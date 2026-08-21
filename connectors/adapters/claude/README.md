@@ -87,7 +87,8 @@ This connector is intentionally reviewable against the four connector layers in 
 - `commands/*.md` — slash commands for session routing, objective discussion, mission creation, and work recording.
 - `hooks/hooks.json` + `scripts/*.sh` — Channel 1 mission follow-up (`UserPromptSubmit`),
   touched-file capture (`PostToolUse`), and Stop delivery reminder. Mechanical harness
-  observation, permission, and injection are Latch's (`latch events` / PTY).
+  observation, permission, and injection are not live Overlord connector paths under Latch v2;
+  native Claude prompts retain control.
 - `userConfig` for `overlord_url` and `user_token`; the hook scripts use the `ovld protocol` CLI and pass the plugin's USER_TOKEN to that CLI as `Overlord_USER_TOKEN`.
 - `conformance-manifest.yaml` — connector conformance declaration for the Overlord contract.
 - `prompt-wrapper.md` — Claude launch context-file guidance.

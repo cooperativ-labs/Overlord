@@ -5,7 +5,6 @@ import type { DatabaseClient } from '@overlord/database';
 import type { ServiceContext } from '../../packages/core/service/context.ts';
 import { ServiceError } from '../../packages/core/service/errors.ts';
 import {
-  asRecord,
   claimNextExecutionRequest,
   clearExecutionRequests,
   type ExecutionRequestSummary,
@@ -21,10 +20,8 @@ import type { RunnerRegistrationInput } from '../../packages/core/service/execut
 import { NO_EXECUTION_TARGET_REGISTERED } from '../../packages/core/service/execution-targets.ts';
 import {
   type ExecutionProviderSession,
-  parseExecutionProviderSession,
-  providerSessionFromMetadata
+  parseExecutionProviderSession
 } from '../../packages/core/service/latch-launch.ts';
-import { ingestLatchHarnessEvents } from '../../packages/core/service/latch-observation.ts';
 import type { CapabilityResult } from '../../packages/core/service/local-target/types.ts';
 import { completeLocalTargetMutationRequest } from '../../packages/core/service/local-target-mutations.ts';
 import { resolveClaimLaunchConfig } from '../../packages/core/service/project-execution-target.ts';
@@ -385,34 +382,6 @@ export async function updateRunnerRequestStatus({
 export function providerSessionFromLaunchedBody(body: unknown): ExecutionProviderSession | null {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return null;
   return parseExecutionProviderSession((body as { providerSession?: unknown }).providerSession);
-}
-
-export async function ingestRunnerHarnessEvents({
-  requestId,
-  body
-}: {
-  requestId: string;
-  body: unknown;
-}): Promise<Record<string, unknown>> {
-  const ctx = await requestRunnerContext(requestId);
-  const request = await getExecutionRequest({ ctx, id: requestId });
-  const payload = asRecord(body);
-  const mapped = providerSessionFromMetadata(request.metadata);
-  const providerSessionId =
-    typeof payload.providerSessionId === 'string' && payload.providerSessionId.trim()
-      ? payload.providerSessionId.trim()
-      : (mapped?.providerSessionId ?? '');
-  const events = Array.isArray(payload.events) ? payload.events : [];
-  const from = typeof payload.from === 'number' ? payload.from : 0;
-  const result = await ingestLatchHarnessEvents({
-    ctx,
-    missionId: request.missionId,
-    executionRequestId: request.id,
-    providerSessionId,
-    events,
-    from
-  });
-  return result;
 }
 
 export async function completeRunnerMutationRequest({

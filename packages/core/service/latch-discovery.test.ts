@@ -54,7 +54,7 @@ describe('parseLatchCapabilitiesReport', () => {
   test('parses the Overlord discovery schema', () => {
     const report = parseLatchCapabilitiesReport(
       JSON.stringify({
-        protocolVersion: 1,
+        protocolVersion: 2,
         productVersion: '0.1.0',
         capabilities: {
           create: true,
@@ -67,7 +67,7 @@ describe('parseLatchCapabilitiesReport', () => {
       })
     );
     assert.deepEqual(report, {
-      protocolVersion: 1,
+      protocolVersion: 2,
       productVersion: '0.1.0',
       capabilities: {
         create: true,
@@ -86,7 +86,7 @@ describe('parseLatchCapabilitiesReport', () => {
     assert.equal(parseLatchCapabilitiesReport('{"protocolVersion":1}'), null);
     assert.equal(
       parseLatchCapabilitiesReport(
-        JSON.stringify({ protocolVersion: 1, productVersion: '1.0.0', capabilities: null })
+        JSON.stringify({ protocolVersion: 2, productVersion: '1.0.0', capabilities: null })
       ),
       null
     );

@@ -6,7 +6,7 @@
 
 **Harness version verified** `2.1.227` · **range** `>=2.1.0` · **scheme** `semver`
 
-**Descriptor digest** `833a35cecb73aa9b34b40036eb6d3088dd729ca6be465d1ee228dae2c5a8269d`
+**Descriptor digest** `15ea657c37363b74db085466a97f38db044892abf2e28465b1c7bcd6cc4ce927`
 
 > The tier is derived from passing fixtures, never authored. `unsupported` means the harness
 > cannot do it — do not attempt it. `not-implemented` means it is buildable and unbuilt: that is
@@ -63,15 +63,15 @@ Per-command `timeout` in seconds with no documented ceiling. Omitting `decision`
 
 ### Capability notes
 
-- **`observe.prompt`** — Two registrations used to ride UserPromptSubmit. Mechanical agent-session observation moved to Latch `events`. This capability grades the protocol follow-up hook that posts `user_follow_up` mission events; that Channel 1 path stays installed.
+- **`observe.prompt`** — Two registrations used to ride UserPromptSubmit. Latch v2 removed the CLI event stream that previously owned mechanical agent-session observation. This capability grades the protocol follow-up hook that posts `user_follow_up` mission events; that Channel 1 path stays installed.
 - **`observe.toolCall`** — Deliberately unregistered in Phase 1. PreToolUse is decision-capable: registering it for observation alone would put a script in front of every tool call for no benefit a PostToolUse registration does not already provide, while inheriting the blast radius of the decision path. It lands with the codecs that can actually use it.
-- **`observe.toolResult`** — Mechanical tool-result observation moved to Latch `events`. The protocol PostToolUse hook still records touched files for delivery attribution.
+- **`observe.toolResult`** — Latch v2 removed the CLI event stream that previously owned mechanical tool-result observation. The protocol PostToolUse hook still records touched files for delivery attribution.
 - **`observe.fileEdit`** — The shipped PostToolUse hook that records touched files into the per-session log used by `deliver` for change attribution remains registered. Mechanical agent-session observation is no longer a live Overlord path.
-- **`observe.sessionLifecycle`** — SessionStart observation moved to Latch `events`. There is no matching Overlord registration.
-- **`decide.universal`** — Remote permission decisions moved to Latch `awaiting_input` / `latch send --resolve`. The native Claude prompt owns approvals when Latch is absent.
+- **`observe.sessionLifecycle`** — Latch v2 removed the CLI event stream that previously owned session observation. There is no matching Overlord registration.
+- **`decide.universal`** — Latch v2 removed the CLI pending-input and send surface. The native Claude prompt owns approvals; Overlord exposes no remote decision control.
 - **`answer.structuredQuestion`** — Elicitation/ElicitationResult hook events exist in the binary but their request and response shapes were not read. Write the fixture before relying on them.
 - **`answer.persistentAllow`** — Structurally available, deliberately unbuilt. A standing permission grant needs its own design, confirmation, audit language, and RBAC review before any remote surface offers it.
-- **`inject.midTurn`** — Session-input injection moved off Overlord connectors. Latch PTY write is Phase 3.
+- **`inject.midTurn`** — Session-input injection is not a live Overlord connector path. A future conversation surface must use the native Latch v2 Conversation Hub protocol.
 - **`inject.turnBoundary`** — Turn-boundary injection moved off Overlord connectors. The protocol Stop hook still reminds the agent to deliver when needed.
 - **`inject.nextTurn`** — No distinct next-turn-only path yet; turn-boundary Stop covers the portable fallback.
 - **`terminal.statusSurface`** — `statusMessage` is static install-time configuration with no per-request interpolation and no session-binding predicate, so it renders in unbound sessions too. It must be worded as an option, never as an instruction.

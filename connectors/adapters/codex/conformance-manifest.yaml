@@ -15,7 +15,7 @@ connector:
   harnessCapabilities:
     path: connectors/adapters/codex/harness-capabilities.yaml
     schemaVersion: 1
-    digest: "ede31118a90f1afc3d8e934b7fd921759faac4afca1a08e4214a1104ee487b1d"
+    digest: "9743c504d8d11ffec193751273102d9a1277293e55f43aef8914da4b05ddfa23"
   capabilities:
     - followUpHook
     - permissionHook

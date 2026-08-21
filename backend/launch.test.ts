@@ -135,8 +135,7 @@ test('mission detail projects Latch terminal sessions independently of active re
       // window — so the projection must say `window`, never guess `tab`.
       viewerOpenAs: 'window',
       createdAt: '2026-08-12T15:00:00.000Z',
-      lastObservedState: 'running',
-      observation: null
+      lastObservedState: 'running'
     }
   ]);
 });

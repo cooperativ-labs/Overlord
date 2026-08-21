@@ -10,7 +10,7 @@ import { buildDeliveryReport, markDeliveryPresentationPending } from './delivery
 import { ServiceError } from './errors.js';
 import { createExecutionRequest, linkExecutionRequestToSession } from './execution-requests.js';
 import { findActingDeviceExecutionTargetId } from './execution-targets.js';
-import { bindProviderSessionAgentSession } from './latch-observation.js';
+import { bindProviderSessionAgentSession } from './latch-provider-session.js';
 import {
   enqueueLiveActivityRefreshForMission,
   enqueueLiveActivityStartForMission

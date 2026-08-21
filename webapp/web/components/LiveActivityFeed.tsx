@@ -349,9 +349,9 @@ function ExecutionStatusSection({
 /**
  * Realtime feed of a mission's workflow history (`mission_events`).
  *
- * Harness permission and question prompts are presented on the terminal-session
- * card from Latch observation, not as session-input controls in this feed.
- * Delivery events render under Artifacts instead.
+ * There are no session-input controls in this feed. Permission and question
+ * prompts remain with the native agent harness. Delivery events render under
+ * Artifacts instead.
  */
 export function LiveActivityFeed({ missionId }: { missionId: string }) {
   const eventsQ = useMissionEvents(missionId);

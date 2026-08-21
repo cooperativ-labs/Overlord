@@ -50,9 +50,10 @@ capabilities:
     native: UserPromptSubmit
     fixtures: [fixtures/normalize-user-prompt-submit.json]
     notes: >-
-      Two registrations used to ride UserPromptSubmit. Mechanical agent-session observation
-      moved to Latch `events`. This capability grades the protocol follow-up hook that posts
-      `user_follow_up` mission events; that Channel 1 path stays installed.
+      Two registrations used to ride UserPromptSubmit. Latch v2 removed the CLI event stream
+      that previously owned mechanical agent-session observation. This capability grades the
+      protocol follow-up hook that posts `user_follow_up` mission events; that Channel 1 path
+      stays installed.
   observe.toolCall:
     status: not-implemented
     native: PreToolUse
@@ -67,8 +68,9 @@ capabilities:
     native: PostToolUse
     trackedAs: latch-engine
     notes: >-
-      Mechanical tool-result observation moved to Latch `events`. The protocol PostToolUse
-      hook still records touched files for delivery attribution.
+      Latch v2 removed the CLI event stream that previously owned mechanical tool-result
+      observation. The protocol PostToolUse hook still records touched files for delivery
+      attribution.
   observe.fileEdit:
     status: supported
     native: PostToolUse
@@ -84,8 +86,8 @@ capabilities:
     native: SessionStart
     trackedAs: latch-engine
     notes: >-
-      SessionStart observation moved to Latch `events`. There is no matching Overlord
-      registration.
+      Latch v2 removed the CLI event stream that previously owned session observation. There
+      is no matching Overlord registration.
   decide.shell:
     status: not-implemented
     native: PermissionRequest
@@ -107,8 +109,8 @@ capabilities:
     native: PermissionRequest
     trackedAs: latch-engine
     notes: >-
-      Remote permission decisions moved to Latch `awaiting_input` / `latch send --resolve`.
-      The native Claude prompt owns approvals when Latch is absent.
+      Latch v2 removed the CLI pending-input and send surface. The native Claude prompt owns
+      approvals; Overlord exposes no remote decision control.
   answer.structuredQuestion:
     status: unverified
     native: Elicitation
@@ -128,7 +130,8 @@ capabilities:
     native: asyncRewake
     trackedAs: latch-engine
     notes: >-
-      Session-input injection moved off Overlord connectors. Latch PTY write is Phase 3.
+      Session-input injection is not a live Overlord connector path. A future conversation
+      surface must use the native Latch v2 Conversation Hub protocol.
   inject.turnBoundary:
     status: not-implemented
     native: Stop

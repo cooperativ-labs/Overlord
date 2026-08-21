@@ -76,7 +76,7 @@ test('formatObjectiveLatchDisplay uses objective display id as name and title pr
 test('parseLatchCreateReport accepts a well-formed create --json document', () => {
   const report = parseLatchCreateReport(
     JSON.stringify({
-      protocolVersion: 1,
+      protocolVersion: 2,
       session: {
         id: 'ses_01JTEST',
         name: 'authentication-refactor',
@@ -98,7 +98,7 @@ test('parseLatchCreateReport rejects garbage', () => {
 test('toExecutionProviderSession never treats the Latch id as an agent session', () => {
   const mapping = toExecutionProviderSession({
     createReport: {
-      protocolVersion: 1,
+      protocolVersion: 2,
       session: {
         id: 'ses_01JTEST',
         name: 'n',
@@ -141,8 +141,7 @@ test('providerSession metadata round-trips', () => {
     executionTargetId: 'target-1',
     agentSessionId: null,
     createdAt: '2026-08-12T14:00:00.000Z',
-    lastObservedState: 'running',
-    observation: null
+    lastObservedState: 'running'
   };
   const merged = mergeProviderSessionIntoMetadata({
     metadataJson: JSON.stringify({ launchSession: { version: 1 } }),

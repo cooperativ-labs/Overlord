@@ -6,7 +6,7 @@
 
 **Harness version verified** `0.147.0` · **range** `>=0.124.0` · **scheme** `semver`
 
-**Descriptor digest** `ede31118a90f1afc3d8e934b7fd921759faac4afca1a08e4214a1104ee487b1d`
+**Descriptor digest** `9743c504d8d11ffec193751273102d9a1277293e55f43aef8914da4b05ddfa23`
 
 > The tier is derived from passing fixtures, never authored. `unsupported` means the harness
 > cannot do it — do not attempt it. `not-implemented` means it is buildable and unbuilt: that is
@@ -64,9 +64,9 @@ Per-hook timeouts in seconds; the documentation gives a 600-second default. The 
 
 ### Capability notes
 
-- **`observe.toolCall`** — Mechanical PreToolUse observation moved to Latch `events`.
+- **`observe.toolCall`** — Latch v2 removed the CLI event stream that previously owned mechanical observation. Overlord exposes no replacement until it has a native Conversation Hub client.
 - **`observe.fileEdit`** — The lifecycle PostToolUse registration pipes Codex's native payload to `ovld protocol record-touched`, which appends normalized changed paths to the per-session attribution log read by `deliver`. It is intentionally separate from mechanical agent-session observation, which remains owned by Latch.
-- **`decide.universal`** — Remote permission decisions moved to Latch `awaiting_input` / `latch send --resolve`.
+- **`decide.universal`** — Latch v2 removed the CLI pending-input and send surface. The native Codex prompt owns approvals; Overlord exposes no remote decision control.
 - **`answer.structuredQuestion`** — `codex app-server` exposes ToolRequestUserInput with per-option label/description and an autoResolutionMs — an ACP-shaped structured question in everything but name. It is unreachable until the single-subscriber question is settled.
 - **`inject.midTurn`** — ThreadInjectItems/TurnSteer exist on the experimental app-server surface only. The binary carries "expected exactly one client subscribed to the thread, found {}", so if the TUI is that one client Overlord cannot also subscribe and this path is closed.
 

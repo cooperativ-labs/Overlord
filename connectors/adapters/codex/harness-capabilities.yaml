@@ -56,7 +56,8 @@ capabilities:
     native: PreToolUse
     trackedAs: latch-engine
     notes: >-
-      Mechanical PreToolUse observation moved to Latch `events`.
+      Latch v2 removed the CLI event stream that previously owned mechanical observation.
+      Overlord exposes no replacement until it has a native Conversation Hub client.
   observe.toolResult:
     status: not-implemented
     native: PostToolUse
@@ -98,7 +99,8 @@ capabilities:
     native: PermissionRequest
     trackedAs: latch-engine
     notes: >-
-      Remote permission decisions moved to Latch `awaiting_input` / `latch send --resolve`.
+      Latch v2 removed the CLI pending-input and send surface. The native Codex prompt owns
+      approvals; Overlord exposes no remote decision control.
   answer.structuredQuestion:
     status: unverified
     native: ToolRequestUserInput

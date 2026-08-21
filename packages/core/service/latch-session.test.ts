@@ -29,7 +29,7 @@ if (command === 'inspect') {
   }));
 } else if (command === 'capabilities') {
   process.stdout.write(JSON.stringify({
-    protocolVersion: 1,
+    protocolVersion: 2,
     productVersion: process.env.FAKE_LATCH_VERSION ?? '0.2608140931.0',
     capabilities: {
       create: true,

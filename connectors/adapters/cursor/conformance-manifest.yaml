@@ -15,7 +15,7 @@ connector:
   harnessCapabilities:
     path: connectors/adapters/cursor/harness-capabilities.yaml
     schemaVersion: 1
-    digest: "7085c25291f5c96cf3c7fb9c280281fa698b5c026e9859377ad8c53d1cd82537"
+    digest: "48b805b1d1cd28ccde10a839b0eb2a85eb237d82b46e3d54b21f671997b0c870"
   capabilities:
     - followUpHook
     - stopHook

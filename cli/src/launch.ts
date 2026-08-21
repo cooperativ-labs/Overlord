@@ -91,6 +91,20 @@ export type LaunchOptions = {
   missionDisplayId?: string | null;
 };
 
+/**
+ * Run a composed launch line in the same kind of shell environment as a new
+ * terminal or Latch session. Pre-command wrappers are commonly shell functions
+ * or binaries added by interactive startup files, so Node's default `/bin/sh`
+ * cannot reliably resolve them.
+ */
+export function interactiveLoginShellInvocation(
+  command: string,
+  configuredShell = process.env.SHELL
+): { command: string; args: string[] } {
+  const shell = configuredShell?.trim() || '/bin/bash';
+  return { command: shell, args: ['-ilc', command] };
+}
+
 type LaunchPlan = {
   command: string;
   args: string[];
@@ -747,11 +761,13 @@ export async function launchAgent({
   }
 
   const { execution } = plan;
-  const result = execution.useShell
-    ? spawnSync(execution.command, {
+  const shellInvocation = execution.useShell
+    ? interactiveLoginShellInvocation(execution.command)
+    : null;
+  const result = shellInvocation
+    ? spawnSync(shellInvocation.command, shellInvocation.args, {
         cwd: options.workingDirectory,
         env,
-        shell: true,
         stdio: 'inherit'
       })
     : spawnSync(execution.command, execution.args, {

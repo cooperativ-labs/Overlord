@@ -7,7 +7,6 @@ import { observeMissionBranchGit } from './branch-observe-git.ts';
 import { fail, ok } from './result.ts';
 import type {
   CapabilityResult,
-  CollectLatchEventsInput,
   DiscoverLatchInput,
   GenerateCommitMessageInput,
   InspectLatchSessionInput,
@@ -21,7 +20,6 @@ import type {
   ReadCurrentDiffInput,
   ReadRepositoryTreeInput,
   RemoveWorktreeInput,
-  ResolveLatchInputInput,
   StopLatchSessionInput,
   WriteProjectMetadataInput
 } from './types.ts';
@@ -50,9 +48,7 @@ export type LocalTargetBridgeCall =
   | { capability: 'discoverLatch'; input: DiscoverLatchInput }
   | { capability: 'inspectLatchSession'; input: InspectLatchSessionInput }
   | { capability: 'openLatchSession'; input: OpenLatchSessionInput }
-  | { capability: 'stopLatchSession'; input: StopLatchSessionInput }
-  | { capability: 'collectLatchEvents'; input: CollectLatchEventsInput }
-  | { capability: 'resolveLatchInput'; input: ResolveLatchInputInput };
+  | { capability: 'stopLatchSession'; input: StopLatchSessionInput };
 
 /** Capability names exposed on the unified desktop bridge. */
 export type LocalTargetBridgeCapability = LocalTargetBridgeCall['capability'];
@@ -97,10 +93,6 @@ export async function invokeLocalTargetCapability({
       return provider.openLatchSession(call.input);
     case 'stopLatchSession':
       return provider.stopLatchSession(call.input);
-    case 'collectLatchEvents':
-      return provider.collectLatchEvents(call.input);
-    case 'resolveLatchInput':
-      return provider.resolveLatchInput(call.input);
     case 'writeProjectMetadata':
       return provider.writeProjectMetadata(call.input);
     default:

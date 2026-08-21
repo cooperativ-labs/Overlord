@@ -1,17 +1,13 @@
 /**
- * Latch terminal-session observation surface: list persistent terminals for a
- * mission, ingest harness events, resolve pending input, and forget a session.
+ * Latch terminal-session surface: list persistent terminals and forget a
+ * provider mapping after Latch reports that the session is absent.
  */
 import { PERMISSIONS } from '@overlord/auth';
 import { launchSessionSnapshotFromMetadata } from '@overlord/core/service/terminal-profile-types';
 
 import { asRecord, parseMetadataJson } from '../../packages/core/service/execution-requests.ts';
 import { providerSessionFromMetadata } from '../../packages/core/service/latch-launch.ts';
-import {
-  clearLatchPendingInput,
-  forgetLatchProviderSession,
-  ingestLatchHarnessEvents
-} from '../../packages/core/service/latch-observation.ts';
+import { forgetLatchProviderSession } from '../../packages/core/service/latch-provider-session.ts';
 import type { TerminalSessionDto } from '../../webapp/shared/contract.ts';
 import { buildWebappServiceContextForWorkspace, requireDatabaseClient } from '../db.ts';
 import { ApiError } from '../errors.ts';
@@ -72,78 +68,10 @@ export async function listMissionTerminalSessions(
         viewerKind: snapshot?.viewer.kind ?? 'iterm',
         viewerOpenAs: snapshot?.viewer.openAs ?? 'window',
         createdAt: providerSession.createdAt,
-        lastObservedState: terminalSessionState(providerSession.lastObservedState),
-        observation: providerSession.observation
-          ? {
-              cursor: providerSession.observation.cursor,
-              lastEventAt: providerSession.observation.lastEventAt,
-              turnCount: providerSession.observation.turnCount,
-              pendingInput: providerSession.observation.pendingInput,
-              unattached: providerSession.observation.unattached
-            }
-          : null
+        lastObservedState: terminalSessionState(providerSession.lastObservedState)
       }
     ];
   });
-}
-
-export async function ingestMissionHarnessEvents(
-  missionRef: string,
-  body: unknown
-): Promise<Record<string, unknown>> {
-  const scope = await requireMissionPermission({
-    missionRef,
-    permission: PERMISSIONS.SESSION_READ
-  });
-  const ctx = await buildWebappServiceContextForWorkspace(
-    scope.workspaceId,
-    requireDatabaseClient(),
-    scope.workspaceUserId
-  );
-  const payload = asRecord(body);
-  const providerSessionId =
-    typeof payload.providerSessionId === 'string' ? payload.providerSessionId : '';
-  const executionRequestId =
-    typeof payload.executionRequestId === 'string' ? payload.executionRequestId : null;
-  const events = Array.isArray(payload.events) ? payload.events : [];
-  const from = typeof payload.from === 'number' ? payload.from : 0;
-  return ingestLatchHarnessEvents({
-    ctx,
-    missionId: scope.missionId,
-    executionRequestId,
-    providerSessionId,
-    events,
-    from
-  });
-}
-
-export async function resolveMissionLatchObservation(
-  missionRef: string,
-  body: unknown
-): Promise<Record<string, unknown>> {
-  const scope = await requireMissionPermission({
-    missionRef,
-    permission: PERMISSIONS.SESSION_ATTACH
-  });
-  const ctx = await buildWebappServiceContextForWorkspace(
-    scope.workspaceId,
-    requireDatabaseClient(),
-    scope.workspaceUserId
-  );
-  const payload = asRecord(body);
-  const providerSessionId =
-    typeof payload.providerSessionId === 'string' ? payload.providerSessionId : '';
-  const requestId = typeof payload.requestId === 'string' ? payload.requestId : '';
-  if (!providerSessionId.trim() || !requestId.trim()) {
-    throw new ApiError(400, 'providerSessionId and requestId are required');
-  }
-  const observation = await clearLatchPendingInput({
-    ctx,
-    missionId: scope.missionId,
-    providerSessionId,
-    requestId
-  });
-  return { observation };
 }
 
 export async function forgetMissionLatchSession(

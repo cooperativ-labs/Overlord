@@ -80,11 +80,12 @@ stale. `yarn connectors:check` runs it alongside the connector version check.
 
 ### The rendered agent-session hook
 
-Mechanical observe / decide / inject is **not a live Overlord connector path**. Latch owns
-turns, tools, `awaiting_input`, and PTY answers via `latch events` and `latch send`. New
-adapters must not register `ovld agent-session` hooks. Channel 1 stays on `ovld protocol`
-(follow-up capture, touched-file attribution, Stop delivery reminder). The rest of this
-section documents leftover CLI runtime and historical fixtures.
+Mechanical observe / decide / inject is **not a live Overlord connector path**. Latch v2
+removed the CLI event and send surface that previously backed it, and Overlord does not
+emulate that protocol. New adapters must not register `ovld agent-session` hooks. Channel 1
+stays on `ovld protocol` (follow-up capture, touched-file attribution, Stop delivery reminder).
+A future conversation surface must be a native Latch v2 Conversation Hub client. The rest of
+this section documents leftover CLI runtime and historical fixtures.
 
 Do not write a per-adapter shell script for agent-session traffic. One core script,
 `connectors/core/scripts/agent-session-hook.sh`, is rendered per adapter at `ovld agent-setup`

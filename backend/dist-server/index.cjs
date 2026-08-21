@@ -735,22 +735,22 @@ var init_next_status_type_migration_runtime = __esm({
 
 // ../packages/contract/dist/agent-launch-flags.js
 function parseAgentLaunchFlagText(text) {
-  const trimmed10 = text.trim();
-  if (!trimmed10)
+  const trimmed8 = text.trim();
+  if (!trimmed8)
     return null;
-  const eqIndex = trimmed10.indexOf("=");
-  if (eqIndex > 0 && trimmed10.startsWith("--")) {
-    const name = trimmed10.slice(0, eqIndex).trim();
-    const value = trimmed10.slice(eqIndex + 1).trim();
+  const eqIndex = trimmed8.indexOf("=");
+  if (eqIndex > 0 && trimmed8.startsWith("--")) {
+    const name = trimmed8.slice(0, eqIndex).trim();
+    const value = trimmed8.slice(eqIndex + 1).trim();
     return name ? { name, value: value.length > 0 ? value : null } : null;
   }
-  const spaceIndex = trimmed10.indexOf(" ");
-  if (spaceIndex > 0 && trimmed10.startsWith("--")) {
-    const name = trimmed10.slice(0, spaceIndex).trim();
-    const value = trimmed10.slice(spaceIndex + 1).trim();
+  const spaceIndex = trimmed8.indexOf(" ");
+  if (spaceIndex > 0 && trimmed8.startsWith("--")) {
+    const name = trimmed8.slice(0, spaceIndex).trim();
+    const value = trimmed8.slice(spaceIndex + 1).trim();
     return name ? { name, value: value.length > 0 ? value : null } : null;
   }
-  return { name: trimmed10 };
+  return { name: trimmed8 };
 }
 function normalizeAgentLaunchFlags(input) {
   if (!Array.isArray(input))
@@ -923,12 +923,12 @@ function formatObjectiveDisplayId({ missionDisplayId, displayKey }) {
   return `${missionDisplayId}${OBJECTIVE_DISPLAY_ID_SEPARATOR}${displayKey}`;
 }
 function parseObjectiveRef(ref) {
-  const trimmed10 = ref.trim();
-  if (trimmed10.length === 0)
-    return { kind: "unknown", ref: trimmed10 };
-  if (UUID_RE.test(trimmed10))
-    return { kind: "uuid", id: trimmed10.toLowerCase() };
-  const display = DISPLAY_ID_RE.exec(trimmed10);
+  const trimmed8 = ref.trim();
+  if (trimmed8.length === 0)
+    return { kind: "unknown", ref: trimmed8 };
+  if (UUID_RE.test(trimmed8))
+    return { kind: "uuid", id: trimmed8.toLowerCase() };
+  const display = DISPLAY_ID_RE.exec(trimmed8);
   if (display) {
     return {
       kind: "display_id",
@@ -936,22 +936,22 @@ function parseObjectiveRef(ref) {
       displayKey: display[3].toLowerCase()
     };
   }
-  if (WRONG_SEPARATOR_COLON_RE.test(trimmed10)) {
-    return { kind: "wrong_separator", separator: ":", ref: trimmed10 };
+  if (WRONG_SEPARATOR_COLON_RE.test(trimmed8)) {
+    return { kind: "wrong_separator", separator: ":", ref: trimmed8 };
   }
-  if (WRONG_SEPARATOR_PIPE_RE.test(trimmed10)) {
-    return { kind: "wrong_separator", separator: "|", ref: trimmed10 };
+  if (WRONG_SEPARATOR_PIPE_RE.test(trimmed8)) {
+    return { kind: "wrong_separator", separator: "|", ref: trimmed8 };
   }
-  if (WRONG_SEPARATOR_HYPHEN_RE.test(trimmed10)) {
-    return { kind: "wrong_separator", separator: "-", ref: trimmed10 };
+  if (WRONG_SEPARATOR_HYPHEN_RE.test(trimmed8)) {
+    return { kind: "wrong_separator", separator: "-", ref: trimmed8 };
   }
-  if (MISSION_DISPLAY_ID_RE.test(trimmed10)) {
-    return { kind: "mission_id", missionDisplayId: trimmed10 };
+  if (MISSION_DISPLAY_ID_RE.test(trimmed8)) {
+    return { kind: "mission_id", missionDisplayId: trimmed8 };
   }
-  if (BARE_KEY_RE.test(trimmed10)) {
-    return { kind: "display_key", displayKey: trimmed10.toLowerCase() };
+  if (BARE_KEY_RE.test(trimmed8)) {
+    return { kind: "display_key", displayKey: trimmed8.toLowerCase() };
   }
-  return { kind: "unknown", ref: trimmed10 };
+  return { kind: "unknown", ref: trimmed8 };
 }
 function missionDisplayIdFromObjectiveRef(ref) {
   if (typeof ref !== "string" || ref.trim() === "")
@@ -10536,9 +10536,9 @@ var init_schemas = __esm({
       $ZodStringFormat.init(inst, def);
       inst._zod.check = (payload) => {
         try {
-          const trimmed10 = payload.value.trim();
+          const trimmed8 = payload.value.trim();
           if (!def.normalize && def.protocol?.source === httpProtocol.source) {
-            if (!/^https?:\/\//i.test(trimmed10)) {
+            if (!/^https?:\/\//i.test(trimmed8)) {
               payload.issues.push({
                 code: "invalid_format",
                 format: "url",
@@ -10550,7 +10550,7 @@ var init_schemas = __esm({
               return;
             }
           }
-          const url2 = new URL(trimmed10);
+          const url2 = new URL(trimmed8);
           if (def.hostname) {
             def.hostname.lastIndex = 0;
             if (!def.hostname.test(url2.hostname)) {
@@ -10582,7 +10582,7 @@ var init_schemas = __esm({
           if (def.normalize) {
             payload.value = url2.href;
           } else {
-            payload.value = trimmed10;
+            payload.value = trimmed8;
           }
           return;
         } catch (_) {
@@ -70932,8 +70932,8 @@ function integrateBranch(input) {
 }
 function commitBranch(input) {
   const { branchName, worktreePath } = input;
-  const trimmed10 = (input.message ?? "").trim();
-  if (!trimmed10) {
+  const trimmed8 = (input.message ?? "").trim();
+  if (!trimmed8) {
     return {
       ok: false,
       code: "BRANCH_COMMIT_MESSAGE_REQUIRED",
@@ -70972,7 +70972,7 @@ function commitBranch(input) {
       detail: staged.stderr || staged.stdout
     };
   }
-  const commit = runGitResult(worktreePath, ["commit", "-m", trimmed10]);
+  const commit = runGitResult(worktreePath, ["commit", "-m", trimmed8]);
   if (!commit.ok) {
     return {
       ok: false,
@@ -71725,7 +71725,7 @@ var init_latch_discovery = __esm({
     import_node_path12 = __toESM(require("node:path"), 1);
     init_latch_environment();
     init_terminal_profile_types();
-    SUPPORTED_LATCH_PROTOCOL_VERSION = 1;
+    SUPPORTED_LATCH_PROTOCOL_VERSION = 2;
     REQUIRED_LATCH_CAPABILITIES = ["create"];
     LATCH_STANDALONE_INSTALL_COMMAND = "curl -fsSL https://raw.githubusercontent.com/jchaselubitz/Latch/main/scripts/install-cli.sh | bash";
     LATCH_DISCOVERY_CACHE_FILENAME = "latch-discovery.json";
@@ -71805,31 +71805,7 @@ function providerSessionFromMetadata(metadata) {
     executionTargetId: trimmed4(cast.executionTargetId),
     agentSessionId: trimmed4(cast.agentSessionId),
     createdAt: trimmed4(cast.createdAt) ?? "",
-    lastObservedState: trimmed4(cast.lastObservedState) ?? "running",
-    observation: parseHarnessObservation(cast.observation)
-  };
-}
-function parseHarnessObservation(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const row = value;
-  const cursor = typeof row.cursor === "number" && Number.isFinite(row.cursor) ? row.cursor : null;
-  if (cursor === null || cursor < 0) return null;
-  const pendingRaw = row.pendingInput && typeof row.pendingInput === "object" && !Array.isArray(row.pendingInput) ? row.pendingInput : null;
-  const pendingKind = trimmed4(pendingRaw?.kind);
-  const pendingInput = pendingRaw && trimmed4(pendingRaw.requestId) && (pendingKind === "permission" || pendingKind === "question") && typeof pendingRaw.prompt === "string" ? {
-    requestId: trimmed4(pendingRaw.requestId),
-    kind: pendingKind === "question" ? "question" : "permission",
-    prompt: pendingRaw.prompt,
-    choices: Array.isArray(pendingRaw.choices) ? pendingRaw.choices.filter((choice) => typeof choice === "string") : [],
-    at: trimmed4(pendingRaw.at) ?? ""
-  } : null;
-  return {
-    cursor,
-    connectorEpoch: typeof row.connectorEpoch === "number" && Number.isFinite(row.connectorEpoch) ? row.connectorEpoch : null,
-    lastEventAt: trimmed4(row.lastEventAt),
-    turnCount: typeof row.turnCount === "number" && Number.isFinite(row.turnCount) ? row.turnCount : 0,
-    pendingInput,
-    unattached: row.unattached === true
+    lastObservedState: trimmed4(cast.lastObservedState) ?? "running"
   };
 }
 function mergeProviderSessionIntoMetadata({
@@ -71847,13 +71823,9 @@ function mergeProviderSessionIntoMetadata({
       parsed = {};
     }
   }
-  const existing = providerSessionFromMetadata(parsed);
   return JSON.stringify({
     ...parsed,
-    [PROVIDER_SESSION_METADATA_KEY]: {
-      ...providerSession,
-      observation: providerSession.observation ?? existing?.observation ?? null
-    }
+    [PROVIDER_SESSION_METADATA_KEY]: providerSession
   });
 }
 function stripProviderSessionFromMetadata({
@@ -72098,327 +72070,10 @@ var init_latch_session = __esm({
   }
 });
 
-// ../packages/core/service/latch-events.ts
-function trimmed6(value) {
-  return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-function parseHarnessEvent(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const row = value;
-  const type = trimmed6(row.type);
-  const sessionId = trimmed6(row.sessionId);
-  const at = trimmed6(row.at);
-  const harnessVersion = trimmed6(row.harnessVersion);
-  const connectorEpoch = typeof row.connectorEpoch === "number" && Number.isFinite(row.connectorEpoch) ? row.connectorEpoch : null;
-  if (!type || !HARNESS_EVENT_TYPES.has(type) || !sessionId || !at || !harnessVersion) return null;
-  if (connectorEpoch === null || connectorEpoch < 1) return null;
-  const base = { sessionId, at, harnessVersion, connectorEpoch };
-  switch (type) {
-    case "user_message":
-    case "assistant_delta":
-    case "assistant_message": {
-      const text = trimmed6(row.text);
-      if (!text) return null;
-      return { ...base, type, text };
-    }
-    case "tool_started": {
-      const tool = trimmed6(row.tool);
-      if (!tool) return null;
-      return { ...base, type, tool, input: row.input };
-    }
-    case "tool_finished": {
-      const tool = trimmed6(row.tool);
-      if (!tool) return null;
-      return { ...base, type, tool, output: row.output };
-    }
-    case "awaiting_input": {
-      const requestId = trimmed6(row.requestId);
-      const kind = trimmed6(row.kind);
-      const prompt = typeof row.prompt === "string" ? row.prompt : null;
-      if (!requestId || kind !== "permission" && kind !== "question" || prompt === null) {
-        return null;
-      }
-      const choices = Array.isArray(row.choices) ? row.choices.filter((choice) => typeof choice === "string") : void 0;
-      return {
-        ...base,
-        type,
-        requestId,
-        kind,
-        prompt,
-        ...choices && choices.length > 0 ? { choices } : {}
-      };
-    }
-    case "status": {
-      const status = trimmed6(row.status);
-      if (!status) return null;
-      return { ...base, type, status };
-    }
-    default:
-      return null;
-  }
-}
-function parseHarnessEventNdjson(raw) {
-  const events = [];
-  for (const line2 of raw.split("\n")) {
-    const trimmedLine = line2.trim();
-    if (!trimmedLine) continue;
-    try {
-      const parsed = parseHarnessEvent(JSON.parse(trimmedLine));
-      if (parsed) events.push(parsed);
-    } catch {
-    }
-  }
-  return events;
-}
-function foldHarnessEvents({
-  events,
-  fromCursor,
-  attached
-}) {
-  let pendingInput = null;
-  let turnCount = 0;
-  let lastEventAt = null;
-  let connectorEpoch = null;
-  for (const event of events) {
-    lastEventAt = event.at;
-    connectorEpoch = event.connectorEpoch;
-    if (event.type === "user_message" || event.type === "assistant_message") {
-      turnCount += 1;
-    }
-    if (event.type === "awaiting_input") {
-      pendingInput = {
-        requestId: event.requestId,
-        kind: event.kind,
-        prompt: event.prompt,
-        choices: event.choices ?? [],
-        at: event.at
-      };
-      continue;
-    }
-    pendingInput = null;
-  }
-  return {
-    cursor: fromCursor + events.length,
-    connectorEpoch,
-    lastEventAt,
-    turnCount,
-    pendingInput,
-    unattached: turnCount > 0 && !attached
-  };
-}
-function mergeHarnessObservation({
-  previous,
-  incoming,
-  attached
-}) {
-  const turnCount = (previous?.turnCount ?? 0) + incoming.turnCount;
-  return {
-    cursor: incoming.cursor,
-    connectorEpoch: incoming.connectorEpoch ?? previous?.connectorEpoch ?? null,
-    lastEventAt: incoming.lastEventAt ?? previous?.lastEventAt ?? null,
-    turnCount,
-    pendingInput: incoming.pendingInput,
-    unattached: turnCount > 0 && !attached
-  };
-}
-async function collectLatchEvents({
-  executable = "latch",
-  providerSessionId,
-  from = 0,
-  idleMs = 250,
-  timeoutMs = 8e3
-}) {
-  const sessionId = trimmed6(providerSessionId);
-  if (!sessionId) throw new LatchSessionCommandError("A Latch session id is required.");
-  const fromCursor = Number.isFinite(from) && from > 0 ? Math.floor(from) : 0;
-  const bin = resolveLatchBinaryPath(executable);
-  if (!bin) throw new LatchSessionCommandError(latchBinaryMissingMessage(executable));
-  return new Promise((resolve, reject) => {
-    const child = (0, import_node_child_process5.spawn)(bin, ["events", sessionId, "--json", "--from", String(fromCursor)], {
-      stdio: ["ignore", "pipe", "pipe"],
-      env: latchChildEnvironment()
-    });
-    let stdout = "";
-    let stderr = "";
-    let idleTimer = null;
-    let settled = false;
-    const finish = ({ ended, error: error53 }) => {
-      if (settled) return;
-      settled = true;
-      if (idleTimer) clearTimeout(idleTimer);
-      clearTimeout(timeoutTimer);
-      if (!child.killed) child.kill("SIGTERM");
-      if (error53) {
-        reject(error53);
-        return;
-      }
-      const events = parseHarnessEventNdjson(stdout);
-      resolve({
-        events,
-        from: fromCursor,
-        nextCursor: fromCursor + events.length,
-        ended
-      });
-    };
-    const bumpIdle = () => {
-      if (idleTimer) clearTimeout(idleTimer);
-      idleTimer = setTimeout(() => finish({ ended: false }), idleMs);
-    };
-    const timeoutTimer = setTimeout(() => finish({ ended: false }), timeoutMs);
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk;
-      bumpIdle();
-    });
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk;
-    });
-    child.on("error", (error53) => {
-      finish({
-        ended: false,
-        error: new LatchSessionCommandError(error53.message)
-      });
-    });
-    child.on("close", (code, signal) => {
-      if (settled) return;
-      if (code && code !== 0 && parseHarnessEventNdjson(stdout).length === 0) {
-        const detail = stderr.trim().slice(0, 500) || `latch events exited ${code}`;
-        finish({ ended: true, error: latchSessionCommandError(detail) });
-        return;
-      }
-      finish({ ended: signal === null && (code === 0 || code === null) });
-    });
-  });
-}
-var import_node_child_process5, HARNESS_EVENT_TYPES;
-var init_latch_events = __esm({
-  "../packages/core/service/latch-events.ts"() {
-    "use strict";
-    import_node_child_process5 = require("node:child_process");
-    init_latch_binary();
-    init_latch_environment();
-    init_latch_session();
-    HARNESS_EVENT_TYPES = /* @__PURE__ */ new Set([
-      "user_message",
-      "assistant_delta",
-      "assistant_message",
-      "tool_started",
-      "tool_finished",
-      "awaiting_input",
-      "status"
-    ]);
-  }
-});
-
-// ../packages/core/service/latch-send.ts
-function trimmed7(value) {
-  return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-function probeLatchInteractionCapabilities({
-  executable = "latch",
-  providerSessionId
-}) {
-  const sessionId = trimmed7(providerSessionId);
-  const bin = resolveLatchBinaryPath(executable);
-  if (!sessionId) {
-    return {
-      sendMessage: false,
-      sendKeys: false,
-      resolve: false,
-      canSend: { ok: false, reason: "A Latch session id is required." }
-    };
-  }
-  if (!bin) {
-    return {
-      sendMessage: false,
-      sendKeys: false,
-      resolve: false,
-      canSend: { ok: false, reason: latchBinaryMissingMessage(executable) }
-    };
-  }
-  const help = (0, import_node_child_process6.spawnSync)(bin, ["send", "--help"], {
-    encoding: "utf8",
-    shell: false,
-    timeout: 5e3,
-    env: latchChildEnvironment()
-  });
-  if (help.error || help.status !== 0) {
-    const detail = (help.stderr || help.stdout || help.error?.message || "latch send is unavailable").trim().slice(0, 200);
-    return {
-      sendMessage: false,
-      sendKeys: false,
-      resolve: false,
-      canSend: { ok: false, reason: detail || "latch send is not available on this Latch build." }
-    };
-  }
-  return {
-    sendMessage: /--message\b/.test(`${help.stdout}
-${help.stderr}`),
-    sendKeys: /--keys\b/.test(`${help.stdout}
-${help.stderr}`),
-    resolve: /--resolve\b/.test(`${help.stdout}
-${help.stderr}`),
-    canSend: { ok: true }
-  };
-}
-function resolveLatchInput({
-  executable = "latch",
-  providerSessionId,
-  requestId,
-  choice
-}) {
-  const sessionId = trimmed7(providerSessionId);
-  const id = trimmed7(requestId);
-  const selected = trimmed7(choice);
-  if (!sessionId) throw new LatchSessionCommandError("A Latch session id is required.");
-  if (!id) throw new LatchSessionCommandError("A request id is required.");
-  if (!selected) throw new LatchSessionCommandError("A resolve choice is required.");
-  const capabilities = probeLatchInteractionCapabilities({
-    executable,
-    providerSessionId: sessionId
-  });
-  if (!capabilities.resolve || !capabilities.canSend.ok) {
-    throw new LatchSessionCommandError(
-      capabilities.canSend.reason || "This Latch session cannot resolve a pending prompt."
-    );
-  }
-  const bin = resolveLatchBinaryPath(executable);
-  if (!bin) throw new LatchSessionCommandError(latchBinaryMissingMessage(executable));
-  const result = (0, import_node_child_process6.spawnSync)(bin, ["send", sessionId, "--resolve", `${id}=${selected}`, "--json"], {
-    encoding: "utf8",
-    shell: false,
-    timeout: 1e4,
-    maxBuffer: 1024 * 1024,
-    env: latchChildEnvironment()
-  });
-  if (result.error) throw new LatchSessionCommandError(result.error.message);
-  if (result.status !== 0) {
-    const detail = (result.stderr || result.stdout || `exit ${result.status ?? "unknown"}`).trim().slice(0, 500);
-    throw new LatchSessionCommandError(detail || "latch send --resolve failed.");
-  }
-  return {
-    providerSessionId: sessionId,
-    requestId: id,
-    choice: selected,
-    resolved: true
-  };
-}
-var import_node_child_process6;
-var init_latch_send = __esm({
-  "../packages/core/service/latch-send.ts"() {
-    "use strict";
-    import_node_child_process6 = require("node:child_process");
-    init_latch_binary();
-    init_latch_environment();
-    init_latch_session();
-  }
-});
-
 // ../packages/core/service/local-target/doctor-checks.ts
 function commandOnPath(command, args) {
   try {
-    const detail = (0, import_node_child_process7.execFileSync)(command, args, {
+    const detail = (0, import_node_child_process5.execFileSync)(command, args, {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"]
     }).trim();
@@ -72430,11 +72085,11 @@ function commandOnPath(command, args) {
 function runLocalTargetDoctorChecks() {
   return [commandOnPath("git", ["--version"]), commandOnPath("node", ["--version"])];
 }
-var import_node_child_process7;
+var import_node_child_process5;
 var init_doctor_checks = __esm({
   "../packages/core/service/local-target/doctor-checks.ts"() {
     "use strict";
-    import_node_child_process7 = require("node:child_process");
+    import_node_child_process5 = require("node:child_process");
   }
 });
 
@@ -72476,7 +72131,7 @@ function ensureGitignore(checkoutPath) {
 }
 function resolveGitRoot(directoryPath) {
   try {
-    return (0, import_node_child_process8.execFileSync)("git", ["-C", directoryPath, "rev-parse", "--show-toplevel"], {
+    return (0, import_node_child_process6.execFileSync)("git", ["-C", directoryPath, "rev-parse", "--show-toplevel"], {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"]
     }).trim();
@@ -72662,11 +72317,11 @@ function writeProjectJson({
   );
   return projectJsonPath;
 }
-var import_node_child_process8, import_node_fs12, import_node_path13, PROJECT_JSON_VERSION, PROJECT_JSON_WARNING, INSTRUCTION_BLOCK_START, INSTRUCTION_BLOCK_END, PROJECT_METADATA_INSTRUCTION;
+var import_node_child_process6, import_node_fs12, import_node_path13, PROJECT_JSON_VERSION, PROJECT_JSON_WARNING, INSTRUCTION_BLOCK_START, INSTRUCTION_BLOCK_END, PROJECT_METADATA_INSTRUCTION;
 var init_project_metadata = __esm({
   "../packages/core/service/local-target/project-metadata.ts"() {
     "use strict";
-    import_node_child_process8 = require("node:child_process");
+    import_node_child_process6 = require("node:child_process");
     import_node_fs12 = require("node:fs");
     import_node_path13 = __toESM(require("node:path"), 1);
     init_util3();
@@ -72717,8 +72372,6 @@ var init_in_process_provider = __esm({
     import_node_fs13 = require("node:fs");
     init_git_tree();
     init_latch_discovery();
-    init_latch_events();
-    init_latch_send();
     init_latch_session();
     init_terminal_profile_types();
     init_branch_actions_git();
@@ -72944,47 +72597,6 @@ var init_in_process_provider = __esm({
           });
         }
       }
-      async collectLatchEvents(input) {
-        try {
-          const collected = await collectLatchEvents({
-            executable: input.executable,
-            providerSessionId: input.providerSessionId,
-            from: input.from
-          });
-          return ok2(this.target, {
-            providerSessionId: input.providerSessionId,
-            events: collected.events,
-            from: collected.from,
-            nextCursor: collected.nextCursor,
-            ended: collected.ended
-          });
-        } catch (error53) {
-          return failLatchCommand({
-            target: this.target,
-            error: error53,
-            fallback: "Could not collect Latch harness events."
-          });
-        }
-      }
-      async resolveLatchInput(input) {
-        try {
-          return ok2(
-            this.target,
-            resolveLatchInput({
-              executable: input.executable,
-              providerSessionId: input.providerSessionId,
-              requestId: input.requestId,
-              choice: input.choice
-            })
-          );
-        } catch (error53) {
-          return failLatchCommand({
-            target: this.target,
-            error: error53,
-            fallback: "Could not resolve the Latch prompt."
-          });
-        }
-      }
       async doctor() {
         return ok2(this.target, { checks: runLocalTargetDoctorChecks() });
       }
@@ -73076,12 +72688,6 @@ var init_registry = __esm({
       stopLatchSession(_input) {
         return this.#fail();
       }
-      collectLatchEvents(_input) {
-        return this.#fail();
-      }
-      resolveLatchInput(_input) {
-        return this.#fail();
-      }
       doctor() {
         return this.#fail();
       }
@@ -73141,10 +72747,6 @@ async function invokeLocalTargetCapability({
       return provider.openLatchSession(call.input);
     case "stopLatchSession":
       return provider.stopLatchSession(call.input);
-    case "collectLatchEvents":
-      return provider.collectLatchEvents(call.input);
-    case "resolveLatchInput":
-      return provider.resolveLatchInput(call.input);
     case "writeProjectMetadata":
       return provider.writeProjectMetadata(call.input);
     default:
@@ -73371,8 +72973,8 @@ function mergeProfileMetadataJson({
     else delete parsed.avatarUrl;
   }
   if (agentInstructions !== void 0) {
-    const trimmed10 = agentInstructions?.trim() ?? "";
-    if (trimmed10) parsed.agentInstructions = trimmed10;
+    const trimmed8 = agentInstructions?.trim() ?? "";
+    if (trimmed8) parsed.agentInstructions = trimmed8;
     else delete parsed.agentInstructions;
   }
   return JSON.stringify(parsed);
@@ -74955,7 +74557,7 @@ var init_webhook_events = __esm({
 function isRunnerRelation(value) {
   return value === "native" || value === "adopted";
 }
-function trimmed8(value) {
+function trimmed6(value) {
   const text = value?.trim();
   return text && text.length > 0 ? text : null;
 }
@@ -75027,7 +74629,7 @@ async function resolveRunnerTarget({
   input,
   actingTarget
 }) {
-  const explicitId = trimmed8(input.executionTargetId);
+  const explicitId = trimmed6(input.executionTargetId);
   if (!explicitId) {
     const target = actingTarget ?? await resolveClaimingDeviceTarget({ ctx });
     await assertTargetEnabled({ ctx, executionTargetId: target.executionTargetId });
@@ -75077,8 +74679,8 @@ async function recordRunnerHeartbeat({
       [
         executionTargetId,
         relation,
-        trimmed8(label),
-        trimmed8(runnerVersion),
+        trimmed6(label),
+        trimmed6(runnerVersion),
         capabilitiesJson,
         supportedAgentsJson,
         health,
@@ -75101,8 +74703,8 @@ async function recordRunnerHeartbeat({
       executionTargetId,
       runnerInstanceId,
       relation,
-      label: trimmed8(label),
-      runnerVersion: trimmed8(runnerVersion),
+      label: trimmed6(label),
+      runnerVersion: trimmed6(runnerVersion),
       supportedAgents: supportedAgents ?? [],
       health,
       lastHeartbeatAt: now2,
@@ -75122,8 +74724,8 @@ async function recordRunnerHeartbeat({
       executionTargetId,
       runnerInstanceId,
       relation,
-      trimmed8(label),
-      trimmed8(runnerVersion),
+      trimmed6(label),
+      trimmed6(runnerVersion),
       capabilitiesJson,
       supportedAgentsJson,
       health,
@@ -75145,8 +74747,8 @@ async function recordRunnerHeartbeat({
     executionTargetId,
     runnerInstanceId,
     relation,
-    label: trimmed8(label),
-    runnerVersion: trimmed8(runnerVersion),
+    label: trimmed6(label),
+    runnerVersion: trimmed6(runnerVersion),
     supportedAgents: supportedAgents ?? [],
     health,
     lastHeartbeatAt: now2,
@@ -75289,8 +74891,8 @@ function readPreferenceRow(ctx, projectId) {
 function readStoredExecutionTargetId(preferences) {
   const stored = preferences[PROJECT_EXECUTION_TARGET_PREFERENCE_KEY];
   if (typeof stored !== "string") return null;
-  const trimmed10 = stored.trim();
-  return trimmed10.length > 0 ? trimmed10 : null;
+  const trimmed8 = stored.trim();
+  return trimmed8.length > 0 ? trimmed8 : null;
 }
 function isTargetReachable({
   lastSeenAt,
@@ -133654,11 +133256,11 @@ function normalizeInstructionText(value) {
   return (value ?? "").trim();
 }
 function deriveTitleFromInstructionText(instructionText) {
-  const trimmed10 = normalizeInstructionText(instructionText);
-  if (trimmed10.length <= 100) {
-    return trimmed10;
+  const trimmed8 = normalizeInstructionText(instructionText);
+  if (trimmed8.length <= 100) {
+    return trimmed8;
   }
-  return `${trimmed10.slice(0, 100)}\u2026`;
+  return `${trimmed8.slice(0, 100)}\u2026`;
 }
 
 // ../automations/dist/title-summarizer/tools/summarize-text.js
@@ -134879,9 +134481,9 @@ function matchedTermsInText({ terms, text }) {
   return terms.filter((term) => termMatchesHaystack({ term, haystack: text }));
 }
 function snippetAroundTerms({ text, terms }) {
-  const trimmed10 = text.trim();
-  if (!trimmed10) return null;
-  const lower = trimmed10.toLowerCase();
+  const trimmed8 = text.trim();
+  if (!trimmed8) return null;
+  const lower = trimmed8.toLowerCase();
   let idx = -1;
   let matchedLen = 0;
   for (const term of terms) {
@@ -134893,16 +134495,16 @@ function snippetAroundTerms({ text, terms }) {
     }
   }
   if (idx === -1) {
-    if (trimmed10.length <= SNIPPET_MAX_LENGTH) return trimmed10;
-    return `${trimmed10.slice(0, SNIPPET_MAX_LENGTH).trimEnd()}\u2026`;
+    if (trimmed8.length <= SNIPPET_MAX_LENGTH) return trimmed8;
+    return `${trimmed8.slice(0, SNIPPET_MAX_LENGTH).trimEnd()}\u2026`;
   }
   const padding = Math.max(0, Math.floor((SNIPPET_MAX_LENGTH - matchedLen) / 2));
   let start2 = Math.max(0, idx - padding);
-  let end = Math.min(trimmed10.length, start2 + SNIPPET_MAX_LENGTH);
+  let end = Math.min(trimmed8.length, start2 + SNIPPET_MAX_LENGTH);
   if (end - start2 < SNIPPET_MAX_LENGTH) start2 = Math.max(0, end - SNIPPET_MAX_LENGTH);
-  let snippet = trimmed10.slice(start2, end).trim();
+  let snippet = trimmed8.slice(start2, end).trim();
   if (start2 > 0) snippet = `\u2026${snippet}`;
-  if (end < trimmed10.length) snippet = `${snippet}\u2026`;
+  if (end < trimmed8.length) snippet = `${snippet}\u2026`;
   return snippet;
 }
 function aggregateDocumentScore(scores) {
@@ -138030,12 +137632,12 @@ async function authenticateChannelCredential({
   rawToken,
   now: now2 = nowIso()
 }) {
-  const trimmed10 = rawToken.trim();
-  if (!trimmed10) return null;
+  const trimmed8 = rawToken.trim();
+  if (!trimmed8) return null;
   const row = await db.get(
     `SELECT ${CHANNEL_COLUMNS} FROM agent_session_channels
        WHERE credential_hash = ? AND deleted_at IS NULL`,
-    [hashSessionChannelToken(trimmed10)]
+    [hashSessionChannelToken(trimmed8)]
   );
   if (!row) return null;
   if (row.credential_revoked_at !== null) return null;
@@ -139230,143 +138832,19 @@ async function linkExecutionRequestToSession({
 // ../packages/core/service/protocol.ts
 init_execution_targets();
 
-// ../packages/core/service/latch-observation.ts
+// ../packages/core/service/latch-provider-session.ts
 init_change_feed();
 init_errors4();
-init_latch_events();
 init_latch_launch();
 init_util3();
-function parseMetadata(raw) {
-  if (!raw?.trim()) return {};
+function parseMetadata(value) {
+  if (!value?.trim()) return {};
   try {
-    const value = JSON.parse(raw);
-    return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
   } catch {
     return {};
   }
-}
-async function ingestLatchHarnessEvents({
-  ctx,
-  missionId,
-  executionRequestId,
-  providerSessionId,
-  events,
-  from = 0
-}) {
-  const sessionId = providerSessionId.trim();
-  if (!sessionId) {
-    throw new ServiceError("A Latch session id is required.", "validation_error");
-  }
-  const parsedEvents = events.map((event) => parseHarnessEvent(event)).filter((event) => event !== null);
-  const fromCursor = Number.isFinite(from) && from > 0 ? Math.floor(from) : 0;
-  return ctx.db.transaction(async (tx) => {
-    const txCtx = { ...ctx, db: tx };
-    const rows = await tx.all(
-      executionRequestId ? `SELECT id, workspace_id, project_id, mission_id, objective_id, launched_session_id,
-                  metadata_json, revision
-             FROM execution_requests
-            WHERE id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL` : `SELECT id, workspace_id, project_id, mission_id, objective_id, launched_session_id,
-                  metadata_json, revision
-             FROM execution_requests
-            WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
-            ORDER BY updated_at DESC, created_at DESC`,
-      executionRequestId ? [executionRequestId, missionId, ctx.workspace.id] : [missionId, ctx.workspace.id]
-    );
-    const row = rows.find((candidate) => {
-      const mapped = providerSessionFromMetadata(parseMetadata(candidate.metadata_json));
-      return mapped?.providerSessionId === sessionId;
-    });
-    if (!row) {
-      throw new ServiceError("Latch session is not mapped to this mission", "not_found", 404);
-    }
-    const metadata = parseMetadata(row.metadata_json);
-    const providerSession = providerSessionFromMetadata(metadata);
-    if (!providerSession || providerSession.providerSessionId !== sessionId) {
-      throw new ServiceError("Latch session is not mapped to this mission", "not_found", 404);
-    }
-    const attached = Boolean(providerSession.agentSessionId || row.launched_session_id);
-    const previous = providerSession.observation ?? null;
-    const storedCursor = previous?.cursor ?? 0;
-    let observation;
-    if (fromCursor < storedCursor) {
-      observation = {
-        ...previous,
-        unattached: (previous?.turnCount ?? 0) > 0 && !attached
-      };
-    } else if (parsedEvents.length === 0) {
-      observation = {
-        cursor: storedCursor,
-        connectorEpoch: previous?.connectorEpoch ?? null,
-        lastEventAt: previous?.lastEventAt ?? null,
-        turnCount: previous?.turnCount ?? 0,
-        pendingInput: previous?.pendingInput ?? null,
-        unattached: (previous?.turnCount ?? 0) > 0 && !attached
-      };
-    } else {
-      observation = mergeHarnessObservation({
-        previous,
-        incoming: foldHarnessEvents({
-          events: parsedEvents,
-          fromCursor,
-          attached
-        }),
-        attached
-      });
-    }
-    const nextSession = {
-      ...providerSession,
-      observation
-    };
-    const now2 = nowIso();
-    const revision = row.revision + 1;
-    const metadataJson = mergeProviderSessionIntoMetadata({
-      metadataJson: row.metadata_json,
-      providerSession: nextSession
-    });
-    const updated = await tx.run(
-      `UPDATE execution_requests
-          SET metadata_json = ?, updated_at = ?, revision = ?
-        WHERE id = ? AND revision = ? AND deleted_at IS NULL`,
-      [metadataJson, now2, revision, row.id, row.revision]
-    );
-    if (updated.changes === 0) {
-      throw new ServiceError(
-        "Execution request changed while ingesting harness events",
-        "execution_request_conflict",
-        409
-      );
-    }
-    await recordChange({
-      ctx: txCtx,
-      entityType: "execution_request",
-      entityId: row.id,
-      operation: "update",
-      entityRevision: revision,
-      projectId: row.project_id,
-      missionId: row.mission_id,
-      objectiveId: row.objective_id,
-      changedFields: ["metadata_json"]
-    });
-    const previousRequestId = previous?.pendingInput?.requestId ?? null;
-    const nextRequestId = observation.pendingInput?.requestId ?? null;
-    let notified = false;
-    if (nextRequestId && nextRequestId !== previousRequestId) {
-      const emitted = await emitNotification({
-        db: tx,
-        workspaceId: row.workspace_id,
-        missionId: row.mission_id,
-        type: "agent_question",
-        objectiveId: row.objective_id,
-        now: now2
-      });
-      notified = emitted.emitted;
-    }
-    return {
-      providerSessionId: sessionId,
-      observation,
-      notified
-    };
-  });
 }
 async function bindProviderSessionAgentSession({
   ctx,
@@ -139374,72 +138852,24 @@ async function bindProviderSessionAgentSession({
   agentSessionId
 }) {
   const row = await ctx.db.get(
-    `SELECT metadata_json, revision FROM execution_requests
-      WHERE id = ? AND deleted_at IS NULL`,
+    `SELECT metadata_json FROM execution_requests WHERE id = ? AND deleted_at IS NULL`,
     [executionRequestId]
   );
   if (!row) return;
   const providerSession = providerSessionFromMetadata(parseMetadata(row.metadata_json));
-  if (!providerSession) return;
-  if (providerSession.agentSessionId === agentSessionId) return;
-  const attachedObservation = providerSession.observation ? { ...providerSession.observation, unattached: false } : null;
-  const metadataJson = mergeProviderSessionIntoMetadata({
-    metadataJson: row.metadata_json,
-    providerSession: {
-      ...providerSession,
-      agentSessionId,
-      observation: attachedObservation
-    }
-  });
-  await ctx.db.run(
-    `UPDATE execution_requests SET metadata_json = ?, updated_at = ?, revision = revision + 1
-      WHERE id = ? AND deleted_at IS NULL`,
-    [metadataJson, nowIso(), executionRequestId]
-  );
-}
-async function clearLatchPendingInput({
-  ctx,
-  missionId,
-  providerSessionId,
-  requestId
-}) {
-  const rows = await ctx.db.all(
-    `SELECT id, metadata_json, launched_session_id, revision
-       FROM execution_requests
-      WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
-      ORDER BY updated_at DESC, created_at DESC`,
-    [missionId, ctx.workspace.id]
-  );
-  const row = rows.find((candidate) => {
-    const mapped = providerSessionFromMetadata(parseMetadata(candidate.metadata_json));
-    return mapped?.providerSessionId === providerSessionId;
-  });
-  if (!row) return null;
-  const providerSession = providerSessionFromMetadata(parseMetadata(row.metadata_json));
-  if (!providerSession || providerSession.providerSessionId !== providerSessionId) return null;
-  const pending = providerSession.observation?.pendingInput;
-  if (!pending || pending.requestId !== requestId) {
-    return providerSession.observation ?? null;
-  }
-  const attached = Boolean(providerSession.agentSessionId || row.launched_session_id);
-  const observation = {
-    ...providerSession.observation,
-    pendingInput: null,
-    unattached: (providerSession.observation?.turnCount ?? 0) > 0 && !attached
-  };
+  if (!providerSession || providerSession.agentSessionId === agentSessionId) return;
   await ctx.db.run(
     `UPDATE execution_requests SET metadata_json = ?, updated_at = ?, revision = revision + 1
       WHERE id = ? AND deleted_at IS NULL`,
     [
       mergeProviderSessionIntoMetadata({
         metadataJson: row.metadata_json,
-        providerSession: { ...providerSession, observation }
+        providerSession: { ...providerSession, agentSessionId }
       }),
       nowIso(),
-      row.id
+      executionRequestId
     ]
   );
-  return observation;
 }
 async function forgetLatchProviderSession({
   ctx,
@@ -139452,7 +138882,6 @@ async function forgetLatchProviderSession({
     throw new ServiceError("A Latch session id is required.", "validation_error");
   }
   return ctx.db.transaction(async (tx) => {
-    const txCtx = { ...ctx, db: tx };
     const rows = await tx.all(
       executionRequestId ? `SELECT id, project_id, mission_id, objective_id, metadata_json, revision
              FROM execution_requests
@@ -139466,19 +138895,13 @@ async function forgetLatchProviderSession({
       const mapped = providerSessionFromMetadata(parseMetadata(candidate.metadata_json));
       return mapped?.providerSessionId === sessionId;
     });
-    if (!row) {
-      return { forgotten: false, executionRequestId: executionRequestId ?? null };
-    }
-    const metadataJson = stripProviderSessionFromMetadata({
-      metadataJson: row.metadata_json
-    });
-    const now2 = nowIso();
+    if (!row) return { forgotten: false, executionRequestId: executionRequestId ?? null };
+    const metadataJson = stripProviderSessionFromMetadata({ metadataJson: row.metadata_json });
     const revision = row.revision + 1;
     const updated = await tx.run(
-      `UPDATE execution_requests
-          SET metadata_json = ?, updated_at = ?, revision = ?
+      `UPDATE execution_requests SET metadata_json = ?, updated_at = ?, revision = ?
         WHERE id = ? AND revision = ? AND deleted_at IS NULL`,
-      [metadataJson, now2, revision, row.id, row.revision]
+      [metadataJson, nowIso(), revision, row.id, row.revision]
     );
     if (updated.changes === 0) {
       throw new ServiceError(
@@ -139488,7 +138911,7 @@ async function forgetLatchProviderSession({
       );
     }
     await recordChange({
-      ctx: txCtx,
+      ctx: { ...ctx, db: tx },
       entityType: "execution_request",
       entityId: row.id,
       operation: "update",
@@ -139981,33 +139404,33 @@ async function resolveWorkspaceMemberId({
   ctx,
   member: member2
 }) {
-  const trimmed10 = member2.trim();
-  if (!trimmed10) {
+  const trimmed8 = member2.trim();
+  if (!trimmed8) {
     throw new ServiceError(ASSIGNEE_NOT_MEMBER, "validation_error");
   }
   const byWorkspaceUserId = await ctx.db.get(
     `SELECT id FROM workspace_users
         WHERE id = ? AND workspace_id = ? AND status = 'active' AND deleted_at IS NULL`,
-    [trimmed10, ctx.workspace.id]
+    [trimmed8, ctx.workspace.id]
   );
   if (byWorkspaceUserId) return byWorkspaceUserId.id;
   const byProfileId = await ctx.db.get(
     `SELECT id FROM workspace_users
         WHERE profile_id = ? AND workspace_id = ? AND status = 'active' AND deleted_at IS NULL`,
-    [trimmed10, ctx.workspace.id]
+    [trimmed8, ctx.workspace.id]
   );
   if (byProfileId) return byProfileId.id;
-  const colon = trimmed10.indexOf(":");
+  const colon = trimmed8.indexOf(":");
   if (colon > 0) {
     const byMemberKey = await ctx.db.get(
       `SELECT id FROM workspace_users
           WHERE workspace_id = ? AND status = 'active' AND deleted_at IS NULL
             AND lower(member_key) = lower(?)`,
-      [ctx.workspace.id, trimmed10]
+      [ctx.workspace.id, trimmed8]
     );
     if (byMemberKey) return byMemberKey.id;
-    const left = trimmed10.slice(0, colon);
-    const username = trimmed10.slice(colon + 1).trim();
+    const left = trimmed8.slice(0, colon);
+    const username = trimmed8.slice(colon + 1).trim();
     if (username) {
       const byOrgAndHandle = await ctx.db.get(
         `SELECT wu.id
@@ -140029,7 +139452,7 @@ async function resolveWorkspaceMemberId({
        JOIN profiles p ON p.id = wu.profile_id AND p.deleted_at IS NULL
       WHERE wu.workspace_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
         AND lower(p.handle) = lower(?)`,
-    [ctx.workspace.id, trimmed10]
+    [ctx.workspace.id, trimmed8]
   );
   if (byHandle) return byHandle.id;
   const byEmail = await ctx.db.get(
@@ -140038,7 +139461,7 @@ async function resolveWorkspaceMemberId({
        JOIN profiles p ON p.id = wu.profile_id AND p.deleted_at IS NULL
       WHERE wu.workspace_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
         AND lower(p.email) = lower(?)`,
-    [ctx.workspace.id, trimmed10]
+    [ctx.workspace.id, trimmed8]
   );
   if (byEmail) return byEmail.id;
   throw new ServiceError(ASSIGNEE_NOT_MEMBER, "validation_error");
@@ -141226,8 +140649,8 @@ async function askQuestion({
   sessionKey,
   question
 }) {
-  const trimmed10 = question.trim();
-  if (!trimmed10) {
+  const trimmed8 = question.trim();
+  if (!trimmed8) {
     throw new ServiceError("Question is required", "validation_error");
   }
   const mission = await resolveMissionId(ctx, missionId);
@@ -141251,7 +140674,7 @@ async function askQuestion({
         mission.id,
         session.objective_id,
         session.id,
-        trimmed10,
+        trimmed8,
         ctx.source,
         ctx.actorWorkspaceUserId,
         now2
@@ -142109,11 +141532,11 @@ var DEFAULT_LAUNCH_SESSION_DEFAULTS2 = {
   openViewerOnLaunch: DEFAULT_OPEN_VIEWER_ON_LAUNCH2
 };
 var LAUNCH_SESSION_METADATA_KEY2 = "launchSession";
-function trimmed9(value) {
+function trimmed7(value) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 function viewerKindForLauncher2(launcher) {
-  const value = trimmed9(launcher);
+  const value = trimmed7(launcher);
   if (!value)
     return "inline";
   const lowered = value.toLowerCase();
@@ -142127,10 +141550,10 @@ function normalizeExecutionProvider2(value) {
   if (!value || typeof value !== "object" || Array.isArray(value))
     return null;
   const cast = value;
-  const kind = trimmed9(cast.kind)?.toLowerCase() === "latch" ? "latch" : "direct";
+  const kind = trimmed7(cast.kind)?.toLowerCase() === "latch" ? "latch" : "direct";
   return {
     kind,
-    executable: trimmed9(cast.executable) ?? DEFAULT_LATCH_EXECUTABLE2
+    executable: trimmed7(cast.executable) ?? DEFAULT_LATCH_EXECUTABLE2
   };
 }
 function resolveLaunchSession2({ profile, defaults: defaults2 = DEFAULT_LAUNCH_SESSION_DEFAULTS2 }) {
@@ -142160,15 +141583,15 @@ function launchSessionSnapshotFromMetadata2(metadata) {
   if (cast.version !== TERMINAL_PROFILE_VERSION2)
     return null;
   const viewer = cast.viewer && typeof cast.viewer === "object" && !Array.isArray(cast.viewer) ? cast.viewer : null;
-  const launcher = trimmed9(viewer?.launcher);
-  const source = (value) => trimmed9(value) === "target" ? "target" : "user_default";
+  const launcher = trimmed7(viewer?.launcher);
+  const source = (value) => trimmed7(value) === "target" ? "target" : "user_default";
   return {
     version: TERMINAL_PROFILE_VERSION2,
     executionProvider: normalizeExecutionProvider2(cast.executionProvider) ?? {
       ...DEFAULT_EXECUTION_PROVIDER2
     },
     viewer: {
-      kind: trimmed9(viewer?.kind) ? trimmed9(viewer?.kind) : viewerKindForLauncher2(launcher),
+      kind: trimmed7(viewer?.kind) ? trimmed7(viewer?.kind) : viewerKindForLauncher2(launcher),
       launcher,
       openOnLaunch: viewer?.openOnLaunch !== false,
       // A snapshot frozen before `openAs` existed carries none; `window` is what
@@ -142177,7 +141600,7 @@ function launchSessionSnapshotFromMetadata2(metadata) {
     },
     executionProviderSource: source(cast.executionProviderSource),
     viewerOpenSource: source(cast.viewerOpenSource),
-    resolvedAt: trimmed9(cast.resolvedAt) ?? ""
+    resolvedAt: trimmed7(cast.resolvedAt) ?? ""
   };
 }
 
@@ -143971,65 +143394,10 @@ async function listMissionTerminalSessions(missionId) {
         viewerKind: snapshot?.viewer.kind ?? "iterm",
         viewerOpenAs: snapshot?.viewer.openAs ?? "window",
         createdAt: providerSession.createdAt,
-        lastObservedState: terminalSessionState(providerSession.lastObservedState),
-        observation: providerSession.observation ? {
-          cursor: providerSession.observation.cursor,
-          lastEventAt: providerSession.observation.lastEventAt,
-          turnCount: providerSession.observation.turnCount,
-          pendingInput: providerSession.observation.pendingInput,
-          unattached: providerSession.observation.unattached
-        } : null
+        lastObservedState: terminalSessionState(providerSession.lastObservedState)
       }
     ];
   });
-}
-async function ingestMissionHarnessEvents(missionRef, body) {
-  const scope = await requireMissionPermission({
-    missionRef,
-    permission: PERMISSIONS.SESSION_READ
-  });
-  const ctx = await buildWebappServiceContextForWorkspace(
-    scope.workspaceId,
-    requireDatabaseClient(),
-    scope.workspaceUserId
-  );
-  const payload = asRecord(body);
-  const providerSessionId = typeof payload.providerSessionId === "string" ? payload.providerSessionId : "";
-  const executionRequestId = typeof payload.executionRequestId === "string" ? payload.executionRequestId : null;
-  const events = Array.isArray(payload.events) ? payload.events : [];
-  const from = typeof payload.from === "number" ? payload.from : 0;
-  return ingestLatchHarnessEvents({
-    ctx,
-    missionId: scope.missionId,
-    executionRequestId,
-    providerSessionId,
-    events,
-    from
-  });
-}
-async function resolveMissionLatchObservation(missionRef, body) {
-  const scope = await requireMissionPermission({
-    missionRef,
-    permission: PERMISSIONS.SESSION_ATTACH
-  });
-  const ctx = await buildWebappServiceContextForWorkspace(
-    scope.workspaceId,
-    requireDatabaseClient(),
-    scope.workspaceUserId
-  );
-  const payload = asRecord(body);
-  const providerSessionId = typeof payload.providerSessionId === "string" ? payload.providerSessionId : "";
-  const requestId = typeof payload.requestId === "string" ? payload.requestId : "";
-  if (!providerSessionId.trim() || !requestId.trim()) {
-    throw new ApiError(400, "providerSessionId and requestId are required");
-  }
-  const observation = await clearLatchPendingInput({
-    ctx,
-    missionId: scope.missionId,
-    providerSessionId,
-    requestId
-  });
-  return { observation };
 }
 async function forgetMissionLatchSession(missionRef, body) {
   const scope = await requireMissionPermission({
@@ -144660,8 +144028,8 @@ var PUBLIC_BACKEND_URL_ENV_KEYS = [
   "OVERLORD_BACKEND_URL"
 ];
 function normalizeOriginUrl(value) {
-  const trimmed10 = value.trim().replace(/\/+$/, "");
-  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed10) ? trimmed10 : `http://${trimmed10}`;
+  const trimmed8 = value.trim().replace(/\/+$/, "");
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed8) ? trimmed8 : `http://${trimmed8}`;
   return new URL(withScheme).origin;
 }
 function readConfiguredPublicBackendUrls() {
@@ -145720,10 +145088,10 @@ async function updateOrganization(id, body) {
     const changed = [];
     let name = existing.name;
     if (body.name !== void 0) {
-      const trimmed10 = body.name.trim();
-      if (!trimmed10) throw new ApiError(400, "Organization name cannot be empty");
-      if (trimmed10 !== existing.name) changed.push("name");
-      name = trimmed10;
+      const trimmed8 = body.name.trim();
+      if (!trimmed8) throw new ApiError(400, "Organization name cannot be empty");
+      if (trimmed8 !== existing.name) changed.push("name");
+      name = trimmed8;
     }
     if (body.logoUrl !== void 0) {
       const logoUrl = body.logoUrl?.trim() || null;
@@ -146265,12 +145633,12 @@ async function resolveResourceExecutionTargetId(db, workspaceId2, executionTarge
     }
   }
   if (executionTargetId === null) return null;
-  const trimmed10 = executionTargetId.trim();
-  if (!trimmed10) return null;
-  if (!await executionTargetBelongsToWorkspace(db, trimmed10, workspaceId2)) {
+  const trimmed8 = executionTargetId.trim();
+  if (!trimmed8) return null;
+  if (!await executionTargetBelongsToWorkspace(db, trimmed8, workspaceId2)) {
     throw new ApiError(404, "Execution target not found");
   }
-  return trimmed10;
+  return trimmed8;
 }
 async function getProjectResourceRow(db, projectId, resourceId, permission = PERMISSIONS.PROJECT_READ) {
   await getProject2(projectId, db, permission);
@@ -147437,8 +146805,8 @@ async function listProjectTags(projectId) {
 }
 function normalizeTagColor(color) {
   if (color === null || color === void 0) return null;
-  const trimmed10 = color.trim();
-  return trimmed10.length > 0 ? trimmed10 : null;
+  const trimmed8 = color.trim();
+  return trimmed8.length > 0 ? trimmed8 : null;
 }
 async function createProjectTag(projectId, body) {
   return requireDatabaseClient().transaction(async (tx) => {
@@ -148084,8 +147452,8 @@ async function getProjectRepository(projectId, executionTargetId, resourceKey = 
 }
 var hexColorPattern = /^#?[0-9a-fA-F]{6}$/;
 function normalizeHexColor(value) {
-  const trimmed10 = value.trim();
-  const withHash = trimmed10.startsWith("#") ? trimmed10 : `#${trimmed10}`;
+  const trimmed8 = value.trim();
+  const withHash = trimmed8.startsWith("#") ? trimmed8 : `#${trimmed8}`;
   return hexColorPattern.test(withHash) ? withHash.toLowerCase() : null;
 }
 async function createProject2(body) {
@@ -149730,12 +149098,12 @@ async function generateMissionTitle(missionRef) {
 }
 async function resolveAssignedWorkspaceUserId(db, workspaceId2, value) {
   if (value === null || value === void 0) return null;
-  const trimmed10 = value.trim();
-  if (!trimmed10) return null;
+  const trimmed8 = value.trim();
+  if (!trimmed8) return null;
   const member2 = await db.get(
     `SELECT id FROM workspace_users
         WHERE id = ? AND workspace_id = ? AND status = 'active' AND deleted_at IS NULL`,
-    [trimmed10, workspaceId2]
+    [trimmed8, workspaceId2]
   );
   if (!member2) throw new ApiError(400, "Assignee is not a member of this workspace");
   return member2.id;
@@ -151429,13 +150797,13 @@ function mergeProfileMetadataJson2({
   if (avatarUrl) parsed.avatarUrl = avatarUrl;
   else if (avatarUrl !== void 0) delete parsed.avatarUrl;
   if (agentInstructions !== void 0) {
-    const trimmed10 = agentInstructions?.trim() ?? "";
-    if (trimmed10) parsed.agentInstructions = trimmed10;
+    const trimmed8 = agentInstructions?.trim() ?? "";
+    if (trimmed8) parsed.agentInstructions = trimmed8;
     else delete parsed.agentInstructions;
   }
   if (editorScheme !== void 0) {
-    const trimmed10 = editorScheme?.trim() ?? "";
-    if (trimmed10) parsed.editorScheme = trimmed10;
+    const trimmed8 = editorScheme?.trim() ?? "";
+    if (trimmed8) parsed.editorScheme = trimmed8;
     else delete parsed.editorScheme;
   }
   return JSON.stringify(parsed);
@@ -152014,7 +151382,7 @@ async function revokeUserTokenSecret(rawToken) {
 var import_node_crypto20 = require("node:crypto");
 
 // sql-studio/sql-studio.ts
-var import_node_child_process9 = require("node:child_process");
+var import_node_child_process7 = require("node:child_process");
 var import_node_fs18 = require("node:fs");
 var import_node_path27 = __toESM(require("node:path"), 1);
 function publicHost(host) {
@@ -152056,7 +151424,7 @@ function startSqlStudio(config4) {
     "sqlite",
     config4.databasePath
   ];
-  const launched = (0, import_node_child_process9.spawn)(binary2, args, {
+  const launched = (0, import_node_child_process7.spawn)(binary2, args, {
     stdio: ["ignore", "pipe", "pipe"]
   });
   let child = launched;
@@ -161748,8 +161116,8 @@ function runnerRegistrationFromBody(value) {
   const text = (key) => {
     const raw = body[key];
     if (typeof raw !== "string") return null;
-    const trimmed10 = raw.trim();
-    return trimmed10.length > 0 ? trimmed10 : null;
+    const trimmed8 = raw.trim();
+    return trimmed8.length > 0 ? trimmed8 : null;
   };
   const relation = text("runnerRelation");
   const capabilities = body.capabilities && typeof body.capabilities === "object" && !Array.isArray(body.capabilities) ? body.capabilities : null;
@@ -162006,27 +161374,6 @@ async function updateRunnerRequestStatus({
 function providerSessionFromLaunchedBody(body) {
   if (!body || typeof body !== "object" || Array.isArray(body)) return null;
   return parseExecutionProviderSession(body.providerSession);
-}
-async function ingestRunnerHarnessEvents({
-  requestId,
-  body
-}) {
-  const ctx = await requestRunnerContext(requestId);
-  const request = await getExecutionRequest({ ctx, id: requestId });
-  const payload = asRecord(body);
-  const mapped = providerSessionFromMetadata(request.metadata);
-  const providerSessionId = typeof payload.providerSessionId === "string" && payload.providerSessionId.trim() ? payload.providerSessionId.trim() : mapped?.providerSessionId ?? "";
-  const events = Array.isArray(payload.events) ? payload.events : [];
-  const from = typeof payload.from === "number" ? payload.from : 0;
-  const result = await ingestLatchHarnessEvents({
-    ctx,
-    missionId: request.missionId,
-    executionRequestId: request.id,
-    providerSessionId,
-    events,
-    from
-  });
-  return result;
 }
 async function completeRunnerMutationRequest({
   requestId,
@@ -162299,9 +161646,9 @@ init_errors5();
 var import_node_crypto21 = require("node:crypto");
 init_errors5();
 function decodeEncryptionKey(encoded) {
-  const trimmed10 = encoded?.trim();
-  if (!trimmed10) return null;
-  const key = Buffer.from(trimmed10, "base64url");
+  const trimmed8 = encoded?.trim();
+  if (!trimmed8) return null;
+  const key = Buffer.from(trimmed8, "base64url");
   if (key.length !== 32) return null;
   return key;
 }
@@ -163534,8 +162881,8 @@ function resolveAllowedBrowserOrigins({
   const extraOrigins = process.env.OVERLORD_WEB_ORIGINS?.trim();
   if (extraOrigins) {
     for (const origin of extraOrigins.split(",")) {
-      const trimmed10 = origin.trim();
-      if (trimmed10) origins.add(trimmed10);
+      const trimmed8 = origin.trim();
+      if (trimmed8) origins.add(trimmed8);
     }
   }
   return [...origins];
@@ -163600,10 +162947,10 @@ function placeholders(count) {
 }
 function resolveAgentIdentifier(...candidates) {
   for (const candidate of candidates) {
-    const trimmed10 = candidate?.trim();
-    if (!trimmed10) continue;
-    if (trimmed10.toLowerCase() === "unknown") continue;
-    return trimmed10;
+    const trimmed8 = candidate?.trim();
+    if (!trimmed8) continue;
+    if (trimmed8.toLowerCase() === "unknown") continue;
+    return trimmed8;
   }
   return null;
 }
@@ -163894,9 +163241,9 @@ var MAX_EVENT_PAYLOAD_BYTES = 8 * 1024;
 var MAX_EVENT_IDENTIFIER_LENGTH = 200;
 function boundedText(value, max) {
   if (typeof value !== "string") return null;
-  const trimmed10 = value.trim();
-  if (trimmed10 === "") return null;
-  return trimmed10.length <= max ? trimmed10 : `${trimmed10.slice(0, max - 1)}\u2026`;
+  const trimmed8 = value.trim();
+  if (trimmed8 === "") return null;
+  return trimmed8.length <= max ? trimmed8 : `${trimmed8.slice(0, max - 1)}\u2026`;
 }
 function requiredIdentifier(value, field) {
   const bounded2 = boundedText(value, MAX_EVENT_IDENTIFIER_LENGTH);
@@ -164198,9 +163545,9 @@ var REQUEST_COLUMNS = `
   created_at, updated_at, revision
 `;
 function boundedSummary(value) {
-  const trimmed10 = value.trim();
-  if (!trimmed10) throw new ServiceError("Request summary is required", "invalid_request", 400);
-  return trimmed10.length <= MAX_REQUEST_SUMMARY_LENGTH ? trimmed10 : `${trimmed10.slice(0, MAX_REQUEST_SUMMARY_LENGTH - 1)}\u2026`;
+  const trimmed8 = value.trim();
+  if (!trimmed8) throw new ServiceError("Request summary is required", "invalid_request", 400);
+  return trimmed8.length <= MAX_REQUEST_SUMMARY_LENGTH ? trimmed8 : `${trimmed8.slice(0, MAX_REQUEST_SUMMARY_LENGTH - 1)}\u2026`;
 }
 function boundedOptions(options) {
   if (!options || options.length === 0) return "[]";
@@ -164995,7 +164342,7 @@ async function prepareMissionSessionChannel(_missionRef, _body) {
 }
 function sessionControlsGone() {
   throw new ServiceError(
-    "There are no active session-input controls. Harness permission and question prompts are presented from Latch observation.",
+    "There are no active session-input controls. Permission and question prompts remain with the native agent harness.",
     "session_controls_gone",
     410
   );
@@ -165644,9 +164991,9 @@ function deriveDeterministicActionCandidates({
 }
 function clampText(value, maxLength) {
   if (typeof value !== "string") return null;
-  const trimmed10 = value.trim();
-  if (!trimmed10) return null;
-  return trimmed10.length > maxLength ? trimmed10.slice(0, maxLength) : trimmed10;
+  const trimmed8 = value.trim();
+  if (!trimmed8) return null;
+  return trimmed8.length > maxLength ? trimmed8.slice(0, maxLength) : trimmed8;
 }
 function clampStringList(value, maxItems = DELIVERY_REPORT_LIMITS.maxItems) {
   if (!Array.isArray(value)) return [];
@@ -169860,20 +169207,14 @@ app.get("/api/auth/callback/github/repository", async (req, res, next) => {
 });
 app.all("/api/auth/*", authNodeHandler);
 var jsonBody = import_express4.default.json();
-var harnessEventsJsonBody = import_express4.default.json({ limit: "1mb" });
 var urlEncodedBody = import_express4.default.urlencoded({ extended: false });
 function isRawUploadRequest(req) {
   if (req.method !== "POST") return false;
   if (req.path.startsWith("/api/uploads/")) return true;
   return /^\/api\/objectives\/[^/]+\/attachments$/.test(req.path);
 }
-function isHarnessEventsRequest(req) {
-  if (req.method !== "POST") return false;
-  return req.path.endsWith("/terminal-sessions/harness-events") || /^\/api\/runner\/requests\/[^/]+\/harness-events$/.test(req.path);
-}
 app.use((req, res, next) => {
   if (isRawUploadRequest(req)) return next();
-  if (isHarnessEventsRequest(req)) return harnessEventsJsonBody(req, res, next);
   return jsonBody(req, res, next);
 });
 app.get("/api/auth-providers", (_req, res) => {
@@ -170943,14 +170284,6 @@ app.post(
   handle3((req) => prepareMissionSessionChannel(req.params.id, req.body ?? {}), { mutates: true })
 );
 app.post(
-  "/api/missions/:id/terminal-sessions/harness-events",
-  handle3((req) => ingestMissionHarnessEvents(req.params.id, req.body ?? {}), { mutates: true })
-);
-app.post(
-  "/api/missions/:id/terminal-sessions/resolve-observation",
-  handle3((req) => resolveMissionLatchObservation(req.params.id, req.body ?? {}), { mutates: true })
-);
-app.post(
   "/api/missions/:id/terminal-sessions/forget",
   handle3((req) => forgetMissionLatchSession(req.params.id, req.body ?? {}), { mutates: true })
 );
@@ -171258,12 +170591,6 @@ app.post(
       mutates: true
     }
   )
-);
-app.post(
-  "/api/runner/requests/:id/harness-events",
-  handle3((req) => ingestRunnerHarnessEvents({ requestId: req.params.id, body: req.body ?? {} }), {
-    mutates: true
-  })
 );
 app.post(
   "/api/runner/requests/:id/failed",

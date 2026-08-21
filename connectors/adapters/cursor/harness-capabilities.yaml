@@ -58,8 +58,9 @@ capabilities:
     native: preToolUse
     trackedAs: latch-engine
     notes: >-
-      Mechanical preToolUse observation moved to Latch `events`. Native Cursor permission
-      prompts own approvals when Latch is absent.
+      Latch v2 removed the CLI event stream that previously owned mechanical observation.
+      Native Cursor permission prompts own approvals; Overlord exposes no replacement until it
+      has a native Conversation Hub client.
   observe.toolResult:
     status: supported
     native: postToolUse

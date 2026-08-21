@@ -77,7 +77,7 @@ This connector is intentionally reviewable against the four connector layers in 
 - `commands/*.md` — slash commands for session routing, objective discussion, mission creation, and work recording.
 - `hooks/overlord-user-prompt-submit.sh` — `beforeSubmitPrompt` follow-up capture through `ovld protocol hook-event`.
 - `hooks/overlord-post-tool-use.sh` — records `postToolUse` file edits and shell-mediated changes for exact per-session delivery attribution.
-- `hooks/overlord-stop.sh` — checks pending delivery through `ovld protocol hook-event`; when needed, it asks Cursor to continue once so the agent can finish delivery. Mechanical harness observation, permission, and injection are Latch's (`latch events` / PTY), not Overlord connector registrations.
+- `hooks/overlord-stop.sh` — checks pending delivery through `ovld protocol hook-event`; when needed, it asks Cursor to continue once so the agent can finish delivery. Mechanical harness observation, permission, and injection are not live Overlord connector paths under Latch v2; native Cursor prompts retain control.
 - `rules/overlord-local.mdc` — always-on workflow rules for Cursor sessions.
 - `mcp.json` + `scripts/overlord-mcp.mjs` — MCP bridge to common `ovld protocol` operations. The shim is **generated**: it is rendered from `connectors/core/scripts/overlord-mcp.mjs` at setup time with the adapter key substituted, and there is no copy in this directory to edit.
 - `conformance-manifest.yaml` — connector conformance declaration for the Overlord contract.
@@ -92,4 +92,4 @@ The shared Connector Core source lives at `connectors/core/overlord-mission`. `o
 
 See the [adapter capability matrix](../../README.md#adapter-capability-matrix) for how this compares across adapters.
 
-Cursor hook execution is fail-open by default, so Overlord protocol-hook failures do not strand the agent. Permission and question prompts are Latch `awaiting_input` when Latch hosts the session.
+Cursor hook execution is fail-open by default, so Overlord protocol-hook failures do not strand the agent. Permission and question prompts remain with Cursor; Overlord has no Latch v2 conversation client yet.

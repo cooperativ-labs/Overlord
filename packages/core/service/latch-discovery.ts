@@ -20,7 +20,7 @@ import { latchChildEnvironment } from './latch-environment.ts';
 import { DEFAULT_LATCH_EXECUTABLE } from './terminal-profile-types.ts';
 
 /** Protocol version Overlord's Latch provider speaks today. */
-export const SUPPORTED_LATCH_PROTOCOL_VERSION = 1;
+export const SUPPORTED_LATCH_PROTOCOL_VERSION = 2;
 
 /**
  * Capabilities required before Overlord offers Latch as a launch provider.

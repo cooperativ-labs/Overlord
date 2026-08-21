@@ -1,15 +1,12 @@
 import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { chunkLatchHarnessEventsForIngest } from '../../../packages/core/service/latch-harness-ingest.ts';
 import { isLatchSessionAbsentMessage } from '../../../packages/core/service/latch-session-absent.ts';
 import type {
   CapabilityFailure,
   CapabilityResult,
-  CollectLatchEventsResult,
   InspectLatchSessionResult,
   LocalTargetErrorCode,
   OpenLatchSessionResult,
-  ResolveLatchInputResult,
   StopLatchSessionResult
 } from '../../../packages/core/service/local-target/types.ts';
 import type { TerminalSessionDto } from '../../shared/contract.ts';
@@ -151,89 +148,6 @@ export function useStopLatchSession(session: TerminalSessionDto) {
           inspectedAt: new Date().toISOString()
         })
       );
-    }
-  });
-}
-
-export function useLatchHarnessEventIngest({
-  session,
-  missionId,
-  enabled
-}: {
-  session: TerminalSessionDto;
-  missionId: string;
-  enabled: boolean;
-}) {
-  const qc = useQueryClient();
-  const localTargetAvailable = useLocalTargetCapabilityAvailable();
-  const from = session.observation?.cursor ?? 0;
-  return useQuery({
-    // The cursor deliberately stays out of the key. Keying on it minted a fresh
-    // cache entry — holding a full collected-event payload — every time the
-    // observation advanced, and a session polling every ten seconds kept a
-    // gcTime's worth of those alive at once. The interval already refetches, and
-    // each refetch runs the current render's `queryFn`, so a stable key reads the
-    // latest cursor without accumulating entries. `gcTime: 0` drops the payload
-    // as soon as nothing is subscribed rather than parking it for five minutes.
-    queryKey: ['latch-events', session.providerSessionId] as const,
-    gcTime: 0,
-    queryFn: async () => {
-      const collected = await requireLocalTargetResult(
-        await invokeLocalTarget<CollectLatchEventsResult>({
-          capability: 'collectLatchEvents',
-          input: {
-            providerSessionId: session.providerSessionId,
-            executable: session.executable,
-            from
-          }
-        })
-      );
-      if (collected.events.length > 0) {
-        const chunks = chunkLatchHarnessEventsForIngest({
-          events: collected.events,
-          from: collected.from
-        });
-        for (const chunk of chunks) {
-          await api.ingestMissionHarnessEvents(missionId, {
-            providerSessionId: session.providerSessionId,
-            events: chunk.events,
-            from: chunk.from,
-            executionRequestId: session.executionRequestId
-          });
-        }
-        await qc.invalidateQueries({ queryKey: keys.mission(missionId) });
-      }
-      return collected;
-    },
-    enabled: enabled && localTargetAvailable,
-    refetchInterval: 10_000,
-    retry: false
-  });
-}
-
-export function useResolveLatchObservation(session: TerminalSessionDto, missionId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ requestId, choice }: { requestId: string; choice: string }) => {
-      const resolved = await requireLocalTargetResult(
-        await invokeLocalTarget<ResolveLatchInputResult>({
-          capability: 'resolveLatchInput',
-          input: {
-            providerSessionId: session.providerSessionId,
-            executable: session.executable,
-            requestId,
-            choice
-          }
-        })
-      );
-      await api.resolveMissionLatchObservation(missionId, {
-        providerSessionId: session.providerSessionId,
-        requestId
-      });
-      return resolved;
-    },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: keys.mission(missionId) });
     }
   });
 }

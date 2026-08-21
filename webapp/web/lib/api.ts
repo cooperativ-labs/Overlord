@@ -59,7 +59,6 @@ import type {
   InboxItemDto,
   InviteWorkspaceMemberBody,
   InviteWorkspaceMemberResultDto,
-  LatchHarnessObservationDto,
   LaunchObjectiveBody,
   LaunchPreferenceDto,
   LaunchSettingsDto,
@@ -623,29 +622,6 @@ export const api = {
     request<PurgeWorktreesResultDto>('POST', '/api/worktrees/purge-merged', body),
   listMissionEvents: (id: string) =>
     request<MissionEventDto[]>('GET', `/api/missions/${id}/events`),
-  ingestMissionHarnessEvents: (
-    missionId: string,
-    body: {
-      providerSessionId: string;
-      events: unknown[];
-      from?: number;
-      executionRequestId?: string | null;
-    }
-  ) =>
-    request<{
-      providerSessionId: string;
-      observation: LatchHarnessObservationDto;
-      notified: boolean;
-    }>('POST', `/api/missions/${missionId}/terminal-sessions/harness-events`, body),
-  resolveMissionLatchObservation: (
-    missionId: string,
-    body: { providerSessionId: string; requestId: string }
-  ) =>
-    request<{ observation: LatchHarnessObservationDto | null }>(
-      'POST',
-      `/api/missions/${missionId}/terminal-sessions/resolve-observation`,
-      body
-    ),
   forgetMissionLatchSession: (
     missionId: string,
     body: { providerSessionId: string; executionRequestId?: string | null }

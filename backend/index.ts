@@ -23,11 +23,7 @@ import type {
 import { postMissionBranchObservations } from './branching/mission-branch-observations.ts';
 import { postExecutionTargetObservations } from './branching/target-resource-observations.ts';
 import { getExecutionTargetMigrationDiagnostics } from './execution/execution-target-migration.ts';
-import {
-  forgetMissionLatchSession,
-  ingestMissionHarnessEvents,
-  resolveMissionLatchObservation
-} from './execution/latch-sessions.ts';
+import { forgetMissionLatchSession } from './execution/latch-sessions.ts';
 import {
   getAgentCatalog,
   getLaunchPreference,
@@ -57,7 +53,6 @@ import {
   claimRunnerRequest,
   clearRunnerRequests,
   completeRunnerMutationRequest,
-  ingestRunnerHarnessEvents,
   providerSessionFromLaunchedBody,
   recordBranchPrepared,
   runnerStatus,
@@ -504,8 +499,6 @@ app.get('/api/auth/callback/github/repository', async (req, res, next) => {
 app.all('/api/auth/*', authNodeHandler);
 
 const jsonBody = express.json();
-/** Latch event snapshots routinely exceed Express's 100 KiB default. */
-const harnessEventsJsonBody = express.json({ limit: '1mb' });
 const urlEncodedBody = express.urlencoded({ extended: false });
 function isRawUploadRequest(req: Request): boolean {
   if (req.method !== 'POST') return false;
@@ -513,17 +506,8 @@ function isRawUploadRequest(req: Request): boolean {
   return /^\/api\/objectives\/[^/]+\/attachments$/.test(req.path);
 }
 
-function isHarnessEventsRequest(req: Request): boolean {
-  if (req.method !== 'POST') return false;
-  return (
-    req.path.endsWith('/terminal-sessions/harness-events') ||
-    /^\/api\/runner\/requests\/[^/]+\/harness-events$/.test(req.path)
-  );
-}
-
 app.use((req, res, next) => {
   if (isRawUploadRequest(req)) return next();
-  if (isHarnessEventsRequest(req)) return harnessEventsJsonBody(req, res, next);
   return jsonBody(req, res, next);
 });
 
@@ -1873,14 +1857,6 @@ app.post(
   handle(req => prepareMissionSessionChannel(req.params.id, req.body ?? {}), { mutates: true })
 );
 app.post(
-  '/api/missions/:id/terminal-sessions/harness-events',
-  handle(req => ingestMissionHarnessEvents(req.params.id, req.body ?? {}), { mutates: true })
-);
-app.post(
-  '/api/missions/:id/terminal-sessions/resolve-observation',
-  handle(req => resolveMissionLatchObservation(req.params.id, req.body ?? {}), { mutates: true })
-);
-app.post(
   '/api/missions/:id/terminal-sessions/forget',
   handle(req => forgetMissionLatchSession(req.params.id, req.body ?? {}), { mutates: true })
 );
@@ -2239,12 +2215,6 @@ app.post(
       mutates: true
     }
   )
-);
-app.post(
-  '/api/runner/requests/:id/harness-events',
-  handle(req => ingestRunnerHarnessEvents({ requestId: req.params.id, body: req.body ?? {} }), {
-    mutates: true
-  })
 );
 app.post(
   '/api/runner/requests/:id/failed',

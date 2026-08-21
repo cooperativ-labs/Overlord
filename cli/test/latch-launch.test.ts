@@ -30,7 +30,7 @@ test('latchViewerFlagForKind matches Latch open --with iterm', () => {
 test('parseLatchCreateReport is re-exported for the CLI wrapper', () => {
   const report = parseLatchCreateReport(
     JSON.stringify({
-      protocolVersion: 1,
+      protocolVersion: 2,
       session: { id: 'ses_1', name: 'n', state: 'running', createdAt: '2026-08-12T00:00:00.000Z' }
     })
   );

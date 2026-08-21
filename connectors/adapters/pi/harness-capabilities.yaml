@@ -103,7 +103,8 @@ capabilities:
     native: sendUserMessage(deliverAs=steer)
     trackedAs: latch-engine
     notes: >-
-      Session-input injection moved off the Overlord connector. Latch PTY write is Phase 3.
+      Session-input injection is not a live Overlord connector path. A future conversation
+      surface must use the native Latch v2 Conversation Hub protocol.
   inject.turnBoundary:
     status: not-implemented
     native: sendUserMessage(deliverAs=followUp)

@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Check, Copy, ExternalLink, Loader2, Monitor, Octagon } from 'lucide-react';
+import { Check, Copy, ExternalLink, Loader2, Monitor, Octagon } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 
 import type { ObjectiveDto, TerminalSessionDto } from '../../shared/contract.ts';
@@ -7,10 +7,8 @@ import { useCopyToClipboard } from '../lib/hooks/use-copy-to-clipboard.ts';
 import {
   forgetAbsentLatchSession,
   isLatchSessionAbsentError,
-  useLatchHarnessEventIngest,
   useLatchSessionInspection,
   useOpenLatchSession,
-  useResolveLatchObservation,
   useStopLatchSession
 } from '../lib/latch-session-client.ts';
 import { selectLatchSessionDisplay } from '../lib/latch-session-display.ts';
@@ -61,15 +59,14 @@ function objectiveLabelFor(
 }
 
 /**
- * Live view of one Latch session: the reachability probe plus the harness-event
- * ingest that feeds mission activity.
+ * Live view of one Latch session through its terminal reachability probe.
  *
  * Tracking is deliberately separate from rendering. The panel only ever draws
  * one full card, but a session that is still running has to keep reporting even
  * while it sits collapsed inside the accordion — otherwise streamlining the
- * display would silently stop watching real work. Both queries are keyed by
- * provider session id, so a tracked session that also gets rendered shares one
- * poll rather than doubling it.
+ * display would silently stop detecting a session Latch has reclaimed. Queries
+ * are keyed by provider session id, so a tracked session that also gets rendered
+ * shares one poll rather than doubling it.
  */
 function useLatchSessionTracking({
   session,
@@ -86,9 +83,7 @@ function useLatchSessionTracking({
   const onThisDevice =
     Boolean(localExecutionTargetId) && session.executionTargetId === localExecutionTargetId;
   const inspection = useLatchSessionInspection({ session, enabled: onThisDevice });
-  const events = useLatchHarnessEventIngest({ session, missionId, enabled: onThisDevice });
-  const absent =
-    isLatchSessionAbsentError(inspection.error) || isLatchSessionAbsentError(events.error);
+  const absent = isLatchSessionAbsentError(inspection.error);
 
   useEffect(() => {
     if (!absent) return;
@@ -107,7 +102,6 @@ function useLatchSessionTracking({
   return {
     onThisDevice,
     inspection,
-    events,
     absent,
     state: inspection.data?.state ?? session.lastObservedState,
     name: inspection.data?.name ?? session.sessionName,
@@ -227,19 +221,16 @@ function TerminalSessionCard({
   footer?: ReactNode;
 }) {
   const { copied, copy } = useCopyToClipboard();
-  const { inspection, events, absent, state, name, reachable, checking } = useLatchSessionTracking({
+  const { inspection, absent, state, name, reachable, checking } = useLatchSessionTracking({
     session,
     missionId,
     localExecutionTargetId,
     onAbsent
   });
   const openSession = useOpenLatchSession(session);
-  const resolveObservation = useResolveLatchObservation(session, missionId);
   const attachCommand = `${session.executable} attach ${session.providerSessionId}`;
   const viewer = viewerLabel(session.viewerKind);
   const canStop = reachable && state === 'running';
-  const pending = session.observation?.pendingInput ?? null;
-  const unattached = session.observation?.unattached === true;
 
   if (absent) return null;
 
@@ -282,45 +273,6 @@ function TerminalSessionCard({
         </span>
       </div>
 
-      {unattached ? (
-        <div className="mt-3 flex gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-xs text-amber-800 dark:text-amber-200">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <p>
-            This Latch session has produced turns, but the agent has not attached to the mission.
-            Protocol attach is the binding record; Latch observation is presentation only.
-          </p>
-        </div>
-      ) : null}
-
-      {pending ? (
-        <div className="mt-3 space-y-2 rounded-md border border-border bg-muted/40 p-2">
-          <p className="text-xs font-medium capitalize">{pending.kind}</p>
-          <p className="text-xs text-muted-foreground">{pending.prompt}</p>
-          <div className="flex flex-wrap gap-2">
-            {(pending.choices.length > 0 ? pending.choices : ['Allow', 'Deny']).map(choice => (
-              <Button
-                key={choice}
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={!reachable || resolveObservation.isPending}
-                onClick={() => resolveObservation.mutate({ requestId: pending.requestId, choice })}
-              >
-                {resolveObservation.isPending ? <Loader2 className="animate-spin" /> : null}
-                {choice}
-              </Button>
-            ))}
-          </div>
-          {resolveObservation.isError ? (
-            <p className="text-xs text-destructive">
-              {resolveObservation.error instanceof Error
-                ? resolveObservation.error.message
-                : 'Could not resolve the Latch prompt.'}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-
       <div className="mt-3 flex flex-wrap gap-2">
         <Button
           type="button"
@@ -343,10 +295,9 @@ function TerminalSessionCard({
         The attach command is a developer path. For another device, SSH to{' '}
         {session.deviceLabel ?? 'the host'} using your own SSH access, then run it there.
       </p>
-      {inspection.isError || openSession.isError || events.isError ? (
+      {inspection.isError || openSession.isError ? (
         <p className="mt-2 text-xs text-destructive">
-          {(inspection.error ?? openSession.error ?? events.error)?.message ??
-            'Latch session action failed.'}
+          {(inspection.error ?? openSession.error)?.message ?? 'Latch session action failed.'}
         </p>
       ) : null}
 

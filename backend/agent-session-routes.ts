@@ -849,7 +849,7 @@ export async function prepareMissionSessionChannel(
 
 function sessionControlsGone(): never {
   throw new ServiceError(
-    'There are no active session-input controls. Harness permission and question prompts are presented from Latch observation.',
+    'There are no active session-input controls. Permission and question prompts remain with the native agent harness.',
     'session_controls_gone',
     410
   );

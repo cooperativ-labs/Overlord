@@ -363,30 +363,6 @@ export interface StopLatchSessionResult {
   state: 'running' | 'exited' | 'stopping' | 'lost';
 }
 
-export interface CollectLatchEventsInput extends LatchSessionInput {
-  from?: number;
-}
-
-export interface CollectLatchEventsResult {
-  providerSessionId: string;
-  events: unknown[];
-  from: number;
-  nextCursor: number;
-  ended: boolean;
-}
-
-export interface ResolveLatchInputInput extends LatchSessionInput {
-  requestId: string;
-  choice: string;
-}
-
-export interface ResolveLatchInputResult {
-  providerSessionId: string;
-  requestId: string;
-  choice: string;
-  resolved: boolean;
-}
-
 export interface DoctorCheck {
   name: string;
   ok: boolean;
@@ -432,12 +408,6 @@ export interface LocalTargetCapabilities {
   ): Promise<CapabilityResult<InspectLatchSessionResult>>;
   openLatchSession(input: OpenLatchSessionInput): Promise<CapabilityResult<OpenLatchSessionResult>>;
   stopLatchSession(input: StopLatchSessionInput): Promise<CapabilityResult<StopLatchSessionResult>>;
-  collectLatchEvents(
-    input: CollectLatchEventsInput
-  ): Promise<CapabilityResult<CollectLatchEventsResult>>;
-  resolveLatchInput(
-    input: ResolveLatchInputInput
-  ): Promise<CapabilityResult<ResolveLatchInputResult>>;
   doctor(): Promise<CapabilityResult<DoctorResult>>;
 }
 

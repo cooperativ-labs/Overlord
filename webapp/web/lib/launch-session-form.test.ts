@@ -127,7 +127,7 @@ describe('launch-session-form', () => {
         state: 'found',
         executable: 'latch',
         resolvedPath: '/usr/local/bin/latch',
-        protocolVersion: 1,
+        protocolVersion: 2,
         productVersion: '0.1.0',
         capabilities: {
           create: true,

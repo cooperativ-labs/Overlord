@@ -15,7 +15,7 @@ connector:
   harnessCapabilities:
     path: connectors/adapters/pi/harness-capabilities.yaml
     schemaVersion: 1
-    digest: "d083b9610578e1af2e73b273d0661430213fbbe5ff24550e8f0815c284733ae1"
+    digest: "0166eb18d8913ea41704d3aa9afbf9164d994ae16089927e38f681be5dd005ff"
   capabilities:
     - followUpHook
     - nativeResume

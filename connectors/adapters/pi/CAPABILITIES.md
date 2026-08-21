@@ -6,7 +6,7 @@
 
 **Harness version verified** `0.83.0` · **range** `>=0.83.0 <0.84.0` · **scheme** `semver`
 
-**Descriptor digest** `d083b9610578e1af2e73b273d0661430213fbbe5ff24550e8f0815c284733ae1`
+**Descriptor digest** `0166eb18d8913ea41704d3aa9afbf9164d994ae16089927e38f681be5dd005ff`
 
 > The tier is derived from passing fixtures, never authored. `unsupported` means the harness
 > cannot do it — do not attempt it. `not-implemented` means it is buildable and unbuilt: that is
@@ -64,7 +64,7 @@ Remote decision hold moved to Latch. Pi has no native prompt; Overlord no longer
 
 - **`observe.prompt`** — The shipped extension captures `input` and posts follow-up activity through `ovld protocol hook-event`. Mechanical agent-session observation is not a live path.
 - **`decide.universal`** — Remote tool-call decisions moved to Latch. Pi no longer intercepts tools on the Overlord connector path.
-- **`inject.midTurn`** — Session-input injection moved off the Overlord connector. Latch PTY write is Phase 3.
+- **`inject.midTurn`** — Session-input injection is not a live Overlord connector path. A future conversation surface must use the native Latch v2 Conversation Hub protocol.
 
 ## Hazards
 

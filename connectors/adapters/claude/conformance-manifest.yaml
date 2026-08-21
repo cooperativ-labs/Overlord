@@ -15,7 +15,7 @@ connector:
   harnessCapabilities:
     path: connectors/adapters/claude/harness-capabilities.yaml
     schemaVersion: 1
-    digest: "833a35cecb73aa9b34b40036eb6d3088dd729ca6be465d1ee228dae2c5a8269d"
+    digest: "15ea657c37363b74db085466a97f38db044892abf2e28465b1c7bcd6cc4ce927"
   capabilities:
     - followUpHook
     - permissionHook

@@ -282,7 +282,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "codec": "claude",
     "integrationShape": "callback",
     "capabilityTier": 1,
-    "descriptorDigest": "833a35cecb73aa9b34b40036eb6d3088dd729ca6be465d1ee228dae2c5a8269d",
+    "descriptorDigest": "15ea657c37363b74db085466a97f38db044892abf2e28465b1c7bcd6cc4ce927",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Claude Code",
@@ -489,7 +489,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "codec": "codex",
     "integrationShape": "callback",
     "capabilityTier": 1,
-    "descriptorDigest": "ede31118a90f1afc3d8e934b7fd921759faac4afca1a08e4214a1104ee487b1d",
+    "descriptorDigest": "9743c504d8d11ffec193751273102d9a1277293e55f43aef8914da4b05ddfa23",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Codex CLI",
@@ -681,7 +681,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "codec": "cursor",
     "integrationShape": "callback",
     "capabilityTier": 1,
-    "descriptorDigest": "7085c25291f5c96cf3c7fb9c280281fa698b5c026e9859377ad8c53d1cd82537",
+    "descriptorDigest": "48b805b1d1cd28ccde10a839b0eb2a85eb237d82b46e3d54b21f671997b0c870",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Cursor Agent CLI",
@@ -1061,7 +1061,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "codec": "pi",
     "integrationShape": "extension",
     "capabilityTier": 1,
-    "descriptorDigest": "d083b9610578e1af2e73b273d0661430213fbbe5ff24550e8f0815c284733ae1",
+    "descriptorDigest": "0166eb18d8913ea41704d3aa9afbf9164d994ae16089927e38f681be5dd005ff",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Pi Coding Agent",
@@ -1248,7 +1248,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
   }
 ];
 
-export const HARNESS_CATALOG_DIGEST = '59627db5cb11242516fc1f6d9fa6e7d7219e308753348cbf02658532b26c2e86';
+export const HARNESS_CATALOG_DIGEST = '73cf1e64ea3f2676fa64f3c7b7469ab98635f74cbb478df487eec2a58a258492';
 
 export function findHarnessDescriptor(adapter: string): HarnessDescriptor | undefined {
   return HARNESS_DESCRIPTORS.find(entry => entry.adapter === adapter);

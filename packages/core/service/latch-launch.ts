@@ -6,7 +6,6 @@
  * never installs Latch and never treats a Latch session id as a credential.
  */
 
-import type { LatchHarnessObservation, LatchPendingInput } from './latch-events.ts';
 import type { TerminalViewerKind, ViewerOpenAs } from './terminal-profile-types.ts';
 import { parseViewerOpenAs } from './terminal-profile-types.ts';
 
@@ -72,8 +71,6 @@ export type ExecutionProviderSession = {
   agentSessionId: string | null;
   createdAt: string;
   lastObservedState: string;
-  /** Presentation-only fold of `latch events`. Never the mission record. */
-  observation?: LatchHarnessObservation | null;
 };
 
 function trimmed(value: unknown): string | null {
@@ -254,7 +251,6 @@ export function providerSessionFromMetadata(
     agentSessionId?: unknown;
     createdAt?: unknown;
     lastObservedState?: unknown;
-    observation?: unknown;
   };
   if (trimmed(cast.provider)?.toLowerCase() !== 'latch') return null;
   const providerSessionId = trimmed(cast.providerSessionId);
@@ -266,47 +262,7 @@ export function providerSessionFromMetadata(
     executionTargetId: trimmed(cast.executionTargetId),
     agentSessionId: trimmed(cast.agentSessionId),
     createdAt: trimmed(cast.createdAt) ?? '',
-    lastObservedState: trimmed(cast.lastObservedState) ?? 'running',
-    observation: parseHarnessObservation(cast.observation)
-  };
-}
-
-function parseHarnessObservation(value: unknown): LatchHarnessObservation | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const row = value as Record<string, unknown>;
-  const cursor = typeof row.cursor === 'number' && Number.isFinite(row.cursor) ? row.cursor : null;
-  if (cursor === null || cursor < 0) return null;
-  const pendingRaw =
-    row.pendingInput && typeof row.pendingInput === 'object' && !Array.isArray(row.pendingInput)
-      ? (row.pendingInput as Record<string, unknown>)
-      : null;
-  const pendingKind = trimmed(pendingRaw?.kind);
-  const pendingInput: LatchPendingInput | null =
-    pendingRaw &&
-    trimmed(pendingRaw.requestId) &&
-    (pendingKind === 'permission' || pendingKind === 'question') &&
-    typeof pendingRaw.prompt === 'string'
-      ? {
-          requestId: trimmed(pendingRaw.requestId)!,
-          kind: pendingKind === 'question' ? 'question' : 'permission',
-          prompt: pendingRaw.prompt,
-          choices: Array.isArray(pendingRaw.choices)
-            ? pendingRaw.choices.filter((choice): choice is string => typeof choice === 'string')
-            : [],
-          at: trimmed(pendingRaw.at) ?? ''
-        }
-      : null;
-  return {
-    cursor,
-    connectorEpoch:
-      typeof row.connectorEpoch === 'number' && Number.isFinite(row.connectorEpoch)
-        ? row.connectorEpoch
-        : null,
-    lastEventAt: trimmed(row.lastEventAt),
-    turnCount:
-      typeof row.turnCount === 'number' && Number.isFinite(row.turnCount) ? row.turnCount : 0,
-    pendingInput,
-    unattached: row.unattached === true
+    lastObservedState: trimmed(cast.lastObservedState) ?? 'running'
   };
 }
 
@@ -329,13 +285,9 @@ export function mergeProviderSessionIntoMetadata({
       parsed = {};
     }
   }
-  const existing = providerSessionFromMetadata(parsed);
   return JSON.stringify({
     ...parsed,
-    [PROVIDER_SESSION_METADATA_KEY]: {
-      ...providerSession,
-      observation: providerSession.observation ?? existing?.observation ?? null
-    }
+    [PROVIDER_SESSION_METADATA_KEY]: providerSession
   });
 }
 

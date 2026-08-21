@@ -17,7 +17,7 @@ describe('discoverLatch capability', () => {
               state: 'found',
               executable: 'latch',
               resolvedPath: '/usr/local/bin/latch',
-              protocolVersion: 1,
+              protocolVersion: 2,
               productVersion: '0.1.0',
               capabilities: {
                 create: true,
@@ -85,35 +85,6 @@ describe('Latch terminal-session lifecycle capabilities', () => {
     assert.deepEqual(
       provider.calls.slice(-3).map(call => call.capability),
       ['inspectLatchSession', 'openLatchSession', 'stopLatchSession']
-    );
-  });
-
-  it('dispatches collect and resolve through the same target provider', async () => {
-    const provider = new FakeLocalTargetProvider();
-    const collect = await invokeLocalTargetCapability({
-      provider,
-      call: {
-        capability: 'collectLatchEvents',
-        input: { providerSessionId: 'ses_1', executable: 'latch', from: 2 }
-      }
-    });
-    const resolve = await invokeLocalTargetCapability({
-      provider,
-      call: {
-        capability: 'resolveLatchInput',
-        input: {
-          providerSessionId: 'ses_1',
-          executable: 'latch',
-          requestId: 'permission-1',
-          choice: 'Allow once'
-        }
-      }
-    });
-    assert.equal(collect.ok, true);
-    assert.equal(resolve.ok, true);
-    assert.deepEqual(
-      provider.calls.slice(-2).map(call => call.capability),
-      ['collectLatchEvents', 'resolveLatchInput']
     );
   });
 

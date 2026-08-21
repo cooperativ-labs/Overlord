@@ -72,7 +72,7 @@ This connector is intentionally reviewable against the four connector layers in 
 - `.codex-plugin/hooks.json` — Channel 1 `UserPromptSubmit` follow-up capture through
   `ovld protocol hook-event` and `PostToolUse` delivery attribution through
   `ovld protocol record-touched`. Mechanical harness observation, permission, and injection
-  are Latch's (`latch events` / PTY), not Overlord connector registrations.
+  are not live Overlord connector paths under Latch v2; native Codex prompts retain control.
 - `.mcp.json` + `scripts/overlord-mcp.mjs` — MCP bridge to common `ovld protocol` operations. The shim is **generated**: it is rendered from `connectors/core/scripts/overlord-mcp.mjs` at setup time with the adapter key substituted, and there is no copy in this directory to edit.
 - `assets/` — branded plugin assets for Codex install surfaces.
 - `conformance-manifest.yaml` — connector conformance declaration for the Overlord contract.

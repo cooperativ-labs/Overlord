@@ -6,7 +6,7 @@
 
 **Harness version verified** `2026.08.04-aaa8809` · **range** `>=2026.07.01` · **scheme** `calendar`
 
-**Descriptor digest** `7085c25291f5c96cf3c7fb9c280281fa698b5c026e9859377ad8c53d1cd82537`
+**Descriptor digest** `48b805b1d1cd28ccde10a839b0eb2a85eb237d82b46e3d54b21f671997b0c870`
 
 > The tier is derived from passing fixtures, never authored. `unsupported` means the harness
 > cannot do it — do not attempt it. `not-implemented` means it is buildable and unbuilt: that is
@@ -65,7 +65,7 @@ The 60-second per-script default is an order of magnitude below any window sized
 
 ### Capability notes
 
-- **`observe.toolCall`** — Mechanical preToolUse observation moved to Latch `events`. Native Cursor permission prompts own approvals when Latch is absent.
+- **`observe.toolCall`** — Latch v2 removed the CLI event stream that previously owned mechanical observation. Native Cursor permission prompts own approvals; Overlord exposes no replacement until it has a native Conversation Hub client.
 - **`observe.fileEdit`** — Carried on postToolUse rather than on Cursor's dedicated `afterFileEdit`, for the same reason Claude carries it on PostToolUse: one registration then covers every mutation, including the ones a shell command makes, and the split into `file.edited` happens where the normalized tool name is already known. `afterFileEdit` remains available if a future need appears for edit-level granularity the tool-level event cannot express.
 - **`observe.sessionLifecycle`** — Cursor fires the event, but no shipped code in this repo has ever read one of its payloads, so the field carrying the equivalent of Claude's `source` is unknown. A codec rule on a guessed path would not fail loudly — an unresolved path yields a card with no detail — so this stays unbuilt until a real payload is recorded, rather than being claimed on an assumed field name.
 - **`inject.turnBoundary`** — `stop` returns `followup_message` for the protocol delivery reminder. Session-input injection is no longer a live Overlord path.

@@ -18,7 +18,6 @@ function session(overrides: Partial<TerminalSessionDto> & { providerSessionId: s
     viewerKind: 'iterm',
     createdAt: '2026-08-17T00:00:00.000Z',
     lastObservedState: 'running',
-    observation: null,
     ...overrides
   } as TerminalSessionDto;
 }

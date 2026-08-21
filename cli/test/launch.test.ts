@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 
-import { buildLaunchPlan } from '../src/launch.ts';
+import { buildLaunchPlan, interactiveLoginShellInvocation } from '../src/launch.ts';
 import type { CliRuntime } from '../src/runtime.ts';
 
 function runtime({
@@ -59,6 +59,17 @@ function runtime({
     close: () => {}
   };
 }
+
+test('shell-composed launches use the configured interactive login shell', () => {
+  assert.deepEqual(interactiveLoginShellInvocation("agp 'codex'", '/bin/zsh'), {
+    command: '/bin/zsh',
+    args: ['-ilc', "agp 'codex'"]
+  });
+  assert.deepEqual(interactiveLoginShellInvocation("agp 'codex'", '  '), {
+    command: '/bin/bash',
+    args: ['-ilc', "agp 'codex'"]
+  });
+});
 
 test('buildLaunchPlan exports mission context for terminal prompt hooks', async () => {
   const workingDirectory = mkdtempSync(path.join('/tmp', 'ovld-launch-env-'));
