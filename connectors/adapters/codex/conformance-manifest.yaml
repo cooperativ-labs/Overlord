@@ -15,10 +15,11 @@ connector:
   harnessCapabilities:
     path: connectors/adapters/codex/harness-capabilities.yaml
     schemaVersion: 1
-    digest: "e0d536667a5616d1a662c7225fc8ef439b5d7cdce1d6703e577190c9e5c6d9c5"
+    digest: "ede31118a90f1afc3d8e934b7fd921759faac4afca1a08e4214a1104ee487b1d"
   capabilities:
     - followUpHook
     - permissionHook
+    - editHook
     - nativeResume
     - modelFlag
     - effortFlag
@@ -27,6 +28,7 @@ connector:
   hookTypes:
     - UserPromptSubmit
     - PermissionRequest
+    - PostToolUse
   # ── END GENERATED ────────────────────────────────────────────────────────────
   installPath: "~/.codex/plugins/overlord"
   managedFiles:
@@ -42,6 +44,7 @@ connector:
     - "prompt-wrapper.md"
     - "scripts/overlord-mcp.mjs"
     - "scripts/permission-hook.sh"
+    - "scripts/post-tool-use-hook.sh"
     - "scripts/user-prompt-submit-hook.sh"
     - "skills/overlord-mission/SKILL.md"
     - "skills/overlord-mission/reference/cli.md"

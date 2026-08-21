@@ -1214,25 +1214,25 @@ export async function runProtocolCommand({
     removeActiveSession({ workingDirectory, missionId });
     clearActiveMissionPointer(workingDirectory);
 
-    // Self-diagnosis: a connector that installs an edit hook (Claude Code or
-    // Cursor) should always have a touched-files
+    // Self-diagnosis: a connector that installs an edit hook (Claude Code,
+    // Codex, or Cursor) should always have a touched-files
     // log by deliver time if the run touched any files. A missing log with a
     // non-empty dirty tree means the hook silently failed to activate — the exact
     // failure mode Layer 1 fixes for the common case. Surface it loudly instead of
     // letting deliver quietly fall back to baseline-only attribution.
-    const connectorInstallsEditHook =
-      existsSync(path.join(os.homedir(), '.claude')) ||
-      existsSync(
-        path.join(
-          os.homedir(),
-          '.cursor',
-          'plugins',
-          'local',
-          'overlord',
-          'hooks',
-          'overlord-post-tool-use.sh'
-        )
-      );
+    const connectorInstallsEditHook = [
+      path.join(os.homedir(), '.claude'),
+      path.join(os.homedir(), '.codex', 'plugins', 'overlord', 'scripts', 'post-tool-use-hook.sh'),
+      path.join(
+        os.homedir(),
+        '.cursor',
+        'plugins',
+        'local',
+        'overlord',
+        'hooks',
+        'overlord-post-tool-use.sh'
+      )
+    ].some(existsSync);
     if (
       connectorInstallsEditHook &&
       !hasTouchedFilesLog({ workingDirectory, missionId }) &&
@@ -1242,7 +1242,8 @@ export async function runProtocolCommand({
         `[overlord] warning: no touched-files log found at deliver for mission ${missionId} in ` +
         `${workingDirectory}, even though this connector installs a PostToolUse edit hook. Deliver is ` +
         `falling back to baseline-only attribution, which can misattribute concurrent sessions' edits. ` +
-        `Check ~/.ovld/logs/cursor-post-tool-use-hook.log and ~/.ovld/logs/post-tool-use-hook.log ` +
+        `Check ~/.ovld/logs/codex-post-tool-use-hook.log, ~/.ovld/logs/cursor-post-tool-use-hook.log, ` +
+        `and ~/.ovld/logs/post-tool-use-hook.log ` +
         `for why the hook did not record any touched files.`;
       console.error(warning);
       const sessionKeyForAlert =

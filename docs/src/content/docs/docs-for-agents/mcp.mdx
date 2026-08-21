@@ -74,18 +74,43 @@ The tool catalog is mission-first:
 
 - `overlord_resolve_project`
 - `overlord_create_project`
+- `overlord_list_project_statuses` — read one project's board columns (names and order are per project; the status type is not)
 - `overlord_search_missions`
 - `overlord_create_mission`
 - `overlord_create_inbox_item` — create a private, account-owned unassigned task capture
 - `overlord_load_mission_context`
+- `overlord_list_deliveries` — read normalized delivery summaries for one mission; an objective display id such as `coo:756.k7xm` supplies the mission
+- `overlord_launch_objective` — queue the normal execution request for one objective; requires `objectiveId` (UUID or display id) and `agent`; does not attach this MCP agent
+- `overlord_reorder_future_objectives` — replace one mission's complete future-objective UUID order
 - `overlord_add_objectives`
-- `overlord_update_objective` — turn auto-advance on or off for an existing objective
+- `overlord_update_objective` — turn auto-advance on or off and/or edit instruction text; requires `objectiveId`
+- `overlord_queue_objective` — add, move, or remove one objective from the project Run Queue; requires `objectiveId` (UUID or display id)
 - `overlord_attach_session`
 - `overlord_update_session`
 - `overlord_deliver_session`
 - `overlord_add_artifact` — create a mission artifact mid-turn without delivering
 - `overlord_update_artifact` — revise an existing mission artifact in place
 - `overlord_record_work`
+
+### Addressing a mission or an objective
+
+Every mission-scoped tool takes `objectiveId` — an objective UUID or a display
+id such as `coo:756.k7xm` — alongside `missionId`. A display id already names
+its parent mission, so `missionId` is **optional** whenever one is supplied.
+An objective **UUID** names no mission and still needs `missionId`.
+
+`overlord_launch_objective`, `overlord_queue_objective`, and
+`overlord_update_objective` **require** `objectiveId` as the primary argument —
+a display id is enough on its own. `overlord_list_deliveries` can take that same
+display id in place of `missionId`. On `overlord_load_mission_context` and
+`overlord_attach_session` the objective is also a pin: it selects which
+objective to read or execute, which is required on a mission running objectives
+in parallel.
+
+`overlord_queue_objective` accepts optional `queue` / `after` placement and
+`remove: true` to dequeue. Queue membership is target-neutral and sequences
+delivery-driven launches; it does not directly launch the objective.
+`overlord_launch_objective` is the explicit launch surface.
 
 Widgets are attached to project resolution, mission search, mission-context, and
 delivery results:

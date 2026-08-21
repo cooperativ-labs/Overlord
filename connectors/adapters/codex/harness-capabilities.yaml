@@ -62,9 +62,17 @@ capabilities:
     native: PostToolUse
     trackedAs: latch-engine
   observe.fileEdit:
-    status: not-implemented
+    status: supported
     native: PostToolUse
-    trackedAs: latch-engine
+    fixtures:
+      - fixtures/normalize-post-tool-use.json
+      - fixtures/agent-session-hooks.json
+      - fixtures/post-tool-use-hook.json
+    notes: >-
+      The lifecycle PostToolUse registration pipes Codex's native payload to
+      `ovld protocol record-touched`, which appends normalized changed paths to the
+      per-session attribution log read by `deliver`. It is intentionally separate
+      from mechanical agent-session observation, which remains owned by Latch.
   observe.sessionLifecycle:
     status: not-implemented
     native: SessionStart
@@ -192,6 +200,7 @@ legacy:
   capabilities:
     - followUpHook
     - permissionHook
+    - editHook
     - nativeResume
     - modelFlag
     - effortFlag
@@ -200,3 +209,4 @@ legacy:
   hookTypes:
     - UserPromptSubmit
     - PermissionRequest
+    - PostToolUse

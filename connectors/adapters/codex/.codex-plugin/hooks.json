@@ -10,6 +10,17 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/bin/sh -c 'exec \"${CODEX_PLUGIN_ROOT:-$HOME/.codex/plugins/overlord}/scripts/post-tool-use-hook.sh\"'"
+          }
+        ]
+      }
     ]
   }
 }

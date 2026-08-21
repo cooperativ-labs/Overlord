@@ -70,6 +70,13 @@ ovld prompt "Investigate intermittent sign-in failures"
 # Add ordered follow-up objectives to an existing mission
 ovld protocol add-objectives --mission-id <mission-id> \
   --objectives-json '[{"objective":"Implement the retry"},{"objective":"Add tests"}]'
+
+# Launch a specific objective by its display id (queues a runner; does not attach)
+ovld protocol launch-objective --objective-id coo:312.k7xm --agent claude
+
+# Add or remove that objective in the project Run Queue
+ovld protocol queue-objective --objective-id coo:312.k7xm
+ovld protocol dequeue-objective --objective-id coo:312.k7xm
 ```
 
 You can also add and reorder objectives visually in the web or desktop app.

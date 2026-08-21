@@ -59,6 +59,20 @@ The runner claims queued execution requests and launches them in the configured
 project environment. You can inspect it with `ovld runner status` and process
 one queued request with `ovld runner once`.
 
+To queue a specific objective by its display id without attaching this CLI:
+
+```bash
+ovld protocol launch-objective --objective-id coo:312.k7xm --agent claude
+```
+
+To add or remove that objective in the project's Run Queue (delivery-driven
+sequencing, not a direct launch):
+
+```bash
+ovld protocol queue-objective --objective-id coo:312.k7xm
+ovld protocol dequeue-objective --objective-id coo:312.k7xm
+```
+
 For a direct local launch, run:
 
 ```bash

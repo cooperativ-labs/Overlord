@@ -1,0 +1,13 @@
+{
+  "fixtureVersion": 1,
+  "kind": "source-guard",
+  "description": "Codex's lifecycle PostToolUse hook must create its log directory before redirecting stderr, then forward the native payload to record-touched for delivery attribution.",
+  "path": "connectors/adapters/codex/scripts/post-tool-use-hook.sh",
+  "assert": {
+    "mustContain": [
+      "mkdir -p \"$LOG_DIR\" 2>/dev/null || true",
+      "ovld protocol record-touched",
+      "codex-post-tool-use-hook.log"
+    ]
+  }
+}

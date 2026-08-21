@@ -28,7 +28,7 @@ Legend: ✅ supported (fixture-proven) · ⛔ unsupported (harness cannot) · �
 | `observe.prompt` | ⛔ unsupported | ✅ supported | ✅ supported | ✅ supported | 🚧 not-implemented | ✅ supported |
 | `observe.toolCall` | 🚧 not-implemented | 🚧 not-implemented | 🚧 not-implemented | 🚧 not-implemented | 🚧 not-implemented | 🚧 not-implemented |
 | `observe.toolResult` | 🚧 not-implemented | 🚧 not-implemented | 🚧 not-implemented | ✅ supported | ✅ supported | 🚧 not-implemented |
-| `observe.fileEdit` | 🚧 not-implemented | ✅ supported | 🚧 not-implemented | ✅ supported | ✅ supported | 🚧 not-implemented |
+| `observe.fileEdit` | 🚧 not-implemented | ✅ supported | ✅ supported | ✅ supported | ✅ supported | 🚧 not-implemented |
 | `observe.sessionLifecycle` | 🚧 not-implemented | 🚧 not-implemented | 🚧 not-implemented | 🚧 not-implemented | ✅ supported | 🚧 not-implemented |
 | `decide.shell` | 🚧 not-implemented | 🚧 not-implemented | 🚧 not-implemented | 🚧 not-implemented | ✅ supported | 🚧 not-implemented |
 | `decide.mcp` | ❓ unverified | 🚧 not-implemented | 🚧 not-implemented | 🚧 not-implemented | ✅ supported | 🚧 not-implemented |

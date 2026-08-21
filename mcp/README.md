@@ -105,10 +105,14 @@ hosted tool cannot be added without updating shipped connector shims.
 Every mission-scoped tool takes `objectiveId` — an objective UUID or a display
 id such as `coo:756.k7xm` — alongside `missionId`. A display id already names
 its parent mission, so `missionId` is **optional** whenever one is supplied:
-`overlord_load_mission_context`, `overlord_attach_session`,
-`overlord_update_session`, `overlord_deliver_session`, `overlord_add_artifact`,
-`overlord_add_objectives`, and `overlord_update_artifact` all derive it. An
-objective **UUID** names no mission and still needs `missionId`.
+`overlord_load_mission_context`, `overlord_list_deliveries`,
+`overlord_attach_session`, `overlord_update_session`, `overlord_deliver_session`,
+`overlord_add_artifact`, `overlord_add_objectives`, and `overlord_update_artifact`
+all derive it. An objective **UUID** names no mission and still needs `missionId`.
+
+`overlord_launch_objective`, `overlord_queue_objective`, and
+`overlord_update_objective` **require** `objectiveId` as the primary argument —
+a display id is enough on its own.
 
 On `overlord_load_mission_context` and `overlord_attach_session` the objective is
 also a _pin_: it selects which objective to read or execute. That is the only way

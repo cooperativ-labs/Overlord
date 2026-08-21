@@ -489,7 +489,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "codec": "codex",
     "integrationShape": "callback",
     "capabilityTier": 1,
-    "descriptorDigest": "e0d536667a5616d1a662c7225fc8ef439b5d7cdce1d6703e577190c9e5c6d9c5",
+    "descriptorDigest": "ede31118a90f1afc3d8e934b7fd921759faac4afca1a08e4214a1104ee487b1d",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Codex CLI",
@@ -533,11 +533,11 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
         "trackedAs": "latch-engine"
       },
       "observe.fileEdit": {
-        "status": "not-implemented",
+        "status": "supported",
         "native": "PostToolUse",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": "latch-engine"
+        "trackedAs": null
       },
       "observe.sessionLifecycle": {
         "status": "not-implemented",
@@ -1248,7 +1248,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
   }
 ];
 
-export const HARNESS_CATALOG_DIGEST = '02e9a482ed735c5bfac6d8999818f6412362dd61260eed5c87aed9b1cd6cf545';
+export const HARNESS_CATALOG_DIGEST = '59627db5cb11242516fc1f6d9fa6e7d7219e308753348cbf02658532b26c2e86';
 
 export function findHarnessDescriptor(adapter: string): HarnessDescriptor | undefined {
   return HARNESS_DESCRIPTORS.find(entry => entry.adapter === adapter);

@@ -6,7 +6,8 @@ description: Short definitions for common Overlord terms.
 - **Workspace:** The shared home for people, projects, permissions, and execution targets. Often called an organization.
 - **Project:** Where related work is organized and where repositories or other resources are linked.
 - **Mission:** A durable record for a larger goal. It holds status, priority, shared context, history, and delivery artifacts.
-- **Objective:** One actionable step within a mission — the unit of work an agent receives for a single pass.
+- **Objective:** One actionable step within a mission — the unit of work an agent receives for a single pass. Identified by a display id such as `coo:312.k7xm`.
+- **Display ID:** The human-readable identifier for a mission (`coo:312`) or objective (`coo:312.k7xm`). An objective display id already names its parent mission, so CLI `--objective-id` and MCP `objectiveId` can omit the mission id when you pass one.
 - **Agent:** The coding tool that performs an objective (Claude Code, Codex, Cursor, and others).
 - **Connector / plugin:** The integration that lets an agent attach, update, ask, and deliver through the Overlord protocol.
 - **Session:** One agent's attachment to an objective, identified by a session key.
@@ -19,4 +20,5 @@ description: Short definitions for common Overlord terms.
 - **Primary resource:** The default directory used for a launch when no explicit resource is named — one per (project, target) pair.
 - **Runner:** The local `ovld runner` process that claims queued execution requests and launches agents.
 - **Execution request:** A durable queue row that tells a runner which objective to launch, where, and how.
+- **Run Queue:** The project's delivery-driven sequence of objectives waiting to launch. Distinct from a one-off execution request; `ovld protocol queue-objective` and `overlord_queue_objective` manage membership by objective display id.
 - **USER_TOKEN:** A durable, user-owned credential used by the CLI, agents, runners, and API clients.

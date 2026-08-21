@@ -74,6 +74,7 @@ Supported built-in connector names currently include `claude`, `codex`, `cursor`
 | `ovld attach <mission-id> [agent] [--objective-id <id>] [--model <id>] [--thinking <level>] [--json]`                                                                                 | Queue an agent for an existing mission.                                                                                                                                                  |
 | `ovld execution --mission-id <id> [--objective-id <id>] [--agent <id>] [--model <id>] [--thinking <level>] [--json]`                                                                  | Alias of `attach` that requires the mission flag.                                                                                                                                        |
 | `ovld missions list [--query <text>] [--project-id <id>] [--limit <n>] [--json]`                                                                                                      | List missions.                                                                                                                                                                           |
+| `ovld statuses list --project-id <id> [--json]`                                                                                                                                       | List one project's board columns. Status names are per project; status types are not.                                                                                                    |
 | `ovld mission context\|events\|deliveries\|artifacts\|rationales <mission-id> [--json]`                                                                                               | Inspect a mission and its work record. Accepts an objective display id, which names its mission.                                                                                         |
 | `ovld launch <agent> --mission-id <id> [--objective-id <id>] [--working-directory <path>] [--model <id>] [--thinking <level>] [--branch <name>] [--no-worktree] [--dry-run] [--json]` | Start an agent locally with mission context. `--objective-id` with a display id supplies `--mission-id`.                                                                                 |
 | `ovld restart <agent> ...`                                                                                                                                                            | Resume an agent where native resume is supported.                                                                                                                                        |
@@ -136,9 +137,17 @@ Every command below is available from `ovld protocol help`.
 | `attach`                           | Start a full mission session and return its working context.                      |
 | `connect`                          | Start a lightweight session without full context assembly.                        |
 | `load-context`                     | Read mission context without starting a session.                                  |
+| `list-deliveries`                  | Read one mission's normalized deliveries. An objective display id supplies the mission. |
+| `launch-objective`                 | Queue a runner execution for one objective. Requires `--objective-id` (UUID or display id) and `--agent`. |
+| `reorder-future-objectives`        | Replace one mission's complete future-objective order.                            |
+| `run-queue`                        | Read every live Run Queue and entry for a project.                                |
+| `queue-objective`                  | Add or move one objective in the Run Queue. Requires `--objective-id` (UUID or display id). |
+| `dequeue-objective`                | Remove one objective from the Run Queue. Requires `--objective-id`.               |
 | `search` (`search-missions` alias) | Find grouped mission, objective, and delivery matches by text, state, or project. |
+| `statuses`                         | List one project's board columns.                                                 |
 | `discuss-objective`                | Submit the latest draft objective for discussion without execution.               |
 | `add-objectives`                   | Append ordered objectives to a mission.                                           |
+| `update-objective`                 | Turn auto-advance on or off, or edit instruction text. Requires `--objective-id`. |
 | `create`                           | Create a draft mission without attaching.                                         |
 | `prompt`                           | Create a mission and attach immediately.                                          |
 | `record-work`                      | Record completed chat work as a review mission.                                   |
@@ -167,11 +176,17 @@ mission, so `--mission-id` is optional whenever you pass one:
 
 ```bash
 ovld protocol update --objective-id coo:8.k7xm --summary "Refactored the parser."
+ovld protocol launch-objective --objective-id coo:8.k7xm --agent claude
+ovld protocol queue-objective --objective-id coo:8.k7xm
+ovld protocol list-deliveries --objective-id coo:8.k7xm
 ```
 
-Use it when reconnecting to a mission that is running more than one objective —
-there, the mission id alone no longer identifies a unit of work. An objective
-UUID names no mission, so it still needs `--mission-id` beside it.
+`launch-objective`, `queue-objective`, `dequeue-objective`, and
+`update-objective` **require** `--objective-id` as the primary argument — a
+display id is enough on its own. Use it when reconnecting to a mission that is
+running more than one objective — there, the mission id alone no longer
+identifies a unit of work. An objective UUID names no mission, so it still needs
+`--mission-id` beside it.
 
 ## Environment variables
 
@@ -180,6 +195,7 @@ UUID names no mission, so it still needs `--mission-id` beside it.
 | `OVERLORD_USER_TOKEN`, `OVLD_USER_TOKEN`, `USER_TOKEN`           | Authentication token, checked in that order.                                                                                                                                                             |
 | `OVERLORD_BACKEND_URL`, `OVERLORD_BACKEND_URL_DEV`               | Backend URL fallback.                                                                                                                                                                                    |
 | `OVERLORD_EXECUTION_REQUEST_ID`                                  | Link an agent protocol attach to a runner request.                                                                                                                                                       |
+| `OVERLORD_OBJECTIVE_ID`                                          | Pin protocol attach to this objective display id (for example `coo:8.k7xm`).                                                                                                                             |
 | `OVERLORD_DEVICE_FINGERPRINT`                                    | Pin this process to a stable execution-target identity. Use when disposable containers (e.g. AgentPod) share one host environment and must not each register a new target from their ephemeral hostname. |
 | `OVERLORD_DEVICE_LABEL`                                          | Override the human-facing device name for this machine's execution target. Optional; falls back to the hostname. Does not affect the fingerprint unless `OVERLORD_DEVICE_FINGERPRINT` is also set.       |
 | `SESSION_KEY`                                                    | Session-key fallback for protocol commands.                                                                                                                                                              |

@@ -1,10 +1,10 @@
 {
   "fixtureVersion": 1,
   "kind": "source-guard",
-  "description": "Codex Channel 1 keeps the protocol follow-up hook. Mechanical agent-session observe/decide/inject is no longer registered.",
+  "description": "Codex Channel 1 keeps the protocol follow-up hook and the lifecycle PostToolUse attribution hook. Mechanical agent-session observe/decide/inject is no longer registered.",
   "path": "connectors/adapters/codex/.codex-plugin/hooks.json",
   "assert": {
-    "mustContain": ["user-prompt-submit-hook.sh"],
+    "mustContain": ["user-prompt-submit-hook.sh", "post-tool-use-hook.sh", "\"PostToolUse\""],
     "mustNotContain": [
       "agent-session-event.sh",
       "agent-session-request.sh",
@@ -12,7 +12,6 @@
       "permission-hook.sh",
       "\"PermissionRequest\"",
       "\"PreToolUse\"",
-      "\"PostToolUse\"",
       "\"SessionStart\"",
       "\"Stop\""
     ]

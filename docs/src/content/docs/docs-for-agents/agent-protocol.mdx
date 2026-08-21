@@ -70,6 +70,40 @@ subcommands, so a launched agent rarely types it. Two commands never inherit it:
 `discuss-objective`, which wants a draft rather than the objective already
 executing.
 
+## Launch, queue, and inspect by objective
+
+These protocol commands take `--objective-id` (UUID or display id) as their
+primary argument. A display id is enough on its own:
+
+```bash
+ovld protocol launch-objective --objective-id coo:312.k7xm --agent claude
+ovld protocol list-deliveries --objective-id coo:312.k7xm
+ovld protocol queue-objective --objective-id coo:312.k7xm
+ovld protocol dequeue-objective --objective-id coo:312.k7xm
+ovld protocol update-objective --objective-id coo:312.k7xm --no-auto-advance
+```
+
+- **`launch-objective`** queues a normal execution request for a runner. It
+  does **not** attach the calling agent. Required: `--objective-id`, `--agent`.
+  Optional: `--model`, `--reasoning-effort`, `--execution-target-id`.
+- **`list-deliveries`** returns one mission's newest-first normalized
+  deliveries (summary, verification, follow-up notes, delivery-report
+  evidence — never raw payload JSON). A display id supplies the mission.
+- **`queue-objective`** adds or moves the objective in the project's Run Queue
+  (delivery-driven sequencing, not a direct launch). Optional `--queue`,
+  `--after` (queued entry, objective UUID, or display id), `--front`, and
+  one-based `--position`; choose at most one placement flag.
+- **`dequeue-objective`** removes it from the queue. Already-unqueued
+  objectives return `{ removed: false }`.
+- **`run-queue --project-id <id|slug|name>`** reads every live queue and entry.
+- **`reorder-future-objectives`** takes `--mission-id` and
+  `--ordered-objective-ids-json` with every future objective **UUID** in the
+  desired order. Display ids are not accepted there.
+
+Hosted MCP exposes the same operations as `overlord_launch_objective`,
+`overlord_list_deliveries`, `overlord_queue_objective` (`remove: true` to
+dequeue), and `overlord_reorder_future_objectives`.
+
 ## Attach
 
 ```bash
@@ -336,12 +370,19 @@ ovld protocol add-objectives --mission-id coo:312 \
 | `attach`                         | Start a session, return full context. Begin work.         |
 | `connect`                        | Lightweight session without full context assembly. `--objective-id` pins it. |
 | `load-context`                   | Read mission context without a session (inspection only). `--objective-id` selects the objective. |
+| `list-deliveries`                | Read one mission's normalized deliveries. An objective display id supplies the mission. |
+| `launch-objective`               | Queue a runner execution. Requires `--objective-id` (UUID or display id) and `--agent`. |
+| `reorder-future-objectives`      | Replace one mission's complete future-objective UUID order. |
+| `run-queue`                      | Read every live Run Queue for `--project-id`.             |
+| `queue-objective`                | Add or move one objective in the Run Queue. Requires `--objective-id`. |
+| `dequeue-objective`              | Remove one objective from the Run Queue. Requires `--objective-id`. |
 | `discover-project`               | Resolve the project from cwd, id, or directory.           |
 | `search-missions`                | Find missions by query, state, project.                   |
+| `statuses`                       | List one project's board columns.                         |
 | `discuss-objective`              | Submit a draft objective for discussion (no session). `--objective-id` names which draft. |
 | `create` / `prompt`              | Create a draft / create-and-attach a mission.             |
 | `add-objectives`                 | Append ordered objectives to a mission.                   |
-| `update-objective`               | Turn auto-advance on or off for an existing objective.    |
+| `update-objective`               | Turn auto-advance on or off, or edit instruction text. Requires `--objective-id`. |
 | `update`                         | Post progress, decisions, and optional rationales.        |
 | `heartbeat`                      | Liveness ping, no feed event.                             |
 | `ask`                            | Post a blocking question and stop.                        |
