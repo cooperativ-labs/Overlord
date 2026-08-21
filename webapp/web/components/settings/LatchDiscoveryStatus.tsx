@@ -73,13 +73,20 @@ export function LatchDiscoveryStatus({
   }
 
   if (discovery.state === 'incompatible') {
+    const requirement =
+      discovery.missingCapability === 'protocolVersion' ? (
+        <>uses an unsupported protocol version</>
+      ) : (
+        <>
+          is missing <code className="font-mono text-[11px]">{discovery.missingCapability}</code>
+        </>
+      );
     return (
       <div className="space-y-1 text-xs text-muted-foreground">
         <p>
           The Latch on {device}
           {discovery.productVersion ? ` (${discovery.productVersion})` : ''} cannot host Overlord
-          sessions: missing{' '}
-          <code className="font-mono text-[11px]">{discovery.missingCapability}</code>.
+          sessions: {requirement}.
         </p>
         <p>{discovery.detail}</p>
         {recheck}

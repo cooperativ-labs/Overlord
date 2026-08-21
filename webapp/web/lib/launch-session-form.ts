@@ -71,6 +71,9 @@ export function sessionOverrideFields({
 export function latchBlockedReason(discovery: LatchDiscoveryView | undefined): string | null {
   if (discovery?.state === 'not_installed') return 'Latch is not installed on this machine.';
   if (discovery?.state === 'incompatible') {
+    if (discovery.missingCapability === 'protocolVersion') {
+      return 'This Latch build uses an unsupported protocol version.';
+    }
     return `This Latch build is missing ${discovery.missingCapability}.`;
   }
   return null;

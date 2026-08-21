@@ -169,6 +169,21 @@ describe('launch-session-form', () => {
       }) ?? '',
       /missing create/
     );
+    assert.equal(
+      latchBlockedReason({
+        state: 'incompatible',
+        executable: 'latch',
+        resolvedPath: '/usr/local/bin/latch',
+        protocolVersion: 2,
+        productVersion: '0.2608210708.0',
+        missingCapability: 'protocolVersion',
+        detail: 'Latch protocolVersion 2 is not supported (need 1).',
+        checkedAt: '2026-08-12T00:00:00.000Z',
+        latchSelectable: false,
+        directSelectable: true
+      }),
+      'This Latch build uses an unsupported protocol version.'
+    );
   });
 
   it('keeps direct selectable in every discovery state', () => {

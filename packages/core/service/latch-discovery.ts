@@ -114,13 +114,15 @@ export type LatchDiscoveryResult =
 
 export type LatchDiscoveryCacheEntry = {
   result: LatchDiscoveryResult;
+  /** Overlord protocol major used to evaluate the cached result. */
+  supportedProtocolVersion: number;
   /** mtimeMs of the resolved binary when known; null for not_installed. */
   binaryMtimeMs: number | null;
   cachedAt: string;
 };
 
 export type LatchDiscoveryCacheFile = {
-  version: 1;
+  version: 2;
   entries: Record<string, LatchDiscoveryCacheEntry>;
 };
 
@@ -433,6 +435,7 @@ export function isLatchDiscoveryCacheFresh({
   entry: LatchDiscoveryCacheEntry;
   resolvePath?: LatchPathResolver;
 }): boolean {
+  if (entry.supportedProtocolVersion !== SUPPORTED_LATCH_PROTOCOL_VERSION) return false;
   const { result } = entry;
   if (result.state === 'not_installed') {
     return resolvePath(result.executable) === null;
@@ -445,15 +448,15 @@ export function isLatchDiscoveryCacheFresh({
 }
 
 export function readLatchDiscoveryCacheFile(filePath: string): LatchDiscoveryCacheFile {
-  if (!existsSync(filePath)) return { version: 1, entries: {} };
+  if (!existsSync(filePath)) return { version: 2, entries: {} };
   try {
     const parsed = JSON.parse(readFileSync(filePath, 'utf8')) as Partial<LatchDiscoveryCacheFile>;
-    if (parsed.version !== 1 || !parsed.entries || typeof parsed.entries !== 'object') {
-      return { version: 1, entries: {} };
+    if (parsed.version !== 2 || !parsed.entries || typeof parsed.entries !== 'object') {
+      return { version: 2, entries: {} };
     }
-    return { version: 1, entries: parsed.entries };
+    return { version: 2, entries: parsed.entries };
   } catch {
-    return { version: 1, entries: {} };
+    return { version: 2, entries: {} };
   }
 }
 
@@ -504,6 +507,7 @@ export function discoverLatchForExecutionTarget({
     result.state === 'not_installed' ? null : readBinaryMtimeMs(result.resolvedPath);
   cache.entries[key] = {
     result,
+    supportedProtocolVersion: SUPPORTED_LATCH_PROTOCOL_VERSION,
     binaryMtimeMs,
     cachedAt: result.checkedAt
   };

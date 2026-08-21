@@ -21,8 +21,15 @@ export function RunQueueSheet({ projectId }: { projectId: string }) {
         Queue
       </Button>
       <Sheet open={open} onOpenChange={setOpen}>
-        {/* Twice the previous sm:max-w-xl so multi-queue boards read without truncation. */}
-        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-[72rem]">
+        {/*
+         * The base Sheet applies its width cap through the right-side data
+         * variant. Match that variant here so this 72rem cap actually
+         * overrides the shared 24rem cap.
+         */}
+        <SheetContent
+          side="right"
+          className="w-full overflow-y-auto data-[side=right]:sm:max-w-[72rem]"
+        >
           <SheetHeader>
             <SheetTitle>Run Queue</SheetTitle>
             <SheetDescription>

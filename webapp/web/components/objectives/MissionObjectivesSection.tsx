@@ -106,14 +106,21 @@ function SortableFutureObjective({
 /**
  * Scrolls the named objective into view and rings it when a deep link or feed
  * card opened this panel with `?objective=`.
+ *
+ * `radiusClass` must match the corner radius of the card being wrapped so the
+ * ring hugs it instead of bowing away from its corners: {@link DraftObjective}
+ * cards are `rounded-xl`, while the tighter {@link ObjectiveCollapsibleItem}
+ * rows are `rounded-md`.
  */
 function ObjectiveFocusAnchor({
   objective,
   focusRef,
+  radiusClass = 'rounded-xl',
   children
 }: {
   objective: ObjectiveDto;
   focusRef: string | undefined;
+  radiusClass?: string;
   children: ReactNode;
 }) {
   const focused = objectiveMatchesFocus({ objective, focusRef });
@@ -129,7 +136,7 @@ function ObjectiveFocusAnchor({
       ref={nodeRef}
       id={objective.displayId ? `objective-${objective.displayId}` : undefined}
       data-objective-ref={objective.displayId ?? objective.id}
-      className={focused ? 'rounded-xl ring-2 ring-ring/60' : undefined}
+      className={focused ? cn(radiusClass, 'ring-2 ring-ring/60') : undefined}
     >
       {children}
     </div>
@@ -317,6 +324,7 @@ export function MissionObjectivesSection({
               key={objective.id}
               objective={objective}
               focusRef={focusObjectiveRef}
+              radiusClass="rounded-md"
             >
               <ObjectiveCollapsibleItem
                 objective={objective}

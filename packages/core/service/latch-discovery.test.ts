@@ -14,6 +14,7 @@ import {
   type LatchDiscoveryCacheEntry,
   parseLatchCapabilitiesReport,
   probeLatchCapabilities,
+  readLatchDiscoveryCacheFile,
   resolveLatchExecutablePathFromEnvironment,
   SUPPORTED_LATCH_PROTOCOL_VERSION
 } from './latch-discovery.ts';
@@ -245,6 +246,36 @@ describe('resolveLatchExecutablePathFromEnvironment', () => {
 });
 
 describe('discoverLatchForExecutionTarget cache', () => {
+  test('invalidates protocol-v1 discovery cache entries after the v2 migration', () => {
+    const cacheFilePath = tempCachePath();
+    writeFileSync(
+      cacheFilePath,
+      `${JSON.stringify({
+        version: 1,
+        entries: {
+          stale: {
+            result: {
+              state: 'incompatible',
+              executable: 'latch',
+              resolvedPath: '/bin/latch',
+              protocolVersion: 2,
+              productVersion: '0.2608210708.0',
+              missingCapability: 'protocolVersion',
+              detail: 'Latch protocolVersion 2 is not supported (need 1).',
+              checkedAt: 't0',
+              latchSelectable: false,
+              directSelectable: true
+            },
+            binaryMtimeMs: 1,
+            cachedAt: 't0'
+          }
+        }
+      })}\n`
+    );
+
+    assert.deepEqual(readLatchDiscoveryCacheFile(cacheFilePath), { version: 2, entries: {} });
+  });
+
   test('reuses a fresh cache entry without re-probing', () => {
     const cacheFilePath = tempCachePath();
     let probes = 0;
@@ -314,10 +345,18 @@ describe('discoverLatchForExecutionTarget cache', () => {
         latchSelectable: false,
         directSelectable: true
       },
+      supportedProtocolVersion: SUPPORTED_LATCH_PROTOCOL_VERSION,
       binaryMtimeMs: null,
       cachedAt: 't0'
     };
     assert.equal(isLatchDiscoveryCacheFresh({ entry, resolvePath: () => null }), true);
+    assert.equal(
+      isLatchDiscoveryCacheFresh({
+        entry: { ...entry, supportedProtocolVersion: SUPPORTED_LATCH_PROTOCOL_VERSION - 1 },
+        resolvePath: () => null
+      }),
+      false
+    );
     assert.equal(isLatchDiscoveryCacheFresh({ entry, resolvePath: () => '/bin/latch' }), false);
   });
 
