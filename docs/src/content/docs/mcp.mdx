@@ -38,7 +38,10 @@ The hosted server advertises these mission-lifecycle tools:
 | `overlord_update_objective`          | Turns auto-advance on or off for an existing objective. Requires `objectiveId` (UUID or display id).                                         |
 | `overlord_launch_objective`          | Queues the normal execution request for one objective. Requires `objectiveId` (UUID or display id) and `agent`. Does not attach this agent.  |
 | `overlord_reorder_future_objectives` | Replaces one mission's complete future-objective order.                                                                                      |
-| `overlord_queue_objective`           | Adds, moves, or removes one objective in the project Run Queue. Requires `objectiveId` (UUID or display id).                                 |
+| `overlord_list_run_queues`           | Reads compact or full live Run Queue state before a mutation.                                                                                |
+| `overlord_reorder_run_queue`         | Atomically replaces every entry in one Run Queue.                                                                                            |
+| `overlord_queue_objective`           | Adds, moves, or removes one objective in the project Run Queue, including front or rank placement. Requires `objectiveId`.                   |
+| `overlord_manage_run_queue`          | Creates, updates, deletes, or reorders queue definitions; requires a full-scope token.                                                       |
 | `overlord_attach_session`            | Starts requested work on a mission and opens an MCP session. Pass `objectiveId` to pin which objective runs.                                 |
 | `overlord_update_session`            | Posts progress, decisions, or discussion updates to an attached session.                                                                     |
 | `overlord_deliver_session`           | Delivers completed work for an attached session.                                                                                             |
@@ -63,6 +66,13 @@ Read tools may also render Overlord MCP Apps widgets (`ui://overlord/*`) for pro
 selection, mission lists, objective viewers, and file-change summaries. Hosted MCP
 does not expose local filesystem, runner, or branch actions — those stay on the
 desktop CLI and connectors.
+
+For Run Queues, read with `overlord_list_run_queues` before changing state.
+`overlord_reorder_run_queue` requires every live entry exactly once and reports
+the current order when it cannot safely apply a request. Entry membership and
+ordering use `execution_request:create`; queue-definition lifecycle through
+`overlord_manage_run_queue` uses `project:update`, so a mission-lifecycle token
+cannot create, rename, pause, delete, or reorder queues.
 
 ## Who it is for
 

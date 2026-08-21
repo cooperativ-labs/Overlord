@@ -250,16 +250,26 @@ function invalidateRunQueue(qc: QueryClient, projectId: string) {
 export function useEnqueueRunQueueEntry(projectId: string) {
   const qc = useQueryClient();
   return useMutation({
+    // Omitting `queueId` targets the objective's own mission queue, creating it
+    // if the mission does not have one yet.
     mutationFn: (body: { objectiveId: string; queueId?: string; afterEntryId?: string }) =>
       api.enqueueRunQueueEntry(projectId, body),
     onSuccess: () => invalidateRunQueue(qc, projectId)
   });
 }
 
+/**
+ * Remove a queue entry. `force` also clears the objective's stuck execution
+ * requests and resets a `launching` objective, which is the only way to
+ * recover an entry wedged in flight.
+ */
 export function useRemoveRunQueueEntry(projectId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (entryId: string) => api.deleteRunQueueEntry(entryId),
+    mutationFn: (input: string | { entryId: string; force?: boolean }) =>
+      typeof input === 'string'
+        ? api.deleteRunQueueEntry(input)
+        : api.deleteRunQueueEntry(input.entryId, input.force ? { force: true } : {}),
     onSuccess: () => invalidateRunQueue(qc, projectId)
   });
 }
@@ -281,7 +291,8 @@ export function useUpdateRunQueue(projectId: string) {
 export function useCreateRunQueue(projectId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (name: string) => api.createRunQueue(projectId, { name }),
+    mutationFn: (input: string | { name: string; missionId?: string | null }) =>
+      api.createRunQueue(projectId, typeof input === 'string' ? { name: input } : input),
     onSuccess: () => invalidateRunQueue(qc, projectId)
   });
 }

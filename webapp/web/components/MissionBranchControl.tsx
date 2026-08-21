@@ -639,7 +639,7 @@ function BranchPanel({ mission }: { mission: MissionDetailDto }) {
       <div className="space-y-3 text-sm">
         {pendingMutation && (
           <p className="rounded-md border border-border/60 bg-muted/30 p-2.5 text-xs text-muted-foreground">
-            A branch action is queued on the selected execution target. It will finish when that
+            A branch action was delegated to the selected execution target. It will finish when that
             device&apos;s runner claims the job.
           </p>
         )}

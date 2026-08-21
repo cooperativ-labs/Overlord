@@ -16,6 +16,12 @@ export type ObjectiveLifecycleObjective = {
   autoAdvance?: boolean;
   assignedAgent?: string | null;
   createdAt?: string;
+  /** When the objective first entered `launching`; null until launched. */
+  launchedAt?: string | null;
+  /** When the objective first entered `executing`; null until started. */
+  startedAt?: string | null;
+  /** When the objective reached `complete`; null until then. */
+  completedAt?: string | null;
   /** Logical project resource; null/blank inherits the mission's primary resource. */
   resourceKey?: string | null;
 };
@@ -339,6 +345,76 @@ export function sortObjectivesByLifecycleOrder<TObjective extends ObjectiveLifec
   });
 }
 
+/**
+ * Comparator over a lifecycle timestamp, oldest first.
+ *
+ * A missing timestamp means the moment was never recorded — a row written
+ * before the columns existed, or a state reached by a path that does not stamp
+ * one. Those sort *last* within their group and fall back to the position order
+ * so the list stays stable and deterministic rather than jumping around.
+ */
+function byLifecycleMoment<TObjective extends ObjectiveLifecycleObjective>(
+  moment: (objective: TObjective) => string | null | undefined
+) {
+  return (a: TObjective, b: TObjective): number => {
+    const left = moment(a) ?? '';
+    const right = moment(b) ?? '';
+    if (left === right) return 0;
+    if (!left) return 1;
+    if (!right) return -1;
+    return left.localeCompare(right);
+  };
+}
+
+/**
+ * Sorts one lifecycle group by when it entered that state, oldest first.
+ *
+ * `objectives` must already be in position order: the sort is stable, so
+ * anything without a recorded moment keeps the position order it arrived with.
+ */
+function sortByLifecycleMoment<TObjective extends ObjectiveLifecycleObjective>(
+  objectives: readonly TObjective[],
+  moment: (objective: TObjective) => string | null | undefined
+): TObjective[] {
+  return [...objectives].sort(byLifecycleMoment(moment));
+}
+
+/**
+ * The order objectives are shown in on a mission, as one flat list.
+ *
+ * Queue position stops being the whole story once objectives can run out of
+ * order (parallel objectives, run queues, ad-hoc launches). What a reader wants
+ * instead is the mission's history followed by its plan:
+ *
+ * 1. **complete** — oldest completion first, so the list reads as a timeline.
+ * 2. **executing / pending_delivery** — oldest start first.
+ * 3. **launching** — oldest launch first.
+ * 4. **draft / submitted**, then **future** — still the authored queue order,
+ *    which is the only order that means anything for work that has not started.
+ *
+ * Each group is sorted by its own moment; position remains the tiebreaker
+ * everywhere, so a mission whose objectives were never timestamped renders
+ * exactly as it did before.
+ */
+export function sortObjectivesForMissionDisplay<TObjective extends ObjectiveLifecycleObjective>(
+  objectives: readonly TObjective[]
+): TObjective[] {
+  const ordered = sortObjectivesByLifecycleOrder(objectives);
+  return [
+    ...sortByLifecycleMoment(
+      ordered.filter(objective => objective.state === 'complete'),
+      objective => objective.completedAt
+    ),
+    ...sortByLifecycleMoment(ordered.filter(isActiveObjective), objective => objective.startedAt),
+    ...sortByLifecycleMoment(
+      ordered.filter(objective => objective.state === 'launching'),
+      objective => objective.launchedAt
+    ),
+    ...ordered.filter(objective => objective.state === 'draft' || objective.state === 'submitted'),
+    ...ordered.filter(isFutureObjective)
+  ];
+}
+
 export function validateObjectiveLifecycle(
   objectives: readonly ObjectiveLifecycleObjective[],
   options: ObjectiveLifecycleOptions = {}
@@ -404,7 +480,10 @@ export function deriveObjectiveLifecycleView<TObjective extends ObjectiveLifecyc
   objectives: readonly TObjective[],
   options: ObjectiveLifecycleOptions = {}
 ): ObjectiveLifecycleView<TObjective> {
-  const orderedObjectives = sortObjectivesByLifecycleOrder(objectives);
+  // One display order, then filtered into the render groups. The groups are
+  // contiguous slices of it, so the UI stacking them top to bottom reproduces
+  // `orderedObjectives` exactly.
+  const orderedObjectives = sortObjectivesForMissionDisplay(objectives);
   const executedObjectives = orderedObjectives.filter(
     objective =>
       (isActiveObjective(objective) || objective.state === 'complete') &&

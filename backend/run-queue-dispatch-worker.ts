@@ -1,4 +1,5 @@
 import { planRunQueueDispatch } from '@overlord/automations';
+import { OBJECTIVE_LAUNCHED_AT_ASSIGNMENT } from '@overlord/core/service/objective-lifecycle-timestamps';
 import type { DatabaseClient } from '@overlord/database';
 
 import { createExecutionRequest } from '../packages/core/service/execution-requests.ts';
@@ -142,8 +143,8 @@ export async function dispatchProjectRunQueues(
             [now, objective.id]
           );
         await tx.run(
-          "UPDATE objectives SET state = 'launching', updated_at = ?, revision = revision + 1 WHERE id = ? AND state IN ('draft','submitted')",
-          [now, objective.id]
+          `UPDATE objectives SET state = 'launching', ${OBJECTIVE_LAUNCHED_AT_ASSIGNMENT}, updated_at = ?, revision = revision + 1 WHERE id = ? AND state IN ('draft','submitted')`,
+          [now, now, objective.id]
         );
         const target = await resolveLaunchExecutionTarget({ ctx, projectId: objective.project_id });
         const resolved = await resolveLaunchConfig({

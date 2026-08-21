@@ -721,7 +721,10 @@ const PROTOCOL_FILE_FLAGS = [
   '--changed-files-file',
   '--value-file',
   '--content-text-file',
-  '--prompt-file'
+  '--prompt-file',
+  '--ordered-entries-file',
+  '--ordered-queues-file',
+  '--ordered-objective-ids-file'
 ] as const;
 
 /** Protocol subcommands that require a session key the cache can auto-inject. */
@@ -1575,7 +1578,7 @@ export async function runManagementCommand({
         }
       });
       if (json) printJson({ request });
-      else console.log(`Queued ${agent} for ${missionDisplayId(mission)}`);
+      else console.log(`Delegated ${agent} for ${missionDisplayId(mission)}`);
       return;
     }
     case 'launch':

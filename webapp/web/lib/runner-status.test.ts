@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { hasRunnerQueueError, runnerQueueErrorMessage } from './runner-status.ts';
+import {
+  executionRequestStatusLabel,
+  hasRunnerQueueError,
+  runnerQueueErrorMessage
+} from './runner-status.ts';
 
 describe('hasRunnerQueueError', () => {
   it('keeps a data-less queue failure visible while React Query retries it', () => {
@@ -74,6 +78,13 @@ describe('hasRunnerQueueError', () => {
       }),
       false
     );
+  });
+});
+
+describe('executionRequestStatusLabel', () => {
+  it('maps wire queued status to delegated', () => {
+    assert.equal(executionRequestStatusLabel('queued'), 'delegated');
+    assert.equal(executionRequestStatusLabel('claimed'), 'claimed');
   });
 });
 

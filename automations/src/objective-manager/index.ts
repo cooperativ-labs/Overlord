@@ -53,6 +53,7 @@ export {
   shouldDiscardEmptiedObjective,
   siblingBlocksParallelLaunch,
   sortObjectivesByLifecycleOrder,
+  sortObjectivesForMissionDisplay,
   validateObjectiveLifecycle
 } from './rules.js';
 

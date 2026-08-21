@@ -67,7 +67,7 @@ test('launching an objective twice while a request is active returns the same re
     .get(objectiveId) as { summary: string; payload_json: string };
   assert.equal(
     manualEvent.summary,
-    'Objective completed: cleared 1 queued execution request(s) and ended 0 active session(s).'
+    'Objective completed: cleared 1 delegated execution request(s) and ended 0 active session(s).'
   );
   assert.equal(JSON.parse(manualEvent.payload_json).clearedRequests, 1);
 

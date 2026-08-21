@@ -11,11 +11,10 @@ use approved Overlord actions from their own interface. The assistant still
 follows workspace permissions and the mission lifecycle.
 
 <Aside type="note">
-This is the **backend-hosted** MCP surface, intentionally not a CLI shim. Local
-connector MCP scripts for Codex, Claude Code, Cursor, and Antigravity continue
-to use [`ovld protocol`](/docs-for-agents/agent-protocol/) for checkout-local
-workflows — but they advertise the **same canonical tool names and input
-contract** as the hosted registry.
+  This is the **backend-hosted** MCP surface, intentionally not a CLI shim. Local connector MCP
+  scripts for Codex, Claude Code, Cursor, and Antigravity continue to use [`ovld
+  protocol`](/docs-for-agents/agent-protocol/) for checkout-local workflows — but they advertise the
+  **same canonical tool names and input contract** as the hosted registry.
 </Aside>
 
 ## Endpoints
@@ -58,11 +57,10 @@ canonical hosted `/mcp` URL at approval and token exchange. A mismatch returns
 receive an OAuth-compatible `401` at `/mcp`.
 
 <Aside type="tip">
-When the SPA is deployed separately from the backend, the hosted web build can
-serve same-domain OAuth discovery metadata and proxy `/mcp` plus OAuth token
-traffic to the backend. Set `OVERLORD_BACKEND_URL` and
-`OVERLORD_WEBAPP_PUBLIC_URL` in the web deployment so remote MCP clients can use
-the webapp domain as the MCP resource.
+  When the SPA is deployed separately from the backend, the hosted web build can serve same-domain
+  OAuth discovery metadata and proxy `/mcp` plus OAuth token traffic to the backend. Set
+  `OVERLORD_BACKEND_URL` and `OVERLORD_WEBAPP_PUBLIC_URL` in the web deployment so remote MCP
+  clients can use the webapp domain as the MCP resource.
 </Aside>
 
 See [Authentication & troubleshooting](/docs-for-agents/authentication/) for the
@@ -84,7 +82,10 @@ The tool catalog is mission-first:
 - `overlord_reorder_future_objectives` — replace one mission's complete future-objective UUID order
 - `overlord_add_objectives`
 - `overlord_update_objective` — turn auto-advance on or off and/or edit instruction text; requires `objectiveId`
-- `overlord_queue_objective` — add, move, or remove one objective from the project Run Queue; requires `objectiveId` (UUID or display id)
+- `overlord_list_run_queues` — read compact or full Run Queue state before changing it
+- `overlord_reorder_run_queue` — atomically replace every entry in one Run Queue
+- `overlord_queue_objective` — add, move, or remove one objective from the project Run Queue, including front or rank placement; requires `objectiveId`
+- `overlord_manage_run_queue` — create, update, delete, or reorder queue definitions with a full-scope token
 - `overlord_attach_session`
 - `overlord_update_session`
 - `overlord_deliver_session`
@@ -107,9 +108,14 @@ display id in place of `missionId`. On `overlord_load_mission_context` and
 objective to read or execute, which is required on a mission running objectives
 in parallel.
 
-`overlord_queue_objective` accepts optional `queue` / `after` placement and
+Use `overlord_list_run_queues` before mutating a Run Queue.
+`overlord_reorder_run_queue` requires every live entry exactly once and returns
+the current order when it cannot safely apply a request. `overlord_queue_objective`
+accepts optional `queue` / `after` / `front` / `position` placement and
 `remove: true` to dequeue. Queue membership is target-neutral and sequences
-delivery-driven launches; it does not directly launch the objective.
+delivery-driven launches; it does not directly launch the objective. Entry
+operations require `execution_request:create`; `overlord_manage_run_queue`
+uses `project:update`, so it requires a full-scope token.
 `overlord_launch_objective` is the explicit launch surface.
 
 Widgets are attached to project resolution, mission search, mission-context, and
@@ -126,10 +132,9 @@ compare those local `tools/list` responses against this hosted registry, so a
 new hosted tool cannot be added without updating the shipped connector shims.
 
 <Aside type="caution">
-**Hosted MCP cannot observe an agent's local working directory.** Tools that
-create missions require an explicit `projectId`. Call `overlord_resolve_project`
-first when project identity comes from an exposed repository resource carrying
-`.overlord/project.json`.
+  **Hosted MCP cannot observe an agent's local working directory.** Tools that create missions
+  require an explicit `projectId`. Call `overlord_resolve_project` first when project identity comes
+  from an exposed repository resource carrying `.overlord/project.json`.
 </Aside>
 
 `overlord_add_artifact` forwards to Protocol `add-artifact` and uses the same

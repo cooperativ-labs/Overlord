@@ -51,6 +51,7 @@ export {
   planRunQueueDispatch,
   siblingBlocksParallelLaunch,
   sortObjectivesByLifecycleOrder,
+  sortObjectivesForMissionDisplay,
   validateObjectiveLifecycle
 } from './objective-manager/index.js';
 export type { RegisteredAutomation } from './registry.js';

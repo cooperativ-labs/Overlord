@@ -314,7 +314,7 @@ describe('protocol objective creation', () => {
     };
 
     await insertEvent('status_change', 'Runner claimed execution request');
-    await insertEvent('execution_requested', 'Queued execution for a runner');
+    await insertEvent('execution_requested', 'Delegated execution for a runner');
     await insertEvent('update', 'Agent made meaningful progress');
 
     const attached = await attachSession({
@@ -327,13 +327,13 @@ describe('protocol objective creation', () => {
       attached.history.map(event => event.summary),
       [
         'Runner claimed execution request',
-        'Queued execution for a runner',
+        'Delegated execution for a runner',
         'Agent made meaningful progress'
       ]
     );
     assert.doesNotMatch(attached.agentInstructions, /Agent made meaningful progress/);
     assert.doesNotMatch(attached.agentInstructions, /Runner claimed execution request/);
-    assert.doesNotMatch(attached.agentInstructions, /Queued execution for a runner/);
+    assert.doesNotMatch(attached.agentInstructions, /Delegated execution for a runner/);
 
     await db.close();
   });

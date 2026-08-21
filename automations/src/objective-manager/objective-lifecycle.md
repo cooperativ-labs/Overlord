@@ -163,7 +163,28 @@ enforce them and the adapter conformance suite must test that enforcement.
 ## 4. Ordering rules and the position queue
 
 - **Canonical sort order is `position ASC`, tie-broken by `created_at ASC`.** Every
-  "pick the next objective" query in the system uses this order.
+  "pick the next objective" query in the system uses this order
+  (`sortObjectivesByLifecycleOrder`).
+- **Display order is not the position queue.** Once objectives can run out of
+  order — parallel objectives, run queues, ad-hoc launches — position no longer
+  describes what happened, so a mission's objective list
+  (`sortObjectivesForMissionDisplay`) reads as history followed by plan:
+  1. `complete`, oldest `completed_at` first;
+  2. `executing` / `pending_delivery`, oldest `started_at` first;
+  3. `launching`, oldest `launched_at` first;
+  4. `draft` / `submitted`, then `future`, in position order.
+
+  Each group sorts by its own recorded moment; a missing moment (rows written
+  before the timestamps existed) falls back to position, so an untimestamped
+  mission renders exactly as it did before. Only groups 4 are position-ordered,
+  which is why drag-to-reorder covers `future` alone. Planning and dispatch
+  (`planEnsureDraftSlot`, `decideAutoAdvanceAfterDelivery`, run-queue dispatch)
+  keep using the position order — display order is presentation only.
+- **Lifecycle timestamps.** `objectives.launched_at` and `objectives.started_at`
+  are stamped first-wins (`COALESCE`) on entry to `launching` and `executing`;
+  `completed_at` is written on delivery. First-wins matters: re-launching, or
+  re-attaching for follow-up work after a delivery, must not move an objective
+  that already earned its place in the list.
 - **Appending** (protocol `create`, `add-objectives`, UI "add objective"): new rows
   take `max(position) + 1` per insert order. An inserted objective becomes `draft`
   only when the mission currently has **no existing `draft` objective**. Once a draft

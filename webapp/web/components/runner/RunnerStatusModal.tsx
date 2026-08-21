@@ -15,7 +15,11 @@ import { api } from '@/lib/api';
 import { getDesktopBridge } from '@/lib/desktop-chrome';
 import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
 import { keys, useRunnerStatus } from '@/lib/queries';
-import { hasRunnerQueueError, runnerQueueErrorMessage } from '@/lib/runner-status';
+import {
+  executionRequestStatusLabel,
+  hasRunnerQueueError,
+  runnerQueueErrorMessage
+} from '@/lib/runner-status';
 import { cn } from '@/lib/utils';
 
 /** Shape of the parsed CLI `runner service status --json` payload. */
@@ -338,7 +342,9 @@ export function RunnerStatusModal({
                         </span>
                       ) : null}
                     </span>
-                    <Badge variant={statusBadgeVariant(request.status)}>{request.status}</Badge>
+                    <Badge variant={statusBadgeVariant(request.status)}>
+                      {executionRequestStatusLabel(request.status)}
+                    </Badge>
                   </li>
                 ))}
               </ul>

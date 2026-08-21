@@ -11,6 +11,7 @@ import {
   planRunQueueDispatch,
   shouldDiscardEmptiedObjective,
   siblingBlocksParallelLaunch,
+  sortObjectivesForMissionDisplay,
   validateObjectiveLifecycle
 } from './index.js';
 
@@ -51,6 +52,121 @@ describe('objective lifecycle rules', () => {
     assert.deepEqual(
       view.futureObjectives.map(item => item.id),
       ['future-1']
+    );
+  });
+
+  it('orders the mission list by lifecycle moment, not queue position', () => {
+    const ordered = sortObjectivesForMissionDisplay([
+      objective({ id: 'future-1', position: 0, state: 'future' }),
+      objective({ id: 'draft', position: 1, state: 'draft' }),
+      objective({
+        id: 'launched-second',
+        position: 2,
+        state: 'launching',
+        launchedAt: '2026-08-21T10:00:00.000Z'
+      }),
+      objective({
+        id: 'launched-first',
+        position: 3,
+        state: 'launching',
+        launchedAt: '2026-08-21T09:00:00.000Z'
+      }),
+      objective({
+        id: 'started-second',
+        position: 4,
+        state: 'pending_delivery',
+        startedAt: '2026-08-21T08:00:00.000Z'
+      }),
+      objective({
+        id: 'started-first',
+        position: 5,
+        state: 'executing',
+        startedAt: '2026-08-21T07:00:00.000Z'
+      }),
+      objective({
+        id: 'done-second',
+        position: 6,
+        state: 'complete',
+        completedAt: '2026-08-21T06:00:00.000Z'
+      }),
+      objective({
+        id: 'done-first',
+        position: 7,
+        state: 'complete',
+        completedAt: '2026-08-21T05:00:00.000Z'
+      })
+    ]);
+
+    assert.deepEqual(
+      ordered.map(item => item.id),
+      [
+        'done-first',
+        'done-second',
+        'started-first',
+        'started-second',
+        'launched-first',
+        'launched-second',
+        'draft',
+        'future-1'
+      ]
+    );
+  });
+
+  it('falls back to position when a lifecycle moment was never recorded', () => {
+    const ordered = sortObjectivesForMissionDisplay([
+      objective({ id: 'untimed-b', position: 3, state: 'complete' }),
+      objective({ id: 'untimed-a', position: 1, state: 'complete' }),
+      objective({
+        id: 'timed',
+        position: 2,
+        state: 'complete',
+        completedAt: '2026-08-21T05:00:00.000Z'
+      })
+    ]);
+
+    // Timestamped rows lead; untimestamped ones keep their position order behind
+    // them instead of shuffling on every render.
+    assert.deepEqual(
+      ordered.map(item => item.id),
+      ['timed', 'untimed-a', 'untimed-b']
+    );
+  });
+
+  it('keeps the render groups as contiguous slices of the display order', () => {
+    const view = deriveObjectiveLifecycleView([
+      objective({ id: 'future-1', position: 0, state: 'future' }),
+      objective({
+        id: 'launching',
+        position: 1,
+        state: 'launching',
+        launchedAt: '2026-08-21T10:00:00.000Z'
+      }),
+      objective({ id: 'draft', position: 2, state: 'draft' }),
+      objective({
+        id: 'active',
+        position: 3,
+        state: 'executing',
+        startedAt: '2026-08-21T09:00:00.000Z'
+      }),
+      objective({
+        id: 'done',
+        position: 4,
+        state: 'complete',
+        completedAt: '2026-08-21T08:00:00.000Z'
+      })
+    ]);
+
+    assert.deepEqual(
+      view.orderedObjectives.map(item => item.id),
+      ['done', 'active', 'launching', 'draft', 'future-1']
+    );
+    assert.deepEqual(
+      [
+        ...view.executedObjectives.map(item => item.id),
+        ...view.editableObjectives.map(item => item.id),
+        ...view.futureObjectives.map(item => item.id)
+      ],
+      view.orderedObjectives.map(item => item.id)
     );
   });
 

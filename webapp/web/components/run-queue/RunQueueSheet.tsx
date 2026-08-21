@@ -21,7 +21,8 @@ export function RunQueueSheet({ projectId }: { projectId: string }) {
         Queue
       </Button>
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
+        {/* Twice the previous sm:max-w-xl so multi-queue boards read without truncation. */}
+        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-[72rem]">
           <SheetHeader>
             <SheetTitle>Run Queue</SheetTitle>
             <SheetDescription>

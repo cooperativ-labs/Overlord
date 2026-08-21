@@ -95,14 +95,21 @@ ovld protocol update-objective --objective-id coo:312.k7xm --no-auto-advance
   one-based `--position`; choose at most one placement flag.
 - **`dequeue-objective`** removes it from the queue. Already-unqueued
   objectives return `{ removed: false }`.
-- **`run-queue --project-id <id|slug|name>`** reads every live queue and entry.
+- **`run-queue`** reads every live queue and entry from `--project-id`,
+  `--objective-id`, or `--mission-id`, optionally narrowed with `--queue`.
+- **`reorder-run-queue`** atomically replaces one queue's complete entry order;
+  every live entry is required exactly once and running/dispatched entries cannot move.
+- **`create-run-queue`**, **`update-run-queue`**, **`delete-run-queue`**, and
+  **`reorder-project-run-queues`** manage queue definitions. They require
+  `project:update`; entry operations require `execution_request:create`.
 - **`reorder-future-objectives`** takes `--mission-id` and
   `--ordered-objective-ids-json` with every future objective **UUID** in the
   desired order. Display ids are not accepted there.
 
 Hosted MCP exposes the same operations as `overlord_launch_objective`,
-`overlord_list_deliveries`, `overlord_queue_objective` (`remove: true` to
-dequeue), and `overlord_reorder_future_objectives`.
+`overlord_list_deliveries`, `overlord_list_run_queues`,
+`overlord_reorder_run_queue`, `overlord_queue_objective` (`remove: true` to
+dequeue), `overlord_manage_run_queue`, and `overlord_reorder_future_objectives`.
 
 ## Attach
 
@@ -365,33 +372,38 @@ ovld protocol add-objectives --mission-id coo:312 \
 
 ## Command quick reference
 
-| Command                          | Purpose                                                   |
-| -------------------------------- | --------------------------------------------------------- |
-| `attach`                         | Start a session, return full context. Begin work.         |
-| `connect`                        | Lightweight session without full context assembly. `--objective-id` pins it. |
+| Command                          | Purpose                                                                                           |
+| -------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `attach`                         | Start a session, return full context. Begin work.                                                 |
+| `connect`                        | Lightweight session without full context assembly. `--objective-id` pins it.                      |
 | `load-context`                   | Read mission context without a session (inspection only). `--objective-id` selects the objective. |
-| `list-deliveries`                | Read one mission's normalized deliveries. An objective display id supplies the mission. |
-| `launch-objective`               | Queue a runner execution. Requires `--objective-id` (UUID or display id) and `--agent`. |
-| `reorder-future-objectives`      | Replace one mission's complete future-objective UUID order. |
-| `run-queue`                      | Read every live Run Queue for `--project-id`.             |
-| `queue-objective`                | Add or move one objective in the Run Queue. Requires `--objective-id`. |
-| `dequeue-objective`              | Remove one objective from the Run Queue. Requires `--objective-id`. |
-| `discover-project`               | Resolve the project from cwd, id, or directory.           |
-| `search-missions`                | Find missions by query, state, project.                   |
-| `statuses`                       | List one project's board columns.                         |
-| `discuss-objective`              | Submit a draft objective for discussion (no session). `--objective-id` names which draft. |
-| `create` / `prompt`              | Create a draft / create-and-attach a mission.             |
-| `add-objectives`                 | Append ordered objectives to a mission.                   |
-| `update-objective`               | Turn auto-advance on or off, or edit instruction text. Requires `--objective-id`. |
-| `update`                         | Post progress, decisions, and optional rationales.        |
-| `heartbeat`                      | Liveness ping, no feed event.                             |
-| `ask`                            | Post a blocking question and stop.                        |
-| `deliver`                        | Finish: summary, artifacts, rationales, mark complete.    |
-| `changes`                        | Local preflight of changed-file attribution.              |
-| `resume-follow-up`               | Reopen a delivered objective for follow-up.               |
-| `read-context` / `write-context` | Read or store persistent shared context.                  |
-| `add-artifact`                   | Create a mission artifact mid-turn (no delivery required). |
-| `update-artifact`                | Revise an existing mission artifact in place.             |
+| `list-deliveries`                | Read one mission's normalized deliveries. An objective display id supplies the mission.           |
+| `launch-objective`               | Queue a runner execution. Requires `--objective-id` (UUID or display id) and `--agent`.           |
+| `reorder-future-objectives`      | Replace one mission's complete future-objective UUID order.                                       |
+| `run-queue`                      | Read live Run Queues from project, objective, or mission scope.                                   |
+| `reorder-run-queue`              | Atomically replace one Run Queue's complete entry order.                                          |
+| `queue-objective`                | Add or move one objective in the Run Queue. Requires `--objective-id`.                            |
+| `dequeue-objective`              | Remove one objective from the Run Queue. Requires `--objective-id`.                               |
+| `create-run-queue`               | Create a queue definition; requires `project:update`.                                             |
+| `update-run-queue`               | Rename, pause, or resume a queue; requires `project:update`.                                      |
+| `delete-run-queue`               | Delete a queue definition; requires `project:update`.                                             |
+| `reorder-project-run-queues`     | Replace the complete queue-definition order; requires `project:update`.                           |
+| `discover-project`               | Resolve the project from cwd, id, or directory.                                                   |
+| `search-missions`                | Find missions by query, state, project.                                                           |
+| `statuses`                       | List one project's board columns.                                                                 |
+| `discuss-objective`              | Submit a draft objective for discussion (no session). `--objective-id` names which draft.         |
+| `create` / `prompt`              | Create a draft / create-and-attach a mission.                                                     |
+| `add-objectives`                 | Append ordered objectives to a mission.                                                           |
+| `update-objective`               | Turn auto-advance on or off, or edit instruction text. Requires `--objective-id`.                 |
+| `update`                         | Post progress, decisions, and optional rationales.                                                |
+| `heartbeat`                      | Liveness ping, no feed event.                                                                     |
+| `ask`                            | Post a blocking question and stop.                                                                |
+| `deliver`                        | Finish: summary, artifacts, rationales, mark complete.                                            |
+| `changes`                        | Local preflight of changed-file attribution.                                                      |
+| `resume-follow-up`               | Reopen a delivered objective for follow-up.                                                       |
+| `read-context` / `write-context` | Read or store persistent shared context.                                                          |
+| `add-artifact`                   | Create a mission artifact mid-turn (no delivery required).                                        |
+| `update-artifact`                | Revise an existing mission artifact in place.                                                     |
 
 For the full CLI surface — management commands, the runner, project linking —
 see the [CLI reference](/cli/). Never invent protocol subcommands; run

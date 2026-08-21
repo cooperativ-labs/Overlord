@@ -1,5 +1,4 @@
 import {
-  AlertTriangle,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -8,7 +7,8 @@ import {
   FolderOpen,
   GitBranch,
   Loader2,
-  Paperclip
+  Paperclip,
+  RefreshCw
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -124,7 +124,9 @@ export function ObjectiveCollapsibleItem({
                 {isExecuting ? (
                   <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
                 ) : isPendingDelivery ? (
-                  <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                  // A refresh mark, not a warning: the agent re-attached to the
+                  // objective and is working again — nothing has gone wrong.
+                  <RefreshCw className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground [animation-duration:2.5s]" />
                 ) : objective.state === 'complete' ? (
                   <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
                 ) : null}

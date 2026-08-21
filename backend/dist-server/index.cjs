@@ -76117,7 +76117,7 @@ async function createLocalTargetMutationRequest({
         resolvedProjectId,
         mission.id,
         objectiveId,
-        eventSummary ?? `Queued ${kind.replace("_", " ")} on remote execution target.`,
+        eventSummary ?? `Delegated ${kind.replace("_", " ")} on remote execution target.`,
         JSON.stringify({ executionRequestId: id, kind, capability }),
         ctx.actorWorkspaceUserId,
         now2
@@ -133484,6 +133484,32 @@ function sortObjectivesByLifecycleOrder(objectives) {
     return a5.id.localeCompare(b5.id);
   });
 }
+function byLifecycleMoment(moment) {
+  return (a5, b5) => {
+    const left = moment(a5) ?? "";
+    const right = moment(b5) ?? "";
+    if (left === right)
+      return 0;
+    if (!left)
+      return 1;
+    if (!right)
+      return -1;
+    return left.localeCompare(right);
+  };
+}
+function sortByLifecycleMoment(objectives, moment) {
+  return [...objectives].sort(byLifecycleMoment(moment));
+}
+function sortObjectivesForMissionDisplay(objectives) {
+  const ordered = sortObjectivesByLifecycleOrder(objectives);
+  return [
+    ...sortByLifecycleMoment(ordered.filter((objective) => objective.state === "complete"), (objective) => objective.completedAt),
+    ...sortByLifecycleMoment(ordered.filter(isActiveObjective), (objective) => objective.startedAt),
+    ...sortByLifecycleMoment(ordered.filter((objective) => objective.state === "launching"), (objective) => objective.launchedAt),
+    ...ordered.filter((objective) => objective.state === "draft" || objective.state === "submitted"),
+    ...ordered.filter(isFutureObjective)
+  ];
+}
 function validateObjectiveLifecycle(objectives, options = {}) {
   const ordered = sortObjectivesByLifecycleOrder(objectives);
   const violations = [];
@@ -133530,7 +133556,7 @@ function validateObjectiveLifecycle(objectives, options = {}) {
   return violations;
 }
 function deriveObjectiveLifecycleView(objectives, options = {}) {
-  const orderedObjectives = sortObjectivesByLifecycleOrder(objectives);
+  const orderedObjectives = sortObjectivesForMissionDisplay(objectives);
   const executedObjectives = orderedObjectives.filter((objective) => (isActiveObjective(objective) || objective.state === "complete") && objectiveHasInstructionText(objective));
   const editableObjectives = orderedObjectives.filter(isEditableNextUpObjective);
   const futureObjectives = orderedObjectives.filter(isFutureObjective);
@@ -136299,6 +136325,11 @@ async function allocateObjectiveDisplayKey({
   );
 }
 
+// ../packages/core/service/objective-lifecycle-timestamps.ts
+var OBJECTIVE_LAUNCHED_AT_ASSIGNMENT = "launched_at = COALESCE(launched_at, ?)";
+var OBJECTIVE_STARTED_AT_ASSIGNMENT = "started_at = COALESCE(started_at, ?)";
+var OBJECTIVE_COMPLETED_AT_ASSIGNMENT = "completed_at = ?";
+
 // ../packages/core/service/missions.ts
 init_projects();
 
@@ -136462,6 +136493,12 @@ async function missionOwnerProfileId({
 var RUN_QUEUE_DISPATCH_JOB_TYPE = "overlord.run-queue.dispatch.v1";
 var STEP = 1e3;
 var truthy = (value) => value === true || value === 1;
+var MISSION_QUEUE_NAME_LIMIT = 80;
+function missionQueueName(missionDisplayId, missionTitle) {
+  const title = (missionTitle ?? "").trim();
+  const suffix = title ? ` \xB7 ${title}` : "";
+  return `${missionDisplayId}${suffix}`.slice(0, MISSION_QUEUE_NAME_LIMIT);
+}
 async function enqueueRunQueueDispatch(db, projectId, workspaceId2) {
   return enqueueWorkerJob({
     db,
@@ -136479,25 +136516,48 @@ async function projectRow(db, projectId) {
   if (!row) throw new ServiceError("Project not found", "project_not_found", 404);
   return row;
 }
-async function ensureDefaultRunQueue(db, projectId, actorId = null) {
+async function ensureMissionRunQueue(db, projectId, missionId, actorId = null) {
   const existing = await db.get(
-    "SELECT id, project_id, workspace_id, name, position, paused, is_default FROM run_queues WHERE project_id = ? AND is_default = ? AND deleted_at IS NULL",
-    [projectId, db.dialect === "postgres" ? true : 1]
+    "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE project_id = ? AND mission_id = ? AND deleted_at IS NULL",
+    [projectId, missionId]
   );
   if (existing) return existing;
-  const project = await projectRow(db, projectId);
+  const mission = await db.get(
+    "SELECT id, project_id, workspace_id, display_id, title FROM missions WHERE id = ? AND deleted_at IS NULL",
+    [missionId]
+  );
+  if (!mission || mission.project_id !== projectId)
+    throw new ServiceError("Mission not found", "mission_not_found", 404);
+  const name = missionQueueName(mission.display_id, mission.title);
+  const adopted = await db.get(
+    "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE project_id = ? AND lower(name) = lower(?) AND deleted_at IS NULL",
+    [projectId, name]
+  );
   const now2 = nowIso();
+  if (adopted) {
+    await db.run(
+      "UPDATE run_queues SET mission_id = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
+      [missionId, now2, adopted.id]
+    );
+    return { ...adopted, mission_id: missionId };
+  }
+  const max = await db.get(
+    "SELECT MAX(position) value FROM run_queues WHERE project_id = ? AND deleted_at IS NULL",
+    [projectId]
+  );
   const id = newId();
+  const position = (max?.value ?? 0) + STEP;
   await db.run(
-    "INSERT INTO run_queues (id, project_id, workspace_id, name, position, paused, is_default, created_by_workspace_user_id, created_at, updated_at, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
+    "INSERT INTO run_queues (id, project_id, workspace_id, mission_id, name, position, paused, is_default, created_by_workspace_user_id, created_at, updated_at, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
     [
       id,
       projectId,
-      project.workspace_id,
-      "Run Queue",
-      STEP,
+      mission.workspace_id,
+      missionId,
+      name,
+      position,
       db.dialect === "postgres" ? false : 0,
-      db.dialect === "postgres" ? true : 1,
+      db.dialect === "postgres" ? false : 0,
       actorId,
       now2,
       now2
@@ -136506,11 +136566,12 @@ async function ensureDefaultRunQueue(db, projectId, actorId = null) {
   return {
     id,
     project_id: projectId,
-    workspace_id: project.workspace_id,
-    name: "Run Queue",
-    position: STEP,
+    workspace_id: mission.workspace_id,
+    name,
+    position,
     paused: false,
-    is_default: true
+    is_default: false,
+    mission_id: missionId
   };
 }
 function entryDto(row, rank) {
@@ -136535,13 +136596,19 @@ function entryDto(row, rank) {
 async function listProjectRunQueues(db, projectId) {
   await projectRow(db, projectId);
   const queues = await db.all(
-    "SELECT id, project_id, workspace_id, name, position, paused, is_default FROM run_queues WHERE project_id = ? AND deleted_at IS NULL ORDER BY is_default DESC, position ASC",
+    "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE project_id = ? AND deleted_at IS NULL ORDER BY is_default DESC, position ASC",
     [projectId]
   );
   const rows = await db.all(
     `SELECT e.*, o.title objective_title, o.display_key objective_display_key, o.assigned_agent, o.resource_key, m.display_id mission_display_id, m.title mission_title FROM run_queue_entries e JOIN objectives o ON o.id = e.objective_id JOIN missions m ON m.id = e.mission_id WHERE e.project_id = ? AND e.deleted_at IS NULL ORDER BY e.position ASC`,
     [projectId]
   );
+  const missionIds = queues.map((queue) => queue.mission_id).filter((value) => Boolean(value));
+  const missionRows = missionIds.length ? await db.all(
+    `SELECT id, display_id FROM missions WHERE id IN (${missionIds.map(() => "?").join(",")})`,
+    missionIds
+  ) : [];
+  const missionDisplayIds = new Map(missionRows.map((row) => [row.id, row.display_id]));
   return {
     projectId,
     queues: queues.map((queue) => {
@@ -136551,6 +136618,8 @@ async function listProjectRunQueues(db, projectId) {
         projectId,
         name: queue.name,
         isDefault: truthy(queue.is_default),
+        missionId: queue.mission_id,
+        missionDisplayId: queue.mission_id ? missionDisplayIds.get(queue.mission_id) ?? null : null,
         paused: truthy(queue.paused),
         position: queue.position,
         entries,
@@ -136576,7 +136645,7 @@ async function rewriteMissionPositions(db, missionId) {
       [i5, now2, rows[i5].id]
     );
 }
-async function createRunQueue(db, projectId, name, actorId) {
+async function createRunQueue(db, projectId, name, actorId, missionId = null) {
   const project = await projectRow(db, projectId);
   const clean3 = name.trim();
   if (!clean3) throw new ServiceError("Queue name is required", "invalid_queue_name", 400);
@@ -136584,14 +136653,22 @@ async function createRunQueue(db, projectId, name, actorId) {
     "SELECT MAX(position) value FROM run_queues WHERE project_id = ? AND deleted_at IS NULL",
     [projectId]
   );
+  if (missionId) {
+    const mission = await db.get(
+      "SELECT id FROM missions WHERE id = ? AND project_id = ? AND deleted_at IS NULL",
+      [missionId, projectId]
+    );
+    if (!mission) throw new ServiceError("Mission not found", "mission_not_found", 404);
+  }
   const id = newId();
   const now2 = nowIso();
   await db.run(
-    "INSERT INTO run_queues (id, project_id, workspace_id, name, position, paused, is_default, created_by_workspace_user_id, created_at, updated_at, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
+    "INSERT INTO run_queues (id, project_id, workspace_id, mission_id, name, position, paused, is_default, created_by_workspace_user_id, created_at, updated_at, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
     [
       id,
       projectId,
       project.workspace_id,
+      missionId,
       clean3,
       (max?.value ?? 0) + STEP,
       db.dialect === "postgres" ? false : 0,
@@ -136606,7 +136683,7 @@ async function createRunQueue(db, projectId, name, actorId) {
 }
 async function updateRunQueue(db, queueId, patch) {
   const queue = await db.get(
-    "SELECT id, project_id, workspace_id, name, position, paused, is_default FROM run_queues WHERE id = ? AND deleted_at IS NULL",
+    "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE id = ? AND deleted_at IS NULL",
     [queueId]
   );
   if (!queue) throw new ServiceError("Run Queue not found", "run_queue_not_found", 404);
@@ -136623,7 +136700,7 @@ async function updateRunQueue(db, queueId, patch) {
 async function reorderProjectRunQueues(db, projectId, orderedQueueIds) {
   return db.transaction(async (tx) => {
     const queues = await tx.all(
-      "SELECT id, project_id, workspace_id, name, position, paused, is_default FROM run_queues WHERE project_id = ? AND deleted_at IS NULL ORDER BY is_default DESC, position ASC",
+      "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE project_id = ? AND deleted_at IS NULL ORDER BY is_default DESC, position ASC",
       [projectId]
     );
     if (queues.length !== orderedQueueIds.length || new Set(orderedQueueIds).size !== queues.length || queues.some((queue) => !orderedQueueIds.includes(queue.id))) {
@@ -136666,9 +136743,9 @@ async function enqueueRunQueueEntry(db, projectId, objectiveId, options = {}) {
     if (existing)
       return (await listProjectRunQueues(tx, projectId)).queues.flatMap((q2) => q2.entries).find((e5) => e5.id === existing.id);
     const queue = options.queueId ? await tx.get(
-      "SELECT id, project_id, workspace_id, name, position, paused, is_default FROM run_queues WHERE id = ? AND project_id = ? AND deleted_at IS NULL",
+      "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE id = ? AND project_id = ? AND deleted_at IS NULL",
       [options.queueId, projectId]
-    ) : await ensureDefaultRunQueue(tx, projectId, options.actorId ?? null);
+    ) : await ensureMissionRunQueue(tx, projectId, objective.mission_id, options.actorId ?? null);
     if (!queue) throw new ServiceError("Run Queue not found", "run_queue_not_found", 404);
     let position = options.position;
     if (options.afterEntryId) {
@@ -136718,25 +136795,64 @@ async function enqueueRunQueueEntry(db, projectId, objectiveId, options = {}) {
     return (await listProjectRunQueues(tx, projectId)).queues.flatMap((q2) => q2.entries).find((e5) => e5.id === id);
   });
 }
-async function removeRunQueueEntry(db, entryId) {
+async function removeRunQueueEntry(db, entryId, options = {}) {
   return db.transaction(async (tx) => {
     const row = await tx.get(
-      "SELECT project_id, workspace_id, mission_id, objective_id FROM run_queue_entries WHERE id = ? AND deleted_at IS NULL",
+      "SELECT project_id, workspace_id, mission_id, objective_id, queue_id, state, execution_request_id FROM run_queue_entries WHERE id = ? AND deleted_at IS NULL",
       [entryId]
     );
     if (!row) throw new ServiceError("Run Queue entry not found", "run_queue_entry_not_found", 404);
+    const inFlight = row.state === "dispatched" || row.state === "running";
     const now2 = nowIso();
     await tx.run(
-      "UPDATE run_queue_entries SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
+      "UPDATE run_queue_entries SET deleted_at = ?, execution_request_id = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?",
       [now2, now2, entryId]
     );
     await tx.run(
       "UPDATE objectives SET auto_advance = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
       [tx.dialect === "postgres" ? false : 0, now2, row.objective_id]
     );
+    const objective = await tx.get(
+      "SELECT state FROM objectives WHERE id = ? AND deleted_at IS NULL",
+      [row.objective_id]
+    );
+    const objectiveReset = options.force === true && inFlight && objective?.state === "launching";
+    if (objectiveReset)
+      await tx.run(
+        "UPDATE objectives SET state = 'draft', updated_at = ?, revision = revision + 1 WHERE id = ?",
+        [now2, row.objective_id]
+      );
+    let removedEmptyQueueId = null;
+    const queue = await tx.get(
+      "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE id = ? AND deleted_at IS NULL",
+      [row.queue_id]
+    );
+    if (queue?.mission_id && !truthy(queue.is_default)) {
+      const remaining = await tx.get(
+        "SELECT id FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL LIMIT 1",
+        [queue.id]
+      );
+      if (!remaining) {
+        await tx.run(
+          "UPDATE run_queues SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
+          [now2, now2, queue.id]
+        );
+        removedEmptyQueueId = queue.id;
+      }
+    }
     await rewriteMissionPositions(tx, row.mission_id);
     await enqueueRunQueueDispatch(tx, row.project_id, row.workspace_id);
-    return { removed: true, projectId: row.project_id };
+    return {
+      removed: true,
+      projectId: row.project_id,
+      workspaceId: row.workspace_id,
+      missionId: row.mission_id,
+      objectiveId: row.objective_id,
+      previousState: row.state,
+      executionRequestId: row.execution_request_id,
+      objectiveReset,
+      removedEmptyQueueId
+    };
   });
 }
 async function enqueueObjectiveAfterLastQueuedSibling(db, projectId, objectiveId, actorId = null) {
@@ -136775,7 +136891,7 @@ async function removeRunQueueEntryForObjective(db, projectId, objectiveId) {
 async function reorderRunQueue(db, queueId, orderedEntryIds) {
   return db.transaction(async (tx) => {
     const queue = await tx.get(
-      "SELECT id, project_id, workspace_id, name, position, paused, is_default FROM run_queues WHERE id = ? AND deleted_at IS NULL",
+      "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE id = ? AND deleted_at IS NULL",
       [queueId]
     );
     if (!queue) throw new ServiceError("Run Queue not found", "run_queue_not_found", 404);
@@ -136854,7 +136970,7 @@ async function moveRunQueueEntry(db, entryId, options) {
 async function deleteRunQueue(db, queueId, moveEntriesTo) {
   return db.transaction(async (tx) => {
     const queue = await tx.get(
-      "SELECT id, project_id, workspace_id, name, position, paused, is_default FROM run_queues WHERE id = ? AND deleted_at IS NULL",
+      "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE id = ? AND deleted_at IS NULL",
       [queueId]
     );
     if (!queue) throw new ServiceError("Run Queue not found", "run_queue_not_found", 404);
@@ -137492,9 +137608,9 @@ async function discussObjective({
   }
   const now2 = nowIso();
   await ctx.db.run(
-    `UPDATE objectives SET state = 'launching', updated_at = ?, revision = revision + 1
+    `UPDATE objectives SET state = 'launching', ${OBJECTIVE_LAUNCHED_AT_ASSIGNMENT}, updated_at = ?, revision = revision + 1
        WHERE id = ? AND mission_id = ?`,
-    [now2, draft.id, draft.missionId]
+    [now2, now2, draft.id, draft.missionId]
   );
   await recordChange({
     ctx,
@@ -138523,7 +138639,7 @@ async function createExecutionRequest({
         resolvedProjectId,
         mission.id,
         objective.id,
-        eventSummary ?? `Queued execution request for ${resolvedAgent ?? "default agent"}.`,
+        eventSummary ?? `Delegated execution request for ${resolvedAgent ?? "default agent"}.`,
         JSON.stringify({ executionRequestId: id, requestedSource, ...eventPayload }),
         ctx.source,
         ctx.actorWorkspaceUserId,
@@ -140482,10 +140598,12 @@ async function attachSession({
       `UPDATE objectives
          SET state = 'executing',
              assigned_agent = COALESCE(assigned_agent, ?),
+             ${OBJECTIVE_LAUNCHED_AT_ASSIGNMENT},
+             ${OBJECTIVE_STARTED_AT_ASSIGNMENT},
              updated_at = ?,
              revision = revision + 1
          WHERE id = ? AND mission_id = ?`,
-      [inheritedDraftAgent || null, now2, objective.id, context.mission.id]
+      [inheritedDraftAgent || null, now2, now2, now2, objective.id, context.mission.id]
     );
     await recordChange({
       ctx: txCtx,
@@ -140498,6 +140616,8 @@ async function attachSession({
       objectiveId: objective.id,
       changedFields: [
         "state",
+        "launched_at",
+        "started_at",
         ...currentObjectiveAssignment?.assigned_agent ? [] : ["assigned_agent"]
       ]
     });
@@ -141465,7 +141585,7 @@ async function deliverSession({
     });
     await enqueueDeliveryComposeJob({ ctx: txCtx, deliveryId, now: now2 });
     await txCtx.db.run(
-      `UPDATE objectives SET state = 'complete', completed_at = ?, updated_at = ?, revision = revision + 1
+      `UPDATE objectives SET state = 'complete', ${OBJECTIVE_COMPLETED_AT_ASSIGNMENT}, updated_at = ?, revision = revision + 1
          WHERE id = ?`,
       [now2, now2, session.objective_id]
     );
@@ -141573,9 +141693,9 @@ async function deliverSession({
       const eventNow = nowIso();
       if (nextObjective.auto_advance === 1) {
         const inheritAgent = !nextObjective.assigned_agent && Boolean(deliveredObjective?.assigned_agent);
-        const objectiveFields = ["state = 'launching'"];
-        const objectiveParams = [];
-        const changedFields = ["state"];
+        const objectiveFields = ["state = 'launching'", OBJECTIVE_LAUNCHED_AT_ASSIGNMENT];
+        const objectiveParams = [eventNow];
+        const changedFields = ["state", "launched_at"];
         if (inheritAgent && deliveredObjective) {
           objectiveFields.push("assigned_agent = ?", "model = ?", "reasoning_effort = ?");
           objectiveParams.push(
@@ -141648,7 +141768,7 @@ async function deliverSession({
               mission.projectId,
               mission.id,
               nextObjective.id,
-              `Auto-advance could not queue the next objective: ${error53 instanceof Error ? error53.message : String(error53)}`,
+              `Auto-advance could not delegate the next objective: ${error53 instanceof Error ? error53.message : String(error53)}`,
               JSON.stringify({ autoAdvanceFailed: true }),
               ctx.source,
               ctx.actorWorkspaceUserId,
@@ -141752,10 +141872,11 @@ async function protocolPrompt({
     assignedWorkspaceUserId,
     ...title !== void 0 ? { title } : {}
   });
+  const launchedAt = nowIso();
   const submitted = await ctx.db.run(
-    `UPDATE objectives SET state = 'launching', updated_at = ?, revision = revision + 1
+    `UPDATE objectives SET state = 'launching', ${OBJECTIVE_LAUNCHED_AT_ASSIGNMENT}, updated_at = ?, revision = revision + 1
        WHERE id = ?`,
-    [nowIso(), created.objectives[0]?.id]
+    [launchedAt, launchedAt, created.objectives[0]?.id]
   );
   void submitted;
   return await attachSession({
@@ -141956,6 +142077,11 @@ init_util3();
 
 // execution/launch.ts
 init_dist();
+
+// ../packages/core/dist/service/objective-lifecycle-timestamps.js
+var OBJECTIVE_LAUNCHED_AT_ASSIGNMENT2 = "launched_at = COALESCE(launched_at, ?)";
+var OBJECTIVE_STARTED_AT_ASSIGNMENT2 = "started_at = COALESCE(started_at, ?)";
+var OBJECTIVE_COMPLETED_AT_ASSIGNMENT2 = "completed_at = ?";
 
 // ../packages/core/dist/service/terminal-profile-types.js
 var DEFAULT_VIEWER_OPEN_AS2 = "window";
@@ -142916,7 +143042,7 @@ async function dequeueObjective({
         projectId,
         missionId,
         objectiveId,
-        `Objective ${reason}: cleared ${cleared} queued execution request(s) and ended ${openSessions.length} active session(s).`,
+        `Objective ${reason}: cleared ${cleared} delegated execution request(s) and ended ${openSessions.length} active session(s).`,
         JSON.stringify({
           reason,
           newState,
@@ -142955,7 +143081,7 @@ async function launchObjective(objectiveRef, body) {
       throw new ApiError(
         409,
         `Objective is not launchable from state "${objective.state}"`,
-        objective.state === "future" ? "Promote the objective to draft first." : "Only draft, submitted, or launching objectives can be queued."
+        objective.state === "future" ? "Promote the objective to draft first." : "Only draft, submitted, or launching objectives can be launched."
       );
     }
     const serviceCtx = await buildWebappServiceContextForWorkspace(
@@ -142978,7 +143104,7 @@ async function launchObjective(objectiveRef, body) {
     if (activeSibling) {
       throw new ApiError(
         409,
-        "Another objective on this mission is already active. Enable auto-advance on this objective instead of queueing it for the runner."
+        "Another objective on this mission is already active. Enable auto-advance on this objective instead of delegating it to the runner."
       );
     }
     const launchTarget = await resolveLaunchExecutionTarget({
@@ -143036,8 +143162,9 @@ async function launchObjective(objectiveRef, body) {
       changed.push("launch_config_json");
     }
     if (objective.state === "draft") {
-      fields.push(`state = 'launching'`);
-      changed.push("state");
+      fields.push(`state = 'launching'`, OBJECTIVE_LAUNCHED_AT_ASSIGNMENT2);
+      setParams.push(now2);
+      changed.push("state", "launched_at");
     }
     let revision = objective.revision;
     if (fields.length > 0) {
@@ -143097,7 +143224,7 @@ async function launchObjective(objectiveRef, body) {
       // eligible target). NULL still means "any eligible target may claim."
       executionTargetId,
       metadata: { launchConfigSource: resolved.source },
-      eventSummary: `Queued ${agentKey}${model ? ` (${model})` : ""} execution for a runner.`,
+      eventSummary: `Delegated ${agentKey}${model ? ` (${model})` : ""} execution for a runner.`,
       eventPayload: { agent: agentKey, model, reasoningEffort }
     });
     await tx.run(
@@ -146636,7 +146763,7 @@ async function performBranchAction(missionRef, body) {
         primaryRepoPath: ctx.primaryRepoPath,
         ...typeof body.message === "string" ? { message: body.message } : {}
       },
-      eventSummary: `Queued branch action "${action}" on remote execution target.`
+      eventSummary: `Delegated branch action "${action}" on remote execution target.`
     });
     return getMissionDetail(ctx.missionId);
   }
@@ -146717,7 +146844,7 @@ async function removeWorktree(body) {
           primaryRepoPath,
           force: body.force === true
         },
-        eventSummary: `Queued worktree removal on remote execution target.`
+        eventSummary: `Delegated worktree removal on remote execution target.`
       });
       return { removed: [], skipped: [], worktrees: [] };
     }
@@ -146761,7 +146888,7 @@ async function purgeMergedWorktrees(body = {}) {
           primaryRepoPath,
           ...typeof body.worktreeRoot === "string" ? { worktreeRoot: body.worktreeRoot } : {}
         },
-        eventSummary: "Queued merged worktree purge on remote execution target."
+        eventSummary: "Delegated merged worktree purge on remote execution target."
       });
       return { removed: [], skipped: [], worktrees: [] };
     }
@@ -146853,6 +146980,9 @@ function toObjectiveDto(r5) {
     reasoningEffort: r5.reasoning_effort,
     createdAt: r5.created_at,
     updatedAt: r5.updated_at,
+    launchedAt: r5.launched_at ?? null,
+    startedAt: r5.started_at ?? null,
+    completedAt: r5.completed_at ?? null,
     revision: r5.revision,
     externalSessionId: r5.external_session_id ?? null,
     branch: r5.branch ?? null,
@@ -148386,8 +148516,12 @@ var selectMissionsSql = `
          (SELECT COUNT(*) FROM objectives o
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'complete')
             AS completed_objective_count,
+         -- pending_delivery counts as executing: the agent re-attached after
+         -- finishing a turn and is still on the objective, so the card should
+         -- keep reading as live work rather than going quiet until delivery.
          (SELECT COUNT(*) > 0 FROM objectives o
-            WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'executing')
+            WHERE o.mission_id = t.id AND o.deleted_at IS NULL
+              AND o.state IN ('executing', 'pending_delivery'))
             AS has_executing_objective,
          (SELECT COUNT(*) > 0 FROM objectives o
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'complete')
@@ -150423,8 +150557,12 @@ function selectMyMissionsSql(pairPlaceholders) {
          (SELECT COUNT(*) FROM objectives o
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'complete')
             AS completed_objective_count,
+         -- pending_delivery counts as executing: the agent re-attached after
+         -- finishing a turn and is still on the objective, so the card should
+         -- keep reading as live work rather than going quiet until delivery.
          (SELECT COUNT(*) > 0 FROM objectives o
-            WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'executing')
+            WHERE o.mission_id = t.id AND o.deleted_at IS NULL
+              AND o.state IN ('executing', 'pending_delivery'))
             AS has_executing_objective,
          (SELECT COUNT(*) > 0 FROM objectives o
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'complete')
@@ -150943,9 +151081,21 @@ async function updateObjectiveTx(idRef, body) {
       fields.push("state = ?");
       setParams.push(body.state);
       changed.push("state");
-      if (body.state === "complete") {
-        fields.push("completed_at = ?");
+      if (body.state === "launching") {
+        fields.push(OBJECTIVE_LAUNCHED_AT_ASSIGNMENT2);
         setParams.push(nowIso2());
+        changed.push("launched_at");
+      }
+      if (body.state === "executing") {
+        fields.push(OBJECTIVE_LAUNCHED_AT_ASSIGNMENT2, OBJECTIVE_STARTED_AT_ASSIGNMENT2);
+        const startedAt = nowIso2();
+        setParams.push(startedAt, startedAt);
+        changed.push("launched_at", "started_at");
+      }
+      if (body.state === "complete") {
+        fields.push(OBJECTIVE_COMPLETED_AT_ASSIGNMENT2);
+        setParams.push(nowIso2());
+        changed.push("completed_at");
       }
     }
     if (body.autoAdvance !== void 0) {
@@ -159048,6 +159198,122 @@ function queueByRef(queues, ref) {
   }
   throw new ApiError(404, `Run Queue not found: ${ref}`);
 }
+async function runQueueProjectIdFromProtocol(ctx, body) {
+  const objectiveRef = objectiveRefFlag(body);
+  const missionRef = strFlag(body, "--mission-id");
+  const objective = objectiveRef ? await resolveObjectiveRef({ ctx, ref: objectiveRef, missionId: missionRef }) : null;
+  const mission = missionRef ? await resolveMissionId(ctx, missionRef) : null;
+  const projectRef = strFlag(body, "--project-id");
+  if (projectRef) {
+    const projectId = await resolveProjectId(ctx, projectRef);
+    if (objective && projectId !== objective.projectId) {
+      throw new ApiError(400, "--project-id does not own the addressed objective");
+    }
+    if (mission && projectId !== mission.projectId) {
+      throw new ApiError(400, "--project-id does not own the addressed mission");
+    }
+    return projectId;
+  }
+  if (objective) return objective.projectId;
+  if (mission) return mission.projectId;
+  throw new ApiError(400, "Missing required flag: --project-id");
+}
+async function reorderRunQueueFromProtocol(ctx, body) {
+  const orderedRefs = parseJsonInput(
+    body,
+    "--ordered-entries-json",
+    "--ordered-entries-file"
+  );
+  if (orderedRefs === void 0) {
+    throw new ApiError(400, "Missing required flag: --ordered-entries-json");
+  }
+  if (!Array.isArray(orderedRefs) || !orderedRefs.every((ref) => typeof ref === "string")) {
+    throw new ApiError(
+      400,
+      "--ordered-entries-json must be a JSON array of entry or objective ids"
+    );
+  }
+  const projectId = await runQueueProjectIdFromProtocol(ctx, body);
+  const projection = await listProjectRunQueues(ctx.db, projectId);
+  const queue = queueByRef(projection.queues, requireFlag(body, "--queue"));
+  const orderedEntryIds = orderedRefs.map((ref) => {
+    const entry = queue.entries.find(
+      (candidate) => candidate.id === ref || candidate.objectiveId === ref || candidate.objectiveDisplayId === ref
+    );
+    if (!entry) throw new ApiError(404, `Run Queue entry not found: ${ref}`);
+    return entry.id;
+  });
+  try {
+    return await reorderRunQueue(ctx.db, queue.id, orderedEntryIds);
+  } catch (error53) {
+    if (!(error53 instanceof ServiceError)) throw error53;
+    const refreshed = await listProjectRunQueues(ctx.db, projectId);
+    const currentQueue = refreshed.queues.find((candidate) => candidate.id === queue.id);
+    const details = {
+      currentOrder: currentQueue?.entries.map((entry) => entry.objectiveDisplayId) ?? [],
+      runningEntryId: currentQueue?.running?.id ?? null
+    };
+    throw new ServiceError(error53.message, error53.code, error53.status, details);
+  }
+}
+async function addressedRunQueue(ctx, body, flag) {
+  const projectId = await runQueueProjectIdFromProtocol(ctx, body);
+  const projection = await listProjectRunQueues(ctx.db, projectId);
+  const queues = projection.queues;
+  return { projectId, queues, queue: queueByRef(queues, requireFlag(body, flag)) };
+}
+async function createRunQueueFromProtocol(ctx, body) {
+  const projectId = await runQueueProjectIdFromProtocol(ctx, body);
+  return createRunQueue(
+    ctx.db,
+    projectId,
+    requireFlag(body, "--name"),
+    ctx.actorWorkspaceUserId ?? null
+  );
+}
+async function updateRunQueueFromProtocol(ctx, body) {
+  const pause = boolFlag(body, "--pause");
+  const resume = boolFlag(body, "--resume");
+  if (pause && resume) {
+    throw new ApiError(400, "Choose only one pause option: --pause or --resume");
+  }
+  const name = strFlag(body, "--name");
+  if (name === void 0 && !pause && !resume) {
+    throw new ApiError(400, "Nothing to update: supply --name, --pause, or --resume");
+  }
+  const { queue } = await addressedRunQueue(ctx, body, "--queue");
+  return updateRunQueue(ctx.db, queue.id, {
+    ...name !== void 0 ? { name } : {},
+    ...pause || resume ? { paused: pause } : {}
+  });
+}
+async function deleteRunQueueFromProtocol(ctx, body) {
+  const { queues, queue } = await addressedRunQueue(ctx, body, "--queue");
+  const moveRef = strFlag(body, "--move-entries-to");
+  const destination = moveRef ? queueByRef(queues, moveRef) : void 0;
+  if (destination && destination.id === queue.id) {
+    throw new ApiError(400, "--move-entries-to must name a different Run Queue");
+  }
+  return deleteRunQueue(ctx.db, queue.id, destination?.id);
+}
+async function reorderProjectRunQueuesFromProtocol(ctx, body) {
+  const orderedRefs = parseJsonInput(
+    body,
+    "--ordered-queues-json",
+    "--ordered-queues-file"
+  );
+  if (orderedRefs === void 0) {
+    throw new ApiError(400, "Missing required flag: --ordered-queues-json");
+  }
+  if (!Array.isArray(orderedRefs) || !orderedRefs.every((ref) => typeof ref === "string")) {
+    throw new ApiError(400, "--ordered-queues-json must be a JSON array of queue ids or names");
+  }
+  const projectId = await runQueueProjectIdFromProtocol(ctx, body);
+  const projection = await listProjectRunQueues(ctx.db, projectId);
+  const queues = projection.queues;
+  const orderedQueueIds = orderedRefs.map((ref) => queueByRef(queues, ref).id);
+  return reorderProjectRunQueues(ctx.db, projectId, orderedQueueIds);
+}
 async function queueObjectiveFromProtocol(ctx, body) {
   const objective = await resolveObjectiveRef({
     ctx,
@@ -159078,12 +159344,15 @@ async function queueObjectiveFromProtocol(ctx, body) {
     throw new ApiError(400, "An objective cannot be placed after itself");
   }
   const queueRef = strFlag(body, "--queue");
-  const selectedQueue = queueRef ? queueByRef(queues, queueRef) : after ? queues.find((queue) => queue.id === after.queueId) : existing ? queues.find((queue) => queue.entries.some((entry) => entry.id === existing.id)) : queues.find((queue) => queue.isDefault);
-  if (!selectedQueue) throw new ApiError(404, "Default Run Queue not found");
-  if (after && after.queueId !== selectedQueue.id) {
+  const selectedQueue = queueRef ? queueByRef(queues, queueRef) : after ? queues.find((queue) => queue.id === after.queueId) : existing ? queues.find((queue) => queue.entries.some((entry) => entry.id === existing.id)) : queues.find((queue) => queue.missionId === objective.missionId) ?? queues.find((queue) => queue.isDefault);
+  if (queueRef && !selectedQueue) throw new ApiError(404, `Run Queue not found: ${queueRef}`);
+  if (!selectedQueue && (after || existing)) throw new ApiError(404, "Run Queue not found");
+  if (after && selectedQueue && after.queueId !== selectedQueue.id) {
     throw new ApiError(400, "The queued predecessor belongs to a different Run Queue");
   }
-  const entriesWithoutCurrent = selectedQueue.entries.filter((entry) => entry.id !== existing?.id);
+  const entriesWithoutCurrent = (selectedQueue?.entries ?? []).filter(
+    (entry) => entry.id !== existing?.id
+  );
   let afterEntryId = after?.id;
   let position;
   if (hasFront) {
@@ -159102,6 +159371,7 @@ async function queueObjectiveFromProtocol(ctx, body) {
     return queues.flatMap((queue) => queue.entries).find((entry) => entry.id === existing.id);
   }
   if (existing) {
+    if (!selectedQueue) throw new ApiError(404, "Run Queue not found");
     return moveRunQueueEntry(ctx.db, existing.id, {
       queueId: selectedQueue.id,
       ...afterEntryId ? { afterEntryId } : {},
@@ -159109,7 +159379,7 @@ async function queueObjectiveFromProtocol(ctx, body) {
     });
   }
   return enqueueRunQueueEntry(ctx.db, objective.projectId, objective.id, {
-    queueId: selectedQueue.id,
+    ...selectedQueue ? { queueId: selectedQueue.id } : {},
     ...afterEntryId ? { afterEntryId } : {},
     ...position !== void 0 ? { position } : {},
     actorId: ctx.actorWorkspaceUserId
@@ -159422,7 +159692,23 @@ var handlers = {
   },
   "queue-objective": (ctx, body) => queueObjectiveFromProtocol(ctx, body),
   "dequeue-objective": (ctx, body) => dequeueObjectiveFromProtocol(ctx, body),
-  "run-queue": async (ctx, body) => listProjectRunQueues(ctx.db, await resolveProjectId(ctx, requireFlag(body, "--project-id"))),
+  "reorder-run-queue": (ctx, body) => reorderRunQueueFromProtocol(ctx, body),
+  "create-run-queue": (ctx, body) => createRunQueueFromProtocol(ctx, body),
+  "update-run-queue": (ctx, body) => updateRunQueueFromProtocol(ctx, body),
+  "delete-run-queue": (ctx, body) => deleteRunQueueFromProtocol(ctx, body),
+  "reorder-project-run-queues": (ctx, body) => reorderProjectRunQueuesFromProtocol(ctx, body),
+  "run-queue": async (ctx, body) => {
+    const projection = await listProjectRunQueues(
+      ctx.db,
+      await runQueueProjectIdFromProtocol(ctx, body)
+    );
+    const queueRef = strFlag(body, "--queue");
+    if (!queueRef) return projection;
+    return {
+      ...projection,
+      queues: [queueByRef(projection.queues, queueRef)]
+    };
+  },
   connect: (ctx, body) => connectSession({
     ctx,
     missionId: missionRefFlag(body),
@@ -159684,6 +159970,14 @@ var SUBCOMMAND_PERMISSIONS = {
   "reorder-future-objectives": PERMISSIONS.OBJECTIVE_UPDATE,
   "queue-objective": PERMISSIONS.EXECUTION_REQUEST_CREATE,
   "dequeue-objective": PERMISSIONS.EXECUTION_REQUEST_CREATE,
+  "reorder-run-queue": PERMISSIONS.EXECUTION_REQUEST_CREATE,
+  // Queue definitions are project configuration, matching the REST mapping in
+  // backend/run-queue.ts. `project:update` is not in MISSION_LIFECYCLE_GRANTS,
+  // so these four are full-token operations by design.
+  "create-run-queue": PERMISSIONS.PROJECT_UPDATE,
+  "update-run-queue": PERMISSIONS.PROJECT_UPDATE,
+  "delete-run-queue": PERMISSIONS.PROJECT_UPDATE,
+  "reorder-project-run-queues": PERMISSIONS.PROJECT_UPDATE,
   "run-queue": PERMISSIONS.OBJECTIVE_READ,
   connect: PERMISSIONS.SESSION_ATTACH,
   "search-missions": PERMISSIONS.MISSION_READ,
@@ -159735,20 +160029,51 @@ async function runProtocolSubcommand(subcommand, body) {
   }
 }
 
-// ../mcp/search-detail.ts
+// ../mcp/run-queue-detail.ts
 function isRecord(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
+function compactRunQueueResponse(value) {
+  if (!isRecord(value) || !Array.isArray(value.queues)) return value;
+  return {
+    projectId: value.projectId,
+    queues: value.queues.map((queue) => {
+      if (!isRecord(queue)) return queue;
+      return {
+        id: queue.id,
+        name: queue.name,
+        isDefault: queue.isDefault,
+        paused: queue.paused,
+        entries: Array.isArray(queue.entries) ? queue.entries.map((entry) => {
+          if (!isRecord(entry)) return entry;
+          return {
+            position: entry.position,
+            state: entry.state,
+            objectiveDisplayId: entry.objectiveDisplayId,
+            objectiveTitle: entry.objectiveTitle,
+            missionTitle: entry.missionTitle,
+            blockedReason: entry.blockedReason
+          };
+        }) : []
+      };
+    })
+  };
+}
+
+// ../mcp/search-detail.ts
+function isRecord2(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 function compactSearchResponse(value) {
-  if (!isRecord(value) || value.version !== 3 || !Array.isArray(value.results)) return value;
+  if (!isRecord2(value) || value.version !== 3 || !Array.isArray(value.results)) return value;
   return {
     ...value,
     results: value.results.map((result) => {
-      if (!isRecord(result) || !Array.isArray(result.matches)) return result;
+      if (!isRecord2(result) || !Array.isArray(result.matches)) return result;
       return {
         ...result,
         matches: result.matches.slice(0, 2).map((match) => {
-          if (!isRecord(match)) return match;
+          if (!isRecord2(match)) return match;
           const compact = { ...match };
           delete compact.snippet;
           delete compact.matchedTerms;
@@ -160065,6 +160390,51 @@ var hostedMcpToolDefinitions = [
     annotations: writeAction
   },
   {
+    name: "overlord_list_run_queues",
+    title: "List Run Queues",
+    description: "Use this to read a project's authoritative Run Queues before adding, moving, removing, or bulk-reordering entries. Compact detail is the default and includes ordering and blocking state; request full for the complete ProjectRunQueuesDto.",
+    inputSchema: objectSchema({
+      projectId: stringProperty("Optional project UUID, slug, or name."),
+      objectiveId: stringProperty(
+        "Optional objective UUID or display id; derives the project when projectId is omitted."
+      ),
+      missionId: stringProperty(
+        "Optional mission UUID or display id; derives the project when projectId is omitted."
+      ),
+      queue: stringProperty("Optional Run Queue UUID or unambiguous name to return by itself."),
+      detail: {
+        type: "string",
+        enum: ["compact", "full"],
+        description: "Result detail: compact (default) returns queue ordering state; full returns the raw ProjectRunQueuesDto."
+      }
+    }),
+    outputSchema: protocolOutputSchema(
+      "Compact queue state by default, or the raw ProjectRunQueuesDto when detail is full."
+    ),
+    annotations: readOnly
+  },
+  {
+    name: "overlord_reorder_run_queue",
+    title: "Reorder Run Queue entries",
+    description: "Use this only when the user explicitly asks to reorder every entry in one Run Queue. Supply every live entry exactly once, using entry UUIDs, objective UUIDs, or objective display ids. Running and dispatched entries cannot move. On a mismatch, the error returns the current order; re-read the queue and retry.",
+    inputSchema: objectSchema(
+      {
+        queue: stringProperty("Run Queue UUID or unambiguous name."),
+        orderedObjectives: {
+          type: "array",
+          description: "Complete desired top-to-bottom entry order. Each item may be an entry UUID, objective UUID, or objective display id.",
+          items: stringProperty("Run Queue entry UUID, objective UUID, or objective display id.")
+        },
+        projectId: stringProperty(
+          "Optional project UUID, slug, or name; disambiguates queue names."
+        )
+      },
+      ["queue", "orderedObjectives"]
+    ),
+    outputSchema: protocolOutputSchema("The reordered RunQueueDto."),
+    annotations: writeAction
+  },
+  {
     name: "overlord_queue_objective",
     title: "Queue objective",
     description: "Use this only when the user explicitly asks to add, move, or remove an objective in the project Run Queue. Queue membership is target-neutral and sequences delivery-driven launches; it does not directly launch the objective.",
@@ -160075,6 +160445,11 @@ var hostedMcpToolDefinitions = [
         after: stringProperty(
           "Optional queued predecessor entry id, objective UUID, or objective display id. Its queue is used when queue is omitted."
         ),
+        front: booleanProperty("When true, place this objective first in the selected queue."),
+        position: {
+          type: "number",
+          description: "Optional one-based insertion position in the selected queue."
+        },
         remove: booleanProperty(
           "When true, remove this objective from the Run Queue instead of adding or moving it."
         )
@@ -160082,6 +160457,43 @@ var hostedMcpToolDefinitions = [
       ["objectiveId"]
     ),
     outputSchema: protocolOutputSchema("The queued entry, or removal confirmation."),
+    annotations: writeAction
+  },
+  {
+    name: "overlord_manage_run_queue",
+    title: "Manage Run Queues",
+    description: "Use this only when the user explicitly asks to create, rename, pause, resume, delete, or reorder the project's Run Queue definitions. These are administrative project-configuration actions and require a full-scope token; adding, moving, or removing objectives inside a queue uses overlord_queue_objective and overlord_reorder_run_queue instead.",
+    inputSchema: objectSchema(
+      {
+        action: {
+          type: "string",
+          enum: ["create", "update", "delete", "reorder_queues"],
+          description: "create a queue, update (rename/pause/resume) one, delete one, or reorder the queue definitions."
+        },
+        projectId: stringProperty(
+          "Project UUID, slug, or name. Required for create and reorder_queues."
+        ),
+        queue: stringProperty(
+          "Run Queue UUID or unambiguous name. Required for update and delete."
+        ),
+        name: stringProperty("New queue name for create, or the replacement name for update."),
+        paused: booleanProperty(
+          "update only: true pauses dispatching from the queue, false resumes it."
+        ),
+        moveEntriesTo: stringProperty(
+          "delete only: destination queue UUID or unambiguous name. Required when the queue still holds entries."
+        ),
+        orderedQueues: {
+          type: "array",
+          description: "reorder_queues only: every live queue exactly once, top to bottom, by UUID or unambiguous name. The default queue must stay first.",
+          items: stringProperty("Run Queue UUID or unambiguous name.")
+        }
+      },
+      ["action"]
+    ),
+    outputSchema: protocolOutputSchema(
+      "The created or updated RunQueueDto, a removal confirmation, or the reordered ProjectRunQueuesDto."
+    ),
     annotations: writeAction
   },
   {
@@ -160393,7 +160805,7 @@ function readHostedMcpWidget(uri) {
 
 // ../mcp/server.ts
 var MCP_PROTOCOL_VERSION = "2025-11-25";
-function isRecord2(value) {
+function isRecord3(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function optionalString(args, name) {
@@ -160429,8 +160841,123 @@ function autoAdvanceFlags(args) {
 function protocolBody(flags) {
   return { flags };
 }
+function runQueueMcpProtocolCall(name, args) {
+  if (name === "overlord_list_run_queues") {
+    return {
+      subcommand: "run-queue",
+      body: protocolBody({
+        ...optionalProjectRef(args) ? { "--project-id": optionalProjectRef(args) } : {},
+        ...optionalString(args, "objectiveId") ? { "--objective-id": requiredString(args, "objectiveId") } : {},
+        ...optionalString(args, "missionId") ? { "--mission-id": requiredString(args, "missionId") } : {},
+        ...optionalString(args, "queue") ? { "--queue": requiredString(args, "queue") } : {}
+      })
+    };
+  }
+  if (name === "overlord_reorder_run_queue") {
+    if (!Array.isArray(args.orderedObjectives) || !args.orderedObjectives.every((item) => typeof item === "string")) {
+      throw new Error("orderedObjectives must be an array of strings");
+    }
+    return {
+      subcommand: "reorder-run-queue",
+      body: protocolBody({
+        "--queue": requiredString(args, "queue"),
+        "--ordered-entries-json": JSON.stringify(args.orderedObjectives),
+        ...optionalProjectRef(args) ? { "--project-id": optionalProjectRef(args) } : {}
+      })
+    };
+  }
+  if (name === "overlord_queue_objective") {
+    const hasAfter = optionalString(args, "after") !== null;
+    const hasFront = args.front === true;
+    const hasPosition = args.position !== void 0;
+    if (Number(hasAfter) + Number(hasFront) + Number(hasPosition) > 1) {
+      throw new Error("Choose only one placement option: after, front, or position");
+    }
+    if (hasPosition && (!Number.isInteger(args.position) || args.position < 1)) {
+      throw new Error("position must be a positive integer");
+    }
+    if (args.remove === true) {
+      return {
+        subcommand: "dequeue-objective",
+        body: protocolBody({ "--objective-id": requiredString(args, "objectiveId") })
+      };
+    }
+    return {
+      subcommand: "queue-objective",
+      body: protocolBody({
+        "--objective-id": requiredString(args, "objectiveId"),
+        ...optionalString(args, "queue") ? { "--queue": requiredString(args, "queue") } : {},
+        ...hasAfter ? { "--after": requiredString(args, "after") } : {},
+        ...hasFront ? { "--front": true } : {},
+        ...hasPosition ? { "--position": String(args.position) } : {}
+      })
+    };
+  }
+  if (name === "overlord_manage_run_queue") {
+    const action = optionalString(args, "action");
+    if (action === null) throw new Error("action is required");
+    const projectRef = optionalProjectRef(args);
+    const queue = optionalString(args, "queue");
+    const queueName = optionalString(args, "name");
+    if (action === "create") {
+      if (!projectRef) throw new Error("action 'create' requires projectId");
+      if (!queueName) throw new Error("action 'create' requires name");
+      return {
+        subcommand: "create-run-queue",
+        body: protocolBody({ "--project-id": projectRef, "--name": queueName })
+      };
+    }
+    if (action === "update") {
+      if (!queue) throw new Error("action 'update' requires queue");
+      const paused = args.paused;
+      if (paused !== void 0 && typeof paused !== "boolean") {
+        throw new Error("paused must be a boolean");
+      }
+      if (!queueName && paused === void 0) {
+        throw new Error("action 'update' requires name or paused");
+      }
+      return {
+        subcommand: "update-run-queue",
+        body: protocolBody({
+          "--queue": queue,
+          ...projectRef ? { "--project-id": projectRef } : {},
+          ...queueName ? { "--name": queueName } : {},
+          ...paused === true ? { "--pause": true } : {},
+          ...paused === false ? { "--resume": true } : {}
+        })
+      };
+    }
+    if (action === "delete") {
+      if (!queue) throw new Error("action 'delete' requires queue");
+      const moveEntriesTo = optionalString(args, "moveEntriesTo");
+      return {
+        subcommand: "delete-run-queue",
+        body: protocolBody({
+          "--queue": queue,
+          ...projectRef ? { "--project-id": projectRef } : {},
+          ...moveEntriesTo ? { "--move-entries-to": moveEntriesTo } : {}
+        })
+      };
+    }
+    if (action === "reorder_queues") {
+      if (!projectRef) throw new Error("action 'reorder_queues' requires projectId");
+      if (!Array.isArray(args.orderedQueues) || args.orderedQueues.length === 0 || !args.orderedQueues.every((item) => typeof item === "string")) {
+        throw new Error("action 'reorder_queues' requires orderedQueues as an array of strings");
+      }
+      return {
+        subcommand: "reorder-project-run-queues",
+        body: protocolBody({
+          "--project-id": projectRef,
+          "--ordered-queues-json": JSON.stringify(args.orderedQueues)
+        })
+      };
+    }
+    throw new Error(`Unsupported Run Queue action: ${action}`);
+  }
+  throw new Error(`Unsupported Run Queue MCP tool: ${name}`);
+}
 function jsonText(value) {
-  const structured = isRecord2(value) ? value : { results: value };
+  const structured = isRecord3(value) ? value : { results: value };
   return {
     content: [
       {
@@ -160576,16 +161103,27 @@ var toolHandlers = {
       })
     );
   },
-  overlord_queue_objective: (args) => runProtocolSubcommand(
-    args.remove === true ? "dequeue-objective" : "queue-objective",
-    protocolBody({
-      "--objective-id": requiredString(args, "objectiveId"),
-      ...args.remove === true ? {} : {
-        ...optionalString(args, "queue") ? { "--queue": requiredString(args, "queue") } : {},
-        ...optionalString(args, "after") ? { "--after": requiredString(args, "after") } : {}
-      }
-    })
-  ),
+  overlord_list_run_queues: async (args) => {
+    const detail = optionalString(args, "detail") ?? "compact";
+    if (detail !== "compact" && detail !== "full") {
+      throw new Error("detail must be 'compact' or 'full'");
+    }
+    const request = runQueueMcpProtocolCall("overlord_list_run_queues", args);
+    const result = await runProtocolSubcommand(request.subcommand, request.body);
+    return detail === "compact" ? compactRunQueueResponse(result) : result;
+  },
+  overlord_reorder_run_queue: (args) => {
+    const request = runQueueMcpProtocolCall("overlord_reorder_run_queue", args);
+    return runProtocolSubcommand(request.subcommand, request.body);
+  },
+  overlord_queue_objective: (args) => {
+    const request = runQueueMcpProtocolCall("overlord_queue_objective", args);
+    return runProtocolSubcommand(request.subcommand, request.body);
+  },
+  overlord_manage_run_queue: (args) => {
+    const request = runQueueMcpProtocolCall("overlord_manage_run_queue", args);
+    return runProtocolSubcommand(request.subcommand, request.body);
+  },
   overlord_attach_session: (args) => runProtocolSubcommand(
     "attach",
     protocolBody({
@@ -160713,7 +161251,7 @@ function failure(id, error53) {
   return { jsonrpc: "2.0", id: id ?? null, error: error53 };
 }
 async function callTool(params) {
-  if (!isRecord2(params) || !isRecord2(params.arguments)) {
+  if (!isRecord3(params) || !isRecord3(params.arguments)) {
     throw new Error("tools/call requires params.name and params.arguments");
   }
   const name = typeof params.name === "string" ? params.name : "";
@@ -160726,7 +161264,7 @@ async function callTool(params) {
   }
 }
 function readResource(params) {
-  if (!isRecord2(params) || typeof params.uri !== "string") {
+  if (!isRecord3(params) || typeof params.uri !== "string") {
     throw new Error("resources/read requires params.uri");
   }
   const resource = readHostedMcpWidget(params.uri);
@@ -160800,7 +161338,7 @@ async function handleMcpPost(req, res, next) {
     const requests = Array.isArray(body) ? body : [body];
     const responses = [];
     for (const item of requests) {
-      const response = await dispatch(isRecord2(item) ? item : {});
+      const response = await dispatch(isRecord3(item) ? item : {});
       if (response) responses.push(response);
     }
     if (Array.isArray(body)) {
@@ -163136,7 +163674,7 @@ async function loadRuns(workspaceIds) {
               ORDER BY r.created_at DESC, r.id DESC LIMIT 1) AS request_created_at
        FROM objectives o${CONTEXT_JOIN}
       WHERE o.deleted_at IS NULL
-        AND o.state IN ('launching', 'executing')
+        AND o.state IN ('launching', 'executing', 'pending_delivery')
         AND o.workspace_id IN (${placeholders(workspaceIds.length)})
       ORDER BY o.updated_at DESC, o.id ASC
       LIMIT ?`,
@@ -163249,7 +163787,7 @@ function toRunItem(row, queued, latest) {
     ...baseFields(row),
     objectiveId: row.objective_id,
     objectiveDisplayId: objectiveDisplayId(row.mission_display_id, row.objective_display_key),
-    state: row.state === "launching" ? "launching" : "executing",
+    state: row.state === "launching" ? "launching" : row.state === "pending_delivery" ? "pending_delivery" : "executing",
     objectiveTitle: row.objective_title,
     instructionPreview: truncate(row.instruction_text, INSTRUCTION_PREVIEW_CHARS),
     agentIdentifier: resolveAgentIdentifier(row.session_agent_identifier, row.assigned_agent),
@@ -165903,7 +166441,7 @@ async function buildLiveActivityContentState(db, profileId, now2 = /* @__PURE__ 
   const rows = await db.all(
     `SELECT m.id, m.title, m.display_id, p.name AS project_name, p.settings_json AS project_settings_json,
             m.updated_at, m.status_type,
-            EXISTS(SELECT 1 FROM objectives o WHERE o.mission_id = m.id AND o.deleted_at IS NULL AND o.state = 'executing') AS has_executing_objective,
+            EXISTS(SELECT 1 FROM objectives o WHERE o.mission_id = m.id AND o.deleted_at IS NULL AND o.state IN ('executing', 'pending_delivery')) AS has_executing_objective,
             EXISTS(SELECT 1 FROM objectives o WHERE o.mission_id = m.id AND o.deleted_at IS NULL AND o.state = 'complete') AS has_completed_objective
        FROM missions m
        JOIN projects p ON p.id = m.project_id AND p.deleted_at IS NULL
@@ -165922,7 +166460,7 @@ async function buildLiveActivityContentState(db, profileId, now2 = /* @__PURE__ 
        JOIN projects p ON p.id = m.project_id AND p.deleted_at IS NULL
        JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
        JOIN workspaces w ON w.id = m.workspace_id AND w.deleted_at IS NULL
-      WHERE o.deleted_at IS NULL AND o.state = 'executing'
+      WHERE o.deleted_at IS NULL AND o.state IN ('executing', 'pending_delivery')
         AND wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
       ORDER BY o.updated_at DESC, o.id ASC`,
     [profileId]
@@ -167516,7 +168054,13 @@ async function getProjectRunQueues(projectId) {
 async function postProjectRunQueue(projectId, body) {
   const db = requireDatabaseClient();
   await authorize(projectId, PERMISSIONS.PROJECT_UPDATE, db);
-  return createRunQueue(db, projectId, body.name ?? "", getActorWorkspaceUserId());
+  return createRunQueue(
+    db,
+    projectId,
+    body.name ?? "",
+    getActorWorkspaceUserId(),
+    body.missionId ?? null
+  );
 }
 async function patchProjectRunQueueOrder(projectId, body) {
   const db = requireDatabaseClient();
@@ -167549,12 +168093,34 @@ async function patchRunQueueEntry(entryId, body) {
   await authorize(projectId, PERMISSIONS.EXECUTION_REQUEST_CREATE, db);
   return moveRunQueueEntry(db, entryId, body);
 }
-async function deleteRunQueueEntry(entryId) {
+async function deleteRunQueueEntry(entryId, body = {}) {
   const db = requireDatabaseClient();
   const projectId = await projectForEntry(db, entryId);
   await authorize(projectId, PERMISSIONS.EXECUTION_REQUEST_CREATE, db);
-  const result = await removeRunQueueEntry(db, entryId);
-  return { removed: result.removed };
+  const force = body.force === true;
+  const result = await removeRunQueueEntry(db, entryId, { force });
+  let clearedExecutionRequests = 0;
+  if (force) {
+    const ctx = await buildWebappServiceContextForWorkspace(
+      result.workspaceId,
+      db,
+      getActorWorkspaceUserId()
+    );
+    ({ cleared: clearedExecutionRequests } = await clearExecutionRequests({
+      ctx,
+      objectiveId: result.objectiveId,
+      eventSummary: "Cleared execution request by forced Run Queue removal."
+    }));
+  }
+  return {
+    removed: result.removed,
+    forced: force,
+    objectiveId: result.objectiveId,
+    previousState: result.previousState,
+    objectiveReset: result.objectiveReset,
+    clearedExecutionRequests,
+    removedEmptyQueueId: result.removedEmptyQueueId
+  };
 }
 async function patchRunQueueOrder(queueId, body) {
   const db = requireDatabaseClient();
@@ -167660,8 +168226,8 @@ async function dispatchProjectRunQueues(db, projectId) {
             [now2, objective.id]
           );
         await tx.run(
-          "UPDATE objectives SET state = 'launching', updated_at = ?, revision = revision + 1 WHERE id = ? AND state IN ('draft','submitted')",
-          [now2, objective.id]
+          `UPDATE objectives SET state = 'launching', ${OBJECTIVE_LAUNCHED_AT_ASSIGNMENT2}, updated_at = ?, revision = revision + 1 WHERE id = ? AND state IN ('draft','submitted')`,
+          [now2, now2, objective.id]
         );
         const target = await resolveLaunchExecutionTarget({ ctx, projectId: objective.project_id });
         const resolved = await resolveLaunchConfig({
@@ -169952,7 +170518,7 @@ app.patch(
 );
 app.delete(
   "/api/run-queues/entries/:entryId",
-  handle3((req) => deleteRunQueueEntry(req.params.entryId), { mutates: true })
+  handle3((req) => deleteRunQueueEntry(req.params.entryId, req.body ?? {}), { mutates: true })
 );
 app.get(
   "/api/projects/:id/statuses",

@@ -21,6 +21,7 @@ import {
   toSearchResponseV3
 } from './mission-search.js';
 import { allocateObjectiveDisplayKey } from './objective-display-id.js';
+import { OBJECTIVE_LAUNCHED_AT_ASSIGNMENT } from './objective-lifecycle-timestamps.js';
 import { assertProjectResourceKeyExists } from './projects.js';
 import {
   enqueueObjectiveAfterLastQueuedSibling,
@@ -1165,9 +1166,9 @@ export async function discussObjective({
 
   const now = nowIso();
   await ctx.db.run(
-    `UPDATE objectives SET state = 'launching', updated_at = ?, revision = revision + 1
+    `UPDATE objectives SET state = 'launching', ${OBJECTIVE_LAUNCHED_AT_ASSIGNMENT}, updated_at = ?, revision = revision + 1
        WHERE id = ? AND mission_id = ?`,
-    [now, draft.id, draft.missionId]
+    [now, now, draft.id, draft.missionId]
   );
 
   await recordChange({

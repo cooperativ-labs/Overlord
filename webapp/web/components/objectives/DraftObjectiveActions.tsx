@@ -1,7 +1,7 @@
 import { Check, Copy, ListOrdered, Loader2, MoreVertical, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
-import type { ObjectiveDto, ObjectiveState } from '../../../shared/contract.ts';
+import type { ObjectiveDto, ObjectiveState, RunQueueDto } from '../../../shared/contract.ts';
 import { useCopyToClipboard } from '../../lib/hooks/use-copy-to-clipboard.ts';
 import {
   useDeleteObjective,
@@ -32,6 +32,8 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover.tsx';
 
 const AUTO_ADVANCE_TOGGLE_STATES: ObjectiveState[] = ['future', 'draft', 'submitted', 'launching'];
+/** Sentinel for "this mission's queue" before that queue has been created. */
+const MISSION_QUEUE_OPTION = 'mission-queue';
 const OBJECTIVE_STATES: ObjectiveState[] = [
   'future',
   'draft',
@@ -46,6 +48,12 @@ type DraftObjectiveActionsProps = {
   objective: ObjectiveDto;
 };
 
+/** Queue option label; the objective's own mission queue is called out first. */
+function queueLabel(queue: RunQueueDto, missionId: string): string {
+  if (queue.missionId === missionId) return `${queue.name} (This mission)`;
+  return `${queue.name}${queue.isDefault ? ' (Default)' : ''}`;
+}
+
 /** State picker, delete, and Run Queue controls for a draft objective card. */
 export function DraftObjectiveActions({ objective }: DraftObjectiveActionsProps) {
   const update = useUpdateObjective();
@@ -56,16 +64,25 @@ export function DraftObjectiveActions({ objective }: DraftObjectiveActionsProps)
   const move = useMoveRunQueueEntry(objective.projectId);
   const { copied, copy } = useCopyToClipboard();
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
+  /** True when the pending removal must also unstick an in-flight entry. */
+  const [forceRemove, setForceRemove] = useState(false);
   const [selectedQueueId, setSelectedQueueId] = useState<string | null>(null);
 
   const canToggleAutoAdvance = AUTO_ADVANCE_TOGGLE_STATES.includes(objective.state);
   const queueEntry = objective.queueEntry ?? null;
   const queuePending = enqueue.isPending || dequeue.isPending || move.isPending;
-  const defaultQueue = queues.data?.queues.find(queue => queue.isDefault) ?? null;
-  const selectedQueue =
-    queues.data?.queues.find(queue => queue.id === selectedQueueId) ??
-    queues.data?.queues.find(queue => queue.id === queueEntry?.queueId) ??
-    defaultQueue;
+  const allQueues = queues.data?.queues ?? [];
+  // The objective's own mission queue is the default destination. When the
+  // mission has no queue yet it is offered as MISSION_QUEUE_OPTION and created
+  // on the server at enqueue time, so no queue exists until it is used.
+  const missionQueue = allQueues.find(queue => queue.missionId === objective.missionId) ?? null;
+  const queueOptions = [
+    ...(missionQueue ? [missionQueue] : []),
+    ...allQueues.filter(queue => queue.id !== missionQueue?.id)
+  ];
+  const defaultSelection = missionQueue?.id ?? MISSION_QUEUE_OPTION;
+  const selection = selectedQueueId ?? queueEntry?.queueId ?? defaultSelection;
+  const selectedQueue = allQueues.find(queue => queue.id === selection) ?? null;
   const predecessor = selectedQueue?.entries.at(-1) ?? null;
   const queueRank = queueEntry
     ? (queues.data?.queues
@@ -162,27 +179,39 @@ export function DraftObjectiveActions({ objective }: DraftObjectiveActionsProps)
                   ) : null}
                 </div>
                 {queueEntry.state === 'running' || queueEntry.state === 'dispatched' ? (
-                  <p className="text-xs text-muted-foreground">
-                    This entry is in flight and cannot be moved or removed.
-                  </p>
+                  <>
+                    <p className="text-xs text-muted-foreground">
+                      This entry is in flight, so it cannot be reordered. Force-remove it if the
+                      launch never started and the objective is stuck.
+                    </p>
+                    <Button
+                      variant="danger"
+                      className="h-8 text-xs"
+                      onClick={() => {
+                        setForceRemove(true);
+                        setRemoveConfirmOpen(true);
+                      }}
+                    >
+                      Force-remove from queue
+                    </Button>
+                  </>
                 ) : (
                   <>
                     <label className="space-y-1 text-xs text-muted-foreground">
                       <span>Queue</span>
                       <select
                         className="h-8 w-full rounded-md border bg-background px-2 text-xs text-foreground"
-                        value={selectedQueue?.id ?? ''}
+                        value={selection}
                         onChange={event => {
                           const queueId = event.target.value;
                           setSelectedQueueId(queueId);
-                          if (queueId !== queueEntry.queueId)
+                          if (queueId !== queueEntry.queueId && queueId !== MISSION_QUEUE_OPTION)
                             move.mutate({ entryId: queueEntry.id, queueId });
                         }}
                       >
-                        {(queues.data?.queues ?? []).map(queue => (
+                        {queueOptions.map(queue => (
                           <option key={queue.id} value={queue.id}>
-                            {queue.name}
-                            {queue.isDefault ? ' (Default)' : ''}
+                            {queueLabel(queue, objective.missionId)}
                           </option>
                         ))}
                       </select>
@@ -190,7 +219,10 @@ export function DraftObjectiveActions({ objective }: DraftObjectiveActionsProps)
                     <Button
                       variant="secondary"
                       className="h-8 text-xs"
-                      onClick={() => setRemoveConfirmOpen(true)}
+                      onClick={() => {
+                        setForceRemove(false);
+                        setRemoveConfirmOpen(true);
+                      }}
                     >
                       Remove from queue
                     </Button>
@@ -204,29 +236,36 @@ export function DraftObjectiveActions({ objective }: DraftObjectiveActionsProps)
                   <p className="mt-1 text-xs text-muted-foreground">
                     {predecessor
                       ? `It will follow ${predecessor.objectiveTitle ?? predecessor.objectiveDisplayId} · ${predecessor.missionTitle}.`
-                      : `This will be the first entry in ${selectedQueue?.name ?? 'the selected queue'}.`}
+                      : `This will be the first entry in ${selectedQueue?.name ?? "this mission's new queue"}.`}
                   </p>
                 </div>
                 <label className="space-y-1 text-xs text-muted-foreground">
                   <span>Queue</span>
                   <select
                     className="h-8 w-full rounded-md border bg-background px-2 text-xs text-foreground"
-                    value={selectedQueue?.id ?? ''}
+                    value={selection}
                     onChange={event => setSelectedQueueId(event.target.value)}
                   >
-                    {(queues.data?.queues ?? []).map(queue => (
+                    {!missionQueue ? (
+                      <option value={MISSION_QUEUE_OPTION}>This mission&apos;s queue (new)</option>
+                    ) : null}
+                    {queueOptions.map(queue => (
                       <option key={queue.id} value={queue.id}>
-                        {queue.name}
-                        {queue.isDefault ? ' (Default)' : ''}
+                        {queueLabel(queue, objective.missionId)}
                       </option>
                     ))}
                   </select>
                 </label>
                 <Button
                   className="h-8 text-xs"
-                  disabled={!selectedQueue || queues.isLoading || queuePending}
+                  disabled={queues.isLoading || queuePending}
                   onClick={() =>
-                    enqueue.mutate({ objectiveId: objective.id, queueId: selectedQueue?.id })
+                    enqueue.mutate({
+                      objectiveId: objective.id,
+                      // Omitting queueId asks the server for this objective's
+                      // mission queue, creating it only if it is missing.
+                      ...(selection === MISSION_QUEUE_OPTION ? {} : { queueId: selection })
+                    })
                   }
                 >
                   Add to queue
@@ -239,10 +278,13 @@ export function DraftObjectiveActions({ objective }: DraftObjectiveActionsProps)
       <Dialog open={removeConfirmOpen} onOpenChange={setRemoveConfirmOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Remove from Run Queue?</DialogTitle>
+            <DialogTitle>
+              {forceRemove ? 'Force-remove from Run Queue?' : 'Remove from Run Queue?'}
+            </DialogTitle>
             <DialogDescription>
-              This objective will no longer wait for the queue. It will not be launched
-              automatically.
+              {forceRemove
+                ? 'This drops the in-flight entry, clears the execution requests it left behind, and returns an objective still stuck in Launching to Draft so it can be run again. An objective already Executing keeps its live session.'
+                : 'This objective will no longer wait for the queue. It will not be launched automatically.'}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -254,10 +296,13 @@ export function DraftObjectiveActions({ objective }: DraftObjectiveActionsProps)
               disabled={!queueEntry || dequeue.isPending}
               onClick={() => {
                 if (!queueEntry) return;
-                dequeue.mutate(queueEntry.id, { onSuccess: () => setRemoveConfirmOpen(false) });
+                dequeue.mutate(
+                  { entryId: queueEntry.id, force: forceRemove },
+                  { onSuccess: () => setRemoveConfirmOpen(false) }
+                );
               }}
             >
-              Remove
+              {forceRemove ? 'Force-remove' : 'Remove'}
             </Button>
           </DialogFooter>
         </DialogContent>

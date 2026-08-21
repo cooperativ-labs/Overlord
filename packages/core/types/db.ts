@@ -838,6 +838,7 @@ export interface Objectives {
   id: string | null;
   instruction_text: string | null;
   launch_config_json: string | null;
+  launched_at: string | null;
   mission_id: string;
   model: string | null;
   position: number;
@@ -845,6 +846,7 @@ export interface Objectives {
   reasoning_effort: string | null;
   resource_key: string | null;
   revision: Generated<number>;
+  started_at: string | null;
   state: string;
   title: string | null;
   updated_at: string;

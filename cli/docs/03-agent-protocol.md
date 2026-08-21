@@ -58,13 +58,21 @@ Requirements:
   existing `objective:update` authorization and rejects duplicate, missing, or
   non-future ids while returning the full objective list.
 - `run-queue`: return all live queues and entries for `--project-id` (UUID,
-  slug, or name). It is a read of delivery-driven sequencing state, not a direct
+  slug, or name), `--objective-id`, or `--mission-id`, optionally narrowed with
+  `--queue`. It is a read of delivery-driven sequencing state, not a direct
   launch command.
+- `reorder-run-queue`: atomically replace one queue's complete entry order.
+  Every live entry must appear exactly once; running and dispatched entries
+  cannot move. It requires `execution_request:create`.
 - `queue-objective`: enqueue or move an objective UUID/display id through the
   existing Run Queue service. Optional `--queue`, `--after`, `--front`, and
   one-based `--position` control placement; entries never select a target.
 - `dequeue-objective`: remove an objective UUID/display id from live queue
   membership; an already-unqueued objective is an idempotent no-op.
+- `create-run-queue`, `update-run-queue`, `delete-run-queue`, and
+  `reorder-project-run-queues`: manage queue definitions through the existing
+  Run Queue service. These are `project:update` operations and require a
+  full-scope token; mission-lifecycle tokens can still perform entry operations.
 - `connect`: create a lightweight session key without full context. Optional
   `--objective-id` pins the session to that objective.
 - `search` (with `search-missions` retained as an alias): v1 remains compatible. `--response-version 2` returns the

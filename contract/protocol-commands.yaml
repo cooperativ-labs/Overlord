@@ -313,7 +313,7 @@ missionDiscovery:
       - creates-session-key
 
   listDeliveries:
-    description: 'List one addressed mission\'s newest-first normalized delivery records'
+    description: 'List one addressed mission''s newest-first normalized delivery records'
     readOnly: true
     optionalFlags:
       - --mission-id
@@ -340,7 +340,7 @@ missionDiscovery:
       - may-transition-draft-objective-to-launching
 
   reorderFutureObjectives:
-    description: 'Reorder one mission UUID\'s future objectives without changing non-future positions'
+    description: 'Reorder one mission UUID''s future objectives without changing non-future positions'
     requiredFlags:
       - --mission-id
       - --ordered-objective-ids-json
@@ -390,11 +390,102 @@ missionDiscovery:
   runQueue:
     description: 'Read the addressed project''s live Run Queue projection'
     readOnly: true
-    requiredFlags:
+    optionalFlags:
       - --project-id
+      - --objective-id
+      - --mission-id
+      - --queue
     responseShape: ProjectRunQueuesDto
     rules:
-      - '--project-id accepts the normal project UUID, slug, or name reference and uses objective:read authorization.'
+      - 'Supply --project-id, --objective-id, or --mission-id. The objective or mission derives the project when --project-id is absent; supplied scopes must agree.'
+      - '--project-id accepts the normal project UUID, slug, or name reference. --queue accepts a queue UUID or an unambiguous queue name and narrows the unchanged ProjectRunQueuesDto shape.'
+      - 'Uses objective:read authorization.'
+
+  reorderRunQueue:
+    description: 'Atomically replace one Run Queue''s complete live entry order'
+    requiredFlags:
+      - --queue
+      - --ordered-entries-json | --ordered-entries-file
+    optionalFlags:
+      - --project-id
+      - --objective-id
+      - --mission-id
+    responseShape: RunQueueDto
+    rules:
+      - 'The queue reference accepts a UUID or unambiguous name. Each order item accepts an entry UUID, objective UUID, or objective display id in that queue.'
+      - 'Supply every live entry exactly once. Running and dispatched entries cannot move; rejected orders include currentOrder and runningEntryId so callers can re-read and retry.'
+      - 'Uses execution_request:create; entries remain target-neutral.'
+    sideEffects:
+      - reorders-run-queue-entries
+      - rewrites-affected-mission-objective-positions
+
+  createRunQueue:
+    description: 'Create an additional Run Queue in the addressed project'
+    requiredFlags:
+      - --name
+    optionalFlags:
+      - --project-id
+      - --objective-id
+      - --mission-id
+    responseShape: RunQueueDto
+    rules:
+      - 'Supply --project-id, --objective-id, or --mission-id to address the project; supplied scopes must agree.'
+      - 'Uses project:update. Queue definitions are project configuration, so mission_lifecycle-scoped tokens cannot create them.'
+    sideEffects:
+      - creates-run-queue
+
+  updateRunQueue:
+    description: 'Rename, pause, or resume one Run Queue'
+    requiredFlags:
+      - --queue
+    optionalFlags:
+      - --project-id
+      - --objective-id
+      - --mission-id
+      - --name
+      - --pause
+      - --resume
+    responseShape: RunQueueDto
+    rules:
+      - 'The queue reference accepts a UUID or unambiguous name. Supply --project-id, --objective-id, or --mission-id to disambiguate a name when needed.'
+      - '--pause and --resume are mutually exclusive. At least one of --name, --pause, or --resume is required.'
+      - 'Uses project:update; mission_lifecycle-scoped tokens cannot modify queue definitions.'
+    sideEffects:
+      - updates-run-queue
+
+  deleteRunQueue:
+    description: 'Delete one Run Queue, optionally moving its entries'
+    requiredFlags:
+      - --queue
+    optionalFlags:
+      - --project-id
+      - --objective-id
+      - --mission-id
+      - --move-entries-to
+    responseShape: '{ removed: boolean, projectId: string }'
+    rules:
+      - 'Queue and destination references accept UUIDs or unambiguous names in the addressed project; the destination must differ from the deleted queue.'
+      - 'The default queue cannot be deleted. A non-empty queue requires --move-entries-to.'
+      - 'Uses project:update; mission_lifecycle-scoped tokens cannot modify queue definitions.'
+    sideEffects:
+      - deletes-run-queue
+      - optionally-moves-run-queue-entries
+
+  reorderProjectRunQueues:
+    description: 'Atomically replace a project''s complete Run Queue definition order'
+    requiredFlags:
+      - --ordered-queues-json | --ordered-queues-file
+    optionalFlags:
+      - --project-id
+      - --objective-id
+      - --mission-id
+    responseShape: ProjectRunQueuesDto
+    rules:
+      - 'Supply --project-id, --objective-id, or --mission-id to address the project; each order item accepts a queue UUID or unambiguous name.'
+      - 'Supply every live queue exactly once and keep the default queue first.'
+      - 'Uses project:update; mission_lifecycle-scoped tokens cannot modify queue definitions.'
+    sideEffects:
+      - reorders-project-run-queues
 
   search:
     aliases:

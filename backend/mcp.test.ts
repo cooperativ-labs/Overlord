@@ -3,7 +3,9 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import test from 'node:test';
 
+import { compactRunQueueResponse } from '../mcp/run-queue-detail.ts';
 import { compactSearchResponse } from '../mcp/search-detail.ts';
+import { runQueueMcpProtocolCall } from '../mcp/server.ts';
 import { hostedMcpToolDefinitions } from '../mcp/tool-catalog.ts';
 import { hostedMcpWidgetResources, readHostedMcpWidget } from '../mcp/widgets.ts';
 
@@ -256,4 +258,271 @@ test('PM-management MCP tools preserve the protocol contracts', () => {
   assert.equal(reorder.annotations?.readOnlyHint, false);
   assert.deepEqual(reorder.inputSchema.required, ['missionId', 'orderedObjectiveIds']);
   assert.match(reorder.description, /every future objective UUID/);
+});
+
+test('Run Queue MCP tools map arguments to Protocol flags and retain the compact read shape', () => {
+  const list = runQueueMcpProtocolCall('overlord_list_run_queues', {
+    projectId: 'project-ref',
+    objectiveId: 'coo:802.rjay',
+    missionId: 'coo:802',
+    queue: 'Priority'
+  });
+  assert.equal(list.subcommand, 'run-queue');
+  assert.deepEqual(list.body, {
+    flags: {
+      '--project-id': 'project-ref',
+      '--objective-id': 'coo:802.rjay',
+      '--mission-id': 'coo:802',
+      '--queue': 'Priority'
+    }
+  });
+
+  const reorder = runQueueMcpProtocolCall('overlord_reorder_run_queue', {
+    queue: 'Priority',
+    orderedObjectives: ['entry-id', 'objective-id', 'coo:802.rjay'],
+    projectId: 'project-ref'
+  });
+  assert.equal(reorder.subcommand, 'reorder-run-queue');
+  assert.deepEqual(reorder.body, {
+    flags: {
+      '--queue': 'Priority',
+      '--ordered-entries-json': JSON.stringify(['entry-id', 'objective-id', 'coo:802.rjay']),
+      '--project-id': 'project-ref'
+    }
+  });
+
+  const front = runQueueMcpProtocolCall('overlord_queue_objective', {
+    objectiveId: 'coo:802.rjay',
+    queue: 'Priority',
+    front: true
+  });
+  assert.equal(front.subcommand, 'queue-objective');
+  assert.deepEqual(front.body, {
+    flags: {
+      '--objective-id': 'coo:802.rjay',
+      '--queue': 'Priority',
+      '--front': true
+    }
+  });
+
+  const positioned = runQueueMcpProtocolCall('overlord_queue_objective', {
+    objectiveId: 'coo:802.rjay',
+    position: 2
+  });
+  assert.deepEqual(positioned.body, {
+    flags: { '--objective-id': 'coo:802.rjay', '--position': '2' }
+  });
+
+  assert.throws(
+    () =>
+      runQueueMcpProtocolCall('overlord_queue_objective', {
+        objectiveId: 'coo:802.rjay',
+        after: 'coo:802.qe54',
+        front: true
+      }),
+    /Choose only one placement option/
+  );
+
+  const compact = compactRunQueueResponse({
+    projectId: 'project-id',
+    queues: [
+      {
+        id: 'queue-id',
+        name: 'Run Queue',
+        isDefault: true,
+        paused: false,
+        position: 1,
+        running: null,
+        entries: [
+          {
+            id: 'entry-id',
+            position: 1,
+            state: 'waiting',
+            objectiveId: 'objective-id',
+            objectiveDisplayId: 'coo:802.rjay',
+            objectiveTitle: 'Queue support',
+            missionId: 'mission-id',
+            missionDisplayId: 'coo:802',
+            missionTitle: 'Manage queues',
+            blockedReason: null,
+            assignedAgent: null,
+            resourceKey: null,
+            enqueuedAt: '2026-08-21T00:00:00.000Z',
+            executionRequestId: null
+          }
+        ]
+      }
+    ]
+  }) as Record<string, unknown>;
+  assert.deepEqual(compact, {
+    projectId: 'project-id',
+    queues: [
+      {
+        id: 'queue-id',
+        name: 'Run Queue',
+        isDefault: true,
+        paused: false,
+        entries: [
+          {
+            position: 1,
+            state: 'waiting',
+            objectiveDisplayId: 'coo:802.rjay',
+            objectiveTitle: 'Queue support',
+            missionTitle: 'Manage queues',
+            blockedReason: null
+          }
+        ]
+      }
+    ]
+  });
+});
+
+test('Run Queue MCP catalog entries are readable and use the expected arguments', () => {
+  const list = hostedMcpToolDefinitions.find(
+    definition => definition.name === 'overlord_list_run_queues'
+  );
+  assert.ok(list);
+  assert.equal(list.annotations?.readOnlyHint, true);
+  assert.deepEqual(Object.keys(list.inputSchema.properties ?? {}).sort(), [
+    'detail',
+    'missionId',
+    'objectiveId',
+    'projectId',
+    'queue'
+  ]);
+
+  const reorder = hostedMcpToolDefinitions.find(
+    definition => definition.name === 'overlord_reorder_run_queue'
+  );
+  assert.ok(reorder);
+  assert.deepEqual(reorder.inputSchema.required, ['queue', 'orderedObjectives']);
+  assert.match(reorder.description, /every live entry exactly once/);
+  assert.match(reorder.description, /Running and dispatched entries cannot move/);
+});
+
+test('overlord_manage_run_queue dispatches each action to its Protocol subcommand', () => {
+  const created = runQueueMcpProtocolCall('overlord_manage_run_queue', {
+    action: 'create',
+    projectId: 'project-ref',
+    name: 'Priority'
+  });
+  assert.equal(created.subcommand, 'create-run-queue');
+  assert.deepEqual(created.body, {
+    flags: { '--project-id': 'project-ref', '--name': 'Priority' }
+  });
+
+  const renamed = runQueueMcpProtocolCall('overlord_manage_run_queue', {
+    action: 'update',
+    queue: 'Priority',
+    projectId: 'project-ref',
+    name: 'Hot path'
+  });
+  assert.equal(renamed.subcommand, 'update-run-queue');
+  assert.deepEqual(renamed.body, {
+    flags: { '--queue': 'Priority', '--project-id': 'project-ref', '--name': 'Hot path' }
+  });
+
+  const paused = runQueueMcpProtocolCall('overlord_manage_run_queue', {
+    action: 'update',
+    queue: 'Priority',
+    paused: true
+  });
+  assert.deepEqual(paused.body, { flags: { '--queue': 'Priority', '--pause': true } });
+
+  const resumed = runQueueMcpProtocolCall('overlord_manage_run_queue', {
+    action: 'update',
+    queue: 'Priority',
+    paused: false
+  });
+  assert.deepEqual(resumed.body, { flags: { '--queue': 'Priority', '--resume': true } });
+
+  const deleted = runQueueMcpProtocolCall('overlord_manage_run_queue', {
+    action: 'delete',
+    queue: 'Priority',
+    moveEntriesTo: 'Run Queue'
+  });
+  assert.equal(deleted.subcommand, 'delete-run-queue');
+  assert.deepEqual(deleted.body, {
+    flags: { '--queue': 'Priority', '--move-entries-to': 'Run Queue' }
+  });
+
+  const reordered = runQueueMcpProtocolCall('overlord_manage_run_queue', {
+    action: 'reorder_queues',
+    projectId: 'project-ref',
+    orderedQueues: ['Run Queue', 'Priority']
+  });
+  assert.equal(reordered.subcommand, 'reorder-project-run-queues');
+  assert.deepEqual(reordered.body, {
+    flags: {
+      '--project-id': 'project-ref',
+      '--ordered-queues-json': JSON.stringify(['Run Queue', 'Priority'])
+    }
+  });
+});
+
+test('overlord_manage_run_queue rejects missing arguments before calling Protocol', () => {
+  assert.throws(
+    () => runQueueMcpProtocolCall('overlord_manage_run_queue', {}),
+    /action is required/
+  );
+  assert.throws(
+    () => runQueueMcpProtocolCall('overlord_manage_run_queue', { action: 'create' }),
+    /action 'create' requires projectId/
+  );
+  assert.throws(
+    () =>
+      runQueueMcpProtocolCall('overlord_manage_run_queue', {
+        action: 'create',
+        projectId: 'project-ref'
+      }),
+    /action 'create' requires name/
+  );
+  assert.throws(
+    () => runQueueMcpProtocolCall('overlord_manage_run_queue', { action: 'update' }),
+    /action 'update' requires queue/
+  );
+  assert.throws(
+    () =>
+      runQueueMcpProtocolCall('overlord_manage_run_queue', { action: 'update', queue: 'Priority' }),
+    /action 'update' requires name or paused/
+  );
+  assert.throws(
+    () => runQueueMcpProtocolCall('overlord_manage_run_queue', { action: 'delete' }),
+    /action 'delete' requires queue/
+  );
+  assert.throws(
+    () => runQueueMcpProtocolCall('overlord_manage_run_queue', { action: 'reorder_queues' }),
+    /action 'reorder_queues' requires projectId/
+  );
+  assert.throws(
+    () =>
+      runQueueMcpProtocolCall('overlord_manage_run_queue', {
+        action: 'reorder_queues',
+        projectId: 'project-ref'
+      }),
+    /action 'reorder_queues' requires orderedQueues as an array of strings/
+  );
+  assert.throws(
+    () => runQueueMcpProtocolCall('overlord_manage_run_queue', { action: 'archive' }),
+    /Unsupported Run Queue action: archive/
+  );
+});
+
+test('overlord_manage_run_queue is catalogued as an administrative write tool', () => {
+  const manage = hostedMcpToolDefinitions.find(
+    definition => definition.name === 'overlord_manage_run_queue'
+  );
+  assert.ok(manage);
+  assert.equal(manage.annotations?.readOnlyHint, false);
+  assert.deepEqual(manage.inputSchema.required, ['action']);
+  assert.deepEqual(Object.keys(manage.inputSchema.properties ?? {}).sort(), [
+    'action',
+    'moveEntriesTo',
+    'name',
+    'orderedQueues',
+    'paused',
+    'projectId',
+    'queue'
+  ]);
+  assert.match(manage.description, /full-scope token/);
 });

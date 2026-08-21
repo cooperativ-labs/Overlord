@@ -1330,7 +1330,7 @@ app.patch(
 );
 app.delete(
   '/api/run-queues/entries/:entryId',
-  handle(req => deleteRunQueueEntry(req.params.entryId), { mutates: true })
+  handle(req => deleteRunQueueEntry(req.params.entryId, req.body ?? {}), { mutates: true })
 );
 app.get(
   '/api/projects/:id/statuses',

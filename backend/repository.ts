@@ -12,6 +12,11 @@ import {
 import { generateDateFromSchedule, type ScheduleLike } from '@overlord/automations';
 import type { CreatedGitHubRepositoryDto } from '@overlord/contract/ext/github';
 import {
+  OBJECTIVE_COMPLETED_AT_ASSIGNMENT,
+  OBJECTIVE_LAUNCHED_AT_ASSIGNMENT,
+  OBJECTIVE_STARTED_AT_ASSIGNMENT
+} from '@overlord/core/service/objective-lifecycle-timestamps';
+import {
   bindBool,
   type DatabaseClient,
   DEFAULT_STATUSES,
@@ -628,6 +633,9 @@ interface ObjectiveRow {
   launch_config_json: string | null;
   created_at: string;
   updated_at: string;
+  launched_at?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
   revision: number;
   branch: string | null;
   external_session_id?: string | null;
@@ -1503,7 +1511,7 @@ export async function performBranchAction(
         primaryRepoPath: ctx.primaryRepoPath,
         ...(typeof body.message === 'string' ? { message: body.message } : {})
       },
-      eventSummary: `Queued branch action "${action}" on remote execution target.`
+      eventSummary: `Delegated branch action "${action}" on remote execution target.`
     });
     return getMissionDetail(ctx.missionId);
   }
@@ -1621,7 +1629,7 @@ export async function removeWorktree(body: RemoveWorktreeBody): Promise<PurgeWor
           primaryRepoPath,
           force: body.force === true
         },
-        eventSummary: `Queued worktree removal on remote execution target.`
+        eventSummary: `Delegated worktree removal on remote execution target.`
       });
       return { removed: [], skipped: [], worktrees: [] };
     }
@@ -1678,7 +1686,7 @@ export async function purgeMergedWorktrees(
           primaryRepoPath,
           ...(typeof body.worktreeRoot === 'string' ? { worktreeRoot: body.worktreeRoot } : {})
         },
-        eventSummary: 'Queued merged worktree purge on remote execution target.'
+        eventSummary: 'Delegated merged worktree purge on remote execution target.'
       });
       return { removed: [], skipped: [], worktrees: [] };
     }
@@ -1804,6 +1812,9 @@ function toObjectiveDto(r: ObjectiveRow): ObjectiveDto {
     reasoningEffort: r.reasoning_effort,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+    launchedAt: r.launched_at ?? null,
+    startedAt: r.started_at ?? null,
+    completedAt: r.completed_at ?? null,
     revision: r.revision,
     externalSessionId: r.external_session_id ?? null,
     branch: r.branch ?? null,
@@ -3683,8 +3694,12 @@ const selectMissionsSql = `
          (SELECT COUNT(*) FROM objectives o
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'complete')
             AS completed_objective_count,
+         -- pending_delivery counts as executing: the agent re-attached after
+         -- finishing a turn and is still on the objective, so the card should
+         -- keep reading as live work rather than going quiet until delivery.
          (SELECT COUNT(*) > 0 FROM objectives o
-            WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'executing')
+            WHERE o.mission_id = t.id AND o.deleted_at IS NULL
+              AND o.state IN ('executing', 'pending_delivery'))
             AS has_executing_objective,
          (SELECT COUNT(*) > 0 FROM objectives o
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'complete')
@@ -6391,8 +6406,12 @@ function selectMyMissionsSql(pairPlaceholders: string): string {
          (SELECT COUNT(*) FROM objectives o
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'complete')
             AS completed_objective_count,
+         -- pending_delivery counts as executing: the agent re-attached after
+         -- finishing a turn and is still on the objective, so the card should
+         -- keep reading as live work rather than going quiet until delivery.
          (SELECT COUNT(*) > 0 FROM objectives o
-            WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'executing')
+            WHERE o.mission_id = t.id AND o.deleted_at IS NULL
+              AND o.state IN ('executing', 'pending_delivery'))
             AS has_executing_objective,
          (SELECT COUNT(*) > 0 FROM objectives o
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'complete')
@@ -7122,9 +7141,23 @@ async function updateObjectiveTx(
       fields.push('state = ?');
       setParams.push(body.state);
       changed.push('state');
-      if (body.state === 'complete') {
-        fields.push('completed_at = ?');
+      // Stamp the lifecycle moment the mission objective list orders by. See
+      // OBJECTIVE_*_AT_ASSIGNMENT: launch/start are first-wins, completion is not.
+      if (body.state === 'launching') {
+        fields.push(OBJECTIVE_LAUNCHED_AT_ASSIGNMENT);
         setParams.push(nowIso());
+        changed.push('launched_at');
+      }
+      if (body.state === 'executing') {
+        fields.push(OBJECTIVE_LAUNCHED_AT_ASSIGNMENT, OBJECTIVE_STARTED_AT_ASSIGNMENT);
+        const startedAt = nowIso();
+        setParams.push(startedAt, startedAt);
+        changed.push('launched_at', 'started_at');
+      }
+      if (body.state === 'complete') {
+        fields.push(OBJECTIVE_COMPLETED_AT_ASSIGNMENT);
+        setParams.push(nowIso());
+        changed.push('completed_at');
       }
     }
     if (body.autoAdvance !== undefined) {

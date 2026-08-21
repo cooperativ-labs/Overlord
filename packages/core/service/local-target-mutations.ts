@@ -190,7 +190,7 @@ export async function createLocalTargetMutationRequest({
         resolvedProjectId,
         mission.id,
         objectiveId,
-        eventSummary ?? `Queued ${kind.replace('_', ' ')} on remote execution target.`,
+        eventSummary ?? `Delegated ${kind.replace('_', ' ')} on remote execution target.`,
         JSON.stringify({ executionRequestId: id, kind, capability }),
         ctx.actorWorkspaceUserId,
         now

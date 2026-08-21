@@ -715,6 +715,18 @@ export interface ObjectiveDto {
   reasoningEffort: string | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * When the objective first entered `launching`. Null until it has been
+   * launched. First-wins: a re-launch never rewrites it.
+   */
+  launchedAt: string | null;
+  /**
+   * When the objective first entered `executing` (an agent attached).
+   * Null until then. First-wins: re-attaching after delivery keeps the original.
+   */
+  startedAt: string | null;
+  /** When the objective reached `complete`. Null until then. */
+  completedAt: string | null;
   revision: number;
   /** Native harness session/resume ID from the objective's latest agent session, when captured. */
   externalSessionId: string | null;
@@ -787,6 +799,15 @@ export interface RunQueueDto {
   projectId: string;
   name: string;
   isDefault: boolean;
+  /**
+   * Mission this queue belongs to, or `null` for a free-standing project queue.
+   * A mission queue is created lazily the first time one of that mission's
+   * objectives is queued without an explicit destination, and is retired again
+   * once its last entry is removed.
+   */
+  missionId: string | null;
+  /** Display id of {@link missionId}, when the queue is mission-scoped. */
+  missionDisplayId: string | null;
   paused: boolean;
   position: number;
   entries: RunQueueEntryDto[];
@@ -2242,10 +2263,15 @@ export interface ActivityFeedQueuedObjectiveDto {
   assignedAgent: string | null;
 }
 
-/** An objective that is launching or executing right now. */
+/**
+ * An objective that is launching, executing, or awaiting delivery right now.
+ * `pending_delivery` is live work — the agent re-attached after finishing a turn
+ * and has not delivered yet — so it belongs in the run projection rather than
+ * disappearing from the feed between the last update and delivery.
+ */
 export interface ActivityFeedRunItemDto extends ActivityFeedItemBaseDto {
   kind: 'objective_run';
-  state: 'launching' | 'executing';
+  state: 'launching' | 'executing' | 'pending_delivery';
   objectiveTitle: string | null;
   /** Server-truncated instruction preview. Never the full prompt body. */
   instructionPreview: string;

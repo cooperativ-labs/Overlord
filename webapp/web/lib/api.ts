@@ -486,7 +486,7 @@ export const api = {
   getRunnerStatus: () => request<RunnerQueueStatus>('GET', '/api/runner/status'),
   getProjectRunQueues: (projectId: string) =>
     request<ProjectRunQueuesDto>('GET', `/api/projects/${projectId}/run-queues`),
-  createRunQueue: (projectId: string, body: { name: string }) =>
+  createRunQueue: (projectId: string, body: { name: string; missionId?: string | null }) =>
     request<RunQueueDto>('POST', `/api/projects/${projectId}/run-queues`, body),
   reorderProjectRunQueues: (projectId: string, orderedQueueIds: string[]) =>
     request<ProjectRunQueuesDto>('PATCH', `/api/projects/${projectId}/run-queues/order`, {
@@ -506,8 +506,13 @@ export const api = {
     entryId: string,
     body: { queueId?: string; afterEntryId?: string; position?: number }
   ) => request<RunQueueEntryDto>('PATCH', `/api/run-queues/entries/${entryId}`, body),
-  deleteRunQueueEntry: (entryId: string) =>
-    request<{ removed: boolean }>('DELETE', `/api/run-queues/entries/${entryId}`),
+  deleteRunQueueEntry: (entryId: string, body: { force?: boolean } = {}) =>
+    request<{
+      removed: boolean;
+      forced: boolean;
+      objectiveReset: boolean;
+      clearedExecutionRequests: number;
+    }>('DELETE', `/api/run-queues/entries/${entryId}`, body),
   clearRunnerQueue: (body: { objectiveId?: string; projectId?: string } = {}) =>
     request<{ cleared: number }>('POST', '/api/runner/clear', body),
   listMissions: (projectId: string, options: { includeObjectives?: boolean } = {}) =>

@@ -505,7 +505,7 @@ export async function createExecutionRequest({
         resolvedProjectId,
         mission.id,
         objective.id,
-        eventSummary ?? `Queued execution request for ${resolvedAgent ?? 'default agent'}.`,
+        eventSummary ?? `Delegated execution request for ${resolvedAgent ?? 'default agent'}.`,
         JSON.stringify({ executionRequestId: id, requestedSource, ...eventPayload }),
         ctx.source,
         ctx.actorWorkspaceUserId,

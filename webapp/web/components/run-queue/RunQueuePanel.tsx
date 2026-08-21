@@ -22,13 +22,15 @@ import {
   ArrowUp,
   GripVertical,
   Loader2,
+  OctagonX,
   Pause,
   Pencil,
   Play,
   Plus,
   Radio,
   Rows3,
-  Trash2
+  Trash2,
+  X
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -38,6 +40,7 @@ import {
   useDeleteRunQueue,
   useMoveRunQueueEntry,
   useProjectRunQueues,
+  useRemoveRunQueueEntry,
   useReorderProjectRunQueues,
   useReorderRunQueue,
   useUpdateRunQueue
@@ -55,13 +58,25 @@ import {
 import { Input } from '../ui/input.tsx';
 import { Switch } from '../ui/switch.tsx';
 
+/** Dispatched/running entries need the forced path to leave a queue. */
+const isEntryInFlight = (entry: RunQueueEntryDto) =>
+  entry.state === 'running' || entry.state === 'dispatched';
+
 type PendingEntryMove = {
   entry: RunQueueEntryDto;
   destination: RunQueueDto;
   afterEntryId?: string;
 };
 
-function QueueRow({ entry, projectId }: { entry: RunQueueEntryDto; projectId: string }) {
+function QueueRow({
+  entry,
+  projectId,
+  onRemove
+}: {
+  entry: RunQueueEntryDto;
+  projectId: string;
+  onRemove: (entry: RunQueueEntryDto) => void;
+}) {
   const locked = entry.state === 'running' || entry.state === 'dispatched';
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: entry.id,
@@ -127,6 +142,19 @@ function QueueRow({ entry, projectId }: { entry: RunQueueEntryDto; projectId: st
       >
         {entry.state === 'dispatched' ? 'In flight' : entry.state}
       </span>
+      <Button
+        variant="ghost"
+        className="h-7 w-7 shrink-0 p-0 text-destructive hover:text-destructive"
+        title={
+          locked
+            ? 'Force-remove this in-flight entry so the objective can launch again'
+            : 'Remove from queue'
+        }
+        aria-label={locked ? 'Force-remove queue entry' : 'Remove queue entry'}
+        onClick={() => onRemove(entry)}
+      >
+        {locked ? <OctagonX className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
+      </Button>
     </div>
   );
 }
@@ -153,7 +181,8 @@ function QueueSection({
   queueCount,
   onRename,
   onDelete,
-  onMoveQueue
+  onMoveQueue,
+  onRemoveEntry
 }: {
   projectId: string;
   queue: RunQueueDto;
@@ -162,6 +191,7 @@ function QueueSection({
   onRename: (queue: RunQueueDto) => void;
   onDelete: (queue: RunQueueDto) => void;
   onMoveQueue: (queue: RunQueueDto, direction: -1 | 1) => void;
+  onRemoveEntry: (entry: RunQueueEntryDto) => void;
 }) {
   const update = useUpdateRunQueue(projectId);
   return (
@@ -173,7 +203,7 @@ function QueueSection({
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-sm font-semibold">
             {queue.name}
-            {queue.isDefault ? ' · Default' : ''}
+            {queue.isDefault ? ' · Default' : queue.missionId ? ' · Mission' : ''}
           </h2>
           <p className="text-[11px] text-muted-foreground">
             {queue.running
@@ -241,7 +271,7 @@ function QueueSection({
       >
         <div className="space-y-1.5">
           {queue.entries.map(entry => (
-            <QueueRow key={entry.id} entry={entry} projectId={projectId} />
+            <QueueRow key={entry.id} entry={entry} projectId={projectId} onRemove={onRemoveEntry} />
           ))}
           <QueueDropZone queue={queue} />
         </div>
@@ -265,6 +295,7 @@ export function RunQueuePanel({
   const createQueue = useCreateRunQueue(projectId);
   const deleteQueue = useDeleteRunQueue(projectId);
   const updateQueue = useUpdateRunQueue(projectId);
+  const removeEntry = useRemoveRunQueueEntry(projectId);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -275,10 +306,16 @@ export function RunQueuePanel({
   const [deleting, setDeleting] = useState<RunQueueDto | null>(null);
   const [moveEntriesTo, setMoveEntriesTo] = useState('');
   const [pendingMove, setPendingMove] = useState<PendingEntryMove | null>(null);
+  const [removingEntry, setRemovingEntry] = useState<RunQueueEntryDto | null>(null);
 
   useEffect(() => {
     if (deleting && !moveEntriesTo)
-      setMoveEntriesTo(queues.data?.queues.find(queue => queue.isDefault)?.id ?? '');
+      setMoveEntriesTo(
+        (
+          queues.data?.queues.find(queue => queue.isDefault && queue.id !== deleting.id) ??
+          queues.data?.queues.find(queue => queue.id !== deleting.id)
+        )?.id ?? ''
+      );
   }, [deleting, moveEntriesTo, queues.data?.queues]);
 
   if (queues.isLoading)
@@ -297,7 +334,7 @@ export function RunQueuePanel({
     return (
       <EmptyState
         title="No Run Queues"
-        hint="Queues are created with the project and appear here once available."
+        hint="Create a queue here, or queue an objective from its mission — that creates the mission's queue on first use."
       />
     );
   const queueList = queues.data.queues;
@@ -384,10 +421,16 @@ export function RunQueuePanel({
               setRenaming(queue);
             }}
             onDelete={queue => {
-              setMoveEntriesTo(queueList.find(item => item.isDefault)?.id ?? '');
+              setMoveEntriesTo(
+                (
+                  queueList.find(item => item.isDefault && item.id !== queue.id) ??
+                  queueList.find(item => item.id !== queue.id)
+                )?.id ?? ''
+              );
               setDeleting(queue);
             }}
             onMoveQueue={reorderQueueDefinition}
+            onRemoveEntry={setRemovingEntry}
           />
         ))}
       </DndContext>
@@ -399,6 +442,11 @@ export function RunQueuePanel({
       {reorderEntries.isError || moveEntry.isError ? (
         <p role="alert" className="text-xs text-destructive">
           Could not move this entry. The previous order was restored.
+        </p>
+      ) : null}
+      {removeEntry.isError ? (
+        <p role="alert" className="text-xs text-destructive">
+          Could not remove this entry. Check your project permission and retry.
         </p>
       ) : null}
       {createQueue.isError || updateQueue.isError || deleteQueue.isError ? (
@@ -508,6 +556,40 @@ export function RunQueuePanel({
               }
             >
               Delete queue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={Boolean(removingEntry)} onOpenChange={open => !open && setRemovingEntry(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {removingEntry && isEntryInFlight(removingEntry)
+                ? 'Force-remove this in-flight entry?'
+                : 'Remove from this queue?'}
+            </DialogTitle>
+            <DialogDescription>
+              {removingEntry && isEntryInFlight(removingEntry)
+                ? 'This drops the entry, clears the execution requests it left behind, and returns an objective still stuck in Launching to Draft so it can be run again. An objective already Executing keeps its live session.'
+                : 'The objective leaves this queue and will not be launched automatically.'}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setRemovingEntry(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              disabled={!removingEntry || removeEntry.isPending}
+              onClick={() =>
+                removingEntry &&
+                removeEntry.mutate(
+                  { entryId: removingEntry.id, force: isEntryInFlight(removingEntry) },
+                  { onSuccess: () => setRemovingEntry(null) }
+                )
+              }
+            >
+              {removingEntry && isEntryInFlight(removingEntry) ? 'Force-remove' : 'Remove'}
             </Button>
           </DialogFooter>
         </DialogContent>

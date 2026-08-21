@@ -376,7 +376,7 @@ export async function buildLiveActivityContentState(
   const rows = await db.all<SnapshotRow>(
     `SELECT m.id, m.title, m.display_id, p.name AS project_name, p.settings_json AS project_settings_json,
             m.updated_at, m.status_type,
-            EXISTS(SELECT 1 FROM objectives o WHERE o.mission_id = m.id AND o.deleted_at IS NULL AND o.state = 'executing') AS has_executing_objective,
+            EXISTS(SELECT 1 FROM objectives o WHERE o.mission_id = m.id AND o.deleted_at IS NULL AND o.state IN ('executing', 'pending_delivery')) AS has_executing_objective,
             EXISTS(SELECT 1 FROM objectives o WHERE o.mission_id = m.id AND o.deleted_at IS NULL AND o.state = 'complete') AS has_completed_objective
        FROM missions m
        JOIN projects p ON p.id = m.project_id AND p.deleted_at IS NULL
@@ -388,7 +388,8 @@ export async function buildLiveActivityContentState(
   );
   // Running rows are one per **executing objective**, not one per mission: the
   // cap of two is about how much work is on screen, and two objectives of one
-  // mission are two different things happening.
+  // mission are two different things happening. `pending_delivery` is included
+  // because the agent has re-attached and is still on the objective.
   const runningRows = await db.all<RunningObjectiveRow>(
     `SELECT o.id AS objective_id, o.title AS objective_title, o.display_key,
             m.id AS mission_id, m.title AS mission_title, m.display_id AS mission_display_id,
@@ -398,7 +399,7 @@ export async function buildLiveActivityContentState(
        JOIN projects p ON p.id = m.project_id AND p.deleted_at IS NULL
        JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
        JOIN workspaces w ON w.id = m.workspace_id AND w.deleted_at IS NULL
-      WHERE o.deleted_at IS NULL AND o.state = 'executing'
+      WHERE o.deleted_at IS NULL AND o.state IN ('executing', 'pending_delivery')
         AND wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
       ORDER BY o.updated_at DESC, o.id ASC`,
     [profileId]

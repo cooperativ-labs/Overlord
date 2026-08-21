@@ -19,6 +19,7 @@
 import { type Permission, PERMISSIONS } from '@overlord/auth';
 import { formatOvldLaunchCommand, normalizeAgentLaunchFlags } from '@overlord/contract';
 import type { ServiceContext } from '@overlord/core/service/context';
+import { OBJECTIVE_LAUNCHED_AT_ASSIGNMENT } from '@overlord/core/service/objective-lifecycle-timestamps';
 import {
   DEFAULT_LAUNCH_SESSION_DEFAULTS,
   DEFAULT_TERMINAL_PROFILE,
@@ -1058,7 +1059,7 @@ export async function dequeueObjective({
         projectId,
         missionId,
         objectiveId,
-        `Objective ${reason}: cleared ${cleared} queued execution request(s) ` +
+        `Objective ${reason}: cleared ${cleared} delegated execution request(s) ` +
           `and ended ${openSessions.length} active session(s).`,
         JSON.stringify({
           reason,
@@ -1121,7 +1122,7 @@ export async function launchObjective(
         `Objective is not launchable from state "${objective.state}"`,
         objective.state === 'future'
           ? 'Promote the objective to draft first.'
-          : 'Only draft, submitted, or launching objectives can be queued.'
+          : 'Only draft, submitted, or launching objectives can be launched.'
       );
     }
 
@@ -1145,7 +1146,7 @@ export async function launchObjective(
     if (activeSibling) {
       throw new ApiError(
         409,
-        'Another objective on this mission is already active. Enable auto-advance on this objective instead of queueing it for the runner.'
+        'Another objective on this mission is already active. Enable auto-advance on this objective instead of delegating it to the runner.'
       );
     }
 
@@ -1210,8 +1211,9 @@ export async function launchObjective(
       changed.push('launch_config_json');
     }
     if (objective.state === 'draft') {
-      fields.push(`state = 'launching'`);
-      changed.push('state');
+      fields.push(`state = 'launching'`, OBJECTIVE_LAUNCHED_AT_ASSIGNMENT);
+      setParams.push(now);
+      changed.push('state', 'launched_at');
     }
 
     let revision = objective.revision;
@@ -1279,7 +1281,7 @@ export async function launchObjective(
       // eligible target). NULL still means "any eligible target may claim."
       executionTargetId,
       metadata: { launchConfigSource: resolved.source },
-      eventSummary: `Queued ${agentKey}${model ? ` (${model})` : ''} execution for a runner.`,
+      eventSummary: `Delegated ${agentKey}${model ? ` (${model})` : ''} execution for a runner.`,
       eventPayload: { agent: agentKey, model, reasoningEffort }
     });
     // Direct Run bypasses queue ordering, but if this objective already belongs

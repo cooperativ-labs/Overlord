@@ -79,7 +79,10 @@ The current tool catalog is mission-first:
 - `overlord_reorder_future_objectives` — explicitly replace one mission's complete future-objective ordering
 - `overlord_add_objectives`
 - `overlord_update_objective` — turn auto-advance on or off and/or edit instruction text on draft/future objectives
-- `overlord_queue_objective` — add, move, or remove one objective from the authoritative project Run Queue
+- `overlord_list_run_queues` — read compact or full live Run Queue state before changing it
+- `overlord_reorder_run_queue` — atomically replace every entry in one Run Queue
+- `overlord_queue_objective` — add, move, or remove one objective from the authoritative project Run Queue, including front or one-based rank placement
+- `overlord_manage_run_queue` — create, rename, pause, resume, delete, or reorder queue definitions (full-scope token required)
 - `overlord_attach_session`
 - `overlord_update_session`
 - `overlord_deliver_session`
@@ -125,11 +128,16 @@ supplies the mission scope.
 `overlord_create_mission` and `overlord_add_objectives` accept optional
 `autoAdvance` (boolean; default false), which maps to authoritative Run Queue
 membership. `overlord_update_objective` maps its `autoAdvance` compatibility
-input the same way. `overlord_queue_objective` is the explicit queue surface:
-it takes `objectiveId`, optional queue/predecessor placement, and `remove` to
-dequeue. The returned `autoAdvance` field is deprecated and derived from live
-`queueEntry` membership; legacy storage writes retire next release and column
-removal requires a later contract bump.
+input the same way. Use `overlord_list_run_queues` before queue mutations;
+`overlord_reorder_run_queue` requires every live entry exactly once and returns
+the current order when it cannot safely apply a request. `overlord_queue_objective`
+adds, moves, or removes one objective with optional queue, predecessor, front,
+or one-based rank placement. `overlord_manage_run_queue` owns queue-definition
+lifecycle. Entry operations require `execution_request:create`; definition
+operations require `project:update` and therefore need a full-scope token.
+The returned `autoAdvance` field is deprecated and derived from live `queueEntry`
+membership; legacy storage writes retire next release and column removal requires
+a later contract bump.
 
 Hosted MCP cannot observe an agent's local current working directory. Tools
 that create missions require explicit `projectId`; clients should call

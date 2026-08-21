@@ -129,41 +129,46 @@ The `ovld protocol` commands are primarily used by connectors and agent
 runtimes. They create the durable mission lifecycle that you see in Overlord.
 Every command below is available from `ovld protocol help`.
 
-| Command                            | Purpose                                                                           |
-| ---------------------------------- | --------------------------------------------------------------------------------- |
-| `auth-status`                      | Check backend and authentication readiness.                                       |
-| `discover-project`                 | Resolve a project from the working directory, project ID, or directory.           |
-| `list-organizations`               | Return the current workspace context (the historic command name is retained).     |
-| `attach`                           | Start a full mission session and return its working context.                      |
-| `connect`                          | Start a lightweight session without full context assembly.                        |
-| `load-context`                     | Read mission context without starting a session.                                  |
-| `list-deliveries`                  | Read one mission's normalized deliveries. An objective display id supplies the mission. |
+| Command                            | Purpose                                                                                                   |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `auth-status`                      | Check backend and authentication readiness.                                                               |
+| `discover-project`                 | Resolve a project from the working directory, project ID, or directory.                                   |
+| `list-organizations`               | Return the current workspace context (the historic command name is retained).                             |
+| `attach`                           | Start a full mission session and return its working context.                                              |
+| `connect`                          | Start a lightweight session without full context assembly.                                                |
+| `load-context`                     | Read mission context without starting a session.                                                          |
+| `list-deliveries`                  | Read one mission's normalized deliveries. An objective display id supplies the mission.                   |
 | `launch-objective`                 | Queue a runner execution for one objective. Requires `--objective-id` (UUID or display id) and `--agent`. |
-| `reorder-future-objectives`        | Replace one mission's complete future-objective order.                            |
-| `run-queue`                        | Read every live Run Queue and entry for a project.                                |
-| `queue-objective`                  | Add or move one objective in the Run Queue. Requires `--objective-id` (UUID or display id). |
-| `dequeue-objective`                | Remove one objective from the Run Queue. Requires `--objective-id`.               |
-| `search` (`search-missions` alias) | Find grouped mission, objective, and delivery matches by text, state, or project. |
-| `statuses`                         | List one project's board columns.                                                 |
-| `discuss-objective`                | Submit the latest draft objective for discussion without execution.               |
-| `add-objectives`                   | Append ordered objectives to a mission.                                           |
-| `update-objective`                 | Turn auto-advance on or off, or edit instruction text. Requires `--objective-id`. |
-| `create`                           | Create a draft mission without attaching.                                         |
-| `prompt`                           | Create a mission and attach immediately.                                          |
-| `record-work`                      | Record completed chat work as a review mission.                                   |
-| `update`                           | Post progress, activity, and optional change rationale.                           |
-| `heartbeat`                        | Send liveness information without creating a feed event.                          |
-| `ask`                              | Raise a blocking question for a human reviewer.                                   |
-| `deliver`                          | Finish the session with summary, artifacts, and rationale.                        |
-| `resume-follow-up`                 | Reopen completed work for a follow-up.                                            |
-| `hook-event`                       | Record a connector lifecycle event.                                               |
-| `record-touched`                   | Locally record files touched by an edit hook.                                     |
-| `changes`                          | Locally preflight changed-file attribution before delivery.                       |
-| `read-context` / `write-context`   | Read or store persistent mission context.                                         |
-| `add-artifact`                     | Create a mission artifact mid-turn without delivering.                            |
-| `update-artifact`                  | Revise an existing mission artifact in place (label / content / URL).             |
-| `attachment-list`                  | List mission attachments.                                                         |
-| `attachment-download-url`          | Retrieve one attachment's download URL.                                           |
+| `reorder-future-objectives`        | Replace one mission's complete future-objective order.                                                    |
+| `run-queue`                        | Read live Run Queues; project scope can come from project, objective, or mission.                         |
+| `reorder-run-queue`                | Atomically replace every entry in one Run Queue.                                                          |
+| `queue-objective`                  | Add or move one objective in the Run Queue. Requires `--objective-id` (UUID or display id).               |
+| `dequeue-objective`                | Remove one objective from the Run Queue. Requires `--objective-id`.                                       |
+| `create-run-queue`                 | Create a queue definition. Requires `project:update`.                                                     |
+| `update-run-queue`                 | Rename, pause, or resume a queue definition. Requires `project:update`.                                   |
+| `delete-run-queue`                 | Delete a queue, optionally moving its entries. Requires `project:update`.                                 |
+| `reorder-project-run-queues`       | Replace the project's complete queue-definition order. Requires `project:update`.                         |
+| `search` (`search-missions` alias) | Find grouped mission, objective, and delivery matches by text, state, or project.                         |
+| `statuses`                         | List one project's board columns.                                                                         |
+| `discuss-objective`                | Submit the latest draft objective for discussion without execution.                                       |
+| `add-objectives`                   | Append ordered objectives to a mission.                                                                   |
+| `update-objective`                 | Turn auto-advance on or off, or edit instruction text. Requires `--objective-id`.                         |
+| `create`                           | Create a draft mission without attaching.                                                                 |
+| `prompt`                           | Create a mission and attach immediately.                                                                  |
+| `record-work`                      | Record completed chat work as a review mission.                                                           |
+| `update`                           | Post progress, activity, and optional change rationale.                                                   |
+| `heartbeat`                        | Send liveness information without creating a feed event.                                                  |
+| `ask`                              | Raise a blocking question for a human reviewer.                                                           |
+| `deliver`                          | Finish the session with summary, artifacts, and rationale.                                                |
+| `resume-follow-up`                 | Reopen completed work for a follow-up.                                                                    |
+| `hook-event`                       | Record a connector lifecycle event.                                                                       |
+| `record-touched`                   | Locally record files touched by an edit hook.                                                             |
+| `changes`                          | Locally preflight changed-file attribution before delivery.                                               |
+| `read-context` / `write-context`   | Read or store persistent mission context.                                                                 |
+| `add-artifact`                     | Create a mission artifact mid-turn without delivering.                                                    |
+| `update-artifact`                  | Revise an existing mission artifact in place (label / content / URL).                                     |
+| `attachment-list`                  | List mission attachments.                                                                                 |
+| `attachment-download-url`          | Retrieve one attachment's download URL.                                                                   |
 
 Common protocol flags are `--mission-id <id>`, `--objective-id <id>`,
 `--session-key <key>`, `--agent <identifier>`, `--model <identifier>`, and
@@ -187,6 +192,13 @@ display id is enough on its own. Use it when reconnecting to a mission that is
 running more than one objective — there, the mission id alone no longer
 identifies a unit of work. An objective UUID names no mission, so it still needs
 `--mission-id` beside it.
+
+Run Queue entry operations (`queue-objective`, `dequeue-objective`, and
+`reorder-run-queue`) require `execution_request:create`. Queue-definition
+operations (`create-run-queue`, `update-run-queue`, `delete-run-queue`, and
+`reorder-project-run-queues`) require `project:update`, so a
+mission-lifecycle-scoped token cannot perform them. `run-queue` accepts
+`--project-id`, `--objective-id`, or `--mission-id`, plus optional `--queue`.
 
 ## Environment variables
 

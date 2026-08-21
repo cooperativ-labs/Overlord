@@ -1,3 +1,9 @@
+/** Human-readable Delegator status; wire `queued` reads as delegated. */
+export function executionRequestStatusLabel(status: string): string {
+  if (status === 'queued') return 'delegated';
+  return status;
+}
+
 /**
  * Whether the runner queue has an unresolved fetch failure with nothing usable
  * to display.

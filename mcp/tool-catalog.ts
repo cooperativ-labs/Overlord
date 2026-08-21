@@ -361,6 +361,55 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
     annotations: writeAction
   },
   {
+    name: 'overlord_list_run_queues',
+    title: 'List Run Queues',
+    description:
+      "Use this to read a project's authoritative Run Queues before adding, moving, removing, or bulk-reordering entries. Compact detail is the default and includes ordering and blocking state; request full for the complete ProjectRunQueuesDto.",
+    inputSchema: objectSchema({
+      projectId: stringProperty('Optional project UUID, slug, or name.'),
+      objectiveId: stringProperty(
+        'Optional objective UUID or display id; derives the project when projectId is omitted.'
+      ),
+      missionId: stringProperty(
+        'Optional mission UUID or display id; derives the project when projectId is omitted.'
+      ),
+      queue: stringProperty('Optional Run Queue UUID or unambiguous name to return by itself.'),
+      detail: {
+        type: 'string',
+        enum: ['compact', 'full'],
+        description:
+          'Result detail: compact (default) returns queue ordering state; full returns the raw ProjectRunQueuesDto.'
+      }
+    }),
+    outputSchema: protocolOutputSchema(
+      'Compact queue state by default, or the raw ProjectRunQueuesDto when detail is full.'
+    ),
+    annotations: readOnly
+  },
+  {
+    name: 'overlord_reorder_run_queue',
+    title: 'Reorder Run Queue entries',
+    description:
+      'Use this only when the user explicitly asks to reorder every entry in one Run Queue. Supply every live entry exactly once, using entry UUIDs, objective UUIDs, or objective display ids. Running and dispatched entries cannot move. On a mismatch, the error returns the current order; re-read the queue and retry.',
+    inputSchema: objectSchema(
+      {
+        queue: stringProperty('Run Queue UUID or unambiguous name.'),
+        orderedObjectives: {
+          type: 'array',
+          description:
+            'Complete desired top-to-bottom entry order. Each item may be an entry UUID, objective UUID, or objective display id.',
+          items: stringProperty('Run Queue entry UUID, objective UUID, or objective display id.')
+        },
+        projectId: stringProperty(
+          'Optional project UUID, slug, or name; disambiguates queue names.'
+        )
+      },
+      ['queue', 'orderedObjectives']
+    ),
+    outputSchema: protocolOutputSchema('The reordered RunQueueDto.'),
+    annotations: writeAction
+  },
+  {
     name: 'overlord_queue_objective',
     title: 'Queue objective',
     description:
@@ -372,6 +421,11 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
         after: stringProperty(
           'Optional queued predecessor entry id, objective UUID, or objective display id. Its queue is used when queue is omitted.'
         ),
+        front: booleanProperty('When true, place this objective first in the selected queue.'),
+        position: {
+          type: 'number',
+          description: 'Optional one-based insertion position in the selected queue.'
+        },
         remove: booleanProperty(
           'When true, remove this objective from the Run Queue instead of adding or moving it.'
         )
@@ -379,6 +433,46 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
       ['objectiveId']
     ),
     outputSchema: protocolOutputSchema('The queued entry, or removal confirmation.'),
+    annotations: writeAction
+  },
+  {
+    name: 'overlord_manage_run_queue',
+    title: 'Manage Run Queues',
+    description:
+      "Use this only when the user explicitly asks to create, rename, pause, resume, delete, or reorder the project's Run Queue definitions. These are administrative project-configuration actions and require a full-scope token; adding, moving, or removing objectives inside a queue uses overlord_queue_objective and overlord_reorder_run_queue instead.",
+    inputSchema: objectSchema(
+      {
+        action: {
+          type: 'string',
+          enum: ['create', 'update', 'delete', 'reorder_queues'],
+          description:
+            'create a queue, update (rename/pause/resume) one, delete one, or reorder the queue definitions.'
+        },
+        projectId: stringProperty(
+          'Project UUID, slug, or name. Required for create and reorder_queues.'
+        ),
+        queue: stringProperty(
+          'Run Queue UUID or unambiguous name. Required for update and delete.'
+        ),
+        name: stringProperty('New queue name for create, or the replacement name for update.'),
+        paused: booleanProperty(
+          'update only: true pauses dispatching from the queue, false resumes it.'
+        ),
+        moveEntriesTo: stringProperty(
+          'delete only: destination queue UUID or unambiguous name. Required when the queue still holds entries.'
+        ),
+        orderedQueues: {
+          type: 'array',
+          description:
+            'reorder_queues only: every live queue exactly once, top to bottom, by UUID or unambiguous name. The default queue must stay first.',
+          items: stringProperty('Run Queue UUID or unambiguous name.')
+        }
+      },
+      ['action']
+    ),
+    outputSchema: protocolOutputSchema(
+      'The created or updated RunQueueDto, a removal confirmation, or the reordered ProjectRunQueuesDto.'
+    ),
     annotations: writeAction
   },
   {

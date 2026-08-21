@@ -10,7 +10,6 @@ import {
   useLaunchObjective,
   useProjectExecutionTarget,
   useProjectResources,
-  useProjectRunQueues,
   useUpdateObjective
 } from '../../lib/queries.ts';
 import { cn } from '../../lib/utils.ts';
@@ -36,7 +35,7 @@ type AgentLaunchButtonProps = {
   hasActiveSibling?: boolean;
   /** Objective id for the active sibling job, when {@link hasActiveSibling} is true. */
   activeSiblingId?: string | null;
-  /** Active execution request already queued for this objective, if any. */
+  /** Active execution request already delegated for this objective, if any. */
   activeRequest?: ExecutionRequestDto | null;
   size?: AgentLaunchButtonSize;
 };
@@ -84,7 +83,6 @@ export function AgentLaunchButton({
   const updateObjective = useUpdateObjective();
   const resourcesQ = useProjectResources(objective.projectId);
   const executionTargetQ = useProjectExecutionTarget(objective.projectId);
-  const runQueuesQ = useProjectRunQueues(objective.projectId);
   const enqueue = useEnqueueRunQueueEntry(objective.projectId);
   const [showActiveConfirm, setShowActiveConfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,14 +95,14 @@ export function AgentLaunchButton({
     resourceKey: objective.resourceKey,
     executionTargetId: executionTargetQ.data?.selectedExecutionTargetId ?? null
   });
-  const isQueued = Boolean(activeRequest);
+  const hasActiveRequest = Boolean(activeRequest);
   const isLaunching = launch.isPending || updateObjective.isPending;
   const isManual = selection.agent === MANUAL_AGENT_KEY;
   // Blank draft slots can exist for inline authoring — they must not be launched
   // until an instruction has been written.
   const hasInstruction = objective.instructionText.trim().length > 0;
-  // Queuing can fail silently, leaving an objective marked queued without a
-  // runner ever picking it up. Keep the button enabled while queued so the user
+  // Delegation can fail silently, leaving an objective marked launching without a
+  // runner ever picking it up. Keep the button enabled while delegated so the user
   // can re-launch; only an in-flight request (isLaunching) blocks a re-click.
   const isDisabled =
     !selectionLoaded || isLaunching || !primaryConnection.connected || !hasInstruction;
@@ -130,19 +128,21 @@ export function AgentLaunchButton({
           executionTargetId: executionTargetId || undefined
         }
       },
-      { onError: err => setError(err instanceof Error ? err.message : 'Failed to queue execution') }
+      {
+        onError: err => setError(err instanceof Error ? err.message : 'Failed to launch execution')
+      }
     );
   }
 
+  /**
+   * Queue behind the mission's own work. No `queueId` is sent: the server
+   * resolves this objective's mission queue and creates it only if the mission
+   * does not have one yet.
+   */
   function queueAfterActiveSibling() {
     setError(null);
-    const queue = runQueuesQ.data?.queues.find(item => item.isDefault);
-    if (!queue) {
-      setError('The default Run Queue is not available yet');
-      return;
-    }
     enqueue.mutate(
-      { objectiveId: objective.id, queueId: queue.id },
+      { objectiveId: objective.id },
       {
         onError: err =>
           setError(err instanceof Error ? err.message : 'Failed to add to the Run Queue')
@@ -232,7 +232,7 @@ export function AgentLaunchButton({
     >
       {isLaunching ? (
         <Loader2 className={cn(styles.icon, 'animate-spin')} />
-      ) : isQueued ? (
+      ) : hasActiveRequest ? (
         <Check className={cn(styles.icon, 'text-sky-500')} />
       ) : (
         <Play className={styles.icon} />
@@ -241,10 +241,10 @@ export function AgentLaunchButton({
         className={cn(
           'whitespace-nowrap transition-colors',
           styles.label,
-          isQueued && 'text-sky-600 dark:text-sky-400'
+          hasActiveRequest && 'text-sky-600 dark:text-sky-400'
         )}
       >
-        {isQueued ? 'Queued' : 'Run'}
+        {hasActiveRequest ? 'Launching' : 'Run'}
       </span>
     </button>
   );
@@ -323,7 +323,7 @@ export function AgentLaunchButton({
             ? 'Loading your agent model selection.'
             : !primaryConnection.connected
               ? primaryConnection.message
-              : 'Queueing…'}
+              : 'Launching…'}
       </TooltipContent>
     </Tooltip>
   );
@@ -374,7 +374,7 @@ export function AgentLaunchButton({
         className={cn(
           'inline-flex shrink-0 items-stretch rounded-md border border-input bg-background text-sm shadow-sm transition-all',
           !isDisabled && 'hover:bg-accent hover:text-accent-foreground',
-          isQueued && 'border-sky-400/60 ring-1 ring-sky-400/40'
+          hasActiveRequest && 'border-sky-400/60 ring-1 ring-sky-400/40'
         )}
       >
         {runButtonWrapped}

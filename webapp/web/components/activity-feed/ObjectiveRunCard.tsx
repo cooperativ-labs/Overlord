@@ -1,4 +1,12 @@
-import { Clock, FastForward, FolderOpen, GitBranch, Loader2, Rocket } from 'lucide-react';
+import {
+  Clock,
+  FastForward,
+  FolderOpen,
+  GitBranch,
+  Loader2,
+  RefreshCw,
+  Rocket
+} from 'lucide-react';
 
 import type { ActivityFeedRunItemDto } from '../../../shared/contract.ts';
 import { AgentIcon } from '../objectives/AgentIcon.tsx';
@@ -12,9 +20,12 @@ import {
 } from './ActivityFeedCardChrome.tsx';
 
 /**
- * A launching or executing objective. The whole card is the button that opens the
- * mission panel: an operator scanning the feed is looking for "what is this agent
- * doing", and that answer lives in the panel, not on a nested control.
+ * A launching, executing, or pending-delivery objective. The whole card is the
+ * button that opens the mission panel: an operator scanning the feed is looking
+ * for "what is this agent doing", and that answer lives in the panel, not on a
+ * nested control. `pending_delivery` is presented as live work with a refresh
+ * mark — the agent re-attached to the objective after finishing a turn, which is
+ * a return to execution rather than a fault.
  */
 export function ObjectiveRunCard({
   item,
@@ -26,6 +37,7 @@ export function ObjectiveRunCard({
   onOpenMission: (args: { missionId: string; objectiveDisplayId?: string | null }) => void;
 }) {
   const launching = item.state === 'launching';
+  const pendingDelivery = item.state === 'pending_delivery';
   const elapsed = elapsedLabel(item.startedAt, nowIso);
 
   return (
@@ -62,6 +74,11 @@ export function ObjectiveRunCard({
             icon={
               launching ? (
                 <Rocket className="size-3" aria-hidden="true" />
+              ) : pendingDelivery ? (
+                <RefreshCw
+                  className="size-3 animate-spin [animation-duration:2.5s]"
+                  aria-hidden="true"
+                />
               ) : (
                 <Loader2 className="size-3 animate-spin" aria-hidden="true" />
               )

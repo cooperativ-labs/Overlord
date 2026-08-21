@@ -35,6 +35,11 @@ import {
   type SharedContextEntry
 } from './missions.js';
 import {
+  OBJECTIVE_COMPLETED_AT_ASSIGNMENT,
+  OBJECTIVE_LAUNCHED_AT_ASSIGNMENT,
+  OBJECTIVE_STARTED_AT_ASSIGNMENT
+} from './objective-lifecycle-timestamps.js';
+import {
   countActiveMissionObjectives,
   findConflictingActiveSibling,
   missionAllowsParallelObjectives
@@ -800,10 +805,12 @@ export async function attachSession({
       `UPDATE objectives
          SET state = 'executing',
              assigned_agent = COALESCE(assigned_agent, ?),
+             ${OBJECTIVE_LAUNCHED_AT_ASSIGNMENT},
+             ${OBJECTIVE_STARTED_AT_ASSIGNMENT},
              updated_at = ?,
              revision = revision + 1
          WHERE id = ? AND mission_id = ?`,
-      [inheritedDraftAgent || null, now, objective.id, context.mission.id]
+      [inheritedDraftAgent || null, now, now, now, objective.id, context.mission.id]
     );
     await recordChange({
       ctx: txCtx,
@@ -816,6 +823,8 @@ export async function attachSession({
       objectiveId: objective.id,
       changedFields: [
         'state',
+        'launched_at',
+        'started_at',
         ...(currentObjectiveAssignment?.assigned_agent ? [] : ['assigned_agent'])
       ]
     });
@@ -2099,7 +2108,7 @@ export async function deliverSession({
     await enqueueDeliveryComposeJob({ ctx: txCtx, deliveryId, now });
 
     await txCtx.db.run(
-      `UPDATE objectives SET state = 'complete', completed_at = ?, updated_at = ?, revision = revision + 1
+      `UPDATE objectives SET state = 'complete', ${OBJECTIVE_COMPLETED_AT_ASSIGNMENT}, updated_at = ?, revision = revision + 1
          WHERE id = ?`,
       [now, now, session.objective_id]
     );
@@ -2251,9 +2260,9 @@ export async function deliverSession({
         // button that reads it, and the queued execution request all agree.
         const inheritAgent =
           !nextObjective.assigned_agent && Boolean(deliveredObjective?.assigned_agent);
-        const objectiveFields = ["state = 'launching'"];
-        const objectiveParams: unknown[] = [];
-        const changedFields = ['state'];
+        const objectiveFields = ["state = 'launching'", OBJECTIVE_LAUNCHED_AT_ASSIGNMENT];
+        const objectiveParams: unknown[] = [eventNow];
+        const changedFields = ['state', 'launched_at'];
         if (inheritAgent && deliveredObjective) {
           objectiveFields.push('assigned_agent = ?', 'model = ?', 'reasoning_effort = ?');
           objectiveParams.push(
@@ -2337,7 +2346,7 @@ export async function deliverSession({
               mission.projectId,
               mission.id,
               nextObjective.id,
-              `Auto-advance could not queue the next objective: ${
+              `Auto-advance could not delegate the next objective: ${
                 error instanceof Error ? error.message : String(error)
               }`,
               JSON.stringify({ autoAdvanceFailed: true }),
@@ -2479,10 +2488,11 @@ export async function protocolPrompt({
     ...(title !== undefined ? { title } : {})
   });
 
+  const launchedAt = nowIso();
   const submitted = await ctx.db.run(
-    `UPDATE objectives SET state = 'launching', updated_at = ?, revision = revision + 1
+    `UPDATE objectives SET state = 'launching', ${OBJECTIVE_LAUNCHED_AT_ASSIGNMENT}, updated_at = ?, revision = revision + 1
        WHERE id = ?`,
-    [nowIso(), created.objectives[0]?.id]
+    [launchedAt, launchedAt, created.objectives[0]?.id]
   );
 
   void submitted;

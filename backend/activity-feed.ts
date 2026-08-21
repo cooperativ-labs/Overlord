@@ -215,7 +215,7 @@ async function loadRuns(workspaceIds: string[]): Promise<RunRow[]> {
               ORDER BY r.created_at DESC, r.id DESC LIMIT 1) AS request_created_at
        FROM objectives o${CONTEXT_JOIN}
       WHERE o.deleted_at IS NULL
-        AND o.state IN ('launching', 'executing')
+        AND o.state IN ('launching', 'executing', 'pending_delivery')
         AND o.workspace_id IN (${placeholders(workspaceIds.length)})
       ORDER BY o.updated_at DESC, o.id ASC
       LIMIT ?`,
@@ -366,7 +366,12 @@ function toRunItem(
     ...baseFields(row),
     objectiveId: row.objective_id,
     objectiveDisplayId: objectiveDisplayId(row.mission_display_id, row.objective_display_key),
-    state: row.state === 'launching' ? 'launching' : 'executing',
+    state:
+      row.state === 'launching'
+        ? 'launching'
+        : row.state === 'pending_delivery'
+          ? 'pending_delivery'
+          : 'executing',
     objectiveTitle: row.objective_title,
     instructionPreview: truncate(row.instruction_text, INSTRUCTION_PREVIEW_CHARS),
     agentIdentifier: resolveAgentIdentifier(row.session_agent_identifier, row.assigned_agent),

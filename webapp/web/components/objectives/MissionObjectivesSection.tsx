@@ -139,12 +139,18 @@ function ObjectiveFocusAnchor({
 /**
  * The mission panel's objective list, split into three groups:
  *
- * 1. **Executed** (executing / pending delivery / complete) — read-first
+ * 1. **Executed** (complete, then executing / pending delivery) — read-first
  *    {@link ObjectiveCollapsibleItem}s.
- * 2. **Editable** (draft / submitted / launching) — full {@link DraftObjective}
- *    launch cards.
+ * 2. **Editable** (launching, then draft / submitted) — full
+ *    {@link DraftObjective} launch cards.
  * 3. **Future** — {@link DraftObjective} cards made sortable via dnd-kit so they
  *    can be reordered; the new order is persisted optimistically.
+ *
+ * Order inside the first two groups is the mission's history, not its queue:
+ * `deriveObjectiveLifecycleView` sorts completed objectives by completion time,
+ * executing ones by start time, and launching ones by launch time, all oldest
+ * first. Only work that has not started yet is still ordered by position, which
+ * is why drag-to-reorder applies to the future group alone.
  *
  * Plus the {@link GhostObjective} composer, which is *not* an objective: the
  * always-available empty field used to be a blank objective row written to the

@@ -157,7 +157,9 @@ export function objectiveStateClasses(state: ObjectiveState): string {
     case 'executing':
       return 'bg-blue-500/15 text-blue-700 ring-blue-400/30 dark:text-blue-300';
     case 'pending_delivery':
-      return 'bg-amber-500/15 text-amber-700 ring-amber-400/30 dark:text-amber-300';
+      // Reads as live work, not as a warning: the agent has re-attached to the
+      // objective and is executing again until it delivers.
+      return 'bg-teal-500/15 text-teal-700 ring-teal-400/30 dark:text-teal-300';
     case 'complete':
       return 'bg-emerald-500/15 text-emerald-700 ring-emerald-400/30 dark:text-emerald-300';
   }

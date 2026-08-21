@@ -4,6 +4,7 @@ import type { NextFunction, Request, Response } from 'express';
 import type { ProtocolRequestBody } from '../backend/protocol.ts';
 import { runProtocolSubcommand } from '../backend/protocol.ts';
 
+import { compactRunQueueResponse } from './run-queue-detail.ts';
 import { compactSearchResponse } from './search-detail.ts';
 import { hostedMcpToolDefinitions, type ToolDefinition } from './tool-catalog.ts';
 import { hostedMcpWidgetResources, readHostedMcpWidget } from './widgets.ts';
@@ -99,6 +100,159 @@ function autoAdvanceFlags(args: Record<string, unknown>): Record<string, true> {
 
 function protocolBody(flags: Record<string, string | boolean>): ProtocolRequestBody {
   return { flags };
+}
+
+type RunQueueMcpProtocolCall = {
+  subcommand:
+    | 'run-queue'
+    | 'reorder-run-queue'
+    | 'queue-objective'
+    | 'dequeue-objective'
+    | 'create-run-queue'
+    | 'update-run-queue'
+    | 'delete-run-queue'
+    | 'reorder-project-run-queues';
+  body: ProtocolRequestBody;
+};
+
+/** Maps entry-level Run Queue MCP arguments to the authoritative Protocol surface. */
+export function runQueueMcpProtocolCall(
+  name: string,
+  args: Record<string, unknown>
+): RunQueueMcpProtocolCall {
+  if (name === 'overlord_list_run_queues') {
+    return {
+      subcommand: 'run-queue',
+      body: protocolBody({
+        ...(optionalProjectRef(args) ? { '--project-id': optionalProjectRef(args)! } : {}),
+        ...(optionalString(args, 'objectiveId')
+          ? { '--objective-id': requiredString(args, 'objectiveId') }
+          : {}),
+        ...(optionalString(args, 'missionId')
+          ? { '--mission-id': requiredString(args, 'missionId') }
+          : {}),
+        ...(optionalString(args, 'queue') ? { '--queue': requiredString(args, 'queue') } : {})
+      })
+    };
+  }
+
+  if (name === 'overlord_reorder_run_queue') {
+    if (
+      !Array.isArray(args.orderedObjectives) ||
+      !args.orderedObjectives.every(item => typeof item === 'string')
+    ) {
+      throw new Error('orderedObjectives must be an array of strings');
+    }
+    return {
+      subcommand: 'reorder-run-queue',
+      body: protocolBody({
+        '--queue': requiredString(args, 'queue'),
+        '--ordered-entries-json': JSON.stringify(args.orderedObjectives),
+        ...(optionalProjectRef(args) ? { '--project-id': optionalProjectRef(args)! } : {})
+      })
+    };
+  }
+
+  if (name === 'overlord_queue_objective') {
+    const hasAfter = optionalString(args, 'after') !== null;
+    const hasFront = args.front === true;
+    const hasPosition = args.position !== undefined;
+    if (Number(hasAfter) + Number(hasFront) + Number(hasPosition) > 1) {
+      throw new Error('Choose only one placement option: after, front, or position');
+    }
+    if (hasPosition && (!Number.isInteger(args.position) || (args.position as number) < 1)) {
+      throw new Error('position must be a positive integer');
+    }
+    if (args.remove === true) {
+      return {
+        subcommand: 'dequeue-objective',
+        body: protocolBody({ '--objective-id': requiredString(args, 'objectiveId') })
+      };
+    }
+    return {
+      subcommand: 'queue-objective',
+      body: protocolBody({
+        '--objective-id': requiredString(args, 'objectiveId'),
+        ...(optionalString(args, 'queue') ? { '--queue': requiredString(args, 'queue') } : {}),
+        ...(hasAfter ? { '--after': requiredString(args, 'after') } : {}),
+        ...(hasFront ? { '--front': true } : {}),
+        ...(hasPosition ? { '--position': String(args.position) } : {})
+      })
+    };
+  }
+
+  if (name === 'overlord_manage_run_queue') {
+    const action = optionalString(args, 'action');
+    if (action === null) throw new Error('action is required');
+    const projectRef = optionalProjectRef(args);
+    const queue = optionalString(args, 'queue');
+    const queueName = optionalString(args, 'name');
+
+    if (action === 'create') {
+      if (!projectRef) throw new Error("action 'create' requires projectId");
+      if (!queueName) throw new Error("action 'create' requires name");
+      return {
+        subcommand: 'create-run-queue',
+        body: protocolBody({ '--project-id': projectRef, '--name': queueName })
+      };
+    }
+
+    if (action === 'update') {
+      if (!queue) throw new Error("action 'update' requires queue");
+      const paused = args.paused;
+      if (paused !== undefined && typeof paused !== 'boolean') {
+        throw new Error('paused must be a boolean');
+      }
+      if (!queueName && paused === undefined) {
+        throw new Error("action 'update' requires name or paused");
+      }
+      return {
+        subcommand: 'update-run-queue',
+        body: protocolBody({
+          '--queue': queue,
+          ...(projectRef ? { '--project-id': projectRef } : {}),
+          ...(queueName ? { '--name': queueName } : {}),
+          ...(paused === true ? { '--pause': true } : {}),
+          ...(paused === false ? { '--resume': true } : {})
+        })
+      };
+    }
+
+    if (action === 'delete') {
+      if (!queue) throw new Error("action 'delete' requires queue");
+      const moveEntriesTo = optionalString(args, 'moveEntriesTo');
+      return {
+        subcommand: 'delete-run-queue',
+        body: protocolBody({
+          '--queue': queue,
+          ...(projectRef ? { '--project-id': projectRef } : {}),
+          ...(moveEntriesTo ? { '--move-entries-to': moveEntriesTo } : {})
+        })
+      };
+    }
+
+    if (action === 'reorder_queues') {
+      if (!projectRef) throw new Error("action 'reorder_queues' requires projectId");
+      if (
+        !Array.isArray(args.orderedQueues) ||
+        args.orderedQueues.length === 0 ||
+        !args.orderedQueues.every(item => typeof item === 'string')
+      ) {
+        throw new Error("action 'reorder_queues' requires orderedQueues as an array of strings");
+      }
+      return {
+        subcommand: 'reorder-project-run-queues',
+        body: protocolBody({
+          '--project-id': projectRef,
+          '--ordered-queues-json': JSON.stringify(args.orderedQueues)
+        })
+      };
+    }
+
+    throw new Error(`Unsupported Run Queue action: ${action}`);
+  }
+
+  throw new Error(`Unsupported Run Queue MCP tool: ${name}`);
 }
 
 function jsonText(value: unknown): ToolCallResult {
@@ -306,21 +460,27 @@ const toolHandlers: Record<string, ToolHandler> = {
       })
     );
   },
-  overlord_queue_objective: args =>
-    runProtocolSubcommand(
-      args.remove === true ? 'dequeue-objective' : 'queue-objective',
-      protocolBody({
-        '--objective-id': requiredString(args, 'objectiveId'),
-        ...(args.remove === true
-          ? {}
-          : {
-              ...(optionalString(args, 'queue')
-                ? { '--queue': requiredString(args, 'queue') }
-                : {}),
-              ...(optionalString(args, 'after') ? { '--after': requiredString(args, 'after') } : {})
-            })
-      })
-    ),
+  overlord_list_run_queues: async args => {
+    const detail = optionalString(args, 'detail') ?? 'compact';
+    if (detail !== 'compact' && detail !== 'full') {
+      throw new Error("detail must be 'compact' or 'full'");
+    }
+    const request = runQueueMcpProtocolCall('overlord_list_run_queues', args);
+    const result = await runProtocolSubcommand(request.subcommand, request.body);
+    return detail === 'compact' ? compactRunQueueResponse(result) : result;
+  },
+  overlord_reorder_run_queue: args => {
+    const request = runQueueMcpProtocolCall('overlord_reorder_run_queue', args);
+    return runProtocolSubcommand(request.subcommand, request.body);
+  },
+  overlord_queue_objective: args => {
+    const request = runQueueMcpProtocolCall('overlord_queue_objective', args);
+    return runProtocolSubcommand(request.subcommand, request.body);
+  },
+  overlord_manage_run_queue: args => {
+    const request = runQueueMcpProtocolCall('overlord_manage_run_queue', args);
+    return runProtocolSubcommand(request.subcommand, request.body);
+  },
   overlord_attach_session: args =>
     runProtocolSubcommand(
       'attach',

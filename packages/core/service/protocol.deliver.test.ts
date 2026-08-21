@@ -69,7 +69,57 @@ describe('deliverSession mechanical change capture', () => {
     assert.equal(attachChange.project_id, mission.projectId);
     assert.equal(attachChange.mission_id, mission.id);
     assert.equal(attachChange.objective_id, objectiveId);
-    assert.deepEqual(changedFields(attachChange), ['state', 'assigned_agent']);
+    assert.deepEqual(changedFields(attachChange), [
+      'state',
+      'launched_at',
+      'started_at',
+      'assigned_agent'
+    ]);
+
+    await db.close();
+  });
+
+  it('stamps the lifecycle timestamps the mission objective list is ordered by', async () => {
+    const { db, ctx } = await setup();
+    const { mission, objectiveId } = await submittedMission(ctx, 'Lifecycle Stamps');
+
+    const attached = await attachSession({
+      ctx,
+      missionId: mission.displayId,
+      agentIdentifier: 'codex'
+    });
+    const afterAttach = (await ctx.db.get(
+      `SELECT launched_at, started_at, completed_at FROM objectives WHERE id = ?`,
+      [objectiveId]
+    )) as { launched_at: string | null; started_at: string | null; completed_at: string | null };
+    assert.ok(afterAttach.launched_at);
+    assert.ok(afterAttach.started_at);
+    assert.equal(afterAttach.completed_at, null);
+
+    // Re-attaching must not move the objective in the list: both stamps are
+    // first-wins, so the second attach leaves them exactly as they were.
+    await attachSession({ ctx, missionId: mission.displayId, agentIdentifier: 'codex' });
+    const afterReattach = (await ctx.db.get(
+      `SELECT launched_at, started_at FROM objectives WHERE id = ?`,
+      [objectiveId]
+    )) as { launched_at: string; started_at: string };
+    assert.equal(afterReattach.launched_at, afterAttach.launched_at);
+    assert.equal(afterReattach.started_at, afterAttach.started_at);
+
+    await deliverSession({
+      ctx,
+      sessionKey: attached.sessionKey,
+      missionId: mission.displayId,
+      summary: 'Delivered the work.',
+      noFileChanges: true
+    });
+    const afterDeliver = (await ctx.db.get(
+      `SELECT state, started_at, completed_at FROM objectives WHERE id = ?`,
+      [objectiveId]
+    )) as { state: string; started_at: string; completed_at: string | null };
+    assert.equal(afterDeliver.state, 'complete');
+    assert.equal(afterDeliver.started_at, afterAttach.started_at);
+    assert.ok(afterDeliver.completed_at);
 
     await db.close();
   });

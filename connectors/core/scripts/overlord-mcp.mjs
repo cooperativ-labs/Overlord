@@ -108,6 +108,34 @@ function compactSearchResponse(response) {
   };
 }
 
+function compactRunQueueResponse(response) {
+  const value = response?.structuredContent;
+  if (!value || !Array.isArray(value.queues)) return response;
+  const compact = {
+    projectId: value.projectId,
+    queues: value.queues.map(queue => ({
+      id: queue.id,
+      name: queue.name,
+      isDefault: queue.isDefault,
+      paused: queue.paused,
+      entries: Array.isArray(queue.entries)
+        ? queue.entries.map(entry => ({
+            position: entry.position,
+            state: entry.state,
+            objectiveDisplayId: entry.objectiveDisplayId,
+            objectiveTitle: entry.objectiveTitle,
+            missionTitle: entry.missionTitle,
+            blockedReason: entry.blockedReason
+          }))
+        : []
+    }))
+  };
+  return {
+    content: [{ type: 'text', text: JSON.stringify(compact, null, 2) }],
+    structuredContent: compact
+  };
+}
+
 const tools = [
   {
     name: 'overlord_resolve_project',
@@ -358,6 +386,49 @@ const tools = [
     )
   },
   {
+    name: 'overlord_list_run_queues',
+    title: 'List Run Queues',
+    description:
+      "Use this to read a project's authoritative Run Queues before adding, moving, removing, or bulk-reordering entries. Compact detail is the default and includes ordering and blocking state; request full for the complete ProjectRunQueuesDto.",
+    inputSchema: objectSchema({
+      projectId: stringProperty('Optional project UUID, slug, or name.'),
+      objectiveId: stringProperty(
+        'Optional objective UUID or display id; derives the project when projectId is omitted.'
+      ),
+      missionId: stringProperty(
+        'Optional mission UUID or display id; derives the project when projectId is omitted.'
+      ),
+      queue: stringProperty('Optional Run Queue UUID or unambiguous name to return by itself.'),
+      detail: {
+        type: 'string',
+        enum: ['compact', 'full'],
+        description:
+          'Result detail: compact (default) returns queue ordering state; full returns the raw ProjectRunQueuesDto.'
+      }
+    })
+  },
+  {
+    name: 'overlord_reorder_run_queue',
+    title: 'Reorder Run Queue entries',
+    description:
+      'Use this only when the user explicitly asks to reorder every entry in one Run Queue. Supply every live entry exactly once, using entry UUIDs, objective UUIDs, or objective display ids. Running and dispatched entries cannot move. On a mismatch, the error returns the current order; re-read the queue and retry.',
+    inputSchema: objectSchema(
+      {
+        queue: stringProperty('Run Queue UUID or unambiguous name.'),
+        orderedObjectives: {
+          type: 'array',
+          description:
+            'Complete desired top-to-bottom entry order. Each item may be an entry UUID, objective UUID, or objective display id.',
+          items: stringProperty('Run Queue entry UUID, objective UUID, or objective display id.')
+        },
+        projectId: stringProperty(
+          'Optional project UUID, slug, or name; disambiguates queue names.'
+        )
+      },
+      ['queue', 'orderedObjectives']
+    )
+  },
+  {
     name: 'overlord_queue_objective',
     title: 'Queue objective',
     description:
@@ -369,12 +440,51 @@ const tools = [
         after: stringProperty(
           'Optional queued predecessor entry id, objective UUID, or objective display id. Its queue is used when queue is omitted.'
         ),
+        front: booleanProperty('When true, place this objective first in the selected queue.'),
+        position: {
+          type: 'number',
+          description: 'Optional one-based insertion position in the selected queue.'
+        },
         remove: booleanProperty(
           'When true, remove this objective from the Run Queue instead of adding or moving it.'
         )
       },
       ['objectiveId']
     )
+  },
+  {
+    name: 'overlord_manage_run_queue',
+    title: 'Manage Run Queues',
+    description:
+      "Use this only when the user explicitly asks to create, rename, pause, resume, delete, or reorder the project's Run Queue definitions. These are administrative project-configuration actions and require a full-scope token; adding, moving, or removing objectives inside a queue uses overlord_queue_objective and overlord_reorder_run_queue instead.",
+    inputSchema: objectSchema(
+      {
+        action: {
+          type: 'string',
+          enum: ['create', 'update', 'delete', 'reorder_queues'],
+          description:
+            'create a queue, update (rename/pause/resume) one, delete one, or reorder the queue definitions.'
+        },
+        projectId: stringProperty(
+          'Project UUID, slug, or name. Required for create and reorder_queues.'
+        ),
+        queue: stringProperty('Run Queue UUID or unambiguous name. Required for update and delete.'),
+        name: stringProperty('New queue name for create, or the replacement name for update.'),
+        paused: booleanProperty(
+          'update only: true pauses dispatching from the queue, false resumes it.'
+        ),
+        moveEntriesTo: stringProperty(
+          'delete only: destination queue UUID or unambiguous name. Required when the queue still holds entries.'
+        ),
+        orderedQueues: {
+          type: 'array',
+          description:
+            'reorder_queues only: every live queue exactly once, top to bottom, by UUID or unambiguous name. The default queue must stay first.',
+          items: stringProperty('Run Queue UUID or unambiguous name.')
+        }
+      },
+      ['action']
+    ),
   },
   {
     name: 'overlord_attach_session',
@@ -721,16 +831,119 @@ async function callOverlordTool(name, args) {
       ...(hasInstructionText ? { 'instruction-text': requiredString(args, 'instructionText') } : {})
     });
   }
+  if (name === 'overlord_list_run_queues') {
+    const detail = optionalString(args, 'detail') || 'compact';
+    if (detail !== 'compact' && detail !== 'full') {
+      throw new Error("detail must be 'compact' or 'full'");
+    }
+    const response = await runProtocol('run-queue', {
+      ...(optionalString(args, 'projectId')
+        ? { 'project-id': requiredString(args, 'projectId') }
+        : {}),
+      ...(optionalString(args, 'objectiveId')
+        ? { 'objective-id': requiredString(args, 'objectiveId') }
+        : {}),
+      ...(optionalString(args, 'missionId')
+        ? { 'mission-id': requiredString(args, 'missionId') }
+        : {}),
+      ...(optionalString(args, 'queue') ? { queue: requiredString(args, 'queue') } : {})
+    });
+    return detail === 'compact' ? compactRunQueueResponse(response) : response;
+  }
+  if (name === 'overlord_reorder_run_queue') {
+    if (
+      !Array.isArray(args.orderedObjectives) ||
+      !args.orderedObjectives.every(item => typeof item === 'string')
+    ) {
+      throw new Error('orderedObjectives must be an array of strings');
+    }
+    return runProtocol('reorder-run-queue', {
+      queue: requiredString(args, 'queue'),
+      'ordered-entries-json': args.orderedObjectives,
+      ...(optionalString(args, 'projectId')
+        ? { 'project-id': requiredString(args, 'projectId') }
+        : {})
+    });
+  }
   if (name === 'overlord_queue_objective') {
+    const hasAfter = optionalString(args, 'after') !== null;
+    const hasFront = args.front === true;
+    const hasPosition = args.position !== undefined;
+    if (Number(hasAfter) + Number(hasFront) + Number(hasPosition) > 1) {
+      throw new Error('Choose only one placement option: after, front, or position');
+    }
+    if (hasPosition && (!Number.isInteger(args.position) || args.position < 1)) {
+      throw new Error('position must be a positive integer');
+    }
     return runProtocol(args.remove === true ? 'dequeue-objective' : 'queue-objective', {
       'objective-id': requiredString(args, 'objectiveId'),
       ...(args.remove === true
         ? {}
         : {
             ...(optionalString(args, 'queue') ? { queue: requiredString(args, 'queue') } : {}),
-            ...(optionalString(args, 'after') ? { after: requiredString(args, 'after') } : {})
+            ...(hasAfter ? { after: requiredString(args, 'after') } : {}),
+            ...(hasFront ? { front: true } : {}),
+            ...(hasPosition ? { position: String(args.position) } : {})
           })
     });
+  }
+  if (name === 'overlord_manage_run_queue') {
+    const action = optionalString(args, 'action');
+    if (action === null) throw new Error('action is required');
+    const projectRef = optionalString(args, 'projectId');
+    const queue = optionalString(args, 'queue');
+    const queueName = optionalString(args, 'name');
+
+    if (action === 'create') {
+      if (!projectRef) throw new Error("action 'create' requires projectId");
+      if (!queueName) throw new Error("action 'create' requires name");
+      return runProtocol('create-run-queue', { 'project-id': projectRef, name: queueName });
+    }
+
+    if (action === 'update') {
+      if (!queue) throw new Error("action 'update' requires queue");
+      const paused = args.paused;
+      if (paused !== undefined && typeof paused !== 'boolean') {
+        throw new Error('paused must be a boolean');
+      }
+      if (!queueName && paused === undefined) {
+        throw new Error("action 'update' requires name or paused");
+      }
+      return runProtocol('update-run-queue', {
+        queue,
+        ...(projectRef ? { 'project-id': projectRef } : {}),
+        ...(queueName ? { name: queueName } : {}),
+        ...(paused === true ? { pause: true } : {}),
+        ...(paused === false ? { resume: true } : {})
+      });
+    }
+
+    if (action === 'delete') {
+      if (!queue) throw new Error("action 'delete' requires queue");
+      const moveEntriesTo = optionalString(args, 'moveEntriesTo');
+      return runProtocol('delete-run-queue', {
+        queue,
+        ...(projectRef ? { 'project-id': projectRef } : {}),
+        ...(moveEntriesTo ? { 'move-entries-to': moveEntriesTo } : {})
+      });
+    }
+
+    if (action === 'reorder_queues') {
+      if (!projectRef) throw new Error("action 'reorder_queues' requires projectId");
+      if (
+        !Array.isArray(args.orderedQueues) ||
+        args.orderedQueues.length === 0 ||
+        !args.orderedQueues.every(item => typeof item === 'string')
+      ) {
+        throw new Error("action 'reorder_queues' requires orderedQueues as an array of strings");
+      }
+      return runProtocol('reorder-project-run-queues', {
+        'project-id': projectRef,
+        'ordered-queues-json': args.orderedQueues
+      });
+    }
+
+    throw new Error(`Unsupported Run Queue action: ${action}`);
   }
   if (name === 'overlord_attach_session') {
     return runProtocol('attach', {

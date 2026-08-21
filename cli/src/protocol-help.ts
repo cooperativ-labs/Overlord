@@ -10,7 +10,9 @@ export const SUPPORTED_PROTOCOL_SUBCOMMANDS = [
   'changes',
   'connect',
   'create',
+  'create-run-queue',
   'dequeue-objective',
+  'delete-run-queue',
   'deliver',
   'discover-project',
   'discuss-objective',
@@ -25,6 +27,8 @@ export const SUPPORTED_PROTOCOL_SUBCOMMANDS = [
   'record-touched',
   'record-work',
   'reorder-future-objectives',
+  'reorder-project-run-queues',
+  'reorder-run-queue',
   'run-queue',
   'queue-objective',
   'resume-follow-up',
@@ -33,6 +37,7 @@ export const SUPPORTED_PROTOCOL_SUBCOMMANDS = [
   'update',
   'update-artifact',
   'update-objective',
+  'update-run-queue',
   'write-context'
 ] as const;
 
@@ -113,6 +118,13 @@ Subcommands:
   update-artifact        Update an existing mission artifact in place
   attachment-list        List all attachments for the mission
   attachment-download-url  Get the download URL for a specific attachment
+  run-queue              Read the project's authoritative Run Queues
+  reorder-run-queue      Atomically reorder every entry in one Run Queue
+  create-run-queue       Create an additional Run Queue in a project
+  update-run-queue       Rename, pause, or resume one Run Queue
+  delete-run-queue       Delete a Run Queue, optionally moving its entries
+  reorder-project-run-queues
+                         Reorder the project's Run Queue definitions
 
 Runner queue (management commands, not protocol):
   ${primaryCommand} runner once|start|status|clear|clear-all [--branch <name>] [--no-worktree]
@@ -242,10 +254,109 @@ reorder-future-objectives:
 run-queue:
   Purpose:
     Read every live Run Queue in one project, including queued, held, and running entries.
-  Required:
-    --project-id <id|slug|name>
+  Optional:
+    --project-id <id|slug|name> Project UUID, slug, or name
+    --objective-id <id>          Derive the project from this objective
+    --mission-id <id>            Derive the project from this mission
+    --queue <id|name>            Return only this queue by UUID or unambiguous name
   Returns:
     ProjectRunQueuesDto JSON. This reads sequencing state; it does not launch work.
+  Rules:
+    Supply --project-id, --objective-id, or --mission-id. When --project-id and
+    --objective-id are both supplied, they must name the same project.
+
+reorder-run-queue:
+  Purpose:
+    Atomically replace one Run Queue's complete entry order without selecting an
+    execution target.
+  Required:
+    --queue <id|name>             Queue UUID or unambiguous name
+    --ordered-entries-json <json> Complete top-to-bottom entry order
+  Optional:
+    --ordered-entries-file <path|->
+                                  Read the JSON order from a file or stdin
+    --project-id <id|slug|name>   Project UUID, slug, or name
+    --objective-id <id>           Derive the project from this objective
+    --mission-id <id>             Derive the project from this mission
+  Returns:
+    The reordered RunQueueDto.
+  Rules:
+    Each item may be an entry UUID, objective UUID, or objective display id.
+    Supply every live entry exactly once. Running and dispatched entries cannot
+    move. A rejected order returns currentOrder and runningEntryId so callers can
+    re-read the queue and retry.
+
+create-run-queue:
+  Purpose:
+    Create an additional Run Queue alongside the project's default queue.
+  Required:
+    --project-id <id|slug|name> Project UUID, slug, or name
+    --name <text>               Name for the new queue
+  Optional:
+    --objective-id <id>         Derive the project from this objective
+    --mission-id <id>           Derive the project from this mission
+  Returns:
+    The created RunQueueDto, unpaused and positioned after the existing queues.
+  Rules:
+    Queue definitions are project configuration and require the project:update
+    permission, so a mission_lifecycle-scoped agent token cannot run this. Entry
+    operations (queue-objective, dequeue-objective, reorder-run-queue) are
+    unaffected.
+
+update-run-queue:
+  Purpose:
+    Rename one Run Queue, or pause and resume its dispatching.
+  Required:
+    --queue <id|name>           Queue UUID or unambiguous name
+  Optional:
+    --project-id <id|slug|name> Project UUID, slug, or name
+    --objective-id <id>         Derive the project from this objective
+    --mission-id <id>           Derive the project from this mission
+    --name <text>               New queue name
+    --pause                     Stop dispatching from this queue
+    --resume                    Resume dispatching from this queue
+  Returns:
+    The updated RunQueueDto.
+  Rules:
+    --pause and --resume are mutually exclusive. Supplying neither a --name nor a
+    pause state is rejected rather than silently succeeding. Requires
+    project:update, so a mission_lifecycle-scoped agent token cannot run this.
+
+delete-run-queue:
+  Purpose:
+    Delete one Run Queue, optionally relocating the entries it still holds.
+  Required:
+    --queue <id|name>           Queue UUID or unambiguous name
+  Optional:
+    --project-id <id|slug|name> Project UUID, slug, or name
+    --objective-id <id>         Derive the project from this objective
+    --mission-id <id>           Derive the project from this mission
+    --move-entries-to <id|name> Destination queue for the entries being displaced
+  Returns:
+    { removed, projectId }.
+  Rules:
+    The default queue cannot be deleted, and a non-empty queue requires
+    --move-entries-to. Requires project:update, so a mission_lifecycle-scoped
+    agent token cannot run this.
+
+reorder-project-run-queues:
+  Purpose:
+    Reorder the project's Run Queue definitions without touching entry
+    membership or entry order.
+  Required:
+    --project-id <id|slug|name> Project UUID, slug, or name
+    --ordered-queues-json <json> Complete top-to-bottom queue order
+  Optional:
+    --ordered-queues-file <path|->
+                                Read the JSON order from a file or stdin
+    --objective-id <id>         Derive the project from this objective
+    --mission-id <id>           Derive the project from this mission
+  Returns:
+    ProjectRunQueuesDto in its new order.
+  Rules:
+    Each item may be a queue UUID or an unambiguous queue name. Supply every live
+    queue exactly once, and keep the default queue first. Requires
+    project:update, so a mission_lifecycle-scoped agent token cannot run this.
 
 queue-objective:
   Purpose:

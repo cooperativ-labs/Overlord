@@ -99,7 +99,24 @@ test('an executing objective appears with its project and mission context', asyn
   assert.equal(item.objectiveDisplayId, objective.displayId);
 });
 
-test('objectives that are not launching or executing stay out of the feed', async () => {
+test('a pending-delivery objective appears in the feed as live work', async () => {
+  const project = await createProject({ name: 'AF Pending' });
+  const mission = await createMission({ projectId: project.id, firstObjective: 'Re-attached' });
+  const objective = mission.objectives[0]!;
+  // Written directly rather than through updateObjective: the state is the only
+  // thing under test and the REST update path needs an authorized-workspace
+  // context this read-path test does not establish.
+  db.prepare(`UPDATE objectives SET state = 'pending_delivery' WHERE id = ?`).run(objective.id);
+
+  const feed = await listActivityFeed();
+  const item = feed.items.find(entry => entry.id === `run:${objective.id}`);
+
+  assert.ok(item, 'the pending-delivery objective must be in the feed');
+  assert.equal(item.kind, 'objective_run');
+  assert.ok(item.kind === 'objective_run' && item.state === 'pending_delivery');
+});
+
+test('objectives that are not launching, executing, or pending delivery stay out of the feed', async () => {
   const project = await createProject({ name: 'AF Idle' });
   const mission = await createMission({ projectId: project.id, firstObjective: 'Idle' });
   const objective = mission.objectives[0]!;

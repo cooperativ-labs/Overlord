@@ -14,6 +14,8 @@ function queues(projectId: string, entryId: string): ProjectRunQueuesDto {
         projectId,
         name: 'Run Queue',
         isDefault: true,
+        missionId: null,
+        missionDisplayId: null,
         paused: false,
         position: 1,
         running: null,
