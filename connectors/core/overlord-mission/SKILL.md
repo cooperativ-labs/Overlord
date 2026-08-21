@@ -1,11 +1,11 @@
 ---
 name: overlord-mission
-description: Shared Overlord mission workflow protocol for connector plugins, covering both Overlord-launched missions and chat-invoked Overlord work.
+description: Use for the shared Overlord workflow whenever the user refers to an Overlord mission or ticket.
 ---
 
 # Overlord Mission
 
-Use this core whenever an agent connector needs to work with Overlord, whether the session was launched by Overlord Desktop/CLI or the user asks from chat to engage with Overlord.
+Use this core whenever an agent connector needs to work with Overlord, whether the session was launched by Overlord Desktop/CLI or the user asks from chat to engage with Overlord. Treat **ticket** as a user-facing synonym for **mission**: invoke this `overlord-mission` skill for either term. There is no separate `overlord-ticket` skill.
 
 Connector adapters may add harness-specific commands, hooks, MCP tools, or launch flags, but they must not replace the lifecycle rules in this core.
 

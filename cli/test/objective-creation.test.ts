@@ -102,6 +102,52 @@ test('adding objectives persists autoAdvance when requested', async () => {
   await db.close();
 });
 
+test('adding objectives persists an explicit agent and model', async () => {
+  const { db, ctx } = await createSeededCliContext();
+  const project = await createProject({ ctx, name: 'Add Objectives Agent Model' });
+  const { mission } = await createMissionWithObjectives({
+    ctx,
+    projectId: project.id,
+    objectives: [{ objective: 'Existing draft' }]
+  });
+
+  const [added] = await addObjectivesToMission({
+    ctx,
+    missionId: mission.id,
+    objectives: [{ objective: 'Run with Codex', agent: 'codex', model: 'gpt-5.6-terra' }]
+  });
+
+  const stored = await db.get<{ assigned_agent: string | null; model: string | null }>(
+    `SELECT assigned_agent, model FROM objectives WHERE id = ?`,
+    [added!.id]
+  );
+  assert.equal(stored?.assigned_agent, 'codex');
+  assert.equal(stored?.model, 'gpt-5.6-terra');
+
+  await db.close();
+});
+
+test('adding an objective rejects a model without an agent', async () => {
+  const { db, ctx } = await createSeededCliContext();
+  const project = await createProject({ ctx, name: 'Add Objectives Model Validation' });
+  const { mission } = await createMissionWithObjectives({
+    ctx,
+    projectId: project.id,
+    objectives: [{ objective: 'Existing draft' }]
+  });
+
+  await assert.rejects(
+    addObjectivesToMission({
+      ctx,
+      missionId: mission.id,
+      objectives: [{ objective: 'Invalid model selection', model: 'gpt-5.6-terra' }]
+    }),
+    /model requires an assigned agent/
+  );
+
+  await db.close();
+});
+
 test('updateObjective toggles autoAdvance on an existing objective', async () => {
   const { db, ctx } = await createSeededCliContext();
   const project = await createProject({ ctx, name: 'Update Objective Auto Advance' });

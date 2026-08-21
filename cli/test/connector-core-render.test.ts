@@ -77,6 +77,22 @@ test('setup installs rendered skill with core content and core references', () =
   }
 });
 
+test('connectors install one mission skill that recognizes ticket terminology', () => {
+  for (const agentKey of ['antigravity', 'claude', 'codex', 'cursor', 'pi'] as const) {
+    const manifest = readConnectorManifest(agentKey);
+    assert.ok(manifest.connector.managedFiles.includes('skills/overlord-mission/SKILL.md'));
+    assert.ok(!manifest.connector.managedFiles.some(file => file.includes('overlord-ticket')));
+
+    const skill = resolveManagedFileContents({
+      sourceDir: path.join(repoRoot, 'connectors', 'adapters', agentKey),
+      relativePath: 'skills/overlord-mission/SKILL.md',
+      adapterKey: agentKey
+    }).toString('utf8');
+    assert.match(skill, /ticket.*synonym.*mission/i);
+    assert.doesNotMatch(skill, /name:\s*overlord-ticket/i);
+  }
+});
+
 const MCP_SHIM_ADAPTERS = ['codex', 'cursor', 'antigravity'] as const;
 
 test('rendered MCP shims differ from the core source only by the adapter key', () => {

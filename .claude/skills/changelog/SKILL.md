@@ -1,6 +1,6 @@
 ---
 Name: changelog
-Description: use this skill to generate and update the project changelog from recent changes.
+description: use this skill to generate and update the project changelog from recent changes.
 allowed-tools: Read, Edit, Write, Grep, Glob
 user-invocable: true
 ---

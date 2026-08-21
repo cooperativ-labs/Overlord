@@ -22,7 +22,7 @@ Overlord exposes its protocol through six parallel surfaces:
 | **API routes** | `apps/web/app/api/protocol/*/route.ts` | REST endpoints, kebab-case paths |
 | **CLI commands** | `packages/overlord-cli/bin/_cli/protocol.mjs` | `ovld protocol <subcommand>`, `--kebab-case` flags |
 | **MCP tools** | `supabase/functions/mcp/tools.ts` (hosted) + `plugins/overlord/scripts/overlord-mcp.mjs` (Codex local shim) + `plugins/antigravity/scripts/overlord-mcp.mjs` (Antigravity local shim, staged to `~/.ovld/antigravity/scripts/`) | Hosted: `snake_case` tool names, **camelCase** parameters matching API JSON. Local shims: `snake_case` parameters mapping to CLI flags. |
-| **Agent plugins** | Source templates in `plugins/_source/agents/{claude,cursor,overlord}/` plus shared include templates in `plugins/_source/shared/` render to `plugins/{claude,cursor,overlord}/` and `packages/overlord-cli/plugins/{claude,cursor,overlord}/`; Antigravity remains direct at `plugins/antigravity/skills/overlord-ticket/` | Skill instructions referencing CLI/MCP |
+| **Agent plugins** | Adapter templates in `connectors/adapters/<agent>/skills/overlord-mission/`, rendered with `connectors/core/overlord-mission/` by `ovld agent-setup` | The single `overlord-mission` skill; user-facing “ticket” is a trigger synonym for “mission” |
 | **Public docs for agents** | `docs/public/` | AI-agent-facing explainers that help agents explain Overlord to end users |
 | **CLI README** | `packages/overlord-cli/README.md` | User-facing CLI documentation and examples |
 
@@ -63,16 +63,11 @@ Extract for each tool:
 - For the shim: the `subcommand` and `toCliFlags` / `toCliStdin` mapping
 
 #### 4. Agent Plugin Skills
-Read the `overlord-ticket` skill in each plugin directory. For Claude, Cursor, and Codex, prefer the source templates first and then confirm rendered output with `yarn plugins:check`:
-- `plugins/_source/agents/claude/skills/overlord-ticket/SKILL.md`
-- `plugins/_source/agents/cursor/skills/overlord-ticket/SKILL.md`
-- `plugins/_source/agents/overlord/skills/overlord-ticket/SKILL.md`
-- `plugins/claude/skills/overlord-ticket/SKILL.md`
-- `plugins/cursor/skills/overlord-ticket/SKILL.md`
-- `plugins/overlord/skills/overlord-ticket/SKILL.md` (Codex plugin)
-- `plugins/antigravity/skills/overlord-ticket/SKILL.md`
+Read the single `overlord-mission` skill source: `connectors/core/overlord-mission/SKILL.md`, then each adapter template at `connectors/adapters/<agent>/skills/overlord-mission/SKILL.md`. Confirm the `ovld agent-setup` rendering with the connector test suite.
 
-For Antigravity, also spot-check bundled slash commands under `plugins/antigravity/commands/` (Markdown, `$ARGUMENTS`) — they are not installed via `slash-commands.ts`.
+Treat a user’s word “ticket” as a trigger for this same `overlord-mission` skill. Report any `overlord-ticket` source, managed-file declaration, or generated install path as critical naming drift.
+
+For Antigravity, also spot-check bundled slash-command skills under `connectors/adapters/antigravity/skills/` (Markdown, `$ARGUMENTS`) — they are installed directly from that adapter manifest.
 
 Extract which operations and parameters are documented for agents to use.
 

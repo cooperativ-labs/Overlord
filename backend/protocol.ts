@@ -686,6 +686,8 @@ type ObjectiveInput = {
   objective: string;
   title?: string | null;
   autoAdvance?: boolean;
+  agent?: string | null;
+  model?: string | null;
   resourceKey?: string | null;
 };
 

@@ -372,6 +372,7 @@ export async function insertObjective({
   state,
   autoAdvance = false,
   assignedAgent,
+  model,
   resourceKey = null
 }: {
   ctx: ServiceContext;
@@ -381,6 +382,7 @@ export async function insertObjective({
   state?: string;
   autoAdvance?: boolean;
   assignedAgent?: string | null;
+  model?: string | null;
   resourceKey?: string | null;
 }): Promise<ObjectiveSummary> {
   const instruction = instructionText.trim();
@@ -424,12 +426,16 @@ export async function insertObjective({
   // the agent is always recorded in the db; an explicit agent passed by the caller
   // still wins. Executed/complete states are created with whatever the caller set.
   const explicitAgent = assignedAgent?.trim() || null;
+  const explicitModel = model?.trim() || null;
+  if (explicitModel && !explicitAgent) {
+    throw new ServiceError('An objective model requires an assigned agent', 'validation_error');
+  }
   const launchSelection =
     !explicitAgent && (resolvedState === 'draft' || resolvedState === 'future')
       ? await readProjectLaunchSelection(ctx, mission.projectId)
       : { agent: null, model: null, reasoningEffort: null };
   const resolvedAssignedAgent = explicitAgent ?? launchSelection.agent;
-  const resolvedModel = explicitAgent ? null : launchSelection.model;
+  const resolvedModel = explicitAgent ? explicitModel : launchSelection.model;
   const resolvedReasoningEffort = explicitAgent ? null : launchSelection.reasoningEffort;
   const origin = resolveOrigin(ctx);
   const displayKey = await allocateObjectiveDisplayKey({ db: ctx.db, missionId: mission.id });
@@ -1014,6 +1020,8 @@ export async function addObjectivesToMission({
     objective: string;
     title?: string | null;
     autoAdvance?: boolean;
+    agent?: string | null;
+    model?: string | null;
     resourceKey?: string | null;
   }>;
 }): Promise<ObjectiveSummary[]> {
@@ -1034,6 +1042,8 @@ export async function addObjectivesToMission({
           instructionText: item.objective,
           ...(item.title !== undefined ? { title: item.title } : {}),
           autoAdvance: item.autoAdvance ?? false,
+          ...(item.agent !== undefined ? { assignedAgent: item.agent } : {}),
+          ...(item.model !== undefined ? { model: item.model } : {}),
           ...(item.resourceKey !== undefined ? { resourceKey: item.resourceKey } : {}),
           state: 'draft'
         })

@@ -451,8 +451,9 @@ add-objectives:
     --auto-advance / --no-auto-advance
         Default auto-advance for items that omit "autoAdvance". Defaults to off.
   Notes:
-    Each item is { "objective": "...", "title": "...", "autoAdvance": true|false,
-    "resourceKey": "..." }. Per-item autoAdvance wins over the flag.
+    Each item is { "objective": "...", "title": "...", "agent": "codex",
+    "model": "gpt-5.6-terra", "autoAdvance": true|false, "resourceKey": "..." }.
+    model requires agent. Per-item autoAdvance wins over the flag.
 
 update-objective:
   Purpose:

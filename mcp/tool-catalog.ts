@@ -322,10 +322,14 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
         objectives: {
           type: 'array',
           description:
-            'Objective objects with objective text and optional title, resourceKey, and autoAdvance.',
+            'Objective objects with objective text and optional title, agent/model launch selection, resourceKey, and autoAdvance.',
           items: objectSchema({
             objective: stringProperty('Objective text.'),
             title: stringProperty('Optional objective title.'),
+            agent: stringProperty(
+              'Optional agent identifier to assign to this objective, such as codex or claude.'
+            ),
+            model: stringProperty('Optional model identifier for this objective. Requires agent.'),
             resourceKey: stringProperty('Optional logical project resource key.'),
             autoAdvance: booleanProperty(
               'When true, Overlord queues the next objective for execution after this one is delivered. Defaults to false.'

@@ -1,6 +1,6 @@
 ---
 Name: everhour-api
-Description: Guidance for using Everhour timers and time-record endpoints correctly in this codebase.
+description: Guidance for using Everhour timers and time-record endpoints correctly in this codebase.
 ---
 
 ## Instructions

@@ -8,8 +8,12 @@ const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
 const bootstrap = await bootstrapIntegrationTestDb({
   sqlitePath: path.join(tempDir, 'webapp.sqlite')
 });
-const { getActiveWorkspace, setAuthorizedWorkspacesContext, withRequestContextAsync } =
-  await import('./db.ts');
+const {
+  getActiveWorkspace,
+  serviceDatabaseClient,
+  setAuthorizedWorkspacesContext,
+  withRequestContextAsync
+} = await import('./db.ts');
 
 const { createProject, updateObjective } = await import('./repository.ts');
 const { ApiError } = await import('./errors.ts');
@@ -72,6 +76,32 @@ test('protocol add-objectives persists per-item autoAdvance', async () => {
 
   assert.equal(added[0]?.autoAdvance, true);
   assert.equal(added[1]?.autoAdvance, false);
+});
+
+test('protocol add-objectives persists per-item agent and model', async () => {
+  const project = await createProject({ name: `Agent model add ${Date.now()}` });
+  const created = (await runProtocolSubcommand('create', {
+    flags: {
+      '--project-id': project.id,
+      '--objective': 'Existing draft'
+    }
+  })) as CreatedMission;
+
+  const added = (await runProtocolSubcommand('add-objectives', {
+    flags: {
+      '--mission-id': created.mission.id,
+      '--objectives-json': JSON.stringify([
+        { objective: 'Use Codex', agent: 'codex', model: 'gpt-5.6-terra' }
+      ])
+    }
+  })) as CreatedMission['objectives'];
+
+  const stored = await serviceDatabaseClient().get<{
+    assigned_agent: string | null;
+    model: string | null;
+  }>(`SELECT assigned_agent, model FROM objectives WHERE id = ?`, [added[0]!.id]);
+  assert.equal(stored?.assigned_agent, 'codex');
+  assert.equal(stored?.model, 'gpt-5.6-terra');
 });
 
 test('agent queue commands keep legacy auto-advance work in mission-local queue order', async () => {

@@ -1,5 +1,5 @@
-contractVersion: '106'
+contractVersion: '111'
 componentType: mcp-server
 componentKey: overlord
 label: 'Overlord Hosted MCP Server'
-description: 'OAuth-protected, mission-first MCP server for hosted ChatGPT Apps and other MCP clients. Run Queue tools include overlord_list_run_queues, overlord_reorder_run_queue, and overlord_manage_run_queue; overlord_queue_objective supports queue, predecessor, front, and rank placement.'
+description: 'OAuth-protected, mission-first MCP server for hosted ChatGPT Apps and other MCP clients. The overlord_add_objectives tool supports per-objective agent/model selection. Run Queue tools include overlord_list_run_queues, overlord_reorder_run_queue, and overlord_manage_run_queue; overlord_queue_objective supports queue, predecessor, front, and rank placement.'

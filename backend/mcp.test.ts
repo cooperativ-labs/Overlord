@@ -224,6 +224,22 @@ test('overlord_list_project_statuses is a read-only project-scoped discovery too
 });
 
 test('PM-management MCP tools preserve the protocol contracts', () => {
+  const addObjectives = hostedMcpToolDefinitions.find(
+    definition => definition.name === 'overlord_add_objectives'
+  );
+  assert.ok(addObjectives);
+  const objectiveItems = (addObjectives.inputSchema.properties as Record<string, any>).objectives
+    .items.properties;
+  assert.deepEqual(Object.keys(objectiveItems).sort(), [
+    'agent',
+    'autoAdvance',
+    'model',
+    'objective',
+    'resourceKey',
+    'title'
+  ]);
+  assert.match(objectiveItems.model.description, /Requires agent/);
+
   const deliveries = hostedMcpToolDefinitions.find(
     definition => definition.name === 'overlord_list_deliveries'
   );

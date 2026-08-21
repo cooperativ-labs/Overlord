@@ -1,6 +1,6 @@
 ---
 name: overlord-mission
-description: Codex adapter for the shared Overlord mission workflow.
+description: Use for the shared Overlord workflow whenever the user refers to an Overlord mission or ticket.
 ---
 
 <!-- @connector-core -->

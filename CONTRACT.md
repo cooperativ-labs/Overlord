@@ -34,7 +34,7 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `110`
+Current version: `111`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
@@ -114,6 +114,18 @@ projection never exposes launch commands, environment, credentials, terminal
 output, or provider-session metadata. Dispatch failures use the same shared
 redaction and bounding policy before they become a queue hold reason, service
 log detail, or response projection.
+
+### Version 111 Change Summary
+
+Protocol `add-objectives` additively accepts per-item `agent` and `model` in
+its objectives JSON/file payload, and hosted MCP `overlord_add_objectives`
+exposes the same fields. An explicit `agent` is persisted as the appended
+objective's `assignedAgent`; an accompanying `model` is persisted with it.
+A model without a non-empty explicit agent is rejected, because it cannot
+identify a launch selection. Existing items that omit both fields retain the
+project launch-preference defaulting behavior. The existing `resourceKey` and
+Run Queue `autoAdvance` semantics, authorization, and response shapes are
+unchanged.
 
 ### Version 106 Change Summary
 
@@ -475,6 +487,10 @@ Owns:
 - Mid-turn mission artifact creation via `ovld protocol add-artifact` / `POST /api/protocol/add-artifact`, which creates an artifact without a delivery using the same `createArtifact` service as REST `POST /api/missions/:id/artifacts`; an optional session key stamps session/objective provenance when present
 - Run Queue agent operations: `queue-objective`, `dequeue-objective`, `run-queue`, `reorder-run-queue`, `create-run-queue`, `update-run-queue`, `delete-run-queue`, and `reorder-project-run-queues` use display-id/project resolution and the existing queue service. Hosted MCP and connector shims expose the same agent surface through `overlord_queue_objective`, `overlord_list_run_queues`, `overlord_reorder_run_queue`, and `overlord_manage_run_queue`. Entry membership and entry ordering require `execution_request:create`; queue-definition lifecycle requires `project:update`. `queue-objective` accepts queue, predecessor, front, and rank placement without selecting an execution target, and with no explicit destination targets the objective's own mission queue, creating it on demand before falling back to the project default
 - `autoAdvance` is a deprecated compatibility view derived from live Run Queue membership. Protocol creation and update auto-advance options enqueue/dequeue; legacy storage writes retire next release and column removal requires a later contract bump
+- Per-item `agent` and `model` launch selection for `add-objectives`: the optional
+  fields persist to the new objective's existing `assigned_agent` and `model`
+  columns; `model` requires a non-empty `agent`, while omitted fields preserve
+  the existing project launch-preference defaults
 
 Does NOT own:
 

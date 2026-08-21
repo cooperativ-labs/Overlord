@@ -4,7 +4,7 @@
 # IMPORTANT: Update this file and CONTRACT.md together when adding components or surfaces.
 # Increment contractVersion when any stable interface changes.
 
-contractVersion: '110'
+contractVersion: '111'
 
 components:
   protocol:
@@ -29,6 +29,7 @@ components:
       - 'account-owned inbox capture: protocol create --inbox explicitly creates a private profile-owned inbox item; ordinary non-executing create falls back to inbox only after explicit and discovered project resolution fail, while prompt and record-work remain project-required'
       - 'Run Queue agent operations: queue-objective, dequeue-objective, run-queue, reorder-run-queue, create-run-queue, update-run-queue, delete-run-queue, and reorder-project-run-queues resolve objective display IDs/project references and route reads, entry operations, and queue-definition lifecycle only through the Run Queue service; entry operations require execution_request:create and queue-definition lifecycle requires project:update'
       - 'deprecated autoAdvance compatibility: create/prompt/add-objectives per-item autoAdvance and --auto-advance/--no-auto-advance, plus update-objective, map to authoritative Run Queue membership; legacy storage writes retire next release and column removal requires a later contract bump'
+      - 'add-objectives per-item agent/model selection: optional agent persists as assigned_agent and optional model as model; a model requires a non-empty agent and omitted fields preserve project launch-preference defaults'
       - 'agent-facing mission lifecycle commands only; runner queue/device/project-resource management commands live on CLI/Runner/REST surfaces'
     dependsOn:
       - database
@@ -340,6 +341,7 @@ components:
       - 'hosted overlord_add_artifact tool forwarding to Protocol add-artifact'
       - 'additive assignedTo input on overlord_create_mission, forwarded to the same service-layer member resolver as Protocol --assigned-to (workspace_users.id, profile UUID, orgid:username, bare username, or email); an unresolvable member is an error, never a silent fallback to unassigned'
       - 'additive autoAdvance input on overlord_create_mission and overlord_add_objectives items, forwarded to Protocol create/add-objectives'
+      - 'additive agent/model inputs on overlord_add_objectives items, forwarded unchanged to Protocol add-objectives so an agent can select each appended objective\'s launch identity'
       - 'hosted overlord_update_objective tool forwards autoAdvance compatibility to Protocol queue membership and instructionText to Protocol update-objective'
       - 'hosted overlord_queue_objective forwards queue/add/remove intent to Protocol queue-objective or dequeue-objective; it does not access queue tables directly'
       - 'overlord_list_deliveries, overlord_launch_objective, and overlord_reorder_future_objectives forward to Protocol list-deliveries, launch-objective, and reorder-future-objectives; they preserve the existing normalized delivery response, execution-request queue semantics, and full future-objective ordering validation'

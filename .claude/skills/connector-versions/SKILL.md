@@ -1,6 +1,6 @@
 ---
 Name: connector-versions
-Description: Keep agent connector plugin and MCP version numbers in sync whenever files under connectors/ change. Run the sync script after connector edits and bump the patch version for user-visible connector releases.
+description: Keep agent connector plugin and MCP version numbers in sync whenever files under connectors/ change. Run the sync script after connector edits and bump the patch version for user-visible connector releases.
 allowed-tools: Read, Edit, Write, Bash, Grep, Glob
 user-invocable: true
 ---

@@ -541,6 +541,7 @@ missionDiscovery:
       - --no-auto-advance
     rules:
       - 'Each --objectives-json / --objectives-file item may set autoAdvance; --auto-advance / --no-auto-advance supply the default when an item omits it; omitted defaults to false'
+      - 'Each item may set agent and model. agent persists as the new objective\'s assignedAgent; model requires a non-empty agent. When both are omitted, existing project launch-preference defaults apply.'
     sideEffects:
       - creates-objectives-in-draft-state
 

@@ -86,8 +86,10 @@ Requirements:
 - `discuss-objective`: mark a draft objective submitted. Optional
   `--objective-id` names which draft when a mission holds more than one; the
   objective must be in `draft` state.
-- `add-objectives`: append ordered objectives to a mission. Same `autoAdvance`
-  JSON field and `--auto-advance` / `--no-auto-advance` Run Queue mapping as create.
+- `add-objectives`: append ordered objectives to a mission. Each JSON/file item
+  may select its `agent` and `model` (`model` requires `agent`); omitted fields
+  retain project launch-preference defaults. It uses the same `autoAdvance` JSON
+  field and `--auto-advance` / `--no-auto-advance` Run Queue mapping as create.
 - `update-objective`: maps `--auto-advance` / `--no-auto-advance` to queue
   membership and can edit instruction text on draft/future objectives. The
   returned `autoAdvance` field is deprecated and derived from `queueEntry`.

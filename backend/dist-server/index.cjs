@@ -136866,6 +136866,7 @@ async function insertObjective({
   state: state2,
   autoAdvance = false,
   assignedAgent,
+  model,
   resourceKey = null
 }) {
   const instruction = instructionText.trim();
@@ -136902,9 +136903,13 @@ async function insertObjective({
   const id = newId();
   const resolvedTitle = title?.trim() || (instruction ? initialTitleFromInstruction(instruction) : "New objective");
   const explicitAgent = assignedAgent?.trim() || null;
+  const explicitModel = model?.trim() || null;
+  if (explicitModel && !explicitAgent) {
+    throw new ServiceError("An objective model requires an assigned agent", "validation_error");
+  }
   const launchSelection = !explicitAgent && (resolvedState === "draft" || resolvedState === "future") ? await readProjectLaunchSelection(ctx, mission.projectId) : { agent: null, model: null, reasoningEffort: null };
   const resolvedAssignedAgent = explicitAgent ?? launchSelection.agent;
-  const resolvedModel = explicitAgent ? null : launchSelection.model;
+  const resolvedModel = explicitAgent ? explicitModel : launchSelection.model;
   const resolvedReasoningEffort = explicitAgent ? null : launchSelection.reasoningEffort;
   const origin = resolveOrigin(ctx);
   const displayKey = await allocateObjectiveDisplayKey({ db: ctx.db, missionId: mission.id });
@@ -137243,6 +137248,8 @@ async function addObjectivesToMission({
           instructionText: item.objective,
           ...item.title !== void 0 ? { title: item.title } : {},
           autoAdvance: item.autoAdvance ?? false,
+          ...item.agent !== void 0 ? { assignedAgent: item.agent } : {},
+          ...item.model !== void 0 ? { model: item.model } : {},
           ...item.resourceKey !== void 0 ? { resourceKey: item.resourceKey } : {},
           state: "draft"
         })
@@ -159916,10 +159923,14 @@ var hostedMcpToolDefinitions = [
         ),
         objectives: {
           type: "array",
-          description: "Objective objects with objective text and optional title, resourceKey, and autoAdvance.",
+          description: "Objective objects with objective text and optional title, agent/model launch selection, resourceKey, and autoAdvance.",
           items: objectSchema({
             objective: stringProperty("Objective text."),
             title: stringProperty("Optional objective title."),
+            agent: stringProperty(
+              "Optional agent identifier to assign to this objective, such as codex or claude."
+            ),
+            model: stringProperty("Optional model identifier for this objective. Requires agent."),
             resourceKey: stringProperty("Optional logical project resource key."),
             autoAdvance: booleanProperty(
               "When true, Overlord queues the next objective for execution after this one is delivered. Defaults to false."

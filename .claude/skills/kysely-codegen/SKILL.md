@@ -1,6 +1,7 @@
-# Kysely Codegen
-
-Use this skill when working with database types, running type generation, or helping developers build custom Kysely types on top of the generated schema.
+---
+name: kysely-codegen
+description: Use this skill when working with database types, running type generation, or helping developers build custom Kysely types on top of the generated schema.
+---
 
 ## Overview
 
