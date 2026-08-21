@@ -13,7 +13,7 @@ import { after, describe, it } from 'node:test';
 import { listChangedFilesForReview } from './changes.js';
 import { createServiceContext } from './context.js';
 import { ServiceError } from './errors.js';
-import { claimNextExecutionRequest } from './execution-requests.js';
+import { claimNextExecutionRequest, expireStaleExecutionRequests } from './execution-requests.js';
 import { backendHostFingerprint, ensureCallerDeviceTarget } from './execution-targets.js';
 import {
   getProjectExecutionTargetSelection,
@@ -21,7 +21,7 @@ import {
   resolveLaunchConfig
 } from './project-execution-target.js';
 import { findPrimaryProjectResource } from './projects.js';
-import { claimNextQueuedRequest, recoverStaleExecutionRequests } from './queue-runtime.js';
+import { claimNextQueuedRequest } from './queue-runtime.js';
 import { seedServiceOperator } from './test-helpers.js';
 
 /**
@@ -470,11 +470,9 @@ for (const adapter of adapters) {
           [past, past, staleLaunched]
         );
 
-        const recovered = await recoverStaleExecutionRequests(client, {
-          workspaceId: WORKSPACE_ID
-        });
-        const recoveredIds = recovered.map(r => r.id).sort();
-        assert.deepEqual(recoveredIds, [staleClaimed, staleLaunched].sort());
+        const ctx = await createServiceContext({ db: client, source: 'runner' });
+        const recovered = await expireStaleExecutionRequests({ ctx });
+        assert.equal(recovered.expired, 2);
 
         for (const id of [staleClaimed, staleLaunched]) {
           const row = await client.get<{ status: string }>(

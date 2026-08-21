@@ -43,12 +43,14 @@ import {
 import { CliError, isUnlinkableExecutionRequestError } from './errors.js';
 import { launchAgent } from './launch.js';
 import { recoverLaunchBootstrapFromProjectTmp } from './launch-bootstrap.js';
+import { fetchLaunchSettings } from './launch-settings.js';
 import { resolveNativeSessionId } from './native-session.js';
 import { runOrgSetupCommand } from './org-setup.js';
 import { printJson, printKeyValue } from './output.js';
 import { pruneStaleProjectTmp } from './project-tmp.js';
 import { printProtocolHelp } from './protocol-help.js';
 import { recordTouchedFromPayload } from './record-touched.js';
+import { redactSecrets } from './redact-secrets.js';
 import { reportRunnerResourceObservations } from './resource-observations.js';
 import { runnerRegistrationPayload } from './runner-identity.js';
 import {
@@ -540,37 +542,51 @@ function repeatedLaunchFlags(args: string[], name: string): AgentLaunchFlagDto[]
   return flags;
 }
 
+/**
+ * The stored terminal profile for this device, as launch settings.
+ *
+ * A read failure is reported, never swallowed: falling back to
+ * `terminalLauncher: null` makes the agent run **inline** in the runner's own
+ * process, which under `ovld runner service` (no TTY) is exactly the
+ * "Launch command exited with status 1" failure, and under a foreground
+ * `ovld runner start` blocks the poll loop behind the agent. The caller passes
+ * the workspace it already knows (the claimed request's, or the mission's) so
+ * the workspace-scoped launch-settings route is used — see `launch-settings.ts`.
+ */
 async function resolveTerminalLaunchSettings({
   runtime,
-  flags
+  flags,
+  workspaceId
 }: {
   runtime: CliRuntime;
   flags: Map<string, string | true>;
+  workspaceId?: string | null;
 }): Promise<TerminalLaunchSettings> {
   if (flagBoolean(flags, '--no-terminal')) {
     return { terminalLauncher: null };
   }
 
   const override = flagValue(flags, '--terminal');
-  if (override) {
-    try {
-      const profile = await fetchTerminalProfile({ backend: runtime.backend });
-      return {
-        terminalLauncher: override,
-        terminalLaunchPlacement: profile.placement,
-        terminalLaunchChord: profile.chord,
-        terminalLaunchBackground: profile.background ?? false
-      };
-    } catch {
-      return { terminalLauncher: override };
-    }
-  }
-
   try {
-    const profile = await fetchTerminalProfile({ backend: runtime.backend });
-    return terminalProfileToLaunchSettings(profile);
-  } catch {
-    return { terminalLauncher: null };
+    const profile = await fetchTerminalProfile({ backend: runtime.backend, workspaceId });
+    if (!override) return terminalProfileToLaunchSettings(profile);
+    return {
+      terminalLauncher: override,
+      terminalLaunchPlacement: profile.placement,
+      terminalLaunchChord: profile.chord,
+      terminalLaunchBackground: profile.background ?? false
+    };
+  } catch (error) {
+    console.error(
+      `[overlord] Could not read your terminal profile (${
+        error instanceof Error ? error.message : String(error)
+      }). ${
+        override
+          ? `Launching with --terminal ${override} and default placement.`
+          : 'The agent will run inline in this process instead of a new terminal window/tab.'
+      }`
+    );
+    return override ? { terminalLauncher: override } : { terminalLauncher: null };
   }
 }
 
@@ -595,11 +611,27 @@ function parseLaunchEnvVarsValue(value: unknown): Record<string, string> {
   return vars;
 }
 
-async function readWorktreeBranchAutomationEnabled(runtime: CliRuntime): Promise<boolean> {
+/**
+ * Whether worktree/branch automation is on for `workspaceId`. Read failures are
+ * reported rather than silently disabling automation, which previously made a
+ * runner prepare no branch at all and launch straight into the main checkout.
+ */
+async function readWorktreeBranchAutomationEnabled(
+  runtime: CliRuntime,
+  workspaceId?: string | null
+): Promise<boolean> {
   try {
-    const settings = await runtime.backend.get<LaunchSettingsShape>('/api/launch-settings');
+    const settings = await fetchLaunchSettings<LaunchSettingsShape>({
+      backend: runtime.backend,
+      workspaceId
+    });
     return settings.worktreeBranchAutomationEnabled === true;
-  } catch {
+  } catch (error) {
+    console.error(
+      `[overlord] Could not read launch settings (${
+        error instanceof Error ? error.message : String(error)
+      }); continuing with worktree branch automation disabled.`
+    );
     return false;
   }
 }
@@ -1610,15 +1642,23 @@ export async function runManagementCommand({
         `/api/missions/${encodeURIComponent(missionId)}`
       );
       const scopedRuntime: CliRuntime = runtime;
+      // The mission's own workspace owns its launch settings; passing it keeps a
+      // secondary-workspace launch on the same terminal profile as its runner.
+      const missionWorkspaceId =
+        typeof asRecord(mission).workspaceId === 'string'
+          ? (asRecord(mission).workspaceId as string)
+          : null;
       const terminal = await resolveTerminalLaunchSettings({
         runtime: scopedRuntime,
-        flags: parsed.flags
+        flags: parsed.flags,
+        workspaceId: missionWorkspaceId
       });
       const objectiveId = objectiveRef
         ? objectiveIdForRef(mission, objectiveRef)
         : resolveActiveObjectiveId(mission);
       const executionTargetId = await resolvePreferredExecutionTargetId({
-        backend: scopedRuntime.backend
+        backend: scopedRuntime.backend,
+        workspaceId: missionWorkspaceId
       });
       // Per-project pre-launch commands and launch env vars run/apply before the
       // agent starts. Resolved from the mission's project so a manual launch
@@ -1645,7 +1685,10 @@ export async function runManagementCommand({
           missionId,
           workingDirectory,
           objectiveId: objectiveId ?? undefined,
-          workspaceAutomationEnabled: await readWorktreeBranchAutomationEnabled(scopedRuntime),
+          workspaceAutomationEnabled: await readWorktreeBranchAutomationEnabled(
+            scopedRuntime,
+            missionWorkspaceId
+          ),
           dryRun,
           overrideBranch: flagValue(parsed.flags, '--branch'),
           noWorktree: flagBoolean(parsed.flags, '--no-worktree')
@@ -1679,7 +1722,13 @@ export async function runManagementCommand({
         printJson({ plan: result.plan, status: result.status, signal: result.signal });
       }
       if (result.status && result.status !== 0) {
-        throw new CliError({ message: `Launch command exited with status ${result.status}` });
+        throw new CliError({
+          message: launchFailureMessage({
+            status: result.status,
+            execution: result.plan.execution,
+            terminal
+          })
+        });
       }
       return;
     }
@@ -1972,6 +2021,44 @@ export async function runManagementCommand({
 }
 
 /**
+ * Why a launch command exited non-zero, in terms a user can act on.
+ *
+ * The bare "Launch command exited with status 1" said nothing about *what* ran:
+ * the same message covered a missing agent binary, an inline spawn with no TTY,
+ * and a terminal launcher that could not open. Name the resolved invocation and
+ * the terminal it used (or the fact that there was none) so the mission event and
+ * the runner service log both carry the cause.
+ */
+const MAX_RUNNER_FAILURE_MESSAGE_LENGTH = 1_200;
+
+/** Keep launch diagnostics useful without letting env-bearing command text leak. */
+export function sanitizeRunnerFailureMessage(value: unknown): string {
+  const redacted = redactSecrets(value);
+  return redacted.length <= MAX_RUNNER_FAILURE_MESSAGE_LENGTH
+    ? redacted
+    : `${redacted.slice(0, MAX_RUNNER_FAILURE_MESSAGE_LENGTH)}… [truncated]`;
+}
+
+export function launchFailureMessage({
+  status,
+  execution,
+  terminal
+}: {
+  status: number | null;
+  execution: { display: string; terminal: string | null };
+  terminal: TerminalLaunchSettings;
+}): string {
+  const where = execution.terminal
+    ? `in ${execution.terminal}${
+        terminal.terminalLaunchPlacement ? ` (${terminal.terminalLaunchPlacement})` : ''
+      }`
+    : 'inline (no terminal launcher resolved for this device)';
+  return sanitizeRunnerFailureMessage(
+    `Launch command exited with status ${status ?? 'unknown'} running ${where}: ${execution.display}`
+  );
+}
+
+/**
  * Whether a backend failure is the "this machine was never declared as an
  * execution target" refusal. The backend client folds the error code into the
  * rendered message as `(<code>)`, so match that marker rather than re-parsing
@@ -1980,6 +2067,21 @@ export async function runManagementCommand({
 function isNoExecutionTargetRegisteredError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return message.includes('(no_execution_target_registered)');
+}
+
+/** The runner service cannot host an interactive agent inline without a TTY. */
+export function shouldRefuseInlineRunnerLaunch({
+  dryRun,
+  terminalLauncher,
+  executionProvider,
+  stdoutIsTTY
+}: {
+  dryRun: boolean;
+  terminalLauncher?: string | null;
+  executionProvider?: string | null;
+  stdoutIsTTY?: boolean;
+}): boolean {
+  return !dryRun && !terminalLauncher && executionProvider !== 'latch' && !stdoutIsTTY;
 }
 
 export async function runRunnerOnce({
@@ -2078,7 +2180,16 @@ export async function runRunnerOnce({
       });
     }
     const launchConfig = asRecord(requestRecord.launchConfig);
-    const terminal = await resolveTerminalLaunchSettings({ runtime, flags: parsed.flags });
+    // Launch settings are workspace-scoped: address the claimed request's own
+    // workspace so a secondary-workspace run reads the same profile the user
+    // configured, and so the read does not 400 (see `launch-settings.ts`).
+    const requestWorkspaceId =
+      typeof requestRecord.workspaceId === 'string' ? requestRecord.workspaceId : null;
+    const terminal = await resolveTerminalLaunchSettings({
+      runtime,
+      flags: parsed.flags,
+      workspaceId: requestWorkspaceId
+    });
     const missionId = String(requestRecord.missionId);
     const dryRun = flagBoolean(parsed.flags, '--dry-run');
     const prepared = await prepareMissionBranch({
@@ -2087,7 +2198,10 @@ export async function runRunnerOnce({
         missionId,
         workingDirectory: String(requestRecord.workingDirectory ?? process.cwd()),
         objectiveId: String(requestRecord.objectiveId ?? ''),
-        workspaceAutomationEnabled: await readWorktreeBranchAutomationEnabled(runtime),
+        workspaceAutomationEnabled: await readWorktreeBranchAutomationEnabled(
+          runtime,
+          requestWorkspaceId
+        ),
         dryRun,
         overrideBranch: flagValue(parsed.flags, '--branch'),
         noWorktree: flagBoolean(parsed.flags, '--no-worktree')
@@ -2100,6 +2214,28 @@ export async function runRunnerOnce({
       branchAutomation: prepared.branchAutomation
     });
     const launchSession = launchSessionSnapshotFromMetadata(asRecord(requestRecord.metadata));
+    // A runner must hand the agent a terminal of its own (a launcher window/tab,
+    // or a Latch session). With neither, `launchAgent` spawns the agent inline on
+    // the runner's own stdio: under the persistent runner service there is no TTY
+    // at all, so an interactive agent exits immediately and the only trace is a
+    // bare "Launch command exited with status 1". Refuse up front with the repair
+    // instruction instead of producing that unexplained exit code.
+    if (
+      shouldRefuseInlineRunnerLaunch({
+        dryRun,
+        terminalLauncher: terminal.terminalLauncher,
+        executionProvider: launchSession?.executionProvider.kind,
+        stdoutIsTTY: process.stdout.isTTY
+      })
+    ) {
+      throw new CliError({
+        message:
+          `Refusing to launch ${requestedAgent} inline: this runner has no TTY and no terminal ` +
+          'launcher is configured for this device, so the agent would have nowhere to run. ' +
+          'Set a terminal in Settings → Terminal & IDE (or run `ovld setup`), or select the ' +
+          'Latch execution provider for this target, then re-run the objective.'
+      });
+    }
     const result = await launchAgent({
       runtime,
       options: {
@@ -2139,7 +2275,13 @@ export async function runRunnerOnce({
       console.error(`[overlord] ${result.viewerOpen.warning}`);
     }
     if (result.status && result.status !== 0) {
-      throw new CliError({ message: `Launch command exited with status ${result.status}` });
+      throw new CliError({
+        message: launchFailureMessage({
+          status: result.status,
+          execution: result.plan.execution,
+          terminal
+        })
+      });
     }
     await runtime.backend.post({
       path: `/api/runner/requests/${requestId}/launched`,
@@ -2166,7 +2308,9 @@ export async function runRunnerOnce({
     try {
       await runtime.backend.post({
         path: `/api/runner/requests/${requestId}/failed`,
-        body: { error: error instanceof Error ? error.message : String(error) }
+        body: {
+          error: sanitizeRunnerFailureMessage(error instanceof Error ? error.message : error)
+        }
       });
     } catch {
       // Reporting failed too; surface the original cause below.
@@ -2239,7 +2383,20 @@ async function runRunnerCommand({
   const intervalMs = Number.parseInt(flagValue(parsed.flags, '--poll-interval-ms') ?? '3000', 10);
   if (!json) console.log(`Runner started. Polling every ${intervalMs}ms for execution requests.`);
   while (true) {
-    const result = await runOnce();
+    let result = { launched: false, longPoll: false };
+    try {
+      result = await runOnce();
+    } catch (error) {
+      // One failed launch must not end the foreground runner. It used to throw
+      // straight out of this loop, so the very first "Launch command exited with
+      // status 1" left the machine with no runner at all — every later objective
+      // then sat in the queue forever with nothing to claim it. `supervise`
+      // already survived this; `start` now behaves the same.
+      if (isNoExecutionTargetRegisteredError(error)) throw error;
+      console.error(
+        `[overlord] Runner poll failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
     // A hosted claim either waited for work or advertises that the next claim
     // can do so. Reconnect directly; SQLite retains this foreground fallback.
     if (!result.longPoll) await new Promise(resolve => setTimeout(resolve, intervalMs));

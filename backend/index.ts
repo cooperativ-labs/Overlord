@@ -28,6 +28,7 @@ import {
   getAgentCatalog,
   getLaunchPreference,
   getLaunchSettings,
+  getObjectiveEffectiveLaunchConfig,
   getObjectiveLaunchCommand,
   getObjectivePrompt,
   launchObjective,
@@ -1954,6 +1955,16 @@ app.get(
       model: typeof req.query.model === 'string' ? req.query.model : null,
       reasoningEffort:
         typeof req.query.reasoningEffort === 'string' ? req.query.reasoningEffort : null,
+      executionTargetId:
+        typeof req.query.executionTargetId === 'string' ? req.query.executionTargetId : null
+    })
+  )
+);
+app.get(
+  '/api/objectives/:id/effective-launch-config',
+  handle(req =>
+    getObjectiveEffectiveLaunchConfig(req.params.id, {
+      agent: typeof req.query.agent === 'string' ? req.query.agent : '',
       executionTargetId:
         typeof req.query.executionTargetId === 'string' ? req.query.executionTargetId : null
     })

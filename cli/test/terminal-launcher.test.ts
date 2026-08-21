@@ -400,3 +400,15 @@ test('composeAgentTerminalCommand matches the terminal inner command string S', 
   assert.ok(composed.includes('echo ready;'));
   assert.ok(composed.includes(`agp 'claude'`));
 });
+
+test('an explicitly empty snapshot omits a pre-command for direct and Latch launches', () => {
+  const direct = resolveLaunchExecution({ ...AGENT, preCommand: '' });
+  assert.equal(direct.command, 'claude');
+  assert.equal(direct.useShell, false);
+  assert.doesNotMatch([direct.command, ...direct.args].join(' '), /\bagp\b|agent-pod/);
+
+  // Latch runs this same command string through its PTY shell.
+  const latch = composeAgentTerminalCommand({ ...AGENT, preCommand: '' });
+  assert.match(latch, /'claude'/);
+  assert.doesNotMatch(latch, /\bagp\b|agent-pod/);
+});

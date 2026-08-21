@@ -21,8 +21,12 @@ const {
   reorderFutureObjectives,
   updateObjective
 } = await import('./repository.ts');
-const { getObjectiveLaunchCommand, getObjectivePrompt, updateLaunchPreference } =
-  await import('./execution/launch.ts');
+const {
+  getObjectiveEffectiveLaunchConfig,
+  getObjectiveLaunchCommand,
+  getObjectivePrompt,
+  updateLaunchPreference
+} = await import('./execution/launch.ts');
 const { ApiError } = await import('./errors.ts');
 
 const OBJECTIVE_DISPLAY_ID_RE = /^[a-z0-9-]+:\d+\.[0-9a-hjkmnp-tv-z]{4}$/;
@@ -199,6 +203,29 @@ test('copyable launch commands include agent, mission, and resolved launch mecha
     launchCommand.command,
     `ovld launch cursor --mission-id ${mission.displayId} --objective-id ${mission.objectives[0]!.displayId} --model gpt-5.6-terra --thinking high --pre-command agp --flag '--sandbox workspace-write'`
   );
+});
+
+test('effective launch config keeps an explicit empty objective override authoritative', async () => {
+  const project = await createProject({ name: 'Effective launch config' });
+  const mission = await createMission({
+    projectId: project.id,
+    firstObjective: 'Launch without pod'
+  });
+  const objectiveId = mission.objectives[0]!.id;
+
+  await updateObjective(objectiveId, {
+    launchConfigAgent: 'claude',
+    launchConfigOverride: { preCommand: '', flags: [] }
+  });
+
+  const effective = await getObjectiveEffectiveLaunchConfig(objectiveId, { agent: 'claude' });
+  assert.deepEqual(effective, {
+    objectiveId,
+    missionId: mission.id,
+    executionTargetId: null,
+    launchConfig: { preCommand: '', flags: [] },
+    source: 'objective'
+  });
 });
 
 test('objective launch mechanics are persisted as an explicit any-target override', async () => {

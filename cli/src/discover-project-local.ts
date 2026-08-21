@@ -9,16 +9,20 @@ import path from 'node:path';
 
 import type { BackendClient } from './backend-client.js';
 import { CliError } from './errors.js';
+import { fetchLaunchSettings } from './launch-settings.js';
 
 export async function resolvePreferredExecutionTargetId({
-  backend
+  backend,
+  workspaceId
 }: {
   backend: BackendClient;
+  workspaceId?: string | null;
 }): Promise<string | null> {
   try {
-    const launchSettings = await backend.get<{ executionTargetId?: string | null }>(
-      '/api/launch-settings'
-    );
+    const launchSettings = await fetchLaunchSettings<{ executionTargetId?: string | null }>({
+      backend,
+      workspaceId
+    });
     return typeof launchSettings.executionTargetId === 'string'
       ? launchSettings.executionTargetId
       : null;

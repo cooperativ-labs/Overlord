@@ -41,6 +41,8 @@ type AgentLaunchFooterProps = {
   onCommit: (config: AgentLaunchConfigDto) => void;
   /** Short hint describing where the shown config comes from. */
   sourceHint?: string;
+  /** Delete the explicit override and re-resolve the inherited configuration. */
+  onUseInheritedDefault?: () => void;
 };
 
 function cleanFlags(raw: AgentLaunchFlagDto[]): AgentLaunchFlagDto[] {
@@ -65,7 +67,8 @@ export function AgentLaunchFooter({
   preCommand: initialPreCommand,
   flags: initialFlags,
   onCommit,
-  sourceHint
+  sourceHint,
+  onUseInheritedDefault
 }: AgentLaunchFooterProps) {
   const [preCommand, setPreCommand] = useState(initialPreCommand);
   const [flags, setFlags] = useState<AgentLaunchFlagDto[]>(initialFlags);
@@ -80,6 +83,11 @@ export function AgentLaunchFooter({
   useEffect(() => {
     setRecentFlags(readRecentAgentLaunchFlags(agentKey));
   }, [agentKey]);
+
+  useEffect(() => {
+    setPreCommand(initialPreCommand);
+    setFlags(initialFlags);
+  }, [initialFlags, initialPreCommand]);
 
   const suggestions = useMemo(
     () => filterRecentAgentLaunchFlags({ flags: recentFlags, query: draftName }),
@@ -342,7 +350,18 @@ export function AgentLaunchFooter({
           </div>
         </div>
       </div>
-      {sourceHint ? <p className="text-[10px] text-muted-foreground">{sourceHint}</p> : null}
+      <div className="flex items-center justify-between gap-2">
+        {sourceHint ? <p className="text-[10px] text-muted-foreground">{sourceHint}</p> : <span />}
+        {onUseInheritedDefault ? (
+          <button
+            type="button"
+            onClick={onUseInheritedDefault}
+            className="shrink-0 text-[10px] text-primary underline-offset-2 hover:underline"
+          >
+            Use inherited default
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }

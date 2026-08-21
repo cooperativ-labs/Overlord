@@ -2,6 +2,7 @@ import { planRunQueueDispatch } from '@overlord/automations';
 import { OBJECTIVE_LAUNCHED_AT_ASSIGNMENT } from '@overlord/core/service/objective-lifecycle-timestamps';
 import type { DatabaseClient } from '@overlord/database';
 
+import { sanitizeDispatchFailure } from '../packages/core/service/dispatch-diagnostics.ts';
 import { createExecutionRequest } from '../packages/core/service/execution-requests.ts';
 import {
   resolveLaunchConfig,
@@ -177,9 +178,17 @@ export async function dispatchProjectRunQueues(
         );
       });
     } catch (error) {
+      // Keep the real cause. `dispatch_failed` alone told the user nothing about
+      // *why* their queued objective stopped — an unconnected resource, a missing
+      // execution target, and an unlaunchable objective state all rendered as the
+      // same opaque word in "Held: dispatch_failed". The reason is surfaced
+      // verbatim in the Run Queue panel, so keep the machine-readable prefix and
+      // append a bounded detail.
+      const detail = sanitizeDispatchFailure(error);
+      console.error('[run-queue-dispatcher] dispatch failed', { entryId: entry.id, error });
       await db.run(
-        "UPDATE run_queue_entries SET state = 'blocked', blocked_reason = 'dispatch_failed', attempt_count = attempt_count + 1, updated_at = ?, revision = revision + 1 WHERE id = ?",
-        [now, entry.id]
+        "UPDATE run_queue_entries SET state = 'blocked', blocked_reason = ?, attempt_count = attempt_count + 1, updated_at = ?, revision = revision + 1 WHERE id = ?",
+        [detail ? `dispatch_failed: ${detail.slice(0, 400)}` : 'dispatch_failed', now, entry.id]
       );
     }
   }

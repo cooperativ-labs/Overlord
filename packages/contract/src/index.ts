@@ -793,6 +793,21 @@ export interface RunQueueEntryDto {
   resourceKey: string | null;
   enqueuedAt: string;
   executionRequestId: string | null;
+  /** Safe state diagnostics for the request created by this queue entry. */
+  executionRequest: {
+    status: string;
+    lastError: string | null;
+    claimedByDeviceId: string | null;
+    claimedByExecutionTargetId: string | null;
+    executionTargetId: string | null;
+    createdAt: string;
+    claimedAt: string | null;
+    launchStartedAt: string | null;
+    launchCompletedAt: string | null;
+    updatedAt: string;
+  } | null;
+  /** A detected impossible queue/request state pair, if any. */
+  diagnosticCode: 'terminal_request_dispatched' | 'running_without_live_request' | null;
 }
 export interface RunQueueDto {
   id: string;
@@ -1741,6 +1756,17 @@ export interface ObjectiveLaunchCommandDto {
   objectiveId: string;
   missionId: string;
   command: string;
+}
+
+/** Authoritative resolved launch mechanics for an objective and selected target. */
+export interface ObjectiveEffectiveLaunchConfigDto {
+  objectiveId: string;
+  missionId: string;
+  /** The target used to resolve target- and resource-scoped defaults, if any. */
+  executionTargetId: string | null;
+  launchConfig: AgentLaunchConfigDto;
+  /** The precedence layer that supplied `launchConfig`. */
+  source: 'objective' | 'resource_source' | 'user_target' | 'workspace' | 'none';
 }
 
 // ---- Realtime feed ----

@@ -348,7 +348,9 @@ test('Run Queue MCP tools map arguments to Protocol flags and retain the compact
             assignedAgent: null,
             resourceKey: null,
             enqueuedAt: '2026-08-21T00:00:00.000Z',
-            executionRequestId: null
+            executionRequestId: null,
+            executionRequest: null,
+            diagnosticCode: null
           }
         ]
       }

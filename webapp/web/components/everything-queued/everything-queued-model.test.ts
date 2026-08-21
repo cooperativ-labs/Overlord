@@ -35,7 +35,9 @@ function queues(projectId: string, entryId: string): ProjectRunQueuesDto {
             assignedAgent: null,
             resourceKey: null,
             enqueuedAt: '2026-08-20T00:00:00.000Z',
-            executionRequestId: null
+            executionRequestId: null,
+            executionRequest: null,
+            diagnosticCode: null
           }
         ]
       }

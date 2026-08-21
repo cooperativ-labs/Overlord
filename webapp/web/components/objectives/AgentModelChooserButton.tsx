@@ -20,6 +20,8 @@ type AgentModelChooserButtonProps = {
   onChange: (selection: AgentModelSelection) => void;
   agentConfigs: Record<string, AgentLaunchConfigDto>;
   onLaunchConfigCommit: (agentKey: string, config: AgentLaunchConfigDto) => void;
+  onUseInheritedDefault?: (agentKey: string) => void;
+  launchConfigSourceHint?: string;
   disabled?: boolean;
   /** Icon-only trigger for dense surfaces such as the quick task bar. */
   compact?: boolean;
@@ -36,6 +38,8 @@ export function AgentModelChooserButton({
   onChange,
   agentConfigs,
   onLaunchConfigCommit,
+  onUseInheritedDefault,
+  launchConfigSourceHint,
   disabled = false,
   compact = false
 }: AgentModelChooserButtonProps) {
@@ -105,7 +109,8 @@ export function AgentModelChooserButton({
             onChange={onChange}
             agentConfigs={agentConfigs}
             onLaunchConfigCommit={onLaunchConfigCommit}
-            launchConfigSourceHint="Saved to your launch config for this machine."
+            onUseInheritedDefault={onUseInheritedDefault}
+            launchConfigSourceHint={launchConfigSourceHint}
           />
         ) : null}
       </PopoverContent>

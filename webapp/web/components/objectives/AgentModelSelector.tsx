@@ -41,6 +41,8 @@ type AgentModelSelectorProps = {
   agentConfigs: Record<string, AgentLaunchConfigDto>;
   /** Persist a pre-command/flags edit for the given agent. */
   onLaunchConfigCommit: (agentKey: string, config: AgentLaunchConfigDto) => void;
+  /** Delete an objective override and restore resolver inheritance. */
+  onUseInheritedDefault?: (agentKey: string) => void;
   /** Hint shown under the footer describing where edits persist. */
   launchConfigSourceHint?: string;
   /** When true, stacks columns vertically (settings page); compact rows otherwise. */
@@ -66,6 +68,7 @@ export function AgentModelSelector({
   onChange,
   agentConfigs,
   onLaunchConfigCommit,
+  onUseInheritedDefault,
   launchConfigSourceHint,
   inline = false
 }: AgentModelSelectorProps) {
@@ -276,6 +279,9 @@ export function AgentModelSelector({
           flags={launchConfig?.flags ?? []}
           onCommit={config => onLaunchConfigCommit(value.agent, config)}
           sourceHint={launchConfigSourceHint}
+          onUseInheritedDefault={
+            onUseInheritedDefault ? () => onUseInheritedDefault(value.agent) : undefined
+          }
         />
       )}
     </div>

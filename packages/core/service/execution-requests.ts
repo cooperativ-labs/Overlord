@@ -3,6 +3,7 @@ import {
   formatAgentLaunchFlagText,
   parseObjectiveRef
 } from '@overlord/contract';
+import type { DatabaseClient } from '@overlord/database';
 
 import { emitNotification } from './notifications/notifications.js';
 import { recordChange } from './change-feed.js';
@@ -45,6 +46,44 @@ const LAUNCH_ATTACH_TTL_MS = 15 * 60 * 1000;
 // sibling objective on the mission is refused. Ten minutes is the compromise: a
 // generous multiple of a realistic slow launch, and a bounded wait for the user.
 const LAUNCH_START_TTL_MS = 10 * 60 * 1000;
+
+/**
+ * Keep the queue's planning state in lock-step with the execution request that
+ * its dispatcher created. Queue entries are upstream planning state, but once
+ * an entry points at a request this is the only place that can observe every
+ * runner terminal transition. Keeping this small reconciliation here makes the
+ * request update, mission event, and actionable queue state one transaction.
+ */
+async function reconcileLinkedRunQueueEntry({
+  db,
+  requestId,
+  state,
+  now,
+  blockedReason
+}: {
+  db: DatabaseClient;
+  requestId: string;
+  state: 'running' | 'blocked';
+  now: string;
+  blockedReason?: string | null;
+}): Promise<void> {
+  await db.run(
+    `UPDATE run_queue_entries
+        SET state = ?,
+            blocked_reason = ?,
+            updated_at = ?,
+            revision = revision + 1
+      WHERE execution_request_id = ?
+        AND deleted_at IS NULL
+        AND state IN ('dispatched', 'running')`,
+    [
+      state,
+      state === 'blocked' ? (blockedReason?.slice(0, 400) ?? 'Execution request failed.') : null,
+      now,
+      requestId
+    ]
+  );
+}
 
 export type ExecutionRequestSummary = {
   id: string;
@@ -901,6 +940,12 @@ export async function markExecutionLaunched({
           }
         : {})
     });
+    await reconcileLinkedRunQueueEntry({
+      db: txCtx.db,
+      requestId,
+      state: 'running',
+      now
+    });
     return await getExecutionRequest({ ctx: txCtx, id: requestId });
   });
 }
@@ -958,6 +1003,13 @@ export async function markExecutionFailed({
       type: 'mission_failed',
       objectiveId: row.objective_id,
       now
+    });
+    await reconcileLinkedRunQueueEntry({
+      db: txCtx.db,
+      requestId,
+      state: 'blocked',
+      now,
+      blockedReason: error
     });
     return await getExecutionRequest({ ctx: txCtx, id: requestId });
   });
@@ -1034,6 +1086,13 @@ export async function clearExecutionRequests({
           summary: eventSummary
         });
       }
+      await reconcileLinkedRunQueueEntry({
+        db: txCtx.db,
+        requestId: row.id,
+        state: 'blocked',
+        now,
+        blockedReason: 'Execution request cleared before the agent attached.'
+      });
     }
     return { cleared: rows.length };
   });
@@ -1112,6 +1171,13 @@ export async function expireStaleExecutionRequests({
         ctx: txCtx,
         row,
         summary: message
+      });
+      await reconcileLinkedRunQueueEntry({
+        db: txCtx.db,
+        requestId: row.id,
+        state: 'blocked',
+        now,
+        blockedReason: message
       });
     }
 
@@ -1215,6 +1281,12 @@ export async function linkExecutionRequestToSession({
       row,
       revision,
       changedFields: ['launched_session_id']
+    });
+    await reconcileLinkedRunQueueEntry({
+      db: txCtx.db,
+      requestId: row.id,
+      state: 'running',
+      now
     });
     return await getExecutionRequest({ ctx: txCtx, id: row.id });
   });

@@ -39,6 +39,7 @@ import type {
   MyMissionsResponse,
   NotificationDto,
   ObjectiveAttachmentDto,
+  ObjectiveEffectiveLaunchConfigDto,
   PreviewScheduleBody,
   ProjectDto,
   ProjectListLifecycle,
@@ -1833,6 +1834,25 @@ export const useLaunchPreference = (projectId: string) =>
     queryFn: () => api.getLaunchPreference(projectId),
     staleTime: 60_000,
     enabled: Boolean(projectId)
+  });
+
+export const useObjectiveEffectiveLaunchConfig = ({
+  objectiveId,
+  agent,
+  executionTargetId,
+  enabled = true
+}: {
+  objectiveId: string;
+  agent: string;
+  executionTargetId?: string | null;
+  enabled?: boolean;
+}) =>
+  useQuery<ObjectiveEffectiveLaunchConfigDto>({
+    queryKey: keys.objectiveEffectiveLaunchConfig(objectiveId, agent, executionTargetId),
+    queryFn: () =>
+      api.getObjectiveEffectiveLaunchConfig({ id: objectiveId, agent, executionTargetId }),
+    enabled: enabled && Boolean(objectiveId) && Boolean(agent),
+    staleTime: 30_000
   });
 
 export const useProjectExecutionTarget = (projectId: string) =>

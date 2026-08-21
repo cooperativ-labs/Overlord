@@ -3,6 +3,11 @@ import { parse } from 'smol-toml';
 
 import type { BackendClient } from './backend-client.js';
 import { findEffectiveConfigPath } from './config.js';
+import {
+  fetchLaunchSettings,
+  launchSettingsPath,
+  resolveLaunchSettingsWorkspaceId
+} from './launch-settings.js';
 import { normalizeTerminalLaunchPlacement } from './terminal-launch-chord.js';
 import {
   EMPTY_TERMINAL_PROFILE,
@@ -49,12 +54,20 @@ export function readLegacyTerminalProfileFromToml(): TerminalProfile | null {
   };
 }
 
+/**
+ * Read this device's terminal profile from the workspace-scoped launch-settings
+ * route. `workspaceId` is the claimed request's / mission's workspace when the
+ * caller knows it; otherwise the acting user's active workspace is resolved.
+ * See `launch-settings.ts` for why the unscoped route cannot be used.
+ */
 export async function fetchTerminalProfile({
-  backend
+  backend,
+  workspaceId
 }: {
   backend: BackendClient;
+  workspaceId?: string | null;
 }): Promise<TerminalProfile & { executionTargetId: string; deviceLabel: string }> {
-  const response = await backend.get<LaunchSettingsResponse>('/api/launch-settings');
+  const response = await fetchLaunchSettings<LaunchSettingsResponse>({ backend, workspaceId });
   const profile = terminalProfileFromResponse(response);
   return {
     ...profile,
@@ -65,13 +78,16 @@ export async function fetchTerminalProfile({
 
 export async function saveTerminalProfile({
   backend,
-  profile
+  profile,
+  workspaceId
 }: {
   backend: BackendClient;
   profile: TerminalProfile;
+  workspaceId?: string | null;
 }): Promise<TerminalProfile & { executionTargetId: string; deviceLabel: string }> {
+  const resolved = await resolveLaunchSettingsWorkspaceId({ backend, workspaceId });
   const response = await backend.patch<LaunchSettingsResponse>({
-    path: '/api/launch-settings/terminal-profile',
+    path: launchSettingsPath(resolved, '/terminal-profile'),
     body: profile
   });
   const saved = terminalProfileFromResponse(response);

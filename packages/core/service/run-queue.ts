@@ -1,6 +1,7 @@
 import type { ProjectRunQueuesDto, RunQueueDto, RunQueueEntryDto } from '@overlord/contract';
 import type { DatabaseClient } from '@overlord/database';
 
+import { runQueueDiagnosticCode } from './dispatch-diagnostics.js';
 import { ServiceError } from './errors.js';
 import { newId, nowIso } from './util.js';
 import { enqueueWorkerJob } from './worker-jobs.js';
@@ -36,6 +37,17 @@ type EntryRow = {
   resource_key: string | null;
   mission_display_id: string;
   mission_title: string;
+  request_status: string | null;
+  request_last_error: string | null;
+  request_claimed_by_device_id: string | null;
+  request_claimed_by_execution_target_id: string | null;
+  request_execution_target_id: string | null;
+  request_created_at: string | null;
+  request_claimed_at: string | null;
+  request_launch_started_at: string | null;
+  request_launch_completed_at: string | null;
+  request_updated_at: string | null;
+  request_launched_session_id: string | null;
 };
 
 const truthy = (value: number | boolean) => value === true || value === 1;
@@ -193,6 +205,11 @@ export async function ensureMissionRunQueue(
 }
 
 function entryDto(row: EntryRow, rank: number): RunQueueEntryDto {
+  const diagnosticCode = runQueueDiagnosticCode({
+    entryState: row.state,
+    requestStatus: row.request_status,
+    launchedSessionId: row.request_launched_session_id
+  });
   return {
     id: row.id,
     queueId: row.queue_id,
@@ -208,7 +225,22 @@ function entryDto(row: EntryRow, rank: number): RunQueueEntryDto {
     assignedAgent: row.assigned_agent,
     resourceKey: row.resource_key?.trim() || null,
     enqueuedAt: row.enqueued_at,
-    executionRequestId: row.execution_request_id
+    executionRequestId: row.execution_request_id,
+    executionRequest: row.request_status
+      ? {
+          status: row.request_status,
+          lastError: row.request_last_error,
+          claimedByDeviceId: row.request_claimed_by_device_id,
+          claimedByExecutionTargetId: row.request_claimed_by_execution_target_id,
+          executionTargetId: row.request_execution_target_id,
+          createdAt: row.request_created_at!,
+          claimedAt: row.request_claimed_at,
+          launchStartedAt: row.request_launch_started_at,
+          launchCompletedAt: row.request_launch_completed_at,
+          updatedAt: row.request_updated_at!
+        }
+      : null,
+    diagnosticCode
   };
 }
 
@@ -222,7 +254,14 @@ export async function listProjectRunQueues(
     [projectId]
   );
   const rows = await db.all<EntryRow>(
-    `SELECT e.*, o.title objective_title, o.display_key objective_display_key, o.assigned_agent, o.resource_key, m.display_id mission_display_id, m.title mission_title FROM run_queue_entries e JOIN objectives o ON o.id = e.objective_id JOIN missions m ON m.id = e.mission_id WHERE e.project_id = ? AND e.deleted_at IS NULL ORDER BY e.position ASC`,
+    `SELECT e.*, o.title objective_title, o.display_key objective_display_key, o.assigned_agent, o.resource_key, m.display_id mission_display_id, m.title mission_title,
+      er.status request_status, er.last_error request_last_error, er.claimed_by_device_id request_claimed_by_device_id,
+      er.claimed_by_execution_target_id request_claimed_by_execution_target_id, er.execution_target_id request_execution_target_id,
+      er.created_at request_created_at, er.claimed_at request_claimed_at, er.launch_started_at request_launch_started_at,
+      er.launch_completed_at request_launch_completed_at, er.updated_at request_updated_at, er.launched_session_id request_launched_session_id
+      FROM run_queue_entries e JOIN objectives o ON o.id = e.objective_id JOIN missions m ON m.id = e.mission_id
+      LEFT JOIN execution_requests er ON er.id = e.execution_request_id AND er.deleted_at IS NULL
+      WHERE e.project_id = ? AND e.deleted_at IS NULL ORDER BY e.position ASC`,
     [projectId]
   );
   const missionIds = queues

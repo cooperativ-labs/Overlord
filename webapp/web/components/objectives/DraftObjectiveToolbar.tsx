@@ -40,8 +40,16 @@ export function DraftObjectiveToolbar({
 }: DraftObjectiveToolbarProps) {
   const update = useUpdateObjective();
   const resourcesQ = useProjectResources(objective.projectId);
-  const { catalog, agentConfigs, selection, setSelection, commitLaunchConfig, loaded } =
-    useObjectiveAgentSelection(objective);
+  const {
+    catalog,
+    agentConfigs,
+    selection,
+    setSelection,
+    commitLaunchConfig,
+    useInheritedLaunchConfig,
+    launchConfigSourceHint,
+    loaded
+  } = useObjectiveAgentSelection(objective);
 
   const isFuture = objective.state === 'future';
   const isLaunching = objective.state === 'launching';
@@ -100,6 +108,8 @@ export function DraftObjectiveToolbar({
         onChange={setSelection}
         agentConfigs={agentConfigs}
         onLaunchConfigCommit={commitLaunchConfig}
+        onUseInheritedDefault={useInheritedLaunchConfig}
+        launchConfigSourceHint={launchConfigSourceHint}
       />
 
       {isFuture ? (

@@ -37,6 +37,7 @@ import {
   clearExecutionRequests,
   createExecutionRequest,
   type ExecutionRequestSummary,
+  expireStaleExecutionRequests,
   parseMetadataJson
 } from '../../packages/core/service/execution-requests.ts';
 import {
@@ -72,6 +73,7 @@ import type {
   LaunchPreferenceDto,
   LaunchSessionDefaultsDto,
   LaunchSettingsDto,
+  ObjectiveEffectiveLaunchConfigDto,
   ObjectiveLaunchCommandDto,
   ObjectivePromptDto,
   TerminalProfileDto,
@@ -1087,7 +1089,29 @@ export async function launchObjective(
   objectiveRef: string,
   body: LaunchObjectiveBody
 ): Promise<ExecutionRequestDto> {
-  return requireDatabaseClient().transaction(async tx => {
+  // Direct launches are also a stale-request recovery boundary. Do this before
+  // opening the launch transaction, then re-read inside it below, so a Run click
+  // cannot keep returning a request whose runner disappeared mid-launch.
+  const db = requireDatabaseClient();
+  const { id: preflightObjectiveId } = await resolveObjectiveIdForRest({ ref: objectiveRef, db });
+  const preflightObjective = await db.get<{ workspace_id: string }>(
+    'SELECT workspace_id FROM objectives WHERE id = ? AND deleted_at IS NULL',
+    [preflightObjectiveId]
+  );
+  if (!preflightObjective) throw new ApiError(404, 'Objective not found');
+  const preflightProfileId = await resolveActiveProfileId(db);
+  const preflightWorkspaceUserId = preflightProfileId
+    ? await findActiveMembershipId(preflightObjective.workspace_id, preflightProfileId, db)
+    : null;
+  if (preflightWorkspaceUserId) {
+    const preflightCtx = await buildWebappServiceContextForWorkspace(
+      preflightObjective.workspace_id,
+      db,
+      preflightWorkspaceUserId
+    );
+    await expireStaleExecutionRequests({ ctx: preflightCtx });
+  }
+  return db.transaction(async tx => {
     const agentKey = (body.agent ?? '').trim();
     if (!agentKey) throw new ApiError(400, 'agent is required');
 
@@ -1257,9 +1281,9 @@ export async function launchObjective(
     const activeRequestRow = await tx.get<ExecutionRequestRow>(
       `SELECT ${EXECUTION_REQUEST_COLUMNS} FROM execution_requests
           WHERE objective_id = ? AND deleted_at IS NULL
-            AND status IN (${ACTIVE_EXECUTION_REQUEST_STATUSES.map(() => '?').join(', ')})
+            AND status IN (${[...ACTIVE_EXECUTION_REQUEST_STATUSES, 'launched'].map(() => '?').join(', ')})
           ORDER BY created_at DESC LIMIT 1`,
-      [objective.id, ...ACTIVE_EXECUTION_REQUEST_STATUSES]
+      [objective.id, ...ACTIVE_EXECUTION_REQUEST_STATUSES, 'launched']
     );
     if (activeRequestRow) {
       return toExecutionRequestDto(activeRequestRow);
@@ -1381,6 +1405,77 @@ export type ObjectiveLaunchCommandQuery = {
   reasoningEffort?: string | null;
   executionTargetId?: string | null;
 };
+
+export type ObjectiveEffectiveLaunchConfigQuery = {
+  agent: string;
+  executionTargetId?: string | null;
+};
+
+/** Return the exact read-only launch config direct and queued launches snapshot. */
+export async function getObjectiveEffectiveLaunchConfig(
+  objectiveRef: string,
+  query: ObjectiveEffectiveLaunchConfigQuery
+): Promise<ObjectiveEffectiveLaunchConfigDto> {
+  const agentKey = (query.agent ?? '').trim();
+  if (!agentKey) throw new ApiError(400, 'agent is required');
+
+  const db = requireDatabaseClient();
+  const { id: objectiveId } = await resolveObjectiveIdForRest({ ref: objectiveRef, db });
+  const row = await db.get<{
+    id: string;
+    mission_id: string;
+    project_id: string;
+    launch_config_json: string | null;
+    resource_key: string | null;
+    workspace_id: string;
+  }>(
+    `SELECT o.id, o.mission_id, o.project_id, o.launch_config_json, o.resource_key, o.workspace_id
+       FROM objectives o WHERE o.id = ? AND o.deleted_at IS NULL`,
+    [objectiveId]
+  );
+  if (!row) throw new ApiError(404, 'Objective not found');
+
+  const profileId = await resolveActiveProfileId(db);
+  const workspaceUserId = profileId
+    ? await findActiveMembershipId(row.workspace_id, profileId, db)
+    : null;
+  if (
+    !workspaceUserId ||
+    !(await actorCan(PERMISSIONS.OBJECTIVE_READ, {
+      workspaceId: row.workspace_id,
+      workspaceUserId
+    }))
+  ) {
+    throw new ApiError(404, 'Objective not found');
+  }
+
+  const serviceCtx = await buildWebappServiceContextForWorkspace(
+    row.workspace_id,
+    db,
+    workspaceUserId
+  );
+  const launchTarget = await resolveLaunchExecutionTarget({
+    ctx: serviceCtx,
+    projectId: row.project_id,
+    executionTargetId: query.executionTargetId
+  });
+  const resolved = await resolveLaunchConfig({
+    ctx: serviceCtx,
+    objectiveLaunchConfigJson: row.launch_config_json,
+    executionTargetId: launchTarget.executionTargetId,
+    agentKey,
+    userConfigs: launchTarget.agentConfigs,
+    projectId: row.project_id,
+    objectiveResourceKey: row.resource_key
+  });
+  return {
+    objectiveId: row.id,
+    missionId: row.mission_id,
+    executionTargetId: launchTarget.executionTargetId,
+    launchConfig: resolved.config,
+    source: resolved.source
+  };
+}
 
 /**
  * Build a paste-ready `ovld launch` command for the objective using the caller's

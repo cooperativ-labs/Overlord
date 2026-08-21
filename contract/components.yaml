@@ -4,7 +4,7 @@
 # IMPORTANT: Update this file and CONTRACT.md together when adding components or surfaces.
 # Increment contractVersion when any stable interface changes.
 
-contractVersion: '108'
+contractVersion: '110'
 
 components:
   protocol:
@@ -171,9 +171,10 @@ components:
     referenceSection: 'REST API Boundary'
     owns:
       - 'URL paths and HTTP method contracts'
-      - 'project Run Queue REST family: project-scoped reads and queue/entry create, update, pause, move, reorder, and delete operations; queue-definition order is rewritten only through PATCH /api/projects/:id/run-queues/order with project:update, while entry order uses execution_request:create; queue entries are target-neutral, ObjectiveDto.queueEntry projects live membership, and compatibility autoAdvance is derived from membership'
+      - 'project Run Queue REST family: project-scoped reads and queue/entry create, update, pause, move, reorder, and delete operations; queue-definition order is rewritten only through PATCH /api/projects/:id/run-queues/order with project:update, while entry order uses execution_request:create; queue entries are target-neutral, their existing read projection additively includes safe execution-request status/error/claim/target/timestamp diagnostics plus bounded impossible-pair codes, ObjectiveDto.queueEntry projects live membership, and compatibility autoAdvance is derived from membership'
       - 'project resource-source launch defaults via PATCH /api/projects/:id/resources/:resourceId/sources/:sourceId, preserving the materialization fields in descriptor_json while replacing per-agent launchDefaults'
       - 'request/response DTO shapes (camelCase, derived from logical schema)'
+      - 'read-only effective launch-config projection: GET /api/objectives/:id/effective-launch-config accepts agent and optional executionTargetId, derives the target from the objective project when omitted, authorizes objective:read in the objective workspace, and returns the shared resolver’s normalized config, source (objective|resource_source|user_target|workspace|none), and resolved target id; clients never duplicate source precedence'
       - 'creation-provenance projection: MissionDto/ObjectiveDto carry non-optional createdByKind (human fallback in the mapper), createdByAgent, and createdByWorkspaceUserId; MissionDetailDto alone carries createdFrom (sessionId, missionId, missionDisplayId, agentIdentifier, or null) via a LEFT JOIN that tolerates a missing session and is never paid per board row'
       - 'ObjectiveDto additively carries displayKey and computed displayId ({mission.displayId}.{displayKey}); /api/objectives/:id accepts an objective UUID or a full display id (UUIDs globally unique, display ids active-workspace scoped)'
 
@@ -243,7 +244,7 @@ components:
       - 'self-service account deletion trigger (user.deleteUser), delegating the cascade to a backend-supplied callback'
       - 'sign-up/sign-in email verification via an optional backend-supplied sendVerificationEmail callback (Resend-backed, RESEND_API_KEY, notifications.cooperativ.io); disabled by default when unset'
       - 'hosted MCP OAuth consent and token issuance: browser approval creates scoped mission_lifecycle USER_TOKEN access tokens; authorization codes are short-lived, single-use, PKCE-protected, and resource-bound; refresh tokens are not issued through contract version 2'
-      - 'self-issued USER_TOKEN consent: a token an authenticated user creates for themselves (CLI login, settings) takes no workspace or organization selection and consents to all current and future workspaces in that caller''s organization; its issuance workspace is audit attribution only, and runtime access remains consent intersected with live membership and per-workspace RBAC. Token ownership resolves from the authenticated profile, never from the instance''s oldest account'
+      - "self-issued USER_TOKEN consent: a token an authenticated user creates for themselves (CLI login, settings) takes no workspace or organization selection and consents to all current and future workspaces in that caller's organization; its issuance workspace is audit attribution only, and runtime access remains consent intersected with live membership and per-workspace RBAC. Token ownership resolves from the authenticated profile, never from the instance's oldest account"
     dependsOn:
       - database
     interactionSurfaces:

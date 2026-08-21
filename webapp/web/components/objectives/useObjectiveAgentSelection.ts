@@ -5,6 +5,7 @@ import {
   useAgentCatalog,
   useLaunchPreference,
   useLaunchSettings,
+  useObjectiveEffectiveLaunchConfig,
   useProject,
   useUpdateLaunchPreference,
   useUpdateObjective
@@ -54,10 +55,6 @@ export function useObjectiveAgentSelection(objective: SelectableObjective) {
 
   const catalog = catalogQ.data ?? null;
   const preference = preferenceQ.data ?? null;
-  const agentConfigs = useMemo(() => {
-    const inherited = settingsQ.data?.agentConfigs ?? {};
-    return { ...inherited, ...(objective.launchConfigOverrides?.['*'] ?? {}) };
-  }, [objective.launchConfigOverrides, settingsQ.data?.agentConfigs]);
   const loaded = Boolean(catalog) && !preferenceQ.isLoading;
 
   const selection = useMemo<AgentModelSelection>(() => {
@@ -81,6 +78,37 @@ export function useObjectiveAgentSelection(objective: SelectableObjective) {
       reasoningEffort: null
     };
   }, [catalog, objective.assignedAgent, objective.model, objective.reasoningEffort, preference]);
+
+  const effectiveConfigQ = useObjectiveEffectiveLaunchConfig({
+    objectiveId: objective.id,
+    agent: selection.agent,
+    // Ghost objectives have no persisted launch config to resolve yet.
+    enabled: Boolean(objective.id)
+  });
+  const agentConfigs = useMemo(() => {
+    const inherited = settingsQ.data?.agentConfigs ?? {};
+    const configs = { ...inherited, ...(objective.launchConfigOverrides?.['*'] ?? {}) };
+    if (effectiveConfigQ.data) configs[selection.agent] = effectiveConfigQ.data.launchConfig;
+    return configs;
+  }, [
+    effectiveConfigQ.data,
+    objective.launchConfigOverrides,
+    selection.agent,
+    settingsQ.data?.agentConfigs
+  ]);
+
+  const launchConfigSourceHint = useMemo(() => {
+    const source = effectiveConfigQ.data?.source;
+    if (!source) return 'Loading effective launch configuration…';
+    const labels = {
+      objective: 'Objective override',
+      resource_source: 'Project resource default',
+      user_target: 'Your selected target default',
+      workspace: 'Workspace default',
+      none: 'No configured default'
+    } as const;
+    return `Using ${labels[source]}. Clearing creates an empty objective override.`;
+  }, [effectiveConfigQ.data?.source]);
 
   const setSelection = useCallback(
     // `targetId` defaults to the bound objective but can be overridden — the
@@ -121,5 +149,26 @@ export function useObjectiveAgentSelection(objective: SelectableObjective) {
     [objective.id, updateObjective]
   );
 
-  return { catalog, agentConfigs, preference, selection, setSelection, commitLaunchConfig, loaded };
+  const useInheritedLaunchConfig = useCallback(
+    (agentKey: string, targetId: string = objective.id) => {
+      if (!targetId) return;
+      updateObjective.mutate({
+        id: targetId,
+        body: { launchConfigAgent: agentKey, launchConfigOverride: null }
+      });
+    },
+    [objective.id, updateObjective]
+  );
+
+  return {
+    catalog,
+    agentConfigs,
+    preference,
+    selection,
+    setSelection,
+    commitLaunchConfig,
+    useInheritedLaunchConfig,
+    launchConfigSourceHint,
+    loaded
+  };
 }

@@ -53,6 +53,18 @@ export const keys = {
   /** Inbound instructions queued from Overlord into a mission's live session. */
   missionAgentSessionInputs: (id: string) => ['mission', id, 'agent-session-inputs'] as const,
   objectiveAttachments: (objectiveId: string) => ['objective', objectiveId, 'attachments'] as const,
+  objectiveEffectiveLaunchConfig: (
+    objectiveId: string,
+    agent: string,
+    executionTargetId?: string | null
+  ) =>
+    [
+      'objective',
+      objectiveId,
+      'effective-launch-config',
+      agent,
+      executionTargetId ?? 'selected'
+    ] as const,
   agentCatalog: (workspaceId?: string | null) =>
     workspaceId ? (['agent-catalog', workspaceId] as const) : (['agent-catalog'] as const),
   runnerStatus: ['runner', 'status'] as const,

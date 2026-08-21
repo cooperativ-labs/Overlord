@@ -74,6 +74,7 @@ import type {
   NotificationPreferencesDto,
   ObjectiveAttachmentDto,
   ObjectiveDto,
+  ObjectiveEffectiveLaunchConfigDto,
   ObjectiveLaunchCommandDto,
   ObjectivePromptDto,
   OrganizationAdminDto,
@@ -677,6 +678,22 @@ export const api = {
     return request<ObjectiveLaunchCommandDto>(
       'GET',
       `/api/objectives/${id}/launch-command?${params.toString()}`
+    );
+  },
+  getObjectiveEffectiveLaunchConfig: ({
+    id,
+    agent,
+    executionTargetId
+  }: {
+    id: string;
+    agent: string;
+    executionTargetId?: string | null;
+  }) => {
+    const params = new URLSearchParams({ agent });
+    if (executionTargetId) params.set('executionTargetId', executionTargetId);
+    return request<ObjectiveEffectiveLaunchConfigDto>(
+      'GET',
+      `/api/objectives/${id}/effective-launch-config?${params.toString()}`
     );
   },
 

@@ -71659,6 +71659,7 @@ function isLatchDiscoveryCacheFresh({
   entry,
   resolvePath = resolveLatchExecutablePath
 }) {
+  if (entry.supportedProtocolVersion !== SUPPORTED_LATCH_PROTOCOL_VERSION) return false;
   const { result } = entry;
   if (result.state === "not_installed") {
     return resolvePath(result.executable) === null;
@@ -71670,15 +71671,15 @@ function isLatchDiscoveryCacheFresh({
   return mtime === entry.binaryMtimeMs;
 }
 function readLatchDiscoveryCacheFile(filePath) {
-  if (!(0, import_node_fs10.existsSync)(filePath)) return { version: 1, entries: {} };
+  if (!(0, import_node_fs10.existsSync)(filePath)) return { version: 2, entries: {} };
   try {
     const parsed = JSON.parse((0, import_node_fs10.readFileSync)(filePath, "utf8"));
-    if (parsed.version !== 1 || !parsed.entries || typeof parsed.entries !== "object") {
-      return { version: 1, entries: {} };
+    if (parsed.version !== 2 || !parsed.entries || typeof parsed.entries !== "object") {
+      return { version: 2, entries: {} };
     }
-    return { version: 1, entries: parsed.entries };
+    return { version: 2, entries: parsed.entries };
   } catch {
-    return { version: 1, entries: {} };
+    return { version: 2, entries: {} };
   }
 }
 function writeLatchDiscoveryCacheFile({
@@ -71709,6 +71710,7 @@ function discoverLatchForExecutionTarget({
   const binaryMtimeMs = result.state === "not_installed" ? null : readBinaryMtimeMs(result.resolvedPath);
   cache8.entries[key] = {
     result,
+    supportedProtocolVersion: SUPPORTED_LATCH_PROTOCOL_VERSION,
     binaryMtimeMs,
     cachedAt: result.checkedAt
   };
@@ -132995,7 +132997,7 @@ function planRunQueueDispatch(input) {
     const entries = input.entries.filter((entry) => entry.queueId === queue.id);
     if (entries.some((entry) => entry.state === "dispatched" || entry.state === "running"))
       continue;
-    for (const entry of entries.filter((entry2) => entry2.state === "waiting" || entry2.state === "blocked").sort((a5, b5) => a5.position - b5.position || a5.id.localeCompare(b5.id))) {
+    for (const entry of entries.filter((entry2) => entry2.state === "waiting").sort((a5, b5) => a5.position - b5.position || a5.id.localeCompare(b5.id))) {
       const objective = input.objectives[entry.objectiveId];
       if (!objective || objective.deleted || objective.state === "complete") {
         actions.push({ action: "drop", entryId: entry.id, reason: "objective_gone" });
@@ -133026,7 +133028,7 @@ function planRunQueueDispatch(input) {
         entryId: entry.id,
         objectiveId: entry.objectiveId,
         promoteFutureToDraft: objective.state === "future",
-        idempotencyKey: `run_queue:${entry.id}`
+        idempotencyKey: `run_queue:${entry.id}:attempt:${entry.attemptCount + 1}`
       });
       break;
     }
@@ -135935,6 +135937,55 @@ var OBJECTIVE_COMPLETED_AT_ASSIGNMENT = "completed_at = ?";
 // ../packages/core/service/missions.ts
 init_projects();
 
+// ../packages/core/service/agent-session/pure/redact.ts
+var SECRET_PATTERNS = [
+  { name: "overlord-user-token", pattern: /out_[A-Za-z0-9_-]{8,}/g },
+  { name: "overlord-channel-token", pattern: /osc_[A-Za-z0-9_-]{8,}/g },
+  { name: "anthropic-key", pattern: /sk-ant-[A-Za-z0-9_-]{16,}/g },
+  { name: "openai-key", pattern: /sk-[A-Za-z0-9]{20,}/g },
+  { name: "github-token", pattern: /gh[pousr]_[A-Za-z0-9]{16,}/g },
+  { name: "slack-token", pattern: /xox[abprs]-[A-Za-z0-9-]{10,}/g },
+  { name: "aws-access-key", pattern: /A(?:KIA|SIA)[0-9A-Z]{16}/g },
+  { name: "jwt", pattern: /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g },
+  { name: "bearer-header", pattern: /(?<=[Bb]earer\s)[A-Za-z0-9._~+/-]{12,}=*/g },
+  // `SOMETHING_TOKEN=value`, `--password value`, `api-key: value`. The key half is kept —
+  // knowing a command sets DATABASE_PASSWORD is useful; knowing its value is not.
+  {
+    name: "assigned-secret",
+    pattern: /((?:secret|token|passwd|password|api[_-]?key|access[_-]?key|private[_-]?key|credential)[a-z0-9_-]*\s*[=:]\s*)("[^"]*"|'[^']*'|\S+)/gi
+  }
+];
+function redactSecrets2(value) {
+  let text = value;
+  const fired = [];
+  for (const { name, pattern } of SECRET_PATTERNS) {
+    pattern.lastIndex = 0;
+    if (!pattern.test(text)) continue;
+    pattern.lastIndex = 0;
+    fired.push(name);
+    text = text.replace(pattern, (...args) => {
+      const groups = args.slice(1, -2).filter((arg) => typeof arg === "string");
+      return groups.length >= 2 ? `${groups[0]}[redacted]` : "[redacted]";
+    });
+  }
+  return { text, redactedPatterns: fired };
+}
+
+// ../packages/core/service/dispatch-diagnostics.ts
+function sanitizeDispatchFailure(error53, limit = 400) {
+  const message2 = (error53 instanceof Error ? error53.message : String(error53)).trim();
+  if (!message2) return null;
+  return redactSecrets2(message2).text.slice(0, limit).trim() || null;
+}
+function runQueueDiagnosticCode(input) {
+  const terminal = /* @__PURE__ */ new Set(["failed", "cleared", "cancelled", "expired"]);
+  if (input.entryState === "dispatched" && input.requestStatus && terminal.has(input.requestStatus))
+    return "terminal_request_dispatched";
+  if (input.entryState === "running" && (!input.requestStatus || terminal.has(input.requestStatus) && !input.launchedSessionId))
+    return "running_without_live_request";
+  return null;
+}
+
 // ../packages/core/service/run-queue.ts
 init_errors4();
 init_util3();
@@ -136177,6 +136228,11 @@ async function ensureMissionRunQueue(db, projectId, missionId, actorId = null) {
   };
 }
 function entryDto(row, rank) {
+  const diagnosticCode = runQueueDiagnosticCode({
+    entryState: row.state,
+    requestStatus: row.request_status,
+    launchedSessionId: row.request_launched_session_id
+  });
   return {
     id: row.id,
     queueId: row.queue_id,
@@ -136192,7 +136248,20 @@ function entryDto(row, rank) {
     assignedAgent: row.assigned_agent,
     resourceKey: row.resource_key?.trim() || null,
     enqueuedAt: row.enqueued_at,
-    executionRequestId: row.execution_request_id
+    executionRequestId: row.execution_request_id,
+    executionRequest: row.request_status ? {
+      status: row.request_status,
+      lastError: row.request_last_error,
+      claimedByDeviceId: row.request_claimed_by_device_id,
+      claimedByExecutionTargetId: row.request_claimed_by_execution_target_id,
+      executionTargetId: row.request_execution_target_id,
+      createdAt: row.request_created_at,
+      claimedAt: row.request_claimed_at,
+      launchStartedAt: row.request_launch_started_at,
+      launchCompletedAt: row.request_launch_completed_at,
+      updatedAt: row.request_updated_at
+    } : null,
+    diagnosticCode
   };
 }
 async function listProjectRunQueues(db, projectId) {
@@ -136202,7 +136271,14 @@ async function listProjectRunQueues(db, projectId) {
     [projectId]
   );
   const rows = await db.all(
-    `SELECT e.*, o.title objective_title, o.display_key objective_display_key, o.assigned_agent, o.resource_key, m.display_id mission_display_id, m.title mission_title FROM run_queue_entries e JOIN objectives o ON o.id = e.objective_id JOIN missions m ON m.id = e.mission_id WHERE e.project_id = ? AND e.deleted_at IS NULL ORDER BY e.position ASC`,
+    `SELECT e.*, o.title objective_title, o.display_key objective_display_key, o.assigned_agent, o.resource_key, m.display_id mission_display_id, m.title mission_title,
+      er.status request_status, er.last_error request_last_error, er.claimed_by_device_id request_claimed_by_device_id,
+      er.claimed_by_execution_target_id request_claimed_by_execution_target_id, er.execution_target_id request_execution_target_id,
+      er.created_at request_created_at, er.claimed_at request_claimed_at, er.launch_started_at request_launch_started_at,
+      er.launch_completed_at request_launch_completed_at, er.updated_at request_updated_at, er.launched_session_id request_launched_session_id
+      FROM run_queue_entries e JOIN objectives o ON o.id = e.objective_id JOIN missions m ON m.id = e.mission_id
+      LEFT JOIN execution_requests er ON er.id = e.execution_request_id AND er.deleted_at IS NULL
+      WHERE e.project_id = ? AND e.deleted_at IS NULL ORDER BY e.position ASC`,
     [projectId]
   );
   const missionIds = queues.map((queue) => queue.mission_id).filter((value) => Boolean(value));
@@ -137959,6 +138035,30 @@ var LAUNCHABLE_OBJECTIVE_STATES2 = ["draft", "submitted", "launching"];
 var CLAIM_TTL_MS = 15 * 60 * 1e3;
 var LAUNCH_ATTACH_TTL_MS = 15 * 60 * 1e3;
 var LAUNCH_START_TTL_MS = 10 * 60 * 1e3;
+async function reconcileLinkedRunQueueEntry({
+  db,
+  requestId,
+  state: state2,
+  now: now2,
+  blockedReason
+}) {
+  await db.run(
+    `UPDATE run_queue_entries
+        SET state = ?,
+            blocked_reason = ?,
+            updated_at = ?,
+            revision = revision + 1
+      WHERE execution_request_id = ?
+        AND deleted_at IS NULL
+        AND state IN ('dispatched', 'running')`,
+    [
+      state2,
+      state2 === "blocked" ? blockedReason?.slice(0, 400) ?? "Execution request failed." : null,
+      now2,
+      requestId
+    ]
+  );
+}
 function asRecord(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
@@ -138563,6 +138663,12 @@ async function markExecutionLaunched({
         }
       } : {}
     });
+    await reconcileLinkedRunQueueEntry({
+      db: txCtx.db,
+      requestId,
+      state: "running",
+      now: now2
+    });
     return await getExecutionRequest({ ctx: txCtx, id: requestId });
   });
 }
@@ -138613,6 +138719,13 @@ async function markExecutionFailed({
       type: "mission_failed",
       objectiveId: row.objective_id,
       now: now2
+    });
+    await reconcileLinkedRunQueueEntry({
+      db: txCtx.db,
+      requestId,
+      state: "blocked",
+      now: now2,
+      blockedReason: error53
     });
     return await getExecutionRequest({ ctx: txCtx, id: requestId });
   });
@@ -138674,6 +138787,13 @@ async function clearExecutionRequests({
           summary: eventSummary
         });
       }
+      await reconcileLinkedRunQueueEntry({
+        db: txCtx.db,
+        requestId: row.id,
+        state: "blocked",
+        now: now2,
+        blockedReason: "Execution request cleared before the agent attached."
+      });
     }
     return { cleared: rows.length };
   });
@@ -138740,6 +138860,13 @@ async function expireStaleExecutionRequests({
         ctx: txCtx,
         row,
         summary: message2
+      });
+      await reconcileLinkedRunQueueEntry({
+        db: txCtx.db,
+        requestId: row.id,
+        state: "blocked",
+        now: now2,
+        blockedReason: message2
       });
     }
     return { expired: rows.length };
@@ -138824,6 +138951,12 @@ async function linkExecutionRequestToSession({
       row,
       revision,
       changedFields: ["launched_session_id"]
+    });
+    await reconcileLinkedRunQueueEntry({
+      db: txCtx.db,
+      requestId: row.id,
+      state: "running",
+      now: now2
     });
     return await getExecutionRequest({ ctx: txCtx, id: row.id });
   });
@@ -142480,7 +142613,24 @@ async function dequeueObjective({
   return { clearedRequests: cleared, endedSessions: openSessions.length };
 }
 async function launchObjective(objectiveRef, body) {
-  return requireDatabaseClient().transaction(async (tx) => {
+  const db = requireDatabaseClient();
+  const { id: preflightObjectiveId } = await resolveObjectiveIdForRest({ ref: objectiveRef, db });
+  const preflightObjective = await db.get(
+    "SELECT workspace_id FROM objectives WHERE id = ? AND deleted_at IS NULL",
+    [preflightObjectiveId]
+  );
+  if (!preflightObjective) throw new ApiError(404, "Objective not found");
+  const preflightProfileId = await resolveActiveProfileId(db);
+  const preflightWorkspaceUserId = preflightProfileId ? await findActiveMembershipId(preflightObjective.workspace_id, preflightProfileId, db) : null;
+  if (preflightWorkspaceUserId) {
+    const preflightCtx = await buildWebappServiceContextForWorkspace(
+      preflightObjective.workspace_id,
+      db,
+      preflightWorkspaceUserId
+    );
+    await expireStaleExecutionRequests({ ctx: preflightCtx });
+  }
+  return db.transaction(async (tx) => {
     const agentKey = (body.agent ?? "").trim();
     if (!agentKey) throw new ApiError(400, "agent is required");
     const { id: objectiveId } = await resolveObjectiveIdForRest({ ref: objectiveRef, db: tx });
@@ -142624,9 +142774,9 @@ async function launchObjective(objectiveRef, body) {
     const activeRequestRow = await tx.get(
       `SELECT ${EXECUTION_REQUEST_COLUMNS} FROM execution_requests
           WHERE objective_id = ? AND deleted_at IS NULL
-            AND status IN (${ACTIVE_EXECUTION_REQUEST_STATUSES.map(() => "?").join(", ")})
+            AND status IN (${[...ACTIVE_EXECUTION_REQUEST_STATUSES, "launched"].map(() => "?").join(", ")})
           ORDER BY created_at DESC LIMIT 1`,
-      [objective.id, ...ACTIVE_EXECUTION_REQUEST_STATUSES]
+      [objective.id, ...ACTIVE_EXECUTION_REQUEST_STATUSES, "launched"]
     );
     if (activeRequestRow) {
       return toExecutionRequestDto(activeRequestRow);
@@ -142707,6 +142857,52 @@ async function getObjectivePrompt(objectiveRef) {
     `    ovld protocol attach --mission-id ${row.display_id} --objective-id ${formatObjectiveDisplayId({ missionDisplayId: row.display_id, displayKey: row.display_key })}`
   ].join("\n");
   return { objectiveId: row.id, missionId: row.mission_id, prompt };
+}
+async function getObjectiveEffectiveLaunchConfig(objectiveRef, query) {
+  const agentKey = (query.agent ?? "").trim();
+  if (!agentKey) throw new ApiError(400, "agent is required");
+  const db = requireDatabaseClient();
+  const { id: objectiveId } = await resolveObjectiveIdForRest({ ref: objectiveRef, db });
+  const row = await db.get(
+    `SELECT o.id, o.mission_id, o.project_id, o.launch_config_json, o.resource_key, o.workspace_id
+       FROM objectives o WHERE o.id = ? AND o.deleted_at IS NULL`,
+    [objectiveId]
+  );
+  if (!row) throw new ApiError(404, "Objective not found");
+  const profileId = await resolveActiveProfileId(db);
+  const workspaceUserId = profileId ? await findActiveMembershipId(row.workspace_id, profileId, db) : null;
+  if (!workspaceUserId || !await actorCan(PERMISSIONS.OBJECTIVE_READ, {
+    workspaceId: row.workspace_id,
+    workspaceUserId
+  })) {
+    throw new ApiError(404, "Objective not found");
+  }
+  const serviceCtx = await buildWebappServiceContextForWorkspace(
+    row.workspace_id,
+    db,
+    workspaceUserId
+  );
+  const launchTarget = await resolveLaunchExecutionTarget({
+    ctx: serviceCtx,
+    projectId: row.project_id,
+    executionTargetId: query.executionTargetId
+  });
+  const resolved = await resolveLaunchConfig({
+    ctx: serviceCtx,
+    objectiveLaunchConfigJson: row.launch_config_json,
+    executionTargetId: launchTarget.executionTargetId,
+    agentKey,
+    userConfigs: launchTarget.agentConfigs,
+    projectId: row.project_id,
+    objectiveResourceKey: row.resource_key
+  });
+  return {
+    objectiveId: row.id,
+    missionId: row.mission_id,
+    executionTargetId: launchTarget.executionTargetId,
+    launchConfig: resolved.config,
+    source: resolved.source
+  };
 }
 async function getObjectiveLaunchCommand(objectiveRef, query) {
   const agentKey = (query.agent ?? "").trim();
@@ -167607,9 +167803,11 @@ async function dispatchProjectRunQueues(db, projectId) {
         );
       });
     } catch (error53) {
+      const detail = sanitizeDispatchFailure(error53);
+      console.error("[run-queue-dispatcher] dispatch failed", { entryId: entry.id, error: error53 });
       await db.run(
-        "UPDATE run_queue_entries SET state = 'blocked', blocked_reason = 'dispatch_failed', attempt_count = attempt_count + 1, updated_at = ?, revision = revision + 1 WHERE id = ?",
-        [now2, entry.id]
+        "UPDATE run_queue_entries SET state = 'blocked', blocked_reason = ?, attempt_count = attempt_count + 1, updated_at = ?, revision = revision + 1 WHERE id = ?",
+        [detail ? `dispatch_failed: ${detail.slice(0, 400)}` : "dispatch_failed", now2, entry.id]
       );
     }
   }
@@ -170373,6 +170571,15 @@ app.get(
       agent: typeof req.query.agent === "string" ? req.query.agent : "",
       model: typeof req.query.model === "string" ? req.query.model : null,
       reasoningEffort: typeof req.query.reasoningEffort === "string" ? req.query.reasoningEffort : null,
+      executionTargetId: typeof req.query.executionTargetId === "string" ? req.query.executionTargetId : null
+    })
+  )
+);
+app.get(
+  "/api/objectives/:id/effective-launch-config",
+  handle3(
+    (req) => getObjectiveEffectiveLaunchConfig(req.params.id, {
+      agent: typeof req.query.agent === "string" ? req.query.agent : "",
       executionTargetId: typeof req.query.executionTargetId === "string" ? req.query.executionTargetId : null
     })
   )

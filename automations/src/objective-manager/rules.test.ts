@@ -479,14 +479,81 @@ describe('objective lifecycle rules', () => {
         entryId: 'next',
         objectiveId: 'next-objective',
         promoteFutureToDraft: false,
-        idempotencyKey: 'run_queue:next'
+        idempotencyKey: 'run_queue:next:attempt:1'
       },
       {
         action: 'dispatch',
         entryId: 'parallel',
         objectiveId: 'future-objective',
         promoteFutureToDraft: true,
-        idempotencyKey: 'run_queue:parallel'
+        idempotencyKey: 'run_queue:parallel:attempt:1'
+      }
+    ]);
+  });
+
+  it('does not redispatch terminally held entries and scopes retries to a fresh attempt', () => {
+    const held = planRunQueueDispatch({
+      queues: [{ id: 'queue', paused: false }],
+      entries: [
+        {
+          id: 'terminal',
+          queueId: 'queue',
+          objectiveId: 'failed-objective',
+          position: 1,
+          state: 'blocked',
+          attemptCount: 1
+        },
+        {
+          id: 'later',
+          queueId: 'queue',
+          objectiveId: 'later-objective',
+          position: 2,
+          state: 'waiting',
+          attemptCount: 0
+        }
+      ],
+      objectives: {
+        'failed-objective': {
+          id: 'failed-objective',
+          state: 'launching',
+          instructionText: 'failed'
+        },
+        'later-objective': { id: 'later-objective', state: 'draft', instructionText: 'continue' }
+      }
+    });
+    assert.deepEqual(held, [
+      {
+        action: 'dispatch',
+        entryId: 'later',
+        objectiveId: 'later-objective',
+        promoteFutureToDraft: false,
+        idempotencyKey: 'run_queue:later:attempt:1'
+      }
+    ]);
+
+    const retry = planRunQueueDispatch({
+      queues: [{ id: 'queue', paused: false }],
+      entries: [
+        {
+          id: 'terminal',
+          queueId: 'queue',
+          objectiveId: 'failed-objective',
+          position: 1,
+          state: 'waiting',
+          attemptCount: 1
+        }
+      ],
+      objectives: {
+        'failed-objective': { id: 'failed-objective', state: 'draft', instructionText: 'retry' }
+      }
+    });
+    assert.deepEqual(retry, [
+      {
+        action: 'dispatch',
+        entryId: 'terminal',
+        objectiveId: 'failed-objective',
+        promoteFutureToDraft: false,
+        idempotencyKey: 'run_queue:terminal:attempt:2'
       }
     ]);
   });

@@ -158,7 +158,10 @@ export function planRunQueueDispatch(input: {
     const entries = input.entries.filter(entry => entry.queueId === queue.id);
     if (entries.some(entry => entry.state === 'dispatched' || entry.state === 'running')) continue;
     for (const entry of entries
-      .filter(entry => entry.state === 'waiting' || entry.state === 'blocked')
+      // A blocked entry is a terminal/actionable hold, not an implicit retry.
+      // Queue mutation is the retry boundary: it resets the entry to waiting
+      // and yields a new attempt-scoped idempotency key below.
+      .filter(entry => entry.state === 'waiting')
       .sort((a, b) => a.position - b.position || a.id.localeCompare(b.id))) {
       const objective = input.objectives[entry.objectiveId];
       if (!objective || objective.deleted || objective.state === 'complete') {
@@ -190,7 +193,7 @@ export function planRunQueueDispatch(input: {
         entryId: entry.id,
         objectiveId: entry.objectiveId,
         promoteFutureToDraft: objective.state === 'future',
-        idempotencyKey: `run_queue:${entry.id}`
+        idempotencyKey: `run_queue:${entry.id}:attempt:${entry.attemptCount + 1}`
       });
       break;
     }

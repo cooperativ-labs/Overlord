@@ -129,6 +129,28 @@ function QueueRow({
             Held: {entry.blockedReason}
           </p>
         ) : null}
+        {entry.executionRequest ? (
+          <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+            Request: {entry.executionRequest.status}
+            {entry.executionRequest.claimedByExecutionTargetId ||
+            entry.executionRequest.executionTargetId
+              ? ` · target ${entry.executionRequest.claimedByExecutionTargetId ?? entry.executionRequest.executionTargetId}`
+              : ''}
+            {entry.executionRequest.claimedByDeviceId
+              ? ` · runner ${entry.executionRequest.claimedByDeviceId}`
+              : ''}
+          </p>
+        ) : null}
+        {entry.executionRequest?.lastError ? (
+          <p className="mt-0.5 truncate text-[11px] text-destructive">
+            Last error: {entry.executionRequest.lastError}
+          </p>
+        ) : null}
+        {entry.diagnosticCode ? (
+          <p className="mt-0.5 text-[11px] font-medium text-destructive">
+            Diagnostic: {entry.diagnosticCode.replaceAll('_', ' ')}
+          </p>
+        ) : null}
       </div>
       <span
         className={cn(
