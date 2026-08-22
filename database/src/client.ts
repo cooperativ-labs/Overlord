@@ -331,6 +331,8 @@ interface PgQueryable {
 interface PgPool extends PgQueryable {
   connect(): Promise<PgPoolClient>;
   end(): Promise<void>;
+  on?(event: 'error', listener: (error: unknown) => void): unknown;
+  off?(event: 'error', listener: (error: unknown) => void): unknown;
 }
 interface PgPoolClient extends PgQueryable {
   release(): void;
@@ -383,6 +385,7 @@ class PostgresClient implements DatabaseClient {
   readonly #inTransaction: boolean;
   /** See {@link SqliteClient}'s `#als` — same per-root-instance rule applies here. */
   readonly #als: AsyncLocalStorage<PostgresClient> | undefined;
+  readonly #poolErrorListener: ((error: unknown) => void) | undefined;
   #savepointDepth = 0;
   #closed = false;
 
@@ -394,11 +397,27 @@ class PostgresClient implements DatabaseClient {
       this.#conn = options.pool;
       this.#ownsPool = options.ownsPool ?? true;
       this.#inTransaction = false;
+      // `pg` emits an `error` event when an idle pooled connection is severed
+      // (for example while Railway replaces Postgres during maintenance). With
+      // no listener, EventEmitter turns that recoverable connection loss into
+      // an uncaught exception and terminates the entire backend. pg-pool has
+      // already discarded the failed client before emitting this event, so the
+      // correct response is to report the bounded cause and let the next query
+      // establish a fresh connection.
+      this.#poolErrorListener = error => {
+        const rawMessage = error instanceof Error ? error.message : String(error);
+        const message = rawMessage.replace(/\s+/g, ' ').trim().slice(0, 500) || 'unknown error';
+        console.error(
+          `[database] PostgreSQL idle connection failed; the pool discarded it and will reconnect on demand: ${message}`
+        );
+      };
+      options.pool.on?.('error', this.#poolErrorListener);
     } else {
       this.#pool = null;
       this.#conn = options.client;
       this.#ownsPool = false;
       this.#inTransaction = options.inTransaction ?? false;
+      this.#poolErrorListener = undefined;
     }
     this.#als = this.#inTransaction ? undefined : new AsyncLocalStorage<PostgresClient>();
   }
@@ -525,6 +544,9 @@ class PostgresClient implements DatabaseClient {
 
   async close(): Promise<void> {
     if (this.#ownsPool && this.#pool) await this.#pool.end();
+    if (this.#pool && this.#poolErrorListener) {
+      this.#pool.off?.('error', this.#poolErrorListener);
+    }
   }
 }
 
