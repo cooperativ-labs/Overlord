@@ -20,16 +20,15 @@ one place.
 
 ## File changes
 
-When an agent edits files, Overlord stores file-level **change records** — a
-short title, summary, why the change was made, and optional diff hints — so you
-get more than a wall of terminal output. Those records are the durable story of
-the patch, separate from chat narrative, and they link back to the mission and
-objective that produced them.
+When an objective-bound connector directly observes an edited path, Overlord
+stores a file-level **change record** with source, quality, overlap, hook health,
+and optional reviewer rationale. Those records are separate from chat narrative
+and link back to the objective that produced them.
 
-Changed files for a delivery are the run-attributable delta from the attach-time
-VCS baseline, so the review UI opens diffs for the paths this objective actually
-touched. In the desktop app you can inspect these diffs hunk-by-hunk with the
-attached rationale in the **Current Changes** view.
+Overlord does not infer ownership from the shared worktree. A recorded path can
+open the current local diff when that resource is available; missing prose or
+unavailable hook evidence remains visible review metadata and never blocks
+delivery.
 
 ## Inspect a delivery from the terminal
 

@@ -339,9 +339,7 @@ protocolE2e(
         '--session-key',
         resumedJson.sessionKey,
         '--summary',
-        'Changed docs.',
-        '--changed-files-json',
-        '[{"filePath":"docs/example.md","vcsStatus":"modified"}]'
+        'Changed docs.'
       ],
       env
     });
@@ -356,9 +354,7 @@ protocolE2e(
         '--session-key',
         resumedJson.sessionKey,
         '--summary',
-        'Follow-up delivery',
-        '--change-rationales-json',
-        '[{"file_path":"docs/example.md","label":"Update docs","summary":"Updated docs.","why":"User requested a follow-up tweak.","impact":"Records the follow-up change."}]'
+        'Follow-up delivery'
       ],
       env
     });

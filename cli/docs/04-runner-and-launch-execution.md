@@ -187,8 +187,9 @@ Isolation is deliberately narrow:
 
 - **Worktree mode only.** A mission running branch-only (or with no branch
   automation) has exactly one checkout; concurrent objectives share it by design,
-  and delivery attributes files through each session's touched-file log rather
-  than through the checkout.
+  and file attribution comes only from each explicitly bound objective/session
+  ledger. Connector-owned codecs may add direct evidence for exact normalized
+  paths; the checkout is never scanned to infer attribution.
 - **No explicit pin.** `--branch` and the mission's pinned `overrideBranch` are
   human instructions and win; two objectives pinned to one branch share it.
 - **Same resource only.** A sibling running in another repository is prepared in

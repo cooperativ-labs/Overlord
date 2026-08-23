@@ -1,4 +1,4 @@
-contractVersion: "52"
+contractVersion: "116"
 componentType: connector
 componentKey: opencode
 label: "OpenCode Connector"
@@ -8,15 +8,13 @@ connector:
   agentIdentifier: opencode
   # ── GENERATED: do not edit by hand ───────────────────────────────────────────
   # Projected from connectors/adapters/opencode/harness-capabilities.yaml by `yarn connectors:capabilities`.
-  # `capabilities` and `hookTypes` are the DEPRECATED hook-named projection, retained for
-  # one release. `harnessCapabilities` is the authoritative source.
+  # The harness descriptor and its executable fixtures are the only capability source.
   integrationShape: controlPlane
   capabilityTier: 3
   harnessCapabilities:
     path: connectors/adapters/opencode/harness-capabilities.yaml
     schemaVersion: 1
-    digest: "83f146f0c4be8764608401886f374ebfc7bbe5dca8fcdecf3856a99030f778e6"
-  capabilities:
+    digest: "4af085fa3987501b85e323fdbfcc0c3cfe1a8da47ef373f0b509082749d2c44f"
   # ── END GENERATED ────────────────────────────────────────────────────────────
   installPath: "~/.ovld/opencode"
   managedFiles:

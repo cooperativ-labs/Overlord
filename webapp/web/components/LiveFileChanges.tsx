@@ -14,8 +14,8 @@ import { Spinner } from './ui.tsx';
 
 /**
  * Realtime File Changes section for the mission panel. Lists the structured
- * per-file change rationales (`change_rationales`) recorded for the mission,
- * newest-first, each rendered as a collapsible {@link LiveFileChangeCard}. The
+ * mechanically observed per-file changes with optional rationales, newest-first,
+ * each rendered as a collapsible {@link LiveFileChangeCard}. The
  * query is invalidated by the global SSE change feed, so rationales written by
  * the agent or CLI in another process stream in without a manual refresh.
  * Adapted from the reference `LiveFileChanges` for this app's stack.

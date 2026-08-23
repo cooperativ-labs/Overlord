@@ -1242,8 +1242,8 @@ export async function linkExecutionRequestToSession({
       // Terminal states (cleared, failed, expired, ...): the agent process may
       // already be running — agent-pod recovers the id from the launch script
       // after the runner has cleared the request. Skip linking rather than
-      // failing attach, or PostToolUse never gets an active-session manifest
-      // and deliver falls back to baseline-only attribution.
+      // failing attach, or PostToolUse never gets the objective/session binding
+      // required for direct change-ledger capture.
       return null;
     }
 

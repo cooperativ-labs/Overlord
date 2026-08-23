@@ -1317,7 +1317,8 @@ export interface DeliveryAgentReportV1 {
 /**
  * Read-side delivery presentation. New deliveries start as `pending` (with
  * deterministic content) when a compose job is enqueued; the worker may later
- * set `composed` or `fallback`. Legacy/read-time synthesis uses `deterministic`.
+ * set `composed` or `fallback`. Missing or malformed persisted report data is
+ * safely synthesized at read time with `deterministic` status.
  */
 export interface DeliveryPresentationV1 {
   status: 'deterministic' | 'pending' | 'composed' | 'fallback';
@@ -1336,13 +1337,16 @@ export interface DeliveryPresentationV1 {
 export interface DeliveryReportPayloadV1 {
   schemaVersion: 1;
   agentReport: DeliveryAgentReportV1;
+  /** Bounded non-fatal normalization warnings for advisory agent evidence. */
+  warnings?: string[];
   presentation: DeliveryPresentationV1;
 }
 
 /**
  * An authorized, normalized delivery record returned from
  * `GET /api/missions/:id/deliveries`. The REST API never exposes the raw
- * persisted payload; legacy records receive a deterministic V1 report here.
+ * persisted payload; missing or malformed report data receives a safe,
+ * deterministic V1 projection here.
  */
 export interface DeliveryDto {
   id: string;
@@ -1361,39 +1365,36 @@ export interface DeliveryDto {
 // ---- Mission file changes ----
 
 /**
- * Diff availability for a changed file, mirroring `changed_files.current_diff_state`.
- * `null` when no `changed_files` row is linked to the rationale.
- */
-export type FileChangeDiffState = 'present' | 'resolved' | 'unknown' | 'unavailable' | null;
-
-/**
- * A structured per-file change record (`change_rationales`) surfaced in the
- * mission panel's File Changes section. Each row records what changed in one file
- * along with why the agent made the change and its expected impact. Optionally
- * joined to the `changed_files` row that tracks the file's diff state.
+ * A mechanically observed `changed_files` row surfaced in the mission panel,
+ * optionally joined to the latest agent-authored rationale for the same
+ * objective and path.
  */
 export interface FileChangeDto {
   id: string;
   missionId: string;
-  objectiveId: string | null;
+  objectiveId: string;
   /** Repository-relative path of the changed file. */
   filePath: string;
   /** Basename of `filePath`, for compact display in the card header. */
   fileName: string;
-  /** Short headline describing the change. */
-  label: string;
-  /** Longer description of what changed. */
-  summary: string;
-  /** Why the change was made. */
-  why: string;
-  /** Expected impact of the change. */
-  impact: string;
-  /** Diff availability from the linked `changed_files` row, when present. */
-  diffState: FileChangeDiffState;
+  /** Optional agent-authored rationale for the mechanically observed path. */
+  label: string | null;
+  summary: string | null;
+  why: string | null;
+  impact: string | null;
   /** Version-control status of the file (e.g. `modified`, `added`), when known. */
   vcsStatus: string | null;
+  /** Attribution source from objective-ledger evidence, when known. */
+  source: 'declared_edit' | 'window_observed' | null;
+  /** Evidence quality paired with `source`, when known. */
+  quality: 'direct' | 'window' | null;
+  /** Whether the evidence window overlapped another mutation-capable window. */
+  overlap: boolean;
+  /** Bounded hook-health status captured by the execution target, when known. */
+  hookHealth: string | null;
   /** Logical project resource the change belongs to, when known. */
   resourceKey: string | null;
+  /** Time this path evidence was last observed (`changed_files.last_observed_at`). */
   createdAt: string;
 }
 

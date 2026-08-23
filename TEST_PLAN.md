@@ -168,8 +168,9 @@ For every `conformance-manifest.yaml` in the repo (currently
 - `contractVersion` is a known version present in the `CONTRACT.md` version table.
 - `componentType`-specific required blocks are present (e.g. `connector` block for
   connectors, `restModule.endpointPrefix` for REST modules).
-- Every declared connector `capabilities` value is in `approvedConnectorCapabilities`.
-- Every declared `hookTypes` value is in `approvedHookTypes`.
+- Every connector's `harnessCapabilities` digest matches its generated descriptor output.
+- Every connector's `integrationShape` and derived `capabilityTier` match the
+  canonical harness descriptor; deprecated hook-named projections are absent.
 - Every `vocabularyExtensions[].value` is namespaced and targets an **open**
   vocabulary (never a closed one).
 - Extension `tablePrefix` matches `^ext_[a-z][a-z0-9_]*_$` and `migrationComponent`

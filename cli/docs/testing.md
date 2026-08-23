@@ -90,22 +90,22 @@ shared with [Layer 3 §3.5](../../TEST_PLAN.md#35-protocol-command-surface-confo
 - Out-of-set phase/event-type values are rejected with a domain error.
 
 ### B4. Side-effect fidelity
-- `update` appends a `mission_events` row and upserts changed files keyed by
-  session+objective+path.
+- `update` appends a `mission_events` row and best-effort drains the separate
+  objective/session change ledger; it accepts no changed-file payload.
 - **`heartbeat` creates NO `mission_events` row** — only updates session liveness
   (explicit negative assertion; contract calls this out).
 - `deliver` stores a delivery record, sets objective `complete`, moves mission to
   `review`, and may trigger auto-advance of the next objective.
 
-### B5. Delivery validation — change rationales
-> "Meaningful tracked changed files require rationales."
+### B5. Delivery validation — advisory change evidence
 
-- Delivery with tracked, meaningful changed files but **no** rationales is
-  rejected.
-- Each rationale requires `file_path`, `label`, `summary`, `why`, `impact`; the
-  internal `filePath`/`rationale` shape is rejected (matches the skill's stated
-  validation).
-- Formatting-only / untracked changes do not require rationales.
+- Delivery succeeds with no file evidence or rationale.
+- Each optional rationale requires canonical `filePath`, `label`, `summary`,
+  `why`, and `impact`; retired aliases are rejected.
+- `sync-changes` salvages valid siblings, warns per invalid item, and never gates
+  delivery.
+- Delivery rejects retired changed-file, observed-dirty, no-file, and
+  rationale-skip inputs rather than normalizing them.
 
 ### B6. Shell-special content handling
 - Summaries/questions/payloads containing backticks, `$vars`, quotes are accepted

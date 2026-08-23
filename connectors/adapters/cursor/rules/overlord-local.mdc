@@ -9,6 +9,5 @@ alwaysApply: true
 - If the user asks from chat to use Overlord, use `/prompt` for new missions, `/load` for read-only context by mission ID, `/connect` to route the session onto an existing mission, and `/attach` when the user explicitly wants execution.
 - If you need other protocol commands or flags, run `ovld protocol help` instead of guessing.
 
-Always include `changeRationales` on delivery for meaningful behavioral file changes.
-Oversized inline `--change-rationales-json` is rejected — pipe rationales with `--change-rationales-file -` and keep `--summary` inline.
-**Never revert, restore, or delete file changes from other agents or missions** to make delivery succeed. Leave unrelated dirty files intact and use `ovld protocol ask` when attribution blocks delivery.
+Normal delivery is summary-only; the objective ledger syncs independently. Use `ovld protocol changes` only to inspect ledger sync and hook health, never to infer ownership from a shared worktree.
+**Never revert, restore, or delete file changes from other agents or missions.** Leave unrelated dirty files intact.

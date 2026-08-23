@@ -73,9 +73,9 @@ export function objectiveResourcesConflict({
  * shared one dirty checkout. They no longer are: the Runner Layer isolates a
  * concurrently launched objective onto its own branch and worktree when the
  * mission uses worktrees, and a mission that runs without worktrees has exactly
- * one checkout by construction and deliberately shares it (file attribution comes
- * from each session's touched-file log, not from the checkout). The resource keys
- * are still accepted so call sites read explicitly, and
+ * one checkout by construction and deliberately shares it. File attribution comes
+ * from each explicitly bound objective/session ledger, never a checkout-wide scan.
+ * The resource keys are still accepted so call sites read explicitly, and
  * `objectiveResourcesConflict` still answers "same checkout?" for the callers
  * that need it.
  */

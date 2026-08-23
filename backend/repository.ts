@@ -4457,22 +4457,52 @@ export async function listMissionDeliveries(
 interface FileChangeRow {
   id: string;
   mission_id: string;
-  objective_id: string | null;
+  objective_id: string;
   file_path: string;
-  label: string;
-  summary: string;
-  why: string;
-  impact: string;
-  diff_state: string | null;
+  label: string | null;
+  summary: string | null;
+  why: string | null;
+  impact: string | null;
   vcs_status: string | null;
+  observed_metadata_json: string;
   resource_key: string | null;
   created_at: string;
 }
 
+const MAX_FILE_CHANGE_HOOK_HEALTH_LENGTH = 160;
+const FILE_CHANGE_HOOK_HEALTH_PATTERN = /^[a-z0-9][a-z0-9_.:-]*$/i;
+
+function projectFileChangeEvidence(metadata: {
+  source?: unknown;
+  quality?: unknown;
+  overlap?: unknown;
+  hookHealth?: unknown;
+}): {
+  source: FileChangeDto['source'];
+  quality: FileChangeDto['quality'];
+  overlap: boolean;
+  hookHealth: string | null;
+} {
+  const paired =
+    (metadata.source === 'declared_edit' && metadata.quality === 'direct') ||
+    (metadata.source === 'window_observed' && metadata.quality === 'window');
+  const health = typeof metadata.hookHealth === 'string' ? metadata.hookHealth.trim() : '';
+  return {
+    source: paired ? (metadata.source as FileChangeDto['source']) : null,
+    quality: paired ? (metadata.quality as FileChangeDto['quality']) : null,
+    overlap: paired && metadata.overlap === true,
+    hookHealth:
+      health &&
+      health.length <= MAX_FILE_CHANGE_HOOK_HEALTH_LENGTH &&
+      FILE_CHANGE_HOOK_HEALTH_PATTERN.test(health)
+        ? health
+        : null
+  };
+}
+
 /**
- * Returns a mission's structured per-file change rationales newest-first for the
- * File Changes section, joined to the `changed_files` row (when linked) for diff
- * state and VCS status. Like the activity feed, the global SSE change feed
+ * Returns a mission's observed changed files newest-first for the File Changes
+ * section, with an optional rationale. Like the activity feed, the global SSE change feed
  * invalidates the client query so changes recorded by the agent or CLI in
  * another process stream into the panel without a manual refresh.
  */
@@ -4482,38 +4512,70 @@ export async function listMissionFileChanges(
 ): Promise<FileChangeDto[]> {
   const mission = await getMissionRow(missionRef);
   const rows = (await requireDatabaseClient().all(
-    `SELECT cr.id, cr.mission_id, cr.objective_id, cr.file_path, cr.label, cr.summary,
-              cr.why, cr.impact, cr.created_at,
-              cf.current_diff_state AS diff_state, cf.vcs_status AS vcs_status,
+    `WITH ranked_rationales AS (
+       SELECT objective_id, file_path, label, summary, why, impact,
+              ROW_NUMBER() OVER (
+                PARTITION BY objective_id, file_path
+                ORDER BY created_at DESC, id DESC
+              ) AS rationale_rank
+         FROM change_rationales
+        WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+     )
+     SELECT cf.id, cf.mission_id, cf.objective_id, cf.file_path, cr.label, cr.summary,
+              cr.why, cr.impact, cf.last_observed_at AS created_at,
+              cf.vcs_status AS vcs_status,
+              cf.observed_metadata_json,
               COALESCE(pr_cf.resource_key, o.resource_key) AS resource_key
-         FROM change_rationales cr
-         LEFT JOIN changed_files cf
-           ON cf.id = cr.changed_file_id AND cf.deleted_at IS NULL
+         FROM changed_files cf
+         LEFT JOIN ranked_rationales cr
+           ON cr.objective_id = cf.objective_id
+          AND cr.file_path = cf.file_path
+          AND cr.rationale_rank = 1
          LEFT JOIN objectives o
-           ON o.id = cr.objective_id AND o.deleted_at IS NULL
+           ON o.id = cf.objective_id AND o.deleted_at IS NULL
          LEFT JOIN project_resources pr_cf
            ON pr_cf.id = cf.resource_id AND pr_cf.deleted_at IS NULL
-        WHERE cr.mission_id = ? AND cr.workspace_id = ?
-          AND cr.deleted_at IS NULL
-        ORDER BY cr.created_at DESC, cr.id DESC
+        WHERE cf.mission_id = ? AND cf.workspace_id = ?
+          AND cf.deleted_at IS NULL
+        ORDER BY cf.last_observed_at DESC, cf.id DESC
         LIMIT ?`,
-    [mission.id, mission.workspace_id, limit]
+    [mission.id, mission.workspace_id, mission.id, mission.workspace_id, limit]
   )) as FileChangeRow[];
-  return rows.map(row => ({
-    id: row.id,
-    missionId: row.mission_id,
-    objectiveId: row.objective_id,
-    filePath: row.file_path,
-    fileName: row.file_path.split('/').pop() || row.file_path,
-    label: row.label,
-    summary: row.summary,
-    why: row.why,
-    impact: row.impact,
-    diffState: (row.diff_state as FileChangeDto['diffState']) ?? null,
-    vcsStatus: row.vcs_status,
-    resourceKey: row.resource_key?.trim() || null,
-    createdAt: row.created_at
-  }));
+  return rows.map(row => {
+    let metadata: {
+      source?: unknown;
+      quality?: unknown;
+      overlap?: unknown;
+      hookHealth?: unknown;
+    } = {};
+    try {
+      const parsed = JSON.parse(row.observed_metadata_json) as unknown;
+      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+        metadata = parsed as typeof metadata;
+      }
+    } catch {
+      // Unreadable stored metadata remains reviewable without attribution labels.
+    }
+    const evidence = projectFileChangeEvidence(metadata);
+    return {
+      id: row.id,
+      missionId: row.mission_id,
+      objectiveId: row.objective_id,
+      filePath: row.file_path,
+      fileName: row.file_path.split('/').pop() || row.file_path,
+      label: row.label,
+      summary: row.summary,
+      why: row.why,
+      impact: row.impact,
+      vcsStatus: row.vcs_status,
+      source: evidence.source,
+      quality: evidence.quality,
+      overlap: evidence.overlap,
+      hookHealth: evidence.hookHealth,
+      resourceKey: row.resource_key?.trim() || null,
+      createdAt: row.created_at
+    };
+  });
 }
 
 interface ArtifactRow {

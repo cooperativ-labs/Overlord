@@ -1,4 +1,4 @@
-contractVersion: "52"
+contractVersion: "116"
 componentType: connector
 componentKey: antigravity
 label: "Antigravity Connector"
@@ -8,17 +8,13 @@ connector:
   agentIdentifier: antigravity
   # ── GENERATED: do not edit by hand ───────────────────────────────────────────
   # Projected from connectors/adapters/antigravity/harness-capabilities.yaml by `yarn connectors:capabilities`.
-  # `capabilities` and `hookTypes` are the DEPRECATED hook-named projection, retained for
-  # one release. `harnessCapabilities` is the authoritative source.
+  # The harness descriptor and its executable fixtures are the only capability source.
   integrationShape: callback
   capabilityTier: 0
   harnessCapabilities:
     path: connectors/adapters/antigravity/harness-capabilities.yaml
     schemaVersion: 1
-    digest: "e7313b23f98b6ed15a1a32849291a2a391523d4c06403bf395ecbcadfa3b11ac"
-  capabilities:
-    - contextFilePrompt
-    - slashCommands
+    digest: "c5686f1ab4c02e6bb90adeef83c6acd61703f3238be12618fed1e2b833636b2a"
   # ── END GENERATED ────────────────────────────────────────────────────────────
   installPath: "~/.gemini/antigravity-cli/plugins/overlord"
   managedFiles:
@@ -38,7 +34,6 @@ connector:
     - "skills/add-objectives.md"
     - "skills/load.md"
     - "skills/record-work.md"
-    - "skills/spawn.md"
     - "skills/overlord-mission/SKILL.md"
     - "skills/overlord-mission/reference/cli.md"
     - "skills/overlord-mission/reference/record-work.md"

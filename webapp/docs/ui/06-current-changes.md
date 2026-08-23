@@ -1,135 +1,95 @@
-# 06 — Current Changes
+# 06 — File Changes
 
-A **read-only** view of the linked project's local VCS state, scoped around
-Overlord review units (mission, objective, delivery) and linked to recorded change
-rationales. This is the web equivalent of `ovld changes status|diff|rationales`.
+The mission panel's **File Changes** section is a read-only projection of durable,
+objective-scoped path evidence. It starts from `changed_files` and joins an optional
+agent-authored rationale for the same objective and path. It never scans the working
+tree to infer ownership.
 
-**Route:** `/p/:projectId/changes?missionId=&objectiveId=&path=` — also embedded as
-the **Changes** tab on mission detail (doc 03) scoped to that mission/objective.
-
-> **Hard constraint:** VCS access is strictly read-only. This screen never creates
-> commits, refs, branches, stashes, tags, resets, checkouts, patches,
-> or any other mutation, and it never uploads repository contents to the backend.
-> It requires a **local backend** with a linked directory; without one it shows an
-> unavailable state.
+**Surface:** embedded in mission detail. The current product does not expose a
+standalone current-worktree diff route.
 
 ---
 
-## Layout
+## Evidence boundary
 
-A file list on the left, a diff viewer on the right, scoped by a context selector.
+- Connector callbacks append to an owner-only local ledger only when an explicit
+  objective/session binding exists.
+- A connector-owned codec must normalize the callback as `file.edited` and return
+  an exact workspace-relative path before the ledger can record
+  `declared_edit` / `direct` evidence.
+- Known read-only callbacks are silent. Shell, generic, unmapped, mutation-capable
+  no-path, and unavailable callbacks record bounded hook health without claiming a
+  file.
+- No shipped connector currently proves a paired mutation window, so
+  `window_observed` / `window` remains reserved.
+- The backend stores paths and bounded attribution metadata only. It never receives
+  file content, a diff, a raw command, a transcript, environment values, a
+  fingerprint, or an absolute host path.
 
-```
-Changes · Open0      Scope: [ Mission 1:1429 ▾ ][ Objective: Write docs ▾ ]   ⌕ path…
-┌─ Changed files ──────────────┐ ┌─ Diff: webapp/docs/ui/03-mission-detail.md ──────────┐
-│ ▸ rationale-covered (4)      │ │ @@ -0,0 +1,210 @@   ✦ "Add mission detail spec"       │
-│   M src/auth/token.ts    ✓   │ │ + # 03 — Mission Detail                               │
-│   A …/ui/03-…detail.md   ✓   │ │ + The core screen of the application…               │
-│   M src/auth/index.ts    ✓   │ │ …                                                   │
-│ ▸ needs rationale (1)        │ │  (read-only; line numbers; hunk headers; rationale   │
-│   M src/rbac/types.ts    ⚠   │ │   labels annotated inline where recorded)            │
-│ ▸ unassigned / workspace (2) │ │                                                      │
-│   M README.md            –   │ │                                                      │
-│   ?? scratch.txt         –   │ │                                                      │
-└──────────────────────────────┘ └──────────────────────────────────────────────────────┘
-   Coverage: 4/5 meaningful files have rationales · [ open in Review → ]
-```
-
----
-
-## Scope selector
-
-Change views are organized around Overlord review units first, the repo second:
-
-- **Mission** scope: all changed files associated with the mission's sessions/objectives.
-- **Objective** scope: narrow to one objective's `changed_files`.
-- **Unassigned / current workspace**: local diff hunks that can't be associated with
-  a specific objective are shown explicitly as workspace changes — never silently
-  attached to the wrong objective.
-
-The scope is in the URL so a deep link reproduces the exact view.
+There is no VCS baseline, worktree-wide delta, unassigned-workspace bucket,
+rationale skip, or no-file-change override in this surface.
 
 ---
 
-## File list groups
+## Layout and behavior
 
-`ChangedFileRow`s grouped by review meaning, not just by directory:
+Rows are newest-first and grouped by logical project resource when a project has
+more than one relevant resource. A collapsed row shows the basename, optional
+recorded VCS status, attribution source, and observation time. Expanding it shows:
 
-| Group | Meaning | Marker |
+- the normalized repository-relative path;
+- source and quality, plus overlapping-window metadata when present;
+- bounded hook health;
+- the optional rationale fields (`label`, `summary`, `why`, `impact`).
+
+A row without rationale prose stays visible and is labeled as an observed file
+change with no rationale recorded. Missing rationale is non-blocking review
+metadata.
+
+When the selected execution target exposes the row's resource root, the path opens
+in the user's configured editor. This is a local editor deep link, not a backend
+diff read. Without a usable resource root, the UI renders the repository-relative
+path as text.
+
+---
+
+## Data and refresh
+
+| Region | Read | Refresh |
 | --- | --- | --- |
-| Rationale-covered | meaningful tracked change with a `change_rationale` | ✓ + rationale label |
-| Needs rationale | meaningful tracked change, no rationale yet | ⚠ (the gap delivery validates) |
-| Observed earlier / no current diff | recorded earlier, gone from the working tree | "no current diff" |
-| Unassigned / workspace | local change not tied to an objective | – |
+| File evidence | `GET /api/missions/:id/file-changes` | `changed_file` entity changes invalidate `['mission', id, 'file-changes']` |
+| Optional rationale | latest `change_rationales` row joined by objective/path | `change_rationale` changes invalidate the same query |
+| Resource label/root | project resources for the selected execution target | normal project-resource invalidation |
 
-Each row shows the normalized path, VCS status (`M`/`A`/`D`/`R`/`??`), the owning
-objective when known, and rationale presence. Status comes from `changed_files`
-(metadata only — path + status + session/objective, never file contents) joined
-with live local VCS status read by the backend.
-
----
-
-## Diff viewer
-
-- `DiffView` renders the **read-only** unified diff for the selected file. Hunk
-  headers are shown and, where a `change_rationale.hunks[].header` matches, the
-  rationale `label` is annotated inline so the reviewer sees *why* a hunk exists.
-- Diffs are read on demand from the local backend's VCS read (status/diff only).
-  Full diffs and file contents are **not persisted** to the database — they're read
-  live and shown, consistent with the change-tracking security boundary.
-- A "open in Review" jump links the file to the Review screen's rationale coverage
-  (doc 05) and vice-versa.
-
----
-
-## Data + realtime
-
-| Region | Read | Realtime |
-| --- | --- | --- |
-| File list + coverage | `GET /missions/:id/changes` (`changed_files` + `change_rationales`) → `['mission', id, 'changes']` | `changed_files`/`change_rationale` deltas update rows/coverage live during an active session |
-| Diff body | local backend VCS read (status/diff), on demand | refetched when the file's `changed_files` revision changes |
-| Workspace/unassigned diff | local backend VCS status | local poll; not from the change feed (it's live VCS, not a domain entity) |
-
-While an agent is working, the persisted `changed_files` set updates through the
-change feed, so the file list reflects what's changing in near-real-time; the diff
-bodies are pulled from the live working tree on selection.
+The REST projection is changed-file-first: every observed path appears once even
+when no rationale exists. Historical malformed evidence metadata stays reviewable
+without an attribution badge; it does not become active write input.
 
 ---
 
 ## States
 
-- **No linked directory / no local backend:** unavailable state — "Current changes
-  need a linked local directory and the local backend." Offer `ovld add-cwd` and
-  explain a browser-only deployment can't read local diffs.
-- **Clean working tree:** "No local changes" + the recorded `changed_files` history
-  for the scope (so a delivered mission still shows what changed).
-- **Loading diff:** skeleton in the diff pane; file list loads first.
-- **Large diff:** collapse-by-default with "expand"; very large files offer
-  "view in editor" rather than rendering inline.
-- **Coverage gap:** the "needs rationale" group is highlighted and counted; links to
-  Review so a human can push back before completing.
-
----
-
-## Capability gating
-
-- Entirely depends on a **local backend** with filesystem/VCS read access; this is
-  a deployment capability, not a table group. Hosted/browser-only deployments hide
-  the diff panes and show the recorded `changed_files` metadata read-only.
-- Read access gated by RBAC `mission:read` when Group 1 is installed.
+- **No evidence:** "No file changes yet."
+- **Loading:** compact spinner while evidence or project resources load.
+- **Read failure:** bounded error text without exposing credentials or raw backend
+  internals.
+- **No rationale:** the row remains visible with a neutral explanatory message.
+- **No local resource root:** metadata remains readable; editor linking is omitted.
+- **Pathless unavailable hook evidence:** reported by local protocol preflight, not
+  as a File Changes row; the review projection never invents a path.
 
 ---
 
 ## Acceptance criteria
 
-- The view shows changed files for a mission/objective grouped by rationale coverage,
-  with unassigned workspace changes shown separately and never misattributed.
-- Diffs are read-only and annotated with recorded rationale labels and hunk headers;
-  no control on this screen can mutate the repository.
-- No repository contents are uploaded to the backend; diffs are read locally and
-  shown, and only metadata is persisted.
-- When no local directory/backend is available, the screen shows a clear unavailable
-  state with the repair command instead of erroring.
-- Coverage gaps (meaningful changes lacking rationales) are visible and link to the
-  Review screen.
+- Every durable `changed_files` row for the mission is visible once, newest-first.
+- The UI never fabricates file ownership from CWD, Git status, or a shared
+  worktree delta.
+- Optional rationales enrich a path but never determine whether it is listed or
+  whether delivery can complete.
+- Source, quality, overlap, and hook health accurately reflect the stored bounded
+  evidence.
+- Multi-resource missions resolve editor links against the row's resource and
+  selected execution target.
+- No repository content leaves the execution target through this surface.
 </content>

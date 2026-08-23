@@ -93,6 +93,14 @@ The tool catalog is mission-first:
 - `overlord_update_artifact` — revise an existing mission artifact in place
 - `overlord_record_work`
 
+`overlord_update_session`, `overlord_deliver_session`, and `overlord_record_work`
+accept optional
+`changeRationales` annotations using canonical `filePath`, `label`, `summary`,
+`why`, `impact`, and optional header-only `hunks`. They annotate objective-ledger
+evidence; MCP does not enumerate changed files or inspect a worktree.
+Unknown item or hunk keys discard only that advisory entry with a bounded warning;
+for duplicate canonical paths, the last valid item wins.
+
 ### Addressing a mission or an objective
 
 Every mission-scoped tool takes `objectiveId` — an objective UUID or a display

@@ -37,8 +37,9 @@ not be edited.
 **Shape:** callback plugin. **Observe:** `UserPromptSubmit`, `PostToolUse`, `SessionStart`.
 **Decide:** `PermissionRequest`. **Inject:** `asyncRewake` during a turn plus a Stop boundary.
 
-- The legacy follow-up and touched-file hooks remain additive. Removing them while repairing
-  agent-session events regresses mission activity or delivery attribution.
+- `UserPromptSubmit` records follow-up activity. `PostToolUse` sends its native payload to local
+  `capture-change`; only an objective-bound event that the Claude codec normalizes as
+  `file.edited` can record `declared_edit` / `direct` path evidence.
 - The decision response is Claude's `hookSpecificOutput` shape. Cursor's flat `permission`
   response is never valid here.
 - `asyncRewake` reports Delivered only after Claude's documented stderr plus exit-2 signal is
@@ -55,6 +56,9 @@ not be edited.
 
 - Codex hooks require a supported hook-era version. An installed plugin on an older binary can
   look healthy while never invoking hooks.
+- `PostToolUse` sends its native payload to local `capture-change`; only an objective-bound
+  event that the Codex codec normalizes as `file.edited` records path evidence. Shell and
+  no-path callbacks record unavailable health without scanning the worktree.
 - The response is nested `hookSpecificOutput.decision.behavior`; `ask` deliberately emits no
   bytes so Codex owns the native prompt.
 - Do not start an app-server decision subscriber beside the hook adapter. That creates two
@@ -65,9 +69,13 @@ not be edited.
 
 ## Cursor
 
-**Shape:** callback scripts. **Observe:** not currently promoted. **Decide:** per-tool shell, MCP,
-and generic pre-tool events. **Inject:** `stop` returning `followup_message`.
+**Shape:** callback scripts. **Observe:** `postToolUse` tool results and file edits. **Decide:**
+per-tool shell, MCP, and generic pre-tool events. **Inject:** `stop` returning
+`followup_message`.
 
+- `postToolUse` is the file-evidence path. The Cursor codec admits exact Write/Edit paths,
+  leaves known read/search/fetch callbacks silent, and records unavailable health without a path
+  for shell, generic, unmapped, or mutation-capable no-path callbacks.
 - Cursor has no universal `PermissionRequest` event. Never restore the old manifest claim; use
   `beforeShellExecution`, `beforeMCPExecution`, or `preToolUse` according to the descriptor.
 - Native output is flat: `{ "permission": "allow|deny|ask" }`. Claude's nested response may be
@@ -119,8 +127,8 @@ and generic pre-tool events. **Inject:** `stop` returning `followup_message`.
 - Mission lifecycle capture may work while agent-session observe/decide/inject remains
   unverified. Do not promote UI controls based on the agent name or resemblance to Gemini.
 - `PreToolUse` currently returns allow for legacy telemetry and is not a remote decision path.
-- Native hook names differ from Claude's canonical legacy vocabulary. Record a native fixture
-  before changing mappings or claiming PostToolUse/Stop behavior.
+- Native hook names are harness-specific. Record a native fixture before
+  changing mappings or claiming post-tool or stop behavior.
 - Upgrade work belongs in a separate verification objective with executable fixtures.
 
 ## Development verification

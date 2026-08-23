@@ -494,25 +494,27 @@ const toolHandlers: Record<string, ToolHandler> = {
       })
     ),
   overlord_update_session: args =>
-    runProtocolSubcommand(
-      'update',
-      protocolBody({
+    runProtocolSubcommand('update', {
+      flags: {
         ...missionScopeFlags(args),
         '--session-key': requiredString(args, 'sessionKey'),
         '--summary': requiredString(args, 'summary'),
         ...(optionalString(args, 'phase') ? { '--phase': requiredString(args, 'phase') } : {}),
         ...(optionalString(args, 'eventType')
           ? { '--event-type': requiredString(args, 'eventType') }
-          : {})
-      })
-    ),
+          : {}),
+        ...(Array.isArray(args.changeRationales) ? { '--change-rationales-file': true } : {})
+      },
+      fileInputs: Array.isArray(args.changeRationales)
+        ? { '--change-rationales-file': JSON.stringify(args.changeRationales) }
+        : undefined
+    }),
   overlord_deliver_session: args =>
     runProtocolSubcommand('deliver', {
       flags: {
         ...missionScopeFlags(args),
         '--session-key': requiredString(args, 'sessionKey'),
         '--summary': requiredString(args, 'summary'),
-        ...(args.noFileChanges === true ? { '--no-file-changes': true } : {}),
         ...(Array.isArray(args.artifacts) ? { '--artifacts-file': true } : {}),
         ...(Array.isArray(args.changeRationales) ? { '--change-rationales-file': true } : {}),
         ...(Array.isArray(args.humanActions) ||
@@ -596,9 +598,8 @@ const toolHandlers: Record<string, ToolHandler> = {
     });
   },
   overlord_record_work: args => {
-    // record-work takes its whole envelope on stdin so objective/summary/title
-    // and the file-change arrays travel as one JSON object — the same shape the
-    // shared reference documents for the CLI's `--payload-file -`.
+    // record-work takes one payload-file envelope so objective/summary/title and
+    // file-change arrays travel as one unambiguous JSON object.
     const payload: Record<string, unknown> = {
       objective: requiredString(args, 'objective'),
       summary: requiredString(args, 'summary'),

@@ -80,6 +80,28 @@ function booleanProperty(description) {
   return { type: 'boolean', description };
 }
 
+function changeRationalesProperty(description) {
+  return {
+    type: 'array',
+    description,
+    items: objectSchema(
+      {
+        filePath: stringProperty('Repository-relative path of the changed file.'),
+        label: stringProperty('Short reviewer title for the change.'),
+        summary: stringProperty('What changed in this file.'),
+        why: stringProperty('Why the change was made.'),
+        impact: stringProperty('Behavioral impact of the change.'),
+        hunks: {
+          type: 'array',
+          description: 'Optional diff-hunk headers only; file contents and diffs are prohibited.',
+          items: objectSchema({ header: stringProperty('Unified-diff hunk header.') }, ['header'])
+        }
+      },
+      ['filePath', 'label', 'summary', 'why', 'impact']
+    )
+  };
+}
+
 function compactSearchResponse(response) {
   const value = response?.structuredContent;
   if (!value || value.version !== 3 || !Array.isArray(value.results)) return response;
@@ -523,7 +545,10 @@ const tools = [
         sessionKey: stringProperty('Session key returned by overlord_attach_session.'),
         summary: stringProperty('Update text.'),
         phase: stringProperty('Optional protocol phase.'),
-        eventType: stringProperty('Optional event type. Defaults to update.')
+        eventType: stringProperty('Optional event type. Defaults to update.'),
+        changeRationales: changeRationalesProperty(
+          'Optional reviewer-facing annotations for objective-ledger file evidence.'
+        )
       },
       ['sessionKey', 'summary']
     )
@@ -547,14 +572,9 @@ const tools = [
           type: 'array',
           description: 'Optional mission artifacts to persist with this delivery.'
         },
-        noFileChanges: {
-          type: 'boolean',
-          description: 'Set true when the MCP run changed no files.'
-        },
-        changeRationales: {
-          type: 'array',
-          description: 'Explicit change rationale objects, if files were changed.'
-        },
+        changeRationales: changeRationalesProperty(
+          'Optional reviewer-facing annotations for objective-ledger file evidence.'
+        ),
         humanActions: {
           type: 'array',
           description:
@@ -624,21 +644,26 @@ const tools = [
     name: 'overlord_record_work',
     title: 'Record completed work as a mission',
     description:
-      'Record work already completed in this chat as a mission that lands in review — one call, no attach/deliver cycle. Records file-change rationales and runs the delivery through the standard Gemini summarizer.',
+      'Record work already completed in this chat as a mission that lands in review — one call, no attach/deliver cycle. Accepts optional file-change rationales and runs the delivery through the standard Gemini summarizer.',
     inputSchema: objectSchema(
       {
         projectId: stringProperty('Overlord project id, slug, or name.'),
         objective: stringProperty('What was asked and done, phrased as a completed objective.'),
         summary: stringProperty('Reviewer-facing narrative of what changed and why.'),
         title: stringProperty('Optional mission title.'),
-        changeRationales: {
-          type: 'array',
-          description:
-            'One entry per meaningful file change (filePath, label, summary, why, impact).'
-        },
+        changeRationales: changeRationalesProperty(
+          'One optional reviewer annotation per meaningful file change.'
+        ),
         changedFiles: {
           type: 'array',
-          description: 'Optional extra touched files without a full rationale.'
+          description: 'Optional explicit file observations for this sessionless record.',
+          items: objectSchema(
+            {
+              filePath: stringProperty('Repository-relative path.'),
+              vcsStatus: stringProperty('Optional VCS status such as M, A, or D.')
+            },
+            ['filePath']
+          )
         },
         artifacts: {
           type: 'array',
@@ -963,6 +988,9 @@ async function callOverlordTool(name, args) {
       ...(optionalString(args, 'phase') ? { phase: requiredString(args, 'phase') } : {}),
       ...(optionalString(args, 'eventType')
         ? { 'event-type': requiredString(args, 'eventType') }
+        : {}),
+      ...(Array.isArray(args.changeRationales)
+        ? { 'change-rationales-json': args.changeRationales }
         : {})
     });
   }
@@ -971,7 +999,6 @@ async function callOverlordTool(name, args) {
       ...missionScopeFlags(args),
       'session-key': requiredString(args, 'sessionKey'),
       summary: requiredString(args, 'summary'),
-      ...(args.noFileChanges === true ? { 'no-file-changes': true } : {}),
       ...(Array.isArray(args.artifacts) ? { 'artifacts-json': args.artifacts } : {}),
       ...(Array.isArray(args.changeRationales)
         ? { 'change-rationales-json': args.changeRationales }
@@ -1051,24 +1078,6 @@ async function callOverlordTool(name, args) {
       }
     });
   }
-  if (name === 'attach') {
-    return runProtocol('attach', { 'mission-id': args.mission_id });
-  }
-  if (name === 'update') {
-    return runProtocol('update', {
-      'session-key': args.session_key,
-      'mission-id': args.mission_id,
-      summary: args.summary,
-      phase: args.phase && String(args.phase).trim() ? String(args.phase).trim() : 'execute'
-    });
-  }
-  if (name === 'deliver') {
-    return runProtocol('deliver', {
-      'session-key': args.session_key,
-      'mission-id': args.mission_id,
-      summary: args.summary
-    });
-  }
   throw new Error(`Unknown tool: ${name}`);
 }
 
@@ -1082,7 +1091,7 @@ process.stdin.on('data', async chunk => {
         result: {
           protocolVersion: PROTOCOL_VERSION,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.33' }
+          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.35' }
         }
       });
       continue;

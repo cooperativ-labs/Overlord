@@ -196,6 +196,23 @@ test('envelope: sealPayload drops anything not on the allowlist', () => {
   assert.deepEqual(Object.keys(sealed).sort(), ['detail', 'tool']);
 });
 
+test('envelope: exact evidence paths are validated without presentation rewriting', () => {
+  const longPath = `src/${'a'.repeat(300)}  literal.ts`;
+  assert.deepEqual(
+    sealPayload({
+      paths: [
+        longPath,
+        ' src/trimmed.ts ',
+        '../outside.ts',
+        '/absolute.ts',
+        'C:drive-relative.ts',
+        'src/ok.ts'
+      ]
+    }).paths,
+    [longPath, 'src/ok.ts']
+  );
+});
+
 /**
  * The waist test: one codec spec, two harness shapes, the same envelope.
  *
@@ -218,6 +235,7 @@ const CLAUDE_CODEC: CodecSpec = {
       toolPath: 'tool_name',
       inputPath: 'tool_input',
       callIdPath: 'tool_use_id',
+      filePathPaths: ['file_path'],
       fileEditKind: 'file.edited'
     },
     { native: 'UserPromptSubmit', kind: 'prompt.submitted', origin: 'user', promptPath: 'prompt' }
@@ -238,6 +256,7 @@ const OPENCODE_CODEC: CodecSpec = {
       inputPath: 'properties.part.state.input',
       callIdPath: 'properties.part.callID',
       outcomePath: 'properties.part.state.status',
+      filePathPaths: ['file_path'],
       fileEditKind: 'file.edited'
     }
   ]
@@ -348,6 +367,109 @@ test('codec: a file-editing tool becomes a file.edited event with a repo-relativ
   assert.equal(event?.kind, 'file.edited');
   assert.deepEqual(event?.payload.paths, ['src/app.ts']);
   assert.ok(!JSON.stringify(event).includes('never transmitted'));
+});
+
+test('codec: edit evidence reads only connector-declared input paths', () => {
+  const codec: CodecSpec = {
+    ...CLAUDE_CODEC,
+    events: [
+      {
+        ...CLAUDE_CODEC.events[0]!,
+        filePathPaths: ['declared.target']
+      }
+    ]
+  };
+  const event = normalizeNativeEvent({
+    codec,
+    payload: {
+      hook_event_name: 'PostToolUse',
+      session_id: 'sess-claude',
+      cwd: '/repo',
+      tool_name: 'Write',
+      tool_input: {
+        file_path: '/repo/wrong.ts',
+        declared: { target: '/repo/right.ts' }
+      }
+    },
+    occurredAt: '2026-08-01T00:00:00.000Z'
+  });
+  assert.deepEqual(event?.payload.paths, ['right.ts']);
+});
+
+test('codec: an outside-project edit never exposes a basename as repo-relative evidence', () => {
+  const event = normalizeNativeEvent({
+    codec: CLAUDE_CODEC,
+    payload: {
+      hook_event_name: 'PostToolUse',
+      session_id: 'sess-claude',
+      cwd: '/repo',
+      tool_name: 'Write',
+      tool_input: { file_path: '/private/customer/secret.ts', content: 'never transmitted' }
+    },
+    occurredAt: '2026-08-01T00:00:00.000Z'
+  });
+  assert.equal(event?.kind, 'file.edited');
+  assert.equal(event?.payload.paths, undefined);
+  assert.ok(!JSON.stringify(event).includes('/private/customer'));
+  assert.ok(!JSON.stringify(event).includes('never transmitted'));
+});
+
+test('codec: edit evidence preserves exact long paths and rejects whitespace mutation', () => {
+  const longRelativePath = `src/${'a'.repeat(300)}  literal.ts`;
+  const normalize = (filePath: string) =>
+    normalizeNativeEvent({
+      codec: CLAUDE_CODEC,
+      payload: {
+        hook_event_name: 'PostToolUse',
+        session_id: 'sess-claude',
+        cwd: '/repo',
+        tool_name: 'Write',
+        tool_input: { file_path: filePath }
+      },
+      occurredAt: '2026-08-01T00:00:00.000Z'
+    });
+
+  assert.deepEqual(normalize(`/repo/${longRelativePath}`)?.payload.paths, [longRelativePath]);
+  assert.equal(normalize(' src/trimmed.ts ')?.payload.paths, undefined);
+  if (path.sep === '/') assert.equal(normalize('src\\literal.ts')?.payload.paths, undefined);
+});
+
+test('codec: exact edit paths keep producer ids distinct past presentation truncation', () => {
+  const sharedPrefix = `src/${'a'.repeat(300)}`;
+  const normalize = (filePath: string) =>
+    normalizeNativeEvent({
+      codec: CLAUDE_CODEC,
+      payload: {
+        hook_event_name: 'PostToolUse',
+        session_id: 'sess-claude',
+        cwd: '/repo',
+        tool_name: 'Write',
+        tool_input: { file_path: `/repo/${filePath}` }
+      },
+      occurredAt: '2026-08-01T00:00:00.000Z'
+    });
+
+  const left = normalize(`${sharedPrefix}-left.ts`);
+  const right = normalize(`${sharedPrefix}-right.ts`);
+  assert.ok(left);
+  assert.ok(right);
+  assert.notEqual(left.eventId, right.eventId);
+});
+
+test('codec: project roots preserve literal leading and trailing spaces', () => {
+  const projectRoot = '/repo with spaces ';
+  const event = normalizeNativeEvent({
+    codec: CLAUDE_CODEC,
+    payload: {
+      hook_event_name: 'PostToolUse',
+      session_id: 'sess-claude',
+      cwd: projectRoot,
+      tool_name: 'Write',
+      tool_input: { file_path: `${projectRoot}/src/app.ts` }
+    },
+    occurredAt: '2026-08-01T00:00:00.000Z'
+  });
+  assert.deepEqual(event?.payload.paths, ['src/app.ts']);
 });
 
 test('codec: prompt text is persisted in full but still redacted', () => {

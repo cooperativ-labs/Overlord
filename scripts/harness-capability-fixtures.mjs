@@ -3,18 +3,19 @@
  * Executable fixture runner for connector harness-capability descriptors.
  *
  * A `supported` capability is only true if a fixture proves it, and a fixture is only
- * proof if it actually runs. This runner executes the five fixture kinds that are
+ * proof if it actually runs. This runner executes the six fixture kinds that are
  * meaningful for a connector adapter and returns a structured pass/fail result.
  *
  *   native-payload  Assert the shape of a RECORDED native harness payload: the fields the
  *                   adapter's binding/normalization depends on are present at the declared
  *                   paths. Pure; no process is started.
  *
- *   script-io       Run a shipped adapter script in an isolated sandbox (own HOME, TMPDIR,
- *                   cwd, and a PATH whose only `ovld` is a recording spy) with a recorded
- *                   stdin, and assert exit status, stdout, stderr, every file the script
- *                   created inside the sandbox, and every CLI invocation it attempted.
- *                   This is how the mandatory unbound-session negative test is executed.
+ *   script-io       Run a shipped adapter script or rendered core script template in an
+ *                   isolated sandbox (own HOME, TMPDIR, cwd, and a PATH whose only `ovld`
+ *                   is a recording spy) with a recorded stdin, and assert exit status,
+ *                   stdout, stderr, every file the script created inside the sandbox, and
+ *                   every CLI invocation it attempted. This is how the mandatory
+ *                   unbound-session negative test is executed.
  *
  *   source-guard    Assert that a repo file does or does not contain declared markers —
  *                   the mechanism for "this dangerous harness flag must stay unset".
@@ -22,7 +23,7 @@
  *   normalized-event  Run a RECORDED native payload through the adapter's connector-owned
  *                   codec and the real pure normalizer, and assert the exact resulting
  *                   envelope. This is what makes an `observe.*` capability provable rather
- *                   than claimed: the fixture executes the shipped interpreter, so a codec
+ *                   than asserted: the fixture executes the shipped interpreter, so a codec
  *                   that stops producing the recorded envelope fails CI. It also carries a
  *                   `mustNotContain` list, which is how "no raw payload leaves the machine"
  *                   becomes an executable assertion instead of a promise.
@@ -30,6 +31,10 @@
  *   decision-codec Run a recorded native decision payload through the connector-owned
  *                   declaration and the real pure request/response interpreter. Assert the
  *                   bounded redacted card plus exact allow, deny, and defer bytes.
+ *
+ *   mutation-window Validate recorded mutation evidence semantically. Classification is
+ *                   derived from the available pre/post proof; a fixture cannot make a
+ *                   `paired` claim true merely by writing that word into its own JSON.
  *
  * Fixtures never reach the network: `script-io` runs with a PATH that contains no real
  * `ovld`, and the runner itself performs no I/O outside the repo and its sandbox.
@@ -52,7 +57,8 @@ export const FIXTURE_KINDS = [
   'script-io',
   'source-guard',
   'normalized-event',
-  'decision-codec'
+  'decision-codec',
+  'mutation-window'
 ];
 
 function fail(message) {
@@ -121,6 +127,315 @@ function runNativePayloadFixture({ fixture }) {
   return { ok: failures.length === 0, failures };
 }
 
+/**
+ * Execute a Phase-0 mutation-window proof. The referenced payload fixtures are
+ * recorded native inputs, so this runner verifies the fields needed to safely
+ * classify a connector without inventing a pairing that the harness has not
+ * demonstrated. It deliberately does not read source files or invoke a hook.
+ */
+export function runMutationWindowFixture({ fixture, adapterDir, repoRoot }) {
+  const failures = [];
+  const allowedTopLevel = new Set([
+    'fixtureVersion',
+    'kind',
+    'description',
+    'classification',
+    'reason',
+    'preFixture',
+    'postFixture',
+    'proof'
+  ]);
+  const semanticFields = new Set([
+    'session',
+    'call',
+    'workspace',
+    'tool',
+    'directPath',
+    'outcome',
+    'completion'
+  ]);
+  const proofKeys = new Set(['pre', 'post', 'mismatches']);
+
+  for (const key of Object.keys(fixture)) {
+    if (!allowedTopLevel.has(key)) failures.push(`unexpected mutation-window field: ${key}`);
+  }
+  if (typeof fixture.description !== 'string' || fixture.description.trim() === '') {
+    failures.push('mutation-window fixture requires a non-empty description');
+  }
+  if (!['paired', 'post-only', 'unsupported'].includes(fixture.classification)) {
+    failures.push('classification must be paired, post-only, or unsupported');
+  }
+  for (const key of Object.keys(fixture.proof ?? {})) {
+    if (!proofKeys.has(key)) failures.push(`unexpected mutation-window proof field: ${key}`);
+  }
+  for (const [label, map] of [
+    ['pre', fixture.proof?.pre],
+    ['post', fixture.proof?.post]
+  ]) {
+    if (map === undefined) continue;
+    if (map === null || typeof map !== 'object' || Array.isArray(map)) {
+      failures.push(`${label} proof must be an object`);
+      continue;
+    }
+    if (Object.keys(map).length === 0) {
+      failures.push(`${label} proof must declare at least one semantic field`);
+    }
+    for (const [field, dotted] of Object.entries(map)) {
+      if (!semanticFields.has(field)) {
+        failures.push(`unexpected ${label} semantic field: ${field}`);
+      }
+      if (field === 'completion') {
+        const valid =
+          dotted &&
+          typeof dotted === 'object' &&
+          !Array.isArray(dotted) &&
+          typeof dotted.path === 'string' &&
+          dotted.path !== '' &&
+          Object.hasOwn(dotted, 'equals') &&
+          Object.keys(dotted).every(key => key === 'path' || key === 'equals');
+        if (!valid) failures.push(`${label}.completion requires exactly path and equals`);
+      } else if (typeof dotted !== 'string' || dotted === '') {
+        failures.push(`${label}.${field} must be a non-empty dotted payload path`);
+      }
+    }
+  }
+
+  if (fixture.preFixture !== undefined && fixture.proof?.pre === undefined) {
+    failures.push('preFixture requires a pre semantic proof');
+  }
+  if (fixture.postFixture !== undefined && fixture.proof?.post === undefined) {
+    failures.push('postFixture requires a post semantic proof');
+  }
+  if (fixture.preFixture === undefined && fixture.proof?.pre !== undefined) {
+    failures.push('pre semantic proof requires preFixture');
+  }
+  if (fixture.postFixture === undefined && fixture.proof?.post !== undefined) {
+    failures.push('post semantic proof requires postFixture');
+  }
+  if (
+    fixture.proof?.mismatches !== undefined &&
+    (fixture.preFixture === undefined || fixture.postFixture === undefined)
+  ) {
+    failures.push('mismatch assertions require both preFixture and postFixture');
+  }
+  if (fixture.proof?.mismatches !== undefined && !Array.isArray(fixture.proof.mismatches)) {
+    failures.push('mismatch assertions must be an array');
+  }
+
+  const readReferencedPayload = (label, ref) => {
+    if (!ref) return null;
+    if (typeof ref !== 'string' || !/^fixtures\/[A-Za-z0-9._-]+\.json$/.test(ref)) {
+      failures.push(`${label} fixture must be an adapter-relative fixtures/*.json path`);
+      return null;
+    }
+    let referenced;
+    try {
+      referenced = readJson(path.join(adapterDir, ref));
+    } catch (error) {
+      failures.push(`${label} fixture not readable: ${ref} (${error.message})`);
+      return null;
+    }
+    if (referenced.payload === undefined) {
+      failures.push(`${label} fixture has no recorded payload: ${ref}`);
+      return null;
+    }
+    return { fixture: referenced, payload: referenced.payload };
+  };
+  const readSemanticValue = (label, payload, field, spec) => {
+    if (!payload || spec === undefined || field === 'completion') return undefined;
+    const value = resolvePath(payload, spec);
+    if (typeof value !== 'string' || value.trim() === '') {
+      failures.push(`${label} payload ${field} must resolve to a non-empty string at ${spec}`);
+      return undefined;
+    }
+    return value;
+  };
+  const validateSemanticMap = (label, payload, map) => {
+    const values = {};
+    if (!map || typeof map !== 'object' || Array.isArray(map)) return values;
+    for (const [field, spec] of Object.entries(map)) {
+      if (field === 'completion') {
+        if (!spec || typeof spec !== 'object' || Array.isArray(spec)) continue;
+        const actual = resolvePath(payload, spec.path);
+        if (actual !== spec.equals) {
+          failures.push(
+            `${label} completion mismatch at ${spec.path}: expected ${JSON.stringify(spec.equals)}, ` +
+              `got ${JSON.stringify(actual)}`
+          );
+        }
+      } else {
+        values[field] = readSemanticValue(label, payload, field, spec);
+      }
+    }
+    return values;
+  };
+
+  const preRecord = readReferencedPayload('pre', fixture.preFixture);
+  const postRecord = readReferencedPayload('post', fixture.postFixture);
+  const pre = preRecord?.payload ?? null;
+  const post = postRecord?.payload ?? null;
+  const preValues = validateSemanticMap('pre', pre, fixture.proof?.pre);
+  const postValues = validateSemanticMap('post', post, fixture.proof?.post);
+
+  const normalizedPostPaths = postRecord?.fixture?.expect?.payload?.paths;
+  const hasNormalizedDirectPathShape =
+    typeof fixture.proof?.post?.directPath === 'string' &&
+    postRecord?.fixture?.kind === 'normalized-event' &&
+    postRecord.fixture.expect?.kind === 'file.edited' &&
+    Array.isArray(normalizedPostPaths) &&
+    normalizedPostPaths.length > 0 &&
+    normalizedPostPaths.every(entry => typeof entry === 'string' && entry.trim() !== '');
+  let directPathEvidence = false;
+  if (typeof fixture.proof?.post?.directPath === 'string' && !hasNormalizedDirectPathShape) {
+    failures.push(
+      'post.directPath requires a normalized-event fixture whose expected file.edited payload has paths'
+    );
+  } else if (hasNormalizedDirectPathShape) {
+    const normalization = runNormalizedEventFixture({
+      fixture: postRecord.fixture,
+      repoRoot,
+      adapterDir
+    });
+    if (!normalization.ok) {
+      failures.push(
+        ...normalization.failures.map(failure => `post.directPath normalization: ${failure}`)
+      );
+    } else {
+      const rawDirectPath = postValues.directPath;
+      const workspace = postValues.workspace;
+      if (typeof rawDirectPath !== 'string' || typeof workspace !== 'string') {
+        failures.push(
+          'post.directPath evidence requires resolvable directPath and workspace values'
+        );
+      } else {
+        const resolvedWorkspace = path.resolve(workspace);
+        const resolvedDirectPath = path.isAbsolute(rawDirectPath)
+          ? path.resolve(rawDirectPath)
+          : path.resolve(resolvedWorkspace, rawDirectPath);
+        const relativeDirectPath = path.relative(resolvedWorkspace, resolvedDirectPath);
+        const canonicalDirectPath = relativeDirectPath.split(path.sep).join('/');
+        const escapesWorkspace =
+          canonicalDirectPath === '' ||
+          canonicalDirectPath === '..' ||
+          canonicalDirectPath.startsWith('../') ||
+          path.isAbsolute(relativeDirectPath);
+        if (
+          escapesWorkspace ||
+          normalizedPostPaths.length !== 1 ||
+          normalizedPostPaths[0] !== canonicalDirectPath
+        ) {
+          failures.push(
+            'post.directPath must resolve inside post.workspace and exactly match the sole ' +
+              `codec-normalized file.edited path (raw ${JSON.stringify(rawDirectPath)}, ` +
+              `normalized ${JSON.stringify(normalizedPostPaths)})`
+          );
+        } else {
+          directPathEvidence = true;
+        }
+      }
+    }
+  }
+
+  const pairedFields = ['session', 'call', 'workspace', 'tool', 'directPath'];
+  const declaresStrictPair =
+    Boolean(pre && post) &&
+    pairedFields.every(field => typeof fixture.proof?.pre?.[field] === 'string') &&
+    pairedFields.every(field => typeof fixture.proof?.post?.[field] === 'string') &&
+    typeof fixture.proof?.post?.outcome === 'string' &&
+    fixture.proof?.post?.completion !== undefined &&
+    !(fixture.proof?.mismatches?.length > 0);
+  const observedClassification = declaresStrictPair ? 'paired' : post ? 'post-only' : 'unsupported';
+
+  if (fixture.classification !== observedClassification) {
+    failures.push(
+      `declared classification ${fixture.classification} does not match derived ${observedClassification}`
+    );
+  }
+
+  if (observedClassification === 'paired') {
+    for (const field of pairedFields) {
+      if (preValues[field] !== postValues[field]) {
+        failures.push(
+          `${field} pair mismatch: ${JSON.stringify(preValues[field])} != ${JSON.stringify(postValues[field])}`
+        );
+      }
+    }
+  }
+
+  if (observedClassification === 'post-only') {
+    for (const field of ['session', 'workspace', 'tool']) {
+      if (typeof fixture.proof?.post?.[field] !== 'string') {
+        failures.push(`post-only proof requires post.${field}`);
+      }
+    }
+    if (fixture.proof?.post?.completion === undefined) {
+      failures.push('post-only proof requires post.completion with an exact native value');
+    }
+    if (pre) {
+      const mismatches = fixture.proof?.mismatches;
+      if (!Array.isArray(mismatches) || mismatches.length === 0) {
+        failures.push('post-only evidence with both payloads must prove at least one mismatch');
+      } else {
+        for (const [index, mismatch] of mismatches.entries()) {
+          const valid =
+            mismatch &&
+            typeof mismatch === 'object' &&
+            !Array.isArray(mismatch) &&
+            semanticFields.has(mismatch.field) &&
+            mismatch.field !== 'completion' &&
+            typeof mismatch.pre === 'string' &&
+            mismatch.pre !== '' &&
+            typeof mismatch.post === 'string' &&
+            mismatch.post !== '' &&
+            Object.keys(mismatch).every(key => ['field', 'pre', 'post'].includes(key));
+          if (!valid) {
+            failures.push(`mismatches[${index}] requires exactly field, pre, and post paths`);
+            continue;
+          }
+          if (
+            mismatch.pre !== fixture.proof?.pre?.[mismatch.field] ||
+            mismatch.post !== fixture.proof?.post?.[mismatch.field]
+          ) {
+            failures.push(
+              `mismatches[${index}] paths must equal the declared ${mismatch.field} semantic paths`
+            );
+            continue;
+          }
+          const before = resolvePath(pre, mismatch.pre);
+          const after = resolvePath(post, mismatch.post);
+          if (before === undefined || after === undefined) {
+            failures.push(`mismatches[${index}] paths must both resolve`);
+          } else if (JSON.stringify(before) === JSON.stringify(after)) {
+            failures.push(
+              `mismatches[${index}] did not differ: ${mismatch.pre} equals ${mismatch.post}`
+            );
+          }
+        }
+      }
+    }
+  }
+
+  if (observedClassification === 'unsupported') {
+    if (typeof fixture.reason !== 'string' || fixture.reason.trim() === '') {
+      failures.push('unsupported evidence requires a non-empty reason');
+    }
+    if (fixture.postFixture !== undefined) {
+      failures.push('unsupported evidence cannot reference a postFixture');
+    }
+  } else if (fixture.reason !== undefined) {
+    failures.push('reason is only valid for unsupported mutation evidence');
+  }
+
+  return {
+    ok: failures.length === 0,
+    failures,
+    observed: {
+      classification: observedClassification,
+      directPathEvidence: directPathEvidence ? 'direct' : 'unavailable'
+    }
+  };
+}
+
 function runSourceGuardFixture({ fixture, repoRoot }) {
   const failures = [];
   const target = path.join(repoRoot, fixture.path);
@@ -150,6 +465,21 @@ function runScriptIoFixture({ fixture, repoRoot }) {
     return fail(`script-io target not found: ${fixture.script}`);
   }
 
+  const adapterKey = fixture.adapterKey;
+  if (adapterKey !== undefined && !/^[a-z][a-z0-9_-]*$/.test(adapterKey)) {
+    return fail('script-io adapterKey must be a connector adapter key.');
+  }
+
+  let renderedScript = null;
+  if (adapterKey !== undefined) {
+    const source = readFileSync(scriptPath, 'utf8');
+    const placeholder = '__OVERLORD_ADAPTER_KEY__';
+    if (!source.includes(placeholder)) {
+      return fail(`script-io template does not contain ${placeholder}: ${fixture.script}`);
+    }
+    renderedScript = source.replaceAll(placeholder, adapterKey);
+  }
+
   const sandbox = mkdtempSync(path.join(tmpdir(), 'ovld-fixture-'));
   try {
     const home = path.join(sandbox, 'home');
@@ -162,12 +492,18 @@ function runScriptIoFixture({ fixture, repoRoot }) {
     // touching the network, so a fixture can assert exactly which CLI calls a script
     // attempts from an unbound session.
     const spyLog = path.join(sandbox, 'ovld-invocations.log');
+    const spyStdin = path.join(sandbox, 'ovld-stdin.log');
     const spyPath = path.join(bin, 'ovld');
     writeFileSync(
       spyPath,
-      `#!/bin/sh\nprintf '%s\\n' "$*" >> ${JSON.stringify(spyLog)}\nexit 0\n`,
+      `#!/bin/sh\nprintf '%s\\n' "$*" >> ${JSON.stringify(spyLog)}\ncat >> ${JSON.stringify(spyStdin)}\nexit 0\n`,
       { mode: 0o755 }
     );
+
+    const executablePath = renderedScript === null ? scriptPath : path.join(bin, 'callback.sh');
+    if (renderedScript !== null) {
+      writeFileSync(executablePath, renderedScript, { mode: 0o755 });
+    }
 
     const env = {
       PATH: `${bin}:/usr/local/bin:/usr/bin:/bin`,
@@ -182,7 +518,7 @@ function runScriptIoFixture({ fixture, repoRoot }) {
 
     const stdin =
       typeof fixture.stdin === 'string' ? fixture.stdin : `${JSON.stringify(fixture.stdin ?? {})}`;
-    const result = spawnSync('/bin/bash', [scriptPath], {
+    const result = spawnSync('/bin/bash', [executablePath], {
       cwd: work,
       env,
       input: stdin,
@@ -232,10 +568,22 @@ function runScriptIoFixture({ fixture, repoRoot }) {
     } catch {
       invocations = [];
     }
+    let capturedStdin = '';
+    try {
+      capturedStdin = readFileSync(spyStdin, 'utf8');
+    } catch {
+      capturedStdin = '';
+    }
     if (expected.cliInvocations !== undefined) {
       const actual = JSON.stringify(invocations);
       const wanted = JSON.stringify(expected.cliInvocations);
       if (actual !== wanted) failures.push(`cli invocations: expected ${wanted}, got ${actual}`);
+    }
+    if (expected.stdinForwarded !== undefined) {
+      const forwarded = capturedStdin === stdin;
+      if (forwarded !== expected.stdinForwarded) {
+        failures.push(`stdin forwarded: expected ${expected.stdinForwarded}, got ${forwarded}`);
+      }
     }
 
     if (expected.sandboxWrites !== undefined) {
@@ -259,7 +607,13 @@ function runScriptIoFixture({ fixture, repoRoot }) {
         exitCode: result.status,
         stdout: result.stdout,
         stderr: result.stderr,
-        cliInvocations: invocations
+        cliInvocations: invocations,
+        cliStdin: capturedStdin,
+        sandboxWrites: listFilesRecursively(home)
+          .map(entry => `~/${entry}`)
+          .concat(listFilesRecursively(temp).map(entry => `$TMPDIR/${entry}`))
+          .concat(listFilesRecursively(work).map(entry => `./${entry}`))
+          .sort()
       }
     };
   } finally {
@@ -398,7 +752,8 @@ export function runFixture({ fixturePath, repoRoot }) {
     'script-io': runScriptIoFixture,
     'source-guard': runSourceGuardFixture,
     'normalized-event': runNormalizedEventFixture,
-    'decision-codec': runDecisionCodecFixture
+    'decision-codec': runDecisionCodecFixture,
+    'mutation-window': runMutationWindowFixture
   };
   const result = runners[fixture.kind]({
     fixture,

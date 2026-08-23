@@ -1378,7 +1378,9 @@ Indexes:
 
 ### `changed_files`
 
-Update-time file metadata, upserted by session/objective/path.
+Objective-ledger file metadata, upserted by objective/path through `sync-changes`.
+It persists only bounded metadata, never file content, diffs, commands,
+transcripts, environment values, fingerprints, or absolute host paths.
 
 | Column                   | Type         | Required | Notes                                                                                                                                                                                                                                     |
 | ------------------------ | ------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1388,14 +1390,14 @@ Update-time file metadata, upserted by session/objective/path.
 | `mission_id`             | Id           | yes      | FK to `missions`.                                                                                                                                                                                                                         |
 | `objective_id`           | Id           | yes      | FK to `objectives`.                                                                                                                                                                                                                       |
 | `session_id`             | Id           | no       | FK to `agent_sessions`; null for `record-work` changed-file metadata.                                                                                                                                                                     |
-| `resource_id`            | Id           | no       | FK to `project_resources` when known. Protocol update/deliver paths populate this from the session execution request's `resolved_resource_id` when available, so review surfaces can identify which project resource produced the change. |
+| `resource_id`            | Id           | no       | FK to `project_resources` when known. `sync-changes` refreshes it from the observing session's resolved resource, so review surfaces can identify which project resource produced the change. |
 | `file_path`              | Path         | yes      | Normalized repo-relative path.                                                                                                                                                                                                            |
 | `vcs_status`             | text         | no       | `modified`, `added`, `deleted`, etc.                                                                                                                                                                                                      |
-| `current_diff_state`     | text         | yes      | `present`, `resolved`, `unknown`, `unavailable`.                                                                                                                                                                                          |
+| `current_diff_state`     | text         | yes      | `present`, `resolved`, `unknown`, `unavailable`. New objective-ledger and `record-work` path observations use `unknown`: neither path establishes that a current VCS diff exists. Historical `present` and `resolved` rows remain readable. |
 | `first_observed_at`      | TimestampUTC | yes      |                                                                                                                                                                                                                                           |
 | `last_observed_at`       | TimestampUTC | yes      |                                                                                                                                                                                                                                           |
 | `last_observed_event_id` | Id           | no       | FK to `mission_events`.                                                                                                                                                                                                                   |
-| `observed_metadata_json` | Json         | yes      | No full diff or file contents.                                                                                                                                                                                                            |
+| `observed_metadata_json` | Json         | yes      | Bounded source, quality, overlap, tool-window, adapter-version, and hook-health metadata only; never content, diffs, commands, transcripts, environment values, or fingerprints.                                                         |
 | `created_at`             | TimestampUTC | yes      |                                                                                                                                                                                                                                           |
 | `updated_at`             | TimestampUTC | yes      |                                                                                                                                                                                                                                           |
 | `deleted_at`             | TimestampUTC | no       | Tombstone.                                                                                                                                                                                                                                |
@@ -1403,15 +1405,17 @@ Update-time file metadata, upserted by session/objective/path.
 
 Indexes:
 
-- Unique active `(session_id, objective_id, file_path)` where `session_id` is present.
+- Unique active `(objective_id, file_path)`. A changed-file row is objective-owned
+  across sessions; a later observation may refresh its session metadata but cannot
+  create a second active row for the same objective/path.
 - `(mission_id, objective_id, file_path)`.
 - `(project_id, updated_at)`.
 
-When an update-time changed-file record omits `objective_id`, services should apply the same objective auto-association rule as `mission_events`.
-
-Delivery coverage is objective-scoped. Validators must aggregate `changed_files` across every session for the objective, plus any null-session `record-work` records. If multiple sessions observed the same file, `present` wins over `unknown`/`unavailable`, and `resolved` removes the file from final coverage only when the final local workspace state no longer contains a meaningful change.
-
-`deliverSession` (`packages/core/service/protocol.ts`) performs this `present`→`resolved` transition when the client supplies the optional `observedDirtyPaths` deliver field: any `present` row for the objective whose path is absent from that set is marked `resolved` before rationale coverage is computed, regardless of which session originally recorded it (coo:127 Layer 4).
+`objective_id` is mandatory. Every later observation refreshes `session_id`,
+`resource_id`, last-observed time, and bounded provenance on the same active row.
+Evidence precedence prevents a weaker observation from replacing a stronger
+source/quality pair. `record-work` is the only writer with a null session because
+it has no execution target ledger.
 
 ### `change_rationales`
 
@@ -1446,7 +1450,8 @@ Indexes:
 - `(delivery_id, file_path)`.
 - Optional unique active final rationale `(delivery_id, file_path)`.
 
-Delivery validation should require final rationales for meaningful `changed_files` still present in the final workspace state, unless explicitly skipped.
+Rationales are optional annotations. Missing rationale prose never blocks delivery;
+review starts from `changed_files` and joins the latest applicable rationale.
 
 ## Runner, Jobs, And Protocol Idempotency
 

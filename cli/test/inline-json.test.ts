@@ -9,7 +9,7 @@ test('rejectOversizedInlineJson allows compact inline JSON', () => {
   const flags = parseArgs([
     'deliver',
     '--change-rationales-json',
-    '[{"label":"x","file_path":"a.ts","summary":"s","why":"w","impact":"i"}]'
+    '[{"label":"x","filePath":"a.ts","summary":"s","why":"w","impact":"i"}]'
   ]).flags;
 
   assert.doesNotThrow(() => rejectOversizedInlineJson({ flags }));
@@ -21,6 +21,14 @@ test('rejectOversizedInlineJson rejects oversized change-rationales-json', () =>
 
   assert.throws(() => rejectOversizedInlineJson({ flags }), /change-rationales-json is too large/);
   assert.throws(() => rejectOversizedInlineJson({ flags }), /--change-rationales-file -/);
+});
+
+test('rejectOversizedInlineJson points sync changes to the canonical file flag', () => {
+  const oversized = 'x'.repeat(MAX_INLINE_JSON_CHARS + 1);
+  const flags = parseArgs(['sync-changes', '--changes-json', oversized]).flags;
+
+  assert.throws(() => rejectOversizedInlineJson({ flags }), /--changes-json is too large/);
+  assert.throws(() => rejectOversizedInlineJson({ flags }), /--changes-file -/);
 });
 
 test('runProtocolCommand rejects oversized inline JSON before calling the backend', async () => {

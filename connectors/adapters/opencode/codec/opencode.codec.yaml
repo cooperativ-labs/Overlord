@@ -30,7 +30,6 @@ events:
     inputPath: properties.part.state.input
     callIdPath: properties.part.callID
     outcomePath: properties.part.state.status
-    fileEditKind: file.edited
 
   - native: session.idle
     kind: session.ended

@@ -10,7 +10,7 @@ import {
 } from '@overlord/core/service/execution-requests';
 import { createMissionWithObjectives } from '@overlord/core/service/missions';
 import { addProjectResource, createProject } from '@overlord/core/service/projects';
-import { attachSession, deliverSession, updateSession } from '@overlord/core/service/protocol';
+import { attachSession, deliverSession, syncChanges } from '@overlord/core/service/protocol';
 import { createIsolatedCheckout } from '@overlord/core/service/test-checkout';
 import { newId } from '@overlord/core/service/util';
 import assert from 'node:assert/strict';
@@ -734,17 +734,22 @@ test('change review reports missing and covered rationales', async () => {
   await ctx.db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [objectives[0]?.id]);
   const attached = await attachSession({ ctx, missionId: mission.displayId });
 
-  await updateSession({
+  await syncChanges({
     ctx,
     missionId: mission.displayId,
     sessionKey: attached.sessionKey,
-    summary: 'Changed files',
-    changedFiles: [{ filePath: 'src/example.ts', vcsStatus: 'M' }]
+    changes: [
+      {
+        filePath: 'src/example.ts',
+        idempotencyKey: 'change-review-example-1',
+        source: 'declared_edit',
+        quality: 'direct',
+        overlap: false
+      }
+    ]
   });
   assert.equal(
-    (
-      await listChangedFilesForReview({ ctx, missionId: mission.displayId, includeCurrent: false })
-    )[0]?.coverage,
+    (await listChangedFilesForReview({ ctx, missionId: mission.displayId }))[0]?.coverage,
     'missing_rationale'
   );
 
@@ -755,7 +760,7 @@ test('change review reports missing and covered rationales', async () => {
     summary: 'Delivered tracked change',
     changeRationales: [
       {
-        file_path: 'src/example.ts',
+        filePath: 'src/example.ts',
         label: 'Example change',
         summary: 'Updated the example.',
         why: 'Required for the test.',
@@ -766,8 +771,7 @@ test('change review reports missing and covered rationales', async () => {
 
   const files = await listChangedFilesForReview({
     ctx,
-    missionId: mission.displayId,
-    includeCurrent: false
+    missionId: mission.displayId
   });
   assert.equal(files[0]?.coverage, 'covered');
   assert.equal((await listRationalesForReview({ ctx, missionId: mission.displayId })).length, 1);

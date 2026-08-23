@@ -1,24 +1,20 @@
 import { groupConcat } from '@overlord/database';
-import path from 'node:path';
 
-import { readGitStatusPorcelain } from './local-target/git-status.ts';
-import { isCoLocatedBackend } from './local-target/index.ts';
 import type { ServiceContext } from './context.js';
 import { resolveMissionId } from './context.js';
-import { discoverProject } from './projects.js';
 
 export type ChangedFileReview = {
   filePath: string;
   vcsStatus: string | null;
-  currentDiffState: string | null;
-  objectiveId: string | null;
+  currentDiffState: string;
+  objectiveId: string;
   sessionId: string | null;
-  firstObservedAt: string | null;
-  lastObservedAt: string | null;
+  firstObservedAt: string;
+  lastObservedAt: string;
   rationaleCount: number;
   finalRationaleCount: number;
   rationaleLabels: string[];
-  coverage: 'covered' | 'missing_rationale' | 'skipped' | 'unassigned' | 'resolved';
+  coverage: 'covered' | 'missing_rationale' | 'resolved';
 };
 
 export type RationaleReview = {
@@ -35,44 +31,14 @@ export type RationaleReview = {
   createdAt: string;
 };
 
-function parseObservedMetadata(raw: string | null | undefined): {
-  rationaleSkipped?: boolean;
-} {
-  if (!raw?.trim()) return {};
-  try {
-    const parsed = JSON.parse(raw) as { rationaleSkipped?: boolean };
-    return typeof parsed === 'object' && parsed !== null ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-async function resolveWorkingDirectory({
-  ctx,
-  missionId
-}: {
-  ctx: ServiceContext;
-  missionId: string;
-}): Promise<string | null> {
-  try {
-    const mission = await resolveMissionId(ctx, missionId);
-    const discovery = await discoverProject({ ctx, projectId: mission.projectId });
-    return discovery.resourcePath ? path.resolve(discovery.resourcePath) : null;
-  } catch {
-    return null;
-  }
-}
-
 export async function listChangedFilesForReview({
   ctx,
   missionId,
-  objectiveId,
-  includeCurrent = true
+  objectiveId
 }: {
   ctx: ServiceContext;
   missionId: string;
   objectiveId?: string | null;
-  includeCurrent?: boolean;
 }): Promise<ChangedFileReview[]> {
   const mission = await resolveMissionId(ctx, missionId);
   const params: string[] = [mission.id];
@@ -81,7 +47,7 @@ export async function listChangedFilesForReview({
 
   const rows = (await ctx.db.all(
     `SELECT cf.file_path, cf.vcs_status, cf.current_diff_state, cf.objective_id, cf.session_id,
-              cf.first_observed_at, cf.last_observed_at, cf.observed_metadata_json,
+              cf.first_observed_at, cf.last_observed_at,
               COUNT(cr.id) AS rationale_count,
               SUM(CASE WHEN cr.is_final THEN 1 ELSE 0 END) AS final_rationale_count,
               ${groupConcat(ctx.db.dialect, 'cr.label', '\n')} AS rationale_labels
@@ -98,31 +64,26 @@ export async function listChangedFilesForReview({
   )) as Array<{
     file_path: string;
     vcs_status: string | null;
-    current_diff_state: string | null;
-    objective_id: string | null;
+    current_diff_state: string;
+    objective_id: string;
     session_id: string | null;
-    first_observed_at: string | null;
-    last_observed_at: string | null;
-    observed_metadata_json: string | null;
+    first_observed_at: string;
+    last_observed_at: string;
     rationale_count: number;
     final_rationale_count: number | null;
     rationale_labels: string | null;
   }>;
 
-  const byPath = new Map<string, ChangedFileReview>();
-  for (const row of rows) {
+  const reviews = rows.map(row => {
     const rationaleCount = Number(row.rationale_count ?? 0);
     const finalRationaleCount = Number(row.final_rationale_count ?? 0);
-    const metadata = parseObservedMetadata(row.observed_metadata_json);
     const coverage =
-      metadata.rationaleSkipped === true
-        ? 'skipped'
-        : row.current_diff_state === 'resolved'
-          ? 'resolved'
-          : finalRationaleCount > 0 || rationaleCount > 0
-            ? 'covered'
-            : 'missing_rationale';
-    byPath.set(row.file_path, {
+      row.current_diff_state === 'resolved'
+        ? 'resolved'
+        : finalRationaleCount > 0 || rationaleCount > 0
+          ? 'covered'
+          : 'missing_rationale';
+    return {
       filePath: row.file_path,
       vcsStatus: row.vcs_status,
       currentDiffState: row.current_diff_state,
@@ -134,36 +95,12 @@ export async function listChangedFilesForReview({
       finalRationaleCount,
       rationaleLabels: row.rationale_labels?.split('\n').filter(Boolean) ?? [],
       coverage
-    });
-  }
+    } satisfies ChangedFileReview;
+  });
 
-  // Co-located (Local SQLite) backend only: the porcelain status is read
-  // directly here because no provider capability lists current changes yet —
-  // `readCurrentDiff` is still `CAPABILITY_NOT_IMPLEMENTED`. Routing this read
-  // through the seam waits on that capability landing across all transports.
-  if (includeCurrent && isCoLocatedBackend(ctx.db)) {
-    const workingDirectory = await resolveWorkingDirectory({ ctx, missionId: mission.id });
-    if (workingDirectory) {
-      for (const current of readGitStatusPorcelain(workingDirectory)) {
-        if (byPath.has(current.filePath)) continue;
-        byPath.set(current.filePath, {
-          filePath: current.filePath,
-          vcsStatus: current.vcsStatus,
-          currentDiffState: 'present',
-          objectiveId: null,
-          sessionId: null,
-          firstObservedAt: null,
-          lastObservedAt: null,
-          rationaleCount: 0,
-          finalRationaleCount: 0,
-          rationaleLabels: [],
-          coverage: 'unassigned'
-        });
-      }
-    }
-  }
-
-  return Array.from(byPath.values()).sort((a, b) => a.filePath.localeCompare(b.filePath));
+  return reviews.sort(
+    (a, b) => a.filePath.localeCompare(b.filePath) || a.objectiveId.localeCompare(b.objectiveId)
+  );
 }
 
 export async function listRationalesForReview({

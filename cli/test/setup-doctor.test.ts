@@ -27,9 +27,6 @@ test('parseConnectorManifestYaml reads the constrained manifest subset', () => {
       'componentKey: demo',
       'connector:',
       '  agentIdentifier: demo',
-      '  capabilities:',
-      '    - followUpHook',
-      '    - permissionHook',
       '  installPath: "~/.demo/plugin"',
       '  managedFiles:',
       '    - "README.md"'
@@ -38,7 +35,6 @@ test('parseConnectorManifestYaml reads the constrained manifest subset', () => {
 
   assert.equal(parsed.contractVersion, '0');
   assert.equal(parsed.connector.agentIdentifier, 'demo');
-  assert.deepEqual(parsed.connector.capabilities, ['followUpHook', 'permissionHook']);
   assert.equal(parsed.connector.installPath, '~/.demo/plugin');
   assert.deepEqual(parsed.connector.managedFiles, ['README.md']);
 });
@@ -50,7 +46,7 @@ test('claude connector is available and every managed file exists on disk', () =
   const sourceDir = path.join(repoRoot, 'connectors', 'adapters', 'claude');
   for (const relativePath of manifest.connector.managedFiles) {
     assert.ok(
-      managedFileSourceExists({ sourceDir, relativePath }),
+      managedFileSourceExists({ sourceDir, relativePath, adapterKey: 'claude' }),
       `missing managed source: ${relativePath}`
     );
   }
@@ -63,7 +59,7 @@ test('cursor connector is available and every managed file exists on disk', () =
   const sourceDir = path.join(repoRoot, 'connectors', 'adapters', 'cursor');
   for (const relativePath of manifest.connector.managedFiles) {
     assert.ok(
-      managedFileSourceExists({ sourceDir, relativePath }),
+      managedFileSourceExists({ sourceDir, relativePath, adapterKey: 'cursor' }),
       `missing managed source: ${relativePath}`
     );
   }
@@ -76,7 +72,7 @@ test('codex connector is available and every managed file exists on disk', () =>
   const sourceDir = path.join(repoRoot, 'connectors', 'adapters', 'codex');
   for (const relativePath of manifest.connector.managedFiles) {
     assert.ok(
-      managedFileSourceExists({ sourceDir, relativePath }),
+      managedFileSourceExists({ sourceDir, relativePath, adapterKey: 'codex' }),
       `missing managed source: ${relativePath}`
     );
   }
@@ -89,7 +85,7 @@ test('PI connector is available and every managed file exists on disk', () => {
   const sourceDir = path.join(repoRoot, 'connectors', 'adapters', 'pi');
   for (const relativePath of manifest.connector.managedFiles) {
     assert.ok(
-      managedFileSourceExists({ sourceDir, relativePath }),
+      managedFileSourceExists({ sourceDir, relativePath, adapterKey: 'pi' }),
       `missing managed source: ${relativePath}`
     );
   }

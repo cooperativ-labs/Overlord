@@ -41,10 +41,9 @@ in the design set:
 - **Realtime is driven by `entity_changes`.** The UI subscribes to `/realtime`
   (SSE/WebSocket backed by the change feed) and catches up via `/sync/changes?after=<seq>`.
   Active agent work must update on screen without a manual refresh.
-- **VCS access is strictly read-only.** The UI may display status, diffs, and
-  rationale coverage, but it must never create commits, branches, resets, or any
-  other VCS mutation, and it must not upload repository contents unless the user
-  explicitly attaches a file.
+- **File evidence is metadata-only.** The UI reads objective-ledger paths and
+  optional rationale annotations; it does not scan the worktree, upload repository
+  contents, or perform VCS mutations.
 - **Capability gating is first-class.** Overlord installs in
   [core + à-la-carte table groups](../../../database/docs/10-database-table-groups.md).
   Pages and panels that depend on a group (auth, tags, search, connector
@@ -69,8 +68,8 @@ gating, acceptance criteria).
 | 02 | [Mission Board](02-mission-board.md) | Kanban + list board, filters, search, create-mission, quick run |
 | 03 | [Mission Detail](03-mission-detail.md) | The core screen: target header, objectives, editor, activity timeline, context, artifacts — **plus an As-built section documenting the shipped single-column mission presentation and the deviations to ratify** |
 | 04 | [Execution & Runner](04-execution-and-runner.md) | Run controls, execution-request queue, runner status, approval gates |
-| 05 | [Review & Delivery](05-review-and-delivery.md) | Delivery summary, artifacts, change-rationale coverage, review actions |
-| 06 | [Current Changes](06-current-changes.md) | Read-only VCS status, diffs, rationale linking |
+| 05 | [Review & Delivery](05-review-and-delivery.md) | Delivery summary, artifacts, file evidence, review actions |
+| 06 | [File Changes](06-current-changes.md) | Objective-ledger attribution and optional rationale annotations |
 | 07 | [Connectors & Doctor](07-connectors-and-doctor.md) | Connector install/health, `doctor` results, permission-request review |
 | 08 | [Settings](08-settings.md) | Instance, execution targets, project workflow, terminal, danger zone |
 | 09 | [Users, Roles & Tokens](09-users-roles-and-tokens.md) | Multi-user admin, RBAC roles, `USER_TOKEN` lifecycle (capability-gated) |

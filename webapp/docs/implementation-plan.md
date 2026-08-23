@@ -129,7 +129,7 @@ resources (not raw tables), so they fit the existing boundary. Ratify them in th
 
 | Endpoint | Feeds | Page docs |
 | --- | --- | --- |
-| `GET /missions/:id/changes` | `changed_files` + `change_rationales` (coverage) | `ui/05`, `ui/06` |
+| `GET /api/missions/:id/file-changes` | changed-file-first evidence with optional rationale | `ui/05`, `ui/06` |
 | `GET /runner/status` | local runner identity + queue summary | `ui/04` |
 | `GET /execution-requests?projectId=` | runner queue | `ui/04` |
 | `GET /capabilities` | which à-la-carte groups / REST features are installed | all (gating, `ui/00` §5) |
@@ -258,7 +258,7 @@ breadth work begins.
 | **M3** | Mission board (full) | 02 | L | Kanban + list, filter bar in URL state, create-mission modal, drag/keyboard status move (optimistic + reconcile), quick-run with working-dir repair |
 | **M4** | Mission detail (full) | 03 | XL | Objective rail + editor, all timeline `EventItem` renderers, inline ask answering, shared-context tab, objective-scoped attachments, the never-transition-locally rule |
 | **M5** | Execution & runner | 04 | L | Run control, execution-request queue, runner-status panel, auto-advance approval gate, idempotent re-click safety |
-| **M6** | Review & delivery | 05 | L | Delivery summary, rationale coverage bar, artifacts by type, follow-up vs reopen-for-changes distinction, delivery history pager |
+| **M6** | Review & delivery | 05 | L | Delivery summary, objective-ledger file evidence, artifacts by type, follow-up vs reopen-for-changes distinction, delivery history pager |
 
 M4 (mission detail) is the largest single screen and the heart of "realtime React
 interface" — budget accordingly. M5/M6 complete the run→deliver→review loop that
@@ -385,7 +385,7 @@ product-level criteria in [web-app.md](web-app.md):
 - Launch lands on the active project's board — never a marketing or forced-login page.
 - A user can create a project + mission in the web app and execute it via the CLI runner.
 - A user can watch an executing objective update live in mission detail (no refresh).
-- A user can review delivery summary, artifacts, and rationale coverage without the agent chat.
+- A user can review delivery summary, artifacts, and objective-ledger file evidence without the agent chat.
 - A user can identify and clear stale execution requests.
 - A user can configure connector/default-launch settings without editing config files.
 - A core-only install hides every gated surface with no broken links and a fully usable core workflow.

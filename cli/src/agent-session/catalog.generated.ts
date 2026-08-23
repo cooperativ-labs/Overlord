@@ -41,6 +41,8 @@ export type AgentSessionCapabilityStatus =
 
 export type HarnessIntegrationShape = 'callback' | 'extension' | 'controlPlane';
 
+export type MutationHookClassification = 'paired' | 'post-only' | 'unsupported';
+
 export type HarnessCapabilityEntry = {
   status: AgentSessionCapabilityStatus;
   native: string | null;
@@ -75,6 +77,17 @@ export type HarnessDescriptor = {
     defaultTimeoutSeconds: number | null;
     maxTimeoutSeconds: number | null;
   };
+  mutationHooks: {
+    classification: MutationHookClassification;
+    pathEvidenceSource: 'declared_edit' | 'window_observed' | 'unavailable';
+    pathEvidenceQuality: 'direct' | 'window' | 'unavailable';
+    shellEvidence: 'unavailable';
+    pathlessEvidence: 'unavailable';
+    fixture: string;
+    reason: string | null;
+    evidenceRef: string | null;
+    notes: string | null;
+  };
   capabilities: Record<AgentSessionCapabilityId, HarnessCapabilityEntry>;
   hazards: Array<{
     id: string;
@@ -100,7 +113,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "codec": "antigravity",
     "integrationShape": "callback",
     "capabilityTier": 0,
-    "descriptorDigest": "e7313b23f98b6ed15a1a32849291a2a391523d4c06403bf395ecbcadfa3b11ac",
+    "descriptorDigest": "c5686f1ab4c02e6bb90adeef83c6acd61703f3238be12618fed1e2b833636b2a",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Antigravity CLI",
@@ -119,6 +132,17 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
       "timeoutUnit": null,
       "defaultTimeoutSeconds": null,
       "maxTimeoutSeconds": null
+    },
+    "mutationHooks": {
+      "classification": "unsupported",
+      "pathEvidenceSource": "unavailable",
+      "pathEvidenceQuality": "unavailable",
+      "shellEvidence": "unavailable",
+      "pathlessEvidence": "unavailable",
+      "fixture": "fixtures/mutation-window-evidence.json",
+      "reason": "No recorded PostToolUse payload or empirical agy hook execution proves a pair.",
+      "evidenceRef": null,
+      "notes": null
     },
     "capabilities": {
       "observe.prompt": {
@@ -249,22 +273,6 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
         "verification": "unverified",
         "mitigation": "required",
         "trackedAs": "agent-session-verify-antigravity"
-      },
-      {
-        "id": "pre-tool-use-always-allows",
-        "severity": "medium",
-        "summary": "The former PreToolUse hook answered `{\"allow_tool\":true}` even though the first-party response contract requires `decision`, and called a nonexistent detached protocol command. It neither gated nor recorded reliably; changing it to native `decision: allow` would have silently bypassed the harness permission system, so the registration was removed.",
-        "verification": "verified",
-        "mitigation": "implemented",
-        "trackedAs": null
-      },
-      {
-        "id": "pre-invocation-has-no-prompt",
-        "severity": "high",
-        "summary": "The former follow-up hook guessed prompt/message/text/input fields on PreInvocation, but the first-party schema contains none of them. It could never capture a normal follow-up; reconstructing one from transcriptPath would violate the raw-transcript privacy boundary. The false followUpHook projection and the registration were removed.",
-        "verification": "verified",
-        "mitigation": "implemented",
-        "trackedAs": null
       }
     ],
     "decisionShape": {
@@ -282,7 +290,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "codec": "claude",
     "integrationShape": "callback",
     "capabilityTier": 1,
-    "descriptorDigest": "15ea657c37363b74db085466a97f38db044892abf2e28465b1c7bcd6cc4ce927",
+    "descriptorDigest": "c7e52ce7d4698d35888a533b42d67c56d7616b3bb90e8537e4afcc39e1b6cc5d",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Claude Code",
@@ -302,6 +310,17 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
       "timeoutUnit": "seconds",
       "defaultTimeoutSeconds": null,
       "maxTimeoutSeconds": null
+    },
+    "mutationHooks": {
+      "classification": "post-only",
+      "pathEvidenceSource": "declared_edit",
+      "pathEvidenceQuality": "direct",
+      "shellEvidence": "unavailable",
+      "pathlessEvidence": "unavailable",
+      "fixture": "fixtures/mutation-window-evidence.json",
+      "reason": null,
+      "evidenceRef": null,
+      "notes": "Recorded completion-side write evidence lacks a matching pre/post call pair. A directly named native edit path normalized by the Claude codec as `file.edited` records objective-bound, non-exclusive `declared_edit`/`direct` evidence. Codec-normalized read, search, and fetch callbacks are silent no-ops. Mutation-capable callbacks without a normalized edit path, plus shell, generic, unknown, and unmapped callbacks, record unavailable evidence health."
     },
     "capabilities": {
       "observe.prompt": {
@@ -428,7 +447,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
       {
         "id": "shipped-permission-hook-inert",
         "severity": "high",
-        "summary": "The installed PermissionRequest hook calls a `ovld protocol permission-request` subcommand that does not exist, backgrounds the call with `) & disown`, and is gated on a MISSION_ID environment variable launched sessions do not always set. It records nothing and, being backgrounded with stdout discarded, is structurally incapable of returning a decision. The shipped conformance `permissionHook` flag therefore overstates what happens today.",
+        "summary": "The installed PermissionRequest hook calls a `ovld protocol permission-request` subcommand that does not exist, backgrounds the call with `) & disown`, and is gated on a MISSION_ID environment variable launched sessions do not always set. It records nothing and, being backgrounded with stdout discarded, is structurally incapable of returning a decision.",
         "verification": "verified",
         "mitigation": "implemented",
         "trackedAs": null
@@ -436,18 +455,10 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
       {
         "id": "shipped-stop-hook-inert",
         "severity": "medium",
-        "summary": "The installed Stop hook calls `ovld protocol hook-event --hook-type Stop`, which the CLI rejects, and then parses a `deliveryStatus` field nothing produces. Confirmed again at 2.1.221 from a live agent-pod session: every entry in ~/.ovld/logs/stop-hook.log takes the `no launch mission id` branch and returns before the delivery check, because the hook gates on a `MISSION_ID` environment variable the pod does not set. The PostToolUse hook works in the same session because it resolves the mission from the per-cwd active-session manifest instead; the Stop hook should resolve it the same way.",
+        "summary": "The installed Stop hook calls `ovld protocol hook-event --hook-type Stop`, which the CLI rejects, and then parses a `deliveryStatus` field nothing produces. Confirmed again at 2.1.221 from a live agent-pod session: every entry in ~/.ovld/logs/stop-hook.log takes the `no launch mission id` branch and returns before the delivery check, because the hook gates on a `MISSION_ID` environment variable the pod does not set. The PostToolUse path is independently scoped by explicit mission and objective launch environment; the Stop hook should use an equally explicit binding.",
         "verification": "verified",
         "mitigation": "required",
         "trackedAs": "agent-session-phase-3"
-      },
-      {
-        "id": "unbound-session-side-effects",
-        "severity": "medium",
-        "summary": "NARROWED, NOT CLOSED. The new agent-session registrations gate in bash on OVERLORD_SESSION_CHANNEL_ID before spawning anything, so they are completely silent in an unbound session (proved by fixtures/agent-session-hook-unbound.json). The LEGACY PostToolUse hook still spawns `ovld protocol record-touched` and appends to ~/.ovld/logs in every session on the machine, because its scope gate lives inside the CLI rather than before the spawn (proved by fixtures/unbound-session.json). It stays installed on purpose: it is what feeds touched-file change attribution at deliver time, and removing it before the normalized path has demonstrated equivalent attribution would trade a privacy nit for a data-loss bug. Closing this means retiring the legacy hook, which is a migration, not a patch.",
-        "verification": "verified",
-        "mitigation": "required",
-        "trackedAs": "agent-session-phase-4"
       },
       {
         "id": "fork-and-subagent-identity-unknown",
@@ -461,14 +472,6 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
         "id": "subagent-stop-unregistered",
         "severity": "medium",
         "summary": "The adapter registers `Stop` and no subagent-lifecycle event. Claude Code 2.1.221 fires `SubagentStop` — not `Stop` — when a subagent finishes, and subagents now run in the background past the parent's turn boundary. Version 2.1.224 also removed the 200-subagent-per-session spawn cap, increasing the frequency of this gap, so the shipped Stop registration is guaranteed not to run for work a subagent completes after the parent stopped. Nothing is lost today because that registration is already inert (see `shipped-stop-hook-inert`), which is exactly why the fix is to repair the Stop path first and only then decide whether the repaired body should also ride `SubagentStop`. Registering the current inert script on a second event would add a spawn per subagent completion and buy nothing.",
-        "verification": "verified",
-        "mitigation": "required",
-        "trackedAs": "coo:585"
-      },
-      {
-        "id": "subagent-commits-escape-delivery-delta",
-        "severity": "high",
-        "summary": "Delivery change attribution is computed from `git status --porcelain` against the attach baseline (cli/src/vcs.ts `readChangedFiles` / `filterRunAttributableChanges`); nothing in that path consults HEAD or the commit graph. Claude Code 2.1.221 made background-session commit-and-push behavior an explicit work-preservation default. A background subagent that commits, merges, or opens a PR for its own work therefore removes those files from the worktree delta, and they vanish from the delivery report entirely — not flagged, not skipped, silently absent. The PostToolUse touched-files log is unaffected (its key is `sha256(abspath(cwd) + \"\\0\" + MISSION_ID)`, so a subagent sharing the cwd writes to the same log), which means the evidence that the edit happened survives while the delta that decides coverage does not. Closing this means teaching the delta about commits made since the baseline, which is a CLI change with branch and worktree semantics to settle, not a hook edit.",
         "verification": "verified",
         "mitigation": "required",
         "trackedAs": "coo:585"
@@ -489,7 +492,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "codec": "codex",
     "integrationShape": "callback",
     "capabilityTier": 1,
-    "descriptorDigest": "9743c504d8d11ffec193751273102d9a1277293e55f43aef8914da4b05ddfa23",
+    "descriptorDigest": "bc823089f8c0fc97b888dec6b4e10eb55b596b1194664e1fe200468fe2c622c0",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Codex CLI",
@@ -509,6 +512,17 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
       "timeoutUnit": "seconds",
       "defaultTimeoutSeconds": 600,
       "maxTimeoutSeconds": null
+    },
+    "mutationHooks": {
+      "classification": "post-only",
+      "pathEvidenceSource": "unavailable",
+      "pathEvidenceQuality": "unavailable",
+      "shellEvidence": "unavailable",
+      "pathlessEvidence": "unavailable",
+      "fixture": "fixtures/mutation-window-evidence.json",
+      "reason": null,
+      "evidenceRef": null,
+      "notes": "Recorded pre/post shapes are separate calls and do not prove a paired window. A directly named native edit path normalized by the Codex codec as `file.edited` may record objective-bound, non-exclusive `declared_edit`/`direct` evidence. The recorded apply_patch completion has no normalized edit path, so it records unavailable evidence health."
     },
     "capabilities": {
       "observe.prompt": {
@@ -641,14 +655,6 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
         "trackedAs": null
       },
       {
-        "id": "shipped-permission-hook-inert",
-        "severity": "high",
-        "summary": "The former PermissionRequest hook called a nonexistent protocol command in the background. The connector no longer registers a PermissionRequest hook; the native prompt owns approvals when Latch is absent.",
-        "verification": "verified",
-        "mitigation": "implemented",
-        "trackedAs": null
-      },
-      {
         "id": "prompt-and-agent-hook-handlers-inert",
         "severity": "low",
         "summary": "Codex 0.146.0 accepts three hook handler types — `command`, `prompt`, and `agent` — but only `command` runs. Hook discovery parses `prompt` and `agent` and then skips them with a \"not supported yet\" warning, so a manifest that used either would install cleanly, list in `hooks`, and never execute. The connector must keep emitting `command` handlers only, and must not read the presence of these variants in the schema as availability. `command` is a shell command line run through `$SHELL -lc` (`/bin/sh` when SHELL is unset) — it is not restricted to Bash and not restricted to shell scripting, since the command may invoke any interpreter.",
@@ -681,7 +687,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "codec": "cursor",
     "integrationShape": "callback",
     "capabilityTier": 1,
-    "descriptorDigest": "48b805b1d1cd28ccde10a839b0eb2a85eb237d82b46e3d54b21f671997b0c870",
+    "descriptorDigest": "d468594240b637953358713e6412156d35b2b095d14fd1b2fc403496bcd6caf9",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Cursor Agent CLI",
@@ -701,6 +707,17 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
       "timeoutUnit": "seconds",
       "defaultTimeoutSeconds": 60,
       "maxTimeoutSeconds": null
+    },
+    "mutationHooks": {
+      "classification": "post-only",
+      "pathEvidenceSource": "declared_edit",
+      "pathEvidenceQuality": "direct",
+      "shellEvidence": "unavailable",
+      "pathlessEvidence": "unavailable",
+      "fixture": "fixtures/mutation-window-evidence.json",
+      "reason": null,
+      "evidenceRef": null,
+      "notes": "Recorded pre/post payloads carry different native call ids and do not prove a paired window. A postToolUse path normalized by the Cursor codec as `file.edited` records objective-bound, non-exclusive `declared_edit`/`direct` evidence. Codec-normalized read, search, and fetch callbacks are silent no-ops. Mutation-capable callbacks without a normalized edit path, plus shell, generic, unknown, and unmapped callbacks, record unavailable evidence health."
     },
     "capabilities": {
       "observe.prompt": {
@@ -769,7 +786,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
       "decide.universal": {
         "status": "unsupported",
         "native": null,
-        "reason": "There is no single event covering every approval. Cursor's own Claude-compatibility map resolves `PermissionRequest` to null and lists it as unsupported; coverage is per tool class (shell, MCP, file read, generic pre-tool), so some approvals will never reach Overlord and the UI must not imply otherwise.",
+        "reason": "There is no single event covering every approval. Cursor's own Claude-dialect map resolves `PermissionRequest` to null and lists it as unsupported; coverage is per tool class (shell, MCP, file read, generic pre-tool), so some approvals will never reach Overlord and the UI must not imply otherwise.",
         "evidenceRef": "connector-harness-taxonomy.md#42-what-is-verified",
         "trackedAs": null
       },
@@ -825,14 +842,6 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     },
     "hazards": [
       {
-        "id": "false-permission-hook-claim",
-        "severity": "high",
-        "summary": "The shipped conformance manifest declared the `permissionHook` capability and a `PermissionRequest` hook type. Cursor maps that event to null and lists it as unsupported, so the declaration was false and would render remote controls that can never fire. Corrected in this descriptor and in the generated legacy projection.",
-        "verification": "verified",
-        "mitigation": "implemented",
-        "trackedAs": null
-      },
-      {
         "id": "reads-claude-hook-config",
         "severity": "high",
         "summary": "Cursor resolves hooks from Claude's own project-local, project, and user configuration in addition to its own. If plugin-provided hooks are expanded, Overlord's Claude hooks may fire inside Cursor sessions and emit Claude-shaped decisions into a Cursor-shaped contract — cross-connector misattribution with no code change on our side.",
@@ -855,14 +864,6 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
         "verification": "verified",
         "mitigation": "implemented",
         "trackedAs": null
-      },
-      {
-        "id": "post-tool-use-log-dir-precondition",
-        "severity": "medium",
-        "summary": "The shipped postToolUse hook redirects stderr into ~/.ovld/logs without creating that directory first (Claude's equivalent does). On a machine where the directory does not yet exist the redirect fails and `ovld protocol record-touched` is never invoked, so touched-file attribution silently records nothing for that session. Fixed in phase 0B by creating the directory before the redirect, matching Claude's hook; the fixture guards the hook against losing that line again.",
-        "verification": "verified",
-        "mitigation": "implemented",
-        "trackedAs": null
       }
     ],
     "decisionShape": {
@@ -879,7 +880,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "codec": "opencode",
     "integrationShape": "controlPlane",
     "capabilityTier": 3,
-    "descriptorDigest": "83f146f0c4be8764608401886f374ebfc7bbe5dca8fcdecf3856a99030f778e6",
+    "descriptorDigest": "4af085fa3987501b85e323fdbfcc0c3cfe1a8da47ef373f0b509082749d2c44f",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "OpenCode",
@@ -898,6 +899,17 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
       "timeoutUnit": null,
       "defaultTimeoutSeconds": null,
       "maxTimeoutSeconds": null
+    },
+    "mutationHooks": {
+      "classification": "post-only",
+      "pathEvidenceSource": "unavailable",
+      "pathEvidenceQuality": "unavailable",
+      "shellEvidence": "unavailable",
+      "pathlessEvidence": "unavailable",
+      "fixture": "fixtures/mutation-window-evidence.json",
+      "reason": null,
+      "evidenceRef": null,
+      "notes": "A completed tool frame is recorded, but no matching in-progress frame exists."
     },
     "capabilities": {
       "observe.prompt": {
@@ -922,11 +934,11 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
         "trackedAs": null
       },
       "observe.fileEdit": {
-        "status": "supported",
+        "status": "not-implemented",
         "native": "message.part.updated",
         "reason": null,
         "evidenceRef": null,
-        "trackedAs": null
+        "trackedAs": "agent-session-phase-2"
       },
       "observe.sessionLifecycle": {
         "status": "supported",
@@ -1061,7 +1073,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "codec": "pi",
     "integrationShape": "extension",
     "capabilityTier": 1,
-    "descriptorDigest": "0166eb18d8913ea41704d3aa9afbf9164d994ae16089927e38f681be5dd005ff",
+    "descriptorDigest": "00ac7950f03ff225b0ed39ab3b57b4db4d28f4fe0331d0ee50bcb2c51bfa6823",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Pi Coding Agent",
@@ -1081,6 +1093,17 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
       "timeoutUnit": null,
       "defaultTimeoutSeconds": null,
       "maxTimeoutSeconds": null
+    },
+    "mutationHooks": {
+      "classification": "unsupported",
+      "pathEvidenceSource": "unavailable",
+      "pathEvidenceQuality": "unavailable",
+      "shellEvidence": "unavailable",
+      "pathlessEvidence": "unavailable",
+      "fixture": "fixtures/mutation-window-evidence.json",
+      "reason": "No recorded completion callback with the same native call id proves a pair.",
+      "evidenceRef": null,
+      "notes": null
     },
     "capabilities": {
       "observe.prompt": {
@@ -1248,7 +1271,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
   }
 ];
 
-export const HARNESS_CATALOG_DIGEST = '73cf1e64ea3f2676fa64f3c7b7469ab98635f74cbb478df487eec2a58a258492';
+export const HARNESS_CATALOG_DIGEST = '9cc9f237fc308dec078f5a3c6fc89741fa46005d76cce4b2250dc4c82d12f847';
 
 export function findHarnessDescriptor(adapter: string): HarnessDescriptor | undefined {
   return HARNESS_DESCRIPTORS.find(entry => entry.adapter === adapter);

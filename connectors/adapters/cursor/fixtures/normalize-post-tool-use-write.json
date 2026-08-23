@@ -16,7 +16,7 @@
     }
   },
   "expect": {
-    "eventId": "ev_005e149f289472f0bb9c94aea6c5cfa0",
+    "eventId": "ev_2db184edfa10d170f773ff87c748e2e7",
     "producerSequence": null,
     "occurredAt": "2026-01-01T00:00:00.000Z",
     "kind": "file.edited",

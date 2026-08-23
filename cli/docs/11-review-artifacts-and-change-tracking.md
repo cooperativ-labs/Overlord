@@ -64,12 +64,12 @@ Requirements:
 
 ## Change Rationale Requirements
 
-Each meaningful tracked file change should have a rationale:
+Rationales are optional reviewer annotations for mechanically observed paths:
 
 ```json
 {
   "label": "Short reviewer title",
-  "file_path": "path/to/file.ts",
+  "filePath": "path/to/file.ts",
   "summary": "What changed.",
   "why": "Why it changed.",
   "impact": "Behavioral impact.",
@@ -79,62 +79,52 @@ Each meaningful tracked file change should have a rationale:
 
 Rules:
 
-- `file_path`, `label`, `summary`, `why`, and `impact` are required.
+- Changed files are captured mechanically, so delivery neither requires a rationale nor can
+  fail for lacking one.
+- When one is supplied, `filePath`, `label`, `summary`, `why`, and `impact` are all required
+  on that entry; a malformed entry is salvaged per item and returns a warning.
 - `hunks` should be captured when available.
-- Formatting-only noise can be skipped.
+- Formatting-only changes may remain mechanically observed without a rationale.
 - Do not send `file_changes` as a generic artifact.
-- Record rationales during `update`, via `record-change-rationales`, or during `deliver`.
-- Delivery should validate rationale coverage unless explicitly skipped.
+- Record rationales during `update` or during `deliver`.
 
 ## Mechanical Changed File Capture
 
 Changed-file capture must not depend on the agent remembering to enumerate what it
-changed. The client CLI captures changes from VCS automatically:
+changed:
 
-- When a work session begins (`attach`, `resume-follow-up`), the CLI records a **baseline** — the set of changed file paths from local `git status` for the working directory.
-- At `deliver`, the CLI reads `git status` again and computes the **run-attributable delta** (current changed paths minus the baseline), then injects it as `--changed-files-json`. This subtracts files that were already dirty before the session started.
-- **Exact attribution under concurrency**: when several missions run against one working tree, the baseline cannot tell sessions apart — a file another mission edits *after* this session attached has no baseline entry, so the delta alone would wrongly attribute it. To prevent this, a connector that ships a `PostToolUse` edit hook writes a per-session **touched-files log** (`<OVLD_HOME|~/.ovld>/vcs-touched/<sha256(abspath(cwd) + NUL + MISSION_ID)>.json`) recording the exact paths this agent edited. When that log exists, the run-attributable set is the **VCS delta intersected with the touched-files log**, so files this agent never touched are excluded even if they are dirty for unrelated reasons. The CLI clears the log at `attach`/`resume-follow-up` so each session starts from an empty edit set.
-- The hook resolves `cwd` from the payload's `cwd` (Claude Code), then `workspace_roots[0]` (Cursor Agent CLI), then `CURSOR_PROJECT_DIR` / `CLAUDE_PROJECT_DIR` / `CLAUDE_PROJECT_ROOT`. User-level Cursor hooks run from `~/.cursor`, so using the hook process cwd would miss the session manifest written at attach and deliver would fall back to baseline-only attribution. Debug traces go to `~/.ovld/logs/cursor-post-tool-use-hook.log` and `~/.ovld/logs/post-tool-use-hook.log` (Cursor Agent CLI sessions that run a Claude model invoke both hook systems).
-- Connectors without an edit hook write no touched-files log; the CLI then falls back to the baseline-delta alone (no intersection), so hookless agents behave exactly as before.
-- **`.overlordignore`**: a repo may carry an optional `.overlordignore` file at its git root listing gitignore-style patterns for paths Overlord should never report as run-attributable changes (e.g. generated artifacts like `install-state.gz`). Blank lines and `#` comments are skipped; patterns support `!` negation (last match wins), leading-`/` anchoring to the repo root, trailing-`/` directory matches, and `*`/`**`/`?` globs. Matching paths are dropped at `deliver`/`update` after the baseline-delta and touched-files intersection, so ignored files never reach the changed-file payload.
-- VCS is read **on the client only**; the CLI persists only metadata (normalized path and status), never full diffs, patch bodies, or file contents. The touched-files log likewise stores only normalized absolute paths.
-- An agent that genuinely changed no files passes `--no-file-changes` at deliver to skip rationale-coverage enforcement. If the CLI still observes a non-empty delta, it warns.
-- An agent that did change files but sees unrelated dirty paths in the run delta passes `--skip-rationale-for-json` / `--skip-rationale-for-file` with one `{ file_path, reason }` entry per path it did not change.
-- Run `ovld protocol changes --mission-id <id>` before delivering instead of hand-triaging `git status`: a local-only, read-only preflight that prints the same mine/claimed/unclaimed classification `deliver` computes, plus draft rationales from local edit notes and ready-to-use `--skip-rationale-for-json` entries for `claimed` paths.
+- The **objective ledger** is authoritative. Hook-aware connectors append path evidence keyed by
+  objective and protocol session, and the CLI syncs it automatically on `update`, `changes`, and
+  `deliver`. The agent supplies no file list.
+- A path claim is **non-exclusive**. Two objectives editing the same file in one worktree each
+  record it; neither overwrites nor suppresses the other.
+- `capture-change` requires an explicit objective-bound session. CWD only supplies the workspace
+  root and never selects an objective.
+- A native post-tool payload that directly names an edited path records
+  `source=declared_edit`, `quality=direct`. A shell/no-path callback records unavailable health
+  and claims no file. Overlord never promotes a shared-worktree delta to attribution.
+- `source=window_observed`, `quality=window` is reserved for a connector whose strict fixtures
+  and runtime both prove a matched pre/post mutation window; no shipped connector currently does.
+- The owner-only ledger stores normalized workspace-relative paths and bounded source, quality,
+  overlap, window, and hook-health metadata. It never stores or transmits file content, diffs,
+  commands, transcripts, environment values, fingerprints, or absolute host paths.
+- `.overlordignore` patterns are applied before ledger insertion. Matching paths never enter the
+  ledger or reach the backend.
+- `sync-changes` processes bounded batches independently. Invalid items become warnings; valid
+  siblings persist. Sync and hook failures are advisory and cannot reject delivery.
+- Run `ovld protocol changes --objective-id <id>` to drain the ledger and inspect
+  `objectiveId`, `synced`, `warning`, `unsyncedEvidence`, and bounded health entries.
 
-## Server-Side Reconciliation And Self-Servicing Errors
+## Review State
 
-- `deliver` accepts an optional `observedDirtyPaths`: the full set of paths the client currently observes as dirty (not just the run-attributable delta), auto-injected by the CLI. When present, the server reconciles `changed_files` rows for the objective that are `present` but no longer named in `observedDirtyPaths` to `current_diff_state = 'resolved'` before computing rationale coverage — un-poisoning coverage from a past over-attribution (e.g. a row recorded while an edit hook was inert) instead of permanently demanding a rationale for a file that is no longer dirty. Omitting the field skips reconciliation; existing clients are unaffected.
-- A `resolved` row never requires a rationale and surfaces in review as its own coverage state, distinct from `covered`, `missing_rationale`, `skipped`, and `unassigned`.
-- `--changed-files-json` / `--changed-files-file` entries may carry an optional `attribution` (`mine` / `claimed` / `unclaimed`) and `claimedByMissionIds`, computed client-side from the touched-files log and peer sessions' claims. This is never persisted; it only classifies a residual `missing_rationale` failure.
-- A `missing_rationale` error is structured: `details.missingRationales` is an array of `{ filePath, classification, suggestedSkip }`, where `suggestedSkip` is a ready-to-use `{ filePath, reason }` for every non-`'mine'` path (`null` for `'mine'`, since a real rationale is owed there, not a skip). A rejected `deliver` therefore needs exactly one mechanical retry, never an investigation.
-
-## Update-Time Changed File Tracking
-
-Agents may also make changed files visible before delivery without increasing protocol call volume:
-
-- `ovld protocol update` may include changed-file tracking (`--changed-files-json` / `--changed-files-file`) in the same call already used for progress.
-- The CLI persists only metadata such as normalized path, status, session, objective, and optional rationale fields.
-- Full diffs, patch bodies, and file contents must not be persisted as update-time changed-file records.
-- Each changed file should be stored once per session/objective/path and updated in place on later updates.
-- Delivery coverage is objective-scoped: it should aggregate changed-file observations across all sessions for the objective and any no-session `record-work` records.
-- Rationale fields can be added or revised over time, but delivery must still enforce complete rationales for meaningful tracked changes.
-- A changed-file record can exist before a rationale exists; this lets live review show what is changing while the work is still in progress.
-- If a file disappears from the current local diff, keep enough history to explain that it was observed earlier, but do not require final delivery coverage unless the final workspace state still contains a meaningful tracked change or a retained rationale should be reviewed.
-
-## Local VCS Read And Current Changes Requirements
-
-CLI-first requirements:
-
-- Overlord may read VCS status and diffs for a linked project, but it must not create commits, refs, branches, stashes, tags, resets, checkouts, patches, or any other VCS mutation.
-- Change views should be scoped around Overlord review units first: mission, objective, and delivery.
-- `ovld changes status --mission-id <id> [--objective-id <id>]`: summarize changed files and rationale coverage for the mission or objective.
-- `ovld changes diff --mission-id <id> [--objective-id <id>] [--path <path>]`: show read-only local VCS diffs grouped by objective context where possible.
-- `ovld changes rationales --mission-id <id> [--objective-id <id>]`: show rationale coverage grouped by objective and file.
-- `ovld protocol deliver` rejects delivery when run-attributable tracked changes lack rationales, unless `--no-file-changes` is passed; coverage is aggregated per objective across all sessions.
-- Diffs should be annotated with recorded rationale labels and hunk headers when available.
-- Changes that cannot be associated with a specific objective should be shown as unassigned/current workspace changes, not silently attached to the wrong objective.
-- `ovld protocol changes --mission-id <id>` is a distinct, local-only preflight (no backend call): it classifies the current worktree's dirty paths as `mine`/`claimed`/`unclaimed` against this session's and peer sessions' touched-files logs and prints draft rationales, ahead of running `ovld changes status`/`rationales` (the server-backed review views above) or calling `deliver`.
+- The active changed-file identity is `(objective_id, file_path)` across sessions. A later
+  observation refreshes last-observer provenance instead of creating a duplicate row.
+- A changed-file row can exist without a rationale and remains fully reviewable.
+- Review starts from mechanically observed `changed_files` and joins the latest optional
+  rationale, whether it was recorded during update or delivery. It never starts from rationale
+  prose.
+- `record-work` is the sole path that accepts explicit `changedFiles`, because completed chat work
+  has no attached execution target capable of producing a ledger.
 
 Future web/desktop requirements are documented in [web-app.md](../../webapp/docs/web-app.md).
 
@@ -147,7 +137,7 @@ Humans should be able to review:
 - Blocking questions and answers.
 - Delivery summary.
 - Artifacts.
-- Changed files and rationale coverage.
+- Changed files, attribution metadata, hook health, and optional rationales.
 - Follow-up objectives.
 
 CLI review commands can be added before UI:
@@ -169,7 +159,8 @@ external URL — the same mutation as the web/mobile PATCH editor.
 Requirements:
 
 - Linking a repository must not automatically store repository contents.
-- Reading local VCS state is allowed only for explicit status, diff, rationale coverage, delivery validation, or review views.
+- Change capture never reads local VCS state. Separate explicit review commands may read status
+  or diffs but cannot mutate the repository or turn a worktree delta into objective attribution.
 - Terminal output should only be persisted when a user or agent records it.
 - Secrets should not be pasted into missions, artifacts, updates, or shared context.
 - Attachments are explicit uploads/imports.
@@ -178,6 +169,6 @@ Requirements:
 ## Acceptance Criteria
 
 - A delivered mission can be reviewed without opening the original agent chat.
-- Missing change rationales are detected before or during delivery.
+- Mechanically observed paths remain reviewable with or without optional rationale prose.
 - A later objective can read shared context written by an earlier objective.
 - Artifacts and attachments are distinguishable.

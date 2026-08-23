@@ -13,8 +13,8 @@ export class CliError extends Error {
 /**
  * Attach recovered an execution-request id from the launch script, but the
  * request is no longer linkable (cleared/failed/expired). The agent process is
- * already running — attach should still create a session so the touched-files
- * hook can record edits.
+ * already running — attach should still create an objective/session binding so
+ * the capture hook can append exact ledger evidence.
  */
 export function isUnlinkableExecutionRequestError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);

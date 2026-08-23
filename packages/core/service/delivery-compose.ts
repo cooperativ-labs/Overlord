@@ -313,8 +313,7 @@ export function applyDeliveryPresentation({
   presentation: DeliveryPresentationV1;
 }): DeliveryReportPayloadV1 {
   return {
-    schemaVersion: 1,
-    agentReport: report.agentReport,
+    ...report,
     presentation
   };
 }

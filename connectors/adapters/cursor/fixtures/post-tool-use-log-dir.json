@@ -1,9 +1,0 @@
-{
-  "fixtureVersion": 1,
-  "kind": "source-guard",
-  "description": "The postToolUse hook must create ~/.ovld/logs before anything redirects into it. `ovld protocol record-touched` is invoked with `2>>\"$LOG_FILE\"`, and bash fails the entire command when the redirect target's directory is missing — so without the mkdir the hook silently records no touched files at all on a machine where the directory does not yet exist. Claude's equivalent hook has always had this line; Cursor's did not, which is why touched-file attribution could disappear on a first-run machine with no visible error.",
-  "path": "connectors/adapters/cursor/hooks/overlord-post-tool-use.sh",
-  "assert": {
-    "mustContain": ["mkdir -p \"$LOG_DIR\" 2>/dev/null || true", "ovld protocol record-touched"]
-  }
-}

@@ -9,7 +9,8 @@ import {
   sealPayload,
   summarizeDescription
 } from './envelope.js';
-import { redactSecrets, reducePath } from './redact.js';
+import { reduceEvidencePath } from './evidence-path.js';
+import { redactSecrets } from './redact.js';
 import { safeText } from './text.js';
 import { normalizeToolName } from './tool-normalize.js';
 
@@ -51,6 +52,8 @@ export type CodecEventRule = {
   detailPath?: string;
   /** Dotted path to a boolean/string success indicator. Never the output itself. */
   outcomePath?: string;
+  /** Ordered dotted paths, relative to inputPath, that may carry exact edit evidence. */
+  filePathPaths?: string[];
   /**
    * When the normalized tool is a file mutation, emit this kind instead.
    *
@@ -58,7 +61,7 @@ export type CodecEventRule = {
    * cannot tell those apart cannot show a file-change timeline, so the split happens here where
    * the normalized tool name is already known.
    */
-  fileEditKind?: AgentSessionEventKind;
+  fileEditKind?: 'file.edited';
 };
 
 export type CodecSpec = {
@@ -101,6 +104,14 @@ function firstString(source: unknown, paths: string[] | undefined): string | nul
   for (const path of paths ?? []) {
     const value = readPath(source, path);
     if (typeof value === 'string' && value.trim() !== '') return value.trim();
+  }
+  return null;
+}
+
+function firstLiteralString(source: unknown, paths: string[] | undefined): string | null {
+  for (const path of paths ?? []) {
+    const value = readPath(source, path);
+    if (typeof value === 'string' && value.length > 0) return value;
   }
   return null;
 }
@@ -176,7 +187,7 @@ export function normalizeNativeEvent({
   if (!rule || !isAgentSessionEventKind(rule.kind)) return null;
 
   const sessionId = nativeSessionId ?? resolveNativeSessionId(codec, payload);
-  const projectRoot = firstString(payload, codec.projectRootPaths);
+  const projectRoot = firstLiteralString(payload, codec.projectRootPaths);
   const nativeCallId = boundedId(readPath(payload, rule.callIdPath));
   const nativeTurnId = boundedId(readPath(payload, rule.turnIdPath));
   const subagentId = boundedId(readPath(payload, rule.subagentIdPath));
@@ -201,14 +212,15 @@ export function normalizeNativeEvent({
 
     if (rule.fileEditKind && (tool === 'write' || tool === 'edit')) {
       kind = rule.fileEditKind;
-      const path = reducePath(
-        readPath(input, 'file_path') ??
-          readPath(input, 'filePath') ??
-          readPath(input, 'path') ??
-          readPath(input, 'notebook_path'),
-        projectRoot
+      const evidencePath = (rule.filePathPaths ?? []).reduce<string | null>(
+        (accepted, declaredPath) =>
+          accepted ?? reduceEvidencePath(readPath(input, declaredPath), projectRoot),
+        null
       );
-      if (path) sealedInput.paths = [path.display];
+      if (evidencePath) {
+        sealedInput.paths = [evidencePath];
+        idParts.push(evidencePath);
+      }
     }
 
     // Tool name and subject identify the call when the harness gives us no call id — which is

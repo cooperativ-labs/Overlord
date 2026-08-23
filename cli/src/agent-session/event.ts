@@ -4,7 +4,8 @@ import {
   resolveNativeSessionId
 } from '@overlord/core/service/agent-session/pure/codec';
 import type { NormalizedEvent } from '@overlord/core/service/agent-session/pure/envelope';
-import { readFileSync } from 'node:fs';
+
+import { readBoundedUtf8File, readBoundedUtf8FromDescriptor } from '../local-file-storage.js';
 
 import { resolveAgentSessionScope } from './bind.js';
 import { createChannelClient } from './client.js';
@@ -39,7 +40,7 @@ import { findAgentSessionCodec } from './codec-registry.generated.js';
  */
 
 /** Hard ceiling on the payload we will read from stdin. */
-const MAX_PAYLOAD_BYTES = 1024 * 1024;
+export const MAX_AGENT_SESSION_PAYLOAD_BYTES = 1024 * 1024;
 
 /** Bounded because a hook sits in front of a human. A slow event is worse than a lost one. */
 const POST_TIMEOUT_MS = 3000;
@@ -60,14 +61,12 @@ export type AgentSessionEventOutcome =
  * and a correctness one (argv has a size limit and mangles NUL bytes). The size ceiling is here
  * because the payload is untrusted input from a process we do not control.
  */
-export function readBoundedStdin(maxBytes = MAX_PAYLOAD_BYTES): string | null {
-  try {
-    const raw = readFileSync(0);
-    if (raw.byteLength === 0 || raw.byteLength > maxBytes) return null;
-    return raw.toString('utf8');
-  } catch {
-    return null;
-  }
+export function readBoundedStdin(
+  maxBytes = MAX_AGENT_SESSION_PAYLOAD_BYTES,
+  fileDescriptor = 0
+): string | null {
+  const raw = readBoundedUtf8FromDescriptor(fileDescriptor, maxBytes);
+  return raw ? raw : null;
 }
 
 /**
@@ -80,13 +79,8 @@ export function readBoundedStdin(maxBytes = MAX_PAYLOAD_BYTES): string | null {
  */
 export function readBoundedPayloadFile(payloadFile: string | null | undefined): string | null {
   if (!payloadFile || payloadFile === '-') return readBoundedStdin();
-  try {
-    const raw = readFileSync(payloadFile);
-    if (raw.byteLength === 0 || raw.byteLength > MAX_PAYLOAD_BYTES) return null;
-    return raw.toString('utf8');
-  } catch {
-    return null;
-  }
+  const raw = readBoundedUtf8File(payloadFile, MAX_AGENT_SESSION_PAYLOAD_BYTES);
+  return raw ? raw : null;
 }
 
 /**

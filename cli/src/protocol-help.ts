@@ -7,6 +7,7 @@ export const SUPPORTED_PROTOCOL_SUBCOMMANDS = [
   'attachment-download-url',
   'attachment-list',
   'auth-status',
+  'capture-change',
   'changes',
   'connect',
   'create',
@@ -24,7 +25,6 @@ export const SUPPORTED_PROTOCOL_SUBCOMMANDS = [
   'load-context',
   'prompt',
   'read-context',
-  'record-touched',
   'record-work',
   'reorder-future-objectives',
   'reorder-project-run-queues',
@@ -34,6 +34,7 @@ export const SUPPORTED_PROTOCOL_SUBCOMMANDS = [
   'resume-follow-up',
   'search',
   'search-missions',
+  'sync-changes',
   'update',
   'update-artifact',
   'update-objective',
@@ -108,10 +109,9 @@ Subcommands:
   deliver                Finish work, send artifacts, and move the mission to review
   resume-follow-up       Reopen a completed objective for post-delivery follow-up work
   hook-event             Record a connector lifecycle hook (e.g. UserPromptSubmit)
-  record-touched         Local-only: append an edit hook's touched files to the session log
-  changes                Local-only: preflight — print classified mine/claimed/unclaimed
-                         paths and drafted rationales before delivering; run this instead
-                         of hand-triaging \`git status\`
+  capture-change         Local-only: append direct-path hook evidence to an objective ledger
+  changes                Sync and inspect the attached objective's local change ledger
+                         (source, overlap, and hook-health evidence); never arbitrate peers
   read-context           Read shared persistent context for this mission
   write-context          Write shared persistent context for future sessions
   add-artifact           Create a mission artifact during a turn (no delivery required)
@@ -185,9 +185,6 @@ attach:
   Returns:
     Full JSON including session.sessionKey, mission, history, artifacts, sharedState,
     and agentInstructions with required workflow instructions and structured-field pointers.
-  Notes:
-    The client CLI records a VCS baseline at attach so deliver can report the
-    run-attributable changed-file delta automatically.
 
 connect:
   Purpose:
@@ -526,8 +523,8 @@ record-work:
     { objective, summary, title?, changeRationales, changedFiles?, artifacts? }.
     Explicit flags always win over fields inside --payload-json.
     Change-rationale entries use the same shape documented under \`deliver\`
-    (file_path, label, summary, why, impact; summary is named "summary", not "rationale").
-    Every rationale's file_path is recorded as a changed file (shown "covered" in
+    (filePath, label, summary, why, impact; summary is named "summary", not "rationale").
+    Every rationale's filePath is recorded as a changed file (shown "covered" in
     review); add --changed-files-json for touched files without a rationale. The
     full submission format lives in reference/record-work.md.
 
@@ -546,14 +543,13 @@ update:
     --payload-json / --payload-file <path|->
     --external-url <url|null>
     --external-session-id <id|null>
-    --changed-files-json / --changed-files-file <path|->
     --change-rationales-json / --change-rationales-file <path|->
   Notes:
     Pass --summary-file - to read the summary from stdin and avoid shell quoting issues.
     Inline --*-json values larger than ~8 KB are rejected; use the paired --*-file - flag.
     After delivery, pass --begin-follow-up-work before posting execution updates.
     Change-rationale entries use the same shape documented under \`deliver\`
-    (file_path, label, summary, why, impact; summary is named "summary", not "rationale").
+    (filePath, label, summary, why, impact; summary is named "summary", not "rationale").
 
 heartbeat:
   Purpose:
@@ -587,14 +583,11 @@ deliver:
   Optional:
     --artifacts-json / --artifacts-file <path|->
     --change-rationales-json / --change-rationales-file <path|->
-    --changed-files-json / --changed-files-file <path|->
-    --no-file-changes             Assert this run changed no files
-    --skip-rationale-for-json / --skip-rationale-for-file <path|->
     --verification-summary <text>
     --follow-up-notes <text>
   Change-rationale entry shape (each item in --change-rationales-json / -file):
     {
-      "file_path": "src/api.ts",   // required. repo-relative path. "filePath" also accepted; no "path" field.
+      "filePath":  "src/api.ts",   // required repo-relative path.
       "label":     "Add retry",     // required. short reviewer-facing title.
       "summary":   "Added retry.",  // required. WHAT changed. The field is named "summary", NOT "rationale".
       "why":       "Flaky calls.",  // required. WHY it changed.
@@ -603,36 +596,40 @@ deliver:
     }
     Pass an array of these. Do NOT wrap entries under a "rationale" key and do not send a
     top-level "file_changes" artifact. label/summary/why/impact must be non-empty strings.
-  Skip-rationale-for entry shape (each item in --skip-rationale-for-json / -file):
-    {
-      "file_path": "webapp/package.json",  // required. repo-relative path. "filePath" also accepted.
-      "reason":    "Concurrent host-side edit; not made by this mission."
-    }
-    Use when deliver would fail missing_rationale for a file you did not change. Do not
-    fabricate a change rationale and do not revert the file.
   Notes:
-    Changed files are captured mechanically: the CLI records a VCS baseline at attach
-    and injects the run-attributable delta at deliver. Meaningful tracked changes
-    require rationales unless --no-file-changes is passed or the file is listed in
-    --skip-rationale-for-*. Do not continue
-    implementation after delivery without explicit follow-up.
+    A normal delivery requires only --summary. The CLI syncs objective-bound ledger
+    evidence automatically before update, changes, and deliver. Optional rationales,
+    hook health, and path attribution cannot fail delivery. Do not continue implementation
+    after delivery without explicit follow-up.
     Inline --*-json values larger than ~8 KB are rejected; use --change-rationales-file -
     (or --payload-file -) and stream JSON on stdin. Keep --summary inline.
-    Run \`${primaryCommand} protocol changes --mission-id <id>\` first instead of hand-
-    triaging \`git status\` — it prints the same mine/claimed/unclaimed classification
-    deliver uses, plus drafted rationales. If deliver still rejects with
-    missing_rationale, the error includes a per-path classification and a ready-to-use
-    --skip-rationale-for-json value for every non-'mine' path — one mechanical retry.
+    Run \`${primaryCommand} protocol changes --objective-id <id>\` to inspect the attached
+    objective ledger and retry any advisory sync. It never claims or excludes another
+    objective's paths.
+
+capture-change:
+  Purpose:
+    Normalize one raw native callback with the named connector codec and append only
+    declared Write/Edit paths to the exact objective/session ledger. The raw payload
+    remains local and input is bounded to 1 MiB.
+  Required:
+    --agent <connector-key>
+    --objective-id <id>
+    native callback JSON on stdin
+  Notes:
+    Read/search/fetch callbacks are silent. Shell, unknown, unmapped, and pathless
+    mutation callbacks record bounded unavailable health without claiming a path.
 
 changes:
   Purpose:
-    Local-only preflight: print every currently dirty path classified as 'mine'
-    (confirmed by this session's touched-files log), 'claimed' (confirmed by another
-    active session's log), or 'unclaimed' (dirty, but confirmed by nobody), plus
-    draft rationales from local edit notes and ready-to-use --skip-rationale-for-json
-    entries for 'claimed' paths. Makes no backend call; safe to run at any time.
+    Sync and inspect the attached objective's local ledger. Reports whether evidence
+    remains unsynced, but never scans the shared worktree, claims peer paths, or drafts
+    rationale/skip payloads. Sync failure is advisory.
   Required:
-    --mission-id <id>
+    --objective-id <id>
+  Optional:
+    --mission-id <id>           Required when objective id does not encode mission scope
+    --session-key <key>         Validate one exact binding; every matching live/retry ledger drains
 
 resume-follow-up:
   Purpose:

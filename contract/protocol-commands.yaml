@@ -9,10 +9,10 @@
 #
 # Local-only `ovld protocol <subcommand>` commands that never cross the CLI -> backend
 # HTTP surface (no POST /api/protocol/<subcommand>, no backend handler, no permission
-# entry) are intentionally not listed here: `record-touched` and `changes`. See
+# entry) are intentionally not listed here: `capture-change` and `changes`. See
 # CONTRACT.md's contract-version-2 changelog entry for the precedent.
 
-contractVersion: '2'
+contractVersion: '116'
 referenceSpec: 'cli/docs/03-agent-protocol.md'
 
 # Transport-level shape shared by every protocol command, independent of subcommand.
@@ -30,35 +30,32 @@ requestEnvelope:
       - 'An objective UUID does not name its mission, so --mission-id remains required when --objective-id is a UUID.'
       - 'The CLI auto-fills --objective-id from OVERLORD_OBJECTIVE_ID (and the recovered launch bootstrap) on every subcommand that accepts it, not only attach.'
       - 'Reference grammar is owned by @overlord/contract (parseObjectiveRef / formatObjectiveDisplayId / missionDisplayIdFromObjectiveRef) and re-exported by @overlord/database; no surface may carry a private copy.'
-    backwardCompatible: true
   fileInputs:
-    description: "Per-flag map of resolved --*-file payloads: { '--summary-file': '<content>', '--change-rationales-file': '<content>', ... }. The client CLI resolves EACH --*-file flag independently so multiple file payloads in one invocation no longer collide on a single field."
+    description: "Canonical per-flag map of resolved --*-file payloads: { '--summary-file': '<content>', '--change-rationales-file': '<content>', ... }."
     rules:
       - "At most one --*-file flag may use literal '-' (true stdin) per invocation; passing two stdin flags fails fast on the client with a CliError naming the offending flags. Real file paths are unlimited."
-      - "Backward compatible: the legacy single `stdin` field is still populated for the lone '-' payload and still honored by the backend when `fileInputs` lacks an entry for a flag."
-    backwardCompatible: true
+      - 'Every file-backed input is read only from its own fileInputs entry; no shared stdin payload or fallback field exists.'
   changeRationaleInput:
-    description: 'Shape of each --change-rationales entry on deliver, update, record-change-rationales, and record-work.'
+    description: 'Shape of each optional --change-rationales entry on deliver, update, and record-work.'
     requiredFields:
-      - file_path
+      - filePath
       - label
       - summary
       - why
       - impact
-    fieldAliases:
-      filePath: 'Accepted as an alias for file_path and normalized to the canonical snake_case shape, so an entry keyed by the camelCase changed-files casing no longer fails validation. file_path is the documented canonical form.'
-    backwardCompatible: true
+    optionalFields:
+      - hunks
+    validationRules:
+      - 'Items accept exactly filePath, label, summary, why, impact, and optional hunks; unknown or retired fields discard that item with a bounded warning.'
+      - 'Each optional hunk accepts exactly one non-empty bounded header field; malformed hunks are discarded independently with bounded warnings.'
+      - 'After canonical path normalization, the last valid item for a duplicate filePath wins with a bounded warning.'
+      - 'Annotations are advisory: discarded items and hunks never reject update, deliver, or record-work.'
   changedFileInput:
-    description: 'Shape of each --changed-files entry on deliver and update.'
+    description: 'Shape of each explicit --changed-files entry on sessionless record-work.'
     requiredFields:
       - filePath
     optionalFields:
       - vcsStatus
-      - attribution
-      - claimedByMissionIds
-    notes:
-      - "attribution ('mine' | 'claimed' | 'unclaimed') and claimedByMissionIds are computed client-side from the touched-files log and peer sessions' claims (cli/src/vcs.ts). Never persisted server-side; used only to classify a residual missing_rationale error (coo:127 Layer 4)."
-    backwardCompatible: true
 
 sessionLifecycle:
   attach:
@@ -82,15 +79,13 @@ sessionLifecycle:
     responseShape: attach-response-v3
     rules:
       - 'When --objective-id or --execution-request-id is present, attach pins to that objective and must not rediscover via mission state'
-    clientCapture:
-      - 'The client CLI records a VCS baseline (changed file paths from git status) for the working directory so deliver can compute the run-attributable changed-file delta. VCS is read on the client only; best-effort and skipped outside a git repo.'
     sideEffects:
       - creates-agent-session
       - objective-state-to-executing
       - binds-session-channel
 
   update:
-    description: 'Post progress event; optionally record changed files and rationales'
+    description: 'Post progress event; optionally record rationale annotations for ledger-observed paths'
     requiredFlags: []
     requiresSessionKey: true
     optionalFlags:
@@ -104,9 +99,6 @@ sessionLifecycle:
       - --payload-file
       - --external-url
       - --external-session-id
-      - --track-changed-files
-      - --changed-files-json
-      - --changed-files-file
       - --change-rationales-json
       - --change-rationales-file
       - --begin-follow-up-work
@@ -127,7 +119,8 @@ sessionLifecycle:
       - decision
     sideEffects:
       - appends-mission-event
-      - upserts-changed-files-by-session-objective-path
+      - records-optional-change-rationale-annotations
+      - emits-scoped-change-rationale-entity-changes
 
   hookEvent:
     description: 'Record connector lifecycle events such as UserPromptSubmit without requiring a live agent session'
@@ -182,6 +175,37 @@ sessionLifecycle:
       - updates-session-last-heartbeat-only
       # Does NOT create a mission_events row
 
+  syncChanges:
+    description: 'Synchronize bounded metadata-only path evidence from the execution target objective ledger'
+    requiredFlags:
+      - --session-key
+    optionalFlags:
+      - --mission-id
+      - --objective-id
+      - --changes-json
+      - --changes-file
+    requestInput:
+      requiredFields:
+        - filePath
+        - idempotencyKey
+        - source
+        - quality
+      optionalFields:
+        - overlap
+        - toolWindowId
+        - observedAt
+        - hookHealth
+    responseShape: sync-changes-v1
+    rules:
+      - 'Each item is processed independently and returns accepted, ignored, or warning; invalid siblings never roll back accepted evidence.'
+      - 'source is declared_edit or window_observed; quality is direct or window. fallback_delta is not accepted.'
+      - 'Only normalized workspace-relative path and bounded source/quality/overlap/window/health metadata persist. Absolute paths, parent traversal, file content, diffs, commands, transcripts, environment values, and fingerprints are prohibited.'
+      - 'Accepted path evidence sets current_diff_state to unknown; synchronization does not inspect VCS state or claim that a current diff exists.'
+      - 'Replay of an idempotencyKey for the same objective/path is ignored; sync failure and warnings cannot reject delivery.'
+    sideEffects:
+      - upserts-changed-files-by-objective-path
+      - emits-scoped-changed-file-entity-changes
+
   ask:
     description: 'Post a single blocking question and stop work'
     requiredFlags: []
@@ -211,41 +235,22 @@ sessionLifecycle:
       - --artifacts
       - --change-rationales-json
       - --change-rationales-file
-      - --changed-files-json
-      - --changed-files-file
-      - --observed-dirty-paths-json
-      - --no-file-changes
-      - --skip-rationale-for-json
-      - --skip-rationale-for-file
       - --payload-json
       - --payload-file
       - --verification-summary
       - --follow-up-notes
     clientCapture:
-      - 'The client CLI auto-injects --changed-files-json at deliver from the run-attributable VCS delta (current changed paths minus the baseline captured at attach/resume-follow-up). VCS is read on the client only.'
-      - 'The client CLI auto-injects --observed-dirty-paths-json at deliver: the full current dirty worktree (not just the run-attributable delta), used only for server-side coverage reconciliation (see reconciliation rule below). Additive/optional — omitted by older clients.'
+      - 'The client CLI drains every pending bounded batch from the attached objective ledger through sync-changes before delivery. It never derives or injects file paths from a worktree delta.'
     validationRules:
-      - 'Meaningful tracked changed files require rationales'
-      - '--payload-json / --payload-file may carry an additive deliveryReport object with schemaVersion: 1 and agentReport.{humanActions,tradeoffsMade,knownRisks,deferredWork,assumptions}; omitted evidence normalizes to empty arrays and can never prevent delivery'
+      - 'Objective-ledger changed files and optional rationales are review metadata and cannot reject a delivery.'
+      - '--payload-json / --payload-file may carry an additive deliveryReport object with schemaVersion: 1 and agentReport.{humanActions,tradeoffsMade,knownRisks,deferredWork,assumptions}; omitted or malformed advisory items normalize independently with bounded warnings and can never prevent delivery'
       - 'Human actions are bounded and filter Git operations plus routine review/testing instructions before they are persisted in deliveryReport.presentation'
       - 'deliveryReport.presentation starts as an immediate deterministic/pending fallback; a durable overlord.delivery.compose.v1 worker job may asynchronously replace only presentation while delivery success and latency never depend on an automation provider'
-      - 'Rationale coverage is objective-scoped: aggregated across all sessions for the objective (and no-session record-work records)'
-      - '--no-file-changes asserts this run changed no files and skips rationale-coverage enforcement'
-      - '--skip-rationale-for-json / --skip-rationale-for-file lists per-file rationale overrides for changes the agent did not make; each entry requires file_path (filePath alias accepted) and a non-empty reason string'
-      - "When --observed-dirty-paths-json is present, changed_files rows for the objective that are current_diff_state='present' but whose path is absent from it are reconciled to current_diff_state='resolved' before coverage is computed, un-poisoning coverage from a past over-attribution (coo:127 Layer 4). 'resolved' is an existing changed_files vocabulary value (database/docs/09-database-schema-contract.md), not a new one."
-      - "A missing_rationale failure (code missing_rationale, HTTP 400) carries a structured details.missingRationales array: [{ filePath, classification: 'mine'|'claimed'|'unclaimed', suggestedSkip: { filePath, reason } | null }]. classification is derived from the attribution attached to the corresponding --changed-files-json entry (default 'unclaimed' when absent); suggestedSkip is null for 'mine' (a rationale is owed, not a skip)."
+      - 'Changed-file attribution, hook health, and rationale coverage are objective-scoped review metadata aggregated across sessions (and no-session record-work records); none can reject delivery.'
       - 'Delivery is the final work boundary — no implementation after delivery without explicit follow-up'
-    skipRationaleForInput:
-      description: 'Shape of each --skip-rationale-for entry on deliver.'
-      requiredFields:
-        - file_path
-        - reason
-      fieldAliases:
-        filePath: 'Accepted as an alias for file_path and normalized to the canonical snake_case shape.'
-      backwardCompatible: true
     sideEffects:
-      - upserts-changed-files-by-session-objective-path
-      - reconciles-stale-changed-files-to-resolved-when-observed-dirty-paths-provided
+      - records-optional-change-rationale-annotations
+      - emits-scoped-change-rationale-entity-changes
       - stores-delivery-record
       - objective-state-to-complete
       - mission-status-to-review
@@ -541,7 +546,7 @@ missionDiscovery:
       - --no-auto-advance
     rules:
       - 'Each --objectives-json / --objectives-file item may set autoAdvance; --auto-advance / --no-auto-advance supply the default when an item omits it; omitted defaults to false'
-      - 'Each item may set agent and model. agent persists as the new objective\'s assignedAgent; model requires a non-empty agent. When both are omitted, existing project launch-preference defaults apply.'
+      - 'Each item may set agent and model. agent persists as the new objective''s assignedAgent; model requires a non-empty agent. When both are omitted, existing project launch-preference defaults apply.'
     sideEffects:
       - creates-objectives-in-draft-state
 
@@ -569,10 +574,13 @@ missionDiscovery:
     rules:
       - 'For work already done in chat, not for in-progress work'
       - '--assigned-to resolves one workspace member by the same rules as on create; an unresolvable member is rejected rather than silently left unassigned'
+      - 'Explicit changed-file paths set current_diff_state to unknown; record-work does not inspect a current checkout.'
     sideEffects:
       - creates-mission-in-review-status
       - creates-completed-objective
       - creates-delivery-record-without-session-attribution
+      - records-explicit-changed-files-and-optional-rationale-annotations
+      - emits-scoped-changed-file-and-change-rationale-entity-changes
 
 artifacts:
   addArtifact:

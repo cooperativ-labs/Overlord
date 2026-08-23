@@ -9,8 +9,8 @@
 #
 #   `hook_event_name` / `event`  — both declared in cursor.decision-codec.yaml
 #   `cwd`                        — same
-#   `tool_name`, `tool_input`    — same (preToolUse), and `tool_input.file_path` is what the
-#                                  shipped postToolUse hook feeds to `ovld protocol record-touched`
+#   `tool_name`, `tool_input`    — same (preToolUse); the codec must normalize a postToolUse
+#                                  edit to `file.edited` before `capture-change` records its path
 #   `prompt` (then `message`)    — read by hooks/overlord-user-prompt-submit.sh
 #   `conversation_id`            — read by the same hook, and persisted as the native session alias
 #
@@ -69,3 +69,5 @@ events:
     inputPath: tool_input
     callIdPath: call_id
     fileEditKind: file.edited
+    filePathPaths:
+      - file_path

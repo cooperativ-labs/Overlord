@@ -20,6 +20,18 @@ export const CONNECTOR_CORE_MCP_SHIM_RELATIVE_PATH = 'scripts/overlord-mcp.mjs';
 export const CONNECTOR_ADAPTER_KEY_PLACEHOLDER = '__OVERLORD_ADAPTER_KEY__';
 
 /**
+ * One post-tool capture callback is rendered into the three harness-native paths.
+ * The path remains adapter-owned; the executable implementation does not.
+ */
+export const CONNECTOR_CORE_CAPTURE_CHANGE_HOOK_SOURCE = 'capture-change-hook.sh';
+export const CONNECTOR_CORE_CAPTURE_CHANGE_HOOK_PATHS: Readonly<Record<string, string>> =
+  Object.freeze({
+    claude: 'scripts/post-tool-use-hook.sh',
+    codex: 'scripts/post-tool-use-hook.sh',
+    cursor: 'hooks/overlord-post-tool-use.sh'
+  });
+
+/**
  * The shared agent-session hook, rendered per adapter *and per action*.
  *
  * The declared managed path spells the action — `scripts/agent-session-event.sh`,
@@ -93,6 +105,16 @@ export function connectorCoreScriptsRoot(coreRoot = connectorCoreRoot()): string
   return path.join(path.dirname(coreRoot), 'scripts');
 }
 
+export function isConnectorCoreCaptureChangeHookPath({
+  adapterKey,
+  relativePath
+}: {
+  adapterKey: string;
+  relativePath: string;
+}): boolean {
+  return CONNECTOR_CORE_CAPTURE_CHANGE_HOOK_PATHS[adapterKey] === relativePath;
+}
+
 export function isConnectorCoreMcpShimPath(relativePath: string): boolean {
   return relativePath === CONNECTOR_CORE_MCP_SHIM_RELATIVE_PATH;
 }
@@ -124,6 +146,42 @@ export function readConnectorCoreSkillBody(coreRoot = connectorCoreRoot()): stri
     });
   }
   return stripMarkdownFrontmatter(readFileSync(coreSkillPath, 'utf8')).trim();
+}
+
+function renderConnectorCoreScript({
+  sourceName,
+  label,
+  substitutions,
+  coreRoot = connectorCoreRoot()
+}: {
+  sourceName: string;
+  label: string;
+  substitutions: ReadonlyArray<readonly [placeholder: string, value: string]>;
+  coreRoot?: string;
+}): string {
+  const scriptPath = path.join(connectorCoreScriptsRoot(coreRoot), sourceName);
+  if (!existsSync(scriptPath)) {
+    throw new CliError({ message: `Connector core ${label} missing at ${scriptPath}.` });
+  }
+
+  let rendered = readFileSync(scriptPath, 'utf8');
+  for (const [placeholder, value] of substitutions) {
+    if (!rendered.includes(placeholder)) {
+      throw new CliError({
+        message:
+          `Connector core ${label} at ${scriptPath} is missing ${placeholder}. ` +
+          'Every adapter-specific value must stay an explicit substitution point.'
+      });
+    }
+    rendered = rendered.replaceAll(placeholder, value);
+  }
+  return rendered;
+}
+
+function assertAdapterKey(adapterKey: string): void {
+  if (!/^[a-z][a-z0-9_-]*$/.test(adapterKey)) {
+    throw new CliError({ message: `Invalid connector adapter key: ${adapterKey}` });
+  }
 }
 
 export function renderConnectorSkill({
@@ -180,21 +238,30 @@ export function renderConnectorMcpShim({
   adapterKey: string;
   coreRoot?: string;
 }): string {
-  const shimPath = path.join(connectorCoreScriptsRoot(coreRoot), 'overlord-mcp.mjs');
-  if (!existsSync(shimPath)) {
-    throw new CliError({
-      message: `Connector core MCP shim missing at ${shimPath}.`
-    });
-  }
-  const source = readFileSync(shimPath, 'utf8');
-  if (!source.includes(CONNECTOR_ADAPTER_KEY_PLACEHOLDER)) {
-    throw new CliError({
-      message:
-        `Connector core MCP shim at ${shimPath} is missing ` +
-        `${CONNECTOR_ADAPTER_KEY_PLACEHOLDER}. The adapter key must stay a substitution point.`
-    });
-  }
-  return source.replaceAll(CONNECTOR_ADAPTER_KEY_PLACEHOLDER, adapterKey);
+  assertAdapterKey(adapterKey);
+  return renderConnectorCoreScript({
+    sourceName: path.basename(CONNECTOR_CORE_MCP_SHIM_RELATIVE_PATH),
+    label: 'MCP shim',
+    substitutions: [[CONNECTOR_ADAPTER_KEY_PLACEHOLDER, adapterKey]],
+    coreRoot
+  });
+}
+
+/** Render the shared post-tool capture callback into its harness-native path. */
+export function renderConnectorCaptureChangeHook({
+  adapterKey,
+  coreRoot = connectorCoreRoot()
+}: {
+  adapterKey: string;
+  coreRoot?: string;
+}): string {
+  assertAdapterKey(adapterKey);
+  return renderConnectorCoreScript({
+    sourceName: CONNECTOR_CORE_CAPTURE_CHANGE_HOOK_SOURCE,
+    label: 'capture-change hook',
+    substitutions: [[CONNECTOR_ADAPTER_KEY_PLACEHOLDER, adapterKey]],
+    coreRoot
+  });
 }
 
 /**
@@ -212,63 +279,44 @@ export function renderConnectorAgentSessionHook({
   action: ConnectorSessionAction;
   coreRoot?: string;
 }): string {
-  const scriptPath = path.join(
-    connectorCoreScriptsRoot(coreRoot),
-    CONNECTOR_CORE_AGENT_SESSION_HOOK_SOURCE
-  );
-  if (!existsSync(scriptPath)) {
-    throw new CliError({
-      message: `Connector core agent-session hook missing at ${scriptPath}.`
-    });
-  }
-  const source = readFileSync(scriptPath, 'utf8');
-  for (const placeholder of [
-    CONNECTOR_ADAPTER_KEY_PLACEHOLDER,
-    CONNECTOR_SESSION_ACTION_PLACEHOLDER
-  ]) {
-    if (!source.includes(placeholder)) {
-      throw new CliError({
-        message:
-          `Connector core agent-session hook at ${scriptPath} is missing ${placeholder}. ` +
-          `Both the adapter key and the action must stay substitution points — a hook that ` +
-          `chooses its own action at run time is exactly what this design forbids.`
-      });
-    }
-  }
-  return source
-    .replaceAll(CONNECTOR_ADAPTER_KEY_PLACEHOLDER, adapterKey)
-    .replaceAll(CONNECTOR_SESSION_ACTION_PLACEHOLDER, action);
-}
-
-/**
- * Adapter key for substitution. `setupConnector` passes it explicitly; the
- * fallback keeps the older `sourceDir`-only callers working, since every
- * adapter source directory is named for its key.
- */
-function resolveAdapterKey({
-  sourceDir,
-  adapterKey
-}: {
-  sourceDir: string;
-  adapterKey?: string;
-}): string {
-  return adapterKey ?? path.basename(sourceDir);
+  assertAdapterKey(adapterKey);
+  return renderConnectorCoreScript({
+    sourceName: CONNECTOR_CORE_AGENT_SESSION_HOOK_SOURCE,
+    label: 'agent-session hook',
+    substitutions: [
+      [CONNECTOR_ADAPTER_KEY_PLACEHOLDER, adapterKey],
+      [CONNECTOR_SESSION_ACTION_PLACEHOLDER, action]
+    ],
+    coreRoot
+  });
 }
 
 export function managedFileSourceExists({
   sourceDir,
   relativePath,
+  adapterKey,
   coreRoot = connectorCoreRoot()
 }: {
   sourceDir: string;
   relativePath: string;
+  adapterKey: string;
   coreRoot?: string;
 }): boolean {
   if (isConnectorCoreReferencePath(relativePath)) {
     return existsSync(path.join(coreRoot, 'reference', path.basename(relativePath)));
   }
   if (isConnectorCoreMcpShimPath(relativePath)) {
-    return existsSync(path.join(connectorCoreScriptsRoot(coreRoot), 'overlord-mcp.mjs'));
+    return existsSync(
+      path.join(
+        connectorCoreScriptsRoot(coreRoot),
+        path.basename(CONNECTOR_CORE_MCP_SHIM_RELATIVE_PATH)
+      )
+    );
+  }
+  if (isConnectorCoreCaptureChangeHookPath({ adapterKey, relativePath })) {
+    return existsSync(
+      path.join(connectorCoreScriptsRoot(coreRoot), CONNECTOR_CORE_CAPTURE_CHANGE_HOOK_SOURCE)
+    );
   }
   if (connectorCoreAgentSessionAction(relativePath)) {
     return existsSync(
@@ -286,7 +334,7 @@ export function resolveManagedFileContents({
 }: {
   sourceDir: string;
   relativePath: string;
-  adapterKey?: string;
+  adapterKey: string;
   coreRoot?: string;
 }): Buffer {
   if (isConnectorCoreReferencePath(relativePath)) {
@@ -295,16 +343,20 @@ export function resolveManagedFileContents({
 
   if (isConnectorCoreMcpShimPath(relativePath)) {
     const rendered = renderConnectorMcpShim({
-      adapterKey: resolveAdapterKey({ sourceDir, adapterKey }),
+      adapterKey,
       coreRoot
     });
     return Buffer.from(rendered, 'utf8');
   }
 
+  if (isConnectorCoreCaptureChangeHookPath({ adapterKey, relativePath })) {
+    return Buffer.from(renderConnectorCaptureChangeHook({ adapterKey, coreRoot }), 'utf8');
+  }
+
   const sessionAction = connectorCoreAgentSessionAction(relativePath);
   if (sessionAction) {
     const rendered = renderConnectorAgentSessionHook({
-      adapterKey: resolveAdapterKey({ sourceDir, adapterKey }),
+      adapterKey,
       action: sessionAction,
       coreRoot
     });

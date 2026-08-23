@@ -36,6 +36,10 @@ events:
     # A file-mutating tool becomes `file.edited` instead, so the feed can show a change
     # timeline without the reader having to know which tool names mutate files.
     fileEditKind: file.edited
+    # Candidate paths are relative to `tool_input`, tried in this declared order. The core has
+    # no generic path-key fallback.
+    filePathPaths:
+      - file_path
 
   # The one place raw user content flows, deliberately: the activity feed exists to show
   # follow-up prompts. Secret redaction still runs over the text.

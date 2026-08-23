@@ -12,7 +12,7 @@ import { recordMissionBranchObservations } from './mission-branch-observations.j
 import { createMissionWithObjectives } from './missions.js';
 import { buildProjectResourceManifest } from './project-resource-manifest.js';
 import { addProjectResource, createProject, resolveObjectiveWorkingDirectory } from './projects.js';
-import { attachSession, deliverSession, loadMissionContext, updateSession } from './protocol.js';
+import { attachSession, deliverSession, loadMissionContext, syncChanges } from './protocol.js';
 import { recordTargetResourceObservations } from './target-resource-observations.js';
 import { createIsolatedCheckout } from './test-checkout.ts';
 import { createSeededServiceContext } from './test-helpers.js';
@@ -193,12 +193,19 @@ describe('resource binding end-to-end (simulated cross-repo mission)', () => {
       });
       assert.equal(attached.objective.id, objective.id);
 
-      await updateSession({
+      await syncChanges({
         ctx,
         missionId: mission.displayId,
         sessionKey: attached.sessionKey,
-        summary: `Recorded change in ${resourceKey}`,
-        changedFiles: [{ filePath: `src/e2e-${resourceKey}.ts`, vcsStatus: 'modified' }]
+        changes: [
+          {
+            filePath: `src/e2e-${resourceKey}.ts`,
+            idempotencyKey: `resource-${resourceKey}-1`,
+            source: 'declared_edit',
+            quality: 'direct',
+            overlap: false
+          }
+        ]
       });
 
       const changedFile = (await db.get(
@@ -213,8 +220,7 @@ describe('resource binding end-to-end (simulated cross-repo mission)', () => {
         ctx,
         missionId: mission.displayId,
         sessionKey: attached.sessionKey,
-        summary: `Delivered ${resourceKey} objective`,
-        noFileChanges: true
+        summary: `Delivered ${resourceKey} objective`
       });
 
       const objectiveRow = (await db.get(`SELECT state FROM objectives WHERE id = ?`, [

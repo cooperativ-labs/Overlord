@@ -18,6 +18,10 @@ function formatTimestamp(iso: string): string {
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
 }
 
+function formatEvidenceValue(value: string): string {
+  return value.replaceAll('_', ' ');
+}
+
 function joinAbsolutePath(rootPath: string, filePath: string): string {
   const trimmedRoot = rootPath.replace(/[\\/]+$/, '');
   const trimmedFile = filePath.replace(/^[\\/]+/, '');
@@ -27,7 +31,7 @@ function joinAbsolutePath(rootPath: string, filePath: string): string {
 
 /**
  * A single collapsible file-change entry in the mission panel's File Changes
- * section. Collapsed it shows the file name and recorded time; expanded it
+ * section. Collapsed it shows the file name and last observation time; expanded it
  * reveals the full path and the structured change/why/impact rationale. Adapted
  * from the reference `LiveFileChangeCard` for this app's stack. When the
  * linked resource root is available, the path deep-links into the operator's
@@ -76,6 +80,11 @@ export function LiveFileChangeCard({
             {fileChange.vcsStatus}
           </Badge>
         )}
+        {fileChange.source && (
+          <Badge className="shrink-0 px-2 py-0 text-[10px] uppercase tracking-wide">
+            {formatEvidenceValue(fileChange.source)}
+          </Badge>
+        )}
         <span className="shrink-0 text-[11px] text-[var(--color-ink-dim)]">
           {formatTimestamp(fileChange.createdAt)}
         </span>
@@ -99,25 +108,55 @@ export function LiveFileChangeCard({
             <p className="mb-2 text-[11px] text-[var(--color-ink-dim)]">Opens in {editorLabel}.</p>
           ) : null}
           <div className="grid gap-2 text-sm">
+            <div className="grid gap-2 md:grid-cols-2">
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-[var(--color-ink-dim)]">
+                  Attribution
+                </p>
+                <p className="text-[var(--color-ink)]">
+                  {fileChange.source ? formatEvidenceValue(fileChange.source) : 'not reported'}
+                  {fileChange.quality ? ` · ${formatEvidenceValue(fileChange.quality)}` : ''}
+                  {fileChange.overlap ? ' · overlapping window' : ''}
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] uppercase tracking-wide text-[var(--color-ink-dim)]">
+                  Hook health
+                </p>
+                <p className="text-[var(--color-ink)]">
+                  {fileChange.hookHealth
+                    ? formatEvidenceValue(fileChange.hookHealth)
+                    : 'not reported'}
+                </p>
+              </div>
+            </div>
             <div>
               <p className="text-[11px] uppercase tracking-wide text-[var(--color-ink-dim)]">
                 Change
               </p>
-              <p className="text-[var(--color-ink)]">{fileChange.label}</p>
-              <p className="mt-1 text-[var(--color-ink-dim)]">{fileChange.summary}</p>
+              {fileChange.label ? (
+                <p className="text-[var(--color-ink)]">{fileChange.label}</p>
+              ) : null}
+              {fileChange.summary ? (
+                <p className="mt-1 text-[var(--color-ink-dim)]">{fileChange.summary}</p>
+              ) : (
+                <p className="mt-1 text-[var(--color-ink-dim)]">
+                  Observed file change; no agent rationale recorded.
+                </p>
+              )}
             </div>
             <div className="grid gap-2 md:grid-cols-2">
               <div>
                 <p className="text-[11px] uppercase tracking-wide text-[var(--color-ink-dim)]">
                   Why
                 </p>
-                <p className="text-[var(--color-ink)]">{fileChange.why}</p>
+                <p className="text-[var(--color-ink)]">{fileChange.why ?? '—'}</p>
               </div>
               <div>
                 <p className="text-[11px] uppercase tracking-wide text-[var(--color-ink-dim)]">
                   Impact
                 </p>
-                <p className="text-[var(--color-ink)]">{fileChange.impact}</p>
+                <p className="text-[var(--color-ink)]">{fileChange.impact ?? '—'}</p>
               </div>
             </div>
           </div>

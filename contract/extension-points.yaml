@@ -9,7 +9,7 @@
 # IMPORTANT: Adding a new capability flag, extension point, or vocabulary change
 # requires a contract version update in CONTRACT.md and components.yaml.
 
-contractVersion: '6'
+contractVersion: '7'
 
 # Sanctioned extension points — the only ways to extend Overlord
 extensionPoints:
@@ -24,17 +24,15 @@ extensionPoints:
         - componentKey
         - contractVersion
         - connector.agentIdentifier
-        - connector.capabilities
         - connector.harnessCapabilities
     constraints:
       - "Must not duplicate connector core protocol rules — extend the core, don't replace it"
       - 'Must ship a harness-capabilities.yaml descriptor validating against contract/harness-capabilities.schema.yaml — it is the only hand-authored agent-session capability source'
-      - 'connector.capabilities, connector.hookTypes, connector.integrationShape, and connector.capabilityTier are a GENERATED projection of that descriptor; hand-editing them is a contract violation'
+      - 'connector.integrationShape, connector.capabilityTier, and connector.harnessCapabilities are generated from that descriptor; hand-editing them is a contract violation'
       - 'A capability is proven by an executable fixture, not by inspection: `supported` without a passing fixture is a CI failure, not a claim'
       - 'capabilityTier is derived, never authored; a connector may not declare more than its fixtures prove'
       - 'Every adapter must ship the mandatory unbound-session negative fixture'
-      - 'Deprecated hook-named capability flags must be from the approvedConnectorCapabilities list below and hook types from approvedHookTypes'
-      - 'Adding a new capability flag or agent-session capability id requires a contract update first'
+      - 'Adding a new agent-session capability id requires a contract update first'
 
   customHarness:
     id: custom-harness
@@ -143,42 +141,6 @@ extensionPoints:
       - "Declare all new vocabulary values in the component's conformance manifest"
       - 'Values can be promoted to core by updating CONTRACT.md and the schema contract'
 
-# Approved connector capability flags — closed set
-# Add here (with contract version bump) before declaring a new capability in a manifest
-approvedConnectorCapabilities:
-  # Behavior-named agent-session capabilities. These describe what a connector DOES, not which
-  # Claude hook it came from, so they can also describe a connector that answers permissions
-  # over HTTP or injects a message through an in-process call. Emitted by the descriptor
-  # generator; never hand-declared.
-  - sessionEventStream # Emits normalized agent-session events (any integration shape)
-  - answerableRequests # Presents answerable requests resolvable from an Overlord surface
-  - remoteDecisionHold # Can hold a native decision open while a remote answer is awaited
-  - messageInjection # Can deliver an inbound instruction into a live or next turn
-  - nativeSessionBinding # Can resolve a native session id for correlation
-  # DEPRECATED hook-named flags, named after Claude hook types. Retained as generated aliases
-  # for one release so no shipped manifest breaks. Do not add new hook-named flags.
-  - followUpHook # Deprecated. Has a UserPromptSubmit hook that records follow-up messages
-  - permissionHook # Deprecated. Has a PermissionRequest hook that records tool permission prompts
-  - stopHook # Deprecated. Has a Stop hook for pending-delivery checks
-  - editHook # Deprecated. Has a PostToolUse hook that records touched files for delivery attribution
-  - nativeResume # Can detect and report native harness session/thread IDs
-  - modelFlag # Supports --model <model> launch flag
-  - effortFlag # Supports --effort or equivalent thinking/reasoning flag
-  - contextFilePrompt # Supports --append-system-prompt-file or equivalent context file flag
-  - permissionRules # Supports declarative protocol permission rules (no interactive approval)
-  - slashCommands # Supports slash commands for protocol operations
-
-# Approved hook types — closed set, DEPRECATED and harness-scoped.
-# A closed set of four Claude event names cannot describe Codex's fourteen, Cursor's
-# twenty-one, Pi's thirty-plus, or OpenCode's event bus. For capability purposes this list is
-# superseded by the agentSession.capabilityIds vocabulary below; it survives only as the
-# generated legacy projection for one release. Do not add values.
-approvedHookTypes:
-  - UserPromptSubmit # Captures human follow-up messages after initial mission
-  - PermissionRequest # Records tool permission prompts
-  - PostToolUse # Records touched files after editing tools and shell commands
-  - Stop # Checks pending delivery after agent turn (future)
-
 # Agent-session interaction vocabulary — closed sets.
 # The capability id vocabulary is closed so the same id means the same thing across every
 # adapter, and so the core can branch on a capability rather than on an agent identifier.
@@ -226,6 +188,8 @@ agentSession:
       # (file bodies, transcript paths, credentials) appears nowhere in it
     - decision-codec # Run the shipped request/decision codec and pure interpreter; assert
       # the bounded redacted request card and exact allow/deny/defer bytes
+    - mutation-window # Execute recorded pre/post mutation evidence and prove the adapter's
+      # paired, post-only, or unsupported classification without inferring harness parity
   rules:
     - 'capabilityTier is derived from passing fixtures only; it is never authored or persisted'
     - 'Promoting a status out of `unsupported` must replace evidenceRef with executable fixtures in the same change'

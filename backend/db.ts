@@ -347,6 +347,35 @@ export function getAuthorizedWorkspacesContext(): {
   return requestContext().authorizedWorkspaces;
 }
 
+/**
+ * Workspaces a resource-reference lookup may search.
+ *
+ * Authenticated requests are limited to their immutable authorization snapshot,
+ * including an explicitly empty snapshot. Process-local Local calls have no
+ * request snapshot, so they derive the same boundary from the active operator's
+ * live memberships rather than losing display-id resolution or widening to
+ * every workspace in the database.
+ */
+export async function getResourceLookupWorkspaceIds(
+  client: DatabaseClient = requireDatabaseClient()
+): Promise<string[]> {
+  const authorized = getAuthorizedWorkspacesContext();
+  if (authorized) {
+    return authorized.workspaces.map(workspace => workspace.workspaceId);
+  }
+  const profileId = await resolveActiveProfileId(client);
+  if (!profileId) return [];
+  const rows = await client.all<{ workspace_id: string }>(
+    `SELECT wu.workspace_id
+       FROM workspace_users wu
+       JOIN workspaces w ON w.id = wu.workspace_id AND w.deleted_at IS NULL
+      WHERE wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
+      ORDER BY wu.created_at ASC, wu.id ASC`,
+    [profileId]
+  );
+  return rows.map(row => row.workspace_id);
+}
+
 export function getAuthorizedWorkspace(workspaceId: string): AuthorizedWorkspace | null {
   return (
     requestContext().authorizedWorkspaces?.workspaces.find(

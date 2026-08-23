@@ -162,8 +162,9 @@ Every command below is available from `ovld protocol help`.
 | `deliver`                          | Finish the session with summary, artifacts, and rationale.                                                |
 | `resume-follow-up`                 | Reopen completed work for a follow-up.                                                                    |
 | `hook-event`                       | Record a connector lifecycle event.                                                                       |
-| `record-touched`                   | Locally record files touched by an edit hook.                                                             |
-| `changes`                          | Locally preflight changed-file attribution before delivery.                                               |
+| `capture-change`                   | Locally capture direct, objective-bound native edit paths (connector use).                                |
+| `sync-changes`                     | Synchronize one bounded objective-ledger batch.                                                            |
+| `changes`                          | Drain and report the exact objective ledger and hook health before delivery.                               |
 | `read-context` / `write-context`   | Read or store persistent mission context.                                                                 |
 | `add-artifact`                     | Create a mission artifact mid-turn without delivering.                                                    |
 | `update-artifact`                  | Revise an existing mission artifact in place (label / content / URL).                                     |

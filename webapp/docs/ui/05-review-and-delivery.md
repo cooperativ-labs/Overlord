@@ -21,14 +21,14 @@ mission detail when status is `review`).
 │ ┌─ Delivery summary ───────────────────────────────────────────────────────────────┐ │
 │ │ Narrative summary (what was asked, what happened, what's left). Markdown.         │ │
 │ └───────────────────────────────────────────────────────────────────────────────────┘ │
-│ ┌─ Rationale coverage ─────────────────┐  ┌─ Artifacts ──────────────────────────────┐ │
-│ │ 4 changed files · 4 with rationale ✓ │  │ ▸ test_results  "vitest 41 pass"          │ │
-│ │ ▓▓▓▓ 100% covered                    │  │ ▸ next_steps    "wire rotate to UI"       │ │
-│ │  src/auth/token.ts        ✓ rationale│  │ ▸ migration     "add user_token_scopes"   │ │
-│ │  src/auth/token.test.ts   ✓ rationale│  │ ▸ note / url / decision …                 │ │
-│ │  src/auth/index.ts        ✓ rationale│  └──────────────────────────────────────────┘ │
-│ │  src/rbac/authorizer.ts   ✓ rationale│  ┌─ Objective completion history ───────────┐ │
-│ │  [ open diff → Changes ]             │  │ 1 ✓ Plan       complete  · session …      │ │
+│ ┌─ File evidence ──────────────────────┐  ┌─ Artifacts ──────────────────────────────┐ │
+│ │ 4 objective-ledger paths             │  │ ▸ test_results  "vitest 41 pass"          │ │
+│ │  src/auth/token.ts      direct + note│  │ ▸ next_steps    "wire rotate to UI"       │ │
+│ │  src/auth/token.test.ts direct       │  │ ▸ migration     "add user_token_scopes"   │ │
+│ │  src/auth/index.ts      direct + note│  │ ▸ note / url / decision …                 │ │
+│ │  src/rbac/authorizer.ts direct       │  └──────────────────────────────────────────┘ │
+│ │  [ inspect file evidence ]           │  ┌─ Objective completion history ───────────┐ │
+│ │                                      │  │ 1 ✓ Plan       complete  · session …      │ │
 │ └──────────────────────────────────────┘  │ 2 ✓ Add rotation complete · session a1b2 │ │
 │ ┌─ Human action / follow-up ──────────────┐│ 3 ◷ Wire UI    draft                      │ │
 │ │ thread of asks/answers, decisions, notes ││  (redelivery indicator if pending)        │ │
@@ -48,16 +48,14 @@ mission detail when status is `review`).
 - **Follow-up deliveries do not replace prior ones**: a delivery history selector
   lets the reviewer page through prior deliveries; the latest is shown by default.
 
-### Rationale coverage
-- The core review affordance. Aggregates `changed_files` for the objective(s) and
-  shows which have a `change_rationale` (`label`, `summary`, `why`, `impact`,
-  `hunks`). A coverage bar shows covered vs uncovered.
-- **Uncovered meaningful changes are flagged** — delivery validates coverage, so an
-  uncovered file is either a known skip (formatting noise) or a gap worth raising in
-  review. Each file links into the **Changes** tab/diff (doc 06) annotated with its
-  rationale label and hunk headers.
-- Files no longer in the local diff are shown as "observed earlier, no current
-  diff" rather than silently dropped (per change-tracking rules).
+### File evidence
+- The core review affordance starts from `changed_files`, so every mechanically
+  observed objective/path row stays visible with source, quality, overlap, and
+  bounded hook health.
+- A `change_rationale` can optionally add `label`, `summary`, `why`, and `impact`.
+  Missing prose is neutral review metadata and never blocks delivery.
+- File ownership is never inferred from Git status or a shared checkout. There is
+  no unassigned-workspace bucket, rationale skip, or worktree-wide delta.
 
 ### Artifacts
 - Grouped by `artifacts.type`: `test_results`, `next_steps`, `note`, `url`,
@@ -107,13 +105,13 @@ mission detail when status is `review`).
 | --- | --- | --- |
 | Delivery summary + history | `GET /missions/:id/deliveries` → `['mission', id, 'deliveries']` | `delivery` insert/update → new delivery card; status badge |
 | Artifacts | within deliveries payload | `artifact` deltas |
-| Rationale coverage | `GET /missions/:id/changes` (`changed_files`+`change_rationales`) | `changed_files`/`change_rationale` deltas update coverage live |
+| File evidence | `GET /api/missions/:id/file-changes` (`changed_files` first, optional rationale join) | `changed_file`/`change_rationale` deltas refresh the file list |
 | Follow-up thread | `GET /missions/:id/events` | `mission_event` deltas (`ask`, `decision`, `user_follow_up`) |
 | Objective history | `['mission', id]` | `objective` deltas (incl. `pending_delivery`) |
 
-Because coverage reads the live `changed_files`, a reviewer watching a follow-up
-session sees coverage update as the agent records rationales — review is live, not a
-post-hoc snapshot.
+Because the list reads durable `changed_files`, a reviewer watching a follow-up
+session sees accepted ledger observations and optional annotations update without
+reconstructing state from the worktree.
 
 ---
 
@@ -121,8 +119,8 @@ post-hoc snapshot.
 
 - **Not yet delivered:** if opened on a non-`review` mission, show "No delivery yet"
   with the current objective/session status and a link back to detail.
-- **Missing rationale coverage:** prominent but non-blocking warning listing
-  uncovered meaningful files (this is the human's call to accept or push back).
+- **No rationale:** the observed path remains visible with a neutral explanation;
+  the reviewer may request prose, but delivery remains complete.
 - **`record-work` delivery:** clearly labeled "recorded from chat — no live
   session"; session attribution is null.
 - **Pending redelivery:** banner that the latest follow-up work hasn't been
@@ -143,10 +141,11 @@ post-hoc snapshot.
 
 ## Acceptance criteria
 
-- A delivered mission can be fully reviewed here — summary, artifacts, changed files
-  and rationale coverage, and follow-up actions — without opening the agent chat.
-- Rationale coverage clearly distinguishes covered vs uncovered meaningful changes
-  and links each file to its annotated diff.
+- A delivered mission can be fully reviewed here — summary, artifacts, observed
+  file paths with optional annotations, and follow-up actions — without opening
+  the agent chat.
+- Each path exposes its objective-ledger attribution and remains visible without a
+  rationale.
 - Artifacts are grouped by type and visually distinct from objective attachments.
 - Ordinary review discussion keeps the mission in `review`; reopening for code work
   is an explicit, separately-labeled action that moves the objective to

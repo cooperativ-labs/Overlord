@@ -4,7 +4,7 @@
 
 ```
 cli/bin/ovld.mjs      # real entry point — run this, not dist/, to exercise a dev build
-cli/src/              # commands, protocol client, launch, VCS, config, setup
+cli/src/              # commands, protocol client, launch, objective ledger, config, setup
 cli/test/             # unit tests + cli/test/e2e
 cli/docs/             # command reference and protocol docs (drift target)
 ```
@@ -26,10 +26,10 @@ exactly what this routine looks for.
 
 | File | Lines | Why it is a standing candidate |
 |---|---:|---|
-| `cli/src/commands.ts` | ~1890 | Long `if (subcommand === …)` dispatch mixed with per-command logic |
-| `cli/src/vcs.ts` | ~1030 | Git invocation, status parsing, baseline/delta computation |
-| `cli/src/connectors.ts` | ~900 | Connector staging, rendering, install paths |
-| `cli/src/runner-service.ts` | ~650 | Runner daemon lifecycle and queue polling |
+| `cli/src/commands.ts` | ~2460 | Long `if (subcommand === …)` dispatch mixed with per-command logic |
+| `cli/src/connectors.ts` | ~870 | Connector staging, rendering, install paths |
+| `cli/src/runner-service.ts` | ~710 | Runner daemon lifecycle and queue polling |
+| `cli/src/change-ledger.ts` | ~500 | Objective-scoped evidence lifecycle, batching, and acknowledgements |
 
 ## Area-specific checks
 
@@ -85,11 +85,14 @@ so error-mapping consolidation is a real finding when that mapping is scattered.
 command that builds JSON by string concatenation. Agents parse this output; inconsistent
 envelopes are a high-value finding.
 
-### Git and secrets safety
-`vcs.ts` and `record-touched.ts` back change attribution; `redact-secrets.ts` protects logs.
-Refactors here are `L` at minimum because misattributed changes corrupt delivery reports. Flag
-git invocations that bypass the shared runner in `vcs.ts` (inconsistent cwd, env, or error
-handling), and any new logging path that does not pass through redaction.
+### Attribution and secrets safety
+`capture-change.ts`, `active-objective-sessions.ts`, `change-ledger.ts`, and
+`local-file-storage.ts` implement objective-bound path evidence; `redact-secrets.ts` protects
+logs. Refactors across this boundary are `L` at minimum because scope or locking mistakes can
+misattribute changes or lose retryable evidence. Verify that path validation remains shared with
+the core Protocol schema, storage stays owner-only and atomically locked across processes, and
+callbacks without an exact objective binding or codec-normalized edit path cannot create a file
+claim. Flag any new logging path that does not pass through redaction.
 
 ### Session and config resolution
 `session-key.ts`, `active-mission.ts`, `config.ts`, and `env.ts` all resolve state from a

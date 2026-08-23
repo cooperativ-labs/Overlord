@@ -1,17 +1,20 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
 import {
   CONNECTOR_ADAPTER_KEY_PLACEHOLDER,
+  CONNECTOR_CORE_CAPTURE_CHANGE_HOOK_PATHS,
+  CONNECTOR_CORE_CAPTURE_CHANGE_HOOK_SOURCE,
   CONNECTOR_CORE_MARKER,
   CONNECTOR_CORE_MCP_SHIM_RELATIVE_PATH,
   connectorCoreRoot,
   connectorCoreScriptsRoot,
   managedFileSourceExists,
+  renderConnectorCaptureChangeHook,
   renderConnectorMcpShim,
   renderConnectorSkill,
   resolveManagedFileContents
@@ -44,7 +47,8 @@ test('renderConnectorSkill interpolates connector core into adapter template', (
 test('resolveManagedFileContents reads core reference files from connector core', () => {
   const contents = resolveManagedFileContents({
     sourceDir: path.join(repoRoot, 'connectors', 'adapters', 'cursor'),
-    relativePath: 'skills/overlord-mission/reference/cli.md'
+    relativePath: 'skills/overlord-mission/reference/cli.md',
+    adapterKey: 'cursor'
   }).toString('utf8');
 
   const coreReference = readFileSync(path.join(connectorCoreRoot(), 'reference', 'cli.md'), 'utf8');
@@ -94,6 +98,7 @@ test('connectors install one mission skill that recognizes ticket terminology', 
 });
 
 const MCP_SHIM_ADAPTERS = ['codex', 'cursor', 'antigravity'] as const;
+const CAPTURE_CHANGE_HOOK_ADAPTERS = ['claude', 'codex', 'cursor'] as const;
 
 test('rendered MCP shims differ from the core source only by the adapter key', () => {
   const coreSource = readFileSync(
@@ -139,13 +144,52 @@ test('shim adapters install a rendered shim that parses as a standalone module',
   }
 });
 
+test('post-tool capture hooks render from one core template into native managed paths', () => {
+  const coreSource = readFileSync(
+    path.join(connectorCoreScriptsRoot(), CONNECTOR_CORE_CAPTURE_CHANGE_HOOK_SOURCE),
+    'utf8'
+  );
+  assert.ok(coreSource.includes(CONNECTOR_ADAPTER_KEY_PLACEHOLDER));
+
+  for (const adapterKey of CAPTURE_CHANGE_HOOK_ADAPTERS) {
+    const relativePath = CONNECTOR_CORE_CAPTURE_CHANGE_HOOK_PATHS[adapterKey];
+    const sourceDir = path.join(repoRoot, 'connectors', 'adapters', adapterKey);
+    const manifest = readConnectorManifest(adapterKey);
+
+    assert.ok(manifest.connector.managedFiles.includes(relativePath));
+    assert.equal(existsSync(path.join(sourceDir, relativePath)), false);
+    assert.equal(managedFileSourceExists({ sourceDir, relativePath, adapterKey }), true);
+
+    const rendered = renderConnectorCaptureChangeHook({ adapterKey });
+    assert.equal(rendered, coreSource.replaceAll(CONNECTOR_ADAPTER_KEY_PLACEHOLDER, adapterKey));
+    assert.doesNotMatch(rendered, /__OVERLORD_/);
+    assert.ok(rendered.includes(`--agent ${adapterKey}`));
+
+    const home = mkdtempSync(path.join(os.tmpdir(), `ovld-capture-hook-${adapterKey}-`));
+    try {
+      const result = setupConnector({ agentKey: adapterKey, home });
+      const installedPath = path.join(result.installPath, relativePath);
+      assert.equal(readFileSync(installedPath, 'utf8'), rendered);
+      assert.notEqual(
+        statSync(installedPath).mode & 0o111,
+        0,
+        `${relativePath} must be executable`
+      );
+      const check = spawnSync('/bin/bash', ['-n', installedPath], { encoding: 'utf8' });
+      assert.equal(check.status, 0, `${adapterKey}: capture hook syntax: ${check.stderr}`);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  }
+});
+
 test('managed core reference paths do not require adapter-local copies', () => {
   for (const agentKey of ['claude', 'cursor', 'codex'] as const) {
     const manifest = readConnectorManifest(agentKey);
     const sourceDir = path.join(repoRoot, 'connectors', 'adapters', agentKey);
     for (const relativePath of manifest.connector.managedFiles) {
       assert.ok(
-        managedFileSourceExists({ sourceDir, relativePath }),
+        managedFileSourceExists({ sourceDir, relativePath, adapterKey: agentKey }),
         `${agentKey}: missing managed source ${relativePath}`
       );
     }

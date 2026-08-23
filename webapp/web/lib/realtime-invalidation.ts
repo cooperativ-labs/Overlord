@@ -120,6 +120,12 @@ function routeChange(change: EntityChangeDto): QueryKey[] | null {
       if (!missionId) return null;
       return [keys.missionDeliveries(missionId), keys.activityFeed];
     }
+    case 'changed_file':
+    case 'change_rationale': {
+      const missionId = missionIdFor(change);
+      if (!missionId) return null;
+      return [keys.missionFileChanges(missionId)];
+    }
     case 'agent_session':
     case 'execution_request': {
       return missionWorkflowKeys(change);

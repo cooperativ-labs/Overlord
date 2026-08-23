@@ -61,9 +61,9 @@ Narrower targets use the enclosing area's playbook:
 
 The monthly Claude web routine uses its connected Overlord MCP after it finishes the review. It
 creates one mission containing a short **Publish refactor review** objective, appends one draft
-objective per recommended finding/remediation, then delivers the publish objective with the full
-Markdown report as a `note` artifact and `noFileChanges: true`. The same report stays in
-`planning/refactor-reviews/`.
+objective per recommended finding/remediation, then delivers the publish objective with a concise
+summary and the full Markdown report as a `note` artifact. File-change evidence is captured
+independently by the attached connector. The same report stays in `planning/refactor-reviews/`.
 
 Use this Routine prompt:
 
@@ -73,8 +73,8 @@ Run the refactor-review skill for the next area in its rotation. Follow
 planning/refactor-reviews/. Then, using the connected Overlord MCP, resolve the Overlord project,
 create a mission with a Publish refactor review objective, add one draft objective for every
 recommended finding/remediation, and attach/deliver the publish objective with the full report as
-a note artifact. Set noFileChanges to true. Do not make any refactor changes and do not wait for
-user confirmation.
+a note artifact and a concise summary. Do not send a no-file assertion or explicit changed-file
+list. Do not make any refactor changes and do not wait for user confirmation.
 ```
 
 Keep review publication and refactoring separate. The published mission is the action queue; a

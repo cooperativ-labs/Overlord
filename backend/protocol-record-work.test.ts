@@ -7,7 +7,7 @@ const tempDir = mkdtempSync(path.join('/tmp', 'ovld-protocol-record-work-'));
 const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
 await bootstrapIntegrationTestDb({ sqlitePath: path.join(tempDir, 'webapp.sqlite') });
 
-const { createProject } = await import('./repository.ts');
+const { createProject, listMissionFileChanges } = await import('./repository.ts');
 const { runProtocolSubcommand } = await import('./protocol.ts');
 const { serviceDatabaseClient } = await import('./db.ts');
 const { nowIso } = await import('../packages/core/service/util.ts');
@@ -38,7 +38,7 @@ test('record-work accepts the whole submission as one --payload-json envelope', 
         summary: 'Added a CSV export control and the serializer behind it.',
         changeRationales: [
           {
-            file_path: 'src/export.ts',
+            filePath: 'src/export.ts',
             label: 'CSV serializer',
             summary: 'New CSV serializer.',
             why: 'Users need offline reports.',
@@ -69,6 +69,78 @@ test('record-work accepts the whole submission as one --payload-json envelope', 
     ['src/export.ts', 'src/generated.ts'],
     'both rationale-derived and explicit changed files are recorded'
   );
+
+  const linked = (await db.get(
+    `SELECT cf.id, cf.workspace_id, cf.project_id, cf.objective_id, cf.last_observed_at
+       FROM changed_files cf
+      WHERE cf.mission_id = ? AND cf.file_path = 'src/export.ts'`,
+    [result.mission.id]
+  )) as {
+    id: string;
+    workspace_id: string;
+    project_id: string;
+    objective_id: string;
+    last_observed_at: string;
+  };
+  await db.run(
+    `INSERT INTO change_rationales
+       (id, workspace_id, project_id, mission_id, objective_id, changed_file_id, file_path,
+        label, summary, why, impact, hunks_json, is_final, created_at, updated_at, revision)
+     VALUES ('newest-rationale', ?, ?, ?, ?, ?, 'src/export.ts', 'Newest rationale',
+             'Latest summary.', 'Latest reason.', 'Latest impact.', '[]', 0, ?, ?, 1)`,
+    [
+      linked.workspace_id,
+      linked.project_id,
+      result.mission.id,
+      linked.objective_id,
+      linked.id,
+      '2099-01-01T00:00:00.000Z',
+      '2099-01-01T00:00:00.000Z'
+    ]
+  );
+  await db.run(
+    `UPDATE changed_files SET observed_metadata_json = ?
+       WHERE mission_id = ? AND file_path = 'src/export.ts'`,
+    [
+      JSON.stringify({
+        source: 'declared_edit',
+        quality: 'window',
+        overlap: true,
+        hookHealth: 'x'.repeat(161)
+      }),
+      result.mission.id
+    ]
+  );
+  await db.run(
+    `UPDATE changed_files SET observed_metadata_json = ?
+       WHERE mission_id = ? AND file_path = 'src/generated.ts'`,
+    [
+      JSON.stringify({
+        source: 'window_observed',
+        quality: 'window',
+        overlap: true,
+        hookHealth: ' paired_hook_healthy '
+      }),
+      result.mission.id
+    ]
+  );
+  const projected = await listMissionFileChanges(result.mission.id);
+  assert.equal(projected.filter(change => change.filePath === 'src/export.ts').length, 1);
+  assert.equal(
+    projected.find(change => change.filePath === 'src/export.ts')?.label,
+    'Newest rationale'
+  );
+  const invalidEvidence = projected.find(change => change.filePath === 'src/export.ts');
+  assert.equal(invalidEvidence?.createdAt, linked.last_observed_at);
+  assert.equal(invalidEvidence?.source, null);
+  assert.equal(invalidEvidence?.quality, null);
+  assert.equal(invalidEvidence?.overlap, false);
+  assert.equal(invalidEvidence?.hookHealth, null);
+  const validEvidence = projected.find(change => change.filePath === 'src/generated.ts');
+  assert.equal(validEvidence?.source, 'window_observed');
+  assert.equal(validEvidence?.quality, 'window');
+  assert.equal(validEvidence?.overlap, true);
+  assert.equal(validEvidence?.hookHealth, 'paired_hook_healthy');
 });
 
 test('record-work rejects a submission with no objective anywhere', async () => {

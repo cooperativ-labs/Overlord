@@ -7,7 +7,7 @@
 # capabilities begin conservatively as `unverified` rather than inherited from a harness that
 # looks similar. Omitting a shipped connector from the generated matrix would make it less
 # truthful than the hand-written table it replaces; guessing its capabilities would be worse.
-# No UI control may be inferred from the agent name — only from a proven capability.
+# No UI control may be derived from the agent name — only from a proven capability.
 schemaVersion: 1
 adapter: antigravity
 codec: antigravity
@@ -39,6 +39,11 @@ decisionHold:
     PreToolUse `decision` response, but do not define timeout, crash, non-zero-exit, or malformed
     JSON fallback behavior. Keep the remote decision hold unverified until an installed binary
     exercises those failure paths.
+
+mutationHooks:
+  classification: unsupported
+  fixture: fixtures/mutation-window-evidence.json
+  reason: No recorded PostToolUse payload or empirical agy hook execution proves a pair.
 
 capabilities:
   observe.prompt:
@@ -121,27 +126,6 @@ hazards:
     verification: unverified
     mitigation: required
     trackedAs: agent-session-verify-antigravity
-  - id: pre-tool-use-always-allows
-    severity: medium
-    summary: >-
-      The former PreToolUse hook answered `{"allow_tool":true}` even though the first-party
-      response contract requires `decision`, and called a nonexistent detached protocol command.
-      It neither gated nor recorded reliably; changing it to native `decision: allow` would have
-      silently bypassed the harness permission system, so the registration was removed.
-    verification: verified
-    mitigation: implemented
-    fixture: fixtures/unbound-session.json
-  - id: pre-invocation-has-no-prompt
-    severity: high
-    summary: >-
-      The former follow-up hook guessed prompt/message/text/input fields on PreInvocation, but
-      the first-party schema contains none of them. It could never capture a normal follow-up;
-      reconstructing one from transcriptPath would violate the raw-transcript privacy boundary.
-      The false followUpHook projection and the registration were removed.
-    verification: verified
-    mitigation: implemented
-    fixture: fixtures/unbound-session.json
-
 decisionShape:
   codec: antigravity
   neverSend: [allow_tool, hookSpecificOutput, permissionDecision, permission]
@@ -152,9 +136,3 @@ decisionShape:
     no failure path may manufacture `decision: allow`.
 
 unboundSessionFixture: fixtures/unbound-session.json
-
-legacy:
-  capabilities:
-    - contextFilePrompt
-    - slashCommands
-  hookTypes: []

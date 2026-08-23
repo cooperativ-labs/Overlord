@@ -14,24 +14,32 @@ import {
   parseMutationFromMetadata
 } from '@overlord/core/service/local-target-mutation-runner';
 import { launchSessionSnapshotFromMetadata } from '@overlord/core/service/terminal-profile-types';
-import { existsSync, readFileSync } from 'node:fs';
-import os from 'node:os';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
+import { readBoundedStdin } from './agent-session/event.js';
+import { clearActiveMissionPointer, writeActiveMissionPointer } from './active-mission.js';
 import {
-  clearActiveMissionPointer,
-  readActiveMissionPointer,
-  writeActiveMissionPointer
-} from './active-mission.js';
+  finalizeActiveSession,
+  readActiveSessions,
+  readObjectiveSessions,
+  writeActiveSession
+} from './active-objective-sessions.js';
 import {
   flagBoolean,
   flagOptionalBoolean,
   flagValue,
   parseArgs,
-  rejectOversizedInlineJson,
-  requireFlag
+  rejectOversizedInlineJson
 } from './args.js';
 import { type BranchAutomationPayload, prepareMissionBranch } from './branch-preparation.js';
+import { captureChangeFromPayload } from './capture-change.js';
+import {
+  type LedgerEvidence,
+  markChangeEvidenceSynced,
+  readChangeLedgerHealth,
+  readUnsyncedChangeEvidence
+} from './change-ledger.js';
 import { isLoopbackBackendUrl, loadConfig, resolveBackendUrl } from './config.js';
 import { clientDeviceIdentity } from './device-identity.js';
 import {
@@ -49,7 +57,6 @@ import { runOrgSetupCommand } from './org-setup.js';
 import { printJson, printKeyValue } from './output.js';
 import { pruneStaleProjectTmp } from './project-tmp.js';
 import { printProtocolHelp } from './protocol-help.js';
-import { recordTouchedFromPayload } from './record-touched.js';
 import { redactSecrets } from './redact-secrets.js';
 import { reportRunnerResourceObservations } from './resource-observations.js';
 import { runnerRegistrationPayload } from './runner-identity.js';
@@ -74,39 +81,6 @@ import {
 } from './session-key.js';
 import type { TerminalLaunchSettings } from './terminal-launcher.js';
 import { fetchTerminalProfile, terminalProfileToLaunchSettings } from './terminal-profile.js';
-import {
-  computeRunDelta,
-  draftChangeRationalesFromNotes,
-  filterRunAttributableChanges,
-  hasTouchedFilesLog,
-  readChangedFiles,
-  resetRationaleNotes,
-  resetTouchedFiles,
-  writeBaseline
-} from './vcs.js';
-import { removeActiveSession, writeActiveSession } from './vcs-sessions.js';
-
-type ChangedFileEntry = {
-  filePath: string;
-  vcsStatus?: string | null;
-  attribution?: 'mine' | 'claimed' | 'unclaimed';
-  claimedByMissionIds?: string[];
-};
-type ChangeRationaleEntry = {
-  file_path?: string;
-  filePath?: string;
-  label?: string;
-  summary?: string;
-  why?: string;
-  impact?: string;
-  [key: string]: unknown;
-};
-type SkipRationaleEntry = {
-  file_path?: string;
-  filePath?: string;
-  reason?: string;
-  [key: string]: unknown;
-};
 
 /**
  * Normalize an `--access` flag into a `{ accessMode }` request fragment (coo:368).
@@ -156,373 +130,180 @@ function writeProjectJsonFromResource({
   });
 }
 
-/** Parse an inline `--changed-files-json` value into entries (best-effort). */
-function parseChangedFilesJson(value: unknown): ChangedFileEntry[] {
-  if (typeof value !== 'string' || value.trim() === '') return [];
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (entry): entry is ChangedFileEntry =>
-        typeof entry === 'object' &&
-        entry !== null &&
-        typeof (entry as ChangedFileEntry).filePath === 'string'
-    );
-  } catch {
-    return [];
+type JsonRecord = Record<string, unknown>;
+
+type ChangeEvidenceIdentity = Pick<LedgerEvidence, 'idempotencyKey' | 'filePath'>;
+
+const SYNC_CHANGE_EVIDENCE_KEYS = new Set([
+  'filePath',
+  'idempotencyKey',
+  'source',
+  'quality',
+  'overlap',
+  'toolWindowId',
+  'observedAt',
+  'hookHealth'
+]);
+
+function changeEvidenceIdentityKey(identity: ChangeEvidenceIdentity): string {
+  return JSON.stringify([identity.idempotencyKey, identity.filePath]);
+}
+
+function canonicalChangeEvidenceTuple(value: unknown): string | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as JsonRecord;
+  if (Object.keys(record).some(key => !SYNC_CHANGE_EVIDENCE_KEYS.has(key))) return null;
+  if (
+    typeof record.idempotencyKey !== 'string' ||
+    typeof record.filePath !== 'string' ||
+    (record.source !== 'declared_edit' && record.source !== 'window_observed') ||
+    (record.quality !== 'direct' && record.quality !== 'window') ||
+    typeof record.overlap !== 'boolean' ||
+    typeof record.observedAt !== 'string' ||
+    (record.toolWindowId !== undefined && typeof record.toolWindowId !== 'string') ||
+    (record.hookHealth !== undefined && typeof record.hookHealth !== 'string')
+  ) {
+    return null;
   }
-}
-
-/** Read `--changed-files-json` or `--changed-files-file` entries (best-effort). */
-function readChangedFilesFromFlags(
-  flags: Record<string, string | true>,
-  stdin?: string
-): ChangedFileEntry[] {
-  const fileFlag = flags['--changed-files-file'];
-  if (typeof fileFlag === 'string') {
-    const raw =
-      fileFlag === '-'
-        ? (stdin ?? '')
-        : (() => {
-            try {
-              return readFileSync(fileFlag, 'utf8');
-            } catch {
-              return '';
-            }
-          })();
-    return parseChangedFilesJson(raw);
-  }
-  return parseChangedFilesJson(flags['--changed-files-json']);
-}
-
-function writeFilteredChangedFilesToFlags({
-  flags,
-  files
-}: {
-  flags: Record<string, string | true>;
-  files: ChangedFileEntry[];
-}): void {
-  delete flags['--changed-files-file'];
-  if (files.length === 0) {
-    delete flags['--changed-files-json'];
-    return;
-  }
-  flags['--changed-files-json'] = JSON.stringify(files);
-}
-
-function writeSkipRationaleForToFlags({
-  flags,
-  fileInputs,
-  entries
-}: {
-  flags: Record<string, string | true>;
-  fileInputs: Record<string, string>;
-  entries: SkipRationaleEntry[];
-}): void {
-  if (typeof flags['--skip-rationale-for-file'] === 'string') {
-    fileInputs['--skip-rationale-for-file'] = JSON.stringify(entries, null, 2);
-    delete flags['--skip-rationale-for-json'];
-    return;
-  }
-  flags['--skip-rationale-for-json'] = JSON.stringify(entries);
-  delete flags['--skip-rationale-for-file'];
-}
-
-function parseJsonArray(value: unknown): unknown[] {
-  if (typeof value !== 'string' || value.trim() === '') return [];
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function readJsonFlagContent({
-  flags,
-  fileInputs,
-  jsonFlag,
-  fileFlag
-}: {
-  flags: Record<string, string | true>;
-  fileInputs: Record<string, string>;
-  jsonFlag: string;
-  fileFlag: string;
-}): string | undefined {
-  const filePath = flags[fileFlag];
-  if (typeof filePath === 'string') {
-    if (fileInputs[fileFlag] !== undefined) return fileInputs[fileFlag];
-    try {
-      return readFileSync(filePath, 'utf8');
-    } catch {
-      return undefined;
-    }
-  }
-  return typeof flags[jsonFlag] === 'string' ? flags[jsonFlag] : undefined;
-}
-
-function readChangeRationalesFromFlags({
-  flags,
-  fileInputs
-}: {
-  flags: Record<string, string | true>;
-  fileInputs: Record<string, string>;
-}): ChangeRationaleEntry[] {
-  const direct = parseJsonArray(
-    readJsonFlagContent({
-      flags,
-      fileInputs,
-      jsonFlag: '--change-rationales-json',
-      fileFlag: '--change-rationales-file'
-    })
-  ).filter((entry): entry is ChangeRationaleEntry => typeof entry === 'object' && entry !== null);
-
-  const payloadRaw = readJsonFlagContent({
-    flags,
-    fileInputs,
-    jsonFlag: '--payload-json',
-    fileFlag: '--payload-file'
-  });
-  let payloadRationales: ChangeRationaleEntry[] = [];
-  if (payloadRaw) {
-    try {
-      const payload = JSON.parse(payloadRaw) as { changeRationales?: unknown };
-      payloadRationales = Array.isArray(payload.changeRationales)
-        ? payload.changeRationales.filter(
-            (entry): entry is ChangeRationaleEntry => typeof entry === 'object' && entry !== null
-          )
-        : [];
-    } catch {
-      payloadRationales = [];
-    }
-  }
-
-  return [...payloadRationales, ...direct];
-}
-
-function rationalePath(rationale: ChangeRationaleEntry): string {
-  return (rationale.file_path ?? rationale.filePath ?? '').replace(/\\/g, '/').trim();
-}
-
-function readSkipRationaleForFromFlags({
-  flags,
-  fileInputs
-}: {
-  flags: Record<string, string | true>;
-  fileInputs: Record<string, string>;
-}): SkipRationaleEntry[] {
-  return parseJsonArray(
-    readJsonFlagContent({
-      flags,
-      fileInputs,
-      jsonFlag: '--skip-rationale-for-json',
-      fileFlag: '--skip-rationale-for-file'
-    })
-  ).filter((entry): entry is SkipRationaleEntry => typeof entry === 'object' && entry !== null);
-}
-
-function skipRationalePath(entry: SkipRationaleEntry): string {
-  return (entry.file_path ?? entry.filePath ?? '').replace(/\\/g, '/').trim();
+  return JSON.stringify([
+    record.idempotencyKey,
+    record.filePath,
+    record.source,
+    record.quality,
+    record.overlap,
+    record.toolWindowId ?? null,
+    record.observedAt,
+    record.hookHealth ?? null
+  ]);
 }
 
 /**
- * Filter protocol changed-file payloads so only run-attributable paths (not in
- * the session baseline) are sent. At deliver, merge explicit payloads with the
- * VCS delta so a partial explicit list does not suppress mechanically observed
- * files.
+ * Accept only caller-supplied rows that exactly reproduce a current local
+ * ledger tuple. A reused key with a different path or metadata must never mark
+ * the real local row synchronized merely because the backend accepted it.
  */
-function applySessionChangedFiles({
-  flags,
+function changeBatchEvidenceIdentities(
+  raw: string | undefined,
+  unsynced: LedgerEvidence[]
+): Set<string> {
+  if (!raw) return new Set();
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return new Set();
+    const localByTuple = new Map(
+      unsynced.flatMap(entry => {
+        const tuple = canonicalChangeEvidenceTuple(entry);
+        return tuple ? [[tuple, entry] as const] : [];
+      })
+    );
+    return new Set(
+      parsed.flatMap(item => {
+        const tuple = canonicalChangeEvidenceTuple(item);
+        const local = tuple ? localByTuple.get(tuple) : undefined;
+        return local ? [changeEvidenceIdentityKey(local)] : [];
+      })
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+/**
+ * Best-effort drain for normal lifecycle commands. Evidence is synchronized in
+ * bounded batches until the ledger is empty or the backend makes no progress.
+ * A failed drain is advisory and must not change the lifecycle operation.
+ */
+async function syncObjectiveLedger({
+  runtime,
   workingDirectory,
   missionId,
-  subcommand,
-  stdin,
-  fileInputs = {}
+  sessionKey,
+  active
 }: {
-  flags: Record<string, string | true>;
+  runtime: CliRuntime;
   workingDirectory: string;
   missionId: string;
-  subcommand: string;
-  stdin?: string;
-  fileInputs?: Record<string, string>;
-}): void {
-  const noFileChanges =
-    subcommand === 'deliver' &&
-    (flags['--no-file-changes'] === true || flags['--no-file-changes'] === 'true');
-  const delta = computeRunDelta({ workingDirectory, missionId });
+  sessionKey: string;
+  active: { missionId: string; objectiveId: string; sessionKey: string };
+}): Promise<{ synced: number; warning?: string }> {
+  let synced = 0;
+  while (true) {
+    const changes = readUnsyncedChangeEvidence({
+      workingDirectory,
+      objectiveId: active.objectiveId,
+      sessionKey
+    }).slice(0, 25);
+    if (changes.length === 0) return { synced };
 
-  // Full current dirty tree (not just the run-attributable delta), sent so the
-  // server can reconcile changed_files rows that are no longer dirty to
-  // 'resolved' — un-poisoning coverage from a past over-attribution. Sent even
-  // for --no-file-changes so a leftover stale row still gets cleared.
-  if (subcommand === 'deliver') {
-    flags['--observed-dirty-paths-json'] = JSON.stringify(
-      readChangedFiles(workingDirectory).map(entry => entry.filePath)
-    );
-  }
-
-  if (noFileChanges) {
-    if (delta.length > 0) {
-      console.error(
-        `[overlord] --no-file-changes was set, but VCS shows ${delta.length} changed file(s) for this run: ${delta
-          .map(entry => entry.filePath)
-          .join(', ')}`
+    try {
+      const result = await runtime.backend.post<unknown>({
+        path: '/api/protocol/sync-changes',
+        body: {
+          fileInputs: {},
+          args: [],
+          positional: [],
+          externalSessionId: null,
+          flags: {
+            '--session-key': sessionKey,
+            '--mission-id': missionId,
+            '--changes-json': JSON.stringify(changes)
+          }
+        }
+      });
+      const outcomes = asRecord(result).outcomes;
+      const batch = new Map(
+        changes.map(change => [changeEvidenceIdentityKey(change), change] as const)
       );
-    }
-    delete flags['--changed-files-json'];
-    delete flags['--changed-files-file'];
-    return;
-  }
-
-  const hasExplicitPayload = '--changed-files-json' in flags || '--changed-files-file' in flags;
-  if (subcommand === 'update' && !hasExplicitPayload) return;
-
-  const explicit = readChangedFilesFromFlags(flags, stdin);
-  const merged =
-    subcommand === 'deliver'
-      ? [...explicit, ...delta].filter(
-          (entry, index, all) => all.findIndex(item => item.filePath === entry.filePath) === index
-        )
-      : explicit;
-  const classified = filterRunAttributableChanges({
-    workingDirectory,
-    missionId,
-    files: merged.map(entry => ({
-      filePath: entry.filePath,
-      vcsStatus: entry.vcsStatus ?? 'changed'
-    }))
-  });
-
-  const claimedElsewhere = classified.filter(entry => entry.attribution === 'claimed');
-  const unclaimedFlagged = classified.filter(entry => entry.attribution === 'unclaimed');
-
-  if (subcommand === 'deliver' && claimedElsewhere.length > 0) {
-    console.error(
-      `[overlord] excluded ${claimedElsewhere.length} changed file(s) claimed by concurrent mission logs: ` +
-        `${claimedElsewhere
-          .map(entry =>
-            entry.claimedByMissionIds?.length
-              ? `${entry.filePath} (${entry.claimedByMissionIds.join(', ')})`
-              : entry.filePath
-          )
-          .join(', ')}`
-    );
-  }
-
-  if (subcommand === 'deliver' && unclaimedFlagged.length > 0) {
-    console.error(
-      `[overlord] ${unclaimedFlagged.length} changed file(s) are not claimed by any edit-tracking log ` +
-        `and are included for completeness — please confirm or --skip-rationale-for- them: ` +
-        `${unclaimedFlagged.map(entry => entry.filePath).join(', ')}`
-    );
-  }
-
-  // Attribution/claimedByMissionIds ride along to the backend (never persisted)
-  // so a residual missing_rationale error can classify each path without the
-  // server re-deriving touched-log state it has no access to.
-  const attributable = classified
-    .filter(entry => entry.attribution !== 'claimed')
-    .map(entry => ({
-      filePath: entry.filePath,
-      vcsStatus: entry.vcsStatus,
-      ...(entry.attribution ? { attribution: entry.attribution } : {}),
-      ...(entry.claimedByMissionIds?.length
-        ? { claimedByMissionIds: entry.claimedByMissionIds }
-        : {})
-    }));
-
-  const skipEntries =
-    subcommand === 'deliver' ? readSkipRationaleForFromFlags({ flags, fileInputs }) : [];
-  const rationalePaths =
-    subcommand === 'deliver'
-      ? new Set(
-          readChangeRationalesFromFlags({ flags, fileInputs }).map(rationalePath).filter(Boolean)
-        )
-      : new Set<string>();
-  const skipByPath = new Map<string, SkipRationaleEntry>();
-  if (subcommand === 'deliver') {
-    for (const entry of skipEntries) {
-      const filePath = skipRationalePath(entry);
-      if (!filePath) continue;
-      skipByPath.set(filePath, entry);
-    }
-  }
-  if (subcommand === 'deliver') {
-    for (const entry of claimedElsewhere) {
-      const filePath = entry.filePath;
-      if (rationalePaths.has(filePath)) continue;
-      if (skipByPath.has(filePath)) continue;
-      const missionLabel =
-        entry.claimedByMissionIds && entry.claimedByMissionIds.length > 0
-          ? entry.claimedByMissionIds.join(', ')
-          : 'another active mission';
-      skipByPath.set(filePath, {
-        file_path: filePath,
-        reason: `Changed by concurrent mission ${missionLabel}; excluded from this delivery report.`
+      const accepted = new Map<string, ChangeEvidenceIdentity>(
+        Array.isArray(outcomes)
+          ? outcomes.flatMap(outcome => {
+              const record = asRecord(outcome);
+              if (
+                (record.status !== 'accepted' && record.status !== 'ignored') ||
+                typeof record.idempotencyKey !== 'string' ||
+                typeof record.filePath !== 'string'
+              ) {
+                return [];
+              }
+              const identity = {
+                idempotencyKey: record.idempotencyKey,
+                filePath: record.filePath
+              };
+              const key = changeEvidenceIdentityKey(identity);
+              return batch.has(key) ? [[key, identity] as const] : [];
+            })
+          : []
+      );
+      if (accepted.size === 0) {
+        return { synced, warning: 'change ledger sync made no progress' };
+      }
+      markChangeEvidenceSynced({
+        workingDirectory,
+        objectiveId: active.objectiveId,
+        sessionKey,
+        evidence: [...accepted.values()]
       });
-    }
-    if (skipByPath.size > 0) {
-      writeSkipRationaleForToFlags({
-        flags,
-        fileInputs,
-        entries: Array.from(skipByPath.values())
-      });
+      const remainingBatch = new Set(
+        readUnsyncedChangeEvidence({
+          workingDirectory,
+          objectiveId: active.objectiveId,
+          sessionKey
+        })
+          .map(changeEvidenceIdentityKey)
+          .filter(key => batch.has(key))
+      );
+      const progress = changes.filter(
+        change => !remainingBatch.has(changeEvidenceIdentityKey(change))
+      ).length;
+      if (progress === 0) {
+        return { synced, warning: 'change ledger sync made no progress' };
+      }
+      synced += progress;
+    } catch {
+      return { synced, warning: 'change ledger sync unavailable' };
     }
   }
-
-  const skipPaths =
-    subcommand === 'deliver'
-      ? new Set(Array.from(skipByPath.keys()).filter(Boolean))
-      : new Set<string>();
-  const filtered =
-    skipPaths.size > 0
-      ? attributable.filter(entry => !skipPaths.has(entry.filePath))
-      : attributable;
-
-  writeFilteredChangedFilesToFlags({ flags, files: filtered });
 }
-
-function applyDraftChangeRationales({
-  flags,
-  fileInputs,
-  workingDirectory,
-  missionId
-}: {
-  flags: Record<string, string | true>;
-  fileInputs: Record<string, string>;
-  workingDirectory: string;
-  missionId: string;
-}): void {
-  const changedFiles = readChangedFilesFromFlags(flags, fileInputs['--changed-files-file']).map(
-    entry => ({
-      filePath: entry.filePath,
-      vcsStatus: entry.vcsStatus ?? 'changed'
-    })
-  );
-  if (changedFiles.length === 0) return;
-
-  const explicitRationales = readChangeRationalesFromFlags({ flags, fileInputs });
-  const covered = new Set(explicitRationales.map(rationalePath).filter(Boolean));
-  const drafts = draftChangeRationalesFromNotes({
-    workingDirectory,
-    missionId,
-    files: changedFiles
-  }).filter(draft => !covered.has(draft.file_path));
-  if (drafts.length === 0) return;
-
-  const merged = [...explicitRationales, ...drafts];
-  if (typeof flags['--change-rationales-file'] === 'string') {
-    fileInputs['--change-rationales-file'] = JSON.stringify(merged, null, 2);
-  } else {
-    flags['--change-rationales-json'] = JSON.stringify(merged);
-  }
-
-  console.error(
-    `[overlord] prefilled ${drafts.length} draft change rationale(s) from local edit notes.`
-  );
-}
-
-type JsonRecord = Record<string, unknown>;
 
 type LaunchSettingsShape = {
   worktreeBranchAutomationEnabled?: unknown;
@@ -746,8 +527,8 @@ const PROTOCOL_FILE_FLAGS = [
   '--payload-file',
   '--artifacts-file',
   '--change-rationales-file',
-  '--skip-rationale-for-file',
   '--objectives-file',
+  '--changes-file',
   '--changed-files-file',
   '--value-file',
   '--content-text-file',
@@ -765,7 +546,7 @@ const SESSION_KEY_SUBCOMMANDS = new Set([
   'ask',
   'deliver',
   'hook-event',
-  'record-change-rationales'
+  'sync-changes'
 ]);
 
 /**
@@ -791,21 +572,34 @@ const OBJECTIVE_SCOPED_SUBCOMMANDS = new Set([
   'hook-event',
   'load-context',
   'read-context',
-  'record-change-rationales',
-  'record-touched',
+  'capture-change',
   'resume-follow-up',
+  'sync-changes',
   'attach',
   'update',
   'update-artifact',
   'write-context'
 ]);
 
+const RETIRED_CHANGE_TRACKING_FLAGS: Record<string, readonly string[]> = {
+  update: ['--track-changed-files', '--changed-files-json', '--changed-files-file'],
+  deliver: [
+    '--changed-files-json',
+    '--changed-files-file',
+    '--observed-dirty-paths-json',
+    '--observed-dirty-paths-file',
+    '--no-file-changes',
+    '--skip-rationale-for-json',
+    '--skip-rationale-for-file'
+  ]
+};
+
+const MAX_CHANGES_HEALTH_ENTRIES = 128;
+
 /**
- * Resolve EACH `--*-file` flag independently into a `fileInputs` map so multiple
- * file payloads in one invocation no longer collide on a single `stdin` field.
+ * Resolve each `--*-file` flag independently into its canonical `fileInputs`
+ * entry.
  * At most one flag may use literal `-` (true stdin); real file paths are unlimited.
- * The single `-` payload is also returned as `stdin` so the backend keeps honoring
- * `body.stdin` for backward compatibility.
  */
 export async function resolveProtocolFileInputs({
   flags,
@@ -813,7 +607,7 @@ export async function resolveProtocolFileInputs({
 }: {
   flags: Map<string, string | true>;
   stdin?: string;
-}): Promise<{ fileInputs: Record<string, string>; stdin?: string }> {
+}): Promise<{ fileInputs: Record<string, string> }> {
   const stdinFlags = PROTOCOL_FILE_FLAGS.filter(name => flagValue(flags, name) === '-');
   if (stdinFlags.length > 1) {
     throw new CliError({
@@ -838,7 +632,6 @@ export async function resolveProtocolFileInputs({
   };
 
   const fileInputs: Record<string, string> = {};
-  let stdinPayload: string | undefined;
 
   for (const flagName of PROTOCOL_FILE_FLAGS) {
     const filePath = flagValue(flags, flagName);
@@ -846,19 +639,12 @@ export async function resolveProtocolFileInputs({
     if (filePath === '-') {
       const content = readStdinOnce();
       fileInputs[flagName] = content;
-      stdinPayload = content;
     } else {
       fileInputs[flagName] = readFileSync(filePath, 'utf8');
     }
   }
 
-  // No file flags but a piped/explicit stdin was supplied: preserve it as the
-  // single backward-compatible payload (legacy behavior).
-  if (stdinPayload === undefined && stdin !== undefined && Object.keys(fileInputs).length === 0) {
-    stdinPayload = stdin;
-  }
-
-  return { fileInputs, stdin: stdinPayload };
+  return { fileInputs };
 }
 
 async function discoverProjectId(runtime: CliRuntime, explicit?: string): Promise<string> {
@@ -895,6 +681,15 @@ export async function runProtocolCommand({
 
   const workingDirectory = process.cwd();
   const flags = Object.fromEntries(parsed.flags);
+  const retiredFlags = RETIRED_CHANGE_TRACKING_FLAGS[subcommand] ?? [];
+  const suppliedRetiredFlags = retiredFlags.filter(flag => flag in flags);
+  if (suppliedRetiredFlags.length > 0) {
+    throw new CliError({
+      message:
+        `${suppliedRetiredFlags.join(', ')} ${suppliedRetiredFlags.length === 1 ? 'was' : 'were'} removed. ` +
+        'File evidence is captured and synchronized from the objective ledger.'
+    });
+  }
   if (
     subcommand === 'attach' &&
     typeof flags['--execution-request-id'] !== 'string' &&
@@ -965,8 +760,7 @@ export async function runProtocolCommand({
   // `coo:756`), so an agent that reconnects holding only the objective it was
   // launched for can address every subcommand with it. Fill `--mission-id` in
   // here rather than leaving it to the backend so the local paths below —
-  // session-key cache, VCS baseline, touched-files log — all key off the same
-  // mission the request will.
+  // session-key cache and objective ledger both require the exact objective.
   const objectiveRef =
     typeof flags['--objective-id'] === 'string' ? flags['--objective-id'] : undefined;
   const missionId =
@@ -974,65 +768,129 @@ export async function runProtocolCommand({
   if (missionId && typeof flags['--mission-id'] !== 'string') {
     flags['--mission-id'] = missionId;
   }
-  const { fileInputs, stdin: protocolStdin } = await resolveProtocolFileInputs({
+  const { fileInputs } = await resolveProtocolFileInputs({
     flags: parsed.flags,
     stdin
   });
+  let explicitSyncIdentity:
+    | { objectiveId: string; sessionKey: string; batchEvidence: Set<string> }
+    | undefined;
 
-  // Local-only: append this hook invocation's edited files to the resolved
-  // mission's touched-files log. No backend call — an adapter's edit hook pipes
-  // its native hook JSON on stdin and gets the same bookkeeping cli/src/vcs.ts
-  // already does for the Claude hook, without needing MISSION_ID in env.
-  if (subcommand === 'record-touched') {
-    const missionOverride = missionId ?? process.env.MISSION_ID ?? process.env.OVERLORD_MISSION_ID;
+  // Local-only: reduce a connector post-tool payload into direct path evidence.
+  // There is no backend call and no worktree scan on this latency-sensitive path.
+  if (subcommand === 'capture-change') {
     // The hook payload arrives as raw piped stdin, not a --*-file flag, so read
     // fd 0 directly rather than going through resolveProtocolFileInputs (which
     // only reads stdin when a --*-file flag is literally '-').
-    const rawPayload = stdin ?? (process.stdin.isTTY ? '' : readFileSync(0, 'utf8'));
-    const result = recordTouchedFromPayload({
+    const rawPayload = stdin ?? (process.stdin.isTTY ? null : readBoundedStdin());
+    const result = captureChangeFromPayload({
+      agent: flagValue(parsed.flags, '--agent') ?? '',
       rawPayload,
-      missionOverride,
+      objectiveOverride: objectiveRef ?? process.env.OVERLORD_OBJECTIVE_ID,
       fallbackCwd: workingDirectory
     });
     printJson(result);
     return;
   }
 
-  // Local-only preflight: classify every currently dirty path (mine/claimed/
-  // unclaimed) exactly the way deliver will, plus draft rationales from local
-  // edit notes. No backend call — this replaces hand-triaging `git status`
-  // before delivering with one read-only, ready-to-use report.
+  // Preflight drains the attached objective ledger, then reports its local
+  // health. It deliberately does not inspect or classify the shared worktree:
+  // a path may belong to more than one objective and peer arbitration is not
+  // an attribution mechanism.
   if (subcommand === 'changes') {
+    if (!objectiveRef) {
+      throw new CliError({
+        message: 'Usage: ovld protocol changes --objective-id <id> [--mission-id <id>]'
+      });
+    }
     if (!missionId) {
       throw new CliError({
         message:
-          'Usage: ovld protocol changes --mission-id <id> (or --objective-id <mission-display-id>.<key>)'
+          'Mission scope is required when --objective-id is not a mission-qualified display id.'
       });
     }
-    const classified = filterRunAttributableChanges({
-      workingDirectory,
-      missionId,
-      files: readChangedFiles(workingDirectory)
+    const sessionKey =
+      (typeof flags['--session-key'] === 'string' && flags['--session-key']) ||
+      (objectiveRef
+        ? readCachedSessionKey({ missionId, workingDirectory, objectiveId: objectiveRef })
+        : undefined);
+    const objectiveSessions = objectiveRef
+      ? readObjectiveSessions({ workingDirectory, objectiveId: objectiveRef })
+      : [];
+    const explicitSessionKey =
+      typeof flags['--session-key'] === 'string' ? flags['--session-key'] : undefined;
+    const explicitSessionMatches =
+      !explicitSessionKey ||
+      objectiveSessions.some(entry => entry.sessionKey === explicitSessionKey);
+    const candidates = explicitSessionMatches ? objectiveSessions : [];
+    const selected =
+      (sessionKey ? objectiveSessions.find(entry => entry.sessionKey === sessionKey) : undefined) ??
+      objectiveSessions.find(entry => !entry.deliveryPendingSync);
+    let synced = 0;
+    const warnings: string[] = [];
+    for (const entry of candidates) {
+      const result = await syncObjectiveLedger({
+        runtime,
+        workingDirectory,
+        missionId,
+        sessionKey: entry.sessionKey,
+        active: entry
+      });
+      synced += result.synced;
+      if (result.warning && !warnings.includes(result.warning)) warnings.push(result.warning);
+    }
+    let unsyncedEvidence = 0;
+    const allHealth = candidates.flatMap(entry => {
+      unsyncedEvidence += readUnsyncedChangeEvidence({
+        workingDirectory,
+        objectiveId: entry.objectiveId,
+        sessionKey: entry.sessionKey
+      }).length;
+      return readChangeLedgerHealth({
+        workingDirectory,
+        objectiveId: entry.objectiveId,
+        sessionKey: entry.sessionKey
+      });
     });
-    const mine = classified.filter(
-      entry => entry.attribution === 'mine' || entry.attribution === undefined
-    );
-    const claimed = classified.filter(entry => entry.attribution === 'claimed');
-    const unclaimed = classified.filter(entry => entry.attribution === 'unclaimed');
-    const draftRationales = draftChangeRationalesFromNotes({
-      workingDirectory,
-      missionId,
-      files: [...mine, ...unclaimed]
+    const health = allHealth
+      .sort((left, right) => left.at.localeCompare(right.at))
+      .slice(-MAX_CHANGES_HEALTH_ENTRIES);
+    for (const entry of candidates.filter(candidate => candidate.deliveryPendingSync)) {
+      const stillUnsynced = readUnsyncedChangeEvidence({
+        workingDirectory,
+        objectiveId: entry.objectiveId,
+        sessionKey: entry.sessionKey
+      });
+      if (stillUnsynced.length > 0) continue;
+      const finalized = finalizeActiveSession({
+        workingDirectory,
+        objectiveId: entry.objectiveId,
+        sessionKey: entry.sessionKey
+      });
+      if (finalized) {
+        clearCachedSessionKey({
+          missionId,
+          workingDirectory,
+          objectiveId: objectiveRef,
+          sessionKey: entry.sessionKey
+        });
+      }
+    }
+    if (readActiveSessions(workingDirectory).length === 0) {
+      clearActiveMissionPointer(workingDirectory);
+    }
+    printJson({
+      objectiveId: selected?.objectiveId ?? objectiveSessions[0]?.objectiveId ?? null,
+      synced,
+      warning:
+        candidates.length === 0
+          ? 'no attached objective session'
+          : warnings.length > 0
+            ? warnings.join('; ')
+            : null,
+      unsyncedEvidence,
+      health
     });
-    const suggestedSkipRationaleFor = claimed.map(entry => ({
-      file_path: entry.filePath,
-      reason: `Changed by concurrent mission ${
-        entry.claimedByMissionIds?.length
-          ? entry.claimedByMissionIds.join(', ')
-          : 'another active mission'
-      }; excluded from this delivery report.`
-    }));
-    printJson({ mine, claimed, unclaimed, draftRationales, suggestedSkipRationaleFor });
     return;
   }
 
@@ -1042,6 +900,7 @@ export async function runProtocolCommand({
   if (
     SESSION_KEY_SUBCOMMANDS.has(subcommand) &&
     missionId &&
+    objectiveRef &&
     (typeof flags['--session-key'] !== 'string' || flags['--session-key'].trim() === '')
   ) {
     const cached = readCachedSessionKey({
@@ -1052,28 +911,55 @@ export async function runProtocolCommand({
     if (cached) flags['--session-key'] = cached;
   }
 
-  pruneStaleProjectTmp({ workingDirectory });
-
-  // Client-side VCS capture: read git status here (the agent's machine), never on
-  // the backend. Filter explicit payloads and, at deliver, merge the run delta.
-  if ((subcommand === 'deliver' || subcommand === 'update') && missionId) {
-    applySessionChangedFiles({
-      flags,
+  // `sync-changes` is a retryable local-ledger drain. The normal agent never
+  // writes this payload: the CLI supplies at most 25 unsynced metadata-only
+  // entries and retains anything the server does not accept for a later retry.
+  if (subcommand === 'sync-changes' && missionId) {
+    const sessionKey = typeof flags['--session-key'] === 'string' ? flags['--session-key'] : null;
+    const active = sessionKey
+      ? readActiveSessions(workingDirectory).find(entry => entry.sessionKey === sessionKey)
+      : undefined;
+    if (!sessionKey || !active) {
+      throw new CliError({
+        message: 'sync-changes requires an attached objective session in this working directory.'
+      });
+    }
+    const unsynced = readUnsyncedChangeEvidence({
       workingDirectory,
-      missionId,
-      subcommand,
-      stdin: fileInputs['--changed-files-file'] ?? protocolStdin,
-      fileInputs
+      objectiveId: active.objectiveId,
+      sessionKey
     });
+    if (
+      typeof flags['--changes-json'] !== 'string' &&
+      typeof flags['--changes-file'] !== 'string'
+    ) {
+      flags['--changes-json'] = JSON.stringify(unsynced.slice(0, 25));
+    }
+    const suppliedEvidence = changeBatchEvidenceIdentities(
+      typeof flags['--changes-json'] === 'string'
+        ? flags['--changes-json']
+        : fileInputs['--changes-file'],
+      unsynced
+    );
+    explicitSyncIdentity = {
+      objectiveId: active.objectiveId,
+      sessionKey,
+      batchEvidence: suppliedEvidence
+    };
   }
 
-  if (subcommand === 'deliver' && missionId) {
-    applyDraftChangeRationales({
-      flags,
-      fileInputs,
-      workingDirectory,
-      missionId
-    });
+  pruneStaleProjectTmp({ workingDirectory });
+
+  let lifecycleActive: { missionId: string; objectiveId: string; sessionKey: string } | undefined;
+  if ((subcommand === 'deliver' || subcommand === 'update') && missionId) {
+    const sessionKey = typeof flags['--session-key'] === 'string' ? flags['--session-key'] : null;
+    const active = sessionKey
+      ? readActiveSessions(workingDirectory).find(entry => entry.sessionKey === sessionKey)
+      : undefined;
+    lifecycleActive = active;
+    if (sessionKey && active) {
+      await syncObjectiveLedger({ runtime, workingDirectory, missionId, sessionKey, active });
+    }
   }
 
   // Hosted backends cannot walk the agent machine's filesystem for discovery.
@@ -1103,7 +989,6 @@ export async function runProtocolCommand({
     args,
     positional: parsed.positional,
     flags,
-    stdin: protocolStdin,
     fileInputs,
     externalSessionId:
       flagValue(parsed.flags, '--external-session-id') ??
@@ -1126,7 +1011,7 @@ export async function runProtocolCommand({
   } catch (error) {
     // Agent-pod / `agp` recovers OVERLORD_EXECUTION_REQUEST_ID from the launch
     // script. If the runner already cleared that request, attach would otherwise
-    // fail before writeActiveSession, and the touched-files hook would stay inert.
+    // fail before writeActiveSession, and the objective capture hook would stay inert.
     if (
       subcommand === 'attach' &&
       typeof flags['--execution-request-id'] === 'string' &&
@@ -1142,19 +1027,44 @@ export async function runProtocolCommand({
     }
   }
 
-  // Record the dirty-file baseline once a work session begins, so deliver can
-  // subtract pre-existing/concurrent changes from this run's reported delta.
-  if ((subcommand === 'attach' || subcommand === 'resume-follow-up') && missionId) {
-    writeBaseline({
-      workingDirectory,
-      missionId,
-      files: readChangedFiles(workingDirectory)
-    });
-    resetTouchedFiles({ workingDirectory, missionId });
-    resetRationaleNotes({ workingDirectory, missionId });
-  }
-
   const resultRecord = asRecord(result);
+
+  if (subcommand === 'sync-changes' && missionId && explicitSyncIdentity) {
+    const outcomes = asRecord(resultRecord).outcomes;
+    if (Array.isArray(outcomes)) {
+      const accepted = new Map<string, ChangeEvidenceIdentity>(
+        outcomes.flatMap(outcome => {
+          const record = asRecord(outcome);
+          if (
+            (record.status !== 'accepted' && record.status !== 'ignored') ||
+            typeof record.idempotencyKey !== 'string' ||
+            typeof record.filePath !== 'string'
+          ) {
+            return [];
+          }
+          const identity = {
+            idempotencyKey: record.idempotencyKey,
+            filePath: record.filePath
+          };
+          const key = changeEvidenceIdentityKey(identity);
+          return explicitSyncIdentity?.batchEvidence.has(key) ? [[key, identity] as const] : [];
+        })
+      );
+      const active = readActiveSessions(workingDirectory).find(
+        entry =>
+          entry.objectiveId === explicitSyncIdentity?.objectiveId &&
+          entry.sessionKey === explicitSyncIdentity?.sessionKey
+      );
+      if (active && accepted.size > 0) {
+        markChangeEvidenceSynced({
+          workingDirectory,
+          objectiveId: active.objectiveId,
+          sessionKey: active.sessionKey,
+          evidence: [...accepted.values()]
+        });
+      }
+    }
+  }
   if (typeof resultRecord.sessionKey === 'string') {
     printKeyValue({ SESSION_KEY: resultRecord.sessionKey });
     // Persist the freshly minted key so subsequent commands in other shells for
@@ -1180,29 +1090,25 @@ export async function runProtocolCommand({
           objectiveRef ?? null
         ].filter((value): value is string => Boolean(value))
       );
-      if (objectiveAliases.size === 0) {
+      for (const objectiveAlias of objectiveAliases) {
         writeCachedSessionKey({
           missionId,
           workingDirectory,
-          sessionKey: resultRecord.sessionKey
+          sessionKey: resultRecord.sessionKey,
+          objectiveId: objectiveAlias
         });
-      } else {
-        for (const objectiveAlias of objectiveAliases) {
-          writeCachedSessionKey({
-            missionId,
-            workingDirectory,
-            sessionKey: resultRecord.sessionKey,
-            objectiveId: objectiveAlias
-          });
-        }
       }
-      // Also record this mission as "active in this cwd" so an edit hook that
-      // never sees MISSION_ID in its own environment (e.g. agent-pod sessions)
-      // can still resolve which mission's touched log to append to.
-      if (subcommand === 'attach' || subcommand === 'resume-follow-up') {
+      // Store the exact objective binding used by capture-change. The hook must
+      // still supply this objective; cwd never chooses an entry.
+      if ((subcommand === 'attach' || subcommand === 'resume-follow-up') && attachedObjectiveId) {
+        const objectiveIdentity =
+          (typeof attachedObjective.id === 'string' && attachedObjective.id.trim()) ||
+          attachedObjectiveId;
         writeActiveSession({
           workingDirectory,
           missionId,
+          objectiveId: objectiveIdentity,
+          objectiveAliases: [...objectiveAliases],
           sessionKey: resultRecord.sessionKey
         });
       }
@@ -1235,76 +1141,33 @@ export async function runProtocolCommand({
     }
   }
 
-  // The session ends at deliver: drop the cached key so it can't bind to a later
-  // session for the same working dir + mission.
+  // The session ends at deliver only after its exact ledger is fully synced.
+  // Failed ledger cleanup retains the binding and cache for `changes` retries.
   if (subcommand === 'deliver' && missionId) {
-    clearCachedSessionKey({
-      missionId,
-      workingDirectory,
-      objectiveId: objectiveRef,
-      sessionKey: typeof flags['--session-key'] === 'string' ? flags['--session-key'] : null
-    });
-    removeActiveSession({ workingDirectory, missionId });
-    clearActiveMissionPointer(workingDirectory);
-
-    // Self-diagnosis: a connector that installs an edit hook (Claude Code,
-    // Codex, or Cursor) should always have a touched-files
-    // log by deliver time if the run touched any files. A missing log with a
-    // non-empty dirty tree means the hook silently failed to activate — the exact
-    // failure mode Layer 1 fixes for the common case. Surface it loudly instead of
-    // letting deliver quietly fall back to baseline-only attribution.
-    const connectorInstallsEditHook = [
-      path.join(os.homedir(), '.claude'),
-      path.join(os.homedir(), '.codex', 'plugins', 'overlord', 'scripts', 'post-tool-use-hook.sh'),
-      path.join(
-        os.homedir(),
-        '.cursor',
-        'plugins',
-        'local',
-        'overlord',
-        'hooks',
-        'overlord-post-tool-use.sh'
-      )
-    ].some(existsSync);
-    if (
-      connectorInstallsEditHook &&
-      !hasTouchedFilesLog({ workingDirectory, missionId }) &&
-      readChangedFiles(workingDirectory).length > 0
-    ) {
-      const warning =
-        `[overlord] warning: no touched-files log found at deliver for mission ${missionId} in ` +
-        `${workingDirectory}, even though this connector installs a PostToolUse edit hook. Deliver is ` +
-        `falling back to baseline-only attribution, which can misattribute concurrent sessions' edits. ` +
-        `Check ~/.ovld/logs/codex-post-tool-use-hook.log, ~/.ovld/logs/cursor-post-tool-use-hook.log, ` +
-        `and ~/.ovld/logs/post-tool-use-hook.log ` +
-        `for why the hook did not record any touched files.`;
-      console.error(warning);
-      const sessionKeyForAlert =
-        typeof flags['--session-key'] === 'string' ? flags['--session-key'] : undefined;
-      if (sessionKeyForAlert) {
-        try {
-          await runtime.backend.post({
-            path: '/api/protocol/update',
-            body: {
-              args: [],
-              positional: [],
-              flags: {
-                '--mission-id': missionId,
-                // Carry the objective so the alert lands on the run that
-                // produced it rather than on whichever one attach rediscovers.
-                ...(objectiveRef ? { '--objective-id': objectiveRef } : {}),
-                '--session-key': sessionKeyForAlert,
-                '--event-type': 'alert',
-                '--summary': warning
-              },
-              stdin: undefined,
-              fileInputs: {}
-            }
-          });
-        } catch {
-          // Best-effort: the loud stderr warning above already surfaces the issue
-          // even if the telemetry POST fails.
-        }
+    const deliveredSessionKey =
+      typeof flags['--session-key'] === 'string' ? flags['--session-key'] : undefined;
+    const deliveredActive = deliveredSessionKey
+      ? (readActiveSessions(workingDirectory).find(
+          entry => entry.sessionKey === deliveredSessionKey
+        ) ?? lifecycleActive)
+      : undefined;
+    const finalized =
+      deliveredActive && deliveredSessionKey
+        ? finalizeActiveSession({
+            workingDirectory,
+            objectiveId: deliveredActive.objectiveId,
+            sessionKey: deliveredSessionKey
+          })
+        : true;
+    if (finalized) {
+      clearCachedSessionKey({
+        missionId,
+        workingDirectory,
+        objectiveId: objectiveRef,
+        sessionKey: deliveredSessionKey ?? null
+      });
+      if (readActiveSessions(workingDirectory).length === 0) {
+        clearActiveMissionPointer(workingDirectory);
       }
     }
   }

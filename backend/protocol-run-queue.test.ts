@@ -39,6 +39,10 @@ type CreatedMission = {
   objectives: Array<{ id: string; displayId: string }>;
 };
 
+test('sync-changes requires the same event-create permission as lifecycle writes', () => {
+  assert.equal(SUBCOMMAND_PERMISSIONS['sync-changes'], PERMISSIONS.EVENT_CREATE);
+});
+
 async function createQueuedObjectives() {
   const project = await createProject({ name: `Run Queue protocol ${Date.now()}` });
   const created = (await runProtocolSubcommand('create', {

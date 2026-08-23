@@ -1,0 +1,19 @@
+{
+  "fixtureVersion": 1,
+  "kind": "mutation-window",
+  "description": "Claude has recorded completion-side write metadata but no matching pre/post call pair, so it is post-only.",
+  "classification": "post-only",
+  "postFixture": "fixtures/normalize-post-tool-use-write.json",
+  "proof": {
+    "post": {
+      "session": "session_id",
+      "workspace": "cwd",
+      "tool": "tool_name",
+      "directPath": "tool_input.file_path",
+      "completion": {
+        "path": "hook_event_name",
+        "equals": "PostToolUse"
+      }
+    }
+  }
+}

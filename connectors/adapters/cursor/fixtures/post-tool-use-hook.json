@@ -1,0 +1,27 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "A bound Cursor postToolUse callback forwards its native payload to local capture-change with an explicit objective id and no mission environment value.",
+  "script": "connectors/core/scripts/capture-change-hook.sh",
+  "adapterKey": "cursor",
+  "stdin": {
+    "conversation_id": "cursor-session-1",
+    "event": "postToolUse",
+    "cwd": "/repo",
+    "tool_name": "Write",
+    "tool_input": { "file_path": "/repo/src/a.ts" }
+  },
+  "env": {
+    "MISSION_ID": null,
+    "OVERLORD_MISSION_ID": null,
+    "OVERLORD_OBJECTIVE_ID": "coo:825.abcd"
+  },
+  "expect": {
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": "",
+    "cliInvocations": ["protocol capture-change --agent cursor --objective-id coo:825.abcd"],
+    "stdinForwarded": true,
+    "sandboxWrites": []
+  }
+}

@@ -8,9 +8,10 @@ import { resolveGlobalDataDir } from './config.js';
  * Reverse lookup: which mission is this working directory on?
  *
  * Distinct from `session-key.ts` (keyed by cwd+mission, not reversible) and from
- * `vcs-sessions.ts` (attribution manifest with session keys, no display title).
+ * `active-objective-sessions.ts` (attribution bindings with session keys, no display title).
  * This pointer is what hooks and banners read locally instead of calling the
- * backend — written on attach/connect/resume-follow-up, cleared on deliver.
+ * backend — written on attach/connect/resume-follow-up, then cleared only after
+ * delivery's exact objective ledger has fully synchronized and finalized.
  */
 
 export type ActiveMissionPointer = {

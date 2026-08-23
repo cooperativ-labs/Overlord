@@ -6,7 +6,7 @@
 
 **Harness version verified** `0.83.0` · **range** `>=0.83.0 <0.84.0` · **scheme** `semver`
 
-**Descriptor digest** `0166eb18d8913ea41704d3aa9afbf9164d994ae16089927e38f681be5dd005ff`
+**Descriptor digest** `00ac7950f03ff225b0ed39ab3b57b4db4d28f4fe0331d0ee50bcb2c51bfa6823`
 
 > The tier is derived from passing fixtures, never authored. `unsupported` means the harness
 > cannot do it — do not attempt it. `not-implemented` means it is buildable and unbuilt: that is
@@ -36,7 +36,19 @@ native id is a binding authority.
 | Harness ceiling | none documented |
 | Evidence | tracked as `latch-engine` |
 
-Remote decision hold moved to Latch. Pi has no native prompt; Overlord no longer intercepts tool calls.
+Pi has no native prompt, and Overlord does not intercept tool calls in this connector.
+
+## Mutation-window evidence
+
+| Field | Value |
+| --- | --- |
+| Classification | `unsupported` |
+| Executable fixture | `fixtures/mutation-window-evidence.json` |
+
+No recorded completion callback with the same native call id proves a pair.
+
+File attribution may not be synthesized for this adapter. Missing mutation evidence is
+reported as unavailable health, never recovered from a worktree-wide delta.
 
 ## Capabilities
 
@@ -63,7 +75,7 @@ Remote decision hold moved to Latch. Pi has no native prompt; Overlord no longer
 ### Capability notes
 
 - **`observe.prompt`** — The shipped extension captures `input` and posts follow-up activity through `ovld protocol hook-event`. Mechanical agent-session observation is not a live path.
-- **`decide.universal`** — Remote tool-call decisions moved to Latch. Pi no longer intercepts tools on the Overlord connector path.
+- **`decide.universal`** — Pi does not intercept tools on the Overlord connector path.
 - **`inject.midTurn`** — Session-input injection is not a live Overlord connector path. A future conversation surface must use the native Latch v2 Conversation Hub protocol.
 
 ## Hazards

@@ -13,7 +13,11 @@ description: Use for the shared Overlord workflow whenever the user refers to an
 - Permission decisions: installed `beforeShellExecution` and `beforeMCPExecution` hooks call the
   scoped `ovld agent-session request` path. A remote allow/deny uses Cursor's flat native
   response; timeout or failure emits nothing and leaves Cursor authoritative.
-- Edit capture: the installed `postToolUse` hook records Cursor file and shell effects for exact delivery attribution.
+- Edit capture: the installed `postToolUse` hook passes `--agent cursor`; only a path the Cursor
+  codec normalizes as `file.edited` becomes objective-bound, non-exclusive
+  `declared_edit`/`direct` evidence. Codec-normalized read, search, and fetch callbacks are silent
+  no-ops. Mutation-capable callbacks without a normalized edit path, plus shell, generic, unknown,
+  and unmapped callbacks, record unavailable evidence health.
 - Stop hook: the installed `stop` hook may auto-submit one pending-delivery reminder but does not deliver for you.
 - MCP bridge: the installed `overlord` MCP server exposes the hosted-compatible `overlord_*` mission tool catalog backed by `ovld protocol`.
 - Authentication: use shared `ovld auth` credentials, Overlord-launched environment variables, or `Overlord_USER_TOKEN` / `OVLD_USER_TOKEN`.

@@ -116,17 +116,22 @@ work as its own mission rather than folding it into a docs change:
 
 - `codex` ships no `commands/` while `claude` and `cursor` do, and `antigravity`
   achieves the same surface through `skills/*.md`. No harness constraint is recorded.
-- `codex` and `antigravity` register no `PostToolUse` or `Stop` hooks; whether their
-  harnesses expose the equivalent events is not documented here.
+- `antigravity` registers no post-tool mutation or Stop hook; whether its harness exposes
+  equivalent events is not documented here.
 
 ### Generated files
 
-The local MCP shim (`scripts/overlord-mcp.mjs`) is **generated**, not committed per
-adapter. One source — [`core/scripts/overlord-mcp.mjs`](core/scripts/overlord-mcp.mjs) —
-is rendered per adapter at `ovld agent-setup` time, substituting the adapter key into
-`DEFAULT_AGENT` and `serverInfo.name`. Edit the core file; there is no adapter copy to
-edit. The rendered artifact stays a standalone runnable `.mjs`, since harnesses start it
-directly from the install path.
+The local MCP shim and post-tool capture callback are **generated**, not committed per
+adapter. `ovld agent-setup` renders their core sources with the adapter key substituted:
+
+- [`core/scripts/overlord-mcp.mjs`](core/scripts/overlord-mcp.mjs) becomes the local MCP
+  shim for Codex, Cursor, and Antigravity.
+- [`core/scripts/capture-change-hook.sh`](core/scripts/capture-change-hook.sh) becomes
+  Claude's and Codex's `scripts/post-tool-use-hook.sh` and Cursor's
+  `hooks/overlord-post-tool-use.sh`.
+
+Edit the core source; there are no adapter copies. Installed paths and native hook
+registrations remain harness-specific.
 
 ### Documentation
 

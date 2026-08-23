@@ -29,6 +29,8 @@ events:
     callIdPath: tool_use_id
     turnIdPath: turn_id
     fileEditKind: file.edited
+    filePathPaths:
+      - file_path
 
   - native: UserPromptSubmit
     kind: prompt.submitted

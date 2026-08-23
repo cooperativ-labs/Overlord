@@ -164,6 +164,14 @@ REST `POST /api/missions/:id/artifacts`) without delivering; artifacts are
 validated and persisted by the existing Protocol/REST service layer, never
 directly by MCP.
 
+`overlord_update_session`, `overlord_deliver_session`, and `overlord_record_work`
+all accept optional
+canonical `changeRationales` annotations. Each item uses `filePath`, `label`,
+`summary`, `why`, `impact`, and optional header-only `hunks`; changed-file paths
+themselves come from objective-ledger evidence, not from MCP or a worktree scan.
+Unknown item or hunk keys discard only that advisory entry with a bounded warning;
+for duplicate canonical paths, the last valid item wins.
+
 `overlord_update_artifact` is the supported way to revise such an artifact later
 (for example during a follow-up objective) without creating a duplicate. It
 requires the current `expectedRevision` and forwards to Protocol

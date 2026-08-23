@@ -32,7 +32,10 @@ export const AGENT_SESSION_CODECS: Record<string, CodecSpec> = {
         "origin": "agent",
         "toolPath": "tool_name",
         "inputPath": "tool_input",
-        "fileEditKind": "file.edited"
+        "fileEditKind": "file.edited",
+        "filePathPaths": [
+          "file_path"
+        ]
       },
       {
         "native": "UserPromptSubmit",
@@ -76,7 +79,10 @@ export const AGENT_SESSION_CODECS: Record<string, CodecSpec> = {
         "inputPath": "tool_input",
         "callIdPath": "tool_use_id",
         "turnIdPath": "turn_id",
-        "fileEditKind": "file.edited"
+        "fileEditKind": "file.edited",
+        "filePathPaths": [
+          "file_path"
+        ]
       },
       {
         "native": "UserPromptSubmit",
@@ -129,7 +135,10 @@ export const AGENT_SESSION_CODECS: Record<string, CodecSpec> = {
         "toolPath": "tool_name",
         "inputPath": "tool_input",
         "callIdPath": "call_id",
-        "fileEditKind": "file.edited"
+        "fileEditKind": "file.edited",
+        "filePathPaths": [
+          "file_path"
+        ]
       }
     ]
   },
@@ -152,8 +161,7 @@ export const AGENT_SESSION_CODECS: Record<string, CodecSpec> = {
         "toolPath": "properties.part.tool",
         "inputPath": "properties.part.state.input",
         "callIdPath": "properties.part.callID",
-        "outcomePath": "properties.part.state.status",
-        "fileEditKind": "file.edited"
+        "outcomePath": "properties.part.state.status"
       },
       {
         "native": "session.idle",

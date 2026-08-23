@@ -6,7 +6,7 @@
 
 **Harness version verified** _not verified_ · **range** `>=0.5.0` · **scheme** `semver`
 
-**Descriptor digest** `83f146f0c4be8764608401886f374ebfc7bbe5dca8fcdecf3856a99030f778e6`
+**Descriptor digest** `4af085fa3987501b85e323fdbfcc0c3cfe1a8da47ef373f0b509082749d2c44f`
 
 > The tier is derived from passing fixtures, never authored. `unsupported` means the harness
 > cannot do it — do not attempt it. `not-implemented` means it is buildable and unbuilt: that is
@@ -38,6 +38,18 @@ native id is a binding authority.
 
 Shape C never *holds* anything: there is no callback to block, so a permission is a durable object on the harness's own bus that can be answered by either side. That makes `terminal.concurrentAnswer` reachable here and structurally impossible for Claude — the one place where the control-plane shape is strictly richer rather than merely different.
 
+## Mutation-window evidence
+
+| Field | Value |
+| --- | --- |
+| Classification | `post-only` |
+| Executable fixture | `fixtures/mutation-window-evidence.json` |
+
+A completed tool frame is recorded, but no matching in-progress frame exists.
+
+The completion fixture proves post-only timing but exposes no normalized `file.edited`
+path. Runtime file evidence is unavailable for this adapter.
+
 ## Capabilities
 
 | Capability | Status | Native | Evidence |
@@ -45,7 +57,7 @@ Shape C never *holds* anything: there is no callback to block, so a permission i
 | `observe.prompt` | 🚧 not-implemented | `message.updated` | tracked as `agent-session-phase-3` |
 | `observe.toolCall` | 🚧 not-implemented | `message.part.updated` | tracked as `agent-session-phase-2` |
 | `observe.toolResult` | ✅ supported | `message.part.updated` | fixtures: `fixtures/normalize-tool-completed.json` |
-| `observe.fileEdit` | ✅ supported | `message.part.updated` | fixtures: `fixtures/normalize-tool-completed.json` |
+| `observe.fileEdit` | 🚧 not-implemented | `message.part.updated` | tracked as `agent-session-phase-2` |
 | `observe.sessionLifecycle` | ✅ supported | `session.idle` | fixtures: `fixtures/normalize-session-idle.json` |
 | `decide.shell` | ✅ supported | `/permission` | fixtures: `fixtures/permission-reply-path.json` |
 | `decide.mcp` | ✅ supported | `/permission` | fixtures: `fixtures/permission-reply-path.json` |
@@ -64,7 +76,7 @@ Shape C never *holds* anything: there is no callback to block, so a permission i
 
 - **`observe.prompt`** — Reachable on the same event stream, deliberately unregistered until the inject path exists: a user prompt and an Overlord-injected instruction arrive through the same frame, and recording them as the same thing before we can tell them apart would put words in a user's mouth in the activity feed.
 - **`observe.toolCall`** — The same frame carries in-progress and completed parts. Grading the in-progress state as supported would require a fixture proving we can distinguish them, which the recorded payload set does not yet contain.
-- **`observe.fileEdit`** — Shares the tool-part frame; the codec routes a file-mutating normalized tool to `file.edited` exactly as the callback codecs do. The same rule, not a parallel one.
+- **`observe.fileEdit`** — The codec can route a file-mutating tool to `file.edited`, but no recorded OpenCode fixture proves a normalized edit path yet. A completed shell frame is not file-edit evidence.
 - **`answer.persistentAllow`** — OpenCode's `always` reply grants a standing permission on the machine. Product policy hides it from remote surfaces: a person approving from a phone cannot see what they are granting for the rest of the session, and an irreversible grant made from a surface that shows a summary is not informed consent.
 - **`terminal.concurrentAnswer`** — Structurally available and unbuilt — the one adapter where this is a tracker rather than a permanent `unsupported`. A permission is a durable object on the bus, so the TUI and Overlord can both see it and either can answer; the loser learns it was resolved elsewhere. Callback harnesses cannot produce that outcome at all.
 

@@ -1,4 +1,4 @@
-contractVersion: "52"
+contractVersion: "116"
 componentType: connector
 componentKey: codex
 label: "Codex Connector"
@@ -8,27 +8,13 @@ connector:
   agentIdentifier: codex
   # ── GENERATED: do not edit by hand ───────────────────────────────────────────
   # Projected from connectors/adapters/codex/harness-capabilities.yaml by `yarn connectors:capabilities`.
-  # `capabilities` and `hookTypes` are the DEPRECATED hook-named projection, retained for
-  # one release. `harnessCapabilities` is the authoritative source.
+  # The harness descriptor and its executable fixtures are the only capability source.
   integrationShape: callback
   capabilityTier: 1
   harnessCapabilities:
     path: connectors/adapters/codex/harness-capabilities.yaml
     schemaVersion: 1
-    digest: "9743c504d8d11ffec193751273102d9a1277293e55f43aef8914da4b05ddfa23"
-  capabilities:
-    - followUpHook
-    - permissionHook
-    - editHook
-    - nativeResume
-    - modelFlag
-    - effortFlag
-    - contextFilePrompt
-    - permissionRules
-  hookTypes:
-    - UserPromptSubmit
-    - PermissionRequest
-    - PostToolUse
+    digest: "bc823089f8c0fc97b888dec6b4e10eb55b596b1194664e1fe200468fe2c622c0"
   # ── END GENERATED ────────────────────────────────────────────────────────────
   installPath: "~/.codex/plugins/overlord"
   managedFiles:

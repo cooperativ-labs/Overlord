@@ -39,6 +39,7 @@ import {
   recordWork,
   resumeFollowUp,
   searchMissions,
+  syncChanges,
   updateSession,
   writeSharedContext
 } from '../packages/core/service/protocol.ts';
@@ -89,8 +90,8 @@ import { listWorkspaces } from './workspaces.ts';
 //
 // The published npm CLI is client-only: `ovld protocol <subcommand>` forwards
 // to `POST /api/protocol/<subcommand>` carrying the parsed flags/positional
-// args/stdin. This module turns that envelope back into a service-layer call so
-// every protocol command shares one implementation with the rest of Overlord.
+// arguments and per-flag file payloads. This module turns that envelope back
+// into a service-layer call shared with the rest of Overlord.
 
 /** Envelope posted by the CLI's `runProtocolCommand`. */
 export interface ProtocolRequestBody {
@@ -98,12 +99,10 @@ export interface ProtocolRequestBody {
   positional?: string[];
   flags?: Record<string, string | boolean>;
   /**
-   * Per-flag file/stdin payloads, keyed by the `--*-file` flag name. Replaces the
-   * single `stdin` field so multiple file payloads in one call no longer collide.
+   * Per-flag payloads keyed by the `--*-file` flag name, so multiple file inputs
+   * in one call remain unambiguous.
    */
   fileInputs?: Record<string, string>;
-  /** Legacy single-payload field; still honored when `fileInputs` lacks the flag. */
-  stdin?: string;
   externalSessionId?: string | null;
 }
 
@@ -313,7 +312,7 @@ async function buildProtocolContext(
       return { ...ctx, source: 'protocol' };
     }
     // Direct service tests and the loopback bootstrap surface have no request
-    // authorization snapshot; preserve their process-local compatibility path.
+    // authorization snapshot, so they resolve their process-local context here.
     const ctx = buildWebappServiceContext();
     if (permission) {
       await requirePermission(permission, {
@@ -432,6 +431,72 @@ function hasFlag(body: ProtocolRequestBody, name: string): boolean {
   return name in flagsOf(body);
 }
 
+const RETIRED_SHARED_CHANGE_TRACKING_FLAGS = [
+  '--no-file-changes',
+  '--skip-rationale-for-json',
+  '--skip-rationale-for-file',
+  '--observed-dirty-paths-json',
+  '--observed-dirty-paths-file'
+] as const;
+
+const RETIRED_CHANGE_TRACKING_FLAGS = [
+  '--track-changed-files',
+  '--changed-files-json',
+  '--changed-files-file',
+  ...RETIRED_SHARED_CHANGE_TRACKING_FLAGS
+] as const;
+
+const RETIRED_SHARED_CHANGE_TRACKING_FIELDS = [
+  'noFileChanges',
+  'skipRationaleFor',
+  'observedDirtyPaths',
+  'changed_files',
+  'no_file_changes',
+  'skip_rationale_for',
+  'observed_dirty_paths'
+] as const;
+
+const RETIRED_CHANGE_TRACKING_FIELDS = [
+  'changedFiles',
+  ...RETIRED_SHARED_CHANGE_TRACKING_FIELDS
+] as const;
+
+const RETIRED_RECORD_WORK_FLAGS = RETIRED_SHARED_CHANGE_TRACKING_FLAGS;
+const RETIRED_RECORD_WORK_FIELDS = RETIRED_SHARED_CHANGE_TRACKING_FIELDS;
+
+function rejectRemovedProtocolFlags(
+  body: ProtocolRequestBody,
+  removedFlags: readonly string[]
+): void {
+  const present = removedFlags.filter(flag => hasFlag(body, flag));
+  if (present.length > 0) {
+    throw new ApiError(
+      400,
+      `Unsupported protocol flag(s): ${present.join(', ')}`,
+      undefined,
+      'invalid_input'
+    );
+  }
+}
+
+function rejectRemovedProtocolPayloadFields(
+  payload: Record<string, unknown> | null | undefined,
+  context: string,
+  removedFields: readonly string[] = RETIRED_CHANGE_TRACKING_FIELDS
+): void {
+  const present = removedFields.filter(field =>
+    Object.prototype.hasOwnProperty.call(payload ?? {}, field)
+  );
+  if (present.length > 0) {
+    throw new ApiError(
+      400,
+      `Unsupported ${context} payload field(s): ${present.join(', ')}`,
+      undefined,
+      'invalid_input'
+    );
+  }
+}
+
 /** Agent protocol surfaces may edit instruction text only on queued objectives. */
 async function assertInstructionEditableOnProtocolSurface(objectiveRef: string): Promise<void> {
   const db = requireDatabaseClient();
@@ -453,18 +518,6 @@ async function assertInstructionEditableOnProtocolSurface(objectiveRef: string):
 }
 
 /**
- * Resolve the per-flag file payload the CLI streamed for `fileFlag`, falling back
- * to the legacy single `stdin` field for older clients. Each `--*-file` flag now
- * carries its own content in `fileInputs`, so multiple file payloads in one call
- * no longer collide.
- */
-function fileInput(body: ProtocolRequestBody, fileFlag: string): string | undefined {
-  const perFlag = body.fileInputs?.[fileFlag];
-  if (typeof perFlag === 'string') return perFlag;
-  return body.stdin ?? '';
-}
-
-/**
  * Resolve text supplied either inline (`--summary "..."`) or via the file
  * variant (`--summary-file -`). The CLI streams file contents in the `fileInputs`
  * envelope, so any presence of the file flag means "use that payload" — this is
@@ -477,7 +530,13 @@ function resolveInput(
 ): string | undefined {
   const direct = strFlag(body, valueFlag);
   if (direct !== undefined) return direct;
-  if (hasFlag(body, fileFlag)) return fileInput(body, fileFlag);
+  if (hasFlag(body, fileFlag)) {
+    const payload = body.fileInputs?.[fileFlag];
+    if (payload === undefined) {
+      throw new ApiError(400, `Missing file input for ${fileFlag}`, undefined, 'invalid_input');
+    }
+    return payload;
+  }
   return undefined;
 }
 
@@ -547,7 +606,7 @@ async function validateObjectiveAddressing({
   await resolveObjectiveRef({ ctx, ref: objectiveRef, missionId: missionRef });
 }
 
-/** Parse a JSON flag supplied inline (`--x-json`) or via stdin (`--x-file`). */
+/** Parse a JSON flag supplied inline (`--x-json`) or through its per-flag file payload. */
 function parseJsonInput<T>(
   body: ProtocolRequestBody,
   jsonFlag: string,
@@ -566,6 +625,34 @@ function parseJsonInput<T>(
   }
 }
 
+function parseJsonArrayInput<T>(
+  body: ProtocolRequestBody,
+  jsonFlag: string,
+  fileFlag: string,
+  label: string
+): T[] | undefined {
+  const input = parseJsonInput<unknown>(body, jsonFlag, fileFlag);
+  if (input === undefined) return undefined;
+  if (!Array.isArray(input)) {
+    throw new ApiError(400, `${label} must be a JSON array`, undefined, 'invalid_input');
+  }
+  return input as T[];
+}
+
+function parseJsonObjectInput(
+  body: ProtocolRequestBody,
+  jsonFlag: string,
+  fileFlag: string,
+  label: string
+): Record<string, unknown> | undefined {
+  const input = parseJsonInput<unknown>(body, jsonFlag, fileFlag);
+  if (input === undefined) return undefined;
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+    throw new ApiError(400, `${label} must be a JSON object`, undefined, 'invalid_input');
+  }
+  return input as Record<string, unknown>;
+}
+
 type DeliveryPayloadEnvelope = {
   summary?: string;
   artifacts?: ArtifactInput[];
@@ -576,15 +663,12 @@ type DeliveryPayloadEnvelope = {
 };
 
 /**
- * `--payload-json` is the portable delivery envelope. Individual delivery flags
- * remain authoritative when both forms are present, preserving older clients.
+ * `--payload-json` is the portable delivery envelope. Individual current delivery
+ * flags remain authoritative when both forms are present.
  */
 function parseDeliveryPayloadEnvelope(body: ProtocolRequestBody): DeliveryPayloadEnvelope {
-  const input = parseJsonInput<unknown>(body, '--payload-json', '--payload-file');
+  const input = parseJsonObjectInput(body, '--payload-json', '--payload-file', 'delivery payload');
   if (input === undefined) return {};
-  if (typeof input !== 'object' || input === null || Array.isArray(input)) {
-    throw new ApiError(400, 'Delivery payload must be a JSON object');
-  }
 
   const {
     summary,
@@ -593,7 +677,7 @@ function parseDeliveryPayloadEnvelope(body: ProtocolRequestBody): DeliveryPayloa
     verificationSummary,
     followUpNotes,
     ...payloadJson
-  } = input as Record<string, unknown>;
+  } = input;
   if (summary !== undefined && typeof summary !== 'string') {
     throw new ApiError(400, 'Delivery payload summary must be a string');
   }
@@ -690,6 +774,75 @@ type ObjectiveInput = {
   model?: string | null;
   resourceKey?: string | null;
 };
+
+const MAX_PROTOCOL_OBJECTIVES = 100;
+const OBJECTIVE_INPUT_KEYS = new Set([
+  'objective',
+  'title',
+  'autoAdvance',
+  'agent',
+  'model',
+  'resourceKey'
+]);
+
+function parseObjectiveArrayInput(body: ProtocolRequestBody): ObjectiveInput[] | undefined {
+  const values = parseJsonArrayInput<unknown>(
+    body,
+    '--objectives-json',
+    '--objectives-file',
+    'objectives'
+  );
+  if (values === undefined) return undefined;
+  if (values.length > MAX_PROTOCOL_OBJECTIVES) {
+    throw new ApiError(
+      400,
+      `objectives accepts at most ${MAX_PROTOCOL_OBJECTIVES} items`,
+      undefined,
+      'invalid_input'
+    );
+  }
+  return values.map((value, index) => {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      throw new ApiError(400, `objectives[${index}] must be an object`, undefined, 'invalid_input');
+    }
+    const item = value as Record<string, unknown>;
+    if (Object.keys(item).some(key => !OBJECTIVE_INPUT_KEYS.has(key))) {
+      throw new ApiError(
+        400,
+        `objectives[${index}] contains unsupported fields`,
+        undefined,
+        'invalid_input'
+      );
+    }
+    if (typeof item.objective !== 'string' || !item.objective.trim()) {
+      throw new ApiError(
+        400,
+        `objectives[${index}].objective must be a non-empty string`,
+        undefined,
+        'invalid_input'
+      );
+    }
+    for (const key of ['title', 'agent', 'model', 'resourceKey'] as const) {
+      if (item[key] !== undefined && item[key] !== null && typeof item[key] !== 'string') {
+        throw new ApiError(
+          400,
+          `objectives[${index}].${key} must be a string or null`,
+          undefined,
+          'invalid_input'
+        );
+      }
+    }
+    if (item.autoAdvance !== undefined && typeof item.autoAdvance !== 'boolean') {
+      throw new ApiError(
+        400,
+        `objectives[${index}].autoAdvance must be a boolean`,
+        undefined,
+        'invalid_input'
+      );
+    }
+    return item as ObjectiveInput;
+  });
+}
 
 type QueueEntryProjection = {
   id: string;
@@ -1018,13 +1171,9 @@ async function dequeueObjectiveFromProtocol(
 
 /** Objective array for create/prompt: `--objectives-json`, else a one-item `--objective`. */
 function objectiveInputs(body: ProtocolRequestBody): ObjectiveInput[] {
-  const parsed =
-    parseJsonInput<ObjectiveInput[]>(body, '--objectives-json', '--objectives-file') ?? null;
+  const parsed = parseObjectiveArrayInput(body);
   const autoAdvance = optionalAutoAdvanceFlag(body);
-  if (parsed) {
-    if (!Array.isArray(parsed)) {
-      throw new ApiError(400, 'objectives-json must be an array');
-    }
+  if (parsed !== undefined) {
     return withDefaultAutoAdvance(parsed, autoAdvance);
   }
   const resourceKey = strFlag(body, '--resource');
@@ -1049,8 +1198,6 @@ type ArtifactInput = {
 type ChangedFileInput = {
   filePath: string;
   vcsStatus?: string | null;
-  attribution?: 'mine' | 'claimed' | 'unclaimed';
-  claimedByMissionIds?: string[];
 };
 
 type Handler = (ctx: ServiceContext, body: ProtocolRequestBody) => unknown;
@@ -1205,34 +1352,51 @@ const handlers: Record<string, Handler> = {
       objectiveId: objectiveRefFlag(body)
     }),
 
-  update: (ctx, body) =>
-    updateSession({
+  update: (ctx, body) => {
+    rejectRemovedProtocolFlags(body, RETIRED_CHANGE_TRACKING_FLAGS);
+    const payloadJson = parseJsonObjectInput(
+      body,
+      '--payload-json',
+      '--payload-file',
+      'update payload'
+    );
+    rejectRemovedProtocolPayloadFields(payloadJson, 'update');
+    return updateSession({
       ctx,
       missionId: missionRefFlag(body),
       sessionKey: requireFlag(body, '--session-key'),
       summary: resolveInput(body, '--summary', '--summary-file') ?? '',
       phase: strFlag(body, '--phase') ?? null,
       eventType: strFlag(body, '--event-type') ?? 'update',
-      payloadJson: parseJsonInput<Record<string, unknown>>(
-        body,
-        '--payload-json',
-        '--payload-file'
-      ),
+      payloadJson,
       externalUrl: strFlag(body, '--external-url') ?? null,
       externalSessionId: externalSessionId(body),
       beginFollowUpWork: boolFlag(body, '--begin-follow-up-work'),
       followUpIntent: strFlag(body, '--follow-up-intent') ?? null,
-      changedFiles: parseJsonInput<ChangedFileInput[]>(
-        body,
-        '--changed-files-json',
-        '--changed-files-file'
-      ),
-      changeRationales: parseJsonInput<Array<Record<string, unknown>>>(
+      changeRationales: parseJsonArrayInput<ChangeRationaleInput>(
         body,
         '--change-rationales-json',
-        '--change-rationales-file'
+        '--change-rationales-file',
+        'changeRationales'
       )
-    }),
+    });
+  },
+
+  'sync-changes': (ctx, body) => {
+    const changes =
+      parseJsonArrayInput<unknown>(
+        body,
+        '--changes-json',
+        '--changes-file',
+        'sync-changes input'
+      ) ?? [];
+    return syncChanges({
+      ctx,
+      missionId: missionRefFlag(body),
+      sessionKey: requireFlag(body, '--session-key'),
+      changes
+    });
+  },
 
   heartbeat: (ctx, body) =>
     heartbeatSession({
@@ -1252,12 +1416,20 @@ const handlers: Record<string, Handler> = {
     }),
 
   deliver: (ctx, body) => {
+    rejectRemovedProtocolFlags(body, RETIRED_CHANGE_TRACKING_FLAGS);
     const envelope = parseDeliveryPayloadEnvelope(body);
-    const artifacts = parseJsonInput<ArtifactInput[]>(body, '--artifacts', '--artifacts-file');
-    const changeRationales = parseJsonInput<ChangeRationaleInput[]>(
+    rejectRemovedProtocolPayloadFields(envelope.payloadJson, 'delivery');
+    const artifacts = parseJsonArrayInput<ArtifactInput>(
+      body,
+      '--artifacts',
+      '--artifacts-file',
+      'artifacts'
+    );
+    const changeRationales = parseJsonArrayInput<ChangeRationaleInput>(
       body,
       '--change-rationales-json',
-      '--change-rationales-file'
+      '--change-rationales-file',
+      'changeRationales'
     );
     return deliverSession({
       ctx,
@@ -1266,23 +1438,6 @@ const handlers: Record<string, Handler> = {
       summary: resolveInput(body, '--summary', '--summary-file') ?? envelope.summary ?? '',
       artifacts: artifacts ?? envelope.artifacts ?? [],
       changeRationales: changeRationales ?? envelope.changeRationales ?? [],
-      changedFiles: parseJsonInput<ChangedFileInput[]>(
-        body,
-        '--changed-files-json',
-        '--changed-files-file'
-      ),
-      noFileChanges: boolFlag(body, '--no-file-changes'),
-      skipRationaleFor:
-        parseJsonInput<Array<{ filePath?: string; file_path?: string; reason: string }>>(
-          body,
-          '--skip-rationale-for-json',
-          '--skip-rationale-for-file'
-        ) ?? [],
-      observedDirtyPaths: parseJsonInput<string[]>(
-        body,
-        '--observed-dirty-paths-json',
-        '--observed-dirty-paths-file'
-      ),
       payloadJson: envelope.payloadJson,
       verificationSummary:
         strFlag(body, '--verification-summary') ?? envelope.verificationSummary ?? null,
@@ -1498,7 +1653,7 @@ const handlers: Record<string, Handler> = {
       ctx: await withAgentOrigin({ ctx, body }),
       missionId: missionRefFlag(body),
       objectives: withDefaultAutoAdvance(
-        parseJsonInput<ObjectiveInput[]>(body, '--objectives-json', '--objectives-file') ?? [],
+        parseObjectiveArrayInput(body) ?? [],
         optionalAutoAdvanceFlag(body)
       )
     }),
@@ -1525,7 +1680,13 @@ const handlers: Record<string, Handler> = {
   },
 
   'record-work': async (ctx, body) => {
+    rejectRemovedProtocolFlags(body, RETIRED_RECORD_WORK_FLAGS);
     const envelope = parseDeliveryPayloadEnvelope(body);
+    rejectRemovedProtocolPayloadFields(
+      envelope.payloadJson,
+      'record-work',
+      RETIRED_RECORD_WORK_FIELDS
+    );
     // record-work is often driven from a single streamed JSON envelope, so
     // `objective`, `title`, and `changedFiles` may arrive either as flags or as
     // fields inside `--payload-json`/`--payload-file`. Pull them out of the
@@ -1537,17 +1698,27 @@ const handlers: Record<string, Handler> = {
       changedFiles: payloadChangedFiles,
       ...restPayload
     } = envelope.payloadJson ?? {};
-    const artifacts = parseJsonInput<ArtifactInput[]>(body, '--artifacts', '--artifacts-file');
-    const changeRationales = parseJsonInput<ChangeRationaleInput[]>(
+    const artifacts = parseJsonArrayInput<ArtifactInput>(
+      body,
+      '--artifacts',
+      '--artifacts-file',
+      'artifacts'
+    );
+    const changeRationales = parseJsonArrayInput<ChangeRationaleInput>(
       body,
       '--change-rationales-json',
-      '--change-rationales-file'
+      '--change-rationales-file',
+      'changeRationales'
     );
-    const changedFiles = parseJsonInput<ChangedFileInput[]>(
+    const changedFiles = parseJsonArrayInput<ChangedFileInput>(
       body,
       '--changed-files-json',
-      '--changed-files-file'
+      '--changed-files-file',
+      'changedFiles'
     );
+    if (payloadChangedFiles !== undefined && !Array.isArray(payloadChangedFiles)) {
+      throw new ApiError(400, 'changedFiles must be a JSON array', undefined, 'invalid_input');
+    }
     const objective =
       strFlag(body, '--objective') ??
       ((body.positional ?? []).join(' ').trim() || undefined) ??
@@ -1723,6 +1894,7 @@ const handlers: Record<string, Handler> = {
 export const SUBCOMMAND_PERMISSIONS: Record<string, Permission | null> = {
   attach: PERMISSIONS.SESSION_ATTACH,
   update: PERMISSIONS.EVENT_CREATE,
+  'sync-changes': PERMISSIONS.EVENT_CREATE,
   heartbeat: PERMISSIONS.EVENT_CREATE,
   ask: PERMISSIONS.EVENT_CREATE,
   deliver: PERMISSIONS.EVENT_CREATE,
@@ -1791,9 +1963,15 @@ export async function runProtocolSubcommand(
   const isAggregateSearch =
     canonicalSubcommand === 'search-missions' &&
     (intFlag(body, '--response-version') === 2 || intFlag(body, '--response-version') === 3);
+  if (!isAggregateSearch && !(canonicalSubcommand in SUBCOMMAND_PERMISSIONS)) {
+    throw new ApiError(
+      500,
+      `Protocol subcommand is missing an RBAC permission: ${canonicalSubcommand}`
+    );
+  }
   const requiredPermission = isAggregateSearch
     ? null
-    : (SUBCOMMAND_PERMISSIONS[canonicalSubcommand] ?? null);
+    : SUBCOMMAND_PERMISSIONS[canonicalSubcommand]!;
   try {
     const ctx = await buildProtocolContext(body, requiredPermission);
     await validateObjectiveAddressing({ ctx, body, subcommand: canonicalSubcommand });

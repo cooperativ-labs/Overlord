@@ -91,8 +91,7 @@ test('compose worker updates presentation from a fake provider and emits deliver
           ]
         }
       }
-    },
-    noFileChanges: true
+    }
   });
 
   deliveryComposeWorker.setGenerateOverride(async () =>
@@ -177,8 +176,7 @@ test('compose worker marks fallback when the fake provider returns invalid JSON'
     ctx,
     missionId: mission.displayId,
     sessionKey: attached.sessionKey,
-    summary: 'Deterministic fallback should remain readable.',
-    noFileChanges: true
+    summary: 'Deterministic fallback should remain readable.'
   });
 
   deliveryComposeWorker.setGenerateOverride(async () => 'not-json');

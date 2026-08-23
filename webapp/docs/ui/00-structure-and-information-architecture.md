@@ -36,7 +36,7 @@ resolves to the active project's mission board.
    `ovld setup <agent>` / `ovld add-cwd` / `--working-directory` fix, not a stack
    trace.
 5. **Review beats logs.** Review screens must be easier to scan than terminal
-   output: structured delivery, grouped artifacts, rationale coverage.
+   output: structured delivery, grouped artifacts, and objective-ledger file evidence.
 6. **Read-only toward the repo.** The UI never mutates git and never uploads repo
    contents implicitly.
 
@@ -145,8 +145,8 @@ enumerated in the documented REST API Boundary and should be added to it (they a
 owned by the `rest` module and fit the existing boundary — they expose domain
 resources, not raw tables):
 
-- `GET /missions/:id/changes` — `changed_files` + `change_rationales` for review/coverage
-  (docs 05, 06).
+- `GET /api/missions/:id/file-changes` — changed-file-first evidence with an optional
+  rationale join (docs 05, 06).
 - `GET /runner/status` and `GET /execution-requests?projectId=` — runner identity and
   queue (doc 04).
 - `GET /capabilities` — which à-la-carte table groups / REST features are installed,
@@ -170,7 +170,7 @@ Query keys mirror the resource hierarchy so invalidation is precise:
 ['mission', missionId, 'events']                // activity timeline (append-only)
 ['mission', missionId, 'context']               // shared context entries
 ['mission', missionId, 'deliveries']            // delivery + artifacts + rationales
-['mission', missionId, 'changes']               // changed_files + coverage
+['mission', missionId, 'file-changes']          // changed_files + optional rationales
 ['executionRequests', projectId]              // runner queue
 ['runner', 'status']                          // local device + queue summary
 ['connectors']                                // doctor / installations  (gated G4)

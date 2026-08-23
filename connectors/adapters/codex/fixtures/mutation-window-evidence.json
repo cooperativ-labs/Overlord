@@ -1,0 +1,33 @@
+{
+  "fixtureVersion": 1,
+  "kind": "mutation-window",
+  "description": "Codex pre/post samples are different calls and the post apply_patch payload has no direct path field, so it is post-only.",
+  "classification": "post-only",
+  "preFixture": "fixtures/normalize-pre-tool-use.json",
+  "postFixture": "fixtures/normalize-post-tool-use.json",
+  "proof": {
+    "pre": {
+      "session": "session_id",
+      "call": "tool_use_id",
+      "workspace": "cwd",
+      "tool": "tool_name"
+    },
+    "post": {
+      "session": "session_id",
+      "call": "tool_use_id",
+      "workspace": "cwd",
+      "tool": "tool_name",
+      "completion": {
+        "path": "hook_event_name",
+        "equals": "PostToolUse"
+      }
+    },
+    "mismatches": [
+      {
+        "field": "call",
+        "pre": "tool_use_id",
+        "post": "tool_use_id"
+      }
+    ]
+  }
+}

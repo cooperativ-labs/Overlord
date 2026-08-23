@@ -1,13 +1,27 @@
 {
   "fixtureVersion": 1,
-  "kind": "source-guard",
-  "description": "Codex's lifecycle PostToolUse hook must create its log directory before redirecting stderr, then forward the native payload to record-touched for delivery attribution.",
-  "path": "connectors/adapters/codex/scripts/post-tool-use-hook.sh",
-  "assert": {
-    "mustContain": [
-      "mkdir -p \"$LOG_DIR\" 2>/dev/null || true",
-      "ovld protocol record-touched",
-      "codex-post-tool-use-hook.log"
-    ]
+  "kind": "script-io",
+  "description": "A bound Codex PostToolUse callback forwards its native payload to local capture-change with an explicit objective id and no mission environment value.",
+  "script": "connectors/core/scripts/capture-change-hook.sh",
+  "adapterKey": "codex",
+  "stdin": {
+    "session_id": "codex-session-1",
+    "hook_event_name": "PostToolUse",
+    "cwd": "/repo",
+    "tool_name": "apply_patch",
+    "tool_input": { "command": "*** Begin Patch" }
+  },
+  "env": {
+    "MISSION_ID": null,
+    "OVERLORD_MISSION_ID": null,
+    "OVERLORD_OBJECTIVE_ID": "coo:825.abcd"
+  },
+  "expect": {
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": "",
+    "cliInvocations": ["protocol capture-change --agent codex --objective-id coo:825.abcd"],
+    "stdinForwarded": true,
+    "sandboxWrites": []
   }
 }

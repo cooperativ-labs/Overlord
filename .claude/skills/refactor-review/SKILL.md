@@ -252,9 +252,10 @@ uses the connected **Overlord MCP** — never shell `ovld` commands — after sa
    steps, contract impact, risk, and report path. Do not create objectives for declined or
    adjacent findings.
 4. Call `overlord_attach_session` for the publish objective, then
-   `overlord_deliver_session` with `noFileChanges: true` and exactly one `note` artifact whose
+   `overlord_deliver_session` with a concise summary and exactly one `note` artifact whose
    `content` is the complete Markdown report. The artifact label is `Refactor review — <area> —
-   <date>`.
+   <date>`. File-change evidence is captured independently by the attached connector; do not
+   send a no-file assertion or an explicit changed-file list with delivery.
 
 This leaves the report visible on the monthly mission and each remediation visible as a separate,
 executable draft objective. A delivery moves the publish objective to review; it does **not**
@@ -281,4 +282,4 @@ create and publish the mission, but add no remediation objectives.
 
 </refactor-review>
 
-<!-- version: 1.0.0 -->
+<!-- version: 1.0.1 -->

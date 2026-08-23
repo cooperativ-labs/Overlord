@@ -69,10 +69,16 @@ This connector is intentionally reviewable against the four connector layers in 
 ### What ships
 
 - `skills/overlord-mission/SKILL.md` — Codex adapter template with a `<!-- @connector-core -->` marker; setup interpolates shared core content at install time.
-- `.codex-plugin/hooks.json` — Channel 1 `UserPromptSubmit` follow-up capture through
-  `ovld protocol hook-event` and `PostToolUse` delivery attribution through
-  `ovld protocol record-touched`. Mechanical harness observation, permission, and injection
-  are not live Overlord connector paths under Latch v2; native Codex prompts retain control.
+- `.codex-plugin/hooks.json` — `UserPromptSubmit` follow-up capture through
+  `ovld protocol hook-event` and local objective-ledger capture through `ovld protocol
+  capture-change`. The installed `scripts/post-tool-use-hook.sh` is rendered from the shared
+  `connectors/core/scripts/capture-change-hook.sh`; there is no adapter-local implementation.
+  Only a path normalized by the Codex codec as `file.edited` records
+  non-exclusive `declared_edit`/`direct` evidence; normalized read, search, and fetch callbacks are
+  silent no-ops. Mutation-capable callbacks without a normalized edit path, plus shell, generic,
+  unknown, and unmapped callbacks, record unavailable evidence health. Mechanical harness
+  observation, permission, and injection are not live Overlord connector paths under Latch v2;
+  native Codex prompts retain control.
 - `.mcp.json` + `scripts/overlord-mcp.mjs` — MCP bridge to common `ovld protocol` operations. The shim is **generated**: it is rendered from `connectors/core/scripts/overlord-mcp.mjs` at setup time with the adapter key substituted, and there is no copy in this directory to edit.
 - `assets/` — branded plugin assets for Codex install surfaces.
 - `conformance-manifest.yaml` — connector conformance declaration for the Overlord contract.

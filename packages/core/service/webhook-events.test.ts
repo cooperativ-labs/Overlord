@@ -48,8 +48,7 @@ describe('delivery webhook envelopes', () => {
               ]
             }
           }
-        },
-        noFileChanges: true
+        }
       });
 
       const refs = {

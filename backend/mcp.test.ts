@@ -58,7 +58,7 @@ function parseMcpMessages(buffer: Buffer): Array<Record<string, any>> {
   return messages;
 }
 
-async function localToolContracts(scriptPath: string): Promise<ToolContract[]> {
+async function localToolDefinitions(scriptPath: string): Promise<Array<Record<string, any>>> {
   const child = spawn(process.execPath, [scriptPath], {
     cwd: repoRoot,
     stdio: ['pipe', 'pipe', 'pipe']
@@ -84,7 +84,47 @@ async function localToolContracts(scriptPath: string): Promise<ToolContract[]> {
   const response = messages.find(message => message.id === 1);
   assert.ok(response, `${scriptPath} did not return a tools/list response`);
   assert.ifError(response.error);
-  return normalizeTools(response.result.tools);
+  return response.result.tools;
+}
+
+async function localToolContracts(scriptPath: string): Promise<ToolContract[]> {
+  return normalizeTools(await localToolDefinitions(scriptPath));
+}
+
+function assertCanonicalChangeRationaleSchema(tools: Array<Record<string, any>>): void {
+  for (const name of [
+    'overlord_update_session',
+    'overlord_deliver_session',
+    'overlord_record_work'
+  ]) {
+    const tool = tools.find(definition => definition.name === name);
+    assert.ok(tool, `${name} is published`);
+    const properties = tool.inputSchema.properties as Record<string, any>;
+    const rationale = properties.changeRationales;
+    assert.ok(rationale, `${name} publishes changeRationales`);
+    assert.equal(rationale.type, 'array');
+    assert.equal(rationale.items.additionalProperties, false);
+    assert.deepEqual(rationale.items.required, ['filePath', 'label', 'summary', 'why', 'impact']);
+    assert.deepEqual(Object.keys(rationale.items.properties).sort(), [
+      'filePath',
+      'hunks',
+      'impact',
+      'label',
+      'summary',
+      'why'
+    ]);
+    const hunk = rationale.items.properties.hunks;
+    assert.equal(hunk.items.additionalProperties, false);
+    assert.deepEqual(hunk.items.required, ['header']);
+    assert.deepEqual(Object.keys(hunk.items.properties), ['header']);
+  }
+
+  const recordWork = tools.find(definition => definition.name === 'overlord_record_work');
+  assert.ok(recordWork, 'overlord_record_work is published');
+  const changedFiles = recordWork.inputSchema.properties.changedFiles;
+  assert.equal(changedFiles.items.additionalProperties, false);
+  assert.deepEqual(changedFiles.items.required, ['filePath']);
+  assert.deepEqual(Object.keys(changedFiles.items.properties).sort(), ['filePath', 'vcsStatus']);
 }
 
 test('local MCP bridge tools stay in sync with hosted MCP registry', async () => {
@@ -96,6 +136,14 @@ test('local MCP bridge tools stay in sync with hosted MCP registry', async () =>
   for (const relativePath of scripts) {
     assert.deepEqual(await localToolContracts(path.join(repoRoot, relativePath)), expected);
   }
+});
+
+test('hosted and local lifecycle tools expose only canonical rationale annotation keys', async () => {
+  assertCanonicalChangeRationaleSchema(hostedMcpToolDefinitions);
+  const local = await localToolDefinitions(
+    path.join(repoRoot, 'connectors/core/scripts/overlord-mcp.mjs')
+  );
+  assertCanonicalChangeRationaleSchema(local);
 });
 
 test('hosted MCP tool metadata is publication-ready', () => {

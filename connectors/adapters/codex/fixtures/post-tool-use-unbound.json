@@ -1,0 +1,26 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "The Codex PostToolUse callback exits before reading stdin, spawning the CLI, or writing when no objective is explicitly bound.",
+  "script": "connectors/core/scripts/capture-change-hook.sh",
+  "adapterKey": "codex",
+  "stdin": {
+    "session_id": "codex-session-1",
+    "hook_event_name": "PostToolUse",
+    "cwd": "/private/unrelated-project",
+    "tool_name": "Write",
+    "tool_input": { "file_path": "/private/unrelated-project/a.ts" }
+  },
+  "env": {
+    "MISSION_ID": null,
+    "OVERLORD_MISSION_ID": null,
+    "OVERLORD_OBJECTIVE_ID": null
+  },
+  "expect": {
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": "",
+    "cliInvocations": [],
+    "sandboxWrites": []
+  }
+}

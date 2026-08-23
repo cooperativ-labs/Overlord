@@ -49,6 +49,11 @@ decisionHold:
     `terminal.concurrentAnswer` reachable here and structurally impossible for Claude — the one
     place where the control-plane shape is strictly richer rather than merely different.
 
+mutationHooks:
+  classification: post-only
+  fixture: fixtures/mutation-window-evidence.json
+  notes: A completed tool frame is recorded, but no matching in-progress frame exists.
+
 capabilities:
   observe.prompt:
     status: not-implemented
@@ -72,12 +77,12 @@ capabilities:
     native: message.part.updated
     fixtures: [fixtures/normalize-tool-completed.json]
   observe.fileEdit:
-    status: supported
+    status: not-implemented
     native: message.part.updated
-    fixtures: [fixtures/normalize-tool-completed.json]
+    trackedAs: agent-session-phase-2
     notes: >-
-      Shares the tool-part frame; the codec routes a file-mutating normalized tool to
-      `file.edited` exactly as the callback codecs do. The same rule, not a parallel one.
+      The codec can route a file-mutating tool to `file.edited`, but no recorded OpenCode fixture
+      proves a normalized edit path yet. A completed shell frame is not file-edit evidence.
   observe.sessionLifecycle:
     status: supported
     native: session.idle
@@ -138,7 +143,6 @@ capabilities:
       elsewhere. Callback harnesses cannot produce that outcome at all.
   terminal.statusSurface:
     status: not-implemented
-    native: null
     trackedAs: agent-session-phase-2
 
 hazards:
@@ -184,7 +188,3 @@ decisionShape:
     looks like it worked.
 
 unboundSessionFixture: fixtures/unbound-session.json
-
-legacy:
-  capabilities: []
-  hookTypes: []

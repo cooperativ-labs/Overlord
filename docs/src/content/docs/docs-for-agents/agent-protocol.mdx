@@ -142,9 +142,8 @@ reading prior chat:
 - **`agentInstructions`** — concise workflow guidance and pointers into the
   structured fields.
 
-In a git workspace, `attach` also records a **VCS baseline** (changed file paths
-from local `git status`) so delivery can compute the run-attributable delta
-automatically.
+`attach` stores an exact objective/session binding for local connector evidence.
+It does not read Git state or derive a worktree baseline.
 
 ## Post progress while you work
 
@@ -188,13 +187,12 @@ delivering the wrong thing.
 
 ## Deliver
 
-Delivery is the concluding step. It stores the summary, artifacts, and
-rationales, moves the objective to `complete`, and moves the mission to review.
+Delivery is the concluding step. It stores the summary and optional current
+annotations, moves the objective to `complete`, and moves the mission to review.
 
 ```bash
-ovld protocol deliver --session-key <sessionKey> --mission-id coo:312 \
-  --summary "Added a loading state to the account page and covered it with a test." \
-  --change-rationales-json '[{"file_path":"web/account/page.tsx","label":"Loading state","summary":"Render a skeleton while the query is pending.","why":"Avoid a flash of empty content.","impact":"Users see a skeleton instead of a blank page on slow loads."}]'
+ovld protocol deliver --session-key <sessionKey> --objective-id coo:312.k7xm \
+  --summary "Added a loading state to the account page and covered it with a test."
 ```
 
 <Aside type="tip">
@@ -216,44 +214,28 @@ never replaced.
 
 ### Changed files are captured for you
 
-You do **not** enumerate changed files by hand. The CLI records a VCS baseline
-at attach and, at deliver, computes the run-attributable delta (current
-`git status` minus the baseline) and sends it automatically. Your job is the
-**rationale** — _why_ each meaningful change was made — not the _which_.
+You do **not** enumerate changed files or inspect `git status` for delivery. An
+objective-bound connector callback records only paths directly named by its
+native edit payload. The CLI synchronizes that local ledger separately from the
+delivery request. Shell and no-path callbacks record unavailable hook health;
+they never trigger a worktree scan.
 
-Each change-rationale entry requires exactly these fields:
-
-- `file_path` (repo-relative; `filePath` is accepted as an alias)
-- `label` — short reviewer-facing title
-- `summary` — what changed (the field is `summary`, never `rationale`)
-- `why` — why it changed
-- `impact` — behavioral impact
-
-Optional `hunks: [{ "header": "@@ -10,6 +10,14 @@" }]`. Do **not** wrap entries
-under a `rationale` key and do not send a `file_changes` artifact.
-
-If the run changed no files, declare it:
-
-```bash
-ovld protocol deliver --session-key <sessionKey> --mission-id coo:312 \
-  --summary "Investigated the flake; no code changes were required." --no-file-changes
-```
+Rationales are optional reviewer annotations, not coverage requirements. When a
+rationale is useful, each entry uses the canonical fields `filePath`, `label`,
+`summary`, `why`, and `impact`, plus optional `hunks` containing only `header`.
+Do not wrap an entry, use a snake-case alias, or send a `file_changes` artifact.
+Unknown keys discard only that advisory entry with a bounded warning; the last
+valid entry wins when a canonical path is repeated.
 
 ### Preflight before delivering
 
-Never hand-triage `git status`. Run the local-only preflight first — it prints
-every dirty path already classified the way `deliver` will, plus draft
-rationales:
+Run the local-only preflight first. It drains the exact objective ledger and
+reports remaining evidence plus bounded hook health; it never scans or
+classifies the shared worktree:
 
 ```bash
-ovld protocol changes --mission-id coo:312
+ovld protocol changes --objective-id coo:312.k7xm
 ```
-
-- **`mine`** — confirmed by this session's touched-files log; owe a real
-  rationale.
-- **`claimed`** — another active session's change; exclude it or use the printed
-  skip entry.
-- **`unclaimed`** — dirty but confirmed by nobody; report or skip explicitly.
 
 ### Large payloads and special characters
 
@@ -279,28 +261,18 @@ objectives** running in the same checkout. Those are **not yours to undo.**
   checkout`/`restore`/`reset` of edits you didn't make, and no deleting unfamiliar files.
 </Aside>
 
-If `deliver` fails with `missing_rationale` for a file you did not change, or
-`git status` shows unrelated dirty paths:
+If `git status` shows unrelated dirty paths:
 
 <Steps>
 
 1. Leave those files intact.
 2. Do not fabricate a rationale for work you didn't do.
-3. Run `ovld protocol changes --mission-id <id>` to classify the paths.
-4. Re-deliver, skipping the unrelated paths with a truthful reason:
-
-   ```bash
-   ovld protocol deliver --session-key <sessionKey> --mission-id coo:312 \
-     --summary "Implemented the feature." \
-     --change-rationales-json '[{"file_path":"src/feature.ts","label":"Feature","summary":"…","why":"…","impact":"…"}]' \
-     --skip-rationale-for-json '[{"file_path":"webapp/package.json","reason":"Concurrent host-side edit; not made by this mission."}]'
-   ```
+3. Run `ovld protocol changes --objective-id <objective>` to inspect only the
+   current objective's recorded evidence.
+4. Deliver the summary normally. Unrelated worktree state is not a delivery
+   input and cannot block the lifecycle transition.
 
 </Steps>
-
-A rejected `deliver` returns the same classification in
-`details.missingRationales`, with ready-to-use skip entries — paste them into the
-retry instead of re-deriving.
 
 ## After delivery
 

@@ -6,7 +6,7 @@
 
 **Harness version verified** `docs: Antigravity CLI v1.1.11 / Antigravity 2.0 v2.6.0` · **scheme** `opaque`
 
-**Descriptor digest** `e7313b23f98b6ed15a1a32849291a2a391523d4c06403bf395ecbcadfa3b11ac`
+**Descriptor digest** `c5686f1ab4c02e6bb90adeef83c6acd61703f3238be12618fed1e2b833636b2a`
 
 > The tier is derived from passing fixtures, never authored. `unsupported` means the harness
 > cannot do it — do not attempt it. `not-implemented` means it is buildable and unbuilt: that is
@@ -38,6 +38,18 @@ native id is a binding authority.
 
 The first-party docs define command-hook timeouts (30 seconds by default) and a synchronous PreToolUse `decision` response, but do not define timeout, crash, non-zero-exit, or malformed JSON fallback behavior. Keep the remote decision hold unverified until an installed binary exercises those failure paths.
 
+## Mutation-window evidence
+
+| Field | Value |
+| --- | --- |
+| Classification | `unsupported` |
+| Executable fixture | `fixtures/mutation-window-evidence.json` |
+
+No recorded PostToolUse payload or empirical agy hook execution proves a pair.
+
+File attribution may not be synthesized for this adapter. Missing mutation evidence is
+reported as unavailable health, never recovered from a worktree-wide delta.
+
 ## Capabilities
 
 | Capability | Status | Native | Evidence |
@@ -65,14 +77,8 @@ The first-party docs define command-hook timeouts (30 seconds by default) and a 
 | Hazard | Severity | Verification | Mitigation | Tracked as |
 | --- | --- | --- | --- | --- |
 | `outside-verification-survey` | medium | unverified | required | `agent-session-verify-antigravity` |
-| `pre-tool-use-always-allows` | medium | verified | implemented | fixture `fixtures/unbound-session.json` |
-| `pre-invocation-has-no-prompt` | high | verified | implemented | fixture `fixtures/unbound-session.json` |
 
 **`outside-verification-survey`** — Antigravity was not part of the original harness verification survey. The current first-party docs now establish hook names, payload fields, and response shapes, but the `agy` binary was unavailable for empirical timeout, failure, resume, and headless tests. The connector must stay at its fixture-proven tier until those paths are exercised.
-
-**`pre-tool-use-always-allows`** — The former PreToolUse hook answered `{"allow_tool":true}` even though the first-party response contract requires `decision`, and called a nonexistent detached protocol command. It neither gated nor recorded reliably; changing it to native `decision: allow` would have silently bypassed the harness permission system, so the registration was removed.
-
-**`pre-invocation-has-no-prompt`** — The former follow-up hook guessed prompt/message/text/input fields on PreInvocation, but the first-party schema contains none of them. It could never capture a normal follow-up; reconstructing one from transcriptPath would violate the raw-transcript privacy boundary. The false followUpHook projection and the registration were removed.
 
 ## Native decision shape
 

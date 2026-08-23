@@ -85,10 +85,16 @@ This connector is intentionally reviewable against the four connector layers in 
 
 - `skills/overlord-mission/SKILL.md` — Claude adapter template with a `<!-- @connector-core -->` marker; setup interpolates shared core content at install time.
 - `commands/*.md` — slash commands for session routing, objective discussion, mission creation, and work recording.
-- `hooks/hooks.json` + `scripts/*.sh` — Channel 1 mission follow-up (`UserPromptSubmit`),
-  touched-file capture (`PostToolUse`), and Stop delivery reminder. Mechanical harness
-  observation, permission, and injection are not live Overlord connector paths under Latch v2;
-  native Claude prompts retain control.
+- `hooks/hooks.json` + `scripts/*.sh` — mission follow-up (`UserPromptSubmit`), local
+  objective-ledger capture (`PostToolUse`), and the Stop delivery reminder. The installed
+  `scripts/post-tool-use-hook.sh` is rendered from the shared
+  `connectors/core/scripts/capture-change-hook.sh`; there is no adapter-local implementation.
+  Only a path normalized
+  by the Claude codec as `file.edited` records non-exclusive `declared_edit`/`direct` evidence;
+  normalized read, search, and fetch callbacks are silent no-ops. Mutation-capable callbacks
+  without a normalized edit path, plus shell, generic, unknown, and unmapped callbacks, record
+  unavailable evidence health. Mechanical harness observation, permission, and injection are not
+  live Overlord connector paths under Latch v2; native Claude prompts retain control.
 - `userConfig` for `overlord_url` and `user_token`; the hook scripts use the `ovld protocol` CLI and pass the plugin's USER_TOKEN to that CLI as `Overlord_USER_TOKEN`.
 - `conformance-manifest.yaml` — connector conformance declaration for the Overlord contract.
 - `prompt-wrapper.md` — Claude launch context-file guidance.

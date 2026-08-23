@@ -4,7 +4,7 @@
 # IMPORTANT: Update this file and CONTRACT.md together when adding components or surfaces.
 # Increment contractVersion when any stable interface changes.
 
-contractVersion: '111'
+contractVersion: '116'
 
 components:
   protocol:
@@ -21,8 +21,10 @@ components:
       - 'delivery payload structure and validation rules'
       - 'versioned delivery-report evidence normalization and deterministic fallback presentation'
       - 'transactional enqueue of overlord.delivery.compose.v1 worker jobs from deliverSession and recordWork'
-      - 'request envelope: per-flag fileInputs map (at most one stdin payload) and change-rationale file_path/filePath alias normalization'
-      - 'changed-file and change-rationale recording protocol'
+      - 'request envelope: canonical per-flag fileInputs map (at most one flag may read literal stdin) and canonical change-rationale input; no shared stdin fallback field'
+      - 'optional change-rationale annotations on update, delivery, and sessionless record-work; exact canonical item/hunk keys, bounded per-item warnings, and deterministic last-valid-wins handling for duplicate per-request paths'
+      - 'sync-changes: bounded idempotent metadata-only objective-ledger evidence batching with per-item accepted/ignored/warning outcomes; evidence and hook health are advisory and cannot reject delivery'
+      - 'Phase 5 ledger cutover: CLI update, preflight, and deliver auto-sync direct or paired objective-ledger evidence without a VCS-delta fallback. update accepts no changed-file payload; deliver accepts summary plus current optional annotations and no legacy changed-file, observed-dirty, no-file-change, or rationale-skip inputs'
       - 'idempotency key scope naming: protocol.*'
       - 'in-place mission artifact updates via update-artifact (same editable fields and revision CAS as REST PATCH /api/missions/:id/artifacts/:artifactId; no session key required)'
       - 'mid-turn mission artifact creation via add-artifact (POST /api/protocol/add-artifact), which creates an artifact without a delivery using the same createArtifact service as REST POST /api/missions/:id/artifacts; optional session key stamps session/objective provenance when present'
@@ -52,7 +54,7 @@ components:
       - 'controlled vocabularies (closed and open sets)'
       - 'creation provenance on missions and objectives: created_by_kind (closed human/agent/automation, NOT NULL DEFAULT human), created_by_agent (open connector identifier), and created_by_session_id as a deliberate soft reference to agent_sessions.id with no foreign key, so a dangling provenance pointer can never block a delete; provenance is read as a column on rows already selected and carries no new index'
       - 'profile-owned inbox_items: a minimal private unassigned capture with one v1 objective array entry, optional due datetime and priority, profile cascade deletion, and no workspace/project/status/session state'
-      - 'versioned deliveryReport payload storage in deliveries.payload_json; summary remains immutable agent-authored source text'
+      - 'versioned deliveryReport payload storage in deliveries.payload_json; summary remains immutable agent-authored source text; malformed advisory agent-report items are salvaged independently with bounded warnings and never reject delivery'
       - 'portable search_documents maintained exclusively by adapter triggers: mission, objective, event, and bounded delivery documents. Delivery bodies include only summary, verification/follow-up text, and normalized deliveryReport agent-report fields, are capped at 20,000 characters, and preserve owning mission/objective provenance; mission documents include constraints, output format, and notes. Artifacts are never indexed; notes remain outside agent context loading but are searchable by authorized callers'
       - 'worker_jobs durable background queue including core types overlord.delivery.compose.v1, overlord.live_activity.dispatch.v1, overlord.push_notification.dispatch.v1, and overlord.notification.dispatch.v1'
       - 'private live_activity_push_tokens registrations keyed by profile and ActivityKit activity id, carrying environment and bundle_id so update/end pushes select the APNs host and liveactivity topic per registration; APNs tokens are never projected through REST, realtime, or audit payloads'
@@ -69,7 +71,6 @@ components:
     dependsOn: []
     interactionSurfaces:
       - protocolToDatabase
-      - restApiToDatabase
       - restApiToDatabase
       - extensionToCore
 
@@ -88,7 +89,10 @@ components:
       - 'project resource registration commands: ovld add-cwd --key <resourceKey> upserts a target-scoped local_checkout source on the project-scoped identity; ovld add-url --url <git-url> upserts its project-global git source'
       - 'backend URL settings: backend_url and backend_mode (local/cloud)'
       - 'per-user terminal profiles on user_execution_target_preferences for opening launched agents in a terminal window'
-      - 'protocol session-key cache: persists the attach session key by (working directory, mission) and auto-injects --session-key when the flag is absent; cleared at deliver'
+      - 'protocol session-key cache: persists the attach session key by canonical working directory, mission, and objective and auto-injects --session-key only for that explicit objective; cleared after deliver only when its exact ledger is fully synchronized, otherwise retained for retry'
+      - 'owner-only, cross-process-safe objective/session local change ledger and hook-health records; cwd alone never chooses an objective, only normalized workspace-relative paths and bounded metadata are stored, and only metadata is synchronized through Protocol'
+      - 'local-only ovld protocol capture-change: requires an adapter key, reduces the native post-tool payload through that connector-owned compiled codec, records only exact normalized file.edited paths when an explicit objective-bound session resolves, leaves known read-only callbacks silent, and records unavailable health rather than scanning the worktree for mutation-capable, shell, unmapped, or no-path callbacks'
+      - 'normal delivery composes only the required summary plus optional current annotations; it does not accept or derive a changed-file, observed-dirty, no-file-change, or rationale-skip payload'
       - 'agent-session runtime: the ovld agent-session command family and the compiled harness catalog (cli/src/agent-session/catalog.generated.ts). The only local module that carries agent-session traffic to the backend, and only with the channel-scoped OVERLORD_SESSION_CHANNEL_TOKEN — never the user broad USER_TOKEN. The runtime reads the compiled catalog, never the descriptor YAML. Adding a sixth harness must add zero agent-session subcommands'
       - 'ovld agent-session capabilities [<agent>] [--json]: offline human/agent-facing reader of the compiled catalog — no network call, no write, no subprocess'
       - 'ovld agent-session event --agent <key> --payload-file -: the push path for callback and extension shapes. Gate, reduce on the machine, post, exit. Emits no stdout or stderr on any path and exits 0 on every path including failure, because an observational hook that speaks has produced output the user did not ask for and cannot turn off'
@@ -116,11 +120,12 @@ components:
       - 'connector core workflow instructions'
       - 'per-agent plugin/adapter files and managed file manifests'
       - 'hook scripts and their event contracts'
+      - 'fixture-backed mutation-window evidence classification (paired, post-only, unsupported); a future paired pre/post local hook is permitted only for a connector proven paired and retains metadata only'
       - 'ovld agent-setup <agent>/all and ovld doctor behavior'
-      - 'connector capability declarations and approved capability flag set'
+      - 'connector capability declarations in the harness descriptor'
       - 'per-adapter event codec declaration (connectors/adapters/<agent>/codec/<agent>.codec.yaml, referenced by the descriptor codecSpec field): a declaration of where native values live, never executable code. It cannot name a destination the core interpreter does not implement, and an unknown key is a generation error rather than a silently ignored field'
       - 'per-adapter decision codec declaration (connectors/adapters/<agent>/codec/<agent>.decision-codec.yaml, referenced by decisionCodecSpec): native request paths and literal allow/deny/defer bodies compiled for the shared pure interpreter; exact bytes and redacted request cards are pinned by executable decision-codec fixtures'
-      - 'per-adapter harness capability descriptor (connectors/adapters/<agent>/harness-capabilities.yaml, validated by contract/harness-capabilities.schema.yaml) and its executable fixtures: the only hand-authored agent-session capability source, and simultaneously the runtime gating input, the CI contract, and the source of the generated CAPABILITIES.md, HARNESS-MATRIX.md, compiled CLI catalog, and deprecated conformance projection'
+      - 'per-adapter harness capability descriptor (connectors/adapters/<agent>/harness-capabilities.yaml, validated by contract/harness-capabilities.schema.yaml) and its executable fixtures: the only hand-authored agent-session capability source, and simultaneously the runtime gating input, the CI contract, and the source of generated CAPABILITIES.md, HARNESS-MATRIX.md, and the compiled CLI catalog'
       - 'connector-owned native event-normalization and decision codecs; resolve emits the harness exact native decision shape and every failure path returns no decision so the harness own behavior remains the floor'
     doesNotOwn:
       - 'any network call to the Overlord backend — adapters translate and hand off to the CLI, which owns transport, auth, retry, and redaction'
@@ -220,6 +225,7 @@ components:
       - 'editable mission artifacts: PATCH /api/missions/:id/artifacts/:artifactId accepts expectedRevision plus a non-empty subset of { label, contentText, externalUrl }, requires mission:update on the named mission, preserves delivery/session/objective provenance plus contentJson, rejects stale edits with 409 and non-HTTP(S) external URLs, and emits an artifact entity-change in the same transaction'
       - 'mid-turn mission artifact creation: POST /api/missions/:id/artifacts accepts { type, label } plus at least one of { contentText, externalUrl }, requires artifact:create on the named mission, optionally stamps objectiveId/sessionId provenance, leaves delivery_id null, and emits an artifact entity-change insert in the same transaction'
       - 'mission shared context: GET /api/missions/:id/context returns SharedContextEntryDto[] with mission:read; PUT /api/missions/:id/context upserts { key, value } with mission:update (same durable memory as Protocol write-context), and emits a shared_context_entry entity-change in the same transaction'
+      - 'changed-file-first review projection: GET /api/missions/:id/file-changes returns every durable objective/path observation once with source, quality, overlap, bounded per-file hook health, and the latest optional rationale; accepted changed_file/change_rationale writes emit scoped entity changes that refresh this projection without a Git-status or worktree-delta scan'
       - "user-scoped Everhour identity under /ext/everhour: authenticated GET/PUT/DELETE /user-connection are account-wide with no workspace permission; the personal API key is stored only as AES-256-GCM ciphertext; GET/PUT/DELETE /integration remain a deprecated alias of that profile-scoped surface; timer and time-entry writes use the acting user's key; credentials never enter DTOs, logs, mobile/browser storage, realtime, or change projections, and workspace-scoped GitHub App installation plus Everhour/GitHub resource links remain separate"
       - 'user-scoped GitHub repository authorization under /ext/github: authenticated connection metadata/authorization/disconnect and eligible-owner reads are account-wide; it reuses the Better Auth GitHub OAuth App client registration while maintaining a distinct explicit repo read:org grant, profile-bound hashed single-use state, and separately AES-256-GCM-encrypted token; its /api/auth/callback/github/repository callback is handled before the Better Auth wildcard; credentials never enter DTOs, logs, mobile/browser storage, realtime, or change projections, and the one-installation-per-workspace GitHub App integration remains separate'
       - 'composite project initialization: POST /api/projects/initialize authorizes project:create against its explicit workspace, atomically creates the project plus first mission/objective under a caller idempotency key, and optionally performs retryable private GitHub repository provisioning through the separate user OAuth connection; provisioning failure preserves the internal creation, while success records exactly one GitHub project link and one non-primary read-only git resource without changing the workspace GitHub App installation'
@@ -341,7 +347,7 @@ components:
       - 'hosted overlord_add_artifact tool forwarding to Protocol add-artifact'
       - 'additive assignedTo input on overlord_create_mission, forwarded to the same service-layer member resolver as Protocol --assigned-to (workspace_users.id, profile UUID, orgid:username, bare username, or email); an unresolvable member is an error, never a silent fallback to unassigned'
       - 'additive autoAdvance input on overlord_create_mission and overlord_add_objectives items, forwarded to Protocol create/add-objectives'
-      - 'additive agent/model inputs on overlord_add_objectives items, forwarded unchanged to Protocol add-objectives so an agent can select each appended objective\'s launch identity'
+      - "additive agent/model inputs on overlord_add_objectives items, forwarded unchanged to Protocol add-objectives so an agent can select each appended objective's launch identity"
       - 'hosted overlord_update_objective tool forwards autoAdvance compatibility to Protocol queue membership and instructionText to Protocol update-objective'
       - 'hosted overlord_queue_objective forwards queue/add/remove intent to Protocol queue-objective or dequeue-objective; it does not access queue tables directly'
       - 'overlord_list_deliveries, overlord_launch_objective, and overlord_reorder_future_objectives forward to Protocol list-deliveries, launch-objective, and reorder-future-objectives; they preserve the existing normalized delivery response, execution-request queue semantics, and full future-objective ordering validation'
@@ -421,15 +427,18 @@ interactionSurfaces:
       - 'Cloud/headless runners authenticate with scoped service tokens that can claim only their own target/workspace requests'
 
   connectorToProtocol:
-    description: 'Connector hook scripts invoke protocol commands via subprocess'
+    description: 'Connector hook scripts invoke protocol commands via subprocess; change capture terminates in the local CLI ledger until a lifecycle command synchronizes it'
     from: connector
     to: protocol
     transport: shell-script-subprocess
     rules:
       - 'Hook scripts must not write to the database directly'
-      - 'Hook scripts must use ovld protocol hook-event or update'
+      - 'Hook scripts use ovld protocol hook-event for follow-up activity or local-only ovld protocol capture-change for file evidence'
       - 'Hooks may not add new event types without contract update'
       - 'UserPromptSubmit follow-up capture records user_follow_up activity without requiring a live session and without reopening execution'
+      - 'capture-change requires an explicit objective-bound session; cwd is normalization context only and never selects an objective'
+      - 'A post callback may record declared_edit/direct evidence only when the connector-owned codec normalizes it as file.edited with an exact path. Generic path-key parsing is forbidden; known read-only callbacks are silent, mutation-capable/shell/unmapped/no-path callbacks record unavailable health and claim no file, and no connector may synthesize a worktree-wide fallback delta'
+      - 'Only normalized workspace-relative paths plus bounded source, quality, overlap, window, and health metadata enter the ledger; no content, diff, command, transcript, environment value, fingerprint, or absolute host path may cross the surface'
 
   connectorToAgentSessionRuntime:
     description: 'Connector integrations hand native payloads to the CLI agent-session runtime, which is the only component that calls the versioned agent-session channel route family'

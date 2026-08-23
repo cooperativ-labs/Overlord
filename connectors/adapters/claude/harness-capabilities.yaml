@@ -44,16 +44,24 @@ decisionHold:
     PermissionRequest response falls through to the native prompt, which is the required
     fail-toward-the-harness behavior.
 
+mutationHooks:
+  classification: post-only
+  fixture: fixtures/mutation-window-evidence.json
+  notes: >-
+    Recorded completion-side write evidence lacks a matching pre/post call pair. A directly named
+    native edit path normalized by the Claude codec as `file.edited` records objective-bound,
+    non-exclusive `declared_edit`/`direct` evidence. Codec-normalized read, search, and fetch
+    callbacks are silent no-ops. Mutation-capable callbacks without a normalized edit path, plus
+    shell, generic, unknown, and unmapped callbacks, record unavailable evidence health.
+
 capabilities:
   observe.prompt:
     status: supported
     native: UserPromptSubmit
     fixtures: [fixtures/normalize-user-prompt-submit.json]
     notes: >-
-      Two registrations used to ride UserPromptSubmit. Latch v2 removed the CLI event stream
-      that previously owned mechanical agent-session observation. This capability grades the
-      protocol follow-up hook that posts `user_follow_up` mission events; that Channel 1 path
-      stays installed.
+      The protocol follow-up hook posts `user_follow_up` mission events. There is no separate
+      mechanical agent-session event stream.
   observe.toolCall:
     status: not-implemented
     native: PreToolUse
@@ -68,26 +76,28 @@ capabilities:
     native: PostToolUse
     trackedAs: latch-engine
     notes: >-
-      Latch v2 removed the CLI event stream that previously owned mechanical tool-result
-      observation. The protocol PostToolUse hook still records touched files for delivery
-      attribution.
+      The protocol PostToolUse callback forwards bounded mutation evidence to the local objective
+      ledger, but it does not expose a general tool-result event stream.
   observe.fileEdit:
     status: supported
     native: PostToolUse
     fixtures:
       - fixtures/normalize-post-tool-use-write.json
       - fixtures/post-tool-use-parity.json
+      - fixtures/post-tool-use-capture.json
     notes: >-
-      The shipped PostToolUse hook that records touched files into the per-session log used by
-      `deliver` for change attribution remains registered. Mechanical agent-session observation
-      is no longer a live Overlord path.
+      The shipped PostToolUse callback forwards its native payload to local `capture-change` only
+      when `OVERLORD_OBJECTIVE_ID` resolves an exact active-session binding. A directly named
+      Write/Edit path normalized by the Claude codec as `file.edited` records non-exclusive
+      `declared_edit`/`direct` evidence. Codec-normalized read, search, and fetch callbacks are
+      silent no-ops; mutation-capable callbacks without a normalized edit path, plus shell,
+      generic, unknown, and unmapped callbacks, record unavailable evidence health. Mechanical
+      agent-session observation is not a live Overlord path.
   observe.sessionLifecycle:
     status: not-implemented
     native: SessionStart
     trackedAs: latch-engine
-    notes: >-
-      Latch v2 removed the CLI event stream that previously owned session observation. There
-      is no matching Overlord registration.
+    notes: No Overlord session-lifecycle registration ships.
   decide.shell:
     status: not-implemented
     native: PermissionRequest
@@ -109,8 +119,7 @@ capabilities:
     native: PermissionRequest
     trackedAs: latch-engine
     notes: >-
-      Latch v2 removed the CLI pending-input and send surface. The native Claude prompt owns
-      approvals; Overlord exposes no remote decision control.
+      The native Claude prompt owns approvals; Overlord exposes no remote decision control.
   answer.structuredQuestion:
     status: unverified
     native: Elicitation
@@ -169,8 +178,7 @@ hazards:
       subcommand that does not exist, backgrounds the call with `) & disown`, and is gated on
       a MISSION_ID environment variable launched sessions do not always set. It records
       nothing and, being backgrounded with stdout discarded, is structurally incapable of
-      returning a decision. The shipped conformance `permissionHook` flag therefore overstates
-      what happens today.
+      returning a decision.
     verification: verified
     mitigation: implemented
     fixture: fixtures/permission-request.json
@@ -182,29 +190,11 @@ hazards:
       2.1.221 from a live agent-pod session: every entry
       in ~/.ovld/logs/stop-hook.log takes the `no launch mission id` branch and returns before
       the delivery check, because the hook gates on a `MISSION_ID` environment variable the pod
-      does not set. The PostToolUse hook works in the same session because it resolves the
-      mission from the per-cwd active-session manifest instead; the Stop hook should resolve it
-      the same way.
+      does not set. The PostToolUse path is independently scoped by explicit mission and
+      objective launch environment; the Stop hook should use an equally explicit binding.
     verification: verified
     mitigation: required
     trackedAs: agent-session-phase-3
-  - id: unbound-session-side-effects
-    severity: medium
-    summary: >-
-      NARROWED, NOT CLOSED. The new agent-session registrations gate in bash on
-      OVERLORD_SESSION_CHANNEL_ID before spawning anything, so they are completely silent in an
-      unbound session (proved by fixtures/agent-session-hook-unbound.json). The LEGACY
-      PostToolUse hook still spawns `ovld protocol record-touched` and appends to ~/.ovld/logs
-      in every session on the machine, because its scope gate lives inside the CLI rather than
-      before the spawn (proved by fixtures/unbound-session.json). It stays installed on purpose:
-      it is what feeds touched-file change attribution at deliver time, and removing it before
-      the normalized path has demonstrated equivalent attribution would trade a privacy nit for
-      a data-loss bug. Closing this means retiring the legacy hook, which is a migration, not a
-      patch.
-    verification: verified
-    mitigation: required
-    fixture: fixtures/unbound-session.json
-    trackedAs: agent-session-phase-4
   - id: fork-and-subagent-identity-unknown
     severity: medium
     summary: >-
@@ -237,26 +227,6 @@ hazards:
     verification: verified
     mitigation: required
     trackedAs: coo:585
-  - id: subagent-commits-escape-delivery-delta
-    severity: high
-    summary: >-
-      Delivery change attribution is computed from `git status --porcelain` against the attach
-      baseline (cli/src/vcs.ts `readChangedFiles` / `filterRunAttributableChanges`); nothing in
-      that path consults HEAD or the commit graph. Claude Code 2.1.221 made background-session
-      commit-and-push behavior an explicit work-preservation default. A
-      background subagent that commits, merges, or opens a PR for its own work
-      therefore removes those files from the worktree delta, and
-      they vanish from the delivery report entirely — not flagged, not skipped, silently
-      absent. The PostToolUse touched-files log is unaffected (its key is
-      `sha256(abspath(cwd) + "\0" + MISSION_ID)`, so a subagent sharing the cwd writes to the
-      same log), which means the evidence that the edit happened survives while the delta that
-      decides coverage does not. Closing this means teaching the delta about commits made since
-      the baseline, which is a CLI change with branch and worktree semantics to settle, not a
-      hook edit.
-    verification: verified
-    mitigation: required
-    trackedAs: coo:585
-
 decisionShape:
   codec: claude
   allowFixture: fixtures/decision-codec.json
@@ -265,25 +235,8 @@ decisionShape:
   neverSend: [permission, user_message, agent_message, followup_message]
   notes: >-
     Claude expects `hookSpecificOutput.decision` with behavior allow/deny. Cursor's flat
-    `permission` dialect must never be emitted here; relying on any cross-vendor
-    compatibility shim is how a connector silently stops working after an upstream release.
+    `permission` dialect must never be emitted here; relying on a cross-vendor dialect fallback
+    is how a connector silently stops working after an upstream release.
     The decision-codec fixture executes the shared interpreter and pins all three outcomes.
 
 unboundSessionFixture: fixtures/unbound-session.json
-
-legacy:
-  capabilities:
-    - followUpHook
-    - permissionHook
-    - stopHook
-    - editHook
-    - modelFlag
-    - effortFlag
-    - contextFilePrompt
-    - permissionRules
-    - slashCommands
-  hookTypes:
-    - UserPromptSubmit
-    - PermissionRequest
-    - PostToolUse
-    - Stop

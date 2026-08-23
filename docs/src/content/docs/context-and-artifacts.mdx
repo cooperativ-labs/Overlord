@@ -20,20 +20,16 @@ or moves between agent runtimes.
 
 ## Change rationales
 
-Change rationales are the first-class record of *what* changed and *why*. They
-are stored as structured rows, not free-form text, and each covers one file:
+Change rationales are optional structured reviewer annotations for an observed
+file:
 
 - a short reviewer title
 - the file path
 - what changed, why it changed, and the behavioral impact
 - optional diff-hunk headers
 
-Agents cover every meaningful change with a rationale (formatting-only noise can
-be skipped), so review reads as a clear story instead of a wall of diff.
-
-In a git workspace, attach records a **VCS baseline** and delivery computes the
-run-attributable delta against current `git status`, so rationales stay tied to
-the files this objective actually changed.
+The objective/session ledger supplies file evidence independently. A file remains
+reviewable without prose, and a missing rationale never blocks delivery.
 
 ## Artifacts
 

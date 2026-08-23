@@ -11,6 +11,7 @@ import {
   attachSession,
   deliverSession,
   resumeFollowUp,
+  syncChanges,
   updateSession
 } from './protocol.js';
 import { createIsolatedCheckout } from './test-checkout.ts';
@@ -79,6 +80,135 @@ describe('deliverSession mechanical change capture', () => {
     await db.close();
   });
 
+  it('emits changed-file feed rows only for accepted ledger observations', async () => {
+    const { db, ctx } = await setup();
+    const { mission, objectiveId } = await submittedMission(ctx, 'Ledger Feed');
+    const attached = await attachSession({ ctx, missionId: mission.displayId });
+
+    const first = await syncChanges({
+      ctx,
+      missionId: mission.displayId,
+      sessionKey: attached.sessionKey,
+      changes: [
+        {
+          filePath: 'src/feed.ts',
+          idempotencyKey: 'feed-1',
+          source: 'declared_edit',
+          quality: 'direct'
+        }
+      ]
+    });
+    assert.equal(first.outcomes[0]?.status, 'accepted');
+
+    const changedFile = (await ctx.db.get(
+      `SELECT id FROM changed_files WHERE objective_id = ? AND file_path = ?`,
+      [objectiveId, 'src/feed.ts']
+    )) as { id: string };
+    assert.equal((await entityChangesFor(ctx, 'changed_file', changedFile.id)).length, 1);
+
+    const second = await syncChanges({
+      ctx,
+      missionId: mission.displayId,
+      sessionKey: attached.sessionKey,
+      changes: [
+        {
+          filePath: 'src/feed.ts',
+          idempotencyKey: 'feed-2',
+          source: 'declared_edit',
+          quality: 'direct',
+          hookHealth: 'capture_healthy'
+        }
+      ]
+    });
+    assert.equal(second.outcomes[0]?.status, 'accepted');
+    const afterUpdate = await entityChangesFor(ctx, 'changed_file', changedFile.id);
+    assert.deepEqual(
+      afterUpdate.map(change => change.operation),
+      ['insert', 'update']
+    );
+
+    const replay = await syncChanges({
+      ctx,
+      missionId: mission.displayId,
+      sessionKey: attached.sessionKey,
+      changes: [
+        {
+          filePath: 'src/feed.ts',
+          idempotencyKey: 'feed-2',
+          source: 'declared_edit',
+          quality: 'direct',
+          hookHealth: 'capture_healthy'
+        }
+      ]
+    });
+    assert.equal(replay.outcomes[0]?.status, 'ignored');
+    assert.equal((await entityChangesFor(ctx, 'changed_file', changedFile.id)).length, 2);
+
+    await db.close();
+  });
+
+  it('persists update rationale annotations once and emits scoped feed rows', async () => {
+    const { db, ctx } = await setup();
+    const { mission, objectiveId } = await submittedMission(ctx, 'Update Rationale');
+    const attached = await attachSession({ ctx, missionId: mission.displayId });
+    await syncChanges({
+      ctx,
+      missionId: mission.displayId,
+      sessionKey: attached.sessionKey,
+      changes: [
+        {
+          filePath: 'src/update.ts',
+          idempotencyKey: 'update-rationale-1',
+          source: 'declared_edit',
+          quality: 'direct'
+        }
+      ]
+    });
+
+    const updated = await updateSession({
+      ctx,
+      missionId: mission.displayId,
+      sessionKey: attached.sessionKey,
+      summary: 'Recorded an in-progress rationale.',
+      changeRationales: [
+        {
+          filePath: 'src/update.ts',
+          label: 'Update path',
+          summary: 'Changed the update path.',
+          why: 'Keep review current during execution.',
+          impact: 'The annotation appears before delivery.'
+        },
+        { file_path: 'src/retired-alias.ts' } as never
+      ]
+    });
+
+    const rationale = (await ctx.db.get(
+      `SELECT id, changed_file_id, source_event_id, is_final
+         FROM change_rationales
+        WHERE objective_id = ? AND file_path = ?`,
+      [objectiveId, 'src/update.ts']
+    )) as {
+      id: string;
+      changed_file_id: string | null;
+      source_event_id: string | null;
+      is_final: boolean | number;
+    };
+    assert.ok(rationale.changed_file_id);
+    assert.equal(rationale.source_event_id, updated.eventId);
+    assert.equal(Boolean(rationale.is_final), false);
+    assert.equal((await entityChangesFor(ctx, 'change_rationale', rationale.id)).length, 1);
+    assert.equal((await entityChangesFor(ctx, 'mission_event', updated.eventId)).length, 1);
+
+    const event = (await ctx.db.get(`SELECT payload_json FROM mission_events WHERE id = ?`, [
+      updated.eventId
+    ])) as { payload_json: string };
+    const payload = JSON.parse(event.payload_json) as Record<string, unknown>;
+    assert.equal('changeRationales' in payload, false);
+    assert.match(JSON.stringify(payload.changeRationaleWarnings), /changeRationales/);
+
+    await db.close();
+  });
+
   it('stamps the lifecycle timestamps the mission objective list is ordered by', async () => {
     const { db, ctx } = await setup();
     const { mission, objectiveId } = await submittedMission(ctx, 'Lifecycle Stamps');
@@ -110,8 +240,7 @@ describe('deliverSession mechanical change capture', () => {
       ctx,
       sessionKey: attached.sessionKey,
       missionId: mission.displayId,
-      summary: 'Delivered the work.',
-      noFileChanges: true
+      summary: 'Delivered the work.'
     });
     const afterDeliver = (await ctx.db.get(
       `SELECT state, started_at, completed_at FROM objectives WHERE id = ?`,
@@ -281,46 +410,33 @@ describe('deliverSession mechanical change capture', () => {
     await db.close();
   });
 
-  it('rejects malformed or oversized delivery evidence without completing the objective', async () => {
+  it('salvages malformed or oversized delivery evidence without blocking completion', async () => {
     const { db, ctx } = await setup();
     const { mission, objectiveId } = await submittedMission(ctx, 'Invalid Delivery Evidence');
     const attached = await attachSession({ ctx, missionId: mission.displayId });
 
-    await assert.rejects(
-      () =>
-        deliverSession({
-          ctx,
-          missionId: mission.displayId,
-          sessionKey: attached.sessionKey,
-          summary: 'This should not deliver.',
-          payloadJson: { deliveryReport: { schemaVersion: 2 } }
-        }),
-      /Invalid deliveryReport/
-    );
-    await assert.rejects(
-      () =>
-        deliverSession({
-          ctx,
-          missionId: mission.displayId,
-          sessionKey: attached.sessionKey,
-          summary: 'This should not deliver either.',
-          payloadJson: {
-            deliveryReport: {
-              agentReport: {
-                knownRisks: Array.from({ length: 13 }, (_, index) => `Risk ${index + 1}`)
-              }
-            }
-          }
-        }),
-      /Invalid deliveryReport/
-    );
+    const delivered = await deliverSession({
+      ctx,
+      missionId: mission.displayId,
+      sessionKey: attached.sessionKey,
+      summary: 'This delivers despite malformed advisory evidence.',
+      payloadJson: {
+        deliveryReport: {
+          agentReport: { knownRisks: Array.from({ length: 13 }, (_, index) => `Risk ${index + 1}`) }
+        }
+      }
+    });
+    const payload = (await ctx.db.get(`SELECT payload_json FROM deliveries WHERE id = ?`, [
+      delivered.deliveryId
+    ])) as { payload_json: string };
+    assert.ok(JSON.parse(payload.payload_json).deliveryReport.warnings.length > 0);
 
     const objective = (await ctx.db.get(`SELECT state FROM objectives WHERE id = ?`, [
       objectiveId
     ])) as {
       state: string;
     };
-    assert.equal(objective.state, 'executing');
+    assert.equal(objective.state, 'complete');
     await db.close();
   });
 
@@ -526,69 +642,67 @@ describe('deliverSession mechanical change capture', () => {
     await db.close();
   });
 
-  it('records run-supplied changed files and enforces rationale coverage', async () => {
+  it('delivers with synchronized changed files without requiring rationale coverage', async () => {
     const { db, ctx } = await setup();
     const { mission } = await submittedMission(ctx, 'Deliver Capture');
     const attached = await attachSession({ ctx, missionId: mission.displayId });
 
-    // The CLI injects the VCS delta as changedFiles at deliver; a changed file
-    // without a rationale must block delivery.
-    await assert.rejects(
-      async () =>
-        await deliverSession({
-          ctx,
-          missionId: mission.displayId,
-          sessionKey: attached.sessionKey,
-          summary: 'Deliver without rationale',
-          changedFiles: [{ filePath: 'src/feature.ts', vcsStatus: 'M' }]
-        }),
-      /Missing change rationale for src\/feature\.ts/
-    );
-
-    // With the rationale, delivery succeeds and the file is recorded and covered.
+    await syncChanges({
+      ctx,
+      missionId: mission.displayId,
+      sessionKey: attached.sessionKey,
+      changes: [
+        {
+          filePath: 'src/feature.ts',
+          idempotencyKey: 'deliver-feature-1',
+          source: 'declared_edit',
+          quality: 'direct',
+          overlap: false
+        }
+      ]
+    });
     await deliverSession({
       ctx,
       missionId: mission.displayId,
       sessionKey: attached.sessionKey,
-      summary: 'Deliver with rationale',
-      changedFiles: [{ filePath: 'src/feature.ts', vcsStatus: 'M' }],
-      changeRationales: [
-        {
-          file_path: 'src/feature.ts',
-          label: 'Feature',
-          summary: 'Added feature.',
-          why: 'Required by the objective.',
-          impact: 'New behavior ships.'
-        }
-      ]
+      summary: 'Deliver without rationale'
     });
 
     const files = await listChangedFilesForReview({
       ctx,
-      missionId: mission.displayId,
-      includeCurrent: false
+      missionId: mission.displayId
     });
     assert.equal(files.length, 1);
     assert.equal(files[0]?.filePath, 'src/feature.ts');
-    assert.equal(files[0]?.coverage, 'covered');
+    assert.equal(files[0]?.coverage, 'missing_rationale');
 
     await db.close();
   });
 
-  it('accepts the camelCase filePath alias for a rationale', async () => {
+  it('links a canonical filePath rationale to synchronized evidence', async () => {
     const { db, ctx } = await setup();
-    const { mission } = await submittedMission(ctx, 'Rationale Alias');
+    const { mission } = await submittedMission(ctx, 'Canonical Rationale');
     const attached = await attachSession({ ctx, missionId: mission.displayId });
 
-    // An agent that generalizes the changed-files `filePath` casing to a
-    // rationale must no longer be rejected; the alias normalizes to file_path
-    // and satisfies coverage for the same path.
+    await syncChanges({
+      ctx,
+      missionId: mission.displayId,
+      sessionKey: attached.sessionKey,
+      changes: [
+        {
+          filePath: 'src/alias.ts',
+          idempotencyKey: 'canonical-rationale-1',
+          source: 'declared_edit',
+          quality: 'direct',
+          overlap: false
+        }
+      ]
+    });
     await deliverSession({
       ctx,
       missionId: mission.displayId,
       sessionKey: attached.sessionKey,
-      summary: 'Deliver with camelCase rationale path',
-      changedFiles: [{ filePath: 'src/alias.ts', vcsStatus: 'M' }],
+      summary: 'Deliver with canonical rationale path',
       changeRationales: [
         {
           filePath: 'src/alias.ts',
@@ -602,8 +716,7 @@ describe('deliverSession mechanical change capture', () => {
 
     const files = await listChangedFilesForReview({
       ctx,
-      missionId: mission.displayId,
-      includeCurrent: false
+      missionId: mission.displayId
     });
     assert.equal(files.length, 1);
     assert.equal(files[0]?.filePath, 'src/alias.ts');
@@ -612,27 +725,31 @@ describe('deliverSession mechanical change capture', () => {
     await db.close();
   });
 
-  it('skips rationale coverage when the run declares no file changes', async () => {
+  it('requires no no-file-change override when evidence exists without a rationale', async () => {
     const { db, ctx } = await setup();
     const { mission, objectiveId } = await submittedMission(ctx, 'No File Changes');
     const attached = await attachSession({ ctx, missionId: mission.displayId });
 
-    // A changed file was observed earlier, but the explicit no-file-changes
-    // declaration must skip coverage so a genuine no-op run can deliver.
-    await updateSession({
+    await syncChanges({
       ctx,
       missionId: mission.displayId,
       sessionKey: attached.sessionKey,
-      summary: 'Observed a leftover edit',
-      changedFiles: [{ filePath: 'src/leftover.ts', vcsStatus: 'M' }]
+      changes: [
+        {
+          filePath: 'src/leftover.ts',
+          idempotencyKey: 'leftover-1',
+          source: 'declared_edit',
+          quality: 'direct',
+          overlap: false
+        }
+      ]
     });
 
     const result = await deliverSession({
       ctx,
       missionId: mission.displayId,
       sessionKey: attached.sessionKey,
-      summary: 'No files changed in this run.',
-      noFileChanges: true
+      summary: 'Delivery remains independent from rationale metadata.'
     });
     assert.ok(result.deliveryId);
 
@@ -644,93 +761,140 @@ describe('deliverSession mechanical change capture', () => {
     await db.close();
   });
 
-  it('allows per-file rationale skips for changes the agent did not make', async () => {
+  it('salvages canonical rationale items independently without blocking delivery', async () => {
     const { db, ctx } = await setup();
-    const { mission } = await submittedMission(ctx, 'Skip Rationale');
+    const { mission } = await submittedMission(ctx, 'Rationale Salvage');
     const attached = await attachSession({ ctx, missionId: mission.displayId });
 
+    await syncChanges({
+      ctx,
+      missionId: mission.displayId,
+      sessionKey: attached.sessionKey,
+      changes: [
+        {
+          filePath: 'src/mine.ts',
+          idempotencyKey: 'rationale-salvage-1',
+          source: 'declared_edit',
+          quality: 'direct',
+          overlap: false
+        },
+        {
+          filePath: 'src/invalid.ts',
+          idempotencyKey: 'rationale-salvage-2',
+          source: 'declared_edit',
+          quality: 'direct',
+          overlap: false
+        }
+      ]
+    });
     await deliverSession({
       ctx,
       missionId: mission.displayId,
       sessionKey: attached.sessionKey,
-      summary: 'Deliver with skip override',
-      changedFiles: [
-        { filePath: 'src/mine.ts', vcsStatus: 'M' },
-        { filePath: 'webapp/package.json', vcsStatus: 'M' }
-      ],
+      summary: 'Deliver with one valid rationale',
       changeRationales: [
         {
-          file_path: 'src/mine.ts',
+          filePath: 'src/mine.ts',
           label: 'Mine',
           summary: 'My change.',
           why: 'Required.',
           impact: 'Ships.'
-        }
-      ],
-      skipRationaleFor: [
+        },
         {
-          file_path: 'webapp/package.json',
-          reason: 'Concurrent host-side edit; not made by this mission.'
-        }
+          filePath: 'src/invalid.ts',
+          file_path: 'src/invalid.ts',
+          label: 'Retired alias',
+          summary: 'Contains a retired alias.',
+          why: 'Exercise exact-key validation.',
+          impact: 'The item is ignored with a warning.'
+        } as never
       ]
     });
 
     const files = await listChangedFilesForReview({
       ctx,
-      missionId: mission.displayId,
-      includeCurrent: false
+      missionId: mission.displayId
     });
     assert.equal(files.find(file => file.filePath === 'src/mine.ts')?.coverage, 'covered');
-    assert.equal(files.find(file => file.filePath === 'webapp/package.json')?.coverage, 'skipped');
+    assert.equal(
+      files.find(file => file.filePath === 'src/invalid.ts')?.coverage,
+      'missing_rationale'
+    );
 
-    await db.close();
-  });
-
-  it('rejects skip and rationale for the same file', async () => {
-    const { db, ctx } = await setup();
-    const { mission } = await submittedMission(ctx, 'Skip Conflict');
-    const attached = await attachSession({ ctx, missionId: mission.displayId });
-
-    await assert.rejects(
-      async () =>
-        await deliverSession({
-          ctx,
-          missionId: mission.displayId,
-          sessionKey: attached.sessionKey,
-          summary: 'Conflicting skip and rationale',
-          changedFiles: [{ filePath: 'src/conflict.ts', vcsStatus: 'M' }],
-          changeRationales: [
-            {
-              file_path: 'src/conflict.ts',
-              label: 'Conflict',
-              summary: 'Changed.',
-              why: 'Needed.',
-              impact: 'Ships.'
-            }
-          ],
-          skipRationaleFor: [{ file_path: 'src/conflict.ts', reason: 'Not mine.' }]
-        }),
-      /Cannot skip and provide a rationale for the same file/
+    const payload = (await ctx.db.get(
+      `SELECT payload_json FROM deliveries WHERE mission_id = ? ORDER BY created_at DESC LIMIT 1`,
+      [mission.id]
+    )) as { payload_json: string };
+    assert.match(
+      JSON.stringify(JSON.parse(payload.payload_json).deliveryReport.warnings),
+      /changeRationales/
     );
 
     await db.close();
   });
 
-  it('enforces coverage objective-scoped across no-session records', async () => {
+  it('deduplicates rationale paths and rejects unknown hunk keys without blocking delivery', async () => {
+    const { db, ctx } = await setup();
+    const { mission } = await submittedMission(ctx, 'Rationale Deduplication');
+    const attached = await attachSession({ ctx, missionId: mission.displayId });
+
+    const delivered = await deliverSession({
+      ctx,
+      missionId: mission.displayId,
+      sessionKey: attached.sessionKey,
+      summary: 'Deliver duplicate rationale input safely.',
+      changeRationales: [
+        {
+          filePath: 'src/duplicate.ts',
+          label: 'Earlier rationale',
+          summary: 'Earlier summary.',
+          why: 'Earlier reason.',
+          impact: 'Earlier impact.',
+          hunks: [{ header: '@@ -1 +1 @@', line: 1 } as never]
+        },
+        {
+          filePath: 'src/duplicate.ts',
+          label: 'Latest rationale',
+          summary: 'Latest summary.',
+          why: 'Latest reason.',
+          impact: 'Latest impact.',
+          hunks: [{ header: '@@ -2 +2 @@' }]
+        }
+      ]
+    });
+
+    const rationales = (await ctx.db.all(
+      `SELECT label, hunks_json FROM change_rationales WHERE delivery_id = ?`,
+      [delivered.deliveryId]
+    )) as Array<{ label: string; hunks_json: string }>;
+    assert.deepEqual(rationales, [
+      { label: 'Latest rationale', hunks_json: JSON.stringify([{ header: '@@ -2 +2 @@' }]) }
+    ]);
+
+    const payload = (await ctx.db.get(`SELECT payload_json FROM deliveries WHERE id = ?`, [
+      delivered.deliveryId
+    ])) as { payload_json: string };
+    const warnings = JSON.parse(payload.payload_json).deliveryReport.warnings as string[];
+    assert.ok(warnings.some(warning => warning.includes('hunks[0]: unsupported fields')));
+    assert.ok(warnings.some(warning => warning.includes('last valid item for filePath wins')));
+
+    await db.close();
+  });
+
+  it('delivers with objective-scoped no-session evidence and no rationale', async () => {
     const { db, ctx } = await setup();
     const { project, mission, objectiveId } = await submittedMission(ctx, 'Objective Scope');
     const attached = await attachSession({ ctx, missionId: mission.displayId });
 
-    // A changed file recorded with no session (record-work style) for this
-    // objective. Under the old session-scoped check a different session's
-    // delivery would miss it; objective-scoped coverage must still require it.
+    // Sessionless record-work evidence remains visible on the objective, but its
+    // missing optional rationale cannot block a later attached delivery.
     const now = nowIso();
     await ctx.db.run(
       `INSERT INTO changed_files
            (id, workspace_id, project_id, mission_id, objective_id, session_id, file_path, vcs_status,
             current_diff_state, first_observed_at, last_observed_at, observed_metadata_json,
             created_at, updated_at, revision)
-         VALUES (?, ?, ?, ?, ?, NULL, ?, 'M', 'present', ?, ?, '{}', ?, ?, 1)`,
+         VALUES (?, ?, ?, ?, ?, NULL, ?, 'M', 'unknown', ?, ?, '{}', ?, ?, 1)`,
       [
         'cf-scope-1',
         ctx.workspace.id,
@@ -745,116 +909,13 @@ describe('deliverSession mechanical change capture', () => {
       ]
     );
 
-    await assert.rejects(
-      async () =>
-        await deliverSession({
-          ctx,
-          missionId: mission.displayId,
-          sessionKey: attached.sessionKey,
-          summary: 'Deliver objective'
-        }),
-      /Missing change rationale for src\/shared\.ts/
-    );
-
-    await db.close();
-  });
-
-  it('reconciles a stale changed_files row to resolved once observedDirtyPaths no longer includes it', async () => {
-    const { db, ctx } = await setup();
-    const { mission } = await submittedMission(ctx, 'Reconcile Stale');
-    const attached = await attachSession({ ctx, missionId: mission.displayId });
-
-    // First delivery: an over-attributed file (e.g. recorded while an edit hook
-    // was inert) gets a real rationale so delivery succeeds.
-    await deliverSession({
+    const delivered = await deliverSession({
       ctx,
       missionId: mission.displayId,
       sessionKey: attached.sessionKey,
-      summary: 'First delivery',
-      changedFiles: [{ filePath: 'src/leftover.ts', vcsStatus: 'M' }],
-      changeRationales: [
-        {
-          file_path: 'src/leftover.ts',
-          label: 'Leftover',
-          summary: 'Touched leftover.',
-          why: 'Needed then.',
-          impact: 'Ships.'
-        }
-      ]
+      summary: 'Deliver objective'
     });
-
-    // Follow-up: the file is no longer dirty. observedDirtyPaths reflects the
-    // current (clean) worktree, so the stale row should be reconciled to
-    // 'resolved' and never demand a rationale again.
-    const resumed = await resumeFollowUp({ ctx, missionId: mission.displayId });
-    const result = await deliverSession({
-      ctx,
-      missionId: mission.displayId,
-      sessionKey: resumed.sessionKey,
-      summary: 'Follow-up delivery with a clean tree',
-      observedDirtyPaths: []
-    });
-    assert.ok(result.deliveryId);
-
-    const row = (await ctx.db.get(
-      `SELECT current_diff_state FROM changed_files WHERE file_path = ? AND deleted_at IS NULL`,
-      ['src/leftover.ts']
-    )) as { current_diff_state: string } | undefined;
-    assert.equal(row?.current_diff_state, 'resolved');
-
-    const files = await listChangedFilesForReview({
-      ctx,
-      missionId: mission.displayId,
-      includeCurrent: false
-    });
-    assert.equal(files.find(file => file.filePath === 'src/leftover.ts')?.coverage, 'resolved');
-
-    await db.close();
-  });
-
-  it('structures a missing_rationale error with per-path classification and a ready-to-use skip', async () => {
-    const { db, ctx } = await setup();
-    const { mission } = await submittedMission(ctx, 'Structured Error');
-    const attached = await attachSession({ ctx, missionId: mission.displayId });
-
-    await assert.rejects(
-      async () =>
-        await deliverSession({
-          ctx,
-          missionId: mission.displayId,
-          sessionKey: attached.sessionKey,
-          summary: 'Deliver without rationale',
-          changedFiles: [
-            { filePath: 'src/mine.ts', vcsStatus: 'M', attribution: 'mine' },
-            {
-              filePath: 'src/theirs.ts',
-              vcsStatus: 'M',
-              attribution: 'claimed',
-              claimedByMissionIds: ['coo:999']
-            },
-            { filePath: 'src/ambiguous.ts', vcsStatus: 'M', attribution: 'unclaimed' }
-          ]
-        }),
-      (error: unknown) => {
-        assert.ok(error instanceof ServiceError);
-        assert.equal(error.code, 'missing_rationale');
-        const details = error.details as {
-          missingRationales: Array<{
-            filePath: string;
-            classification: string;
-            suggestedSkip: { filePath: string; reason: string } | null;
-          }>;
-        };
-        const byPath = new Map(details.missingRationales.map(entry => [entry.filePath, entry]));
-        assert.equal(byPath.get('src/mine.ts')?.classification, 'mine');
-        assert.equal(byPath.get('src/mine.ts')?.suggestedSkip, null);
-        assert.equal(byPath.get('src/theirs.ts')?.classification, 'claimed');
-        assert.match(byPath.get('src/theirs.ts')?.suggestedSkip?.reason ?? '', /coo:999/);
-        assert.equal(byPath.get('src/ambiguous.ts')?.classification, 'unclaimed');
-        assert.ok(byPath.get('src/ambiguous.ts')?.suggestedSkip);
-        return true;
-      }
-    );
+    assert.ok(delivered.deliveryId);
 
     await db.close();
   });

@@ -136,7 +136,8 @@ enforce them and the adapter conformance suite must test that enforcement.
    uses worktrees puts a concurrently launched same-resource objective on its own
    branch (`<mission branch>-<objectives.display_key>`) in its own worktree, and a
    mission that runs without worktrees has one checkout that both objectives share
-   deliberately — file attribution then comes from each session's touched-file log.
+   deliberately — file attribution then comes only from each explicitly bound
+   objective/session ledger, never from a checkout-wide scan.
 3. **Unique per-mission positions.** `position` is an integer, unique per mission,
    0-based.
 4. **Auto-assigned position on insert.** When a caller omits `position`, the system

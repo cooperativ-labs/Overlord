@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import {
+  applyDeliveryPresentation,
   deriveDeterministicActionCandidates,
   reconcileDeliveryComposeDraft
 } from './delivery-compose.js';
@@ -114,5 +115,12 @@ describe('delivery-compose reconciliation', () => {
     assert.ok(candidates.some(candidate => candidate.category === 'database'));
     assert.ok(candidates.some(candidate => candidate.category === 'environment'));
     assert.ok(candidates.every(candidate => candidate.source === 'deterministic_rule'));
+  });
+
+  it('preserves normalization warnings when composition replaces the presentation', () => {
+    const report = { ...baseReport(), warnings: ['Ignored malformed advisory evidence.'] };
+    const presentation = reconcileDeliveryComposeDraft({ report, draft: null });
+
+    assert.deepEqual(applyDeliveryPresentation({ report, presentation }).warnings, report.warnings);
   });
 });

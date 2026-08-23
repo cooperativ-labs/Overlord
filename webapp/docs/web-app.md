@@ -92,7 +92,7 @@ Requirements:
 - Activity timeline with progress updates, follow-ups, decisions, questions, and deliveries.
 - Shared context viewer.
 - Artifact viewer.
-- Delivery summary and rationale coverage.
+- Delivery summary and changed-file evidence with optional rationale annotations.
 
 ### Execution Controls
 
@@ -118,18 +118,19 @@ Requirements:
 - Redelivery indicator for `pending_delivery`.
 - Buttons/actions to complete, reopen, add follow-up objective, or ask for changes.
 
-### Current Changes
+### File Changes
 
 Requirements:
 
-- Show read-only local VCS status for linked project directory.
-- Show changed file list and diff hunks grouped by mission/objective when available.
-- Link hunks to recorded change rationales where possible.
-- Filter by mission/objective.
-- Show unassigned/current workspace changes when a local diff cannot be associated with a specific objective.
-- Show unavailable state if no local directory is linked or the browser cannot access local diffs.
+- Show the mission's durable changed-file observations, grouped by logical resource
+  when needed.
+- Show source, quality, overlap, bounded hook health, and optional rationale prose.
+- Keep observed paths visible when no rationale exists.
+- Open a path in the configured editor only when its target/resource root is available.
+- Never scan Git status or infer an unassigned workspace set.
 
-For a browser-only local web app, this may need a local backend process to read VCS state. It should not upload repository contents unless the user explicitly requests an artifact/attachment, and it must not perform VCS mutations.
+The projection contains metadata only. It never uploads repository contents and
+never performs VCS mutations.
 
 ### Settings
 

@@ -10,9 +10,10 @@
  *   connectors/HARNESS-MATRIX.md                  cross-adapter matrix
  *   cli/src/agent-session/catalog.generated.ts    compiled catalog the runtime reads
  *   connectors/adapters/<agent>/conformance-manifest.yaml
- *                                                 the DEPRECATED hook-named capability
- *                                                 projection plus integrationShape,
- *                                                 capabilityTier, and the descriptor digest
+ *                                                 integrationShape, capabilityTier, and the
+ *                                                 descriptor pointer/digest
+ *   contract/examples/connector-claude-conformance-manifest.yaml
+ *                                                 reference connector projection
  *
  * Nothing here is hand-maintained prose: a matrix that is 60% accurate is worse than none,
  * because it is trusted. The tier is DERIVED — never authored — and a `supported` claim whose
@@ -28,33 +29,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse as parseYaml } from 'yaml';
 
-import { runFixture } from './harness-capability-fixtures.mjs';
+import { FIXTURE_KINDS, runFixture } from './harness-capability-fixtures.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const adaptersDir = path.join(repoRoot, 'connectors', 'adapters');
 const extensionPointsPath = path.join(repoRoot, 'contract', 'extension-points.yaml');
-
-const CAPABILITY_IDS = [
-  'observe.prompt',
-  'observe.toolCall',
-  'observe.toolResult',
-  'observe.fileEdit',
-  'observe.sessionLifecycle',
-  'decide.shell',
-  'decide.mcp',
-  'decide.fileWrite',
-  'decide.anyTool',
-  'decide.universal',
-  'answer.structuredQuestion',
-  'answer.persistentAllow',
-  'inject.midTurn',
-  'inject.turnBoundary',
-  'inject.nextTurn',
-  'terminal.concurrentAnswer',
-  'terminal.statusSurface'
-];
-const STATUSES = ['supported', 'unsupported', 'not-implemented', 'unverified'];
-const INTEGRATION_SHAPES = ['callback', 'extension', 'controlPlane'];
+const descriptorSchemaPath = path.join(repoRoot, 'contract', 'harness-capabilities.schema.yaml');
+const componentsPath = path.join(repoRoot, 'contract', 'components.yaml');
 const TIER_NAMES = ['Unsupported', 'Observational', 'Answerable', 'Conversational'];
 const DO_NOT_EDIT =
   '<!-- GENERATED FILE — DO NOT EDIT. Source: harness-capabilities.yaml. Regenerate with `yarn connectors:capabilities`. -->';
@@ -62,6 +43,11 @@ const DO_NOT_EDIT =
 function readYaml(filePath) {
   return parseYaml(readFileSync(filePath, 'utf8'));
 }
+
+const descriptorSchema = readYaml(descriptorSchemaPath);
+const CAPABILITY_IDS = descriptorSchema.properties.capabilities.propertyNames.enum;
+const STATUSES = descriptorSchema.$defs.capabilityStatus.enum;
+const INTEGRATION_SHAPES = descriptorSchema.properties.integrationShape.enum;
 
 function sha256(text) {
   return createHash('sha256').update(text).digest('hex');
@@ -76,55 +62,153 @@ function listAdapters() {
 
 // ── Validation ────────────────────────────────────────────────────────────────
 //
-// The schema file is the normative document; this is its executable enforcement,
-// written out longhand so a failure names the exact rule that was broken.
+// The checked-in JSON Schema is normative. This small Draft 2020-12 subset interpreter covers
+// every keyword that schema uses, so adding a required field, enum member, pattern, conditional,
+// or unknown-property rule changes validation without duplicating it below. Cross-file and
+// executable-evidence invariants remain explicit after schema validation.
 
-function validateStatusEvidence({ label, node, errors }) {
-  if (!STATUSES.includes(node.status)) {
-    errors.push(`${label}: status must be one of ${STATUSES.join(' | ')} (got ${node.status})`);
-    return;
-  }
-  if (node.status === 'unsupported' && (!node.reason || !node.evidenceRef)) {
-    errors.push(`${label}: unsupported requires both reason and evidenceRef`);
-  }
-  if ((node.status === 'not-implemented' || node.status === 'unverified') && !node.trackedAs) {
-    errors.push(`${label}: ${node.status} requires trackedAs`);
-  }
-  if (node.status === 'supported' && node.evidenceRef) {
-    errors.push(
-      `${label}: promoting a status out of unsupported must replace evidenceRef with executable fixtures`
-    );
-  }
+function resolveSchemaRef(rootSchema, ref) {
+  if (typeof ref !== 'string' || !ref.startsWith('#/')) return null;
+  return ref
+    .slice(2)
+    .split('/')
+    .map(segment => segment.replaceAll('~1', '/').replaceAll('~0', '~'))
+    .reduce((node, segment) => node?.[segment], rootSchema);
 }
 
-function validateDescriptor({ adapter, descriptor, approved, errors }) {
+function valueMatchesType(value, type) {
+  if (type === 'null') return value === null;
+  if (type === 'array') return Array.isArray(value);
+  if (type === 'object') return value !== null && typeof value === 'object' && !Array.isArray(value);
+  if (type === 'integer') return Number.isInteger(value);
+  if (type === 'number') return typeof value === 'number' && Number.isFinite(value);
+  return typeof value === type;
+}
+
+export function validateAgainstSchema(value, schema, rootSchema = schema, location = '$') {
+  if (!schema || typeof schema !== 'object') return [];
+  const errors = [];
+
+  if (schema.$ref) {
+    const target = resolveSchemaRef(rootSchema, schema.$ref);
+    if (!target) return [`${location}: unresolved schema reference ${schema.$ref}`];
+    errors.push(...validateAgainstSchema(value, target, rootSchema, location));
+  }
+
+  for (const branch of schema.allOf ?? []) {
+    errors.push(...validateAgainstSchema(value, branch, rootSchema, location));
+  }
+  if (schema.anyOf) {
+    const matches = schema.anyOf.some(
+      branch => validateAgainstSchema(value, branch, rootSchema, location).length === 0
+    );
+    if (!matches) errors.push(`${location}: must match at least one allowed schema`);
+  }
+  if (
+    schema.if &&
+    validateAgainstSchema(value, schema.if, rootSchema, location).length === 0 &&
+    schema.then
+  ) {
+    errors.push(...validateAgainstSchema(value, schema.then, rootSchema, location));
+  }
+
+  if (schema.const !== undefined && value !== schema.const) {
+    errors.push(`${location}: must equal ${JSON.stringify(schema.const)}`);
+  }
+  if (schema.enum && !schema.enum.some(entry => JSON.stringify(entry) === JSON.stringify(value))) {
+    errors.push(`${location}: must be one of ${schema.enum.map(JSON.stringify).join(', ')}`);
+  }
+
+  if (schema.type) {
+    const accepted = Array.isArray(schema.type) ? schema.type : [schema.type];
+    if (!accepted.some(type => valueMatchesType(value, type))) {
+      errors.push(`${location}: must be ${accepted.join(' or ')}`);
+      return errors;
+    }
+  }
+
+  const isObject = value !== null && typeof value === 'object' && !Array.isArray(value);
+  if (isObject) {
+    const properties = schema.properties ?? {};
+    for (const key of schema.required ?? []) {
+      if (!Object.hasOwn(value, key)) errors.push(`${location}: missing required field ${key}`);
+    }
+    if (schema.minProperties !== undefined && Object.keys(value).length < schema.minProperties) {
+      errors.push(`${location}: must contain at least ${schema.minProperties} properties`);
+    }
+    for (const key of Object.keys(value)) {
+      if (schema.propertyNames) {
+        errors.push(
+          ...validateAgainstSchema(key, schema.propertyNames, rootSchema, `${location}.${key}`)
+        );
+      }
+      if (Object.hasOwn(properties, key)) {
+        errors.push(
+          ...validateAgainstSchema(value[key], properties[key], rootSchema, `${location}.${key}`)
+        );
+      } else if (schema.additionalProperties === false) {
+        errors.push(`${location}: unexpected field ${key}`);
+      } else if (schema.additionalProperties && typeof schema.additionalProperties === 'object') {
+        errors.push(
+          ...validateAgainstSchema(
+            value[key],
+            schema.additionalProperties,
+            rootSchema,
+            `${location}.${key}`
+          )
+        );
+      }
+    }
+  }
+
+  if (Array.isArray(value)) {
+    if (schema.minItems !== undefined && value.length < schema.minItems) {
+      errors.push(`${location}: must contain at least ${schema.minItems} items`);
+    }
+    if (schema.uniqueItems) {
+      const keys = value.map(entry => JSON.stringify(entry));
+      if (new Set(keys).size !== keys.length) errors.push(`${location}: items must be unique`);
+    }
+    if (schema.items) {
+      value.forEach((entry, index) => {
+        errors.push(
+          ...validateAgainstSchema(entry, schema.items, rootSchema, `${location}[${index}]`)
+        );
+      });
+    }
+  }
+
+  if (typeof value === 'string') {
+    if (schema.minLength !== undefined && value.length < schema.minLength) {
+      errors.push(`${location}: must contain at least ${schema.minLength} characters`);
+    }
+    if (schema.pattern && !new RegExp(schema.pattern).test(value)) {
+      errors.push(`${location}: must match ${schema.pattern}`);
+    }
+  }
+  if (typeof value === 'number') {
+    if (schema.minimum !== undefined && value < schema.minimum) {
+      errors.push(`${location}: must be at least ${schema.minimum}`);
+    }
+    if (schema.maximum !== undefined && value > schema.maximum) {
+      errors.push(`${location}: must be at most ${schema.maximum}`);
+    }
+  }
+  return errors;
+}
+
+function validateDescriptor({ adapter, descriptor, errors }) {
   const at = field => `${adapter}/harness-capabilities.yaml ${field}`;
 
-  if (descriptor.schemaVersion !== 1) errors.push(at('schemaVersion') + ': must be 1');
+  for (const error of validateAgainstSchema(descriptor, descriptorSchema)) {
+    errors.push(`${adapter}/harness-capabilities.yaml ${error}`);
+  }
+
   if (descriptor.adapter !== adapter) {
     errors.push(at('adapter') + `: must equal the directory name (${adapter})`);
   }
-  if (!descriptor.codec) errors.push(at('codec') + ': required');
-  if (!INTEGRATION_SHAPES.includes(descriptor.integrationShape)) {
-    errors.push(at('integrationShape') + `: must be one of ${INTEGRATION_SHAPES.join(' | ')}`);
-  }
-  if (!descriptor.harness?.name || !descriptor.harness?.versionScheme) {
-    errors.push(at('harness') + ': name and versionScheme are required');
-  }
-
-  validateStatusEvidence({ label: at('binding'), node: descriptor.binding ?? {}, errors });
-  validateStatusEvidence({
-    label: at('decisionHold'),
-    node: descriptor.decisionHold ?? {},
-    errors
-  });
 
   const capabilities = descriptor.capabilities ?? {};
-  for (const id of Object.keys(capabilities)) {
-    if (!CAPABILITY_IDS.includes(id)) {
-      errors.push(at(`capabilities.${id}`) + ': not in the closed capability-id vocabulary');
-    }
-  }
   for (const id of CAPABILITY_IDS) {
     const node = capabilities[id];
     if (!node) {
@@ -134,67 +218,12 @@ function validateDescriptor({ adapter, descriptor, approved, errors }) {
       );
       continue;
     }
-    validateStatusEvidence({ label: at(`capabilities.${id}`), node, errors });
-    if (node.status === 'supported' && (!node.native || !(node.fixtures?.length > 0))) {
+    if (node.status === 'supported' && node.evidenceRef) {
       errors.push(
-        at(`capabilities.${id}`) + ': supported requires native and at least one fixture'
+        at(`capabilities.${id}`) +
+          ': promoting a status out of unsupported must replace evidenceRef with fixtures'
       );
     }
-  }
-
-  for (const hazard of descriptor.hazards ?? []) {
-    if (hazard.mitigation === 'implemented' && !hazard.fixture) {
-      errors.push(at(`hazards.${hazard.id}`) + ': mitigation implemented requires a fixture');
-    }
-    if (
-      (hazard.verification === 'unverified' || hazard.mitigation === 'required') &&
-      !hazard.trackedAs
-    ) {
-      errors.push(
-        at(`hazards.${hazard.id}`) + ': unverified or required-mitigation hazards need trackedAs'
-      );
-    }
-  }
-
-  if (!descriptor.unboundSessionFixture) {
-    errors.push(
-      at('unboundSessionFixture') +
-        ': required. A negative test proving an unbound session is untouched is mandatory per adapter.'
-    );
-  }
-
-  // Legacy projection inputs must stay inside the approved (deprecated) closed sets, and the
-  // hook-named interaction flags may only be emitted when this descriptor actually backs them.
-  const legacyCapabilities = descriptor.legacy?.capabilities ?? [];
-  const legacyHookTypes = descriptor.legacy?.hookTypes ?? [];
-  for (const flag of legacyCapabilities) {
-    if (!approved.capabilities.includes(flag)) {
-      errors.push(at(`legacy.capabilities`) + `: ${flag} is not in approvedConnectorCapabilities`);
-    }
-  }
-  for (const hookType of legacyHookTypes) {
-    if (!approved.hookTypes.includes(hookType)) {
-      errors.push(at(`legacy.hookTypes`) + `: ${hookType} is not in approvedHookTypes`);
-    }
-  }
-  const claimsNative = nativeName =>
-    Object.values(capabilities).some(
-      node => node.native === nativeName && node.status !== 'unsupported'
-    );
-  if (legacyCapabilities.includes('permissionHook')) {
-    if (!legacyHookTypes.includes('PermissionRequest') || !claimsNative('PermissionRequest')) {
-      errors.push(
-        at('legacy.capabilities') +
-          ': permissionHook may only be declared when the descriptor declares a non-unsupported' +
-          ' capability on the native PermissionRequest event AND hookTypes includes PermissionRequest'
-      );
-    }
-  }
-  if (legacyHookTypes.includes('PermissionRequest') && !claimsNative('PermissionRequest')) {
-    errors.push(
-      at('legacy.hookTypes') +
-        ': PermissionRequest may not be declared when no capability rides on that native event'
-    );
   }
 }
 
@@ -204,6 +233,7 @@ function collectFixtureRefs(descriptor) {
   const refs = new Set();
   if (descriptor.binding?.fixture) refs.add(descriptor.binding.fixture);
   if (descriptor.decisionHold?.fixture) refs.add(descriptor.decisionHold.fixture);
+  if (descriptor.mutationHooks?.fixture) refs.add(descriptor.mutationHooks.fixture);
   for (const node of Object.values(descriptor.capabilities ?? {})) {
     for (const fixture of node.fixtures ?? []) refs.add(fixture);
   }
@@ -233,23 +263,32 @@ function runAdapterFixtures({ adapter, descriptor, errors }) {
     }
   }
 
-  // The unbound-session negative test is allowed to RECORD side effects that exist today, but
-  // only if the descriptor also declares the hazard that tracks removing them. Silence about a
-  // recorded side effect would let the negative test read as clean when it is not.
-  const unbound = descriptor.unboundSessionFixture;
-  if (unbound && existsSync(path.join(adaptersDir, adapter, unbound))) {
-    const fixture = JSON.parse(readFileSync(path.join(adaptersDir, adapter, unbound), 'utf8'));
-    const sideEffects =
-      (fixture.expect?.sandboxWrites?.length ?? 0) > 0 ||
-      (fixture.expect?.cliInvocations?.length ?? 0) > 0;
-    const declared = (descriptor.hazards ?? []).some(
-      hazard => hazard.id === 'unbound-session-side-effects'
-    );
-    if (sideEffects && !declared) {
+  const mutationFixture = descriptor.mutationHooks?.fixture;
+  if (mutationFixture) {
+    const result = results[mutationFixture];
+    if (result?.kind !== 'mutation-window') {
+      errors.push(`${adapter}: mutationHooks.fixture must be a mutation-window fixture`);
+    } else if (result.observed?.classification !== descriptor.mutationHooks.classification) {
       errors.push(
-        `${adapter}: the unbound-session fixture records a write or CLI invocation, so the descriptor` +
-          ` must declare the \`unbound-session-side-effects\` hazard with a tracker`
+        `${adapter}: mutationHooks classification ${descriptor.mutationHooks.classification} does not match ` +
+          `fixture classification ${result.observed?.classification ?? 'missing'}`
       );
+    }
+  }
+
+  // An executable unbound-session fixture is a hard negative boundary. A fixture cannot make a
+  // side effect acceptable by declaring it as the expected result.
+  const unbound = descriptor.unboundSessionFixture;
+  const unboundResult = unbound ? results[unbound] : null;
+  if (unboundResult?.kind === 'script-io') {
+    if ((unboundResult.observed?.cliInvocations?.length ?? 0) > 0) {
+      errors.push(`${adapter}: unbound-session fixture attempted a CLI invocation`);
+    }
+    if ((unboundResult.observed?.sandboxWrites?.length ?? 0) > 0) {
+      errors.push(`${adapter}: unbound-session fixture wrote inside its sandbox`);
+    }
+    if (unboundResult.observed?.stdout !== '' || unboundResult.observed?.stderr !== '') {
+      errors.push(`${adapter}: unbound-session fixture must be silent`);
     }
   }
   if (descriptor.integrationShape !== 'controlPlane') {
@@ -272,7 +311,7 @@ function runAdapterFixtures({ adapter, descriptor, errors }) {
 // ── Tier derivation ───────────────────────────────────────────────────────────
 //
 // No tier is authored. A connector's tier is the highest one whose every requirement it
-// demonstrates with a passing fixture; claimed-but-unproven is worse than absent, because the
+// demonstrates with a passing fixture; asserted-but-unproven is worse than absent, because the
 // UI renders controls that do nothing.
 
 function deriveTier({ descriptor }) {
@@ -320,7 +359,7 @@ function renderEvidence(node) {
   return node.trackedAs ? `tracked as \`${node.trackedAs}\`` : '';
 }
 
-function renderAdapterPage({ adapter, descriptor, tier, digest }) {
+function renderAdapterPage({ adapter, descriptor, tier, digest, fixtureResults }) {
   const lines = [];
   lines.push(DO_NOT_EDIT, '');
   lines.push(`# ${descriptor.harness.name} — Overlord agent-session capabilities`, '');
@@ -387,6 +426,45 @@ function renderAdapterPage({ adapter, descriptor, tier, digest }) {
   );
   lines.push(`| Evidence | ${renderEvidence(descriptor.decisionHold)} |`, '');
   if (descriptor.decisionHold.notes) lines.push(descriptor.decisionHold.notes.trim(), '');
+
+  lines.push('## Mutation-window evidence', '');
+  lines.push('| Field | Value |', '| --- | --- |');
+  lines.push(`| Classification | \`${descriptor.mutationHooks.classification}\` |`);
+  lines.push(`| Executable fixture | \`${descriptor.mutationHooks.fixture}\` |`, '');
+  if (descriptor.mutationHooks.notes) lines.push(descriptor.mutationHooks.notes.trim(), '');
+  if (descriptor.mutationHooks.reason) lines.push(descriptor.mutationHooks.reason.trim(), '');
+  if (descriptor.mutationHooks.classification === 'post-only') {
+    const directPathEvidence =
+      fixtureResults?.[descriptor.mutationHooks.fixture]?.observed?.directPathEvidence === 'direct';
+    if (directPathEvidence) {
+      lines.push(
+        'A completion callback path normalized by the connector-owned codec as `file.edited`',
+        'records objective-bound, non-exclusive `declared_edit`/`direct` evidence.',
+        'Codec-normalized read, search, and fetch callbacks are silent no-ops. Mutation-capable',
+        'callbacks without a normalized edit path, plus shell, generic, unknown, and unmapped',
+        'callbacks, record unavailable evidence health.',
+        ''
+      );
+    } else {
+      lines.push(
+        'The completion fixture proves post-only timing but exposes no normalized `file.edited`',
+        'path. Runtime file evidence is unavailable for this adapter.',
+        ''
+      );
+    }
+  } else if (descriptor.mutationHooks.classification === 'paired') {
+    lines.push(
+      'The fixture proves a matching native pre/post window. Runtime window evidence must retain',
+      'the same session, call, workspace, tool, outcome, and direct-path semantics.',
+      ''
+    );
+  } else {
+    lines.push(
+      'File attribution may not be synthesized for this adapter. Missing mutation evidence is',
+      'reported as unavailable health, never recovered from a worktree-wide delta.',
+      ''
+    );
+  }
 
   lines.push('## Capabilities', '');
   lines.push('| Capability | Status | Native | Evidence |', '| --- | --- | --- | --- |');
@@ -468,10 +546,9 @@ function renderMatrix({ adapters }) {
   lines.push(DO_NOT_EDIT, '');
   lines.push('# Harness capability matrix', '');
   lines.push(
-    "Generated from each adapter's `harness-capabilities.yaml`. This file replaces the",
-    'hand-written capability table that used to live in `connectors/README.md`: prose maintained',
-    'by hand alongside code drifts, and a matrix that is 60% accurate is worse than none because',
-    'it is trusted.',
+    "Generated from each adapter's fixture-backed `harness-capabilities.yaml` descriptor.",
+    'The descriptor is the single authored capability source; the tier and every table cell are',
+    'derived.',
     '',
     'Legend: ✅ supported (fixture-proven) · ⛔ unsupported (harness cannot) · 🚧 not-implemented',
     '(buildable, unbuilt) · ❓ unverified (find out first).',
@@ -479,13 +556,13 @@ function renderMatrix({ adapters }) {
   );
 
   lines.push('## Adapters', '');
-  lines.push('| Adapter | Harness | Verified version | Shape | Tier | Binding | Decision hold |');
-  lines.push('| --- | --- | --- | --- | --- | --- | --- |');
+  lines.push('| Adapter | Harness | Verified version | Shape | Tier | Mutation evidence | Binding | Decision hold |');
+  lines.push('| --- | --- | --- | --- | --- | --- | --- | --- |');
   for (const { adapter, descriptor, tier } of adapters) {
     lines.push(
       `| [\`${adapter}\`](adapters/${adapter}/CAPABILITIES.md) | ${descriptor.harness.name} | ${
         descriptor.harness.verifiedVersion ? `\`${descriptor.harness.verifiedVersion}\`` : '—'
-      } | \`${descriptor.integrationShape}\` | ${tier} (${TIER_NAMES[tier]}) | ${renderStatusCell(
+      } | \`${descriptor.integrationShape}\` | ${tier} (${TIER_NAMES[tier]}) | \`${descriptor.mutationHooks.classification}\` | ${renderStatusCell(
         descriptor.binding
       )} | ${renderStatusCell(descriptor.decisionHold)} |`
     );
@@ -563,8 +640,18 @@ const CODEC_RULE_KEYS = new Set([
   'promptPath',
   'detailPath',
   'outcomePath',
-  'fileEditKind'
+  'fileEditKind',
+  'filePathPaths'
 ]);
+
+function isBoundedDottedPath(value) {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= 200 &&
+    /^[A-Za-z0-9_$-]+(?:\.[A-Za-z0-9_$-]+)*$/.test(value)
+  );
+}
 
 /**
  * Validate a codec declaration.
@@ -574,7 +661,7 @@ const CODEC_RULE_KEYS = new Set([
  * *invented* key is how a codec author would try to route a native field somewhere the
  * interpreter does not sanction.
  */
-function validateCodec({ adapter, codec, errors, integrationShape }) {
+export function validateCodec({ adapter, codec, errors, integrationShape }) {
   const at = field => `${adapter} codec ${field}`;
   if (codec?.codecVersion !== 1) errors.push(`${at('codecVersion')}: must be 1`);
   if (codec?.adapter !== adapter) {
@@ -623,9 +710,31 @@ function validateCodec({ adapter, codec, errors, integrationShape }) {
         `${at(`events.${rule.native}`)}: kind "${rule.kind}" is outside the normalized vocabulary`
       );
     }
-    if (rule.fileEditKind && !NORMALIZED_EVENT_KINDS.includes(rule.fileEditKind)) {
+    if (rule.fileEditKind !== undefined && rule.fileEditKind !== 'file.edited') {
       errors.push(
-        `${at(`events.${rule.native}`)}: fileEditKind "${rule.fileEditKind}" is outside the normalized vocabulary`
+        `${at(`events.${rule.native}`)}: fileEditKind must be the literal "file.edited"`
+      );
+    }
+    if (rule.fileEditKind === 'file.edited') {
+      if (!isBoundedDottedPath(rule.toolPath) || !isBoundedDottedPath(rule.inputPath)) {
+        errors.push(
+          `${at(`events.${rule.native}`)}: fileEditKind requires toolPath and inputPath`
+        );
+      }
+      if (
+        !Array.isArray(rule.filePathPaths) ||
+        rule.filePathPaths.length === 0 ||
+        rule.filePathPaths.length > 8 ||
+        rule.filePathPaths.some(path => !isBoundedDottedPath(path)) ||
+        new Set(rule.filePathPaths).size !== rule.filePathPaths.length
+      ) {
+        errors.push(
+          `${at(`events.${rule.native}`)}: filePathPaths must contain 1-8 unique bounded dotted paths relative to inputPath`
+        );
+      }
+    } else if (rule.filePathPaths !== undefined) {
+      errors.push(
+        `${at(`events.${rule.native}`)}: filePathPaths is only valid with fileEditKind "file.edited"`
       );
     }
     if (!['agent', 'user', 'system'].includes(rule.origin)) {
@@ -719,7 +828,7 @@ function renderDecisionCodecRegistry({ codecs }) {
 }
 
 function renderCatalog({ adapters }) {
-  const catalog = adapters.map(({ adapter, descriptor, tier, digest }) => ({
+  const catalog = adapters.map(({ adapter, descriptor, tier, digest, fixtureResults }) => ({
     adapter,
     codec: descriptor.codec,
     integrationShape: descriptor.integrationShape,
@@ -740,6 +849,32 @@ function renderCatalog({ adapters }) {
       defaultTimeoutSeconds: descriptor.decisionHold.defaultTimeoutSeconds ?? null,
       maxTimeoutSeconds: descriptor.decisionHold.maxTimeoutSeconds ?? null
     },
+    mutationHooks: (() => {
+      const hasDirectPath =
+        fixtureResults?.[descriptor.mutationHooks.fixture]?.observed?.directPathEvidence ===
+        'direct';
+      return {
+        classification: descriptor.mutationHooks.classification,
+        pathEvidenceSource:
+          !hasDirectPath
+            ? 'unavailable'
+            : descriptor.mutationHooks.classification === 'paired'
+              ? 'window_observed'
+              : 'declared_edit',
+        pathEvidenceQuality:
+          !hasDirectPath
+            ? 'unavailable'
+            : descriptor.mutationHooks.classification === 'paired'
+              ? 'window'
+              : 'direct',
+        shellEvidence: 'unavailable',
+        pathlessEvidence: 'unavailable',
+        fixture: descriptor.mutationHooks.fixture,
+        reason: descriptor.mutationHooks.reason?.trim() ?? null,
+        evidenceRef: descriptor.mutationHooks.evidenceRef ?? null,
+        notes: descriptor.mutationHooks.notes?.trim() ?? null
+      };
+    })(),
     capabilities: Object.fromEntries(
       CAPABILITY_IDS.map(id => {
         const node = descriptor.capabilities[id];
@@ -796,6 +931,8 @@ export type AgentSessionCapabilityStatus =
 
 export type HarnessIntegrationShape = 'callback' | 'extension' | 'controlPlane';
 
+export type MutationHookClassification = 'paired' | 'post-only' | 'unsupported';
+
 export type HarnessCapabilityEntry = {
   status: AgentSessionCapabilityStatus;
   native: string | null;
@@ -830,6 +967,17 @@ export type HarnessDescriptor = {
     defaultTimeoutSeconds: number | null;
     maxTimeoutSeconds: number | null;
   };
+  mutationHooks: {
+    classification: MutationHookClassification;
+    pathEvidenceSource: 'declared_edit' | 'window_observed' | 'unavailable';
+    pathEvidenceQuality: 'direct' | 'window' | 'unavailable';
+    shellEvidence: 'unavailable';
+    pathlessEvidence: 'unavailable';
+    fixture: string;
+    reason: string | null;
+    evidenceRef: string | null;
+    notes: string | null;
+  };
   capabilities: Record<AgentSessionCapabilityId, HarnessCapabilityEntry>;
   hazards: Array<{
     id: string;
@@ -857,30 +1005,28 @@ export function findHarnessDescriptor(adapter: string): HarnessDescriptor | unde
 /**
  * Rewrite the generated block of a conformance manifest in place.
  *
- * The manifest keeps its hand-authored identity fields; only the connector capability
- * projection is regenerated, so there are never two hand-authored capability sources that
- * can disagree.
+ * The manifest keeps its hand-authored identity and install fields. Contract version and the
+ * connector descriptor projection are regenerated, so stale manifests cannot validate against
+ * an older contract and there is no second capability source to drift.
  */
-function projectConformanceManifest({ manifestText, descriptor, tier, digest, descriptorPath }) {
-  const legacyCapabilities = [...(descriptor.legacy?.capabilities ?? [])];
-  const legacyHookTypes = [...(descriptor.legacy?.hookTypes ?? [])];
-
+function projectConformanceManifest({
+  manifestText,
+  descriptor,
+  tier,
+  digest,
+  descriptorPath,
+  contractVersion
+}) {
   const block = [
     '  # ── GENERATED: do not edit by hand ───────────────────────────────────────────',
     `  # Projected from ${descriptorPath} by \`yarn connectors:capabilities\`.`,
-    '  # `capabilities` and `hookTypes` are the DEPRECATED hook-named projection, retained for',
-    '  # one release. `harnessCapabilities` is the authoritative source.',
+    '  # The harness descriptor and its executable fixtures are the only capability source.',
     `  integrationShape: ${descriptor.integrationShape}`,
     `  capabilityTier: ${tier}`,
     '  harnessCapabilities:',
     `    path: ${descriptorPath}`,
     `    schemaVersion: ${descriptor.schemaVersion}`,
     `    digest: "${digest}"`,
-    '  capabilities:',
-    ...legacyCapabilities.map(flag => `    - ${flag}`),
-    ...(legacyHookTypes.length > 0
-      ? ['  hookTypes:', ...legacyHookTypes.map(hookType => `    - ${hookType}`)]
-      : []),
     '  # ── END GENERATED ────────────────────────────────────────────────────────────'
   ].join('\n');
 
@@ -910,7 +1056,7 @@ function projectConformanceManifest({ manifestText, descriptor, tier, digest, de
       continue;
     }
     if (insideConnector) {
-      // Drop every previously generated or hand-authored projection field.
+      // Replace the current generated projection as one atomic block.
       if (/^\s*#\s*──\s*GENERATED/.test(line)) {
         while (index < lines.length && !/^\s*#\s*──\s*END GENERATED/.test(lines[index])) index += 1;
         index += 1;
@@ -920,11 +1066,7 @@ function projectConformanceManifest({ manifestText, descriptor, tier, digest, de
         }
         continue;
       }
-      if (
-        /^\s{2}(capabilities|hookTypes|integrationShape|capabilityTier|harnessCapabilities):/.test(
-          line
-        )
-      ) {
+      if (/^\s{2}(integrationShape|capabilityTier|harnessCapabilities):/.test(line)) {
         index += 1;
         while (index < lines.length && /^\s{4,}\S/.test(lines[index])) index += 1;
         if (!injected) {
@@ -939,7 +1081,10 @@ function projectConformanceManifest({ manifestText, descriptor, tier, digest, de
   }
   if (!injected) output.push(block);
 
-  return output.join('\n').replace(/\n{3,}/g, '\n\n');
+  return output
+    .join('\n')
+    .replace(/^contractVersion:\s*.*$/m, `contractVersion: "${contractVersion}"`)
+    .replace(/\n{3,}/g, '\n\n');
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -948,10 +1093,22 @@ function main() {
   const check = process.argv.includes('--check');
   const errors = [];
   const extensionPoints = readYaml(extensionPointsPath);
-  const approved = {
-    capabilities: extensionPoints.approvedConnectorCapabilities ?? [],
-    hookTypes: extensionPoints.approvedHookTypes ?? []
-  };
+  const components = readYaml(componentsPath);
+  const contractVersion = String(components.contractVersion);
+  const vocabularyChecks = [
+    ['capability ids', CAPABILITY_IDS, extensionPoints.agentSession?.capabilityIds ?? []],
+    ['capability statuses', STATUSES, extensionPoints.agentSession?.capabilityStatuses ?? []],
+    ['integration shapes', INTEGRATION_SHAPES, extensionPoints.agentSession?.integrationShapes ?? []],
+    ['fixture kinds', FIXTURE_KINDS, extensionPoints.agentSession?.fixtureKinds ?? []]
+  ];
+  for (const [label, schemaValues, registryValues] of vocabularyChecks) {
+    if (JSON.stringify(schemaValues) !== JSON.stringify(registryValues)) {
+      errors.push(
+        `harness descriptor ${label} drift between contract/harness-capabilities.schema.yaml ` +
+          'and contract/extension-points.yaml'
+      );
+    }
+  }
 
   const adapters = [];
   const codecs = [];
@@ -967,9 +1124,9 @@ function main() {
     }
     const raw = readFileSync(descriptorPath, 'utf8');
     const descriptor = parseYaml(raw);
-    validateDescriptor({ adapter, descriptor, approved, errors });
+    validateDescriptor({ adapter, descriptor, errors });
     if (errors.length > 0 && !descriptor?.capabilities) continue;
-    runAdapterFixtures({ adapter, descriptor, errors });
+    const fixtureResults = runAdapterFixtures({ adapter, descriptor, errors });
     if (descriptor?.codecSpec) {
       const codecPath = path.join(adaptersDir, adapter, descriptor.codecSpec);
       if (!existsSync(codecPath)) {
@@ -995,6 +1152,7 @@ function main() {
       descriptor,
       digest: sha256(raw),
       tier: deriveTier({ descriptor }),
+      fixtureResults,
       descriptorPath: `connectors/adapters/${adapter}/harness-capabilities.yaml`
     });
   }
@@ -1017,12 +1175,30 @@ function main() {
         filePath: manifestPath,
         contents: projectConformanceManifest({
           manifestText: readFileSync(manifestPath, 'utf8'),
+          contractVersion,
           ...entry
         })
       });
     } else {
       errors.push(`${entry.adapter}: missing conformance-manifest.yaml`);
     }
+  }
+  const connectorExamplePath = path.join(
+    repoRoot,
+    'contract',
+    'examples',
+    'connector-claude-conformance-manifest.yaml'
+  );
+  const claudeEntry = adapters.find(entry => entry.adapter === 'claude');
+  if (claudeEntry && existsSync(connectorExamplePath)) {
+    outputs.push({
+      filePath: connectorExamplePath,
+      contents: projectConformanceManifest({
+        manifestText: readFileSync(connectorExamplePath, 'utf8'),
+        contractVersion,
+        ...claudeEntry
+      })
+    });
   }
   outputs.push({
     filePath: path.join(repoRoot, 'connectors', 'HARNESS-MATRIX.md'),
@@ -1080,4 +1256,6 @@ function main() {
   for (const file of drift) console.log(`- ${file}`);
 }
 
-main();
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  main();
+}

@@ -24,9 +24,9 @@ Use this mode when the prompt already contains a mission ID or explicitly says t
    During long mechanical stretches with nothing meaningful to post, send `ovld protocol heartbeat --session-key <sessionKey> --mission-id <mission_id> [--phase execute] [--percent <0-100>] [--note "..."]` instead of an empty update.
 5. Follow-up messages after the initial mission are captured automatically by the installed `UserPromptSubmit` hook and stay in discussion intent while the mission is in review. Do not post `user_follow_up` manually unless the hook is unavailable.
 6. If blocked, call `ovld protocol ask --session-key <sessionKey> --mission-id <mission_id> --question "..."` and stop.
-7. Deliver last with `ovld protocol deliver --session-key <sessionKey> --mission-id <mission_id> --summary "..."`, including `changeRationales` only for meaningful behavioral file changes made as part of this mission.
+7. Deliver last with `ovld protocol deliver --session-key <sessionKey> --mission-id <mission_id> --summary "..."`. Normal delivery is summary-only; objective-ledger evidence syncs independently.
 
-At delivery, provide `deliveryReport.agentReport` through `--payload-json` / `--payload-file`: use
+When review facts genuinely apply, you may add `deliveryReport.agentReport` through `--payload-json` / `--payload-file`: use
 `humanActions`, `tradeoffsMade`, `knownRisks`, `deferredWork`, and `assumptions`, with empty arrays
 when none apply. Human actions are concrete work a user must perform outside completed agent work;
 never include Git operations or routine review/testing. Tradeoffs record the implementation decision,
@@ -86,7 +86,7 @@ Use this mode when the conversation starts normally and the user asks the agent 
 5. If the user wants to establish a persistent session with a mission by ID, run `ovld protocol attach --mission-id <mission_id>`.
 6. If the user wants to find a mission but does not know the ID, run `ovld protocol search-missions --query "..." --status execute,review` and ask the user to confirm.
 7. If you need to understand project routing before prompting, use `ovld protocol discover-project`.
-8. If the user wants to **record work that is already finished** in this chat (for example, something you just built in a chat app) as a completed mission, run `ovld protocol record-work` (or the hosted `overlord_record_work` MCP tool). This creates a mission with one completed objective, records the file changes with rationales, lands it in the review column, and runs the standard Gemini delivery summary — all in one call, with no `attach`/`deliver`. Do **not** use it for in-progress work. The exact submission format is in [reference/record-work.md](reference/record-work.md).
+8. If the user wants to **record work that is already finished** in this chat (for example, something you just built in a chat app) as a completed mission, run `ovld protocol record-work` (or the hosted `overlord_record_work` MCP tool). This creates a mission with one completed objective, records explicitly supplied changed files and optional rationales, lands it in the review column, and runs the standard Gemini delivery summary — all in one call, with no `attach`/`deliver`. Do **not** use it for in-progress work. The exact submission format is in [reference/record-work.md](reference/record-work.md).
 9. If you need other lifecycle commands or flags, run `ovld protocol help` and use the real subcommand list instead of guessing.
 10. Once you attach to a mission, switch back to Mode 1 and follow the full mission lifecycle.
 
@@ -105,7 +105,7 @@ ovld protocol attach --objective-id $OBJECTIVE_ID                            # d
 The third form works because an objective display id (`coo:695.k7xm`) already
 names its mission — use it when reconnecting and the mission id is not at hand.
 
-In a git workspace, `attach` records a VCS baseline (changed file paths from local `git status`) so delivery can compute the run-attributable delta automatically.
+`attach` establishes the objective/session binding used by the local change ledger. It does not snapshot or diff the working tree.
 
 ### Update
 
@@ -159,26 +159,19 @@ ovld protocol ask --session-key <sessionKey> --mission-id $MISSION_ID --question
 ```bash
 ovld protocol deliver --session-key <sessionKey> \
   --mission-id $MISSION_ID \
-  --summary "Narrative: what you did, next steps." \
-  --artifacts-json '[{"type":"next_steps","label":"Next steps","content":"..."}]' \
-  --change-rationales-json '[{"label":"Short reviewer title","file_path":"path/to/file.ts","summary":"What changed.","why":"Why it changed.","impact":"Behavioral impact.","hunks":[{"header":"@@ -10,6 +10,14 @@"}]}]'
+  --summary "Narrative: what you did and next steps."
 ```
 
-Use `--payload-json` when the full delivery object fits comfortably inline (roughly under 8 KB). Larger inline `--*-json` values are **rejected** — use `--payload-file -`, `--change-rationales-file -`, or `--artifacts-file -` and stream JSON on stdin so no scratch file needs to be created or removed. If you use `--payload-file`, `--artifacts-file`, or `--change-rationales-file` with a real path, treat that file as ephemeral scratch data under `.overlord/tmp` and remove it after delivery.
+This is the normal delivery shape: a summary is sufficient. The CLI syncs objective-ledger
+evidence independently before the lifecycle transition.
 
-When delivery includes many change rationales, keep `--summary` inline and pipe rationales on stdin:
+Artifacts, optional change rationales, and a delivery report remain current annotations when
+they add review value. Use `--payload-json` when the full delivery object fits comfortably inline
+(roughly under 8 KB). Larger inline `--*-json` values are rejected; stream them through the
+corresponding `--*-file -` flag. A real scratch path belongs under `.overlord/tmp` and should be
+removed after delivery.
 
-```bash
-ovld protocol deliver --session-key <sessionKey> --mission-id $MISSION_ID \
-  --summary "Narrative: what you did and next steps." \
-  --change-rationales-file - <<'EOF'
-[
-  {"label":"Add backoff","file_path":"lib/api.ts","summary":"Added retry.","why":"Transient failures.","impact":"Retries 3x."}
-]
-EOF
-```
-
-If `heartbeat` succeeds but `deliver` or `update` fails, the session is likely fine — retry with large JSON on stdin instead of inline `--*-json`.
+If `heartbeat` succeeds but `deliver` or `update` fails, the session is likely fine — retry with the corresponding `--*-file -` flag instead of inline `--*-json`.
 
 ### Delivery Evidence
 
@@ -204,24 +197,23 @@ Only list a human action when a person must perform a concrete non-Git step outs
 agent's completed work (for example, add a secret, run a production migration, deploy, or
 configure an external integration). Never list committing, pushing, opening a pull request,
 reviewing code, or ordinary tests. A tradeoff must state the decision, alternatives considered,
-and rationale. Missing evidence is normalized to empty arrays for compatibility, but agents
-should report it when applicable.
+and rationale. Omit the report when none of these facts apply.
 
-### Preflight: check your changes before delivering
+### Change ledger health (diagnostic)
 
-Never hand-triage `git status` to figure out which dirty files are yours. Run the preflight first:
+Use this only to inspect or troubleshoot objective-ledger synchronization and hook health:
 
 ```bash
 ovld protocol changes --mission-id $MISSION_ID
 ```
 
-This is local-only (no backend call) and prints every currently dirty path already classified exactly the way `deliver` will:
-
-- `mine` — confirmed by this session's own touched-files log; report these with a real `changeRationales` entry.
-- `claimed` — confirmed by another active session's touched-files log; exclude these, or use the `suggestedSkipRationaleFor` entries it prints verbatim.
-- `unclaimed` — dirty, but confirmed by nobody's log (e.g. a `.overlordignore`-eligible file, or a Bash-mediated change the hook hasn't caught up with yet); still report these for completeness, but confirm or `--skip-rationale-for-*` them explicitly.
-
-It also prints `draftRationales` prefilled from local edit notes for `mine`/`unclaimed` paths — reuse these instead of re-deriving a rationale from scratch when they already describe the change accurately.
+It may flush pending metadata-only ledger entries for the attached objective, then reports the
+binding, synchronization result, evidence source/quality, and bounded hook health. It does not
+read or diff the worktree, classify files by agent ownership, draft rationales, or gate delivery.
+Native paths normalized by the connector-owned codec as `file.edited` are valid, non-exclusive
+`declared_edit`/`direct` evidence. Codec-normalized read, search, and fetch callbacks are silent
+no-ops. Mutation-capable callbacks without a normalized edit path, plus shell, generic, unknown,
+and unmapped callbacks, report unavailable evidence health.
 
 ### Shared worktree safety (critical)
 
@@ -232,60 +224,44 @@ The working tree may contain file changes from **other agents, missions, or obje
 - `git checkout`, `git restore`, `git reset`, or any command that rolls back uncommitted edits you did not make for this mission
 - Deleting or overwriting files you do not recognize as your own
 
-If `deliver` fails with `missing_rationale` for a file you did not change, or `git status` shows dirty paths outside your mission:
-
-1. **Do not** touch those files — leave concurrent work intact.
-2. **Do not** fabricate rationales for work you did not do.
-3. Run `ovld protocol changes --mission-id $MISSION_ID` (see **Preflight** above) rather than reasoning about `git status` by hand — it already excludes/classifies concurrent work.
-4. Re-deliver with `--skip-rationale-for-json` (or `--skip-rationale-for-file -`) listing each unrelated path and a truthful `reason`. A rejected `deliver` also returns this same classification plus ready-to-use skip entries in its error `details.missingRationales` — paste them into the retry instead of re-deriving. Use `ovld protocol ask` only when you still cannot tell whether a dirty file belongs to this mission.
-
-```bash
-ovld protocol deliver --session-key <sessionKey> --mission-id $MISSION_ID \
-  --summary "Implemented X." \
-  --change-rationales-json '[{"file_path":"src/feature.ts","label":"Feature","summary":"...","why":"...","impact":"..."}]' \
-  --skip-rationale-for-json '[{"file_path":"webapp/package.json","reason":"Concurrent host-side edit; not made by this mission."}]'
-```
-
-Report only **your** mission's changes in the delivery payload and `changeRationales`. Excluding unrelated files from the delivery report is correct; **removing them from disk is not**.
-
-Changed files are captured for you: the CLI records a VCS baseline at attach and, at deliver, reports the run-attributable delta (current `git status` minus baseline) automatically — you do not pass `--changed-files-json`. Include `changeRationales` only for meaningful file changes made as part of this mission. Do not include other tracked worktree changes in the delivery report, payload, artifacts, or `changeRationales`, even to label them as pre-existing, concurrent, or unrelated. If `deliver` rejects with a `missing_rationale` error for a file you did not change for this mission, do not add a rationale for that file and **do not revert the file**; skip rationale coverage for that path with `--skip-rationale-for-*` (see **Shared worktree safety** above). Coverage is aggregated per objective. If the run changed no files, declare it explicitly:
-
-```bash
-ovld protocol deliver --session-key <sessionKey> --mission-id $MISSION_ID \
-  --summary "Investigated X; no code changes were required." --no-file-changes
-```
+If `git status` shows dirty paths outside your work, leave them intact. The ledger is evidence
+about the addressed objective, not an ownership arbiter for a shared worktree. Read-only work
+uses the same summary-only delivery as every other objective.
 
 Ordinary deliver artifacts should use `next_steps`, `test_results`, `migration`, `note`, `url`, or `decision`.
 
-### Record Change Rationales
+### Optional Change Rationales
 
-These are structured protocol payloads that Overlord stores as first-class rows in the `file_changes` table. Inline `--change-rationales-json` is fine for a few entries; larger arrays are **rejected** — use `--change-rationales-file -` and stream JSON on stdin. The same ~8 KB inline limit applies to `--payload-json` and other `--*-json` flags.
+Rationales are optional annotations. Overlord records which files an objective changed on its
+own, so a delivery never needs them and can never fail for lacking them. Supply one only when
+the reason for a change is not obvious from the diff.
 
-**Required fields per entry:** `file_path`, `label`, `summary`, `why`, `impact` (all strings). `filePath` (camelCase) is accepted as an alias for `file_path` and normalized to the canonical form, so matching the changed-files casing no longer fails validation. Do not wrap the entry under a `rationale` key — that is a different internal shape and will fail CLI validation.
+Attach them to `update` while working, or to `deliver` at the end. Inline
+`--change-rationales-json` is fine for a few entries; larger arrays are **rejected** — use
+`--change-rationales-file -` and stream JSON on stdin. The same ~8 KB inline limit applies to
+`--payload-json` and other `--*-json` flags.
 
-**Never revert, restore, or delete file changes from other agents or missions** to make delivery succeed. Leave unrelated dirty files intact and use `--skip-rationale-for-*` (or `ovld protocol ask` when attribution is unclear).
+**Fields per entry:** `filePath`, `label`, `summary`, `why`, `impact` (all strings).
+Use the canonical `filePath` spelling. Do not wrap the entry under a `rationale` key.
 
-```bash
-ovld protocol record-change-rationales --session-key <sessionKey> --mission-id $MISSION_ID \
-  --summary "Recorded rationale details for the latest code changes." --phase execute \
-  --change-rationales-json '[{"label":"Add backoff","file_path":"lib/api.ts","summary":"Added retry.","why":"Transient failures.","impact":"Retries 3x.","hunks":[{"header":"@@ -22,4 +22,18 @@"}]}]'
-```
+**Never revert, restore, or delete file changes from other agents or missions.** Leave
+unrelated dirty files intact.
 
 ```bash
 ovld protocol update --session-key <sessionKey> --mission-id $MISSION_ID \
   --summary "Added retry logic." --phase execute \
-  --change-rationales-json '[{"label":"Add backoff","file_path":"lib/api.ts","summary":"Added retry.","why":"Transient failures.","impact":"Retries 3x.","hunks":[{"header":"@@ -22,4 +22,18 @@"}]}]'
+  --change-rationales-json '[{"label":"Add backoff","filePath":"lib/api.ts","summary":"Added retry.","why":"Transient failures.","impact":"Retries 3x.","hunks":[{"header":"@@ -22,4 +22,18 @@"}]}]'
 ```
 
-For many entries (roughly 5+), pipe via stdin to avoid shell quoting failures:
+For many entries (roughly 5+), stream them through `--change-rationales-file -` to avoid shell quoting failures:
 
 ```bash
-ovld protocol record-change-rationales --session-key <sessionKey> --mission-id $MISSION_ID \
-  --summary "Recorded rationale details for the latest code changes." --phase execute \
+ovld protocol deliver --session-key <sessionKey> --mission-id $MISSION_ID \
+  --summary "Narrative: what you did and next steps." \
   --change-rationales-file - <<'EOF'
 [
-  {"label":"Add backoff","file_path":"lib/api.ts","summary":"Added retry.","why":"Transient failures.","impact":"Retries 3x."},
-  {"label":"Update config","file_path":"lib/config.ts","summary":"Added timeout.","why":"Match new defaults.","impact":"Requests time out after 30s."}
+  {"label":"Add backoff","filePath":"lib/api.ts","summary":"Added retry.","why":"Transient failures.","impact":"Retries 3x."},
+  {"label":"Update config","filePath":"lib/config.ts","summary":"Added timeout.","why":"Match new defaults.","impact":"Requests time out after 30s."}
 ]
 EOF
 ```
@@ -375,28 +351,30 @@ When you need a project ID for a protocol command and the mission prompt did not
 
 1. `--project-id` if explicitly provided.
 2. Otherwise, let the CLI match the current working directory (the default behavior of `create`, `prompt`, `discover-project`).
-3. If working-directory resolution returns nothing, read `.overlord/project.json` from the cwd (or any ancestor you have access to). Use the project whose `projects[]` entry has `isPrimary: true` (also mirrored as the top-level `projectId`) and pass that id via `--project-id`. If no entry is primary, use the sole / top-level project. To associate missions with a different linked project, pass that project's id explicitly.
+3. If working-directory resolution returns nothing, read `.overlord/project.json` from the cwd (or any ancestor you have access to). Select the `projects[]` entry with `isPrimary: true` and pass its id via `--project-id`. If the array or primary entry is missing, treat the metadata as invalid and run `ovld doctor`; do not fall back to a top-level projection. To associate missions with a different linked project, pass that project's id explicitly.
 
 **Over MCP (web agents and hosted tools, where the server cannot see the agent's cwd):**
 
 1. `projectId` (hosted MCP) or `project_id` (local shim) if explicitly provided or found in the mission/context.
-2. Read `.overlord/project.json` from the directory the user is accessing. Prefer the `projects[]` entry with `isPrimary: true` (the top-level `projectId` is that same projection) and pass it as `projectId` / `project_id`. If the file has no `projects` array, use the top-level `projectId` (legacy single-project files).
+2. Read `.overlord/project.json` from the directory the user is accessing. Select the `projects[]` entry with `isPrimary: true` and pass its id as `projectId` / `project_id`.
 3. As a last resort, try `workingDirectory` / `working_directory` resolution. If a device fingerprint is available, include `deviceFingerprint` / `device_fingerprint`.
 
-A checkout may be linked to more than one project. Default mission association to the `isPrimary: true` project — that is whichever project most recently set this resource as primary. `ovld protocol discover-project` returns that project plus additive `linkedProjects`. Only ask the user which linked project to use when you need a different one than that default, or when no entry is primary and more than one project is listed.
+A checkout may be linked to more than one project. Default mission association to the `isPrimary: true` project — that is whichever project most recently set this resource as primary. `ovld protocol discover-project` returns that project plus additive `linkedProjects`. Only ask the user which linked project to use when you need a different one than that default or the canonical primary entry is missing.
 
-## Change Rationales
+## Delivery And Change Evidence
 
-Always include `changeRationales` when delivering; optionally on updates during long-running work. Your job is rationale for _what_ changed and why — the CLI captures _which_ files changed (see **Deliver** above).
+Normal delivery contains the narrative summary only. The CLI synchronizes objective-ledger
+evidence independently; neither the agent nor a shared working tree supplies an ownership list.
 
-- Rationales only for meaningful behavioral changes you made for this mission; skip formatting-only noise. Do not send `file_changes` as an artifact.
-- Do not include unrelated worktree changes in the delivery report, payload, artifacts, or rationales — even to label them pre-existing.
-- Run `ovld protocol changes --mission-id $MISSION_ID` before writing rationales by hand (see **Preflight** under **Deliver**) — it drafts rationales from local edit notes for files you touched.
-- **Never revert, restore, or delete file changes from other agents or missions** to satisfy delivery. Use `--skip-rationale-for-*` for paths you did not change (see **Shared worktree safety** under **Deliver**).
-- If `deliver` rejects with `missing_rationale` for a file you did not change, do not invent a rationale and do not revert the file; re-deliver with `--skip-rationale-for-*` and a truthful reason — the error's `details.missingRationales` already names which paths are safe to skip.
-- Read-only runs: `--no-file-changes` (see **Deliver** above).
+- Add a change rationale only when a non-obvious implementation reason materially helps review.
+- Do not send `file_changes` as an artifact or reconstruct paths from `git status`.
+- `ovld protocol changes` is a ledger-sync and hook-health diagnostic. It does not classify
+  ownership or draft annotations.
+- Do not include unrelated worktree changes in delivery annotations or artifacts.
+- **Never revert, restore, or delete file changes from other agents or missions.**
+- A read-only result uses the same delivery command; summarize that no code change was needed.
 
-Field shape, inline vs stdin piping, and `record-change-rationales` syntax are in **Deliver** and **Record Change Rationales** in **CLI Command Reference** above.
+The optional annotation shape and `--change-rationales-file -` guidance are under **Optional Change Rationales** above.
 
 ## Rules
 
@@ -409,7 +387,7 @@ Field shape, inline vs stdin piping, and `record-change-rationales` syntax are i
 - After delivery, answer ordinary questions and clarifications in discussion mode; hook capture records those user turns as `user_follow_up` activity.
 - When explicit follow-up implementation starts on a delivered/review mission and no live session exists, call `ovld protocol resume-follow-up --mission-id <mission_id> --summary "Beginning follow-up work."` and use the returned session key before code changes.
 - When explicit follow-up implementation starts while a live delivered session still accepts updates, call `ovld protocol update --begin-follow-up-work --follow-up-intent execution --summary "Beginning follow-up work."` before code changes or `--phase execute`.
-- During follow-up execution, post progress updates and record change rationales for each file modified, the same as during initial execution.
+- During follow-up execution, post progress updates and let the objective ledger capture file evidence as during initial execution.
 - Record important non-file decisions with `--event-type decision` or `--event-type discussion_summary`.
 - The `summary` in deliver is what the PM reads first, so write it as a narrative, not a command list.
 - When a summary or question contains backticks, `$vars`, or other shell-special characters, always use `--summary-file -` (or `--question-file -`) with a single-quoted heredoc (`<<'EOF'`). Never retry by stripping or escaping content — pipe stdin instead. See [reference/shell-escaping.md](reference/shell-escaping.md).
@@ -419,7 +397,7 @@ Field shape, inline vs stdin piping, and `record-change-rationales` syntax are i
 - If a protocol or MCP call fails with auth/session errors, run `ovld auth repair` yourself before asking the user to log in again or proceed without Overlord updates.
 - If you must run `ovld auth login`, `--organization-id <id>` is optional — it validates/scopes that login or command but does not create a stored default organization.
 - Do not add or commit changes unless the user explicitly asks you to commit.
-- **Never revert, restore, or delete concurrent work from other agents or missions** to deliver your own changes. Leave unrelated dirty files intact and use `--skip-rationale-for-*` when you know a dirty path is not yours.
+- **Never revert, restore, or delete concurrent work from other agents or missions** to deliver your own changes. Leave unrelated dirty files intact.
 - Delivery is the concluding step. After delivering, stop implementation work unless the user explicitly asks for follow-up execution; once follow-up execution is complete, deliver again.
 
 ## Reference
@@ -429,6 +407,6 @@ Field shape, inline vs stdin piping, and `record-change-rationales` syntax are i
 - [reference/mcp.md](reference/mcp.md) — MCP tool naming, key casing, hosted vs local shim defaults
 - [reference/devices.md](reference/devices.md) — Device fingerprints, project resources, and `--for-human`
 - [reference/context.md](reference/context.md) — Shared state, attachments, and large artifact policy
-- [reference/shell-escaping.md](reference/shell-escaping.md) — Heredoc stdin piping for special characters in summaries and payloads
+- [reference/shell-escaping.md](reference/shell-escaping.md) — Heredoc input through explicit `--*-file -` flags
 
-<!-- version: 0.5.17 -->
+<!-- version: 0.6.0 -->

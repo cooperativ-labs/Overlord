@@ -264,3 +264,72 @@ describe('window-or-tab preference reaching a delegated viewer', () => {
     assert.equal(parsed.launcher, 'iTerm2');
   });
 });
+
+describe('the provider and the viewer stay orthogonal', () => {
+  test('provider=latch with no viewer is a valid, complete choice', () => {
+    // A Latch session can be created headless: the agent runs, and nobody is
+    // looking at it yet. Collapsing Latch into the terminal list would make
+    // this state unrepresentable.
+    const profile: TerminalProfile = {
+      launcher: null,
+      placement: 'window',
+      chord: null,
+      executionProvider: { kind: 'latch', executable: 'latch' },
+      openViewerOnLaunch: false
+    };
+    const resolved = resolveLaunchSession({ profile });
+
+    assert.equal(resolved.executionProvider.kind, 'latch');
+    assert.equal(resolved.viewer.kind, 'inline');
+    assert.equal(resolved.viewer.launcher, null);
+    assert.equal(resolved.viewer.openOnLaunch, false);
+
+    // And it survives a storage round trip rather than being normalized into
+    // some viewer the user did not pick.
+    const stored = parseTerminalProfileJson(serializeTerminalProfile(profile));
+    assert.equal(stored.executionProvider?.kind, 'latch');
+    assert.equal(stored.launcher, null);
+    assert.equal(stored.openViewerOnLaunch, false);
+  });
+
+  test('changing the viewer leaves the provider session untouched', () => {
+    // Latch attach is exclusive: opening a session in a different terminal
+    // steals the one surface rather than creating a second one. That is only
+    // safe if changing the viewer does not also change the provider, which
+    // would recreate the agent session instead of moving the window.
+    const provider = { kind: 'latch' as const, executable: '/opt/homebrew/bin/latch' };
+    const before: TerminalProfile = {
+      launcher: 'iTerm2',
+      placement: 'window',
+      chord: null,
+      executionProvider: provider
+    };
+    const after: TerminalProfile = { ...before, launcher: 'Terminal', placement: 'tab' };
+
+    const first = resolveLaunchSession({ profile: before });
+    const second = resolveLaunchSession({ profile: after });
+
+    assert.equal(first.viewer.kind, 'iterm');
+    assert.equal(second.viewer.kind, 'terminal');
+    assert.equal(second.viewer.openAs, 'tab');
+    assert.deepEqual(second.executionProvider, first.executionProvider);
+    assert.equal(second.executionProviderSource, first.executionProviderSource);
+
+    // Switching all the way to no viewer is the same story.
+    const none = resolveLaunchSession({
+      profile: { ...before, launcher: null }
+    });
+    assert.equal(none.viewer.kind, 'inline');
+    assert.deepEqual(none.executionProvider, first.executionProvider);
+  });
+
+  test('a viewer choice alone never turns execution into a Latch session', () => {
+    // The inverse direction: picking a terminal is not a way to opt into the
+    // persistent provider, so the two axes cannot be collapsed from either end.
+    const resolved = resolveLaunchSession({
+      profile: { launcher: 'iTerm2', placement: 'window', chord: null }
+    });
+    assert.equal(resolved.executionProvider.kind, 'direct');
+    assert.equal(resolved.viewer.kind, 'iterm');
+  });
+});

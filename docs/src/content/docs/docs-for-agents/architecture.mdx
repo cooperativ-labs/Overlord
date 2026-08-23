@@ -40,7 +40,7 @@ links to the authoritative spec on GitHub.
 | 2 | [CLI-First Product Surface](https://github.com/cooperativ-labs/Overlord/blob/main/cli/docs/02-cli-first-product-surface.md) | cli | Management commands, configuration, project linking, output contracts. |
 | 3 | [Agent Protocol](https://github.com/cooperativ-labs/Overlord/blob/main/cli/docs/03-agent-protocol.md) | cli | The `ovld protocol` lifecycle: context assembly, updates, delivery, attachments. |
 | 4 | [Runner & Launch Execution](https://github.com/cooperativ-labs/Overlord/blob/main/cli/docs/04-runner-and-launch-execution.md) | cli | Execution requests, the local runner, launch-command generation, auto-advance. |
-| 5 | [Review, Artifacts & Change Tracking](https://github.com/cooperativ-labs/Overlord/blob/main/cli/docs/11-review-artifacts-and-change-tracking.md) | cli | Delivery review records, artifacts, rationale coverage, local diff support. |
+| 5 | [Review, Artifacts & Change Tracking](https://github.com/cooperativ-labs/Overlord/blob/main/cli/docs/11-review-artifacts-and-change-tracking.md) | cli | Delivery review records, artifacts, objective-ledger evidence, and local diff support. |
 | 6 | [Connectors & Agent Plugins](https://github.com/cooperativ-labs/Overlord/blob/main/connectors/docs/05-connectors-and-agent-plugins.md) | connectors | The connector core, plugins, adapters, and prompt wrappers that bind agents to Overlord. |
 | 7 | [Automations Overview](https://github.com/cooperativ-labs/Overlord/blob/main/automations/docs/01-automations-overview.md) | automations | Optional AI automations (objective titling, summarization) and how they plug in. |
 | 8 | [USER_TOKEN Authentication](https://github.com/cooperativ-labs/Overlord/blob/main/auth/docs/07-user-token-authentication.md) | auth | Mix-and-match authentication and the `USER_TOKEN` lifecycle. |
@@ -66,12 +66,13 @@ what data moves at each hop — see [From "Run" to delivery](/docs-for-agents/mi
    `ovld protocol`, receiving full context (see
    [The agent protocol](/docs-for-agents/agent-protocol/)).
 5. **Work & report.** The agent posts updates, may ask blocking questions, and
-   the client captures the VCS baseline/delta for changed-file attribution.
-6. **Deliver.** The agent delivers a summary, artifacts, and per-file
-   rationales. The objective moves to `complete`, the mission to `review`, and
-   auto-advance may launch the next objective.
-7. **Review.** The **review/change-tracking** surface reads the durable records
-   back, checking rationale coverage against the changed files.
+   objective-bound connector callbacks append direct path evidence locally.
+6. **Deliver.** The client drains that evidence independently and the agent
+   delivers a summary plus optional current annotations. The objective moves to
+   `complete`, the mission to `review`, and auto-advance may launch the next
+   objective.
+7. **Review.** The **review/change-tracking** surface reads every durable file
+   observation with its attribution metadata and optional rationale.
 
 Throughout, the **auth** module resolves identity and enforces RBAC, and the
 **database** module provides the portable schema all of this persists to.

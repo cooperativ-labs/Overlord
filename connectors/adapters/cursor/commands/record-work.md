@@ -1,10 +1,10 @@
-Immediately record the work you just completed in this chat as a new Overlord mission via `ovld protocol record-work`. No agent session is opened — the work is already done. This creates a mission with one completed objective, records the file changes with rationales, lands it in the review column, and runs the standard Gemini delivery summary.
+Immediately record the work you just completed in this chat as a new Overlord mission via `ovld protocol record-work`. No agent session is opened — the work is already done. This creates a mission with one completed objective, lands it in the review column, and runs the standard Gemini delivery summary.
 
 Synthesize from the current conversation:
 - `objective`: what was asked / what was done.
 - `summary`: reviewer-friendly narrative of what changed and why.
-- `changeRationales`: one entry per meaningful git-tracked file change (`file_path`, `label`, `summary`, `why`, `impact`, optional `hunks`). Use `git status` and `git diff` to enumerate changed files. Every listed file shows as "covered" in review.
-- `changedFiles` (optional): touched files without a full rationale (`filePath`, optional `vcsStatus`).
+- `changeRationales` (optional): reviewer annotations for changes whose reason is not obvious (`filePath`, `label`, `summary`, `why`, `impact`, optional `hunks`).
+- `changedFiles` (optional, `record-work` only): files known from this completed chat work that have no rationale. Each entry is an object with canonical repository-relative `filePath` and optional `vcsStatus`; never infer ownership from a shared-worktree-wide status or diff.
 - `title` (optional): mission title; defaults to a title derived from the objective.
 - `artifacts` (optional): `next_steps`, `test_results`, `decision`, `note`, `url`.
 

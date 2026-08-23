@@ -113,3 +113,155 @@ test('missing both --mission-id and --objective-id names both in the error', asy
       error.message.includes('--objective-id')
   );
 });
+
+test('update and deliver reject retired change-tracking inputs with invalid_input', async () => {
+  const { missionDisplayId } = await missionFixture('Retired change inputs');
+  for (const [subcommand, flags] of [
+    [
+      'update',
+      {
+        '--mission-id': missionDisplayId,
+        '--session-key': 'unused',
+        '--summary': 'Progress',
+        '--changed-files-json': '[]'
+      }
+    ],
+    [
+      'update',
+      {
+        '--mission-id': missionDisplayId,
+        '--session-key': 'unused',
+        '--summary': 'Progress',
+        '--track-changed-files': true
+      }
+    ],
+    [
+      'deliver',
+      {
+        '--mission-id': missionDisplayId,
+        '--session-key': 'unused',
+        '--summary': 'Done',
+        '--observed-dirty-paths-json': '[]'
+      }
+    ],
+    [
+      'deliver',
+      {
+        '--mission-id': missionDisplayId,
+        '--session-key': 'unused',
+        '--payload-json': JSON.stringify({ summary: 'Done', noFileChanges: true })
+      }
+    ],
+    [
+      'update',
+      {
+        '--mission-id': missionDisplayId,
+        '--session-key': 'unused',
+        '--summary': 'Progress',
+        '--payload-json': JSON.stringify({ skipRationaleFor: [] })
+      }
+    ],
+    [
+      'deliver',
+      {
+        '--mission-id': missionDisplayId,
+        '--session-key': 'unused',
+        '--payload-json': JSON.stringify({ summary: 'Done', observed_dirty_paths: [] })
+      }
+    ],
+    [
+      'record-work',
+      {
+        '--project-id': 'unused',
+        '--objective': 'Recorded objective',
+        '--summary': 'Recorded summary',
+        '--payload-json': JSON.stringify({ noFileChanges: true })
+      }
+    ]
+  ] as const) {
+    await assert.rejects(
+      runProtocolSubcommand(subcommand, { flags }),
+      (error: unknown) =>
+        error instanceof ApiError && error.status === 400 && error.code === 'invalid_input'
+    );
+  }
+});
+
+test('protocol array inputs reject non-array JSON without reaching service code', async () => {
+  const { missionDisplayId } = await missionFixture('Malformed protocol arrays');
+  for (const [subcommand, flags] of [
+    [
+      'update',
+      {
+        '--mission-id': missionDisplayId,
+        '--session-key': 'unused',
+        '--summary': 'Progress',
+        '--change-rationales-json': '{}'
+      }
+    ],
+    [
+      'update',
+      {
+        '--mission-id': missionDisplayId,
+        '--session-key': 'unused',
+        '--summary': 'Progress',
+        '--payload-json': '[]'
+      }
+    ],
+    [
+      'deliver',
+      {
+        '--mission-id': missionDisplayId,
+        '--session-key': 'unused',
+        '--summary': 'Done',
+        '--change-rationales-json': '{}'
+      }
+    ],
+    [
+      'record-work',
+      {
+        '--project-id': 'unused',
+        '--objective': 'Recorded objective',
+        '--summary': 'Recorded summary',
+        '--changed-files-json': '{}'
+      }
+    ],
+    [
+      'record-work',
+      {
+        '--project-id': 'unused',
+        '--objective': 'Recorded objective',
+        '--summary': 'Recorded summary',
+        '--payload-json': JSON.stringify({ changedFiles: {} })
+      }
+    ],
+    [
+      'add-objectives',
+      {
+        '--mission-id': missionDisplayId,
+        '--objectives-json': '[null]'
+      }
+    ]
+  ] as const) {
+    await assert.rejects(
+      runProtocolSubcommand(subcommand, { flags }),
+      (error: unknown) =>
+        error instanceof ApiError && error.status === 400 && error.code === 'invalid_input'
+    );
+  }
+});
+
+test('protocol file flags require their matching keyed payload', async () => {
+  const { missionDisplayId } = await missionFixture('Missing keyed file payload');
+  await assert.rejects(
+    runProtocolSubcommand('update', {
+      flags: {
+        '--mission-id': missionDisplayId,
+        '--session-key': 'unused',
+        '--summary-file': '-'
+      }
+    }),
+    (error: unknown) =>
+      error instanceof ApiError && error.status === 400 && error.code === 'invalid_input'
+  );
+});

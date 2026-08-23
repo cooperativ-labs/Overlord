@@ -12,7 +12,7 @@ You update the contract when a module change:
 - Adds or changes a protocol command or required flag
 - Changes a stable interface (requires a version bump)
 - Adds a new sanctioned extension point
-- Adds a new connector capability flag or hook type
+- Adds a new closed agent-session capability id, integration shape, or fixture kind
 - Adds a value to a closed vocabulary
 
 You do **not** update the contract for:
@@ -35,7 +35,7 @@ You do **not** update the contract for:
 | --- | --- | --- |
 | `components.yaml` | Component registry: capabilities, ownership, interaction surfaces, contract version | New component, new surface, new capability, any version bump |
 | `protocol-commands.yaml` | `ovld protocol` subcommand names, required/optional flags, response shape versions | New protocol command, changed command flag |
-| `extension-points.yaml` | Sanctioned extension points, approved connector capability flags, approved hook types, open/closed vocabularies | New extension point, new capability flag, new hook type, closed vocabulary change |
+| `extension-points.yaml` | Sanctioned extension points and open/closed vocabularies, including agent-session capability ids, integration shapes, and fixture kinds | New extension point or vocabulary value |
 | `conformance-manifest.schema.yaml` | JSON Schema (YAML) that every shipped component's conformance manifest must validate against | New required manifest field |
 
 ---
@@ -73,7 +73,7 @@ You do **not** update the contract for:
 
 1. Add the extension point to `extension-points.yaml` under `extensionPoints:`.
 2. Add it to the Extension Points table in `CONTRACT.md`.
-3. If it requires a new connector capability flag or hook type, add it to `approvedConnectorCapabilities` or `approvedHookTypes` in `extension-points.yaml`.
+3. If it requires a new agent-session capability id, add it to `agentSession.capabilityIds` in `extension-points.yaml` and update the descriptor schema.
 
 ---
 
@@ -108,21 +108,25 @@ The manifest schema is in `contract/conformance-manifest.schema.yaml`. Required 
 - `contractVersion`: the version validated against
 - `componentType`: one of `connector`, `extension`, `database-adapter`, `auth-provider`, `rest-module`
 - `componentKey`: stable lowercase identifier
-- Declared capabilities, extension points, and vocabulary extensions used
+- The component-specific block required by its `componentType`
 
 ---
 
 ## Example: Minimal Conformance Manifest
 
 ```yaml
-contractVersion: "0"
+contractVersion: "116"
 componentType: connector
 componentKey: my-agent
-capabilities:
-  - supports-prompt-wrapper
-hookTypes:
-  - UserPromptSubmit
-openVocabularyValues: []
+label: "My Agent Connector"
+connector:
+  agentIdentifier: my-agent
+  integrationShape: callback
+  capabilityTier: 0
+  harnessCapabilities:
+    path: connectors/adapters/my-agent/harness-capabilities.yaml
+    schemaVersion: 1
+    digest: "0000000000000000000000000000000000000000000000000000000000000000"
 ```
 
 ---
@@ -135,5 +139,5 @@ openVocabularyValues: []
 - [ ] New protocol command → update `protocol-commands.yaml`
 - [ ] Breaking change → bump `contractVersion` in `components.yaml` + add changelog
 - [ ] New extension point → update `extension-points.yaml` + `CONTRACT.md`
-- [ ] New capability flag or hook type → update `extension-points.yaml`
+- [ ] New capability id, integration shape, or fixture kind → update `extension-points.yaml` and the descriptor schema
 - [ ] Implementation code does not land before the contract update

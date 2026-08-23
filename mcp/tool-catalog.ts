@@ -36,6 +36,26 @@ const protocolOutputSchema = (description: string): Record<string, unknown> => (
   additionalProperties: true
 });
 
+const changeRationalesProperty = (description: string): Record<string, unknown> => ({
+  type: 'array',
+  description,
+  items: objectSchema(
+    {
+      filePath: stringProperty('Repository-relative path of the changed file.'),
+      label: stringProperty('Short reviewer title for the change.'),
+      summary: stringProperty('What changed in this file.'),
+      why: stringProperty('Why the change was made.'),
+      impact: stringProperty('Behavioral impact of the change.'),
+      hunks: {
+        type: 'array',
+        description: 'Optional diff-hunk headers only; file contents and diffs are prohibited.',
+        items: objectSchema({ header: stringProperty('Unified-diff hunk header.') }, ['header'])
+      }
+    },
+    ['filePath', 'label', 'summary', 'why', 'impact']
+  )
+});
+
 const readOnly = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
 const writeAction = { readOnlyHint: false, destructiveHint: false, openWorldHint: false };
 
@@ -521,7 +541,10 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
         sessionKey: stringProperty('Session key returned by overlord_attach_session.'),
         summary: stringProperty('Update text.'),
         phase: stringProperty('Optional protocol phase.'),
-        eventType: stringProperty('Optional event type. Defaults to update.')
+        eventType: stringProperty('Optional event type. Defaults to update.'),
+        changeRationales: changeRationalesProperty(
+          'Optional reviewer-facing annotations for objective-ledger file evidence.'
+        )
       },
       ['sessionKey', 'summary']
     ),
@@ -559,14 +582,9 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
             ['type', 'label']
           )
         },
-        noFileChanges: {
-          type: 'boolean',
-          description: 'Set true when the MCP run changed no files.'
-        },
-        changeRationales: {
-          type: 'array',
-          description: 'Explicit change rationale objects, if files were changed.'
-        },
+        changeRationales: changeRationalesProperty(
+          'Optional reviewer-facing annotations for objective-ledger file evidence.'
+        ),
         humanActions: {
           type: 'array',
           description:
@@ -676,7 +694,7 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
       'Use this to log work already finished in this chat as a completed Overlord mission — one call, no attach/deliver cycle. ' +
       'It creates a mission and a single completed objective, records the file changes and their rationales, lands the mission in ' +
       'the review column, and runs the delivery through the standard Gemini summarizer so it reads like any other delivered mission. ' +
-      'Provide an objective (what was asked/done), a reviewer-facing summary, and one changeRationale per meaningful file change. ' +
+      'Provide an objective (what was asked/done) and a reviewer-facing summary; optional changeRationales may annotate meaningful file changes. ' +
       'Only use this when the work is genuinely complete; use overlord_create_mission for work still to be done.',
     inputSchema: objectSchema(
       {
@@ -690,25 +708,12 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
         title: stringProperty(
           'Optional mission title; defaults to a title derived from the objective.'
         ),
-        changeRationales: {
-          type: 'array',
-          description:
-            'One entry per meaningful file change. Each: filePath, label, summary, why, impact (all strings).',
-          items: objectSchema(
-            {
-              filePath: stringProperty('Repository-relative path of the changed file.'),
-              label: stringProperty('Short reviewer title for the change.'),
-              summary: stringProperty('What changed in this file.'),
-              why: stringProperty('Why the change was made.'),
-              impact: stringProperty('Behavioral impact of the change.')
-            },
-            ['filePath', 'label', 'summary', 'why', 'impact']
-          )
-        },
+        changeRationales: changeRationalesProperty(
+          'One optional reviewer annotation per meaningful file change.'
+        ),
         changedFiles: {
           type: 'array',
-          description:
-            'Optional extra touched files without a full rationale (surface as missing_rationale in review).',
+          description: 'Optional explicit file observations for this sessionless record.',
           items: objectSchema(
             {
               filePath: stringProperty('Repository-relative path.'),

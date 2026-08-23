@@ -3,11 +3,9 @@
 # Authoritative and fixture-backed. Validated against contract/harness-capabilities.schema.yaml.
 # See connectors/AGENTS.md → "Harness capability descriptors" before writing any code here.
 #
-# Cursor is the adapter where a naive reading gets it backwards: the shipped conformance
-# manifest claimed a universal PermissionRequest hook Cursor does not have, while the
-# capability it DOES have (per-tool-class decisions with allow/deny/ask) is richer than
-# Claude's in one respect. `decide.universal` is `unsupported` here, permanently, and the
-# false legacy claim is corrected in the generated projection.
+# Cursor exposes per-tool-class decisions rather than one event covering every approval.
+# `decide.universal` is therefore unsupported; the descriptor records the native surfaces
+# directly.
 schemaVersion: 1
 adapter: cursor
 codec: cursor
@@ -34,7 +32,7 @@ binding:
     field as the primary correlation alias, so the descriptor now matches the runtime instead of
     preferring the optional `session_id`. The verified channel credential remains the authority;
     neither identifier grants mission scope. A local authenticated resume probe was unavailable,
-    so `session_id` remains a compatibility fallback rather than a competing primary identity.
+    so `session_id` remains a secondary correlation alias rather than a competing primary identity.
 
 decisionHold:
   status: supported
@@ -48,6 +46,16 @@ decisionHold:
     human who is away from the keyboard. The adapter must always set `timeout` explicitly
     and must never rely on the default.
 
+mutationHooks:
+  classification: post-only
+  fixture: fixtures/mutation-window-evidence.json
+  notes: >-
+    Recorded pre/post payloads carry different native call ids and do not prove a paired window.
+    A postToolUse path normalized by the Cursor codec as `file.edited` records objective-bound,
+    non-exclusive `declared_edit`/`direct` evidence. Codec-normalized read, search, and fetch
+    callbacks are silent no-ops. Mutation-capable callbacks without a normalized edit path, plus
+    shell, generic, unknown, and unmapped callbacks, record unavailable evidence health.
+
 capabilities:
   observe.prompt:
     status: supported
@@ -58,9 +66,8 @@ capabilities:
     native: preToolUse
     trackedAs: latch-engine
     notes: >-
-      Latch v2 removed the CLI event stream that previously owned mechanical observation.
-      Native Cursor permission prompts own approvals; Overlord exposes no replacement until it
-      has a native Conversation Hub client.
+      Native Cursor permission prompts own approvals. Overlord needs a native Conversation Hub
+      client before this observation can become a live path.
   observe.toolResult:
     status: supported
     native: postToolUse
@@ -68,13 +75,17 @@ capabilities:
   observe.fileEdit:
     status: supported
     native: postToolUse
-    fixtures: [fixtures/normalize-post-tool-use-write.json]
+    fixtures:
+      - fixtures/normalize-post-tool-use-write.json
+      - fixtures/post-tool-use-hook.json
+      - fixtures/post-tool-use-unbound.json
     notes: >-
-      Carried on postToolUse rather than on Cursor's dedicated `afterFileEdit`, for the same
-      reason Claude carries it on PostToolUse: one registration then covers every mutation,
-      including the ones a shell command makes, and the split into `file.edited` happens where
-      the normalized tool name is already known. `afterFileEdit` remains available if a future
-      need appears for edit-level granularity the tool-level event cannot express.
+      Carried on postToolUse rather than Cursor's dedicated `afterFileEdit`. Native Write/Edit
+      paths normalized by the Cursor codec as `file.edited` are forwarded to local
+      `capture-change` as non-exclusive `declared_edit`/`direct` evidence. Codec-normalized read,
+      search, and fetch callbacks are silent no-ops; mutation-capable callbacks without a
+      normalized edit path, plus shell, generic, unknown, and unmapped callbacks, record
+      unavailable evidence health.
   observe.sessionLifecycle:
     status: not-implemented
     native: sessionStart
@@ -84,7 +95,7 @@ capabilities:
       payloads, so the field carrying the equivalent of Claude's `source` is unknown. A codec
       rule on a guessed path would not fail loudly — an unresolved path yields a card with no
       detail — so this stays unbuilt until a real payload is recorded, rather than being
-      claimed on an assumed field name.
+      asserted on an assumed field name.
   decide.shell:
     status: not-implemented
     native: beforeShellExecution
@@ -104,7 +115,7 @@ capabilities:
   decide.universal:
     status: unsupported
     reason: >-
-      There is no single event covering every approval. Cursor's own Claude-compatibility map
+      There is no single event covering every approval. Cursor's own Claude-dialect map
       resolves `PermissionRequest` to null and lists it as unsupported; coverage is per tool
       class (shell, MCP, file read, generic pre-tool), so some approvals will never reach
       Overlord and the UI must not imply otherwise.
@@ -130,7 +141,7 @@ capabilities:
       - fixtures/inject-followup-message.json
     notes: >-
       `stop` returns `followup_message` for the protocol delivery reminder. Session-input
-      injection is no longer a live Overlord path.
+      injection is not a live Overlord path.
   inject.nextTurn:
     status: supported
     native: stop
@@ -151,17 +162,6 @@ capabilities:
     notes: Whether Cursor exposes an in-TUI status surface equivalent to Claude's statusMessage was not established.
 
 hazards:
-  - id: false-permission-hook-claim
-    severity: high
-    summary: >-
-      The shipped conformance manifest declared the `permissionHook` capability and a
-      `PermissionRequest` hook type. Cursor maps that event to null and lists it as
-      unsupported, so the declaration was false and would render remote controls that can
-      never fire. Corrected in this descriptor and in the generated legacy projection.
-    verification: verified
-    mitigation: implemented
-    fixture: fixtures/no-permission-request-hook.json
-    evidenceRef: connector-harness-taxonomy.md#43-unique-challenges
   - id: reads-claude-hook-config
     severity: high
     summary: >-
@@ -189,19 +189,6 @@ hazards:
     verification: verified
     mitigation: implemented
     fixture: fixtures/fail-closed-unset.json
-  - id: post-tool-use-log-dir-precondition
-    severity: medium
-    summary: >-
-      The shipped postToolUse hook redirects stderr into ~/.ovld/logs without creating that
-      directory first (Claude's equivalent does). On a machine where the directory does not
-      yet exist the redirect fails and `ovld protocol record-touched` is never invoked, so
-      touched-file attribution silently records nothing for that session. Fixed in phase 0B by
-      creating the directory before the redirect, matching Claude's hook; the fixture guards
-      the hook against losing that line again.
-    verification: verified
-    mitigation: implemented
-    fixture: fixtures/post-tool-use-log-dir.json
-
 decisionShape:
   codec: cursor
   allowFixture: fixtures/decision-codec.json
@@ -211,21 +198,8 @@ decisionShape:
   notes: >-
     Cursor's own dialect is flat — `{ permission, user_message, agent_message }`. Claude's
     nested `hookSpecificOutput` must never be emitted here even though Cursor would accept it
-    under `enableClaudeNestedHookSpecificOutputCompatibility`: relying on another vendor's
-    compatibility shim for our primary path is a dependency we do not need.
+    when its cross-vendor nested-output setting is enabled. Depending on another vendor's
+    dialect fallback for the primary path is unnecessary.
     The decision-codec fixture executes the shared interpreter and pins all three outcomes.
 
 unboundSessionFixture: fixtures/unbound-session.json
-
-legacy:
-  capabilities:
-    - followUpHook
-    - stopHook
-    - editHook
-    - modelFlag
-    - permissionRules
-    - slashCommands
-  hookTypes:
-    - UserPromptSubmit
-    - PostToolUse
-    - Stop

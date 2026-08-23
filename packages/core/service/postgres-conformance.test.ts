@@ -737,8 +737,7 @@ for (const adapter of adapters) {
 
         const files = await listChangedFilesForReview({
           ctx,
-          missionId: graph.missionId,
-          includeCurrent: false
+          missionId: graph.missionId
         });
 
         assert.equal(files.length, 1);
@@ -759,7 +758,7 @@ for (const adapter of adapters) {
       }
     });
 
-    it('classifies coverage states correctly across both adapters', async () => {
+    it('classifies optional rationale coverage across both adapters', async () => {
       const { client, teardown } = await adapter.create();
       try {
         const graph = await seedGraph(client);
@@ -783,37 +782,26 @@ for (const adapter of adapters) {
           missionId: graph.missionId,
           objectiveId: graph.objectiveId,
           projectId: graph.projectId,
-          filePath: 'src/missing.ts'
-        });
-
-        await insertChangedFile(client, {
-          missionId: graph.missionId,
-          objectiveId: graph.objectiveId,
-          projectId: graph.projectId,
-          filePath: 'src/skipped.ts',
+          filePath: 'src/missing.ts',
           observedMetadataJson: '{"rationaleSkipped":true}'
         });
 
         const files = await listChangedFilesForReview({
           ctx,
-          missionId: graph.missionId,
-          includeCurrent: false
+          missionId: graph.missionId
         });
 
-        assert.equal(files.length, 3);
+        assert.equal(files.length, 2);
         const byPath = new Map(files.map(f => [f.filePath, f]));
         assert.equal(byPath.get('src/covered.ts')?.coverage, 'covered');
         assert.equal(byPath.get('src/missing.ts')?.coverage, 'missing_rationale');
-        assert.equal(byPath.get('src/skipped.ts')?.coverage, 'skipped');
       } finally {
         await teardown();
       }
     });
 
-    // coo:127 Layer 4: deliverSession reconciles a changed_files row no longer
-    // present in the client's observedDirtyPaths to current_diff_state='resolved'
-    // (see protocol.ts), un-poisoning coverage from a past over-attribution. This
-    // pins the review-side classification of that state across both adapters.
+    // `resolved` remains part of the stored diff-state vocabulary even though
+    // current checkout discovery and reconciliation inputs have been removed.
     it('classifies a resolved changed_files row without demanding a rationale', async () => {
       const { client, teardown } = await adapter.create();
       try {
@@ -830,8 +818,7 @@ for (const adapter of adapters) {
 
         const files = await listChangedFilesForReview({
           ctx,
-          missionId: graph.missionId,
-          includeCurrent: false
+          missionId: graph.missionId
         });
 
         assert.equal(files.length, 1);
@@ -871,24 +858,29 @@ for (const adapter of adapters) {
           missionId: graph.missionId,
           objectiveId: graph.objectiveId,
           projectId: graph.projectId,
-          filePath: 'src/obj-one.ts'
+          filePath: 'src/shared.ts'
         });
         await insertChangedFile(client, {
           missionId: graph.missionId,
           objectiveId: secondObjectiveId,
           projectId: graph.projectId,
-          filePath: 'src/obj-two.ts'
+          filePath: 'src/shared.ts'
         });
+
+        const missionWide = await listChangedFilesForReview({
+          ctx,
+          missionId: graph.missionId
+        });
+        assert.equal(missionWide.length, 2, 'same path in two objectives remains two records');
 
         const filtered = await listChangedFilesForReview({
           ctx,
           missionId: graph.missionId,
-          objectiveId: graph.objectiveId,
-          includeCurrent: false
+          objectiveId: graph.objectiveId
         });
 
         assert.equal(filtered.length, 1);
-        assert.equal(filtered[0]!.filePath, 'src/obj-one.ts');
+        assert.equal(filtered[0]!.filePath, 'src/shared.ts');
       } finally {
         await teardown();
       }

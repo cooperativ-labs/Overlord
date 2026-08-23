@@ -11,9 +11,9 @@ A connector lets an AI coding harness (Claude Code, Codex, Cursor, etc.) speak t
 | Extension type        | Example user request                                  |
 | --------------------- | ----------------------------------------------------- |
 | New agent connector   | "Add a connector for OpenCode / Windsurf / Zed"       |
-| New hook type         | "Add a Stop hook for pending-delivery checks"         |
+| New harness event path | "Capture a newly exposed native mutation event"       |
 | Extend connector core | "Add a new canonical instruction to all connectors"   |
-| New capability flag   | "Connectors can now declare `supports-multi-session`" |
+| New capability id     | "Grade a new agent-session behavior"                  |
 
 Each type has a different procedure below.
 
@@ -24,7 +24,7 @@ Each type has a different procedure below.
 1. Read `CONTRACT.md` — Connector Layer section (stable id: `connector`).
 2. Read [`connectors/docs/05-connectors-and-agent-plugins.md`](docs/05-connectors-and-agent-plugins.md) for the four-layer model: connector core, plugins, adapters, and prompt wrappers.
 3. Read [`connectors/docs/agent-harness-configuration-architecture.md`](docs/agent-harness-configuration-architecture.md) for ownership boundaries.
-4. Check `contract/extension-points.yaml` for approved capability flags and hook types before adding new ones.
+4. Check the `agentSession` vocabularies in `contract/extension-points.yaml` and the descriptor schema before adding a normalized capability, integration shape, or fixture kind.
 5. After connector edits, follow the [connector-versions skill](../.claude/skills/connector-versions/SKILL.md) and run `yarn connectors:version:bump`.
 
 ---
@@ -57,7 +57,7 @@ The descriptor is the **only hand-authored capability source**. Everything below
 | `connectors/adapters/<agent>/CAPABILITIES.md`                                                                                                               | Per-adapter page with a do-not-edit banner                             |
 | `connectors/HARNESS-MATRIX.md`                                                                                                                              | Cross-adapter matrix                                                   |
 | `cli/src/agent-session/catalog.generated.ts`                                                                                                                | Compiled catalog the CLI runtime reads                                 |
-| The `connector:` block's `capabilities`, `hookTypes`, `integrationShape`, `capabilityTier`, and `harnessCapabilities` fields in `conformance-manifest.yaml` | The deprecated hook-named legacy projection plus the descriptor digest |
+| The `connector:` block's `integrationShape`, `capabilityTier`, and `harnessCapabilities` fields in `conformance-manifest.yaml` | The descriptor-derived integration shape, tier, and digest |
 
 `yarn connectors:capabilities:check` is the CI drift check: it validates every descriptor,
 executes every referenced fixture, re-derives each tier, and fails if any generated artifact is
@@ -68,58 +68,32 @@ stale. `yarn connectors:check` runs it alongside the connector version check.
 1. **A capability is proven by fixture, not by inspection.** CI runs the fixture. Checking only
    that a named file exists would let an empty fixture claim a capability into existence.
 2. **The tier is derived, never authored.** `capabilityTier` comes from what the fixtures prove.
-   Claimed-but-unproven is worse than absent, because the UI renders controls that do nothing.
+   Asserted-but-unproven is worse than absent, because the UI renders controls that do nothing.
 3. **Every adapter ships the unbound-session negative fixture.** An unbound session in an
    unrelated directory must be untouched and unblocked by every registered integration. A side
-   effect the fixture records must be declared as a hazard with a tracker — recording the truth
-   is required; claiming silence you do not have is not.
+   effect, CLI invocation, or output makes the fixture fail; a hazard declaration cannot waive
+   this boundary.
 4. **A native session id binds nothing on its own.** It is a correlation alias. The verified
    channel/session credential is the authorization and mission scope, and the working directory
    is never a binding authority.
-5. **Adapters make no network call.** Translate, hand off to `ovld agent-session`, return.
+5. **Adapters make no network call.** Translate, hand off to the documented local `ovld`
+   command, and return.
 
-### The rendered agent-session hook
+### Local mutation capture hooks
 
-Mechanical observe / decide / inject is **not a live Overlord connector path**. Latch v2
-removed the CLI event and send surface that previously backed it, and Overlord does not
-emulate that protocol. New adapters must not register `ovld agent-session` hooks. Channel 1
-stays on `ovld protocol` (follow-up capture, touched-file attribution, Stop delivery reminder).
-A future conversation surface must be a native Latch v2 Conversation Hub client. The rest of
-this section documents leftover CLI runtime and historical fixtures.
-
-Do not write a per-adapter shell script for agent-session traffic. One core script,
-`connectors/core/scripts/agent-session-hook.sh`, is rendered per adapter at `ovld agent-setup`
-time — declare the managed file as `scripts/agent-session-<action>.sh` in the manifest, and the
-installer substitutes both your adapter key and that **fixed action**:
-
-```bash
-[ -n "${OVERLORD_SESSION_CHANNEL_ID:-}" ] || exit 0
-command -v ovld >/dev/null 2>&1 || exit 0
-exec ovld agent-session event --agent claude --payload-file -
-```
-
-The first line is the scope gate, and it is in bash rather than in the CLI on purpose. An
-unbound session — someone's own agent in an unrelated directory on a machine that happens to
-have Overlord installed — must cost no process, no log line, and no measurable delay. A gate
-inside the CLI cannot deliver that, because reaching it already cost a process launch. The CLI
-applies the same gate again, since a check that can be skipped by invoking `ovld` directly is
-not a gate.
-
-The action being fixed at install time is the point, not a simplification. A single script that
-dispatched on `$1` would let whatever wrote the hook registration choose which CLI operation
-runs, and hook registrations are the least-reviewed configuration on a developer's machine. A
-`PostToolUse` registration renders an `event` script; a permission registration renders a
-`request` script; an inject registration renders an `inbox` script; none can become another.
-`event`, `request`, and `inbox` are the only three actions a managed path may name.
-
-The payload streams on stdin — not through a shell variable, which caps size and mangles NUL
-bytes, and not through argv, which is world-readable. For `request` and `inbox`, stdout and exit
-status pass through unchanged so the native decision or injection reaches the harness in its
-exact expected shape.
-
-Silence is the failure mode. A missing `ovld` exits `0` with no output, which for a decision
-hook means _no decision_ and therefore the harness's own prompt. No failure path may ever
-manufacture an approval.
+A connector may invoke `ovld protocol capture-change` from a native post-mutation hook when
+`OVERLORD_OBJECTIVE_ID` is explicit in the launch environment. Mission scope is recovered from
+that objective's exact active-session binding; cwd never selects it. The hook must remain silent
+and perform no write when the objective id or `ovld` is unavailable. A directly named native edit
+path records objective-bound, non-exclusive `declared_edit`/`direct` evidence only after the
+connector-owned codec normalizes it as `file.edited`. The hook must pass its connector key through
+`--agent`; generic payload path parsing is forbidden. Codec-normalized read, search, and fetch
+callbacks are silent no-ops. Mutation-capable callbacks without a normalized edit path, plus shell,
+generic, unknown, and unmapped callbacks, record unavailable evidence health. Every hook
+registration must be backed by a `script-io` fixture, and every mutation window claim must be
+backed by a `mutation-window` fixture. Claude, Codex, and Cursor render this callback from
+`connectors/core/scripts/capture-change-hook.sh`; their adapter directories own only the native
+managed path and registration, not copies of the implementation.
 
 ### The event codec
 
@@ -144,6 +118,7 @@ events:
     toolPath: tool_name
     inputPath: tool_input
     fileEditKind: file.edited # a file-mutating tool becomes this kind instead
+    filePathPaths: [file_path] # bounded paths inside tool_input; no generic key fallback
 ```
 
 A codec can only say **where** native values live. It cannot name a destination the core
@@ -161,6 +136,9 @@ What each field feeds:
 - `inputPath` is never transmitted. It is reduced on the machine into an action, a subject, a
   bounded detail, and machine-derived risk markers. A tool with no formatter emits its name and
   the top-level **key names** of its input and nothing else.
+- `filePathPaths` is a bounded, ordered list of dotted paths relative to `inputPath`. It is
+  required with the literal `fileEditKind: file.edited`; only exact strings resolved through
+  those connector-owned paths may become mutation evidence. Core never guesses common path keys.
 - `promptPath` is the single deliberate exception: prompt text is persisted in full for bound
   sessions, because the activity feed exists to show it. Secret redaction still runs over it.
 
@@ -208,8 +186,9 @@ grants nothing on its own.
 | `native-payload`   | Asserts the shape of a recorded native harness payload (pure; no process started)                                                                                                                                                                                                                                |
 | `script-io`        | Runs a shipped adapter script in an isolated sandbox — own `HOME`, `TMPDIR`, cwd, and a `PATH` whose only `ovld` is a recording spy — and asserts exit status, stdout, stderr, every sandbox write, and every CLI invocation attempted                                                                           |
 | `source-guard`     | Asserts a repo file does or does not contain declared markers (how "this dangerous harness flag must stay unset" is enforced)                                                                                                                                                                                    |
-| `normalized-event` | Runs the shipped codec and the real core interpreter against a recorded native payload, asserts the exact normalized envelope, and asserts that named raw content (file bodies, transcript paths, credentials) appears nowhere in it. This is how an `observe.*` capability becomes provable rather than claimed |
+| `normalized-event` | Runs the shipped codec and the real core interpreter against a recorded native payload, asserts the exact normalized envelope, and asserts that named raw content (file bodies, transcript paths, credentials) appears nowhere in it. This is how an `observe.*` capability becomes provable rather than merely asserted |
 | `decision-codec`   | Runs the connector-owned request/decision declaration through the real pure interpreter, asserts the bounded redacted request card, and pins exact allow/deny/defer bytes. Required for supported callback/extension `decide.*` capabilities                                                                     |
+| `mutation-window`  | Executes recorded pre/post evidence semantics and derives whether the connector has a strict paired window, post-only evidence, or no post evidence. Declared classifications must match the derived result.                                                                                                  |
 
 Fixtures never reach the network.
 
@@ -217,7 +196,7 @@ Fixtures never reach the network.
 
 ## Adding a New Agent Connector
 
-A new connector is the primary sanctioned extension point for this module. It requires a conformance manifest but does not require a contract version bump unless it introduces new capability flags or hook types.
+A new connector is the primary sanctioned extension point for this module. It requires a conformance manifest but does not require a contract version bump unless it introduces a new closed capability id, integration shape, fixture kind, or protocol surface.
 
 **Steps:**
 
@@ -229,8 +208,8 @@ A new connector is the primary sanctioned extension point for this module. It re
    - Post meaningful progress updates
    - Use heartbeat during long work with no meaningful update
    - Ask exactly one blocking question and stop when blocked
-   - Deliver last with summary, artifacts, and change rationales
-   - Record all meaningful file changes as structured rationales
+   - Deliver last with a concise summary
+   - Keep objective-ledger capture local and independent of delivery
    - Use stdin/file flags for shell-special content
    - Do not continue after delivery unless explicitly asked
    - Run local repair before asking the user to fix setup
@@ -259,13 +238,15 @@ wrong and that is worth raising rather than working around.
 6. **Create `connectors/adapters/<agent-name>/conformance-manifest.yaml`** declaring:
 
    ```yaml
-   contractVersion: '0'
+   contractVersion: '116'
    componentType: connector
    componentKey: <agent-name>
-   capabilities:
-     - <only approved flags from contract/extension-points.yaml>
-   hookTypes:
-     - <only approved types from contract/extension-points.yaml>
+   label: <human-readable label>
+   connector:
+     agentIdentifier: <agent-name>
+     # integrationShape, capabilityTier, and harnessCapabilities are generated.
+     installPath: <default install root>
+     managedFiles: []
    ```
 
 7. **Validate**: run `ovld contract check connectors/adapters/<agent-name>/conformance-manifest.yaml`.
@@ -274,18 +255,18 @@ wrong and that is worth raising rather than working around.
 
 ---
 
-## Adding a New Hook Type
+## Adding a New Harness Event Path
 
-Hook types (`UserPromptSubmit`, `PermissionRequest`, `Stop`) are **stable interfaces** listed in `contract/extension-points.yaml`. Adding a new type requires a contract update first.
+Native hook names belong to the adapter. Contract changes are required only when the path adds a
+new normalized capability id, fixture kind, integration shape, or protocol surface.
 
 **Steps:**
 
-1. **Update `contract/extension-points.yaml`**: add the new hook name to `approvedHookTypes`.
-2. **Update `CONTRACT.md`** Connector Layer section with the new hook's event contract.
-3. **Increment the contract version** in `contract/components.yaml` and add a changelog entry to `CONTRACT.md`.
-4. **Implement the hook script** in `connectors/adapters/<agent-name>/hooks/` (or the connector-specific hook location).
-5. **Hook scripts must not write to the database directly** — use `ovld protocol hook-event` or `ovld protocol update` only.
-6. **Update affected conformance manifests** to declare the new hook type.
+1. **Record the native event** in an adapter fixture and map it to an existing normalized capability.
+2. **Implement the hook script** in the adapter's native hook location.
+3. **Keep it local and protocol-only** — use the documented `ovld protocol` command and never write to the database directly.
+4. **Prove behavior** with a `script-io` fixture and, for mutation evidence, a `mutation-window` fixture.
+5. **Update the descriptor** and run `yarn connectors:capabilities`.
 
 ---
 
@@ -302,16 +283,17 @@ The connector core is the set of canonical Markdown workflow instructions every 
 
 ---
 
-## Adding a New Capability Flag
+## Adding a New Capability Id
 
-Capability flags (e.g. `sessionEventStream`, `nativeSessionBinding`) are listed in `contract/extension-points.yaml` under `approvedConnectorCapabilities`. New flags require a contract update.
+Normalized capability ids are closed values listed under `agentSession.capabilityIds` in
+`contract/extension-points.yaml` and in `contract/harness-capabilities.schema.yaml`.
 
 **Steps:**
 
-1. **Add the flag** to `approvedConnectorCapabilities` in `contract/extension-points.yaml`.
-2. **Add a description** of what the flag means in `CONTRACT.md` Connector Layer section.
-3. **Increment contract version** if the flag represents a breaking stable-interface change.
-4. **Declare the flag** in the conformance manifests of connectors that support it.
+1. **Add the id** to the contract vocabulary and descriptor schema in the same change.
+2. **Define its evidence semantics** and fixture requirements in the Connector Layer contract.
+3. **Increment the contract version** for the closed-vocabulary change.
+4. **Declare the id and evidence** in every descriptor, then regenerate manifests and catalogs.
 
 ---
 
@@ -341,7 +323,7 @@ No adapter implementations have landed yet. When they do, the Claude and Codex a
 ## Cross-Module Checklist
 
 - [ ] Read `CONTRACT.md` Connector Layer section
-- [ ] New hook type or capability flag → update `contract/extension-points.yaml` first
+- [ ] New capability id, integration shape, or fixture kind → update the contract vocabulary and descriptor schema first
 - [ ] Hook scripts → use `ovld protocol` commands only, no direct DB writes
 - [ ] Conformance manifest created and validated for every new connector
 - [ ] `ovld agent-setup <agent>` and `ovld doctor` behavior documented

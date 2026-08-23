@@ -4,7 +4,7 @@ import { describe, it } from 'node:test';
 import { createMissionWithObjectives } from './missions.js';
 import { buildProjectResourceManifestEntries } from './project-resource-manifest.js';
 import { addProjectResource, createProject } from './projects.js';
-import { attachSession, loadMissionContext, updateSession } from './protocol.js';
+import { attachSession, loadMissionContext, syncChanges } from './protocol.js';
 import { createIsolatedCheckout } from './test-checkout.ts';
 import { createSeededServiceContext } from './test-helpers.js';
 
@@ -96,7 +96,7 @@ describe('protocol context manifest', () => {
     assert.equal(attached.projectResources?.length, 1);
   });
 
-  it('updateSession stamps changed_files.resource_id from objective resourceKey without execution request', async () => {
+  it('syncChanges stamps changed_files.resource_id from objective resourceKey without execution request', async () => {
     const { db, ctx } = await createSeededServiceContext();
     const project = await createProject({ ctx, name: 'Resource id fallback' });
     const resource = await addProjectResource({
@@ -119,19 +119,233 @@ describe('protocol context manifest', () => {
       missionId: mission.id,
       agentIdentifier: 'test-agent'
     });
-    await updateSession({
+    await syncChanges({
       ctx,
       missionId: mission.displayId,
       sessionKey: attached.sessionKey,
-      summary: 'Recorded a change',
-      changedFiles: [{ filePath: 'src/fallback.ts', vcsStatus: 'modified' }]
+      changes: [
+        {
+          filePath: 'src/direct.ts',
+          idempotencyKey: 'resource-binding-1',
+          source: 'declared_edit',
+          quality: 'direct'
+        }
+      ]
     });
 
     const changedFile = (await db.get(
-      `SELECT resource_id FROM changed_files WHERE session_id = ? AND deleted_at IS NULL`,
+      `SELECT resource_id, vcs_status, current_diff_state, observed_metadata_json
+         FROM changed_files WHERE session_id = ? AND deleted_at IS NULL`,
       [attached.session.id]
-    )) as { resource_id: string | null };
+    )) as {
+      resource_id: string | null;
+      vcs_status: string | null;
+      current_diff_state: string;
+      observed_metadata_json: string;
+    };
     assert.equal(changedFile.resource_id, resource.id);
+    assert.equal(changedFile.vcs_status, null);
+    assert.equal(changedFile.current_diff_state, 'unknown');
+    assert.equal(JSON.parse(changedFile.observed_metadata_json).overlap, false);
+    await db.close();
+  });
+
+  it('syncChanges salvages malformed siblings and idempotently persists metadata-only evidence', async () => {
+    const { db, ctx } = await createSeededServiceContext();
+    const project = await createProject({ ctx, name: 'Change sync' });
+    const { mission, objectives } = await createMissionWithObjectives({
+      ctx,
+      projectId: project.id,
+      objectives: [{ objective: 'Sync metadata' }]
+    });
+    await db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [objectives[0]?.id]);
+    const attached = await attachSession({
+      ctx,
+      missionId: mission.id,
+      agentIdentifier: 'test-agent'
+    });
+
+    const first = await syncChanges({
+      ctx,
+      missionId: mission.id,
+      sessionKey: attached.sessionKey,
+      changes: [
+        {
+          filePath: 'src/evidence.ts',
+          idempotencyKey: 'evidence-1',
+          source: 'declared_edit',
+          quality: 'direct',
+          overlap: false
+        },
+        {
+          filePath: '../escape.ts',
+          idempotencyKey: 'parent-segment',
+          source: 'declared_edit',
+          quality: 'direct',
+          overlap: false
+        },
+        {
+          filePath: '/absolute.ts',
+          idempotencyKey: 'absolute',
+          source: 'declared_edit',
+          quality: 'direct',
+          overlap: false
+        },
+        {
+          filePath: 'C:/drive.ts',
+          idempotencyKey: 'drive',
+          source: 'declared_edit',
+          quality: 'direct',
+          overlap: false
+        },
+        {
+          filePath: 'C:drive-relative.ts',
+          idempotencyKey: 'drive-relative',
+          source: 'declared_edit',
+          quality: 'direct',
+          overlap: false
+        },
+        {
+          filePath: 'src\\windows.ts',
+          idempotencyKey: 'backslash',
+          source: 'declared_edit',
+          quality: 'direct',
+          overlap: false
+        },
+        {
+          filePath: ' src/leading-space.ts',
+          idempotencyKey: 'leading-space',
+          source: 'declared_edit',
+          quality: 'direct',
+          overlap: false
+        },
+        {
+          filePath: 'src/trailing-space.ts ',
+          idempotencyKey: 'trailing-space',
+          source: 'declared_edit',
+          quality: 'direct',
+          overlap: false
+        },
+        {
+          filePath: 'src//empty-segment.ts',
+          idempotencyKey: 'empty-segment',
+          source: 'declared_edit',
+          quality: 'direct',
+          overlap: false
+        },
+        {
+          filePath: 'src/./dot-segment.ts',
+          idempotencyKey: 'dot-segment',
+          source: 'declared_edit',
+          quality: 'direct',
+          overlap: false
+        },
+        {
+          filePath: 'src/retired-state.ts',
+          idempotencyKey: 'retired-state',
+          state: 'present',
+          source: 'declared_edit',
+          quality: 'direct',
+          overlap: false
+        },
+        {
+          filePath: 'src/retired-vcs-status.ts',
+          idempotencyKey: 'retired-vcs-status',
+          vcsStatus: 'modified',
+          source: 'declared_edit',
+          quality: 'direct',
+          overlap: false
+        },
+        {
+          filePath: 'src/prohibited-content.ts',
+          idempotencyKey: 'prohibited-content',
+          content: 'must never cross the metadata-only boundary',
+          source: 'declared_edit',
+          quality: 'direct',
+          overlap: false
+        }
+      ]
+    });
+    assert.deepEqual(
+      first.outcomes.map(entry => entry.status),
+      ['accepted', ...Array.from({ length: 12 }, () => 'warning')]
+    );
+    assert.equal(
+      first.outcomes.filter(entry => entry.warning?.includes('normalized repository-relative path'))
+        .length,
+      9
+    );
+    assert.equal(
+      first.outcomes.filter(entry => entry.warning?.includes('unsupported fields')).length,
+      3
+    );
+    assert.equal(first.outcomes.find(entry => entry.idempotencyKey === 'absolute')?.filePath, null);
+    assert.equal(
+      first.outcomes.some(entry => entry.filePath?.startsWith('/')),
+      false
+    );
+    const overflow = await syncChanges({
+      ctx,
+      missionId: mission.id,
+      sessionKey: attached.sessionKey,
+      changes: [
+        ...Array.from({ length: 25 }, (_, index) => ({
+          filePath: `src/unsupported-${index}.ts`,
+          idempotencyKey: `unsupported-${index}`,
+          content: 'prohibited'
+        })),
+        { filePath: '/private/host-secret.ts', idempotencyKey: 'overflow-absolute' }
+      ]
+    });
+    assert.equal(overflow.outcomes.at(-1)?.status, 'warning');
+    assert.equal(overflow.outcomes.at(-1)?.filePath, null);
+    const replay = await syncChanges({
+      ctx,
+      missionId: mission.id,
+      sessionKey: attached.sessionKey,
+      changes: [
+        {
+          filePath: 'src/evidence.ts',
+          idempotencyKey: 'evidence-1',
+          source: 'declared_edit',
+          quality: 'direct',
+          overlap: false
+        }
+      ]
+    });
+    assert.equal(replay.outcomes[0]?.status, 'ignored');
+    const secondSession = await attachSession({
+      ctx,
+      missionId: mission.id,
+      agentIdentifier: 'second-test-agent'
+    });
+    const weaker = await syncChanges({
+      ctx,
+      missionId: mission.id,
+      sessionKey: secondSession.sessionKey,
+      changes: [
+        {
+          filePath: 'src/evidence.ts',
+          idempotencyKey: 'evidence-2',
+          source: 'window_observed',
+          quality: 'window',
+          overlap: true,
+          toolWindowId: 'window-2'
+        }
+      ]
+    });
+    assert.equal(weaker.outcomes[0]?.status, 'accepted');
+    const stored = (await db.get(
+      `SELECT session_id, observed_metadata_json FROM changed_files WHERE objective_id = ? AND file_path = ?`,
+      [attached.session.objectiveId, 'src/evidence.ts']
+    )) as { session_id: string | null; observed_metadata_json: string };
+    assert.equal(stored.session_id, secondSession.session.id);
+    assert.deepEqual(JSON.parse(stored.observed_metadata_json), {
+      source: 'declared_edit',
+      quality: 'direct',
+      overlap: true,
+      syncKeys: ['evidence-1', 'evidence-2']
+    });
     await db.close();
   });
 });

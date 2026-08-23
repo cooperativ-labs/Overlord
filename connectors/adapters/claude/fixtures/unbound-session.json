@@ -1,8 +1,9 @@
 {
   "fixtureVersion": 1,
   "kind": "script-io",
-  "description": "Mandatory negative test: what the shipped Claude PostToolUse hook does in a session with no Overlord binding, in an unrelated directory. Recorded truth, not an aspiration — the non-empty cliInvocations and sandboxWrites below are the reason hazard `unbound-session-side-effects` is declared and tracked for the agent-session runtime.",
-  "script": "connectors/adapters/claude/scripts/post-tool-use-hook.sh",
+  "description": "Mandatory negative test: the Claude PostToolUse hook exits before reading stdin, spawning the CLI, or writing a log when no objective is explicitly bound.",
+  "script": "connectors/core/scripts/capture-change-hook.sh",
+  "adapterKey": "claude",
   "stdin": {
     "session_id": "11111111-2222-3333-4444-555555555555",
     "hook_event_name": "PostToolUse",
@@ -20,7 +21,7 @@
     "exitCode": 0,
     "stdout": "",
     "stderr": "",
-    "cliInvocations": ["protocol record-touched"],
-    "sandboxWrites": ["~/.ovld/logs/post-tool-use-hook.log"]
+    "cliInvocations": [],
+    "sandboxWrites": []
   }
 }

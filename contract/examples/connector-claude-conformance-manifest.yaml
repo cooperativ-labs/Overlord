@@ -4,7 +4,7 @@
 #
 # Validate with: ovld contract check conformance-manifest.yaml
 
-contractVersion: "0"
+contractVersion: "116"
 componentType: connector
 componentKey: claude
 label: "Claude Code Connector"
@@ -12,19 +12,16 @@ description: "Connector adapter for Anthropic Claude Code CLI agent"
 
 connector:
   agentIdentifier: claude
-  capabilities:
-    - followUpHook
-    - permissionHook
-    - stopHook
-    - modelFlag
-    - effortFlag
-    - contextFilePrompt
-    - permissionRules
-    - slashCommands
-  hookTypes:
-    - UserPromptSubmit
-    - PermissionRequest
-    - Stop
+  # ── GENERATED: do not edit by hand ───────────────────────────────────────────
+  # Projected from connectors/adapters/claude/harness-capabilities.yaml by `yarn connectors:capabilities`.
+  # The harness descriptor and its executable fixtures are the only capability source.
+  integrationShape: callback
+  capabilityTier: 1
+  harnessCapabilities:
+    path: connectors/adapters/claude/harness-capabilities.yaml
+    schemaVersion: 1
+    digest: "c7e52ce7d4698d35888a533b42d67c56d7616b3bb90e8537e4afcc39e1b6cc5d"
+  # ── END GENERATED ────────────────────────────────────────────────────────────
   installPath: "~/.claude"
   managedFiles:
     - "~/.claude/plugins/overlord/overlord-mission.md"

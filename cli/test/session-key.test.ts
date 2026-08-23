@@ -1,5 +1,13 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  statSync,
+  symlinkSync,
+  truncateSync
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -10,20 +18,25 @@ import {
   writeCachedSessionKey
 } from '../src/session-key.ts';
 
-function withTempHome(run: () => void): void {
+function withTempHome(run: (home: string) => void): void {
   const previous = process.env.OVLD_HOME;
-  process.env.OVLD_HOME = mkdtempSync(path.join(tmpdir(), 'ovld-session-key-'));
+  const home = mkdtempSync(path.join(tmpdir(), 'ovld-session-key-'));
+  process.env.OVLD_HOME = home;
   try {
-    run();
+    run(home);
   } finally {
     if (previous === undefined) delete process.env.OVLD_HOME;
     else process.env.OVLD_HOME = previous;
   }
 }
 
-test('session key cache round-trips for a (workingDir, mission) pair', () => {
+test('session key cache round-trips for an exact objective scope', () => {
   withTempHome(() => {
-    const args = { missionId: 'coo:42', workingDirectory: '/repo/one' };
+    const args = {
+      missionId: 'coo:42',
+      workingDirectory: '/repo/one',
+      objectiveId: 'coo:42.abcd'
+    };
     assert.equal(readCachedSessionKey(args), undefined);
 
     writeCachedSessionKey({ ...args, sessionKey: 'sess_abc123' });
@@ -34,43 +47,99 @@ test('session key cache round-trips for a (workingDir, mission) pair', () => {
   });
 });
 
+test('session key files atomically tighten an existing cache directory to owner-only', () => {
+  withTempHome(home => {
+    const cacheDirectory = path.join(home, 'protocol-session-keys');
+    mkdirSync(cacheDirectory, { mode: 0o777 });
+    chmodSync(cacheDirectory, 0o777);
+    writeCachedSessionKey({
+      missionId: 'coo:42',
+      workingDirectory: '/repo/private',
+      objectiveId: 'coo:42.private',
+      sessionKey: 'sess_private'
+    });
+
+    const files = readdirSync(cacheDirectory);
+    assert.equal(files.length, 1);
+    assert.match(files[0]!, /^[a-f0-9]{64}$/);
+    assert.equal(statSync(cacheDirectory).mode & 0o777, 0o700);
+    assert.equal(statSync(path.join(cacheDirectory, files[0]!)).mode & 0o777, 0o600);
+  });
+});
+
+test('oversized session-key cache files are never parsed as credentials', () => {
+  withTempHome(home => {
+    const args = {
+      missionId: 'coo:42',
+      workingDirectory: '/repo/oversized',
+      objectiveId: 'coo:42.oversized'
+    };
+    writeCachedSessionKey({ ...args, sessionKey: 'sess_private' });
+    const cacheDirectory = path.join(home, 'protocol-session-keys');
+    const [cacheName] = readdirSync(cacheDirectory);
+    assert.ok(cacheName);
+    truncateSync(path.join(cacheDirectory, cacheName), 4 * 1024 + 1);
+
+    assert.equal(readCachedSessionKey(args), undefined);
+  });
+});
+
 test('session key cache is scoped per mission and per working directory', () => {
   withTempHome(() => {
     writeCachedSessionKey({
       missionId: 'coo:1',
       workingDirectory: '/repo/one',
+      objectiveId: 'coo:1.abcd',
       sessionKey: 'sess_one'
     });
 
     // Same directory, different mission → no leak.
     assert.equal(
-      readCachedSessionKey({ missionId: 'coo:2', workingDirectory: '/repo/one' }),
+      readCachedSessionKey({
+        missionId: 'coo:2',
+        workingDirectory: '/repo/one',
+        objectiveId: 'coo:2.abcd'
+      }),
       undefined
     );
     // Same mission, different directory → no leak.
     assert.equal(
-      readCachedSessionKey({ missionId: 'coo:1', workingDirectory: '/repo/two' }),
+      readCachedSessionKey({
+        missionId: 'coo:1',
+        workingDirectory: '/repo/two',
+        objectiveId: 'coo:1.abcd'
+      }),
       undefined
     );
     // Exact pair still resolves.
     assert.equal(
-      readCachedSessionKey({ missionId: 'coo:1', workingDirectory: '/repo/one' }),
+      readCachedSessionKey({
+        missionId: 'coo:1',
+        workingDirectory: '/repo/one',
+        objectiveId: 'coo:1.abcd'
+      }),
       'sess_one'
     );
   });
 });
 
-test('cache keys on the resolved working directory', () => {
+test('cache keys on the canonical working directory across symlink aliases', () => {
   withTempHome(() => {
+    const workspace = mkdtempSync(path.join(tmpdir(), 'ovld-session-key-workspace-'));
+    const workspaceAlias = `${workspace}-alias`;
+    symlinkSync(workspace, workspaceAlias);
     writeCachedSessionKey({
       missionId: 'coo:7',
-      workingDirectory: '/repo/app',
+      workingDirectory: workspace,
+      objectiveId: 'coo:7.abcd',
       sessionKey: 'sess_resolved'
     });
-    // A non-normalized path that resolves to the same absolute directory hits the
-    // same cache entry, matching the auto-inject behavior in runProtocolCommand.
     assert.equal(
-      readCachedSessionKey({ missionId: 'coo:7', workingDirectory: '/repo/sub/../app' }),
+      readCachedSessionKey({
+        missionId: 'coo:7',
+        workingDirectory: workspaceAlias,
+        objectiveId: 'coo:7.abcd'
+      }),
       'sess_resolved'
     );
   });
@@ -115,17 +184,16 @@ test('session key cache scopes per objective without falling back across sibling
       }),
       undefined
     );
-    // A caller that did not name an objective retains the serial compatibility cache.
-    assert.equal(
-      readCachedSessionKey({ missionId: 'coo:1', workingDirectory: '/repo/one' }),
-      'sess_b'
-    );
   });
 });
 
 test('blank session keys are never persisted', () => {
   withTempHome(() => {
-    const args = { missionId: 'coo:9', workingDirectory: '/repo/blank' };
+    const args = {
+      missionId: 'coo:9',
+      workingDirectory: '/repo/blank',
+      objectiveId: 'coo:9.abcd'
+    };
     writeCachedSessionKey({ ...args, sessionKey: '   ' });
     assert.equal(readCachedSessionKey(args), undefined);
   });
@@ -158,6 +226,5 @@ test('clearing by session key removes every objective alias but preserves siblin
       undefined
     );
     assert.equal(readCachedSessionKey({ ...common, objectiveId: 'coo:1.bbbb' }), 'sess_sibling');
-    assert.equal(readCachedSessionKey(common), 'sess_sibling');
   });
 });

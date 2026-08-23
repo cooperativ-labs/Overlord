@@ -12,9 +12,9 @@
 #   yarn connectors:capabilities          (write)
 #   yarn connectors:capabilities:check    (CI drift check)
 #
-# The deprecated hook-named `connector.capabilities` / `connector.hookTypes` flags in
-# conformance-manifest.yaml are a GENERATED legacy projection of this file plus the
-# adapter's `legacy:` block. Do not hand-edit them.
+# Connector conformance metadata is generated directly from this descriptor. There is no
+# second projection: the descriptor, executable fixtures, and derived tier are the complete
+# capability source.
 
 '$schema': 'https://json-schema.org/draft/2020-12/schema'
 '$id': 'openoverlord/harness-capabilities/v1'
@@ -34,7 +34,9 @@ required:
   - integrationShape
   - binding
   - decisionHold
+  - mutationHooks
   - capabilities
+  - unboundSessionFixture
 
 properties:
   schemaVersion:
@@ -178,6 +180,41 @@ properties:
         then:
           required: [fixture]
 
+  # ── File-attribution mutation-window evidence ───────────────────────────────
+  #
+  # This records what the native harness has actually proven. A post-only native edit callback
+  # may forward its native payload to `capture-change --agent <connector>`. Only a path the
+  # connector-owned codec normalizes as `file.edited` becomes objective-bound, non-exclusive
+  # `declared_edit`/`direct` evidence. Codec-normalized read, search, and fetch callbacks are
+  # silent no-ops. Mutation-capable callbacks without a normalized edit path, plus shell,
+  # generic, unknown, and unmapped callbacks, record unavailable evidence health.
+  # Only a strictly proven `paired` descriptor may emit authoritative window evidence.
+
+  mutationHooks:
+    type: object
+    additionalProperties: false
+    required: [classification, fixture]
+    properties:
+      classification:
+        type: string
+        enum: [paired, post-only, unsupported]
+      fixture:
+        '$ref': '#/$defs/fixtureRef'
+      notes:
+        type: string
+        minLength: 1
+      reason:
+        type: string
+        minLength: 1
+      evidenceRef:
+        '$ref': '#/$defs/evidenceRef'
+    allOf:
+      - if:
+          properties: { classification: { const: unsupported } }
+          required: [classification]
+        then:
+          required: [reason]
+
   # ── Capability vector ────────────────────────────────────────────────────────
 
   capabilities:
@@ -310,28 +347,8 @@ properties:
     '$ref': '#/$defs/fixtureRef'
     description: >
       Required executable proof that an unbound session in an unrelated directory produces
-      no request, event, network call, subprocess, or delay from this adapter's registered
-      integrations. Any local write the fixture records must be declared as a hazard.
-
-  # ── Legacy conformance projection inputs ─────────────────────────────────────
-
-  legacy:
-    type: object
-    additionalProperties: false
-    description: >
-      Hand-authored inputs for the generated deprecated conformance projection. Launch
-      capabilities (model/effort/context-file/permission-rules/slash-commands) are not
-      agent-session interaction capabilities and are carried through verbatim; the
-      hook-named interaction flags are validated against this descriptor before emission.
-    properties:
-      capabilities:
-        type: array
-        uniqueItems: true
-        items: { type: string }
-      hookTypes:
-        type: array
-        uniqueItems: true
-        items: { type: string }
+      no request, event, network call, subprocess, local write, output, or delay from this
+      adapter's registered integrations.
 
 '$defs':
   capabilityStatus:

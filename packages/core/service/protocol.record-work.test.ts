@@ -56,7 +56,7 @@ describe('recordWork (record completed chat work as a review mission)', () => {
     const { db, ctx } = await setup();
     const project = await createProject({ ctx, name: 'Record Coverage' });
 
-    const { mission } = await recordWork({
+    const { mission, deliveryId } = await recordWork({
       ctx,
       projectId: project.id,
       objective: 'Ship the feature.',
@@ -70,20 +70,52 @@ describe('recordWork (record completed chat work as a review mission)', () => {
           impact: 'A works.'
         }
       ],
-      // An extra touched file with no rationale surfaces as missing_rationale.
-      changedFiles: [{ filePath: 'src/b.ts', vcsStatus: 'M' }]
+      // An explicit changed-file input with no rationale surfaces as missing_rationale.
+      changedFiles: [
+        null,
+        { filePath: '/private/host-path.ts', vcsStatus: 'M' },
+        { filePath: 'src/invalid-status.ts', vcsStatus: 'x'.repeat(33) },
+        { filePath: 'src/b.ts', vcsStatus: 'M' }
+      ]
     });
 
     const files = await listChangedFilesForReview({
       ctx,
-      missionId: mission.id,
-      includeCurrent: false
+      missionId: mission.id
     });
     const byPath = new Map(files.map(file => [file.filePath, file]));
 
     assert.equal(byPath.get('src/a.ts')?.coverage, 'covered');
+    assert.equal(byPath.get('src/a.ts')?.currentDiffState, 'unknown');
     assert.equal(byPath.get('src/b.ts')?.coverage, 'missing_rationale');
+    assert.equal(byPath.get('src/b.ts')?.currentDiffState, 'unknown');
     assert.equal(byPath.get('src/b.ts')?.vcsStatus, 'M');
+    assert.equal(byPath.has('/private/host-path.ts'), false);
+    assert.equal(byPath.has('src/invalid-status.ts'), false);
+    const rationaleLink = (await db.get(
+      `SELECT changed_file_id FROM change_rationales WHERE mission_id = ? AND file_path = ?`,
+      [mission.id, 'src/a.ts']
+    )) as { changed_file_id: string | null };
+    assert.ok(
+      rationaleLink.changed_file_id,
+      'record-work rationale links to its objective/path row'
+    );
+    const reviewChanges = (await db.all(
+      `SELECT entity_type, operation FROM entity_changes
+        WHERE mission_id = ? AND entity_type IN ('changed_file', 'change_rationale')
+        ORDER BY entity_type, seq`,
+      [mission.id]
+    )) as Array<{ entity_type: string; operation: string }>;
+    assert.deepEqual(reviewChanges, [
+      { entity_type: 'change_rationale', operation: 'insert' },
+      { entity_type: 'changed_file', operation: 'insert' },
+      { entity_type: 'changed_file', operation: 'insert' }
+    ]);
+    const delivery = (await db.get(`SELECT payload_json FROM deliveries WHERE id = ?`, [
+      deliveryId
+    ])) as { payload_json: string };
+    const warnings = JSON.parse(delivery.payload_json).deliveryReport.warnings as string[];
+    assert.equal(warnings.length, 3);
 
     await db.close();
   });
@@ -130,6 +162,29 @@ describe('recordWork (record completed chat work as a review mission)', () => {
         error.message.includes('Artifact type must be')
     );
 
+    await db.close();
+  });
+
+  it('rejects malformed artifact items before creating record-work state', async () => {
+    const { db, ctx } = await setup();
+    const project = await createProject({ ctx, name: 'Record Malformed Artifact' });
+    const before = (await db.get(`SELECT COUNT(*) AS count FROM missions`)) as { count: number };
+
+    await assert.rejects(
+      () =>
+        recordWork({
+          ctx,
+          projectId: project.id,
+          objective: 'Record malformed evidence.',
+          summary: 'Malformed artifact must not create a mission.',
+          artifacts: [null]
+        }),
+      (error: unknown) =>
+        error instanceof ServiceError && error.status === 400 && error.code === 'validation_error'
+    );
+
+    const after = (await db.get(`SELECT COUNT(*) AS count FROM missions`)) as { count: number };
+    assert.equal(after.count, before.count);
     await db.close();
   });
 

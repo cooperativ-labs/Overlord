@@ -97,7 +97,7 @@ backend is reachable.
 
 Environment overrides (useful in scripts and CI):
 
-- `OVLD_HOME` — relocate the entire global `~/.ovld` data directory (SQLite, object storage, VCS baselines, native-session caches)
+- `OVLD_HOME` — relocate the entire global `~/.ovld` data directory (SQLite, object storage, objective ledgers, and native-session caches)
 - `OVERLORD_BACKEND_URL` — production/global backend target; an *explicit* runtime value (shell export, container/launcher injection) takes precedence over the resolved `overlord.toml` `backend_url`
 - `OVERLORD_BACKEND_URL_DEV` — **development-only** backend target, read solely by the in-repo source build and the dev/test tooling that runs it (`yarn dev`, the test harness). An installed/published `ovld` never reads it, and nothing aliases it into the production `OVERLORD_BACKEND_URL`
 - `OVERLORD_WEB_PORT` — port the local backend binds when launched
@@ -249,7 +249,7 @@ colocation convention):
 - [03 — Agent Protocol](https://github.com/cooperativ-labs/OpenOverlord/blob/main/cli/docs/03-agent-protocol.md): `ovld protocol` lifecycle, context assembly, updates, delivery, attachments.
 - [04 — Runner and Launch Execution](https://github.com/cooperativ-labs/OpenOverlord/blob/main/cli/docs/04-runner-and-launch-execution.md): execution requests, local runner, launch command generation, auto-advance.
 - [06 — Core Domain and Lifecycle](https://github.com/cooperativ-labs/OpenOverlord/blob/main/cli/docs/06-core-domain-and-lifecycle.md): projects, missions, objectives, sessions, events, statuses, state transitions.
-- [11 — Review, Artifacts, and Change Tracking](https://github.com/cooperativ-labs/OpenOverlord/blob/main/cli/docs/11-review-artifacts-and-change-tracking.md): delivery review records, artifacts, rationale coverage, local diff support.
+- [11 — Review, Artifacts, and Change Tracking](https://github.com/cooperativ-labs/OpenOverlord/blob/main/cli/docs/11-review-artifacts-and-change-tracking.md): delivery review records, artifacts, objective-ledger evidence, and optional rationale annotations.
 - [Test Plan](https://github.com/cooperativ-labs/OpenOverlord/blob/main/cli/docs/testing.md): test plan for the `cli`, `protocol`, and `runner` components — management commands, protocol lifecycle/attach-shape/validation conformance, runner queue atomicity, and surface smoke tests. Part of the root [TEST_PLAN.md](https://github.com/cooperativ-labs/OpenOverlord/blob/main/TEST_PLAN.md).
 
 ### Code & Tests

@@ -116,10 +116,11 @@ policy owner.
 
 ### Duplicate observation and side effects
 
-Overlord event retries deduplicate by a content-derived producer id, but an external hook still
-owns its own side effects. Two touched-file hooks can write two logs; two notification hooks can
-send two notifications. Deduplication of Overlord events does not make arbitrary hook commands
-idempotent.
+Overlord reduces each connector callback through that connector's compiled codec. Only an exact
+normalized `file.edited` path can enter the objective/session ledger; read-only callbacks are
+silent, and mutation-capable callbacks without a usable path record unavailable hook health.
+Duplicate hook registrations can still run arbitrary external commands twice, so remove duplicate
+registrations even though ledger synchronization itself is idempotent.
 
 ### Shared configuration namespaces
 

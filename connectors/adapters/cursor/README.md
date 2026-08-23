@@ -48,7 +48,6 @@ ovld doctor
 - `/discuss-objective` — submit a draft objective for discussion
 - `/add-objectives` — append ordered objectives to a mission
 - `/record-work` — record already-completed work as a new mission
-- `/spawn` — deprecated alias for `/prompt`
 
 ### Namespaced components
 
@@ -76,7 +75,13 @@ This connector is intentionally reviewable against the four connector layers in 
 - `skills/overlord-mission/SKILL.md` — Cursor adapter template with a `<!-- @connector-core -->` marker; setup interpolates shared core content at install time.
 - `commands/*.md` — slash commands for session routing, objective discussion, mission creation, and work recording.
 - `hooks/overlord-user-prompt-submit.sh` — `beforeSubmitPrompt` follow-up capture through `ovld protocol hook-event`.
-- `hooks/overlord-post-tool-use.sh` — records `postToolUse` file edits and shell-mediated changes for exact per-session delivery attribution.
+- `hooks/overlord-post-tool-use.sh` — forwards bound `postToolUse` payloads to local
+  `capture-change`. Its installed body is rendered from the shared
+  `connectors/core/scripts/capture-change-hook.sh`; there is no adapter-local implementation.
+  Only a path normalized by the Cursor codec as `file.edited` records
+  non-exclusive `declared_edit`/`direct` evidence; normalized read, search, and fetch callbacks are
+  silent no-ops. Mutation-capable callbacks without a normalized edit path, plus shell, generic,
+  unknown, and unmapped callbacks, record unavailable evidence health.
 - `hooks/overlord-stop.sh` — checks pending delivery through `ovld protocol hook-event`; when needed, it asks Cursor to continue once so the agent can finish delivery. Mechanical harness observation, permission, and injection are not live Overlord connector paths under Latch v2; native Cursor prompts retain control.
 - `rules/overlord-local.mdc` — always-on workflow rules for Cursor sessions.
 - `mcp.json` + `scripts/overlord-mcp.mjs` — MCP bridge to common `ovld protocol` operations. The shim is **generated**: it is rendered from `connectors/core/scripts/overlord-mcp.mjs` at setup time with the adapter key substituted, and there is no copy in this directory to edit.

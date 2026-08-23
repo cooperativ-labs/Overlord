@@ -193,7 +193,7 @@ test('an agent-session hook path resolves from connector core, not the adapter d
   const relativePath = 'scripts/agent-session-event.sh';
 
   // The adapter ships no such file; the core renderer supplies it.
-  assert.equal(managedFileSourceExists({ sourceDir, relativePath }), true);
+  assert.equal(managedFileSourceExists({ sourceDir, relativePath, adapterKey: 'claude' }), true);
 
   const contents = resolveManagedFileContents({
     sourceDir,

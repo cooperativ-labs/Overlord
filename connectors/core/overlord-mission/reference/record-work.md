@@ -5,7 +5,7 @@ just built for the user in a chat app — as a completed Overlord mission. It is
 after-the-fact equivalent of `create` + `attach` + `deliver`, collapsed into one call:
 
 1. Creates a mission with a **single completed objective** matching the work done.
-2. Records each file change with its rationale.
+2. Records explicitly supplied changed files and any optional reviewer annotations.
 3. Lands the mission in the **review** column.
 4. Runs the delivery through the **standard Gemini delivery summarizer**, so the result
    reads like any other delivered (in-review) mission.
@@ -26,7 +26,7 @@ identical across the CLI (`--payload-file -`) and the hosted MCP tool
   "title": "Optional mission title; defaults to a title derived from the objective.",
   "changeRationales": [
     {
-      "file_path": "src/widget.ts",   // repository-relative path
+      "filePath": "src/widget.ts",   // repository-relative path
       "label": "Add widget",          // short reviewer title
       "summary": "New widget module.", // what changed in this file
       "why": "User asked for a widget.", // why it changed
@@ -34,7 +34,7 @@ identical across the CLI (`--payload-file -`) and the hosted MCP tool
     }
   ],
   "changedFiles": [
-    { "filePath": "src/generated.ts", "vcsStatus": "M" } // optional; touched files without a rationale
+    { "filePath": "src/generated.ts", "vcsStatus": "M" }
   ],
   "artifacts": [
     { "type": "next_steps", "label": "Next steps", "content": "…" } // optional
@@ -48,22 +48,19 @@ identical across the CLI (`--payload-file -`) and the hosted MCP tool
   `--objective`/positional on the CLI; a flag always wins over the envelope.
 - **`summary`** (required) — narrative, not a command list.
 - **`title`** (optional) — omit to derive from the objective.
-- **`changeRationales`** (one per meaningful file change) — same shape as `deliver`. All
-  five string fields (`file_path`, `label`, `summary`, `why`, `impact`) are required per
-  entry. `filePath` (camelCase) is accepted as an alias for `file_path`. Do **not** wrap
-  entries under a `rationale` key. Skip formatting-only noise.
-  - Every rationale's `file_path` is automatically recorded as a **changed file** and
-    shows as **covered** in the review file panel — you do not list it twice.
-- **`changedFiles`** (optional) — additional touched files you are *not* writing a full
-  rationale for. They appear as **missing_rationale** in review, exactly like a live
-  delivery. Uses `filePath` (camelCase) + optional `vcsStatus`.
+- **`changeRationales`** (optional reviewer annotations) — same shape as `deliver`. All
+  five string fields (`filePath`, `label`, `summary`, `why`, `impact`) are required per
+  entry. Use canonical `filePath`; do **not** wrap entries under a `rationale` key.
+- **`changedFiles`** (optional, `record-work` only) — files known to have changed during
+  this completed chat work. Each entry is an object with a canonical repository-relative
+  `filePath` and optional bounded `vcsStatus`; raw strings, absolute paths, and extra fields
+  are rejected. A rationale's `filePath` is recorded automatically, so do not list it twice.
+  Do not infer ownership from a shared-worktree-wide status or diff.
 - **`artifacts`** (optional) — `next_steps`, `test_results`, `migration`, `note`, `url`,
   or `decision`.
 - **`deliveryReport`** (optional) — you may include a `deliveryReport.agentReport`
   (`humanActions`, `tradeoffsMade`, `knownRisks`, `deferredWork`, `assumptions`) just as
   in `deliver`. It improves review visibility but never blocks the record.
-
-Enumerate changed files from `git status` / `git diff` before writing rationales.
 
 ## CLI
 
@@ -75,9 +72,12 @@ ovld protocol record-work --payload-file - <<'EOF'
   "objective": "Add a CSV export button to the reports page.",
   "summary": "Added a CSV export control and the serializer behind it.",
   "changeRationales": [
-    { "file_path": "src/reports/export.ts", "label": "CSV serializer",
+    { "filePath": "src/reports/export.ts", "label": "CSV serializer",
       "summary": "New CSV serializer.", "why": "Users need offline reports.",
       "impact": "Reports can be exported as CSV." }
+  ],
+  "changedFiles": [
+    { "filePath": "src/reports/generated-schema.ts", "vcsStatus": "M" }
   ]
 }
 EOF
@@ -102,6 +102,9 @@ Call `overlord_record_work` with the same fields as first-class arguments
     { "filePath": "src/reports/export.ts", "label": "CSV serializer",
       "summary": "New CSV serializer.", "why": "Users need offline reports.",
       "impact": "Reports can be exported as CSV." }
+  ],
+  "changedFiles": [
+    { "filePath": "src/reports/generated-schema.ts", "vcsStatus": "M" }
   ]
 }
 ```

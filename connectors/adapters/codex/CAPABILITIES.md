@@ -6,7 +6,7 @@
 
 **Harness version verified** `0.147.0` · **range** `>=0.124.0` · **scheme** `semver`
 
-**Descriptor digest** `9743c504d8d11ffec193751273102d9a1277293e55f43aef8914da4b05ddfa23`
+**Descriptor digest** `bc823089f8c0fc97b888dec6b4e10eb55b596b1194664e1fe200468fe2c622c0`
 
 > The tier is derived from passing fixtures, never authored. `unsupported` means the harness
 > cannot do it — do not attempt it. `not-implemented` means it is buildable and unbuilt: that is
@@ -40,6 +40,18 @@ native id is a binding authority.
 
 Per-hook timeouts in seconds; the documentation gives a 600-second default. The adapter must set `timeout` explicitly from the window policy and well below that default. A local 0.147.0 `codex exec --approve-for-me` smoke test still emitted PermissionRequest after the workspace sandbox failed and automatic review retried the shell command, so auto-review does not bypass the installed request hook.
 
+## Mutation-window evidence
+
+| Field | Value |
+| --- | --- |
+| Classification | `post-only` |
+| Executable fixture | `fixtures/mutation-window-evidence.json` |
+
+Recorded pre/post shapes are separate calls and do not prove a paired window. A directly named native edit path normalized by the Codex codec as `file.edited` may record objective-bound, non-exclusive `declared_edit`/`direct` evidence. The recorded apply_patch completion has no normalized edit path, so it records unavailable evidence health.
+
+The completion fixture proves post-only timing but exposes no normalized `file.edited`
+path. Runtime file evidence is unavailable for this adapter.
+
 ## Capabilities
 
 | Capability | Status | Native | Evidence |
@@ -47,7 +59,7 @@ Per-hook timeouts in seconds; the documentation gives a 600-second default. The 
 | `observe.prompt` | ✅ supported | `UserPromptSubmit` | fixtures: `fixtures/normalize-user-prompt.json` |
 | `observe.toolCall` | 🚧 not-implemented | `PreToolUse` | tracked as `latch-engine` |
 | `observe.toolResult` | 🚧 not-implemented | `PostToolUse` | tracked as `latch-engine` |
-| `observe.fileEdit` | ✅ supported | `PostToolUse` | fixtures: `fixtures/normalize-post-tool-use.json`, `fixtures/agent-session-hooks.json`, `fixtures/post-tool-use-hook.json` |
+| `observe.fileEdit` | ✅ supported | `PostToolUse` | fixtures: `fixtures/normalize-post-tool-use.json`, `fixtures/agent-session-hooks.json`, `fixtures/post-tool-use-hook.json`, `fixtures/post-tool-use-unbound.json` |
 | `observe.sessionLifecycle` | 🚧 not-implemented | `SessionStart` | tracked as `latch-engine` |
 | `decide.shell` | 🚧 not-implemented | `PermissionRequest` | tracked as `latch-engine` |
 | `decide.mcp` | 🚧 not-implemented | `PermissionRequest` | tracked as `latch-engine` |
@@ -64,9 +76,9 @@ Per-hook timeouts in seconds; the documentation gives a 600-second default. The 
 
 ### Capability notes
 
-- **`observe.toolCall`** — Latch v2 removed the CLI event stream that previously owned mechanical observation. Overlord exposes no replacement until it has a native Conversation Hub client.
-- **`observe.fileEdit`** — The lifecycle PostToolUse registration pipes Codex's native payload to `ovld protocol record-touched`, which appends normalized changed paths to the per-session attribution log read by `deliver`. It is intentionally separate from mechanical agent-session observation, which remains owned by Latch.
-- **`decide.universal`** — Latch v2 removed the CLI pending-input and send surface. The native Codex prompt owns approvals; Overlord exposes no remote decision control.
+- **`observe.toolCall`** — There is no mechanical observation path until Overlord has a native Conversation Hub client.
+- **`observe.fileEdit`** — The lifecycle PostToolUse registration forwards Codex's native payload to local `capture-change` only when `OVERLORD_OBJECTIVE_ID` resolves an exact active-session binding. Native paths normalized by the Codex codec as `file.edited` record non-exclusive `declared_edit`/`direct` evidence. Codec-normalized read, search, and fetch callbacks are silent no-ops; mutation-capable callbacks without a normalized edit path, plus shell, generic, unknown, and unmapped callbacks, record unavailable evidence health. It remains separate from mechanical agent-session observation.
+- **`decide.universal`** — The native Codex prompt owns approvals; Overlord exposes no remote decision control.
 - **`answer.structuredQuestion`** — `codex app-server` exposes ToolRequestUserInput with per-option label/description and an autoResolutionMs — an ACP-shaped structured question in everything but name. It is unreachable until the single-subscriber question is settled.
 - **`inject.midTurn`** — ThreadInjectItems/TurnSteer exist on the experimental app-server surface only. The binary carries "expected exactly one client subscribed to the thread, found {}", so if the TUI is that one client Overlord cannot also subscribe and this path is closed.
 
@@ -75,13 +87,10 @@ Per-hook timeouts in seconds; the documentation gives a 600-second default. The 
 | Hazard | Severity | Verification | Mitigation | Tracked as |
 | --- | --- | --- | --- | --- |
 | `two-integration-surfaces-could-disagree` | high | verified | implemented | fixture `fixtures/agent-session-hooks.json` |
-| `shipped-permission-hook-inert` | high | verified | implemented | fixture `fixtures/agent-session-hooks.json` |
 | `prompt-and-agent-hook-handlers-inert` | low | verified | accepted | — |
 | `hooks-version-and-platform-gate` | medium | verified | required | `agent-session-phase-4` |
 
 **`two-integration-surfaces-could-disagree`** — Hooks and `codex app-server` can both answer a permission. A session driven by both would race in a way no revision CAS can settle, so exactly one surface must be chosen and documented before either is built.
-
-**`shipped-permission-hook-inert`** — The former PermissionRequest hook called a nonexistent protocol command in the background. The connector no longer registers a PermissionRequest hook; the native prompt owns approvals when Latch is absent.
 
 **`prompt-and-agent-hook-handlers-inert`** — Codex 0.146.0 accepts three hook handler types — `command`, `prompt`, and `agent` — but only `command` runs. Hook discovery parses `prompt` and `agent` and then skips them with a "not supported yet" warning, so a manifest that used either would install cleanly, list in `hooks`, and never execute. The connector must keep emitting `command` handlers only, and must not read the presence of these variants in the schema as availability. `command` is a shell command line run through `$SHELL -lc` (`/bin/sh` when SHELL is unset) — it is not restricted to Bash and not restricted to shell scripting, since the command may invoke any interpreter.
 

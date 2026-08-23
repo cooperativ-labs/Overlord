@@ -1,0 +1,20 @@
+{
+  "fixtureVersion": 1,
+  "kind": "mutation-window",
+  "description": "OpenCode has a completed tool part but no matching preceding in-progress frame, so it is post-only.",
+  "classification": "post-only",
+  "postFixture": "fixtures/normalize-tool-completed.json",
+  "proof": {
+    "post": {
+      "session": "properties.sessionID",
+      "call": "properties.part.callID",
+      "workspace": "properties.cwd",
+      "tool": "properties.part.tool",
+      "outcome": "properties.part.state.status",
+      "completion": {
+        "path": "properties.part.state.status",
+        "equals": "completed"
+      }
+    }
+  }
+}

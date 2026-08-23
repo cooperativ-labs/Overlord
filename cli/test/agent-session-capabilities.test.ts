@@ -175,28 +175,13 @@ test('no tier is authored above what the fixtures prove', () => {
   }
 });
 
-test('the deprecated conformance projection never re-declares a capability the harness lacks', () => {
+test('conformance manifests carry only current descriptor-derived metadata', () => {
   for (const adapter of shippedAdapters()) {
     const manifest = parseYaml(
       readFileSync(path.join(adaptersDir, adapter, 'conformance-manifest.yaml'), 'utf8')
     );
-    const descriptor = readDescriptor(adapter);
-    const ridesOnPermissionRequest = Object.values(
-      descriptor.capabilities as Record<string, any>
-    ).some(node => node.native === 'PermissionRequest' && node.status !== 'unsupported');
-
-    if ((manifest.connector.capabilities ?? []).includes('permissionHook')) {
-      assert.ok(
-        ridesOnPermissionRequest,
-        `${adapter}: permissionHook is projected but no capability rides on PermissionRequest`
-      );
-    }
-    if ((manifest.connector.hookTypes ?? []).includes('PermissionRequest')) {
-      assert.ok(
-        ridesOnPermissionRequest,
-        `${adapter}: PermissionRequest hook type is projected but no capability rides on it`
-      );
-    }
+    assert.equal('capabilities' in manifest.connector, false);
+    assert.equal('hookTypes' in manifest.connector, false);
     assert.equal(manifest.connector.capabilityTier, findHarnessDescriptor(adapter)?.capabilityTier);
     assert.equal(
       manifest.connector.integrationShape,
@@ -205,13 +190,7 @@ test('the deprecated conformance projection never re-declares a capability the h
   }
 });
 
-test('Cursor no longer claims a universal PermissionRequest hook it does not have', () => {
-  const manifest = parseYaml(
-    readFileSync(path.join(adaptersDir, 'cursor', 'conformance-manifest.yaml'), 'utf8')
-  );
-  assert.ok(!(manifest.connector.capabilities ?? []).includes('permissionHook'));
-  assert.ok(!(manifest.connector.hookTypes ?? []).includes('PermissionRequest'));
-
+test('Cursor reports its universal decision limitation in the canonical descriptor', () => {
   const cursor = findHarnessDescriptor('cursor');
   assert.equal(cursor?.capabilities['decide.universal'].status, 'unsupported');
   assert.ok(cursor?.capabilities['decide.universal'].evidenceRef);

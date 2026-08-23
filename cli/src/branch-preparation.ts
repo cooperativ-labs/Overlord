@@ -451,7 +451,7 @@ async function resolveProjectPrimaryResourceKey({
  *
  * Isolation applies only in worktree mode: with worktrees off, the mission works
  * in one checkout by construction and two concurrent objectives deliberately
- * share it (delivery attributes files through the per-session touched-file log,
+ * share it (capture attributes files through the objective/session change ledger,
  * not through the checkout). In worktree mode a shared dirty checkout would let
  * two agents clobber each other, so a concurrently launched objective gets its
  * own branch and worktree — the same thing that happens when a mission's branch

@@ -52,8 +52,8 @@
       "expectedTradeoffCount": 0
     },
     {
-      "name": "legacy-summary-only",
-      "summary": "Legacy delivery summary.",
+      "name": "summary-only",
+      "summary": "Delivery summary without advisory evidence.",
       "expectedHumanActionCount": 0,
       "expectedTradeoffCount": 0
     },
@@ -61,8 +61,9 @@
       "name": "prohibited-git-and-qa-actions",
       "summary": "Filtered delivery actions.",
       "deliveryReport": {
+        "schemaVersion": 1,
         "agentReport": {
-          "human_actions": [
+          "humanActions": [
             { "action": "git push the branch" },
             { "action": "Open a pull request" },
             { "action": "Review the code" },
@@ -74,15 +75,28 @@
       "expectedTradeoffCount": 0
     },
     {
+      "name": "retired-wire-aliases-are-not-lifted",
+      "summary": "Retired aliases are ignored without blocking delivery.",
+      "deliveryReport": {
+        "agent_report": {
+          "known_risks": ["This retired field must not be persisted."]
+        }
+      },
+      "expectedHumanActionCount": 0,
+      "expectedTradeoffCount": 0,
+      "expectedWarningCount": 1
+    },
+    {
       "name": "malformed-oversized-model-output",
-      "summary": "Invalid output must fail validation.",
+      "summary": "Invalid advisory output is salvaged.",
       "deliveryReport": {
         "schemaVersion": 1,
         "agentReport": {
           "knownRisks": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"]
         }
       },
-      "valid": false
+      "expectedHumanActionCount": 0,
+      "expectedTradeoffCount": 0
     }
   ]
 }

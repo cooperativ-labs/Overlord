@@ -137,9 +137,9 @@ ground from the system's point of view, plus everything before and after.
    [The agent protocol](/docs-for-agents/agent-protocol/#attach): the current
    objective, previous/future objectives, history, artifacts, attachments,
    shared state, the same `projectResources` array from step 5, and
-   `agentInstructions`. In a git workspace, attach also records a VCS baseline
-   so changed-file attribution works automatically at delivery — this is
-   independent of the launch env vars and happens fresh every attach.
+   `agentInstructions`. Attach also records the exact objective/session binding
+   used by local connector evidence; it does not inspect Git or snapshot the
+   worktree.
 
 7. ### The agent works and reports
 
@@ -152,11 +152,10 @@ ground from the system's point of view, plus everything before and after.
 
    `ovld protocol deliver` closes out the objective in one transaction:
 
-   - Validates the summary and enforces that every changed file (computed as
-     the delta from the attach-time VCS baseline, not hand-reported by the
-     agent) has a change-rationale.
-   - Writes the `deliveries`, `artifacts`, and `change_rationales` rows and a
-     `delivery`-type mission event.
+   - Best-effort drains every bounded batch from the objective/session change
+     ledger. Per-item warnings and unavailable sync never reject delivery.
+   - Validates the summary and writes `deliveries`, optional artifacts and
+     rationale annotations, and a `delivery`-type mission event.
    - Normalizes optional delivery evidence (human actions, tradeoffs, risks,
      deferred work, and assumptions), stores a deterministic presentation, and
      queues optional AI composition without delaying the delivery transaction.
@@ -189,9 +188,9 @@ ground from the system's point of view, plus everything before and after.
 11. ### Review reads the durable records back
 
     Nothing in review is derived live from the agent's session — the review
-    surface reads the `deliveries`, `artifacts`, `change_rationales`, and
-    changed-files records written in step 8, checking rationale coverage
-    against the actual changed files.
+    surface reads the `deliveries`, `artifacts`, optional `change_rationales`,
+    and changed-file observations written in step 8. File observations remain
+    visible without prose.
 
 </Steps>
 

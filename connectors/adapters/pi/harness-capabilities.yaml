@@ -37,8 +37,12 @@ decisionHold:
   trackedAs: latch-engine
   maxTimeoutSeconds: null
   notes: >-
-    Remote decision hold moved to Latch. Pi has no native prompt; Overlord no longer intercepts
-    tool calls.
+    Pi has no native prompt, and Overlord does not intercept tool calls in this connector.
+
+mutationHooks:
+  classification: unsupported
+  fixture: fixtures/mutation-window-evidence.json
+  reason: No recorded completion callback with the same native call id proves a pair.
 
 capabilities:
   observe.prompt:
@@ -85,8 +89,7 @@ capabilities:
     native: tool_call
     trackedAs: latch-engine
     notes: >-
-      Remote tool-call decisions moved to Latch. Pi no longer intercepts tools on the Overlord
-      connector path.
+      Pi does not intercept tools on the Overlord connector path.
   answer.structuredQuestion:
     status: not-implemented
     native: ctx.ui.select
@@ -173,13 +176,3 @@ decisionShape:
     decision rather than an adapter default.
 
 unboundSessionFixture: fixtures/extension-holds-no-credentials.json
-
-legacy:
-  capabilities:
-    - followUpHook
-    - nativeResume
-    - modelFlag
-    - effortFlag
-    - contextFilePrompt
-  hookTypes:
-    - UserPromptSubmit

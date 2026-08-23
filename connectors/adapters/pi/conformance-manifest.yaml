@@ -1,4 +1,4 @@
-contractVersion: "52"
+contractVersion: "116"
 componentType: connector
 componentKey: pi
 label: "PI Connector"
@@ -8,22 +8,13 @@ connector:
   agentIdentifier: pi
   # ── GENERATED: do not edit by hand ───────────────────────────────────────────
   # Projected from connectors/adapters/pi/harness-capabilities.yaml by `yarn connectors:capabilities`.
-  # `capabilities` and `hookTypes` are the DEPRECATED hook-named projection, retained for
-  # one release. `harnessCapabilities` is the authoritative source.
+  # The harness descriptor and its executable fixtures are the only capability source.
   integrationShape: extension
   capabilityTier: 1
   harnessCapabilities:
     path: connectors/adapters/pi/harness-capabilities.yaml
     schemaVersion: 1
-    digest: "0166eb18d8913ea41704d3aa9afbf9164d994ae16089927e38f681be5dd005ff"
-  capabilities:
-    - followUpHook
-    - nativeResume
-    - modelFlag
-    - effortFlag
-    - contextFilePrompt
-  hookTypes:
-    - UserPromptSubmit
+    digest: "00ac7950f03ff225b0ed39ab3b57b4db4d28f4fe0331d0ee50bcb2c51bfa6823"
   # ── END GENERATED ────────────────────────────────────────────────────────────
   installPath: "~/.pi/agent"
   managedFiles:

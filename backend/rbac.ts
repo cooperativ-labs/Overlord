@@ -14,6 +14,7 @@ import {
   getAuthorizedWorkspace,
   getAuthorizedWorkspacesContext,
   getBootstrapWorkspaceIdOrNull,
+  getResourceLookupWorkspaceIds,
   requireDatabaseClient,
   resolveActiveProfileId,
   setResolvedWorkspaceId,
@@ -249,11 +250,10 @@ export async function requireMissionPermission({
   )) as { id: string; workspace_id: string } | undefined;
   let resolved = mission;
   if (!resolved) {
-    const authorized = getAuthorizedWorkspacesContext();
-    if (!authorized || authorized.workspaces.length === 0) {
+    const workspaceIds = await getResourceLookupWorkspaceIds(db);
+    if (workspaceIds.length === 0) {
       throw new ApiError(404, 'Mission not found');
     }
-    const workspaceIds = authorized.workspaces.map(workspace => workspace.workspaceId);
     const rows = await db.all<{ id: string; workspace_id: string }>(
       `SELECT id, workspace_id FROM missions
         WHERE display_id = ?

@@ -23,9 +23,9 @@ import { CliError } from './errors.js';
 /**
  * Connector setup/doctor for the Connector Layer (see CONTRACT.md → Connector
  * Layer). `ovld agent-setup <agent>` materializes a connector adapter's declared
- * `managedFiles` into the agent's native plugin install path. Adapter skill
- * templates and reference paths under `skills/overlord-mission/` are rendered from
- * `connectors/core/overlord-mission/` at install time. Setup records a local
+ * `managedFiles` into the agent's native plugin install path. Adapter skill templates,
+ * core references, and shared connector scripts are rendered from `connectors/core/`
+ * at install time. Setup records a local
  * install manifest so `ovld doctor` can detect stale, missing, or
  * modified files. Installs are idempotent and never touch files outside the
  * connector's own install path.
@@ -39,8 +39,6 @@ export type ConnectorManifest = {
   description?: string;
   connector: {
     agentIdentifier: string;
-    capabilities: string[];
-    hookTypes: string[];
     installPath: string;
     managedFiles: string[];
   };
@@ -240,8 +238,6 @@ export function readConnectorManifest(agentKey: string): ConnectorManifest {
     description: parsed.description ? String(parsed.description) : undefined,
     connector: {
       agentIdentifier: String(connector.agentIdentifier ?? agentKey),
-      capabilities: asList(connector.capabilities),
-      hookTypes: asList(connector.hookTypes),
       installPath,
       managedFiles
     }
@@ -688,7 +684,7 @@ export function setupConnector({
   }
 
   for (const relativePath of manifest.connector.managedFiles) {
-    if (!managedFileSourceExists({ sourceDir, relativePath })) {
+    if (!managedFileSourceExists({ sourceDir, relativePath, adapterKey: agentKey })) {
       warnings.push(`Declared managed file missing from connector source: ${relativePath}`);
       continue;
     }

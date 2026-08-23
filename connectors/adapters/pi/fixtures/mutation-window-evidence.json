@@ -1,0 +1,17 @@
+{
+  "fixtureVersion": 1,
+  "kind": "mutation-window",
+  "description": "Pi has a recorded tool call but no completion callback with the same call id.",
+  "classification": "unsupported",
+  "reason": "The extension fixture proves invocation metadata only; no completion event has been recorded.",
+  "preFixture": "fixtures/normalize-tool-call.json",
+  "proof": {
+    "pre": {
+      "session": "session_id",
+      "call": "tool_use_id",
+      "workspace": "cwd",
+      "tool": "tool_name",
+      "directPath": "tool_input.path"
+    }
+  }
+}

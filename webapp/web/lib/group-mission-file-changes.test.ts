@@ -37,8 +37,11 @@ function fileChange(overrides: Partial<FileChangeDto> = {}): FileChangeDto {
     summary: 'Changed the entrypoint.',
     why: 'Needed for the feature.',
     impact: 'App boots differently.',
-    diffState: 'present',
     vcsStatus: 'modified',
+    source: 'declared_edit',
+    quality: 'direct',
+    overlap: false,
+    hookHealth: null,
     resourceKey: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     ...overrides

@@ -61,6 +61,20 @@ Requirements:
 - The shim tool list must stay in parity with the hosted MCP catalog (`mcp/tool-catalog.ts`).
 - `serverInfo.version` follows `connectors/VERSION` through `scripts/sync-connector-versions.mjs`.
 
+## Canonical Post-Tool Capture Callback
+
+`connectors/core/scripts/capture-change-hook.sh` is the only implementation of the local
+post-tool mutation callback. Setup substitutes the adapter key and installs it at the unchanged
+harness-native paths:
+
+- Claude: `scripts/post-tool-use-hook.sh`
+- Codex: `scripts/post-tool-use-hook.sh`
+- Cursor: `hooks/overlord-post-tool-use.sh`
+
+The adapter hook registrations and managed paths remain native; adapter directories do not carry
+copies of the script. Fixtures render the same core source before exercising bound and unbound
+behavior.
+
 ## Adapter Capability Differences
 
 Adapters intentionally differ in which mechanisms they ship. The per-adapter matrix, the omissions that are decisions, and the gaps that are merely unported are recorded in the [connectors module README](../README.md#adapter-capability-matrix). Update that table when an adapter gains or drops a mechanism.
@@ -222,7 +236,7 @@ Future requirement:
 - Merge user settings safely.
 - Write executable hook scripts.
 - Write a manifest of managed files.
-- Remove obsolete legacy files only when clearly owned by Overlord.
+- Remove Overlord-owned files that are no longer present in the current manifest.
 - Be idempotent.
 
 `ovld doctor`:

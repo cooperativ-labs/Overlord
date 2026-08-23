@@ -1,13 +1,16 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { closeSync, mkdtempSync, openSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { findAgentSessionCodec } from '../dist/agent-session/codec-registry.generated.js';
 import {
+  MAX_AGENT_SESSION_PAYLOAD_BYTES,
   normalizeForAdapter,
   parseNativePayload,
+  readBoundedStdin,
   runAgentSessionEvent
 } from '../dist/agent-session/event.js';
 import { encodeNativeDecision, runAgentSessionRequest } from '../dist/agent-session/request.js';
@@ -187,10 +190,31 @@ test('agent-session event: malformed and oversize payloads are dropped silently'
   assert.equal(parseNativePayload('{'), null);
 });
 
+test('native stdin reader stops after the byte ceiling', () => {
+  const directory = mkdtempSync(path.join(tmpdir(), 'ovld-bounded-stdin-'));
+  const exactPath = path.join(directory, 'exact.json');
+  const oversizedPath = path.join(directory, 'oversized.json');
+  writeFileSync(exactPath, 'x'.repeat(MAX_AGENT_SESSION_PAYLOAD_BYTES));
+  writeFileSync(oversizedPath, 'x'.repeat(MAX_AGENT_SESSION_PAYLOAD_BYTES + 64));
+
+  const exactDescriptor = openSync(exactPath, 'r');
+  const oversizedDescriptor = openSync(oversizedPath, 'r');
+  try {
+    assert.equal(
+      readBoundedStdin(MAX_AGENT_SESSION_PAYLOAD_BYTES, exactDescriptor)?.length,
+      MAX_AGENT_SESSION_PAYLOAD_BYTES
+    );
+    assert.equal(readBoundedStdin(MAX_AGENT_SESSION_PAYLOAD_BYTES, oversizedDescriptor), null);
+  } finally {
+    closeSync(exactDescriptor);
+    closeSync(oversizedDescriptor);
+  }
+});
+
 /**
  * Migration parity, asserted at the source of truth rather than only in the fixture.
  *
- * The normalized event registration is additive. If someone "tidies up" the legacy
+ * The normalized event registration is additive. If someone removes the native protocol
  * registrations, delivery-time change attribution and follow-up capture both break, and neither
  * failure is visible until a delivery comes back empty.
  */

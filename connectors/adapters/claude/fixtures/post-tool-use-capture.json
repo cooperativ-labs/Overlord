@@ -1,0 +1,27 @@
+{
+  "fixtureVersion": 1,
+  "kind": "script-io",
+  "description": "A bound Claude PostToolUse callback forwards the native payload to local capture-change with an explicit objective id, recovers mission scope from that binding, and persists no adapter log.",
+  "script": "connectors/core/scripts/capture-change-hook.sh",
+  "adapterKey": "claude",
+  "stdin": {
+    "session_id": "claude-session-1",
+    "hook_event_name": "PostToolUse",
+    "cwd": "/repo",
+    "tool_name": "Write",
+    "tool_input": { "file_path": "/repo/src/a.ts" }
+  },
+  "env": {
+    "MISSION_ID": null,
+    "OVERLORD_MISSION_ID": null,
+    "OVERLORD_OBJECTIVE_ID": "coo:825.abcd"
+  },
+  "expect": {
+    "exitCode": 0,
+    "stdout": "",
+    "stderr": "",
+    "cliInvocations": ["protocol capture-change --agent claude --objective-id coo:825.abcd"],
+    "stdinForwarded": true,
+    "sandboxWrites": []
+  }
+}

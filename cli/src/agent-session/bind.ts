@@ -16,11 +16,10 @@ import { type ChannelBootstrap, resolveChannelBootstrap } from './channel.js';
  * is not a nice-to-have. A connector that writes a log file in every session on the machine is
  * a connector people uninstall, and rightly.
  *
- * Phase 0A recorded, honestly, that the shipped Claude `PostToolUse` hook does *not* meet this
- * bar today: it spawns `ovld protocol record-touched` unconditionally and its scope check
- * happens inside the CLI, after the spawn. That is a tracked hazard, and it is why this gate
- * exists as its own module rather than as a few lines inside the event path — the next adapter
- * to be wired up should have one obvious thing to call first, not a convention to remember.
+ * File-change callbacks apply the same rule before invoking the local-only
+ * `ovld protocol capture-change` path. Keeping this gate as its own module gives
+ * every adapter one explicit boundary to call rather than a convention to
+ * remember.
  *
  * ## What is and is not an authority
  *

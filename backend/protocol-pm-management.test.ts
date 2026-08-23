@@ -67,8 +67,7 @@ test('PM protocol commands preserve delivery, launch, and future-order service b
     flags: {
       '--mission-id': deliveryMission.mission.id,
       '--session-key': attached.sessionKey,
-      '--summary': 'Delivered evidence is visible to PM agents.',
-      '--no-file-changes': true
+      '--summary': 'Delivered evidence is visible to PM agents.'
     }
   });
 

@@ -2,13 +2,14 @@ import { bindBool, UPDATE_EVENT_TYPES, UPDATE_PHASES } from '@overlord/database'
 import { createHash } from 'node:crypto';
 
 import { bindChannelToSession, findBindableChannelForMission } from './agent-session/channels.js';
+import { hasControlCharacters, isExactEvidencePath } from './agent-session/pure/evidence-path.js';
 import { emitNotification } from './notifications/notifications.js';
 import { recordChange } from './change-feed.js';
 import type { ServiceContext } from './context.js';
 import { resolveMissionId, resolveObjectiveRef, resolveProjectId } from './context.js';
 import { buildDeliveryReport, markDeliveryPresentationPending } from './delivery-report.js';
 import { ServiceError } from './errors.js';
-import { createExecutionRequest, linkExecutionRequestToSession } from './execution-requests.js';
+import { linkExecutionRequestToSession } from './execution-requests.js';
 import { findActingDeviceExecutionTargetId } from './execution-targets.js';
 import { bindProviderSessionAgentSession } from './latch-provider-session.js';
 import {
@@ -39,13 +40,8 @@ import {
   OBJECTIVE_LAUNCHED_AT_ASSIGNMENT,
   OBJECTIVE_STARTED_AT_ASSIGNMENT
 } from './objective-lifecycle-timestamps.js';
-import {
-  countActiveMissionObjectives,
-  findConflictingActiveSibling,
-  missionAllowsParallelObjectives
-} from './objective-parallelism.js';
+import { countActiveMissionObjectives } from './objective-parallelism.js';
 import { loadAgentInstructionsForWorkspaceUser } from './profiles.js';
-import { resolveLaunchConfig, resolveLaunchExecutionTarget } from './project-execution-target.js';
 import {
   buildProjectResourceManifest,
   formatProjectResourcesInstructions,
@@ -101,28 +97,27 @@ const PROTOCOL_WORKFLOW = `
 1. Read the current objective from the top-level \`objective\` field in this JSON response, then immediately begin executing it. This is an execution session: do not wait for more instructions or ask for confirmation.
 2. Post progress with \`ovld protocol update\` or liveness with \`ovld protocol heartbeat\`.
 3. Ask blocking questions with \`ovld protocol ask\` and stop work only when no safe progress remains.
-4. Deliver with \`ovld protocol deliver\` when work is complete, passing one change-rationale
-   entry per meaningful file you changed for this mission.
+4. Deliver with \`ovld protocol deliver\` when work is complete. A summary is the only required
+   delivery input; optional change rationales use the canonical \`filePath\` field.
 5. Do not stage or commit changes unless explicitly instructed to do so.
 6. Do not continue implementation after delivery without \`--begin-follow-up-work\`.
 
-Change-rationale format (deliver requires this exact shape):
+Optional change-rationale format:
   Pass an array via \`--change-rationales-json '[ ... ]'\` (or stream it on stdin with
   \`--change-rationales-file -\` for large arrays). Each entry is a JSON object — use these
   exact field names:
-    - \`file_path\` (string, required) — repo-relative path of the changed file. \`filePath\` is
-      also accepted, but there is no \`path\` field.
+    - \`filePath\` (string, required) — repo-relative path of the changed file.
     - \`label\`     (string, required) — short reviewer-facing title for the change.
     - \`summary\`   (string, required) — what changed. This field is named \`summary\`, NOT
-      \`rationale\`; an entry whose explanation key is anything else is rejected.
+      \`rationale\`; an annotation with unknown or retired keys is ignored with a bounded warning.
     - \`why\`       (string, required) — why the change was made.
     - \`impact\`    (string, required) — behavioral impact of the change.
     - \`hunks\`     (optional) — array of { "header": "@@ -10,6 +10,14 @@" } diff-hunk headers.
   Do NOT wrap entries under a \`rationale\` key, and do not send a top-level \`file_changes\`
   artifact. Example single entry:
-    {"file_path":"src/api.ts","label":"Add retry","summary":"Added retry with backoff.","why":"Transient failures.","impact":"Requests retry up to 3x."}
-  Changed files are detected for you (VCS baseline at attach vs. \`git status\` at deliver); you
-  only supply the rationale per file. If the run changed no files, deliver with \`--no-file-changes\`.
+    {"filePath":"src/api.ts","label":"Add retry","summary":"Added retry with backoff.","why":"Transient failures.","impact":"Requests retry up to 3x."}
+  Changed files are synchronized from the objective ledger before delivery; do not send changed-file,
+  observed-dirty-path, no-file-change, or rationale-skip inputs with update or deliver.
 
 Delivery evidence:
   Every delivery should also provide a \`deliveryReport.agentReport\` in \`--payload-json\` or
@@ -1387,74 +1382,457 @@ export async function heartbeatSession({
   return { ok: true };
 }
 
-/**
- * Upsert mechanically-observed changed files for a session/objective, keyed by
- * normalized path so repeated observations revise the same row. Stores only
- * metadata (path + status), never diffs or file contents. Must run inside a
- * transaction supplied by the caller.
- */
-async function upsertChangedFiles({
+const MAX_SYNC_CHANGE_ITEMS = 25;
+const MAX_SYNC_KEY_LENGTH = 200;
+const MAX_TOOL_WINDOW_ID_LENGTH = 200;
+const MAX_HOOK_HEALTH_LENGTH = 160;
+const MAX_SYNC_KEYS_PER_FILE = 32;
+const HOOK_HEALTH_PATTERN = /^[a-z0-9][a-z0-9_.:-]*$/i;
+const SYNC_CHANGE_ALLOWED_KEYS = new Set([
+  'filePath',
+  'idempotencyKey',
+  'source',
+  'quality',
+  'overlap',
+  'toolWindowId',
+  'observedAt',
+  'hookHealth'
+]);
+
+export type ChangeEvidenceSource = 'declared_edit' | 'window_observed';
+export type ChangeEvidenceQuality = 'direct' | 'window';
+
+type SyncChangeInput = {
+  filePath?: unknown;
+  idempotencyKey?: unknown;
+  source?: unknown;
+  quality?: unknown;
+  overlap?: unknown;
+  toolWindowId?: unknown;
+  observedAt?: unknown;
+  hookHealth?: unknown;
+};
+
+type SyncChangeOutcome = {
+  idempotencyKey: string | null;
+  filePath: string | null;
+  status: 'accepted' | 'ignored' | 'warning';
+  warning?: string;
+};
+
+type ValidSyncChange = {
+  filePath: string;
+  idempotencyKey: string;
+  source: ChangeEvidenceSource;
+  quality: ChangeEvidenceQuality;
+  overlap: boolean;
+  toolWindowId?: string;
+  observedAt?: string;
+  hookHealth?: string;
+};
+
+type StoredChangeEvidence = {
+  source?: ChangeEvidenceSource;
+  quality?: ChangeEvidenceQuality;
+  overlap?: boolean;
+  toolWindowId?: string;
+  observedAt?: string;
+  hookHealth?: string;
+  syncKeys: string[];
+};
+
+function normalizeRepoRelativePath(value: unknown): string | null {
+  return isExactEvidencePath(value) ? value : null;
+}
+
+function normalizeSyncKey(value: unknown): string | null {
+  if (
+    typeof value !== 'string' ||
+    !value ||
+    value !== value.trim() ||
+    value.length > MAX_SYNC_KEY_LENGTH ||
+    hasControlCharacters(value)
+  ) {
+    return null;
+  }
+  return value;
+}
+
+function readSyncChangeIdentity(value: unknown): {
+  filePath: string | null;
+  idempotencyKey: string | null;
+} {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return { filePath: null, idempotencyKey: null };
+  }
+  const input = value as SyncChangeInput;
+  return {
+    filePath: normalizeRepoRelativePath(input.filePath),
+    idempotencyKey: normalizeSyncKey(input.idempotencyKey)
+  };
+}
+
+function validateSyncChange(
+  value: unknown
+):
+  | { change: ValidSyncChange }
+  | { warning: string; filePath: string | null; idempotencyKey: string | null } {
+  const identity = readSyncChangeIdentity(value);
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return { ...identity, warning: 'change evidence must be an object' };
+  }
+  const input = value as SyncChangeInput;
+  if (Object.keys(input).some(key => !SYNC_CHANGE_ALLOWED_KEYS.has(key))) {
+    return {
+      ...identity,
+      warning: 'change evidence contains unsupported fields'
+    };
+  }
+  const filePath = normalizeRepoRelativePath(input.filePath);
+  const idempotencyKey = normalizeSyncKey(input.idempotencyKey);
+  if (!filePath) {
+    return {
+      ...identity,
+      warning: 'filePath must be a bounded normalized repository-relative path without .. segments'
+    };
+  }
+  if (!idempotencyKey) {
+    return { ...identity, filePath, warning: 'idempotencyKey must be a bounded string' };
+  }
+  if (input.source !== 'declared_edit' && input.source !== 'window_observed') {
+    return {
+      ...identity,
+      filePath,
+      idempotencyKey,
+      warning: 'source must be declared_edit or window_observed'
+    };
+  }
+  if (input.quality !== 'direct' && input.quality !== 'window') {
+    return { ...identity, filePath, idempotencyKey, warning: 'quality must be direct or window' };
+  }
+  if (
+    (input.source === 'declared_edit' && input.quality !== 'direct') ||
+    (input.source === 'window_observed' && input.quality !== 'window')
+  ) {
+    return {
+      ...identity,
+      filePath,
+      idempotencyKey,
+      warning: 'source and quality do not describe the same evidence class'
+    };
+  }
+  if (input.overlap !== undefined && typeof input.overlap !== 'boolean') {
+    return { ...identity, filePath, idempotencyKey, warning: 'overlap must be a boolean' };
+  }
+  if (
+    input.toolWindowId !== undefined &&
+    (typeof input.toolWindowId !== 'string' ||
+      !input.toolWindowId.trim() ||
+      input.toolWindowId.length > MAX_TOOL_WINDOW_ID_LENGTH ||
+      hasControlCharacters(input.toolWindowId))
+  ) {
+    return {
+      ...identity,
+      filePath,
+      idempotencyKey,
+      warning: 'toolWindowId must be a bounded string'
+    };
+  }
+  if (
+    input.observedAt !== undefined &&
+    (typeof input.observedAt !== 'string' ||
+      input.observedAt.length > 64 ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/.test(input.observedAt) ||
+      Number.isNaN(Date.parse(input.observedAt)))
+  ) {
+    return {
+      ...identity,
+      filePath,
+      idempotencyKey,
+      warning: 'observedAt must be a bounded UTC ISO timestamp'
+    };
+  }
+  if (
+    input.hookHealth !== undefined &&
+    (typeof input.hookHealth !== 'string' ||
+      !input.hookHealth.trim() ||
+      input.hookHealth.length > MAX_HOOK_HEALTH_LENGTH ||
+      hasControlCharacters(input.hookHealth) ||
+      !HOOK_HEALTH_PATTERN.test(input.hookHealth.trim()))
+  ) {
+    return {
+      ...identity,
+      filePath,
+      idempotencyKey,
+      warning: 'hookHealth must be a bounded string'
+    };
+  }
+  return {
+    change: {
+      filePath,
+      idempotencyKey,
+      source: input.source,
+      quality: input.quality,
+      overlap: input.overlap ?? false,
+      ...(typeof input.toolWindowId === 'string'
+        ? { toolWindowId: input.toolWindowId.trim() }
+        : {}),
+      ...(typeof input.observedAt === 'string' ? { observedAt: input.observedAt } : {}),
+      ...(typeof input.hookHealth === 'string' ? { hookHealth: input.hookHealth.trim() } : {})
+    }
+  };
+}
+
+function parseStoredChangeEvidence(value: string | null): StoredChangeEvidence {
+  let parsed: Record<string, unknown> = {};
+  try {
+    const candidate = JSON.parse(value ?? '{}') as unknown;
+    if (typeof candidate === 'object' && candidate !== null && !Array.isArray(candidate)) {
+      parsed = candidate as Record<string, unknown>;
+    }
+  } catch {
+    parsed = {};
+  }
+  const source = ['declared_edit', 'window_observed'].includes(String(parsed.source))
+    ? (parsed.source as StoredChangeEvidence['source'])
+    : undefined;
+  const quality =
+    parsed.quality === 'direct' || parsed.quality === 'window' ? parsed.quality : undefined;
+  const boundedString = (candidate: unknown, maxLength: number): string | undefined =>
+    typeof candidate === 'string' &&
+    candidate.length <= maxLength &&
+    !hasControlCharacters(candidate)
+      ? candidate
+      : undefined;
+  return {
+    ...(source ? { source } : {}),
+    ...(quality ? { quality } : {}),
+    ...(typeof parsed.overlap === 'boolean' ? { overlap: parsed.overlap } : {}),
+    ...(boundedString(parsed.toolWindowId, MAX_TOOL_WINDOW_ID_LENGTH)
+      ? { toolWindowId: boundedString(parsed.toolWindowId, MAX_TOOL_WINDOW_ID_LENGTH) }
+      : {}),
+    ...(boundedString(parsed.observedAt, 64)
+      ? { observedAt: boundedString(parsed.observedAt, 64) }
+      : {}),
+    ...(boundedString(parsed.hookHealth, MAX_HOOK_HEALTH_LENGTH)
+      ? { hookHealth: boundedString(parsed.hookHealth, MAX_HOOK_HEALTH_LENGTH) }
+      : {}),
+    syncKeys: Array.isArray(parsed.syncKeys)
+      ? parsed.syncKeys
+          .filter(
+            (key): key is string =>
+              typeof key === 'string' &&
+              key.length > 0 &&
+              key.length <= MAX_SYNC_KEY_LENGTH &&
+              !hasControlCharacters(key)
+          )
+          .slice(-MAX_SYNC_KEYS_PER_FILE)
+      : []
+  };
+}
+
+function evidenceStrength(source: StoredChangeEvidence['source']): number {
+  if (source === 'declared_edit') return 3;
+  if (source === 'window_observed') return 2;
+  return 0;
+}
+
+function mergeStoredChangeEvidence({
+  existing,
+  incoming
+}: {
+  existing: StoredChangeEvidence;
+  incoming: ValidSyncChange;
+}): StoredChangeEvidence {
+  const incomingIsStrongest =
+    evidenceStrength(incoming.source) >= evidenceStrength(existing.source);
+  const strongest = incomingIsStrongest ? incoming : existing;
+  return {
+    source: strongest.source,
+    quality: strongest.quality,
+    overlap: existing.overlap === true || incoming.overlap,
+    ...(strongest.toolWindowId ? { toolWindowId: strongest.toolWindowId } : {}),
+    ...(strongest.observedAt ? { observedAt: strongest.observedAt } : {}),
+    ...((incoming.hookHealth ?? existing.hookHealth)
+      ? { hookHealth: incoming.hookHealth ?? existing.hookHealth }
+      : {}),
+    syncKeys: [...existing.syncKeys, incoming.idempotencyKey].slice(-MAX_SYNC_KEYS_PER_FILE)
+  };
+}
+
+/** Upsert one validated objective-ledger observation inside the caller's transaction. */
+async function upsertChangedFileObservation({
   ctx,
   mission,
   session,
-  files,
-  eventId,
+  resourceId,
+  change,
   now
 }: {
   ctx: ServiceContext;
   mission: { id: string; projectId: string };
   session: { id: string; objective_id: string };
-  files: Array<{ filePath: string; vcsStatus?: string | null }>;
-  /** Observing event id, or null when no event row exists yet (e.g. deliver). */
-  eventId: string | null;
+  resourceId: string | null;
+  change: ValidSyncChange;
   now: string;
-}): Promise<void> {
+}): Promise<'accepted' | 'ignored'> {
+  const changedFileId = newId();
+  const incomingMetadata: StoredChangeEvidence = {
+    source: change.source,
+    quality: change.quality,
+    overlap: change.overlap,
+    ...(change.toolWindowId ? { toolWindowId: change.toolWindowId } : {}),
+    ...(change.observedAt ? { observedAt: change.observedAt } : {}),
+    ...(change.hookHealth ? { hookHealth: change.hookHealth } : {}),
+    syncKeys: [change.idempotencyKey]
+  };
+  const inserted = await ctx.db.run(
+    `INSERT INTO changed_files
+         (id, workspace_id, project_id, mission_id, objective_id, session_id, resource_id,
+          file_path, vcs_status, current_diff_state, first_observed_at, last_observed_at,
+          last_observed_event_id, observed_metadata_json, created_at, updated_at, revision)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 1)
+       ON CONFLICT (objective_id, file_path)
+         WHERE objective_id IS NOT NULL AND deleted_at IS NULL
+       DO NOTHING`,
+    [
+      changedFileId,
+      ctx.workspace.id,
+      mission.projectId,
+      mission.id,
+      session.objective_id,
+      session.id,
+      resourceId,
+      change.filePath,
+      null,
+      'unknown',
+      now,
+      now,
+      JSON.stringify(incomingMetadata),
+      now,
+      now
+    ]
+  );
+  if (inserted.changes > 0) {
+    await recordChange({
+      ctx,
+      entityType: 'changed_file',
+      entityId: changedFileId,
+      operation: 'insert',
+      entityRevision: 1,
+      projectId: mission.projectId,
+      missionId: mission.id,
+      objectiveId: session.objective_id
+    });
+    return 'accepted';
+  }
+
+  const lockClause = ctx.db.dialect === 'postgres' ? ' FOR UPDATE' : '';
+  const existing = (await ctx.db.get(
+    `SELECT id, observed_metadata_json, revision FROM changed_files
+       WHERE objective_id = ? AND file_path = ? AND deleted_at IS NULL${lockClause}`,
+    [session.objective_id, change.filePath]
+  )) as { id: string; observed_metadata_json: string | null; revision: number } | undefined;
+  if (!existing) throw new Error('Objective changed-file row disappeared during upsert');
+
+  const existingMetadata = parseStoredChangeEvidence(existing.observed_metadata_json);
+  if (existingMetadata.syncKeys.includes(change.idempotencyKey)) return 'ignored';
+  const mergedMetadata = mergeStoredChangeEvidence({
+    existing: existingMetadata,
+    incoming: change
+  });
+  await ctx.db.run(
+    `UPDATE changed_files
+       SET session_id = ?, resource_id = COALESCE(?, resource_id),
+           last_observed_at = ?, last_observed_event_id = NULL,
+           observed_metadata_json = ?, updated_at = ?, revision = revision + 1
+       WHERE id = ?`,
+    [session.id, resourceId, now, JSON.stringify(mergedMetadata), now, existing.id]
+  );
+  await recordChange({
+    ctx,
+    entityType: 'changed_file',
+    entityId: existing.id,
+    operation: 'update',
+    entityRevision: existing.revision + 1,
+    projectId: mission.projectId,
+    missionId: mission.id,
+    objectiveId: session.objective_id,
+    changedFields: ['session_id', 'resource_id', 'last_observed_at', 'observed_metadata_json']
+  });
+  return 'accepted';
+}
+
+/**
+ * Persist objective-ledger observations without ever making delivery depend on
+ * them. Every item has its own transaction so malformed siblings cannot roll
+ * back valid metadata-only evidence.
+ */
+export async function syncChanges({
+  ctx,
+  missionId,
+  sessionKey,
+  changes
+}: {
+  ctx: ServiceContext;
+  missionId: string;
+  sessionKey: string;
+  changes: unknown[];
+}): Promise<{ outcomes: SyncChangeOutcome[] }> {
+  const mission = await resolveMissionId(ctx, missionId);
+  const session = await getSessionByKey(ctx, sessionKey);
+  if (session.mission_id !== mission.id) {
+    throw new ServiceError('Session key does not match mission', 'invalid_session', 401);
+  }
+
+  const outcomes: SyncChangeOutcome[] = [];
   const resourceId = await resolveSessionResourceId({ ctx, session, mission });
-
-  for (const file of files) {
-    const normalizedPath = file.filePath.replace(/\\/g, '/');
-    const existing = (await ctx.db.get(
-      `SELECT id FROM changed_files
-         WHERE session_id = ? AND objective_id = ? AND file_path = ? AND deleted_at IS NULL`,
-      [session.id, session.objective_id, normalizedPath]
-    )) as { id: string } | undefined;
-
-    if (existing) {
-      await ctx.db.run(
-        `UPDATE changed_files
-           SET vcs_status = ?, current_diff_state = 'present', last_observed_at = ?,
-               last_observed_event_id = COALESCE(?, last_observed_event_id),
-               resource_id = COALESCE(?, resource_id),
-               updated_at = ?, revision = revision + 1
-           WHERE id = ?`,
-        [file.vcsStatus ?? null, now, eventId, resourceId, now, existing.id]
-      );
-    } else {
-      await ctx.db.run(
-        `INSERT INTO changed_files
-             (id, workspace_id, project_id, mission_id, objective_id, session_id, resource_id,
-              file_path, vcs_status, current_diff_state, first_observed_at, last_observed_at,
-              last_observed_event_id, observed_metadata_json, created_at, updated_at, revision)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'present', ?, ?, ?, '{}', ?, ?, 1)`,
-        [
-          newId(),
-          ctx.workspace.id,
-          mission.projectId,
-          mission.id,
-          session.objective_id,
-          session.id,
+  for (const input of changes.slice(0, MAX_SYNC_CHANGE_ITEMS)) {
+    const validated = validateSyncChange(input);
+    if ('warning' in validated) {
+      outcomes.push({
+        idempotencyKey: validated.idempotencyKey,
+        filePath: validated.filePath,
+        status: 'warning',
+        warning: validated.warning
+      });
+      continue;
+    }
+    const change = validated.change;
+    try {
+      const result = await ctx.db.transaction(async tx => {
+        return await upsertChangedFileObservation({
+          ctx: { ...ctx, db: tx },
+          mission,
+          session,
           resourceId,
-          normalizedPath,
-          file.vcsStatus ?? null,
-          now,
-          now,
-          eventId,
-          now,
-          now
-        ]
-      );
+          change,
+          now: nowIso()
+        });
+      });
+      outcomes.push({
+        idempotencyKey: change.idempotencyKey,
+        filePath: change.filePath,
+        status: result
+      });
+    } catch {
+      outcomes.push({
+        idempotencyKey: change.idempotencyKey,
+        filePath: change.filePath,
+        status: 'warning',
+        warning: 'unable to persist change evidence'
+      });
     }
   }
+  for (const overflow of changes.slice(MAX_SYNC_CHANGE_ITEMS)) {
+    const identity = readSyncChangeIdentity(overflow);
+    outcomes.push({
+      ...identity,
+      status: 'warning',
+      warning: `sync-changes accepts at most ${MAX_SYNC_CHANGE_ITEMS} items per request`
+    });
+  }
+  return { outcomes };
 }
 
 export async function updateSession({
@@ -1469,7 +1847,6 @@ export async function updateSession({
   externalSessionId,
   beginFollowUpWork = false,
   followUpIntent,
-  changedFiles,
   changeRationales
 }: {
   ctx: ServiceContext;
@@ -1483,8 +1860,7 @@ export async function updateSession({
   externalSessionId?: string | null;
   beginFollowUpWork?: boolean;
   followUpIntent?: string | null;
-  changedFiles?: Array<{ filePath: string; vcsStatus?: string | null }> | null;
-  changeRationales?: Array<Record<string, unknown>> | null;
+  changeRationales?: ChangeRationaleInput[] | null;
 }): Promise<{ eventId: string }> {
   const trimmedSummary = summary.trim();
   if (!trimmedSummary) {
@@ -1515,6 +1891,7 @@ export async function updateSession({
 
   const now = nowIso();
   const eventId = newId();
+  const normalizedRationales = normalizeChangeRationales(changeRationales ?? []);
 
   await ctx.db.transaction(async tx => {
     const txCtx = { ...ctx, db: tx };
@@ -1550,12 +1927,8 @@ export async function updateSession({
         JSON.stringify({
           ...(payloadJson ?? {}),
           ...(followUpIntent ? { followUpIntent } : {}),
-          ...(changeRationales
-            ? {
-                changeRationales: normalizeChangeRationales(
-                  changeRationales as ChangeRationaleInput[]
-                )
-              }
+          ...(normalizedRationales.warnings.length > 0
+            ? { changeRationaleWarnings: normalizedRationales.warnings }
             : {})
         }),
         externalUrl ?? null,
@@ -1564,6 +1937,39 @@ export async function updateSession({
         now
       ]
     );
+    await recordChange({
+      ctx: txCtx,
+      entityType: 'mission_event',
+      entityId: eventId,
+      operation: 'insert',
+      projectId: mission.projectId,
+      missionId: mission.id,
+      objectiveId: session.objective_id
+    });
+
+    if (normalizedRationales.rationales.length > 0) {
+      const changedFiles = (await txCtx.db.all(
+        `SELECT id, file_path FROM changed_files
+           WHERE objective_id = ? AND deleted_at IS NULL`,
+        [session.objective_id]
+      )) as Array<{ id: string; file_path: string }>;
+      const changedFileIdByPath = new Map(changedFiles.map(row => [row.file_path, row.id]));
+      for (const rationale of normalizedRationales.rationales) {
+        await insertChangeRationaleRow({
+          ctx: txCtx,
+          projectId: mission.projectId,
+          missionId: mission.id,
+          objectiveId: session.objective_id,
+          sessionId: session.id,
+          deliveryId: null,
+          changedFileId: changedFileIdByPath.get(rationale.filePath) ?? null,
+          sourceEventId: eventId,
+          rationale,
+          isFinal: false,
+          now
+        });
+      }
+    }
 
     if (externalSessionId !== undefined) {
       await txCtx.db.run(
@@ -1578,10 +1984,6 @@ export async function updateSession({
         `UPDATE agent_sessions SET phase = ?, updated_at = ?, revision = revision + 1 WHERE id = ?`,
         [phase, now, session.id]
       );
-    }
-
-    if (changedFiles && changedFiles.length > 0) {
-      await upsertChangedFiles({ ctx: txCtx, mission, session, files: changedFiles, eventId, now });
     }
   });
   return { eventId };
@@ -1665,14 +2067,8 @@ export async function askQuestion({
 }
 
 export type ChangeRationaleInput = {
-  /**
-   * Canonical camelCase path for the changed file, matching the `filePath` used by
-   * changed-files inputs. The snake_case `file_path` is accepted as a backward-
-   * compatible alias during migration.
-   */
-  filePath?: string;
-  /** @deprecated alias for {@link ChangeRationaleInput.filePath}. */
-  file_path?: string;
+  /** Canonical repository-relative path of the changed file. */
+  filePath: string;
   label: string;
   summary: string;
   why: string;
@@ -1680,7 +2076,6 @@ export type ChangeRationaleInput = {
   hunks?: Array<{ header: string }>;
 };
 
-/** A change rationale after casing normalization — `filePath` is always present. */
 type NormalizedChangeRationale = {
   filePath: string;
   label: string;
@@ -1690,53 +2085,318 @@ type NormalizedChangeRationale = {
   hunks?: Array<{ header: string }>;
 };
 
-/**
- * Normalize change-rationale inputs to the canonical `filePath` casing, accepting
- * the legacy snake_case `file_path` alias. Backslashes are converted to forward
- * slashes so paths line up with the normalized `file_path` stored on changed-file
- * rows (see `upsertChangedFiles`).
- */
-function normalizeChangeRationales(
-  input: ReadonlyArray<ChangeRationaleInput>
-): NormalizedChangeRationale[] {
-  return input.map(rationale => ({
-    filePath: (rationale.filePath ?? rationale.file_path ?? '').replace(/\\/g, '/'),
-    label: rationale.label,
-    summary: rationale.summary,
-    why: rationale.why,
-    impact: rationale.impact,
-    ...(rationale.hunks ? { hunks: rationale.hunks } : {})
-  }));
+const MAX_CHANGE_RATIONALE_ITEMS = 100;
+const MAX_PROTOCOL_EVIDENCE_WARNINGS = 12;
+const MAX_CHANGE_RATIONALE_LABEL_LENGTH = 240;
+const MAX_CHANGE_RATIONALE_TEXT_LENGTH = 10_000;
+const MAX_CHANGE_RATIONALE_HUNKS = 100;
+const MAX_CHANGE_RATIONALE_HUNK_LENGTH = 1_000;
+const CHANGE_RATIONALE_KEYS = new Set(['filePath', 'label', 'summary', 'why', 'impact', 'hunks']);
+const CHANGE_RATIONALE_HUNK_KEYS = new Set(['header']);
+
+function normalizeChangeRationales(input: unknown): {
+  rationales: NormalizedChangeRationale[];
+  warnings: string[];
+} {
+  const rationales: NormalizedChangeRationale[] = [];
+  const rationaleIndexByPath = new Map<string, number>();
+  const warnings: string[] = [];
+  const warn = (message: string): void => {
+    if (warnings.length < MAX_PROTOCOL_EVIDENCE_WARNINGS) warnings.push(message);
+  };
+  if (!Array.isArray(input)) {
+    warn('Ignored changeRationales: expected an array.');
+    return { rationales, warnings };
+  }
+  if (input.length > MAX_CHANGE_RATIONALE_ITEMS) {
+    warn(`Ignored ${input.length - MAX_CHANGE_RATIONALE_ITEMS} excess change-rationale item(s).`);
+  }
+  input.slice(0, MAX_CHANGE_RATIONALE_ITEMS).forEach((value, index) => {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      warn(`Ignored changeRationales[${index}]: expected an object.`);
+      return;
+    }
+    const rationale = value as Record<string, unknown>;
+    if (Object.keys(rationale).some(key => !CHANGE_RATIONALE_KEYS.has(key))) {
+      warn(`Ignored changeRationales[${index}]: unsupported fields.`);
+      return;
+    }
+    const filePath = normalizeRepoRelativePath(rationale.filePath);
+    const readText = (
+      field: 'label' | 'summary' | 'why' | 'impact',
+      maxLength: number
+    ): string | null => {
+      const candidate = rationale[field];
+      if (typeof candidate !== 'string') return null;
+      const normalized = candidate.trim();
+      return normalized && normalized.length <= maxLength ? normalized : null;
+    };
+    const label = readText('label', MAX_CHANGE_RATIONALE_LABEL_LENGTH);
+    const summary = readText('summary', MAX_CHANGE_RATIONALE_TEXT_LENGTH);
+    const why = readText('why', MAX_CHANGE_RATIONALE_TEXT_LENGTH);
+    const impact = readText('impact', MAX_CHANGE_RATIONALE_TEXT_LENGTH);
+    if (!filePath || !label || !summary || !why || !impact) {
+      warn(
+        `Ignored changeRationales[${index}]: filePath, label, summary, why, and impact must be non-empty bounded strings.`
+      );
+      return;
+    }
+    let hunks: Array<{ header: string }> | undefined;
+    if (rationale.hunks !== undefined) {
+      if (!Array.isArray(rationale.hunks)) {
+        warn(`Ignored changeRationales[${index}].hunks: expected an array.`);
+      } else {
+        if (rationale.hunks.length > MAX_CHANGE_RATIONALE_HUNKS) {
+          warn(
+            `Ignored ${rationale.hunks.length - MAX_CHANGE_RATIONALE_HUNKS} excess changeRationales[${index}].hunks item(s).`
+          );
+        }
+        hunks = rationale.hunks.slice(0, MAX_CHANGE_RATIONALE_HUNKS).flatMap((hunk, hunkIndex) => {
+          if (typeof hunk !== 'object' || hunk === null || Array.isArray(hunk)) {
+            warn(`Ignored changeRationales[${index}].hunks[${hunkIndex}]: expected an object.`);
+            return [];
+          }
+          const candidate = hunk as Record<string, unknown>;
+          if (Object.keys(candidate).some(key => !CHANGE_RATIONALE_HUNK_KEYS.has(key))) {
+            warn(`Ignored changeRationales[${index}].hunks[${hunkIndex}]: unsupported fields.`);
+            return [];
+          }
+          const header = candidate.header;
+          if (
+            typeof header !== 'string' ||
+            !header.trim() ||
+            header.length > MAX_CHANGE_RATIONALE_HUNK_LENGTH
+          ) {
+            warn(
+              `Ignored changeRationales[${index}].hunks[${hunkIndex}]: header must be a non-empty bounded string.`
+            );
+            return [];
+          }
+          return [{ header: header.trim() }];
+        });
+      }
+    }
+    const normalized = { filePath, label, summary, why, impact, ...(hunks ? { hunks } : {}) };
+    const previousIndex = rationaleIndexByPath.get(filePath);
+    if (previousIndex === undefined) {
+      rationaleIndexByPath.set(filePath, rationales.length);
+      rationales.push(normalized);
+    } else {
+      rationales[previousIndex] = normalized;
+      warn(`Duplicate changeRationales[${index}]: last valid item for filePath wins.`);
+    }
+  });
+  return { rationales, warnings };
 }
 
-export type SkipRationaleForInput = {
-  filePath?: string;
-  /** @deprecated alias for {@link SkipRationaleForInput.filePath}. */
-  file_path?: string;
-  reason: string;
-};
-
-type NormalizedSkipRationaleFor = {
-  filePath: string;
-  reason: string;
-};
-
-function normalizeSkipRationaleFor(
-  input: ReadonlyArray<SkipRationaleForInput>
-): NormalizedSkipRationaleFor[] {
-  return input.map(entry => ({
-    filePath: (entry.filePath ?? entry.file_path ?? '').replace(/\\/g, '/'),
-    reason: entry.reason
-  }));
+async function insertChangeRationaleRow({
+  ctx,
+  projectId,
+  missionId,
+  objectiveId,
+  sessionId,
+  deliveryId,
+  changedFileId,
+  sourceEventId,
+  rationale,
+  isFinal,
+  now
+}: {
+  ctx: ServiceContext;
+  projectId: string;
+  missionId: string;
+  objectiveId: string;
+  sessionId: string | null;
+  deliveryId: string | null;
+  changedFileId: string | null;
+  sourceEventId: string | null;
+  rationale: NormalizedChangeRationale;
+  isFinal: boolean;
+  now: string;
+}): Promise<string> {
+  const rationaleId = newId();
+  await ctx.db.run(
+    `INSERT INTO change_rationales
+         (id, workspace_id, project_id, mission_id, objective_id, session_id, delivery_id,
+          changed_file_id, file_path, label, summary, why, impact, hunks_json,
+          source_event_id, is_final, created_at, updated_at, revision)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+    [
+      rationaleId,
+      ctx.workspace.id,
+      projectId,
+      missionId,
+      objectiveId,
+      sessionId,
+      deliveryId,
+      changedFileId,
+      rationale.filePath,
+      rationale.label,
+      rationale.summary,
+      rationale.why,
+      rationale.impact,
+      JSON.stringify(rationale.hunks ?? []),
+      sourceEventId,
+      bindBool(ctx.db.dialect, isFinal),
+      now,
+      now
+    ]
+  );
+  await recordChange({
+    ctx,
+    entityType: 'change_rationale',
+    entityId: rationaleId,
+    operation: 'insert',
+    entityRevision: 1,
+    projectId,
+    missionId,
+    objectiveId
+  });
+  return rationaleId;
 }
 
-/** Per-path classification attached to a missing-rationale error so a retry is mechanical. */
-export type MissingRationaleDetail = {
+type NormalizedRecordWorkChangedFile = {
   filePath: string;
-  classification: 'mine' | 'claimed' | 'unclaimed';
-  /** Ready-to-use `--skip-rationale-for-json` entry; null for `'mine'` (a real rationale is owed, not a skip). */
-  suggestedSkip: { filePath: string; reason: string } | null;
+  vcsStatus: string | null;
 };
+
+const MAX_RECORD_WORK_CHANGED_FILES = 100;
+const MAX_VCS_STATUS_LENGTH = 32;
+const RECORD_WORK_CHANGED_FILE_KEYS = new Set(['filePath', 'vcsStatus']);
+
+function normalizeRecordWorkChangedFiles(input: unknown): {
+  files: NormalizedRecordWorkChangedFile[];
+  warnings: string[];
+} {
+  const files: NormalizedRecordWorkChangedFile[] = [];
+  const warnings: string[] = [];
+  const warn = (message: string): void => {
+    if (warnings.length < MAX_PROTOCOL_EVIDENCE_WARNINGS) warnings.push(message);
+  };
+  if (!Array.isArray(input)) {
+    warn('Ignored changedFiles: expected an array.');
+    return { files, warnings };
+  }
+  if (input.length > MAX_RECORD_WORK_CHANGED_FILES) {
+    warn(`Ignored ${input.length - MAX_RECORD_WORK_CHANGED_FILES} excess changedFiles item(s).`);
+  }
+  input.slice(0, MAX_RECORD_WORK_CHANGED_FILES).forEach((value, index) => {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      warn(`Ignored changedFiles[${index}]: expected an object.`);
+      return;
+    }
+    const candidate = value as Record<string, unknown>;
+    if (Object.keys(candidate).some(key => !RECORD_WORK_CHANGED_FILE_KEYS.has(key))) {
+      warn(`Ignored changedFiles[${index}]: unsupported fields.`);
+      return;
+    }
+    const filePath = normalizeRepoRelativePath(candidate.filePath);
+    if (!filePath) {
+      warn(`Ignored changedFiles[${index}]: filePath must be canonical and repository-relative.`);
+      return;
+    }
+    let vcsStatus: string | null = null;
+    if (candidate.vcsStatus !== undefined && candidate.vcsStatus !== null) {
+      if (
+        typeof candidate.vcsStatus !== 'string' ||
+        !candidate.vcsStatus.trim() ||
+        candidate.vcsStatus.length > MAX_VCS_STATUS_LENGTH ||
+        hasControlCharacters(candidate.vcsStatus)
+      ) {
+        warn(`Ignored changedFiles[${index}]: vcsStatus must be a bounded string or null.`);
+        return;
+      }
+      vcsStatus = candidate.vcsStatus.trim();
+    }
+    files.push({ filePath, vcsStatus });
+  });
+  return { files, warnings };
+}
+
+type ProtocolArtifactInput = {
+  type: string;
+  label: string;
+  content?: string | null;
+  url?: string | null;
+};
+
+const MAX_PROTOCOL_ARTIFACTS = 100;
+const PROTOCOL_ARTIFACT_KEYS = new Set(['type', 'label', 'content', 'url']);
+
+function validateProtocolArtifacts(input: unknown): ProtocolArtifactInput[] {
+  if (!Array.isArray(input)) {
+    throw new ServiceError('artifacts must be an array', 'validation_error', 400);
+  }
+  if (input.length > MAX_PROTOCOL_ARTIFACTS) {
+    throw new ServiceError(
+      `artifacts accepts at most ${MAX_PROTOCOL_ARTIFACTS} items`,
+      'validation_error',
+      400
+    );
+  }
+  return input.map((value, index) => {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      throw new ServiceError(`artifacts[${index}] must be an object`, 'validation_error', 400);
+    }
+    const artifact = value as Record<string, unknown>;
+    if (Object.keys(artifact).some(key => !PROTOCOL_ARTIFACT_KEYS.has(key))) {
+      throw new ServiceError(
+        `artifacts[${index}] contains unsupported fields`,
+        'validation_error',
+        400
+      );
+    }
+    if (typeof artifact.type !== 'string' || !artifact.type.trim()) {
+      throw new ServiceError(
+        `artifacts[${index}].type must be a non-empty string`,
+        'validation_error',
+        400
+      );
+    }
+    if (typeof artifact.label !== 'string' || !artifact.label.trim()) {
+      throw new ServiceError(
+        `artifacts[${index}].label must be a non-empty string`,
+        'validation_error',
+        400
+      );
+    }
+    for (const key of ['content', 'url'] as const) {
+      if (
+        artifact[key] !== undefined &&
+        artifact[key] !== null &&
+        typeof artifact[key] !== 'string'
+      ) {
+        throw new ServiceError(
+          `artifacts[${index}].${key} must be a string or null`,
+          'validation_error',
+          400
+        );
+      }
+    }
+    if (
+      (artifact.content === undefined || artifact.content === null) &&
+      (artifact.url === undefined || artifact.url === null)
+    ) {
+      throw new ServiceError(
+        `artifacts[${index}] requires content or url`,
+        'validation_error',
+        400
+      );
+    }
+    return artifact as ProtocolArtifactInput;
+  });
+}
+
+function appendDeliveryWarnings<T extends { warnings?: string[] }>(
+  report: T,
+  warnings: string[]
+): T {
+  if (warnings.length === 0) return report;
+  return {
+    ...report,
+    warnings: [...(report.warnings ?? []), ...warnings].slice(0, MAX_PROTOCOL_EVIDENCE_WARNINGS)
+  };
+}
 
 export async function deliverSession({
   ctx,
@@ -1745,10 +2405,6 @@ export async function deliverSession({
   summary,
   artifacts = [],
   changeRationales = [],
-  changedFiles,
-  noFileChanges = false,
-  skipRationaleFor = [],
-  observedDirtyPaths,
   payloadJson,
   verificationSummary,
   followUpNotes
@@ -1757,31 +2413,8 @@ export async function deliverSession({
   missionId: string;
   sessionKey: string;
   summary: string;
-  artifacts?: Array<{ type: string; label: string; content?: string | null; url?: string | null }>;
+  artifacts?: unknown[];
   changeRationales?: ChangeRationaleInput[];
-  /**
-   * Mechanically observed changes for this run (client-side VCS delta). May carry an
-   * optional `attribution` classification (from the client's touched-files/claims
-   * comparison) used only to enrich a `missing_rationale` error — never persisted.
-   */
-  changedFiles?: Array<{
-    filePath: string;
-    vcsStatus?: string | null;
-    attribution?: 'mine' | 'claimed' | 'unclaimed';
-    claimedByMissionIds?: string[];
-  }> | null;
-  /** Agent's explicit assertion that this run changed no files. */
-  noFileChanges?: boolean;
-  /** Per-file rationale overrides for changes the agent did not make. */
-  skipRationaleFor?: SkipRationaleForInput[];
-  /**
-   * Every path the client currently observes as dirty (full worktree, not just the
-   * run-attributable delta). When provided, `changed_files` rows for this objective
-   * that are no longer dirty are reconciled to `current_diff_state = 'resolved'`
-   * before rationale coverage is computed, so a past over-attribution stops
-   * permanently demanding a rationale. Additive/optional: omitted skips reconciliation.
-   */
-  observedDirtyPaths?: string[] | null;
   payloadJson?: Record<string, unknown> | null;
   verificationSummary?: string | null;
   followUpNotes?: string | null;
@@ -1798,172 +2431,32 @@ export async function deliverSession({
   }
 
   const normalizedRationales = normalizeChangeRationales(changeRationales);
-  const normalizedSkips = normalizeSkipRationaleFor(skipRationaleFor);
-  const deliveryReport = markDeliveryPresentationPending(
-    buildDeliveryReport({
-      summary: trimmedSummary,
-      deliveryReport: payloadJson?.deliveryReport
-    })
+  const normalizedArtifacts = validateProtocolArtifacts(artifacts);
+  const deliveryReport = appendDeliveryWarnings(
+    markDeliveryPresentationPending(
+      buildDeliveryReport({
+        summary: trimmedSummary,
+        deliveryReport: payloadJson?.deliveryReport
+      })
+    ),
+    normalizedRationales.warnings
   );
-  const skipPathSet = new Set(normalizedSkips.map(entry => entry.filePath));
-
-  for (const skip of normalizedSkips) {
-    if (!skip.filePath.trim()) {
-      throw new ServiceError(
-        'Each skip-rationale-for entry requires a non-empty file_path.',
-        'invalid_rationale_skip',
-        400
-      );
-    }
-    if (!skip.reason.trim()) {
-      throw new ServiceError(
-        `Change rationale skip for ${skip.filePath} is missing required field: reason`,
-        'invalid_rationale_skip',
-        400
-      );
-    }
-  }
-
-  for (const rationale of normalizedRationales) {
-    if (skipPathSet.has(rationale.filePath)) {
-      throw new ServiceError(
-        `Cannot skip and provide a rationale for the same file: ${rationale.filePath}`,
-        'invalid_rationale_skip',
-        400
-      );
-    }
-  }
 
   const now = nowIso();
   const deliveryId = newId();
   const eventId = newId();
 
-  // Populated inside the transaction once the run's changed files are recorded,
-  // then used to link rationales to their changed-file rows.
-  let changedFileIdByPath = new Map<string, string>();
-
   await ctx.db.transaction(async tx => {
     const txCtx = { ...ctx, db: tx };
-    // Record the run's mechanically-observed changed files (client-side VCS
-    // delta) so review reflects what actually changed — unless the agent
-    // explicitly declared this run made no file changes.
-    if (!noFileChanges && changedFiles && changedFiles.length > 0) {
-      // The delivery event row is inserted later in this transaction, so there is
-      // no observing event to link yet; pass null (COALESCE keeps prior links).
-      await upsertChangedFiles({
-        ctx: txCtx,
-        mission,
-        session,
-        files: changedFiles,
-        eventId: null,
-        now
-      });
-    }
-
-    // Coverage is objective-scoped: aggregate observed changes across every
-    // session for the objective (and no-session record-work records).
-    let objectiveChangedFiles = (await txCtx.db.all(
-      `SELECT id, file_path, current_diff_state FROM changed_files
+    const objectiveChangedFiles = (await txCtx.db.all(
+      `SELECT id, file_path FROM changed_files
          WHERE objective_id = ? AND deleted_at IS NULL`,
       [session.objective_id]
     )) as Array<{
       id: string;
       file_path: string;
-      current_diff_state: string | null;
     }>;
-
-    // Reconcile stale coverage: a `present` row whose path this client no longer
-    // observes as dirty is marked `resolved`, un-poisoning coverage from a past
-    // over-attribution (e.g. recorded while an edit hook was inert). Additive:
-    // omitting observedDirtyPaths (older clients) skips reconciliation entirely.
-    if (observedDirtyPaths) {
-      const dirtySet = new Set(observedDirtyPaths.map(p => p.replace(/\\/g, '/')));
-      const staleRows = objectiveChangedFiles.filter(
-        file => file.current_diff_state === 'present' && !dirtySet.has(file.file_path)
-      );
-      for (const row of staleRows) {
-        await txCtx.db.run(
-          `UPDATE changed_files SET current_diff_state = 'resolved', updated_at = ?, revision = revision + 1
-             WHERE id = ?`,
-          [now, row.id]
-        );
-      }
-      if (staleRows.length > 0) {
-        const resolvedIds = new Set(staleRows.map(row => row.id));
-        objectiveChangedFiles = objectiveChangedFiles.map(file =>
-          resolvedIds.has(file.id) ? { ...file, current_diff_state: 'resolved' } : file
-        );
-      }
-    }
-
-    changedFileIdByPath = new Map(objectiveChangedFiles.map(row => [row.file_path, row.id]));
-
-    // Per-call attribution classification (client-computed, never persisted) used
-    // only to enrich a missing_rationale error with a ready-to-use skip suggestion.
-    const attributionByFilePath = new Map(
-      (changedFiles ?? [])
-        .filter(file => file.attribution)
-        .map(file => [
-          file.filePath.replace(/\\/g, '/'),
-          {
-            attribution: file.attribution as 'mine' | 'claimed' | 'unclaimed',
-            claimedByMissionIds: file.claimedByMissionIds
-          }
-        ])
-    );
-
-    if (!noFileChanges) {
-      const meaningfulFiles = objectiveChangedFiles.filter(
-        file => file.current_diff_state === 'present' && !file.file_path.includes('package-lock')
-      );
-      const missingRationales: MissingRationaleDetail[] = [];
-      for (const file of meaningfulFiles) {
-        if (skipPathSet.has(file.file_path)) {
-          continue;
-        }
-        const rationale = normalizedRationales.find(r => r.filePath === file.file_path);
-        if (!rationale) {
-          const attribution = attributionByFilePath.get(file.file_path);
-          const classification = attribution?.attribution ?? 'unclaimed';
-          missingRationales.push({
-            filePath: file.file_path,
-            classification,
-            suggestedSkip:
-              classification === 'mine'
-                ? null
-                : {
-                    filePath: file.file_path,
-                    reason:
-                      classification === 'claimed'
-                        ? `Changed by concurrent mission ${
-                            attribution?.claimedByMissionIds?.length
-                              ? attribution.claimedByMissionIds.join(', ')
-                              : 'another active mission'
-                          }; excluded from this delivery report.`
-                        : `Not confirmed by this session's tracked edits; confirm this is a meaningful change and add a rationale, or skip it if unintentional.`
-                  }
-          });
-          continue;
-        }
-        for (const field of ['label', 'summary', 'why', 'impact'] as const) {
-          if (!rationale[field]?.trim()) {
-            throw new ServiceError(
-              `Change rationale for ${file.file_path} is missing required field: ${field}`,
-              'invalid_rationale',
-              400
-            );
-          }
-        }
-      }
-      if (missingRationales.length > 0) {
-        throw new ServiceError(
-          `Missing change rationale for ${missingRationales.map(m => m.filePath).join(', ')}. Every meaningful tracked file change requires a rationale.`,
-          'missing_rationale',
-          400,
-          { missingRationales }
-        );
-      }
-    }
+    const changedFileIdByPath = new Map(objectiveChangedFiles.map(row => [row.file_path, row.id]));
 
     await txCtx.db.run(
       `INSERT INTO deliveries
@@ -1981,16 +2474,7 @@ export async function deliverSession({
         trimmedSummary,
         JSON.stringify({
           ...(payloadJson ?? {}),
-          deliveryReport,
-          ...(noFileChanges ? { noFileChanges: true } : {}),
-          ...(normalizedSkips.length > 0
-            ? {
-                rationaleSkips: normalizedSkips.map(entry => ({
-                  filePath: entry.filePath,
-                  reason: entry.reason
-                }))
-              }
-            : {})
+          deliveryReport
         }),
         verificationSummary ?? null,
         followUpNotes ?? null,
@@ -2001,7 +2485,7 @@ export async function deliverSession({
       ]
     );
 
-    for (const artifact of artifacts) {
+    for (const artifact of normalizedArtifacts) {
       await insertArtifactRow({
         ctx: txCtx,
         workspaceId: ctx.workspace.id,
@@ -2018,53 +2502,21 @@ export async function deliverSession({
       });
     }
 
-    for (const rationale of normalizedRationales) {
+    for (const rationale of normalizedRationales.rationales) {
       const changedFileId = changedFileIdByPath.get(rationale.filePath) ?? null;
-      await txCtx.db.run(
-        `INSERT INTO change_rationales
-             (id, workspace_id, project_id, mission_id, objective_id, session_id, delivery_id,
-              changed_file_id, file_path, label, summary, why, impact, hunks_json,
-              is_final, created_at, updated_at, revision)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-        [
-          newId(),
-          ctx.workspace.id,
-          mission.projectId,
-          mission.id,
-          session.objective_id,
-          session.id,
-          deliveryId,
-          changedFileId,
-          rationale.filePath,
-          rationale.label,
-          rationale.summary,
-          rationale.why,
-          rationale.impact,
-          JSON.stringify(rationale.hunks ?? []),
-          bindBool(txCtx.db.dialect, true),
-          now,
-          now
-        ]
-      );
-    }
-
-    for (const skip of normalizedSkips) {
-      const changedFileId = changedFileIdByPath.get(skip.filePath);
-      if (!changedFileId) continue;
-      await txCtx.db.run(
-        `UPDATE changed_files
-           SET observed_metadata_json = ?, updated_at = ?, revision = revision + 1
-           WHERE id = ?`,
-        [
-          JSON.stringify({
-            rationaleSkipped: true,
-            skipReason: skip.reason,
-            skippedAtDeliveryId: deliveryId
-          }),
-          now,
-          changedFileId
-        ]
-      );
+      await insertChangeRationaleRow({
+        ctx: txCtx,
+        projectId: mission.projectId,
+        missionId: mission.id,
+        objectiveId: session.objective_id,
+        sessionId: session.id,
+        deliveryId,
+        changedFileId,
+        sourceEventId: null,
+        rationale,
+        isFinal: true,
+        now
+      });
     }
 
     await txCtx.db.run(
@@ -2182,38 +2634,15 @@ export async function deliverSession({
     }
   });
 
-  /* Legacy inline auto-advance dispatch is intentionally disabled. Run Queue
-   * membership is authoritative and its durable project-deduped worker owns
-   * target/config resolution and launch retries. Keep the old block below
-   * unreachable for one release while compatibility readers are retired. */
+  // Run Queue membership is authoritative; its durable project-deduped worker
+  // owns target/config resolution and launch retries.
   await enqueueRunQueueDispatch(ctx.db, mission.projectId, ctx.workspace.id);
-  const useLegacyInlineAutoAdvance = false;
-
-  // The objective that just delivered is the agent the user last ran. Auto-advance
-  // inherits it when the next objective has not been given its own agent, so the
-  // chain never silently falls back to the runner's hardcoded default.
-  const deliveredObjective = (await ctx.db.get(
-    `SELECT assigned_agent, model, reasoning_effort FROM objectives WHERE id = ?`,
-    [session.objective_id]
-  )) as
-    | { assigned_agent: string | null; model: string | null; reasoning_effort: string | null }
-    | undefined;
-
-  if (useLegacyInlineAutoAdvance) {
-    await ensureNextDraftObjective({
-      ctx: ctx,
-      missionId: mission.id,
-      projectId: mission.projectId,
-      now: nowIso()
-    });
-  }
 
   // A draft with no instruction text is the blank slot the UI keeps ready for the
   // user to type into, not queued work. Treating it as the next objective raised
   // a bogus "waiting for approval: New objective" status item on every delivery.
   const nextObjective = (await ctx.db.get(
-    `SELECT id, title, auto_advance, assigned_agent, model, reasoning_effort,
-            launch_config_json, resource_key
+    `SELECT id, title
        FROM objectives
        WHERE mission_id = ? AND position > (
          SELECT position FROM objectives WHERE id = ?
@@ -2224,161 +2653,10 @@ export async function deliverSession({
     | {
         id: string;
         title: string;
-        auto_advance: number;
-        assigned_agent: string | null;
-        model: string | null;
-        reasoning_effort: string | null;
-        launch_config_json: string | null;
-        resource_key: string | null;
       }
     | undefined;
 
-  // A delivery that immediately auto-advances leaves work in flight, which the
-  // Live Activity already shows; only a delivery that actually parks the mission
-  // in review owes the assignee an interrupting notification.
-  let autoAdvanceQueued = false;
-  if (useLegacyInlineAutoAdvance && nextObjective) {
-    const allowParallelObjectives = await missionAllowsParallelObjectives({
-      ctx,
-      missionId: mission.id
-    });
-    const siblingConflict = await findConflictingActiveSibling({
-      ctx,
-      missionId: mission.id,
-      projectId: mission.projectId,
-      objectiveId: nextObjective.id,
-      resourceKey: nextObjective.resource_key,
-      allowParallelObjectives
-    });
-    if (!siblingConflict) {
-      const eventId = newId();
-      const eventNow = nowIso();
-      if (nextObjective.auto_advance === 1) {
-        // Resolve the agent from the database: the next objective's own assignment
-        // wins, otherwise inherit the just-delivered objective's selection. Persist
-        // any inherited choice onto the objective so the stored agent, the launch
-        // button that reads it, and the queued execution request all agree.
-        const inheritAgent =
-          !nextObjective.assigned_agent && Boolean(deliveredObjective?.assigned_agent);
-        const objectiveFields = ["state = 'launching'", OBJECTIVE_LAUNCHED_AT_ASSIGNMENT];
-        const objectiveParams: unknown[] = [eventNow];
-        const changedFields = ['state', 'launched_at'];
-        if (inheritAgent && deliveredObjective) {
-          objectiveFields.push('assigned_agent = ?', 'model = ?', 'reasoning_effort = ?');
-          objectiveParams.push(
-            deliveredObjective.assigned_agent,
-            deliveredObjective.model,
-            deliveredObjective.reasoning_effort
-          );
-          changedFields.push('assigned_agent', 'model', 'reasoning_effort');
-        }
-        await ctx.db.run(
-          `UPDATE objectives SET ${objectiveFields.join(', ')}, updated_at = ?, revision = revision + 1
-           WHERE id = ?`,
-          [...objectiveParams, eventNow, nextObjective.id]
-        );
-        const updatedRevision = (await ctx.db.get(`SELECT revision FROM objectives WHERE id = ?`, [
-          nextObjective.id
-        ])) as { revision: number };
-        await recordChange({
-          ctx: ctx,
-          entityType: 'objective',
-          entityId: nextObjective.id,
-          operation: 'update',
-          entityRevision: updatedRevision.revision,
-          projectId: mission.projectId,
-          missionId: mission.id,
-          objectiveId: nextObjective.id,
-          changedFields
-        });
-        try {
-          // Mirror the manual launch path (webapp launchObjective): resolve the
-          // project's execution target and the effective launch config (pre-command
-          // + flags) for the resolved agent, then stamp both onto the queued request.
-          // Without this, auto-advanced requests were written with launch_flags_json
-          // = '{}' and a null target, so the agent launched with no pre-command and
-          // none of the configured flags.
-          const resolvedAgent =
-            nextObjective.assigned_agent ?? deliveredObjective?.assigned_agent ?? null;
-          const { executionTargetId, agentConfigs } = await resolveLaunchExecutionTarget({
-            ctx: ctx,
-            projectId: mission.projectId
-          });
-          const resolvedLaunch = await resolveLaunchConfig({
-            ctx: ctx,
-            objectiveLaunchConfigJson: nextObjective.launch_config_json,
-            executionTargetId,
-            agentKey: resolvedAgent ?? '',
-            userConfigs: agentConfigs,
-            projectId: mission.projectId,
-            objectiveResourceKey: nextObjective.resource_key
-          });
-          await createExecutionRequest({
-            ctx: ctx,
-            missionId: mission.id,
-            objectiveId: nextObjective.id,
-            requestedAgent: resolvedAgent,
-            requestedModel: nextObjective.assigned_agent
-              ? nextObjective.model
-              : (deliveredObjective?.model ?? null),
-            requestedReasoningEffort: nextObjective.assigned_agent
-              ? nextObjective.reasoning_effort
-              : (deliveredObjective?.reasoning_effort ?? null),
-            launchFlags: {
-              preCommand: resolvedLaunch.config.preCommand,
-              flags: resolvedLaunch.config.flags
-            },
-            executionTargetId,
-            requestedSource: 'auto_advance',
-            metadata: { launchConfigSource: resolvedLaunch.source },
-            idempotencyKey: `auto_advance:${nextObjective.id}`
-          });
-          autoAdvanceQueued = true;
-        } catch (error) {
-          await ctx.db.run(
-            `INSERT INTO mission_events
-               (id, workspace_id, project_id, mission_id, objective_id,
-                type, phase, summary, payload_json, source, actor_workspace_user_id, created_at)
-             VALUES (?, ?, ?, ?, ?, 'alert', 'review', ?, ?, ?, ?, ?)`,
-            [
-              eventId,
-              ctx.workspace.id,
-              mission.projectId,
-              mission.id,
-              nextObjective.id,
-              `Auto-advance could not delegate the next objective: ${
-                error instanceof Error ? error.message : String(error)
-              }`,
-              JSON.stringify({ autoAdvanceFailed: true }),
-              ctx.source,
-              ctx.actorWorkspaceUserId,
-              eventNow
-            ]
-          );
-        }
-      } else {
-        await ctx.db.run(
-          `INSERT INTO mission_events
-             (id, workspace_id, project_id, mission_id, objective_id,
-              type, phase, summary, payload_json, source, actor_workspace_user_id, created_at)
-           VALUES (?, ?, ?, ?, ?, 'awaiting_approval', 'review', ?, '{}', ?, ?, ?)`,
-          [
-            eventId,
-            ctx.workspace.id,
-            mission.projectId,
-            mission.id,
-            nextObjective.id,
-            `Next objective is waiting for approval: ${nextObjective.title}`,
-            ctx.source,
-            ctx.actorWorkspaceUserId,
-            eventNow
-          ]
-        );
-      }
-    }
-  }
-
-  if (!useLegacyInlineAutoAdvance && nextObjective) {
+  if (nextObjective) {
     const queued = await ctx.db.get<{ id: string }>(
       'SELECT id FROM run_queue_entries WHERE objective_id = ? AND deleted_at IS NULL',
       [nextObjective.id]
@@ -2408,7 +2686,7 @@ export async function deliverSession({
     ctx,
     missionId: mission.id
   });
-  if (!autoAdvanceQueued && remainingActive === 0) {
+  if (remainingActive === 0) {
     await emitNotification({
       db: ctx.db,
       workspaceId: ctx.workspace.id,
@@ -2523,9 +2801,9 @@ export async function recordWork({
   summary: string;
   objective: string;
   title?: string | null;
-  artifacts?: Array<{ type: string; label: string; content?: string | null; url?: string | null }>;
+  artifacts?: unknown[];
   changeRationales?: ChangeRationaleInput[];
-  changedFiles?: Array<{ filePath: string; vcsStatus?: string | null }>;
+  changedFiles?: unknown[];
   payloadJson?: Record<string, unknown> | null;
   /** Explicit `--assigned-to` member ref; when omitted, the §7.1 default chain applies. */
   assignedTo?: string | null;
@@ -2534,6 +2812,18 @@ export async function recordWork({
   if (!trimmedSummary) {
     throw new ServiceError('Summary is required for record-work', 'validation_error');
   }
+  const normalizedRationales = normalizeChangeRationales(changeRationales);
+  const normalizedChangedFiles = normalizeRecordWorkChangedFiles(changedFiles);
+  const normalizedArtifacts = validateProtocolArtifacts(artifacts);
+  const deliveryReport = appendDeliveryWarnings(
+    markDeliveryPresentationPending(
+      buildDeliveryReport({
+        summary: trimmedSummary,
+        deliveryReport: payloadJson?.deliveryReport
+      })
+    ),
+    [...normalizedRationales.warnings, ...normalizedChangedFiles.warnings]
+  );
 
   const resolvedProjectId = projectId
     ? await resolveProjectId(ctx, projectId)
@@ -2551,12 +2841,6 @@ export async function recordWork({
 
   const now = nowIso();
   const deliveryId = newId();
-  const deliveryReport = markDeliveryPresentationPending(
-    buildDeliveryReport({
-      summary: trimmedSummary,
-      deliveryReport: payloadJson?.deliveryReport
-    })
-  );
   const objectiveId = created.objectives[0]?.id;
   if (!objectiveId) {
     throw new ServiceError('Failed to create objective for record-work', 'internal_error', 500);
@@ -2585,7 +2869,7 @@ export async function recordWork({
       ]
     );
 
-    for (const artifact of artifacts) {
+    for (const artifact of normalizedArtifacts) {
       await insertArtifactRow({
         ctx: txCtx,
         workspaceId: ctx.workspace.id,
@@ -2602,62 +2886,33 @@ export async function recordWork({
       });
     }
 
-    const normalizedRationales = normalizeChangeRationales(changeRationales);
-    for (const rationale of normalizedRationales) {
-      await txCtx.db.run(
-        `INSERT INTO change_rationales
-             (id, workspace_id, project_id, mission_id, objective_id, delivery_id,
-              file_path, label, summary, why, impact, hunks_json, is_final, created_at, updated_at, revision)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-        [
-          newId(),
-          ctx.workspace.id,
-          resolvedProjectId,
-          created.mission.id,
-          objectiveId,
-          deliveryId,
-          rationale.filePath,
-          rationale.label,
-          rationale.summary,
-          rationale.why,
-          rationale.impact,
-          JSON.stringify(rationale.hunks ?? []),
-          bindBool(txCtx.db.dialect, true),
-          now,
-          now
-        ]
-      );
-    }
-
-    // Populate `changed_files` so the review file panel and its rationale coverage
-    // match any other completed delivery. record-work has no agent session, so
-    // these rows carry a NULL session_id/resource_id. The file set is the union of
-    // explicitly-reported changed files and every rationale's file path; the
-    // rationale-derived rows join back to their rationale as `covered`, while
-    // explicit-only paths surface as `missing_rationale` exactly like a live
-    // delivery. `vcs_status` prefers an explicit status, else the rationale's.
+    // record-work has no attached execution target, so its explicit changed-file
+    // list remains authoritative. Include rationale paths so every annotation
+    // links to the durable objective/path row created in this transaction.
     const changedFileStatus = new Map<string, string | null>();
-    for (const rationale of normalizedRationales) {
-      const normalizedPath = rationale.filePath.replace(/\\/g, '/');
-      if (!changedFileStatus.has(normalizedPath)) changedFileStatus.set(normalizedPath, null);
+    for (const rationale of normalizedRationales.rationales) {
+      if (!changedFileStatus.has(rationale.filePath)) {
+        changedFileStatus.set(rationale.filePath, null);
+      }
     }
-    for (const file of changedFiles) {
-      const normalizedPath = file.filePath.replace(/\\/g, '/');
-      if (!normalizedPath.trim()) continue;
+    for (const file of normalizedChangedFiles.files) {
+      const normalizedPath = file.filePath;
       changedFileStatus.set(
         normalizedPath,
         file.vcsStatus ?? changedFileStatus.get(normalizedPath) ?? null
       );
     }
+    const changedFileIdByPath = new Map<string, string>();
     for (const [normalizedPath, vcsStatus] of changedFileStatus) {
+      const changedFileId = newId();
       await txCtx.db.run(
         `INSERT INTO changed_files
              (id, workspace_id, project_id, mission_id, objective_id, session_id, resource_id,
               file_path, vcs_status, current_diff_state, first_observed_at, last_observed_at,
               last_observed_event_id, observed_metadata_json, created_at, updated_at, revision)
-           VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, 'present', ?, ?, NULL, '{}', ?, ?, 1)`,
+           VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, 'unknown', ?, ?, NULL, '{}', ?, ?, 1)`,
         [
-          newId(),
+          changedFileId,
           ctx.workspace.id,
           resolvedProjectId,
           created.mission.id,
@@ -2670,6 +2925,32 @@ export async function recordWork({
           now
         ]
       );
+      await recordChange({
+        ctx: txCtx,
+        entityType: 'changed_file',
+        entityId: changedFileId,
+        operation: 'insert',
+        entityRevision: 1,
+        projectId: resolvedProjectId,
+        missionId: created.mission.id,
+        objectiveId
+      });
+      changedFileIdByPath.set(normalizedPath, changedFileId);
+    }
+    for (const rationale of normalizedRationales.rationales) {
+      await insertChangeRationaleRow({
+        ctx: txCtx,
+        projectId: resolvedProjectId,
+        missionId: created.mission.id,
+        objectiveId,
+        sessionId: null,
+        deliveryId,
+        changedFileId: changedFileIdByPath.get(rationale.filePath) ?? null,
+        sourceEventId: null,
+        rationale,
+        isFinal: true,
+        now
+      });
     }
 
     await txCtx.db.run(

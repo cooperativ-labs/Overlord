@@ -46,6 +46,15 @@ decisionHold:
     workspace sandbox failed and automatic review retried the shell command, so auto-review does
     not bypass the installed request hook.
 
+mutationHooks:
+  classification: post-only
+  fixture: fixtures/mutation-window-evidence.json
+  notes: >-
+    Recorded pre/post shapes are separate calls and do not prove a paired window. A directly named
+    native edit path normalized by the Codex codec as `file.edited` may record objective-bound,
+    non-exclusive `declared_edit`/`direct` evidence. The recorded apply_patch completion has no
+    normalized edit path, so it records unavailable evidence health.
+
 capabilities:
   observe.prompt:
     status: supported
@@ -56,8 +65,7 @@ capabilities:
     native: PreToolUse
     trackedAs: latch-engine
     notes: >-
-      Latch v2 removed the CLI event stream that previously owned mechanical observation.
-      Overlord exposes no replacement until it has a native Conversation Hub client.
+      There is no mechanical observation path until Overlord has a native Conversation Hub client.
   observe.toolResult:
     status: not-implemented
     native: PostToolUse
@@ -69,11 +77,15 @@ capabilities:
       - fixtures/normalize-post-tool-use.json
       - fixtures/agent-session-hooks.json
       - fixtures/post-tool-use-hook.json
+      - fixtures/post-tool-use-unbound.json
     notes: >-
-      The lifecycle PostToolUse registration pipes Codex's native payload to
-      `ovld protocol record-touched`, which appends normalized changed paths to the
-      per-session attribution log read by `deliver`. It is intentionally separate
-      from mechanical agent-session observation, which remains owned by Latch.
+      The lifecycle PostToolUse registration forwards Codex's native payload to local
+      `capture-change` only when `OVERLORD_OBJECTIVE_ID` resolves an exact active-session binding.
+      Native paths normalized by the Codex codec as `file.edited` record non-exclusive
+      `declared_edit`/`direct` evidence. Codec-normalized read, search, and fetch callbacks are
+      silent no-ops; mutation-capable callbacks without a normalized edit path, plus shell,
+      generic, unknown, and unmapped callbacks, record unavailable evidence health. It remains
+      separate from mechanical agent-session observation.
   observe.sessionLifecycle:
     status: not-implemented
     native: SessionStart
@@ -99,8 +111,7 @@ capabilities:
     native: PermissionRequest
     trackedAs: latch-engine
     notes: >-
-      Latch v2 removed the CLI pending-input and send surface. The native Codex prompt owns
-      approvals; Overlord exposes no remote decision control.
+      The native Codex prompt owns approvals; Overlord exposes no remote decision control.
   answer.structuredQuestion:
     status: unverified
     native: ToolRequestUserInput
@@ -149,15 +160,6 @@ hazards:
     verification: verified
     mitigation: implemented
     fixture: fixtures/agent-session-hooks.json
-  - id: shipped-permission-hook-inert
-    severity: high
-    summary: >-
-      The former PermissionRequest hook called a nonexistent protocol command in the
-      background. The connector no longer registers a PermissionRequest hook; the native
-      prompt owns approvals when Latch is absent.
-    verification: verified
-    mitigation: implemented
-    fixture: fixtures/agent-session-hooks.json
   - id: prompt-and-agent-hook-handlers-inert
     severity: low
     summary: >-
@@ -197,18 +199,3 @@ decisionShape:
     make — and not an inference about what the harness can do.
 
 unboundSessionFixture: fixtures/unbound-session.json
-
-legacy:
-  capabilities:
-    - followUpHook
-    - permissionHook
-    - editHook
-    - nativeResume
-    - modelFlag
-    - effortFlag
-    - contextFilePrompt
-    - permissionRules
-  hookTypes:
-    - UserPromptSubmit
-    - PermissionRequest
-    - PostToolUse

@@ -22,7 +22,7 @@ export function resolveLaunchSettingsWorkspaceId({
   const defaultIsAvailable = defaultWorkspaceId
     ? workspaces.some(workspace => workspace.id === defaultWorkspaceId)
     : false;
-  if (defaultIsAvailable) return defaultWorkspaceId;
+  if (defaultIsAvailable) return defaultWorkspaceId ?? null;
 
   return workspaces[0]?.id ?? null;
 }

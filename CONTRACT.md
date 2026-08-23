@@ -34,7 +34,7 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `111`
+Current version: `116`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
@@ -126,6 +126,125 @@ identify a launch selection. Existing items that omit both fields retain the
 project launch-preference defaulting behavior. The existing `resourceKey` and
 Run Queue `autoAdvance` semantics, authorization, and response shapes are
 unchanged.
+
+### Version 112 Change Summary
+
+Phase 0 of hook-first file-change attribution establishes the connector contract
+without enabling the new runtime path. Every shipped connector descriptor now
+declares fixture-backed mutation-window evidence with one honest classification:
+`paired`, `post-only`, or `unsupported`. A `paired` claim proves matching native
+session, call, workspace-root, tool, outcome, and direct-path fields in recorded
+pre/post payloads. `post-only` proves only completion-side evidence; `unsupported`
+records why no usable pair is evidenced. The descriptor generator executes these
+fixtures and rejects a classification that lacks the required proof.
+
+The Connector → Protocol hook surface is prepared for the later local-only
+pre/post attribution command: adapters must resolve scope before logging or
+spawning, use bounded best-effort execution, never make network/database calls,
+and never persist or transmit file content, diffs, raw commands, transcripts,
+environment values, or fingerprints. This release ships no mutation ledger,
+sync command, delivery behavior, database, or REST change; those remain later
+phases. The existing PostToolUse touched-file compatibility path is unchanged.
+
+### Version 113 Change Summary
+
+Phase 1 of hook-first file-change attribution makes delivery non-blocking with
+respect to change tracking and advisory evidence. A delivery requires only its
+summary: missing change rationales, rationale skips, and unavailable change
+tracking are review metadata and cannot reject the lifecycle transition.
+Malformed `deliveryReport.agentReport` items are salvaged independently; valid
+siblings persist and bounded warnings are retained with the delivery report.
+
+The mission File Changes REST projection is changed-file-first. Every observed
+`changed_files` record appears once, with an optional rationale, so mechanical
+evidence is never hidden behind author-supplied prose. Active changed-file
+identity is `(objective_id, file_path)`, rather than session-scoped, allowing
+one objective to retain one durable record per path across sessions.
+
+### Version 114 Change Summary
+
+Phase 2 adds the additive Protocol `sync-changes` operation. An attached
+execution target submits bounded, metadata-only objective-ledger evidence using
+its existing session key; every item independently reports `accepted`,
+`ignored`, or `warning`, so one malformed item cannot discard valid siblings or
+block delivery. The service upserts the objective/path `changed_files` identity
+and stores only source, quality, overlap, window, and hook-health metadata —
+never content, diffs, commands, transcripts, environment, or fingerprints.
+
+The CLI owns a versioned local ledger keyed by canonical working directory,
+objective, and protocol session. CWD alone must never select an objective:
+unbound or ambiguous hook calls record local health and create no attribution.
+The legacy VCS delta remains shadow-only during this phase. Local and Cloud
+execution targets use the same Protocol payload; no backend reads an execution
+target filesystem.
+
+### Version 115 Change Summary
+
+Phase 4 cuts the normal product path over to the objective/session-keyed local
+ledger. CLI update, change preflight, and delivery drain metadata-only ledger
+evidence through Protocol before their primary operation. Paired connector
+evidence is authoritative; post-only and hookless compatibility observations
+are explicitly `fallback_delta` review metadata and never exact attribution.
+
+The normal `deliver` request requires only its summary. Legacy changed-file,
+observed-dirty-path, rationale-skip, and rationale fields remain accepted for
+older clients and useful optional annotations, but the CLI no longer synthesizes
+them from a worktree delta, arbitrates peer claims, invents skip reasons, or
+preflights rationale coverage. Ledger synchronization, hook health, path
+source, overlap, and optional rationale evidence can produce bounded review
+warnings but cannot reject delivery. Both Local and Cloud execution targets use
+the same metadata-only Protocol sync payload; neither backend reads the target
+filesystem.
+
+### Version 116 Change Summary
+
+Phase 5 is an immediate, breaking cutover to objective-ledger change tracking.
+Protocol `update` no longer accepts changed-file payloads. Protocol `deliver`
+accepts only its required summary plus current optional annotations
+(`changeRationales`, artifacts, and `deliveryReport`); changed-file,
+observed-dirty-path, no-file-change, and rationale-skip inputs are removed from
+CLI, REST, MCP, service, help, and connector instruction surfaces. `record-work`
+retains explicit `changedFiles` because it records already-completed work and has
+no attached execution target capable of producing a ledger.
+
+File-backed Protocol inputs use the per-flag `fileInputs` envelope exclusively.
+The retired shared `stdin` payload is removed; a literal `--*-file -` is resolved
+by the CLI into that flag's own `fileInputs` entry before transport.
+
+The retired mission-scoped VCS baseline, touched-file log, transcript-derived
+rationale notes, peer-claim arbitration, and `fallback_delta` evidence path are
+removed. A connector PostToolUse callback may append `declared_edit` evidence
+only when the connector-owned codec normalizes the event as `file.edited` and
+produces a bounded path inside the explicitly addressed objective workspace.
+Known read-only callbacks are silent; mutation-capable, shell, unmapped, and
+no-path callbacks append no path claim and instead record bounded unavailable
+hook health. Generic native payload path parsing is forbidden, and CWD never
+selects an objective. No shipped connector currently
+claims paired-window support; `window_observed` remains reserved for a future
+connector whose strict fixtures and runtime both prove a matching pre/post
+window.
+
+The local ledger is owner-only, atomically updated under a cross-process lock,
+and records normalized repo-relative paths only. Every synchronized item carries
+source, quality (`direct` or `window`), overlap, and bounded hook-health metadata.
+The backend rejects malformed or absolute paths item-by-item, preserves the
+strongest observation for an objective/path, and updates last-observer session
+provenance. Objective/path uniqueness migrations deduplicate existing rows before
+installing the new index. Historical compatibility payloads and stored metadata
+are not accepted as active write inputs.
+
+Optional rationale annotations use one exact shape: `filePath`, `label`,
+`summary`, `why`, `impact`, and optional `hunks` containing only `header`.
+Unknown or retired keys discard only that advisory item with a bounded warning;
+duplicate canonical paths resolve deterministically to the last valid item.
+`update` persists non-final annotations and `deliver` / `record-work` persist
+final annotations through one shared writer. Accepted changed-file and rationale
+writes append scoped `entity_changes` in the same transaction, and the File
+Changes projection joins the latest annotation regardless of finality.
+
+Objective-ledger and `record-work` observations set `current_diff_state` to
+`unknown`; a captured path is evidence of an edit, not evidence that a current
+VCS diff was inspected. Historical `present` and `resolved` rows remain readable.
 
 ### Version 106 Change Summary
 
@@ -481,7 +600,10 @@ Owns:
 - Context assembly format returned by `attach`, including additive `displayKey` / `displayId` on `ObjectiveSummary`
 - Delivery payload structure and validation rules
 - Versioned delivery-report evidence and deterministic/pending presentation in `deliveries.payload_json`, with optional asynchronous Gemini composition of `presentation` only
-- Changed-file and change-rationale recording protocol
+- Objective/session-ledger changed-file synchronization plus optional update,
+  delivery, and record-work rationale annotations. Accepted changed-file and
+  rationale writes emit scoped `entity_changes` in the same transaction so the
+  changed-file-first REST projection refreshes without scanning a worktree
 - Idempotency key scope naming for protocol operations (`protocol.*`)
 - In-place mission artifact updates via `ovld protocol update-artifact` / `POST /api/protocol/update-artifact`, which apply the same editable-field and revision rules as REST `PATCH /api/missions/:id/artifacts/:artifactId` without requiring a live session key
 - Mid-turn mission artifact creation via `ovld protocol add-artifact` / `POST /api/protocol/add-artifact`, which creates an artifact without a delivery using the same `createArtifact` service as REST `POST /api/missions/:id/artifacts`; an optional session key stamps session/objective provenance when present
@@ -541,7 +663,8 @@ Owns:
 - Execution-target registration command: `ovld add-et --name <name>` (backed by the `register-target` protocol subcommand / `POST /api/protocol/register-target`) announces the acting machine as an execution target for the resolved workspace, declaring or reusing the device's `local` target idempotently and applying `--name` as its label. Parentless workspace resolution and the `workspace_selection_required` fallback mirror `ovld create-project`.
 - Execution-target onboarding triggers: `ovld add-et` and an eligible machine-local checkout link (`ovld add-cwd`, `ovld create-project --directory`, the desktop local bridge) are the only CLI acts that create an execution target. `ovld auth login`, `ovld runner install`, `ovld runner start`, and `ovld runner supervise` never create one — credentials, an installed CLI, and a running process are all disqualified as triggers because container images ship all three. `ovld setup` creates a target only by making the same explicit `register-target` call, reported to the user as its own step. Commands that need a declared target and find none fail with an actionable message naming `ovld add-et` and `ovld add-cwd`.
 - Runner identity environment: `OVERLORD_RUNNER_INSTANCE_ID` pins this runner process's stable instance identity (otherwise a local id is generated and persisted alongside the runner service state), `OVERLORD_EXECUTION_TARGET_ID` names an existing execution target to serve instead of resolving the acting machine's own, and `OVERLORD_RUNNER_RELATION` (`native` | `adopted`) declares the relationship. An AgentPod container sets the host's `OVERLORD_EXECUTION_TARGET_ID`, its own `OVERLORD_RUNNER_INSTANCE_ID`, and `OVERLORD_RUNNER_RELATION=adopted`; none of these ever create a target, and an unresolvable one fails loudly with `no_execution_target_registered`. Bare `OVERLORD_DEVICE_FINGERPRINT` remains a compatibility host hint, not the adoption model
-- The optional per-repo `.overlordignore` file (git repo root): gitignore-style patterns for paths the client-side changed-file capture must never report as run-attributable changes (see [`cli/docs/11-review-artifacts-and-change-tracking.md`](cli/docs/11-review-artifacts-and-change-tracking.md)). Parsed and applied entirely on the client in `cli/src/vcs.ts`.
+- The optional per-repo `.overlordignore` file: gitignore-style patterns for paths the client-side objective ledger must never record or synchronize (see [`cli/docs/11-review-artifacts-and-change-tracking.md`](cli/docs/11-review-artifacts-and-change-tracking.md)). Parsed and applied entirely on the client at the ledger insertion boundary.
+- The owner-only objective/session change ledger and local-only `ovld protocol capture-change` command. Ledger writes are cross-process safe, store normalized workspace-relative paths and bounded attribution metadata only, and require an explicit objective identity; cwd alone never resolves scope.
 - The **agent-session runtime**: the `ovld agent-session` command family and the compiled harness catalog (`cli/src/agent-session/catalog.generated.ts`). It is the only local module that carries agent-session traffic to the backend, and it does so with the channel-scoped `OVERLORD_SESSION_CHANNEL_TOKEN` — never the user's broad `USER_TOKEN`. The runtime reads the compiled catalog, never the descriptor YAML, because parsing YAML on a hook path would violate the latency invariant and the installed adapter may be older than the CLI. `ovld agent-session capabilities [<agent>] [--json]` is a human/agent-facing offline reader of that catalog: no network call, no write, no subprocess. `ovld doctor` additionally reports each connector's installed descriptor digest against the compiled catalog and which mission the current working directory's native session is bound to, and makes no network call to do either — an unbound session must be able to run it with nothing requested on its behalf. Adding a sixth harness must add zero agent-session subcommands
 - Human-readable CLI output format conventions
 
@@ -561,8 +684,8 @@ Owns:
 - Per-agent plugin/adapter files and managed file manifests
 - Hook scripts and their event contracts
 - `ovld agent-setup <agent>` / `ovld agent-setup all` and `ovld doctor` behavior
-- Connector capability declarations (the approved capability flag set)
-- The per-adapter **harness capability descriptor** (`connectors/adapters/<agent>/harness-capabilities.yaml`, validated by [`contract/harness-capabilities.schema.yaml`](contract/harness-capabilities.schema.yaml)) and its executable fixtures. The descriptor is the only hand-authored source of agent-session interaction capability truth: it is simultaneously the runtime gating input, the CI contract, and the source the generated `CAPABILITIES.md`, `connectors/HARNESS-MATRIX.md`, compiled CLI catalog, and deprecated conformance projection are produced from. Capability ids, statuses, integration shapes, tiers, and fixture kinds come from the closed `agentSession` vocabulary in `contract/extension-points.yaml`; `capabilityTier` is derived from passing fixtures and is never authored or persisted
+- Connector capability declarations in the harness descriptor
+- The per-adapter **harness capability descriptor** (`connectors/adapters/<agent>/harness-capabilities.yaml`, validated by [`contract/harness-capabilities.schema.yaml`](contract/harness-capabilities.schema.yaml)) and its executable fixtures. The descriptor is the only hand-authored source of agent-session interaction capability truth: it is simultaneously the runtime gating input, the CI contract, and the source from which generated `CAPABILITIES.md`, `connectors/HARNESS-MATRIX.md`, and the compiled CLI catalog are produced. Capability ids, statuses, integration shapes, tiers, and fixture kinds come from the closed `agentSession` vocabulary in `contract/extension-points.yaml`; `capabilityTier` is derived from passing fixtures and is never authored or persisted
 - Connector-owned native event-normalization and decision codecs. Native event and decision contracts belong to this layer; the CLI owns execution and transport but never becomes the source of truth for a harness dialect. `resolve` emits the harness's exact native decision shape, never a normalized Overlord shape, and every failure path returns _no decision_ so the harness's own behavior remains the floor
 - Per-adapter decision codec declarations at `connectors/adapters/<agent>/codec/<agent>.decision-codec.yaml`, referenced from the harness descriptor and compiled into `cli/src/agent-session/decision-codec-registry.generated.ts`. The pure interpreter owns bounded/redacted request-card construction; the connector declaration owns native event paths and exact literal response bodies. Exact allow, deny, and defer behavior is proven by `decision-codec` fixtures that execute the shipped interpreter
 
@@ -585,7 +708,7 @@ Owns:
 - Launch-config resolution for manual, auto-advance, and claim-time launches: an explicit objective override wins, then per-agent defaults on the selected `project_resource_sources` descriptor, then user execution-target and workspace defaults
 - Per-mission branch/worktree preparation before local agent spawn when enabled, including the deterministic branch/worktree **planning** algorithm (`cli/src/branch-planning.ts`) — co-owned with the service layer and pinned to `contract/branch-planning-vectors.json` (see "Shared Deterministic Algorithms")
 - Same-mission branch/worktree reuse: if the planned worktree already exists and is checked out on the expected mission branch, the runner may launch into it even when it has uncommitted changes, so sequential objectives can continue work on the same branch without forcing an intermediate commit
-- Per-objective checkout isolation for parallel objectives: when the mission has `allowParallelObjectives` on, uses worktrees, has no explicit branch pin, and a sibling objective on the **same** effective `resource_key` is already `launching`/`executing`/`pending_delivery`, the runner plans `<mission branch>-<objectives.display_key>` in its own worktree instead of joining the sibling's dirty checkout, and reports `branchAutomation.isolated` on `branch-prepared`. The suffix is the objective's stable display key, so the decision needs no coordination between simultaneous launches and a relaunch returns the objective to its own worktree. Without worktrees the mission has one checkout and concurrent objectives share it deliberately — file attribution comes from each session's touched-file log, not from the checkout
+- Per-objective checkout isolation for parallel objectives: when the mission has `allowParallelObjectives` on, uses worktrees, has no explicit branch pin, and a sibling objective on the **same** effective `resource_key` is already `launching`/`executing`/`pending_delivery`, the runner plans `<mission branch>-<objectives.display_key>` in its own worktree instead of joining the sibling's dirty checkout, and reports `branchAutomation.isolated` on `branch-prepared`. The suffix is the objective's stable display key, so the decision needs no coordination between simultaneous launches and a relaunch returns the objective to its own worktree. Without worktrees the mission has one checkout and concurrent objectives share it deliberately — attribution comes only from each explicitly bound objective/session ledger, never from a checkout-wide scan
 - Runner launch environment variables, including `OVERLORD_PROJECT_RESOURCES` as a JSON sibling-resource manifest resolved for the launching execution target (each entry additively carries `accessMode`; `read` and `read_write` file-path sources both contribute their path to `OVERLORD_PROJECT_RESOURCES_PATHS` with explicit `:ro`/`:rw` suffixes, while URL/git sources contribute none)
 - Runner-instance identity and heartbeat: each runner process carries a stable `runnerInstanceId` and a `native`/`adopted` relation to the execution target it serves, published on every claim so the backend can report honest local liveness. Several runner instances may serve one target (a host runner plus containers adopting it); claiming stays target-level and a runner instance is never individually addressed
 - `ovld runner` commands
@@ -597,7 +720,7 @@ Owns:
 - Latch capability discovery on the execution target: run read-only `latch capabilities --json` on the device where the process will run (never a different laptop), parse `protocolVersion` / `productVersion` / the capabilities map, expose three distinguishable states (`found` with version and resolved path, `not_installed` with the standalone install command, `incompatible` naming the missing capability), cache per target with cheap revalidation, and never install or upgrade Latch as a side effect. Direct execution remains selectable in every state
 - Latch create-then-open launch path: when the claim-time launch-session snapshot selects Latch and discovery reports `found`, replace only the final process/terminal spawn with `latch create --manifest-file - --json` (same composed terminal command string S run via `$SHELL -ilc`), record the returned session id as `execution_requests.metadata_json.providerSession` (never as `launched_session_id` or a credential), then best-effort `latch open`; create failure fails the request, viewer failure does not. Direct launch remains the path when the provider is direct or Latch is unavailable
 - Latch terminal-session lifecycle capabilities on the execution target: `inspectLatchSession`, `openLatchSession`, and `stopLatchSession` invoke the public Latch CLI with argv on the device that owns the mapped session, resolving the executable exactly as discovery does (PATH, then `~/.local/bin` and the macOS Homebrew prefixes) and reporting a named missing-binary condition when nothing resolves, so a process started without an interactive-shell PATH cannot see discovery report `found` while every lifecycle command fails. Inspect reports only the closed `running` / `exited` / `stopping` / `lost` projection when the session still exists; Latch `no session` absence (pruned or removed metadata) is `LATCH_SESSION_ABSENT` and is not a reachability failure. Reachability remains a separate capability-result/client condition for other lifecycle failures. Stop is explicit and destructive and is never coupled to objective delivery/completion. Overlord does not invoke or emulate Latch's removed v1 conversation commands; a future conversation integration must speak the v2 Conversation Hub protocol natively
-- Launch does not mint Agent Session Exchange channels. Protocol attach is the binding declaration and does not require a Latch session or a session channel. Channel 1 (artifacts, shared state, delivery, follow-up capture, touched-file attribution) works with Latch uninstalled
+- Launch does not mint Agent Session Exchange channels. Protocol attach is the binding declaration and does not require a Latch session or a session channel. Channel 1 (artifacts, shared state, delivery, follow-up capture, objective-ledger attribution) works with Latch uninstalled
 
 Does NOT own:
 
@@ -845,7 +968,7 @@ These are the **only sanctioned paths** between components. Bypassing these surf
 - **Response format**: JSON on stdout; non-zero exit on error
 - **Inbox capture**: `ovld protocol create --inbox` creates an account-owned unassigned capture. Ordinary non-executing `create` uses an explicit project first, then discovered project, then this inbox fallback; `prompt` and `record-work` continue to fail without a project because they imply executable work.
 - **Shell-special content**: Must use `--summary-file -` / `--payload-file -` with stdin heredoc
-- **Delivery evidence**: `deliver` accepts an optional versioned `deliveryReport.agentReport` object. Its `humanActions`, `tradeoffsMade`, `knownRisks`, `deferredWork`, and `assumptions` fields are advisory agent evidence, normalized to empty arrays when absent so evidence and model availability never delay delivery. Human actions must exclude Git operations and routine review/testing; the protocol applies this exclusion before persistence. The stored `deliveryReport.presentation` begins as an immediate deterministic fallback and is marked `pending` when a compose job is enqueued; a background worker may later replace only `presentation` with a Gemini-composed or `fallback` result. The original delivery summary remains immutable.
+- **Delivery evidence**: `deliver` accepts an optional versioned `deliveryReport.agentReport` object. Its `humanActions`, `tradeoffsMade`, `knownRisks`, `deferredWork`, and `assumptions` fields are advisory agent evidence, normalized to empty arrays when absent. Malformed advisory items are discarded independently with bounded warnings; evidence, change tracking, and model availability never delay delivery. Human actions must exclude Git operations and routine review/testing; the protocol applies this exclusion before persistence. The stored `deliveryReport.presentation` begins as an immediate deterministic fallback and is marked `pending` when a compose job is enqueued; a background worker may later replace only `presentation` with a Gemini-composed or `fallback` result. The original delivery summary remains immutable.
 
 ### Protocol → Database (Service Layer)
 
@@ -868,11 +991,21 @@ These are the **only sanctioned paths** between components. Bypassing these surf
 
 ### Connector → Protocol (Hook Surface)
 
-- **Hooks**: `UserPromptSubmit`, `PermissionRequest`, `PostToolUse`, `Stop` (future)
-- **Transport**: Shell scripts invoking `ovld protocol hook-event` or `update`
+- **Hooks**: harness-native lifecycle callbacks declared by the connector descriptor
+- **Transport**: Shell scripts invoking `ovld protocol hook-event` for follow-up activity or the local-only `ovld protocol capture-change` command for file evidence
 - **Rule**: Hook scripts must not write to the database directly; use protocol commands only
-- **Edit capture**: a connector's `PostToolUse` edit hook records the files the agent edits into the per-session touched-files log read by the client at `deliver` to make changed-file attribution exact under concurrency (see change-tracking in `cli/docs/11-review-artifacts-and-change-tracking.md`). The hook writes only normalized absolute paths — never diffs or file contents — and must not write to the database directly
-- **Edit capability declaration**: connectors that install this hook declare the approved `editHook` capability and `PostToolUse` hook type in their conformance manifest
+- **Scope**: file capture requires an explicit objective identity and its attached protocol session. The working directory is only the normalization root and never selects an objective. An unbound callback performs no attribution.
+- **Direct edit capture**: a post-tool callback must pass its connector key, and may append `declared_edit` / `direct` evidence only when that connector's compiled codec normalizes the event as `file.edited` with an exact path. The CLI bounds the normalized workspace-relative path and applies `.overlordignore` before writing the owner-only objective/session ledger. Generic path-key parsing is forbidden; known read-only callbacks are silent, while mutation-capable, shell, unmapped, and no-path callbacks record bounded unavailable health and claim no path.
+- **Mutation-window foundation**: each shipped connector declares a fixture-backed
+  `mutationHooks` classification in its harness descriptor. A paired pre/post
+  runtime may run only when strict fixtures and the installed connector both
+  prove matching session, call, workspace, tool, outcome, and path/window
+  semantics. It records `window_observed` / `window` evidence with honest
+  overlap state. `post-only` and `unsupported` classifications never trigger a
+  worktree-wide delta or synthesize attribution.
+- **Privacy boundary**: native payloads, file contents, diffs, raw commands,
+  transcript content or paths, environment values, fingerprints, and absolute
+  host paths never cross this adapter surface.
 - **Follow-up capture**: `UserPromptSubmit` records `user_follow_up` activity even when the original delivery ended the session; it must not reopen implementation work by itself
 
 ### Connector → CLI Agent Session Runtime → REST (Agent Session Surface)
@@ -1100,9 +1233,9 @@ In addition to the requirements above, a connector must:
 4. **Ship the mandatory unbound-session negative fixture**, demonstrating that an unbound session
    in an unrelated directory is untouched and unblocked by every registered integration. A side
    effect the fixture records must be declared as a hazard with a tracker.
-5. **Never hand-edit the generated projection.** `connector.capabilities`, `hookTypes`,
-   `integrationShape`, and `capabilityTier` are produced from the descriptor. The tier is derived
-   from passing fixtures; a connector that declares more than its fixtures prove fails conformance.
+5. **Never hand-edit generated descriptor metadata.** `integrationShape`, `capabilityTier`, and
+   `harnessCapabilities` are produced from the descriptor. The tier is derived from passing
+   fixtures; a connector that declares more than its fixtures prove fails conformance.
 6. **Make no network call from adapter code.** Adapters translate and hand off to the CLI, which
    owns transport, auth, retry, and redaction.
 
@@ -1149,7 +1282,8 @@ The only sanctioned ways to extend Overlord:
 
 Attempting to extend Overlord through any other path — patching core tables directly, adding undeclared hook types, using closed vocabulary values — is a contract violation that must be resolved before the component ships.
 
-See [`contract/extension-points.yaml`](contract/extension-points.yaml) for machine-readable declarations and the approved capability flag list.
+See [`contract/extension-points.yaml`](contract/extension-points.yaml) for machine-readable
+extension declarations and the agent-session capability vocabulary.
 
 ---
 
@@ -1217,9 +1351,8 @@ The `contract/` directory contains machine-readable counterparts:
 | Closed vocabulary value added          | Yes — requires contract version bump                                                                                                      |
 | Open vocabulary value promoted to core | Yes — add to `09-database-schema-contract.md` Controlled Vocabularies                                                                     |
 | New extension point                    | Yes — add to `contract/extension-points.yaml` and this document                                                                           |
-| New connector capability flag          | Yes — add to `approvedConnectorCapabilities` in `contract/extension-points.yaml`                                                          |
 | New agent-session capability id        | Yes — add to `agentSession.capabilityIds` in `contract/extension-points.yaml` and the descriptor schema; requires a contract version bump |
-| Connector capability status change     | No contract update — but a `supported` claim requires a passing fixture, and the generated projection must be regenerated                 |
+| Connector capability status change     | No contract update — but a `supported` claim requires a passing fixture, and generated descriptor artifacts must be regenerated           |
 | New connector shipped                  | Conformance manifest only; no contract update unless new capabilities needed                                                              |
 | Extension shipped                      | Conformance manifest only; no contract update unless new extension points needed                                                          |
 

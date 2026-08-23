@@ -265,7 +265,7 @@ Objective 3 · Implement runtime                         state: draft  [ Save ]
 
 ### Changes
 - Embedded view of doc 06 scoped to this mission (and selected objective): changed
-  files, read-only diffs, and rationale coverage.
+  files, attribution metadata, and optional rationale annotations.
 
 ---
 
@@ -279,7 +279,7 @@ Objective 3 · Implement runtime                         state: draft  [ Save ]
 | Activity | `GET /missions/:id/events` → `['mission', id, 'events']` | `mission_event` insert → prepend `EventItem` |
 | Context | `GET /api/missions/:id/context` | `shared_context_entry` deltas |
 | Artifacts | `GET /missions/:id/deliveries` | `delivery`/`artifact` deltas |
-| Changes | `GET /missions/:id/changes` | `changed_files`/`change_rationale` deltas |
+| Changes | `GET /api/missions/:id/file-changes` | `changed_file`/`change_rationale` inserts and updates invalidate the projection |
 
 One realtime subscription scoped to `mission:<id>` (a `stream_key` the change feed
 supports) drives all of the above. Heartbeats update the session strip age but do

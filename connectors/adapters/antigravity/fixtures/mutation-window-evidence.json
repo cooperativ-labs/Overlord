@@ -1,0 +1,15 @@
+{
+  "fixtureVersion": 1,
+  "kind": "mutation-window",
+  "description": "Antigravity has a first-party PreToolUse example but no recorded completion payload or runtime evidence.",
+  "classification": "unsupported",
+  "reason": "No recorded PostToolUse payload or empirical agy hook execution proves completion-side or paired evidence.",
+  "preFixture": "fixtures/official-pre-tool-use.json",
+  "proof": {
+    "pre": {
+      "session": "conversationId",
+      "workspace": "workspacePaths.0",
+      "tool": "toolCall.name"
+    }
+  }
+}

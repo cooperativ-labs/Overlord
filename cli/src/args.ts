@@ -124,6 +124,7 @@ const INLINE_JSON_FLAG_PAIRS = [
   { jsonFlag: '--payload-json', fileFlag: '--payload-file' },
   { jsonFlag: '--artifacts-json', fileFlag: '--artifacts-file' },
   { jsonFlag: '--objectives-json', fileFlag: '--objectives-file' },
+  { jsonFlag: '--changes-json', fileFlag: '--changes-file' },
   { jsonFlag: '--changed-files-json', fileFlag: '--changed-files-file' },
   { jsonFlag: '--value-json', fileFlag: '--value-file' }
 ] as const;

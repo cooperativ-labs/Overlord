@@ -1,4 +1,4 @@
-contractVersion: "52"
+contractVersion: "116"
 componentType: connector
 componentKey: claude
 label: "Claude Code Connector"
@@ -8,29 +8,13 @@ connector:
   agentIdentifier: claude
   # ── GENERATED: do not edit by hand ───────────────────────────────────────────
   # Projected from connectors/adapters/claude/harness-capabilities.yaml by `yarn connectors:capabilities`.
-  # `capabilities` and `hookTypes` are the DEPRECATED hook-named projection, retained for
-  # one release. `harnessCapabilities` is the authoritative source.
+  # The harness descriptor and its executable fixtures are the only capability source.
   integrationShape: callback
   capabilityTier: 1
   harnessCapabilities:
     path: connectors/adapters/claude/harness-capabilities.yaml
     schemaVersion: 1
-    digest: "15ea657c37363b74db085466a97f38db044892abf2e28465b1c7bcd6cc4ce927"
-  capabilities:
-    - followUpHook
-    - permissionHook
-    - stopHook
-    - editHook
-    - modelFlag
-    - effortFlag
-    - contextFilePrompt
-    - permissionRules
-    - slashCommands
-  hookTypes:
-    - UserPromptSubmit
-    - PermissionRequest
-    - PostToolUse
-    - Stop
+    digest: "c7e52ce7d4698d35888a533b42d67c56d7616b3bb90e8537e4afcc39e1b6cc5d"
   # ── END GENERATED ────────────────────────────────────────────────────────────
   installPath: "~/.ovld/claude/marketplace/plugins/overlord"
   managedFiles:
@@ -46,7 +30,6 @@ connector:
     - "commands/load.md"
     - "commands/prompt.md"
     - "commands/record-work.md"
-    - "commands/spawn.md"
     - "hooks/hooks.json"
     - "scripts/permission-hook.sh"
     - "scripts/post-tool-use-hook.sh"

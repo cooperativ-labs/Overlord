@@ -65,7 +65,9 @@ properties:
     description: "Required when componentType is 'connector'"
     required:
       - agentIdentifier
-      - capabilities
+      - harnessCapabilities
+      - integrationShape
+      - capabilityTier
     additionalProperties: false
     properties:
       agentIdentifier:
@@ -80,7 +82,6 @@ properties:
         description: >
           Pointer to this connector's harness-capabilities.yaml descriptor, which is validated
           against contract/harness-capabilities.schema.yaml and proven by executable fixtures.
-          Required for connectors shipped against contract version 45 or later.
         required:
           - path
           - schemaVersion
@@ -115,48 +116,6 @@ properties:
           3 Conversational). Generated from passing fixtures — never authored. A connector that
           claims more than its fixtures prove fails conformance.
 
-      capabilities:
-        type: array
-        description: >
-          GENERATED projection. Capability flags this connector supports — must be from the
-          approvedConnectorCapabilities list in contract/extension-points.yaml. The hook-named
-          flags (followUpHook, permissionHook, stopHook, editHook) are DEPRECATED aliases
-          retained for one release; the behavior-named flags describe what the connector does
-          rather than which Claude hook it came from.
-        items:
-          type: string
-          enum:
-            - sessionEventStream
-            - answerableRequests
-            - remoteDecisionHold
-            - messageInjection
-            - nativeSessionBinding
-            - followUpHook
-            - permissionHook
-            - stopHook
-            - editHook
-            - nativeResume
-            - modelFlag
-            - effortFlag
-            - contextFilePrompt
-            - permissionRules
-            - slashCommands
-        uniqueItems: true
-      hookTypes:
-        type: array
-        description: >
-          GENERATED projection, DEPRECATED and harness-scoped. Retained for one release; for
-          capability purposes it is superseded by the normalized agent-session capability id
-          vocabulary in contract/extension-points.yaml. A connector may not declare a hook type
-          no descriptor capability rides on.
-        items:
-          type: string
-          enum:
-            - UserPromptSubmit
-            - PermissionRequest
-            - PostToolUse
-            - Stop
-        uniqueItems: true
       managedFiles:
         type: array
         description: "Paths of files this connector installs and manages (relative to install location)"

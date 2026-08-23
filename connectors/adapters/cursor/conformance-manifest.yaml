@@ -1,4 +1,4 @@
-contractVersion: "52"
+contractVersion: "116"
 componentType: connector
 componentKey: cursor
 label: "Cursor Connector"
@@ -8,25 +8,13 @@ connector:
   agentIdentifier: cursor
   # ── GENERATED: do not edit by hand ───────────────────────────────────────────
   # Projected from connectors/adapters/cursor/harness-capabilities.yaml by `yarn connectors:capabilities`.
-  # `capabilities` and `hookTypes` are the DEPRECATED hook-named projection, retained for
-  # one release. `harnessCapabilities` is the authoritative source.
+  # The harness descriptor and its executable fixtures are the only capability source.
   integrationShape: callback
   capabilityTier: 1
   harnessCapabilities:
     path: connectors/adapters/cursor/harness-capabilities.yaml
     schemaVersion: 1
-    digest: "48b805b1d1cd28ccde10a839b0eb2a85eb237d82b46e3d54b21f671997b0c870"
-  capabilities:
-    - followUpHook
-    - stopHook
-    - editHook
-    - modelFlag
-    - permissionRules
-    - slashCommands
-  hookTypes:
-    - UserPromptSubmit
-    - PostToolUse
-    - Stop
+    digest: "d468594240b637953358713e6412156d35b2b095d14fd1b2fc403496bcd6caf9"
   # ── END GENERATED ────────────────────────────────────────────────────────────
   installPath: "~/.cursor/plugins/local/overlord"
   managedFiles:
@@ -42,7 +30,6 @@ connector:
     - "commands/load.md"
     - "commands/prompt.md"
     - "commands/record-work.md"
-    - "commands/spawn.md"
     - "hooks/overlord-user-prompt-submit.sh"
     - "hooks/overlord-post-tool-use.sh"
     - "hooks/overlord-stop.sh"

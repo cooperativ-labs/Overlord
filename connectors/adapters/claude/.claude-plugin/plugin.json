@@ -1,6 +1,6 @@
 {
   "name": "overlord",
-  "version": "0.3.33",
+  "version": "0.3.35",
   "description": "Overlord mission protocol workflow for Claude Code — attach/update/ask/deliver, slash commands, and hook-driven activity capture.",
   "author": {
     "name": "Cooperativ",
