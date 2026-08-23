@@ -1,5 +1,5 @@
-import { ListChecks, Package, Scale } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { AlertTriangle, Clock3, Lightbulb, ListChecks, Package, Scale } from 'lucide-react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import {
   Accordion,
@@ -38,6 +38,47 @@ export function deliveryOneSentenceSummary(delivery: DeliveryDto): string {
 export function formatDeliveryTimestamp(iso: string): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
+}
+
+function DeliveryBulletSection({
+  deliveryId,
+  sectionKey,
+  title,
+  icon,
+  items,
+  className,
+  titleClassName,
+  itemClassName
+}: {
+  deliveryId: string;
+  sectionKey: string;
+  title: string;
+  icon: ReactNode;
+  items: string[];
+  className: string;
+  titleClassName: string;
+  itemClassName: string;
+}) {
+  const headingId = `delivery-${sectionKey}-${deliveryId}`;
+  return (
+    <section aria-labelledby={headingId} className={className}>
+      <h4 id={headingId} className={titleClassName}>
+        {icon}
+        {title}
+      </h4>
+      <ul className={`mt-2 grid min-w-0 gap-2 wrap-anywhere text-sm ${itemClassName}`}>
+        {items.map((item, index) => (
+          <li key={`${sectionKey}-${index}`} className="flex min-w-0 items-start gap-2">
+            <span
+              className="mt-1.5 size-1.5 shrink-0 rounded-full bg-current"
+              aria-hidden="true"
+            />
+            <span className="min-w-0">{item}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
 }
 
 export function DeliveryPresentation({
@@ -115,6 +156,42 @@ export function DeliveryPresentation({
             ))}
           </ul>
         </section>
+      ) : null}
+      {presentation.knownRisks.length > 0 ? (
+        <DeliveryBulletSection
+          deliveryId={delivery.id}
+          sectionKey="risks"
+          title="Known risks"
+          icon={<AlertTriangle className="size-4" aria-hidden="true" />}
+          items={presentation.knownRisks}
+          className="min-w-0 rounded-md border border-red-300 bg-red-50 p-3 dark:border-red-500/50 dark:bg-red-500/10"
+          titleClassName="flex items-center gap-1.5 wrap-anywhere text-sm font-semibold text-red-950 dark:text-red-100"
+          itemClassName="text-red-950 dark:text-red-100"
+        />
+      ) : null}
+      {presentation.deferredWork.length > 0 ? (
+        <DeliveryBulletSection
+          deliveryId={delivery.id}
+          sectionKey="deferred"
+          title="Deferred work"
+          icon={<Clock3 className="size-4" aria-hidden="true" />}
+          items={presentation.deferredWork}
+          className="min-w-0 rounded-md border border-violet-300 bg-violet-50 p-3 dark:border-violet-500/50 dark:bg-violet-500/10"
+          titleClassName="flex items-center gap-1.5 wrap-anywhere text-sm font-semibold text-violet-950 dark:text-violet-100"
+          itemClassName="text-violet-950 dark:text-violet-100"
+        />
+      ) : null}
+      {presentation.assumptions.length > 0 ? (
+        <DeliveryBulletSection
+          deliveryId={delivery.id}
+          sectionKey="assumptions"
+          title="Assumptions"
+          icon={<Lightbulb className="size-4" aria-hidden="true" />}
+          items={presentation.assumptions}
+          className="min-w-0 rounded-md border border-(--color-border) bg-(--color-muted)/70 p-3 dark:bg-(--color-muted)/50"
+          titleClassName="flex items-center gap-1.5 wrap-anywhere text-sm font-semibold text-(--color-ink)"
+          itemClassName="text-(--color-ink)"
+        />
       ) : null}
       <Accordion className="border-t border-(--color-ink-dim)/15 pt-1">
         <AccordionItem value="summary" className="border-none">
