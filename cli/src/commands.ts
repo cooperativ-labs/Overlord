@@ -48,7 +48,12 @@ import {
   resolvePreferredExecutionTargetId,
   resolveProjectByIdOrName
 } from './discover-project-local.js';
-import { CliError, isUnlinkableExecutionRequestError } from './errors.js';
+import {
+  CliError,
+  formatExecutionRequestAlreadyLinkedDiagnostic,
+  isExecutionRequestAlreadyLinkedError,
+  isUnlinkableExecutionRequestError
+} from './errors.js';
 import { launchAgent } from './launch.js';
 import { recoverLaunchBootstrapFromProjectTmp } from './launch-bootstrap.js';
 import { fetchLaunchSettings } from './launch-settings.js';
@@ -1022,6 +1027,8 @@ export async function runProtocolCommand({
         path: protocolPath,
         body: { ...protocolBody, flags }
       });
+    } else if (isExecutionRequestAlreadyLinkedError(error)) {
+      throw new CliError({ message: formatExecutionRequestAlreadyLinkedDiagnostic() });
     } else {
       throw error;
     }

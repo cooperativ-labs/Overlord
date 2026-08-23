@@ -375,7 +375,7 @@ test('bundled PI catalog keeps provider-qualified models and no forced default',
   const pi = BUNDLED_AGENT_CATALOG.pi;
   assert.ok(pi);
   assert.equal(pi.label, 'PI');
-  assert.equal(pi.availableByDefault, true);
+  assert.equal(pi.availableByDefault, false);
   assert.equal(pi.defaultModel, null);
   assert.equal(pi.defaultReasoningEffort, null);
   assert.deepEqual(

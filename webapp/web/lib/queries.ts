@@ -30,6 +30,7 @@ import type {
   CreateWorkspaceBody,
   DeliveryDto,
   InboxItemDto,
+  InboxMissionsResponse,
   InviteWorkspaceMemberBody,
   LaunchObjectiveBody,
   LaunchPreferenceDto,
@@ -1398,7 +1399,18 @@ export function useInboxItems() {
 }
 
 /**
- * Cross-workspace objective activity for the Inbox feed. Freshness comes from the
+ * Cross-workspace recent + agent-created Next missions for the Inbox page.
+ * Invalidated with mission workflow changes via `keys.inboxMissions`.
+ */
+export function useInboxMissions() {
+  return useQuery<InboxMissionsResponse>({
+    queryKey: keys.inboxMissions,
+    queryFn: api.listInboxMissions
+  });
+}
+
+/**
+ * Cross-workspace objective activity for the Feed page. Freshness comes from the
  * realtime change link invalidating `keys.activityFeed`, not from polling — the
  * `refetchOnWindowFocus` default is the only fallback for a dropped stream.
  */

@@ -180,6 +180,7 @@ import {
   initializeProject,
   listArtifacts,
   listInboxItems,
+  listInboxMissions,
   listMissionBranches,
   listMissionDeliveries,
   listMissionEvents,
@@ -1369,6 +1370,14 @@ app.patch(
 app.get(
   '/api/activity-feed',
   handle(() => listActivityFeed())
+);
+
+// ---- Inbox missions triage (cross-workspace) ------------------------------
+// Recently created + agent-authored Next missions for the Inbox page. Same
+// membership / mission:read fan-out as My Missions and the activity feed.
+app.get(
+  '/api/inbox/missions',
+  handle(() => listInboxMissions())
 );
 
 // ---- Mobile Live Activities ---------------------------------------------

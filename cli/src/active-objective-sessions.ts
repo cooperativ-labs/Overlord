@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
 import { removeChangeLedger, resetChangeLedger } from './change-ledger.js';
@@ -39,6 +39,8 @@ export const MAX_ACTIVE_OBJECTIVE_SESSION_BINDINGS = 64;
 const MAX_OBJECTIVE_ALIASES = 16;
 const MAX_ID_LENGTH = 200;
 const MAX_ACTIVE_SESSION_MANIFEST_BYTES = 512 * 1024;
+/** Bound for scanning sibling worktree manifests when a hook omits cwd. */
+const MAX_ACTIVE_SESSION_MANIFEST_FILES = 256;
 
 function normalizeIdentifier(value: string): string {
   return typeof value === 'string' ? value.trim() : '';
@@ -264,6 +266,91 @@ export function readObjectiveSessions({
   if (canonical.length > 0) return canonical;
   const aliases = entries.filter(entry => entry.objectiveAliases.includes(requested));
   return new Set(aliases.map(entry => entry.objectiveId)).size === 1 ? aliases : [];
+}
+
+function pathIsUnderWorkingDirectory({
+  absolutePath,
+  workingDirectory
+}: {
+  absolutePath: string;
+  workingDirectory: string;
+}): boolean {
+  const root = canonicalDirectory(workingDirectory);
+  const resolved = path.resolve(absolutePath);
+  return resolved === root || resolved.startsWith(`${root}${path.sep}`);
+}
+
+/**
+ * Locate the worktree that holds an explicit objective binding when a hook
+ * payload omits cwd (Cursor postToolUse) or the hook process cwd is unrelated
+ * (`~/.cursor`). Objective id remains the only selector; cwd never chooses
+ * among concurrent objectives. Absolute path hints only break ties when the
+ * same objective is bound in more than one worktree.
+ */
+export function resolveWorkingDirectoryForObjective({
+  objectiveId,
+  candidateWorkingDirectory,
+  pathHints = []
+}: {
+  objectiveId: string;
+  candidateWorkingDirectory: string;
+  pathHints?: string[];
+}): string | null {
+  const requested = normalizeIdentifier(objectiveId);
+  if (!isValidIdentifier(requested)) return null;
+
+  const candidate = path.resolve(candidateWorkingDirectory);
+  const local = readManifest(candidate);
+  if (local && resolveEntry(local.entries, requested)) {
+    return local.workingDirectory;
+  }
+
+  const matches: string[] = [];
+  const root = path.join(resolveGlobalDataDir(), 'active-objective-sessions');
+  try {
+    if (!existsSync(root)) return null;
+    for (const name of readdirSync(root).slice(0, MAX_ACTIVE_SESSION_MANIFEST_FILES)) {
+      if (!name.endsWith('.json')) continue;
+      try {
+        const raw = readBoundedUtf8File(path.join(root, name), MAX_ACTIVE_SESSION_MANIFEST_BYTES);
+        if (raw === null) continue;
+        const value = JSON.parse(raw) as Partial<ActiveSessionManifest>;
+        if (
+          value.schemaVersion !== 3 ||
+          typeof value.workingDirectory !== 'string' ||
+          !Array.isArray(value.entries)
+        ) {
+          continue;
+        }
+        const entries = value.entries.flatMap(entry => {
+          const normalized = normalizeEntry(entry);
+          return normalized ? [normalized] : [];
+        });
+        if (!resolveEntry(entries, requested)) continue;
+        const workingDirectory = canonicalDirectory(value.workingDirectory);
+        if (!matches.includes(workingDirectory)) matches.push(workingDirectory);
+      } catch {
+        // Skip unreadable or malformed sibling manifests.
+      }
+    }
+  } catch {
+    return null;
+  }
+
+  if (matches.length === 0) return null;
+  if (matches.length === 1) return matches[0] ?? null;
+
+  const absoluteHints = pathHints
+    .filter((hint): hint is string => typeof hint === 'string' && path.isAbsolute(hint))
+    .map(hint => path.resolve(hint));
+  if (absoluteHints.length === 0) return null;
+
+  const hinted = matches.filter(workingDirectory =>
+    absoluteHints.some(absolutePath =>
+      pathIsUnderWorkingDirectory({ absolutePath, workingDirectory })
+    )
+  );
+  return hinted.length === 1 ? (hinted[0] ?? null) : null;
 }
 
 /**

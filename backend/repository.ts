@@ -90,6 +90,9 @@ import type {
   FileChangeDto,
   GenerateCommitMessageResultDto,
   InboxItemDto,
+  InboxMissionDto,
+  InboxMissionReason,
+  InboxMissionsResponse,
   InitializeProjectBody,
   InitializeProjectResultDto,
   MissionBranchDto,
@@ -6534,6 +6537,160 @@ export async function listWorkspaceMyMissions(): Promise<MyMissionsResponse> {
   )) as MyMissionRow[];
   const tagsByMission = await getTagsByMission(rows.map(row => row.id));
   return { missions: rows.map(row => toMyMissionDto(row, tagsByMission.get(row.id) ?? [])) };
+}
+
+// ---- Inbox missions (recent + agent Next) ---------------------------------
+
+/** Rolling window for "recently created" on the Inbox missions list (coo:826). */
+const INBOX_MISSION_RECENT_MS = 7 * 24 * 60 * 60 * 1000;
+const INBOX_MISSION_RECENT_LIMIT = 40;
+const INBOX_MISSION_AGENT_NEXT_LIMIT = 40;
+const INBOX_MISSION_TOTAL_LIMIT = 60;
+
+interface InboxMissionRow extends MissionRow {
+  project_name: string;
+  project_settings_json: string;
+}
+
+/**
+ * Shared SELECT for Inbox mission triage cards. Same MissionDto projection as
+ * My Missions (without personal position), joined to project name/color.
+ */
+function selectInboxMissionsSql(workspacePlaceholders: string): string {
+  return `
+  SELECT t.id, t.workspace_id, t.project_id, t.display_id, t.sequence_number, t.title,
+         t.status_id, t.status_type, t.board_position, t.priority,
+         t.assigned_workspace_user_id,
+         t.notes_text,
+         t.schedule_id, t.due_datetime,
+         t.created_at, t.updated_at, t.revision,
+         t.created_by_kind, t.created_by_agent, t.created_by_workspace_user_id,
+         t.allow_parallel_objectives,
+         p.name AS project_name, p.settings_json AS project_settings_json,
+         (SELECT COUNT(*) FROM objectives o
+            WHERE o.mission_id = t.id AND o.deleted_at IS NULL) AS objective_count,
+         (SELECT COUNT(*) FROM objectives o
+            WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'complete')
+            AS completed_objective_count,
+         (SELECT COUNT(*) > 0 FROM objectives o
+            WHERE o.mission_id = t.id AND o.deleted_at IS NULL
+              AND o.state IN ('executing', 'pending_delivery'))
+            AS has_executing_objective,
+         (SELECT COUNT(*) > 0 FROM objectives o
+            WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'complete')
+            AS has_completed_objective,
+         (SELECT COUNT(*) > 0 FROM objectives o
+            WHERE o.mission_id = t.id AND o.deleted_at IS NULL
+              AND o.state IN ('draft', 'future') AND TRIM(o.instruction_text) != '')
+            AS has_pending_objective_with_instructions,
+${missionHasUnseenBlockingQuestionSql},
+${missionHasUnseenReturnedToExecuteSql},
+         (SELECT o.resource_key FROM objectives o
+            WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'draft'
+            LIMIT 1) AS draft_objective_resource_key
+    FROM missions t
+    JOIN projects p ON p.id = t.project_id AND p.workspace_id = t.workspace_id
+      AND p.deleted_at IS NULL
+   WHERE t.deleted_at IS NULL
+     AND t.workspace_id IN (${workspacePlaceholders})
+`;
+}
+
+function toInboxMissionDto(
+  r: InboxMissionRow,
+  tags: ProjectTagDto[],
+  reasons: InboxMissionReason[]
+): InboxMissionDto {
+  return {
+    ...toMissionDto(r, tags),
+    projectName: r.project_name,
+    projectColor: readProjectColor(r.project_settings_json),
+    reasons
+  };
+}
+
+/**
+ * GET /api/inbox/missions — recently created missions (past 7 days) union
+ * agent-authored missions in status type `next`, across every workspace the
+ * caller may `mission:read` in the active organization. Sorted newest-first;
+ * truncated after merge. Distinct from profile-owned `/api/inbox` capture.
+ */
+export async function listInboxMissions(): Promise<InboxMissionsResponse> {
+  const generatedAt = new Date().toISOString();
+  const memberships = await callerMembershipsInActiveOrganization();
+  const readableWorkspaceIds: string[] = [];
+  for (const membership of memberships) {
+    if (
+      await actorCan(PERMISSIONS.MISSION_READ, {
+        workspaceId: membership.workspaceId,
+        workspaceUserId: membership.workspaceUserId
+      })
+    ) {
+      readableWorkspaceIds.push(membership.workspaceId);
+    }
+  }
+  if (readableWorkspaceIds.length === 0) {
+    return { missions: [], generatedAt };
+  }
+
+  const workspacePlaceholders = readableWorkspaceIds.map(() => '?').join(', ');
+  const recentCutoff = new Date(Date.now() - INBOX_MISSION_RECENT_MS).toISOString();
+  const client = requireDatabaseClient();
+  const baseSql = selectInboxMissionsSql(workspacePlaceholders);
+
+  const recentRows = (await client.all(
+    `${baseSql}
+       AND t.created_at >= ?
+     ORDER BY t.created_at DESC, t.sequence_number DESC, t.id ASC
+     LIMIT ?`,
+    [...readableWorkspaceIds, recentCutoff, INBOX_MISSION_RECENT_LIMIT]
+  )) as InboxMissionRow[];
+
+  const agentNextRows = (await client.all(
+    `${baseSql}
+       AND t.created_by_kind = 'agent'
+       AND t.status_type = 'next'
+     ORDER BY t.created_at DESC, t.sequence_number DESC, t.id ASC
+     LIMIT ?`,
+    [...readableWorkspaceIds, INBOX_MISSION_AGENT_NEXT_LIMIT]
+  )) as InboxMissionRow[];
+
+  const byId = new Map<string, { row: InboxMissionRow; reasons: Set<InboxMissionReason> }>();
+  for (const row of recentRows) {
+    const existing = byId.get(row.id);
+    if (existing) {
+      existing.reasons.add('recent');
+    } else {
+      byId.set(row.id, { row, reasons: new Set<InboxMissionReason>(['recent']) });
+    }
+  }
+  for (const row of agentNextRows) {
+    const existing = byId.get(row.id);
+    if (existing) {
+      existing.reasons.add('agent_next');
+    } else {
+      byId.set(row.id, { row, reasons: new Set<InboxMissionReason>(['agent_next']) });
+    }
+  }
+
+  const merged = [...byId.values()].sort((a, b) => {
+    if (a.row.created_at !== b.row.created_at) {
+      return a.row.created_at < b.row.created_at ? 1 : -1;
+    }
+    if (a.row.sequence_number !== b.row.sequence_number) {
+      return b.row.sequence_number - a.row.sequence_number;
+    }
+    return a.row.id < b.row.id ? -1 : a.row.id > b.row.id ? 1 : 0;
+  });
+
+  const limited = merged.slice(0, INBOX_MISSION_TOTAL_LIMIT);
+  const tagsByMission = await getTagsByMission(limited.map(entry => entry.row.id));
+  return {
+    generatedAt,
+    missions: limited.map(entry =>
+      toInboxMissionDto(entry.row, tagsByMission.get(entry.row.id) ?? [], [...entry.reasons])
+    )
+  };
 }
 
 /** Insert or update one operator's personal position for a mission in a column. */

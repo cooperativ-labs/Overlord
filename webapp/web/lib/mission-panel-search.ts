@@ -1,5 +1,5 @@
 /**
- * Mission-panel search used by desktop deep links and Inbox feed cards.
+ * Mission-panel search used by desktop deep links and Feed cards.
  *
  * `?objective=coo:756.k7xm` keeps the SPA on the mission route (planning
  * surface) while naming the objective the live/activity surface pointed at

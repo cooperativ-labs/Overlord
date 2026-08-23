@@ -137,7 +137,9 @@ export const AGENT_SESSION_CODECS: Record<string, CodecSpec> = {
         "callIdPath": "call_id",
         "fileEditKind": "file.edited",
         "filePathPaths": [
-          "file_path"
+          "file_path",
+          "filePath",
+          "path"
         ]
       }
     ]

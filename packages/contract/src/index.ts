@@ -2221,6 +2221,33 @@ export interface MyMissionsResponse {
   missions: MyMissionDto[];
 }
 
+// ---- Inbox missions triage (coo:826, contract v117) -----------------------
+//
+// Bounded cross-workspace projection for the Inbox page: recently created
+// missions plus agent-authored missions still in status type `next`. Same
+// membership / mission:read rule as My Missions and the activity feed.
+// Distinct from profile-owned `/api/inbox` capture items.
+
+/** Why a mission appears in `GET /api/inbox/missions`. */
+export type InboxMissionReason = 'recent' | 'agent_next';
+
+/**
+ * A mission card on the Inbox page. Extends `MissionDto` with the cross-project
+ * chrome the aggregate list needs and the inclusion reasons that selected it.
+ */
+export interface InboxMissionDto extends MissionDto {
+  projectName: string;
+  projectColor: string | null;
+  /** One or both of `recent` (created within the rolling window) and `agent_next`. */
+  reasons: InboxMissionReason[];
+}
+
+export interface InboxMissionsResponse {
+  missions: InboxMissionDto[];
+  /** Server clock so the client can label the recent window without skew. */
+  generatedAt: string;
+}
+
 // ---- Inbox activity feed (coo:757, contract v84) --------------------------
 //
 // One bounded, time-descending projection of objective-level activity across

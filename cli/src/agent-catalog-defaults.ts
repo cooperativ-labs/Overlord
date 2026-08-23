@@ -9,77 +9,9 @@ export type CatalogAgent = {
 };
 
 export const BUNDLED_AGENT_CATALOG: Record<string, CatalogAgent> = {
-  claude: {
-    label: 'Claude Code',
-    availableByDefault: true,
-    models: [
-      {
-        id: 'claude-fable-5',
-        displayName: 'Fable 5',
-        reasoningOptions: ['low', 'medium', 'high', 'xhigh', 'max', 'ultracode']
-      },
-      {
-        id: 'claude-opus-4-8',
-        displayName: 'Opus 4.8',
-        reasoningOptions: ['low', 'medium', 'high', 'xhigh', 'max', 'ultracode']
-      },
-      {
-        id: 'claude-opus-5',
-        displayName: 'Opus 5',
-        reasoningOptions: ['low', 'medium', 'high', 'xhigh', 'max', 'ultracode']
-      },
-      {
-        id: 'claude-sonnet-5',
-        displayName: 'Sonnet 5',
-        reasoningOptions: ['low', 'medium', 'high', 'xhigh', 'max', 'ultracode']
-      },
-      {
-        id: 'claude-sonnet-4-6',
-        displayName: 'Sonnet 4.6',
-        reasoningOptions: ['low', 'medium', 'high', 'max']
-      },
-      { id: 'claude-haiku-4-5', displayName: 'Haiku 4.5', reasoningOptions: [] }
-    ],
-    defaultModel: null,
-    defaultReasoningEffort: null,
-    reasoningLabel: 'Thinking'
-  },
-  codex: {
-    label: 'Codex',
-    availableByDefault: true,
-    models: [
-      // `gpt-5.4` was removed from the bundled menu ahead of its 2026-08-31 retirement for
-      // ChatGPT-authenticated Codex sessions: a launch that picks it would start failing on
-      // that date with a vendor-side error the mission report cannot explain. An instance
-      // that still has access can re-add it through `[agent_catalog]` in overlord.toml.
-      {
-        id: 'gpt-5.5',
-        displayName: 'GPT-5.5',
-        reasoningOptions: ['low', 'medium', 'high', 'xhigh']
-      },
-      {
-        id: 'gpt-5.6-sol',
-        displayName: 'GPT-5.6 Sol',
-        reasoningOptions: ['low', 'medium', 'high', 'xhigh', 'max']
-      },
-      {
-        id: 'gpt-5.6-luna',
-        displayName: 'GPT-5.6 Luna',
-        reasoningOptions: ['low', 'medium', 'high', 'xhigh', 'max']
-      },
-      {
-        id: 'gpt-5.6-terra',
-        displayName: 'GPT-5.6 Terra',
-        reasoningOptions: ['none', 'low', 'medium', 'high', 'xhigh', 'max']
-      }
-    ],
-    defaultModel: 'gpt-5.6-terra',
-    defaultReasoningEffort: 'medium',
-    reasoningLabel: 'Effort'
-  },
   pi: {
     label: 'PI',
-    availableByDefault: true,
+    availableByDefault: false,
     models: [
       {
         id: 'zai/glm-5.2',
@@ -101,12 +33,106 @@ export const BUNDLED_AGENT_CATALOG: Record<string, CatalogAgent> = {
     defaultReasoningEffort: null,
     reasoningLabel: 'Thinking'
   },
+  codex: {
+    label: 'Codex',
+    availableByDefault: true,
+    models: [
+      {
+        id: 'gpt-5.4',
+        displayName: 'GPT-5.4',
+        reasoningOptions: ['low', 'medium', 'high', 'xhigh']
+      },
+      {
+        id: 'gpt-5.5',
+        displayName: 'GPT-5.5',
+        reasoningOptions: ['low', 'medium', 'high', 'xhigh']
+      },
+      {
+        id: 'gpt-5.6-sol',
+        displayName: 'GPT-5.6 Sol',
+        reasoningOptions: ['low', 'medium', 'high', 'xhigh', 'max']
+      },
+      {
+        id: 'gpt-5.6-terra',
+        displayName: 'GPT-5.6 Terra',
+        reasoningOptions: ['none', 'low', 'medium', 'high', 'xhigh', 'max']
+      },
+      {
+        id: 'gpt-5.6-luna',
+        displayName: 'GPT-5.6 Luna',
+        reasoningOptions: ['low', 'medium', 'high', 'xhigh', 'max']
+      }
+    ],
+    defaultModel: 'gpt-5.6-terra',
+    defaultReasoningEffort: 'medium',
+    reasoningLabel: 'Effort'
+  },
+  claude: {
+    label: 'Claude Code',
+    availableByDefault: true,
+    models: [
+      {
+        id: 'claude-fable-5',
+        displayName: 'Fable 5',
+        reasoningOptions: ['low', 'medium', 'high', 'xhigh', 'max', 'ultracode']
+      },
+      {
+        id: 'claude-opus-5',
+        displayName: 'Opus 5',
+        reasoningOptions: ['low', 'medium', 'high', 'xhigh', 'max', 'ultracode']
+      },
+      {
+        id: 'claude-opus-4-8',
+        displayName: 'Opus 4.8',
+        reasoningOptions: ['low', 'medium', 'high', 'xhigh', 'max', 'ultracode']
+      },
+      {
+        id: 'claude-sonnet-5',
+        displayName: 'Sonnet 5',
+        reasoningOptions: ['low', 'medium', 'high', 'max']
+      },
+      {
+        id: 'claude-sonnet-4-6',
+        displayName: 'Sonnet 4.6',
+        reasoningOptions: ['low', 'medium', 'high', 'max']
+      },
+      { id: 'claude-haiku-4-5', displayName: 'Haiku 4.5', reasoningOptions: [] }
+    ],
+    defaultModel: 'claude-opus-5',
+    defaultReasoningEffort: null,
+    reasoningLabel: 'Thinking'
+  },
   cursor: {
     label: 'Cursor',
     availableByDefault: true,
     models: [
       { id: 'auto', displayName: 'Auto', reasoningOptions: [] },
       { id: 'composer-2.5', displayName: 'Composer 2.5', reasoningOptions: [] },
+      {
+        id: 'cursor-grok-4.6-high',
+        displayName: 'Grok 4.6 High',
+        reasoningOptions: []
+      },
+      {
+        id: 'cursor-grok-4.6-xhigh',
+        displayName: 'Grok 4.6 Xhigh',
+        reasoningOptions: []
+      },
+      {
+        id: 'grok-4.5-medium',
+        displayName: 'Grok 4.5 Medium',
+        reasoningOptions: []
+      },
+      {
+        id: 'grok-4.5-high',
+        displayName: 'Grok 4.5 High',
+        reasoningOptions: []
+      },
+      {
+        id: 'grok-4.5-xhigh',
+        displayName: 'Grok 4.5 Xhigh',
+        reasoningOptions: []
+      },
       {
         id: 'grok-4.5-fast-high',
         displayName: 'Grok 4.5 Fast High',
@@ -123,31 +149,10 @@ export const BUNDLED_AGENT_CATALOG: Record<string, CatalogAgent> = {
         reasoningOptions: []
       },
       {
-        id: 'grok-4.5-high',
-        displayName: 'Grok 4.5 High',
-        reasoningOptions: []
-      },
-      {
-        id: 'grok-4.5-medium',
-        displayName: 'Grok 4.5 Medium',
-        reasoningOptions: []
-      },
-      {
-        id: 'grok-4.5-xhigh',
-        displayName: 'Grok 4.5 Xhigh',
-        reasoningOptions: []
-      },
-      {
-        id: 'glm-5.2-high',
-        displayName: 'GLM 5.2 High',
-        reasoningOptions: []
-      },
-      {
         id: 'gpt-5.6-sol',
         displayName: 'GPT-5.6 Sol',
         reasoningOptions: []
       },
-
       {
         id: 'gpt-5.6-terra',
         displayName: 'GPT-5.6 Terra',
@@ -157,13 +162,24 @@ export const BUNDLED_AGENT_CATALOG: Record<string, CatalogAgent> = {
         id: 'gpt-5.6-luna',
         displayName: 'GPT-5.6 Luna',
         reasoningOptions: []
+      },
+      {
+        id: 'glm-5.2-high',
+        displayName: 'GLM 5.2 High',
+        reasoningOptions: []
+      },
+      {
+        id: 'claude-fable-5-thinking-high',
+        displayName: 'Fable 5 High',
+        reasoningOptions: []
+      },
+      {
+        id: 'claude-fable-5-thinking-xhighmodel-16',
+        displayName: 'Fable 5 XHigh',
+        reasoningOptions: []
       }
     ],
-    // `auto` stays selectable, but it is not the default any more: it routes each turn through
-    // Cursor's own model router, so two runs of the same objective can execute on different
-    // models and a delivery report cannot say which one produced the work. Mission execution
-    // wants a model it can name; a user who wants the router can still pick it explicitly.
-    defaultModel: 'composer-2.5',
+    defaultModel: 'auto',
     defaultReasoningEffort: null,
     reasoningLabel: 'Thinking'
   }

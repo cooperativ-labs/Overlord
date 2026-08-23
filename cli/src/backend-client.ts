@@ -1,7 +1,11 @@
 import { readStoredAuthCredentials } from './auth-credentials.js';
 import { loadConfig, resolveBackendUrl } from './config.js';
 import { clientDeviceIdentity } from './device-identity.js';
-import { CliError } from './errors.js';
+import {
+  CliError,
+  formatExecutionRequestAlreadyLinkedDiagnostic,
+  isExecutionRequestAlreadyLinkedPayload
+} from './errors.js';
 
 export type BackendClient = {
   baseUrl: string;
@@ -147,6 +151,9 @@ export function createBackendClient(): BackendClient {
 
     const payload = await readResponseJson(response);
     if (!response.ok) {
+      if (isExecutionRequestAlreadyLinkedPayload(payload)) {
+        throw new CliError({ message: formatExecutionRequestAlreadyLinkedDiagnostic() });
+      }
       if (response.status === 401 && auth.headers.Authorization) {
         // Do NOT delete stored credentials here. A 401 can be transient (backend
         // restart, momentary session-lookup failure, an edge revocation) and

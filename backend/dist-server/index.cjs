@@ -69909,77 +69909,9 @@ var init_agent_catalog_defaults = __esm({
   "../cli/src/agent-catalog-defaults.ts"() {
     "use strict";
     BUNDLED_AGENT_CATALOG = {
-      claude: {
-        label: "Claude Code",
-        availableByDefault: true,
-        models: [
-          {
-            id: "claude-fable-5",
-            displayName: "Fable 5",
-            reasoningOptions: ["low", "medium", "high", "xhigh", "max", "ultracode"]
-          },
-          {
-            id: "claude-opus-4-8",
-            displayName: "Opus 4.8",
-            reasoningOptions: ["low", "medium", "high", "xhigh", "max", "ultracode"]
-          },
-          {
-            id: "claude-opus-5",
-            displayName: "Opus 5",
-            reasoningOptions: ["low", "medium", "high", "xhigh", "max", "ultracode"]
-          },
-          {
-            id: "claude-sonnet-5",
-            displayName: "Sonnet 5",
-            reasoningOptions: ["low", "medium", "high", "xhigh", "max", "ultracode"]
-          },
-          {
-            id: "claude-sonnet-4-6",
-            displayName: "Sonnet 4.6",
-            reasoningOptions: ["low", "medium", "high", "max"]
-          },
-          { id: "claude-haiku-4-5", displayName: "Haiku 4.5", reasoningOptions: [] }
-        ],
-        defaultModel: null,
-        defaultReasoningEffort: null,
-        reasoningLabel: "Thinking"
-      },
-      codex: {
-        label: "Codex",
-        availableByDefault: true,
-        models: [
-          // `gpt-5.4` was removed from the bundled menu ahead of its 2026-08-31 retirement for
-          // ChatGPT-authenticated Codex sessions: a launch that picks it would start failing on
-          // that date with a vendor-side error the mission report cannot explain. An instance
-          // that still has access can re-add it through `[agent_catalog]` in overlord.toml.
-          {
-            id: "gpt-5.5",
-            displayName: "GPT-5.5",
-            reasoningOptions: ["low", "medium", "high", "xhigh"]
-          },
-          {
-            id: "gpt-5.6-sol",
-            displayName: "GPT-5.6 Sol",
-            reasoningOptions: ["low", "medium", "high", "xhigh", "max"]
-          },
-          {
-            id: "gpt-5.6-luna",
-            displayName: "GPT-5.6 Luna",
-            reasoningOptions: ["low", "medium", "high", "xhigh", "max"]
-          },
-          {
-            id: "gpt-5.6-terra",
-            displayName: "GPT-5.6 Terra",
-            reasoningOptions: ["none", "low", "medium", "high", "xhigh", "max"]
-          }
-        ],
-        defaultModel: "gpt-5.6-terra",
-        defaultReasoningEffort: "medium",
-        reasoningLabel: "Effort"
-      },
       pi: {
         label: "PI",
-        availableByDefault: true,
+        availableByDefault: false,
         models: [
           {
             id: "zai/glm-5.2",
@@ -70001,12 +69933,106 @@ var init_agent_catalog_defaults = __esm({
         defaultReasoningEffort: null,
         reasoningLabel: "Thinking"
       },
+      codex: {
+        label: "Codex",
+        availableByDefault: true,
+        models: [
+          {
+            id: "gpt-5.4",
+            displayName: "GPT-5.4",
+            reasoningOptions: ["low", "medium", "high", "xhigh"]
+          },
+          {
+            id: "gpt-5.5",
+            displayName: "GPT-5.5",
+            reasoningOptions: ["low", "medium", "high", "xhigh"]
+          },
+          {
+            id: "gpt-5.6-sol",
+            displayName: "GPT-5.6 Sol",
+            reasoningOptions: ["low", "medium", "high", "xhigh", "max"]
+          },
+          {
+            id: "gpt-5.6-terra",
+            displayName: "GPT-5.6 Terra",
+            reasoningOptions: ["none", "low", "medium", "high", "xhigh", "max"]
+          },
+          {
+            id: "gpt-5.6-luna",
+            displayName: "GPT-5.6 Luna",
+            reasoningOptions: ["low", "medium", "high", "xhigh", "max"]
+          }
+        ],
+        defaultModel: "gpt-5.6-terra",
+        defaultReasoningEffort: "medium",
+        reasoningLabel: "Effort"
+      },
+      claude: {
+        label: "Claude Code",
+        availableByDefault: true,
+        models: [
+          {
+            id: "claude-fable-5",
+            displayName: "Fable 5",
+            reasoningOptions: ["low", "medium", "high", "xhigh", "max", "ultracode"]
+          },
+          {
+            id: "claude-opus-5",
+            displayName: "Opus 5",
+            reasoningOptions: ["low", "medium", "high", "xhigh", "max", "ultracode"]
+          },
+          {
+            id: "claude-opus-4-8",
+            displayName: "Opus 4.8",
+            reasoningOptions: ["low", "medium", "high", "xhigh", "max", "ultracode"]
+          },
+          {
+            id: "claude-sonnet-5",
+            displayName: "Sonnet 5",
+            reasoningOptions: ["low", "medium", "high", "max"]
+          },
+          {
+            id: "claude-sonnet-4-6",
+            displayName: "Sonnet 4.6",
+            reasoningOptions: ["low", "medium", "high", "max"]
+          },
+          { id: "claude-haiku-4-5", displayName: "Haiku 4.5", reasoningOptions: [] }
+        ],
+        defaultModel: "claude-opus-5",
+        defaultReasoningEffort: null,
+        reasoningLabel: "Thinking"
+      },
       cursor: {
         label: "Cursor",
         availableByDefault: true,
         models: [
           { id: "auto", displayName: "Auto", reasoningOptions: [] },
           { id: "composer-2.5", displayName: "Composer 2.5", reasoningOptions: [] },
+          {
+            id: "cursor-grok-4.6-high",
+            displayName: "Grok 4.6 High",
+            reasoningOptions: []
+          },
+          {
+            id: "cursor-grok-4.6-xhigh",
+            displayName: "Grok 4.6 Xhigh",
+            reasoningOptions: []
+          },
+          {
+            id: "grok-4.5-medium",
+            displayName: "Grok 4.5 Medium",
+            reasoningOptions: []
+          },
+          {
+            id: "grok-4.5-high",
+            displayName: "Grok 4.5 High",
+            reasoningOptions: []
+          },
+          {
+            id: "grok-4.5-xhigh",
+            displayName: "Grok 4.5 Xhigh",
+            reasoningOptions: []
+          },
           {
             id: "grok-4.5-fast-high",
             displayName: "Grok 4.5 Fast High",
@@ -70023,26 +70049,6 @@ var init_agent_catalog_defaults = __esm({
             reasoningOptions: []
           },
           {
-            id: "grok-4.5-high",
-            displayName: "Grok 4.5 High",
-            reasoningOptions: []
-          },
-          {
-            id: "grok-4.5-medium",
-            displayName: "Grok 4.5 Medium",
-            reasoningOptions: []
-          },
-          {
-            id: "grok-4.5-xhigh",
-            displayName: "Grok 4.5 Xhigh",
-            reasoningOptions: []
-          },
-          {
-            id: "glm-5.2-high",
-            displayName: "GLM 5.2 High",
-            reasoningOptions: []
-          },
-          {
             id: "gpt-5.6-sol",
             displayName: "GPT-5.6 Sol",
             reasoningOptions: []
@@ -70056,13 +70062,24 @@ var init_agent_catalog_defaults = __esm({
             id: "gpt-5.6-luna",
             displayName: "GPT-5.6 Luna",
             reasoningOptions: []
+          },
+          {
+            id: "glm-5.2-high",
+            displayName: "GLM 5.2 High",
+            reasoningOptions: []
+          },
+          {
+            id: "claude-fable-5-thinking-high",
+            displayName: "Fable 5 High",
+            reasoningOptions: []
+          },
+          {
+            id: "claude-fable-5-thinking-xhighmodel-16",
+            displayName: "Fable 5 XHigh",
+            reasoningOptions: []
           }
         ],
-        // `auto` stays selectable, but it is not the default any more: it routes each turn through
-        // Cursor's own model router, so two runs of the same objective can execute on different
-        // models and a delivery report cannot say which one produced the work. Mission execution
-        // wants a model it can name; a user who wants the router can still pick it explicitly.
-        defaultModel: "composer-2.5",
+        defaultModel: "auto",
         defaultReasoningEffort: null,
         reasoningLabel: "Thinking"
       }
@@ -150634,6 +150651,126 @@ async function listWorkspaceMyMissions() {
   const tagsByMission = await getTagsByMission(rows.map((row) => row.id));
   return { missions: rows.map((row) => toMyMissionDto(row, tagsByMission.get(row.id) ?? [])) };
 }
+var INBOX_MISSION_RECENT_MS = 7 * 24 * 60 * 60 * 1e3;
+var INBOX_MISSION_RECENT_LIMIT = 40;
+var INBOX_MISSION_AGENT_NEXT_LIMIT = 40;
+var INBOX_MISSION_TOTAL_LIMIT = 60;
+function selectInboxMissionsSql(workspacePlaceholders) {
+  return `
+  SELECT t.id, t.workspace_id, t.project_id, t.display_id, t.sequence_number, t.title,
+         t.status_id, t.status_type, t.board_position, t.priority,
+         t.assigned_workspace_user_id,
+         t.notes_text,
+         t.schedule_id, t.due_datetime,
+         t.created_at, t.updated_at, t.revision,
+         t.created_by_kind, t.created_by_agent, t.created_by_workspace_user_id,
+         t.allow_parallel_objectives,
+         p.name AS project_name, p.settings_json AS project_settings_json,
+         (SELECT COUNT(*) FROM objectives o
+            WHERE o.mission_id = t.id AND o.deleted_at IS NULL) AS objective_count,
+         (SELECT COUNT(*) FROM objectives o
+            WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'complete')
+            AS completed_objective_count,
+         (SELECT COUNT(*) > 0 FROM objectives o
+            WHERE o.mission_id = t.id AND o.deleted_at IS NULL
+              AND o.state IN ('executing', 'pending_delivery'))
+            AS has_executing_objective,
+         (SELECT COUNT(*) > 0 FROM objectives o
+            WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'complete')
+            AS has_completed_objective,
+         (SELECT COUNT(*) > 0 FROM objectives o
+            WHERE o.mission_id = t.id AND o.deleted_at IS NULL
+              AND o.state IN ('draft', 'future') AND TRIM(o.instruction_text) != '')
+            AS has_pending_objective_with_instructions,
+${missionHasUnseenBlockingQuestionSql},
+${missionHasUnseenReturnedToExecuteSql},
+         (SELECT o.resource_key FROM objectives o
+            WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'draft'
+            LIMIT 1) AS draft_objective_resource_key
+    FROM missions t
+    JOIN projects p ON p.id = t.project_id AND p.workspace_id = t.workspace_id
+      AND p.deleted_at IS NULL
+   WHERE t.deleted_at IS NULL
+     AND t.workspace_id IN (${workspacePlaceholders})
+`;
+}
+function toInboxMissionDto(r5, tags, reasons) {
+  return {
+    ...toMissionDto(r5, tags),
+    projectName: r5.project_name,
+    projectColor: readProjectColor(r5.project_settings_json),
+    reasons
+  };
+}
+async function listInboxMissions() {
+  const generatedAt = (/* @__PURE__ */ new Date()).toISOString();
+  const memberships = await callerMembershipsInActiveOrganization();
+  const readableWorkspaceIds2 = [];
+  for (const membership of memberships) {
+    if (await actorCan(PERMISSIONS.MISSION_READ, {
+      workspaceId: membership.workspaceId,
+      workspaceUserId: membership.workspaceUserId
+    })) {
+      readableWorkspaceIds2.push(membership.workspaceId);
+    }
+  }
+  if (readableWorkspaceIds2.length === 0) {
+    return { missions: [], generatedAt };
+  }
+  const workspacePlaceholders = readableWorkspaceIds2.map(() => "?").join(", ");
+  const recentCutoff = new Date(Date.now() - INBOX_MISSION_RECENT_MS).toISOString();
+  const client = requireDatabaseClient();
+  const baseSql = selectInboxMissionsSql(workspacePlaceholders);
+  const recentRows = await client.all(
+    `${baseSql}
+       AND t.created_at >= ?
+     ORDER BY t.created_at DESC, t.sequence_number DESC, t.id ASC
+     LIMIT ?`,
+    [...readableWorkspaceIds2, recentCutoff, INBOX_MISSION_RECENT_LIMIT]
+  );
+  const agentNextRows = await client.all(
+    `${baseSql}
+       AND t.created_by_kind = 'agent'
+       AND t.status_type = 'next'
+     ORDER BY t.created_at DESC, t.sequence_number DESC, t.id ASC
+     LIMIT ?`,
+    [...readableWorkspaceIds2, INBOX_MISSION_AGENT_NEXT_LIMIT]
+  );
+  const byId = /* @__PURE__ */ new Map();
+  for (const row of recentRows) {
+    const existing = byId.get(row.id);
+    if (existing) {
+      existing.reasons.add("recent");
+    } else {
+      byId.set(row.id, { row, reasons: /* @__PURE__ */ new Set(["recent"]) });
+    }
+  }
+  for (const row of agentNextRows) {
+    const existing = byId.get(row.id);
+    if (existing) {
+      existing.reasons.add("agent_next");
+    } else {
+      byId.set(row.id, { row, reasons: /* @__PURE__ */ new Set(["agent_next"]) });
+    }
+  }
+  const merged = [...byId.values()].sort((a5, b5) => {
+    if (a5.row.created_at !== b5.row.created_at) {
+      return a5.row.created_at < b5.row.created_at ? 1 : -1;
+    }
+    if (a5.row.sequence_number !== b5.row.sequence_number) {
+      return b5.row.sequence_number - a5.row.sequence_number;
+    }
+    return a5.row.id < b5.row.id ? -1 : a5.row.id > b5.row.id ? 1 : 0;
+  });
+  const limited = merged.slice(0, INBOX_MISSION_TOTAL_LIMIT);
+  const tagsByMission = await getTagsByMission(limited.map((entry) => entry.row.id));
+  return {
+    generatedAt,
+    missions: limited.map(
+      (entry) => toInboxMissionDto(entry.row, tagsByMission.get(entry.row.id) ?? [], [...entry.reasons])
+    )
+  };
+}
 async function upsertMyMissionPosition(db, {
   workspaceId: workspaceId2,
   projectId,
@@ -170735,6 +170872,10 @@ app.patch(
 app.get(
   "/api/activity-feed",
   handle3(() => listActivityFeed())
+);
+app.get(
+  "/api/inbox/missions",
+  handle3(() => listInboxMissions())
 );
 app.put(
   "/api/mobile/live-activities/:activityId/push-token",

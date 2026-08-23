@@ -350,7 +350,7 @@ function configureCursorHarness({
       event: 'postToolUse',
       command: CURSOR_HOOK_COMMANDS.postToolUse,
       marker: 'overlord-post-tool-use',
-      extra: { matcher: 'Shell|Write|Edit|MultiEdit|NotebookEdit' }
+      extra: { matcher: 'Shell|Write|Edit|MultiEdit|NotebookEdit|StrReplace' }
     }) && 'postToolUse',
     mergeHook({
       event: 'stop',

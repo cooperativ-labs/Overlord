@@ -62,6 +62,8 @@ const EXACT: Record<string, NormalizedTool> = {
   editfile: 'edit',
   edit_file: 'edit',
   str_replace: 'edit',
+  // Cursor/IDE lowercases StrReplace → "strreplace" (no underscore).
+  strreplace: 'edit',
   str_replace_editor: 'edit',
   apply_patch: 'edit',
   applypatch: 'edit',

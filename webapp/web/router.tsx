@@ -129,18 +129,38 @@ const searchRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/SearchPage.tsx'), 'SearchPage')
 });
 
+const feedRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/feed',
+  component: lazyRouteComponent(() => import('./pages/FeedPage.tsx'), 'FeedPage')
+});
+
+/** Nested panel route so a Feed card can open a mission in place. */
+const feedMissionPanelRoute = createRoute({
+  getParentRoute: () => feedRoute,
+  path: 'missions/$missionId',
+  validateSearch: parseMissionPanelSearch,
+  component: lazyRouteComponent(() => import('./pages/FeedPage.tsx'), 'FeedMissionPanelRoute')
+});
+
 const inboxRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/inbox',
   component: lazyRouteComponent(() => import('./pages/InboxPage.tsx'), 'InboxPage')
 });
 
-/** Nested panel route so an Inbox feed card can open a mission in place. */
-const inboxMissionPanelRoute = createRoute({
-  getParentRoute: () => inboxRoute,
-  path: 'missions/$missionId',
+/** Bookmarked Inbox feed-drawer URLs land on the dedicated Feed page. */
+const inboxMissionLegacyRedirectRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/inbox/missions/$missionId',
   validateSearch: parseMissionPanelSearch,
-  component: lazyRouteComponent(() => import('./pages/InboxPage.tsx'), 'InboxMissionPanelRoute')
+  beforeLoad: ({ params, search }) => {
+    throw redirect({
+      to: '/feed/missions/$missionId',
+      params,
+      search
+    });
+  }
 });
 
 const myMissionsRoute = createRoute({
@@ -199,7 +219,9 @@ export const routeTree = rootRoute.addChildren([
   acceptInviteRoute,
   oauthApproveRoute,
   indexRoute,
-  inboxRoute.addChildren([inboxMissionPanelRoute]),
+  feedRoute.addChildren([feedMissionPanelRoute]),
+  inboxRoute,
+  inboxMissionLegacyRedirectRoute,
   projectsRoute,
   searchRoute,
   workspaceLegacyRedirectRoute,

@@ -217,3 +217,105 @@ test('backend requests do not send workspace-selection headers', async () => {
     else process.env.OVLD_HOME = previousHome;
   }
 });
+
+function assertAlreadyLinkedAttachDiagnostic(message: string): void {
+  assert.match(message, /already linked to another mission session/i);
+  assert.match(message, /stale mission-session binding/i);
+  assert.match(message, /not a user authentication failure/i);
+  assert.match(message, /ovld auth login/);
+  assert.match(message, /ovld auth repair/);
+  assert.match(message, /without `--execution-request-id`/);
+  assert.doesNotMatch(message, /credentials were rejected/i);
+}
+
+test('createBackendClient distinguishes an already-linked execution request from authentication failure', async () => {
+  const home = mkdtempSync(path.join(tmpdir(), 'overlord-backend-client-already-linked-'));
+  const previousHome = process.env.OVLD_HOME;
+  const previousEnv = isolateBackendClientEnv();
+  process.env.OVLD_HOME = home;
+  writeStoredAuthCredentials({
+    type: 'session_bearer',
+    token: 'valid-session-token',
+    backendUrl: TEST_BACKEND_URL
+  });
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        error: 'Execution request is already linked to another session',
+        code: 'execution_request_already_linked'
+      }),
+      {
+        status: 409,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    )) as typeof fetch;
+
+  try {
+    await assert.rejects(
+      () =>
+        createBackendClient().post({
+          path: '/api/protocol/attach',
+          body: { args: ['attach'], flags: { '--execution-request-id': 'req_1' } }
+        }),
+      (error: unknown) => {
+        assert.ok(error instanceof CliError);
+        assertAlreadyLinkedAttachDiagnostic(error.message);
+        return true;
+      }
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    restoreBackendClientEnv(previousEnv);
+    if (previousHome === undefined) delete process.env.OVLD_HOME;
+    else process.env.OVLD_HOME = previousHome;
+  }
+});
+
+test('createBackendClient does not treat an already-linked execution request as a 401 credential rejection', async () => {
+  const home = mkdtempSync(path.join(tmpdir(), 'overlord-backend-client-already-linked-401-'));
+  const previousHome = process.env.OVLD_HOME;
+  const previousEnv = isolateBackendClientEnv();
+  process.env.OVLD_HOME = home;
+  writeStoredAuthCredentials({
+    type: 'session_bearer',
+    token: 'valid-session-token',
+    backendUrl: TEST_BACKEND_URL
+  });
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        error: 'Execution request is already linked to another session',
+        code: 'execution_request_already_linked'
+      }),
+      {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    )) as typeof fetch;
+
+  try {
+    await assert.rejects(
+      () =>
+        createBackendClient().post({
+          path: '/api/protocol/attach',
+          body: { args: ['attach'], flags: { '--execution-request-id': 'req_1' } }
+        }),
+      (error: unknown) => {
+        assert.ok(error instanceof CliError);
+        assertAlreadyLinkedAttachDiagnostic(error.message);
+        assert.doesNotMatch(error.message, /sign in again/i);
+        return true;
+      }
+    );
+    assert.equal(existsSync(authCredentialsPath()), true);
+  } finally {
+    globalThis.fetch = originalFetch;
+    restoreBackendClientEnv(previousEnv);
+    if (previousHome === undefined) delete process.env.OVLD_HOME;
+    else process.env.OVLD_HOME = previousHome;
+  }
+});

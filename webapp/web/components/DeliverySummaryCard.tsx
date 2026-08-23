@@ -1,5 +1,5 @@
 import { AlertTriangle, Clock3, Lightbulb, ListChecks, Package, Scale } from 'lucide-react';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 
 import {
   Accordion,
@@ -69,10 +69,7 @@ function DeliveryBulletSection({
       <ul className={`mt-2 grid min-w-0 gap-2 wrap-anywhere text-sm ${itemClassName}`}>
         {items.map((item, index) => (
           <li key={`${sectionKey}-${index}`} className="flex min-w-0 items-start gap-2">
-            <span
-              className="mt-1.5 size-1.5 shrink-0 rounded-full bg-current"
-              aria-hidden="true"
-            />
+            <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-current" aria-hidden="true" />
             <span className="min-w-0">{item}</span>
           </li>
         ))}
@@ -215,7 +212,7 @@ export function DeliveryPresentation({
  */
 /**
  * Collapse-on-outside-click/Escape for an expanded delivery card. Shared so the
- * mission panel and the Inbox activity feed dismiss the same way; a divergence
+ * mission panel and the Feed activity feed dismiss the same way; a divergence
  * here reads to the operator as two different components.
  */
 export function useCollapseOnDismiss(

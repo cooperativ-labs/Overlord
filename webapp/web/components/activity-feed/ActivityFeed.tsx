@@ -48,10 +48,10 @@ function LiveIndicator() {
 }
 
 /**
- * The Inbox's activity column: one time-descending merge of executing objectives,
- * blocking questions, and recent deliveries across every workspace the operator
- * can read. Freshness rides the existing realtime change link — this component
- * never polls.
+ * The Feed page's activity column: one time-descending merge of executing
+ * objectives, blocking questions, and recent deliveries across every workspace
+ * the operator can read. Freshness rides the existing realtime change link —
+ * this component never polls.
  */
 export function ActivityFeed({
   onOpenMission
@@ -110,7 +110,7 @@ export function ActivityFeed({
             <p className="font-mono text-[11px] font-medium uppercase tracking-[0.24em] text-(--color-ink-dim)">
               Objective activity
             </p>
-            <h2 className="text-xl font-semibold tracking-tight">Live feed</h2>
+            <h1 className="text-xl font-semibold tracking-tight">Feed</h1>
           </div>
           <LiveIndicator />
         </div>

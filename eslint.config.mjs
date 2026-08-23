@@ -10,6 +10,8 @@ export default [
   {
     ignores: [
       '.overlord/**',
+      // Railway IaC — linted by `railway config plan`, not repo TS projects
+      '.railway/**',
       'node_modules/**',
       '**/dist/**',
       '**/build/**',

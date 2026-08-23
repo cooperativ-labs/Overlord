@@ -4,7 +4,7 @@
 # IMPORTANT: Update this file and CONTRACT.md together when adding components or surfaces.
 # Increment contractVersion when any stable interface changes.
 
-contractVersion: '116'
+contractVersion: '117'
 
 components:
   protocol:
@@ -188,6 +188,7 @@ components:
       - 'POST /api/missions/:id/terminal-sessions/forget drops a provider-session mapping after Latch reports that session absent. Overlord exposes no Latch conversation observation or interaction route under protocol major 2; Channel 1 remains independent of Latch'
       - 'Agent Session Exchange human resolve/enqueue/release surfaces remain mounted for historical rows but return no active controls (410). Adapter channel routes are not used by new connector installs'
       - 'profile-owned inbox routes: authenticated GET/POST /api/inbox, GET/PATCH/DELETE /api/inbox/:id, and POST /api/inbox/:id/promote; profile isolation returns 404, promotion requires mission:create on the destination project and atomically creates its normal mission then consumes the capture; inbox writes are intentionally outside workspace realtime'
+      - 'cross-workspace inbox missions: GET /api/inbox/missions returns a bounded InboxMissionsResponse merging missions created within the past 7 days with agent-authored missions whose status type is next, across every workspace the caller actively belongs to in the active organization and may mission:read; each InboxMissionDto extends MissionDto with projectName/projectColor and reasons (recent and/or agent_next); distinct from profile-owned /api/inbox capture'
       - 'cross-workspace activity feed: GET /api/activity-feed returns a bounded time-descending ActivityFeedDto (launching/executing/pending_delivery objectives with their auto-advance queue, newest deliveries as normalized DeliveryDto records, unseen blocking-question mission events from the past 3 days) across every workspace the caller actively belongs to in the active organization, authorized with mission:read per workspace; truncation is reported via counts and no raw payload JSON is exposed; ActivityFeedRunItemDto.state is launching|executing|pending_delivery, so a re-attached objective keeps reading as live work rather than dropping out of the feed until delivery; every ActivityFeedItemBaseDto additively carries objective createdByKind/createdByAgent (human fallback when the objective join is null), and agentIdentifier treats the protocol session sentinel unknown as absent falling back to assigned_agent'
       - 'delivery read projection: GET /api/missions/:id/deliveries returns normalized DeliveryDto records and delivery mission events expose an additive deliveryId without raw payload JSON'
       - 'admin-only workspace objective CSV export (GET /api/workspaces/:id/objectives.csv) as a text/csv attachment'

@@ -4,8 +4,13 @@ import path from 'node:path';
 
 import { findAgentSessionCodec } from './agent-session/codec-registry.generated.js';
 import { MAX_AGENT_SESSION_PAYLOAD_BYTES, normalizeForAdapter } from './agent-session/event.js';
-import { withActiveObjectiveSession } from './active-objective-sessions.js';
+import {
+  resolveWorkingDirectoryForObjective,
+  withActiveObjectiveSession
+} from './active-objective-sessions.js';
 import { appendChangeEvidence, recordChangeLedgerHealth } from './change-ledger.js';
+
+const MAX_PATH_HINTS = 16;
 
 function exactProjectDirectory(value: unknown): string | null {
   if (typeof value !== 'string') return null;
@@ -27,6 +32,54 @@ function resolveHookWorkingDirectory({
     if (projectDirectory) return path.resolve(projectDirectory);
   }
   return path.resolve(fallbackCwd);
+}
+
+/** Seed a missing top-level project-root field so absolute edit paths can relativize. */
+function withProjectRootFallback({
+  payload,
+  projectRootPaths,
+  workingDirectory
+}: {
+  payload: unknown;
+  projectRootPaths: string[] | undefined;
+  workingDirectory: string;
+}): unknown {
+  const rootKey = projectRootPaths?.[0];
+  if (!rootKey || rootKey.includes('.') || !payload || typeof payload !== 'object') {
+    return payload;
+  }
+  if (Array.isArray(payload)) return payload;
+  const record = payload as Record<string, unknown>;
+  if (exactProjectDirectory(record[rootKey])) return payload;
+  return { ...record, [rootKey]: workingDirectory };
+}
+
+/**
+ * Collect absolute path strings from a native payload so a missing cwd can still
+ * be tied back to the worktree that holds the objective binding. Only absolute
+ * paths are kept; relative names never select among worktrees.
+ */
+function collectAbsolutePathHints(payload: unknown): string[] {
+  const hints: string[] = [];
+  const visit = (value: unknown, depth: number): void => {
+    if (hints.length >= MAX_PATH_HINTS || depth > 4) return;
+    if (typeof value === 'string') {
+      if (path.isAbsolute(value) && value.length <= 4_096 && !hasControlCharacters(value)) {
+        hints.push(path.resolve(value));
+      }
+      return;
+    }
+    if (!value || typeof value !== 'object') return;
+    if (Array.isArray(value)) {
+      for (const entry of value.slice(0, 8)) visit(entry, depth + 1);
+      return;
+    }
+    for (const entry of Object.values(value as Record<string, unknown>).slice(0, 16)) {
+      visit(entry, depth + 1);
+    }
+  };
+  visit(payload, 0);
+  return hints;
 }
 
 export type CaptureChangeResult =
@@ -78,12 +131,28 @@ export function captureChangeFromPayload({
     }
   }
 
-  const workingDirectory = resolveHookWorkingDirectory({
+  const candidateWorkingDirectory = resolveHookWorkingDirectory({
     payload: nativePayload,
     projectRootPaths: codec.projectRootPaths,
     fallbackCwd
   });
-  const normalized = payloadFailure ? null : normalizeForAdapter({ codec, payload: nativePayload });
+  const workingDirectory =
+    resolveWorkingDirectoryForObjective({
+      objectiveId,
+      candidateWorkingDirectory,
+      pathHints: collectAbsolutePathHints(nativePayload)
+    }) ?? candidateWorkingDirectory;
+  // Cursor postToolUse often omits cwd while still naming absolute edit paths.
+  // After the objective binding recovers the worktree, seed the codec's project
+  // root so absolute evidence paths relativize instead of being dropped.
+  const payloadForNormalize = withProjectRootFallback({
+    payload: nativePayload,
+    projectRootPaths: codec.projectRootPaths,
+    workingDirectory
+  });
+  const normalized = payloadFailure
+    ? null
+    : normalizeForAdapter({ codec, payload: payloadForNormalize });
   const directPaths =
     normalized?.kind === 'file.edited' && Array.isArray(normalized.payload.paths)
       ? normalized.payload.paths.filter((value): value is string => typeof value === 'string')

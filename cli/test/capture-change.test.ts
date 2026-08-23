@@ -241,6 +241,35 @@ test('requires a declared connector codec and captures Edit as a mutation', () =
   );
 });
 
+test('recovers the objective worktree when Cursor omits cwd and the hook cwd is unrelated', () => {
+  const workspace = makeWorkspace();
+  const editedPath = path.join(workspace, 'src', 'cursor-edit.ts');
+  const unrelatedHookCwd = mkdtempSync(path.join(os.tmpdir(), 'ovld-cursor-hook-cwd-'));
+
+  const result = captureChangeFromPayload({
+    agent: 'cursor',
+    rawPayload: JSON.stringify({
+      conversation_id: 'conv_cursor_1',
+      event: 'postToolUse',
+      tool_name: 'Write',
+      tool_input: { file_path: editedPath, content: 'x\n' },
+      tool_use_id: 'call_1'
+    }),
+    objectiveOverride: OBJECTIVE_DISPLAY_ID,
+    fallbackCwd: unrelatedHookCwd
+  });
+
+  assert.deepEqual(result, { recorded: true, objectiveId: OBJECTIVE_ID, files: 1 });
+  assert.deepEqual(
+    readUnsyncedChangeEvidence({
+      workingDirectory: workspace,
+      objectiveId: OBJECTIVE_ID,
+      sessionKey: SESSION_KEY
+    }).map(entry => entry.filePath),
+    ['src/cursor-edit.ts']
+  );
+});
+
 test('oversized native payloads are not parsed and record bounded health only', () => {
   const workspace = makeWorkspace();
   const result = captureChangeFromPayload({

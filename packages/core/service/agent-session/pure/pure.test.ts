@@ -158,6 +158,7 @@ test('tool-normalize: names map exactly, never by substring', () => {
   assert.equal(normalizeToolName('Bash'), 'shell');
   assert.equal(normalizeToolName('run_terminal_cmd'), 'shell');
   assert.equal(normalizeToolName('MultiEdit'), 'edit');
+  assert.equal(normalizeToolName('StrReplace'), 'edit');
   assert.equal(normalizeToolName('NotebookRead'), 'read');
   assert.equal(normalizeToolName('mcp__github__create_issue'), 'mcp');
   // Not a substring match: an unknown tool whose name merely contains "read" must not be

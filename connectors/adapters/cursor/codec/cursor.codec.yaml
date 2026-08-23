@@ -69,5 +69,9 @@ events:
     inputPath: tool_input
     callIdPath: call_id
     fileEditKind: file.edited
+    # Live Cursor Write payloads use file_path; path/filePath match the write
+    # formatter's key order so an alternate Cursor dialect still captures.
     filePathPaths:
       - file_path
+      - filePath
+      - path

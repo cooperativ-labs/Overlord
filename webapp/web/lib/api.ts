@@ -57,6 +57,7 @@ import type {
   GenerateCommitMessageBody,
   GenerateCommitMessageResultDto,
   InboxItemDto,
+  InboxMissionsResponse,
   InviteWorkspaceMemberBody,
   InviteWorkspaceMemberResultDto,
   LaunchObjectiveBody,
@@ -586,6 +587,8 @@ export const api = {
   createMission: (body: CreateMissionBody) =>
     request<MissionDetailDto>('POST', '/api/missions', body),
   listInboxItems: () => request<InboxItemDto[]>('GET', '/api/inbox'),
+  /** Cross-workspace recent + agent-Next missions for the Inbox column (coo:826). */
+  listInboxMissions: () => request<InboxMissionsResponse>('GET', '/api/inbox/missions'),
   getActivityFeed: () => request<ActivityFeedDto>('GET', '/api/activity-feed'),
   createInboxItem: (body: CreateInboxItemBody) => request<InboxItemDto>('POST', '/api/inbox', body),
   updateInboxItem: (id: string, body: UpdateInboxItemBody) =>

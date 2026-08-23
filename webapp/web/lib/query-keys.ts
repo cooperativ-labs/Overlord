@@ -10,7 +10,9 @@ export const keys = {
   organizationAdmins: (id: string) => ['organization', id, 'admins'] as const,
   defaultProject: ['profile', 'default-project'] as const,
   inbox: ['inbox'] as const,
-  /** Cross-workspace objective activity feed rendered beside the Inbox. */
+  /** Cross-workspace recent + agent-Next missions shown in the Inbox column. */
+  inboxMissions: ['inbox-missions'] as const,
+  /** Cross-workspace objective activity feed rendered on the Feed page. */
   activityFeed: ['activity-feed'] as const,
   notifications: ['notifications'] as const,
   notificationPreferences: ['profile', 'notification-preferences'] as const,

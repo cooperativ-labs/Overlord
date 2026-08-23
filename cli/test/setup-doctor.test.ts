@@ -190,7 +190,9 @@ test('cursor setup merges lifecycle hooks and permission rules', () => {
     assert.ok(
       hooks.hooks.postToolUse.some(
         (entry: { command: string; matcher: string }) =>
-          entry.command.includes('overlord-post-tool-use') && entry.matcher.includes('Shell')
+          entry.command.includes('overlord-post-tool-use') &&
+          entry.matcher.includes('Shell') &&
+          entry.matcher.includes('StrReplace')
       )
     );
     assert.ok(

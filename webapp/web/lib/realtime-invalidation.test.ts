@@ -48,6 +48,7 @@ test('routes mission branch changes to mission, lists, my missions, branch, and 
     ['project', 'project-1', 'missions'],
     ['workspace', 'my-missions'],
     ['activity-feed'],
+    ['inbox-missions'],
     ['mission', 'mission-1', 'branches'],
     ['worktrees']
   ]);
@@ -82,7 +83,8 @@ test('deduplicates workflow invalidations across objective, request, and session
     ['mission', 'mission-1'],
     ['project', 'project-1', 'missions'],
     ['workspace', 'my-missions'],
-    ['activity-feed']
+    ['activity-feed'],
+    ['inbox-missions']
   ]);
 });
 
