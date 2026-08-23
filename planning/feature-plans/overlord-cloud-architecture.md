@@ -91,7 +91,9 @@ Railway builds the backend from a dedicated, backend-owned Dockerfile, **not**
 the repo-root `Dockerfile` (which is the all-in-one local/desktop image). The
 deploy wiring is:
 
-- `railway.json` → `build.dockerfilePath: "backend/Dockerfile.railway"`.
+- `.railway/railway.ts` → `overlord-backend` build uses
+  `dockerfilePath: "backend/Dockerfile.railway"` (Railway Infrastructure as
+  Code; see https://docs.railway.com/infrastructure-as-code).
 - `backend/Dockerfile.railway` — multi-stage build that bundles only the
   Postgres-only control-plane server (`@overlord/backend`'s
   `build:server:cloud`, an esbuild bundle) and ships a pruned runtime.
@@ -115,7 +117,8 @@ Runtime invariants the image preserves:
 - `OVERLORD_SERVE_SPA=false` (Railway serves the API only; no static SPA).
 - Postgres migrations are present (`backend/postgres/migrations`); the SQLite
   migration tree is omitted on the `--cloud` build.
-- `/api/health` is the Railway healthcheck (`railway.json`).
+- `/api/health` is the Railway healthcheck (`.railway/railway.ts` on
+  `overlord-backend`).
 - The pruned `node_modules` comes from `yarn workspaces focus --production
   @overlord/automations`, which resolves to exactly the bundle's one external
   runtime dep — `@google/genai` — plus its transitives. `better-sqlite3` is

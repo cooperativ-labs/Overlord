@@ -2296,6 +2296,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@graphql-typed-document-node/core@npm:^3.2.0":
+  version: 3.2.0
+  resolution: "@graphql-typed-document-node/core@npm:3.2.0"
+  peerDependencies:
+    graphql: ^0.8.0 || ^0.9.0 || ^0.10.0 || ^0.11.0 || ^0.12.0 || ^0.13.0 || ^14.0.0 || ^15.0.0 || ^16.0.0 || ^17.0.0
+  checksum: 10c0/94e9d75c1f178bbae8d874f5a9361708a3350c8def7eaeb6920f2c820e82403b7d4f55b3735856d68e145e86c85cbfe2adc444fdc25519cd51f108697e99346c
+  languageName: node
+  linkType: hard
+
 "@hono/node-server@npm:^1.19.9":
   version: 1.19.14
   resolution: "@hono/node-server@npm:1.19.14"
@@ -8205,6 +8214,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"graphql@npm:^16.10.0":
+  version: 16.14.2
+  resolution: "graphql@npm:16.14.2"
+  checksum: 10c0/a95a96961eaff55cc9fe9d31fae6f33499ac988b972d07ea5085024cb1333f515b902f376e7393a5489aa82200a8aff3eb96580e4d1b69d702ed19b6eb1ce97a
+  languageName: node
+  linkType: hard
+
 "h3@npm:^1.15.10":
   version: 1.15.11
   resolution: "h3@npm:1.15.11"
@@ -11297,6 +11313,7 @@ __metadata:
     kysely: "npm:^0.29.2"
     kysely-codegen: "npm:^0.20.0"
     prettier: "npm:^3.8.4"
+    railway: "npm:^3.10.0"
     tsx: "npm:^4.22.4"
     typescript: "npm:^6.0.3"
     yaml: "npm:^2.6.1"
@@ -12067,6 +12084,19 @@ __metadata:
   version: 1.1.2
   resolution: "radix3@npm:1.1.2"
   checksum: 10c0/d4a295547f71af079868d2c2ed3814a9296ee026c5488212d58c106e6b4797c6eaec1259b46c9728913622f2240c9a944bfc8e2b3b5f6e4a5045338b1609f1e4
+  languageName: node
+  linkType: hard
+
+"railway@npm:^3.10.0":
+  version: 3.10.0
+  resolution: "railway@npm:3.10.0"
+  dependencies:
+    "@graphql-typed-document-node/core": "npm:^3.2.0"
+    graphql: "npm:^16.10.0"
+    tsx: "npm:^4.20.0"
+  bin:
+    railway-iac-ts: dist/iac/bin.js
+  checksum: 10c0/a267d5a642b72f8d58fcf68efe86a6bc179ea959d81ccf318d5ab090b60c9e8a570843241d34cc3d004e1a74d3ff9f2fd228c863a2a0d9771670310480fa35fc
   languageName: node
   linkType: hard
 
