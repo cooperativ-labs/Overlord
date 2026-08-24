@@ -1,5 +1,5 @@
-import { CircleHelp, Filter, Loader2 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { CheckCircle2, CircleHelp, Filter, Loader2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useActivityFeed } from '../../lib/queries.ts';
 import { useRealtime } from '../../lib/realtime.tsx';
@@ -21,7 +21,8 @@ import { MissionRunCard } from './MissionRunCard.tsx';
 
 const KIND_ICONS = {
   mission_run: Loader2,
-  blocking_question: CircleHelp
+  blocking_question: CircleHelp,
+  mission_delivered: CheckCircle2
 } as const;
 
 /** Elapsed labels re-render on this cadence; the data itself arrives over realtime. */
@@ -46,10 +47,11 @@ function LiveIndicator() {
 
 /**
  * The Feed page's activity column: every mission with live work, then the
- * questions blocking an agent, across every workspace the operator can read.
- * The server groups launching missions above executing ones, so this renders
- * the order it is given. Freshness rides the existing realtime change link —
- * this component never polls.
+ * questions blocking an agent, then recently delivered missions, across every
+ * workspace the operator can read. The server groups launching missions above
+ * executing ones, so this renders the order it is given. Freshness rides the
+ * existing realtime change link — this component never polls. Scrolling loads
+ * the next two weeks of delivered missions.
  */
 export function ActivityFeed({
   onOpenMission
@@ -62,21 +64,25 @@ export function ActivityFeed({
   // Elapsed/relative labels advance between refetches by walking a local clock
   // forward, rather than by refetching the feed on a timer.
   const [clock, setClock] = useState(() => Date.now());
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(Date.now()), TICK_MS);
     return () => window.clearInterval(timer);
   }, []);
 
-  const items = useMemo(() => feed.data?.items ?? [], [feed.data]);
+  const pages = feed.data?.pages ?? [];
+  const items = useMemo(() => pages.flatMap(page => page.items), [pages]);
   const projects = useMemo(() => feedProjectOptions(items), [items]);
+  const generatedAt = pages[0]?.generatedAt;
 
   // The server's `generatedAt` is the floor, so a browser clock running behind the
   // backend never renders negative elapsed time on a freshly fetched item.
   const nowIso = useMemo(() => {
-    const generated = feed.data?.generatedAt ? new Date(feed.data.generatedAt).getTime() : 0;
+    const generated = generatedAt ? new Date(generatedAt).getTime() : 0;
     return new Date(Math.max(generated, clock)).toISOString();
-  }, [feed.data?.generatedAt, clock]);
+  }, [generatedAt, clock]);
 
   const visible = useMemo(
     () => filterFeedItems(items, { kinds: enabledKinds, projectId }),
@@ -89,7 +95,24 @@ export function ActivityFeed({
     return counts;
   }, [items]);
 
-  const truncated = feed.data ? truncationNote(feed.data.counts, items) : null;
+  const truncated = pages[0] ? truncationNote(pages[0].counts, items) : null;
+
+  useEffect(() => {
+    const root = scrollRef.current;
+    const sentinel = sentinelRef.current;
+    if (!root || !sentinel || !feed.hasNextPage) return;
+
+    const observer = new IntersectionObserver(
+      entries => {
+        if (!entries.some(entry => entry.isIntersecting)) return;
+        if (feed.isFetchingNextPage || !feed.hasNextPage) return;
+        void feed.fetchNextPage();
+      },
+      { root, rootMargin: '200px', threshold: 0 }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [feed.fetchNextPage, feed.hasNextPage, feed.isFetchingNextPage, items.length]);
 
   const toggleKind = (kind: string) => {
     setEnabledKinds(current => {
@@ -176,7 +199,7 @@ export function ActivityFeed({
       </div>
 
       {/* Scroll the pane; keep the stack unconstrained so overflow-hidden cards do not shrink. */}
-      <div className="min-h-0 flex-1 overflow-y-auto bg-(--color-surface-2) p-4">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto bg-(--color-surface-2) p-4">
         <div className="flex flex-col gap-3">
           {feed.isLoading ? (
             <div className="flex justify-center py-8">
@@ -186,15 +209,19 @@ export function ActivityFeed({
             <p className="text-sm text-red-400">
               Could not load activity: {(feed.error as Error)?.message ?? 'unknown error'}
             </p>
-          ) : visible.length === 0 ? (
+          ) : visible.length === 0 && items.length === 0 && !feed.hasNextPage ? (
             <div className="rounded-xl border border-dashed border-(--color-border) p-6 text-center">
-              <p className="text-sm font-medium text-(--color-ink)">
-                {items.length === 0 ? 'Nothing is running' : 'Nothing matches these filters'}
-              </p>
+              <p className="text-sm font-medium text-(--color-ink)">No missions to show</p>
               <p className="mt-1 text-xs text-(--color-ink-dim)">
-                {items.length === 0
-                  ? 'Launch an objective and its mission will appear here while it runs.'
-                  : 'Turn a filter back on to see running missions and blocking questions again.'}
+                Launch an objective and its mission will appear here while it runs. Delivered
+                missions from the last two weeks appear here too.
+              </p>
+            </div>
+          ) : visible.length === 0 && items.length > 0 ? (
+            <div className="rounded-xl border border-dashed border-(--color-border) p-6 text-center">
+              <p className="text-sm font-medium text-(--color-ink)">Nothing matches these filters</p>
+              <p className="mt-1 text-xs text-(--color-ink-dim)">
+                Turn a filter back on to see running missions, questions, or deliveries again.
               </p>
             </div>
           ) : (
@@ -225,6 +252,16 @@ export function ActivityFeed({
 
           {truncated ? (
             <p className="pb-2 text-center text-[11px] text-(--color-ink-dim)">{truncated}</p>
+          ) : null}
+
+          {feed.hasNextPage || feed.isFetchingNextPage ? (
+            <div ref={sentinelRef} className="flex justify-center py-3">
+              {feed.isFetchingNextPage ? <Spinner /> : null}
+            </div>
+          ) : items.some(item => item.kind === 'mission_delivered') ? (
+            <p className="pb-2 text-center text-[11px] text-(--color-ink-dim)">
+              Scroll to load the previous two weeks of delivered missions.
+            </p>
           ) : null}
         </div>
       </div>

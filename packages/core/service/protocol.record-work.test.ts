@@ -74,6 +74,7 @@ describe('recordWork (record completed chat work as a review mission)', () => {
       changedFiles: [
         null,
         { filePath: '/private/host-path.ts', vcsStatus: 'M' },
+        { filePath: '.overlord/tmp/scratch.txt', vcsStatus: 'M' },
         { filePath: 'src/invalid-status.ts', vcsStatus: 'x'.repeat(33) },
         { filePath: 'src/b.ts', vcsStatus: 'M' }
       ]
@@ -91,6 +92,7 @@ describe('recordWork (record completed chat work as a review mission)', () => {
     assert.equal(byPath.get('src/b.ts')?.currentDiffState, 'unknown');
     assert.equal(byPath.get('src/b.ts')?.vcsStatus, 'M');
     assert.equal(byPath.has('/private/host-path.ts'), false);
+    assert.equal(byPath.has('.overlord/tmp/scratch.txt'), false);
     assert.equal(byPath.has('src/invalid-status.ts'), false);
     const rationaleLink = (await db.get(
       `SELECT changed_file_id FROM change_rationales WHERE mission_id = ? AND file_path = ?`,
@@ -115,7 +117,7 @@ describe('recordWork (record completed chat work as a review mission)', () => {
       deliveryId
     ])) as { payload_json: string };
     const warnings = JSON.parse(delivery.payload_json).deliveryReport.warnings as string[];
-    assert.equal(warnings.length, 3);
+    assert.equal(warnings.length, 4);
 
     await db.close();
   });

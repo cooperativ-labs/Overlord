@@ -34,7 +34,7 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `119`
+Current version: `121`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
@@ -195,6 +195,30 @@ source, overlap, and optional rationale evidence can produce bounded review
 warnings but cannot reject delivery. Both Local and Cloud execution targets use
 the same metadata-only Protocol sync payload; neither backend reads the target
 filesystem.
+
+### Version 121 Change Summary
+
+Delivered missions return to the Feed (coo:826.mnds). `GET /api/activity-feed`
+additively accepts `before` (ISO-8601 UTC) and returns `nextBefore`. The first
+page is live work plus delivered missions whose most recent
+`deliveries.delivered_at` is within the past 14 days; `before` loads the next
+older 14-day window of delivered missions only and omits live runs and
+questions. `ActivityFeedItemKind` additively includes `mission_delivered`. A
+delivered mission is the same `ActivityFeedMissionItemDto` as a live one, keyed
+`mission:<missionId>`, with `runState: 'delivered'` and empty
+`activeObjectiveIds`. A mission that is currently launching, executing, or
+pending delivery is never also a delivered card. Order is launching, then
+executing, then blocking questions, then delivered. Raw delivery payload JSON
+remains unexposed; `GET /api/missions/:id/deliveries` is unchanged.
+
+### Version 120 Change Summary
+
+Inbox mission triage (coo:844). `GET /api/inbox/missions` now returns only
+agent-authored missions in status type `next`. The v117–v118 recent window —
+which still surfaced human-created non-Next missions — is removed. Unallocated
+profile-owned captures remain on `/api/inbox`. The additive `recent` reason is
+retained only as a UI label for agent-Next rows created within the rolling
+7-day window.
 
 ### Version 119 Change Summary
 
@@ -780,8 +804,8 @@ Owns:
 - Objective display ids: `ObjectiveDto` additively carries `displayKey` and computed `displayId` (`{mission.displayId}.{displayKey}`). `/api/objectives/:id` (and launch/prompt/attachment routes that take an objective id) accept an objective UUID or a full display id. UUID lookup stays globally unique; display ids resolve within the selected organization's `authorizedWorkspaces` set, return `404` outside that set, and return `409` on genuine ambiguity.
 - Opt-in parallel objectives: `MissionDto` and `UpdateMissionBody` additively carry `allowParallelObjectives` (default false). `POST /api/objectives/:id/launch` 409s an active sibling only while this flag is false; when it is true a sibling never blocks the launch, on the same `resource_key` or a different one. `POST /api/missions/:id/branch-prepared` accepts an additive `branchAutomation.isolated` boolean: an isolated per-objective branch is recorded on `objectives.branch` and audited as a mission event, but must not move `missions.active_branch` or the mission-level branch observation off the shared mission branch.
 - Profile-owned inbox capture: authenticated `/api/inbox` CRUD and `/api/inbox/:id/promote`. Every item route resolves the caller's profile and returns `404` for an item owned by another profile. Promotion checks `mission:create` only on the destination project, calls the ordinary mission-create transaction with the capture fields, and consumes the item atomically. Account-owned inbox mutations are intentionally absent from workspace `entity_changes`; promotion retains normal mission realtime behavior.
-- Cross-workspace inbox missions: authenticated `GET /api/inbox/missions` returns a bounded `InboxMissionsResponse` merging recently created missions (past 7 days; excluding non-agent status type `next`) with agent-authored missions in status type `next`, across every workspace the caller actively belongs to in the active organization and may `mission:read`. Next-status rows are agent-authored only. Each row is an `InboxMissionDto` (`MissionDto` plus project name/color and inclusion `reasons`). Distinct from profile-owned `/api/inbox` capture.
-- Cross-workspace activity feed: authenticated `GET /api/activity-feed` returns a bounded, mission-anchored `ActivityFeedDto` across every workspace the caller actively belongs to in the active organization, authorized with `mission:read` per workspace. Its two kinds are `mission_run` and `blocking_question`; deliveries are deliberately absent. A mission with at least one `launching` / `executing` / `pending_delivery` objective is a single `ActivityFeedMissionItemDto` keyed `mission:<missionId>` — never one card per objective — carrying `runState` (`launching` \| `executing`), every objective of that mission as `ActivityFeedMissionObjectiveDto` in mission-panel display order, and `activeObjectiveIds` for the objectives that are live. Its chrome fields describe the mission's *primary* running objective: the launching one when there is one, else the oldest active one. `pending_delivery` counts as live work, so a re-attached objective keeps its mission on the feed instead of dropping out between its last update and delivery. `blocking_question` items remain unseen `ask` mission events from the past 3 days. `items` is grouped rather than purely time-descending — launching missions, then executing ones, then questions, newest-first within each group. `createdByKind` / `createdByAgent` describe the item's subject: the mission for `mission_run`, the objective behind the ask for `blocking_question`. Agent identity treats the protocol session sentinel `unknown` as absent and falls back to the objective's `assigned_agent`. Truncation is reported through `counts` rather than implied, and no raw payload JSON is exposed.
+- Cross-workspace inbox missions: authenticated `GET /api/inbox/missions` returns a bounded `InboxMissionsResponse` of agent-authored missions in status type `next` only, across every workspace the caller actively belongs to in the active organization and may `mission:read`. Human-created missions never appear. Each row is an `InboxMissionDto` (`MissionDto` plus project name/color and inclusion `reasons`). The additive `recent` reason labels agent-Next rows created within the past 7 days. Distinct from profile-owned `/api/inbox` capture.
+- Cross-workspace activity feed: authenticated `GET /api/activity-feed` returns a bounded, mission-anchored `ActivityFeedDto` across every workspace the caller actively belongs to in the active organization, authorized with `mission:read` per workspace. Its kinds are `mission_run`, `mission_delivered`, and `blocking_question`. A mission with at least one `launching` / `executing` / `pending_delivery` objective is a single `ActivityFeedMissionItemDto` keyed `mission:<missionId>` — never one card per objective — carrying `runState` (`launching` \| `executing`), every objective of that mission as `ActivityFeedMissionObjectiveDto` in mission-panel display order, and `activeObjectiveIds` for the objectives that are live. Its chrome fields describe the mission's *primary* running objective: the launching one when there is one, else the oldest active one. `pending_delivery` counts as live work, so a re-attached objective keeps its mission on the feed instead of dropping out between its last update and delivery. A mission whose most recent live delivery falls in the requested two-week window and that has no live objective is a `mission_delivered` card of the same DTO shape with `runState: 'delivered'` and empty `activeObjectiveIds`. Optional `before` (ISO-8601 UTC) selects the next older two-week delivered window and omits live runs and questions; `nextBefore` is that window's start when older delivered missions exist, else null. `blocking_question` items remain unseen `ask` mission events from the past 3 days. `items` is grouped rather than purely time-descending — launching missions, then executing ones, then questions, then delivered, newest-first within each group. `createdByKind` / `createdByAgent` describe the item's subject: the mission for `mission_run` and `mission_delivered`, the objective behind the ask for `blocking_question`. Agent identity treats the protocol session sentinel `unknown` as absent and falls back to the objective's `assigned_agent`. Truncation is reported through `counts` rather than implied, and no raw payload JSON is exposed.
 - Delivery read projection: `GET /api/missions/:id/deliveries` returns authorized `DeliveryDto` records with a normalized versioned report, while delivery mission events expose their additive `deliveryId` without exposing raw event or delivery payload JSON
 - Editable mission artifacts: authenticated `PATCH /api/missions/:id/artifacts/:artifactId` accepts `expectedRevision` plus a non-empty subset of `{ label, contentText, externalUrl }`, requires `mission:update` on the named mission, retains delivery/session/objective provenance and `contentJson`, rejects stale edits with `409` and non-HTTP(S) external URLs, and emits an `artifact` entity-change row in the write transaction. The client renders `contentText` as safe Markdown and edits these human-facing fields in place. The same mutation is also reachable through Protocol `update-artifact` and MCP `overlord_update_artifact` (see Protocol / MCP ownership).
 - Mid-turn mission artifact creation: authenticated `POST /api/missions/:id/artifacts` accepts `{ type, label }` plus at least one of `{ contentText, externalUrl }`, requires `artifact:create` on the named mission, optionally stamps `objectiveId` / `sessionId` provenance, leaves `delivery_id` null, rejects non-HTTP(S) external URLs, and emits an `artifact` entity-change insert in the same transaction. The same mutation is reachable through Protocol `add-artifact` and MCP `overlord_add_artifact`.

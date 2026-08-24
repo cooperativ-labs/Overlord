@@ -2,7 +2,11 @@ import { bindBool, UPDATE_EVENT_TYPES, UPDATE_PHASES } from '@overlord/database'
 import { createHash } from 'node:crypto';
 
 import { bindChannelToSession, findBindableChannelForMission } from './agent-session/channels.js';
-import { hasControlCharacters, isExactEvidencePath } from './agent-session/pure/evidence-path.js';
+import {
+  hasControlCharacters,
+  isExactEvidencePath,
+  isOverlordManagedEvidencePath
+} from './agent-session/pure/evidence-path.js';
 import { emitNotification } from './notifications/notifications.js';
 import { recordChange } from './change-feed.js';
 import type { ServiceContext } from './context.js';
@@ -1496,6 +1500,14 @@ function validateSyncChange(
       warning: 'filePath must be a bounded normalized repository-relative path without .. segments'
     };
   }
+  if (isOverlordManagedEvidencePath(filePath)) {
+    return {
+      ...identity,
+      filePath,
+      idempotencyKey,
+      warning: 'filePath is excluded from change reporting'
+    };
+  }
   if (!idempotencyKey) {
     return { ...identity, filePath, warning: 'idempotencyKey must be a bounded string' };
   }
@@ -2293,6 +2305,10 @@ function normalizeRecordWorkChangedFiles(input: unknown): {
     const filePath = normalizeRepoRelativePath(candidate.filePath);
     if (!filePath) {
       warn(`Ignored changedFiles[${index}]: filePath must be canonical and repository-relative.`);
+      return;
+    }
+    if (isOverlordManagedEvidencePath(filePath)) {
+      warn(`Ignored changedFiles[${index}]: filePath is excluded from change reporting.`);
       return;
     }
     let vcsStatus: string | null = null;

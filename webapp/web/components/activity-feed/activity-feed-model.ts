@@ -7,15 +7,20 @@ import type {
 } from '../../../shared/contract.ts';
 
 /** The kinds the feed renders, in the order their chips appear. */
-export const FEED_KINDS: ActivityFeedItemKind[] = ['mission_run', 'blocking_question'];
+export const FEED_KINDS: ActivityFeedItemKind[] = [
+  'mission_run',
+  'blocking_question',
+  'mission_delivered'
+];
 
 export const FEED_KIND_LABELS: Record<ActivityFeedItemKind, string> = {
   mission_run: 'Running',
-  blocking_question: 'Questions'
+  blocking_question: 'Questions',
+  mission_delivered: 'Delivered'
 };
 
 export function isMissionItem(item: ActivityFeedItemDto): item is ActivityFeedMissionItemDto {
-  return item.kind === 'mission_run';
+  return item.kind === 'mission_run' || item.kind === 'mission_delivered';
 }
 
 export function isQuestionItem(item: ActivityFeedItemDto): item is ActivityFeedQuestionItemDto {
@@ -117,8 +122,8 @@ export function elapsedLabel(startedAt: string | null, nowIso: string): string {
 }
 
 /**
- * Whether the feed truncated a source. The DTO reports pre-truncation counts, so
- * the UI can say what it is not showing instead of implying the list is complete.
+ * Whether the feed truncated a live source. Delivered missions paginate by
+ * two-week windows instead of a cap, so they are not part of this note.
  */
 export function truncationNote(
   counts: Record<string, number>,
@@ -126,9 +131,8 @@ export function truncationNote(
 ): string | null {
   const shown = new Map<string, number>();
   for (const item of items) shown.set(item.kind, (shown.get(item.kind) ?? 0) + 1);
-  const hidden = FEED_KINDS.map(kind => (counts[kind] ?? 0) - (shown.get(kind) ?? 0)).reduce(
-    (total, value) => total + Math.max(0, value),
-    0
-  );
+  const hidden = (['mission_run', 'blocking_question'] as const)
+    .map(kind => (counts[kind] ?? 0) - (shown.get(kind) ?? 0))
+    .reduce((total, value) => total + Math.max(0, value), 0);
   return hidden > 0 ? `${hidden} older item${hidden === 1 ? '' : 's'} not shown` : null;
 }

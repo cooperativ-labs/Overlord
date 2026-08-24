@@ -2221,13 +2221,12 @@ export interface MyMissionsResponse {
   missions: MyMissionDto[];
 }
 
-// ---- Inbox missions triage (coo:826, contract v118) -----------------------
+// ---- Inbox missions triage (coo:826 / coo:844, contract v120) -------------
 //
-// Bounded cross-workspace projection for the Inbox page: recently created
-// missions (non-agent Next excluded) plus agent-authored missions still in
-// status type `next`. Next-status rows are agent-authored only. Same
+// Bounded cross-workspace projection for the Inbox page: agent-authored
+// missions still in status type `next` only. Human-created missions never
+// appear here; unallocated captures use profile-owned `/api/inbox`. Same
 // membership / mission:read rule as My Missions and the activity feed.
-// Distinct from profile-owned `/api/inbox` capture items.
 
 /** Why a mission appears in `GET /api/inbox/missions`. */
 export type InboxMissionReason = 'recent' | 'agent_next';
@@ -2251,15 +2250,15 @@ export interface InboxMissionsResponse {
 
 // ---- Feed page activity (coo:757, coo:826) --------------------------------
 //
-// One bounded projection of live work across every workspace the caller
-// actively belongs to in the active organization — the same membership rule the
-// My Missions aggregate uses. The feed is mission-anchored: a mission running
-// work is one card listing all of its objectives, alongside the blocking
-// questions waiting on a person. Open vocabulary: a client that does not
-// recognize a `kind` renders nothing for that item rather than failing, so
-// adding a kind stays additive.
+// One bounded projection of live and recently delivered work across every
+// workspace the caller actively belongs to in the active organization — the
+// same membership rule the My Missions aggregate uses. The feed is
+// mission-anchored: a mission is one card listing all of its objectives,
+// alongside the blocking questions waiting on a person. Open vocabulary: a
+// client that does not recognize a `kind` renders nothing for that item rather
+// than failing, so adding a kind stays additive.
 
-export type ActivityFeedItemKind = 'mission_run' | 'blocking_question';
+export type ActivityFeedItemKind = 'mission_run' | 'mission_delivered' | 'blocking_question';
 
 /** Chrome every feed card shares: where the item happened and what it belongs to. */
 export interface ActivityFeedItemBaseDto {
@@ -2285,9 +2284,9 @@ export interface ActivityFeedItemBaseDto {
   /** `{mission.displayId}.{objective.displayKey}` when the item names an objective. */
   objectiveDisplayId: string | null;
   /**
-   * Who authored the item's subject — the mission for `mission_run`, the
-   * objective behind the ask for `blocking_question`. Same closed vocabulary and
-   * human fallback as `ObjectiveDto.createdByKind`.
+   * Who authored the item's subject — the mission for `mission_run` and
+   * `mission_delivered`, the objective behind the ask for `blocking_question`.
+   * Same closed vocabulary and human fallback as `ObjectiveDto.createdByKind`.
    */
   createdByKind: CreatedByKind;
   /** Connector that authored the subject, when `createdByKind` is `agent`. */
@@ -2314,23 +2313,25 @@ export interface ActivityFeedMissionObjectiveDto {
 }
 
 /**
- * A mission with at least one objective that is launching, executing, or
- * awaiting delivery right now — the feed's only run projection.
+ * A mission card on the feed: live work (`mission_run`) or a recently
+ * delivered mission (`mission_delivered`).
  *
  * The card is the mission, so the chrome fields (`objectiveId`,
  * `objectiveDisplayId`, agent, branch, `startedAt`, latest event) describe its
- * *primary* running objective: the launching one if the mission has one, else
- * the oldest active one. `pending_delivery` counts as live work here, matching
- * every other execution surface.
+ * *primary* objective: the launching one if the mission has one, else the
+ * oldest active one, else the objective behind the most recent delivery.
+ * `pending_delivery` counts as live work here, matching every other execution
+ * surface. A live mission is never also returned as `mission_delivered`.
  */
 export interface ActivityFeedMissionItemDto extends ActivityFeedItemBaseDto {
-  kind: 'mission_run';
+  kind: 'mission_run' | 'mission_delivered';
   /**
-   * Whether the mission is waiting for an agent to pick up work (`launching`)
-   * or has one running (`executing`). Feed order puts every `launching` mission
-   * above every `executing` one.
+   * Whether the mission is waiting for an agent to pick up work (`launching`),
+   * has one running (`executing`), or is on the feed because it recently
+   * delivered (`delivered`). Feed order puts every `launching` mission above
+   * every `executing` one, then questions, then `delivered`.
    */
-  runState: 'launching' | 'executing';
+  runState: 'launching' | 'executing' | 'delivered';
   /** Every objective of the mission, in mission-panel display order. */
   objectives: ActivityFeedMissionObjectiveDto[];
   /** Objective ids that are launching, executing, or pending delivery. */
@@ -2363,14 +2364,20 @@ export type ActivityFeedItemDto = ActivityFeedMissionItemDto | ActivityFeedQuest
 export interface ActivityFeedDto {
   /**
    * Grouped, not purely time-descending: every `mission_run` whose `runState` is
-   * `launching`, then every `executing` one, then the blocking questions. Each
-   * group is newest-first by `occurredAt`.
+   * `launching`, then every `executing` one, then the blocking questions, then
+   * `mission_delivered`. Each group is newest-first by `occurredAt`. A page
+   * loaded with `before` contains only the delivered group.
    */
   items: ActivityFeedItemDto[];
   /** Server clock, so elapsed-time rendering does not drift with a skewed client. */
   generatedAt: string;
   /** Per-kind totals *before* truncation, so the UI can be honest about caps. */
   counts: Record<string, number>;
+  /**
+   * Pass as `?before=` to load the next older two-week window of delivered
+   * missions. `null` when no delivered mission is older than this page's window.
+   */
+  nextBefore: string | null;
 }
 
 /**

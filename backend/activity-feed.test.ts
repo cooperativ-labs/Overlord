@@ -19,8 +19,8 @@ function newId(prefix: string): string {
 
 /**
  * Delivery rows are written by the protocol service, which needs a live agent
- * session. The feed only reads missions and asks now, so this exists solely to
- * prove a delivery never puts a card on the page.
+ * session. Tests seed them directly so the feed can project a delivered mission
+ * without going through attach/deliver.
  */
 function seedDelivery({
   workspaceId,
@@ -208,23 +208,137 @@ test('a launching objective makes its mission lead the feed, above executing mis
   );
 });
 
-test('deliveries never appear on the feed', async () => {
+test('a recent delivered mission appears as a mission card, not a delivery card', async () => {
   const project = await createProject({ name: 'AF Deliveries' });
   const mission = await createMission({ projectId: project.id, firstObjective: 'Deliver' });
   const objective = mission.objectives[0]!;
+  const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
   seedDelivery({
     workspaceId: mission.workspaceId,
     projectId: project.id,
     missionId: mission.id,
     objectiveId: objective.id,
     summary: 'Shipped it',
-    deliveredAt: '2026-08-20T00:00:00.000Z'
+    deliveredAt: threeDaysAgo
   });
 
   const feed = await listActivityFeed();
+  const item = feed.items.find(entry => entry.missionId === mission.id);
 
   assert.ok(!feed.items.some(entry => (entry.kind as string) === 'delivery'));
   assert.ok(!('delivery' in feed.counts));
+  assert.ok(item && item.kind === 'mission_delivered');
+  assert.equal(item.runState, 'delivered');
+  assert.equal(item.latestEventSummary, 'Shipped it');
+  assert.deepEqual(item.activeObjectiveIds, []);
+});
+
+test('a delivery older than two weeks stays off the first page', async () => {
+  const project = await createProject({ name: 'AF Aged Delivery' });
+  const mission = await createMission({ projectId: project.id, firstObjective: 'Old ship' });
+  const twentyDaysAgo = new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString();
+  seedDelivery({
+    workspaceId: mission.workspaceId,
+    projectId: project.id,
+    missionId: mission.id,
+    objectiveId: mission.objectives[0]!.id,
+    summary: 'Shipped last month',
+    deliveredAt: twentyDaysAgo
+  });
+
+  const feed = await listActivityFeed();
+  assert.ok(
+    !feed.items.some(entry => entry.missionId === mission.id),
+    'first page is only the last two weeks of deliveries'
+  );
+  assert.ok(feed.nextBefore, 'older delivered missions remain reachable by scrolling');
+});
+
+test('scrolling before loads the next two weeks of delivered missions', async () => {
+  const project = await createProject({ name: 'AF Scroll Delivery' });
+  const recent = await createMission({ projectId: project.id, firstObjective: 'Recent ship' });
+  const older = await createMission({ projectId: project.id, firstObjective: 'Older ship' });
+  const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+  const twentyDaysAgo = new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString();
+  seedDelivery({
+    workspaceId: recent.workspaceId,
+    projectId: project.id,
+    missionId: recent.id,
+    objectiveId: recent.objectives[0]!.id,
+    summary: 'This week',
+    deliveredAt: threeDaysAgo
+  });
+  seedDelivery({
+    workspaceId: older.workspaceId,
+    projectId: project.id,
+    missionId: older.id,
+    objectiveId: older.objectives[0]!.id,
+    summary: 'Three weeks ago',
+    deliveredAt: twentyDaysAgo
+  });
+
+  const first = await listActivityFeed();
+  assert.ok(first.items.some(entry => entry.missionId === recent.id));
+  assert.ok(!first.items.some(entry => entry.missionId === older.id));
+  assert.ok(first.nextBefore);
+
+  const second = await listActivityFeed({ before: first.nextBefore });
+  assert.ok(
+    second.items.some(entry => entry.missionId === older.id),
+    'the next two-week window includes the older delivery'
+  );
+  assert.ok(
+    !second.items.some(entry => entry.kind === 'mission_run' || entry.kind === 'blocking_question'),
+    'scrolled pages are delivered missions only'
+  );
+});
+
+test('a live mission with a delivery is one running card, not also a delivered card', async () => {
+  const project = await createProject({ name: 'AF Live And Delivered' });
+  const mission = await createMission({ projectId: project.id, firstObjective: 'Still going' });
+  const objective = mission.objectives[0]!;
+  await updateObjective(objective.id, { state: 'executing' });
+  seedDelivery({
+    workspaceId: mission.workspaceId,
+    projectId: project.id,
+    missionId: mission.id,
+    objectiveId: objective.id,
+    summary: 'Partial ship',
+    deliveredAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString()
+  });
+
+  const feed = await listActivityFeed();
+  const cards = feed.items.filter(entry => entry.missionId === mission.id);
+  assert.equal(cards.length, 1);
+  assert.equal(cards[0]!.kind, 'mission_run');
+  assert.equal(cards[0]!.kind === 'mission_run' && cards[0]!.runState, 'executing');
+});
+
+test('the most recent delivery decides which two-week window a mission belongs to', async () => {
+  const project = await createProject({ name: 'AF Latest Delivery' });
+  const mission = await createMission({ projectId: project.id, firstObjective: 'Follow-up' });
+  const objective = mission.objectives[0]!;
+  seedDelivery({
+    workspaceId: mission.workspaceId,
+    projectId: project.id,
+    missionId: mission.id,
+    objectiveId: objective.id,
+    summary: 'First ship',
+    deliveredAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString()
+  });
+  seedDelivery({
+    workspaceId: mission.workspaceId,
+    projectId: project.id,
+    missionId: mission.id,
+    objectiveId: objective.id,
+    summary: 'Follow-up ship',
+    deliveredAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString()
+  });
+
+  const feed = await listActivityFeed();
+  const item = feed.items.find(entry => entry.missionId === mission.id);
+  assert.ok(item && item.kind === 'mission_delivered');
+  assert.equal(item.latestEventSummary, 'Follow-up ship');
 });
 
 test('an unseen blocking question surfaces and a seen one drops out', async () => {

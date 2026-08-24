@@ -6,6 +6,7 @@ import type {
 import type { LinkProjectGitHubBody } from '@overlord/contract/ext/github';
 import {
   type QueryClient,
+  useInfiniteQuery,
   useMutation,
   useQueries,
   useQuery,
@@ -1414,11 +1415,14 @@ export function useInboxMissions() {
  * Cross-workspace objective activity for the Feed page. Freshness comes from the
  * realtime change link invalidating `keys.activityFeed`, not from polling — the
  * `refetchOnWindowFocus` default is the only fallback for a dropped stream.
+ * Older delivered missions load two weeks at a time as the operator scrolls.
  */
 export function useActivityFeed() {
-  return useQuery<ActivityFeedDto>({
+  return useInfiniteQuery({
     queryKey: keys.activityFeed,
-    queryFn: api.getActivityFeed
+    queryFn: ({ pageParam }: { pageParam: string | null }) => api.getActivityFeed(pageParam),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage: ActivityFeedDto) => lastPage.nextBefore
   });
 }
 

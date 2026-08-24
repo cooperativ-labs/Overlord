@@ -110,6 +110,8 @@ changed:
   commands, transcripts, environment values, fingerprints, or absolute host paths.
 - `.overlordignore` patterns are applied before ledger insertion. Matching paths never enter the
   ledger or reach the backend.
+- Paths under `.overlord/` are always excluded at the same boundary, including ephemeral runtime
+  files and `project.json`.
 - `sync-changes` processes bounded batches independently. Invalid items become warnings; valid
   siblings persist. Sync and hook failures are advisory and cannot reject delivery.
 - Run `ovld protocol changes --objective-id <id>` to drain the ledger and inspect

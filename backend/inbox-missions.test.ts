@@ -22,7 +22,7 @@ test.after(() => {
   rmSync(tempDir, { recursive: true, force: true });
 });
 
-test('listInboxMissions includes recently created non-Next missions', async () => {
+test('listInboxMissions omits recently created human non-Next missions', async () => {
   const project = await createProject({ name: 'Inbox recent project' });
   const execute = await statusFor(project.id, 'in_progress');
   const mission = await createMission({
@@ -33,11 +33,11 @@ test('listInboxMissions includes recently created non-Next missions', async () =
   });
 
   const response = await listInboxMissions();
-  const found = response.missions.find(item => item.id === mission.id);
-  assert.ok(found, 'expected recent mission in inbox list');
-  assert.ok(found.reasons.includes('recent'));
-  assert.equal(found.projectName, 'Inbox recent project');
-  assert.equal(found.statusType, 'execute');
+  assert.equal(
+    response.missions.some(item => item.id === mission.id),
+    false,
+    'human missions must not appear in inbox triage regardless of status or age'
+  );
 });
 
 test('listInboxMissions omits human Next missions even when recent', async () => {

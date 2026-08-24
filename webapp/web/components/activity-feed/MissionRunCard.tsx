@@ -17,7 +17,7 @@ import type {
 import { cn } from '../../lib/utils.ts';
 import { AgentIcon } from '../objectives/AgentIcon.tsx';
 
-import { elapsedLabel, isInFlightObjectiveState } from './activity-feed-model.ts';
+import { elapsedLabel, isInFlightObjectiveState, relativeTime } from './activity-feed-model.ts';
 import {
   ActivityFeedAgentLine,
   ActivityFeedCardMeta,
@@ -91,9 +91,8 @@ function MissionObjectiveRow({ objective }: { objective: ActivityFeedMissionObje
 }
 
 /**
- * A mission with live work: launching, executing, or awaiting delivery. The card
- * is the mission and the rows beneath it are its whole plan, so an operator can
- * see both what is running and what it sits between. The whole header is the
+ * A mission on the feed: live work, or a recent delivery. The card is the
+ * mission and the rows beneath it are its whole plan. The whole header is the
  * button that opens the mission panel — the answer to "what is this agent doing"
  * lives there, not on a nested control.
  */
@@ -106,8 +105,10 @@ export function MissionRunCard({
   nowIso: string;
   onOpenMission: (args: { missionId: string; objectiveDisplayId?: string | null }) => void;
 }) {
+  const delivered = item.runState === 'delivered';
   const launching = item.runState === 'launching';
-  const elapsed = elapsedLabel(item.startedAt, nowIso);
+  const elapsed = delivered ? '' : elapsedLabel(item.startedAt, nowIso);
+  const deliveredAgo = delivered ? relativeTime(item.occurredAt, nowIso) : '';
 
   return (
     <article className="relative shrink-0 overflow-hidden rounded-xl border border-(--color-border) bg-(--color-surface-1) transition-shadow hover:shadow-lg">
@@ -134,21 +135,28 @@ export function MissionRunCard({
                 <Clock className="size-3" aria-hidden="true" />
                 {elapsed}
               </span>
+            ) : deliveredAgo ? (
+              <span className="inline-flex items-center gap-1">
+                <Clock className="size-3" aria-hidden="true" />
+                {deliveredAgo}
+              </span>
             ) : null
           }
         />
 
         <div className="flex min-w-0 items-center gap-2">
           <KindBadge
-            tone={launching ? 'launching' : 'running'}
+            tone={delivered ? 'delivered' : launching ? 'launching' : 'running'}
             icon={
-              launching ? (
+              delivered ? (
+                <CheckCircle2 className="size-3" aria-hidden="true" />
+              ) : launching ? (
                 <Rocket className="size-3" aria-hidden="true" />
               ) : (
                 <Loader2 className="size-3 animate-spin" aria-hidden="true" />
               )
             }
-            label={launching ? 'launching' : 'executing'}
+            label={delivered ? 'delivered' : launching ? 'launching' : 'executing'}
           />
           <h3 className="min-w-0 flex-1 truncate text-base font-semibold text-(--color-ink)">
             {item.missionTitle}

@@ -1370,12 +1370,16 @@ app.patch(
 // workspace selection.
 app.get(
   '/api/activity-feed',
-  handle(() => listActivityFeed())
+  handle(req =>
+    listActivityFeed({
+      before: typeof req.query.before === 'string' ? req.query.before : null
+    })
+  )
 );
 
 // ---- Inbox missions triage (cross-workspace) ------------------------------
-// Recently created + agent-authored Next missions for the Inbox page. Same
-// membership / mission:read fan-out as My Missions and the activity feed.
+// Agent-authored Next missions for the Inbox page. Same membership /
+// mission:read fan-out as My Missions and the activity feed.
 app.get(
   '/api/inbox/missions',
   handle(() => listInboxMissions())

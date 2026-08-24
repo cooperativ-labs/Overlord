@@ -589,7 +589,15 @@ export const api = {
   listInboxItems: () => request<InboxItemDto[]>('GET', '/api/inbox'),
   /** Cross-workspace recent + agent-Next missions for the Inbox column (coo:826). */
   listInboxMissions: () => request<InboxMissionsResponse>('GET', '/api/inbox/missions'),
-  getActivityFeed: () => request<ActivityFeedDto>('GET', '/api/activity-feed'),
+  getActivityFeed: (before?: string | null) => {
+    const params = new URLSearchParams();
+    if (before) params.set('before', before);
+    const query = params.toString();
+    return request<ActivityFeedDto>(
+      'GET',
+      `/api/activity-feed${query ? `?${query}` : ''}`
+    );
+  },
   createInboxItem: (body: CreateInboxItemBody) => request<InboxItemDto>('POST', '/api/inbox', body),
   updateInboxItem: (id: string, body: UpdateInboxItemBody) =>
     request<InboxItemDto>('PATCH', `/api/inbox/${id}`, body),

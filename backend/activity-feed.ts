@@ -13,6 +13,7 @@ import type {
 } from '../webapp/shared/contract.ts';
 
 import { requireDatabaseClient } from './db.ts';
+import { ApiError } from './errors.ts';
 import { requireWorkspacePermission } from './rbac.ts';
 import { callerMembershipsInActiveOrganization, readProjectColor } from './repository.ts';
 
@@ -27,6 +28,9 @@ const QUESTION_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 const FEED_LIMIT = 40;
 const INSTRUCTION_PREVIEW_CHARS = 400;
 const EVENT_SUMMARY_CHARS = 240;
+/** First page, and each scroll page, of delivered missions. */
+const DELIVERED_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 /** Objective states that make a mission live work worth a feed card. */
 const RUNNING_STATES = ['launching', 'executing', 'pending_delivery'] as const;
@@ -106,6 +110,23 @@ interface QuestionRow extends FeedContextRow {
   summary: string;
   created_at: string;
   agent_identifier: string | null;
+}
+
+/** Latest delivery of a mission that is not currently running. */
+interface DeliveredRow extends FeedContextRow {
+  delivery_id: string;
+  delivery_summary: string;
+  delivered_at: string;
+  objective_id: string;
+  objective_display_key: string;
+  objective_title: string | null;
+  instruction_text: string | null;
+  branch: string | null;
+  resource_key: string | null;
+  assigned_agent: string | null;
+  model: string | null;
+  session_agent_identifier: string | null;
+  session_model_identifier: string | null;
 }
 
 /**
@@ -324,6 +345,138 @@ async function loadQuestions(workspaceIds: string[]): Promise<QuestionRow[]> {
   )) as QuestionRow[];
 }
 
+function twoWeeksBefore(iso: string): string {
+  return new Date(Date.parse(iso) - DELIVERED_WINDOW_MS).toISOString();
+}
+
+function parseFeedBefore(value: string | null | undefined): string | null {
+  if (typeof value !== 'string' || value.trim() === '') return null;
+  const trimmed = value.trim();
+  if (!ISO_UTC.test(trimmed)) {
+    throw new ApiError(400, 'before must be an ISO-8601 UTC timestamp');
+  }
+  return trimmed;
+}
+
+/**
+ * The latest live delivery row for each mission whose most recent delivery
+ * falls in `(windowStart, windowEnd]`, excluding missions that still have live
+ * work — those already have a `mission_run` card.
+ */
+async function loadDelivered({
+  workspaceIds,
+  windowStart,
+  windowEnd
+}: {
+  workspaceIds: string[];
+  windowStart: string;
+  windowEnd: string;
+}): Promise<DeliveredRow[]> {
+  return (await requireDatabaseClient().all(
+    `SELECT ${CONTEXT_COLUMNS}, ${MISSION_PROVENANCE_COLUMNS},
+            d.id AS delivery_id, d.summary AS delivery_summary, d.delivered_at,
+            o.id AS objective_id, o.display_key AS objective_display_key,
+            o.title AS objective_title, o.instruction_text,
+            o.branch, o.resource_key, o.assigned_agent, o.model,
+            s.agent_identifier AS session_agent_identifier,
+            s.model_identifier AS session_model_identifier
+       FROM deliveries d
+       JOIN objectives o ON o.id = d.objective_id AND o.deleted_at IS NULL
+       ${CONTEXT_JOIN}
+       LEFT JOIN agent_sessions s ON s.id = d.session_id AND s.deleted_at IS NULL
+      WHERE d.deleted_at IS NULL
+        AND d.workspace_id IN (${placeholders(workspaceIds.length)})
+        AND d.delivered_at > ?
+        AND d.delivered_at <= ?
+        AND d.id = (
+          SELECT x.id FROM deliveries x
+           WHERE x.mission_id = d.mission_id
+             AND x.deleted_at IS NULL
+           ORDER BY x.delivered_at DESC, x.id DESC
+           LIMIT 1
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM objectives live
+           WHERE live.mission_id = d.mission_id
+             AND live.deleted_at IS NULL
+             AND live.state IN (${placeholders(RUNNING_STATES.length)})
+        )
+      ORDER BY d.delivered_at DESC, d.id DESC`,
+    [...workspaceIds, windowStart, windowEnd, ...RUNNING_STATES]
+  )) as DeliveredRow[];
+}
+
+async function latestDeliveredAtOnOrBefore({
+  workspaceIds,
+  onOrBefore
+}: {
+  workspaceIds: string[];
+  onOrBefore: string;
+}): Promise<string | null> {
+  const row = (await requireDatabaseClient().get(
+    `SELECT MAX(d.delivered_at) AS latest
+       FROM deliveries d
+      WHERE d.deleted_at IS NULL
+        AND d.workspace_id IN (${placeholders(workspaceIds.length)})
+        AND d.delivered_at <= ?
+        AND d.id = (
+          SELECT x.id FROM deliveries x
+           WHERE x.mission_id = d.mission_id
+             AND x.deleted_at IS NULL
+           ORDER BY x.delivered_at DESC, x.id DESC
+           LIMIT 1
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM objectives live
+           WHERE live.mission_id = d.mission_id
+             AND live.deleted_at IS NULL
+             AND live.state IN (${placeholders(RUNNING_STATES.length)})
+        )`,
+    [...workspaceIds, onOrBefore, ...RUNNING_STATES]
+  )) as { latest: string | null } | undefined;
+  return row?.latest ?? null;
+}
+
+async function hasOlderDelivered({
+  workspaceIds,
+  onOrBefore
+}: {
+  workspaceIds: string[];
+  onOrBefore: string;
+}): Promise<boolean> {
+  return (await latestDeliveredAtOnOrBefore({ workspaceIds, onOrBefore })) !== null;
+}
+
+/**
+ * One two-week window of delivered missions ending at `windowEnd`.
+ *
+ * The first page (`skipEmpty: false`) stays strictly inside that window even
+ * when it is empty, so "the last two weeks" means that. A scroll page may jump
+ * backward over an empty calendar hole so the operator actually sees missions.
+ */
+async function loadDeliveredPage({
+  workspaceIds,
+  windowEnd,
+  skipEmpty
+}: {
+  workspaceIds: string[];
+  windowEnd: string;
+  skipEmpty: boolean;
+}): Promise<{ rows: DeliveredRow[]; nextBefore: string | null }> {
+  let end = windowEnd;
+  let start = twoWeeksBefore(end);
+  let rows = await loadDelivered({ workspaceIds, windowStart: start, windowEnd: end });
+  if (rows.length === 0 && skipEmpty) {
+    const olderAt = await latestDeliveredAtOnOrBefore({ workspaceIds, onOrBefore: start });
+    if (!olderAt) return { rows: [], nextBefore: null };
+    end = olderAt;
+    start = twoWeeksBefore(end);
+    rows = await loadDelivered({ workspaceIds, windowStart: start, windowEnd: end });
+  }
+  const older = await hasOlderDelivered({ workspaceIds, onOrBefore: start });
+  return { rows, nextBefore: older ? start : null };
+}
+
 /**
  * The objective a mission card speaks for.
  *
@@ -407,6 +560,51 @@ function toMissionItem({
   };
 }
 
+function toDeliveredMissionItem({
+  row,
+  objectiveRows
+}: {
+  row: DeliveredRow;
+  objectiveRows: MissionObjectiveRow[];
+}): ActivityFeedMissionItemDto {
+  const ordered = sortObjectivesForMissionDisplay(
+    objectiveRows.map(objective => ({
+      id: objective.objective_id,
+      position: objective.position,
+      state: objective.state,
+      instructionText: objective.instruction_text ?? '',
+      autoAdvance: objective.auto_advance === 1,
+      assignedAgent: objective.assigned_agent,
+      createdAt: objective.created_at,
+      launchedAt: objective.launched_at,
+      startedAt: objective.started_at,
+      completedAt: objective.completed_at,
+      row: objective
+    }))
+  );
+
+  return {
+    id: `mission:${row.mission_id}`,
+    kind: 'mission_delivered',
+    occurredAt: row.delivered_at,
+    ...baseFields(row),
+    objectiveId: row.objective_id,
+    objectiveDisplayId: objectiveDisplayId(row.mission_display_id, row.objective_display_key),
+    runState: 'delivered',
+    objectives: ordered.map(entry => toMissionObjective(entry.row)),
+    activeObjectiveIds: [],
+    objectiveTitle: row.objective_title,
+    instructionPreview: truncate(row.instruction_text, INSTRUCTION_PREVIEW_CHARS),
+    agentIdentifier: resolveAgentIdentifier(row.session_agent_identifier, row.assigned_agent),
+    modelIdentifier: row.session_model_identifier ?? row.model,
+    branch: row.branch,
+    resourceKey: row.resource_key?.trim() || null,
+    startedAt: null,
+    latestEventSummary: truncate(row.delivery_summary, EVENT_SUMMARY_CHARS),
+    latestEventAt: row.delivered_at
+  };
+}
+
 function toQuestionItem(row: QuestionRow): ActivityFeedQuestionItemDto {
   return {
     id: `ask:${row.event_id}`,
@@ -428,26 +626,69 @@ function newestFirst(a: ActivityFeedItemDto, b: ActivityFeedItemDto): number {
 }
 
 /**
- * One bounded read of the work that is live right now, across every workspace the
- * caller can read missions in.
+ * One bounded read of live work, recent deliveries, and blocking questions
+ * across every workspace the caller can read missions in.
  *
- * The result is grouped rather than purely time-descending: launching missions
- * lead, then executing ones, then the blocking questions. A launching mission is
- * the one thing on this page nobody is working on yet, so it is what should be
- * seen first, and a strict timestamp sort would bury it under a chatty run.
- * Deliveries are deliberately absent — finished work belongs on the mission, not
- * on a page about what is happening now (coo:826).
+ * The first page is grouped rather than purely time-descending: launching
+ * missions lead, then executing ones, then blocking questions, then delivered
+ * missions whose most recent delivery is within the past two weeks. A launching
+ * mission is the one thing on this page nobody is working on yet, so it is what
+ * should be seen first. `before` pages drop live work and questions and return
+ * the next older two-week window of delivered missions.
  */
-export async function listActivityFeed(): Promise<ActivityFeedDto> {
+export async function listActivityFeed({
+  before
+}: {
+  before?: string | null;
+} = {}): Promise<ActivityFeedDto> {
   const generatedAt = new Date().toISOString();
+  const empty = {
+    items: [] as ActivityFeedItemDto[],
+    generatedAt,
+    counts: { mission_run: 0, blocking_question: 0, mission_delivered: 0 },
+    nextBefore: null as string | null
+  };
   const workspaceIds = await readableWorkspaceIds();
-  if (workspaceIds.length === 0) {
-    return { items: [], generatedAt, counts: { mission_run: 0, blocking_question: 0 } };
+  if (workspaceIds.length === 0) return empty;
+
+  const parsedBefore = parseFeedBefore(before);
+  const paging = parsedBefore !== null;
+  const windowEnd =
+    paging && parsedBefore < generatedAt ? parsedBefore : generatedAt;
+
+  const deliveredPagePromise = loadDeliveredPage({
+    workspaceIds,
+    windowEnd,
+    skipEmpty: paging
+  });
+
+  if (paging) {
+    const deliveredPage = await deliveredPagePromise;
+    const objectivesByMission = await loadMissionObjectives(
+      deliveredPage.rows.map(row => row.mission_id)
+    );
+    const deliveredItems = deliveredPage.rows.map(row =>
+      toDeliveredMissionItem({
+        row,
+        objectiveRows: objectivesByMission.get(row.mission_id) ?? []
+      })
+    );
+    return {
+      items: deliveredItems,
+      generatedAt,
+      counts: {
+        mission_run: 0,
+        blocking_question: 0,
+        mission_delivered: deliveredPage.rows.length
+      },
+      nextBefore: deliveredPage.nextBefore
+    };
   }
 
-  const [allRuns, questions] = await Promise.all([
+  const [allRuns, questions, deliveredPage] = await Promise.all([
     loadRuns(workspaceIds),
-    loadQuestions(workspaceIds)
+    loadQuestions(workspaceIds),
+    deliveredPagePromise
   ]);
 
   // Group first, cap second: the bound is on cards, and one mission running three
@@ -460,12 +701,13 @@ export async function listActivityFeed(): Promise<ActivityFeedDto> {
   }
   const missionCount = runsByMission.size;
   const missionIds = [...runsByMission.keys()].slice(0, MISSION_LIMIT);
+  const deliveredMissionIds = deliveredPage.rows.map(row => row.mission_id);
 
   const primaryByMission = new Map(
     missionIds.map(missionId => [missionId, pickPrimaryRun(runsByMission.get(missionId)!)])
   );
   const [objectivesByMission, latestByObjective] = await Promise.all([
-    loadMissionObjectives(missionIds),
+    loadMissionObjectives([...new Set([...missionIds, ...deliveredMissionIds])]),
     loadLatestEvents([...primaryByMission.values()].map(run => run.objective_id))
   ]);
 
@@ -476,16 +718,30 @@ export async function listActivityFeed(): Promise<ActivityFeedDto> {
       latest: latestByObjective.get(primaryByMission.get(missionId)!.objective_id)
     })
   );
+  const deliveredItems = deliveredPage.rows.map(row =>
+    toDeliveredMissionItem({
+      row,
+      objectiveRows: objectivesByMission.get(row.mission_id) ?? []
+    })
+  );
 
   const launching = missionItems.filter(item => item.runState === 'launching').sort(newestFirst);
   const executing = missionItems.filter(item => item.runState === 'executing').sort(newestFirst);
   const questionItems = questions.map(toQuestionItem).sort(newestFirst);
 
   return {
-    items: [...launching, ...executing, ...questionItems].slice(0, FEED_LIMIT),
+    items: [
+      ...[...launching, ...executing, ...questionItems].slice(0, FEED_LIMIT),
+      ...deliveredItems
+    ],
     generatedAt,
     // Pre-truncation totals, so the client can say "7 of 12" instead of implying
     // the list is everything there is.
-    counts: { mission_run: missionCount, blocking_question: questions.length }
+    counts: {
+      mission_run: missionCount,
+      blocking_question: questions.length,
+      mission_delivered: deliveredPage.rows.length
+    },
+    nextBefore: deliveredPage.nextBefore
   };
 }

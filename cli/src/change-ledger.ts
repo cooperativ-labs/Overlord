@@ -1,5 +1,6 @@
 import {
   isExactEvidencePath,
+  isOverlordManagedEvidencePath,
   MAX_EVIDENCE_PATH_LENGTH
 } from '@overlord/core/service/agent-session/pure/evidence-path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -361,6 +362,7 @@ function normalizeWorkspacePath({
   }
   if (relative.length > MAX_EVIDENCE_PATH_LENGTH) return { reason: 'path_too_long' };
   if (!isExactEvidencePath(relative)) return { reason: 'invalid_path' };
+  if (isOverlordManagedEvidencePath(relative)) return { reason: 'ignored_path' };
   if (isIgnoredPath(ignoreRules, relative)) return { reason: 'ignored_path' };
   return { filePath: relative };
 }

@@ -16,6 +16,11 @@ function hasUnsafePathCharacters(value: string): boolean {
   return hasControlCharacters(value) || value.includes('\\');
 }
 
+/** Paths under the checkout-local `.overlord/` directory are never reported as file changes. */
+export function isOverlordManagedEvidencePath(filePath: string): boolean {
+  return filePath === '.overlord' || filePath.startsWith('.overlord/');
+}
+
 /** Validate an already-relative evidence path without rewriting its literal filename. */
 export function isExactEvidencePath(value: unknown): value is string {
   if (typeof value !== 'string') return false;

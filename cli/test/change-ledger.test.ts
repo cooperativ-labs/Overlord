@@ -83,6 +83,41 @@ test('objective/session ledgers in one cwd cannot reset or read each other', () 
   assert.deepEqual(readUnsyncedChangeEvidence(right), []);
 });
 
+test('overlord-managed paths are never recorded in the objective ledger', () => {
+  const { workspace } = isolatedWorkspace('ovld-ledger-overlord');
+  mkdirSync(path.join(workspace, '.overlord', 'tmp'), { recursive: true });
+  writeFileSync(path.join(workspace, '.overlord', 'tmp', 'launch.sh'), '#!/bin/sh\n');
+  writeFileSync(path.join(workspace, '.overlord', 'project.json'), '{}\n');
+  const identity = {
+    workingDirectory: workspace,
+    objectiveId: 'objective-overlord',
+    sessionKey: 'sess_overlord'
+  };
+  resetChangeLedger(identity);
+
+  const appended = appendChangeEvidence({
+    ...identity,
+    filePaths: [
+      '.overlord/tmp/launch.sh',
+      '.overlord/project.json',
+      '.overlord/logs/runner.log',
+      'src/accepted.ts'
+    ],
+    source: 'declared_edit'
+  });
+
+  assert.equal(appended, 1);
+  assert.deepEqual(
+    readUnsyncedChangeEvidence(identity).map(entry => entry.filePath),
+    ['src/accepted.ts']
+  );
+  assert.ok(
+    readChangeLedgerHealth(identity)
+      .map(entry => entry.code)
+      .includes('ignored_path:3')
+  );
+});
+
 test('insertion stores only bounded workspace-relative non-ignored paths and readable health', () => {
   const { workspace } = isolatedWorkspace('ovld-ledger-policy');
   const outsideDirectory = mkdtempSync(path.join(os.tmpdir(), 'ovld-ledger-outside-'));

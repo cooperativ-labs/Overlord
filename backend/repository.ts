@@ -6543,9 +6543,7 @@ export async function listWorkspaceMyMissions(): Promise<MyMissionsResponse> {
 
 /** Rolling window for "recently created" on the Inbox missions list (coo:826). */
 const INBOX_MISSION_RECENT_MS = 7 * 24 * 60 * 60 * 1000;
-const INBOX_MISSION_RECENT_LIMIT = 40;
-const INBOX_MISSION_AGENT_NEXT_LIMIT = 40;
-const INBOX_MISSION_TOTAL_LIMIT = 60;
+const INBOX_MISSION_AGENT_NEXT_LIMIT = 60;
 
 interface InboxMissionRow extends MissionRow {
   project_name: string;
@@ -6610,11 +6608,12 @@ function toInboxMissionDto(
 }
 
 /**
- * GET /api/inbox/missions — recently created missions (past 7 days; non-agent
- * Next excluded) union agent-authored missions in status type `next`, across
- * every workspace the caller may `mission:read` in the active organization.
- * Next-status rows are agent-authored only. Sorted newest-first; truncated
- * after merge. Distinct from profile-owned `/api/inbox` capture.
+ * GET /api/inbox/missions — agent-authored missions in status type `next`
+ * across every workspace the caller may `mission:read` in the active
+ * organization. Human-created missions never appear here; unallocated captures
+ * live on profile-owned `/api/inbox`. Sorted newest-first; capped. Rows
+ * created within the rolling recent window carry a `recent` reason for UI
+ * labeling only.
  */
 export async function listInboxMissions(): Promise<InboxMissionsResponse> {
   const generatedAt = new Date().toISOString();
@@ -6639,16 +6638,6 @@ export async function listInboxMissions(): Promise<InboxMissionsResponse> {
   const client = requireDatabaseClient();
   const baseSql = selectInboxMissionsSql(workspacePlaceholders);
 
-  // Recent window must not leak human/other Next missions — Next is agent-only.
-  const recentRows = (await client.all(
-    `${baseSql}
-       AND t.created_at >= ?
-       AND (t.status_type != 'next' OR t.created_by_kind = 'agent')
-     ORDER BY t.created_at DESC, t.sequence_number DESC, t.id ASC
-     LIMIT ?`,
-    [...readableWorkspaceIds, recentCutoff, INBOX_MISSION_RECENT_LIMIT]
-  )) as InboxMissionRow[];
-
   const agentNextRows = (await client.all(
     `${baseSql}
        AND t.created_by_kind = 'agent'
@@ -6658,41 +6647,16 @@ export async function listInboxMissions(): Promise<InboxMissionsResponse> {
     [...readableWorkspaceIds, INBOX_MISSION_AGENT_NEXT_LIMIT]
   )) as InboxMissionRow[];
 
-  const byId = new Map<string, { row: InboxMissionRow; reasons: Set<InboxMissionReason> }>();
-  for (const row of recentRows) {
-    const existing = byId.get(row.id);
-    if (existing) {
-      existing.reasons.add('recent');
-    } else {
-      byId.set(row.id, { row, reasons: new Set<InboxMissionReason>(['recent']) });
-    }
-  }
-  for (const row of agentNextRows) {
-    const existing = byId.get(row.id);
-    if (existing) {
-      existing.reasons.add('agent_next');
-    } else {
-      byId.set(row.id, { row, reasons: new Set<InboxMissionReason>(['agent_next']) });
-    }
-  }
-
-  const merged = [...byId.values()].sort((a, b) => {
-    if (a.row.created_at !== b.row.created_at) {
-      return a.row.created_at < b.row.created_at ? 1 : -1;
-    }
-    if (a.row.sequence_number !== b.row.sequence_number) {
-      return b.row.sequence_number - a.row.sequence_number;
-    }
-    return a.row.id < b.row.id ? -1 : a.row.id > b.row.id ? 1 : 0;
-  });
-
-  const limited = merged.slice(0, INBOX_MISSION_TOTAL_LIMIT);
-  const tagsByMission = await getTagsByMission(limited.map(entry => entry.row.id));
+  const tagsByMission = await getTagsByMission(agentNextRows.map(row => row.id));
   return {
     generatedAt,
-    missions: limited.map(entry =>
-      toInboxMissionDto(entry.row, tagsByMission.get(entry.row.id) ?? [], [...entry.reasons])
-    )
+    missions: agentNextRows.map(row => {
+      const reasons: InboxMissionReason[] = ['agent_next'];
+      if (row.created_at >= recentCutoff) {
+        reasons.push('recent');
+      }
+      return toInboxMissionDto(row, tagsByMission.get(row.id) ?? [], reasons);
+    })
   };
 }
 

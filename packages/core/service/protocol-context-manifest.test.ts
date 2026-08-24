@@ -348,4 +348,57 @@ describe('protocol context manifest', () => {
     });
     await db.close();
   });
+
+  it('syncChanges rejects overlord-managed paths without persisting them', async () => {
+    const { db, ctx } = await createSeededServiceContext();
+    const project = await createProject({ ctx, name: 'Overlord path filter' });
+    const { mission, objectives } = await createMissionWithObjectives({
+      ctx,
+      projectId: project.id,
+      objectives: [{ objective: 'Ignore overlord paths' }]
+    });
+    await db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [objectives[0]?.id]);
+    const attached = await attachSession({
+      ctx,
+      missionId: mission.id,
+      agentIdentifier: 'test-agent'
+    });
+
+    const result = await syncChanges({
+      ctx,
+      missionId: mission.id,
+      sessionKey: attached.sessionKey,
+      changes: [
+        {
+          filePath: '.overlord/tmp/launch.sh',
+          idempotencyKey: 'overlord-tmp',
+          source: 'declared_edit',
+          quality: 'direct'
+        },
+        {
+          filePath: 'src/accepted.ts',
+          idempotencyKey: 'accepted',
+          source: 'declared_edit',
+          quality: 'direct'
+        }
+      ]
+    });
+
+    assert.deepEqual(
+      result.outcomes.map(entry => [entry.filePath, entry.status, entry.warning]),
+      [
+        ['.overlord/tmp/launch.sh', 'warning', 'filePath is excluded from change reporting'],
+        ['src/accepted.ts', 'accepted', undefined]
+      ]
+    );
+    const rows = (await db.all(
+      `SELECT file_path FROM changed_files WHERE objective_id = ? ORDER BY file_path`,
+      [attached.session.objectiveId]
+    )) as Array<{ file_path: string }>;
+    assert.deepEqual(
+      rows.map(row => row.file_path),
+      ['src/accepted.ts']
+    );
+    await db.close();
+  });
 });
