@@ -58,7 +58,8 @@ export function ActivityFeed({
 }: {
   onOpenMission: (args: { missionId: string; objectiveDisplayId?: string | null }) => void;
 }) {
-  const feed = useActivityFeed();
+  const { data, error, fetchNextPage, hasNextPage, isError, isFetchingNextPage, isLoading } =
+    useActivityFeed();
   const [enabledKinds, setEnabledKinds] = useState<Set<string>>(() => new Set(FEED_KINDS));
   const [projectId, setProjectId] = useState<string | null>(null);
   // Elapsed/relative labels advance between refetches by walking a local clock
@@ -72,7 +73,7 @@ export function ActivityFeed({
     return () => window.clearInterval(timer);
   }, []);
 
-  const pages = feed.data?.pages ?? [];
+  const pages = useMemo(() => data?.pages ?? [], [data?.pages]);
   const items = useMemo(() => pages.flatMap(page => page.items), [pages]);
   const projects = useMemo(() => feedProjectOptions(items), [items]);
   const generatedAt = pages[0]?.generatedAt;
@@ -100,19 +101,19 @@ export function ActivityFeed({
   useEffect(() => {
     const root = scrollRef.current;
     const sentinel = sentinelRef.current;
-    if (!root || !sentinel || !feed.hasNextPage) return;
+    if (!root || !sentinel || !hasNextPage) return;
 
     const observer = new IntersectionObserver(
       entries => {
         if (!entries.some(entry => entry.isIntersecting)) return;
-        if (feed.isFetchingNextPage || !feed.hasNextPage) return;
-        void feed.fetchNextPage();
+        if (isFetchingNextPage || !hasNextPage) return;
+        void fetchNextPage();
       },
       { root, rootMargin: '200px', threshold: 0 }
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [feed.fetchNextPage, feed.hasNextPage, feed.isFetchingNextPage, items.length]);
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage, items.length]);
 
   const toggleKind = (kind: string) => {
     setEnabledKinds(current => {
@@ -129,7 +130,7 @@ export function ActivityFeed({
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="font-mono text-[11px] font-medium uppercase tracking-[0.24em] text-(--color-ink-dim)">
-              Missions in flight
+              Live and recently delivered
             </p>
             <h1 className="text-xl font-semibold tracking-tight">Feed</h1>
           </div>
@@ -201,15 +202,15 @@ export function ActivityFeed({
       {/* Scroll the pane; keep the stack unconstrained so overflow-hidden cards do not shrink. */}
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto bg-(--color-surface-2) p-4">
         <div className="flex flex-col gap-3">
-          {feed.isLoading ? (
+          {isLoading ? (
             <div className="flex justify-center py-8">
               <Spinner />
             </div>
-          ) : feed.isError ? (
+          ) : isError ? (
             <p className="text-sm text-red-400">
-              Could not load activity: {(feed.error as Error)?.message ?? 'unknown error'}
+              Could not load activity: {(error as Error)?.message ?? 'unknown error'}
             </p>
-          ) : visible.length === 0 && items.length === 0 && !feed.hasNextPage ? (
+          ) : visible.length === 0 && items.length === 0 && !hasNextPage ? (
             <div className="rounded-xl border border-dashed border-(--color-border) p-6 text-center">
               <p className="text-sm font-medium text-(--color-ink)">No missions to show</p>
               <p className="mt-1 text-xs text-(--color-ink-dim)">
@@ -219,7 +220,9 @@ export function ActivityFeed({
             </div>
           ) : visible.length === 0 && items.length > 0 ? (
             <div className="rounded-xl border border-dashed border-(--color-border) p-6 text-center">
-              <p className="text-sm font-medium text-(--color-ink)">Nothing matches these filters</p>
+              <p className="text-sm font-medium text-(--color-ink)">
+                Nothing matches these filters
+              </p>
               <p className="mt-1 text-xs text-(--color-ink-dim)">
                 Turn a filter back on to see running missions, questions, or deliveries again.
               </p>
@@ -254,14 +257,13 @@ export function ActivityFeed({
             <p className="pb-2 text-center text-[11px] text-(--color-ink-dim)">{truncated}</p>
           ) : null}
 
-          {feed.hasNextPage || feed.isFetchingNextPage ? (
-            <div ref={sentinelRef} className="flex justify-center py-3">
-              {feed.isFetchingNextPage ? <Spinner /> : null}
+          {hasNextPage || isFetchingNextPage ? (
+            <div ref={sentinelRef} className="flex flex-col items-center gap-2 py-3">
+              {isFetchingNextPage ? <Spinner /> : null}
+              <p className="text-[11px] text-(--color-ink-dim)">
+                Scroll to load the previous two weeks of delivered missions
+              </p>
             </div>
-          ) : items.some(item => item.kind === 'mission_delivered') ? (
-            <p className="pb-2 text-center text-[11px] text-(--color-ink-dim)">
-              Scroll to load the previous two weeks of delivered missions.
-            </p>
           ) : null}
         </div>
       </div>

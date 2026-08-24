@@ -521,3 +521,13 @@ test('a mission card carries the mission creation provenance', async () => {
   assert.equal(item.createdByKind, 'agent');
   assert.equal(item.createdByAgent, 'cursor');
 });
+
+test('an invalid before query is rejected', async () => {
+  await assert.rejects(
+    () => listActivityFeed({ before: 'yesterday' }),
+    error => {
+      assert.equal((error as Error).message, 'before must be an ISO-8601 UTC timestamp');
+      return true;
+    }
+  );
+});

@@ -34,8 +34,7 @@ export function KindBadge({
       'border-sky-300 bg-sky-50 text-sky-900 dark:border-sky-500/50 dark:bg-sky-500/10 dark:text-sky-100',
     question:
       'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-100',
-    delivered:
-      'border-(--color-border) bg-(--color-surface-2) text-(--color-ink-dim)'
+    delivered: 'border-(--color-border) bg-(--color-surface-2) text-(--color-ink-dim)'
   }[tone];
 
   return (

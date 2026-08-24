@@ -40,8 +40,8 @@ function InboxColumn() {
         </p>
         <h1 className="text-xl font-semibold tracking-tight">Inbox</h1>
         <p className="mt-1.5 text-[13px] leading-relaxed text-(--color-ink-dim) text-pretty">
-          Unassigned captures stay private until you assign a project. Agent-filed Next work
-          lands here for triage.
+          Unassigned captures stay private until you assign a project. Agent-filed Next work lands
+          here for triage.
         </p>
       </div>
 

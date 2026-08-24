@@ -593,10 +593,7 @@ export const api = {
     const params = new URLSearchParams();
     if (before) params.set('before', before);
     const query = params.toString();
-    return request<ActivityFeedDto>(
-      'GET',
-      `/api/activity-feed${query ? `?${query}` : ''}`
-    );
+    return request<ActivityFeedDto>('GET', `/api/activity-feed${query ? `?${query}` : ''}`);
   },
   createInboxItem: (body: CreateInboxItemBody) => request<InboxItemDto>('POST', '/api/inbox', body),
   updateInboxItem: (id: string, body: UpdateInboxItemBody) =>

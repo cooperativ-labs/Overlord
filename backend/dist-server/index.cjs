@@ -138140,6 +138140,9 @@ function hasControlCharacters(value) {
 function hasUnsafePathCharacters(value) {
   return hasControlCharacters(value) || value.includes("\\");
 }
+function isOverlordManagedEvidencePath(filePath) {
+  return filePath === ".overlord" || filePath.startsWith(".overlord/");
+}
 function isExactEvidencePath(value) {
   if (typeof value !== "string") return false;
   if (value.length === 0 || value.length > MAX_EVIDENCE_PATH_LENGTH || value !== value.trim() || hasUnsafePathCharacters(value)) {
@@ -140846,6 +140849,14 @@ function validateSyncChange(value) {
       warning: "filePath must be a bounded normalized repository-relative path without .. segments"
     };
   }
+  if (isOverlordManagedEvidencePath(filePath)) {
+    return {
+      ...identity,
+      filePath,
+      idempotencyKey,
+      warning: "filePath is excluded from change reporting"
+    };
+  }
   if (!idempotencyKey) {
     return { ...identity, filePath, warning: "idempotencyKey must be a bounded string" };
   }
@@ -141471,6 +141482,10 @@ function normalizeRecordWorkChangedFiles(input) {
     const filePath = normalizeRepoRelativePath(candidate.filePath);
     if (!filePath) {
       warn(`Ignored changedFiles[${index}]: filePath must be canonical and repository-relative.`);
+      return;
+    }
+    if (isOverlordManagedEvidencePath(filePath)) {
+      warn(`Ignored changedFiles[${index}]: filePath is excluded from change reporting.`);
       return;
     }
     let vcsStatus = null;
@@ -150652,9 +150667,7 @@ async function listWorkspaceMyMissions() {
   return { missions: rows.map((row) => toMyMissionDto(row, tagsByMission.get(row.id) ?? [])) };
 }
 var INBOX_MISSION_RECENT_MS = 7 * 24 * 60 * 60 * 1e3;
-var INBOX_MISSION_RECENT_LIMIT = 40;
-var INBOX_MISSION_AGENT_NEXT_LIMIT = 40;
-var INBOX_MISSION_TOTAL_LIMIT = 60;
+var INBOX_MISSION_AGENT_NEXT_LIMIT = 60;
 function selectInboxMissionsSql(workspacePlaceholders) {
   return `
   SELECT t.id, t.workspace_id, t.project_id, t.display_id, t.sequence_number, t.title,
@@ -150721,14 +150734,6 @@ async function listInboxMissions() {
   const recentCutoff = new Date(Date.now() - INBOX_MISSION_RECENT_MS).toISOString();
   const client = requireDatabaseClient();
   const baseSql = selectInboxMissionsSql(workspacePlaceholders);
-  const recentRows = await client.all(
-    `${baseSql}
-       AND t.created_at >= ?
-       AND (t.status_type != 'next' OR t.created_by_kind = 'agent')
-     ORDER BY t.created_at DESC, t.sequence_number DESC, t.id ASC
-     LIMIT ?`,
-    [...readableWorkspaceIds2, recentCutoff, INBOX_MISSION_RECENT_LIMIT]
-  );
   const agentNextRows = await client.all(
     `${baseSql}
        AND t.created_by_kind = 'agent'
@@ -150737,39 +150742,16 @@ async function listInboxMissions() {
      LIMIT ?`,
     [...readableWorkspaceIds2, INBOX_MISSION_AGENT_NEXT_LIMIT]
   );
-  const byId = /* @__PURE__ */ new Map();
-  for (const row of recentRows) {
-    const existing = byId.get(row.id);
-    if (existing) {
-      existing.reasons.add("recent");
-    } else {
-      byId.set(row.id, { row, reasons: /* @__PURE__ */ new Set(["recent"]) });
-    }
-  }
-  for (const row of agentNextRows) {
-    const existing = byId.get(row.id);
-    if (existing) {
-      existing.reasons.add("agent_next");
-    } else {
-      byId.set(row.id, { row, reasons: /* @__PURE__ */ new Set(["agent_next"]) });
-    }
-  }
-  const merged = [...byId.values()].sort((a5, b5) => {
-    if (a5.row.created_at !== b5.row.created_at) {
-      return a5.row.created_at < b5.row.created_at ? 1 : -1;
-    }
-    if (a5.row.sequence_number !== b5.row.sequence_number) {
-      return b5.row.sequence_number - a5.row.sequence_number;
-    }
-    return a5.row.id < b5.row.id ? -1 : a5.row.id > b5.row.id ? 1 : 0;
-  });
-  const limited = merged.slice(0, INBOX_MISSION_TOTAL_LIMIT);
-  const tagsByMission = await getTagsByMission(limited.map((entry) => entry.row.id));
+  const tagsByMission = await getTagsByMission(agentNextRows.map((row) => row.id));
   return {
     generatedAt,
-    missions: limited.map(
-      (entry) => toInboxMissionDto(entry.row, tagsByMission.get(entry.row.id) ?? [], [...entry.reasons])
-    )
+    missions: agentNextRows.map((row) => {
+      const reasons = ["agent_next"];
+      if (row.created_at >= recentCutoff) {
+        reasons.push("recent");
+      }
+      return toInboxMissionDto(row, tagsByMission.get(row.id) ?? [], reasons);
+    })
   };
 }
 async function upsertMyMissionPosition(db, {
@@ -162040,44 +162022,6 @@ async function updateProjectExecutionTarget(projectId, body, client = requireDat
   }
 }
 
-// execution/runner-claim-http.ts
-function flushRunnerClaimHeaders(res) {
-  if (res.headersSent) return;
-  res.status(200);
-  res.setHeader("Content-Type", "application/json; charset=utf-8");
-  res.flushHeaders();
-}
-function writeRunnerClaimBody(res, body) {
-  if (res.writableEnded) return;
-  if (res.headersSent) {
-    res.write(JSON.stringify(body));
-    res.end();
-    return;
-  }
-  res.json(body);
-}
-async function sendRunnerClaimResponse({
-  res,
-  claim
-}) {
-  let flushed = false;
-  try {
-    const result = await claim({
-      onListenArmed: () => {
-        flushRunnerClaimHeaders(res);
-        flushed = true;
-      }
-    });
-    writeRunnerClaimBody(res, result);
-  } catch (error53) {
-    if (flushed && !res.writableEnded) {
-      writeRunnerClaimBody(res, { request: null, longPoll: true });
-      return;
-    }
-    throw error53;
-  }
-}
-
 // execution/runner.ts
 init_dist();
 init_errors4();
@@ -162660,6 +162604,44 @@ async function clearRunnerRequests({
     }
   }
   return { cleared };
+}
+
+// execution/runner-claim-http.ts
+function flushRunnerClaimHeaders(res) {
+  if (res.headersSent) return;
+  res.status(200);
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.flushHeaders();
+}
+function writeRunnerClaimBody(res, body) {
+  if (res.writableEnded) return;
+  if (res.headersSent) {
+    res.write(JSON.stringify(body));
+    res.end();
+    return;
+  }
+  res.json(body);
+}
+async function sendRunnerClaimResponse({
+  res,
+  claim
+}) {
+  let flushed = false;
+  try {
+    const result = await claim({
+      onListenArmed: () => {
+        flushRunnerClaimHeaders(res);
+        flushed = true;
+      }
+    });
+    writeRunnerClaimBody(res, result);
+  } catch (error53) {
+    if (flushed && !res.writableEnded) {
+      writeRunnerClaimBody(res, { request: null, longPoll: true });
+      return;
+    }
+    throw error53;
+  }
 }
 
 // ext/everhour/routes.ts
@@ -163971,12 +163953,15 @@ function resolveServeSpa({
 // activity-feed.ts
 init_dist2();
 init_db();
+init_errors5();
 var MISSION_LIMIT = 25;
 var QUESTION_LIMIT = 10;
 var QUESTION_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1e3;
 var FEED_LIMIT = 40;
 var INSTRUCTION_PREVIEW_CHARS = 400;
 var EVENT_SUMMARY_CHARS = 240;
+var DELIVERED_WINDOW_MS = 14 * 24 * 60 * 60 * 1e3;
+var ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 var RUNNING_STATES = ["launching", "executing", "pending_delivery"];
 function truncate(value, max) {
   const text = (value ?? "").trim();
@@ -164137,6 +164122,106 @@ async function loadQuestions(workspaceIds) {
     [...workspaceIds, askedAfter, QUESTION_LIMIT]
   );
 }
+function twoWeeksBefore(iso) {
+  return new Date(Date.parse(iso) - DELIVERED_WINDOW_MS).toISOString();
+}
+function parseFeedBefore(value) {
+  if (typeof value !== "string" || value.trim() === "") return null;
+  const trimmed8 = value.trim();
+  if (!ISO_UTC.test(trimmed8)) {
+    throw new ApiError(400, "before must be an ISO-8601 UTC timestamp");
+  }
+  return trimmed8;
+}
+async function loadDelivered({
+  workspaceIds,
+  windowStart,
+  windowEnd
+}) {
+  return await requireDatabaseClient().all(
+    `SELECT ${CONTEXT_COLUMNS}, ${MISSION_PROVENANCE_COLUMNS},
+            d.id AS delivery_id, d.summary AS delivery_summary, d.delivered_at,
+            o.id AS objective_id, o.display_key AS objective_display_key,
+            o.title AS objective_title, o.instruction_text,
+            o.branch, o.resource_key, o.assigned_agent, o.model,
+            s.agent_identifier AS session_agent_identifier,
+            s.model_identifier AS session_model_identifier
+       FROM deliveries d
+       JOIN objectives o ON o.id = d.objective_id AND o.deleted_at IS NULL
+       ${CONTEXT_JOIN}
+       LEFT JOIN agent_sessions s ON s.id = d.session_id AND s.deleted_at IS NULL
+      WHERE d.deleted_at IS NULL
+        AND d.workspace_id IN (${placeholders(workspaceIds.length)})
+        AND d.delivered_at > ?
+        AND d.delivered_at <= ?
+        AND d.id = (
+          SELECT x.id FROM deliveries x
+           WHERE x.mission_id = d.mission_id
+             AND x.deleted_at IS NULL
+           ORDER BY x.delivered_at DESC, x.id DESC
+           LIMIT 1
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM objectives live
+           WHERE live.mission_id = d.mission_id
+             AND live.deleted_at IS NULL
+             AND live.state IN (${placeholders(RUNNING_STATES.length)})
+        )
+      ORDER BY d.delivered_at DESC, d.id DESC`,
+    [...workspaceIds, windowStart, windowEnd, ...RUNNING_STATES]
+  );
+}
+async function latestDeliveredAtOnOrBefore({
+  workspaceIds,
+  onOrBefore
+}) {
+  const row = await requireDatabaseClient().get(
+    `SELECT MAX(d.delivered_at) AS latest
+       FROM deliveries d
+      WHERE d.deleted_at IS NULL
+        AND d.workspace_id IN (${placeholders(workspaceIds.length)})
+        AND d.delivered_at <= ?
+        AND d.id = (
+          SELECT x.id FROM deliveries x
+           WHERE x.mission_id = d.mission_id
+             AND x.deleted_at IS NULL
+           ORDER BY x.delivered_at DESC, x.id DESC
+           LIMIT 1
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM objectives live
+           WHERE live.mission_id = d.mission_id
+             AND live.deleted_at IS NULL
+             AND live.state IN (${placeholders(RUNNING_STATES.length)})
+        )`,
+    [...workspaceIds, onOrBefore, ...RUNNING_STATES]
+  );
+  return row?.latest ?? null;
+}
+async function hasOlderDelivered({
+  workspaceIds,
+  onOrBefore
+}) {
+  return await latestDeliveredAtOnOrBefore({ workspaceIds, onOrBefore }) !== null;
+}
+async function loadDeliveredPage({
+  workspaceIds,
+  windowEnd,
+  skipEmpty
+}) {
+  let end = windowEnd;
+  let start2 = twoWeeksBefore(end);
+  let rows = await loadDelivered({ workspaceIds, windowStart: start2, windowEnd: end });
+  if (rows.length === 0 && skipEmpty) {
+    const olderAt = await latestDeliveredAtOnOrBefore({ workspaceIds, onOrBefore: start2 });
+    if (!olderAt) return { rows: [], nextBefore: null };
+    end = olderAt;
+    start2 = twoWeeksBefore(end);
+    rows = await loadDelivered({ workspaceIds, windowStart: start2, windowEnd: end });
+  }
+  const older = await hasOlderDelivered({ workspaceIds, onOrBefore: start2 });
+  return { rows, nextBefore: older ? start2 : null };
+}
 function pickPrimaryRun(runs) {
   const byMoment = (moment) => (a5, b5) => (moment(a5) ?? a5.objective_updated_at).localeCompare(moment(b5) ?? b5.objective_updated_at);
   const launching = runs.filter((run) => run.state === "launching").sort(byMoment((r5) => r5.launched_at));
@@ -164202,6 +164287,46 @@ function toMissionItem({
     latestEventAt: latest?.created_at ?? null
   };
 }
+function toDeliveredMissionItem({
+  row,
+  objectiveRows
+}) {
+  const ordered = sortObjectivesForMissionDisplay(
+    objectiveRows.map((objective) => ({
+      id: objective.objective_id,
+      position: objective.position,
+      state: objective.state,
+      instructionText: objective.instruction_text ?? "",
+      autoAdvance: objective.auto_advance === 1,
+      assignedAgent: objective.assigned_agent,
+      createdAt: objective.created_at,
+      launchedAt: objective.launched_at,
+      startedAt: objective.started_at,
+      completedAt: objective.completed_at,
+      row: objective
+    }))
+  );
+  return {
+    id: `mission:${row.mission_id}`,
+    kind: "mission_delivered",
+    occurredAt: row.delivered_at,
+    ...baseFields(row),
+    objectiveId: row.objective_id,
+    objectiveDisplayId: objectiveDisplayId(row.mission_display_id, row.objective_display_key),
+    runState: "delivered",
+    objectives: ordered.map((entry) => toMissionObjective(entry.row)),
+    activeObjectiveIds: [],
+    objectiveTitle: row.objective_title,
+    instructionPreview: truncate(row.instruction_text, INSTRUCTION_PREVIEW_CHARS),
+    agentIdentifier: resolveAgentIdentifier(row.session_agent_identifier, row.assigned_agent),
+    modelIdentifier: row.session_model_identifier ?? row.model,
+    branch: row.branch,
+    resourceKey: row.resource_key?.trim() || null,
+    startedAt: null,
+    latestEventSummary: truncate(row.delivery_summary, EVENT_SUMMARY_CHARS),
+    latestEventAt: row.delivered_at
+  };
+}
 function toQuestionItem(row) {
   return {
     id: `ask:${row.event_id}`,
@@ -164220,15 +164345,52 @@ function newestFirst(a5, b5) {
   if (a5.occurredAt === b5.occurredAt) return a5.id < b5.id ? 1 : -1;
   return a5.occurredAt < b5.occurredAt ? 1 : -1;
 }
-async function listActivityFeed() {
+async function listActivityFeed({
+  before
+} = {}) {
   const generatedAt = (/* @__PURE__ */ new Date()).toISOString();
+  const empty = {
+    items: [],
+    generatedAt,
+    counts: { mission_run: 0, blocking_question: 0, mission_delivered: 0 },
+    nextBefore: null
+  };
   const workspaceIds = await readableWorkspaceIds();
-  if (workspaceIds.length === 0) {
-    return { items: [], generatedAt, counts: { mission_run: 0, blocking_question: 0 } };
+  if (workspaceIds.length === 0) return empty;
+  const parsedBefore = parseFeedBefore(before);
+  const paging = parsedBefore !== null;
+  const windowEnd = paging && parsedBefore < generatedAt ? parsedBefore : generatedAt;
+  const deliveredPagePromise = loadDeliveredPage({
+    workspaceIds,
+    windowEnd,
+    skipEmpty: paging
+  });
+  if (paging) {
+    const deliveredPage2 = await deliveredPagePromise;
+    const objectivesByMission2 = await loadMissionObjectives(
+      deliveredPage2.rows.map((row) => row.mission_id)
+    );
+    const deliveredItems2 = deliveredPage2.rows.map(
+      (row) => toDeliveredMissionItem({
+        row,
+        objectiveRows: objectivesByMission2.get(row.mission_id) ?? []
+      })
+    );
+    return {
+      items: deliveredItems2,
+      generatedAt,
+      counts: {
+        mission_run: 0,
+        blocking_question: 0,
+        mission_delivered: deliveredPage2.rows.length
+      },
+      nextBefore: deliveredPage2.nextBefore
+    };
   }
-  const [allRuns, questions] = await Promise.all([
+  const [allRuns, questions, deliveredPage] = await Promise.all([
     loadRuns(workspaceIds),
-    loadQuestions(workspaceIds)
+    loadQuestions(workspaceIds),
+    deliveredPagePromise
   ]);
   const runsByMission = /* @__PURE__ */ new Map();
   for (const run of allRuns) {
@@ -164238,11 +164400,12 @@ async function listActivityFeed() {
   }
   const missionCount = runsByMission.size;
   const missionIds = [...runsByMission.keys()].slice(0, MISSION_LIMIT);
+  const deliveredMissionIds = deliveredPage.rows.map((row) => row.mission_id);
   const primaryByMission = new Map(
     missionIds.map((missionId) => [missionId, pickPrimaryRun(runsByMission.get(missionId))])
   );
   const [objectivesByMission, latestByObjective] = await Promise.all([
-    loadMissionObjectives(missionIds),
+    loadMissionObjectives([.../* @__PURE__ */ new Set([...missionIds, ...deliveredMissionIds])]),
     loadLatestEvents([...primaryByMission.values()].map((run) => run.objective_id))
   ]);
   const missionItems = missionIds.map(
@@ -164252,15 +164415,29 @@ async function listActivityFeed() {
       latest: latestByObjective.get(primaryByMission.get(missionId).objective_id)
     })
   );
+  const deliveredItems = deliveredPage.rows.map(
+    (row) => toDeliveredMissionItem({
+      row,
+      objectiveRows: objectivesByMission.get(row.mission_id) ?? []
+    })
+  );
   const launching = missionItems.filter((item) => item.runState === "launching").sort(newestFirst);
   const executing = missionItems.filter((item) => item.runState === "executing").sort(newestFirst);
   const questionItems = questions.map(toQuestionItem).sort(newestFirst);
   return {
-    items: [...launching, ...executing, ...questionItems].slice(0, FEED_LIMIT),
+    items: [
+      ...[...launching, ...executing, ...questionItems].slice(0, FEED_LIMIT),
+      ...deliveredItems
+    ],
     generatedAt,
     // Pre-truncation totals, so the client can say "7 of 12" instead of implying
     // the list is everything there is.
-    counts: { mission_run: missionCount, blocking_question: questions.length }
+    counts: {
+      mission_run: missionCount,
+      blocking_question: questions.length,
+      mission_delivered: deliveredPage.rows.length
+    },
+    nextBefore: deliveredPage.nextBefore
   };
 }
 
@@ -170942,7 +171119,11 @@ app.patch(
 );
 app.get(
   "/api/activity-feed",
-  handle3(() => listActivityFeed())
+  handle3(
+    (req) => listActivityFeed({
+      before: typeof req.query.before === "string" ? req.query.before : null
+    })
+  )
 );
 app.get(
   "/api/inbox/missions",

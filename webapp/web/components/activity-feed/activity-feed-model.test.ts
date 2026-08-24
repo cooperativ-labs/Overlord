@@ -80,6 +80,33 @@ function questionItem(): ActivityFeedQuestionItemDto {
   } as ActivityFeedQuestionItemDto;
 }
 
+test('delivered missions are a first-class kind the chips can hide', () => {
+  const delivered = missionItem({
+    id: 'mission:mission-3',
+    kind: 'mission_delivered',
+    runState: 'delivered',
+    activeObjectiveIds: []
+  });
+
+  const hidden = filterFeedItems([missionItem(), delivered], {
+    kinds: new Set(['mission_run']),
+    projectId: null
+  });
+  const shown = filterFeedItems([missionItem(), delivered], {
+    kinds: new Set(['mission_delivered']),
+    projectId: null
+  });
+
+  assert.deepEqual(
+    hidden.map(item => item.id),
+    ['mission:mission-1']
+  );
+  assert.deepEqual(
+    shown.map(item => item.id),
+    ['mission:mission-3']
+  );
+});
+
 test('kind chips drop items whose kind is switched off', () => {
   const items = [missionItem(), questionItem()];
 

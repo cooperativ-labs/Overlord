@@ -653,8 +653,7 @@ export async function listActivityFeed({
 
   const parsedBefore = parseFeedBefore(before);
   const paging = parsedBefore !== null;
-  const windowEnd =
-    paging && parsedBefore < generatedAt ? parsedBefore : generatedAt;
+  const windowEnd = paging && parsedBefore < generatedAt ? parsedBefore : generatedAt;
 
   const deliveredPagePromise = loadDeliveredPage({
     workspaceIds,
