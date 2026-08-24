@@ -4,6 +4,8 @@ import test from 'node:test';
 import {
   composeAgentTerminalCommand,
   resolveLaunchExecution,
+  TERMINAL_OPEN_SPAWN_TIMEOUT_MS,
+  terminalOpenSpawnTimeoutMs,
   tmpEnvFor
 } from '../src/terminal-launcher.ts';
 
@@ -49,6 +51,31 @@ test('iTerm2 launcher drives osascript to open a new window', () => {
   assert.ok(script.includes(`cd '/Users/jake/project'`));
   assert.ok(script.includes(`export OVERLORD_TMPDIR='/Users/jake/project/.overlord/tmp'`));
   assert.ok(script.includes(`'claude'`));
+});
+
+test('terminal-open spawn is bounded; inline agent spawn is not', () => {
+  assert.equal(TERMINAL_OPEN_SPAWN_TIMEOUT_MS, 45_000);
+  assert.equal(
+    terminalOpenSpawnTimeoutMs(resolveLaunchExecution({ ...AGENT, terminalLauncher: 'iTerm2' })),
+    45_000
+  );
+  assert.equal(
+    terminalOpenSpawnTimeoutMs(resolveLaunchExecution({ ...AGENT, terminalLauncher: 'Terminal' })),
+    45_000
+  );
+  assert.equal(
+    terminalOpenSpawnTimeoutMs(
+      resolveLaunchExecution({ ...AGENT, terminalLauncher: 'open -a Ghostty --args' })
+    ),
+    45_000
+  );
+  assert.equal(terminalOpenSpawnTimeoutMs(resolveLaunchExecution({ ...AGENT })), undefined);
+  assert.equal(
+    terminalOpenSpawnTimeoutMs(
+      resolveLaunchExecution({ ...AGENT, preCommand: 'docker exec -it box' })
+    ),
+    undefined
+  );
 });
 
 test('terminal launch exports mission environment without a mission-link banner', () => {

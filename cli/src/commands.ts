@@ -70,10 +70,12 @@ import {
   buildRunnerServiceEnv,
   captureRunnerSupervisorIdentity,
   FALLBACK_POLL_INTERVAL_MS,
+  inspectInstalledLaunchdPlist,
   patchRunnerServiceState,
   readRunnerServiceState,
   resolveOvldInvocation,
   resolveServiceManager,
+  runnerServiceReinstallHint,
   shouldRestartRunnerSupervisor,
   writeRunnerServiceState
 } from './runner-service.js';
@@ -2368,10 +2370,17 @@ async function runRunnerServiceCommand({
         : state.execProgram.includes('.app/Contents/MacOS/')
           ? 'overlord'
           : 'node';
-    const reinstallHint =
-      runState.installed && publisher === 'node'
-        ? 'This service is registered under "Node.js Foundation" because it runs the plain node binary. Reinstall it from the Overlord desktop app (or with the desktop app present) to re-register it under "Overlord".'
+    const inspected =
+      manager.kind === 'launchd' && runState.installed
+        ? inspectInstalledLaunchdPlist(manager.unitPath())
         : null;
+    const processType = inspected?.processType ?? null;
+    const reinstallHint = runnerServiceReinstallHint({
+      installed: runState.installed,
+      publisher,
+      processType,
+      ...(inspected ? { path: inspected.path } : {})
+    });
     const payload = {
       supported: true,
       kind: manager.kind,
@@ -2387,6 +2396,8 @@ async function runRunnerServiceCommand({
       lastError: state.lastError,
       currentPollIntervalMs: state.currentPollIntervalMs,
       publisher,
+      processType,
+      path: inspected?.path ?? null,
       reinstallHint
     };
     if (json) printJson(payload);
@@ -2396,6 +2407,7 @@ async function runRunnerServiceCommand({
         Installed: runState.installed ? 'yes' : 'no',
         Running: runState.running,
         Publisher: publisher === 'unknown' ? '(unknown)' : publisher,
+        ...(processType ? { 'Process type': processType } : {}),
         Backend: state.backendUrl ?? '(unknown)',
         'Last heartbeat': state.lastHeartbeatAt ?? '(never)',
         'Last launched': state.lastLaunchedAt ?? '(never)',
@@ -2433,7 +2445,10 @@ async function runRunnerServiceCommand({
     if (json) printJson({ started: autoStart, ...runState });
     else
       console.log(
-        `Persistent runner installed (${manager.kind}) and ${autoStart ? 'started' : 'not started'}.`
+        `Persistent runner installed (${manager.kind}) and ${autoStart ? 'started' : 'not started'}.` +
+          (manager.kind === 'launchd'
+            ? ' Re-running install rewrites the LaunchAgent (ProcessType Interactive and PATH prefix); app auto-update respawns the process but does not rewrite the plist.'
+            : '')
       );
     return;
   }

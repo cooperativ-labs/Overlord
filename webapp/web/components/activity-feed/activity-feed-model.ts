@@ -1,34 +1,35 @@
 import type {
-  ActivityFeedDeliveryItemDto,
   ActivityFeedItemDto,
   ActivityFeedItemKind,
+  ActivityFeedMissionItemDto,
   ActivityFeedQuestionItemDto,
-  ActivityFeedRunItemDto
+  ObjectiveState
 } from '../../../shared/contract.ts';
 
 /** The kinds the feed renders, in the order their chips appear. */
-export const FEED_KINDS: ActivityFeedItemKind[] = [
-  'objective_run',
-  'blocking_question',
-  'delivery'
-];
+export const FEED_KINDS: ActivityFeedItemKind[] = ['mission_run', 'blocking_question'];
 
 export const FEED_KIND_LABELS: Record<ActivityFeedItemKind, string> = {
-  objective_run: 'Running',
-  blocking_question: 'Questions',
-  delivery: 'Deliveries'
+  mission_run: 'Running',
+  blocking_question: 'Questions'
 };
 
-export function isRunItem(item: ActivityFeedItemDto): item is ActivityFeedRunItemDto {
-  return item.kind === 'objective_run';
-}
-
-export function isDeliveryItem(item: ActivityFeedItemDto): item is ActivityFeedDeliveryItemDto {
-  return item.kind === 'delivery';
+export function isMissionItem(item: ActivityFeedItemDto): item is ActivityFeedMissionItemDto {
+  return item.kind === 'mission_run';
 }
 
 export function isQuestionItem(item: ActivityFeedItemDto): item is ActivityFeedQuestionItemDto {
   return item.kind === 'blocking_question';
+}
+
+/** Objective states that are live work, and so carry the executing shimmer. */
+const IN_FLIGHT_OBJECTIVE_STATES: ReadonlySet<ObjectiveState> = new Set([
+  'executing',
+  'pending_delivery'
+]);
+
+export function isInFlightObjectiveState(state: ObjectiveState): boolean {
+  return IN_FLIGHT_OBJECTIVE_STATES.has(state);
 }
 
 export interface FeedFilters {

@@ -331,10 +331,19 @@ service that runs the supervisor loop in the background.
   Windows is deferred; use `ovld runner start` there. The installed service
   invokes the resolved `ovld` executable with an explicit environment snapshot
   (a non-loopback `OVERLORD_BACKEND_URL`, `OVLD_HOME` when set, the user token
-  when present, and a minimal `PATH`) because persistent services do not source
-  interactive shell startup files. Loopback URLs are intentionally not captured:
-  the supervisor follows the current `overlord.toml` URL after Desktop selects
-  its local port at boot.
+  when present, and a deterministic `PATH` prefix: `/opt/homebrew/bin`,
+  `/usr/local/bin`, `$HOME/.local/bin`, then `/usr/bin:/bin:/usr/sbin:/sbin`)
+  because persistent services do not source interactive shell startup files and
+  must not snapshot Electron's sanitized PATH or the user's nvm shims. Loopback
+  URLs are intentionally not captured: the supervisor follows the current
+  `overlord.toml` URL after Desktop selects its local port at boot. On macOS the
+  LaunchAgent uses launchd `ProcessType=Interactive` (not Background or Adaptive)
+  so Apple Events to Terminal/iTerm are not App-Napped. `ovld runner service
+  install` is idempotent: it boots out a loaded label, rewrites the plist, and
+  reloads from disk. App auto-update respawns the supervisor process but does
+  **not** rewrite ProcessType or PATH — existing machines must re-run install
+  (CLI or Desktop → Reinstall service). Linux systemd has no ProcessType
+  equivalent; the unit does not set Nice or CPUSchedulingPolicy.
 - **Local state**: `~/.ovld/runner-service.json` records the installed service
   kind/identifier, resolved exec path, backend URL, last heartbeat/claim/launch
   timestamps, last error, and current poll interval. This is local diagnostic

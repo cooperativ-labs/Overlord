@@ -22,13 +22,13 @@ test.after(() => {
   rmSync(tempDir, { recursive: true, force: true });
 });
 
-test('listInboxMissions includes recently created missions', async () => {
+test('listInboxMissions includes recently created non-Next missions', async () => {
   const project = await createProject({ name: 'Inbox recent project' });
-  const next = await statusFor(project.id, 'next_up');
+  const execute = await statusFor(project.id, 'in_progress');
   const mission = await createMission({
     projectId: project.id,
     title: 'Fresh human mission',
-    statusId: next.id,
+    statusId: execute.id,
     firstObjective: 'Do the thing'
   });
 
@@ -37,6 +37,25 @@ test('listInboxMissions includes recently created missions', async () => {
   assert.ok(found, 'expected recent mission in inbox list');
   assert.ok(found.reasons.includes('recent'));
   assert.equal(found.projectName, 'Inbox recent project');
+  assert.equal(found.statusType, 'execute');
+});
+
+test('listInboxMissions omits human Next missions even when recent', async () => {
+  const project = await createProject({ name: 'Inbox human next project' });
+  const next = await statusFor(project.id, 'next_up');
+  const mission = await createMission({
+    projectId: project.id,
+    title: 'Fresh human next mission',
+    statusId: next.id,
+    firstObjective: 'Human next work'
+  });
+
+  const response = await listInboxMissions();
+  assert.equal(
+    response.missions.some(item => item.id === mission.id),
+    false,
+    'human Next missions must not appear in inbox triage'
+  );
 });
 
 test('listInboxMissions includes agent-created Next missions even when older', async () => {
@@ -67,6 +86,33 @@ test('listInboxMissions includes agent-created Next missions even when older', a
   assert.ok(found.reasons.includes('agent_next'));
   assert.equal(found.createdByKind, 'agent');
   assert.equal(found.createdByAgent, 'cursor');
+  assert.equal(found.statusType, 'next');
+});
+
+test('listInboxMissions includes recent agent Next missions', async () => {
+  const project = await createProject({ name: 'Inbox recent agent next' });
+  const next = await statusFor(project.id, 'next_up');
+  const mission = await createMission({
+    projectId: project.id,
+    title: 'Fresh agent next work',
+    statusId: next.id,
+    firstObjective: 'Agent triage'
+  });
+
+  await requireDatabaseClient().run(
+    `UPDATE missions
+        SET created_by_kind = 'agent',
+            created_by_agent = 'cursor'
+      WHERE id = ?`,
+    [mission.id]
+  );
+
+  const response = await listInboxMissions();
+  const found = response.missions.find(item => item.id === mission.id);
+  assert.ok(found, 'expected recent agent Next mission in inbox list');
+  assert.ok(found.reasons.includes('agent_next'));
+  assert.ok(found.reasons.includes('recent'));
+  assert.equal(found.createdByKind, 'agent');
   assert.equal(found.statusType, 'next');
 });
 

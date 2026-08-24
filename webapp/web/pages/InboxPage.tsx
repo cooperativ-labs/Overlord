@@ -40,8 +40,8 @@ function InboxColumn() {
         </p>
         <h1 className="text-xl font-semibold tracking-tight">Inbox</h1>
         <p className="mt-1.5 text-[13px] leading-relaxed text-(--color-ink-dim) text-pretty">
-          Unassigned captures stay private until you assign a project. Recently created missions and
-          agent-filed Next work land here for triage.
+          Unassigned captures stay private until you assign a project. Recently created non-Next
+          missions and agent-filed Next work land here for triage.
         </p>
       </div>
 
@@ -88,7 +88,7 @@ function InboxColumn() {
         {isEmpty ? (
           <p className="text-sm text-(--color-ink-dim)">
             Your Inbox is empty. Create a task without a project to capture it here, or wait for
-            recent and agent-filed Next missions to appear.
+            recent non-Next and agent-filed Next missions to appear.
           </p>
         ) : null}
       </div>

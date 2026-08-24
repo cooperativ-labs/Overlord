@@ -3,6 +3,13 @@
 Design reference: `planning/feature-plans/inbox-activity-feed/design-reference.dc.html`
 (imported from the Claude Design project `Inbox Activity Feed.dc.html`).
 
+> **Superseded in part by coo:826 (contract v119).** The feed now lives on its own
+> `/feed` page, is anchored on missions rather than objectives (`mission_run`
+> replaces `objective_run`, each card listing the mission's whole objective list),
+> and no longer carries delivery items at all. `CONTRACT.md` is authoritative for
+> the shipped shape; the DTOs and card table below describe the original v84
+> design and are kept for its rationale, not as a current spec.
+
 ## Goal
 
 The Inbox screen keeps its unallocated-capture column but gains a second, wider

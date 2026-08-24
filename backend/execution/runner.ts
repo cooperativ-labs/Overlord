@@ -44,7 +44,7 @@ import {
   readProjectPreLaunchCommands
 } from '../repository.ts';
 
-import { createRunnerQueueListener } from './runner-queue-notify.ts';
+import { longPollRunnerClaim } from './runner-queue-notify.ts';
 
 type ClientDeviceBody = {
   deviceFingerprint?: string | null;
@@ -231,11 +231,13 @@ export async function runnerStatus(projectId?: string | null): Promise<Record<st
 export async function claimRunnerRequest({
   projectId,
   clientDevice,
-  runner
+  runner,
+  onListenArmed
 }: {
   projectId?: string | null;
   clientDevice?: ClientDeviceBody;
   runner?: RunnerRegistrationInput | null;
+  onListenArmed?: () => void;
 } = {}): Promise<{
   request: Record<string, unknown> | null;
   longPoll: boolean;
@@ -321,18 +323,10 @@ export async function claimRunnerRequest({
   // the portable fallback cadence instead of reconnecting in a tight loop.
   if (DATABASE_DIALECT !== 'postgres') return { request: null, longPoll: false };
 
-  const listener = await createRunnerQueueListener();
-  if (!listener) return { request: null, longPoll: false };
-  try {
-    // Close the claim-to-LISTEN race before beginning the bounded wait.
-    const afterListen = await claimNow();
-    if (afterListen) return { request: afterListen, longPoll: true };
-    await listener.wait();
-    // Notification is only a wake hint; another runner may have won the row.
-    return { request: await claimNow(), longPoll: true };
-  } finally {
-    await listener.close();
-  }
+  return longPollRunnerClaim({
+    claimNow,
+    onListenArmed
+  });
 }
 
 /**

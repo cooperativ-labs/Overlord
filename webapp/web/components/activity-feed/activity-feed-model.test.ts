@@ -2,24 +2,24 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import type {
-  ActivityFeedDeliveryItemDto,
   ActivityFeedItemDto,
-  ActivityFeedQuestionItemDto,
-  ActivityFeedRunItemDto
+  ActivityFeedMissionItemDto,
+  ActivityFeedQuestionItemDto
 } from '../../../shared/contract.ts';
 
 import {
   elapsedLabel,
   feedProjectOptions,
   filterFeedItems,
+  isInFlightObjectiveState,
   relativeTime,
   truncationNote
 } from './activity-feed-model.ts';
 
 function base(overrides: Partial<ActivityFeedItemDto> = {}) {
   return {
-    id: 'run:objective-1',
-    kind: 'objective_run' as const,
+    id: 'mission:mission-1',
+    kind: 'mission_run' as const,
     occurredAt: '2026-08-17T12:00:00.000Z',
     workspaceId: 'workspace-1',
     workspaceName: 'Core',
@@ -37,11 +37,25 @@ function base(overrides: Partial<ActivityFeedItemDto> = {}) {
   };
 }
 
-function runItem(overrides: Partial<ActivityFeedRunItemDto> = {}): ActivityFeedRunItemDto {
+function missionItem(
+  overrides: Partial<ActivityFeedMissionItemDto> = {}
+): ActivityFeedMissionItemDto {
   return {
     ...base(),
-    kind: 'objective_run',
-    state: 'executing',
+    kind: 'mission_run',
+    runState: 'executing',
+    objectives: [
+      {
+        objectiveId: 'objective-1',
+        displayId: 'coo:757.hegz',
+        title: 'Build the feed',
+        state: 'executing',
+        position: 0,
+        assignedAgent: 'claude',
+        autoAdvance: false
+      }
+    ],
+    activeObjectiveIds: ['objective-1'],
     objectiveTitle: 'Build the feed',
     instructionPreview: 'Implement the feed',
     agentIdentifier: 'claude',
@@ -51,36 +65,8 @@ function runItem(overrides: Partial<ActivityFeedRunItemDto> = {}): ActivityFeedR
     startedAt: '2026-08-17T11:00:00.000Z',
     latestEventSummary: null,
     latestEventAt: null,
-    upcoming: [],
     ...overrides
-  } as ActivityFeedRunItemDto;
-}
-
-function deliveryItem(): ActivityFeedDeliveryItemDto {
-  return {
-    ...base({
-      id: 'delivery:delivery-1',
-      kind: 'delivery',
-      projectId: 'project-2',
-      projectName: 'Latch',
-      occurredAt: '2026-08-17T10:00:00.000Z'
-    }),
-    kind: 'delivery',
-    objectiveTitle: 'Ship it',
-    delivery: {
-      id: 'delivery-1',
-      missionId: 'mission-1',
-      objectiveId: 'objective-1',
-      sessionId: null,
-      summary: 'Done.',
-      verificationSummary: null,
-      followUpNotes: null,
-      report: {} as ActivityFeedDeliveryItemDto['delivery']['report'],
-      deliveredAt: '2026-08-17T10:00:00.000Z',
-      agentIdentifier: 'claude',
-      modelIdentifier: null
-    }
-  } as ActivityFeedDeliveryItemDto;
+  } as ActivityFeedMissionItemDto;
 }
 
 function questionItem(): ActivityFeedQuestionItemDto {
@@ -95,16 +81,16 @@ function questionItem(): ActivityFeedQuestionItemDto {
 }
 
 test('kind chips drop items whose kind is switched off', () => {
-  const items = [runItem(), deliveryItem(), questionItem()];
+  const items = [missionItem(), questionItem()];
 
-  const onlyDeliveries = filterFeedItems(items, {
-    kinds: new Set(['delivery']),
+  const onlyQuestions = filterFeedItems(items, {
+    kinds: new Set(['blocking_question']),
     projectId: null
   });
 
   assert.deepEqual(
-    onlyDeliveries.map(item => item.id),
-    ['delivery:delivery-1']
+    onlyQuestions.map(item => item.id),
+    ['ask:event-1']
   );
 });
 
@@ -114,20 +100,27 @@ test('an unknown kind is dropped rather than rendered blank', () => {
     kind: 'weather_report'
   } as unknown as ActivityFeedItemDto;
 
-  const visible = filterFeedItems([runItem(), unknown], {
-    kinds: new Set(['objective_run', 'weather_report']),
+  const visible = filterFeedItems([missionItem(), unknown], {
+    kinds: new Set(['mission_run', 'weather_report']),
     projectId: null
   });
 
   assert.deepEqual(
     visible.map(item => item.id),
-    ['run:objective-1']
+    ['mission:mission-1']
   );
 });
 
 test('the project filter narrows to one project', () => {
-  const visible = filterFeedItems([runItem(), deliveryItem()], {
-    kinds: new Set(['objective_run', 'delivery']),
+  const other = missionItem({
+    id: 'mission:mission-2',
+    missionId: 'mission-2',
+    projectId: 'project-2',
+    projectName: 'Latch'
+  });
+
+  const visible = filterFeedItems([missionItem(), other], {
+    kinds: new Set(['mission_run']),
     projectId: 'project-2'
   });
 
@@ -138,7 +131,14 @@ test('the project filter narrows to one project', () => {
 });
 
 test('project options are ranked by how much activity each project has', () => {
-  const options = feedProjectOptions([runItem(), questionItem(), deliveryItem()]);
+  const other = missionItem({
+    id: 'mission:mission-2',
+    missionId: 'mission-2',
+    projectId: 'project-2',
+    projectName: 'Latch'
+  });
+
+  const options = feedProjectOptions([missionItem(), questionItem(), other]);
 
   assert.deepEqual(
     options.map(option => [option.projectName, option.count]),
@@ -147,6 +147,13 @@ test('project options are ranked by how much activity each project has', () => {
       ['Latch', 1]
     ]
   );
+});
+
+test('executing and pending delivery are the states that read as live work', () => {
+  assert.equal(isInFlightObjectiveState('executing'), true);
+  assert.equal(isInFlightObjectiveState('pending_delivery'), true);
+  assert.equal(isInFlightObjectiveState('launching'), false);
+  assert.equal(isInFlightObjectiveState('complete'), false);
 });
 
 test('relative and elapsed labels read from the supplied clock, never the browser clock', () => {
@@ -161,14 +168,11 @@ test('a clock behind the item timestamp reports zero rather than negative elapse
 });
 
 test('truncation is reported from the pre-truncation counts', () => {
-  const items = [runItem(), deliveryItem()];
+  const items = [missionItem(), questionItem()];
 
   assert.equal(
-    truncationNote({ objective_run: 1, delivery: 5, blocking_question: 0 }, items),
+    truncationNote({ mission_run: 5, blocking_question: 1 }, items),
     '4 older items not shown'
   );
-  assert.equal(
-    truncationNote({ objective_run: 1, delivery: 1, blocking_question: 0 }, items),
-    null
-  );
+  assert.equal(truncationNote({ mission_run: 1, blocking_question: 1 }, items), null);
 });

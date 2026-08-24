@@ -1,4 +1,4 @@
-import { CircleHelp, Filter, Loader2, Package } from 'lucide-react';
+import { CircleHelp, Filter, Loader2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { useActivityFeed } from '../../lib/queries.ts';
@@ -11,20 +11,17 @@ import {
   FEED_KINDS,
   feedProjectOptions,
   filterFeedItems,
-  isDeliveryItem,
+  isMissionItem,
   isQuestionItem,
-  isRunItem,
   truncationNote
 } from './activity-feed-model.ts';
 import { ProjectDot } from './ActivityFeedCardChrome.tsx';
 import { BlockingQuestionCard } from './BlockingQuestionCard.tsx';
-import { DeliveryFeedCard } from './DeliveryFeedCard.tsx';
-import { ObjectiveRunCard } from './ObjectiveRunCard.tsx';
+import { MissionRunCard } from './MissionRunCard.tsx';
 
 const KIND_ICONS = {
-  objective_run: Loader2,
-  blocking_question: CircleHelp,
-  delivery: Package
+  mission_run: Loader2,
+  blocking_question: CircleHelp
 } as const;
 
 /** Elapsed labels re-render on this cadence; the data itself arrives over realtime. */
@@ -48,9 +45,10 @@ function LiveIndicator() {
 }
 
 /**
- * The Feed page's activity column: one time-descending merge of executing
- * objectives, blocking questions, and recent deliveries across every workspace
- * the operator can read. Freshness rides the existing realtime change link —
+ * The Feed page's activity column: every mission with live work, then the
+ * questions blocking an agent, across every workspace the operator can read.
+ * The server groups launching missions above executing ones, so this renders
+ * the order it is given. Freshness rides the existing realtime change link —
  * this component never polls.
  */
 export function ActivityFeed({
@@ -108,7 +106,7 @@ export function ActivityFeed({
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="font-mono text-[11px] font-medium uppercase tracking-[0.24em] text-(--color-ink-dim)">
-              Objective activity
+              Missions in flight
             </p>
             <h1 className="text-xl font-semibold tracking-tight">Feed</h1>
           </div>
@@ -191,21 +189,19 @@ export function ActivityFeed({
           ) : visible.length === 0 ? (
             <div className="rounded-xl border border-dashed border-(--color-border) p-6 text-center">
               <p className="text-sm font-medium text-(--color-ink)">
-                {items.length === 0
-                  ? 'No recent objective activity'
-                  : 'Nothing matches these filters'}
+                {items.length === 0 ? 'Nothing is running' : 'Nothing matches these filters'}
               </p>
               <p className="mt-1 text-xs text-(--color-ink-dim)">
                 {items.length === 0
-                  ? 'Launch an objective and it will appear here while it runs.'
-                  : 'Turn a filter back on to see deliveries and executing objectives again.'}
+                  ? 'Launch an objective and its mission will appear here while it runs.'
+                  : 'Turn a filter back on to see running missions and blocking questions again.'}
               </p>
             </div>
           ) : (
             visible.map(item => {
-              if (isRunItem(item)) {
+              if (isMissionItem(item)) {
                 return (
-                  <ObjectiveRunCard
+                  <MissionRunCard
                     key={item.id}
                     item={item}
                     nowIso={nowIso}
@@ -216,16 +212,6 @@ export function ActivityFeed({
               if (isQuestionItem(item)) {
                 return (
                   <BlockingQuestionCard
-                    key={item.id}
-                    item={item}
-                    nowIso={nowIso}
-                    onOpenMission={onOpenMission}
-                  />
-                );
-              }
-              if (isDeliveryItem(item)) {
-                return (
-                  <DeliveryFeedCard
                     key={item.id}
                     item={item}
                     nowIso={nowIso}

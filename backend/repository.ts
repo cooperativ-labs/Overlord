@@ -6610,10 +6610,11 @@ function toInboxMissionDto(
 }
 
 /**
- * GET /api/inbox/missions — recently created missions (past 7 days) union
- * agent-authored missions in status type `next`, across every workspace the
- * caller may `mission:read` in the active organization. Sorted newest-first;
- * truncated after merge. Distinct from profile-owned `/api/inbox` capture.
+ * GET /api/inbox/missions — recently created missions (past 7 days; non-agent
+ * Next excluded) union agent-authored missions in status type `next`, across
+ * every workspace the caller may `mission:read` in the active organization.
+ * Next-status rows are agent-authored only. Sorted newest-first; truncated
+ * after merge. Distinct from profile-owned `/api/inbox` capture.
  */
 export async function listInboxMissions(): Promise<InboxMissionsResponse> {
   const generatedAt = new Date().toISOString();
@@ -6638,9 +6639,11 @@ export async function listInboxMissions(): Promise<InboxMissionsResponse> {
   const client = requireDatabaseClient();
   const baseSql = selectInboxMissionsSql(workspacePlaceholders);
 
+  // Recent window must not leak human/other Next missions — Next is agent-only.
   const recentRows = (await client.all(
     `${baseSql}
        AND t.created_at >= ?
+       AND (t.status_type != 'next' OR t.created_by_kind = 'agent')
      ORDER BY t.created_at DESC, t.sequence_number DESC, t.id ASC
      LIMIT ?`,
     [...readableWorkspaceIds, recentCutoff, INBOX_MISSION_RECENT_LIMIT]

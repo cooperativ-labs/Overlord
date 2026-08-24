@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -8,10 +8,15 @@ import {
   applyPollJitter,
   buildRunnerServiceEnv,
   captureRunnerSupervisorIdentity,
+  composeRunnerServicePath,
   emptyRunnerServiceState,
   FALLBACK_POLL_INTERVAL_MS,
+  inspectInstalledLaunchdPlist,
   LAUNCHD_LABEL,
+  LAUNCHD_PROCESS_TYPE,
   LaunchdManager,
+  parseLaunchdEnvPath,
+  parseLaunchdProcessType,
   patchRunnerServiceState,
   planLaunchdLoadCommands,
   planLaunchdUnloadCommands,
@@ -23,6 +28,7 @@ import {
   resolveOvldInvocation,
   resolveRunnerEntryScript,
   resolveServiceManager,
+  runnerServiceReinstallHint,
   shouldRestartRunnerSupervisor,
   writeRunnerServiceState
 } from '../src/runner-service.ts';
@@ -126,8 +132,17 @@ test('resolveOvldInvocation prefers an explicit override, otherwise re-runs the 
     });
     delete process.env.OVLD_RUNNER_EXEC;
     const resolved = resolveOvldInvocation(['/node', '/opt/app/cli/dist/index.js'], '/node');
-    assert.equal(resolved.program, '/node');
-    assert.deepEqual(resolved.args, ['/opt/app/cli/dist/index.js', 'runner', 'supervise']);
+    const appInvocation = resolveOverlordAppInvocation();
+    if (appInvocation) {
+      assert.deepEqual(resolved, {
+        program: appInvocation.program,
+        args: appInvocation.args,
+        runAsElectronNode: true
+      });
+    } else {
+      assert.equal(resolved.program, '/node');
+      assert.deepEqual(resolved.args, ['/opt/app/cli/dist/index.js', 'runner', 'supervise']);
+    }
   } finally {
     if (prior === undefined) delete process.env.OVLD_RUNNER_EXEC;
     else process.env.OVLD_RUNNER_EXEC = prior;
@@ -198,6 +213,33 @@ test('buildRunnerServiceEnv captures a remote backend URL and a non-empty PATH',
   assert.ok(env.PATH && env.PATH.length > 0);
 });
 
+test('composeRunnerServicePath uses a fixed prefix plus system dirs, not the installer PATH', () => {
+  const composed = composeRunnerServicePath({ homeDir: '/Users/tester' });
+  assert.equal(
+    composed,
+    '/opt/homebrew/bin:/usr/local/bin:/Users/tester/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin'
+  );
+  assert.ok(composed.split(':').includes('/usr/bin'), 'osascript lives in /usr/bin');
+  assert.ok(!composed.includes('nvm'));
+  assert.ok(!composed.includes('.nvm'));
+});
+
+test('buildRunnerServiceEnv uses the composed PATH rather than process.env.PATH', () => {
+  const prior = process.env.PATH;
+  try {
+    process.env.PATH = '/tmp/nvm/versions/node/v22/bin:/usr/bin';
+    const env = buildRunnerServiceEnv({
+      backendUrl: 'https://api.example.test',
+      homeDir: '/Users/tester'
+    });
+    assert.equal(env.PATH, composeRunnerServicePath({ homeDir: '/Users/tester' }));
+    assert.ok(!env.PATH?.includes('nvm'));
+  } finally {
+    if (prior === undefined) delete process.env.PATH;
+    else process.env.PATH = prior;
+  }
+});
+
 test('buildRunnerServiceEnv follows overlord.toml instead of pinning a loopback backend URL', () => {
   const env = buildRunnerServiceEnv({ backendUrl: 'http://127.0.0.1:4310' });
   assert.equal(env.OVERLORD_BACKEND_URL, undefined);
@@ -234,6 +276,10 @@ test('renderLaunchdPlist embeds the label, program args, and env, and escapes XM
   assert.match(plist, /<string>runner<\/string>/);
   assert.match(plist, /<string>supervise<\/string>/);
   assert.match(plist, /<key>RunAtLoad<\/key>\s*<true\/>/);
+  assert.match(plist, /<key>ProcessType<\/key>\s*<string>Interactive<\/string>/);
+  assert.equal(parseLaunchdProcessType(plist), LAUNCHD_PROCESS_TYPE);
+  assert.ok(!plist.includes('<string>Background</string>'));
+  assert.ok(!plist.includes('<string>Adaptive</string>'));
   // The `&` in the URL must be XML-escaped.
   assert.ok(plist.includes('a=1&amp;b=2'));
   assert.ok(!plist.includes('a=1&b=2'));
@@ -248,6 +294,8 @@ test('renderSystemdUnit emits an absolute ExecStart with Restart and env lines',
   assert.match(unit, /Restart=always/);
   assert.match(unit, /Environment=OVERLORD_BACKEND_URL=https:\/\/api\.example\.test/);
   assert.match(unit, /WantedBy=default\.target/);
+  assert.ok(!unit.includes('Nice='));
+  assert.ok(!unit.includes('CPUSchedulingPolicy'));
 });
 
 test('resolveServiceManager maps platforms and returns null for unsupported ones', () => {
@@ -340,7 +388,13 @@ test('launchd install boots out an already-loaded label before writing and loadi
     const bootstrapCall = calls.find(args => args[0] === 'bootstrap');
     assert.equal(bootstrapCall?.[2], manager.unitPath());
     assert.ok(existsSync(manager.unitPath()));
-    assert.ok(readFileSync(manager.unitPath(), 'utf8').includes('supervise'));
+    const plist = readFileSync(manager.unitPath(), 'utf8');
+    assert.ok(plist.includes('supervise'));
+    assert.equal(parseLaunchdProcessType(plist), 'Interactive');
+    assert.deepEqual(inspectInstalledLaunchdPlist(manager.unitPath()), {
+      processType: 'Interactive',
+      path: null
+    });
   } finally {
     if (priorHome === undefined) delete process.env.HOME;
     else process.env.HOME = priorHome;
@@ -418,4 +472,65 @@ test('launchd restart forces a full unload and reload from disk', async () => {
     calls.map(args => args[0]),
     ['bootout', 'enable', 'bootstrap', 'kickstart']
   );
+});
+
+test('inspectInstalledLaunchdPlist extracts ProcessType and PATH from a rendered plist', () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'ovld-plist-inspect-'));
+  try {
+    const pathEnv = composeRunnerServicePath({ homeDir: '/Users/tester' });
+    const plist = renderLaunchdPlist({
+      label: LAUNCHD_LABEL,
+      invocation: { program: '/node', args: ['/cli.js', 'runner', 'supervise'] },
+      env: { PATH: pathEnv },
+      logDir: dir
+    });
+    const plistPath = path.join(dir, 'io.overlord.runner.plist');
+    writeFileSync(plistPath, plist);
+    assert.equal(parseLaunchdEnvPath(plist), pathEnv);
+    assert.deepEqual(inspectInstalledLaunchdPlist(plistPath), {
+      processType: 'Interactive',
+      path: pathEnv
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('runnerServiceReinstallHint nags while ProcessType or PATH is stale, or publisher is node', () => {
+  const currentPath = composeRunnerServicePath();
+  assert.equal(
+    runnerServiceReinstallHint({
+      installed: true,
+      publisher: 'overlord',
+      processType: 'Interactive',
+      path: currentPath
+    }),
+    null
+  );
+  assert.equal(
+    runnerServiceReinstallHint({ installed: false, publisher: 'node', processType: 'Background' }),
+    null
+  );
+  const stale = runnerServiceReinstallHint({
+    installed: true,
+    publisher: 'overlord',
+    processType: 'Background'
+  });
+  assert.ok(stale && stale.includes('ProcessType=Background'));
+  assert.ok(stale.includes('ovld runner service install'));
+  const nodeHint = runnerServiceReinstallHint({
+    installed: true,
+    publisher: 'node',
+    processType: 'Interactive'
+  });
+  assert.ok(nodeHint && nodeHint.includes('Node.js Foundation'));
+  const stalePath = runnerServiceReinstallHint({
+    installed: true,
+    publisher: 'overlord',
+    processType: 'Interactive',
+    path: '/usr/bin:/bin:/usr/sbin:/sbin'
+  });
+  assert.ok(stalePath && stalePath.includes('PATH'));
+  assert.ok(stalePath.includes('ovld runner service install'));
+  assert.ok(!stalePath.includes('ProcessType='));
 });

@@ -17,13 +17,13 @@ export function ProjectDot({ color }: { color: string | null }) {
   );
 }
 
-/** The `executing` / `delivered` / `blocking question` pill each card leads with. */
+/** The `launching` / `executing` / `blocking question` pill each card leads with. */
 export function KindBadge({
   tone,
   icon,
   label
 }: {
-  tone: 'running' | 'delivered' | 'question' | 'launching';
+  tone: 'running' | 'question' | 'launching';
   icon: ReactNode;
   label: string;
 }) {
@@ -32,8 +32,6 @@ export function KindBadge({
       'border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-500/50 dark:bg-emerald-500/10 dark:text-emerald-100',
     launching:
       'border-sky-300 bg-sky-50 text-sky-900 dark:border-sky-500/50 dark:bg-sky-500/10 dark:text-sky-100',
-    delivered:
-      'border-(--color-border) bg-(--color-surface-2) text-(--color-ink) dark:border-(--color-border)',
     question:
       'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-100'
   }[tone];
@@ -61,12 +59,19 @@ const missionLinkClass =
 
 export function ActivityFeedCardMeta({
   item,
+  identity = 'objective',
   trailing,
   onMissionOpen
 }: {
   item: ActivityFeedItemDto;
+  /**
+   * What the card itself is. A `mission` card carries the mission title as its
+   * own heading, so its context line is just project and mission id — repeating
+   * the title here would say the same thing twice.
+   */
+  identity?: 'objective' | 'mission';
   trailing?: ReactNode;
-  /** When set, mission display id and title open the mission panel (delivery cards). */
+  /** When set, mission display id and title open the mission panel. */
   onMissionOpen?: (event: MouseEvent<HTMLButtonElement>) => void;
 }) {
   const openMission = (event: MouseEvent<HTMLButtonElement>) => {
@@ -80,31 +85,42 @@ export function ActivityFeedCardMeta({
         <ProjectDot color={item.projectColor} />
         <span className="truncate">{item.projectName}</span>
       </span>
-      {item.objectiveDisplayId ? (
+      {identity === 'mission' ? (
         <>
           <span aria-hidden="true">·</span>
           <span className="font-mono text-xs font-medium text-(--color-ink)">
-            {item.objectiveDisplayId}
+            {item.missionDisplayId}
           </span>
         </>
-      ) : null}
-      <span aria-hidden="true">·</span>
-      {onMissionOpen ? (
-        <>
-          <button
-            type="button"
-            onClick={openMission}
-            className={cn(missionLinkClass, 'font-mono font-medium text-(--color-ink)')}
-          >
-            {item.missionDisplayId}
-          </button>
-          <span aria-hidden="true">·</span>
-          <button type="button" onClick={openMission} className={missionLinkClass}>
-            {item.missionTitle}
-          </button>
-        </>
       ) : (
-        <span className="min-w-0 truncate">{item.missionTitle}</span>
+        <>
+          {item.objectiveDisplayId ? (
+            <>
+              <span aria-hidden="true">·</span>
+              <span className="font-mono text-xs font-medium text-(--color-ink)">
+                {item.objectiveDisplayId}
+              </span>
+            </>
+          ) : null}
+          <span aria-hidden="true">·</span>
+          {onMissionOpen ? (
+            <>
+              <button
+                type="button"
+                onClick={openMission}
+                className={cn(missionLinkClass, 'font-mono font-medium text-(--color-ink)')}
+              >
+                {item.missionDisplayId}
+              </button>
+              <span aria-hidden="true">·</span>
+              <button type="button" onClick={openMission} className={missionLinkClass}>
+                {item.missionTitle}
+              </button>
+            </>
+          ) : (
+            <span className="min-w-0 truncate">{item.missionTitle}</span>
+          )}
+        </>
       )}
       {trailing}
     </div>

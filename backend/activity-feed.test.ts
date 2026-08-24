@@ -19,8 +19,8 @@ function newId(prefix: string): string {
 
 /**
  * Delivery rows are written by the protocol service, which needs a live agent
- * session. The feed only reads them, so the test seeds the row directly rather
- * than standing up a session handshake for a read-path assertion.
+ * session. The feed only reads missions and asks now, so this exists solely to
+ * prove a delivery never puts a card on the page.
  */
 function seedDelivery({
   workspaceId,
@@ -82,24 +82,24 @@ function seedAskEvent({
   return id;
 }
 
-test('an executing objective appears with its project and mission context', async () => {
+test('a mission with an executing objective appears with its project context', async () => {
   const project = await createProject({ name: 'AF Running', color: '#445566' });
   const mission = await createMission({ projectId: project.id, firstObjective: 'Run me' });
   const objective = mission.objectives[0]!;
   await updateObjective(objective.id, { state: 'executing' });
 
   const feed = await listActivityFeed();
-  const item = feed.items.find(entry => entry.id === `run:${objective.id}`);
+  const item = feed.items.find(entry => entry.id === `mission:${mission.id}`);
 
-  assert.ok(item, 'the executing objective must be in the feed');
-  assert.equal(item.kind, 'objective_run');
+  assert.ok(item, 'the running mission must be in the feed');
+  assert.equal(item.kind, 'mission_run');
   assert.equal(item.projectName, 'AF Running');
   assert.equal(item.projectColor, '#445566');
   assert.equal(item.missionId, mission.id);
   assert.equal(item.objectiveDisplayId, objective.displayId);
 });
 
-test('a pending-delivery objective appears in the feed as live work', async () => {
+test('a pending-delivery objective keeps its mission on the feed as live work', async () => {
   const project = await createProject({ name: 'AF Pending' });
   const mission = await createMission({ projectId: project.id, firstObjective: 'Re-attached' });
   const objective = mission.objectives[0]!;
@@ -109,116 +109,122 @@ test('a pending-delivery objective appears in the feed as live work', async () =
   db.prepare(`UPDATE objectives SET state = 'pending_delivery' WHERE id = ?`).run(objective.id);
 
   const feed = await listActivityFeed();
-  const item = feed.items.find(entry => entry.id === `run:${objective.id}`);
+  const item = feed.items.find(entry => entry.id === `mission:${mission.id}`);
 
-  assert.ok(item, 'the pending-delivery objective must be in the feed');
-  assert.equal(item.kind, 'objective_run');
-  assert.ok(item.kind === 'objective_run' && item.state === 'pending_delivery');
+  assert.ok(item && item.kind === 'mission_run');
+  assert.equal(item.runState, 'executing');
+  assert.deepEqual(item.activeObjectiveIds, [objective.id]);
 });
 
-test('objectives that are not launching, executing, or pending delivery stay out of the feed', async () => {
+test('a mission with nothing running stays out of the feed', async () => {
   const project = await createProject({ name: 'AF Idle' });
   const mission = await createMission({ projectId: project.id, firstObjective: 'Idle' });
-  const objective = mission.objectives[0]!;
 
   const feed = await listActivityFeed();
 
-  assert.ok(!feed.items.some(entry => entry.id === `run:${objective.id}`));
+  assert.ok(!feed.items.some(entry => entry.id === `mission:${mission.id}`));
 });
 
-test('the auto-advance queue stops at the first objective that will not advance on its own', async () => {
-  const project = await createProject({ name: 'AF Queue' });
+test('a mission card lists every objective in mission-panel display order', async () => {
+  const project = await createProject({ name: 'AF Objectives' });
   const mission = await createMission({ projectId: project.id, firstObjective: 'First' });
-  const running = mission.objectives[0]!;
-  await updateObjective(running.id, { state: 'executing' });
+  const done = mission.objectives[0]!;
+  db.prepare(
+    `UPDATE objectives SET state = 'complete', completed_at = '2026-08-01T00:00:00.000Z'
+      WHERE id = ?`
+  ).run(done.id);
 
-  const second = await createObjective({
+  const running = await createObjective({
     missionId: mission.id,
     instructionText: 'Second',
-    state: 'future',
-    autoAdvance: true
+    state: 'future'
   });
-  const third = await createObjective({
+  db.prepare(
+    `UPDATE objectives SET state = 'executing', started_at = '2026-08-02T00:00:00.000Z'
+      WHERE id = ?`
+  ).run(running.id);
+
+  const planned = await createObjective({
     missionId: mission.id,
     instructionText: 'Third',
     state: 'future',
     autoAdvance: true
   });
-  // A manual gate: everything behind it is not "up next".
-  const gate = await createObjective({
-    missionId: mission.id,
-    instructionText: 'Manual gate',
-    state: 'future',
-    autoAdvance: false
-  });
-  const behindGate = await createObjective({
-    missionId: mission.id,
-    instructionText: 'Behind the gate',
-    state: 'future',
-    autoAdvance: true
-  });
 
   const feed = await listActivityFeed();
-  const item = feed.items.find(entry => entry.id === `run:${running.id}`);
-  assert.ok(item && item.kind === 'objective_run');
+  const item = feed.items.find(entry => entry.id === `mission:${mission.id}`);
+  assert.ok(item && item.kind === 'mission_run');
 
   assert.deepEqual(
-    item.upcoming.map(next => next.objectiveId),
-    [second.id, third.id],
-    'the queue is the contiguous auto-advance run only'
+    item.objectives.map(objective => objective.objectiveId),
+    [done.id, running.id, planned.id],
+    'completed, then active, then the plan — the mission panel ordering'
   );
-  assert.ok(!item.upcoming.some(next => next.objectiveId === gate.id));
-  assert.ok(!item.upcoming.some(next => next.objectiveId === behindGate.id));
+  assert.deepEqual(
+    item.objectives.map(objective => objective.state),
+    ['complete', 'executing', 'future']
+  );
+  assert.equal(item.objectives[2]!.autoAdvance, true);
 });
 
-test('deliveries are capped at the newest seven, with the true total in counts', async () => {
-  const project = await createProject({ name: 'AF Deliveries' });
-  const mission = await createMission({ projectId: project.id, firstObjective: 'Deliver' });
-  const objective = mission.objectives[0]!;
-
-  for (let index = 0; index < 9; index += 1) {
-    seedDelivery({
-      workspaceId: mission.workspaceId,
-      projectId: project.id,
-      missionId: mission.id,
-      objectiveId: objective.id,
-      summary: `Delivery ${index}`,
-      // Ascending timestamps: the last one written is the newest.
-      deliveredAt: `2026-08-1${index}T00:00:00.000Z`
-    });
-  }
+test('one mission running two objectives is still a single card', async () => {
+  const project = await createProject({ name: 'AF Parallel' });
+  const mission = await createMission({ projectId: project.id, firstObjective: 'Left' });
+  const left = mission.objectives[0]!;
+  const right = await createObjective({
+    missionId: mission.id,
+    instructionText: 'Right',
+    state: 'future'
+  });
+  db.prepare(`UPDATE objectives SET state = 'executing' WHERE id IN (?, ?)`).run(left.id, right.id);
 
   const feed = await listActivityFeed();
-  const deliveries = feed.items.filter(entry => entry.kind === 'delivery');
+  const cards = feed.items.filter(entry => entry.missionId === mission.id);
 
-  assert.equal(deliveries.length, 7, 'the feed shows at most seven deliveries');
-  assert.equal(feed.counts.delivery, 7);
+  assert.equal(cards.length, 1);
+  assert.equal(cards[0]!.kind === 'mission_run' && cards[0]!.activeObjectiveIds.length, 2);
+});
+
+test('a launching objective makes its mission lead the feed, above executing missions', async () => {
+  const project = await createProject({ name: 'AF Order' });
+  const executing = await createMission({ projectId: project.id, firstObjective: 'Executing' });
+  await updateObjective(executing.objectives[0]!.id, { state: 'executing' });
+
+  const launching = await createMission({ projectId: project.id, firstObjective: 'Launching' });
+  db.prepare(`UPDATE objectives SET state = 'launching' WHERE id = ?`).run(
+    launching.objectives[0]!.id
+  );
+
+  const feed = await listActivityFeed();
+  const missionCards = feed.items.filter(entry => entry.kind === 'mission_run');
+  const launchingIndex = missionCards.findIndex(entry => entry.missionId === launching.id);
+  const executingIndex = missionCards.findIndex(entry => entry.missionId === executing.id);
+
+  assert.ok(launchingIndex >= 0 && executingIndex >= 0);
+  assert.ok(launchingIndex < executingIndex, 'launching missions lead');
   assert.equal(
-    deliveries[0]!.kind === 'delivery' ? deliveries[0]!.delivery.summary : null,
-    'Delivery 8',
-    'the newest delivery leads'
+    missionCards[launchingIndex]!.kind === 'mission_run' && missionCards[launchingIndex]!.runState,
+    'launching'
   );
 });
 
-test('a delivery carries the normalized report rather than raw payload JSON', async () => {
-  const project = await createProject({ name: 'AF Report' });
-  const mission = await createMission({ projectId: project.id, firstObjective: 'Report' });
+test('deliveries never appear on the feed', async () => {
+  const project = await createProject({ name: 'AF Deliveries' });
+  const mission = await createMission({ projectId: project.id, firstObjective: 'Deliver' });
   const objective = mission.objectives[0]!;
   seedDelivery({
     workspaceId: mission.workspaceId,
     projectId: project.id,
     missionId: mission.id,
     objectiveId: objective.id,
-    summary: 'Normalized please',
+    summary: 'Shipped it',
     deliveredAt: '2026-08-20T00:00:00.000Z'
   });
 
   const feed = await listActivityFeed();
-  const item = feed.items.find(entry => entry.kind === 'delivery');
 
-  assert.ok(item && item.kind === 'delivery');
-  assert.ok(item.delivery.report, 'a versioned report is synthesized for legacy payloads');
-  assert.ok(!('payloadJson' in item.delivery), 'raw payload JSON is never projected');
+  assert.ok(!feed.items.some(entry => (entry.kind as string) === 'delivery'));
+  assert.ok(!('delivery' in feed.counts));
 });
 
 test('an unseen blocking question surfaces and a seen one drops out', async () => {
@@ -311,7 +317,7 @@ test('the feed reads through workspace membership, not through the rows themselv
   try {
     const feed = await listActivityFeed();
     assert.deepEqual(feed.items, [], 'no membership, no rows');
-    assert.equal(feed.counts.objective_run, 0);
+    assert.equal(feed.counts.mission_run, 0);
   } finally {
     for (const row of restore) {
       db.prepare(`UPDATE workspace_users SET status = ? WHERE id = ?`).run(row.status, row.id);
@@ -380,24 +386,24 @@ test('session agent sentinel unknown falls back to the objective assigned agent'
   });
 
   const feed = await listActivityFeed();
-  const item = feed.items.find(entry => entry.id === `run:${objective.id}`);
-  assert.ok(item && item.kind === 'objective_run');
+  const item = feed.items.find(entry => entry.id === `mission:${mission.id}`);
+  assert.ok(item && item.kind === 'mission_run');
   assert.equal(item.agentIdentifier, 'cursor');
   assert.equal(item.modelIdentifier, 'cursor-grok-4.6');
 });
 
-test('feed items expose objective creation provenance', async () => {
+test('a mission card carries the mission creation provenance', async () => {
   const project = await createProject({ name: 'AF Provenance' });
   const mission = await createMission({ projectId: project.id, firstObjective: 'Authored' });
   const objective = mission.objectives[0]!;
   await updateObjective(objective.id, { state: 'executing' });
   db.prepare(
-    `UPDATE objectives SET created_by_kind = 'agent', created_by_agent = 'cursor' WHERE id = ?`
-  ).run(objective.id);
+    `UPDATE missions SET created_by_kind = 'agent', created_by_agent = 'cursor' WHERE id = ?`
+  ).run(mission.id);
 
   const feed = await listActivityFeed();
-  const item = feed.items.find(entry => entry.id === `run:${objective.id}`);
-  assert.ok(item && item.kind === 'objective_run');
+  const item = feed.items.find(entry => entry.id === `mission:${mission.id}`);
+  assert.ok(item && item.kind === 'mission_run');
   assert.equal(item.createdByKind, 'agent');
   assert.equal(item.createdByAgent, 'cursor');
 });

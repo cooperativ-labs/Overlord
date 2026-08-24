@@ -5,7 +5,7 @@ import {
   shouldUseLatchProvider
 } from '@overlord/core/service/latch-launch';
 import type { LaunchSessionSnapshot } from '@overlord/core/service/terminal-profile-types';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, type SpawnSyncOptions, type SpawnSyncReturns } from 'node:child_process';
 import { chmodSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -29,8 +29,11 @@ import {
   composeAgentTerminalCommand,
   type LaunchExecution,
   resolveLaunchExecution,
+  TERMINAL_OPEN_SPAWN_KILL_SIGNAL,
+  TERMINAL_OPEN_SPAWN_TIMEOUT_MS,
   terminalLaunchScriptContent,
   type TerminalLaunchSettings,
+  terminalOpenSpawnTimeoutMs,
   tmpEnvFor
 } from './terminal-launcher.js';
 
@@ -103,6 +106,65 @@ export function interactiveLoginShellInvocation(
 ): { command: string; args: string[] } {
   const shell = configuredShell?.trim() || '/bin/bash';
   return { command: shell, args: ['-ilc', command] };
+}
+
+/** `spawnSync` options for a direct launch. Timeout is set only for terminal-open. */
+export function spawnSyncOptionsForLaunch({
+  cwd,
+  env,
+  timeoutMs
+}: {
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+  timeoutMs?: number;
+}): SpawnSyncOptions {
+  return {
+    cwd,
+    env,
+    stdio: 'inherit',
+    ...(timeoutMs === undefined
+      ? {}
+      : { timeout: timeoutMs, killSignal: TERMINAL_OPEN_SPAWN_KILL_SIGNAL })
+  };
+}
+
+export function isSpawnSyncTimedOut(result: { error?: Error }): boolean {
+  return (result.error as NodeJS.ErrnoException | undefined)?.code === 'ETIMEDOUT';
+}
+
+/**
+ * Fail the execution request when osascript/Apple Event never returns, so the
+ * supervisor can keep claiming. The terminal app may still open afterward.
+ */
+export function terminalOpenTimeoutMessage({
+  terminal,
+  timeoutMs
+}: {
+  terminal: string;
+  timeoutMs: number;
+}): string {
+  const seconds = Math.round(timeoutMs / 1000);
+  return (
+    `osascript/Apple Event timed out after ${seconds}s while opening ${terminal}. ` +
+    `The execution request failed so the runner can keep claiming. ` +
+    `${terminal} may still open after this timeout (orphan window).`
+  );
+}
+
+export function throwIfTerminalOpenTimedOut({
+  result,
+  execution
+}: {
+  result: Pick<SpawnSyncReturns<Buffer>, 'error'>;
+  execution: LaunchExecution;
+}): void {
+  if (!execution.terminal || !isSpawnSyncTimedOut(result)) return;
+  throw new Error(
+    terminalOpenTimeoutMessage({
+      terminal: execution.terminal,
+      timeoutMs: TERMINAL_OPEN_SPAWN_TIMEOUT_MS
+    })
+  );
 }
 
 type LaunchPlan = {
@@ -657,6 +719,7 @@ export async function launchAgent({
     const shell = process.env.SHELL?.trim() || '/bin/bash';
     // Latch refuses nested `create` calls. Run the exact command string that
     // would have gone in the manifest inline in the current Latch-owned PTY.
+    // No timeout: this is the long-running agent process, not a terminal-open.
     const result = spawnSync(shell, ['-ilc', plan.latchCommandString], {
       cwd: options.workingDirectory,
       env,
@@ -761,20 +824,19 @@ export async function launchAgent({
   }
 
   const { execution } = plan;
+  const timeoutMs = terminalOpenSpawnTimeoutMs(execution);
+  const spawnOptions = spawnSyncOptionsForLaunch({
+    cwd: options.workingDirectory,
+    env,
+    timeoutMs
+  });
   const shellInvocation = execution.useShell
     ? interactiveLoginShellInvocation(execution.command)
     : null;
   const result = shellInvocation
-    ? spawnSync(shellInvocation.command, shellInvocation.args, {
-        cwd: options.workingDirectory,
-        env,
-        stdio: 'inherit'
-      })
-    : spawnSync(execution.command, execution.args, {
-        cwd: options.workingDirectory,
-        env,
-        stdio: 'inherit'
-      });
+    ? spawnSync(shellInvocation.command, shellInvocation.args, spawnOptions)
+    : spawnSync(execution.command, execution.args, spawnOptions);
+  throwIfTerminalOpenTimedOut({ result, execution });
 
   return {
     plan,

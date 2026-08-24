@@ -23,7 +23,16 @@ import { SidebarFooter } from '../ui/sidebar';
 export type SettingsNavItem = {
   name: string;
   icon: ElementType;
+  /**
+   * Stable identity for `activeNav` when the displayed name is not unique or is
+   * user-authored (e.g. one item per project resource). Defaults to `name`.
+   */
+  key?: string;
 };
+
+export function settingsNavItemKey(item: SettingsNavItem): string {
+  return item.key ?? item.name;
+}
 
 export type SettingsNavGroup = {
   label?: string;
@@ -58,7 +67,7 @@ export function SettingsDialogShell({
   children
 }: SettingsDialogShellProps) {
   const flatNavItems = navGroups.flatMap(group => group.items);
-  const activeNavItem = flatNavItems.find(item => item.name === activeNav);
+  const activeNavItem = flatNavItems.find(item => settingsNavItemKey(item) === activeNav);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -81,12 +90,13 @@ export function SettingsDialogShell({
                   <ul className="space-y-0.5">
                     {group.items.map(item => {
                       const Icon = item.icon;
-                      const isActive = item.name === activeNav;
+                      const navKey = settingsNavItemKey(item);
+                      const isActive = navKey === activeNav;
                       return (
-                        <li key={item.name}>
+                        <li key={navKey}>
                           <button
                             type="button"
-                            onClick={() => onActiveNavChange(item.name)}
+                            onClick={() => onActiveNavChange(navKey)}
                             className={cn(
                               'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
                               isActive
@@ -122,8 +132,9 @@ export function SettingsDialogShell({
                   <SelectContent>
                     {flatNavItems.map(item => {
                       const Icon = item.icon;
+                      const navKey = settingsNavItemKey(item);
                       return (
-                        <SelectItem key={item.name} value={item.name}>
+                        <SelectItem key={navKey} value={navKey}>
                           <div className="flex items-center gap-2">
                             <Icon className="size-4" />
                             <span>{item.name}</span>
@@ -138,7 +149,7 @@ export function SettingsDialogShell({
               <div className="hidden items-center gap-2 text-sm md:flex">
                 <span className="text-muted-foreground">{breadcrumbRoot ?? title}</span>
                 <span className="text-muted-foreground">/</span>
-                <span className="font-medium">{activeNav}</span>
+                <span className="font-medium">{activeNavItem?.name ?? activeNav}</span>
               </div>
 
               {showClose ? (

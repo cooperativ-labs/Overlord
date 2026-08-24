@@ -150724,6 +150724,7 @@ async function listInboxMissions() {
   const recentRows = await client.all(
     `${baseSql}
        AND t.created_at >= ?
+       AND (t.status_type != 'next' OR t.created_by_kind = 'agent')
      ORDER BY t.created_at DESC, t.sequence_number DESC, t.id ASC
      LIMIT ?`,
     [...readableWorkspaceIds2, recentCutoff, INBOX_MISSION_RECENT_LIMIT]
@@ -162039,6 +162040,44 @@ async function updateProjectExecutionTarget(projectId, body, client = requireDat
   }
 }
 
+// execution/runner-claim-http.ts
+function flushRunnerClaimHeaders(res) {
+  if (res.headersSent) return;
+  res.status(200);
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.flushHeaders();
+}
+function writeRunnerClaimBody(res, body) {
+  if (res.writableEnded) return;
+  if (res.headersSent) {
+    res.write(JSON.stringify(body));
+    res.end();
+    return;
+  }
+  res.json(body);
+}
+async function sendRunnerClaimResponse({
+  res,
+  claim
+}) {
+  let flushed = false;
+  try {
+    const result = await claim({
+      onListenArmed: () => {
+        flushRunnerClaimHeaders(res);
+        flushed = true;
+      }
+    });
+    writeRunnerClaimBody(res, result);
+  } catch (error53) {
+    if (flushed && !res.writableEnded) {
+      writeRunnerClaimBody(res, { request: null, longPoll: true });
+      return;
+    }
+    throw error53;
+  }
+}
+
 // execution/runner.ts
 init_dist();
 init_errors4();
@@ -162103,19 +162142,44 @@ function runnerRegistrationFromBody(value) {
 // execution/runner-queue-notify.ts
 var QUEUE_CHANNEL = "overlord_execution_request_queue";
 var RUNNER_CLAIM_LONG_POLL_MS = 25e3;
+var RUNNER_QUEUE_LISTEN_CONNECT_TIMEOUT_MS = 3e3;
+async function connectWithTimeout({
+  client,
+  timeoutMs
+}) {
+  let timer;
+  const connectPromise = Promise.resolve(client.connect());
+  try {
+    await Promise.race([
+      connectPromise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`LISTEN connect timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timer !== void 0) clearTimeout(timer);
+    void connectPromise.catch(() => void 0);
+  }
+}
 async function createRunnerQueueListener({
   connectionString = process.env.DATABASE_URL,
   timeoutMs = RUNNER_CLAIM_LONG_POLL_MS,
+  connectTimeoutMs = RUNNER_QUEUE_LISTEN_CONNECT_TIMEOUT_MS,
   createClient
 } = {}) {
   if (!connectionString) return null;
   const client = createClient ? await createClient(connectionString) : await (async () => {
     const pg2 = await Promise.resolve().then(() => (init_esm(), esm_exports));
     const Client3 = (pg2.default ?? pg2).Client;
-    return new Client3({ connectionString });
+    return new Client3({
+      connectionString,
+      connectionTimeoutMillis: connectTimeoutMs
+    });
   })();
   try {
-    await client.connect();
+    await connectWithTimeout({ client, timeoutMs: connectTimeoutMs });
     await client.query(`LISTEN ${QUEUE_CHANNEL}`);
   } catch {
     await client.end().catch(() => void 0);
@@ -162144,6 +162208,23 @@ async function createRunnerQueueListener({
       await client.end().catch(() => void 0);
     }
   };
+}
+async function longPollRunnerClaim({
+  claimNow,
+  createListener = createRunnerQueueListener,
+  onListenArmed
+}) {
+  const listener = await createListener();
+  if (!listener) return { request: null, longPoll: false };
+  try {
+    const afterListen = await claimNow();
+    if (afterListen) return { request: afterListen, longPoll: true };
+    onListenArmed?.();
+    await listener.wait();
+    return { request: await claimNow(), longPoll: true };
+  } finally {
+    await listener.close();
+  }
 }
 
 // execution/runner.ts
@@ -162243,7 +162324,8 @@ async function runnerStatus(projectId) {
 async function claimRunnerRequest({
   projectId,
   clientDevice,
-  runner
+  runner,
+  onListenArmed
 } = {}) {
   const claimNow = async () => {
     const scopes = await resolveRunnerScopes(projectId);
@@ -162305,16 +162387,10 @@ async function claimRunnerRequest({
   const request = await claimNow();
   if (request) return { request, longPoll: DATABASE_DIALECT === "postgres" };
   if (DATABASE_DIALECT !== "postgres") return { request: null, longPoll: false };
-  const listener = await createRunnerQueueListener();
-  if (!listener) return { request: null, longPoll: false };
-  try {
-    const afterListen = await claimNow();
-    if (afterListen) return { request: afterListen, longPoll: true };
-    await listener.wait();
-    return { request: await claimNow(), longPoll: true };
-  } finally {
-    await listener.close();
-  }
+  return longPollRunnerClaim({
+    claimNow,
+    onListenArmed
+  });
 }
 async function claimProjectLaunchSettings(db, projectId) {
   const row = await db.get(
@@ -163895,13 +163971,13 @@ function resolveServeSpa({
 // activity-feed.ts
 init_dist2();
 init_db();
-var RUN_LIMIT = 25;
-var DELIVERY_LIMIT = 7;
+var MISSION_LIMIT = 25;
 var QUESTION_LIMIT = 10;
 var QUESTION_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1e3;
 var FEED_LIMIT = 40;
 var INSTRUCTION_PREVIEW_CHARS = 400;
 var EVENT_SUMMARY_CHARS = 240;
+var RUNNING_STATES = ["launching", "executing", "pending_delivery"];
 function truncate(value, max) {
   const text = (value ?? "").trim();
   if (text.length <= max) return text;
@@ -163964,14 +164040,15 @@ var CONTEXT_COLUMNS = `
             o.workspace_id, w.name AS workspace_name,
             o.project_id, p.name AS project_name, p.settings_json AS project_settings_json,
             o.mission_id, m.display_id AS mission_display_id, m.title AS mission_title`;
+var MISSION_PROVENANCE_COLUMNS = `m.created_by_kind, m.created_by_agent`;
 var OBJECTIVE_PROVENANCE_COLUMNS = `o.created_by_kind, o.created_by_agent`;
 async function loadRuns(workspaceIds) {
   return await requireDatabaseClient().all(
-    `SELECT ${CONTEXT_COLUMNS}, ${OBJECTIVE_PROVENANCE_COLUMNS},
+    `SELECT ${CONTEXT_COLUMNS}, ${MISSION_PROVENANCE_COLUMNS},
             o.id AS objective_id, o.display_key AS objective_display_key,
             o.title AS objective_title, o.instruction_text, o.state, o.position,
             o.branch, o.resource_key, o.assigned_agent, o.model,
-            o.updated_at AS objective_updated_at,
+            o.updated_at AS objective_updated_at, o.launched_at, o.started_at,
             (SELECT s.agent_identifier FROM agent_sessions s
               WHERE s.objective_id = o.id AND s.deleted_at IS NULL
               ORDER BY s.started_at DESC, s.id DESC LIMIT 1) AS session_agent_identifier,
@@ -163986,23 +164063,22 @@ async function loadRuns(workspaceIds) {
               ORDER BY r.created_at DESC, r.id DESC LIMIT 1) AS request_created_at
        FROM objectives o${CONTEXT_JOIN}
       WHERE o.deleted_at IS NULL
-        AND o.state IN ('launching', 'executing', 'pending_delivery')
+        AND o.state IN (${placeholders(RUNNING_STATES.length)})
         AND o.workspace_id IN (${placeholders(workspaceIds.length)})
-      ORDER BY o.updated_at DESC, o.id ASC
-      LIMIT ?`,
-    [...workspaceIds, RUN_LIMIT]
+      ORDER BY o.updated_at DESC, o.id ASC`,
+    [...RUNNING_STATES, ...workspaceIds]
   );
 }
-async function loadQueued(runs) {
-  const missionIds = [...new Set(runs.map((run) => run.mission_id))];
+async function loadMissionObjectives(missionIds) {
   if (missionIds.length === 0) return /* @__PURE__ */ new Map();
   const rows = await requireDatabaseClient().all(
     `SELECT o.mission_id, m.display_id AS mission_display_id, o.id AS objective_id,
-            o.display_key, o.title, o.position, o.assigned_agent, o.auto_advance
+            o.display_key, o.title, o.instruction_text, o.state, o.position,
+            o.assigned_agent, o.auto_advance, o.created_at,
+            o.launched_at, o.started_at, o.completed_at
        FROM objectives o
        JOIN missions m ON m.id = o.mission_id AND m.deleted_at IS NULL
       WHERE o.deleted_at IS NULL
-        AND o.state IN ('future', 'draft', 'submitted')
         AND o.mission_id IN (${placeholders(missionIds.length)})
       ORDER BY o.mission_id ASC, o.position ASC`,
     missionIds
@@ -164015,8 +164091,7 @@ async function loadQueued(runs) {
   }
   return byMission;
 }
-async function loadLatestEvents(runs) {
-  const objectiveIds = runs.map((run) => run.objective_id);
+async function loadLatestEvents(objectiveIds) {
   if (objectiveIds.length === 0) return /* @__PURE__ */ new Map();
   const rows = await requireDatabaseClient().all(
     `SELECT e.objective_id, e.summary, e.created_at
@@ -164032,23 +164107,6 @@ async function loadLatestEvents(runs) {
     if (!existing || row.created_at > existing.created_at) byObjective.set(row.objective_id, row);
   }
   return byObjective;
-}
-async function loadDeliveries(workspaceIds) {
-  return await requireDatabaseClient().all(
-    `SELECT ${CONTEXT_COLUMNS}, ${OBJECTIVE_PROVENANCE_COLUMNS},
-            d.id AS delivery_id, d.objective_id, o.display_key AS objective_display_key,
-            o.title AS objective_title, d.session_id, d.summary, d.verification_summary,
-            d.follow_up_notes, d.payload_json, d.delivered_at,
-            s.agent_identifier, s.model_identifier, o.assigned_agent
-       FROM deliveries d
-       JOIN objectives o ON o.id = d.objective_id AND o.deleted_at IS NULL${CONTEXT_JOIN}
-       LEFT JOIN agent_sessions s ON s.id = d.session_id AND s.deleted_at IS NULL
-      WHERE d.deleted_at IS NULL
-        AND d.workspace_id IN (${placeholders(workspaceIds.length)})
-      ORDER BY d.delivered_at DESC, d.id DESC
-      LIMIT ?`,
-    [...workspaceIds, DELIVERY_LIMIT]
-  );
 }
 var QUESTION_CONTEXT_COLUMNS = CONTEXT_COLUMNS.replace(/\bo\./g, "e.");
 async function loadQuestions(workspaceIds) {
@@ -164079,61 +164137,69 @@ async function loadQuestions(workspaceIds) {
     [...workspaceIds, askedAfter, QUESTION_LIMIT]
   );
 }
-function toRunItem(row, queued, latest) {
-  const upcoming = [];
-  for (const candidate of queued ?? []) {
-    if (candidate.position <= row.position) continue;
-    if (candidate.auto_advance !== 1) break;
-    upcoming.push({
-      objectiveId: candidate.objective_id,
-      displayId: objectiveDisplayId(candidate.mission_display_id, candidate.display_key) ?? candidate.objective_id,
-      title: candidate.title,
-      position: candidate.position,
-      assignedAgent: candidate.assigned_agent
-    });
-  }
+function pickPrimaryRun(runs) {
+  const byMoment = (moment) => (a5, b5) => (moment(a5) ?? a5.objective_updated_at).localeCompare(moment(b5) ?? b5.objective_updated_at);
+  const launching = runs.filter((run) => run.state === "launching").sort(byMoment((r5) => r5.launched_at));
+  if (launching[0]) return launching[0];
+  return [...runs].sort(byMoment((r5) => r5.started_at))[0];
+}
+function toMissionObjective(row) {
   return {
-    id: `run:${row.objective_id}`,
-    kind: "objective_run",
-    occurredAt: latest?.created_at ?? row.objective_updated_at,
-    ...baseFields(row),
     objectiveId: row.objective_id,
-    objectiveDisplayId: objectiveDisplayId(row.mission_display_id, row.objective_display_key),
-    state: row.state === "launching" ? "launching" : row.state === "pending_delivery" ? "pending_delivery" : "executing",
-    objectiveTitle: row.objective_title,
-    instructionPreview: truncate(row.instruction_text, INSTRUCTION_PREVIEW_CHARS),
-    agentIdentifier: resolveAgentIdentifier(row.session_agent_identifier, row.assigned_agent),
-    modelIdentifier: row.session_model_identifier ?? row.model,
-    branch: row.branch,
-    resourceKey: row.resource_key?.trim() || null,
-    startedAt: row.session_started_at ?? row.request_created_at,
-    latestEventSummary: latest ? truncate(latest.summary, EVENT_SUMMARY_CHARS) : null,
-    latestEventAt: latest?.created_at ?? null,
-    upcoming
+    displayId: objectiveDisplayId(row.mission_display_id, row.display_key) ?? row.objective_id,
+    title: row.title,
+    state: row.state,
+    position: row.position,
+    assignedAgent: row.assigned_agent,
+    autoAdvance: row.auto_advance === 1
   };
 }
-function toDeliveryItem(row) {
+function toMissionItem({
+  runs,
+  objectiveRows,
+  latest
+}) {
+  const primary = pickPrimaryRun(runs);
+  const ordered = sortObjectivesForMissionDisplay(
+    objectiveRows.map((row) => ({
+      id: row.objective_id,
+      position: row.position,
+      state: row.state,
+      instructionText: row.instruction_text ?? "",
+      autoAdvance: row.auto_advance === 1,
+      assignedAgent: row.assigned_agent,
+      createdAt: row.created_at,
+      launchedAt: row.launched_at,
+      startedAt: row.started_at,
+      completedAt: row.completed_at,
+      row
+    }))
+  );
   return {
-    id: `delivery:${row.delivery_id}`,
-    kind: "delivery",
-    occurredAt: row.delivered_at,
-    ...baseFields(row),
-    objectiveId: row.objective_id,
-    objectiveDisplayId: objectiveDisplayId(row.mission_display_id, row.objective_display_key),
-    objectiveTitle: row.objective_title,
-    delivery: {
-      id: row.delivery_id,
-      missionId: row.mission_id,
-      objectiveId: row.objective_id,
-      sessionId: row.session_id,
-      summary: row.summary,
-      verificationSummary: row.verification_summary,
-      followUpNotes: row.follow_up_notes,
-      report: deliveryReportFromPayload(row.payload_json, row.summary),
-      deliveredAt: row.delivered_at,
-      agentIdentifier: resolveAgentIdentifier(row.agent_identifier, row.assigned_agent),
-      modelIdentifier: row.model_identifier
-    }
+    id: `mission:${primary.mission_id}`,
+    kind: "mission_run",
+    occurredAt: latest?.created_at ?? primary.objective_updated_at,
+    ...baseFields(primary),
+    objectiveId: primary.objective_id,
+    objectiveDisplayId: objectiveDisplayId(
+      primary.mission_display_id,
+      primary.objective_display_key
+    ),
+    runState: primary.state === "launching" ? "launching" : "executing",
+    objectives: ordered.map((entry) => toMissionObjective(entry.row)),
+    activeObjectiveIds: runs.map((run) => run.objective_id),
+    objectiveTitle: primary.objective_title,
+    instructionPreview: truncate(primary.instruction_text, INSTRUCTION_PREVIEW_CHARS),
+    agentIdentifier: resolveAgentIdentifier(
+      primary.session_agent_identifier,
+      primary.assigned_agent
+    ),
+    modelIdentifier: primary.session_model_identifier ?? primary.model,
+    branch: primary.branch,
+    resourceKey: primary.resource_key?.trim() || null,
+    startedAt: primary.session_started_at ?? primary.request_created_at,
+    latestEventSummary: latest ? truncate(latest.summary, EVENT_SUMMARY_CHARS) : null,
+    latestEventAt: latest?.created_at ?? null
   };
 }
 function toQuestionItem(row) {
@@ -164150,46 +164216,51 @@ function toQuestionItem(row) {
     askedAt: row.created_at
   };
 }
+function newestFirst(a5, b5) {
+  if (a5.occurredAt === b5.occurredAt) return a5.id < b5.id ? 1 : -1;
+  return a5.occurredAt < b5.occurredAt ? 1 : -1;
+}
 async function listActivityFeed() {
   const generatedAt = (/* @__PURE__ */ new Date()).toISOString();
   const workspaceIds = await readableWorkspaceIds();
   if (workspaceIds.length === 0) {
-    return {
-      items: [],
-      generatedAt,
-      counts: { objective_run: 0, delivery: 0, blocking_question: 0 }
-    };
+    return { items: [], generatedAt, counts: { mission_run: 0, blocking_question: 0 } };
   }
-  const [runs, deliveries, questions] = await Promise.all([
+  const [allRuns, questions] = await Promise.all([
     loadRuns(workspaceIds),
-    loadDeliveries(workspaceIds),
     loadQuestions(workspaceIds)
   ]);
-  const [queuedByMission, latestByObjective] = await Promise.all([
-    loadQueued(runs),
-    loadLatestEvents(runs)
+  const runsByMission = /* @__PURE__ */ new Map();
+  for (const run of allRuns) {
+    const list2 = runsByMission.get(run.mission_id) ?? [];
+    list2.push(run);
+    runsByMission.set(run.mission_id, list2);
+  }
+  const missionCount = runsByMission.size;
+  const missionIds = [...runsByMission.keys()].slice(0, MISSION_LIMIT);
+  const primaryByMission = new Map(
+    missionIds.map((missionId) => [missionId, pickPrimaryRun(runsByMission.get(missionId))])
+  );
+  const [objectivesByMission, latestByObjective] = await Promise.all([
+    loadMissionObjectives(missionIds),
+    loadLatestEvents([...primaryByMission.values()].map((run) => run.objective_id))
   ]);
-  const items = [
-    ...runs.map(
-      (row) => toRunItem(row, queuedByMission.get(row.mission_id), latestByObjective.get(row.objective_id))
-    ),
-    ...deliveries.map(toDeliveryItem),
-    ...questions.map(toQuestionItem)
-  ];
-  items.sort((a5, b5) => {
-    if (a5.occurredAt === b5.occurredAt) return a5.id < b5.id ? 1 : -1;
-    return a5.occurredAt < b5.occurredAt ? 1 : -1;
-  });
+  const missionItems = missionIds.map(
+    (missionId) => toMissionItem({
+      runs: runsByMission.get(missionId),
+      objectiveRows: objectivesByMission.get(missionId) ?? [],
+      latest: latestByObjective.get(primaryByMission.get(missionId).objective_id)
+    })
+  );
+  const launching = missionItems.filter((item) => item.runState === "launching").sort(newestFirst);
+  const executing = missionItems.filter((item) => item.runState === "executing").sort(newestFirst);
+  const questionItems = questions.map(toQuestionItem).sort(newestFirst);
   return {
-    items: items.slice(0, FEED_LIMIT),
+    items: [...launching, ...executing, ...questionItems].slice(0, FEED_LIMIT),
     generatedAt,
     // Pre-truncation totals, so the client can say "7 of 12" instead of implying
     // the list is everything there is.
-    counts: {
-      objective_run: runs.length,
-      delivery: deliveries.length,
-      blocking_question: questions.length
-    }
+    counts: { mission_run: missionCount, blocking_question: questions.length }
   };
 }
 
@@ -171528,16 +171599,20 @@ app.get(
 app.post(
   "/api/runner/claim",
   handle3(
-    (req) => claimRunnerRequest({
-      projectId: typeof req.body?.projectId === "string" ? req.body.projectId : null,
-      clientDevice: {
-        deviceFingerprint: typeof req.body?.deviceFingerprint === "string" ? req.body.deviceFingerprint : null,
-        deviceLabel: typeof req.body?.deviceLabel === "string" ? req.body.deviceLabel : null,
-        devicePlatform: typeof req.body?.devicePlatform === "string" ? req.body.devicePlatform : null
-      },
-      // Additive runner-instance identity (contract v40). Absent for older
-      // runners, which claim exactly as before and register no instance.
-      runner: runnerRegistrationFromBody(req.body)
+    (req, res) => sendRunnerClaimResponse({
+      res,
+      claim: ({ onListenArmed }) => claimRunnerRequest({
+        projectId: typeof req.body?.projectId === "string" ? req.body.projectId : null,
+        clientDevice: {
+          deviceFingerprint: typeof req.body?.deviceFingerprint === "string" ? req.body.deviceFingerprint : null,
+          deviceLabel: typeof req.body?.deviceLabel === "string" ? req.body.deviceLabel : null,
+          devicePlatform: typeof req.body?.devicePlatform === "string" ? req.body.devicePlatform : null
+        },
+        // Additive runner-instance identity (contract v40). Absent for older
+        // runners, which claim exactly as before and register no instance.
+        runner: runnerRegistrationFromBody(req.body),
+        onListenArmed
+      })
     }),
     { mutates: true }
   )

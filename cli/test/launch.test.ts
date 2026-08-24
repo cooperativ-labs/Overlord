@@ -1,10 +1,22 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 
-import { buildLaunchPlan, interactiveLoginShellInvocation } from '../src/launch.ts';
+import {
+  buildLaunchPlan,
+  interactiveLoginShellInvocation,
+  isSpawnSyncTimedOut,
+  spawnSyncOptionsForLaunch,
+  terminalOpenTimeoutMessage,
+  throwIfTerminalOpenTimedOut
+} from '../src/launch.ts';
 import type { CliRuntime } from '../src/runtime.ts';
+import {
+  TERMINAL_OPEN_SPAWN_KILL_SIGNAL,
+  TERMINAL_OPEN_SPAWN_TIMEOUT_MS
+} from '../src/terminal-launcher.ts';
 
 function runtime({
   title = 'Prompt Capture',
@@ -284,4 +296,95 @@ test('buildLaunchPlan names the mission id concretely and keeps the execution re
   assert.equal(plan.env.OVERLORD_OBJECTIVE_ID, 'coo:11.k7xm');
   assert.equal(plan.objectiveDisplayId, 'coo:11.k7xm');
   assert.equal(plan.objectiveTitle, 'Ship it');
+});
+
+test('terminal-open spawn options include a 45s SIGKILL timeout; inline does not', () => {
+  const timed = spawnSyncOptionsForLaunch({
+    cwd: '/tmp',
+    env: process.env,
+    timeoutMs: TERMINAL_OPEN_SPAWN_TIMEOUT_MS
+  });
+  assert.equal(timed.timeout, 45_000);
+  assert.equal(timed.killSignal, TERMINAL_OPEN_SPAWN_KILL_SIGNAL);
+  assert.equal(timed.stdio, 'inherit');
+
+  const inline = spawnSyncOptionsForLaunch({ cwd: '/tmp', env: process.env });
+  assert.equal(inline.timeout, undefined);
+  assert.equal(inline.killSignal, undefined);
+});
+
+test('osascript timeout message names Apple Event failure and orphan-window risk', () => {
+  const message = terminalOpenTimeoutMessage({ terminal: 'iTerm2', timeoutMs: 45_000 });
+  assert.match(message, /osascript\/Apple Event timed out after 45s/);
+  assert.match(message, /opening iTerm2/);
+  assert.match(message, /execution request failed/);
+  assert.match(message, /keep claiming/);
+  assert.match(message, /orphan window/);
+});
+
+test('spawnSync ETIMEDOUT is detected as a terminal-open timeout', () => {
+  const timedOut = new Error('spawnSync osascript ETIMEDOUT') as NodeJS.ErrnoException;
+  timedOut.code = 'ETIMEDOUT';
+  assert.equal(isSpawnSyncTimedOut({ error: timedOut }), true);
+  const missing = new Error('spawnSync osascript ENOENT') as NodeJS.ErrnoException;
+  missing.code = 'ENOENT';
+  assert.equal(isSpawnSyncTimedOut({ error: missing }), false);
+  assert.equal(isSpawnSyncTimedOut({}), false);
+});
+
+test('timed-out terminal-open throws so the request is failed, not launched', () => {
+  const timedOut = new Error('spawnSync osascript ETIMEDOUT') as NodeJS.ErrnoException;
+  timedOut.code = 'ETIMEDOUT';
+  assert.throws(
+    () =>
+      throwIfTerminalOpenTimedOut({
+        result: { error: timedOut },
+        execution: {
+          command: 'osascript',
+          args: ['-e', 'tell application "iTerm"'],
+          useShell: false,
+          terminal: 'iTerm2',
+          display: 'iTerm2 (window)'
+        }
+      }),
+    /osascript\/Apple Event timed out after 45s[\s\S]*orphan window/
+  );
+  assert.doesNotThrow(() =>
+    throwIfTerminalOpenTimedOut({
+      result: { error: timedOut },
+      execution: {
+        command: 'claude',
+        args: [],
+        useShell: false,
+        terminal: null,
+        display: 'claude'
+      }
+    })
+  );
+  assert.doesNotThrow(() =>
+    throwIfTerminalOpenTimedOut({
+      result: {},
+      execution: {
+        command: 'osascript',
+        args: [],
+        useShell: false,
+        terminal: 'Terminal',
+        display: 'Terminal.app'
+      }
+    })
+  );
+});
+
+test('terminal-open spawn timeout kills the wait instead of blocking', () => {
+  const options = spawnSyncOptionsForLaunch({
+    cwd: process.cwd(),
+    env: process.env,
+    timeoutMs: 150
+  });
+  const started = Date.now();
+  const result = spawnSync(process.execPath, ['-e', 'setTimeout(() => {}, 10_000)'], options);
+  const elapsedMs = Date.now() - started;
+  assert.equal(isSpawnSyncTimedOut(result), true);
+  assert.equal(result.signal, 'SIGKILL');
+  assert.ok(elapsedMs < 2_000, `timeout wait took ${elapsedMs}ms`);
 });

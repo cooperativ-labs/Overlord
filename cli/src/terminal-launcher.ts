@@ -19,6 +19,26 @@ export type LaunchExecution = {
   display: string;
 };
 
+/**
+ * Bound for osascript / terminal-open `spawnSync` only. osascript returns when
+ * the Apple Event is accepted, not when the agent finishes. 20s false-fails a
+ * cold iTerm start; 45s covers that while remaining far below the 10-minute
+ * `launching` TTL. Latch create and long-running inline agent processes must
+ * not use this — they are not "open the terminal" waits.
+ *
+ * Killing the wait does not recall the Apple Event: iTerm/Terminal may still
+ * open after we fail (orphan window).
+ */
+export const TERMINAL_OPEN_SPAWN_TIMEOUT_MS = 45_000;
+
+/** SIGKILL so a hung osascript cannot ignore SIGTERM and keep blocking the claim loop. */
+export const TERMINAL_OPEN_SPAWN_KILL_SIGNAL = 'SIGKILL';
+
+/** Timeout for opening a terminal window/tab; `undefined` for inline agent spawns. */
+export function terminalOpenSpawnTimeoutMs(execution: LaunchExecution): number | undefined {
+  return execution.terminal ? TERMINAL_OPEN_SPAWN_TIMEOUT_MS : undefined;
+}
+
 export type TerminalLaunchSettings = {
   terminalLauncher?: string | null;
   terminalLaunchPlacement?: TerminalLaunchPlacement;

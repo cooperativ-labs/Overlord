@@ -1399,7 +1399,8 @@ export function useInboxItems() {
 }
 
 /**
- * Cross-workspace recent + agent-created Next missions for the Inbox page.
+ * Cross-workspace recent (non-agent Next excluded) + agent-created Next missions
+ * for the Inbox page.
  * Invalidated with mission workflow changes via `keys.inboxMissions`.
  */
 export function useInboxMissions() {

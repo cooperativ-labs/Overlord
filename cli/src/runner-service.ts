@@ -312,24 +312,127 @@ export function resolveOvldInvocation(
 }
 
 /**
+ * launchd ProcessType for the runner LaunchAgent.
+ *
+ * Interactive (not Background, not Adaptive): a Background agent is App-Napped
+ * and Apple Events to Terminal/iTerm stall or return -1712. Adaptive only
+ * raises QoS after UI activity, which a headless claim loop never generates.
+ * Changing this key requires rewriting the plist — app auto-update respawns
+ * the supervisor process but does not reinstall the LaunchAgent.
+ */
+export const LAUNCHD_PROCESS_TYPE = 'Interactive';
+
+/** System dirs that keep `osascript` and other Apple binaries resolvable. */
+const RUNNER_SERVICE_SYSTEM_PATH_DIRS = ['/usr/bin', '/bin', '/usr/sbin', '/sbin'];
+
+/**
+ * Fixed prefix for Latch/`open`/agent binaries spawned by the service process.
+ * Intentionally not the interactive/nvm shell PATH (version rot + user-writable
+ * shim hijack). iTerm login shells already have the user PATH.
+ */
+const RUNNER_SERVICE_PATH_PREFIX_DIRS = ['/opt/homebrew/bin', '/usr/local/bin'];
+
+/**
+ * Compose the service PATH: Homebrew/local prefixes, `$HOME/.local/bin`, then
+ * system dirs. Does not copy `process.env.PATH`.
+ */
+export function composeRunnerServicePath({
+  homeDir = os.homedir()
+}: {
+  homeDir?: string;
+} = {}): string {
+  const localBin = path.join(homeDir, '.local', 'bin');
+  const dirs = [...RUNNER_SERVICE_PATH_PREFIX_DIRS, localBin, ...RUNNER_SERVICE_SYSTEM_PATH_DIRS];
+  return [...new Set(dirs)].join(':');
+}
+
+export function parseLaunchdProcessType(plist: string): string | null {
+  const match = /<key>ProcessType<\/key>\s*<string>([^<]*)<\/string>/.exec(plist);
+  return match?.[1] ?? null;
+}
+
+export function parseLaunchdEnvPath(plist: string): string | null {
+  const match = /<key>PATH<\/key>\s*<string>([^<]*)<\/string>/.exec(plist);
+  return match?.[1] ?? null;
+}
+
+export function inspectInstalledLaunchdPlist(plistPath: string): {
+  processType: string | null;
+  path: string | null;
+} {
+  if (!existsSync(plistPath)) return { processType: null, path: null };
+  try {
+    const plist = readFileSync(plistPath, 'utf8');
+    return {
+      processType: parseLaunchdProcessType(plist),
+      path: parseLaunchdEnvPath(plist)
+    };
+  } catch {
+    return { processType: null, path: null };
+  }
+}
+
+/**
+ * Status/docs hint when an already-installed agent still needs a plist rewrite.
+ * Empty when ProcessType is Interactive, PATH matches the deterministic prefix,
+ * and the publisher is Overlord (or this is not launchd).
+ *
+ * `path` is launchd-only. Omit it on systemd so a missing PATH key is not
+ * treated as Electron's sanitized snapshot.
+ */
+export function runnerServiceReinstallHint({
+  installed,
+  publisher,
+  processType,
+  path
+}: {
+  installed: boolean;
+  publisher: string;
+  processType: string | null;
+  path?: string | null;
+}): string | null {
+  if (!installed) return null;
+  const hints: string[] = [];
+  if (publisher === 'node') {
+    hints.push(
+      'This service is registered under "Node.js Foundation" because it runs the plain node binary. Reinstall it from the Overlord desktop app (or with the desktop app present) to re-register it under "Overlord".'
+    );
+  }
+  if (processType && processType !== LAUNCHD_PROCESS_TYPE) {
+    hints.push(
+      `This LaunchAgent is ProcessType=${processType}. App auto-update respawns the supervisor but does not rewrite ProcessType, so Apple Events to Terminal/iTerm stay App-Napped. Reinstall with \`ovld runner service install\` (or Desktop → Reinstall service) to switch to ${LAUNCHD_PROCESS_TYPE}.`
+    );
+  }
+  if (path !== undefined && path !== composeRunnerServicePath()) {
+    hints.push(
+      'This LaunchAgent PATH is not the deterministic prefix (`/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin` plus system dirs). App auto-update respawns the supervisor but does not rewrite PATH, so Latch/`open`/agent binaries spawned by the service may be missing. Reinstall with `ovld runner service install` (or Desktop → Reinstall service) to apply it.'
+    );
+  }
+  return hints.length > 0 ? hints.join(' ') : null;
+}
+
+/**
  * Environment snapshot injected into the service definition. Persistent services
  * do not source interactive shell startup files, so the Overlord home and a
- * minimal PATH must be captured explicitly at install time. Remote backend URLs
- * are also captured because the service cannot infer them locally. A loopback
- * URL is deliberately omitted: Desktop may select a different local port on its
- * next boot, and the supervisor must follow the current `overlord.toml` value.
+ * deterministic PATH prefix must be captured explicitly at install time. Remote
+ * backend URLs are also captured because the service cannot infer them locally.
+ * A loopback URL is deliberately omitted: Desktop may select a different local
+ * port on its next boot, and the supervisor must follow the current
+ * `overlord.toml` value.
  */
 export function buildRunnerServiceEnv({
   backendUrl,
   overlordHome,
-  runAsElectronNode
+  runAsElectronNode,
+  homeDir
 }: {
   backendUrl: string;
   overlordHome?: string | null;
   runAsElectronNode?: boolean;
+  homeDir?: string;
 }): Record<string, string> {
   const env: Record<string, string> = {
-    PATH: process.env.PATH?.trim() || '/usr/local/bin:/usr/bin:/bin'
+    PATH: composeRunnerServicePath({ homeDir })
   };
   if (!isLoopbackBackendUrl(backendUrl)) env.OVERLORD_BACKEND_URL = backendUrl;
   const home = overlordHome?.trim() || process.env.OVLD_HOME?.trim();
@@ -398,7 +501,7 @@ ${envEntries}
   <key>StandardErrorPath</key>
   <string>${xmlEscape(path.join(logDir, 'runner-service.err.log'))}</string>
   <key>ProcessType</key>
-  <string>Background</string>
+  <string>${LAUNCHD_PROCESS_TYPE}</string>
 </dict>
 </plist>
 `;
@@ -587,9 +690,12 @@ export class LaunchdManager implements RunnerServiceManager {
     mkdirSync(launchAgentsDir(), { recursive: true });
     mkdirSync(path.join(resolveGlobalDataDir(), 'logs'), { recursive: true });
     // Boot the old definition out BEFORE writing, so an install over a loaded
-    // label cannot leave launchd running the previous ProgramArguments and
-    // EnvironmentVariables — the failure that made a desktop uninstall +
-    // reinstall a no-op after an app update.
+    // label cannot leave launchd running the previous ProgramArguments,
+    // EnvironmentVariables, or ProcessType — the failure that made a desktop
+    // uninstall + reinstall a no-op after an app update. Re-running install
+    // is the supported way to rewrite an already-installed agent; restart and
+    // app auto-update only respawn the process and do not re-read a new plist
+    // until the job is bootstrapped from disk again.
     await this.runSteps(planLaunchdUnloadCommands({ uid: this.uid() }));
     writeServiceFile(this.unitPath(), this.render(opts));
     if (opts.autoStart) await this.start();

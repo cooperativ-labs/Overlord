@@ -1,37 +1,35 @@
 import { PERMISSIONS } from '@overlord/auth';
+import { sortObjectivesForMissionDisplay } from '@overlord/automations';
 import { formatObjectiveDisplayId } from '@overlord/database';
 
 import type {
-  ActivityFeedDeliveryItemDto,
   ActivityFeedDto,
   ActivityFeedItemDto,
+  ActivityFeedMissionItemDto,
+  ActivityFeedMissionObjectiveDto,
   ActivityFeedQuestionItemDto,
-  ActivityFeedQueuedObjectiveDto,
-  ActivityFeedRunItemDto,
-  CreatedByKind
+  CreatedByKind,
+  ObjectiveState
 } from '../webapp/shared/contract.ts';
 
 import { requireDatabaseClient } from './db.ts';
 import { requireWorkspacePermission } from './rbac.ts';
-import {
-  callerMembershipsInActiveOrganization,
-  deliveryReportFromPayload,
-  readProjectColor
-} from './repository.ts';
+import { callerMembershipsInActiveOrganization, readProjectColor } from './repository.ts';
 
 /**
  * Bounds. The feed is a glance surface, not a history: a card the operator will
- * never scroll to costs a row read and buys nothing, and an unbounded delivery
- * list would keep stale work on screen for days (coo:757).
+ * never scroll to costs a row read and buys nothing (coo:757).
  */
-const RUN_LIMIT = 25;
-const DELIVERY_LIMIT = 7;
+const MISSION_LIMIT = 25;
 const QUESTION_LIMIT = 10;
-/** Inbox live feed only surfaces recent asks; older unseen questions stay on the mission. */
+/** The live feed only surfaces recent asks; older unseen questions stay on the mission. */
 const QUESTION_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 const FEED_LIMIT = 40;
 const INSTRUCTION_PREVIEW_CHARS = 400;
 const EVENT_SUMMARY_CHARS = 240;
+
+/** Objective states that make a mission live work worth a feed card. */
+const RUNNING_STATES = ['launching', 'executing', 'pending_delivery'] as const;
 
 function truncate(value: string | null | undefined, max: number): string {
   const text = (value ?? '').trim();
@@ -52,11 +50,11 @@ interface FeedContextRow {
   mission_id: string;
   mission_display_id: string;
   mission_title: string;
-  /** Objective authorship; null only when the objective join itself is null. */
   created_by_kind: string | null;
   created_by_agent: string | null;
 }
 
+/** One running objective, carrying the chrome of the mission it belongs to. */
 interface RunRow extends FeedContextRow {
   objective_id: string;
   objective_display_key: string;
@@ -69,43 +67,36 @@ interface RunRow extends FeedContextRow {
   assigned_agent: string | null;
   model: string | null;
   objective_updated_at: string;
+  launched_at: string | null;
+  started_at: string | null;
   session_agent_identifier: string | null;
   session_model_identifier: string | null;
   session_started_at: string | null;
   request_created_at: string | null;
 }
 
-interface QueuedRow {
+/** Every objective of a running mission, for the list under its card. */
+interface MissionObjectiveRow {
   mission_id: string;
   mission_display_id: string;
   objective_id: string;
   display_key: string;
   title: string | null;
+  instruction_text: string | null;
+  state: string;
   position: number;
   assigned_agent: string | null;
   auto_advance: number;
+  created_at: string;
+  launched_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
 }
 
 interface LatestEventRow {
   objective_id: string;
   summary: string;
   created_at: string;
-}
-
-interface DeliveryFeedRow extends FeedContextRow {
-  delivery_id: string;
-  objective_id: string;
-  objective_display_key: string;
-  objective_title: string | null;
-  session_id: string | null;
-  summary: string;
-  verification_summary: string | null;
-  follow_up_notes: string | null;
-  payload_json: string | null;
-  delivered_at: string;
-  agent_identifier: string | null;
-  model_identifier: string | null;
-  assigned_agent: string | null;
 }
 
 interface QuestionRow extends FeedContextRow {
@@ -191,16 +182,29 @@ const CONTEXT_COLUMNS = `
             o.project_id, p.name AS project_name, p.settings_json AS project_settings_json,
             o.mission_id, m.display_id AS mission_display_id, m.title AS mission_title`;
 
-/** Objective authorship — kept off CONTEXT_COLUMNS so the ask query can re-alias chrome without inventing columns on `mission_events`. */
+/**
+ * A feed card is the mission, so its origin mark is the *mission's* provenance —
+ * "an agent filed this work" — not the authorship of whichever objective happens
+ * to be running. Asks re-alias these off the objective, where the mark still
+ * means the objective the agent is blocked on.
+ */
+const MISSION_PROVENANCE_COLUMNS = `m.created_by_kind, m.created_by_agent`;
 const OBJECTIVE_PROVENANCE_COLUMNS = `o.created_by_kind, o.created_by_agent`;
 
+/**
+ * Every objective that is live right now, newest activity first.
+ *
+ * Read at the objective level and grouped into missions afterwards: a mission
+ * can legally run several objectives at once (parallel objectives), and the
+ * primary-objective choice needs all of them.
+ */
 async function loadRuns(workspaceIds: string[]): Promise<RunRow[]> {
   return (await requireDatabaseClient().all(
-    `SELECT ${CONTEXT_COLUMNS}, ${OBJECTIVE_PROVENANCE_COLUMNS},
+    `SELECT ${CONTEXT_COLUMNS}, ${MISSION_PROVENANCE_COLUMNS},
             o.id AS objective_id, o.display_key AS objective_display_key,
             o.title AS objective_title, o.instruction_text, o.state, o.position,
             o.branch, o.resource_key, o.assigned_agent, o.model,
-            o.updated_at AS objective_updated_at,
+            o.updated_at AS objective_updated_at, o.launched_at, o.started_at,
             (SELECT s.agent_identifier FROM agent_sessions s
               WHERE s.objective_id = o.id AND s.deleted_at IS NULL
               ORDER BY s.started_at DESC, s.id DESC LIMIT 1) AS session_agent_identifier,
@@ -215,37 +219,39 @@ async function loadRuns(workspaceIds: string[]): Promise<RunRow[]> {
               ORDER BY r.created_at DESC, r.id DESC LIMIT 1) AS request_created_at
        FROM objectives o${CONTEXT_JOIN}
       WHERE o.deleted_at IS NULL
-        AND o.state IN ('launching', 'executing', 'pending_delivery')
+        AND o.state IN (${placeholders(RUNNING_STATES.length)})
         AND o.workspace_id IN (${placeholders(workspaceIds.length)})
-      ORDER BY o.updated_at DESC, o.id ASC
-      LIMIT ?`,
-    [...workspaceIds, RUN_LIMIT]
+      ORDER BY o.updated_at DESC, o.id ASC`,
+    [...RUNNING_STATES, ...workspaceIds]
   )) as RunRow[];
 }
 
 /**
- * Every objective positioned after a running one, so the caller can see what the
- * agent will pick up on its own. Loaded for all running missions at once; the
- * per-mission truncation at the first non-auto-advance objective happens in JS,
- * where "contiguous run" is expressible without a window function the SQLite and
- * Postgres adapters would have to agree on.
+ * Every objective of the given missions — done, running, and planned alike.
+ *
+ * The card lists a mission's whole plan, so this is deliberately unfiltered by
+ * state. Ordering into the mission-panel display order happens in JS with the
+ * shared `sortObjectivesForMissionDisplay` rule rather than in SQL, so the feed
+ * cannot drift from the panel it is modelled on.
  */
-async function loadQueued(runs: RunRow[]): Promise<Map<string, QueuedRow[]>> {
-  const missionIds = [...new Set(runs.map(run => run.mission_id))];
+async function loadMissionObjectives(
+  missionIds: string[]
+): Promise<Map<string, MissionObjectiveRow[]>> {
   if (missionIds.length === 0) return new Map();
   const rows = (await requireDatabaseClient().all(
     `SELECT o.mission_id, m.display_id AS mission_display_id, o.id AS objective_id,
-            o.display_key, o.title, o.position, o.assigned_agent, o.auto_advance
+            o.display_key, o.title, o.instruction_text, o.state, o.position,
+            o.assigned_agent, o.auto_advance, o.created_at,
+            o.launched_at, o.started_at, o.completed_at
        FROM objectives o
        JOIN missions m ON m.id = o.mission_id AND m.deleted_at IS NULL
       WHERE o.deleted_at IS NULL
-        AND o.state IN ('future', 'draft', 'submitted')
         AND o.mission_id IN (${placeholders(missionIds.length)})
       ORDER BY o.mission_id ASC, o.position ASC`,
     missionIds
-  )) as QueuedRow[];
+  )) as MissionObjectiveRow[];
 
-  const byMission = new Map<string, QueuedRow[]>();
+  const byMission = new Map<string, MissionObjectiveRow[]>();
   for (const row of rows) {
     const list = byMission.get(row.mission_id) ?? [];
     list.push(row);
@@ -258,8 +264,7 @@ async function loadQueued(runs: RunRow[]): Promise<Map<string, QueuedRow[]>> {
  * The newest event per running objective, as a correlated `MAX(created_at)` rather
  * than a window function — the same statement has to run on both database adapters.
  */
-async function loadLatestEvents(runs: RunRow[]): Promise<Map<string, LatestEventRow>> {
-  const objectiveIds = runs.map(run => run.objective_id);
+async function loadLatestEvents(objectiveIds: string[]): Promise<Map<string, LatestEventRow>> {
   if (objectiveIds.length === 0) return new Map();
   const rows = (await requireDatabaseClient().all(
     `SELECT e.objective_id, e.summary, e.created_at
@@ -278,24 +283,6 @@ async function loadLatestEvents(runs: RunRow[]): Promise<Map<string, LatestEvent
   return byObjective;
 }
 
-async function loadDeliveries(workspaceIds: string[]): Promise<DeliveryFeedRow[]> {
-  return (await requireDatabaseClient().all(
-    `SELECT ${CONTEXT_COLUMNS}, ${OBJECTIVE_PROVENANCE_COLUMNS},
-            d.id AS delivery_id, d.objective_id, o.display_key AS objective_display_key,
-            o.title AS objective_title, d.session_id, d.summary, d.verification_summary,
-            d.follow_up_notes, d.payload_json, d.delivered_at,
-            s.agent_identifier, s.model_identifier, o.assigned_agent
-       FROM deliveries d
-       JOIN objectives o ON o.id = d.objective_id AND o.deleted_at IS NULL${CONTEXT_JOIN}
-       LEFT JOIN agent_sessions s ON s.id = d.session_id AND s.deleted_at IS NULL
-      WHERE d.deleted_at IS NULL
-        AND d.workspace_id IN (${placeholders(workspaceIds.length)})
-      ORDER BY d.delivered_at DESC, d.id DESC
-      LIMIT ?`,
-    [...workspaceIds, DELIVERY_LIMIT]
-  )) as DeliveryFeedRow[];
-}
-
 // `mission_events` carries its own `workspace_id` / `project_id` / `mission_id`, and
 // its objective join is a LEFT join that can be null — so the shared column list,
 // written against an `o.`-prefixed objective row, is re-aliased onto the event row.
@@ -306,7 +293,7 @@ const QUESTION_CONTEXT_COLUMNS = CONTEXT_COLUMNS.replace(/\bo\./g, 'e.');
  * answered-state of its own, so the existing `blocking_question` seen-marker — the
  * same predicate that drives the mission card indicator — is the only honest signal
  * for "still waiting on a person". The feed further limits to asks from the past
- * three days so stale blockers do not crowd the inbox (coo:757.rqtb).
+ * three days so stale blockers do not crowd the page (coo:757.rqtb).
  */
 async function loadQuestions(workspaceIds: string[]): Promise<QuestionRow[]> {
   const askedAfter = new Date(Date.now() - QUESTION_MAX_AGE_MS).toISOString();
@@ -337,76 +324,86 @@ async function loadQuestions(workspaceIds: string[]): Promise<QuestionRow[]> {
   )) as QuestionRow[];
 }
 
-function toRunItem(
-  row: RunRow,
-  queued: QueuedRow[] | undefined,
-  latest: LatestEventRow | undefined
-): ActivityFeedRunItemDto {
-  const upcoming: ActivityFeedQueuedObjectiveDto[] = [];
-  for (const candidate of queued ?? []) {
-    if (candidate.position <= row.position) continue;
-    // The first objective that will not advance on its own ends the chain: what
-    // sits behind a manual gate is not "up next", and saying so would be a lie.
-    if (candidate.auto_advance !== 1) break;
-    upcoming.push({
-      objectiveId: candidate.objective_id,
-      displayId:
-        objectiveDisplayId(candidate.mission_display_id, candidate.display_key) ??
-        candidate.objective_id,
-      title: candidate.title,
-      position: candidate.position,
-      assignedAgent: candidate.assigned_agent
-    });
-  }
+/**
+ * The objective a mission card speaks for.
+ *
+ * A launching objective wins over a running one: "an agent is being handed this"
+ * is the newer fact and the one the operator is waiting on. Within a group the
+ * oldest moment wins, matching the mission panel's own ordering.
+ */
+function pickPrimaryRun(runs: RunRow[]): RunRow {
+  const byMoment = (moment: (row: RunRow) => string | null) => (a: RunRow, b: RunRow) =>
+    (moment(a) ?? a.objective_updated_at).localeCompare(moment(b) ?? b.objective_updated_at);
+  const launching = runs
+    .filter(run => run.state === 'launching')
+    .sort(byMoment(r => r.launched_at));
+  if (launching[0]) return launching[0];
+  return [...runs].sort(byMoment(r => r.started_at))[0]!;
+}
 
+function toMissionObjective(row: MissionObjectiveRow): ActivityFeedMissionObjectiveDto {
   return {
-    id: `run:${row.objective_id}`,
-    kind: 'objective_run',
-    occurredAt: latest?.created_at ?? row.objective_updated_at,
-    ...baseFields(row),
     objectiveId: row.objective_id,
-    objectiveDisplayId: objectiveDisplayId(row.mission_display_id, row.objective_display_key),
-    state:
-      row.state === 'launching'
-        ? 'launching'
-        : row.state === 'pending_delivery'
-          ? 'pending_delivery'
-          : 'executing',
-    objectiveTitle: row.objective_title,
-    instructionPreview: truncate(row.instruction_text, INSTRUCTION_PREVIEW_CHARS),
-    agentIdentifier: resolveAgentIdentifier(row.session_agent_identifier, row.assigned_agent),
-    modelIdentifier: row.session_model_identifier ?? row.model,
-    branch: row.branch,
-    resourceKey: row.resource_key?.trim() || null,
-    startedAt: row.session_started_at ?? row.request_created_at,
-    latestEventSummary: latest ? truncate(latest.summary, EVENT_SUMMARY_CHARS) : null,
-    latestEventAt: latest?.created_at ?? null,
-    upcoming
+    displayId: objectiveDisplayId(row.mission_display_id, row.display_key) ?? row.objective_id,
+    title: row.title,
+    state: row.state as ObjectiveState,
+    position: row.position,
+    assignedAgent: row.assigned_agent,
+    autoAdvance: row.auto_advance === 1
   };
 }
 
-function toDeliveryItem(row: DeliveryFeedRow): ActivityFeedDeliveryItemDto {
+function toMissionItem({
+  runs,
+  objectiveRows,
+  latest
+}: {
+  runs: RunRow[];
+  objectiveRows: MissionObjectiveRow[];
+  latest: LatestEventRow | undefined;
+}): ActivityFeedMissionItemDto {
+  const primary = pickPrimaryRun(runs);
+  const ordered = sortObjectivesForMissionDisplay(
+    objectiveRows.map(row => ({
+      id: row.objective_id,
+      position: row.position,
+      state: row.state,
+      instructionText: row.instruction_text ?? '',
+      autoAdvance: row.auto_advance === 1,
+      assignedAgent: row.assigned_agent,
+      createdAt: row.created_at,
+      launchedAt: row.launched_at,
+      startedAt: row.started_at,
+      completedAt: row.completed_at,
+      row
+    }))
+  );
+
   return {
-    id: `delivery:${row.delivery_id}`,
-    kind: 'delivery',
-    occurredAt: row.delivered_at,
-    ...baseFields(row),
-    objectiveId: row.objective_id,
-    objectiveDisplayId: objectiveDisplayId(row.mission_display_id, row.objective_display_key),
-    objectiveTitle: row.objective_title,
-    delivery: {
-      id: row.delivery_id,
-      missionId: row.mission_id,
-      objectiveId: row.objective_id,
-      sessionId: row.session_id,
-      summary: row.summary,
-      verificationSummary: row.verification_summary,
-      followUpNotes: row.follow_up_notes,
-      report: deliveryReportFromPayload(row.payload_json, row.summary),
-      deliveredAt: row.delivered_at,
-      agentIdentifier: resolveAgentIdentifier(row.agent_identifier, row.assigned_agent),
-      modelIdentifier: row.model_identifier
-    }
+    id: `mission:${primary.mission_id}`,
+    kind: 'mission_run',
+    occurredAt: latest?.created_at ?? primary.objective_updated_at,
+    ...baseFields(primary),
+    objectiveId: primary.objective_id,
+    objectiveDisplayId: objectiveDisplayId(
+      primary.mission_display_id,
+      primary.objective_display_key
+    ),
+    runState: primary.state === 'launching' ? 'launching' : 'executing',
+    objectives: ordered.map(entry => toMissionObjective(entry.row)),
+    activeObjectiveIds: runs.map(run => run.objective_id),
+    objectiveTitle: primary.objective_title,
+    instructionPreview: truncate(primary.instruction_text, INSTRUCTION_PREVIEW_CHARS),
+    agentIdentifier: resolveAgentIdentifier(
+      primary.session_agent_identifier,
+      primary.assigned_agent
+    ),
+    modelIdentifier: primary.session_model_identifier ?? primary.model,
+    branch: primary.branch,
+    resourceKey: primary.resource_key?.trim() || null,
+    startedAt: primary.session_started_at ?? primary.request_created_at,
+    latestEventSummary: latest ? truncate(latest.summary, EVENT_SUMMARY_CHARS) : null,
+    latestEventAt: latest?.created_at ?? null
   };
 }
 
@@ -425,55 +422,70 @@ function toQuestionItem(row: QuestionRow): ActivityFeedQuestionItemDto {
   };
 }
 
+function newestFirst(a: ActivityFeedItemDto, b: ActivityFeedItemDto): number {
+  if (a.occurredAt === b.occurredAt) return a.id < b.id ? 1 : -1;
+  return a.occurredAt < b.occurredAt ? 1 : -1;
+}
+
 /**
- * One bounded, time-descending read of objective activity across every workspace
- * the caller can read missions in. Six indexed statements rather than one union:
- * the three sources have genuinely different shapes, and a lowest-common-
- * denominator projection would have to be re-parsed per row anyway.
+ * One bounded read of the work that is live right now, across every workspace the
+ * caller can read missions in.
+ *
+ * The result is grouped rather than purely time-descending: launching missions
+ * lead, then executing ones, then the blocking questions. A launching mission is
+ * the one thing on this page nobody is working on yet, so it is what should be
+ * seen first, and a strict timestamp sort would bury it under a chatty run.
+ * Deliveries are deliberately absent — finished work belongs on the mission, not
+ * on a page about what is happening now (coo:826).
  */
 export async function listActivityFeed(): Promise<ActivityFeedDto> {
   const generatedAt = new Date().toISOString();
   const workspaceIds = await readableWorkspaceIds();
   if (workspaceIds.length === 0) {
-    return {
-      items: [],
-      generatedAt,
-      counts: { objective_run: 0, delivery: 0, blocking_question: 0 }
-    };
+    return { items: [], generatedAt, counts: { mission_run: 0, blocking_question: 0 } };
   }
 
-  const [runs, deliveries, questions] = await Promise.all([
+  const [allRuns, questions] = await Promise.all([
     loadRuns(workspaceIds),
-    loadDeliveries(workspaceIds),
     loadQuestions(workspaceIds)
   ]);
-  const [queuedByMission, latestByObjective] = await Promise.all([
-    loadQueued(runs),
-    loadLatestEvents(runs)
+
+  // Group first, cap second: the bound is on cards, and one mission running three
+  // objectives must not consume three of the operator's slots.
+  const runsByMission = new Map<string, RunRow[]>();
+  for (const run of allRuns) {
+    const list = runsByMission.get(run.mission_id) ?? [];
+    list.push(run);
+    runsByMission.set(run.mission_id, list);
+  }
+  const missionCount = runsByMission.size;
+  const missionIds = [...runsByMission.keys()].slice(0, MISSION_LIMIT);
+
+  const primaryByMission = new Map(
+    missionIds.map(missionId => [missionId, pickPrimaryRun(runsByMission.get(missionId)!)])
+  );
+  const [objectivesByMission, latestByObjective] = await Promise.all([
+    loadMissionObjectives(missionIds),
+    loadLatestEvents([...primaryByMission.values()].map(run => run.objective_id))
   ]);
 
-  const items: ActivityFeedItemDto[] = [
-    ...runs.map(row =>
-      toRunItem(row, queuedByMission.get(row.mission_id), latestByObjective.get(row.objective_id))
-    ),
-    ...deliveries.map(toDeliveryItem),
-    ...questions.map(toQuestionItem)
-  ];
+  const missionItems = missionIds.map(missionId =>
+    toMissionItem({
+      runs: runsByMission.get(missionId)!,
+      objectiveRows: objectivesByMission.get(missionId) ?? [],
+      latest: latestByObjective.get(primaryByMission.get(missionId)!.objective_id)
+    })
+  );
 
-  items.sort((a, b) => {
-    if (a.occurredAt === b.occurredAt) return a.id < b.id ? 1 : -1;
-    return a.occurredAt < b.occurredAt ? 1 : -1;
-  });
+  const launching = missionItems.filter(item => item.runState === 'launching').sort(newestFirst);
+  const executing = missionItems.filter(item => item.runState === 'executing').sort(newestFirst);
+  const questionItems = questions.map(toQuestionItem).sort(newestFirst);
 
   return {
-    items: items.slice(0, FEED_LIMIT),
+    items: [...launching, ...executing, ...questionItems].slice(0, FEED_LIMIT),
     generatedAt,
     // Pre-truncation totals, so the client can say "7 of 12" instead of implying
     // the list is everything there is.
-    counts: {
-      objective_run: runs.length,
-      delivery: deliveries.length,
-      blocking_question: questions.length
-    }
+    counts: { mission_run: missionCount, blocking_question: questions.length }
   };
 }

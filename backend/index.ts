@@ -59,6 +59,7 @@ import {
   runnerStatus,
   updateRunnerRequestStatus
 } from './execution/runner.ts';
+import { sendRunnerClaimResponse } from './execution/runner-claim-http.ts';
 import { createEverhourExtensionRouter } from './ext/everhour/routes.ts';
 import { createGitHubExtensionRouter } from './ext/github/routes.ts';
 import { completeGitHubUserAuthorization } from './ext/github/user-oauth.ts';
@@ -2188,19 +2189,24 @@ app.get(
 app.post(
   '/api/runner/claim',
   handle(
-    req =>
-      claimRunnerRequest({
-        projectId: typeof req.body?.projectId === 'string' ? req.body.projectId : null,
-        clientDevice: {
-          deviceFingerprint:
-            typeof req.body?.deviceFingerprint === 'string' ? req.body.deviceFingerprint : null,
-          deviceLabel: typeof req.body?.deviceLabel === 'string' ? req.body.deviceLabel : null,
-          devicePlatform:
-            typeof req.body?.devicePlatform === 'string' ? req.body.devicePlatform : null
-        },
-        // Additive runner-instance identity (contract v40). Absent for older
-        // runners, which claim exactly as before and register no instance.
-        runner: runnerRegistrationFromBody(req.body)
+    (req, res) =>
+      sendRunnerClaimResponse({
+        res,
+        claim: ({ onListenArmed }) =>
+          claimRunnerRequest({
+            projectId: typeof req.body?.projectId === 'string' ? req.body.projectId : null,
+            clientDevice: {
+              deviceFingerprint:
+                typeof req.body?.deviceFingerprint === 'string' ? req.body.deviceFingerprint : null,
+              deviceLabel: typeof req.body?.deviceLabel === 'string' ? req.body.deviceLabel : null,
+              devicePlatform:
+                typeof req.body?.devicePlatform === 'string' ? req.body.devicePlatform : null
+            },
+            // Additive runner-instance identity (contract v40). Absent for older
+            // runners, which claim exactly as before and register no instance.
+            runner: runnerRegistrationFromBody(req.body),
+            onListenArmed
+          })
       }),
     { mutates: true }
   )

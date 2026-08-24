@@ -42,3 +42,11 @@ test('runner failure messages redact tokens and bound rendered invocations', () 
   assert.match(rendered, /\[truncated\]$/);
   assert.ok(rendered.length < 1_250);
 });
+
+test('osascript timeout failure is reported in full so the supervisor can continue', () => {
+  const message =
+    'osascript/Apple Event timed out after 45s while opening iTerm2. ' +
+    'The execution request failed so the runner can keep claiming. ' +
+    'iTerm2 may still open after this timeout (orphan window).';
+  assert.equal(sanitizeRunnerFailureMessage(message), message);
+});

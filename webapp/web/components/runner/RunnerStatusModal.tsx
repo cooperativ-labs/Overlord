@@ -33,6 +33,8 @@ interface ServiceStatus {
   lastLaunchedAt?: string | null;
   lastError?: string | null;
   currentPollIntervalMs?: number | null;
+  processType?: string | null;
+  reinstallHint?: string | null;
 }
 
 const SERVICE_INSTALL_COMMAND = 'ovld runner service install';
@@ -133,13 +135,19 @@ function ServiceControls() {
     );
   }
 
+  const installed = status?.installed === true;
+  const running = status?.running === 'running';
+
   const run = async (action: 'install' | 'start' | 'stop' | 'restart' | 'uninstall') => {
     setBusy(action);
     setError(null);
     try {
       const op =
         action === 'install'
-          ? runnerService.install({ noStart: true })
+          ? // First install stays stopped until Enable. Reinstall of an already
+            // installed agent must rewrite the plist and come back up so
+            // ProcessType/PATH changes take effect.
+            runnerService.install({ noStart: !installed })
           : action === 'start'
             ? runnerService.start()
             : action === 'stop'
@@ -157,9 +165,6 @@ function ServiceControls() {
     }
   };
 
-  const installed = status?.installed === true;
-  const running = status?.running === 'running';
-
   return (
     <div className="space-y-3">
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
@@ -173,9 +178,18 @@ function ServiceControls() {
         <dd>{relativeTime(status?.lastHeartbeatAt)}</dd>
         <dt className="text-muted-foreground">Last launch</dt>
         <dd>{relativeTime(status?.lastLaunchedAt)}</dd>
+        {status?.processType ? (
+          <>
+            <dt className="text-muted-foreground">Process type</dt>
+            <dd>{status.processType}</dd>
+          </>
+        ) : null}
       </dl>
 
       {status?.lastError ? <p className="text-xs text-destructive">{status.lastError}</p> : null}
+      {status?.reinstallHint ? (
+        <p className="text-xs text-amber-700 dark:text-amber-400">{status.reinstallHint}</p>
+      ) : null}
 
       <div className="flex flex-wrap gap-2">
         {!installed ? (
@@ -216,6 +230,19 @@ function ServiceControls() {
                 <RotateCw className="size-3.5" />
               )}
               Restart
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void run('install')}
+              disabled={busy !== null}
+            >
+              {busy === 'install' ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Power className="size-3.5" />
+              )}
+              Reinstall service
             </Button>
             <Button
               size="sm"
