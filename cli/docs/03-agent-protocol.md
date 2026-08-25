@@ -69,6 +69,9 @@ Requirements:
   one-based `--position` control placement; entries never select a target.
 - `dequeue-objective`: remove an objective UUID/display id from live queue
   membership; an already-unqueued objective is an idempotent no-op.
+- `retry-queue-entry`: clear one held entry's hold and reset its attempt budget
+  so the dispatcher tries it again. Address it with `--objective-id` or
+  `--entry`; an entry already dispatched or running is refused.
 - `create-run-queue`, `update-run-queue`, `delete-run-queue`, and
   `reorder-project-run-queues`: manage queue definitions through the existing
   Run Queue service. These are `project:update` operations and require a

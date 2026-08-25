@@ -1,6 +1,7 @@
 import { ListOrdered } from 'lucide-react';
 
 import { MissionTagPill } from '@/components/MissionTagPill.tsx';
+import { describeQueueEntry } from '@/components/run-queue/queue-entry-status.ts';
 import { CardContent } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils.ts';
@@ -36,10 +37,18 @@ export function MissionCardBody({
 }) {
   const tags = getMissionTags(mission);
   const runQueues = useProjectRunQueues(projectId);
-  const queuedCount = (runQueues.data?.queues ?? []).reduce(
-    (count, queue) => count + queue.entries.filter(entry => entry.missionId === mission.id).length,
-    0
+  // Entries for this mission can live in several queues; keep each queue's own
+  // order and read them left to right, which is the order the queues dispatch in.
+  const missionEntries = (runQueues.data?.queues ?? []).flatMap(queue =>
+    queue.entries.filter(entry => entry.missionId === mission.id)
   );
+  const queuedCount = missionEntries.length;
+  const queueStatuses = missionEntries.map(entry => ({
+    entry,
+    status: describeQueueEntry(entry)
+  }));
+  const blockedCount = queueStatuses.filter(item => item.status.tone === 'blocked').length;
+  const nextUp = queueStatuses.find(item => item.status.tone !== 'blocked')?.entry ?? null;
 
   return (
     <CardContent className="flex h-full flex-col p-0 font-body">
@@ -83,14 +92,33 @@ export function MissionCardBody({
                 <Tooltip>
                   <TooltipTrigger
                     render={
-                      <span className="inline-flex h-5 items-center gap-1 rounded-full bg-emerald-500/15 px-1.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
+                      <span
+                        className={cn(
+                          'inline-flex h-5 items-center gap-1 rounded-full px-1.5 text-[10px] font-medium',
+                          blockedCount > 0
+                            ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                            : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                        )}
+                      >
                         <ListOrdered className="h-3 w-3" />
                         {queuedCount}
                       </span>
                     }
                   />
                   <TooltipContent>
-                    {queuedCount} objective{queuedCount === 1 ? '' : 's'} queued
+                    <span className="block">
+                      {queuedCount} objective{queuedCount === 1 ? '' : 's'} queued
+                    </span>
+                    {nextUp ? (
+                      <span className="block">
+                        Next up in Run Queue: {nextUp.objectiveDisplayId}
+                      </span>
+                    ) : null}
+                    {blockedCount > 0 ? (
+                      <span className="block">
+                        {blockedCount} blocked — needs attention in the Run Queue
+                      </span>
+                    ) : null}
                   </TooltipContent>
                 </Tooltip>
               ) : null}

@@ -144,6 +144,7 @@ Every command below is available from `ovld protocol help`.
 | `reorder-run-queue`                | Atomically replace every entry in one Run Queue.                                                          |
 | `queue-objective`                  | Add or move one objective in the Run Queue. Requires `--objective-id` (UUID or display id).               |
 | `dequeue-objective`                | Remove one objective from the Run Queue. Requires `--objective-id`.                                       |
+| `retry-queue-entry`                | Retry one held Run Queue entry. Requires `--objective-id` or `--entry`.                                   |
 | `create-run-queue`                 | Create a queue definition. Requires `project:update`.                                                     |
 | `update-run-queue`                 | Rename, pause, or resume a queue definition. Requires `project:update`.                                   |
 | `delete-run-queue`                 | Delete a queue, optionally moving its entries. Requires `project:update`.                                 |
@@ -194,8 +195,9 @@ running more than one objective — there, the mission id alone no longer
 identifies a unit of work. An objective UUID names no mission, so it still needs
 `--mission-id` beside it.
 
-Run Queue entry operations (`queue-objective`, `dequeue-objective`, and
-`reorder-run-queue`) require `execution_request:create`. Queue-definition
+Run Queue entry operations (`queue-objective`, `dequeue-objective`,
+`retry-queue-entry`, and `reorder-run-queue`) require
+`execution_request:create`. Queue-definition
 operations (`create-run-queue`, `update-run-queue`, `delete-run-queue`, and
 `reorder-project-run-queues`) require `project:update`, so a
 mission-lifecycle-scoped token cannot perform them. `run-queue` accepts

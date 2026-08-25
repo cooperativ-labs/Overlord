@@ -11,6 +11,7 @@ import {
   removeRunQueueEntry as removeEntry,
   reorderProjectRunQueues as reorderQueues,
   reorderRunQueue as reorderQueue,
+  retryRunQueueEntry as retryEntry,
   updateRunQueue as updateQueue
 } from '../packages/core/service/run-queue.ts';
 
@@ -91,13 +92,27 @@ export async function postRunQueueEntry(
     actorId: getActorWorkspaceUserId()
   });
 }
+/**
+ * Move an entry, or — with `retry: true` — clear its hold and attempt budget so
+ * the dispatcher tries it again. The two are mutually exclusive: a retry that
+ * also reordered the queue would hide the reorder behind a recovery action.
+ */
 export async function patchRunQueueEntry(
   entryId: string,
-  body: { queueId?: string; afterEntryId?: string; position?: number }
+  body: { queueId?: string; afterEntryId?: string; position?: number; retry?: boolean }
 ) {
   const db = requireDatabaseClient();
   const projectId = await projectForEntry(db, entryId);
   await authorize(projectId, PERMISSIONS.EXECUTION_REQUEST_CREATE, db);
+  if (body.retry === true) {
+    if (
+      body.queueId !== undefined ||
+      body.afterEntryId !== undefined ||
+      body.position !== undefined
+    )
+      throw Object.assign(new Error('retry cannot be combined with a queue move'), { status: 400 });
+    return retryEntry(db, entryId);
+  }
   return moveEntry(db, entryId, body);
 }
 /**

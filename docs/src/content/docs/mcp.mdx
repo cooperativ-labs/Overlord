@@ -41,7 +41,7 @@ The hosted server advertises these mission-lifecycle tools:
 | `overlord_list_run_queues`           | Reads compact or full live Run Queue state before a mutation.                                                                                |
 | `overlord_reorder_run_queue`         | Atomically replaces every entry in one Run Queue.                                                                                            |
 | `overlord_queue_objective`           | Adds, moves, or removes one objective in the project Run Queue, including front or rank placement. Requires `objectiveId`.                   |
-| `overlord_manage_run_queue`          | Creates, updates, deletes, or reorders queue definitions; requires a full-scope token.                                                       |
+| `overlord_manage_run_queue`          | Creates, updates, deletes, or reorders queue definitions (full-scope token), or retries one held entry with `action: 'retry_entry'`.         |
 | `overlord_attach_session`            | Starts requested work on a mission and opens an MCP session. Pass `objectiveId` to pin which objective runs.                                 |
 | `overlord_update_session`            | Posts progress, decisions, or discussion updates to an attached session.                                                                     |
 | `overlord_deliver_session`           | Delivers completed work for an attached session.                                                                                             |
@@ -70,9 +70,10 @@ desktop CLI and connectors.
 For Run Queues, read with `overlord_list_run_queues` before changing state.
 `overlord_reorder_run_queue` requires every live entry exactly once and reports
 the current order when it cannot safely apply a request. Entry membership and
-ordering use `execution_request:create`; queue-definition lifecycle through
-`overlord_manage_run_queue` uses `project:update`, so a mission-lifecycle token
-cannot create, rename, pause, delete, or reorder queues.
+ordering use `execution_request:create`, as does the `retry_entry` action;
+queue-definition lifecycle through `overlord_manage_run_queue` uses
+`project:update`, so a mission-lifecycle token cannot create, rename, pause,
+delete, or reorder queues.
 
 ## Who it is for
 

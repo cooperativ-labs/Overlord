@@ -74204,6 +74204,840 @@ var init_projects = __esm({
   }
 });
 
+// ../packages/core/service/agent-session/pure/text.ts
+var init_text = __esm({
+  "../packages/core/service/agent-session/pure/text.ts"() {
+    "use strict";
+  }
+});
+
+// ../packages/core/service/agent-session/pure/redact.ts
+function redactSecrets2(value) {
+  let text = value;
+  const fired = [];
+  for (const { name, pattern } of SECRET_PATTERNS) {
+    pattern.lastIndex = 0;
+    if (!pattern.test(text)) continue;
+    pattern.lastIndex = 0;
+    fired.push(name);
+    text = text.replace(pattern, (...args) => {
+      const groups = args.slice(1, -2).filter((arg) => typeof arg === "string");
+      return groups.length >= 2 ? `${groups[0]}[redacted]` : "[redacted]";
+    });
+  }
+  return { text, redactedPatterns: fired };
+}
+var SECRET_PATTERNS;
+var init_redact = __esm({
+  "../packages/core/service/agent-session/pure/redact.ts"() {
+    "use strict";
+    init_text();
+    SECRET_PATTERNS = [
+      { name: "overlord-user-token", pattern: /out_[A-Za-z0-9_-]{8,}/g },
+      { name: "overlord-channel-token", pattern: /osc_[A-Za-z0-9_-]{8,}/g },
+      { name: "anthropic-key", pattern: /sk-ant-[A-Za-z0-9_-]{16,}/g },
+      { name: "openai-key", pattern: /sk-[A-Za-z0-9]{20,}/g },
+      { name: "github-token", pattern: /gh[pousr]_[A-Za-z0-9]{16,}/g },
+      { name: "slack-token", pattern: /xox[abprs]-[A-Za-z0-9-]{10,}/g },
+      { name: "aws-access-key", pattern: /A(?:KIA|SIA)[0-9A-Z]{16}/g },
+      { name: "jwt", pattern: /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g },
+      { name: "bearer-header", pattern: /(?<=[Bb]earer\s)[A-Za-z0-9._~+/-]{12,}=*/g },
+      // `SOMETHING_TOKEN=value`, `--password value`, `api-key: value`. The key half is kept —
+      // knowing a command sets DATABASE_PASSWORD is useful; knowing its value is not.
+      {
+        name: "assigned-secret",
+        pattern: /((?:secret|token|passwd|password|api[_-]?key|access[_-]?key|private[_-]?key|credential)[a-z0-9_-]*\s*[=:]\s*)("[^"]*"|'[^']*'|\S+)/gi
+      }
+    ];
+  }
+});
+
+// ../packages/core/service/dispatch-diagnostics.ts
+function sanitizeDispatchFailure(error53, limit = 400) {
+  const message2 = (error53 instanceof Error ? error53.message : String(error53)).trim();
+  if (!message2) return null;
+  return redactSecrets2(message2).text.slice(0, limit).trim() || null;
+}
+function runQueueDiagnosticCode(input) {
+  const terminal = /* @__PURE__ */ new Set(["failed", "cleared", "cancelled", "expired"]);
+  if (input.entryState === "dispatched" && input.requestStatus && terminal.has(input.requestStatus))
+    return "terminal_request_dispatched";
+  if (input.entryState === "running" && (!input.requestStatus || terminal.has(input.requestStatus) && !input.launchedSessionId))
+    return "running_without_live_request";
+  return null;
+}
+var init_dispatch_diagnostics = __esm({
+  "../packages/core/service/dispatch-diagnostics.ts"() {
+    "use strict";
+    init_redact();
+  }
+});
+
+// ../packages/core/service/worker-jobs.ts
+function workerJobJsonFieldPredicate(dialect, field) {
+  if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(field)) {
+    throw new Error(`Invalid worker job JSON field: ${field}`);
+  }
+  return dialect === "postgres" ? `payload_json->>'${field}' = ?` : `json_extract(payload_json, '$.${field}') = ?`;
+}
+function workerJobRetryDelay(attemptCount) {
+  return WORKER_JOB_RETRY_BACKOFF_MS[Math.min(Math.max(attemptCount - 1, 0), WORKER_JOB_RETRY_BACKOFF_MS.length - 1)];
+}
+async function claimNextWorkerJob({
+  db,
+  jobType,
+  workerId,
+  now: now2 = nowIso(),
+  lockTtlMs = DEFAULT_LOCK_TTL_MS
+}) {
+  return db.transaction(async (tx) => {
+    await tx.run(
+      `UPDATE worker_jobs SET status = 'queued', locked_by = NULL, locked_until = NULL, updated_at = ?, revision = revision + 1
+       WHERE type = ? AND status = 'running' AND deleted_at IS NULL AND locked_until < ?`,
+      [now2, jobType, now2]
+    );
+    const lockClause = tx.dialect === "postgres" ? "FOR UPDATE SKIP LOCKED" : "";
+    const candidate = await tx.get(
+      `SELECT id, payload_json, attempt_count, max_attempts, revision FROM worker_jobs
+        WHERE type = ? AND status = 'queued' AND deleted_at IS NULL AND run_after <= ?
+        ORDER BY priority ASC, run_after ASC LIMIT 1 ${lockClause}`,
+      [jobType, now2]
+    );
+    if (!candidate) return null;
+    const updated = await tx.run(
+      `UPDATE worker_jobs SET status = 'running', attempt_count = attempt_count + 1, locked_by = ?, locked_until = ?, updated_at = ?, revision = revision + 1
+        WHERE id = ? AND status = 'queued' AND revision = ?`,
+      [
+        workerId,
+        new Date(Date.parse(now2) + lockTtlMs).toISOString(),
+        now2,
+        candidate.id,
+        candidate.revision
+      ]
+    );
+    return updated.changes === 0 ? null : {
+      ...candidate,
+      attempt_count: candidate.attempt_count + 1,
+      revision: candidate.revision + 1
+    };
+  });
+}
+async function finishWorkerJob(db, id, status, lastError, now2 = nowIso()) {
+  await db.run(
+    `UPDATE worker_jobs SET status = ?, last_error = ?, locked_by = NULL, locked_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?`,
+    [status, lastError, now2, id]
+  );
+}
+async function retryWorkerJob(db, id, attemptCount, lastError, now2 = nowIso()) {
+  await db.run(
+    `UPDATE worker_jobs SET status = 'queued', run_after = ?, last_error = ?, locked_by = NULL,
+       locked_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?`,
+    [
+      new Date(Date.parse(now2) + workerJobRetryDelay(attemptCount)).toISOString(),
+      lastError,
+      now2,
+      id
+    ]
+  );
+}
+async function enqueueWorkerJob({
+  db,
+  workspaceId: workspaceId2,
+  type,
+  dedupeBy,
+  payload,
+  priority = DEFAULT_PRIORITY,
+  maxAttempts = DEFAULT_MAX_ATTEMPTS,
+  now: now2 = nowIso()
+}) {
+  const existing = await db.get(
+    `SELECT id FROM worker_jobs
+       WHERE workspace_id = ?
+         AND type = ?
+         AND status IN ('queued', 'running')
+         AND deleted_at IS NULL
+         AND ${workerJobJsonFieldPredicate(db.dialect, dedupeBy.field)}
+       ORDER BY created_at ASC
+       LIMIT 1`,
+    [workspaceId2, type, dedupeBy.value]
+  );
+  if (existing) return { jobId: existing.id, enqueued: false };
+  const jobId = newId();
+  await db.run(
+    `INSERT INTO worker_jobs
+         (id, workspace_id, type, status, priority, run_after, attempt_count, max_attempts,
+          payload_json, created_at, updated_at, revision)
+       VALUES (?, ?, ?, 'queued', ?, ?, 0, ?, ?, ?, ?, 1)`,
+    [jobId, workspaceId2, type, priority, now2, maxAttempts, JSON.stringify(payload), now2, now2]
+  );
+  return { jobId, enqueued: true };
+}
+async function enqueueDeliveryComposeJob({
+  ctx,
+  deliveryId,
+  now: now2 = nowIso(),
+  maxAttempts = DEFAULT_MAX_ATTEMPTS,
+  priority = DEFAULT_PRIORITY
+}) {
+  const result = await enqueueWorkerJob({
+    db: ctx.db,
+    workspaceId: ctx.workspace.id,
+    type: DELIVERY_COMPOSE_JOB_TYPE,
+    dedupeBy: { field: "deliveryId", value: deliveryId },
+    payload: { deliveryId },
+    priority,
+    maxAttempts,
+    now: now2
+  });
+  if (result.enqueued) {
+    console.info(
+      "[delivery-compose-worker]",
+      JSON.stringify({
+        event: "delivery_compose_queued",
+        deliveryId,
+        jobId: result.jobId,
+        maxAttempts,
+        priority
+      })
+    );
+  }
+  return result;
+}
+async function missionOwnerProfileId({
+  db,
+  workspaceId: workspaceId2,
+  missionId
+}) {
+  const owner = await db.get(
+    `SELECT wu.profile_id
+       FROM missions m
+       JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
+      WHERE m.id = ? AND m.workspace_id = ? AND m.deleted_at IS NULL
+        AND wu.deleted_at IS NULL AND wu.status = 'active'`,
+    [missionId, workspaceId2]
+  );
+  return owner?.profile_id ?? null;
+}
+var DELIVERY_COMPOSE_JOB_TYPE, DEFAULT_MAX_ATTEMPTS, DEFAULT_PRIORITY, DEFAULT_LOCK_TTL_MS, WORKER_JOB_RETRY_BACKOFF_MS;
+var init_worker_jobs = __esm({
+  "../packages/core/service/worker-jobs.ts"() {
+    "use strict";
+    init_util3();
+    DELIVERY_COMPOSE_JOB_TYPE = "overlord.delivery.compose.v1";
+    DEFAULT_MAX_ATTEMPTS = 5;
+    DEFAULT_PRIORITY = 50;
+    DEFAULT_LOCK_TTL_MS = 6e4;
+    WORKER_JOB_RETRY_BACKOFF_MS = [15e3, 6e4, 3e5, 9e5, 36e5];
+  }
+});
+
+// ../packages/core/service/run-queue.ts
+function missionQueueName(missionDisplayId, missionTitle) {
+  const title = (missionTitle ?? "").trim();
+  const suffix = title ? ` \xB7 ${title}` : "";
+  return `${missionDisplayId}${suffix}`.slice(0, MISSION_QUEUE_NAME_LIMIT);
+}
+async function enqueueRunQueueDispatch(db, projectId, workspaceId2) {
+  return enqueueWorkerJob({
+    db,
+    workspaceId: workspaceId2,
+    type: RUN_QUEUE_DISPATCH_JOB_TYPE,
+    dedupeBy: { field: "projectId", value: projectId },
+    payload: { projectId }
+  });
+}
+async function projectRow(db, projectId) {
+  const row = await db.get(
+    "SELECT id, workspace_id FROM projects WHERE id = ? AND deleted_at IS NULL",
+    [projectId]
+  );
+  if (!row) throw new ServiceError("Project not found", "project_not_found", 404);
+  return row;
+}
+async function ensureMissionRunQueue(db, projectId, missionId, actorId = null) {
+  const existing = await db.get(
+    "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE project_id = ? AND mission_id = ? AND deleted_at IS NULL",
+    [projectId, missionId]
+  );
+  if (existing) return existing;
+  const mission = await db.get(
+    "SELECT id, project_id, workspace_id, display_id, title FROM missions WHERE id = ? AND deleted_at IS NULL",
+    [missionId]
+  );
+  if (!mission || mission.project_id !== projectId)
+    throw new ServiceError("Mission not found", "mission_not_found", 404);
+  const name = missionQueueName(mission.display_id, mission.title);
+  const adopted = await db.get(
+    "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE project_id = ? AND lower(name) = lower(?) AND deleted_at IS NULL",
+    [projectId, name]
+  );
+  const now2 = nowIso();
+  if (adopted) {
+    await db.run(
+      "UPDATE run_queues SET mission_id = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
+      [missionId, now2, adopted.id]
+    );
+    return { ...adopted, mission_id: missionId };
+  }
+  const max = await db.get(
+    "SELECT MAX(position) value FROM run_queues WHERE project_id = ? AND deleted_at IS NULL",
+    [projectId]
+  );
+  const id = newId();
+  const position = (max?.value ?? 0) + STEP;
+  await db.run(
+    "INSERT INTO run_queues (id, project_id, workspace_id, mission_id, name, position, paused, is_default, created_by_workspace_user_id, created_at, updated_at, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
+    [
+      id,
+      projectId,
+      mission.workspace_id,
+      missionId,
+      name,
+      position,
+      db.dialect === "postgres" ? false : 0,
+      db.dialect === "postgres" ? false : 0,
+      actorId,
+      now2,
+      now2
+    ]
+  );
+  return {
+    id,
+    project_id: projectId,
+    workspace_id: mission.workspace_id,
+    name,
+    position,
+    paused: false,
+    is_default: false,
+    mission_id: missionId
+  };
+}
+function entryDto(row, rank) {
+  const diagnosticCode = runQueueDiagnosticCode({
+    entryState: row.state,
+    requestStatus: row.request_status,
+    launchedSessionId: row.request_launched_session_id
+  });
+  return {
+    id: row.id,
+    queueId: row.queue_id,
+    position: rank,
+    state: row.state,
+    blockedReason: row.blocked_reason,
+    waitingReason: row.waiting_reason ?? null,
+    waitingOnObjectiveId: row.waiting_on_objective_id ?? null,
+    waitingOnObjectiveDisplayId: row.waiting_on_objective_display_key ? `${row.mission_display_id}.${row.waiting_on_objective_display_key}` : null,
+    attemptCount: row.attempt_count ?? 0,
+    objectiveId: row.objective_id,
+    objectiveDisplayId: `${row.mission_display_id}.${row.objective_display_key}`,
+    objectiveTitle: row.objective_title,
+    missionId: row.mission_id,
+    missionDisplayId: row.mission_display_id,
+    missionTitle: row.mission_title,
+    assignedAgent: row.assigned_agent,
+    resourceKey: row.resource_key?.trim() || null,
+    enqueuedAt: row.enqueued_at,
+    executionRequestId: row.execution_request_id,
+    executionRequest: row.request_status ? {
+      status: row.request_status,
+      lastError: row.request_last_error,
+      claimedByDeviceId: row.request_claimed_by_device_id,
+      claimedByExecutionTargetId: row.request_claimed_by_execution_target_id,
+      executionTargetId: row.request_execution_target_id,
+      createdAt: row.request_created_at,
+      claimedAt: row.request_claimed_at,
+      launchStartedAt: row.request_launch_started_at,
+      launchCompletedAt: row.request_launch_completed_at,
+      updatedAt: row.request_updated_at
+    } : null,
+    diagnosticCode
+  };
+}
+async function listProjectRunQueues(db, projectId) {
+  await projectRow(db, projectId);
+  const queues = await db.all(
+    "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE project_id = ? AND deleted_at IS NULL ORDER BY is_default DESC, position ASC",
+    [projectId]
+  );
+  const rows = await db.all(
+    `SELECT e.*, o.title objective_title, o.display_key objective_display_key, o.assigned_agent, o.resource_key, m.display_id mission_display_id, m.title mission_title,
+      wo.display_key waiting_on_objective_display_key,
+      er.status request_status, er.last_error request_last_error, er.claimed_by_device_id request_claimed_by_device_id,
+      er.claimed_by_execution_target_id request_claimed_by_execution_target_id, er.execution_target_id request_execution_target_id,
+      er.created_at request_created_at, er.claimed_at request_claimed_at, er.launch_started_at request_launch_started_at,
+      er.launch_completed_at request_launch_completed_at, er.updated_at request_updated_at, er.launched_session_id request_launched_session_id
+      FROM run_queue_entries e JOIN objectives o ON o.id = e.objective_id JOIN missions m ON m.id = e.mission_id
+      LEFT JOIN execution_requests er ON er.id = e.execution_request_id AND er.deleted_at IS NULL
+      LEFT JOIN objectives wo ON wo.id = e.waiting_on_objective_id AND wo.deleted_at IS NULL
+      WHERE e.project_id = ? AND e.deleted_at IS NULL ORDER BY e.position ASC`,
+    [projectId]
+  );
+  const missionIds = queues.map((queue) => queue.mission_id).filter((value) => Boolean(value));
+  const missionRows = missionIds.length ? await db.all(
+    `SELECT id, display_id FROM missions WHERE id IN (${missionIds.map(() => "?").join(",")})`,
+    missionIds
+  ) : [];
+  const missionDisplayIds = new Map(missionRows.map((row) => [row.id, row.display_id]));
+  return {
+    projectId,
+    queues: queues.map((queue) => {
+      const entries = rows.filter((row) => row.queue_id === queue.id).map((row, index) => entryDto(row, index + 1));
+      return {
+        id: queue.id,
+        projectId,
+        name: queue.name,
+        isDefault: truthy(queue.is_default),
+        missionId: queue.mission_id,
+        missionDisplayId: queue.mission_id ? missionDisplayIds.get(queue.mission_id) ?? null : null,
+        paused: truthy(queue.paused),
+        position: queue.position,
+        entries,
+        running: entries.find((e5) => e5.state === "running" || e5.state === "dispatched") ?? null
+      };
+    })
+  };
+}
+async function rewriteMissionPositions(db, missionId) {
+  const rows = await db.all(
+    `SELECT o.id, o.state, o.position, e.position queue_position, q.position queue_order FROM objectives o LEFT JOIN run_queue_entries e ON e.objective_id = o.id AND e.deleted_at IS NULL LEFT JOIN run_queues q ON q.id = e.queue_id AND q.deleted_at IS NULL WHERE o.mission_id = ? AND o.deleted_at IS NULL ORDER BY CASE WHEN o.state IN ('executing','pending_delivery','complete') THEN 0 WHEN e.id IS NOT NULL THEN 1 ELSE 2 END, q.position, e.position, o.position`,
+    [missionId]
+  );
+  const now2 = nowIso();
+  for (let i5 = 0; i5 < rows.length; i5++)
+    await db.run(
+      "UPDATE objectives SET position = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
+      [1e9 + i5, now2, rows[i5].id]
+    );
+  for (let i5 = 0; i5 < rows.length; i5++)
+    await db.run(
+      "UPDATE objectives SET position = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
+      [i5, now2, rows[i5].id]
+    );
+}
+async function createRunQueue(db, projectId, name, actorId, missionId = null) {
+  const project = await projectRow(db, projectId);
+  const clean3 = name.trim();
+  if (!clean3) throw new ServiceError("Queue name is required", "invalid_queue_name", 400);
+  const max = await db.get(
+    "SELECT MAX(position) value FROM run_queues WHERE project_id = ? AND deleted_at IS NULL",
+    [projectId]
+  );
+  if (missionId) {
+    const mission = await db.get(
+      "SELECT id FROM missions WHERE id = ? AND project_id = ? AND deleted_at IS NULL",
+      [missionId, projectId]
+    );
+    if (!mission) throw new ServiceError("Mission not found", "mission_not_found", 404);
+  }
+  const id = newId();
+  const now2 = nowIso();
+  await db.run(
+    "INSERT INTO run_queues (id, project_id, workspace_id, mission_id, name, position, paused, is_default, created_by_workspace_user_id, created_at, updated_at, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
+    [
+      id,
+      projectId,
+      project.workspace_id,
+      missionId,
+      clean3,
+      (max?.value ?? 0) + STEP,
+      db.dialect === "postgres" ? false : 0,
+      db.dialect === "postgres" ? false : 0,
+      actorId,
+      now2,
+      now2
+    ]
+  );
+  await enqueueRunQueueDispatch(db, projectId, project.workspace_id);
+  return (await listProjectRunQueues(db, projectId)).queues.find((q2) => q2.id === id);
+}
+async function updateRunQueue(db, queueId, patch) {
+  const queue = await db.get(
+    "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE id = ? AND deleted_at IS NULL",
+    [queueId]
+  );
+  if (!queue) throw new ServiceError("Run Queue not found", "run_queue_not_found", 404);
+  const name = patch.name === void 0 ? queue.name : patch.name.trim();
+  if (!name) throw new ServiceError("Queue name is required", "invalid_queue_name", 400);
+  const paused = patch.paused === void 0 ? truthy(queue.paused) : patch.paused;
+  await db.run(
+    "UPDATE run_queues SET name = ?, paused = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
+    [name, db.dialect === "postgres" ? paused : paused ? 1 : 0, nowIso(), queueId]
+  );
+  if (!paused) await enqueueRunQueueDispatch(db, queue.project_id, queue.workspace_id);
+  return (await listProjectRunQueues(db, queue.project_id)).queues.find((q2) => q2.id === queueId);
+}
+async function reorderProjectRunQueues(db, projectId, orderedQueueIds) {
+  return db.transaction(async (tx) => {
+    const queues = await tx.all(
+      "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE project_id = ? AND deleted_at IS NULL ORDER BY is_default DESC, position ASC",
+      [projectId]
+    );
+    if (queues.length !== orderedQueueIds.length || new Set(orderedQueueIds).size !== queues.length || queues.some((queue) => !orderedQueueIds.includes(queue.id))) {
+      throw new ServiceError(
+        "orderedQueueIds must contain every live queue exactly once",
+        "invalid_run_queue_order",
+        400
+      );
+    }
+    const defaultQueue = queues.find((queue) => truthy(queue.is_default));
+    if (defaultQueue && orderedQueueIds[0] !== defaultQueue.id) {
+      throw new ServiceError(
+        "The default Run Queue must remain first",
+        "default_run_queue_position",
+        409
+      );
+    }
+    const now2 = nowIso();
+    for (let index = 0; index < orderedQueueIds.length; index++) {
+      await tx.run(
+        "UPDATE run_queues SET position = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
+        [(index + 1) * STEP, now2, orderedQueueIds[index]]
+      );
+    }
+    return listProjectRunQueues(tx, projectId);
+  });
+}
+async function enqueueRunQueueEntry(db, projectId, objectiveId, options = {}) {
+  return db.transaction(async (tx) => {
+    const objective = await tx.get(
+      "SELECT id, project_id, workspace_id, mission_id FROM objectives WHERE id = ? AND deleted_at IS NULL",
+      [objectiveId]
+    );
+    if (!objective || objective.project_id !== projectId)
+      throw new ServiceError("Objective not found", "objective_not_found", 404);
+    const existing = await tx.get(
+      "SELECT id FROM run_queue_entries WHERE objective_id = ? AND deleted_at IS NULL",
+      [objectiveId]
+    );
+    if (existing)
+      return (await listProjectRunQueues(tx, projectId)).queues.flatMap((q2) => q2.entries).find((e5) => e5.id === existing.id);
+    const queue = options.queueId ? await tx.get(
+      "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE id = ? AND project_id = ? AND deleted_at IS NULL",
+      [options.queueId, projectId]
+    ) : await ensureMissionRunQueue(tx, projectId, objective.mission_id, options.actorId ?? null);
+    if (!queue) throw new ServiceError("Run Queue not found", "run_queue_not_found", 404);
+    let position = options.position;
+    if (options.afterEntryId) {
+      const after = await tx.get(
+        "SELECT position FROM run_queue_entries WHERE id = ? AND queue_id = ? AND deleted_at IS NULL",
+        [options.afterEntryId, queue.id]
+      );
+      if (!after)
+        throw new ServiceError("Preceding entry not found", "run_queue_entry_not_found", 404);
+      const next = await tx.get(
+        "SELECT position FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL AND position > ? ORDER BY position LIMIT 1",
+        [queue.id, after.position]
+      );
+      position = next ? (after.position + next.position) / 2 : after.position + STEP;
+    }
+    if (position === void 0) {
+      const max = await tx.get(
+        "SELECT MAX(position) value FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL",
+        [queue.id]
+      );
+      position = (max?.value ?? 0) + STEP;
+    }
+    const id = newId();
+    const now2 = nowIso();
+    await tx.run(
+      `INSERT INTO run_queue_entries (id, queue_id, project_id, workspace_id, mission_id, objective_id, position, state, enqueued_by_workspace_user_id, enqueued_at, created_at, updated_at, revision) VALUES (?, ?, ?, ?, ?, ?, ?, 'waiting', ?, ?, ?, ?, 1)`,
+      [
+        id,
+        queue.id,
+        projectId,
+        objective.workspace_id,
+        objective.mission_id,
+        objectiveId,
+        position,
+        options.actorId ?? null,
+        now2,
+        now2,
+        now2
+      ]
+    );
+    await tx.run(
+      "UPDATE objectives SET auto_advance = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
+      [tx.dialect === "postgres" ? true : 1, now2, objectiveId]
+    );
+    await rewriteMissionPositions(tx, objective.mission_id);
+    await enqueueRunQueueDispatch(tx, projectId, objective.workspace_id);
+    return (await listProjectRunQueues(tx, projectId)).queues.flatMap((q2) => q2.entries).find((e5) => e5.id === id);
+  });
+}
+async function removeRunQueueEntry(db, entryId, options = {}) {
+  return db.transaction(async (tx) => {
+    const row = await tx.get(
+      "SELECT project_id, workspace_id, mission_id, objective_id, queue_id, state, execution_request_id FROM run_queue_entries WHERE id = ? AND deleted_at IS NULL",
+      [entryId]
+    );
+    if (!row) throw new ServiceError("Run Queue entry not found", "run_queue_entry_not_found", 404);
+    const inFlight = row.state === "dispatched" || row.state === "running";
+    const now2 = nowIso();
+    await tx.run(
+      "UPDATE run_queue_entries SET deleted_at = ?, execution_request_id = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?",
+      [now2, now2, entryId]
+    );
+    await tx.run(
+      "UPDATE objectives SET auto_advance = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
+      [tx.dialect === "postgres" ? false : 0, now2, row.objective_id]
+    );
+    const objective = await tx.get(
+      "SELECT state FROM objectives WHERE id = ? AND deleted_at IS NULL",
+      [row.objective_id]
+    );
+    const objectiveReset = options.force === true && inFlight && objective?.state === "launching";
+    if (objectiveReset)
+      await tx.run(
+        "UPDATE objectives SET state = 'draft', updated_at = ?, revision = revision + 1 WHERE id = ?",
+        [now2, row.objective_id]
+      );
+    let removedEmptyQueueId = null;
+    const queue = await tx.get(
+      "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE id = ? AND deleted_at IS NULL",
+      [row.queue_id]
+    );
+    if (queue?.mission_id && !truthy(queue.is_default)) {
+      const remaining = await tx.get(
+        "SELECT id FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL LIMIT 1",
+        [queue.id]
+      );
+      if (!remaining) {
+        await tx.run(
+          "UPDATE run_queues SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
+          [now2, now2, queue.id]
+        );
+        removedEmptyQueueId = queue.id;
+      }
+    }
+    await rewriteMissionPositions(tx, row.mission_id);
+    await enqueueRunQueueDispatch(tx, row.project_id, row.workspace_id);
+    return {
+      removed: true,
+      projectId: row.project_id,
+      workspaceId: row.workspace_id,
+      missionId: row.mission_id,
+      objectiveId: row.objective_id,
+      previousState: row.state,
+      executionRequestId: row.execution_request_id,
+      objectiveReset,
+      removedEmptyQueueId
+    };
+  });
+}
+async function enqueueObjectiveAfterLastQueuedSibling(db, projectId, objectiveId, actorId = null) {
+  const objective = await db.get(
+    "SELECT id, mission_id, position FROM objectives WHERE id = ? AND project_id = ? AND deleted_at IS NULL",
+    [objectiveId, projectId]
+  );
+  if (!objective) throw new ServiceError("Objective not found", "objective_not_found", 404);
+  const sibling = await db.get(
+    `SELECT e.id, e.queue_id
+       FROM run_queue_entries e
+       JOIN objectives sibling ON sibling.id = e.objective_id
+      WHERE e.project_id = ?
+        AND e.mission_id = ?
+        AND e.deleted_at IS NULL
+        AND sibling.deleted_at IS NULL
+        AND (sibling.position < ? OR (sibling.position = ? AND sibling.id <> ?))
+      ORDER BY sibling.position DESC, e.position DESC
+      LIMIT 1`,
+    [projectId, objective.mission_id, objective.position, objective.position, objectiveId]
+  );
+  return enqueueRunQueueEntry(db, projectId, objectiveId, {
+    ...sibling ? { queueId: sibling.queue_id, afterEntryId: sibling.id } : {},
+    actorId
+  });
+}
+async function removeRunQueueEntryForObjective(db, projectId, objectiveId) {
+  const entry = await db.get(
+    "SELECT id FROM run_queue_entries WHERE project_id = ? AND objective_id = ? AND deleted_at IS NULL",
+    [projectId, objectiveId]
+  );
+  if (!entry) return { removed: false };
+  await removeRunQueueEntry(db, entry.id);
+  return { removed: true };
+}
+async function reorderRunQueue(db, queueId, orderedEntryIds) {
+  return db.transaction(async (tx) => {
+    const queue = await tx.get(
+      "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE id = ? AND deleted_at IS NULL",
+      [queueId]
+    );
+    if (!queue) throw new ServiceError("Run Queue not found", "run_queue_not_found", 404);
+    const rows = await tx.all(
+      "SELECT id, mission_id, state FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL ORDER BY position",
+      [queueId]
+    );
+    if (rows.length !== orderedEntryIds.length || new Set(orderedEntryIds).size !== rows.length || rows.some((r5) => !orderedEntryIds.includes(r5.id)))
+      throw new ServiceError(
+        "orderedEntryIds must contain every live entry exactly once",
+        "invalid_run_queue_order",
+        400
+      );
+    if (rows.some(
+      (r5) => (r5.state === "running" || r5.state === "dispatched") && orderedEntryIds.indexOf(r5.id) !== rows.indexOf(r5)
+    ))
+      throw new ServiceError("Running entries cannot be moved", "run_queue_entry_running", 409);
+    const now2 = nowIso();
+    for (let i5 = 0; i5 < orderedEntryIds.length; i5++)
+      await tx.run(
+        "UPDATE run_queue_entries SET position = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
+        [(i5 + 1) * STEP, now2, orderedEntryIds[i5]]
+      );
+    for (const missionId of new Set(rows.map((r5) => r5.mission_id)))
+      await rewriteMissionPositions(tx, missionId);
+    await enqueueRunQueueDispatch(tx, queue.project_id, queue.workspace_id);
+    return (await listProjectRunQueues(tx, queue.project_id)).queues.find((q2) => q2.id === queueId);
+  });
+}
+async function moveRunQueueEntry(db, entryId, options) {
+  return db.transaction(async (tx) => {
+    const current = await tx.get(
+      "SELECT project_id, workspace_id, mission_id, queue_id, state FROM run_queue_entries WHERE id = ? AND deleted_at IS NULL",
+      [entryId]
+    );
+    if (!current)
+      throw new ServiceError("Run Queue entry not found", "run_queue_entry_not_found", 404);
+    if (current.state === "running" || current.state === "dispatched")
+      throw new ServiceError("Running entries cannot be moved", "run_queue_entry_running", 409);
+    const queueId = options.queueId ?? current.queue_id;
+    const queue = await tx.get(
+      "SELECT id FROM run_queues WHERE id = ? AND project_id = ? AND deleted_at IS NULL",
+      [queueId, current.project_id]
+    );
+    if (!queue) throw new ServiceError("Run Queue not found", "run_queue_not_found", 404);
+    let position = options.position;
+    if (options.afterEntryId) {
+      const after = await tx.get(
+        "SELECT position FROM run_queue_entries WHERE id = ? AND queue_id = ? AND deleted_at IS NULL",
+        [options.afterEntryId, queueId]
+      );
+      if (!after)
+        throw new ServiceError("Preceding entry not found", "run_queue_entry_not_found", 404);
+      const next = await tx.get(
+        "SELECT position FROM run_queue_entries WHERE queue_id = ? AND id <> ? AND deleted_at IS NULL AND position > ? ORDER BY position LIMIT 1",
+        [queueId, entryId, after.position]
+      );
+      position = next ? (after.position + next.position) / 2 : after.position + STEP;
+    }
+    if (position === void 0) {
+      const max = await tx.get(
+        "SELECT MAX(position) value FROM run_queue_entries WHERE queue_id = ? AND id <> ? AND deleted_at IS NULL",
+        [queueId, entryId]
+      );
+      position = (max?.value ?? 0) + STEP;
+    }
+    await tx.run(
+      "UPDATE run_queue_entries SET queue_id = ?, position = ?, state = 'waiting', blocked_reason = NULL, waiting_reason = NULL, waiting_on_objective_id = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?",
+      [queueId, position, nowIso(), entryId]
+    );
+    await rewriteMissionPositions(tx, current.mission_id);
+    await enqueueRunQueueDispatch(tx, current.project_id, current.workspace_id);
+    return (await listProjectRunQueues(tx, current.project_id)).queues.flatMap((q2) => q2.entries).find((e5) => e5.id === entryId);
+  });
+}
+async function retryRunQueueEntry(db, entryId) {
+  return db.transaction(async (tx) => {
+    const current = await tx.get(
+      "SELECT project_id, workspace_id, state FROM run_queue_entries WHERE id = ? AND deleted_at IS NULL",
+      [entryId]
+    );
+    if (!current)
+      throw new ServiceError("Run Queue entry not found", "run_queue_entry_not_found", 404);
+    if (current.state === "dispatched" || current.state === "running")
+      throw new ServiceError(
+        "An in-flight Run Queue entry cannot be retried; remove it with force first",
+        "run_queue_entry_running",
+        409
+      );
+    const now2 = nowIso();
+    await tx.run(
+      `UPDATE run_queue_entries
+          SET state = 'waiting',
+              waiting_reason = 'retry_pending',
+              waiting_on_objective_id = NULL,
+              blocked_reason = NULL,
+              execution_request_id = NULL,
+              attempt_count = 0,
+              updated_at = ?,
+              revision = revision + 1
+        WHERE id = ?`,
+      [now2, entryId]
+    );
+    await enqueueRunQueueDispatch(tx, current.project_id, current.workspace_id);
+    return (await listProjectRunQueues(tx, current.project_id)).queues.flatMap((q2) => q2.entries).find((e5) => e5.id === entryId);
+  });
+}
+async function enqueueRunQueueDispatchForWorkspace(db, workspaceId2) {
+  const rows = await db.all(
+    `SELECT DISTINCT project_id FROM run_queue_entries
+      WHERE workspace_id = ? AND deleted_at IS NULL AND state IN ('waiting', 'blocked')`,
+    [workspaceId2]
+  );
+  for (const row of rows) await enqueueRunQueueDispatch(db, row.project_id, workspaceId2);
+}
+async function deleteRunQueue(db, queueId, moveEntriesTo) {
+  return db.transaction(async (tx) => {
+    const queue = await tx.get(
+      "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE id = ? AND deleted_at IS NULL",
+      [queueId]
+    );
+    if (!queue) throw new ServiceError("Run Queue not found", "run_queue_not_found", 404);
+    if (truthy(queue.is_default))
+      throw new ServiceError("The default Run Queue cannot be deleted", "default_run_queue", 409);
+    const entries = await tx.all(
+      "SELECT id, mission_id FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL",
+      [queueId]
+    );
+    if (entries.length && !moveEntriesTo)
+      throw new ServiceError(
+        "moveEntriesTo is required for a non-empty queue",
+        "run_queue_not_empty",
+        409
+      );
+    if (moveEntriesTo) {
+      const target = await tx.get(
+        "SELECT id FROM run_queues WHERE id = ? AND project_id = ? AND deleted_at IS NULL",
+        [moveEntriesTo, queue.project_id]
+      );
+      if (!target)
+        throw new ServiceError("Destination Run Queue not found", "run_queue_not_found", 404);
+      const max = await tx.get(
+        "SELECT MAX(position) value FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL",
+        [moveEntriesTo]
+      );
+      for (let i5 = 0; i5 < entries.length; i5++)
+        await tx.run(
+          "UPDATE run_queue_entries SET queue_id = ?, position = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
+          [moveEntriesTo, (max?.value ?? 0) + (i5 + 1) * STEP, nowIso(), entries[i5].id]
+        );
+    }
+    const now2 = nowIso();
+    await tx.run(
+      "UPDATE run_queues SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
+      [now2, now2, queueId]
+    );
+    for (const missionId of new Set(entries.map((e5) => e5.mission_id)))
+      await rewriteMissionPositions(tx, missionId);
+    await enqueueRunQueueDispatch(tx, queue.project_id, queue.workspace_id);
+    return { removed: true, projectId: queue.project_id };
+  });
+}
+var RUN_QUEUE_DISPATCH_JOB_TYPE, STEP, truthy, MISSION_QUEUE_NAME_LIMIT;
+var init_run_queue = __esm({
+  "../packages/core/service/run-queue.ts"() {
+    "use strict";
+    init_dispatch_diagnostics();
+    init_errors4();
+    init_util3();
+    init_worker_jobs();
+    RUN_QUEUE_DISPATCH_JOB_TYPE = "overlord.run-queue.dispatch.v1";
+    STEP = 1e3;
+    truthy = (value) => value === true || value === 1;
+    MISSION_QUEUE_NAME_LIMIT = 80;
+  }
+});
+
 // ../packages/core/service/delivery-report.ts
 function isDisplayableHumanAction(action) {
   return !GIT_ACTION_PATTERN.test(action) && !ROUTINE_QA_PATTERN.test(action);
@@ -74681,6 +75515,13 @@ var init_webhook_events = __esm({
 });
 
 // ../packages/core/service/execution-target-runners.ts
+function isStaleHeartbeat(lastHeartbeatAt, now2) {
+  if (!lastHeartbeatAt) return true;
+  const last = Date.parse(lastHeartbeatAt);
+  const current = Date.parse(now2);
+  if (Number.isNaN(last) || Number.isNaN(current)) return true;
+  return current - last > RUNNER_HEARTBEAT_STALE_MS;
+}
 function isRunnerRelation(value) {
   return value === "native" || value === "adopted";
 }
@@ -74791,10 +75632,11 @@ async function recordRunnerHeartbeat({
   const capabilitiesJson = JSON.stringify(capabilities ?? {});
   const supportedAgentsJson = JSON.stringify(supportedAgents ?? []);
   const existing = await ctx.db.get(
-    `SELECT id, revision FROM execution_target_runner_registrations
+    `SELECT id, revision, health, last_heartbeat_at FROM execution_target_runner_registrations
         WHERE workspace_id = ? AND runner_instance_id = ? AND deleted_at IS NULL`,
     [ctx.workspace.id, runnerInstanceId]
   );
+  const reconnected = !existing || existing.health !== health && health === "healthy" || isStaleHeartbeat(existing.last_heartbeat_at, now2);
   if (existing) {
     await ctx.db.run(
       `UPDATE execution_target_runner_registrations
@@ -74825,6 +75667,7 @@ async function recordRunnerHeartbeat({
       entityRevision: existing.revision + 1,
       changedFields: ["health", "last_heartbeat_at", "relation", "execution_target_id"]
     });
+    if (reconnected) await enqueueRunQueueDispatchForWorkspace(ctx.db, ctx.workspace.id);
     return {
       id: existing.id,
       executionTargetId,
@@ -74869,6 +75712,7 @@ async function recordRunnerHeartbeat({
     operation: "insert",
     entityRevision: 1
   });
+  if (reconnected) await enqueueRunQueueDispatchForWorkspace(ctx.db, ctx.workspace.id);
   return {
     id,
     executionTargetId,
@@ -74969,6 +75813,7 @@ var init_execution_target_runners = __esm({
     init_change_feed();
     init_errors4();
     init_execution_targets();
+    init_run_queue();
     init_util3();
     RUNNER_HEARTBEAT_STALE_MS = 5 * 60 * 1e3;
     LIVE_RUNNER_HEALTH = ["healthy", "degraded"];
@@ -133133,36 +133978,54 @@ var composeDeliveryTool = {
 function planRunQueueDispatch(input) {
   const actions = [];
   const maxAttempts = input.maxDispatchAttempts ?? 3;
-  for (const queue of input.queues) {
+  const claimedMissions = /* @__PURE__ */ new Map();
+  const orderedQueues = [...input.queues].sort((a5, b5) => (a5.position ?? 0) - (b5.position ?? 0) || a5.id.localeCompare(b5.id));
+  for (const queue of orderedQueues) {
     if (queue.paused)
       continue;
     const entries = input.entries.filter((entry) => entry.queueId === queue.id);
     if (entries.some((entry) => entry.state === "dispatched" || entry.state === "running"))
       continue;
-    for (const entry of entries.filter((entry2) => entry2.state === "waiting").sort((a5, b5) => a5.position - b5.position || a5.id.localeCompare(b5.id))) {
+    for (const entry of entries.filter((entry2) => entry2.state === "waiting" || entry2.state === "blocked").sort((a5, b5) => a5.position - b5.position || a5.id.localeCompare(b5.id))) {
       const objective = input.objectives[entry.objectiveId];
       if (!objective || objective.deleted || objective.state === "complete") {
         actions.push({ action: "drop", entryId: entry.id, reason: "objective_gone" });
-        continue;
-      }
-      if (!objective.instructionText.trim()) {
-        actions.push({ action: "hold", entryId: entry.id, reason: "no_instruction" });
         continue;
       }
       if (objective.state === "executing" || objective.state === "pending_delivery") {
         actions.push({ action: "mark_running", entryId: entry.id });
         break;
       }
-      if (objective.missionBusy) {
-        actions.push({ action: "hold", entryId: entry.id, reason: "mission_busy" });
+      if (!objective.instructionText.trim()) {
+        actions.push({ action: "block", entryId: entry.id, reason: "no_instruction" });
+        continue;
+      }
+      if (objective.assignedAgent !== void 0 && !objective.assignedAgent?.trim()) {
+        actions.push({ action: "block", entryId: entry.id, reason: "no_agent" });
+        continue;
+      }
+      const mission = input.missions?.[objective.missionId];
+      const allowParallel = mission?.allowParallelObjectives === true;
+      const blockingSibling = allowParallel ? void 0 : claimedMissions.get(objective.missionId) ?? mission?.busyObjectiveIds?.find((id) => id !== objective.id);
+      if (blockingSibling) {
+        actions.push({
+          action: "wait",
+          entryId: entry.id,
+          reason: "mission_busy",
+          waitingOnObjectiveId: blockingSibling
+        });
         continue;
       }
       if (objective.resourceConnected === false) {
-        actions.push({ action: "hold", entryId: entry.id, reason: "resource_disconnected" });
+        actions.push({ action: "wait", entryId: entry.id, reason: "resource_disconnected" });
         continue;
       }
       if (entry.attemptCount >= maxAttempts) {
-        actions.push({ action: "hold", entryId: entry.id, reason: "dispatch_failed" });
+        actions.push({
+          action: "block",
+          entryId: entry.id,
+          reason: entry.failureKind ?? "dispatch_failed"
+        });
         continue;
       }
       actions.push({
@@ -133172,6 +134035,8 @@ function planRunQueueDispatch(input) {
         promoteFutureToDraft: objective.state === "future",
         idempotencyKey: `run_queue:${entry.id}:attempt:${entry.attemptCount + 1}`
       });
+      if (!allowParallel)
+        claimedMissions.set(objective.missionId, objective.id);
       break;
     }
   }
@@ -136078,764 +136943,7 @@ var OBJECTIVE_COMPLETED_AT_ASSIGNMENT = "completed_at = ?";
 
 // ../packages/core/service/missions.ts
 init_projects();
-
-// ../packages/core/service/agent-session/pure/redact.ts
-var SECRET_PATTERNS = [
-  { name: "overlord-user-token", pattern: /out_[A-Za-z0-9_-]{8,}/g },
-  { name: "overlord-channel-token", pattern: /osc_[A-Za-z0-9_-]{8,}/g },
-  { name: "anthropic-key", pattern: /sk-ant-[A-Za-z0-9_-]{16,}/g },
-  { name: "openai-key", pattern: /sk-[A-Za-z0-9]{20,}/g },
-  { name: "github-token", pattern: /gh[pousr]_[A-Za-z0-9]{16,}/g },
-  { name: "slack-token", pattern: /xox[abprs]-[A-Za-z0-9-]{10,}/g },
-  { name: "aws-access-key", pattern: /A(?:KIA|SIA)[0-9A-Z]{16}/g },
-  { name: "jwt", pattern: /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g },
-  { name: "bearer-header", pattern: /(?<=[Bb]earer\s)[A-Za-z0-9._~+/-]{12,}=*/g },
-  // `SOMETHING_TOKEN=value`, `--password value`, `api-key: value`. The key half is kept —
-  // knowing a command sets DATABASE_PASSWORD is useful; knowing its value is not.
-  {
-    name: "assigned-secret",
-    pattern: /((?:secret|token|passwd|password|api[_-]?key|access[_-]?key|private[_-]?key|credential)[a-z0-9_-]*\s*[=:]\s*)("[^"]*"|'[^']*'|\S+)/gi
-  }
-];
-function redactSecrets2(value) {
-  let text = value;
-  const fired = [];
-  for (const { name, pattern } of SECRET_PATTERNS) {
-    pattern.lastIndex = 0;
-    if (!pattern.test(text)) continue;
-    pattern.lastIndex = 0;
-    fired.push(name);
-    text = text.replace(pattern, (...args) => {
-      const groups = args.slice(1, -2).filter((arg) => typeof arg === "string");
-      return groups.length >= 2 ? `${groups[0]}[redacted]` : "[redacted]";
-    });
-  }
-  return { text, redactedPatterns: fired };
-}
-
-// ../packages/core/service/dispatch-diagnostics.ts
-function sanitizeDispatchFailure(error53, limit = 400) {
-  const message2 = (error53 instanceof Error ? error53.message : String(error53)).trim();
-  if (!message2) return null;
-  return redactSecrets2(message2).text.slice(0, limit).trim() || null;
-}
-function runQueueDiagnosticCode(input) {
-  const terminal = /* @__PURE__ */ new Set(["failed", "cleared", "cancelled", "expired"]);
-  if (input.entryState === "dispatched" && input.requestStatus && terminal.has(input.requestStatus))
-    return "terminal_request_dispatched";
-  if (input.entryState === "running" && (!input.requestStatus || terminal.has(input.requestStatus) && !input.launchedSessionId))
-    return "running_without_live_request";
-  return null;
-}
-
-// ../packages/core/service/run-queue.ts
-init_errors4();
-init_util3();
-
-// ../packages/core/service/worker-jobs.ts
-init_util3();
-var DELIVERY_COMPOSE_JOB_TYPE = "overlord.delivery.compose.v1";
-var DEFAULT_MAX_ATTEMPTS = 5;
-var DEFAULT_PRIORITY = 50;
-var DEFAULT_LOCK_TTL_MS = 6e4;
-var WORKER_JOB_RETRY_BACKOFF_MS = [15e3, 6e4, 3e5, 9e5, 36e5];
-function workerJobJsonFieldPredicate(dialect, field) {
-  if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(field)) {
-    throw new Error(`Invalid worker job JSON field: ${field}`);
-  }
-  return dialect === "postgres" ? `payload_json->>'${field}' = ?` : `json_extract(payload_json, '$.${field}') = ?`;
-}
-function workerJobRetryDelay(attemptCount) {
-  return WORKER_JOB_RETRY_BACKOFF_MS[Math.min(Math.max(attemptCount - 1, 0), WORKER_JOB_RETRY_BACKOFF_MS.length - 1)];
-}
-async function claimNextWorkerJob({
-  db,
-  jobType,
-  workerId,
-  now: now2 = nowIso(),
-  lockTtlMs = DEFAULT_LOCK_TTL_MS
-}) {
-  return db.transaction(async (tx) => {
-    await tx.run(
-      `UPDATE worker_jobs SET status = 'queued', locked_by = NULL, locked_until = NULL, updated_at = ?, revision = revision + 1
-       WHERE type = ? AND status = 'running' AND deleted_at IS NULL AND locked_until < ?`,
-      [now2, jobType, now2]
-    );
-    const lockClause = tx.dialect === "postgres" ? "FOR UPDATE SKIP LOCKED" : "";
-    const candidate = await tx.get(
-      `SELECT id, payload_json, attempt_count, max_attempts, revision FROM worker_jobs
-        WHERE type = ? AND status = 'queued' AND deleted_at IS NULL AND run_after <= ?
-        ORDER BY priority ASC, run_after ASC LIMIT 1 ${lockClause}`,
-      [jobType, now2]
-    );
-    if (!candidate) return null;
-    const updated = await tx.run(
-      `UPDATE worker_jobs SET status = 'running', attempt_count = attempt_count + 1, locked_by = ?, locked_until = ?, updated_at = ?, revision = revision + 1
-        WHERE id = ? AND status = 'queued' AND revision = ?`,
-      [
-        workerId,
-        new Date(Date.parse(now2) + lockTtlMs).toISOString(),
-        now2,
-        candidate.id,
-        candidate.revision
-      ]
-    );
-    return updated.changes === 0 ? null : {
-      ...candidate,
-      attempt_count: candidate.attempt_count + 1,
-      revision: candidate.revision + 1
-    };
-  });
-}
-async function finishWorkerJob(db, id, status, lastError, now2 = nowIso()) {
-  await db.run(
-    `UPDATE worker_jobs SET status = ?, last_error = ?, locked_by = NULL, locked_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?`,
-    [status, lastError, now2, id]
-  );
-}
-async function retryWorkerJob(db, id, attemptCount, lastError, now2 = nowIso()) {
-  await db.run(
-    `UPDATE worker_jobs SET status = 'queued', run_after = ?, last_error = ?, locked_by = NULL,
-       locked_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?`,
-    [
-      new Date(Date.parse(now2) + workerJobRetryDelay(attemptCount)).toISOString(),
-      lastError,
-      now2,
-      id
-    ]
-  );
-}
-async function enqueueWorkerJob({
-  db,
-  workspaceId: workspaceId2,
-  type,
-  dedupeBy,
-  payload,
-  priority = DEFAULT_PRIORITY,
-  maxAttempts = DEFAULT_MAX_ATTEMPTS,
-  now: now2 = nowIso()
-}) {
-  const existing = await db.get(
-    `SELECT id FROM worker_jobs
-       WHERE workspace_id = ?
-         AND type = ?
-         AND status IN ('queued', 'running')
-         AND deleted_at IS NULL
-         AND ${workerJobJsonFieldPredicate(db.dialect, dedupeBy.field)}
-       ORDER BY created_at ASC
-       LIMIT 1`,
-    [workspaceId2, type, dedupeBy.value]
-  );
-  if (existing) return { jobId: existing.id, enqueued: false };
-  const jobId = newId();
-  await db.run(
-    `INSERT INTO worker_jobs
-         (id, workspace_id, type, status, priority, run_after, attempt_count, max_attempts,
-          payload_json, created_at, updated_at, revision)
-       VALUES (?, ?, ?, 'queued', ?, ?, 0, ?, ?, ?, ?, 1)`,
-    [jobId, workspaceId2, type, priority, now2, maxAttempts, JSON.stringify(payload), now2, now2]
-  );
-  return { jobId, enqueued: true };
-}
-async function enqueueDeliveryComposeJob({
-  ctx,
-  deliveryId,
-  now: now2 = nowIso(),
-  maxAttempts = DEFAULT_MAX_ATTEMPTS,
-  priority = DEFAULT_PRIORITY
-}) {
-  const result = await enqueueWorkerJob({
-    db: ctx.db,
-    workspaceId: ctx.workspace.id,
-    type: DELIVERY_COMPOSE_JOB_TYPE,
-    dedupeBy: { field: "deliveryId", value: deliveryId },
-    payload: { deliveryId },
-    priority,
-    maxAttempts,
-    now: now2
-  });
-  if (result.enqueued) {
-    console.info(
-      "[delivery-compose-worker]",
-      JSON.stringify({
-        event: "delivery_compose_queued",
-        deliveryId,
-        jobId: result.jobId,
-        maxAttempts,
-        priority
-      })
-    );
-  }
-  return result;
-}
-async function missionOwnerProfileId({
-  db,
-  workspaceId: workspaceId2,
-  missionId
-}) {
-  const owner = await db.get(
-    `SELECT wu.profile_id
-       FROM missions m
-       JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
-      WHERE m.id = ? AND m.workspace_id = ? AND m.deleted_at IS NULL
-        AND wu.deleted_at IS NULL AND wu.status = 'active'`,
-    [missionId, workspaceId2]
-  );
-  return owner?.profile_id ?? null;
-}
-
-// ../packages/core/service/run-queue.ts
-var RUN_QUEUE_DISPATCH_JOB_TYPE = "overlord.run-queue.dispatch.v1";
-var STEP = 1e3;
-var truthy = (value) => value === true || value === 1;
-var MISSION_QUEUE_NAME_LIMIT = 80;
-function missionQueueName(missionDisplayId, missionTitle) {
-  const title = (missionTitle ?? "").trim();
-  const suffix = title ? ` \xB7 ${title}` : "";
-  return `${missionDisplayId}${suffix}`.slice(0, MISSION_QUEUE_NAME_LIMIT);
-}
-async function enqueueRunQueueDispatch(db, projectId, workspaceId2) {
-  return enqueueWorkerJob({
-    db,
-    workspaceId: workspaceId2,
-    type: RUN_QUEUE_DISPATCH_JOB_TYPE,
-    dedupeBy: { field: "projectId", value: projectId },
-    payload: { projectId }
-  });
-}
-async function projectRow(db, projectId) {
-  const row = await db.get(
-    "SELECT id, workspace_id FROM projects WHERE id = ? AND deleted_at IS NULL",
-    [projectId]
-  );
-  if (!row) throw new ServiceError("Project not found", "project_not_found", 404);
-  return row;
-}
-async function ensureMissionRunQueue(db, projectId, missionId, actorId = null) {
-  const existing = await db.get(
-    "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE project_id = ? AND mission_id = ? AND deleted_at IS NULL",
-    [projectId, missionId]
-  );
-  if (existing) return existing;
-  const mission = await db.get(
-    "SELECT id, project_id, workspace_id, display_id, title FROM missions WHERE id = ? AND deleted_at IS NULL",
-    [missionId]
-  );
-  if (!mission || mission.project_id !== projectId)
-    throw new ServiceError("Mission not found", "mission_not_found", 404);
-  const name = missionQueueName(mission.display_id, mission.title);
-  const adopted = await db.get(
-    "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE project_id = ? AND lower(name) = lower(?) AND deleted_at IS NULL",
-    [projectId, name]
-  );
-  const now2 = nowIso();
-  if (adopted) {
-    await db.run(
-      "UPDATE run_queues SET mission_id = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
-      [missionId, now2, adopted.id]
-    );
-    return { ...adopted, mission_id: missionId };
-  }
-  const max = await db.get(
-    "SELECT MAX(position) value FROM run_queues WHERE project_id = ? AND deleted_at IS NULL",
-    [projectId]
-  );
-  const id = newId();
-  const position = (max?.value ?? 0) + STEP;
-  await db.run(
-    "INSERT INTO run_queues (id, project_id, workspace_id, mission_id, name, position, paused, is_default, created_by_workspace_user_id, created_at, updated_at, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
-    [
-      id,
-      projectId,
-      mission.workspace_id,
-      missionId,
-      name,
-      position,
-      db.dialect === "postgres" ? false : 0,
-      db.dialect === "postgres" ? false : 0,
-      actorId,
-      now2,
-      now2
-    ]
-  );
-  return {
-    id,
-    project_id: projectId,
-    workspace_id: mission.workspace_id,
-    name,
-    position,
-    paused: false,
-    is_default: false,
-    mission_id: missionId
-  };
-}
-function entryDto(row, rank) {
-  const diagnosticCode = runQueueDiagnosticCode({
-    entryState: row.state,
-    requestStatus: row.request_status,
-    launchedSessionId: row.request_launched_session_id
-  });
-  return {
-    id: row.id,
-    queueId: row.queue_id,
-    position: rank,
-    state: row.state,
-    blockedReason: row.blocked_reason,
-    objectiveId: row.objective_id,
-    objectiveDisplayId: `${row.mission_display_id}.${row.objective_display_key}`,
-    objectiveTitle: row.objective_title,
-    missionId: row.mission_id,
-    missionDisplayId: row.mission_display_id,
-    missionTitle: row.mission_title,
-    assignedAgent: row.assigned_agent,
-    resourceKey: row.resource_key?.trim() || null,
-    enqueuedAt: row.enqueued_at,
-    executionRequestId: row.execution_request_id,
-    executionRequest: row.request_status ? {
-      status: row.request_status,
-      lastError: row.request_last_error,
-      claimedByDeviceId: row.request_claimed_by_device_id,
-      claimedByExecutionTargetId: row.request_claimed_by_execution_target_id,
-      executionTargetId: row.request_execution_target_id,
-      createdAt: row.request_created_at,
-      claimedAt: row.request_claimed_at,
-      launchStartedAt: row.request_launch_started_at,
-      launchCompletedAt: row.request_launch_completed_at,
-      updatedAt: row.request_updated_at
-    } : null,
-    diagnosticCode
-  };
-}
-async function listProjectRunQueues(db, projectId) {
-  await projectRow(db, projectId);
-  const queues = await db.all(
-    "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE project_id = ? AND deleted_at IS NULL ORDER BY is_default DESC, position ASC",
-    [projectId]
-  );
-  const rows = await db.all(
-    `SELECT e.*, o.title objective_title, o.display_key objective_display_key, o.assigned_agent, o.resource_key, m.display_id mission_display_id, m.title mission_title,
-      er.status request_status, er.last_error request_last_error, er.claimed_by_device_id request_claimed_by_device_id,
-      er.claimed_by_execution_target_id request_claimed_by_execution_target_id, er.execution_target_id request_execution_target_id,
-      er.created_at request_created_at, er.claimed_at request_claimed_at, er.launch_started_at request_launch_started_at,
-      er.launch_completed_at request_launch_completed_at, er.updated_at request_updated_at, er.launched_session_id request_launched_session_id
-      FROM run_queue_entries e JOIN objectives o ON o.id = e.objective_id JOIN missions m ON m.id = e.mission_id
-      LEFT JOIN execution_requests er ON er.id = e.execution_request_id AND er.deleted_at IS NULL
-      WHERE e.project_id = ? AND e.deleted_at IS NULL ORDER BY e.position ASC`,
-    [projectId]
-  );
-  const missionIds = queues.map((queue) => queue.mission_id).filter((value) => Boolean(value));
-  const missionRows = missionIds.length ? await db.all(
-    `SELECT id, display_id FROM missions WHERE id IN (${missionIds.map(() => "?").join(",")})`,
-    missionIds
-  ) : [];
-  const missionDisplayIds = new Map(missionRows.map((row) => [row.id, row.display_id]));
-  return {
-    projectId,
-    queues: queues.map((queue) => {
-      const entries = rows.filter((row) => row.queue_id === queue.id).map((row, index) => entryDto(row, index + 1));
-      return {
-        id: queue.id,
-        projectId,
-        name: queue.name,
-        isDefault: truthy(queue.is_default),
-        missionId: queue.mission_id,
-        missionDisplayId: queue.mission_id ? missionDisplayIds.get(queue.mission_id) ?? null : null,
-        paused: truthy(queue.paused),
-        position: queue.position,
-        entries,
-        running: entries.find((e5) => e5.state === "running" || e5.state === "dispatched") ?? null
-      };
-    })
-  };
-}
-async function rewriteMissionPositions(db, missionId) {
-  const rows = await db.all(
-    `SELECT o.id, o.state, o.position, e.position queue_position, q.position queue_order FROM objectives o LEFT JOIN run_queue_entries e ON e.objective_id = o.id AND e.deleted_at IS NULL LEFT JOIN run_queues q ON q.id = e.queue_id AND q.deleted_at IS NULL WHERE o.mission_id = ? AND o.deleted_at IS NULL ORDER BY CASE WHEN o.state IN ('executing','pending_delivery','complete') THEN 0 WHEN e.id IS NOT NULL THEN 1 ELSE 2 END, q.position, e.position, o.position`,
-    [missionId]
-  );
-  const now2 = nowIso();
-  for (let i5 = 0; i5 < rows.length; i5++)
-    await db.run(
-      "UPDATE objectives SET position = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
-      [1e9 + i5, now2, rows[i5].id]
-    );
-  for (let i5 = 0; i5 < rows.length; i5++)
-    await db.run(
-      "UPDATE objectives SET position = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
-      [i5, now2, rows[i5].id]
-    );
-}
-async function createRunQueue(db, projectId, name, actorId, missionId = null) {
-  const project = await projectRow(db, projectId);
-  const clean3 = name.trim();
-  if (!clean3) throw new ServiceError("Queue name is required", "invalid_queue_name", 400);
-  const max = await db.get(
-    "SELECT MAX(position) value FROM run_queues WHERE project_id = ? AND deleted_at IS NULL",
-    [projectId]
-  );
-  if (missionId) {
-    const mission = await db.get(
-      "SELECT id FROM missions WHERE id = ? AND project_id = ? AND deleted_at IS NULL",
-      [missionId, projectId]
-    );
-    if (!mission) throw new ServiceError("Mission not found", "mission_not_found", 404);
-  }
-  const id = newId();
-  const now2 = nowIso();
-  await db.run(
-    "INSERT INTO run_queues (id, project_id, workspace_id, mission_id, name, position, paused, is_default, created_by_workspace_user_id, created_at, updated_at, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
-    [
-      id,
-      projectId,
-      project.workspace_id,
-      missionId,
-      clean3,
-      (max?.value ?? 0) + STEP,
-      db.dialect === "postgres" ? false : 0,
-      db.dialect === "postgres" ? false : 0,
-      actorId,
-      now2,
-      now2
-    ]
-  );
-  await enqueueRunQueueDispatch(db, projectId, project.workspace_id);
-  return (await listProjectRunQueues(db, projectId)).queues.find((q2) => q2.id === id);
-}
-async function updateRunQueue(db, queueId, patch) {
-  const queue = await db.get(
-    "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE id = ? AND deleted_at IS NULL",
-    [queueId]
-  );
-  if (!queue) throw new ServiceError("Run Queue not found", "run_queue_not_found", 404);
-  const name = patch.name === void 0 ? queue.name : patch.name.trim();
-  if (!name) throw new ServiceError("Queue name is required", "invalid_queue_name", 400);
-  const paused = patch.paused === void 0 ? truthy(queue.paused) : patch.paused;
-  await db.run(
-    "UPDATE run_queues SET name = ?, paused = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
-    [name, db.dialect === "postgres" ? paused : paused ? 1 : 0, nowIso(), queueId]
-  );
-  if (!paused) await enqueueRunQueueDispatch(db, queue.project_id, queue.workspace_id);
-  return (await listProjectRunQueues(db, queue.project_id)).queues.find((q2) => q2.id === queueId);
-}
-async function reorderProjectRunQueues(db, projectId, orderedQueueIds) {
-  return db.transaction(async (tx) => {
-    const queues = await tx.all(
-      "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE project_id = ? AND deleted_at IS NULL ORDER BY is_default DESC, position ASC",
-      [projectId]
-    );
-    if (queues.length !== orderedQueueIds.length || new Set(orderedQueueIds).size !== queues.length || queues.some((queue) => !orderedQueueIds.includes(queue.id))) {
-      throw new ServiceError(
-        "orderedQueueIds must contain every live queue exactly once",
-        "invalid_run_queue_order",
-        400
-      );
-    }
-    const defaultQueue = queues.find((queue) => truthy(queue.is_default));
-    if (defaultQueue && orderedQueueIds[0] !== defaultQueue.id) {
-      throw new ServiceError(
-        "The default Run Queue must remain first",
-        "default_run_queue_position",
-        409
-      );
-    }
-    const now2 = nowIso();
-    for (let index = 0; index < orderedQueueIds.length; index++) {
-      await tx.run(
-        "UPDATE run_queues SET position = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
-        [(index + 1) * STEP, now2, orderedQueueIds[index]]
-      );
-    }
-    return listProjectRunQueues(tx, projectId);
-  });
-}
-async function enqueueRunQueueEntry(db, projectId, objectiveId, options = {}) {
-  return db.transaction(async (tx) => {
-    const objective = await tx.get(
-      "SELECT id, project_id, workspace_id, mission_id FROM objectives WHERE id = ? AND deleted_at IS NULL",
-      [objectiveId]
-    );
-    if (!objective || objective.project_id !== projectId)
-      throw new ServiceError("Objective not found", "objective_not_found", 404);
-    const existing = await tx.get(
-      "SELECT id FROM run_queue_entries WHERE objective_id = ? AND deleted_at IS NULL",
-      [objectiveId]
-    );
-    if (existing)
-      return (await listProjectRunQueues(tx, projectId)).queues.flatMap((q2) => q2.entries).find((e5) => e5.id === existing.id);
-    const queue = options.queueId ? await tx.get(
-      "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE id = ? AND project_id = ? AND deleted_at IS NULL",
-      [options.queueId, projectId]
-    ) : await ensureMissionRunQueue(tx, projectId, objective.mission_id, options.actorId ?? null);
-    if (!queue) throw new ServiceError("Run Queue not found", "run_queue_not_found", 404);
-    let position = options.position;
-    if (options.afterEntryId) {
-      const after = await tx.get(
-        "SELECT position FROM run_queue_entries WHERE id = ? AND queue_id = ? AND deleted_at IS NULL",
-        [options.afterEntryId, queue.id]
-      );
-      if (!after)
-        throw new ServiceError("Preceding entry not found", "run_queue_entry_not_found", 404);
-      const next = await tx.get(
-        "SELECT position FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL AND position > ? ORDER BY position LIMIT 1",
-        [queue.id, after.position]
-      );
-      position = next ? (after.position + next.position) / 2 : after.position + STEP;
-    }
-    if (position === void 0) {
-      const max = await tx.get(
-        "SELECT MAX(position) value FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL",
-        [queue.id]
-      );
-      position = (max?.value ?? 0) + STEP;
-    }
-    const id = newId();
-    const now2 = nowIso();
-    await tx.run(
-      `INSERT INTO run_queue_entries (id, queue_id, project_id, workspace_id, mission_id, objective_id, position, state, enqueued_by_workspace_user_id, enqueued_at, created_at, updated_at, revision) VALUES (?, ?, ?, ?, ?, ?, ?, 'waiting', ?, ?, ?, ?, 1)`,
-      [
-        id,
-        queue.id,
-        projectId,
-        objective.workspace_id,
-        objective.mission_id,
-        objectiveId,
-        position,
-        options.actorId ?? null,
-        now2,
-        now2,
-        now2
-      ]
-    );
-    await tx.run(
-      "UPDATE objectives SET auto_advance = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
-      [tx.dialect === "postgres" ? true : 1, now2, objectiveId]
-    );
-    await rewriteMissionPositions(tx, objective.mission_id);
-    await enqueueRunQueueDispatch(tx, projectId, objective.workspace_id);
-    return (await listProjectRunQueues(tx, projectId)).queues.flatMap((q2) => q2.entries).find((e5) => e5.id === id);
-  });
-}
-async function removeRunQueueEntry(db, entryId, options = {}) {
-  return db.transaction(async (tx) => {
-    const row = await tx.get(
-      "SELECT project_id, workspace_id, mission_id, objective_id, queue_id, state, execution_request_id FROM run_queue_entries WHERE id = ? AND deleted_at IS NULL",
-      [entryId]
-    );
-    if (!row) throw new ServiceError("Run Queue entry not found", "run_queue_entry_not_found", 404);
-    const inFlight = row.state === "dispatched" || row.state === "running";
-    const now2 = nowIso();
-    await tx.run(
-      "UPDATE run_queue_entries SET deleted_at = ?, execution_request_id = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?",
-      [now2, now2, entryId]
-    );
-    await tx.run(
-      "UPDATE objectives SET auto_advance = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
-      [tx.dialect === "postgres" ? false : 0, now2, row.objective_id]
-    );
-    const objective = await tx.get(
-      "SELECT state FROM objectives WHERE id = ? AND deleted_at IS NULL",
-      [row.objective_id]
-    );
-    const objectiveReset = options.force === true && inFlight && objective?.state === "launching";
-    if (objectiveReset)
-      await tx.run(
-        "UPDATE objectives SET state = 'draft', updated_at = ?, revision = revision + 1 WHERE id = ?",
-        [now2, row.objective_id]
-      );
-    let removedEmptyQueueId = null;
-    const queue = await tx.get(
-      "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE id = ? AND deleted_at IS NULL",
-      [row.queue_id]
-    );
-    if (queue?.mission_id && !truthy(queue.is_default)) {
-      const remaining = await tx.get(
-        "SELECT id FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL LIMIT 1",
-        [queue.id]
-      );
-      if (!remaining) {
-        await tx.run(
-          "UPDATE run_queues SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
-          [now2, now2, queue.id]
-        );
-        removedEmptyQueueId = queue.id;
-      }
-    }
-    await rewriteMissionPositions(tx, row.mission_id);
-    await enqueueRunQueueDispatch(tx, row.project_id, row.workspace_id);
-    return {
-      removed: true,
-      projectId: row.project_id,
-      workspaceId: row.workspace_id,
-      missionId: row.mission_id,
-      objectiveId: row.objective_id,
-      previousState: row.state,
-      executionRequestId: row.execution_request_id,
-      objectiveReset,
-      removedEmptyQueueId
-    };
-  });
-}
-async function enqueueObjectiveAfterLastQueuedSibling(db, projectId, objectiveId, actorId = null) {
-  const objective = await db.get(
-    "SELECT id, mission_id, position FROM objectives WHERE id = ? AND project_id = ? AND deleted_at IS NULL",
-    [objectiveId, projectId]
-  );
-  if (!objective) throw new ServiceError("Objective not found", "objective_not_found", 404);
-  const sibling = await db.get(
-    `SELECT e.id, e.queue_id
-       FROM run_queue_entries e
-       JOIN objectives sibling ON sibling.id = e.objective_id
-      WHERE e.project_id = ?
-        AND e.mission_id = ?
-        AND e.deleted_at IS NULL
-        AND sibling.deleted_at IS NULL
-        AND (sibling.position < ? OR (sibling.position = ? AND sibling.id <> ?))
-      ORDER BY sibling.position DESC, e.position DESC
-      LIMIT 1`,
-    [projectId, objective.mission_id, objective.position, objective.position, objectiveId]
-  );
-  return enqueueRunQueueEntry(db, projectId, objectiveId, {
-    ...sibling ? { queueId: sibling.queue_id, afterEntryId: sibling.id } : {},
-    actorId
-  });
-}
-async function removeRunQueueEntryForObjective(db, projectId, objectiveId) {
-  const entry = await db.get(
-    "SELECT id FROM run_queue_entries WHERE project_id = ? AND objective_id = ? AND deleted_at IS NULL",
-    [projectId, objectiveId]
-  );
-  if (!entry) return { removed: false };
-  await removeRunQueueEntry(db, entry.id);
-  return { removed: true };
-}
-async function reorderRunQueue(db, queueId, orderedEntryIds) {
-  return db.transaction(async (tx) => {
-    const queue = await tx.get(
-      "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE id = ? AND deleted_at IS NULL",
-      [queueId]
-    );
-    if (!queue) throw new ServiceError("Run Queue not found", "run_queue_not_found", 404);
-    const rows = await tx.all(
-      "SELECT id, mission_id, state FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL ORDER BY position",
-      [queueId]
-    );
-    if (rows.length !== orderedEntryIds.length || new Set(orderedEntryIds).size !== rows.length || rows.some((r5) => !orderedEntryIds.includes(r5.id)))
-      throw new ServiceError(
-        "orderedEntryIds must contain every live entry exactly once",
-        "invalid_run_queue_order",
-        400
-      );
-    if (rows.some(
-      (r5) => (r5.state === "running" || r5.state === "dispatched") && orderedEntryIds.indexOf(r5.id) !== rows.indexOf(r5)
-    ))
-      throw new ServiceError("Running entries cannot be moved", "run_queue_entry_running", 409);
-    const now2 = nowIso();
-    for (let i5 = 0; i5 < orderedEntryIds.length; i5++)
-      await tx.run(
-        "UPDATE run_queue_entries SET position = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
-        [(i5 + 1) * STEP, now2, orderedEntryIds[i5]]
-      );
-    for (const missionId of new Set(rows.map((r5) => r5.mission_id)))
-      await rewriteMissionPositions(tx, missionId);
-    await enqueueRunQueueDispatch(tx, queue.project_id, queue.workspace_id);
-    return (await listProjectRunQueues(tx, queue.project_id)).queues.find((q2) => q2.id === queueId);
-  });
-}
-async function moveRunQueueEntry(db, entryId, options) {
-  return db.transaction(async (tx) => {
-    const current = await tx.get(
-      "SELECT project_id, workspace_id, mission_id, queue_id, state FROM run_queue_entries WHERE id = ? AND deleted_at IS NULL",
-      [entryId]
-    );
-    if (!current)
-      throw new ServiceError("Run Queue entry not found", "run_queue_entry_not_found", 404);
-    if (current.state === "running" || current.state === "dispatched")
-      throw new ServiceError("Running entries cannot be moved", "run_queue_entry_running", 409);
-    const queueId = options.queueId ?? current.queue_id;
-    const queue = await tx.get(
-      "SELECT id FROM run_queues WHERE id = ? AND project_id = ? AND deleted_at IS NULL",
-      [queueId, current.project_id]
-    );
-    if (!queue) throw new ServiceError("Run Queue not found", "run_queue_not_found", 404);
-    let position = options.position;
-    if (options.afterEntryId) {
-      const after = await tx.get(
-        "SELECT position FROM run_queue_entries WHERE id = ? AND queue_id = ? AND deleted_at IS NULL",
-        [options.afterEntryId, queueId]
-      );
-      if (!after)
-        throw new ServiceError("Preceding entry not found", "run_queue_entry_not_found", 404);
-      const next = await tx.get(
-        "SELECT position FROM run_queue_entries WHERE queue_id = ? AND id <> ? AND deleted_at IS NULL AND position > ? ORDER BY position LIMIT 1",
-        [queueId, entryId, after.position]
-      );
-      position = next ? (after.position + next.position) / 2 : after.position + STEP;
-    }
-    if (position === void 0) {
-      const max = await tx.get(
-        "SELECT MAX(position) value FROM run_queue_entries WHERE queue_id = ? AND id <> ? AND deleted_at IS NULL",
-        [queueId, entryId]
-      );
-      position = (max?.value ?? 0) + STEP;
-    }
-    await tx.run(
-      "UPDATE run_queue_entries SET queue_id = ?, position = ?, state = 'waiting', blocked_reason = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?",
-      [queueId, position, nowIso(), entryId]
-    );
-    await rewriteMissionPositions(tx, current.mission_id);
-    await enqueueRunQueueDispatch(tx, current.project_id, current.workspace_id);
-    return (await listProjectRunQueues(tx, current.project_id)).queues.flatMap((q2) => q2.entries).find((e5) => e5.id === entryId);
-  });
-}
-async function deleteRunQueue(db, queueId, moveEntriesTo) {
-  return db.transaction(async (tx) => {
-    const queue = await tx.get(
-      "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE id = ? AND deleted_at IS NULL",
-      [queueId]
-    );
-    if (!queue) throw new ServiceError("Run Queue not found", "run_queue_not_found", 404);
-    if (truthy(queue.is_default))
-      throw new ServiceError("The default Run Queue cannot be deleted", "default_run_queue", 409);
-    const entries = await tx.all(
-      "SELECT id, mission_id FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL",
-      [queueId]
-    );
-    if (entries.length && !moveEntriesTo)
-      throw new ServiceError(
-        "moveEntriesTo is required for a non-empty queue",
-        "run_queue_not_empty",
-        409
-      );
-    if (moveEntriesTo) {
-      const target = await tx.get(
-        "SELECT id FROM run_queues WHERE id = ? AND project_id = ? AND deleted_at IS NULL",
-        [moveEntriesTo, queue.project_id]
-      );
-      if (!target)
-        throw new ServiceError("Destination Run Queue not found", "run_queue_not_found", 404);
-      const max = await tx.get(
-        "SELECT MAX(position) value FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL",
-        [moveEntriesTo]
-      );
-      for (let i5 = 0; i5 < entries.length; i5++)
-        await tx.run(
-          "UPDATE run_queue_entries SET queue_id = ?, position = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
-          [moveEntriesTo, (max?.value ?? 0) + (i5 + 1) * STEP, nowIso(), entries[i5].id]
-        );
-    }
-    const now2 = nowIso();
-    await tx.run(
-      "UPDATE run_queues SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
-      [now2, now2, queueId]
-    );
-    for (const missionId of new Set(entries.map((e5) => e5.mission_id)))
-      await rewriteMissionPositions(tx, missionId);
-    await enqueueRunQueueDispatch(tx, queue.project_id, queue.workspace_id);
-    return { removed: true, projectId: queue.project_id };
-  });
-}
-
-// ../packages/core/service/missions.ts
+init_run_queue();
 init_util3();
 init_webhook_events();
 function isTruthyFlag2(value) {
@@ -138156,6 +138264,7 @@ function isExactEvidencePath(value) {
 
 // ../packages/core/service/notifications/notifications.ts
 init_util3();
+init_worker_jobs();
 var NOTIFICATION_DISPATCH_JOB_TYPE = "overlord.notification.dispatch.v1";
 async function emitNotification({
   db,
@@ -138202,8 +138311,73 @@ init_errors4();
 init_execution_target_runners();
 init_latch_launch();
 init_local_target_mutations();
+
+// ../packages/core/service/objective-parallelism.ts
+function isTruthyFlag3(value) {
+  return value === true || value === 1;
+}
+async function missionAllowsParallelObjectives({
+  ctx,
+  missionId
+}) {
+  const row = await ctx.db.get(
+    `SELECT allow_parallel_objectives FROM missions
+      WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [missionId, ctx.workspace.id]
+  );
+  return isTruthyFlag3(row?.allow_parallel_objectives);
+}
+async function countActiveMissionObjectives({
+  ctx,
+  missionId
+}) {
+  const row = await ctx.db.get(
+    `SELECT COUNT(*) AS n FROM objectives
+      WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+        AND state IN (${PARALLEL_BLOCKING_OBJECTIVE_STATES.map(() => "?").join(", ")})`,
+    [missionId, ctx.workspace.id, ...PARALLEL_BLOCKING_OBJECTIVE_STATES]
+  );
+  return Number(row?.n ?? 0);
+}
+async function findSiblingLockHolders({
+  db,
+  workspaceId: workspaceId2,
+  missionIds
+}) {
+  if (missionIds.length === 0) return [];
+  const missionPlaceholders = missionIds.map(() => "?").join(", ");
+  const statePlaceholders = PARALLEL_BLOCKING_OBJECTIVE_STATES.map(() => "?").join(", ");
+  const holders = /* @__PURE__ */ new Map();
+  const activeObjectives = await db.all(
+    `SELECT id AS objective_id, mission_id FROM objectives
+      WHERE mission_id IN (${missionPlaceholders}) AND workspace_id = ? AND deleted_at IS NULL
+        AND state IN (${statePlaceholders})`,
+    [...missionIds, workspaceId2, ...PARALLEL_BLOCKING_OBJECTIVE_STATES]
+  );
+  for (const row of activeObjectives)
+    holders.set(row.objective_id, { objectiveId: row.objective_id, missionId: row.mission_id });
+  return [...holders.values()];
+}
+async function findConflictingActiveSibling({
+  ctx,
+  missionId,
+  objectiveId,
+  allowParallelObjectives
+}) {
+  if (allowParallelObjectives) return null;
+  const holders = await findSiblingLockHolders({
+    db: ctx.db,
+    workspaceId: ctx.workspace.id,
+    missionIds: [missionId]
+  });
+  const sibling = holders.find((holder) => holder.objectiveId !== objectiveId);
+  return sibling ? { id: sibling.objectiveId } : null;
+}
+
+// ../packages/core/service/execution-requests.ts
 init_project_execution_target();
 init_projects();
+init_run_queue();
 init_terminal_profile_types();
 init_util3();
 var ACTIVE_EXECUTION_REQUEST_STATUSES = ["queued", "claimed", "launching"];
@@ -138216,24 +138390,52 @@ async function reconcileLinkedRunQueueEntry({
   requestId,
   state: state2,
   now: now2,
-  blockedReason
+  failureReason
 }) {
+  if (state2 === "running") {
+    await db.run(
+      `UPDATE run_queue_entries
+          SET state = 'running',
+              blocked_reason = NULL,
+              waiting_reason = NULL,
+              waiting_on_objective_id = NULL,
+              updated_at = ?,
+              revision = revision + 1
+        WHERE execution_request_id = ?
+          AND deleted_at IS NULL
+          AND state IN ('dispatched', 'running')`,
+      [now2, requestId]
+    );
+    return;
+  }
+  const linked = await db.get(
+    `SELECT project_id, workspace_id FROM run_queue_entries
+      WHERE execution_request_id = ?
+        AND deleted_at IS NULL
+        AND state IN ('dispatched', 'running')`,
+    [requestId]
+  );
+  if (!linked) return;
   await db.run(
     `UPDATE run_queue_entries
-        SET state = ?,
+        SET state = 'waiting',
+            waiting_reason = 'retry_pending',
+            waiting_on_objective_id = NULL,
             blocked_reason = ?,
+            execution_request_id = NULL,
+            attempt_count = attempt_count + 1,
             updated_at = ?,
             revision = revision + 1
       WHERE execution_request_id = ?
         AND deleted_at IS NULL
         AND state IN ('dispatched', 'running')`,
     [
-      state2,
-      state2 === "blocked" ? blockedReason?.slice(0, 400) ?? "Execution request failed." : null,
+      `request_failed: ${(failureReason ?? "Execution request failed.").slice(0, 380)}`,
       now2,
       requestId
     ]
   );
+  await enqueueRunQueueDispatch(db, linked.project_id, linked.workspace_id);
 }
 function asRecord(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -138451,6 +138653,21 @@ async function createExecutionRequest({
       "objective_not_launchable",
       409
     );
+  }
+  if (requestedSource === "run_queue") {
+    const conflicting = await findConflictingActiveSibling({
+      ctx,
+      missionId: mission.id,
+      objectiveId: objective.id,
+      allowParallelObjectives: await missionAllowsParallelObjectives({ ctx, missionId: mission.id })
+    });
+    if (conflicting) {
+      throw new ServiceError(
+        `Mission already has an active objective: ${conflicting.id}`,
+        "objective_sibling_active",
+        409
+      );
+    }
   }
   if (idempotencyKey) {
     const existing = await ctx.db.get(
@@ -138899,9 +139116,9 @@ async function markExecutionFailed({
     await reconcileLinkedRunQueueEntry({
       db: txCtx.db,
       requestId,
-      state: "blocked",
+      state: "retry",
       now: now2,
-      blockedReason: error53
+      failureReason: error53
     });
     return await getExecutionRequest({ ctx: txCtx, id: requestId });
   });
@@ -138966,9 +139183,9 @@ async function clearExecutionRequests({
       await reconcileLinkedRunQueueEntry({
         db: txCtx.db,
         requestId: row.id,
-        state: "blocked",
+        state: "retry",
         now: now2,
-        blockedReason: "Execution request cleared before the agent attached."
+        failureReason: "Execution request cleared before the agent attached."
       });
     }
     return { cleared: rows.length };
@@ -139040,9 +139257,9 @@ async function expireStaleExecutionRequests({
       await reconcileLinkedRunQueueEntry({
         db: txCtx.db,
         requestId: row.id,
-        state: "blocked",
+        state: "retry",
         now: now2,
-        blockedReason: message2
+        failureReason: message2
       });
     }
     return { expired: rows.length };
@@ -139236,6 +139453,7 @@ async function forgetLatchProviderSession({
 
 // ../packages/core/service/live-activity-jobs.ts
 init_util3();
+init_worker_jobs();
 var LIVE_ACTIVITY_DISPATCH_JOB_TYPE = "overlord.live_activity.dispatch.v1";
 var LIVE_ACTIVITY_START_JOB_TYPE = "overlord.live_activity.start.v1";
 async function enqueueLiveActivityDispatchJob({
@@ -139294,68 +139512,6 @@ async function enqueueLiveActivityStartForMission({
   if (!profileId) return false;
   await enqueueLiveActivityDispatchJob({ db, workspaceId: workspaceId2, profileId, now: now2 });
   return enqueueLiveActivityStartJob({ db, workspaceId: workspaceId2, profileId, missionId, now: now2 });
-}
-
-// ../packages/core/service/objective-parallelism.ts
-function isTruthyFlag3(value) {
-  return value === true || value === 1;
-}
-async function missionAllowsParallelObjectives({
-  ctx,
-  missionId
-}) {
-  const row = await ctx.db.get(
-    `SELECT allow_parallel_objectives FROM missions
-      WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-    [missionId, ctx.workspace.id]
-  );
-  return isTruthyFlag3(row?.allow_parallel_objectives);
-}
-async function countActiveMissionObjectives({
-  ctx,
-  missionId
-}) {
-  const row = await ctx.db.get(
-    `SELECT COUNT(*) AS n FROM objectives
-      WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
-        AND state IN (${PARALLEL_BLOCKING_OBJECTIVE_STATES.map(() => "?").join(", ")})`,
-    [missionId, ctx.workspace.id, ...PARALLEL_BLOCKING_OBJECTIVE_STATES]
-  );
-  return Number(row?.n ?? 0);
-}
-async function findConflictingActiveSibling({
-  ctx,
-  missionId,
-  objectiveId,
-  allowParallelObjectives
-}) {
-  if (allowParallelObjectives) return null;
-  const sibling = await ctx.db.get(
-    `SELECT id FROM objectives
-      WHERE mission_id = ? AND workspace_id = ? AND id <> ? AND deleted_at IS NULL
-        AND state IN (${PARALLEL_BLOCKING_OBJECTIVE_STATES.map(() => "?").join(", ")})
-      LIMIT 1`,
-    [missionId, ctx.workspace.id, objectiveId, ...PARALLEL_BLOCKING_OBJECTIVE_STATES]
-  );
-  if (sibling) return { id: sibling.id };
-  const requestSibling = await ctx.db.get(
-    `SELECT o.id
-       FROM execution_requests er
-       JOIN objectives o ON o.id = er.objective_id AND o.deleted_at IS NULL
-      WHERE er.mission_id = ? AND er.workspace_id = ? AND er.objective_id <> ?
-        AND er.deleted_at IS NULL
-        AND er.status IN (${ACTIVE_EXECUTION_REQUEST_STATUSES.map(() => "?").join(", ")})
-        AND o.state IN (${PARALLEL_BLOCKING_OBJECTIVE_STATES.map(() => "?").join(", ")})
-      LIMIT 1`,
-    [
-      missionId,
-      ctx.workspace.id,
-      objectiveId,
-      ...ACTIVE_EXECUTION_REQUEST_STATUSES,
-      ...PARALLEL_BLOCKING_OBJECTIVE_STATES
-    ]
-  );
-  return requestSibling ? { id: requestSibling.id } : null;
 }
 
 // ../packages/core/service/protocol.ts
@@ -139702,8 +139858,10 @@ function formatProjectResourcesInstructions(projectResources) {
 
 // ../packages/core/service/protocol.ts
 init_projects();
+init_run_queue();
 init_util3();
 init_webhook_events();
+init_worker_jobs();
 
 // ../packages/core/service/workspace-members.ts
 init_errors4();
@@ -142180,6 +142338,7 @@ init_execution_targets();
 init_local_target_mutations();
 init_project_execution_target();
 init_projects();
+init_run_queue();
 init_db();
 init_errors5();
 
@@ -143001,6 +143160,7 @@ async function dequeueObjective({
   now: now2,
   tx = requireDatabaseClient()
 }) {
+  await removeRunQueueEntryForObjective(tx, projectId, objectiveId);
   const { cleared } = await clearExecutionRequests({
     ctx: {
       ...await buildWebappServiceContextForWorkspace(workspaceId2, tx, workspaceUserId),
@@ -143418,6 +143578,7 @@ async function getObjectiveLaunchCommand(objectiveRef, query) {
 // protocol/run-queue.ts
 init_context();
 init_errors4();
+init_run_queue();
 init_errors5();
 function oneBasedQueuePosition(body) {
   const raw = strFlag(body, "--position");
@@ -143639,9 +143800,45 @@ async function dequeueObjectiveFromProtocol(ctx, body) {
   await removeRunQueueEntry(ctx.db, entry.id);
   return { removed: true, objectiveId: objective.id };
 }
+async function retryRunQueueEntryFromProtocol(ctx, body) {
+  const entryRef = strFlag(body, "--entry");
+  const objectiveRef = objectiveRefFlag(body);
+  if (!entryRef && !objectiveRef) {
+    throw new ApiError(400, "Missing required flag: --objective-id or --entry");
+  }
+  const explicitScope = Boolean(objectiveRef) || Boolean(strFlag(body, "--project-id") ?? strFlag(body, "--mission-id"));
+  let projectId;
+  if (explicitScope) {
+    projectId = await runQueueProjectIdFromProtocol(ctx, body);
+  } else {
+    const row = await ctx.db.get(
+      `SELECT project_id FROM run_queue_entries
+        WHERE workspace_id = ? AND deleted_at IS NULL AND (id = ? OR objective_id = ?)`,
+      [ctx.workspace.id, entryRef, entryRef]
+    );
+    if (!row) {
+      throw new ApiError(
+        404,
+        `Run Queue entry not found: ${entryRef}. Pass --project-id when addressing it by display id.`
+      );
+    }
+    projectId = row.project_id;
+  }
+  const projection = await listProjectRunQueues(ctx.db, projectId);
+  const entries = projection.queues.flatMap((queue) => queue.entries);
+  const objective = objectiveRef ? await resolveObjectiveRef({ ctx, ref: objectiveRef }) : null;
+  const entry = entries.find(
+    (candidate) => entryRef ? candidate.id === entryRef || candidate.objectiveId === entryRef || candidate.objectiveDisplayId === entryRef : candidate.objectiveId === objective.id
+  );
+  if (!entry) {
+    throw new ApiError(404, `Run Queue entry not found: ${entryRef ?? objectiveRef}`);
+  }
+  return retryRunQueueEntry(ctx.db, entry.id);
+}
 var runQueueHandlers = {
   "queue-objective": (ctx, body) => queueObjectiveFromProtocol(ctx, body),
   "dequeue-objective": (ctx, body) => dequeueObjectiveFromProtocol(ctx, body),
+  "retry-queue-entry": (ctx, body) => retryRunQueueEntryFromProtocol(ctx, body),
   "reorder-run-queue": (ctx, body) => reorderRunQueueFromProtocol(ctx, body),
   "create-run-queue": (ctx, body) => createRunQueueFromProtocol(ctx, body),
   "update-run-queue": (ctx, body) => updateRunQueueFromProtocol(ctx, body),
@@ -143663,6 +143860,7 @@ var runQueueHandlers = {
 var runQueueSubcommandPermissions = {
   "queue-objective": PERMISSIONS.EXECUTION_REQUEST_CREATE,
   "dequeue-objective": PERMISSIONS.EXECUTION_REQUEST_CREATE,
+  "retry-queue-entry": PERMISSIONS.EXECUTION_REQUEST_CREATE,
   "reorder-run-queue": PERMISSIONS.EXECUTION_REQUEST_CREATE,
   // Queue definitions are project configuration, matching the REST mapping in
   // backend/run-queue.ts. `project:update` is not in MISSION_LIFECYCLE_GRANTS,
@@ -143907,6 +144105,7 @@ function mergeMissionBranchObservation({
 
 // repository.ts
 init_project_execution_target();
+init_run_queue();
 init_util3();
 
 // ../webapp/shared/contract.ts
@@ -147251,6 +147450,13 @@ function toObjectiveDto(r5) {
       position: r5.queue_position,
       state: r5.queue_state,
       blockedReason: r5.queue_blocked_reason ?? null,
+      waitingReason: r5.queue_waiting_reason ?? null,
+      waitingOnObjectiveId: r5.queue_waiting_on_objective_id ?? null,
+      waitingOnObjectiveDisplayId: r5.queue_waiting_on_objective_display_key ? formatObjectiveDisplayId({
+        missionDisplayId: r5.mission_display_id ?? "",
+        displayKey: r5.queue_waiting_on_objective_display_key
+      }) : null,
+      attemptCount: r5.queue_attempt_count ?? 0,
       precededBy: null
     } : null,
     assignedAgent: r5.assigned_agent,
@@ -148825,6 +149031,8 @@ async function getObjectivesByMission(missionIds, db = requireDatabaseClient()) 
          e.id AS queue_entry_id, e.queue_id, q.name AS queue_name,
          CASE WHEN e.id IS NULL THEN NULL ELSE (SELECT COUNT(*) FROM run_queue_entries er WHERE er.queue_id = e.queue_id AND er.deleted_at IS NULL AND (er.position < e.position OR (er.position = e.position AND er.id <= e.id))) END AS queue_position,
          e.state AS queue_state, e.blocked_reason AS queue_blocked_reason,
+         e.waiting_reason AS queue_waiting_reason, e.waiting_on_objective_id AS queue_waiting_on_objective_id,
+         e.attempt_count AS queue_attempt_count, wo.display_key AS queue_waiting_on_objective_display_key,
          (
            SELECT s.external_session_id
              FROM agent_sessions s
@@ -148836,6 +149044,7 @@ async function getObjectivesByMission(missionIds, db = requireDatabaseClient()) 
          JOIN missions m ON m.id = o.mission_id
          LEFT JOIN run_queue_entries e ON e.objective_id = o.id AND e.deleted_at IS NULL
          LEFT JOIN run_queues q ON q.id = e.queue_id AND q.deleted_at IS NULL
+         LEFT JOIN objectives wo ON wo.id = e.waiting_on_objective_id AND wo.deleted_at IS NULL
         WHERE o.mission_id IN (${placeholders2}) AND o.deleted_at IS NULL
         ORDER BY o.mission_id ASC, o.position ASC`,
     missionIds
@@ -150198,6 +150407,9 @@ async function patchMissionFieldsTx(id, body) {
       },
       tx
     );
+    if (changed.includes("allow_parallel_objectives")) {
+      await enqueueRunQueueDispatch(tx, existing.project_id, existing.workspace_id);
+    }
     if (scheduleTriggerStatusType) {
       await createScheduledDuplicateIfNeeded(tx, existing, scheduleTriggerStatusType);
     }
@@ -151164,6 +151376,8 @@ async function listObjectives2(missionId, db = requireDatabaseClient()) {
          e.id AS queue_entry_id, e.queue_id, q.name AS queue_name,
          CASE WHEN e.id IS NULL THEN NULL ELSE (SELECT COUNT(*) FROM run_queue_entries er WHERE er.queue_id = e.queue_id AND er.deleted_at IS NULL AND (er.position < e.position OR (er.position = e.position AND er.id <= e.id))) END AS queue_position,
          e.state AS queue_state, e.blocked_reason AS queue_blocked_reason,
+         e.waiting_reason AS queue_waiting_reason, e.waiting_on_objective_id AS queue_waiting_on_objective_id,
+         e.attempt_count AS queue_attempt_count, wo.display_key AS queue_waiting_on_objective_display_key,
          (
            SELECT s.external_session_id
              FROM agent_sessions s
@@ -151175,6 +151389,7 @@ async function listObjectives2(missionId, db = requireDatabaseClient()) {
          JOIN missions m ON m.id = o.mission_id
          LEFT JOIN run_queue_entries e ON e.objective_id = o.id AND e.deleted_at IS NULL
          LEFT JOIN run_queues q ON q.id = e.queue_id AND q.deleted_at IS NULL
+         LEFT JOIN objectives wo ON wo.id = e.waiting_on_objective_id AND wo.deleted_at IS NULL
         WHERE o.mission_id = ? AND o.deleted_at IS NULL
         ORDER BY o.position ASC`,
     [missionId]
@@ -151182,6 +151397,12 @@ async function listObjectives2(missionId, db = requireDatabaseClient()) {
   return rows.map(toObjectiveDto);
 }
 var DISCONNECT_FROM_STATES = ["launching", "executing", "pending_delivery"];
+var RUN_QUEUE_DISPATCH_FIELDS = [
+  "assigned_agent",
+  "instruction_text",
+  "state",
+  "resource_key"
+];
 async function applyObjectivePositionUpdates(tx, options) {
   const { workspaceId: workspaceId2, missionId, projectId, rows, positionById, now: now2 } = options;
   const byId = new Map(rows.map((row) => [row.id, row]));
@@ -151702,6 +151923,13 @@ async function updateObjectiveTx(idRef, body) {
       } else {
         await removeRunQueueEntryForObjective(tx, existing.project_id, id);
       }
+    }
+    if (RUN_QUEUE_DISPATCH_FIELDS.some((field) => changed.includes(field))) {
+      const liveEntry = await tx.get(
+        "SELECT id FROM run_queue_entries WHERE project_id = ? AND objective_id = ? AND deleted_at IS NULL",
+        [existing.project_id, id]
+      );
+      if (liveEntry) await enqueueRunQueueDispatch(tx, existing.project_id, workspaceId2);
     }
     const row = await tx.get(
       `SELECT o.*, m.display_id AS mission_display_id
@@ -160369,7 +160597,11 @@ function compactRunQueueResponse(value) {
             objectiveDisplayId: entry.objectiveDisplayId,
             objectiveTitle: entry.objectiveTitle,
             missionTitle: entry.missionTitle,
-            blockedReason: entry.blockedReason
+            blockedReason: entry.blockedReason,
+            // A `waiting` hold clears by itself; without these an agent
+            // reads "not dispatched" and cannot tell why or for how long.
+            waitingReason: entry.waitingReason,
+            waitingOnObjectiveDisplayId: entry.waitingOnObjectiveDisplayId
           };
         }) : []
       };
@@ -160802,13 +161034,13 @@ var hostedMcpToolDefinitions = [
   {
     name: "overlord_manage_run_queue",
     title: "Manage Run Queues",
-    description: "Use this only when the user explicitly asks to create, rename, pause, resume, delete, or reorder the project's Run Queue definitions. These are administrative project-configuration actions and require a full-scope token; adding, moving, or removing objectives inside a queue uses overlord_queue_objective and overlord_reorder_run_queue instead.",
+    description: "Use this only when the user explicitly asks to create, rename, pause, resume, delete, or reorder the project's Run Queue definitions, or to retry one held queue entry. The queue-definition actions are administrative project-configuration and require a full-scope token; adding, moving, or removing objectives inside a queue uses overlord_queue_objective and overlord_reorder_run_queue instead.",
     inputSchema: objectSchema(
       {
         action: {
           type: "string",
-          enum: ["create", "update", "delete", "reorder_queues"],
-          description: "create a queue, update (rename/pause/resume) one, delete one, or reorder the queue definitions."
+          enum: ["create", "update", "delete", "reorder_queues", "retry_entry"],
+          description: "create a queue, update (rename/pause/resume) one, delete one, reorder the queue definitions, or retry_entry to clear one held entry's hold and attempt budget so the dispatcher tries it again."
         },
         projectId: stringProperty(
           "Project UUID, slug, or name. Required for create and reorder_queues."
@@ -160823,6 +161055,12 @@ var hostedMcpToolDefinitions = [
         moveEntriesTo: stringProperty(
           "delete only: destination queue UUID or unambiguous name. Required when the queue still holds entries."
         ),
+        entry: stringProperty(
+          "retry_entry only: entry UUID, objective UUID, or objective display id. One of entry or objectiveId is required."
+        ),
+        objectiveId: stringProperty(
+          "retry_entry only: objective UUID or display id whose live entry should be retried."
+        ),
         orderedQueues: {
           type: "array",
           description: "reorder_queues only: every live queue exactly once, top to bottom, by UUID or unambiguous name. The default queue must stay first.",
@@ -160832,7 +161070,7 @@ var hostedMcpToolDefinitions = [
       ["action"]
     ),
     outputSchema: protocolOutputSchema(
-      "The created or updated RunQueueDto, a removal confirmation, or the reordered ProjectRunQueuesDto."
+      "The created or updated RunQueueDto, a removal confirmation, the reordered ProjectRunQueuesDto, or the retried RunQueueEntryDto."
     ),
     annotations: writeAction
   },
@@ -161263,6 +161501,21 @@ function runQueueMcpProtocolCall(name, args) {
           "--queue": queue,
           ...projectRef ? { "--project-id": projectRef } : {},
           ...moveEntriesTo ? { "--move-entries-to": moveEntriesTo } : {}
+        })
+      };
+    }
+    if (action === "retry_entry") {
+      const entry = optionalString(args, "entry");
+      const objectiveRef = optionalString(args, "objectiveId");
+      if (!entry && !objectiveRef) {
+        throw new Error("action 'retry_entry' requires entry or objectiveId");
+      }
+      return {
+        subcommand: "retry-queue-entry",
+        body: protocolBody({
+          ...entry ? { "--entry": entry } : {},
+          ...objectiveRef ? { "--objective-id": objectiveRef } : {},
+          ...projectRef ? { "--project-id": projectRef } : {}
         })
       };
     }
@@ -166354,6 +166607,7 @@ function applyDeliveryPresentation({
 
 // delivery-compose-worker.ts
 init_util3();
+init_worker_jobs();
 init_db();
 var POLL_INTERVAL_MS = 1500;
 var CLAIM_BATCH_SIZE = 5;
@@ -167152,6 +167406,7 @@ init_db();
 
 // worker-job-poller.ts
 init_util3();
+init_worker_jobs();
 var DEFAULT_POLL_INTERVAL_MS = 1500;
 var WorkerJobPoller = class {
   timer = null;
@@ -167522,6 +167777,7 @@ function notificationTypesForTransport(transport) {
 
 // ../packages/core/service/push-notification-jobs.ts
 init_util3();
+init_worker_jobs();
 var PUSH_NOTIFICATION_DISPATCH_JOB_TYPE = "overlord.push_notification.dispatch.v1";
 var PUSH_NOTIFICATION_CATEGORIES = notificationTypesForTransport("apns");
 var PUSH_NOTIFICATION_MASTER_CATEGORY = "all";
@@ -168596,6 +168852,7 @@ async function handleOAuthRevoke(req, res) {
 }
 
 // run-queue.ts
+init_run_queue();
 init_db();
 async function projectForQueue(db, queueId) {
   const row = await db.get(
@@ -168661,6 +168918,11 @@ async function patchRunQueueEntry(entryId, body) {
   const db = requireDatabaseClient();
   const projectId = await projectForEntry(db, entryId);
   await authorize(projectId, PERMISSIONS.EXECUTION_REQUEST_CREATE, db);
+  if (body.retry === true) {
+    if (body.queueId !== void 0 || body.afterEntryId !== void 0 || body.position !== void 0)
+      throw Object.assign(new Error("retry cannot be combined with a queue move"), { status: 400 });
+    return retryRunQueueEntry(db, entryId);
+  }
   return moveRunQueueEntry(db, entryId, body);
 }
 async function deleteRunQueueEntry(entryId, body = {}) {
@@ -168700,7 +168962,10 @@ async function patchRunQueueOrder(queueId, body) {
 }
 
 // run-queue-dispatch-worker.ts
+init_dispatch_diagnostics();
 init_project_execution_target();
+init_run_queue();
+init_run_queue();
 init_util3();
 init_db();
 function parseProjectId(payload) {
@@ -168711,13 +168976,21 @@ function parseProjectId(payload) {
     return null;
   }
 }
+function entryFailureKind(entry) {
+  if (entry.blocked_reason?.startsWith("request_failed")) return "request_failed";
+  if (entry.blocked_reason?.startsWith("dispatch_failed")) return "dispatch_failed";
+  return void 0;
+}
+function entryHoldIsUnchanged(entry, next) {
+  return entry.state === next.state && (entry.waiting_reason ?? null) === next.waitingReason && (entry.waiting_on_objective_id ?? null) === next.waitingOnObjectiveId && (entry.blocked_reason ?? null) === next.blockedReason;
+}
 async function dispatchProjectRunQueues(db, projectId) {
   const queues = await db.all(
-    "SELECT id, paused FROM run_queues WHERE project_id = ? AND deleted_at IS NULL ORDER BY position",
+    "SELECT id, paused, position FROM run_queues WHERE project_id = ? AND deleted_at IS NULL ORDER BY position",
     [projectId]
   );
   const entries = await db.all(
-    "SELECT id, queue_id, objective_id, position, state, attempt_count, workspace_id, project_id, mission_id, enqueued_by_workspace_user_id FROM run_queue_entries WHERE project_id = ? AND deleted_at IS NULL ORDER BY position",
+    "SELECT id, queue_id, objective_id, position, state, blocked_reason, waiting_reason, waiting_on_objective_id, attempt_count, workspace_id, project_id, mission_id, enqueued_by_workspace_user_id FROM run_queue_entries WHERE project_id = ? AND deleted_at IS NULL ORDER BY position",
     [projectId]
   );
   const objectiveRows = await db.all(
@@ -168725,30 +168998,47 @@ async function dispatchProjectRunQueues(db, projectId) {
     entries.map((e5) => e5.objective_id)
   );
   const objectives = {};
-  for (const objective of objectiveRows) {
-    const busy = await db.get(
-      "SELECT id FROM objectives WHERE mission_id = ? AND id <> ? AND deleted_at IS NULL AND state IN ('launching','executing','pending_delivery') LIMIT 1",
-      [objective.mission_id, objective.id]
-    );
+  for (const objective of objectiveRows)
     objectives[objective.id] = {
       id: objective.id,
+      missionId: objective.mission_id,
       state: objective.state,
       instructionText: objective.instruction_text,
-      missionBusy: Boolean(busy),
+      assignedAgent: objective.assigned_agent,
       deleted: Boolean(objective.deleted_at)
     };
-  }
+  const missionIds = [...new Set(entries.map((entry) => entry.mission_id))];
+  const workspaceId2 = entries[0]?.workspace_id ?? null;
+  const missionRows = missionIds.length ? await db.all(
+    `SELECT id, allow_parallel_objectives FROM missions WHERE id IN (${missionIds.map(() => "?").join(",")}) AND deleted_at IS NULL`,
+    missionIds
+  ) : [];
+  const lockHolders = workspaceId2 ? await findSiblingLockHolders({ db, workspaceId: workspaceId2, missionIds }) : [];
+  const missions = {};
+  for (const mission of missionRows)
+    missions[mission.id] = {
+      allowParallelObjectives: mission.allow_parallel_objectives === true || mission.allow_parallel_objectives === 1,
+      busyObjectiveIds: []
+    };
+  for (const holder of lockHolders)
+    missions[holder.missionId]?.busyObjectiveIds.push(holder.objectiveId);
   const actions = planRunQueueDispatch({
-    queues: queues.map((q2) => ({ id: q2.id, paused: q2.paused === true || q2.paused === 1 })),
+    queues: queues.map((q2) => ({
+      id: q2.id,
+      paused: q2.paused === true || q2.paused === 1,
+      position: q2.position
+    })),
     entries: entries.map((e5) => ({
       id: e5.id,
       queueId: e5.queue_id,
       objectiveId: e5.objective_id,
       position: e5.position,
       state: e5.state,
-      attemptCount: e5.attempt_count
+      attemptCount: e5.attempt_count,
+      failureKind: entryFailureKind(e5)
     })),
-    objectives
+    objectives,
+    missions
   });
   for (const action of actions) {
     const entry = entries.find((e5) => e5.id === action.entryId);
@@ -168761,28 +169051,44 @@ async function dispatchProjectRunQueues(db, projectId) {
       );
       continue;
     }
-    if (action.action === "hold") {
+    if (action.action === "wait") {
+      const next = {
+        state: "waiting",
+        waitingReason: action.reason,
+        waitingOnObjectiveId: action.waitingOnObjectiveId ?? null,
+        blockedReason: action.reason === "retry_pending" && entryFailureKind(entry) ? entry.blocked_reason : null
+      };
+      if (entryHoldIsUnchanged(entry, next)) continue;
       await db.run(
-        "UPDATE run_queue_entries SET state = 'blocked', blocked_reason = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND state IN ('waiting','blocked')",
-        [action.reason, now2, entry.id]
+        "UPDATE run_queue_entries SET state = 'waiting', waiting_reason = ?, waiting_on_objective_id = ?, blocked_reason = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND state IN ('waiting','blocked')",
+        [next.waitingReason, next.waitingOnObjectiveId, next.blockedReason, now2, entry.id]
+      );
+      continue;
+    }
+    if (action.action === "block") {
+      const next = {
+        state: "blocked",
+        waitingReason: null,
+        waitingOnObjectiveId: null,
+        blockedReason: entryFailureKind(entry) === action.reason ? entry.blocked_reason : action.reason
+      };
+      if (entryHoldIsUnchanged(entry, next)) continue;
+      await db.run(
+        "UPDATE run_queue_entries SET state = 'blocked', blocked_reason = ?, waiting_reason = NULL, waiting_on_objective_id = NULL, updated_at = ?, revision = revision + 1 WHERE id = ? AND state IN ('waiting','blocked')",
+        [next.blockedReason, now2, entry.id]
       );
       continue;
     }
     if (action.action === "mark_running") {
+      if (entry.state === "running") continue;
       await db.run(
-        "UPDATE run_queue_entries SET state = 'running', blocked_reason = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?",
+        "UPDATE run_queue_entries SET state = 'running', blocked_reason = NULL, waiting_reason = NULL, waiting_on_objective_id = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?",
         [now2, entry.id]
       );
       continue;
     }
     const objective = objectiveRows.find((o3) => o3.id === action.objectiveId);
-    if (!objective || !objective.assigned_agent) {
-      await db.run(
-        "UPDATE run_queue_entries SET state = 'blocked', blocked_reason = 'no_agent', updated_at = ?, revision = revision + 1 WHERE id = ?",
-        [now2, entry.id]
-      );
-      continue;
-    }
+    if (!objective) continue;
     try {
       await db.transaction(async (tx) => {
         const ctx = await buildWebappServiceContextForWorkspace(
@@ -168794,6 +169100,17 @@ async function dispatchProjectRunQueues(db, projectId) {
           await tx.run(
             "UPDATE objectives SET state = 'draft', updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'future'",
             [now2, objective.id]
+          );
+        if (objective.state === "launching")
+          await tx.run(
+            `UPDATE objectives SET state = 'draft', updated_at = ?, revision = revision + 1
+               WHERE id = ? AND state = 'launching'
+                 AND NOT EXISTS (
+                   SELECT 1 FROM execution_requests er
+                    WHERE er.objective_id = ? AND er.deleted_at IS NULL
+                      AND er.status IN (${ACTIVE_EXECUTION_REQUEST_STATUSES.map(() => "?").join(",")})
+                 )`,
+            [now2, objective.id, objective.id, ...ACTIVE_EXECUTION_REQUEST_STATUSES]
           );
         await tx.run(
           `UPDATE objectives SET state = 'launching', ${OBJECTIVE_LAUNCHED_AT_ASSIGNMENT2}, updated_at = ?, revision = revision + 1 WHERE id = ? AND state IN ('draft','submitted')`,
@@ -168825,7 +169142,7 @@ async function dispatchProjectRunQueues(db, projectId) {
           eventPayload: { runQueueEntryId: entry.id }
         });
         await tx.run(
-          "UPDATE run_queue_entries SET state = 'dispatched', blocked_reason = NULL, dispatched_at = ?, execution_request_id = ?, attempt_count = attempt_count + 1, updated_at = ?, revision = revision + 1 WHERE id = ? AND state IN ('waiting','blocked')",
+          "UPDATE run_queue_entries SET state = 'dispatched', blocked_reason = NULL, waiting_reason = NULL, waiting_on_objective_id = NULL, dispatched_at = ?, execution_request_id = ?, attempt_count = attempt_count + 1, updated_at = ?, revision = revision + 1 WHERE id = ? AND state IN ('waiting','blocked')",
           [now2, request.id, now2, entry.id]
         );
       });
@@ -168833,7 +169150,7 @@ async function dispatchProjectRunQueues(db, projectId) {
       const detail = sanitizeDispatchFailure(error53);
       console.error("[run-queue-dispatcher] dispatch failed", { entryId: entry.id, error: error53 });
       await db.run(
-        "UPDATE run_queue_entries SET state = 'blocked', blocked_reason = ?, attempt_count = attempt_count + 1, updated_at = ?, revision = revision + 1 WHERE id = ?",
+        "UPDATE run_queue_entries SET state = 'waiting', waiting_reason = 'retry_pending', waiting_on_objective_id = NULL, blocked_reason = ?, attempt_count = attempt_count + 1, updated_at = ?, revision = revision + 1 WHERE id = ?",
         [detail ? `dispatch_failed: ${detail.slice(0, 400)}` : "dispatch_failed", now2, entry.id]
       );
     }

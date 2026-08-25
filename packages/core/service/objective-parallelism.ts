@@ -1,7 +1,7 @@
 import { PARALLEL_BLOCKING_OBJECTIVE_STATES } from '@overlord/automations';
+import type { DatabaseClient } from '@overlord/database';
 
 import type { ServiceContext } from './context.js';
-import { ACTIVE_EXECUTION_REQUEST_STATUSES } from './execution-requests.js';
 
 function isTruthyFlag(value: unknown): boolean {
   return value === true || value === 1;
@@ -38,9 +38,50 @@ export async function countActiveMissionObjectives({
   return Number(row?.n ?? 0);
 }
 
+export type SiblingLockHolder = { objectiveId: string; missionId: string };
+type HolderRow = { objective_id: string; mission_id: string };
+
 /**
- * Sibling that would 409 a launch of `objectiveId`. Flag off: any active
- * sibling (or any objective holding an active execution request). Flag on:
+ * Objectives currently occupying their mission's sibling lock: any objective in
+ * one of {@link PARALLEL_BLOCKING_OBJECTIVE_STATES}. (`launching` is in that
+ * set, so an objective holding a pre-attach execution request is covered
+ * without a second query against `execution_requests`.)
+ *
+ * This is the single definition of "that mission is busy". The direct-Run path
+ * (`findConflictingActiveSibling`) and the Run Queue dispatcher both read it, so
+ * the two entry points cannot disagree about whether a launch is allowed — they
+ * did before, and a mission that had opted into parallel objectives was held by
+ * the dispatcher while the Run button let it through.
+ */
+export async function findSiblingLockHolders({
+  db,
+  workspaceId,
+  missionIds
+}: {
+  db: DatabaseClient;
+  workspaceId: string;
+  missionIds: readonly string[];
+}): Promise<SiblingLockHolder[]> {
+  if (missionIds.length === 0) return [];
+  const missionPlaceholders = missionIds.map(() => '?').join(', ');
+  const statePlaceholders = PARALLEL_BLOCKING_OBJECTIVE_STATES.map(() => '?').join(', ');
+  const holders = new Map<string, SiblingLockHolder>();
+
+  const activeObjectives = (await db.all(
+    `SELECT id AS objective_id, mission_id FROM objectives
+      WHERE mission_id IN (${missionPlaceholders}) AND workspace_id = ? AND deleted_at IS NULL
+        AND state IN (${statePlaceholders})`,
+    [...missionIds, workspaceId, ...PARALLEL_BLOCKING_OBJECTIVE_STATES]
+  )) as HolderRow[];
+  for (const row of activeObjectives)
+    holders.set(row.objective_id, { objectiveId: row.objective_id, missionId: row.mission_id });
+
+  return [...holders.values()];
+}
+
+/**
+ * Sibling that would 409 a launch of `objectiveId`. Flag off: any objective
+ * holding the mission's sibling lock other than the candidate. Flag on:
  * none — concurrent objectives on the same resource are separated by the Runner
  * Layer's per-objective branch/worktree isolation, or share the mission's single
  * checkout when the mission runs without worktrees.
@@ -61,32 +102,11 @@ export async function findConflictingActiveSibling({
   allowParallelObjectives: boolean;
 }): Promise<{ id: string } | null> {
   if (allowParallelObjectives) return null;
-
-  const sibling = (await ctx.db.get(
-    `SELECT id FROM objectives
-      WHERE mission_id = ? AND workspace_id = ? AND id <> ? AND deleted_at IS NULL
-        AND state IN (${PARALLEL_BLOCKING_OBJECTIVE_STATES.map(() => '?').join(', ')})
-      LIMIT 1`,
-    [missionId, ctx.workspace.id, objectiveId, ...PARALLEL_BLOCKING_OBJECTIVE_STATES]
-  )) as { id: string } | undefined;
-  if (sibling) return { id: sibling.id };
-
-  const requestSibling = (await ctx.db.get(
-    `SELECT o.id
-       FROM execution_requests er
-       JOIN objectives o ON o.id = er.objective_id AND o.deleted_at IS NULL
-      WHERE er.mission_id = ? AND er.workspace_id = ? AND er.objective_id <> ?
-        AND er.deleted_at IS NULL
-        AND er.status IN (${ACTIVE_EXECUTION_REQUEST_STATUSES.map(() => '?').join(', ')})
-        AND o.state IN (${PARALLEL_BLOCKING_OBJECTIVE_STATES.map(() => '?').join(', ')})
-      LIMIT 1`,
-    [
-      missionId,
-      ctx.workspace.id,
-      objectiveId,
-      ...ACTIVE_EXECUTION_REQUEST_STATUSES,
-      ...PARALLEL_BLOCKING_OBJECTIVE_STATES
-    ]
-  )) as { id: string } | undefined;
-  return requestSibling ? { id: requestSibling.id } : null;
+  const holders = await findSiblingLockHolders({
+    db: ctx.db,
+    workspaceId: ctx.workspace.id,
+    missionIds: [missionId]
+  });
+  const sibling = holders.find(holder => holder.objectiveId !== objectiveId);
+  return sibling ? { id: sibling.objectiveId } : null;
 }

@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import type { ProjectRunQueuesDto } from '../../../shared/contract.ts';
+import type { ProjectRunQueuesDto, RunQueueEntryDto } from '../../../shared/contract.ts';
 
 import { buildEverythingQueuedProjection } from './everything-queued-model.ts';
 
-function queues(projectId: string, entryId: string): ProjectRunQueuesDto {
+function queues(
+  projectId: string,
+  entryId: string,
+  overrides: Partial<RunQueueEntryDto> = {}
+): ProjectRunQueuesDto {
   return {
     projectId,
     queues: [
@@ -37,7 +41,8 @@ function queues(projectId: string, entryId: string): ProjectRunQueuesDto {
             enqueuedAt: '2026-08-20T00:00:00.000Z',
             executionRequestId: null,
             executionRequest: null,
-            diagnosticCode: null
+            diagnosticCode: null,
+            ...overrides
           }
         ]
       }
@@ -97,5 +102,31 @@ test('keeps queue entries scoped to their source project without a global order'
   assert.deepEqual(
     projection.map(item => item.canMutate),
     [false, false]
+  );
+});
+
+test('the waiting metadata a hold is rendered from survives the projection', () => {
+  const projection = buildEverythingQueuedProjection([
+    {
+      project: { id: 'allowed', name: 'Visible', workspaceId: 'workspace-a' },
+      workspaceName: 'Workspace A',
+      queues: queues('allowed', 'held-entry', {
+        waitingReason: 'mission_busy',
+        waitingOnObjectiveId: 'sibling-objective',
+        waitingOnObjectiveDisplayId: 'coo:786.9hm5',
+        attemptCount: 1
+      }),
+      readable: true
+    }
+  ]);
+
+  const entry = projection[0]?.queue.entries[0];
+  assert.deepEqual(
+    {
+      waitingReason: entry?.waitingReason,
+      waitingOnObjectiveDisplayId: entry?.waitingOnObjectiveDisplayId,
+      attemptCount: entry?.attemptCount
+    },
+    { waitingReason: 'mission_busy', waitingOnObjectiveDisplayId: 'coo:786.9hm5', attemptCount: 1 }
   );
 });

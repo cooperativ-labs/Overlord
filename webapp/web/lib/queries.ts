@@ -277,6 +277,18 @@ export function useRemoveRunQueueEntry(projectId: string) {
   });
 }
 
+/**
+ * Clear a held entry's hold and attempt budget so the dispatcher tries again.
+ * Refused for an entry already in flight — force-removal is the way out of that.
+ */
+export function useRetryRunQueueEntry(projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (entryId: string) => api.retryRunQueueEntry(entryId),
+    onSuccess: () => invalidateRunQueue(qc, projectId)
+  });
+}
+
 export function useUpdateRunQueue(projectId: string) {
   const qc = useQueryClient();
   return useMutation({

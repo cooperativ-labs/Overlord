@@ -29,6 +29,10 @@ type EntryRow = {
   position: number;
   state: RunQueueEntryDto['state'];
   blocked_reason: string | null;
+  waiting_reason: string | null;
+  waiting_on_objective_id: string | null;
+  waiting_on_objective_display_key: string | null;
+  attempt_count: number;
   enqueued_at: string;
   execution_request_id: string | null;
   objective_title: string | null;
@@ -216,6 +220,12 @@ function entryDto(row: EntryRow, rank: number): RunQueueEntryDto {
     position: rank,
     state: row.state,
     blockedReason: row.blocked_reason,
+    waitingReason: (row.waiting_reason as RunQueueEntryDto['waitingReason']) ?? null,
+    waitingOnObjectiveId: row.waiting_on_objective_id ?? null,
+    waitingOnObjectiveDisplayId: row.waiting_on_objective_display_key
+      ? `${row.mission_display_id}.${row.waiting_on_objective_display_key}`
+      : null,
+    attemptCount: row.attempt_count ?? 0,
     objectiveId: row.objective_id,
     objectiveDisplayId: `${row.mission_display_id}.${row.objective_display_key}`,
     objectiveTitle: row.objective_title,
@@ -255,12 +265,14 @@ export async function listProjectRunQueues(
   );
   const rows = await db.all<EntryRow>(
     `SELECT e.*, o.title objective_title, o.display_key objective_display_key, o.assigned_agent, o.resource_key, m.display_id mission_display_id, m.title mission_title,
+      wo.display_key waiting_on_objective_display_key,
       er.status request_status, er.last_error request_last_error, er.claimed_by_device_id request_claimed_by_device_id,
       er.claimed_by_execution_target_id request_claimed_by_execution_target_id, er.execution_target_id request_execution_target_id,
       er.created_at request_created_at, er.claimed_at request_claimed_at, er.launch_started_at request_launch_started_at,
       er.launch_completed_at request_launch_completed_at, er.updated_at request_updated_at, er.launched_session_id request_launched_session_id
       FROM run_queue_entries e JOIN objectives o ON o.id = e.objective_id JOIN missions m ON m.id = e.mission_id
       LEFT JOIN execution_requests er ON er.id = e.execution_request_id AND er.deleted_at IS NULL
+      LEFT JOIN objectives wo ON wo.id = e.waiting_on_objective_id AND wo.deleted_at IS NULL
       WHERE e.project_id = ? AND e.deleted_at IS NULL ORDER BY e.position ASC`,
     [projectId]
   );
@@ -778,7 +790,7 @@ export async function moveRunQueueEntry(
       position = (max?.value ?? 0) + STEP;
     }
     await tx.run(
-      "UPDATE run_queue_entries SET queue_id = ?, position = ?, state = 'waiting', blocked_reason = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?",
+      "UPDATE run_queue_entries SET queue_id = ?, position = ?, state = 'waiting', blocked_reason = NULL, waiting_reason = NULL, waiting_on_objective_id = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?",
       [queueId, position, nowIso(), entryId]
     );
     await rewriteMissionPositions(tx, current.mission_id);
@@ -787,6 +799,78 @@ export async function moveRunQueueEntry(
       .flatMap(q => q.entries)
       .find(e => e.id === entryId)!;
   });
+}
+
+/**
+ * Explicit retry of a held entry: clear the attempt budget and the hold, and
+ * ask for a dispatch tick.
+ *
+ * Before this the only retry was dragging the entry somewhere, which also
+ * reordered the queue and left `attempt_count` untouched — so after three
+ * failures the planner blocked the entry again on the very next tick and the
+ * user had no way to say "try that again".
+ */
+export async function retryRunQueueEntry(
+  db: DatabaseClient,
+  entryId: string
+): Promise<RunQueueEntryDto> {
+  return db.transaction(async tx => {
+    const current = await tx.get<{
+      project_id: string;
+      workspace_id: string;
+      state: RunQueueEntryDto['state'];
+    }>(
+      'SELECT project_id, workspace_id, state FROM run_queue_entries WHERE id = ? AND deleted_at IS NULL',
+      [entryId]
+    );
+    if (!current)
+      throw new ServiceError('Run Queue entry not found', 'run_queue_entry_not_found', 404);
+    // An in-flight entry has a live request behind it; retrying underneath that
+    // would launch the objective twice. Removing the entry with `force` is the
+    // deliberate way out of a wedged dispatch.
+    if (current.state === 'dispatched' || current.state === 'running')
+      throw new ServiceError(
+        'An in-flight Run Queue entry cannot be retried; remove it with force first',
+        'run_queue_entry_running',
+        409
+      );
+    const now = nowIso();
+    await tx.run(
+      `UPDATE run_queue_entries
+          SET state = 'waiting',
+              waiting_reason = 'retry_pending',
+              waiting_on_objective_id = NULL,
+              blocked_reason = NULL,
+              execution_request_id = NULL,
+              attempt_count = 0,
+              updated_at = ?,
+              revision = revision + 1
+        WHERE id = ?`,
+      [now, entryId]
+    );
+    await enqueueRunQueueDispatch(tx, current.project_id, current.workspace_id);
+    return (await listProjectRunQueues(tx, current.project_id)).queues
+      .flatMap(q => q.entries)
+      .find(e => e.id === entryId)!;
+  });
+}
+
+/**
+ * Ask for a dispatch tick on every project in a workspace that still holds a
+ * released-on-condition entry. Used by triggers that are workspace-wide rather
+ * than project-scoped — a runner reconnecting serves whatever projects its
+ * execution target covers.
+ */
+export async function enqueueRunQueueDispatchForWorkspace(
+  db: DatabaseClient,
+  workspaceId: string
+): Promise<void> {
+  const rows = await db.all<{ project_id: string }>(
+    `SELECT DISTINCT project_id FROM run_queue_entries
+      WHERE workspace_id = ? AND deleted_at IS NULL AND state IN ('waiting', 'blocked')`,
+    [workspaceId]
+  );
+  for (const row of rows) await enqueueRunQueueDispatch(db, row.project_id, workspaceId);
 }
 
 export async function deleteRunQueue(

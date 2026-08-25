@@ -463,14 +463,14 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
     name: 'overlord_manage_run_queue',
     title: 'Manage Run Queues',
     description:
-      "Use this only when the user explicitly asks to create, rename, pause, resume, delete, or reorder the project's Run Queue definitions. These are administrative project-configuration actions and require a full-scope token; adding, moving, or removing objectives inside a queue uses overlord_queue_objective and overlord_reorder_run_queue instead.",
+      "Use this only when the user explicitly asks to create, rename, pause, resume, delete, or reorder the project's Run Queue definitions, or to retry one held queue entry. The queue-definition actions are administrative project-configuration and require a full-scope token; adding, moving, or removing objectives inside a queue uses overlord_queue_objective and overlord_reorder_run_queue instead.",
     inputSchema: objectSchema(
       {
         action: {
           type: 'string',
-          enum: ['create', 'update', 'delete', 'reorder_queues'],
+          enum: ['create', 'update', 'delete', 'reorder_queues', 'retry_entry'],
           description:
-            'create a queue, update (rename/pause/resume) one, delete one, or reorder the queue definitions.'
+            "create a queue, update (rename/pause/resume) one, delete one, reorder the queue definitions, or retry_entry to clear one held entry's hold and attempt budget so the dispatcher tries it again."
         },
         projectId: stringProperty(
           'Project UUID, slug, or name. Required for create and reorder_queues.'
@@ -485,6 +485,12 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
         moveEntriesTo: stringProperty(
           'delete only: destination queue UUID or unambiguous name. Required when the queue still holds entries.'
         ),
+        entry: stringProperty(
+          'retry_entry only: entry UUID, objective UUID, or objective display id. One of entry or objectiveId is required.'
+        ),
+        objectiveId: stringProperty(
+          'retry_entry only: objective UUID or display id whose live entry should be retried.'
+        ),
         orderedQueues: {
           type: 'array',
           description:
@@ -495,7 +501,7 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
       ['action']
     ),
     outputSchema: protocolOutputSchema(
-      'The created or updated RunQueueDto, a removal confirmation, or the reordered ProjectRunQueuesDto.'
+      'The created or updated RunQueueDto, a removal confirmation, the reordered ProjectRunQueuesDto, or the retried RunQueueEntryDto.'
     ),
     annotations: writeAction
   },

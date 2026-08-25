@@ -108,6 +108,7 @@ type RunQueueMcpProtocolCall = {
     | 'reorder-run-queue'
     | 'queue-objective'
     | 'dequeue-objective'
+    | 'retry-queue-entry'
     | 'create-run-queue'
     | 'update-run-queue'
     | 'delete-run-queue'
@@ -227,6 +228,22 @@ export function runQueueMcpProtocolCall(
           '--queue': queue,
           ...(projectRef ? { '--project-id': projectRef } : {}),
           ...(moveEntriesTo ? { '--move-entries-to': moveEntriesTo } : {})
+        })
+      };
+    }
+
+    if (action === 'retry_entry') {
+      const entry = optionalString(args, 'entry');
+      const objectiveRef = optionalString(args, 'objectiveId');
+      if (!entry && !objectiveRef) {
+        throw new Error("action 'retry_entry' requires entry or objectiveId");
+      }
+      return {
+        subcommand: 'retry-queue-entry',
+        body: protocolBody({
+          ...(entry ? { '--entry': entry } : {}),
+          ...(objectiveRef ? { '--objective-id': objectiveRef } : {}),
+          ...(projectRef ? { '--project-id': projectRef } : {})
         })
       };
     }

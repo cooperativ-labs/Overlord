@@ -63,6 +63,7 @@ import { emitNotification } from '../packages/core/service/notifications/notific
 import { resolveProjectExecutionTargetForLaunch } from '../packages/core/service/project-execution-target.ts';
 import {
   enqueueObjectiveAfterLastQueuedSibling,
+  enqueueRunQueueDispatch,
   removeRunQueueEntryForObjective
 } from '../packages/core/service/run-queue.ts';
 import {
@@ -122,6 +123,7 @@ import type {
   ReorderFutureObjectivesBody,
   ReorderProjectsBody,
   ReorderProjectStatusesBody,
+  RunQueueWaitingReason,
   ScheduleDto,
   ScheduleInput,
   SearchMissionsResponseV2,
@@ -653,6 +655,10 @@ interface ObjectiveRow {
   queue_position?: number | null;
   queue_state?: string | null;
   queue_blocked_reason?: string | null;
+  queue_waiting_reason?: string | null;
+  queue_waiting_on_objective_id?: string | null;
+  queue_waiting_on_objective_display_key?: string | null;
+  queue_attempt_count?: number | null;
 }
 
 // ---- serializers ---------------------------------------------------------
@@ -1807,6 +1813,15 @@ function toObjectiveDto(r: ObjectiveRow): ObjectiveDto {
             position: r.queue_position,
             state: r.queue_state as 'waiting' | 'blocked' | 'dispatched' | 'running',
             blockedReason: r.queue_blocked_reason ?? null,
+            waitingReason: (r.queue_waiting_reason as RunQueueWaitingReason | null) ?? null,
+            waitingOnObjectiveId: r.queue_waiting_on_objective_id ?? null,
+            waitingOnObjectiveDisplayId: r.queue_waiting_on_objective_display_key
+              ? formatObjectiveDisplayId({
+                  missionDisplayId: r.mission_display_id ?? '',
+                  displayKey: r.queue_waiting_on_objective_display_key
+                })
+              : null,
+            attemptCount: r.queue_attempt_count ?? 0,
             precededBy: null
           }
         : null,
@@ -3740,6 +3755,8 @@ async function getObjectivesByMission(
          e.id AS queue_entry_id, e.queue_id, q.name AS queue_name,
          CASE WHEN e.id IS NULL THEN NULL ELSE (SELECT COUNT(*) FROM run_queue_entries er WHERE er.queue_id = e.queue_id AND er.deleted_at IS NULL AND (er.position < e.position OR (er.position = e.position AND er.id <= e.id))) END AS queue_position,
          e.state AS queue_state, e.blocked_reason AS queue_blocked_reason,
+         e.waiting_reason AS queue_waiting_reason, e.waiting_on_objective_id AS queue_waiting_on_objective_id,
+         e.attempt_count AS queue_attempt_count, wo.display_key AS queue_waiting_on_objective_display_key,
          (
            SELECT s.external_session_id
              FROM agent_sessions s
@@ -3751,6 +3768,7 @@ async function getObjectivesByMission(
          JOIN missions m ON m.id = o.mission_id
          LEFT JOIN run_queue_entries e ON e.objective_id = o.id AND e.deleted_at IS NULL
          LEFT JOIN run_queues q ON q.id = e.queue_id AND q.deleted_at IS NULL
+         LEFT JOIN objectives wo ON wo.id = e.waiting_on_objective_id AND wo.deleted_at IS NULL
         WHERE o.mission_id IN (${placeholders}) AND o.deleted_at IS NULL
         ORDER BY o.mission_id ASC, o.position ASC`,
     missionIds
@@ -5600,6 +5618,13 @@ async function patchMissionFieldsTx(id: string, body: UpdateMissionBody): Promis
       tx
     );
 
+    // Turning parallel objectives on releases every sibling this mission was
+    // holding across all queues; turning it off may require new waits. Either
+    // way the dispatcher's picture of this mission just changed.
+    if (changed.includes('allow_parallel_objectives')) {
+      await enqueueRunQueueDispatch(tx, existing.project_id, existing.workspace_id);
+    }
+
     if (scheduleTriggerStatusType) {
       await createScheduledDuplicateIfNeeded(tx, existing, scheduleTriggerStatusType);
     }
@@ -6884,6 +6909,8 @@ export async function listObjectives(
          e.id AS queue_entry_id, e.queue_id, q.name AS queue_name,
          CASE WHEN e.id IS NULL THEN NULL ELSE (SELECT COUNT(*) FROM run_queue_entries er WHERE er.queue_id = e.queue_id AND er.deleted_at IS NULL AND (er.position < e.position OR (er.position = e.position AND er.id <= e.id))) END AS queue_position,
          e.state AS queue_state, e.blocked_reason AS queue_blocked_reason,
+         e.waiting_reason AS queue_waiting_reason, e.waiting_on_objective_id AS queue_waiting_on_objective_id,
+         e.attempt_count AS queue_attempt_count, wo.display_key AS queue_waiting_on_objective_display_key,
          (
            SELECT s.external_session_id
              FROM agent_sessions s
@@ -6895,6 +6922,7 @@ export async function listObjectives(
          JOIN missions m ON m.id = o.mission_id
          LEFT JOIN run_queue_entries e ON e.objective_id = o.id AND e.deleted_at IS NULL
          LEFT JOIN run_queues q ON q.id = e.queue_id AND q.deleted_at IS NULL
+         LEFT JOIN objectives wo ON wo.id = e.waiting_on_objective_id AND wo.deleted_at IS NULL
         WHERE o.mission_id = ? AND o.deleted_at IS NULL
         ORDER BY o.position ASC`,
     [missionId]
@@ -6904,6 +6932,18 @@ export async function listObjectives(
 
 /** Active pipeline states a user can disconnect back to the next-up queue. */
 const DISCONNECT_FROM_STATES = ['launching', 'executing', 'pending_delivery'] as const;
+
+/**
+ * Objective columns a Run Queue hold can be waiting on. Changing one of these
+ * on a queued objective is exactly the human action `blocked` asks for, so it
+ * earns an immediate dispatch tick.
+ */
+const RUN_QUEUE_DISPATCH_FIELDS = [
+  'assigned_agent',
+  'instruction_text',
+  'state',
+  'resource_key'
+] as const;
 
 /**
  * Persists objective position changes with a two-phase write so
@@ -7585,6 +7625,19 @@ async function updateObjectiveTx(
       } else {
         await removeRunQueueEntryForObjective(tx, existing.project_id, id);
       }
+    }
+
+    // Fixing what a hold was waiting on — assigning an agent, writing the
+    // instructions, moving the objective back into a launchable state, pointing
+    // it at a connected resource — has to ask for a tick. Without this the
+    // dispatcher only noticed on the next 60 s sweep, so the queue looked stuck
+    // for a minute after the user had already done the thing it asked for.
+    if (RUN_QUEUE_DISPATCH_FIELDS.some(field => changed.includes(field))) {
+      const liveEntry = await tx.get<{ id: string }>(
+        'SELECT id FROM run_queue_entries WHERE project_id = ? AND objective_id = ? AND deleted_at IS NULL',
+        [existing.project_id, id]
+      );
+      if (liveEntry) await enqueueRunQueueDispatch(tx, existing.project_id, workspaceId);
     }
 
     const row = (await tx.get(

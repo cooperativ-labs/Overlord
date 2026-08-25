@@ -34,7 +34,7 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `121`
+Current version: `122`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
@@ -195,6 +195,71 @@ source, overlap, and optional rationale evidence can produce bounded review
 warnings but cannot reject delivery. Both Local and Cloud execution targets use
 the same metadata-only Protocol sync payload; neither backend reads the target
 filesystem.
+
+### Version 122 Change Summary
+
+Run Queue waiting vs. blocked (coo:854, all three phases). `run_queue_entries` gains
+nullable `waiting_reason` and `waiting_on_objective_id`, projected additively as
+`RunQueueEntryDto.waitingReason` / `waitingOnObjectiveId` and on
+`ObjectiveDto.queueEntry`. The four entry states are unchanged, but `blocked`
+and `waiting` are narrowed and no longer overlap: `blocked` means a human must
+act (`blockedReason` is `no_instruction`, `no_agent`, `dispatch_failed`, or
+`request_failed`, optionally followed by `: <detail>`), while `waiting` means
+eligible or held on a condition that clears by itself
+(`waitingReason` is `mission_busy`, `resource_disconnected`, or `retry_pending`,
+and `null` for simply next in line). `waitingOnObjectiveId` names the sibling a
+`mission_busy` entry is queued behind. Two further additive read-only fields
+serve the UI copy: `waitingOnObjectiveDisplayId` (the display id of
+`waitingOnObjectiveId`, so a surface can name the sibling without a second
+lookup) and `attemptCount` (dispatch attempts already spent, ceiling 3), both on
+`RunQueueEntryDto` and `ObjectiveDto.queueEntry`.
+
+The dispatcher re-evaluates **both** `waiting` and `blocked` entries on every
+tick, so a hold is released as soon as its cause is gone with no queue mutation
+and no human intervention; previously only `waiting` entries were reconsidered
+and a `mission_busy` hold written as `blocked` was permanent. It also honours
+`missions.allow_parallel_objectives`, which it previously ignored, using the
+same sibling-lock predicate as the direct-Run path.
+
+New dispatcher guarantee: a serial mission (`allowParallelObjectives = false`)
+has at most one dispatched/running Run Queue entry across all queues in the
+project; a parallel mission has no such limit. When two queues hold objectives
+of one serial mission, the lower-positioned queue dispatches and the other waits
+with `mission_busy`, proceeding on the tick after the first delivers.
+
+An entry whose objective is complete or deleted is dropped from any
+non-in-flight state, and a retry of an objective wedged in `launching` with no
+active execution request resets it to `draft` so the relaunch can proceed.
+
+Retry semantics are explicit. A dispatch that throws, and an execution request
+that reaches `failed`, `expired`, or `cleared` before the agent attached, both
+return the entry to `waiting` with `waitingReason = 'retry_pending'`, release
+`executionRequestId`, count the attempt, and enqueue a dispatch tick;
+`blocked` with `dispatch_failed` / `request_failed` is raised only once the
+attempt count reaches the dispatcher's ceiling (3). The additive
+`PATCH /api/run-queues/entries/:entryId { retry: true }` body, the
+`retry-queue-entry` Protocol subcommand, and the `overlord_manage_run_queue`
+`retry_entry` action clear a hold and reset the attempt budget; all three
+require `execution_request:create` and refuse an entry already dispatched or
+running. `retry` may not be combined with a move in the same PATCH.
+
+Dispatch is now also triggered by the events that change a hold's cause:
+execution-request failure/expiry/clear, an objective leaving the queue, an
+objective PATCH that changes `assignedAgent`, `instructionText`, `state`, or
+`resourceKey` while it has a live entry, a mission PATCH that toggles
+`allowParallelObjectives`, and a runner reconnect. The 60-second sweep is a
+safety net rather than the primary release mechanism.
+`createExecutionRequest` refuses a `requested_source = run_queue` request that
+would give a serial mission a second active objective
+(`objective_sibling_active`, 409), making the dispatcher guarantee above
+database-enforced rather than a planner convention. No runner wire change.
+
+Every Run Queue surface now reads a hold from one shared vocabulary: `waiting`
+is neutral and names what it is waiting for ("Waiting for coo:854.9hm5 to
+finish", "Retrying (2/3)"), while only `blocked` is amber and states the action
+its `blockedReason` asks for ("Assign an agent", "Add instructions",
+"Launch failed 3× — Retry" with a Retry control). This is presentation only; the
+DTO fields above are the sole input.
 
 ### Version 121 Change Summary
 
@@ -667,7 +732,7 @@ Owns:
 - Idempotency key scope naming for protocol operations (`protocol.*`)
 - In-place mission artifact updates via `ovld protocol update-artifact` / `POST /api/protocol/update-artifact`, which apply the same editable-field and revision rules as REST `PATCH /api/missions/:id/artifacts/:artifactId` without requiring a live session key
 - Mid-turn mission artifact creation via `ovld protocol add-artifact` / `POST /api/protocol/add-artifact`, which creates an artifact without a delivery using the same `createArtifact` service as REST `POST /api/missions/:id/artifacts`; an optional session key stamps session/objective provenance when present
-- Run Queue agent operations: `queue-objective`, `dequeue-objective`, `run-queue`, `reorder-run-queue`, `create-run-queue`, `update-run-queue`, `delete-run-queue`, and `reorder-project-run-queues` use display-id/project resolution and the existing queue service. Hosted MCP and connector shims expose the same agent surface through `overlord_queue_objective`, `overlord_list_run_queues`, `overlord_reorder_run_queue`, and `overlord_manage_run_queue`. Entry membership and entry ordering require `execution_request:create`; queue-definition lifecycle requires `project:update`. `queue-objective` accepts queue, predecessor, front, and rank placement without selecting an execution target, and with no explicit destination targets the objective's own mission queue, creating it on demand before falling back to the project default
+- Run Queue agent operations: `queue-objective`, `dequeue-objective`, `retry-queue-entry`, `run-queue`, `reorder-run-queue`, `create-run-queue`, `update-run-queue`, `delete-run-queue`, and `reorder-project-run-queues` use display-id/project resolution and the existing queue service. Hosted MCP and connector shims expose the same agent surface through `overlord_queue_objective`, `overlord_list_run_queues`, `overlord_reorder_run_queue`, and `overlord_manage_run_queue`. Entry membership, entry ordering, and entry retry require `execution_request:create`; queue-definition lifecycle requires `project:update`. `queue-objective` accepts queue, predecessor, front, and rank placement without selecting an execution target, and with no explicit destination targets the objective's own mission queue, creating it on demand before falling back to the project default
 - `autoAdvance` is a deprecated compatibility view derived from live Run Queue membership. Protocol creation and update auto-advance options enqueue/dequeue; legacy storage writes retire next release and column removal requires a later contract bump
 - Per-item `agent` and `model` launch selection for `add-objectives`: the optional
   fields persist to the new objective's existing `assigned_agent` and `model`
@@ -798,7 +863,7 @@ Owns:
 - Project resource-source launch-default mutation through additive `PATCH /api/projects/:id/resources/:resourceId/sources/:sourceId`, authorized as a project update and preserving materialization descriptor fields
 
 - URL paths and HTTP method contracts
-- Project Run Queue REST family: `GET /api/projects/:id/run-queues`, `POST /api/projects/:id/run-queues`, `PATCH /api/projects/:id/run-queues/order`, `POST /api/projects/:id/run-queues/entries`, `PATCH /api/run-queues/:queueId`, `DELETE /api/run-queues/:queueId`, `PATCH /api/run-queues/:queueId/order`, `PATCH /api/run-queues/entries/:entryId`, and `DELETE /api/run-queues/entries/:entryId`. Reads require project/objective read access; planning mutations require `execution_request:create`; queue-definition mutations require `project:update`. The matching Protocol commands are `queue-objective`, `dequeue-objective`, `run-queue`, `reorder-run-queue`, `create-run-queue`, `update-run-queue`, `delete-run-queue`, and `reorder-project-run-queues`; MCP maps them through `overlord_queue_objective`, `overlord_list_run_queues`, `overlord_reorder_run_queue`, and `overlord_manage_run_queue`. Queue entries never select an execution target. `ObjectiveDto.queueEntry` additively projects live membership and `autoAdvance` is derived from that membership for compatibility. A queue may be mission-scoped (`RunQueueDto.missionId`/`missionDisplayId`); an entry POST without `queueId` targets the objective's own mission queue and creates it only if that mission has none, and emptying a mission queue retires it. `DELETE /api/run-queues/entries/:entryId` accepts an additive `{ force?: boolean }` body that also drops an entry wedged in `dispatched`/`running`, clears the objective's active execution requests, and resets a stuck `launching` objective to `draft`.
+- Project Run Queue REST family: `GET /api/projects/:id/run-queues`, `POST /api/projects/:id/run-queues`, `PATCH /api/projects/:id/run-queues/order`, `POST /api/projects/:id/run-queues/entries`, `PATCH /api/run-queues/:queueId`, `DELETE /api/run-queues/:queueId`, `PATCH /api/run-queues/:queueId/order`, `PATCH /api/run-queues/entries/:entryId`, and `DELETE /api/run-queues/entries/:entryId`. Reads require project/objective read access; planning mutations require `execution_request:create`; queue-definition mutations require `project:update`. The matching Protocol commands are `queue-objective`, `dequeue-objective`, `retry-queue-entry`, `run-queue`, `reorder-run-queue`, `create-run-queue`, `update-run-queue`, `delete-run-queue`, and `reorder-project-run-queues`; MCP maps them through `overlord_queue_objective`, `overlord_list_run_queues`, `overlord_reorder_run_queue`, and `overlord_manage_run_queue`. Queue entries never select an execution target. `ObjectiveDto.queueEntry` additively projects live membership and `autoAdvance` is derived from that membership for compatibility. A queue may be mission-scoped (`RunQueueDto.missionId`/`missionDisplayId`); an entry POST without `queueId` targets the objective's own mission queue and creates it only if that mission has none, and emptying a mission queue retires it. `DELETE /api/run-queues/entries/:entryId` accepts an additive `{ force?: boolean }` body that also drops an entry wedged in `dispatched`/`running`, clears the objective's active execution requests, and resets a stuck `launching` objective to `draft`. `PATCH /api/run-queues/entries/:entryId` accepts an additive `{ retry?: boolean }` body that returns a held entry to `waiting` with `attemptCount` reset to 0 and enqueues a dispatch tick; it is refused (409) for an entry already `dispatched`/`running` and may not be combined with a move.
 - Request/response DTO shapes (derived from the logical schema's camelCase field names)
 - Creation-provenance projection: `MissionDto` and `ObjectiveDto` carry `createdByKind` (`human` \| `agent` \| `automation`; non-optional, with a `human` fallback in the mapper so no client writes a null branch), `createdByAgent` (connector/agent identifier or null), and `createdByWorkspaceUserId` (the workspace member the authoring actor acted as, or on behalf of). `MissionDetailDto` additionally carries `createdFrom` — `{ sessionId, missionId, missionDisplayId, agentIdentifier }` or null — resolved from the soft `created_by_session_id` reference by a `LEFT JOIN` that tolerates a missing session; it is paid once per mission page and is deliberately absent from the board/list projections. Provenance is a permanent row attribute, never seen-tracked mission state, and REST exposes no filter or sort on it.
 - Objective display ids: `ObjectiveDto` additively carries `displayKey` and computed `displayId` (`{mission.displayId}.{displayKey}`). `/api/objectives/:id` (and launch/prompt/attachment routes that take an objective id) accept an objective UUID or a full display id. UUID lookup stays globally unique; display ids resolve within the selected organization's `authorizedWorkspaces` set, return `404` outside that set, and return `409` on genuine ambiguity.
@@ -1118,7 +1183,7 @@ answering a decision it is blocked on, and injecting an instruction into it.
 - **Transport**: HTTP/JSON to the configured backend URL
 - **Endpoints**: `GET /api/runner/status`, `POST /api/runner/claim`, `POST /api/runner/clear`, `POST /api/runner/requests/:id/launching`, `POST /api/runner/requests/:id/launched` (additive optional `providerSession` body), `POST /api/runner/requests/:id/failed`, and `POST /api/missions/:id/branch-prepared`
 - **Claiming**: Backend performs an atomic compare-and-set claim on `execution_requests`; verifies launchable state
-- **Run Queue boundary**: project Run Queues are upstream planning state and are invisible to runners and virtual-target gateways. A dispatcher resolves target/config at dispatch and creates an ordinary `execution_requests` row with additive open `requested_source = run_queue` and an entry-scoped idempotency key; claiming and all runner DTO/state semantics remain unchanged.
+- **Run Queue boundary**: project Run Queues are upstream planning state and are invisible to runners and virtual-target gateways. A dispatcher resolves target/config at dispatch and creates an ordinary `execution_requests` row with additive open `requested_source = run_queue` and an entry-scoped idempotency key; claiming and all runner DTO/state semantics remain unchanged. A serial mission (`allowParallelObjectives = false`) has at most one dispatched/running Run Queue entry across all queues in the project; a parallel mission has no such limit. Entry `blocked` means a human must act and `waiting` means eligible or held on a self-clearing condition (`waitingReason`); the dispatcher re-evaluates both states every tick, so no queue mutation is needed to release a hold whose cause is gone.
 - **Long poll**: On Postgres, an otherwise-empty `POST /api/runner/claim` waits up to 25 seconds on a dedicated (non-pooled) `LISTEN` connection for queue notifications, then retries the same scoped atomic claim. After LISTEN is armed, the handler flushes HTTP status and headers with no body bytes until the final `{ request, longPoll }` JSON, so proxies and client header timeouts do not see 25 seconds of silence. Connecting the LISTEN client is bounded (~3 seconds); a connect failure or timeout returns an empty claim with `longPoll: false` so the runner uses its jittered fallback instead of hanging. Its additive `longPoll` response flag is `true` when the wait capability was used; the runner immediately reconnects after an empty long-poll response. Notifications are wake hints only and never replace authorization or claiming. SQLite returns immediately with `longPoll: false` and retains the portable fallback cadence.
 - **Side effects**: Backend claim and state transitions append `mission_events` and `entity_changes` in the same transaction
 - **Claimant resolution**: A claim resolves an **already declared** non-deleted `local` execution target and never creates a device or execution target. An explicit `executionTargetId` in the claim body is resolved and authorized (existing, non-deleted, type `local`, `status = 'active'`, and an active `workspace_user_execution_targets` row for the authenticated member); otherwise the acting machine is resolved from the process host on a co-located Local backend or from the `x-overlord-device-*` hint. When no such target exists — or an explicit target id does not resolve in that workspace — the claim fails with `409 no_execution_target_registered` and an actionable message naming `ovld add-et`, so a machine with a runner but no declaration is visibly unconfigured rather than silently minting a target. A runner polling several workspaces reports this only when **no** workspace in its scope resolves a target

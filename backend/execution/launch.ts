@@ -63,6 +63,7 @@ import {
   resolveLaunchExecutionTarget
 } from '../../packages/core/service/project-execution-target.ts';
 import { assertLaunchResourceConnected } from '../../packages/core/service/projects.ts';
+import { removeRunQueueEntryForObjective } from '../../packages/core/service/run-queue.ts';
 import type {
   AgentCatalogAgentDto,
   AgentCatalogDto,
@@ -1004,6 +1005,14 @@ export async function dequeueObjective({
   now: string;
   tx?: DatabaseClient;
 }): Promise<{ clearedRequests: number; endedSessions: number }> {
+  // Drop the queue entry *before* clearing requests. An objective that has been
+  // completed, disconnected, or deleted has no queue membership left to plan,
+  // and clearing its request first would reconcile the still-live entry back to
+  // `waiting('retry_pending')` — a hold on work nobody is going to do. Removal
+  // also enqueues its own dispatch tick, so the queues behind this objective
+  // move immediately rather than on the next sweep.
+  await removeRunQueueEntryForObjective(tx, projectId, objectiveId);
+
   const { cleared } = await clearExecutionRequests({
     ctx: {
       ...(await buildWebappServiceContextForWorkspace(workspaceId, tx, workspaceUserId)),

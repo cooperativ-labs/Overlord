@@ -32,6 +32,7 @@ export const SUPPORTED_PROTOCOL_SUBCOMMANDS = [
   'run-queue',
   'queue-objective',
   'resume-follow-up',
+  'retry-queue-entry',
   'search',
   'search-missions',
   'sync-changes',
@@ -380,6 +381,21 @@ dequeue-objective:
     --project-id <id|slug|name> Confirms the objective's project
   Returns:
     { removed, objectiveId }. Already-unqueued objectives return removed: false.
+
+retry-queue-entry:
+  Purpose:
+    Retry one held Run Queue entry: clears its hold and resets the attempt
+    budget so the dispatcher tries it again on the next tick.
+  Required (one of):
+    --objective-id <id>         Objective UUID or display id with a live entry
+    --entry <id>                Entry UUID, objective UUID, or display id
+  Optional:
+    --project-id <id|slug|name> Confirms the entry's project
+  Returns:
+    The RunQueueEntryDto, back in waiting with attempt_count reset to 0.
+  Rules:
+    An entry already dispatched or running cannot be retried — remove it with
+    \`dequeue-objective\` (or a forced entry delete) first.
 
 search:
   Purpose:

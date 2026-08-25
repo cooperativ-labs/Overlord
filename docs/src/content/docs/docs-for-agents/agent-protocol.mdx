@@ -95,6 +95,10 @@ ovld protocol update-objective --objective-id coo:312.k7xm --no-auto-advance
   one-based `--position`; choose at most one placement flag.
 - **`dequeue-objective`** removes it from the queue. Already-unqueued
   objectives return `{ removed: false }`.
+- **`retry-queue-entry`** retries one held entry: it clears the hold and resets
+  the attempt budget so the dispatcher tries again on the next tick. Address it
+  with `--objective-id` or `--entry`; an entry already dispatched or running is
+  refused.
 - **`run-queue`** reads every live queue and entry from `--project-id`,
   `--objective-id`, or `--mission-id`, optionally narrowed with `--queue`.
 - **`reorder-run-queue`** atomically replaces one queue's complete entry order;
@@ -356,6 +360,7 @@ ovld protocol add-objectives --mission-id coo:312 \
 | `reorder-run-queue`              | Atomically replace one Run Queue's complete entry order.                                          |
 | `queue-objective`                | Add or move one objective in the Run Queue. Requires `--objective-id`.                            |
 | `dequeue-objective`              | Remove one objective from the Run Queue. Requires `--objective-id`.                               |
+| `retry-queue-entry`              | Retry one held Run Queue entry. Requires `--objective-id` or `--entry`.                           |
 | `create-run-queue`               | Create a queue definition; requires `project:update`.                                             |
 | `update-run-queue`               | Rename, pause, or resume a queue; requires `project:update`.                                      |
 | `delete-run-queue`               | Delete a queue definition; requires `project:update`.                                             |

@@ -7,6 +7,7 @@ import {
   NO_EXECUTION_TARGET_REGISTERED,
   resolveClaimingDeviceTarget
 } from './execution-targets.js';
+import { enqueueRunQueueDispatchForWorkspace } from './run-queue.js';
 import { newId, nowIso } from './util.js';
 
 /**
@@ -18,6 +19,15 @@ export const RUNNER_HEARTBEAT_STALE_MS = 5 * 60 * 1000;
 
 /** Health values that count as "this runner can still take work". */
 const LIVE_RUNNER_HEALTH = ['healthy', 'degraded'] as const;
+
+/** No heartbeat inside the liveness window — the next one is a reconnect. */
+function isStaleHeartbeat(lastHeartbeatAt: string | null, now: string): boolean {
+  if (!lastHeartbeatAt) return true;
+  const last = Date.parse(lastHeartbeatAt);
+  const current = Date.parse(now);
+  if (Number.isNaN(last) || Number.isNaN(current)) return true;
+  return current - last > RUNNER_HEARTBEAT_STALE_MS;
+}
 
 /**
  * How a runner process relates to the execution target it serves.
@@ -245,10 +255,22 @@ export async function recordRunnerHeartbeat({
   const supportedAgentsJson = JSON.stringify(supportedAgents ?? []);
 
   const existing = (await ctx.db.get(
-    `SELECT id, revision FROM execution_target_runner_registrations
+    `SELECT id, revision, health, last_heartbeat_at FROM execution_target_runner_registrations
         WHERE workspace_id = ? AND runner_instance_id = ? AND deleted_at IS NULL`,
     [ctx.workspace.id, runnerInstanceId]
-  )) as { id: string; revision: number } | undefined;
+  )) as
+    | { id: string; revision: number; health: string; last_heartbeat_at: string | null }
+    | undefined;
+
+  // A *reconnect*, not every heartbeat: a first registration, a return from an
+  // unhealthy state, or a gap longer than the liveness TTL. Queue entries held
+  // on `resource_disconnected` should clear as soon as the runner is back
+  // rather than on the next 60 s sweep, but a healthy runner beating every few
+  // seconds must not enqueue a dispatch job each time.
+  const reconnected =
+    !existing ||
+    (existing.health !== health && health === 'healthy') ||
+    isStaleHeartbeat(existing.last_heartbeat_at, now);
 
   if (existing) {
     await ctx.db.run(
@@ -280,6 +302,7 @@ export async function recordRunnerHeartbeat({
       entityRevision: existing.revision + 1,
       changedFields: ['health', 'last_heartbeat_at', 'relation', 'execution_target_id']
     });
+    if (reconnected) await enqueueRunQueueDispatchForWorkspace(ctx.db, ctx.workspace.id);
     return {
       id: existing.id,
       executionTargetId,
@@ -325,6 +348,7 @@ export async function recordRunnerHeartbeat({
     operation: 'insert',
     entityRevision: 1
   });
+  if (reconnected) await enqueueRunQueueDispatchForWorkspace(ctx.db, ctx.workspace.id);
   return {
     id,
     executionTargetId,

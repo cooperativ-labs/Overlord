@@ -28,6 +28,7 @@ import {
   Play,
   Plus,
   Radio,
+  RotateCcw,
   Rows3,
   Trash2,
   X
@@ -43,6 +44,7 @@ import {
   useRemoveRunQueueEntry,
   useReorderProjectRunQueues,
   useReorderRunQueue,
+  useRetryRunQueueEntry,
   useUpdateRunQueue
 } from '../../lib/queries.ts';
 import { cn } from '../../lib/utils.ts';
@@ -58,6 +60,12 @@ import {
 import { Input } from '../ui/input.tsx';
 import { Switch } from '../ui/switch.tsx';
 
+import {
+  describeQueueEntry,
+  QUEUE_STATUS_DETAIL_CLASS,
+  QUEUE_STATUS_PILL_CLASS
+} from './queue-entry-status.ts';
+
 /** Dispatched/running entries need the forced path to leave a queue. */
 const isEntryInFlight = (entry: RunQueueEntryDto) =>
   entry.state === 'running' || entry.state === 'dispatched';
@@ -71,13 +79,18 @@ type PendingEntryMove = {
 function QueueRow({
   entry,
   projectId,
-  onRemove
+  onRemove,
+  onRetry,
+  retryPending
 }: {
   entry: RunQueueEntryDto;
   projectId: string;
   onRemove: (entry: RunQueueEntryDto) => void;
+  onRetry: (entry: RunQueueEntryDto) => void;
+  retryPending: boolean;
 }) {
   const locked = entry.state === 'running' || entry.state === 'dispatched';
+  const status = describeQueueEntry(entry);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: entry.id,
     disabled: locked
@@ -124,10 +137,27 @@ function QueueRow({
           {entry.missionTitle} · {entry.objectiveDisplayId}
           {entry.resourceKey ? ` · ${entry.resourceKey}` : ''}
         </p>
-        {entry.blockedReason ? (
-          <p className="mt-0.5 text-[11px] text-amber-700 dark:text-amber-400">
-            Held: {entry.blockedReason}
+        {status.detail ? (
+          <p className={cn('mt-0.5 text-[11px]', QUEUE_STATUS_DETAIL_CLASS[status.tone])}>
+            {status.waitingOnObjectiveDisplayId ? (
+              <>
+                Waiting for{' '}
+                <Link
+                  to="/projects/$projectId/missions/$missionId"
+                  params={{ projectId, missionId: entry.missionId }}
+                  className="font-medium underline-offset-2 hover:underline"
+                >
+                  {status.waitingOnObjectiveDisplayId}
+                </Link>{' '}
+                to finish
+              </>
+            ) : (
+              status.detail
+            )}
           </p>
+        ) : null}
+        {status.detailNote ? (
+          <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{status.detailNote}</p>
         ) : null}
         {entry.executionRequest ? (
           <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
@@ -155,15 +185,23 @@ function QueueRow({
       <span
         className={cn(
           'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium',
-          locked
-            ? 'bg-sky-500/15 text-sky-700 dark:text-sky-300'
-            : entry.state === 'blocked'
-              ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
-              : 'bg-muted text-muted-foreground'
+          QUEUE_STATUS_PILL_CLASS[status.tone]
         )}
       >
-        {entry.state === 'dispatched' ? 'In flight' : entry.state}
+        {status.label}
       </span>
+      {status.canRetry ? (
+        <Button
+          variant="ghost"
+          className="h-7 w-7 shrink-0 p-0"
+          title="Reset the attempt budget and dispatch this entry again"
+          aria-label="Retry queue entry"
+          disabled={retryPending}
+          onClick={() => onRetry(entry)}
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+        </Button>
+      ) : null}
       <Button
         variant="ghost"
         className="h-7 w-7 shrink-0 p-0 text-destructive hover:text-destructive"
@@ -204,7 +242,9 @@ function QueueSection({
   onRename,
   onDelete,
   onMoveQueue,
-  onRemoveEntry
+  onRemoveEntry,
+  onRetryEntry,
+  retryPending
 }: {
   projectId: string;
   queue: RunQueueDto;
@@ -214,6 +254,8 @@ function QueueSection({
   onDelete: (queue: RunQueueDto) => void;
   onMoveQueue: (queue: RunQueueDto, direction: -1 | 1) => void;
   onRemoveEntry: (entry: RunQueueEntryDto) => void;
+  onRetryEntry: (entry: RunQueueEntryDto) => void;
+  retryPending: boolean;
 }) {
   const update = useUpdateRunQueue(projectId);
   return (
@@ -293,7 +335,14 @@ function QueueSection({
       >
         <div className="space-y-1.5">
           {queue.entries.map(entry => (
-            <QueueRow key={entry.id} entry={entry} projectId={projectId} onRemove={onRemoveEntry} />
+            <QueueRow
+              key={entry.id}
+              entry={entry}
+              projectId={projectId}
+              onRemove={onRemoveEntry}
+              onRetry={onRetryEntry}
+              retryPending={retryPending}
+            />
           ))}
           <QueueDropZone queue={queue} />
         </div>
@@ -318,6 +367,7 @@ export function RunQueuePanel({
   const deleteQueue = useDeleteRunQueue(projectId);
   const updateQueue = useUpdateRunQueue(projectId);
   const removeEntry = useRemoveRunQueueEntry(projectId);
+  const retryEntry = useRetryRunQueueEntry(projectId);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -453,6 +503,8 @@ export function RunQueuePanel({
             }}
             onMoveQueue={reorderQueueDefinition}
             onRemoveEntry={setRemovingEntry}
+            onRetryEntry={entry => retryEntry.mutate(entry.id)}
+            retryPending={retryEntry.isPending}
           />
         ))}
       </DndContext>
@@ -464,6 +516,11 @@ export function RunQueuePanel({
       {reorderEntries.isError || moveEntry.isError ? (
         <p role="alert" className="text-xs text-destructive">
           Could not move this entry. The previous order was restored.
+        </p>
+      ) : null}
+      {retryEntry.isError ? (
+        <p role="alert" className="text-xs text-destructive">
+          Could not retry this entry. Check your project permission and retry.
         </p>
       ) : null}
       {removeEntry.isError ? (

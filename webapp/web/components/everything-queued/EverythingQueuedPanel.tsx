@@ -3,6 +3,11 @@ import { ListOrdered, Loader2 } from 'lucide-react';
 
 import { useEverythingQueued } from '../../lib/queries.ts';
 import { cn } from '../../lib/utils.ts';
+import {
+  describeQueueEntry,
+  QUEUE_STATUS_DETAIL_CLASS,
+  QUEUE_STATUS_PILL_CLASS
+} from '../run-queue/queue-entry-status.ts';
 
 /**
  * Read-only cross-project queue projection for Inbox. Queue state and ordering
@@ -61,45 +66,49 @@ export function EverythingQueuedPanel() {
               </div>
             </div>
             <ol className="space-y-1.5">
-              {queue.entries.map(entry => (
-                <li
-                  key={entry.id}
-                  className="flex min-w-0 items-center gap-2 rounded-md border border-border/60 bg-background px-2 py-2"
-                >
-                  <span className="font-mono text-[10px] text-muted-foreground">
-                    {entry.position}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <Link
-                      to="/projects/$projectId/missions/$missionId"
-                      params={{ projectId, missionId: entry.missionId }}
-                      className="block truncate text-sm font-medium hover:underline"
-                    >
-                      {entry.objectiveTitle ?? entry.objectiveDisplayId}
-                    </Link>
-                    <p className="truncate text-[11px] text-muted-foreground">
-                      {entry.missionTitle} · {entry.objectiveDisplayId}
-                    </p>
-                    {entry.blockedReason ? (
-                      <p className="mt-0.5 text-[11px] text-amber-700 dark:text-amber-400">
-                        Held: {entry.blockedReason}
-                      </p>
-                    ) : null}
-                  </div>
-                  <span
-                    className={cn(
-                      'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium',
-                      entry.state === 'running' || entry.state === 'dispatched'
-                        ? 'bg-sky-500/15 text-sky-700 dark:text-sky-300'
-                        : entry.state === 'blocked'
-                          ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
-                          : 'bg-muted text-muted-foreground'
-                    )}
+              {queue.entries.map(entry => {
+                const status = describeQueueEntry(entry);
+                return (
+                  <li
+                    key={entry.id}
+                    className="flex min-w-0 items-center gap-2 rounded-md border border-border/60 bg-background px-2 py-2"
                   >
-                    {entry.state === 'dispatched' ? 'In flight' : entry.state}
-                  </span>
-                </li>
-              ))}
+                    <span className="font-mono text-[10px] text-muted-foreground">
+                      {entry.position}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <Link
+                        to="/projects/$projectId/missions/$missionId"
+                        params={{ projectId, missionId: entry.missionId }}
+                        className="block truncate text-sm font-medium hover:underline"
+                      >
+                        {entry.objectiveTitle ?? entry.objectiveDisplayId}
+                      </Link>
+                      <p className="truncate text-[11px] text-muted-foreground">
+                        {entry.missionTitle} · {entry.objectiveDisplayId}
+                      </p>
+                      {status.detail ? (
+                        <p
+                          className={cn(
+                            'mt-0.5 truncate text-[11px]',
+                            QUEUE_STATUS_DETAIL_CLASS[status.tone]
+                          )}
+                        >
+                          {status.detail}
+                        </p>
+                      ) : null}
+                    </div>
+                    <span
+                      className={cn(
+                        'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium',
+                        QUEUE_STATUS_PILL_CLASS[status.tone]
+                      )}
+                    >
+                      {status.label}
+                    </span>
+                  </li>
+                );
+              })}
             </ol>
           </article>
         ))}

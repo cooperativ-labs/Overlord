@@ -20,9 +20,12 @@ export type {
   ObjectiveLifecycleState,
   ObjectiveLifecycleView,
   ObjectiveLifecycleViolation,
+  RunQueueBlockedReason,
   RunQueueDispatchAction,
   RunQueuePlannerEntry,
-  RunQueuePlannerObjective
+  RunQueuePlannerMission,
+  RunQueuePlannerObjective,
+  RunQueueWaitingReason
 } from './objective-manager/index.js';
 export {
   ACTIVE_OBJECTIVE_STATES,

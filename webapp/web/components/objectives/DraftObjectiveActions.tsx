@@ -1,4 +1,4 @@
-import { Check, Copy, ListOrdered, Loader2, MoreVertical, Trash2 } from 'lucide-react';
+import { Check, Copy, ListOrdered, Loader2, MoreVertical, RotateCcw, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 import type { ObjectiveDto, ObjectiveState, RunQueueDto } from '../../../shared/contract.ts';
@@ -9,9 +9,11 @@ import {
   useMoveRunQueueEntry,
   useProjectRunQueues,
   useRemoveRunQueueEntry,
+  useRetryRunQueueEntry,
   useUpdateObjective
 } from '../../lib/queries.ts';
 import { cn } from '../../lib/utils.ts';
+import { describeQueueEntry, QUEUE_STATUS_DETAIL_CLASS } from '../run-queue/queue-entry-status.ts';
 import { OBJECTIVE_STATE_LABEL } from '../ui.tsx';
 import { Button } from '../ui.tsx';
 import {
@@ -62,6 +64,7 @@ export function DraftObjectiveActions({ objective }: DraftObjectiveActionsProps)
   const enqueue = useEnqueueRunQueueEntry(objective.projectId);
   const dequeue = useRemoveRunQueueEntry(objective.projectId);
   const move = useMoveRunQueueEntry(objective.projectId);
+  const retry = useRetryRunQueueEntry(objective.projectId);
   const { copied, copy } = useCopyToClipboard();
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
   /** True when the pending removal must also unstick an in-flight entry. */
@@ -70,7 +73,7 @@ export function DraftObjectiveActions({ objective }: DraftObjectiveActionsProps)
 
   const canToggleAutoAdvance = AUTO_ADVANCE_TOGGLE_STATES.includes(objective.state);
   const queueEntry = objective.queueEntry ?? null;
-  const queuePending = enqueue.isPending || dequeue.isPending || move.isPending;
+  const queuePending = enqueue.isPending || dequeue.isPending || move.isPending || retry.isPending;
   const allQueues = queues.data?.queues ?? [];
   // The objective's own mission queue is the default destination. When the
   // mission has no queue yet it is offered as MISSION_QUEUE_OPTION and created
@@ -84,6 +87,7 @@ export function DraftObjectiveActions({ objective }: DraftObjectiveActionsProps)
   const selection = selectedQueueId ?? queueEntry?.queueId ?? defaultSelection;
   const selectedQueue = allQueues.find(queue => queue.id === selection) ?? null;
   const predecessor = selectedQueue?.entries.at(-1) ?? null;
+  const queueStatus = queueEntry ? describeQueueEntry(queueEntry) : null;
   const queueRank = queueEntry
     ? (queues.data?.queues
         .find(queue => queue.id === queueEntry.queueId)
@@ -144,10 +148,18 @@ export function DraftObjectiveActions({ objective }: DraftObjectiveActionsProps)
           <PopoverTrigger
             className={cn(
               'inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs transition-colors hover:bg-accent',
-              queueEntry ? 'text-emerald-600' : 'text-muted-foreground'
+              queueStatus?.tone === 'blocked'
+                ? 'text-amber-600'
+                : queueEntry
+                  ? 'text-emerald-600'
+                  : 'text-muted-foreground'
             )}
-            aria-label={queueEntry ? 'Queued' : 'Add to Run Queue'}
-            title={queueEntry ? 'Queued' : 'Add to Run Queue'}
+            aria-label={queueStatus ? `Queued · ${queueStatus.label}` : 'Add to Run Queue'}
+            title={
+              queueStatus
+                ? `Queued · ${queueStatus.label}${queueStatus.detail ? ` — ${queueStatus.detail}` : ''}`
+                : 'Add to Run Queue'
+            }
           >
             {queuePending ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -159,7 +171,9 @@ export function DraftObjectiveActions({ objective }: DraftObjectiveActionsProps)
             {queueEntry ? (
               <div className="flex flex-col gap-2">
                 <div>
-                  <p className="text-sm font-medium">Queued · {queueEntry.queueName}</p>
+                  <p className="text-sm font-medium">
+                    {queueStatus?.label ?? 'Queued'} · {queueEntry.queueName}
+                  </p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {queueRank && queueRank > 0 ? `Position ${queueRank}` : 'Position loading…'}
                   </p>
@@ -172,12 +186,30 @@ export function DraftObjectiveActions({ objective }: DraftObjectiveActionsProps)
                       {queueEntry.precededBy.missionTitle}
                     </p>
                   ) : null}
-                  {queueEntry.blockedReason ? (
-                    <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
-                      Held: {queueEntry.blockedReason}
+                  {queueStatus?.detail ? (
+                    <p className={cn('mt-1 text-xs', QUEUE_STATUS_DETAIL_CLASS[queueStatus.tone])}>
+                      {queueStatus.detail}
                     </p>
                   ) : null}
+                  {queueStatus?.detailNote ? (
+                    <p className="mt-1 text-xs text-muted-foreground">{queueStatus.detailNote}</p>
+                  ) : null}
                 </div>
+                {queueStatus?.canRetry ? (
+                  <Button
+                    variant="secondary"
+                    className="h-8 text-xs"
+                    disabled={queuePending}
+                    onClick={() => retry.mutate(queueEntry.id)}
+                  >
+                    <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Retry
+                  </Button>
+                ) : null}
+                {retry.isError ? (
+                  <p role="alert" className="text-xs text-destructive">
+                    Could not retry this entry. Check your project permission and retry.
+                  </p>
+                ) : null}
                 {queueEntry.state === 'running' || queueEntry.state === 'dispatched' ? (
                   <>
                     <p className="text-xs text-muted-foreground">

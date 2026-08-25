@@ -18,8 +18,13 @@ import {
 import type { ClientDeviceIdentity } from './execution-targets.js';
 import { type ExecutionProviderSession, mergeProviderSessionIntoMetadata } from './latch-launch.js';
 import { LOCAL_TARGET_MUTATION_REQUESTED_SOURCE } from './local-target-mutations.ts';
+import {
+  findConflictingActiveSibling,
+  missionAllowsParallelObjectives
+} from './objective-parallelism.js';
 import { resolveLaunchSessionForExecutionTarget } from './project-execution-target.js';
 import { resolveObjectiveWorkingDirectory } from './projects.js';
+import { enqueueRunQueueDispatch } from './run-queue.js';
 import {
   LAUNCH_SESSION_METADATA_KEY,
   type LaunchSessionSnapshot,
@@ -53,36 +58,77 @@ const LAUNCH_START_TTL_MS = 10 * 60 * 1000;
  * an entry points at a request this is the only place that can observe every
  * runner terminal transition. Keeping this small reconciliation here makes the
  * request update, mission event, and actionable queue state one transaction.
+ *
+ * A request that dies before the agent attaches (`failed`, `expired`,
+ * `cleared`) is a *retryable* condition, not a human-actionable one: the entry
+ * returns to `waiting` with `waiting_reason='retry_pending'`, releases its
+ * request link, counts the attempt, and enqueues a dispatch tick. The planner
+ * only converts that into `blocked('request_failed')` once the attempt ceiling
+ * is reached. Before this, a runner that kept failing to attach parked the
+ * entry in `blocked` on the first failure and the designed three attempts never
+ * happened.
  */
 async function reconcileLinkedRunQueueEntry({
   db,
   requestId,
   state,
   now,
-  blockedReason
+  failureReason
 }: {
   db: DatabaseClient;
   requestId: string;
-  state: 'running' | 'blocked';
+  state: 'running' | 'retry';
   now: string;
-  blockedReason?: string | null;
+  failureReason?: string | null;
 }): Promise<void> {
+  if (state === 'running') {
+    await db.run(
+      `UPDATE run_queue_entries
+          SET state = 'running',
+              blocked_reason = NULL,
+              waiting_reason = NULL,
+              waiting_on_objective_id = NULL,
+              updated_at = ?,
+              revision = revision + 1
+        WHERE execution_request_id = ?
+          AND deleted_at IS NULL
+          AND state IN ('dispatched', 'running')`,
+      [now, requestId]
+    );
+    return;
+  }
+  // Read first: the dispatch tick needs the entry's project/workspace, and the
+  // UPDATE below clears the link this row is found by.
+  const linked = await db.get<{ project_id: string; workspace_id: string }>(
+    `SELECT project_id, workspace_id FROM run_queue_entries
+      WHERE execution_request_id = ?
+        AND deleted_at IS NULL
+        AND state IN ('dispatched', 'running')`,
+    [requestId]
+  );
+  if (!linked) return;
   await db.run(
     `UPDATE run_queue_entries
-        SET state = ?,
+        SET state = 'waiting',
+            waiting_reason = 'retry_pending',
+            waiting_on_objective_id = NULL,
             blocked_reason = ?,
+            execution_request_id = NULL,
+            attempt_count = attempt_count + 1,
             updated_at = ?,
             revision = revision + 1
       WHERE execution_request_id = ?
         AND deleted_at IS NULL
         AND state IN ('dispatched', 'running')`,
     [
-      state,
-      state === 'blocked' ? (blockedReason?.slice(0, 400) ?? 'Execution request failed.') : null,
+      `request_failed: ${(failureReason ?? 'Execution request failed.').slice(0, 380)}`,
       now,
       requestId
     ]
   );
+  // Without this the retry waited for the 60 s sweep, which made a transient
+  // runner failure look like a minute-long stall.
+  await enqueueRunQueueDispatch(db, linked.project_id, linked.workspace_id);
 }
 
 export type ExecutionRequestSummary = {
@@ -464,6 +510,29 @@ export async function createExecutionRequest({
       'objective_not_launchable',
       409
     );
+  }
+
+  // The Run Queue dispatcher plans from a snapshot, so two queues holding the
+  // same serial mission can both decide to dispatch before either write lands.
+  // The planner's per-tick claims close that inside one tick; this closes it
+  // across concurrent ticks, and makes the contract's "at most one dispatched
+  // entry per serial mission" a database-enforced guarantee rather than a
+  // planner convention. The dispatcher maps this to a retryable wait, so the
+  // loser simply goes again once the sibling delivers.
+  if (requestedSource === 'run_queue') {
+    const conflicting = await findConflictingActiveSibling({
+      ctx,
+      missionId: mission.id,
+      objectiveId: objective.id,
+      allowParallelObjectives: await missionAllowsParallelObjectives({ ctx, missionId: mission.id })
+    });
+    if (conflicting) {
+      throw new ServiceError(
+        `Mission already has an active objective: ${conflicting.id}`,
+        'objective_sibling_active',
+        409
+      );
+    }
   }
 
   if (idempotencyKey) {
@@ -1007,9 +1076,9 @@ export async function markExecutionFailed({
     await reconcileLinkedRunQueueEntry({
       db: txCtx.db,
       requestId,
-      state: 'blocked',
+      state: 'retry',
       now,
-      blockedReason: error
+      failureReason: error
     });
     return await getExecutionRequest({ ctx: txCtx, id: requestId });
   });
@@ -1089,9 +1158,9 @@ export async function clearExecutionRequests({
       await reconcileLinkedRunQueueEntry({
         db: txCtx.db,
         requestId: row.id,
-        state: 'blocked',
+        state: 'retry',
         now,
-        blockedReason: 'Execution request cleared before the agent attached.'
+        failureReason: 'Execution request cleared before the agent attached.'
       });
     }
     return { cleared: rows.length };
@@ -1175,9 +1244,9 @@ export async function expireStaleExecutionRequests({
       await reconcileLinkedRunQueueEntry({
         db: txCtx.db,
         requestId: row.id,
-        state: 'blocked',
+        state: 'retry',
         now,
-        blockedReason: message
+        failureReason: message
       });
     }
 

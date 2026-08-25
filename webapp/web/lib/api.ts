@@ -507,6 +507,9 @@ export const api = {
     entryId: string,
     body: { queueId?: string; afterEntryId?: string; position?: number }
   ) => request<RunQueueEntryDto>('PATCH', `/api/run-queues/entries/${entryId}`, body),
+  /** Clear a held entry's hold and attempt budget so the dispatcher tries again. */
+  retryRunQueueEntry: (entryId: string) =>
+    request<RunQueueEntryDto>('PATCH', `/api/run-queues/entries/${entryId}`, { retry: true }),
   deleteRunQueueEntry: (entryId: string, body: { force?: boolean } = {}) =>
     request<{
       removed: boolean;

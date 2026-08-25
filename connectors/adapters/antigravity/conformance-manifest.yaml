@@ -1,4 +1,4 @@
-contractVersion: "117"
+contractVersion: "122"
 componentType: connector
 componentKey: antigravity
 label: "Antigravity Connector"

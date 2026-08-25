@@ -4,7 +4,7 @@
 # IMPORTANT: Update this file and CONTRACT.md together when adding components or surfaces.
 # Increment contractVersion when any stable interface changes.
 
-contractVersion: '121'
+contractVersion: '122'
 
 components:
   protocol:
@@ -178,6 +178,8 @@ components:
     owns:
       - 'URL paths and HTTP method contracts'
       - 'project Run Queue REST family: project-scoped reads and queue/entry create, update, pause, move, reorder, and delete operations; queue-definition order is rewritten only through PATCH /api/projects/:id/run-queues/order with project:update, while entry order uses execution_request:create; queue entries are target-neutral, their existing read projection additively includes safe execution-request status/error/claim/target/timestamp diagnostics plus bounded impossible-pair codes, ObjectiveDto.queueEntry projects live membership, and compatibility autoAdvance is derived from membership'
+      - 'Run Queue entry holds separate a self-clearing waiting_reason (mission_busy, resource_disconnected, retry_pending, plus waiting_on_objective_id) from a human-actionable blocked_reason (no_instruction, no_agent, dispatch_failed, request_failed); both are projected additively on RunQueueEntryDto and ObjectiveDto.queueEntry alongside read-only waitingOnObjectiveDisplayId and attemptCount, the dispatcher re-evaluates waiting and blocked entries every tick, honours missions.allow_parallel_objectives, and dispatches a serial mission from at most one queue per project at a time'
+      - 'Run Queue retry: a failed dispatch or a failed/expired/cleared execution request returns the entry to waiting with waiting_reason retry_pending and counts the attempt, blocking only at the dispatch ceiling; PATCH /api/run-queues/entries/:entryId accepts an additive { retry?: boolean } (execution_request:create) that resets attempt_count and the hold and is refused for a dispatched/running entry, mirrored by protocol retry-queue-entry and overlord_manage_run_queue retry_entry'
       - 'project resource-source launch defaults via PATCH /api/projects/:id/resources/:resourceId/sources/:sourceId, preserving the materialization fields in descriptor_json while replacing per-agent launchDefaults'
       - 'request/response DTO shapes (camelCase, derived from logical schema)'
       - 'read-only effective launch-config projection: GET /api/objectives/:id/effective-launch-config accepts agent and optional executionTargetId, derives the target from the objective project when omitted, authorizes objective:read in the objective workspace, and returns the shared resolver’s normalized config, source (objective|resource_source|user_target|workspace|none), and resolved target id; clients never duplicate source precedence'

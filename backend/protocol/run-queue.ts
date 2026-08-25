@@ -16,6 +16,7 @@ import {
   removeRunQueueEntry,
   reorderProjectRunQueues,
   reorderRunQueue,
+  retryRunQueueEntry,
   updateRunQueue
 } from '../../packages/core/service/run-queue.ts';
 import { ApiError } from '../errors.ts';
@@ -362,6 +363,61 @@ async function dequeueObjectiveFromProtocol(
   return { removed: true, objectiveId: objective.id };
 }
 
+/**
+ * Clear a held entry's hold and attempt budget so the dispatcher tries it
+ * again. Addressed by `--objective-id` (the id a user actually has in hand) or
+ * by `--entry`, which also accepts an entry UUID.
+ */
+async function retryRunQueueEntryFromProtocol(
+  ctx: ServiceContext,
+  body: ProtocolRequestBody
+): Promise<unknown> {
+  const entryRef = strFlag(body, '--entry');
+  const objectiveRef = objectiveRefFlag(body);
+  if (!entryRef && !objectiveRef) {
+    throw new ApiError(400, 'Missing required flag: --objective-id or --entry');
+  }
+  // `--entry` on its own already names a project: an entry id (or the objective
+  // id behind it) is unique, and making the caller repeat `--project-id` for a
+  // recovery action they reached from a queue listing would be busywork. An
+  // objective *display* id still needs a scope flag, since resolving it is
+  // workspace-and-mission work rather than a lookup.
+  const explicitScope =
+    Boolean(objectiveRef) ||
+    Boolean(strFlag(body, '--project-id') ?? strFlag(body, '--mission-id'));
+  let projectId: string;
+  if (explicitScope) {
+    projectId = await runQueueProjectIdFromProtocol(ctx, body);
+  } else {
+    const row = await ctx.db.get<{ project_id: string }>(
+      `SELECT project_id FROM run_queue_entries
+        WHERE workspace_id = ? AND deleted_at IS NULL AND (id = ? OR objective_id = ?)`,
+      [ctx.workspace.id, entryRef!, entryRef!]
+    );
+    if (!row) {
+      throw new ApiError(
+        404,
+        `Run Queue entry not found: ${entryRef!}. Pass --project-id when addressing it by display id.`
+      );
+    }
+    projectId = row.project_id;
+  }
+  const projection = await listProjectRunQueues(ctx.db, projectId);
+  const entries = projection.queues.flatMap(queue => queue.entries) as QueueEntryProjection[];
+  const objective = objectiveRef ? await resolveObjectiveRef({ ctx, ref: objectiveRef }) : null;
+  const entry = entries.find(candidate =>
+    entryRef
+      ? candidate.id === entryRef ||
+        candidate.objectiveId === entryRef ||
+        candidate.objectiveDisplayId === entryRef
+      : candidate.objectiveId === objective!.id
+  );
+  if (!entry) {
+    throw new ApiError(404, `Run Queue entry not found: ${entryRef ?? objectiveRef!}`);
+  }
+  return retryRunQueueEntry(ctx.db, entry.id);
+}
+
 type Handler = (ctx: ServiceContext, body: ProtocolRequestBody) => unknown;
 
 /** Run Queue subcommands, spread into `handlers` in backend/protocol.ts. */
@@ -369,6 +425,8 @@ export const runQueueHandlers: Record<string, Handler> = {
   'queue-objective': (ctx, body) => queueObjectiveFromProtocol(ctx, body),
 
   'dequeue-objective': (ctx, body) => dequeueObjectiveFromProtocol(ctx, body),
+
+  'retry-queue-entry': (ctx, body) => retryRunQueueEntryFromProtocol(ctx, body),
 
   'reorder-run-queue': (ctx, body) => reorderRunQueueFromProtocol(ctx, body),
 
@@ -401,6 +459,7 @@ export const runQueueHandlers: Record<string, Handler> = {
 export const runQueueSubcommandPermissions: Record<string, Permission | null> = {
   'queue-objective': PERMISSIONS.EXECUTION_REQUEST_CREATE,
   'dequeue-objective': PERMISSIONS.EXECUTION_REQUEST_CREATE,
+  'retry-queue-entry': PERMISSIONS.EXECUTION_REQUEST_CREATE,
   'reorder-run-queue': PERMISSIONS.EXECUTION_REQUEST_CREATE,
   // Queue definitions are project configuration, matching the REST mapping in
   // backend/run-queue.ts. `project:update` is not in MISSION_LIFECYCLE_GRANTS,

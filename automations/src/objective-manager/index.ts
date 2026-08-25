@@ -10,9 +10,12 @@ import {
   type ObjectiveLifecycleViolation,
   planEnsureDraftSlot,
   planRunQueueDispatch,
+  type RunQueueBlockedReason,
   type RunQueueDispatchAction,
   type RunQueuePlannerEntry,
-  type RunQueuePlannerObjective
+  type RunQueuePlannerMission,
+  type RunQueuePlannerObjective,
+  type RunQueueWaitingReason
 } from './rules.js';
 
 export type {
@@ -23,9 +26,12 @@ export type {
   ObjectiveLifecycleState,
   ObjectiveLifecycleView,
   ObjectiveLifecycleViolation,
+  RunQueueBlockedReason,
   RunQueueDispatchAction,
   RunQueuePlannerEntry,
-  RunQueuePlannerObjective
+  RunQueuePlannerMission,
+  RunQueuePlannerObjective,
+  RunQueueWaitingReason
 } from './rules.js';
 export {
   ACTIVE_OBJECTIVE_STATES,

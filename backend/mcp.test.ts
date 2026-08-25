@@ -409,6 +409,10 @@ test('Run Queue MCP tools map arguments to Protocol flags and retain the compact
             missionDisplayId: 'coo:802',
             missionTitle: 'Manage queues',
             blockedReason: null,
+            waitingReason: 'mission_busy',
+            waitingOnObjectiveId: 'sibling-id',
+            waitingOnObjectiveDisplayId: 'coo:802.qe54',
+            attemptCount: 0,
             assignedAgent: null,
             resourceKey: null,
             enqueuedAt: '2026-08-21T00:00:00.000Z',
@@ -435,7 +439,9 @@ test('Run Queue MCP tools map arguments to Protocol flags and retain the compact
             objectiveDisplayId: 'coo:802.rjay',
             objectiveTitle: 'Queue support',
             missionTitle: 'Manage queues',
-            blockedReason: null
+            blockedReason: null,
+            waitingReason: 'mission_busy',
+            waitingOnObjectiveDisplayId: 'coo:802.qe54'
           }
         ]
       }
@@ -568,6 +574,18 @@ test('overlord_manage_run_queue rejects missing arguments before calling Protoco
       }),
     /action 'reorder_queues' requires orderedQueues as an array of strings/
   );
+  // retry_entry is an entry-level recovery action on the same tool: it needs an
+  // address, and either an entry ref or an objective ref is enough.
+  assert.throws(
+    () => runQueueMcpProtocolCall('overlord_manage_run_queue', { action: 'retry_entry' }),
+    /action 'retry_entry' requires entry or objectiveId/
+  );
+  const retried = runQueueMcpProtocolCall('overlord_manage_run_queue', {
+    action: 'retry_entry',
+    objectiveId: 'coo:854.ycde'
+  });
+  assert.equal(retried.subcommand, 'retry-queue-entry');
+  assert.equal(retried.body.flags?.['--objective-id'], 'coo:854.ycde');
   assert.throws(
     () => runQueueMcpProtocolCall('overlord_manage_run_queue', { action: 'archive' }),
     /Unsupported Run Queue action: archive/
@@ -583,8 +601,10 @@ test('overlord_manage_run_queue is catalogued as an administrative write tool', 
   assert.deepEqual(manage.inputSchema.required, ['action']);
   assert.deepEqual(Object.keys(manage.inputSchema.properties ?? {}).sort(), [
     'action',
+    'entry',
     'moveEntriesTo',
     'name',
+    'objectiveId',
     'orderedQueues',
     'paused',
     'projectId',

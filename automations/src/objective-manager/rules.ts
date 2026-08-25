@@ -119,22 +119,49 @@ export type RunQueuePlannerEntry = {
   position: number;
   state: 'waiting' | 'blocked' | 'dispatched' | 'running';
   attemptCount: number;
+  /**
+   * What consumed the previous attempts, so the block raised at the ceiling
+   * names the real cause: a dispatch that threw before a request existed
+   * (`dispatch_failed`) or a request that died before the agent attached
+   * (`request_failed`). Defaults to `dispatch_failed`.
+   */
+  failureKind?: 'dispatch_failed' | 'request_failed';
 };
 export type RunQueuePlannerObjective = {
   id: string;
+  missionId: string;
   state: ObjectiveLifecycleState | string;
   instructionText: string;
-  missionBusy?: boolean;
+  assignedAgent?: string | null;
   resourceConnected?: boolean;
   deleted?: boolean;
 };
+export type RunQueuePlannerMission = {
+  /** `missions.allow_parallel_objectives`. */
+  allowParallelObjectives: boolean;
+  /**
+   * Objectives holding this mission's sibling lock at snapshot time, by the
+   * same predicate the direct-launch path uses. A candidate is "mission busy"
+   * when a lock holder other than itself is present — an objective never waits
+   * on its own launch.
+   */
+  busyObjectiveIds?: readonly string[];
+};
+export type RunQueueWaitingReason = 'mission_busy' | 'resource_disconnected' | 'retry_pending';
+export type RunQueueBlockedReason =
+  | 'no_instruction'
+  | 'no_agent'
+  | 'dispatch_failed'
+  | 'request_failed';
 export type RunQueueDispatchAction =
   | { action: 'drop'; entryId: string; reason: 'objective_gone' }
   | {
-      action: 'hold';
+      action: 'wait';
       entryId: string;
-      reason: 'no_instruction' | 'mission_busy' | 'resource_disconnected' | 'dispatch_failed';
+      reason: RunQueueWaitingReason;
+      waitingOnObjectiveId?: string;
     }
+  | { action: 'block'; entryId: string; reason: RunQueueBlockedReason }
   | { action: 'mark_running'; entryId: string }
   | {
       action: 'dispatch';
@@ -144,48 +171,96 @@ export type RunQueueDispatchAction =
       idempotencyKey: string;
     };
 
-/** Pure, target-neutral planner. Held entries remain visible and do not block later work. */
+/**
+ * Pure, target-neutral planner.
+ *
+ * Two rules carry the weight here:
+ *
+ * 1. **Every non-in-flight entry is re-evaluated, `blocked` included.** `wait`
+ *    is a transient condition that clears on its own (a sibling finishing, a
+ *    device reconnecting); `block` needs a human (no agent, blank instruction,
+ *    attempts exhausted). Neither is terminal for the planner: a blocked entry
+ *    whose cause is gone is simply dispatched on the next tick, and one whose
+ *    cause remains is re-held with the same reason. Nothing but a human used to
+ *    release a hold, which turned "your sibling is still running" into a
+ *    permanent park.
+ * 2. **A serial mission is claimed at most once per tick.** The caller's busy
+ *    snapshot is taken before any action is applied, so without claims two
+ *    queues sharing one `allowParallelObjectives = false` mission would both see
+ *    it idle and both dispatch. The lower-positioned queue wins the mission and
+ *    the other queue's head waits on it, naming the objective it is queued
+ *    behind. Parallel missions are never claimed and flow independently.
+ *
+ * Held entries stay visible and do not block later work in their own queue.
+ */
 export function planRunQueueDispatch(input: {
-  queues: readonly { id: string; paused: boolean }[];
+  queues: readonly { id: string; paused: boolean; position?: number }[];
   entries: readonly RunQueuePlannerEntry[];
   objectives: Readonly<Record<string, RunQueuePlannerObjective | undefined>>;
+  missions?: Readonly<Record<string, RunQueuePlannerMission | undefined>>;
   maxDispatchAttempts?: number;
 }): RunQueueDispatchAction[] {
   const actions: RunQueueDispatchAction[] = [];
   const maxAttempts = input.maxDispatchAttempts ?? 3;
-  for (const queue of input.queues) {
+  /** Serial missions already spoken for this tick, mapped to the winning objective. */
+  const claimedMissions = new Map<string, string>();
+  const orderedQueues = [...input.queues].sort(
+    (a, b) => (a.position ?? 0) - (b.position ?? 0) || a.id.localeCompare(b.id)
+  );
+  for (const queue of orderedQueues) {
     if (queue.paused) continue;
     const entries = input.entries.filter(entry => entry.queueId === queue.id);
     if (entries.some(entry => entry.state === 'dispatched' || entry.state === 'running')) continue;
     for (const entry of entries
-      // A blocked entry is a terminal/actionable hold, not an implicit retry.
-      // Queue mutation is the retry boundary: it resets the entry to waiting
-      // and yields a new attempt-scoped idempotency key below.
-      .filter(entry => entry.state === 'waiting')
+      .filter(entry => entry.state === 'waiting' || entry.state === 'blocked')
       .sort((a, b) => a.position - b.position || a.id.localeCompare(b.id))) {
       const objective = input.objectives[entry.objectiveId];
       if (!objective || objective.deleted || objective.state === 'complete') {
         actions.push({ action: 'drop', entryId: entry.id, reason: 'objective_gone' });
         continue;
       }
-      if (!objective.instructionText.trim()) {
-        actions.push({ action: 'hold', entryId: entry.id, reason: 'no_instruction' });
-        continue;
-      }
+      // Already running — by a direct Run, or by this dispatcher on an earlier
+      // tick. Reflect that and stop; none of the launch preconditions below
+      // apply to work that has already started.
       if (objective.state === 'executing' || objective.state === 'pending_delivery') {
         actions.push({ action: 'mark_running', entryId: entry.id });
         break;
       }
-      if (objective.missionBusy) {
-        actions.push({ action: 'hold', entryId: entry.id, reason: 'mission_busy' });
+      if (!objective.instructionText.trim()) {
+        actions.push({ action: 'block', entryId: entry.id, reason: 'no_instruction' });
+        continue;
+      }
+      // `undefined` means the caller did not supply the field; only an
+      // explicitly blank/null agent is a block.
+      if (objective.assignedAgent !== undefined && !objective.assignedAgent?.trim()) {
+        actions.push({ action: 'block', entryId: entry.id, reason: 'no_agent' });
+        continue;
+      }
+      const mission = input.missions?.[objective.missionId];
+      const allowParallel = mission?.allowParallelObjectives === true;
+      const blockingSibling = allowParallel
+        ? undefined
+        : (claimedMissions.get(objective.missionId) ??
+          mission?.busyObjectiveIds?.find(id => id !== objective.id));
+      if (blockingSibling) {
+        actions.push({
+          action: 'wait',
+          entryId: entry.id,
+          reason: 'mission_busy',
+          waitingOnObjectiveId: blockingSibling
+        });
         continue;
       }
       if (objective.resourceConnected === false) {
-        actions.push({ action: 'hold', entryId: entry.id, reason: 'resource_disconnected' });
+        actions.push({ action: 'wait', entryId: entry.id, reason: 'resource_disconnected' });
         continue;
       }
       if (entry.attemptCount >= maxAttempts) {
-        actions.push({ action: 'hold', entryId: entry.id, reason: 'dispatch_failed' });
+        actions.push({
+          action: 'block',
+          entryId: entry.id,
+          reason: entry.failureKind ?? 'dispatch_failed'
+        });
         continue;
       }
       actions.push({
@@ -195,6 +270,7 @@ export function planRunQueueDispatch(input: {
         promoteFutureToDraft: objective.state === 'future',
         idempotencyKey: `run_queue:${entry.id}:attempt:${entry.attemptCount + 1}`
       });
+      if (!allowParallel) claimedMissions.set(objective.missionId, objective.id);
       break;
     }
   }

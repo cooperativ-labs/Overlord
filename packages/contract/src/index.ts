@@ -764,6 +764,13 @@ export interface ObjectiveDto {
 }
 
 export type RunQueueEntryState = 'waiting' | 'blocked' | 'dispatched' | 'running';
+/**
+ * Why a `waiting` entry is not eligible right now. All three clear on their own
+ * and are re-evaluated by the dispatcher every tick — unlike `blockedReason`,
+ * which names something a human must fix. `null` on a `waiting` entry means it
+ * is simply next in line.
+ */
+export type RunQueueWaitingReason = 'mission_busy' | 'resource_disconnected' | 'retry_pending';
 export interface ObjectiveRunQueueEntryDto {
   id: string;
   queueId: string;
@@ -771,6 +778,14 @@ export interface ObjectiveRunQueueEntryDto {
   position: number;
   state: RunQueueEntryState;
   blockedReason: string | null;
+  /** Set only while `state === 'waiting'`; see {@link RunQueueWaitingReason}. */
+  waitingReason?: RunQueueWaitingReason | null;
+  /** Objective this entry is queued behind when `waitingReason === 'mission_busy'`. */
+  waitingOnObjectiveId?: string | null;
+  /** Display id of {@link waitingOnObjectiveId}, for UI copy that names the sibling. */
+  waitingOnObjectiveDisplayId?: string | null;
+  /** Dispatch attempts already spent on this entry; the ceiling is 3. */
+  attemptCount?: number;
   precededBy: {
     objectiveDisplayId: string;
     objectiveTitle: string | null;
@@ -783,6 +798,14 @@ export interface RunQueueEntryDto {
   position: number;
   state: RunQueueEntryState;
   blockedReason: string | null;
+  /** Set only while `state === 'waiting'`; see {@link RunQueueWaitingReason}. */
+  waitingReason?: RunQueueWaitingReason | null;
+  /** Objective this entry is queued behind when `waitingReason === 'mission_busy'`. */
+  waitingOnObjectiveId?: string | null;
+  /** Display id of {@link waitingOnObjectiveId}, for UI copy that names the sibling. */
+  waitingOnObjectiveDisplayId?: string | null;
+  /** Dispatch attempts already spent on this entry; the ceiling is 3. */
+  attemptCount?: number;
   objectiveId: string;
   objectiveDisplayId: string;
   objectiveTitle: string | null;

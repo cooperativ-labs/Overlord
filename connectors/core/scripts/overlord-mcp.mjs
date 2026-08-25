@@ -478,14 +478,14 @@ const tools = [
     name: 'overlord_manage_run_queue',
     title: 'Manage Run Queues',
     description:
-      "Use this only when the user explicitly asks to create, rename, pause, resume, delete, or reorder the project's Run Queue definitions. These are administrative project-configuration actions and require a full-scope token; adding, moving, or removing objectives inside a queue uses overlord_queue_objective and overlord_reorder_run_queue instead.",
+      "Use this only when the user explicitly asks to create, rename, pause, resume, delete, or reorder the project's Run Queue definitions, or to retry one held queue entry. The queue-definition actions are administrative project-configuration and require a full-scope token; adding, moving, or removing objectives inside a queue uses overlord_queue_objective and overlord_reorder_run_queue instead.",
     inputSchema: objectSchema(
       {
         action: {
           type: 'string',
-          enum: ['create', 'update', 'delete', 'reorder_queues'],
+          enum: ['create', 'update', 'delete', 'reorder_queues', 'retry_entry'],
           description:
-            'create a queue, update (rename/pause/resume) one, delete one, or reorder the queue definitions.'
+            'create a queue, update (rename/pause/resume) one, delete one, reorder the queue definitions, or retry_entry to clear one held entry\'s hold and attempt budget so the dispatcher tries it again.'
         },
         projectId: stringProperty(
           'Project UUID, slug, or name. Required for create and reorder_queues.'
@@ -497,6 +497,12 @@ const tools = [
         ),
         moveEntriesTo: stringProperty(
           'delete only: destination queue UUID or unambiguous name. Required when the queue still holds entries.'
+        ),
+        entry: stringProperty(
+          'retry_entry only: entry UUID, objective UUID, or objective display id. One of entry or objectiveId is required.'
+        ),
+        objectiveId: stringProperty(
+          'retry_entry only: objective UUID or display id whose live entry should be retried.'
         ),
         orderedQueues: {
           type: 'array',
@@ -953,6 +959,19 @@ async function callOverlordTool(name, args) {
       });
     }
 
+    if (action === 'retry_entry') {
+      const entry = optionalString(args, 'entry');
+      const objectiveRef = optionalString(args, 'objectiveId');
+      if (!entry && !objectiveRef) {
+        throw new Error("action 'retry_entry' requires entry or objectiveId");
+      }
+      return runProtocol('retry-queue-entry', {
+        ...(entry ? { entry } : {}),
+        ...(objectiveRef ? { 'objective-id': objectiveRef } : {}),
+        ...(projectRef ? { 'project-id': projectRef } : {})
+      });
+    }
+
     if (action === 'reorder_queues') {
       if (!projectRef) throw new Error("action 'reorder_queues' requires projectId");
       if (
@@ -1091,7 +1110,7 @@ process.stdin.on('data', async chunk => {
         result: {
           protocolVersion: PROTOCOL_VERSION,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.36' }
+          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.37' }
         }
       });
       continue;

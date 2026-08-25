@@ -459,21 +459,33 @@ describe('objective lifecycle rules', () => {
       objectives: {
         'held-objective': {
           id: 'held-objective',
+          missionId: 'mission-held',
           state: 'draft',
           instructionText: 'held',
           resourceConnected: false
         },
-        'next-objective': { id: 'next-objective', state: 'draft', instructionText: 'next' },
+        'next-objective': {
+          id: 'next-objective',
+          missionId: 'mission-next',
+          state: 'draft',
+          instructionText: 'next'
+        },
         'future-objective': {
           id: 'future-objective',
+          missionId: 'mission-future',
           state: 'future',
           instructionText: 'parallel'
         },
-        'paused-objective': { id: 'paused-objective', state: 'draft', instructionText: 'paused' }
+        'paused-objective': {
+          id: 'paused-objective',
+          missionId: 'mission-paused',
+          state: 'draft',
+          instructionText: 'paused'
+        }
       }
     });
     assert.deepEqual(actions, [
-      { action: 'hold', entryId: 'held', reason: 'resource_disconnected' },
+      { action: 'wait', entryId: 'held', reason: 'resource_disconnected' },
       {
         action: 'dispatch',
         entryId: 'next',
@@ -491,7 +503,7 @@ describe('objective lifecycle rules', () => {
     ]);
   });
 
-  it('does not redispatch terminally held entries and scopes retries to a fresh attempt', () => {
+  it('blocks only once attempts are exhausted and scopes retries to a fresh attempt', () => {
     const held = planRunQueueDispatch({
       queues: [{ id: 'queue', paused: false }],
       entries: [
@@ -515,13 +527,21 @@ describe('objective lifecycle rules', () => {
       objectives: {
         'failed-objective': {
           id: 'failed-objective',
+          missionId: 'mission-failed',
           state: 'launching',
           instructionText: 'failed'
         },
-        'later-objective': { id: 'later-objective', state: 'draft', instructionText: 'continue' }
-      }
+        'later-objective': {
+          id: 'later-objective',
+          missionId: 'mission-later',
+          state: 'draft',
+          instructionText: 'continue'
+        }
+      },
+      maxDispatchAttempts: 1
     });
     assert.deepEqual(held, [
+      { action: 'block', entryId: 'terminal', reason: 'dispatch_failed' },
       {
         action: 'dispatch',
         entryId: 'later',
@@ -544,7 +564,12 @@ describe('objective lifecycle rules', () => {
         }
       ],
       objectives: {
-        'failed-objective': { id: 'failed-objective', state: 'draft', instructionText: 'retry' }
+        'failed-objective': {
+          id: 'failed-objective',
+          missionId: 'mission-failed',
+          state: 'draft',
+          instructionText: 'retry'
+        }
       }
     });
     assert.deepEqual(retry, [
@@ -556,5 +581,262 @@ describe('objective lifecycle rules', () => {
         idempotencyKey: 'run_queue:terminal:attempt:2'
       }
     ]);
+  });
+  it('names the failure that spent the attempts when it blocks at the ceiling', () => {
+    // A runner that keeps dying before it attaches and a dispatch that throws
+    // before a request exists are different problems with different remedies,
+    // so the block that ends three attempts must not call them both
+    // `dispatch_failed`.
+    const blocked = planRunQueueDispatch({
+      queues: [{ id: 'queue', paused: false }],
+      entries: [
+        {
+          id: 'entry',
+          queueId: 'queue',
+          objectiveId: 'objective',
+          position: 1,
+          state: 'waiting',
+          attemptCount: 3,
+          failureKind: 'request_failed'
+        }
+      ],
+      objectives: {
+        objective: {
+          id: 'objective',
+          missionId: 'mission',
+          state: 'draft',
+          instructionText: 'retry me'
+        }
+      }
+    });
+    assert.deepEqual(blocked, [{ action: 'block', entryId: 'entry', reason: 'request_failed' }]);
+  });
+  it('waits rather than blocks while a serial mission is busy, and releases when it frees', () => {
+    const entry = {
+      id: 'entry',
+      queueId: 'queue',
+      objectiveId: 'second',
+      position: 1,
+      state: 'waiting' as const,
+      attemptCount: 0
+    };
+    const objectives = {
+      second: {
+        id: 'second',
+        missionId: 'mission',
+        state: 'draft',
+        instructionText: 'second step',
+        assignedAgent: 'claude-code'
+      }
+    };
+    const busy = planRunQueueDispatch({
+      queues: [{ id: 'queue', paused: false, position: 1 }],
+      entries: [entry],
+      objectives,
+      missions: {
+        mission: { allowParallelObjectives: false, busyObjectiveIds: ['first'] }
+      }
+    });
+    assert.deepEqual(busy, [
+      { action: 'wait', entryId: 'entry', reason: 'mission_busy', waitingOnObjectiveId: 'first' }
+    ]);
+
+    // The sibling delivered: nothing had to touch the entry for it to become
+    // eligible again — the same snapshot without a lock holder dispatches it.
+    const freed = planRunQueueDispatch({
+      queues: [{ id: 'queue', paused: false, position: 1 }],
+      entries: [entry],
+      objectives,
+      missions: { mission: { allowParallelObjectives: false, busyObjectiveIds: [] } }
+    });
+    assert.deepEqual(freed, [
+      {
+        action: 'dispatch',
+        entryId: 'entry',
+        objectiveId: 'second',
+        promoteFutureToDraft: false,
+        idempotencyKey: 'run_queue:entry:attempt:1'
+      }
+    ]);
+  });
+
+  it('dispatches a busy mission that allows parallel objectives', () => {
+    const actions = planRunQueueDispatch({
+      queues: [{ id: 'queue', paused: false, position: 1 }],
+      entries: [
+        {
+          id: 'entry',
+          queueId: 'queue',
+          objectiveId: 'second',
+          position: 1,
+          state: 'waiting',
+          attemptCount: 0
+        }
+      ],
+      objectives: {
+        second: {
+          id: 'second',
+          missionId: 'mission',
+          state: 'draft',
+          instructionText: 'second step',
+          assignedAgent: 'claude-code'
+        }
+      },
+      missions: { mission: { allowParallelObjectives: true, busyObjectiveIds: ['first'] } }
+    });
+    assert.deepEqual(actions, [
+      {
+        action: 'dispatch',
+        entryId: 'entry',
+        objectiveId: 'second',
+        promoteFutureToDraft: false,
+        idempotencyKey: 'run_queue:entry:attempt:1'
+      }
+    ]);
+  });
+
+  it('gives a serial mission to one queue per tick and lets a parallel mission flow to both', () => {
+    const twoQueues = (allowParallelObjectives: boolean) =>
+      planRunQueueDispatch({
+        // Declared out of position order: the planner must sort, not trust input order.
+        queues: [
+          { id: 'later', paused: false, position: 2000 },
+          { id: 'earlier', paused: false, position: 1000 }
+        ],
+        entries: [
+          {
+            id: 'in-later',
+            queueId: 'later',
+            objectiveId: 'objective-b',
+            position: 1,
+            state: 'waiting',
+            attemptCount: 0
+          },
+          {
+            id: 'in-earlier',
+            queueId: 'earlier',
+            objectiveId: 'objective-a',
+            position: 1,
+            state: 'waiting',
+            attemptCount: 0
+          }
+        ],
+        objectives: {
+          'objective-a': {
+            id: 'objective-a',
+            missionId: 'mission',
+            state: 'draft',
+            instructionText: 'a',
+            assignedAgent: 'claude-code'
+          },
+          'objective-b': {
+            id: 'objective-b',
+            missionId: 'mission',
+            state: 'draft',
+            instructionText: 'b',
+            assignedAgent: 'claude-code'
+          }
+        },
+        missions: { mission: { allowParallelObjectives, busyObjectiveIds: [] } }
+      });
+
+    assert.deepEqual(twoQueues(false), [
+      {
+        action: 'dispatch',
+        entryId: 'in-earlier',
+        objectiveId: 'objective-a',
+        promoteFutureToDraft: false,
+        idempotencyKey: 'run_queue:in-earlier:attempt:1'
+      },
+      {
+        action: 'wait',
+        entryId: 'in-later',
+        reason: 'mission_busy',
+        waitingOnObjectiveId: 'objective-a'
+      }
+    ]);
+    assert.equal(
+      twoQueues(true).every(action => action.action === 'dispatch'),
+      true
+    );
+  });
+
+  it('re-evaluates a blocked entry and releases it when its cause clears', () => {
+    const entries = [
+      {
+        id: 'entry',
+        queueId: 'queue',
+        objectiveId: 'objective',
+        position: 1,
+        state: 'blocked' as const,
+        attemptCount: 0
+      }
+    ];
+    const stillBlocked = planRunQueueDispatch({
+      queues: [{ id: 'queue', paused: false, position: 1 }],
+      entries,
+      objectives: {
+        objective: {
+          id: 'objective',
+          missionId: 'mission',
+          state: 'draft',
+          instructionText: 'do the thing',
+          assignedAgent: null
+        }
+      }
+    });
+    assert.deepEqual(stillBlocked, [{ action: 'block', entryId: 'entry', reason: 'no_agent' }]);
+
+    const released = planRunQueueDispatch({
+      queues: [{ id: 'queue', paused: false, position: 1 }],
+      entries,
+      objectives: {
+        objective: {
+          id: 'objective',
+          missionId: 'mission',
+          state: 'draft',
+          instructionText: 'do the thing',
+          assignedAgent: 'claude-code'
+        }
+      }
+    });
+    assert.deepEqual(released, [
+      {
+        action: 'dispatch',
+        entryId: 'entry',
+        objectiveId: 'objective',
+        promoteFutureToDraft: false,
+        idempotencyKey: 'run_queue:entry:attempt:1'
+      }
+    ]);
+  });
+
+  it('drops an entry for a gone objective in any non-in-flight state', () => {
+    for (const state of ['waiting', 'blocked'] as const) {
+      const actions = planRunQueueDispatch({
+        queues: [{ id: 'queue', paused: false, position: 1 }],
+        entries: [
+          {
+            id: `entry-${state}`,
+            queueId: 'queue',
+            objectiveId: 'objective',
+            position: 1,
+            state,
+            attemptCount: 0
+          }
+        ],
+        objectives: {
+          objective: {
+            id: 'objective',
+            missionId: 'mission',
+            state: 'complete',
+            instructionText: 'done'
+          }
+        }
+      });
+      assert.deepEqual(actions, [
+        { action: 'drop', entryId: `entry-${state}`, reason: 'objective_gone' }
+      ]);
+    }
   });
 });

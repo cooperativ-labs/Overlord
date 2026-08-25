@@ -23,7 +23,11 @@ export function compactRunQueueResponse(value: unknown): unknown {
                 objectiveDisplayId: entry.objectiveDisplayId,
                 objectiveTitle: entry.objectiveTitle,
                 missionTitle: entry.missionTitle,
-                blockedReason: entry.blockedReason
+                blockedReason: entry.blockedReason,
+                // A `waiting` hold clears by itself; without these an agent
+                // reads "not dispatched" and cannot tell why or for how long.
+                waitingReason: entry.waitingReason,
+                waitingOnObjectiveDisplayId: entry.waitingOnObjectiveDisplayId
               };
             })
           : []
