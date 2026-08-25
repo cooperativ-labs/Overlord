@@ -83,7 +83,7 @@ function missionWorkflowKeys(change: EntityChangeDto): QueryKey[] | null {
     // Objective state, session, and execution-request rows all flow through here,
     // and each of them can change what the Feed page activity feed shows.
     keys.activityFeed,
-    // Status / provenance changes also reshape the Inbox recent + agent-Next list.
+    // Status, provenance, and due-date changes all reshape the Inbox triage list.
     keys.inboxMissions
   ];
 

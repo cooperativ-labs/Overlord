@@ -2244,15 +2244,17 @@ export interface MyMissionsResponse {
   missions: MyMissionDto[];
 }
 
-// ---- Inbox missions triage (coo:826 / coo:844, contract v120) -------------
+// ---- Inbox missions triage (coo:826 / coo:844 / coo:858, contract v123) ---
 //
 // Bounded cross-workspace projection for the Inbox page: agent-authored
-// missions still in status type `next` only. Human-created missions never
-// appear here; unallocated captures use profile-owned `/api/inbox`. Same
-// membership / mission:read rule as My Missions and the activity feed.
+// missions still in status type `next`, unioned with missions of any creator
+// that are due today or tomorrow. Human-created missions without an imminent
+// due date never appear here; unallocated captures use profile-owned
+// `/api/inbox`. Same membership / mission:read rule as My Missions and the
+// activity feed.
 
 /** Why a mission appears in `GET /api/inbox/missions`. */
-export type InboxMissionReason = 'recent' | 'agent_next';
+export type InboxMissionReason = 'recent' | 'agent_next' | 'due_soon';
 
 /**
  * A mission card on the Inbox page. Extends `MissionDto` with the cross-project
@@ -2261,7 +2263,11 @@ export type InboxMissionReason = 'recent' | 'agent_next';
 export interface InboxMissionDto extends MissionDto {
   projectName: string;
   projectColor: string | null;
-  /** One or both of `recent` (created within the rolling window) and `agent_next`. */
+  /**
+   * Any of `agent_next` (agent-authored and still in status type `next`),
+   * `due_soon` (`dueDatetime` falls on today or tomorrow in UTC), and the
+   * label-only `recent` (created within the rolling window).
+   */
   reasons: InboxMissionReason[];
 }
 

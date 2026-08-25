@@ -6569,6 +6569,24 @@ export async function listWorkspaceMyMissions(): Promise<MyMissionsResponse> {
 /** Rolling window for "recently created" on the Inbox missions list (coo:826). */
 const INBOX_MISSION_RECENT_MS = 7 * 24 * 60 * 60 * 1000;
 const INBOX_MISSION_AGENT_NEXT_LIMIT = 60;
+/** Cap on the due-today/tomorrow slice of the Inbox missions list (coo:858). */
+const INBOX_MISSION_DUE_SOON_LIMIT = 60;
+
+/**
+ * UTC day-boundary window covering today and tomorrow, as ISO timestamps for a
+ * half-open `due_datetime >= start AND due_datetime < end` comparison. Due
+ * dates picked in the UI are anchored at 12:00 UTC (see
+ * `webapp/web/lib/due-datetime.ts`), so UTC day boundaries select the calendar
+ * date the operator chose without needing a per-caller timezone.
+ */
+function inboxDueSoonWindow(now: Date): { start: string; end: string } {
+  const startOfToday = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const dayMs = 24 * 60 * 60 * 1000;
+  return {
+    start: new Date(startOfToday).toISOString(),
+    end: new Date(startOfToday + 2 * dayMs).toISOString()
+  };
+}
 
 interface InboxMissionRow extends MissionRow {
   project_name: string;
@@ -6633,10 +6651,12 @@ function toInboxMissionDto(
 }
 
 /**
- * GET /api/inbox/missions — agent-authored missions in status type `next`
- * across every workspace the caller may `mission:read` in the active
- * organization. Human-created missions never appear here; unallocated captures
- * live on profile-owned `/api/inbox`. Sorted newest-first; capped. Rows
+ * GET /api/inbox/missions — agent-authored missions in status type `next`,
+ * unioned with missions of any creator that are due today or tomorrow, across
+ * every workspace the caller may `mission:read` in the active organization.
+ * Other human-created missions never appear here; unallocated captures live on
+ * profile-owned `/api/inbox`. Due-soon rows lead (soonest first), then
+ * agent-Next rows newest-first; each slice is capped independently. Rows
  * created within the rolling recent window carry a `recent` reason for UI
  * labeling only.
  */
@@ -6659,9 +6679,24 @@ export async function listInboxMissions(): Promise<InboxMissionsResponse> {
   }
 
   const workspacePlaceholders = readableWorkspaceIds.map(() => '?').join(', ');
-  const recentCutoff = new Date(Date.now() - INBOX_MISSION_RECENT_MS).toISOString();
+  const now = new Date();
+  const recentCutoff = new Date(now.getTime() - INBOX_MISSION_RECENT_MS).toISOString();
+  const dueSoon = inboxDueSoonWindow(now);
   const client = requireDatabaseClient();
   const baseSql = selectInboxMissionsSql(workspacePlaceholders);
+
+  // Due today/tomorrow leads the list: it is time-sensitive regardless of who
+  // filed the mission. Finished and abandoned work is never triage.
+  const dueSoonRows = (await client.all(
+    `${baseSql}
+       AND t.due_datetime IS NOT NULL
+       AND t.due_datetime >= ?
+       AND t.due_datetime < ?
+       AND t.status_type NOT IN ('complete', 'cancelled')
+     ORDER BY t.due_datetime ASC, t.sequence_number DESC, t.id ASC
+     LIMIT ?`,
+    [...readableWorkspaceIds, dueSoon.start, dueSoon.end, INBOX_MISSION_DUE_SOON_LIMIT]
+  )) as InboxMissionRow[];
 
   const agentNextRows = (await client.all(
     `${baseSql}
@@ -6672,11 +6707,19 @@ export async function listInboxMissions(): Promise<InboxMissionsResponse> {
     [...readableWorkspaceIds, INBOX_MISSION_AGENT_NEXT_LIMIT]
   )) as InboxMissionRow[];
 
-  const tagsByMission = await getTagsByMission(agentNextRows.map(row => row.id));
+  // A mission can qualify both ways; it is one card carrying both reasons, kept
+  // at its due-soon position.
+  const dueSoonIds = new Set(dueSoonRows.map(row => row.id));
+  const orderedRows = [...dueSoonRows, ...agentNextRows.filter(row => !dueSoonIds.has(row.id))];
+  const agentNextIds = new Set(agentNextRows.map(row => row.id));
+
+  const tagsByMission = await getTagsByMission(orderedRows.map(row => row.id));
   return {
     generatedAt,
-    missions: agentNextRows.map(row => {
-      const reasons: InboxMissionReason[] = ['agent_next'];
+    missions: orderedRows.map(row => {
+      const reasons: InboxMissionReason[] = [];
+      if (dueSoonIds.has(row.id)) reasons.push('due_soon');
+      if (agentNextIds.has(row.id)) reasons.push('agent_next');
       if (row.created_at >= recentCutoff) {
         reasons.push('recent');
       }

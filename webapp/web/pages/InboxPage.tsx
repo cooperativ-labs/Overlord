@@ -9,7 +9,7 @@ import type { InboxMissionDto, MissionDetailDto } from '../../shared/contract.ts
 
 import { MissionCard } from './MissionCard.tsx';
 
-/** Left column: unallocated captures plus agent-Next mission triage. */
+/** Left column: unallocated captures plus agent-Next and due-soon mission triage. */
 function InboxColumn() {
   const inbox = useInboxItems();
   const inboxMissions = useInboxMissions();
@@ -40,8 +40,8 @@ function InboxColumn() {
         </p>
         <h1 className="text-xl font-semibold tracking-tight">Inbox</h1>
         <p className="mt-1.5 text-[13px] leading-relaxed text-(--color-ink-dim) text-pretty">
-          Unassigned captures stay private until you assign a project. Agent-filed Next work lands
-          here for triage.
+          Unassigned captures stay private until you assign a project. Agent-filed Next work and
+          anything due today or tomorrow land here for triage.
         </p>
       </div>
 
@@ -88,7 +88,7 @@ function InboxColumn() {
         {isEmpty ? (
           <p className="text-sm text-(--color-ink-dim)">
             Your Inbox is empty. Create a task without a project to capture it here, or wait for
-            agent-filed Next missions to appear.
+            agent-filed Next missions and work due today or tomorrow to appear.
           </p>
         ) : null}
       </div>
@@ -96,12 +96,39 @@ function InboxColumn() {
   );
 }
 
+/**
+ * Inclusion reasons read left to right, most urgent first: when a mission is
+ * due today or tomorrow that is what the operator needs to see, and `recent` is
+ * a modifier rather than a reason of its own.
+ */
+function inboxReasonLabel(mission: InboxMissionDto): string {
+  const parts: string[] = [];
+  if (mission.reasons.includes('due_soon')) {
+    // The server decided the row is due-soon; the client only names the day, so
+    // fall back rather than drop the label if the clocks straddle UTC midnight.
+    parts.push(dueSoonLabel(mission.dueDatetime) ?? 'Due soon');
+  }
+  if (mission.reasons.includes('agent_next')) parts.push('Agent Next');
+  if (mission.reasons.includes('recent')) parts.push('Recent');
+  return parts.length > 0 ? parts.join(' · ') : 'Inbox';
+}
+
+/** `Due today` / `Due tomorrow` against the same UTC day boundaries the API uses. */
+function dueSoonLabel(dueDatetime: string | null): string | null {
+  if (!dueDatetime) return null;
+  const due = new Date(dueDatetime);
+  if (Number.isNaN(due.getTime())) return null;
+  const now = new Date();
+  const dayMs = 24 * 60 * 60 * 1000;
+  const startOfToday = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const dueDay = Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate());
+  if (dueDay === startOfToday) return 'Due today';
+  if (dueDay === startOfToday + dayMs) return 'Due tomorrow';
+  return null;
+}
+
 function InboxTriageMissionCard({ mission }: { mission: InboxMissionDto }) {
-  const reasonLabel = mission.reasons.includes('agent_next')
-    ? mission.reasons.includes('recent')
-      ? 'Recent · Agent Next'
-      : 'Agent Next'
-    : 'Recent';
+  const reasonLabel = inboxReasonLabel(mission);
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -122,9 +149,9 @@ function InboxTriageMissionCard({ mission }: { mission: InboxMissionDto }) {
 }
 
 /**
- * The Inbox surface: unallocated capture and recent/agent-Next mission triage on
- * the left, cross-project queue on the right. Live objective activity lives on
- * `/feed`.
+ * The Inbox surface: unallocated capture plus agent-Next and due-today/tomorrow
+ * mission triage on the left, cross-project queue on the right. Live objective
+ * activity lives on `/feed`.
  */
 export function InboxPage() {
   return (
