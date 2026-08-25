@@ -103,10 +103,13 @@ for duplicate canonical paths, the last valid item wins.
 
 ### Addressing a mission or an objective
 
-Every mission-scoped tool takes `objectiveId` — an objective UUID or a display
+Most mission-scoped tools take `objectiveId` — an objective UUID or a display
 id such as `coo:756.k7xm` — alongside `missionId`. A display id already names
 its parent mission, so `missionId` is **optional** whenever one is supplied.
 An objective **UUID** names no mission and still needs `missionId`.
+`overlord_reorder_future_objectives` is the exception: it only takes
+`missionId`, since it replaces the mission's entire future-objective order
+rather than acting on one objective.
 
 `overlord_launch_objective`, `overlord_queue_objective`, and
 `overlord_update_objective` **require** `objectiveId` as the primary argument —
@@ -146,16 +149,19 @@ new hosted tool cannot be added without updating the shipped connector shims.
 </Aside>
 
 `overlord_add_artifact` forwards to Protocol `add-artifact` and uses the same
-service as REST `POST /api/missions/:id/artifacts`. Provide `missionId`, `type`,
-`label`, and at least one of `contentText` or `externalUrl`. Optional
-`sessionKey` stamps session/objective provenance. Use it to publish a plan,
-notes, or URL during a turn without delivering.
+service as REST `POST /api/missions/:id/artifacts`. Required: `type` and
+`label`, plus at least one of `contentText` or `externalUrl`. Mission scope
+comes from either `missionId` or an objective display id passed as
+`objectiveId`/`sessionKey` — you don't need all three. Use it to publish a
+plan, notes, or URL during a turn without delivering.
 
 `overlord_update_artifact` forwards to Protocol `update-artifact` and uses the
-same service as REST `PATCH /api/missions/:id/artifacts/:artifactId`. Provide
-`missionId`, `artifactId`, `expectedRevision`, and at least one of `label`,
-`contentText`, or `externalUrl`. Use it when a later objective must revise a
-plan artifact created earlier instead of delivering a duplicate.
+same service as REST `PATCH /api/missions/:id/artifacts/:artifactId`.
+Required: `artifactId` and `expectedRevision`, plus at least one of `label`,
+`contentText`, or `externalUrl`. As with `overlord_add_artifact`, mission
+scope comes from `missionId` or an objective display id, not both. Use it
+when a later objective must revise a plan artifact created earlier instead of
+delivering a duplicate.
 
 ## Boundaries
 
