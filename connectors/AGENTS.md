@@ -316,7 +316,7 @@ connectors/
   README.md              ← architectural overview
 ```
 
-No adapter implementations have landed yet. When they do, the Claude and Codex adapters serve as the reference implementations.
+The Claude and Codex adapters are the reference implementations; Cursor, Pi, Antigravity, and OpenCode adapters have also shipped. See `connectors/HARNESS-MATRIX.md` for the current per-adapter capability matrix.
 
 ---
 

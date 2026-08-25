@@ -27,7 +27,9 @@ Agent harness
   of the native timeout for fallback. Many callback harnesses therefore allow only tens of
   seconds even though Overlord's general away-user policy permits a longer window. If Overlord,
   the network, or the waiter fails, Overlord emits no answer and returns control to the harness.
-  Pi is different and is described below.
+  Pi is different and is described below. A held decision renders in the mission panel as one of
+  four request kinds — a plain allow/deny **permission**, a blocking **question**, a **choice**
+  among fixed options, or a **retry** intent — depending on what the harness asked for.
 - **Inject** sends an instruction to a specific live session. The result is honest about what
   the harness proved: **Delivered**, **Queued (turn boundary)**, **Queued (next turn)**, or
   **Unsupported**. An instruction already emitted to a harness is never automatically retried.

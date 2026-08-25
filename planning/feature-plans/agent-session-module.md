@@ -1,6 +1,10 @@
 # Agent Session Module — Implementation Plan
 
-Status: proposed. Implements the design in
+Status: implemented (largely shipped; per-adapter capability coverage is partial —
+see `connectors/HARNESS-MATRIX.md` for current, generated, fixture-backed
+status). This document is a historical build order and worked examples below
+may be aspirational; do not treat it as current-state documentation. Implements
+the design in
 [connector-hook-standard.md](./connector-hook-standard.md) (the harness-agnostic
 core) against the harness facts in
 [connector-harness-taxonomy.md](./connector-harness-taxonomy.md), feeding the
@@ -200,7 +204,9 @@ liveness and exit but never becomes a message broker or addressable runner.
 
 ## 3. Local command and network surfaces
 
-Four adapter-runtime subcommands. Adding another harness must add **zero**
+Four adapter-runtime subcommands as originally planned (shipped as six —
+`capabilities` and `sidecar` were added for control-plane harnesses; see
+`cli/src/agent-session/index.ts`). Adding another harness must add **zero**
 subcommands — that is the test for whether the waist is in the right place.
 
 ```

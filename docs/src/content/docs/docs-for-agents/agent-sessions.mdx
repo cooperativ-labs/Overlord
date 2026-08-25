@@ -35,7 +35,14 @@ not be edited.
 ## Claude Code
 
 **Shape:** callback plugin. **Observe:** `UserPromptSubmit`, `PostToolUse`, `SessionStart`.
-**Decide:** `PermissionRequest`. **Inject:** `asyncRewake` during a turn plus a Stop boundary.
+**Decide (not-implemented — target shape):** `PermissionRequest`. **Inject
+(not-implemented — target shape):** `asyncRewake` during a turn plus a Stop boundary.
+
+All `decide.*` and `inject.*` capabilities are `not-implemented` for Claude today
+per `connectors/adapters/claude/CAPABILITIES.md`; the wire shapes below describe
+the design to build against, not live behavior. Run
+`ovld agent-session capabilities claude --json` to confirm current status before
+relying on either path.
 
 - `UserPromptSubmit` records follow-up activity. `PostToolUse` sends its native payload to local
   `capture-change`; only an objective-bound event that the Claude codec normalizes as
@@ -52,7 +59,12 @@ not be edited.
 ## Codex
 
 **Shape:** callback plugin using documented hooks. **Observe:** prompt, pre/post tool, lifecycle.
-**Decide:** `PermissionRequest`. **Inject:** Stop-boundary delivery.
+**Decide (not-implemented — target shape):** `PermissionRequest`. **Inject
+(not-implemented — target shape):** Stop-boundary delivery.
+
+All `decide.*` and `inject.turnBoundary` are `not-implemented` for Codex today
+per `connectors/adapters/codex/CAPABILITIES.md`; treat the details below as the
+design to build against, not live behavior.
 
 - Codex hooks require a supported hook-era version. An installed plugin on an older binary can
   look healthy while never invoking hooks.
@@ -69,9 +81,14 @@ not be edited.
 
 ## Cursor
 
-**Shape:** callback scripts. **Observe:** `postToolUse` tool results and file edits. **Decide:**
-per-tool shell, MCP, and generic pre-tool events. **Inject:** `stop` returning
-`followup_message`.
+**Shape:** callback scripts. **Observe:** `postToolUse` tool results and file edits. **Decide
+(not-implemented — target shape):** per-tool shell, MCP, and generic pre-tool events.
+**Inject (supported):** `stop` returning `followup_message`.
+
+Per `connectors/adapters/cursor/CAPABILITIES.md`, `decide.shell`/`decide.mcp`/
+`decide.anyTool` are `not-implemented` and `decide.universal` is `unsupported` —
+none of the Decide paths below are live yet. `inject.turnBoundary` and
+`inject.nextTurn` are fixture-proven and accurate as described.
 
 - `postToolUse` is the file-evidence path. The Cursor codec admits exact Write/Edit paths,
   leaves known read/search/fetch callbacks silent, and records unavailable health without a path
@@ -91,7 +108,12 @@ per-tool shell, MCP, and generic pre-tool events. **Inject:** `stop` returning
 ## Pi
 
 **Shape:** in-process TypeScript extension. **Observe:** input, tool call, agent start.
-**Decide:** optional async `tool_call` interceptor. **Inject:** `sendUserMessage` with confirmation.
+**Decide (not-implemented — target shape):** optional async `tool_call` interceptor.
+**Inject (not-implemented — target shape):** `sendUserMessage` with confirmation.
+
+`decide.shell` and every `inject.*` capability are `not-implemented` for Pi today
+per `connectors/adapters/pi/CAPABILITIES.md`; the details below describe the
+design to build against, not live behavior.
 
 - Pi has no native permission dialog. A timeout, CLI failure, or transport failure lets the tool
   run. Remote decisions require both `OVERLORD_PI_REMOTE_DECISIONS=enabled` and
