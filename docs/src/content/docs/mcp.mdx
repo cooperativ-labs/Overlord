@@ -35,7 +35,7 @@ The hosted server advertises these mission-lifecycle tools:
 | `overlord_create_mission`            | Creates a draft mission in a project you specify, or an account-owned inbox item when no project is given (never chooses a project for you). |
 | `overlord_create_inbox_item`         | Creates a private, account-owned unassigned task capture.                                                                                    |
 | `overlord_add_objectives`            | Appends draft objectives to an existing mission.                                                                                             |
-| `overlord_update_objective`          | Turns auto-advance on or off for an existing objective. Requires `objectiveId` (UUID or display id).                                         |
+| `overlord_update_objective`          | Turns auto-advance on or off and/or edits instruction text on a draft or future objective. Requires `objectiveId` (UUID or display id).       |
 | `overlord_launch_objective`          | Queues the normal execution request for one objective. Requires `objectiveId` (UUID or display id) and `agent`. Does not attach this agent.  |
 | `overlord_reorder_future_objectives` | Replaces one mission's complete future-objective order.                                                                                      |
 | `overlord_list_run_queues`           | Reads compact or full live Run Queue state before a mutation.                                                                                |
@@ -49,11 +49,13 @@ The hosted server advertises these mission-lifecycle tools:
 | `overlord_update_artifact`           | Revises an existing mission artifact in place (label, Markdown content, and/or URL).                                                         |
 | `overlord_record_work`               | Records already-finished chat work as a review-column mission.                                                                               |
 
-Every mission-scoped tool accepts `objectiveId` — an objective UUID or a display
+Most mission-scoped tools accept `objectiveId` — an objective UUID or a display
 id such as `coo:756.k7xm` — next to `missionId`. A display id already names its
 mission, so `missionId` is optional whenever you pass one, and a client holding
 only the objective can call the tool with it. An objective UUID names no mission
-and still needs `missionId`.
+and still needs `missionId`. `overlord_reorder_future_objectives` is the
+exception: it only takes `missionId`, since it replaces the mission's entire
+future-objective order rather than acting on one objective.
 
 `overlord_launch_objective`, `overlord_queue_objective`, and
 `overlord_update_objective` **require** `objectiveId` as the primary argument —

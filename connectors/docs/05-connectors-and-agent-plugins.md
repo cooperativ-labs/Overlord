@@ -132,7 +132,11 @@ Requirements:
 
 - Install local Cursor plugin/rules/commands.
 - Add `beforeSubmitPrompt` hook to record follow-ups.
-- Map `beforeShellExecution` and `beforeMCPExecution` onto the canonical observational `PermissionRequest` hook without overriding Cursor's permission decision.
+- Wire `beforeShellExecution`, `beforeMCPExecution`, and `preToolUse` to the Agent
+  Session Module's blocking Decide capability (`ovld agent-session request`) per
+  the descriptor — Cursor has no single universal `PermissionRequest` event, so
+  do not route all three through one shared hook. See
+  `connectors/adapters/cursor/CAPABILITIES.md` for current per-capability status.
 - Add `postToolUse` edit capture for file tools and shell-mediated changes.
 - Add a bounded `stop` hook for pending-delivery reminders.
 - Add permission allow rules for protocol commands.
@@ -212,13 +216,24 @@ Requirements:
 - Records native session/resume ID when the harness exposes one.
 - Does not restart execution by itself.
 
-### Permission Hook
+### Permission Hook (Decide capability)
+
+This is the Agent Session Module's **Decide** capability, not a one-way event
+push. See `planning/feature-plans/agent-session-module.md` and
+`docs/src/content/docs/docs-for-agents/agent-sessions.mdx` for the current
+architecture; `connectors/HARNESS-MATRIX.md` for live per-adapter status.
 
 Requirements:
 
-- Publishes `permission_request` with tool/request payload.
+- Creates an answerable request (`ovld agent-session request`) carrying the
+  tool/request payload, one of the four request kinds (`permission`,
+  `question`, `choice`, `retry`), and a decision window.
+- Blocks the harness's tool call until the request is answered, the window
+  elapses, or a fallback decision applies — it does not merely publish an
+  event and continue.
 - Does not leak secrets.
-- Works without requiring a web app.
+- Degrades gracefully without a web app open: the harness's own fallback
+  decision (allow/deny/ask) applies when no one answers in time.
 
 ### Stop Hook
 
