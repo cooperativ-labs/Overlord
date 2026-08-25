@@ -36,6 +36,7 @@ export function ResourceSourceRow({
   source,
   targetLabel,
   agents,
+  agentsLoading = false,
   onSaved
 }: {
   projectId: string;
@@ -43,6 +44,7 @@ export function ResourceSourceRow({
   source: ProjectResourceSourceDto;
   targetLabel: string;
   agents: AgentCatalogAgentDto[];
+  agentsLoading?: boolean;
   onSaved: () => void;
 }) {
   const createResource = useCreateProjectResource(projectId);
@@ -191,11 +193,13 @@ export function ResourceSourceRow({
           <div>
             <h5 className="text-xs font-medium">Agent settings</h5>
             <p className="text-[11px] text-muted-foreground">
-              Applied when an objective uses this source and has no launch override of its own.
+              Every agent in this workspace&apos;s catalog can be configured here. Values are
+              applied when an objective uses this source and has no launch override of its own.
             </p>
           </div>
           <SourceAgentDefaultsTable
             agents={agents}
+            agentsLoading={agentsLoading}
             launchDefaults={launchDefaults}
             disabled={updateSource.isPending}
             onCommit={handleLaunchDefaultCommit}

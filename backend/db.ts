@@ -384,10 +384,6 @@ export function getAuthorizedWorkspace(workspaceId: string): AuthorizedWorkspace
   );
 }
 
-export function getResolvedWorkspaceId(): string | null {
-  return requestContext().resolvedWorkspaceId;
-}
-
 /** Record a workspace that was derived from an entity and checked against the snapshot. */
 export function setResolvedWorkspaceId(workspaceId: string | null): void {
   if (workspaceId && getAuthorizedWorkspacesContext() && !getAuthorizedWorkspace(workspaceId)) {

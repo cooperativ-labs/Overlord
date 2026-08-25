@@ -255,15 +255,19 @@ export function MissionDeliveryCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const preview = deliveryOneSentenceSummary(delivery);
-  const cardRef = useCollapseOnDismiss(expanded, () => setExpanded(false));
 
+  // The trigger is the only thing that opens or closes this accordion — no
+  // outside-click/Escape dismissal, so interacting with the expanded body
+  // (e.g. selecting text, clicking a link inside it) never collapses the card.
   if (expanded) {
     return (
-      <article
-        ref={cardRef}
-        className="min-w-0 rounded-lg border border-(--color-border) bg-(--color-surface-1) p-3 shadow-md"
-      >
-        <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-(--color-border) pb-2">
+      <article className="min-w-0 rounded-lg border border-(--color-border) bg-(--color-surface-1) p-3 shadow-md">
+        <button
+          type="button"
+          className="mb-3 flex w-full flex-wrap items-center gap-2 border-b border-(--color-border) pb-2 text-left"
+          onClick={() => setExpanded(false)}
+          aria-expanded={true}
+        >
           <Package className="h-3.5 w-3.5 text-(--color-ink-dim)" aria-hidden="true" />
           <span className="min-w-0 wrap-anywhere text-sm font-medium text-(--color-ink)">
             {objectiveTitle ?? 'Delivery'}
@@ -271,7 +275,7 @@ export function MissionDeliveryCard({
           <span className="text-[11px] text-(--color-ink-dim)">
             {formatDeliveryTimestamp(delivery.deliveredAt)}
           </span>
-        </div>
+        </button>
         <DeliveryPresentation delivery={delivery} summaryText={delivery.summary} />
       </article>
     );

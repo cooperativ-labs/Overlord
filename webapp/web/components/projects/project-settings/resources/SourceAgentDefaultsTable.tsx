@@ -20,14 +20,20 @@ function cleanFlags(flags: AgentLaunchFlagDto[]): AgentLaunchFlagDto[] {
     .filter(flag => flag.name.length > 0);
 }
 
+function isConfigured(config: AgentLaunchConfigDto): boolean {
+  return config.preCommand.trim().length > 0 || config.flags.length > 0;
+}
+
 function AgentDefaultsRow({
   agent,
   config,
+  configured,
   disabled,
   onCommit
 }: {
   agent: AgentCatalogAgentDto;
   config: AgentLaunchConfigDto;
+  configured: boolean;
   disabled: boolean;
   onCommit: (config: AgentLaunchConfigDto) => void;
 }) {
@@ -52,7 +58,12 @@ function AgentDefaultsRow({
   return (
     <tr className="border-t align-top">
       <th scope="row" className="w-32 py-2 pr-3 text-left text-xs font-medium">
-        {agent.label}
+        <span className="flex flex-col gap-0.5">
+          <span>{agent.label}</span>
+          {configured ? null : (
+            <span className="text-[10px] font-normal text-muted-foreground">Not configured</span>
+          )}
+        </span>
       </th>
       <td className="w-1/3 py-2 pr-3">
         <Input
@@ -132,22 +143,32 @@ function AgentDefaultsRow({
 
 /**
  * Per-agent launch defaults for one resource source, laid out as a table so the
- * pre-command and flags of every agent are visible side by side. Each edit
- * commits immediately through `onCommit`.
+ * pre-command and flags of every agent are visible side by side. Every agent in
+ * the workspace catalog gets a row whether or not this source has defaults for
+ * it, so an unconfigured agent can be configured from here. Each edit commits
+ * immediately through `onCommit`.
  */
 export function SourceAgentDefaultsTable({
   agents,
   launchDefaults,
+  agentsLoading = false,
   disabled = false,
   onCommit
 }: {
   agents: AgentCatalogAgentDto[];
   launchDefaults: Record<string, AgentLaunchConfigDto>;
+  agentsLoading?: boolean;
   disabled?: boolean;
   onCommit: (args: { agentKey: string; config: AgentLaunchConfigDto }) => void;
 }) {
   if (agents.length === 0) {
-    return <p className="text-xs text-muted-foreground">No agents are configured.</p>;
+    return (
+      <p className="text-xs text-muted-foreground">
+        {agentsLoading
+          ? 'Loading agents…'
+          : "This workspace's agent catalog is empty. Add agents in workspace settings to configure launch defaults here."}
+      </p>
+    );
   }
 
   return (
@@ -166,15 +187,19 @@ export function SourceAgentDefaultsTable({
         </tr>
       </thead>
       <tbody>
-        {agents.map(agent => (
-          <AgentDefaultsRow
-            key={agent.key}
-            agent={agent}
-            config={launchDefaults[agent.key] ?? EMPTY_CONFIG}
-            disabled={disabled}
-            onCommit={config => onCommit({ agentKey: agent.key, config })}
-          />
-        ))}
+        {agents.map(agent => {
+          const config = launchDefaults[agent.key] ?? EMPTY_CONFIG;
+          return (
+            <AgentDefaultsRow
+              key={agent.key}
+              agent={agent}
+              config={config}
+              configured={isConfigured(config)}
+              disabled={disabled}
+              onCommit={next => onCommit({ agentKey: agent.key, config: next })}
+            />
+          );
+        })}
       </tbody>
     </table>
   );

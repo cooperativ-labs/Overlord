@@ -212,8 +212,8 @@ import {
   reorderWorkspaceMyMissions,
   revokeUserToken,
   searchMissions,
-  searchMissionsV2,
-  searchMissionsV3,
+  searchMissionsAcrossWorkspacesV2,
+  searchMissionsAcrossWorkspacesV3,
   setDefaultProjectPreference,
   updateArtifact,
   updateInboxItem,
@@ -1739,7 +1739,7 @@ app.get(
     const from =
       typeof req.query.from === 'string' && req.query.from.trim() ? req.query.from : null;
     const to = typeof req.query.to === 'string' && req.query.to.trim() ? req.query.to : null;
-    return searchMissionsV2({
+    return searchMissionsAcrossWorkspacesV2({
       query,
       projectIds: projectIds.length > 0 ? projectIds : null,
       statusTypes,
@@ -1802,7 +1802,7 @@ app.get(
     const to = typeof req.query.to === 'string' && req.query.to.trim() ? req.query.to : null;
     const matchesPerResultRaw =
       typeof req.query.matchesPerResult === 'string' ? req.query.matchesPerResult : null;
-    return searchMissionsV3({
+    return searchMissionsAcrossWorkspacesV3({
       query,
       projectIds: projectIds.length > 0 ? projectIds : null,
       statusTypes,

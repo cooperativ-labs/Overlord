@@ -43,7 +43,7 @@ import type { ProjectResourceAccessMode } from '../../../../../shared/contract.t
 
 /**
  * The settings page for a single project resource: name, permission, resource
- * id, the sources that materialize it per execution target, and deletion.
+ * id, the sources that materialize it per execution target, and unlinking.
  */
 export function ResourceDetailPage({
   projectId,
@@ -57,8 +57,11 @@ export function ResourceDetailPage({
   const resourcesQ = useProjectResources(projectId);
   const executionTargetQ = useProjectExecutionTarget(projectId);
   const launchSettingsQ = useLaunchSettings();
-  const agentCatalogQ = useAgentCatalog();
   const projectQ = useProject(projectId);
+  // The launch defaults belong to the project's workspace catalog, which is not
+  // necessarily the caller's active workspace, so scope the read explicitly.
+  const workspaceId = projectQ.data?.workspaceId ?? null;
+  const agentCatalogQ = useAgentCatalog(workspaceId, { enabled: Boolean(workspaceId) });
   const updateResource = useUpdateProjectResource(projectId);
   const deleteResource = useDeleteProjectResource(projectId);
   const { copied, copy } = useCopyToClipboard();
@@ -314,6 +317,7 @@ export function ResourceDetailPage({
                   deviceLabel
                 })}
                 agents={agentCatalogQ.data?.agents ?? []}
+                agentsLoading={agentCatalogQ.isPending}
                 onSaved={() => void resourcesQ.refetch()}
               />
             ))}
@@ -331,7 +335,7 @@ export function ResourceDetailPage({
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/30 p-4">
         <div>
-          <h3 className="text-sm font-medium">Delete resource</h3>
+          <h3 className="text-sm font-medium">Unlink resource</h3>
           <p className="text-sm text-muted-foreground">
             Removes this resource and all of its sources from the project. The files on disk are
             left untouched.
@@ -347,7 +351,7 @@ export function ResourceDetailPage({
           }}
         >
           <Trash2 className="size-4" />
-          Delete resource
+          Unlink resource
         </Button>
       </div>
 
@@ -360,9 +364,9 @@ export function ResourceDetailPage({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete resource</DialogTitle>
+            <DialogTitle>Unlink resource</DialogTitle>
             <DialogDescription>
-              Remove resource &ldquo;{resource.resourceKey}&rdquo; and all of its sources from this
+              Unlink resource &ldquo;{resource.resourceKey}&rdquo; and all of its sources from this
               project?
               {resource.sources.length ? (
                 <span className="mt-2 block font-mono text-xs text-muted-foreground">
@@ -386,7 +390,7 @@ export function ResourceDetailPage({
               disabled={deleteResource.isPending}
               onClick={() => void handleDelete()}
             >
-              Delete resource
+              Unlink resource
             </Button>
           </DialogFooter>
         </DialogContent>

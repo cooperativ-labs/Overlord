@@ -9,8 +9,12 @@ const tempDir = mkdtempSync(path.join(os.tmpdir(), 'overlord-search-v3-'));
 const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
 await bootstrapIntegrationTestDb({ sqlitePath: path.join(tempDir, 'webapp.sqlite') });
 
-const { createMission, createProject, searchMissionsV2, searchMissionsV3 } =
-  await import('./repository.ts');
+const {
+  createMission,
+  createProject,
+  searchMissionsAcrossWorkspacesV2,
+  searchMissionsAcrossWorkspacesV3
+} = await import('./repository.ts');
 const { runProtocolSubcommand } = await import('./protocol.ts');
 const { requireDatabaseClient } = await import('./db.ts');
 
@@ -22,7 +26,7 @@ test('GET /api/search/v3 repository surface returns grouped objective matches', 
     firstObjective: 'Implement routeneedle retrieval'
   });
 
-  const v3 = await searchMissionsV3({ query: 'routeneedle' });
+  const v3 = await searchMissionsAcrossWorkspacesV3({ query: 'routeneedle' });
   assert.equal(v3.version, 3);
   const hit = v3.results.find(result => result.id === mission.id);
   assert.ok(hit);
@@ -31,7 +35,7 @@ test('GET /api/search/v3 repository surface returns grouped objective matches', 
   assert.equal(hit.matches[0]?.id, mission.objectives[0]?.id);
   assert.equal(v3.truncatedCandidates, false);
 
-  const v2 = await searchMissionsV2({ query: 'routeneedle' });
+  const v2 = await searchMissionsAcrossWorkspacesV2({ query: 'routeneedle' });
   assert.equal(v2.version, 2);
   assert.ok(v2.results.some(result => result.id === mission.id));
   assert.equal('matches' in v2.results[0]!, false);
@@ -82,7 +86,7 @@ test('canonical protocol search forwards v3 filters', async () => {
 
 test('v3 repository rejects event entityTypes', async () => {
   await assert.rejects(
-    searchMissionsV3({ query: 'anything', entityTypes: ['event'] }),
+    searchMissionsAcrossWorkspacesV3({ query: 'anything', entityTypes: ['event'] }),
     (error: unknown) => (error as { status?: number; message?: string }).status === 400
   );
 });
@@ -114,11 +118,11 @@ test('v1/v2 repository search still ignores delivery-only documents', async () =
     ]
   );
 
-  const v2 = await searchMissionsV2({ query: 'deliveryneedle' });
+  const v2 = await searchMissionsAcrossWorkspacesV2({ query: 'deliveryneedle' });
   assert.equal(
     v2.results.some(result => result.id === mission.id),
     false
   );
-  const v3 = await searchMissionsV3({ query: 'deliveryneedle' });
+  const v3 = await searchMissionsAcrossWorkspacesV3({ query: 'deliveryneedle' });
   assert.ok(v3.results.some(result => result.id === mission.id));
 });

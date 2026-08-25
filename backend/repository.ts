@@ -3950,7 +3950,7 @@ export async function searchMissions({
   });
 }
 
-export async function searchMissionsV2({
+export async function searchMissionsAcrossWorkspacesV2({
   query,
   projectIds,
   statusTypes,
@@ -4016,7 +4016,7 @@ export async function searchMissionsV2({
   return mergeWorkspaceMissionSearches({ results, limit });
 }
 
-export async function searchMissionsV3({
+export async function searchMissionsAcrossWorkspacesV3({
   query,
   projectIds,
   statusTypes,
