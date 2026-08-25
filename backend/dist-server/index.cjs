@@ -151139,6 +151139,15 @@ async function listWorkspaceMyMissions() {
 }
 var INBOX_MISSION_RECENT_MS = 7 * 24 * 60 * 60 * 1e3;
 var INBOX_MISSION_AGENT_NEXT_LIMIT = 60;
+var INBOX_MISSION_DUE_SOON_LIMIT = 60;
+function inboxDueSoonWindow(now2) {
+  const startOfToday = Date.UTC(now2.getUTCFullYear(), now2.getUTCMonth(), now2.getUTCDate());
+  const dayMs = 24 * 60 * 60 * 1e3;
+  return {
+    start: new Date(startOfToday).toISOString(),
+    end: new Date(startOfToday + 2 * dayMs).toISOString()
+  };
+}
 function selectInboxMissionsSql(workspacePlaceholders) {
   return `
   SELECT t.id, t.workspace_id, t.project_id, t.display_id, t.sequence_number, t.title,
@@ -151202,9 +151211,21 @@ async function listInboxMissions() {
     return { missions: [], generatedAt };
   }
   const workspacePlaceholders = readableWorkspaceIds2.map(() => "?").join(", ");
-  const recentCutoff = new Date(Date.now() - INBOX_MISSION_RECENT_MS).toISOString();
+  const now2 = /* @__PURE__ */ new Date();
+  const recentCutoff = new Date(now2.getTime() - INBOX_MISSION_RECENT_MS).toISOString();
+  const dueSoon = inboxDueSoonWindow(now2);
   const client = requireDatabaseClient();
   const baseSql = selectInboxMissionsSql(workspacePlaceholders);
+  const dueSoonRows = await client.all(
+    `${baseSql}
+       AND t.due_datetime IS NOT NULL
+       AND t.due_datetime >= ?
+       AND t.due_datetime < ?
+       AND t.status_type NOT IN ('complete', 'cancelled')
+     ORDER BY t.due_datetime ASC, t.sequence_number DESC, t.id ASC
+     LIMIT ?`,
+    [...readableWorkspaceIds2, dueSoon.start, dueSoon.end, INBOX_MISSION_DUE_SOON_LIMIT]
+  );
   const agentNextRows = await client.all(
     `${baseSql}
        AND t.created_by_kind = 'agent'
@@ -151213,11 +151234,16 @@ async function listInboxMissions() {
      LIMIT ?`,
     [...readableWorkspaceIds2, INBOX_MISSION_AGENT_NEXT_LIMIT]
   );
-  const tagsByMission = await getTagsByMission(agentNextRows.map((row) => row.id));
+  const dueSoonIds = new Set(dueSoonRows.map((row) => row.id));
+  const orderedRows = [...dueSoonRows, ...agentNextRows.filter((row) => !dueSoonIds.has(row.id))];
+  const agentNextIds = new Set(agentNextRows.map((row) => row.id));
+  const tagsByMission = await getTagsByMission(orderedRows.map((row) => row.id));
   return {
     generatedAt,
-    missions: agentNextRows.map((row) => {
-      const reasons = ["agent_next"];
+    missions: orderedRows.map((row) => {
+      const reasons = [];
+      if (dueSoonIds.has(row.id)) reasons.push("due_soon");
+      if (agentNextIds.has(row.id)) reasons.push("agent_next");
       if (row.created_at >= recentCutoff) {
         reasons.push("recent");
       }

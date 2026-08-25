@@ -5,7 +5,7 @@
  * plus the documented install locations, because a Finder/launchd launched
  * process — the packaged desktop app, an installed runner service — does not
  * inherit the interactive shell's PATH. The session lifecycle commands
- * (`inspect`, `open`, `stop`, `events`, `send`) did not: they spawned the bare
+ * (`inspect`, `open`, `stop`) did not: they spawned the bare
  * `latch` name and failed with `spawnSync latch ENOENT` on exactly the devices
  * where discovery had just reported Latch as `found`.
  *
