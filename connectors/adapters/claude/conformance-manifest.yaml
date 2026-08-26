@@ -1,4 +1,4 @@
-contractVersion: "124"
+contractVersion: "125"
 componentType: connector
 componentKey: claude
 label: "Claude Code Connector"
@@ -14,7 +14,7 @@ connector:
   harnessCapabilities:
     path: connectors/adapters/claude/harness-capabilities.yaml
     schemaVersion: 1
-    digest: "c7e52ce7d4698d35888a533b42d67c56d7616b3bb90e8537e4afcc39e1b6cc5d"
+    digest: "0f708197c1306226e137a332532fabbc68c41023ba0bd46614468d9fef38a14e"
   # ── END GENERATED ────────────────────────────────────────────────────────────
   installPath: "~/.ovld/claude/marketplace/plugins/overlord"
   managedFiles:

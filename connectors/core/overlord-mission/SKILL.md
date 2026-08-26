@@ -165,6 +165,11 @@ ovld protocol deliver --session-key <sessionKey> \
 This is the normal delivery shape: a summary is sufficient. The CLI syncs objective-ledger
 evidence independently before the lifecycle transition.
 
+After running a generator, migration, or script that writes files, you may add its known outputs
+to this existing call with `--paths path/one.ts,path/two.ts`. This is optional, paths-only
+metadata for outputs the native hook cannot name; never use it to enumerate every changed or
+opened file, and never make a separate call just to declare paths.
+
 Artifacts, optional change rationales, and a delivery report remain current annotations when
 they add review value. Use `--payload-json` when the full delivery object fits comfortably inline
 (roughly under 8 KB). Larger inline `--*-json` values are rejected; stream them through the

@@ -110,6 +110,8 @@ test('deliver drains every ledger batch and sends no retired change-tracking fla
         SESSION_KEY,
         '--objective-id',
         OBJECTIVE_DISPLAY_ID,
+        '--paths',
+        'generated/one.ts,generated/two.ts',
         '--summary',
         'Done.'
       ]
@@ -122,6 +124,7 @@ test('deliver drains every ledger batch and sends no retired change-tracking fla
   const delivery = requests.find(request => request.path === '/api/protocol/deliver');
   assert.ok(delivery);
   const flags = (delivery.body as { flags: Record<string, string | true> }).flags;
+  assert.equal('--paths' in flags, false);
   for (const retired of [
     '--changed-files-json',
     '--changed-files-file',
@@ -133,6 +136,16 @@ test('deliver drains every ledger batch and sends no retired change-tracking fla
   ]) {
     assert.equal(retired in flags, false);
   }
+  const syncedPaths = requests
+    .filter(request => request.path === '/api/protocol/sync-changes')
+    .flatMap(request => {
+      const syncFlags = (request.body as { flags: Record<string, string> }).flags;
+      return (JSON.parse(syncFlags['--changes-json'] ?? '[]') as Array<{ filePath: string }>).map(
+        entry => entry.filePath
+      );
+    });
+  assert.ok(syncedPaths.includes('generated/one.ts'));
+  assert.ok(syncedPaths.includes('generated/two.ts'));
   assert.deepEqual(readActiveSessions(workspace), []);
   assert.deepEqual(
     readUnsyncedChangeEvidence({

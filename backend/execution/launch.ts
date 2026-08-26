@@ -973,9 +973,9 @@ export const LAUNCHABLE_STATES = ['draft', 'submitted', 'launching'];
 /**
  * Remove an objective from the runner queue when a user manually completes,
  * disconnects, or deletes it in the UI. Clears any active (queued/claimed/
- * launching) execution requests so a runner never claims work the user has
- * stopped, and ends any still-open agent session bound to the objective so the
- * session status reflects the new objective state.
+ * launching/launched) execution requests so a retry cannot reuse work the
+ * user has stopped, and ends any still-open agent session bound to the
+ * objective so the session status reflects the new objective state.
  *
  * Must be called inside the caller's transaction so the objective mutation and
  * these queue/session updates land atomically. Returns the counts so callers
@@ -1020,7 +1020,8 @@ export async function dequeueObjective({
     },
     objectiveId,
     now,
-    emitEvents: false
+    emitEvents: false,
+    includeLaunched: true
   });
 
   // A completed objective ends its session cleanly; a disconnect/delete leaves

@@ -40,6 +40,9 @@ events:
     # no generic path-key fallback.
     filePathPaths:
       - file_path
+      - notebook_path
+      - filePath
+      - path
 
   # The one place raw user content flows, deliberately: the activity feed exists to show
   # follow-up prompts. Secret redaction still runs over the text.

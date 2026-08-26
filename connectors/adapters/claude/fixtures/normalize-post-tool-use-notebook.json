@@ -1,0 +1,40 @@
+{
+  "fixtureVersion": 1,
+  "kind": "normalized-event",
+  "description": "Claude NotebookEdit supplies notebook_path rather than file_path; the connector-owned fallback records only the relative path.",
+  "codec": "codec/claude.codec.yaml",
+  "occurredAt": "2026-08-26T00:00:00.000Z",
+  "payload": {
+    "session_id": "claude-notebook-1",
+    "cwd": "/repo",
+    "hook_event_name": "PostToolUse",
+    "tool_name": "NotebookEdit",
+    "tool_input": {
+      "notebook_path": "/repo/notebooks/analysis.ipynb",
+      "new_source": "token=AKIAIOSFODNN7EXAMPLE"
+    }
+  },
+  "expect": {
+    "eventId": "ev_47e3742894f673ce3e71298321a3ee6d",
+    "producerSequence": null,
+    "occurredAt": "2026-08-26T00:00:00.000Z",
+    "kind": "file.edited",
+    "severity": "info",
+    "nativeEvent": "PostToolUse",
+    "nativeTurnId": null,
+    "nativeCallId": null,
+    "subagentId": null,
+    "correlationId": "claude-notebook-1",
+    "origin": "agent",
+    "summary": "Write a file: notebooks/analysis.ipynb: 26 bytes",
+    "payload": {
+      "tool": "edit",
+      "action": "Write a file",
+      "subject": "notebooks/analysis.ipynb",
+      "detail": "26 bytes",
+      "paths": ["notebooks/analysis.ipynb"],
+      "formatterVersion": 1
+    }
+  },
+  "mustNotContain": ["AKIAIOSFODNN7EXAMPLE", "/repo"]
+}

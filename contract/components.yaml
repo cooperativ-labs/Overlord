@@ -4,7 +4,7 @@
 # IMPORTANT: Update this file and CONTRACT.md together when adding components or surfaces.
 # Increment contractVersion when any stable interface changes.
 
-contractVersion: '124'
+contractVersion: '125'
 
 components:
   protocol:
@@ -24,7 +24,7 @@ components:
       - 'request envelope: canonical per-flag fileInputs map (at most one flag may read literal stdin) and canonical change-rationale input; no shared stdin fallback field'
       - 'optional change-rationale annotations on update, delivery, and sessionless record-work; exact canonical item/hunk keys, bounded per-item warnings, and deterministic last-valid-wins handling for duplicate per-request paths'
       - 'sync-changes: bounded idempotent metadata-only objective-ledger evidence batching with per-item accepted/ignored/warning outcomes; evidence and hook health are advisory and cannot reject delivery'
-      - 'Phase 5 ledger cutover: CLI update, preflight, and deliver auto-sync direct or paired objective-ledger evidence without a VCS-delta fallback. update accepts no changed-file payload; deliver accepts summary plus current optional annotations and no legacy changed-file, observed-dirty, no-file-change, or rationale-skip inputs'
+      - 'Phase 5 ledger cutover: CLI update, preflight, and deliver auto-sync direct or paired objective-ledger evidence without a VCS-delta fallback. update and deliver accept optional bounded --paths only for agent-known generator/script outputs; it appends advisory declared_edit/direct ledger evidence and never requires VCS reconciliation. Neither accepts legacy changed-file, observed-dirty, no-file-change, or rationale-skip inputs'
       - 'idempotency key scope naming: protocol.*'
       - 'in-place mission artifact updates via update-artifact (same editable fields and revision CAS as REST PATCH /api/missions/:id/artifacts/:artifactId; no session key required)'
       - 'mid-turn mission artifact creation via add-artifact (POST /api/protocol/add-artifact), which creates an artifact without a delivery using the same createArtifact service as REST POST /api/missions/:id/artifacts; optional session key stamps session/objective provenance when present'
@@ -91,7 +91,7 @@ components:
       - 'per-user terminal profiles on user_execution_target_preferences for opening launched agents in a terminal window'
       - 'protocol session-key cache: persists the attach session key by canonical working directory, mission, and objective and auto-injects --session-key only for that explicit objective; cleared after deliver only when its exact ledger is fully synchronized, otherwise retained for retry'
       - 'owner-only, cross-process-safe objective/session local change ledger and hook-health records; cwd alone never chooses an objective, only normalized workspace-relative paths and bounded metadata are stored, and only metadata is synchronized through Protocol'
-      - 'local-only ovld protocol capture-change: requires an adapter key, reduces the native post-tool payload through that connector-owned compiled codec, records only exact normalized file.edited paths when an explicit objective-bound session resolves, leaves known read-only callbacks silent, and records unavailable health rather than scanning the worktree for mutation-capable, shell, unmapped, or no-path callbacks'
+      - 'local-only ovld protocol capture-change: requires an adapter key, reduces the native post-tool payload through that connector-owned compiled codec, records only exact normalized file.edited paths (including connector-declared bounded patch headers) when an explicit objective-bound session resolves, leaves known read-only callbacks silent, and records unavailable health rather than scanning the worktree for mutation-capable, shell, unmapped, or no-path callbacks'
       - 'normal delivery composes only the required summary plus optional current annotations; it does not accept or derive a changed-file, observed-dirty, no-file-change, or rationale-skip payload'
       - 'agent-session runtime: the ovld agent-session command family and the compiled harness catalog (cli/src/agent-session/catalog.generated.ts). The only local module that carries agent-session traffic to the backend, and only with the channel-scoped OVERLORD_SESSION_CHANNEL_TOKEN — never the user broad USER_TOKEN. The runtime reads the compiled catalog, never the descriptor YAML. Adding a sixth harness must add zero agent-session subcommands'
       - 'ovld agent-session capabilities [<agent>] [--json]: offline human/agent-facing reader of the compiled catalog — no network call, no write, no subprocess'

@@ -6,7 +6,7 @@
 
 **Harness version verified** `2.1.227` · **range** `>=2.1.0` · **scheme** `semver`
 
-**Descriptor digest** `c7e52ce7d4698d35888a533b42d67c56d7616b3bb90e8537e4afcc39e1b6cc5d`
+**Descriptor digest** `0f708197c1306226e137a332532fabbc68c41023ba0bd46614468d9fef38a14e`
 
 > The tier is derived from passing fixtures, never authored. `unsupported` means the harness
 > cannot do it — do not attempt it. `not-implemented` means it is buildable and unbuilt: that is
@@ -61,7 +61,7 @@ callbacks, record unavailable evidence health.
 | `observe.prompt` | ✅ supported | `UserPromptSubmit` | fixtures: `fixtures/normalize-user-prompt-submit.json` |
 | `observe.toolCall` | 🚧 not-implemented | `PreToolUse` | tracked as `agent-session-phase-2` |
 | `observe.toolResult` | 🚧 not-implemented | `PostToolUse` | tracked as `latch-engine` |
-| `observe.fileEdit` | ✅ supported | `PostToolUse` | fixtures: `fixtures/normalize-post-tool-use-write.json`, `fixtures/post-tool-use-parity.json`, `fixtures/post-tool-use-capture.json` |
+| `observe.fileEdit` | ✅ supported | `PostToolUse` | fixtures: `fixtures/normalize-post-tool-use-write.json`, `fixtures/normalize-post-tool-use-notebook.json`, `fixtures/post-tool-use-parity.json`, `fixtures/post-tool-use-capture.json` |
 | `observe.sessionLifecycle` | 🚧 not-implemented | `SessionStart` | tracked as `latch-engine` |
 | `decide.shell` | 🚧 not-implemented | `PermissionRequest` | tracked as `latch-engine` |
 | `decide.mcp` | 🚧 not-implemented | `PermissionRequest` | tracked as `latch-engine` |

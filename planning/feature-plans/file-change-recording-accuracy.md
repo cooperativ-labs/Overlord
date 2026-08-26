@@ -154,3 +154,173 @@ cannot regress into the old rationale interrogation.
 | 5 | E declare-changes | small | Long-tail precision for generated outputs |
 
 Phases 1–2 are independent of each other and of 3; both are safe to start immediately.
+
+---
+
+# Addendum: is explicit agent declaration simpler and more accurate?
+
+Objective `coo:851.fdd0`. The question: rather than the layered capture approach above,
+should the agent simply note each file path it changes — during operation, or just before
+delivery? Specifically, could it paste each path into a temp file whenever it opens a file,
+and **how significant would the token overhead actually be?**
+
+Short answer: the token overhead of *declaring paths* is negligible — about **0.1% of a
+session** — so token efficiency is not the reason to reject the idea. But the overhead of
+*when and how* you ask for them varies by roughly **6,000×** between the two shapes in the
+question, and the expensive shape buys information the harness is already handing us for
+free. The right move is to keep the layered capture and add a batched, prose-free
+declaration for the one thing the agent knows and the hook cannot see.
+
+## Method
+
+Measured against real data rather than estimates:
+
+- **35 Claude Code session transcripts** for this repo
+  (`~/.claude/projects/-Users-jake-Development-Cooperativ-Overlord/*.jsonl`), 19 of which
+  contain at least one edit-tool call. Token counts come from the recorded `usage` fields,
+  not from guessing.
+- **The 7 real change-ledgers** on this machine (`~/.ovld/change-ledgers/*.json`).
+- Timing of `git status --porcelain -uall` in this worktree.
+
+## What a session actually looks like
+
+| Measure | Value |
+|---|---|
+| Assistant turns per edit-session (mean) | 124 |
+| Tool calls per edit-session (mean) | 73 |
+| **Context tokens re-read per assistant turn** | **127,475 mean / 114,962 median** |
+| Output tokens per assistant turn (mean) | 695 |
+| Output tokens per edit-session (mean) | ~96,000 |
+| Unique files edited per edit-session | 4.2 mean, 3 median, 19 max |
+| Repo-relative path length | 60 chars mean ≈ 15 tokens |
+
+The decisive number is the third row. In an agentic loop an extra tool call is not "a few
+tokens" — it is a full forward pass over the entire conversation, ~127K tokens of (cached)
+context plus a fresh generation, plus a real-time round trip. **Paths are free; turns are
+not.**
+
+## The four shapes, priced
+
+| Shape | Extra turns | Extra tokens (mean / worst observed) | Share of session | Added latency |
+|---|---|---|---|---|
+| **Hook capture (today)** | 0 | 0 | 0% | ~20 ms subprocess |
+| **Paths appended to the `deliver` call the agent already runs** | 0 | ~90 / ~310 | 0.09–0.32% of generated tokens | 0 |
+| **A separate `declare-changes` call before delivering** | 1 | ~128,000 | ~0.8% of session tokens | one round trip |
+| **Append per file changed** (the proposal) | 4–19 | ~538,000 / ~2,400,000 | +3.5% mean, ~+7% on the heaviest session | 15–90 s |
+| **Append per file *opened*** | 30–100+ | multi-million | +20–50% | minutes |
+
+Same information, delivered two ways: **~90 tokens and zero round trips, or ~538,000
+tokens and a dozen round trips.** The per-file variant also compounds — every logged line
+joins the context that every later turn re-reads.
+
+The last row matters because the question says "anytime it opens a new file." Opening is an
+order of magnitude more frequent than changing (145 `Read` calls plus most of 1,907 `Bash`
+calls used `cat`/`sed -n` to read), and reads are not what the ledger wants anyway.
+
+**So: batching is not an optimization, it is the whole cost.** Anything folded into a call
+the agent was already going to make is effectively free. Anything that adds its own turn is
+not.
+
+## The temp-file instinct is right — and it already exists
+
+The proposal's real insight is externalizing the record so it does not depend on the agent
+remembering, mid-session, what it touched 80 turns ago. That is correct, and it is exactly
+what ships today: the temp file is `~/.ovld/change-ledgers/<hash>.json`, and the thing
+appending to it is the `PostToolUse` hook, not the agent. It costs **zero tokens and zero
+turns** because the harness runs it out-of-band.
+
+The consequential finding is what that hook is already being handed. The Claude matcher is:
+
+```json
+"PostToolUse": [{ "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash", ... }]
+```
+
+**`Bash` is already in the matcher.** Every one of the 1,907 shell commands in those 35
+sessions already arrived at `ovld protocol capture-change` with its full command text, for
+free — and the codec discarded it, because `bash` normalizes to `shell` and `shell` has no
+declared path key. We are not missing the signal. We are dropping it after it arrives.
+
+Asking the agent to retype, at 128K tokens per turn, information that reached the machine
+for free 200 ms earlier is the most expensive possible way to obtain it.
+
+## Would declaration be more *accurate*?
+
+For hook-visible edits, no. In this sample all **174** edit-tool calls carried
+`tool_input.file_path`, so on this harness the direct tier already sees every `Write`/`Edit`.
+An agent-declared list can only match that at best, and it has failure modes the hook does
+not: it depends on the agent's recall across a 124-turn session, it survives context
+compaction only by luck, and — the reason coo:825 removed agent-declared changed-file lists
+in the first place — a model asked to enumerate what it changed will confidently produce a
+plausible list rather than an observed one. Declaration is a *memory*; the hook is a
+*recording*.
+
+Where declaration is not merely equal but strictly better is the set the hook structurally
+cannot see. By a conservative keyword heuristic, 67 of those 1,907 Bash calls mutated files
+inside the repo:
+
+| Mutation | Count | Path recoverable from command text? |
+|---|---|---|
+| `cat > file` / heredoc | 13 | yes |
+| codegen / migrate / `connectors:capabilities` | 12 | **no** — outputs unknown |
+| `sed -i` | 10 | yes |
+| `rm` / `git rm` / `git checkout --` | 9 | yes |
+| `eslint --fix` | 7 | usually |
+| `touch` | 6 | yes |
+| `prettier --write` | 6 | usually |
+| redirect into a source file | 2 | yes |
+| `mv` | 1 | yes (both sides) |
+| `mkdir` | 1 | n/a |
+
+That is **67 shell mutations against 174 edit-tool calls — roughly one in four mutation
+events is invisible today.** (Caveat: these are Claude Code sessions in a repo whose
+conventions push work through Bash, so one-in-four is likely an upper bound for other
+environments; and the heuristic both over- and under-counts at the margins.)
+
+The live ledgers agree. Across the 7 on this machine: 11 evidence entries, **all**
+`declared_edit/direct`, and health codes `direct_path_unavailable` ×5,
+`direct_path_observed` ×3, `native_payload_unavailable` ×2. Five of seven ledgers already
+record "a mutation-capable callback arrived and I could not name a path." The system knows
+where its blind spots are and tells no one.
+
+## Revised recommendation
+
+Keep the layered capture; do not replace it with agent declaration. Change the plan in three
+ways:
+
+1. **Promote E (`declare-changes --paths`) from phase 5 to phase 2, and scope it
+   correctly.** It is nearly free, so the earlier objection ("long-tail, do it last") does
+   not survive the measurement. But the prompt line must not be "declare the files you
+   changed" — that is the coo:825 failure mode, and it also duplicates a signal the hook
+   already has perfectly. It must be *"after running a generator, migration, or script that
+   writes files, you may declare its outputs."* One sentence, paths only, no prose, no gate.
+   That targets precisely the 12 codegen mutations above — the one row of the table nothing
+   else in this plan can recover.
+2. **Prefer the zero-turn delivery path.** Accept `--paths` on the existing `update` and
+   `deliver` commands, not only as a standalone subcommand, so declaration costs ~90 tokens
+   and no round trip. A standalone call is 1,400× more expensive for the same fact.
+3. **Add A5: use the shell command text we already receive.** Not as an attribution source —
+   the plan is right to reject that (§F) — but as a *corroborator* for the window tier:
+   extract unambiguous path operands from the command, then promote a path to evidence only
+   when the worktree confirms it actually changed in that window. This also recovers deletes
+   and renames, which mtime alone cannot express.
+
+One cost assumption in phase 3 is now measured rather than feared: `git status --porcelain
+-uall` in this worktree runs in **~20 ms**. Fingerprinting on every mutation-capable
+callback would have added ~38 s across all 35 sessions — about **1 s per session**. The
+window tier is cheap; it was never the token budget that made it look expensive.
+
+## Revised sequencing
+
+| Phase | Work | Effort | Recall impact |
+|---|---|---|---|
+| 1 | A1–A3 codec fixes + A4 fixtures | days | Fixes NotebookEdit, Codex `apply_patch`, MCP writes |
+| 2 | E declare-changes, scoped to generator output, folded into `update`/`deliver` | small | Recovers codegen outputs (~18% of shell mutations) at ~90 tokens |
+| 3 | C health surfacing + doctor checks | days | Makes the 5-of-7 `direct_path_unavailable` ledgers visible to reviewers |
+| 4 | B window tier (+ A5 shell-text corroboration) | ~1–2 weeks | The remaining shell/formatter mutations, renames, deletes |
+| 5 | D hookless fallback | small once B exists | Three adapters go from zero evidence to window-quality evidence |
+
+## What this rules out
+
+Asking the agent to log every file it opens. It is the most expensive shape of the cheapest
+question, it records reads the ledger does not want, and it re-derives by hand — at ~128K
+tokens per entry — data the hook is already receiving and throwing away.

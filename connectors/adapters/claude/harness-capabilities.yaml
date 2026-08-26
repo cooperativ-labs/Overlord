@@ -83,6 +83,7 @@ capabilities:
     native: PostToolUse
     fixtures:
       - fixtures/normalize-post-tool-use-write.json
+      - fixtures/normalize-post-tool-use-notebook.json
       - fixtures/post-tool-use-parity.json
       - fixtures/post-tool-use-capture.json
     notes: >-

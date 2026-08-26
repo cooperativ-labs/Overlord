@@ -34,7 +34,10 @@ export const AGENT_SESSION_CODECS: Record<string, CodecSpec> = {
         "inputPath": "tool_input",
         "fileEditKind": "file.edited",
         "filePathPaths": [
-          "file_path"
+          "file_path",
+          "notebook_path",
+          "filePath",
+          "path"
         ]
       },
       {
@@ -81,7 +84,13 @@ export const AGENT_SESSION_CODECS: Record<string, CodecSpec> = {
         "turnIdPath": "turn_id",
         "fileEditKind": "file.edited",
         "filePathPaths": [
-          "file_path"
+          "file_path",
+          "filePath",
+          "path"
+        ],
+        "filePathPatchTextPaths": [
+          "command",
+          "patch"
         ]
       },
       {

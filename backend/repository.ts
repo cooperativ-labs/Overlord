@@ -7663,8 +7663,8 @@ async function updateObjectiveTx(
       });
     }
 
-    const disconnectingToSubmitted =
-      body.state === 'submitted' &&
+    const disconnectingToQueue =
+      (body.state === 'draft' || body.state === 'submitted') &&
       body.state !== existing.state &&
       DISCONNECT_FROM_STATES.includes(existing.state as (typeof DISCONNECT_FROM_STATES)[number]);
 
@@ -7674,7 +7674,7 @@ async function updateObjectiveTx(
     if (
       body.state !== undefined &&
       body.state !== existing.state &&
-      (disconnectingToSubmitted || !LAUNCHABLE_STATES.includes(body.state))
+      (disconnectingToQueue || !LAUNCHABLE_STATES.includes(body.state))
     ) {
       await dequeueObjective({
         objectiveId: id,

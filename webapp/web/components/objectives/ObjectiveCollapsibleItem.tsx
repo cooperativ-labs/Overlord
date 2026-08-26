@@ -8,7 +8,8 @@ import {
   GitBranch,
   Loader2,
   Paperclip,
-  RefreshCw
+  RefreshCw,
+  Unplug
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -28,7 +29,17 @@ import {
 import { cn } from '../../lib/utils.ts';
 import { InlineEditField } from '../InlineEditField.tsx';
 import { OriginSparklesIcon } from '../OriginSparklesIcon.tsx';
+import { Button } from '../ui/button.tsx';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible.tsx';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
+} from '../ui/dialog.tsx';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip.tsx';
 
 import { AgentIcon } from './AgentIcon.tsx';
@@ -57,6 +68,7 @@ export function ObjectiveCollapsibleItem({
   const update = useUpdateObjective();
   const { copied, copy } = useCopyToClipboard();
   const [open, setOpen] = useState(defaultOpen);
+  const [forceDisconnectOpen, setForceDisconnectOpen] = useState(false);
   useEffect(() => {
     if (defaultOpen) setOpen(true);
   }, [defaultOpen]);
@@ -105,6 +117,11 @@ export function ObjectiveCollapsibleItem({
     agent: objective.assignedAgent,
     sessionId: objective.externalSessionId
   });
+
+  const forceDisconnect = async () => {
+    await update.mutateAsync({ id: objective.id, body: { state: 'draft' } });
+    setForceDisconnectOpen(false);
+  };
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -242,6 +259,48 @@ export function ObjectiveCollapsibleItem({
                 <Copy className="h-3.5 w-3.5" />
               )}
             </button>
+          ) : null}
+          {isExecuting ? (
+            <Dialog open={forceDisconnectOpen} onOpenChange={setForceDisconnectOpen}>
+              <DialogTrigger
+                render={
+                  <button
+                    type="button"
+                    aria-label="Force disconnect objective"
+                    title="Force disconnect"
+                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    onClick={event => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                    }}
+                  />
+                }
+              >
+                <Unplug className="h-3.5 w-3.5" />
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Force disconnect this objective?</DialogTitle>
+                  <DialogDescription>
+                    This ends Overlord&apos;s active session and clears its pending launch. The
+                    objective returns to Draft, and any existing draft becomes the first future
+                    objective.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <Button variant="secondary" onClick={() => setForceDisconnectOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    disabled={update.isPending}
+                    onClick={() => void forceDisconnect()}
+                  >
+                    {update.isPending ? 'Disconnecting…' : 'Force disconnect'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           ) : null}
           <ObjectiveMenuButton
             objectiveId={objective.id}

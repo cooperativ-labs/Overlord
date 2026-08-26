@@ -617,6 +617,10 @@ deliver:
     evidence automatically before update, changes, and deliver. Optional rationales,
     hook health, and path attribution cannot fail delivery. Do not continue implementation
     after delivery without explicit follow-up.
+
+    --paths <a,b,c> is optional, metadata-only evidence for outputs of a generator,
+    migration, or script. It is batched into this existing call, never inspects VCS,
+    and is not an instruction to list every changed or opened file.
     Inline --*-json values larger than ~8 KB are rejected; use --change-rationales-file -
     (or --payload-file -) and stream JSON on stdin. Keep --summary inline.
     Run \`${primaryCommand} protocol changes --objective-id <id>\` to inspect the attached

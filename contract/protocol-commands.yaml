@@ -12,7 +12,7 @@
 # entry) are intentionally not listed here: `capture-change` and `changes`. See
 # CONTRACT.md's contract-version-2 changelog entry for the precedent.
 
-contractVersion: '116'
+contractVersion: '125'
 referenceSpec: 'cli/docs/03-agent-protocol.md'
 
 # Transport-level shape shared by every protocol command, independent of subcommand.
@@ -101,6 +101,7 @@ sessionLifecycle:
       - --external-session-id
       - --change-rationales-json
       - --change-rationales-file
+      - --paths
       - --begin-follow-up-work
       - --follow-up-intent
     validPhases:
@@ -119,6 +120,7 @@ sessionLifecycle:
       - decision
     sideEffects:
       - appends-mission-event
+      - appends-optional-generator-output-ledger-evidence
       - records-optional-change-rationale-annotations
       - emits-scoped-change-rationale-entity-changes
 
@@ -239,8 +241,10 @@ sessionLifecycle:
       - --payload-file
       - --verification-summary
       - --follow-up-notes
+      - --paths
     clientCapture:
       - 'The client CLI drains every pending bounded batch from the attached objective ledger through sync-changes before delivery. It never derives or injects file paths from a worktree delta.'
+      - 'An optional bounded --paths list may append agent-known generator, migration, or script outputs to the attached objective ledger before the drain. It is not a changed-file reconciliation input.'
     validationRules:
       - 'Objective-ledger changed files and optional rationales are review metadata and cannot reject a delivery.'
       - '--payload-json / --payload-file may carry an additive deliveryReport object with schemaVersion: 1 and agentReport.{humanActions,tradeoffsMade,knownRisks,deferredWork,assumptions}; omitted or malformed advisory items normalize independently with bounded warnings and can never prevent delivery'

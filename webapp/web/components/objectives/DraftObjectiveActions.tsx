@@ -36,15 +36,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover.tsx';
 const AUTO_ADVANCE_TOGGLE_STATES: ObjectiveState[] = ['future', 'draft', 'submitted', 'launching'];
 /** Sentinel for "this mission's queue" before that queue has been created. */
 const MISSION_QUEUE_OPTION = 'mission-queue';
-const OBJECTIVE_STATES: ObjectiveState[] = [
-  'future',
-  'draft',
-  'submitted',
-  'launching',
-  'executing',
-  'pending_delivery',
-  'complete'
-];
+// The lifecycle pipeline owns submitted through pending-delivery; people can
+// only sequence a card, make it the active draft, or mark it finished here.
+const MANUALLY_SETTABLE_STATES: ObjectiveState[] = ['future', 'draft', 'complete'];
 
 type DraftObjectiveActionsProps = {
   objective: ObjectiveDto;
@@ -105,7 +99,7 @@ export function DraftObjectiveActions({ objective }: DraftObjectiveActionsProps)
           <MoreVertical className="h-3.5 w-3.5" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-[160px]">
-          {OBJECTIVE_STATES.map(s => (
+          {MANUALLY_SETTABLE_STATES.map(s => (
             <DropdownMenuItem
               key={s}
               className="gap-2 text-xs"

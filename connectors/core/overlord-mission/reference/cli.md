@@ -113,6 +113,10 @@ Native paths normalized by the connector-owned codec as `file.edited` are valid,
 no-ops. Mutation-capable callbacks without a normalized edit path, plus shell, generic, unknown,
 and unmapped callbacks, report unavailable evidence health.
 
+For outputs of a generator, migration, or file-writing script that the hook cannot name, an agent
+may add `--paths path/one.ts,path/two.ts` to its existing `update` or `deliver` call. It is
+optional, paths-only metadata; it is never a request to enumerate every changed or opened file.
+
 ### Shared worktree safety (critical)
 
 The working tree may contain file changes from **other agents, missions, or objectives** running concurrently in the same checkout or worktree. Those changes are **not yours to undo**.

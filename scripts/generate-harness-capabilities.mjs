@@ -641,7 +641,8 @@ const CODEC_RULE_KEYS = new Set([
   'detailPath',
   'outcomePath',
   'fileEditKind',
-  'filePathPaths'
+  'filePathPaths',
+  'filePathPatchTextPaths'
 ]);
 
 function isBoundedDottedPath(value) {
@@ -732,9 +733,24 @@ export function validateCodec({ adapter, codec, errors, integrationShape }) {
           `${at(`events.${rule.native}`)}: filePathPaths must contain 1-8 unique bounded dotted paths relative to inputPath`
         );
       }
-    } else if (rule.filePathPaths !== undefined) {
+      if (
+        rule.filePathPatchTextPaths !== undefined &&
+        (!Array.isArray(rule.filePathPatchTextPaths) ||
+          rule.filePathPatchTextPaths.length === 0 ||
+          rule.filePathPatchTextPaths.length > 4 ||
+          rule.filePathPatchTextPaths.some(path => !isBoundedDottedPath(path)) ||
+          new Set(rule.filePathPatchTextPaths).size !== rule.filePathPatchTextPaths.length)
+      ) {
+        errors.push(
+          `${at(`events.${rule.native}`)}: filePathPatchTextPaths must contain 1-4 unique bounded dotted paths relative to inputPath`
+        );
+      }
+    } else if (
+      rule.filePathPaths !== undefined ||
+      rule.filePathPatchTextPaths !== undefined
+    ) {
       errors.push(
-        `${at(`events.${rule.native}`)}: filePathPaths is only valid with fileEditKind "file.edited"`
+        `${at(`events.${rule.native}`)}: filePathPaths is only valid with fileEditKind "file.edited" (as is filePathPatchTextPaths)`
       );
     }
     if (!['agent', 'user', 'system'].includes(rule.origin)) {

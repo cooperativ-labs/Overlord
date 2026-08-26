@@ -290,7 +290,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "codec": "claude",
     "integrationShape": "callback",
     "capabilityTier": 1,
-    "descriptorDigest": "c7e52ce7d4698d35888a533b42d67c56d7616b3bb90e8537e4afcc39e1b6cc5d",
+    "descriptorDigest": "0f708197c1306226e137a332532fabbc68c41023ba0bd46614468d9fef38a14e",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Claude Code",
@@ -492,7 +492,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "codec": "codex",
     "integrationShape": "callback",
     "capabilityTier": 1,
-    "descriptorDigest": "bc823089f8c0fc97b888dec6b4e10eb55b596b1194664e1fe200468fe2c622c0",
+    "descriptorDigest": "4d4908a81023cf7943ebbcb35d8477751f97d916597adc3bf3cec63bdb58dc4b",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Codex CLI",
@@ -522,7 +522,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
       "fixture": "fixtures/mutation-window-evidence.json",
       "reason": null,
       "evidenceRef": null,
-      "notes": "Recorded pre/post shapes are separate calls and do not prove a paired window. A directly named native edit path normalized by the Codex codec as `file.edited` may record objective-bound, non-exclusive `declared_edit`/`direct` evidence. The recorded apply_patch completion has no normalized edit path, so it records unavailable evidence health."
+      "notes": "Recorded pre/post shapes are separate calls and do not prove a paired window. A directly named native edit path normalized by the Codex codec as `file.edited` may record objective-bound, non-exclusive `declared_edit`/`direct` evidence. `apply_patch` destinations are reduced only from its declared `*** Add|Update|Delete File:` headers; patch text itself is never retained."
     },
     "capabilities": {
       "observe.prompt": {
@@ -1271,7 +1271,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
   }
 ];
 
-export const HARNESS_CATALOG_DIGEST = '9cc9f237fc308dec078f5a3c6fc89741fa46005d76cce4b2250dc4c82d12f847';
+export const HARNESS_CATALOG_DIGEST = '9b5e5074ad777fa04280b57040141eab441d4d386da054cc415f8f2166460672';
 
 export function findHarnessDescriptor(adapter: string): HarnessDescriptor | undefined {
   return HARNESS_DESCRIPTORS.find(entry => entry.adapter === adapter);

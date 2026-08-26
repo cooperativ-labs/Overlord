@@ -80,6 +80,53 @@ test('captures a direct native path under the canonical objective ledger', () =>
   );
 });
 
+test('captures declared notebook and apply_patch paths without retaining native content', () => {
+  const workspace = makeWorkspace();
+
+  assert.deepEqual(
+    captureChangeFromPayload({
+      agent: 'claude',
+      rawPayload: JSON.stringify({
+        hook_event_name: 'PostToolUse',
+        tool_name: 'NotebookEdit',
+        tool_input: { notebook_path: path.join(workspace, 'notebooks', 'report.ipynb') },
+        cwd: workspace
+      }),
+      objectiveOverride: OBJECTIVE_DISPLAY_ID,
+      fallbackCwd: workspace
+    }),
+    { recorded: true, objectiveId: OBJECTIVE_ID, files: 1 }
+  );
+  assert.deepEqual(
+    captureChangeFromPayload({
+      agent: 'codex',
+      rawPayload: JSON.stringify({
+        hook_event_name: 'PostToolUse',
+        tool_name: 'apply_patch',
+        tool_input: {
+          command:
+            '*** Begin Patch\n*** Update File: ' +
+            path.join(workspace, 'generated', 'one.ts') +
+            '\nsecret=AKIAIOSFODNN7EXAMPLE\n*** Add File: generated/two.ts\n*** End Patch'
+        },
+        cwd: workspace
+      }),
+      objectiveOverride: OBJECTIVE_DISPLAY_ID,
+      fallbackCwd: workspace
+    }),
+    { recorded: true, objectiveId: OBJECTIVE_ID, files: 2 }
+  );
+
+  assert.deepEqual(
+    readUnsyncedChangeEvidence({
+      workingDirectory: workspace,
+      objectiveId: OBJECTIVE_ID,
+      sessionKey: SESSION_KEY
+    }).map(entry => entry.filePath),
+    ['notebooks/report.ipynb', 'generated/one.ts', 'generated/two.ts']
+  );
+});
+
 test('read callbacks are silent while shell callbacks record unavailable health', () => {
   const workspace = makeWorkspace();
   writeFileSync(path.join(workspace, 'generated.ts'), 'generated\n');

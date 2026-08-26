@@ -1090,7 +1090,8 @@ export async function clearExecutionRequests({
   projectId,
   now = nowIso(),
   emitEvents = true,
-  eventSummary = 'Cleared execution request.'
+  eventSummary = 'Cleared execution request.',
+  includeLaunched = false
 }: {
   ctx: ServiceContext;
   objectiveId?: string | null;
@@ -1098,15 +1099,20 @@ export async function clearExecutionRequests({
   now?: string;
   emitEvents?: boolean;
   eventSummary?: string;
+  /** A force-disconnect must also release a request whose runner already launched. */
+  includeLaunched?: boolean;
 }): Promise<{ cleared: number }> {
   return await ctx.db.transaction(async tx => {
     const txCtx = { ...ctx, db: tx };
+    const clearableStatuses = includeLaunched
+      ? [...ACTIVE_EXECUTION_REQUEST_STATUSES, 'launched']
+      : ACTIVE_EXECUTION_REQUEST_STATUSES;
     const conditions = [
       `workspace_id = ?`,
       `deleted_at IS NULL`,
-      `status IN (${ACTIVE_EXECUTION_REQUEST_STATUSES.map(() => '?').join(', ')})`
+      `status IN (${clearableStatuses.map(() => '?').join(', ')})`
     ];
-    const params: Array<string> = [ctx.workspace.id, ...ACTIVE_EXECUTION_REQUEST_STATUSES];
+    const params: Array<string> = [ctx.workspace.id, ...clearableStatuses];
     if (objectiveId) {
       // `ovld runner clear coo:756.k7xm` passes a display id; comparing it to the
       // UUID column would report "cleared 0" instead of clearing the queue. A

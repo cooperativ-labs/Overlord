@@ -16,7 +16,7 @@
     "tool_response": { "text": "changed with postgres://user:hunter2@db/app" }
   },
   "expect": {
-    "eventId": "ev_b6414915d58f532e1e3eea254578e9b9",
+    "eventId": "ev_bf289659aca425896e8c26747d35c87e",
     "producerSequence": null,
     "occurredAt": "2026-08-01T00:00:00.000Z",
     "kind": "file.edited",
@@ -28,7 +28,12 @@
     "correlationId": "codex-session-1",
     "origin": "agent",
     "summary": "Write a file",
-    "payload": { "tool": "edit", "action": "Write a file", "formatterVersion": 1 }
+    "payload": {
+      "tool": "edit",
+      "action": "Write a file",
+      "paths": ["src/token.ts"],
+      "formatterVersion": 1
+    }
   },
   "mustNotContain": ["AKIAIOSFODNN7EXAMPLE", "hunter2", "secret.jsonl", "/Users/jake"]
 }

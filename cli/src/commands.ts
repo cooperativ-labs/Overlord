@@ -35,6 +35,7 @@ import {
 import { type BranchAutomationPayload, prepareMissionBranch } from './branch-preparation.js';
 import { captureChangeFromPayload } from './capture-change.js';
 import {
+  appendChangeEvidence,
   type LedgerEvidence,
   markChangeEvidenceSynced,
   readChangeLedgerHealth,
@@ -602,6 +603,52 @@ const RETIRED_CHANGE_TRACKING_FLAGS: Record<string, readonly string[]> = {
 };
 
 const MAX_CHANGES_HEALTH_ENTRIES = 128;
+const MAX_DECLARED_OUTPUT_PATHS = 512;
+
+/**
+ * `--paths` is deliberately narrow: a single batched declaration for outputs
+ * the agent knows a generator or script produced.  It is not a VCS
+ * reconciliation path, and it is resolved locally before the normal ledger
+ * drain so no raw list crosses the lifecycle request.
+ */
+function appendDeclaredOutputPaths({
+  flags,
+  active,
+  workingDirectory
+}: {
+  flags: Record<string, string | true>;
+  active: { objectiveId: string; sessionKey: string } | undefined;
+  workingDirectory: string;
+}): void {
+  const value = flags['--paths'];
+  if (value === undefined) return;
+  delete flags['--paths'];
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new CliError({ message: '--paths requires a comma-separated list of output paths.' });
+  }
+  if (!active) {
+    throw new CliError({
+      message: '--paths requires the attached objective session in this working directory.'
+    });
+  }
+  const paths = value
+    .split(',')
+    .map(entry => entry.trim())
+    .filter(Boolean);
+  if (paths.length === 0) {
+    throw new CliError({ message: '--paths requires at least one output path.' });
+  }
+  appendChangeEvidence({
+    workingDirectory,
+    objectiveId: active.objectiveId,
+    sessionKey: active.sessionKey,
+    filePaths: paths.slice(0, MAX_DECLARED_OUTPUT_PATHS),
+    source: 'declared_edit',
+    quality: 'direct',
+    overlap: false,
+    hookHealth: 'agent_declared_generator_output'
+  });
+}
 
 /**
  * Resolve each `--*-file` flag independently into its canonical `fileInputs`
@@ -964,6 +1011,7 @@ export async function runProtocolCommand({
       ? readActiveSessions(workingDirectory).find(entry => entry.sessionKey === sessionKey)
       : undefined;
     lifecycleActive = active;
+    appendDeclaredOutputPaths({ flags, active, workingDirectory });
     if (sessionKey && active) {
       await syncObjectiveLedger({ runtime, workingDirectory, missionId, sessionKey, active });
     }

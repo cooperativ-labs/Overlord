@@ -34,13 +34,30 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `124`
+Current version: `125`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
 `contract/components.yaml`) — never a header duplicate. The contract version is
 incremented when any stable interface changes. All conformance manifests must
 declare the contract version they were validated against.
+
+### Version 125 Change Summary
+
+File-change capture gains additive, metadata-only recall paths without reintroducing
+VCS-delta reconciliation or delivery gates. Connector-owned codecs may declare
+bounded exact path fields and bounded unified-patch header fields; every extracted
+path is reduced locally to an objective-bound `declared_edit` / `direct` ledger
+observation. The raw patch, command, native payload, and file content remain local
+and are never synchronized.
+
+Protocol `update` and `deliver` add the optional `--paths` input. It accepts a
+bounded comma-separated list of agent-known generator, migration, or script outputs
+and appends the same objective/session ledger evidence before the normal lifecycle
+request. It is advisory, applies `.overlordignore`, is never inferred from a VCS
+delta, and cannot block update or delivery. Connector prompts may mention it only
+as an optional escape hatch for generated outputs, never as an instruction to
+enumerate all changed or opened files.
 
 ### Version 103 Change Summary
 

@@ -55,6 +55,12 @@ export type CodecEventRule = {
   /** Ordered dotted paths, relative to inputPath, that may carry exact edit evidence. */
   filePathPaths?: string[];
   /**
+   * Ordered dotted paths, relative to inputPath, containing a unified-patch-like
+   * string. Only `*** Add|Update|Delete File:` headers are reduced to paths;
+   * the patch text itself never enters the normalized event.
+   */
+  filePathPatchTextPaths?: string[];
+  /**
    * When the normalized tool is a file mutation, emit this kind instead.
    *
    * One native event covers "the agent used a tool" and "the agent changed a file"; a feed that
@@ -138,6 +144,28 @@ function readOutcome(value: unknown): NormalizedEventPayload['outcome'] | undefi
   return undefined;
 }
 
+const PATCH_HEADER = /^\*\*\* (?:Add|Update|Delete) File: (.+)$/gm;
+const MAX_PATCH_PATHS = 32;
+
+function declaredPatchPaths(
+  input: unknown,
+  paths: string[] | undefined,
+  projectRoot: string | null
+): string[] {
+  const output: string[] = [];
+  for (const declaredPath of paths ?? []) {
+    const patch = readPath(input, declaredPath);
+    if (typeof patch !== 'string' || patch.length > 1_048_576) continue;
+    PATCH_HEADER.lastIndex = 0;
+    for (const match of patch.matchAll(PATCH_HEADER)) {
+      const reduced = reduceEvidencePath(match[1], projectRoot);
+      if (reduced && !output.includes(reduced)) output.push(reduced);
+      if (output.length >= MAX_PATCH_PATHS) return output;
+    }
+  }
+  return output;
+}
+
 export function findCodecRule(
   codec: CodecSpec,
   nativeEventName: string | null
@@ -212,14 +240,17 @@ export function normalizeNativeEvent({
 
     if (rule.fileEditKind && (tool === 'write' || tool === 'edit')) {
       kind = rule.fileEditKind;
-      const evidencePath = (rule.filePathPaths ?? []).reduce<string | null>(
-        (accepted, declaredPath) =>
-          accepted ?? reduceEvidencePath(readPath(input, declaredPath), projectRoot),
-        null
-      );
-      if (evidencePath) {
-        sealedInput.paths = [evidencePath];
-        idParts.push(evidencePath);
+      const exactPaths: string[] = [];
+      for (const declaredPath of rule.filePathPaths ?? []) {
+        const reduced = reduceEvidencePath(readPath(input, declaredPath), projectRoot);
+        if (reduced && !exactPaths.includes(reduced)) exactPaths.push(reduced);
+      }
+      for (const extracted of declaredPatchPaths(input, rule.filePathPatchTextPaths, projectRoot)) {
+        if (!exactPaths.includes(extracted)) exactPaths.push(extracted);
+      }
+      if (exactPaths.length > 0) {
+        sealedInput.paths = exactPaths;
+        idParts.push(...exactPaths);
       }
     }
 

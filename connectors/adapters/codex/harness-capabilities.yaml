@@ -52,8 +52,8 @@ mutationHooks:
   notes: >-
     Recorded pre/post shapes are separate calls and do not prove a paired window. A directly named
     native edit path normalized by the Codex codec as `file.edited` may record objective-bound,
-    non-exclusive `declared_edit`/`direct` evidence. The recorded apply_patch completion has no
-    normalized edit path, so it records unavailable evidence health.
+    non-exclusive `declared_edit`/`direct` evidence. `apply_patch` destinations are reduced only
+    from its declared `*** Add|Update|Delete File:` headers; patch text itself is never retained.
 
 capabilities:
   observe.prompt:
@@ -81,8 +81,9 @@ capabilities:
     notes: >-
       The lifecycle PostToolUse registration forwards Codex's native payload to local
       `capture-change` only when `OVERLORD_OBJECTIVE_ID` resolves an exact active-session binding.
-      Native paths normalized by the Codex codec as `file.edited` record non-exclusive
-      `declared_edit`/`direct` evidence. Codec-normalized read, search, and fetch callbacks are
+      Native paths and declared `apply_patch` headers normalized by the Codex codec as
+      `file.edited` record non-exclusive `declared_edit`/`direct` evidence. Codec-normalized
+      read, search, and fetch callbacks are
       silent no-ops; mutation-capable callbacks without a normalized edit path, plus shell,
       generic, unknown, and unmapped callbacks, record unavailable evidence health. It remains
       separate from mechanical agent-session observation.

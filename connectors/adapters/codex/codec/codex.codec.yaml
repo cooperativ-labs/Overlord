@@ -31,6 +31,13 @@ events:
     fileEditKind: file.edited
     filePathPaths:
       - file_path
+      - filePath
+      - path
+    # Codex apply_patch carries destinations in bounded patch headers rather
+    # than a standalone path field. The codec extracts only those headers.
+    filePathPatchTextPaths:
+      - command
+      - patch
 
   - native: UserPromptSubmit
     kind: prompt.submitted

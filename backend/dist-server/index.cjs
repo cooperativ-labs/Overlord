@@ -139129,16 +139129,18 @@ async function clearExecutionRequests({
   projectId,
   now: now2 = nowIso(),
   emitEvents = true,
-  eventSummary = "Cleared execution request."
+  eventSummary = "Cleared execution request.",
+  includeLaunched = false
 }) {
   return await ctx.db.transaction(async (tx) => {
     const txCtx = { ...ctx, db: tx };
+    const clearableStatuses = includeLaunched ? [...ACTIVE_EXECUTION_REQUEST_STATUSES, "launched"] : ACTIVE_EXECUTION_REQUEST_STATUSES;
     const conditions = [
       `workspace_id = ?`,
       `deleted_at IS NULL`,
-      `status IN (${ACTIVE_EXECUTION_REQUEST_STATUSES.map(() => "?").join(", ")})`
+      `status IN (${clearableStatuses.map(() => "?").join(", ")})`
     ];
-    const params = [ctx.workspace.id, ...ACTIVE_EXECUTION_REQUEST_STATUSES];
+    const params = [ctx.workspace.id, ...clearableStatuses];
     if (objectiveId) {
       const parsed = parseObjectiveRef(objectiveId);
       conditions.push("objective_id = ?");
@@ -143168,7 +143170,8 @@ async function dequeueObjective({
     },
     objectiveId,
     now: now2,
-    emitEvents: false
+    emitEvents: false,
+    includeLaunched: true
   });
   const sessionPhase = newState === "complete" ? "complete" : "blocked";
   const openSessions = await tx.all(
@@ -151140,12 +151143,13 @@ async function listWorkspaceMyMissions() {
 var INBOX_MISSION_RECENT_MS = 7 * 24 * 60 * 60 * 1e3;
 var INBOX_MISSION_AGENT_NEXT_LIMIT = 60;
 var INBOX_MISSION_DUE_SOON_LIMIT = 60;
-function inboxDueSoonWindow(now2) {
+var INBOX_MISSION_OVERDUE_LIMIT = 60;
+function inboxDueWindow(now2) {
   const startOfToday = Date.UTC(now2.getUTCFullYear(), now2.getUTCMonth(), now2.getUTCDate());
   const dayMs = 24 * 60 * 60 * 1e3;
   return {
-    start: new Date(startOfToday).toISOString(),
-    end: new Date(startOfToday + 2 * dayMs).toISOString()
+    todayStart: new Date(startOfToday).toISOString(),
+    dueSoonEnd: new Date(startOfToday + 2 * dayMs).toISOString()
   };
 }
 function selectInboxMissionsSql(workspacePlaceholders) {
@@ -151213,9 +151217,18 @@ async function listInboxMissions() {
   const workspacePlaceholders = readableWorkspaceIds2.map(() => "?").join(", ");
   const now2 = /* @__PURE__ */ new Date();
   const recentCutoff = new Date(now2.getTime() - INBOX_MISSION_RECENT_MS).toISOString();
-  const dueSoon = inboxDueSoonWindow(now2);
+  const dueWindow = inboxDueWindow(now2);
   const client = requireDatabaseClient();
   const baseSql = selectInboxMissionsSql(workspacePlaceholders);
+  const overdueRows = await client.all(
+    `${baseSql}
+       AND t.due_datetime IS NOT NULL
+       AND t.due_datetime < ?
+       AND t.status_type NOT IN ('complete', 'cancelled')
+     ORDER BY t.due_datetime DESC, t.sequence_number DESC, t.id ASC
+     LIMIT ?`,
+    [...readableWorkspaceIds2, dueWindow.todayStart, INBOX_MISSION_OVERDUE_LIMIT]
+  );
   const dueSoonRows = await client.all(
     `${baseSql}
        AND t.due_datetime IS NOT NULL
@@ -151224,7 +151237,12 @@ async function listInboxMissions() {
        AND t.status_type NOT IN ('complete', 'cancelled')
      ORDER BY t.due_datetime ASC, t.sequence_number DESC, t.id ASC
      LIMIT ?`,
-    [...readableWorkspaceIds2, dueSoon.start, dueSoon.end, INBOX_MISSION_DUE_SOON_LIMIT]
+    [
+      ...readableWorkspaceIds2,
+      dueWindow.todayStart,
+      dueWindow.dueSoonEnd,
+      INBOX_MISSION_DUE_SOON_LIMIT
+    ]
   );
   const agentNextRows = await client.all(
     `${baseSql}
@@ -151234,14 +151252,20 @@ async function listInboxMissions() {
      LIMIT ?`,
     [...readableWorkspaceIds2, INBOX_MISSION_AGENT_NEXT_LIMIT]
   );
+  const overdueIds = new Set(overdueRows.map((row) => row.id));
   const dueSoonIds = new Set(dueSoonRows.map((row) => row.id));
-  const orderedRows = [...dueSoonRows, ...agentNextRows.filter((row) => !dueSoonIds.has(row.id))];
+  const orderedRows = [
+    ...overdueRows,
+    ...dueSoonRows,
+    ...agentNextRows.filter((row) => !overdueIds.has(row.id) && !dueSoonIds.has(row.id))
+  ];
   const agentNextIds = new Set(agentNextRows.map((row) => row.id));
   const tagsByMission = await getTagsByMission(orderedRows.map((row) => row.id));
   return {
     generatedAt,
     missions: orderedRows.map((row) => {
       const reasons = [];
+      if (overdueIds.has(row.id)) reasons.push("overdue");
       if (dueSoonIds.has(row.id)) reasons.push("due_soon");
       if (agentNextIds.has(row.id)) reasons.push("agent_next");
       if (row.created_at >= recentCutoff) {
@@ -151929,8 +151953,8 @@ async function updateObjectiveTx(idRef, body) {
         now: now2
       });
     }
-    const disconnectingToSubmitted = body.state === "submitted" && body.state !== existing.state && DISCONNECT_FROM_STATES.includes(existing.state);
-    if (body.state !== void 0 && body.state !== existing.state && (disconnectingToSubmitted || !LAUNCHABLE_STATES.includes(body.state))) {
+    const disconnectingToQueue = (body.state === "draft" || body.state === "submitted") && body.state !== existing.state && DISCONNECT_FROM_STATES.includes(existing.state);
+    if (body.state !== void 0 && body.state !== existing.state && (disconnectingToQueue || !LAUNCHABLE_STATES.includes(body.state))) {
       await dequeueObjective({
         objectiveId: id,
         projectId: existing.project_id,

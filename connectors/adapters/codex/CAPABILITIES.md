@@ -6,7 +6,7 @@
 
 **Harness version verified** `0.147.0` · **range** `>=0.124.0` · **scheme** `semver`
 
-**Descriptor digest** `bc823089f8c0fc97b888dec6b4e10eb55b596b1194664e1fe200468fe2c622c0`
+**Descriptor digest** `4d4908a81023cf7943ebbcb35d8477751f97d916597adc3bf3cec63bdb58dc4b`
 
 > The tier is derived from passing fixtures, never authored. `unsupported` means the harness
 > cannot do it — do not attempt it. `not-implemented` means it is buildable and unbuilt: that is
@@ -47,7 +47,7 @@ Per-hook timeouts in seconds; the documentation gives a 600-second default. The 
 | Classification | `post-only` |
 | Executable fixture | `fixtures/mutation-window-evidence.json` |
 
-Recorded pre/post shapes are separate calls and do not prove a paired window. A directly named native edit path normalized by the Codex codec as `file.edited` may record objective-bound, non-exclusive `declared_edit`/`direct` evidence. The recorded apply_patch completion has no normalized edit path, so it records unavailable evidence health.
+Recorded pre/post shapes are separate calls and do not prove a paired window. A directly named native edit path normalized by the Codex codec as `file.edited` may record objective-bound, non-exclusive `declared_edit`/`direct` evidence. `apply_patch` destinations are reduced only from its declared `*** Add|Update|Delete File:` headers; patch text itself is never retained.
 
 The completion fixture proves post-only timing but exposes no normalized `file.edited`
 path. Runtime file evidence is unavailable for this adapter.
@@ -77,7 +77,7 @@ path. Runtime file evidence is unavailable for this adapter.
 ### Capability notes
 
 - **`observe.toolCall`** — There is no mechanical observation path until Overlord has a native Conversation Hub client.
-- **`observe.fileEdit`** — The lifecycle PostToolUse registration forwards Codex's native payload to local `capture-change` only when `OVERLORD_OBJECTIVE_ID` resolves an exact active-session binding. Native paths normalized by the Codex codec as `file.edited` record non-exclusive `declared_edit`/`direct` evidence. Codec-normalized read, search, and fetch callbacks are silent no-ops; mutation-capable callbacks without a normalized edit path, plus shell, generic, unknown, and unmapped callbacks, record unavailable evidence health. It remains separate from mechanical agent-session observation.
+- **`observe.fileEdit`** — The lifecycle PostToolUse registration forwards Codex's native payload to local `capture-change` only when `OVERLORD_OBJECTIVE_ID` resolves an exact active-session binding. Native paths and declared `apply_patch` headers normalized by the Codex codec as `file.edited` record non-exclusive `declared_edit`/`direct` evidence. Codec-normalized read, search, and fetch callbacks are silent no-ops; mutation-capable callbacks without a normalized edit path, plus shell, generic, unknown, and unmapped callbacks, record unavailable evidence health. It remains separate from mechanical agent-session observation.
 - **`decide.universal`** — The native Codex prompt owns approvals; Overlord exposes no remote decision control.
 - **`answer.structuredQuestion`** — `codex app-server` exposes ToolRequestUserInput with per-option label/description and an autoResolutionMs — an ACP-shaped structured question in everything but name. It is unreachable until the single-subscriber question is settled.
 - **`inject.midTurn`** — ThreadInjectItems/TurnSteer exist on the experimental app-server surface only. The binary carries "expected exactly one client subscribed to the thread, found {}", so if the TUI is that one client Overlord cannot also subscribe and this path is closed.

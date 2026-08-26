@@ -173,6 +173,45 @@ test('parking an active objective to submitted clears its queue and allows launc
   assert.equal(secondRequest.objectiveId, second.id);
 });
 
+test('force-disconnecting an executing objective to draft clears stale execution and parks the draft sibling', async () => {
+  const project = await createProject({ name: 'Force Disconnect To Draft Test' });
+  await createProjectResource(project.id, {
+    directoryPath: createIsolatedCheckout('overlord-launch-force-disconnect-resource-'),
+    executionTargetId: null,
+    isPrimary: true
+  });
+  const mission = await createMission({
+    projectId: project.id,
+    firstObjective: 'First objective'
+  });
+  const firstObjective = mission.objectives[0]!;
+  const firstRequest = await launchObjective(firstObjective.id, { agent: 'codex' });
+  db.prepare(`UPDATE execution_requests SET status = 'launched' WHERE id = ?`).run(firstRequest.id);
+  await updateObjective(firstObjective.id, { state: 'executing' });
+
+  const draftSibling = await createObjective({
+    missionId: mission.id,
+    instructionText: 'Existing draft objective'
+  });
+  assert.equal(draftSibling.state, 'draft');
+
+  const disconnected = await updateObjective(firstObjective.id, { state: 'draft' });
+  assert.equal(disconnected.state, 'draft');
+
+  const requestAfterDisconnect = db
+    .prepare(`SELECT status FROM execution_requests WHERE id = ?`)
+    .get(firstRequest.id) as { status: string };
+  assert.equal(requestAfterDisconnect.status, 'cleared');
+
+  const siblingAfterDisconnect = db
+    .prepare(`SELECT state FROM objectives WHERE id = ?`)
+    .get(draftSibling.id) as { state: string };
+  assert.equal(siblingAfterDisconnect.state, 'future');
+
+  const retry = await launchObjective(firstObjective.id, { agent: 'codex' });
+  assert.notEqual(retry.id, firstRequest.id);
+});
+
 test('launching ignores stale active requests tied to completed objectives', async () => {
   const project = await createProject({ name: 'Stale Completed Request Launch Test' });
   await createProjectResource(project.id, {
