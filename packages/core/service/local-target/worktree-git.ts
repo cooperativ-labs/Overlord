@@ -17,6 +17,31 @@ export function worktreeIsDirty(worktreePath: string): boolean {
   return status.ok && status.stdout.length > 0;
 }
 
+/**
+ * Where a mission branch is actually checked out on this device.
+ *
+ * Prefers the canonical/recorded worktree (`worktreePathHint`) when it still
+ * exists and is on `branchName`. Otherwise asks git where the branch lives —
+ * which may be the primary repo itself (the worktree was removed and the branch
+ * checked out in the main checkout) or another linked worktree. `null` means the
+ * branch is not checked out anywhere in this repo.
+ */
+export function resolveBranchCheckoutPath({
+  repoPath,
+  branchName,
+  worktreePathHint
+}: {
+  repoPath: string;
+  branchName: string;
+  worktreePathHint?: string | null;
+}): string | null {
+  if (worktreePathHint && existsSync(worktreePathHint)) {
+    const current = runGitResult(worktreePathHint, ['branch', '--show-current']);
+    if (current.ok && current.stdout === branchName) return worktreePathHint;
+  }
+  return worktreePathForBranch(repoPath, branchName);
+}
+
 export function worktreePathForBranch(repoPath: string, branch: string): string | null {
   const out = runGitResult(repoPath, ['worktree', 'list', '--porcelain']);
   if (!out.ok) return null;

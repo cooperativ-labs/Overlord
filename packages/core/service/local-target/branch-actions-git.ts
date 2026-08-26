@@ -1,12 +1,15 @@
-import { existsSync } from 'node:fs';
-
 import { runGitResult } from './git-run.ts';
-import type { BranchActionKind, PerformBranchActionInput } from './types.ts';
-import { removeGitWorktree, worktreeIsDirty, worktreePathForBranch } from './worktree-git.ts';
+import type { PerformBranchActionInput } from './types.ts';
+import {
+  removeGitWorktree,
+  resolveBranchCheckoutPath,
+  resolveRealPath,
+  worktreeIsDirty,
+  worktreePathForBranch
+} from './worktree-git.ts';
 
 export type BranchActionErrorCode =
   | 'BRANCH_NO_WORKTREE'
-  | 'BRANCH_WORKTREE_MISMATCH'
   | 'BRANCH_DIRTY'
   | 'BRANCH_MERGE_CONFLICT'
   | 'BRANCH_PARENT_NOT_CHECKED_OUT'
@@ -20,23 +23,35 @@ export type BranchActionGitResult =
   | { ok: true; summary: string }
   | { ok: false; code: BranchActionErrorCode; message: string; detail?: string };
 
+// Locates the checkout an action should run in. The recorded worktree wins when
+// it still exists; otherwise the branch may live in the primary repo (its
+// worktree was removed and the branch checked out there) or another linked
+// worktree. Only a branch checked out nowhere is an error.
+function resolveActionCheckout(
+  input: PerformBranchActionInput
+): { ok: true; path: string } | { ok: false; code: 'BRANCH_NO_WORKTREE'; message: string } {
+  const path = resolveBranchCheckoutPath({
+    repoPath: input.primaryRepoPath,
+    branchName: input.branchName,
+    worktreePathHint: input.worktreePath
+  });
+  if (path) return { ok: true, path };
+  return {
+    ok: false,
+    code: 'BRANCH_NO_WORKTREE',
+    message: `${input.branchName} is not checked out in any worktree of ${input.primaryRepoPath} (expected ${input.worktreePath}).`
+  };
+}
+
+function isPrimaryRepo(candidate: string, primaryRepoPath: string): boolean {
+  return resolveRealPath(candidate) === resolveRealPath(primaryRepoPath);
+}
+
 function integrateBranch(input: PerformBranchActionInput): BranchActionGitResult {
-  const { branchName, baseBranch, worktreePath, primaryRepoPath } = input;
-  if (!existsSync(worktreePath)) {
-    return {
-      ok: false,
-      code: 'BRANCH_NO_WORKTREE',
-      message: `The branch's worktree is not present at ${worktreePath}.`
-    };
-  }
-  const wtBranch = runGitResult(worktreePath, ['branch', '--show-current']);
-  if (!wtBranch.ok || wtBranch.stdout !== branchName) {
-    return {
-      ok: false,
-      code: 'BRANCH_WORKTREE_MISMATCH',
-      message: `The worktree at ${worktreePath} is not checked out on ${branchName}.`
-    };
-  }
+  const { branchName, baseBranch, primaryRepoPath } = input;
+  const checkout = resolveActionCheckout(input);
+  if (!checkout.ok) return checkout;
+  const worktreePath = checkout.path;
   if (worktreeIsDirty(worktreePath)) {
     return {
       ok: false,
@@ -100,7 +115,7 @@ function integrateBranch(input: PerformBranchActionInput): BranchActionGitResult
 }
 
 function commitBranch(input: PerformBranchActionInput): BranchActionGitResult {
-  const { branchName, worktreePath } = input;
+  const { branchName } = input;
   const trimmed = (input.message ?? '').trim();
   if (!trimmed) {
     return {
@@ -109,21 +124,9 @@ function commitBranch(input: PerformBranchActionInput): BranchActionGitResult {
       message: 'A commit message is required.'
     };
   }
-  if (!existsSync(worktreePath)) {
-    return {
-      ok: false,
-      code: 'BRANCH_NO_WORKTREE',
-      message: `The branch's worktree is not present at ${worktreePath}.`
-    };
-  }
-  const wtBranch = runGitResult(worktreePath, ['branch', '--show-current']);
-  if (!wtBranch.ok || wtBranch.stdout !== branchName) {
-    return {
-      ok: false,
-      code: 'BRANCH_WORKTREE_MISMATCH',
-      message: `The worktree at ${worktreePath} is not checked out on ${branchName}.`
-    };
-  }
+  const checkout = resolveActionCheckout(input);
+  if (!checkout.ok) return checkout;
+  const worktreePath = checkout.path;
   if (!worktreeIsDirty(worktreePath)) {
     return {
       ok: false,
@@ -154,7 +157,7 @@ function commitBranch(input: PerformBranchActionInput): BranchActionGitResult {
 }
 
 function pushParent(input: PerformBranchActionInput): BranchActionGitResult {
-  const { branchName, baseBranch, worktreePath, primaryRepoPath } = input;
+  const { branchName, baseBranch, primaryRepoPath } = input;
   const repo = worktreePathForBranch(primaryRepoPath, baseBranch) ?? primaryRepoPath;
   const push = runGitResult(repo, ['push', 'origin', baseBranch]);
   if (!push.ok) {
@@ -166,7 +169,18 @@ function pushParent(input: PerformBranchActionInput): BranchActionGitResult {
     };
   }
   let summary = `Pushed ${baseBranch} to origin.`;
-  if (existsSync(worktreePath) && !worktreeIsDirty(worktreePath)) {
+  // Only a dedicated linked worktree is cleaned up; a branch living in the
+  // primary repo has nothing to remove.
+  const worktreePath = resolveBranchCheckoutPath({
+    repoPath: primaryRepoPath,
+    branchName,
+    worktreePathHint: input.worktreePath
+  });
+  if (
+    worktreePath &&
+    !isPrimaryRepo(worktreePath, primaryRepoPath) &&
+    !worktreeIsDirty(worktreePath)
+  ) {
     if (removeGitWorktree({ primaryRepoPath, worktreePath, force: false })) {
       summary += ` Removed the merged worktree for ${branchName}.`;
     }
@@ -175,8 +189,13 @@ function pushParent(input: PerformBranchActionInput): BranchActionGitResult {
 }
 
 function publishBranch(input: PerformBranchActionInput): BranchActionGitResult {
-  const { branchName, worktreePath, primaryRepoPath } = input;
-  const repo = existsSync(worktreePath) ? worktreePath : primaryRepoPath;
+  const { branchName, primaryRepoPath } = input;
+  const repo =
+    resolveBranchCheckoutPath({
+      repoPath: primaryRepoPath,
+      branchName,
+      worktreePathHint: input.worktreePath
+    }) ?? primaryRepoPath;
   const push = runGitResult(repo, ['push', '-u', 'origin', branchName]);
   if (!push.ok) {
     return {

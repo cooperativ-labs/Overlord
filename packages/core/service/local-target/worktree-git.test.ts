@@ -9,6 +9,7 @@ import { performBranchActionGit } from './branch-actions-git.ts';
 import {
   collectManagedWorktrees,
   removeManagedWorktree,
+  resolveBranchCheckoutPath,
   resolveRealPath,
   worktreeIsDirty
 } from './worktree-git.ts';
@@ -81,7 +82,105 @@ describe('worktree-git', () => {
   });
 });
 
+describe('resolveBranchCheckoutPath', () => {
+  it('prefers the recorded worktree while it is still on the branch', () => {
+    const repo = makeRepo();
+    const worktreeRoot = mkdtempSync(path.join(tmpdir(), 'ovld-wt-root-'));
+    const worktreePath = path.join(worktreeRoot, 'demo');
+    git(repo, ['branch', 'feature/demo']);
+    git(repo, ['worktree', 'add', worktreePath, 'feature/demo']);
+
+    assert.equal(
+      resolveBranchCheckoutPath({
+        repoPath: repo,
+        branchName: 'feature/demo',
+        worktreePathHint: worktreePath
+      }),
+      worktreePath
+    );
+
+    rmSync(worktreeRoot, { recursive: true, force: true });
+    rmSync(repo, { recursive: true, force: true });
+  });
+
+  it('falls back to the primary repo once the worktree is gone and the branch lives there', () => {
+    const repo = makeRepo();
+    const worktreeRoot = mkdtempSync(path.join(tmpdir(), 'ovld-wt-root-'));
+    const worktreePath = path.join(worktreeRoot, 'demo');
+    git(repo, ['branch', 'feature/demo']);
+    git(repo, ['worktree', 'add', worktreePath, 'feature/demo']);
+    git(repo, ['worktree', 'remove', worktreePath]);
+    git(repo, ['checkout', 'feature/demo']);
+
+    const resolved = resolveBranchCheckoutPath({
+      repoPath: repo,
+      branchName: 'feature/demo',
+      worktreePathHint: worktreePath
+    });
+    assert.ok(resolved, 'expected the primary repo checkout');
+    assert.equal(resolveRealPath(resolved), resolveRealPath(repo));
+
+    rmSync(worktreeRoot, { recursive: true, force: true });
+    rmSync(repo, { recursive: true, force: true });
+  });
+
+  it('returns null when the branch is checked out nowhere', () => {
+    const repo = makeRepo();
+    git(repo, ['branch', 'feature/idle']);
+    assert.equal(
+      resolveBranchCheckoutPath({
+        repoPath: repo,
+        branchName: 'feature/idle',
+        worktreePathHint: path.join(repo, 'missing')
+      }),
+      null
+    );
+    rmSync(repo, { recursive: true, force: true });
+  });
+});
+
 describe('branch-actions-git', () => {
+  it('commits in the primary repo when the recorded worktree no longer exists', () => {
+    const repo = makeRepo();
+    const worktreeRoot = mkdtempSync(path.join(tmpdir(), 'ovld-wt-root-'));
+    const worktreePath = path.join(worktreeRoot, 'demo');
+    git(repo, ['branch', 'feature/demo']);
+    git(repo, ['worktree', 'add', worktreePath, 'feature/demo']);
+    git(repo, ['worktree', 'remove', worktreePath]);
+    git(repo, ['checkout', 'feature/demo']);
+    writeFileSync(path.join(repo, 'change.txt'), 'change');
+
+    const result = performBranchActionGit({
+      action: 'commit',
+      branchName: 'feature/demo',
+      baseBranch: 'main',
+      worktreePath,
+      primaryRepoPath: repo,
+      message: 'commit from primary'
+    });
+    assert.equal(result.ok, true, JSON.stringify(result));
+    assert.equal(worktreeIsDirty(repo), false);
+
+    rmSync(worktreeRoot, { recursive: true, force: true });
+    rmSync(repo, { recursive: true, force: true });
+  });
+
+  it('reports a branch checked out nowhere instead of a missing path', () => {
+    const repo = makeRepo();
+    git(repo, ['branch', 'feature/idle']);
+    const result = performBranchActionGit({
+      action: 'commit',
+      branchName: 'feature/idle',
+      baseBranch: 'main',
+      worktreePath: path.join(repo, 'missing'),
+      primaryRepoPath: repo,
+      message: 'noop'
+    });
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.code, 'BRANCH_NO_WORKTREE');
+    rmSync(repo, { recursive: true, force: true });
+  });
+
   it('requires a commit message for the commit action', () => {
     const result = performBranchActionGit({
       action: 'commit',

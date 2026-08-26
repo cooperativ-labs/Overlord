@@ -79,7 +79,7 @@ import type {
   WorkspaceExecutionTargetDto
 } from '../../shared/contract.ts';
 
-import { api } from './api.ts';
+import { api, ApiRequestError } from './api.ts';
 import { clearAuthTokens } from './api-base.ts';
 import { authClient, normalizeEmail } from './auth-client.ts';
 import { getDesktopBridge } from './desktop-chrome.ts';
@@ -1515,7 +1515,12 @@ export function useGenerateCommitMessage(mission: MissionDetailDto) {
           executionTargetId: executionTarget.selectedExecutionTargetId
         });
         if (!context) {
-          throw new Error('This mission has no prepared branch worktree on this device.');
+          throw new ApiRequestError(
+            `${mission.branch?.name ?? 'The mission branch'} is not checked out on this device.`,
+            409,
+            'BRANCH_NO_WORKTREE',
+            'Run the mission to check the branch out here, or switch the mission to another branch.'
+          );
         }
         const diff = await gatherCommitDiffOnLocalTarget({ worktreePath: context.worktreePath });
         return api.generateCommitMessage(mission.id, { diff });
@@ -1542,7 +1547,12 @@ export function useBranchAction(mission: MissionDetailDto) {
           executionTargetId: executionTarget.selectedExecutionTargetId
         });
         if (!context) {
-          throw new Error('This mission has no prepared branch worktree on this device.');
+          throw new ApiRequestError(
+            `${mission.branch?.name ?? 'The mission branch'} is not checked out on this device.`,
+            409,
+            'BRANCH_NO_WORKTREE',
+            'Run the mission to check the branch out here, or switch the mission to another branch.'
+          );
         }
         const summary = await runBranchActionOnLocalTarget({ context, body });
         return api.branchAction(mission.id, {

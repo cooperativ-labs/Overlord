@@ -152,7 +152,7 @@ export async function observeMissionBranchFromLocalTarget({
     status: result.value.status as MissionBranchStatus,
     dirty: result.value.dirty,
     hasUnpushedCommits: result.value.hasUnpushedCommits,
-    worktreePath: result.value.worktreePath ?? branch.worktreePath,
+    worktreePath: result.value.worktreePath,
     observedAt: new Date().toISOString(),
     observationSource: 'client'
   };

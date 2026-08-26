@@ -9,8 +9,14 @@ const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
 await bootstrapIntegrationTestDb({ sqlitePath: path.join(tempDir, 'webapp.sqlite') });
 
 const { requireDatabaseClient } = await import('./db.ts');
-const { createMission, createProject, listInboxMissions, listProjectStatuses, updateMission } =
-  await import('./repository.ts');
+const {
+  createMission,
+  createProject,
+  listInboxMissions,
+  listProjectStatuses,
+  updateMission,
+  updateProject
+} = await import('./repository.ts');
 
 async function statusFor(projectId: string, key: string) {
   const status = (await listProjectStatuses(projectId)).find(item => item.key === key);
@@ -297,6 +303,30 @@ test('listInboxMissions carries both reasons for an overdue agent Next mission',
   assert.equal(matches.length, 1, 'a mission qualifying twice is still one card');
   assert.ok(matches[0].reasons.includes('overdue'));
   assert.ok(matches[0].reasons.includes('agent_next'));
+});
+
+test('listInboxMissions excludes all missions in archived projects', async () => {
+  const project = await createProject({ name: 'Archived inbox project' });
+  const next = await statusFor(project.id, 'next_up');
+  const mission = await createMission({
+    projectId: project.id,
+    title: 'Archived agent mission due today',
+    statusId: next.id,
+    firstObjective: 'Do not surface this objective'
+  });
+  await requireDatabaseClient().run(
+    `UPDATE missions SET created_by_kind = 'agent', created_by_agent = 'cursor' WHERE id = ?`,
+    [mission.id]
+  );
+  await setDueDatetime(mission.id, dueDatetimeDaysFromNow(0));
+  await updateProject(project.id, { status: 'archived' });
+
+  const response = await listInboxMissions();
+  assert.equal(
+    response.missions.some(item => item.id === mission.id),
+    false,
+    'archived-project missions stay out even when agent-next and due soon'
+  );
 });
 
 test('listInboxMissions omits completed and cancelled missions due today', async () => {

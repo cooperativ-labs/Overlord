@@ -70765,6 +70765,17 @@ function worktreeIsDirty(worktreePath) {
   const status = runGitResult(worktreePath, ["status", "--porcelain"]);
   return status.ok && status.stdout.length > 0;
 }
+function resolveBranchCheckoutPath({
+  repoPath,
+  branchName,
+  worktreePathHint
+}) {
+  if (worktreePathHint && (0, import_node_fs6.existsSync)(worktreePathHint)) {
+    const current = runGitResult(worktreePathHint, ["branch", "--show-current"]);
+    if (current.ok && current.stdout === branchName) return worktreePathHint;
+  }
+  return worktreePathForBranch(repoPath, branchName);
+}
 function worktreePathForBranch(repoPath, branch) {
   const out = runGitResult(repoPath, ["worktree", "list", "--porcelain"]);
   if (!out.ok) return null;
@@ -70884,23 +70895,27 @@ var init_worktree_git = __esm({
 });
 
 // ../packages/core/service/local-target/branch-actions-git.ts
+function resolveActionCheckout(input) {
+  const path26 = resolveBranchCheckoutPath({
+    repoPath: input.primaryRepoPath,
+    branchName: input.branchName,
+    worktreePathHint: input.worktreePath
+  });
+  if (path26) return { ok: true, path: path26 };
+  return {
+    ok: false,
+    code: "BRANCH_NO_WORKTREE",
+    message: `${input.branchName} is not checked out in any worktree of ${input.primaryRepoPath} (expected ${input.worktreePath}).`
+  };
+}
+function isPrimaryRepo(candidate, primaryRepoPath) {
+  return resolveRealPath(candidate) === resolveRealPath(primaryRepoPath);
+}
 function integrateBranch(input) {
-  const { branchName, baseBranch, worktreePath, primaryRepoPath } = input;
-  if (!(0, import_node_fs7.existsSync)(worktreePath)) {
-    return {
-      ok: false,
-      code: "BRANCH_NO_WORKTREE",
-      message: `The branch's worktree is not present at ${worktreePath}.`
-    };
-  }
-  const wtBranch = runGitResult(worktreePath, ["branch", "--show-current"]);
-  if (!wtBranch.ok || wtBranch.stdout !== branchName) {
-    return {
-      ok: false,
-      code: "BRANCH_WORKTREE_MISMATCH",
-      message: `The worktree at ${worktreePath} is not checked out on ${branchName}.`
-    };
-  }
+  const { branchName, baseBranch, primaryRepoPath } = input;
+  const checkout = resolveActionCheckout(input);
+  if (!checkout.ok) return checkout;
+  const worktreePath = checkout.path;
   if (worktreeIsDirty(worktreePath)) {
     return {
       ok: false,
@@ -70959,7 +70974,7 @@ function integrateBranch(input) {
   };
 }
 function commitBranch(input) {
-  const { branchName, worktreePath } = input;
+  const { branchName } = input;
   const trimmed8 = (input.message ?? "").trim();
   if (!trimmed8) {
     return {
@@ -70968,21 +70983,9 @@ function commitBranch(input) {
       message: "A commit message is required."
     };
   }
-  if (!(0, import_node_fs7.existsSync)(worktreePath)) {
-    return {
-      ok: false,
-      code: "BRANCH_NO_WORKTREE",
-      message: `The branch's worktree is not present at ${worktreePath}.`
-    };
-  }
-  const wtBranch = runGitResult(worktreePath, ["branch", "--show-current"]);
-  if (!wtBranch.ok || wtBranch.stdout !== branchName) {
-    return {
-      ok: false,
-      code: "BRANCH_WORKTREE_MISMATCH",
-      message: `The worktree at ${worktreePath} is not checked out on ${branchName}.`
-    };
-  }
+  const checkout = resolveActionCheckout(input);
+  if (!checkout.ok) return checkout;
+  const worktreePath = checkout.path;
   if (!worktreeIsDirty(worktreePath)) {
     return {
       ok: false,
@@ -71012,7 +71015,7 @@ function commitBranch(input) {
   return { ok: true, summary: `Committed changes on ${branchName}.` };
 }
 function pushParent(input) {
-  const { branchName, baseBranch, worktreePath, primaryRepoPath } = input;
+  const { branchName, baseBranch, primaryRepoPath } = input;
   const repo = worktreePathForBranch(primaryRepoPath, baseBranch) ?? primaryRepoPath;
   const push = runGitResult(repo, ["push", "origin", baseBranch]);
   if (!push.ok) {
@@ -71024,7 +71027,12 @@ function pushParent(input) {
     };
   }
   let summary = `Pushed ${baseBranch} to origin.`;
-  if ((0, import_node_fs7.existsSync)(worktreePath) && !worktreeIsDirty(worktreePath)) {
+  const worktreePath = resolveBranchCheckoutPath({
+    repoPath: primaryRepoPath,
+    branchName,
+    worktreePathHint: input.worktreePath
+  });
+  if (worktreePath && !isPrimaryRepo(worktreePath, primaryRepoPath) && !worktreeIsDirty(worktreePath)) {
     if (removeGitWorktree({ primaryRepoPath, worktreePath, force: false })) {
       summary += ` Removed the merged worktree for ${branchName}.`;
     }
@@ -71032,8 +71040,12 @@ function pushParent(input) {
   return { ok: true, summary };
 }
 function publishBranch(input) {
-  const { branchName, worktreePath, primaryRepoPath } = input;
-  const repo = (0, import_node_fs7.existsSync)(worktreePath) ? worktreePath : primaryRepoPath;
+  const { branchName, primaryRepoPath } = input;
+  const repo = resolveBranchCheckoutPath({
+    repoPath: primaryRepoPath,
+    branchName,
+    worktreePathHint: input.worktreePath
+  }) ?? primaryRepoPath;
   const push = runGitResult(repo, ["push", "-u", "origin", branchName]);
   if (!push.ok) {
     return {
@@ -71063,11 +71075,9 @@ function performBranchActionGit(input) {
       };
   }
 }
-var import_node_fs7;
 var init_branch_actions_git = __esm({
   "../packages/core/service/local-target/branch-actions-git.ts"() {
     "use strict";
-    import_node_fs7 = require("node:fs");
     init_git_run();
     init_worktree_git();
   }
@@ -71128,7 +71138,11 @@ var init_branch_status_git = __esm({
 // ../packages/core/service/local-target/branch-observe-git.ts
 function observeMissionBranchGit(input) {
   const status = deriveBranchPublicationStatus(input);
-  const resolved = (input.worktreePathHint && (0, import_node_fs8.existsSync)(input.worktreePathHint) ? input.worktreePathHint : null) ?? worktreePathForBranch(input.repoPath, input.branchName);
+  const resolved = resolveBranchCheckoutPath({
+    repoPath: input.repoPath,
+    branchName: input.branchName,
+    worktreePathHint: input.worktreePathHint
+  });
   return {
     status,
     dirty: resolved ? worktreeIsDirty(resolved) : false,
@@ -71136,11 +71150,9 @@ function observeMissionBranchGit(input) {
     hasUnpushedCommits: status === "published" && branchHasUnpushedCommits({ repoPath: input.repoPath, branchName: input.branchName })
   };
 }
-var import_node_fs8;
 var init_branch_observe_git = __esm({
   "../packages/core/service/local-target/branch-observe-git.ts"() {
     "use strict";
-    import_node_fs8 = require("node:fs");
     init_branch_status_git();
     init_worktree_git();
   }
@@ -71162,7 +71174,7 @@ ${diff.stdout}`);
   return sections.join("\n\n");
 }
 function gatherCommitMessageDiff(worktreePath) {
-  if (!(0, import_node_fs9.existsSync)(worktreePath)) {
+  if (!(0, import_node_fs7.existsSync)(worktreePath)) {
     return {
       ok: false,
       code: "BRANCH_NO_WORKTREE",
@@ -71179,11 +71191,11 @@ function gatherCommitMessageDiff(worktreePath) {
   }
   return { ok: true, diff: collectWorktreeChanges(worktreePath) };
 }
-var import_node_fs9;
+var import_node_fs7;
 var init_commit_message_diff_git = __esm({
   "../packages/core/service/local-target/commit-message-diff-git.ts"() {
     "use strict";
-    import_node_fs9 = require("node:fs");
+    import_node_fs7 = require("node:fs");
     init_git_run();
     init_worktree_git();
   }
@@ -71604,7 +71616,7 @@ function resolveLatchExecutablePathFromEnvironment({
   homeDirectory = import_node_os4.default.homedir(),
   platform: platform4 = process.platform,
   resolveOnPath = resolveLatchExecutableOnPath,
-  fileExists = import_node_fs10.existsSync
+  fileExists = import_node_fs8.existsSync
 }) {
   const name = trimmed2(executable) ?? DEFAULT_LATCH_EXECUTABLE;
   if (import_node_path12.default.isAbsolute(name) || name.includes("/") || name.includes("\\")) {
@@ -71678,7 +71690,7 @@ function latchDiscoveryCacheKey({
 function readBinaryMtimeMs(resolvedPath2) {
   if (!resolvedPath2) return null;
   try {
-    return (0, import_node_fs10.statSync)(resolvedPath2).mtimeMs;
+    return (0, import_node_fs8.statSync)(resolvedPath2).mtimeMs;
   } catch {
     return null;
   }
@@ -71693,15 +71705,15 @@ function isLatchDiscoveryCacheFresh({
     return resolvePath(result.executable) === null;
   }
   const pathStill = result.resolvedPath;
-  if (!pathStill || !(0, import_node_fs10.existsSync)(pathStill)) return false;
+  if (!pathStill || !(0, import_node_fs8.existsSync)(pathStill)) return false;
   const mtime = readBinaryMtimeMs(pathStill);
   if (mtime === null || entry.binaryMtimeMs === null) return false;
   return mtime === entry.binaryMtimeMs;
 }
 function readLatchDiscoveryCacheFile(filePath) {
-  if (!(0, import_node_fs10.existsSync)(filePath)) return { version: 2, entries: {} };
+  if (!(0, import_node_fs8.existsSync)(filePath)) return { version: 2, entries: {} };
   try {
-    const parsed = JSON.parse((0, import_node_fs10.readFileSync)(filePath, "utf8"));
+    const parsed = JSON.parse((0, import_node_fs8.readFileSync)(filePath, "utf8"));
     if (parsed.version !== 2 || !parsed.entries || typeof parsed.entries !== "object") {
       return { version: 2, entries: {} };
     }
@@ -71714,8 +71726,8 @@ function writeLatchDiscoveryCacheFile({
   filePath,
   cache: cache8
 }) {
-  (0, import_node_fs10.mkdirSync)(import_node_path12.default.dirname(filePath), { recursive: true });
-  (0, import_node_fs10.writeFileSync)(filePath, `${JSON.stringify(cache8, null, 2)}
+  (0, import_node_fs8.mkdirSync)(import_node_path12.default.dirname(filePath), { recursive: true });
+  (0, import_node_fs8.writeFileSync)(filePath, `${JSON.stringify(cache8, null, 2)}
 `, { mode: 384 });
 }
 function discoverLatchForExecutionTarget({
@@ -71745,12 +71757,12 @@ function discoverLatchForExecutionTarget({
   writeLatchDiscoveryCacheFile({ filePath: cacheFilePath, cache: cache8 });
   return result;
 }
-var import_node_child_process3, import_node_fs10, import_node_os4, import_node_path12, SUPPORTED_LATCH_PROTOCOL_VERSION, REQUIRED_LATCH_CAPABILITIES, LATCH_STANDALONE_INSTALL_COMMAND, LATCH_DISCOVERY_CACHE_FILENAME, defaultCommandRunner;
+var import_node_child_process3, import_node_fs8, import_node_os4, import_node_path12, SUPPORTED_LATCH_PROTOCOL_VERSION, REQUIRED_LATCH_CAPABILITIES, LATCH_STANDALONE_INSTALL_COMMAND, LATCH_DISCOVERY_CACHE_FILENAME, defaultCommandRunner;
 var init_latch_discovery = __esm({
   "../packages/core/service/latch-discovery.ts"() {
     "use strict";
     import_node_child_process3 = require("node:child_process");
-    import_node_fs10 = require("node:fs");
+    import_node_fs8 = require("node:fs");
     import_node_os4 = __toESM(require("node:os"), 1);
     import_node_path12 = __toESM(require("node:path"), 1);
     init_latch_environment();
@@ -71791,7 +71803,7 @@ function resolveLatchBinaryPath(executable, resolve = resolveLatchExecutablePath
   const name = trimmed3(executable) ?? DEFAULT_LATCH_EXECUTABLE;
   const cached3 = cache3.get(name);
   if (cached3) {
-    if ((0, import_node_fs11.existsSync)(cached3)) return cached3;
+    if ((0, import_node_fs9.existsSync)(cached3)) return cached3;
     cache3.delete(name);
   }
   const resolved = resolve(name);
@@ -71802,11 +71814,11 @@ function latchBinaryMissingMessage(executable) {
   const name = trimmed3(executable) ?? DEFAULT_LATCH_EXECUTABLE;
   return `Latch executable "${name}" was not found on this device (checked PATH, ~/.local/bin, and the Homebrew prefixes).`;
 }
-var import_node_fs11, cache3;
+var import_node_fs9, cache3;
 var init_latch_binary = __esm({
   "../packages/core/service/latch-binary.ts"() {
     "use strict";
-    import_node_fs11 = require("node:fs");
+    import_node_fs9 = require("node:fs");
     init_latch_discovery();
     init_terminal_profile_types();
     cache3 = /* @__PURE__ */ new Map();
@@ -72125,8 +72137,8 @@ var init_doctor_checks = __esm({
 
 // ../packages/core/service/local-target/project-metadata.ts
 function writeIfChanged(filePath, content) {
-  if (!(0, import_node_fs12.existsSync)(filePath) || (0, import_node_fs12.readFileSync)(filePath, "utf8") !== content) {
-    (0, import_node_fs12.writeFileSync)(filePath, content);
+  if (!(0, import_node_fs10.existsSync)(filePath) || (0, import_node_fs10.readFileSync)(filePath, "utf8") !== content) {
+    (0, import_node_fs10.writeFileSync)(filePath, content);
   }
 }
 function replaceManagedBlock(content, block) {
@@ -72141,13 +72153,13 @@ function replaceManagedBlock(content, block) {
 function ensureAgentInstructions(checkoutPath) {
   for (const filename of ["AGENTS.md", "CLAUDE.md"]) {
     const instructionPath = import_node_path13.default.join(checkoutPath, filename);
-    const existing = (0, import_node_fs12.existsSync)(instructionPath) ? (0, import_node_fs12.readFileSync)(instructionPath, "utf8") : "";
+    const existing = (0, import_node_fs10.existsSync)(instructionPath) ? (0, import_node_fs10.readFileSync)(instructionPath, "utf8") : "";
     writeIfChanged(instructionPath, replaceManagedBlock(existing, PROJECT_METADATA_INSTRUCTION));
   }
 }
 function ensureGitignore(checkoutPath) {
   const gitignorePath = import_node_path13.default.join(checkoutPath, ".gitignore");
-  const existing = (0, import_node_fs12.existsSync)(gitignorePath) ? (0, import_node_fs12.readFileSync)(gitignorePath, "utf8") : "";
+  const existing = (0, import_node_fs10.existsSync)(gitignorePath) ? (0, import_node_fs10.readFileSync)(gitignorePath, "utf8") : "";
   const existingPatterns = new Set(
     existing.split(/\r?\n/).map((line2) => line2.trim().replace(/^\//, "")).filter(Boolean)
   );
@@ -72156,7 +72168,7 @@ function ensureGitignore(checkoutPath) {
   );
   if (additions.length === 0) return;
   const separator = existing.length === 0 || existing.endsWith("\n") ? "" : "\n";
-  (0, import_node_fs12.writeFileSync)(gitignorePath, `${existing}${separator}${additions.join("\n")}
+  (0, import_node_fs10.writeFileSync)(gitignorePath, `${existing}${separator}${additions.join("\n")}
 `);
 }
 function resolveGitRoot(directoryPath) {
@@ -72217,8 +72229,8 @@ function selectPrimaryProjectEntry(projects) {
   return latestLinkedAt(projects);
 }
 function parseProjectJson(projectJsonPath) {
-  if (!(0, import_node_fs12.existsSync)(projectJsonPath)) return null;
-  const parsed = JSON.parse((0, import_node_fs12.readFileSync)(projectJsonPath, "utf8"));
+  if (!(0, import_node_fs10.existsSync)(projectJsonPath)) return null;
+  const parsed = JSON.parse((0, import_node_fs10.readFileSync)(projectJsonPath, "utf8"));
   const fromArray = Array.isArray(parsed.projects) ? parsed.projects.map((entry) => parseProjectEntry(entry)).filter((entry) => entry !== null) : [];
   const fromTopLevel = parseProjectEntry(parsed);
   const projects = fromArray.length > 0 ? fromArray : fromTopLevel ? [fromTopLevel] : [];
@@ -72294,9 +72306,9 @@ function writeProjectJson({
   isPrimary
 }) {
   const overlordDir = import_node_path13.default.join(directoryPath, ".overlord");
-  (0, import_node_fs12.mkdirSync)(overlordDir, { recursive: true });
-  (0, import_node_fs12.mkdirSync)(import_node_path13.default.join(overlordDir, "tmp"), { recursive: true });
-  (0, import_node_fs12.mkdirSync)(import_node_path13.default.join(overlordDir, "logs"), { recursive: true });
+  (0, import_node_fs10.mkdirSync)(overlordDir, { recursive: true });
+  (0, import_node_fs10.mkdirSync)(import_node_path13.default.join(overlordDir, "tmp"), { recursive: true });
+  (0, import_node_fs10.mkdirSync)(import_node_path13.default.join(overlordDir, "logs"), { recursive: true });
   protectProjectMetadata(directoryPath);
   const projectJsonPath = import_node_path13.default.join(overlordDir, "project.json");
   const existing = parseProjectJson(projectJsonPath);
@@ -72325,7 +72337,7 @@ function writeProjectJson({
   ];
   const primary = selectPrimaryProjectEntry(projects) ?? nextEntry;
   const primaryResourceIds = primary.resourceIdsByExecutionTarget ?? {};
-  (0, import_node_fs12.writeFileSync)(
+  (0, import_node_fs10.writeFileSync)(
     projectJsonPath,
     `${JSON.stringify(
       {
@@ -72347,12 +72359,12 @@ function writeProjectJson({
   );
   return projectJsonPath;
 }
-var import_node_child_process6, import_node_fs12, import_node_path13, PROJECT_JSON_VERSION, PROJECT_JSON_WARNING, INSTRUCTION_BLOCK_START, INSTRUCTION_BLOCK_END, PROJECT_METADATA_INSTRUCTION;
+var import_node_child_process6, import_node_fs10, import_node_path13, PROJECT_JSON_VERSION, PROJECT_JSON_WARNING, INSTRUCTION_BLOCK_START, INSTRUCTION_BLOCK_END, PROJECT_METADATA_INSTRUCTION;
 var init_project_metadata = __esm({
   "../packages/core/service/local-target/project-metadata.ts"() {
     "use strict";
     import_node_child_process6 = require("node:child_process");
-    import_node_fs12 = require("node:fs");
+    import_node_fs10 = require("node:fs");
     import_node_path13 = __toESM(require("node:path"), 1);
     init_util3();
     PROJECT_JSON_VERSION = 3;
@@ -72395,11 +72407,11 @@ function failLatchCommand({
     message2
   );
 }
-var import_node_fs13, InProcessProvider;
+var import_node_fs11, InProcessProvider;
 var init_in_process_provider = __esm({
   "../packages/core/service/local-target/in-process-provider.ts"() {
     "use strict";
-    import_node_fs13 = require("node:fs");
+    import_node_fs11 = require("node:fs");
     init_git_tree();
     init_latch_discovery();
     init_latch_session();
@@ -72426,7 +72438,7 @@ var init_in_process_provider = __esm({
        */
       async observeResource(input) {
         const observedAt = (/* @__PURE__ */ new Date()).toISOString();
-        const state2 = (0, import_node_fs13.existsSync)(input.path) ? "available" : "missing";
+        const state2 = (0, import_node_fs11.existsSync)(input.path) ? "available" : "missing";
         return ok2(this.target, { state: state2, observedAt });
       }
       /**
@@ -74031,7 +74043,7 @@ async function resolveObjectiveWorkingDirectory({
 }) {
   if (explicitWorkingDirectory?.trim()) {
     const resolved = import_node_path14.default.resolve(explicitWorkingDirectory);
-    if (ctx.db.dialect === "sqlite" && !(0, import_node_fs14.existsSync)(resolved)) {
+    if (ctx.db.dialect === "sqlite" && !(0, import_node_fs12.existsSync)(resolved)) {
       throw new ServiceError(
         `Working directory does not exist: ${resolved}`,
         "working_directory_missing"
@@ -74187,12 +74199,12 @@ async function discoverProject({
     404
   );
 }
-var import_node_fs14, import_node_path14, PRIMARY_RESOURCE_REPAIR_HINT;
+var import_node_fs12, import_node_path14, PRIMARY_RESOURCE_REPAIR_HINT;
 var init_projects = __esm({
   "../packages/core/service/projects.ts"() {
     "use strict";
     init_dist2();
-    import_node_fs14 = require("node:fs");
+    import_node_fs12 = require("node:fs");
     import_node_path14 = __toESM(require("node:path"), 1);
     init_local_target();
     init_change_feed();
@@ -80812,10 +80824,10 @@ var init_hex_encoding = __esm({
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/serde/util-body-length/calculateBodyLength.js
-var import_node_fs15, calculateBodyLength;
+var import_node_fs13, calculateBodyLength;
 var init_calculateBodyLength = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/serde/util-body-length/calculateBodyLength.js"() {
-    import_node_fs15 = require("node:fs");
+    import_node_fs13 = require("node:fs");
     calculateBodyLength = (body) => {
       if (!body) {
         return 0;
@@ -80828,11 +80840,11 @@ var init_calculateBodyLength = __esm({
         return body.size;
       } else if (typeof body.start === "number" && typeof body.end === "number") {
         return body.end + 1 - body.start;
-      } else if (body instanceof import_node_fs15.ReadStream) {
+      } else if (body instanceof import_node_fs13.ReadStream) {
         if (body.path != null) {
-          return (0, import_node_fs15.lstatSync)(body.path).size;
+          return (0, import_node_fs13.lstatSync)(body.path).size;
         } else if (typeof body.fd === "number") {
-          return (0, import_node_fs15.fstatSync)(body.fd).size;
+          return (0, import_node_fs13.fstatSync)(body.fd).size;
         }
       }
       throw new Error(`Body Length computation failed for ${body}`);
@@ -111235,17 +111247,17 @@ var init_HashCalculator = __esm({
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/checksum/hash-stream-node/fileStreamHasher.js
-var import_node_fs16, fileStreamHasher, isReadStream;
+var import_node_fs14, fileStreamHasher, isReadStream;
 var init_fileStreamHasher = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/checksum/hash-stream-node/fileStreamHasher.js"() {
-    import_node_fs16 = require("node:fs");
+    import_node_fs14 = require("node:fs");
     init_HashCalculator();
     fileStreamHasher = (hashCtor, fileStream) => new Promise((resolve, reject) => {
       if (!isReadStream(fileStream)) {
         reject(new Error("Unable to calculate hash for non-file streams."));
         return;
       }
-      const fileStreamTee = (0, import_node_fs16.createReadStream)(fileStream.path, {
+      const fileStreamTee = (0, import_node_fs14.createReadStream)(fileStream.path, {
         start: fileStream.start,
         end: fileStream.end
       });
@@ -135167,7 +135179,7 @@ function fromNodeHeaders(nodeHeaders) {
 // index.ts
 var import_cors = __toESM(require_lib3(), 1);
 var import_express4 = __toESM(require_express2(), 1);
-var import_node_fs20 = require("node:fs");
+var import_node_fs18 = require("node:fs");
 var import_node_path32 = __toESM(require("node:path"), 1);
 var import_node_url8 = require("node:url");
 init_config();
@@ -144075,7 +144087,9 @@ function mergeMissionBranchObservation({
     ...controlPlaneBranch,
     status: observation.status,
     dirty: observation.dirty,
-    worktreePath: observation.worktreePath ?? controlPlaneBranch.worktreePath,
+    // An observation is authoritative for where the branch lives on that device:
+    // null means it is checked out nowhere there, not "unknown".
+    worktreePath: observation.worktreePath,
     observedAt: observation.observedAt,
     observationSource: "client"
   };
@@ -145859,7 +145873,7 @@ init_errors5();
 // storage-backends.ts
 var import_client_s3 = __toESM(require_dist_cjs21(), 1);
 var import_s3_request_presigner = __toESM(require_dist_cjs22(), 1);
-var import_node_fs17 = require("node:fs");
+var import_node_fs15 = require("node:fs");
 var import_node_path25 = __toESM(require("node:path"), 1);
 init_errors5();
 var DEFAULT_PRESIGN_TTL_SECONDS = 300;
@@ -145919,15 +145933,15 @@ function createLocalFsBackend({
   const root5 = import_node_path25.default.isAbsolute(bucket.local_path) ? bucket.local_path : import_node_path25.default.resolve(repoRoot4, bucket.local_path);
   return {
     async put({ key, bytes }) {
-      if (!(0, import_node_fs17.existsSync)(root5)) (0, import_node_fs17.mkdirSync)(root5, { recursive: true });
+      if (!(0, import_node_fs15.existsSync)(root5)) (0, import_node_fs15.mkdirSync)(root5, { recursive: true });
       const absolutePath = import_node_path25.default.join(root5, key);
-      (0, import_node_fs17.mkdirSync)(import_node_path25.default.dirname(absolutePath), { recursive: true });
-      (0, import_node_fs17.writeFileSync)(absolutePath, bytes);
+      (0, import_node_fs15.mkdirSync)(import_node_path25.default.dirname(absolutePath), { recursive: true });
+      (0, import_node_fs15.writeFileSync)(absolutePath, bytes);
     },
     async getStream({ key }) {
       const absolutePath = import_node_path25.default.join(root5, key);
-      if (!(0, import_node_fs17.existsSync)(absolutePath)) throw new ApiError(404, "File not found");
-      return (0, import_node_fs17.createReadStream)(absolutePath);
+      if (!(0, import_node_fs15.existsSync)(absolutePath)) throw new ApiError(404, "File not found");
+      return (0, import_node_fs15.createReadStream)(absolutePath);
     }
   };
 }
@@ -151162,7 +151176,7 @@ ${missionHasUnseenReturnedToExecuteSql},
             LIMIT 1) AS draft_objective_resource_key
     FROM missions t
     JOIN projects p ON p.id = t.project_id AND p.workspace_id = t.workspace_id
-      AND p.deleted_at IS NULL
+      AND p.deleted_at IS NULL AND p.status = 'active'
    WHERE t.deleted_at IS NULL
      AND t.workspace_id IN (${workspacePlaceholders})
 `;
@@ -152673,7 +152687,7 @@ var import_node_crypto20 = require("node:crypto");
 
 // sql-studio/sql-studio.ts
 var import_node_child_process7 = require("node:child_process");
-var import_node_fs18 = require("node:fs");
+var import_node_fs16 = require("node:fs");
 var import_node_path28 = __toESM(require("node:path"), 1);
 function publicHost(host) {
   return host === "0.0.0.0" ? "127.0.0.1" : host;
@@ -152688,10 +152702,10 @@ function sqlStudioUrl({
 }
 function resolveBinary(binary2) {
   if (import_node_path28.default.isAbsolute(binary2)) {
-    return (0, import_node_fs18.existsSync)(binary2) ? binary2 : null;
+    return (0, import_node_fs16.existsSync)(binary2) ? binary2 : null;
   }
   if (binary2.includes("/")) {
-    return (0, import_node_fs18.existsSync)(binary2) ? binary2 : null;
+    return (0, import_node_fs16.existsSync)(binary2) ? binary2 : null;
   }
   return binary2;
 }
@@ -169227,7 +169241,7 @@ var runQueueDispatchWorker = new RunQueueDispatchWorker();
 
 // storage.ts
 var import_node_crypto26 = require("node:crypto");
-var import_node_fs19 = require("node:fs");
+var import_node_fs17 = require("node:fs");
 var import_node_path31 = __toESM(require("node:path"), 1);
 var import_node_url7 = require("node:url");
 init_db();
@@ -169715,7 +169729,7 @@ async function finalizeStoredObject({
     }
     const root5 = import_node_path31.default.isAbsolute(bucket.local_path) ? bucket.local_path : import_node_path31.default.resolve(repoRoot3, bucket.local_path);
     const absolutePath = import_node_path31.default.join(root5, storageKey);
-    if (!(0, import_node_fs19.existsSync)(absolutePath)) throw new ApiError(404, "File not found");
+    if (!(0, import_node_fs17.existsSync)(absolutePath)) throw new ApiError(404, "File not found");
     return { absolutePath, contentType, filename, forceDownload };
   }
   return {
@@ -172239,7 +172253,7 @@ app.post(
     requires: PERMISSIONS.PROJECT_UPDATE
   })
 );
-if (resolveServeSpa({ dialect: DATABASE_DIALECT }) && (0, import_node_fs20.existsSync)(distDir)) {
+if (resolveServeSpa({ dialect: DATABASE_DIALECT }) && (0, import_node_fs18.existsSync)(distDir)) {
   app.use(import_express4.default.static(distDir));
   app.get("*", (req, res, next) => {
     if (req.path.startsWith("/api/")) return next();

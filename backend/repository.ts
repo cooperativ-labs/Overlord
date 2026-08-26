@@ -6638,7 +6638,7 @@ ${missionHasUnseenReturnedToExecuteSql},
             LIMIT 1) AS draft_objective_resource_key
     FROM missions t
     JOIN projects p ON p.id = t.project_id AND p.workspace_id = t.workspace_id
-      AND p.deleted_at IS NULL
+      AND p.deleted_at IS NULL AND p.status = 'active'
    WHERE t.deleted_at IS NULL
      AND t.workspace_id IN (${workspacePlaceholders})
 `;
@@ -6660,12 +6660,13 @@ function toInboxMissionDto(
 /**
  * GET /api/inbox/missions — agent-authored missions in status type `next`,
  * unioned with missions of any creator that are past due or due today or
- * tomorrow, across every workspace the caller may `mission:read` in the active
- * organization. Other human-created missions never appear here; unallocated
- * captures live on profile-owned `/api/inbox`. Overdue rows lead, most recently
- * overdue first, then due-soon rows soonest-first, then agent-Next rows
- * newest-first; each slice is capped independently. Rows created within the
- * rolling recent window carry a `recent` reason for UI labeling only.
+ * tomorrow, from active projects across every workspace the caller may
+ * `mission:read` in the active organization. Other human-created missions never
+ * appear here; unallocated captures live on profile-owned `/api/inbox`.
+ * Overdue rows lead, most recently overdue first, then due-soon rows
+ * soonest-first, then agent-Next rows newest-first; each slice is capped
+ * independently. Rows created within the rolling recent window carry a `recent`
+ * reason for UI labeling only.
  */
 export async function listInboxMissions(): Promise<InboxMissionsResponse> {
   const generatedAt = new Date().toISOString();

@@ -466,6 +466,70 @@ test('prepareMissionBranch checks the branch out in the primary repo for branch-
   assert.equal(worktrees.length, 1, 'only the primary repo worktree exists');
 });
 
+test('prepareMissionBranch reuses the primary checkout when the worktree is gone', async () => {
+  const repo = initRepo('ovld-prep-wt-gone-');
+  const worktreeRoot = mkdtempSync(path.join(os.tmpdir(), 'ovld-prep-wt-gone-root-'));
+  process.env.OVERLORD_WORKTREE_ROOT = worktreeRoot;
+  try {
+    const mission = {
+      title: 'Moved to main repo',
+      sequence: 21,
+      projectId: 'p1',
+      project: { slug: 'demo' },
+      branch: { baseBranch: 'main', willPrepareBranch: true, willUseWorktree: true }
+    };
+    const first = await prepareMissionBranch({
+      runtime: runtimeForMission(mission),
+      options: { missionId: 'coo:21', workingDirectory: repo, automationEnabled: false }
+    });
+    const branchName = first.branchAutomation!.branchName;
+    // The user removed the worktree and checked the branch out in the main repo.
+    git(repo, ['worktree', 'remove', first.workingDirectory]);
+    git(repo, ['checkout', branchName]);
+
+    const second = await prepareMissionBranch({
+      runtime: runtimeForMission({
+        ...mission,
+        branch: { ...mission.branch, name: branchName, status: 'created' }
+      }),
+      options: { missionId: 'coo:21', workingDirectory: repo, automationEnabled: false }
+    });
+    assert.equal(second.branchAutomation?.branchName, branchName);
+    assert.equal(canonicalPath(second.workingDirectory), canonicalPath(repo));
+    assert.equal(canonicalPath(second.branchAutomation!.worktreePath), canonicalPath(repo));
+    assert.equal(git(repo, ['branch', '--show-current']), branchName);
+  } finally {
+    delete process.env.OVERLORD_WORKTREE_ROOT;
+  }
+});
+
+test('prepareMissionBranch follows a linked worktree in branch-only mode', async () => {
+  const repo = initRepo('ovld-prep-branch-linked-');
+  const worktreePath = mkdtempSync(path.join(os.tmpdir(), 'ovld-prep-branch-linked-wt-'));
+  git(repo, ['branch', 'pinned']);
+  git(repo, ['worktree', 'add', '-f', worktreePath, 'pinned']);
+  const result = await prepareMissionBranch({
+    runtime: runtimeForMission({
+      title: 'Pinned elsewhere',
+      sequence: 22,
+      projectId: 'p1',
+      project: { slug: 'demo' },
+      branch: {
+        baseBranch: 'main',
+        overrideBranch: 'pinned',
+        willPrepareBranch: true,
+        willUseWorktree: false,
+        worktreePreference: 'branch'
+      }
+    }),
+    options: { missionId: 'coo:22', workingDirectory: repo, automationEnabled: false }
+  });
+  assert.equal(result.branchAutomation?.branchName, 'pinned');
+  assert.equal(canonicalPath(result.workingDirectory), canonicalPath(worktreePath));
+  // The primary repo stays on main; git cannot check `pinned` out twice.
+  assert.equal(git(repo, ['branch', '--show-current']), 'main');
+});
+
 test('prepareMissionBranch prepares nothing when the mission runs off its base branch', async () => {
   const repo = initRepo('ovld-prep-off-');
   const result = await prepareMissionBranch({

@@ -1,11 +1,9 @@
-import { existsSync } from 'node:fs';
-
 import {
   branchHasUnpushedCommits,
   type BranchPublicationStatus,
   deriveBranchPublicationStatus
 } from './branch-status-git.ts';
-import { worktreeIsDirty, worktreePathForBranch } from './worktree-git.ts';
+import { resolveBranchCheckoutPath, worktreeIsDirty } from './worktree-git.ts';
 
 export interface BranchObservationInput {
   repoPath: string;
@@ -26,10 +24,11 @@ export interface BranchObservationResult {
 /** Observe live branch publication status, worktree location, and dirty state. */
 export function observeMissionBranchGit(input: BranchObservationInput): BranchObservationResult {
   const status = deriveBranchPublicationStatus(input);
-  const resolved =
-    (input.worktreePathHint && existsSync(input.worktreePathHint)
-      ? input.worktreePathHint
-      : null) ?? worktreePathForBranch(input.repoPath, input.branchName);
+  const resolved = resolveBranchCheckoutPath({
+    repoPath: input.repoPath,
+    branchName: input.branchName,
+    worktreePathHint: input.worktreePathHint
+  });
   return {
     status,
     dirty: resolved ? worktreeIsDirty(resolved) : false,

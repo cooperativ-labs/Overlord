@@ -15,7 +15,7 @@ import {
   Sparkles,
   Terminal
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import type {
   MissionBranchDto,
@@ -359,13 +359,15 @@ function MissionBranchSetupForm({
             ? isSwitch
               ? 'Start the next branch cycle for this mission. Overlord prepares it the next time the mission runs.'
               : 'Create a dedicated branch for this mission. Overlord prepares it the next time the mission runs, then follows the usual branch workflow.'
-            : 'Continue this mission on an existing branch. Overlord checks it out the next time the mission runs.'}
+            : isSwitch
+              ? 'Following objectives run on the branch you pick. Overlord reuses its worktree if one exists, otherwise the checkout that already has the branch, otherwise it checks the branch out fresh.'
+              : 'Continue this mission on an existing branch. Overlord checks it out the next time the mission runs.'}
         </p>
 
         {mode === 'new' ? (
           isSwitch ? (
             <p className="rounded-md border border-border/50 bg-background/60 px-2 py-1.5 text-xs text-muted-foreground">
-              The merged branch stays on record so Overlord can pick the next cycle name
+              The current branch stays on record so Overlord can pick the next cycle name
               automatically.
             </p>
           ) : (
@@ -498,10 +500,17 @@ function describeBranchError(err: unknown, parent: string): BranchErrorView {
         detail: err.detail
       };
     case 'BRANCH_NO_WORKTREE':
-    case 'BRANCH_WORKTREE_MISMATCH':
       return {
-        title: 'Worktree unavailable',
-        instruction: 'The branch worktree is missing or on the wrong branch.',
+        title: 'Branch not checked out',
+        instruction:
+          'This branch is not checked out in any worktree on this device. Run the mission to check it out, or switch the mission to another branch.',
+        detail: err.detail
+      };
+    case 'LOCAL_FILESYSTEM_UNAVAILABLE':
+      return {
+        title: 'Desktop required',
+        instruction:
+          'Git actions run on the device holding the checkout. Open Overlord Desktop on that machine, or select it as the execution target.',
         detail: err.detail
       };
     case 'BRANCH_NO_PRIMARY':
@@ -547,6 +556,11 @@ function BranchPanel({ mission }: { mission: MissionDetailDto }) {
   const [confirmAction, setConfirmAction] = useState<BranchActionName | null>(null);
   // The commit message captured before merging, while the branch worktree is dirty.
   const [commitMessage, setCommitMessage] = useState('');
+  // The switch form is always reachable for a prepared branch, but only a merged
+  // branch opens it by default — otherwise it sits behind a disclosure.
+  const [switchOpen, setSwitchOpen] = useState(false);
+  const branchName = branch?.name;
+  useEffect(() => setSwitchOpen(false), [branchName]);
 
   if (!branch) return null;
   // Worktree automation is off for this mission and it hasn't been opted in, so it
@@ -556,8 +570,14 @@ function BranchPanel({ mission }: { mission: MissionDetailDto }) {
   }
   const status = BRANCH_STATUS_META[branch.status];
   const canConfigureBranch = branch.status === 'pending';
-  const canSwitchBranch = branch.status === 'merged' || branch.status === 'merged_unpushed';
+  const isMerged = branch.status === 'merged' || branch.status === 'merged_unpushed';
+  const showSwitchForm = !canConfigureBranch && (isMerged || switchOpen);
   const showBranchIdentity = !canConfigureBranch;
+  // A local target looked and found the branch checked out nowhere on this
+  // device: git actions cannot run until the mission runs (which checks it out
+  // again) or the mission moves to another branch.
+  const notCheckedOutHere =
+    branch.observationSource === 'client' && !canConfigureBranch && branch.worktreePath === null;
   // A per-mission opt-in that hasn't been prepared yet can still be reverted to
   // "work off the base branch" (only meaningful while automation is globally off).
   const canRevertToBase =
@@ -631,7 +651,9 @@ function BranchPanel({ mission }: { mission: MissionDetailDto }) {
   const existingGitHubPullRequest = githubPullRequest.data;
   const commitMessageValid = commitMessage.trim().length > 0;
   const gitUnavailable =
-    (localTargetUnavailable && !isRemoteTarget && branch.status !== 'pending') || pendingMutation;
+    (localTargetUnavailable && !isRemoteTarget && branch.status !== 'pending') ||
+    pendingMutation ||
+    notCheckedOutHere;
   const hasActions = (showIntegrate || showPushParent || showPublish) && !gitUnavailable;
 
   return (
@@ -671,7 +693,24 @@ function BranchPanel({ mission }: { mission: MissionDetailDto }) {
 
         {canConfigureBranch && <MissionBranchSetupForm mission={mission} intent="setup" />}
 
-        {canSwitchBranch && <MissionBranchSetupForm mission={mission} intent="switch" />}
+        {notCheckedOutHere && (
+          <p className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-800 dark:text-amber-200">
+            This branch is not checked out on this device — its worktree was removed. Running the
+            mission checks it out again, or switch to another branch below.
+          </p>
+        )}
+
+        {showSwitchForm && <MissionBranchSetupForm mission={mission} intent="switch" />}
+
+        {!canConfigureBranch && !isMerged && (
+          <button
+            type="button"
+            onClick={() => setSwitchOpen(open => !open)}
+            className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          >
+            {switchOpen ? 'Keep current branch' : 'Switch branch…'}
+          </button>
+        )}
 
         {canRevertToBase && (
           <button

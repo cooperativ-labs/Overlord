@@ -289,7 +289,9 @@ export function mergeMissionBranchObservation<T extends ControlPlaneMissionBranc
     ...controlPlaneBranch,
     status: observation.status,
     dirty: observation.dirty,
-    worktreePath: observation.worktreePath ?? controlPlaneBranch.worktreePath,
+    // An observation is authoritative for where the branch lives on that device:
+    // null means it is checked out nowhere there, not "unknown".
+    worktreePath: observation.worktreePath,
     observedAt: observation.observedAt,
     observationSource: 'client'
   } as T;

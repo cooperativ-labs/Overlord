@@ -1059,6 +1059,16 @@ export type MissionWorktreePreference = 'worktree' | 'branch';
 export interface MissionBranchDto {
   name: string;
   baseBranch: string | null;
+  /**
+   * Where the branch is checked out. Before any observation this is the
+   * planner's canonical worktree path. Once a local target has observed the
+   * branch (`observedAt` set) it is wherever git actually has it checked out —
+   * the canonical worktree, the primary repo, or another linked worktree — and
+   * `null` means the branch is checked out nowhere on that device. Branch
+   * actions and the Runner Layer resolve the checkout the same way: the
+   * recorded worktree when it still exists, else any existing checkout of the
+   * branch, else (runner only) a fresh checkout.
+   */
   worktreePath: string | null;
   status: MissionBranchStatus;
   /**
@@ -2200,8 +2210,10 @@ export interface UpdateMissionBody {
   allowParallelObjectives?: boolean;
   /**
    * Clear `missions.active_branch` so the mission panel returns to a pending
-   * branch preview. Used when switching to a different branch after the
-   * previous one has merged. Clears stored branch observations for the mission.
+   * branch preview. Used when switching a mission to a different branch (paired
+   * with `branchOverride`), whatever the current branch's status; the next
+   * launch prepares the new branch. Clears stored branch observations for the
+   * mission.
    */
   resetActiveBranch?: boolean;
   /**

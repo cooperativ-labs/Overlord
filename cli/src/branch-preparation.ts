@@ -167,11 +167,33 @@ function resolveBaseBranch(gitRoot: string, mission: MissionShape): string {
   return repoDefaultBranch(gitRoot);
 }
 
+// Every checkout of this repo (the primary repo first, then linked worktrees),
+// keyed by the branch it has checked out.
+function worktreeCheckouts(gitRoot: string): Map<string, string> {
+  const checkouts = new Map<string, string>();
+  let currentPath: string | null = null;
+  for (const line of lines(
+    runGit(gitRoot, ['worktree', 'list', '--porcelain'], { optional: true })
+  )) {
+    if (line.startsWith('worktree ')) {
+      currentPath = line.slice('worktree '.length);
+    } else if (line.startsWith('branch ') && currentPath) {
+      const branch = line.replace(/^branch refs\/heads\//, '');
+      if (branch && !checkouts.has(branch)) checkouts.set(branch, currentPath);
+    }
+  }
+  return checkouts;
+}
+
 function currentWorktrees(gitRoot: string): string[] {
-  return lines(runGit(gitRoot, ['worktree', 'list', '--porcelain'], { optional: true }))
-    .filter(line => line.startsWith('branch '))
-    .map(line => line.replace(/^branch refs\/heads\//, '').trim())
-    .filter(Boolean);
+  return [...worktreeCheckouts(gitRoot).keys()];
+}
+
+// Where `branch` is already checked out — the primary repo or a linked
+// worktree — or null when it is checked out nowhere. Git refuses to check one
+// branch out twice, so an existing checkout is always the place to work.
+function existingCheckout(gitRoot: string, branch: string): string | null {
+  return worktreeCheckouts(gitRoot).get(branch) ?? null;
 }
 
 function revParse(gitRoot: string, ref: string): string {
@@ -305,7 +327,12 @@ function ensureBranchRef(gitRoot: string, decision: BranchDecision): void {
   if (!check) throw new Error(`Invalid branch name: ${decision.branch}`);
 }
 
-function ensureWorktree(gitRoot: string, decision: BranchDecision): void {
+// Ensures the planned branch has a worktree and returns the directory to work
+// in. That is the canonical worktree path, unless the branch is already checked
+// out somewhere else — its worktree was removed and the branch checked out in
+// the primary repo, say — in which case that existing checkout is used instead
+// of failing on git's one-checkout-per-branch rule.
+function ensureWorktree(gitRoot: string, decision: BranchDecision): string {
   ensureBranchRef(gitRoot, decision);
   mkdirSync(path.dirname(decision.worktreePath), { recursive: true });
 
@@ -322,7 +349,7 @@ function ensureWorktree(gitRoot: string, decision: BranchDecision): void {
         `Worktree path is checked out on ${existingBranch}, expected ${decision.branch}: ${decision.worktreePath}`
       );
     }
-    return;
+    return decision.worktreePath;
   }
 
   // The worktree directory is gone but git may still hold a stale registration
@@ -332,29 +359,33 @@ function ensureWorktree(gitRoot: string, decision: BranchDecision): void {
   runGit(gitRoot, ['worktree', 'prune'], { optional: true });
 
   if (decision.action === 'reuse') {
+    const checkout = existingCheckout(gitRoot, decision.branch);
+    if (checkout) return checkout;
     runGit(gitRoot, ['worktree', 'add', decision.worktreePath, decision.branch]);
-    return;
+    return decision.worktreePath;
   }
   runGit(gitRoot, ['worktree', 'add', '-b', decision.branch, decision.worktreePath, decision.from]);
+  return decision.worktreePath;
 }
 
 // Creates (when needed) and checks out the planned branch directly in the
 // primary repo — the "branch without a worktree" mode (coo:9). Unlike
 // `ensureWorktree`, no separate worktree directory is added; the branch lives in
-// the working repo, switching it onto the branch.
-function ensureBranchCheckout(gitRoot: string, decision: BranchDecision): void {
+// the working repo, switching it onto the branch. Returns the directory to work
+// in: the primary repo, or the linked worktree that already has the branch
+// checked out (git will not check it out a second time).
+function ensureBranchCheckout(gitRoot: string, decision: BranchDecision): string {
   ensureBranchRef(gitRoot, decision);
+  const checkout = existingCheckout(gitRoot, decision.branch);
+  if (checkout) return checkout;
   const exists = runGit(gitRoot, ['rev-parse', '--verify', '--quiet', decision.branch], {
     optional: true
   });
-  if (!exists) {
-    if (decision.action === 'reuse') {
-      runGit(gitRoot, ['checkout', decision.branch]);
-      return;
-    }
+  if (!exists && decision.action !== 'reuse') {
     runGit(gitRoot, ['branch', decision.branch, decision.from]);
   }
   runGit(gitRoot, ['checkout', decision.branch]);
+  return gitRoot;
 }
 
 // Resolves the mission's effective branch behavior. Prefers the resolved flags
@@ -565,13 +596,13 @@ export async function prepareMissionBranch({
   const isolated = Boolean(isolation) && !overrideBranch;
 
   if (useWorktree) {
-    ensureWorktree(gitRoot, decision);
+    const worktreePath = ensureWorktree(gitRoot, decision);
     return {
-      workingDirectory: decision.worktreePath,
+      workingDirectory: worktreePath,
       branchAutomation: {
         branchName: decision.branch,
         baseBranch: decision.baseBranch,
-        worktreePath: decision.worktreePath,
+        worktreePath,
         resourceKey,
         action: decision.action,
         cycle: decision.cycle,
@@ -583,13 +614,13 @@ export async function prepareMissionBranch({
   // Branch-only: check the branch out in the primary repo (no worktree). The
   // branch's "worktree" is the primary repo itself, which the mission panel's
   // git-state derivation resolves via `git worktree list`.
-  ensureBranchCheckout(gitRoot, decision);
+  const checkoutPath = ensureBranchCheckout(gitRoot, decision);
   return {
-    workingDirectory: gitRoot,
+    workingDirectory: checkoutPath,
     branchAutomation: {
       branchName: decision.branch,
       baseBranch: decision.baseBranch,
-      worktreePath: gitRoot,
+      worktreePath: checkoutPath,
       resourceKey,
       action: decision.action,
       cycle: decision.cycle,
