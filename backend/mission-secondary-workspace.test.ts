@@ -547,27 +547,25 @@ describe('runner claims and drives executions in a secondary (non-active) worksp
 // endpoint converted in Phase 2, all built on the shared fixture so the bug class
 // is caught at the door for every newly-converted endpoint.
 describe('workspace-scoped operations resolve against the resource workspace, not the active one', () => {
-  // Phase 0 — the genuinely per-workspace launch setting. `worktreeBranchAutomationEnabled`
-  // lives in `workspaces.settings_json`; before the fix the launch-settings surface
-  // read/wrote it against the caller's *active* workspace (launch.ts:114/131/189
-  // defaulted to `WORKSPACE.id`), so toggling it while viewing a secondary-workspace
-  // project silently configured the active workspace instead. The conversion threads
-  // an explicit `workspaceId`, so the toggle lands in — and reads back from — the
-  // objective's own workspace B without touching the active workspace A.
-  it('reads and writes worktree-branch automation against the objective workspace (Phase 0)', async () => {
+  // Phase 0 — worktree/branch automation is a *user* preference (contract v126):
+  // worktrees live on the user's machine, so the flag is stored on the profile's
+  // launch-session defaults rather than in `workspaces.settings_json`. Writing it
+  // through the surface scoped to secondary workspace B must therefore read back
+  // identically from every workspace the profile belongs to, including active A.
+  it('stores worktree-branch automation per user, visible from every workspace (Phase 0)', async () => {
     const fixture = await setupSecondaryWorkspaceFixture({ namePrefix: 'Launch Settings' });
     const { getLaunchSettings, updateWorktreeBranchAutomation } =
       await import('./execution/launch.ts');
 
-    await assertScopedToResourceWorkspace({
-      fixture,
-      message: 'worktree-branch automation',
-      write: workspaceId => updateWorktreeBranchAutomation({ enabled: true }, workspaceId),
-      read: workspaceId => getLaunchSettings(workspaceId),
-      extract: settings => settings.worktreeBranchAutomationEnabled,
-      expected: true,
-      present: value => value === true
-    });
+    const saved = await updateWorktreeBranchAutomation({ enabled: true }, fixture.secondary.id);
+    assert.equal(saved.worktreeBranchAutomationEnabled, true);
+    assert.equal(saved.launchSessionDefaults.worktreeBranchAutomationEnabled, true);
+
+    for (const workspaceId of [fixture.secondary.id, fixture.workspaceAId]) {
+      const read = await getLaunchSettings(workspaceId);
+      assert.equal(read.worktreeBranchAutomationEnabled, true);
+      assert.equal(read.launchSessionDefaults.worktreeBranchAutomationEnabled, true);
+    }
   });
 
   // Phase 0 — the origin bug, end to end. Per-user launch mechanics (pre-command

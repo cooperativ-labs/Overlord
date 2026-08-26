@@ -10,7 +10,7 @@ import {
   useLaunchSettings,
   usePurgeMergedWorktrees,
   useRemoveWorktree,
-  useUpdateWorktreeBranchAutomation,
+  useUpdateLaunchSessionDefaults,
   useWorktrees
 } from '@/lib/queries';
 
@@ -134,7 +134,7 @@ function WorktreeRow({ worktree }: { worktree: WorktreeDto }) {
 
 export function WorktreesPage() {
   const launchSettings = useLaunchSettings();
-  const updateWorktrees = useUpdateWorktreeBranchAutomation();
+  const updateWorktrees = useUpdateLaunchSessionDefaults();
   const worktreesEnabled = launchSettings.data?.worktreeBranchAutomationEnabled ?? false;
   const localTargetUnavailable = useLocalTargetUnavailable();
 
@@ -164,7 +164,9 @@ export function WorktreesPage() {
             id="worktree-branch-automation"
             checked={worktreesEnabled}
             disabled={launchSettings.isLoading || updateWorktrees.isPending}
-            onCheckedChange={enabled => updateWorktrees.mutate({ enabled })}
+            onCheckedChange={enabled =>
+              updateWorktrees.mutate({ worktreeBranchAutomationEnabled: enabled })
+            }
           />
         </div>
         {updateWorktrees.isError && (

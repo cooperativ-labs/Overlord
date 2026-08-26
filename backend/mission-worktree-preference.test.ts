@@ -3,11 +3,11 @@ import { mkdtempSync } from 'node:fs';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 
-// Per-mission worktree/branch opt-in (coo:9). When the workspace
-// `worktreeBranchAutomationEnabled` setting is off, a mission runs off its base
+// Per-mission worktree/branch opt-in (coo:9). When the user's
+// `worktreeBranchAutomationEnabled` default is off, a mission runs off its base
 // branch (`willPrepareBranch` false) unless it carries a per-mission
 // `worktreePreference`. Setting `'worktree'`/`'branch'` opts the single mission
-// in; clearing it (null) reverts to inheriting the workspace setting.
+// in; clearing it (null) reverts to inheriting the user default.
 describe('per-mission worktree preference', () => {
   it('resolves willPrepareBranch / willUseWorktree from the setting and per-mission preference', async () => {
     const dir = mkdtempSync(path.join('/tmp', 'ovld-wt-pref-'));
@@ -20,9 +20,9 @@ describe('per-mission worktree preference', () => {
 
     const project = await createProject({ name: 'Worktree Preference Test' });
 
-    // Workspace automation OFF (the default) and no per-mission preference: the
-    // mission works off its base branch — the header shows "main".
-    updateWorktreeBranchAutomation({ enabled: false });
+    // User automation default OFF (the default) and no per-mission preference:
+    // the mission works off its base branch — the header shows "main".
+    await updateWorktreeBranchAutomation({ enabled: false });
     const mission = await createMission({ projectId: project.id, firstObjective: 'Default off' });
     let branch = (await getMissionDetail(mission.id)).branch;
     assert.equal(branch?.worktreeAutomationEnabled, false);
@@ -49,7 +49,7 @@ describe('per-mission worktree preference', () => {
     assert.equal(branch?.willUseWorktree, false);
 
     // With automation ON, a mission with no preference inherits worktree behavior.
-    updateWorktreeBranchAutomation({ enabled: true });
+    await updateWorktreeBranchAutomation({ enabled: true });
     branch = (await getMissionDetail(mission.id)).branch;
     assert.equal(branch?.worktreeAutomationEnabled, true);
     assert.equal(branch?.willPrepareBranch, true);

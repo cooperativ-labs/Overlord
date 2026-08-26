@@ -129,8 +129,9 @@ Requirements:
 
 ## Mission Branch And Worktree Preparation
 
-When launch settings have `worktreeBranchAutomationEnabled` enabled (disabled by
-default; users opt in from the Worktrees settings page), the runner prepares a
+When the acting user's launch settings have `worktreeBranchAutomationEnabled`
+enabled (disabled by default; a per-user preference set from the Worktrees settings
+page, identical in every workspace), the runner prepares a
 mission-specific branch and git worktree after resolving the project resource and
 before spawning the agent.
 

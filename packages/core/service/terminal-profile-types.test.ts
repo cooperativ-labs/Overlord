@@ -129,7 +129,8 @@ describe('user default and target override', () => {
       profile: { launcher: 'Terminal', placement: 'window', chord: null },
       defaults: {
         executionProvider: { kind: 'latch', executable: 'latch' },
-        openViewerOnLaunch: false
+        openViewerOnLaunch: false,
+        worktreeBranchAutomationEnabled: false
       }
     });
     assert.equal(resolved.executionProvider.kind, 'latch');
@@ -149,7 +150,8 @@ describe('user default and target override', () => {
       },
       defaults: {
         executionProvider: { kind: 'latch', executable: 'latch' },
-        openViewerOnLaunch: false
+        openViewerOnLaunch: false,
+        worktreeBranchAutomationEnabled: false
       }
     });
     assert.equal(resolved.executionProvider.kind, 'direct');
@@ -169,7 +171,8 @@ describe('user default and target override', () => {
   test('the stored user default round-trips', () => {
     const defaults = {
       executionProvider: { kind: 'latch' as const, executable: 'latch' },
-      openViewerOnLaunch: false
+      openViewerOnLaunch: false,
+      worktreeBranchAutomationEnabled: true
     };
     assert.deepEqual(
       parseLaunchSessionDefaults(serializeLaunchSessionDefaults(defaults)),

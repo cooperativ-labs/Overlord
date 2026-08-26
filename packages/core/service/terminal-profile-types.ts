@@ -112,11 +112,18 @@ export const EMPTY_TERMINAL_PROFILE = DEFAULT_TERMINAL_PROFILE;
 export type LaunchSessionDefaults = {
   executionProvider: ExecutionProvider;
   openViewerOnLaunch: boolean;
+  /**
+   * Whether launches prepare a per-mission branch + worktree before spawn.
+   * Worktrees live on the user's own machine (under the Overlord home folder),
+   * so this is a user preference — it follows the profile across workspaces.
+   */
+  worktreeBranchAutomationEnabled: boolean;
 };
 
 export const DEFAULT_LAUNCH_SESSION_DEFAULTS: LaunchSessionDefaults = {
   executionProvider: { ...DEFAULT_EXECUTION_PROVIDER },
-  openViewerOnLaunch: DEFAULT_OPEN_VIEWER_ON_LAUNCH
+  openViewerOnLaunch: DEFAULT_OPEN_VIEWER_ON_LAUNCH,
+  worktreeBranchAutomationEnabled: false
 };
 
 /** Where an effective value came from, so settings can say "your default" honestly. */
@@ -299,12 +306,13 @@ export function serializeTerminalProfile(profile: TerminalProfile): string {
 /** Parse the user-level default from its stored (profile-metadata) representation. */
 export function parseLaunchSessionDefaults(value: unknown): LaunchSessionDefaults {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return {
-      executionProvider: { ...DEFAULT_EXECUTION_PROVIDER },
-      openViewerOnLaunch: DEFAULT_OPEN_VIEWER_ON_LAUNCH
-    };
+    return { ...DEFAULT_LAUNCH_SESSION_DEFAULTS };
   }
-  const cast = value as { executionProvider?: unknown; viewer?: unknown };
+  const cast = value as {
+    executionProvider?: unknown;
+    viewer?: unknown;
+    worktreeBranchAutomationEnabled?: unknown;
+  };
   const viewer =
     cast.viewer && typeof cast.viewer === 'object' && !Array.isArray(cast.viewer)
       ? (cast.viewer as { openOnLaunch?: unknown })
@@ -316,7 +324,8 @@ export function parseLaunchSessionDefaults(value: unknown): LaunchSessionDefault
     openViewerOnLaunch:
       typeof viewer?.openOnLaunch === 'boolean'
         ? viewer.openOnLaunch
-        : DEFAULT_OPEN_VIEWER_ON_LAUNCH
+        : DEFAULT_OPEN_VIEWER_ON_LAUNCH,
+    worktreeBranchAutomationEnabled: cast.worktreeBranchAutomationEnabled === true
   };
 }
 
@@ -329,7 +338,8 @@ export function serializeLaunchSessionDefaults(
     executionProvider: normalizeExecutionProvider(defaults.executionProvider) ?? {
       ...DEFAULT_EXECUTION_PROVIDER
     },
-    viewer: { openOnLaunch: defaults.openViewerOnLaunch !== false }
+    viewer: { openOnLaunch: defaults.openViewerOnLaunch !== false },
+    worktreeBranchAutomationEnabled: defaults.worktreeBranchAutomationEnabled === true
   };
 }
 

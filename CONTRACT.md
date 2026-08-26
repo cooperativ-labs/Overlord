@@ -34,13 +34,27 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `125`
+Current version: `126`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
 `contract/components.yaml`) — never a header duplicate. The contract version is
 incremented when any stable interface changes. All conformance manifests must
 declare the contract version they were validated against.
+
+### Version 126 Change Summary
+
+Worktree/branch automation is a user preference, not a workspace setting.
+`worktreeBranchAutomationEnabled` moves out of `workspaces.settings_json` into the
+acting profile's launch-session defaults: `LaunchSessionDefaultsDto` and
+`UpdateLaunchSessionDefaultsBody` gain the field, and `PATCH …/launch-settings/
+worktree-branch-automation` becomes an alias for the session-defaults update. The
+top-level `LaunchSettingsDto.worktreeBranchAutomationEnabled` and
+`MissionBranchDto.worktreeAutomationEnabled` keep their shape but now mirror the
+user default, so the value is identical across every workspace the user belongs
+to; the workspace id on the launch-settings routes only selects the authorizing
+membership. Previously stored workspace values are not migrated — users re-enable
+the toggle once.
 
 ### Version 125 Change Summary
 

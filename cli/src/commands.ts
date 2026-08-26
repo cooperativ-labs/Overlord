@@ -401,18 +401,16 @@ function parseLaunchEnvVarsValue(value: unknown): Record<string, string> {
 }
 
 /**
- * Whether worktree/branch automation is on for `workspaceId`. Read failures are
- * reported rather than silently disabling automation, which previously made a
- * runner prepare no branch at all and launch straight into the main checkout.
+ * Whether the acting user's worktree/branch automation default is on. It is a
+ * user preference (identical in every workspace), so no workspace is passed.
+ * Read failures are reported rather than silently disabling automation, which
+ * previously made a runner prepare no branch at all and launch straight into
+ * the main checkout.
  */
-async function readWorktreeBranchAutomationEnabled(
-  runtime: CliRuntime,
-  workspaceId?: string | null
-): Promise<boolean> {
+async function readWorktreeBranchAutomationEnabled(runtime: CliRuntime): Promise<boolean> {
   try {
     const settings = await fetchLaunchSettings<LaunchSettingsShape>({
-      backend: runtime.backend,
-      workspaceId
+      backend: runtime.backend
     });
     return settings.worktreeBranchAutomationEnabled === true;
   } catch (error) {
@@ -1605,10 +1603,7 @@ export async function runManagementCommand({
           missionId,
           workingDirectory,
           objectiveId: objectiveId ?? undefined,
-          workspaceAutomationEnabled: await readWorktreeBranchAutomationEnabled(
-            scopedRuntime,
-            missionWorkspaceId
-          ),
+          automationEnabled: await readWorktreeBranchAutomationEnabled(scopedRuntime),
           dryRun,
           overrideBranch: flagValue(parsed.flags, '--branch'),
           noWorktree: flagBoolean(parsed.flags, '--no-worktree')
@@ -2118,10 +2113,7 @@ export async function runRunnerOnce({
         missionId,
         workingDirectory: String(requestRecord.workingDirectory ?? process.cwd()),
         objectiveId: String(requestRecord.objectiveId ?? ''),
-        workspaceAutomationEnabled: await readWorktreeBranchAutomationEnabled(
-          runtime,
-          requestWorkspaceId
-        ),
+        automationEnabled: await readWorktreeBranchAutomationEnabled(runtime),
         dryRun,
         overrideBranch: flagValue(parsed.flags, '--branch'),
         noWorktree: flagBoolean(parsed.flags, '--no-worktree')

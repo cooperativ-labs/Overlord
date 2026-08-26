@@ -20,7 +20,7 @@ export type BranchPreparationOptions = {
    * recompute the mission's effective decision when the mission DTO does not
    * carry the resolved `willPrepareBranch`/`willUseWorktree` flags.
    */
-  workspaceAutomationEnabled: boolean;
+  automationEnabled: boolean;
   /** No git side-effects; used for launch previews. */
   dryRun?: boolean;
   /** The `--no-worktree` flag: downgrade a worktree decision to a branch-only checkout. */
@@ -360,10 +360,10 @@ function ensureBranchCheckout(gitRoot: string, decision: BranchDecision): void {
 // Resolves the mission's effective branch behavior. Prefers the resolved flags
 // the REST layer computes on the mission DTO (`willPrepareBranch`/
 // `willUseWorktree`); falls back to recomputing from the per-mission
-// `worktreePreference` and the workspace automation setting for older backends.
+// `worktreePreference` and the user's automation default for older backends.
 function resolveBranchDecision(
   mission: MissionShape,
-  workspaceAutomationEnabled: boolean
+  automationEnabled: boolean
 ): { willPrepareBranch: boolean; willUseWorktree: boolean } {
   const branch = mission.branch;
   if (
@@ -381,9 +381,8 @@ function resolveBranchDecision(
   const willPrepareBranch =
     preference === 'worktree' ||
     preference === 'branch' ||
-    (preference === null && workspaceAutomationEnabled);
-  const willUseWorktree =
-    preference === 'worktree' || (preference === null && workspaceAutomationEnabled);
+    (preference === null && automationEnabled);
+  const willUseWorktree = preference === 'worktree' || (preference === null && automationEnabled);
   return { willPrepareBranch, willUseWorktree };
 }
 
@@ -527,7 +526,7 @@ export async function prepareMissionBranch({
 
   const { willPrepareBranch, willUseWorktree } = resolveBranchDecision(
     mission,
-    options.workspaceAutomationEnabled
+    options.automationEnabled
   );
   const overrideFlag = options.overrideBranch?.trim() || null;
   // An explicit `--branch` always forces at least a branch, even for a mission

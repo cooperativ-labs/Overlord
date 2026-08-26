@@ -20,12 +20,14 @@ const baseProfile: TerminalProfileDto = {
 
 const directDefaults: LaunchSessionDefaultsDto = {
   executionProvider: { kind: 'direct', executable: 'latch' },
-  openViewerOnLaunch: true
+  openViewerOnLaunch: true,
+  worktreeBranchAutomationEnabled: false
 };
 
 const latchDefaults: LaunchSessionDefaultsDto = {
   executionProvider: { kind: 'latch', executable: 'latch' },
-  openViewerOnLaunch: true
+  openViewerOnLaunch: true,
+  worktreeBranchAutomationEnabled: false
 };
 
 describe('launch-session-form', () => {

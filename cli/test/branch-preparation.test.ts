@@ -136,7 +136,7 @@ test('prepareMissionBranch creates a worktree when the mission resolves to workt
       options: {
         missionId: 'coo:7',
         workingDirectory: repo,
-        workspaceAutomationEnabled: false
+        automationEnabled: false
       }
     });
     assert.ok(result.branchAutomation, 'expected a branch automation payload');
@@ -167,7 +167,7 @@ test('prepareMissionBranch reuses a dirty same-mission worktree', async () => {
       options: {
         missionId: 'coo:15',
         workingDirectory: repo,
-        workspaceAutomationEnabled: false
+        automationEnabled: false
       }
     });
     assert.ok(first.branchAutomation, 'expected initial branch automation payload');
@@ -186,7 +186,7 @@ test('prepareMissionBranch reuses a dirty same-mission worktree', async () => {
       options: {
         missionId: 'coo:15',
         workingDirectory: repo,
-        workspaceAutomationEnabled: false
+        automationEnabled: false
       }
     });
 
@@ -226,7 +226,7 @@ test('prepareMissionBranch isolates a concurrent objective into its own worktree
         missionId: 'coo:21',
         workingDirectory: repo,
         objectiveId: 'obj-a',
-        workspaceAutomationEnabled: false
+        automationEnabled: false
       }
     });
     assert.ok(first.branchAutomation);
@@ -255,7 +255,7 @@ test('prepareMissionBranch isolates a concurrent objective into its own worktree
         missionId: 'coo:21',
         workingDirectory: repo,
         objectiveId: 'obj-b',
-        workspaceAutomationEnabled: false
+        automationEnabled: false
       }
     });
 
@@ -287,7 +287,7 @@ test('prepareMissionBranch isolates a concurrent objective into its own worktree
         missionId: 'coo:21',
         workingDirectory: repo,
         objectiveId: 'obj-b',
-        workspaceAutomationEnabled: false
+        automationEnabled: false
       }
     });
     assert.equal(relaunch.workingDirectory, second.workingDirectory);
@@ -320,7 +320,7 @@ test('prepareMissionBranch shares one checkout for concurrent objectives without
       missionId: 'coo:22',
       workingDirectory: repo,
       objectiveId: 'obj-b',
-      workspaceAutomationEnabled: false
+      automationEnabled: false
     }
   });
 
@@ -352,7 +352,7 @@ test('prepareMissionBranch keeps one worktree for a sibling on a different resou
         workingDirectory: repo,
         objectiveId: 'obj-b',
         resourceKey: 'primary',
-        workspaceAutomationEnabled: false
+        automationEnabled: false
       }
     });
 
@@ -383,7 +383,7 @@ test('prepareMissionBranch falls back to the primary checkout branch as base', a
       options: {
         missionId: 'coo:12',
         workingDirectory: repo,
-        workspaceAutomationEnabled: false
+        automationEnabled: false
       }
     });
 
@@ -418,7 +418,7 @@ test('prepareMissionBranch ignores a linked worktree checkout when resolving the
       options: {
         missionId: 'coo:13',
         workingDirectory: linked,
-        workspaceAutomationEnabled: false
+        automationEnabled: false
       }
     });
 
@@ -450,7 +450,7 @@ test('prepareMissionBranch checks the branch out in the primary repo for branch-
     options: {
       missionId: 'coo:3',
       workingDirectory: repo,
-      workspaceAutomationEnabled: false
+      automationEnabled: false
     }
   });
   assert.ok(result.branchAutomation, 'expected a branch automation payload');
@@ -479,7 +479,7 @@ test('prepareMissionBranch prepares nothing when the mission runs off its base b
     options: {
       missionId: 'coo:1',
       workingDirectory: repo,
-      workspaceAutomationEnabled: false
+      automationEnabled: false
     }
   });
   assert.equal(result.branchAutomation, null);
@@ -496,7 +496,7 @@ test('prepareMissionBranch never touches git on a dry run', async () => {
     options: {
       missionId: 'coo:9',
       workingDirectory: repo,
-      workspaceAutomationEnabled: true,
+      automationEnabled: true,
       dryRun: true
     }
   });

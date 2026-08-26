@@ -784,11 +784,13 @@ export async function readActorLaunchSessionDefaults({
 export async function updateActorLaunchSessionDefaults({
   ctx,
   executionProvider,
-  openViewerOnLaunch
+  openViewerOnLaunch,
+  worktreeBranchAutomationEnabled
 }: {
   ctx: ServiceContext;
   executionProvider?: ExecutionProvider | null;
   openViewerOnLaunch?: boolean | null;
+  worktreeBranchAutomationEnabled?: boolean | null;
 }): Promise<LaunchSessionDefaults> {
   requireActor(ctx);
   const profileId = await actorProfileId(ctx);
@@ -821,7 +823,11 @@ export async function updateActorLaunchSessionDefaults({
     openViewerOnLaunch:
       openViewerOnLaunch === undefined || openViewerOnLaunch === null
         ? current.openViewerOnLaunch
-        : openViewerOnLaunch
+        : openViewerOnLaunch,
+    worktreeBranchAutomationEnabled:
+      worktreeBranchAutomationEnabled === undefined || worktreeBranchAutomationEnabled === null
+        ? current.worktreeBranchAutomationEnabled
+        : worktreeBranchAutomationEnabled
   };
 
   const revision = row.revision + 1;

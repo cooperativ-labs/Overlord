@@ -27,11 +27,13 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 
+import type { ServiceContext } from '../packages/core/service/context.ts';
 import { readDeliveryReport } from '../packages/core/service/delivery-report.ts';
 import { ServiceError } from '../packages/core/service/errors.ts';
 import {
   declareActingDeviceTarget,
-  NO_EXECUTION_TARGET_REGISTERED
+  NO_EXECUTION_TARGET_REGISTERED,
+  readActorLaunchSessionDefaults
 } from '../packages/core/service/execution-targets.ts';
 import {
   enqueueLiveActivityRefreshForMission,
@@ -163,8 +165,7 @@ import { listMissionTerminalSessions } from './execution/latch-sessions.ts';
 import {
   dequeueObjective,
   LAUNCHABLE_STATES,
-  listMissionExecutionRequests,
-  readWorktreeBranchAutomationEnabled
+  listMissionExecutionRequests
 } from './execution/launch.ts';
 import {
   queueLocalTargetMutation,
@@ -1044,18 +1045,19 @@ function parseWorktreePreference(value: string | null): MissionWorktreePreferenc
 }
 
 // Resolves a mission's effective branch behavior by combining its per-mission
-// preference with the workspace automation setting (coo:9). When the preference
-// is null the mission inherits the workspace setting (the original behavior);
-// `'worktree'`/`'branch'` opt an individual mission in regardless of the setting.
+// preference with the acting user's automation default (coo:9). When the
+// preference is null the mission inherits the user default (the original
+// behavior); `'worktree'`/`'branch'` opt an individual mission in regardless.
 async function resolveBranchAutomation(
   preference: MissionWorktreePreference | null,
-  workspaceId: string
+  ctx: ServiceContext
 ): Promise<{
   automationEnabled: boolean;
   willPrepareBranch: boolean;
   willUseWorktree: boolean;
 }> {
-  const automationEnabled = await readWorktreeBranchAutomationEnabled(undefined, workspaceId);
+  const { worktreeBranchAutomationEnabled: automationEnabled } =
+    await readActorLaunchSessionDefaults({ ctx });
   const willPrepareBranch =
     preference === 'worktree' ||
     preference === 'branch' ||
@@ -1083,10 +1085,11 @@ async function resolvePreparedWorktreePath({
 // source of truth the runner writes). When it is null no branch has been
 // prepared yet, so we surface the planner's predicted name with a pending status.
 async function missionBranchDto(row: MissionRow): Promise<MissionBranchDto> {
-  const executionTargetId = await resolveProjectResourceScopeTargetId(
-    row.project_id,
-    row.workspace_id
-  );
+  const ctx = await buildWebappServiceContextForWorkspace(row.workspace_id);
+  const executionTargetId = await resolveProjectExecutionTargetForLaunch({
+    ctx,
+    projectId: row.project_id
+  });
   const projectSlug = await getProjectSlug(row.project_id, row.workspace_id);
   const worktreeRoot = resolveWorktreeRoot();
   const resourceKey = await primaryResourceKey(row.project_id, row.workspace_id, executionTargetId);
@@ -1094,7 +1097,7 @@ async function missionBranchDto(row: MissionRow): Promise<MissionBranchDto> {
   const worktreePreference = parseWorktreePreference(row.worktree_preference);
   const { automationEnabled, willPrepareBranch, willUseWorktree } = await resolveBranchAutomation(
     worktreePreference,
-    row.workspace_id
+    ctx
   );
   const name = row.active_branch?.trim();
   if (name) {
@@ -1135,7 +1138,7 @@ async function missionBranchDto(row: MissionRow): Promise<MissionBranchDto> {
       willUseWorktree
     };
     const observations = await loadMissionBranchObservationsForMissions({
-      ctx: await buildWebappServiceContextForWorkspace(row.workspace_id),
+      ctx,
       executionTargetId,
       missionIds: [row.id],
       resourceKey

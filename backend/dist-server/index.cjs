@@ -71394,10 +71394,7 @@ function serializeTerminalProfile(profile) {
 }
 function parseLaunchSessionDefaults(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return {
-      executionProvider: { ...DEFAULT_EXECUTION_PROVIDER },
-      openViewerOnLaunch: DEFAULT_OPEN_VIEWER_ON_LAUNCH
-    };
+    return { ...DEFAULT_LAUNCH_SESSION_DEFAULTS };
   }
   const cast = value;
   const viewer = cast.viewer && typeof cast.viewer === "object" && !Array.isArray(cast.viewer) ? cast.viewer : null;
@@ -71405,7 +71402,8 @@ function parseLaunchSessionDefaults(value) {
     executionProvider: normalizeExecutionProvider(cast.executionProvider) ?? {
       ...DEFAULT_EXECUTION_PROVIDER
     },
-    openViewerOnLaunch: typeof viewer?.openOnLaunch === "boolean" ? viewer.openOnLaunch : DEFAULT_OPEN_VIEWER_ON_LAUNCH
+    openViewerOnLaunch: typeof viewer?.openOnLaunch === "boolean" ? viewer.openOnLaunch : DEFAULT_OPEN_VIEWER_ON_LAUNCH,
+    worktreeBranchAutomationEnabled: cast.worktreeBranchAutomationEnabled === true
   };
 }
 function serializeLaunchSessionDefaults(defaults2) {
@@ -71414,7 +71412,8 @@ function serializeLaunchSessionDefaults(defaults2) {
     executionProvider: normalizeExecutionProvider(defaults2.executionProvider) ?? {
       ...DEFAULT_EXECUTION_PROVIDER
     },
-    viewer: { openOnLaunch: defaults2.openViewerOnLaunch !== false }
+    viewer: { openOnLaunch: defaults2.openViewerOnLaunch !== false },
+    worktreeBranchAutomationEnabled: defaults2.worktreeBranchAutomationEnabled === true
   };
 }
 function resolveLaunchSession({
@@ -71488,7 +71487,8 @@ var init_terminal_profile_types = __esm({
     };
     DEFAULT_LAUNCH_SESSION_DEFAULTS = {
       executionProvider: { ...DEFAULT_EXECUTION_PROVIDER },
-      openViewerOnLaunch: DEFAULT_OPEN_VIEWER_ON_LAUNCH
+      openViewerOnLaunch: DEFAULT_OPEN_VIEWER_ON_LAUNCH,
+      worktreeBranchAutomationEnabled: false
     };
     LAUNCH_SESSION_METADATA_KEY = "launchSession";
   }
@@ -73536,7 +73536,8 @@ async function readActorLaunchSessionDefaults({
 async function updateActorLaunchSessionDefaults({
   ctx,
   executionProvider,
-  openViewerOnLaunch
+  openViewerOnLaunch,
+  worktreeBranchAutomationEnabled
 }) {
   requireActor(ctx);
   const profileId = await actorProfileId(ctx);
@@ -73562,7 +73563,8 @@ async function updateActorLaunchSessionDefaults({
     executionProvider: executionProvider === void 0 ? current.executionProvider : normalizeExecutionProvider(executionProvider) ?? {
       ...DEFAULT_LAUNCH_SESSION_DEFAULTS.executionProvider
     },
-    openViewerOnLaunch: openViewerOnLaunch === void 0 || openViewerOnLaunch === null ? current.openViewerOnLaunch : openViewerOnLaunch
+    openViewerOnLaunch: openViewerOnLaunch === void 0 || openViewerOnLaunch === null ? current.openViewerOnLaunch : openViewerOnLaunch,
+    worktreeBranchAutomationEnabled: worktreeBranchAutomationEnabled === void 0 || worktreeBranchAutomationEnabled === null ? current.worktreeBranchAutomationEnabled : worktreeBranchAutomationEnabled
   };
   const revision = row.revision + 1;
   await ctx.db.run(
@@ -142257,7 +142259,8 @@ var DEFAULT_TERMINAL_PROFILE2 = {
 };
 var DEFAULT_LAUNCH_SESSION_DEFAULTS2 = {
   executionProvider: { ...DEFAULT_EXECUTION_PROVIDER2 },
-  openViewerOnLaunch: DEFAULT_OPEN_VIEWER_ON_LAUNCH2
+  openViewerOnLaunch: DEFAULT_OPEN_VIEWER_ON_LAUNCH2,
+  worktreeBranchAutomationEnabled: false
 };
 var LAUNCH_SESSION_METADATA_KEY2 = "launchSession";
 function trimmed7(value) {
@@ -142618,7 +142621,6 @@ async function listOrganizationAdminProfileIds(organizationId, client = requireD
 
 // execution/launch.ts
 var AGENT_CATALOG_SETTINGS_KEY = "agentCatalog";
-var WORKTREE_BRANCH_AUTOMATION_SETTINGS_KEY = "worktreeBranchAutomationEnabled";
 function instanceAgentCatalog() {
   const config4 = loadConfig();
   return resolveInstanceAgentCatalog({ configCatalog: config4.agentCatalog });
@@ -142667,18 +142669,12 @@ async function resolveCatalogWorkspaceId(workspaceId2, permission, db) {
   });
   return workspaceId2;
 }
-async function readWorktreeBranchAutomationEnabled(client = requireDatabaseClient(), workspaceId2) {
-  const settings = await readWorkspaceSettings(client, workspaceId2);
-  return settings[WORKTREE_BRANCH_AUTOMATION_SETTINGS_KEY] === true;
-}
 async function launchSettingsDto({
   target,
-  workspaceId: workspaceId2,
   ctx,
   agentConfigs = target?.agentConfigs ?? {},
   terminalProfile = target?.terminalProfile ?? toTerminalProfileDto(DEFAULT_TERMINAL_PROFILE2),
-  launchSessionDefaults,
-  client = requireDatabaseClient()
+  launchSessionDefaults
 }) {
   const defaults2 = launchSessionDefaults ?? await readActorLaunchSessionDefaults({ ctx });
   return {
@@ -142690,7 +142686,7 @@ async function launchSettingsDto({
     // Resolved from the same stored profile the DTO carries, so a client never has
     // to re-implement the target-override-then-user-default precedence itself.
     resolvedLaunchSession: target ? resolveLaunchSession2({ profile: fromTerminalProfileDto(terminalProfile), defaults: defaults2 }) : null,
-    worktreeBranchAutomationEnabled: await readWorktreeBranchAutomationEnabled(client, workspaceId2)
+    worktreeBranchAutomationEnabled: defaults2.worktreeBranchAutomationEnabled
   };
 }
 async function resolveLaunchSettingsScope(workspaceId2, permission, client) {
@@ -142880,7 +142876,8 @@ function terminalProfileFromBody(body, current) {
 function toLaunchSessionDefaultsDto(defaults2) {
   return {
     executionProvider: { ...defaults2.executionProvider },
-    openViewerOnLaunch: defaults2.openViewerOnLaunch
+    openViewerOnLaunch: defaults2.openViewerOnLaunch,
+    worktreeBranchAutomationEnabled: defaults2.worktreeBranchAutomationEnabled
   };
 }
 async function readAgentConfigs(preferenceId, client = requireDatabaseClient()) {
@@ -142919,7 +142916,7 @@ async function getLaunchSettings(workspaceId2) {
   const client = requireDatabaseClient();
   const scope = await resolveLaunchSettingsScope(workspaceId2, PERMISSIONS.LAUNCH_READ, client);
   const target = await findLocalLaunchTarget(client, scope.ctx);
-  return launchSettingsDto({ target, workspaceId: scope.workspaceId, ctx: scope.ctx, client });
+  return launchSettingsDto({ target, ctx: scope.ctx });
 }
 async function updateAgentLaunchConfig(agentKey, body, workspaceId2) {
   return requireDatabaseClient().transaction(async (tx) => {
@@ -142941,13 +142938,7 @@ async function updateAgentLaunchConfig(agentKey, body, workspaceId2) {
         WHERE id = ?`,
       [JSON.stringify(configs), nowIso2(), target.preferenceId]
     );
-    return launchSettingsDto({
-      target,
-      workspaceId: scope.workspaceId,
-      ctx: scope.ctx,
-      agentConfigs: configs,
-      client: tx
-    });
+    return launchSettingsDto({ target, ctx: scope.ctx, agentConfigs: configs });
   });
 }
 async function updateTerminalProfile2(body, workspaceId2) {
@@ -142968,10 +142959,8 @@ async function updateTerminalProfile2(body, workspaceId2) {
         executionTargetId: saved.executionTargetId,
         deviceLabel: saved.deviceLabel
       },
-      workspaceId: scope.workspaceId,
       ctx: scope.ctx,
-      terminalProfile: toTerminalProfileDto(saved.terminalProfile),
-      client: tx
+      terminalProfile: toTerminalProfileDto(saved.terminalProfile)
     });
   });
 }
@@ -142981,32 +142970,18 @@ async function updateLaunchSessionDefaults(body, workspaceId2) {
     const defaults2 = await updateActorLaunchSessionDefaults({
       ctx: scope.ctx,
       executionProvider: body.executionProvider === void 0 ? void 0 : body.executionProvider === null ? DEFAULT_LAUNCH_SESSION_DEFAULTS2.executionProvider : normalizeExecutionProvider2(body.executionProvider),
-      openViewerOnLaunch: body.openViewerOnLaunch
+      openViewerOnLaunch: body.openViewerOnLaunch,
+      worktreeBranchAutomationEnabled: body.worktreeBranchAutomationEnabled
     });
     const target = await findLocalLaunchTarget(tx, scope.ctx);
-    return launchSettingsDto({
-      target,
-      workspaceId: scope.workspaceId,
-      ctx: scope.ctx,
-      launchSessionDefaults: defaults2,
-      client: tx
-    });
+    return launchSettingsDto({ target, ctx: scope.ctx, launchSessionDefaults: defaults2 });
   });
 }
-async function updateWorktreeBranchAutomation(body, workspaceId2) {
-  return requireDatabaseClient().transaction(async (tx) => {
-    const scope = await resolveLaunchSettingsScope(workspaceId2, PERMISSIONS.LAUNCH_CONFIGURE, tx);
-    const settings = await readWorkspaceSettings(tx, scope.workspaceId);
-    settings[WORKTREE_BRANCH_AUTOMATION_SETTINGS_KEY] = body.enabled === true;
-    await writeWorkspaceSettings(settings, tx, scope.workspaceId);
-    const target = await findLocalLaunchTarget(tx, scope.ctx);
-    return launchSettingsDto({
-      target,
-      workspaceId: scope.workspaceId,
-      ctx: scope.ctx,
-      client: tx
-    });
-  });
+function updateWorktreeBranchAutomation(body, workspaceId2) {
+  return updateLaunchSessionDefaults(
+    { worktreeBranchAutomationEnabled: body.enabled === true },
+    workspaceId2
+  );
 }
 var LAUNCH_PREFERENCE_KEY = "launchPreference";
 function readPreferenceRow2(projectId, workspaceId2, workspaceUserId, client = requireDatabaseClient()) {
@@ -146900,8 +146875,8 @@ async function resolveMissionBaseBranch({
 function parseWorktreePreference(value) {
   return value === "worktree" || value === "branch" ? value : null;
 }
-async function resolveBranchAutomation(preference, workspaceId2) {
-  const automationEnabled = await readWorktreeBranchAutomationEnabled(void 0, workspaceId2);
+async function resolveBranchAutomation(preference, ctx) {
+  const { worktreeBranchAutomationEnabled: automationEnabled } = await readActorLaunchSessionDefaults({ ctx });
   const willPrepareBranch = preference === "worktree" || preference === "branch" || preference === null && automationEnabled;
   const willUseWorktree = preference === "worktree" || preference === null && automationEnabled;
   return { automationEnabled, willPrepareBranch, willUseWorktree };
@@ -146912,10 +146887,11 @@ async function resolvePreparedWorktreePath({
   return fallback2;
 }
 async function missionBranchDto(row) {
-  const executionTargetId = await resolveProjectResourceScopeTargetId(
-    row.project_id,
-    row.workspace_id
-  );
+  const ctx = await buildWebappServiceContextForWorkspace(row.workspace_id);
+  const executionTargetId = await resolveProjectExecutionTargetForLaunch({
+    ctx,
+    projectId: row.project_id
+  });
   const projectSlug = await getProjectSlug(row.project_id, row.workspace_id);
   const worktreeRoot = resolveWorktreeRoot();
   const resourceKey = await primaryResourceKey(row.project_id, row.workspace_id, executionTargetId);
@@ -146923,7 +146899,7 @@ async function missionBranchDto(row) {
   const worktreePreference = parseWorktreePreference(row.worktree_preference);
   const { automationEnabled, willPrepareBranch, willUseWorktree } = await resolveBranchAutomation(
     worktreePreference,
-    row.workspace_id
+    ctx
   );
   const name = row.active_branch?.trim();
   if (name) {
@@ -146964,7 +146940,7 @@ async function missionBranchDto(row) {
       willUseWorktree
     };
     const observations = await loadMissionBranchObservationsForMissions({
-      ctx: await buildWebappServiceContextForWorkspace(row.workspace_id),
+      ctx,
       executionTargetId,
       missionIds: [row.id],
       resourceKey

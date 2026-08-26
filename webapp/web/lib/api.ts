@@ -129,7 +129,6 @@ import type {
   UpdateWebhookSubscriptionBody,
   UpdateWorkspaceBody,
   UpdateWorkspaceMemberRoleBody,
-  UpdateWorktreeBranchAutomationBody,
   UpsertSharedContextBody,
   UserTokenDto,
   WebhookDeliveryAttemptsPageDto,
@@ -789,17 +788,6 @@ export const api = {
       workspaceId
         ? `/api/workspaces/${workspaceId}/launch-settings/session-defaults`
         : '/api/launch-settings/session-defaults',
-      body
-    ),
-  updateWorktreeBranchAutomation: (
-    body: UpdateWorktreeBranchAutomationBody,
-    workspaceId?: string | null
-  ) =>
-    request<LaunchSettingsDto>(
-      'PATCH',
-      workspaceId
-        ? `/api/workspaces/${workspaceId}/launch-settings/worktree-branch-automation`
-        : '/api/launch-settings/worktree-branch-automation',
       body
     ),
   getLaunchPreference: (projectId: string) =>

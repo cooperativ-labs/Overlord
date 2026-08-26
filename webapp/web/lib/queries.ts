@@ -75,7 +75,6 @@ import type {
   UpdateWebhookSubscriptionBody,
   UpdateWorkspaceBody,
   UpdateWorkspaceMemberRoleBody,
-  UpdateWorktreeBranchAutomationBody,
   WorkspaceDto,
   WorkspaceExecutionTargetDto
 } from '../../shared/contract.ts';
@@ -1073,17 +1072,6 @@ export function useRedeliverWebhookDelivery() {
       api.redeliverWebhookDelivery(id, outboxId),
     onSuccess: (_result, { id }) =>
       void qc.invalidateQueries({ queryKey: keys.webhookDeliveries(id) })
-  });
-}
-
-export function useUpdateWorktreeBranchAutomation(workspaceId?: string | null) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (body: UpdateWorktreeBranchAutomationBody) =>
-      api.updateWorktreeBranchAutomation(body, workspaceId),
-    onSuccess: data => {
-      qc.setQueryData(keys.launchSettings(workspaceId), data);
-    }
   });
 }
 

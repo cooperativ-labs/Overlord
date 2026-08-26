@@ -130,7 +130,6 @@ type StoredCatalog = {
 };
 
 const AGENT_CATALOG_SETTINGS_KEY = 'agentCatalog';
-const WORKTREE_BRANCH_AUTOMATION_SETTINGS_KEY = 'worktreeBranchAutomationEnabled';
 
 function instanceAgentCatalog(): Record<string, StoredCatalogAgent> {
   const config = loadConfig();
@@ -213,38 +212,19 @@ async function resolveCatalogWorkspaceId(
   return workspaceId;
 }
 
-/**
- * Whether worktree/branch automation is enabled for `workspaceId`. Every caller
- * derives the workspace from the resource it already loaded — mission-detail
- * assembly passes the mission's own workspace, and the launch-settings surface
- * passes the scope's workspace — so a secondary workspace's setting, not the
- * active one's, governs its missions (coo:135/coo:331).
- */
-export async function readWorktreeBranchAutomationEnabled(
-  client: DatabaseClient = requireDatabaseClient(),
-  workspaceId: string
-): Promise<boolean> {
-  const settings = await readWorkspaceSettings(client, workspaceId);
-  return settings[WORKTREE_BRANCH_AUTOMATION_SETTINGS_KEY] === true;
-}
-
 async function launchSettingsDto({
   target,
-  workspaceId,
   ctx,
   agentConfigs = target?.agentConfigs ?? {},
   terminalProfile = target?.terminalProfile ?? toTerminalProfileDto(DEFAULT_TERMINAL_PROFILE),
-  launchSessionDefaults,
-  client = requireDatabaseClient()
+  launchSessionDefaults
 }: {
   /** `null` when the acting machine has no declared execution target (contract v38). */
   target: LocalLaunchTarget | null;
-  workspaceId: string;
   ctx: ServiceContext;
   agentConfigs?: Record<string, AgentLaunchConfigDto>;
   terminalProfile?: TerminalProfileDto;
   launchSessionDefaults?: LaunchSessionDefaults;
-  client?: DatabaseClient;
 }): Promise<LaunchSettingsDto> {
   const defaults = launchSessionDefaults ?? (await readActorLaunchSessionDefaults({ ctx }));
   return {
@@ -258,7 +238,7 @@ async function launchSettingsDto({
     resolvedLaunchSession: target
       ? resolveLaunchSession({ profile: fromTerminalProfileDto(terminalProfile), defaults })
       : null,
-    worktreeBranchAutomationEnabled: await readWorktreeBranchAutomationEnabled(client, workspaceId)
+    worktreeBranchAutomationEnabled: defaults.worktreeBranchAutomationEnabled
   };
 }
 
@@ -540,7 +520,8 @@ function terminalProfileFromBody(
 function toLaunchSessionDefaultsDto(defaults: LaunchSessionDefaults): LaunchSessionDefaultsDto {
   return {
     executionProvider: { ...defaults.executionProvider },
-    openViewerOnLaunch: defaults.openViewerOnLaunch
+    openViewerOnLaunch: defaults.openViewerOnLaunch,
+    worktreeBranchAutomationEnabled: defaults.worktreeBranchAutomationEnabled
   };
 }
 
@@ -616,7 +597,7 @@ export async function getLaunchSettings(workspaceId?: string): Promise<LaunchSet
   const client = requireDatabaseClient();
   const scope = await resolveLaunchSettingsScope(workspaceId, PERMISSIONS.LAUNCH_READ, client);
   const target = await findLocalLaunchTarget(client, scope.ctx);
-  return launchSettingsDto({ target, workspaceId: scope.workspaceId, ctx: scope.ctx, client });
+  return launchSettingsDto({ target, ctx: scope.ctx });
 }
 
 /** Persist the acting user's launch mechanics (pre-command/flags) for one agent. */
@@ -653,13 +634,7 @@ export async function updateAgentLaunchConfig(
       [JSON.stringify(configs), nowIso(), target.preferenceId]
     );
 
-    return launchSettingsDto({
-      target,
-      workspaceId: scope.workspaceId,
-      ctx: scope.ctx,
-      agentConfigs: configs,
-      client: tx
-    });
+    return launchSettingsDto({ target, ctx: scope.ctx, agentConfigs: configs });
   });
 }
 
@@ -688,10 +663,8 @@ export async function updateTerminalProfile(
         executionTargetId: saved.executionTargetId,
         deviceLabel: saved.deviceLabel
       },
-      workspaceId: scope.workspaceId,
       ctx: scope.ctx,
-      terminalProfile: toTerminalProfileDto(saved.terminalProfile),
-      client: tx
+      terminalProfile: toTerminalProfileDto(saved.terminalProfile)
     });
   });
 }
@@ -715,40 +688,30 @@ export async function updateLaunchSessionDefaults(
           : body.executionProvider === null
             ? DEFAULT_LAUNCH_SESSION_DEFAULTS.executionProvider
             : normalizeExecutionProvider(body.executionProvider),
-      openViewerOnLaunch: body.openViewerOnLaunch
+      openViewerOnLaunch: body.openViewerOnLaunch,
+      worktreeBranchAutomationEnabled: body.worktreeBranchAutomationEnabled
     });
     // Reading the target here never declares one: the user default is stored on
     // the profile, so a machine with no execution target may still set it.
     const target = await findLocalLaunchTarget(tx, scope.ctx);
-    return launchSettingsDto({
-      target,
-      workspaceId: scope.workspaceId,
-      ctx: scope.ctx,
-      launchSessionDefaults: defaults,
-      client: tx
-    });
+    return launchSettingsDto({ target, ctx: scope.ctx, launchSessionDefaults: defaults });
   });
 }
 
-export async function updateWorktreeBranchAutomation(
+/**
+ * Toggle the acting user's worktree/branch automation default. A thin alias over
+ * `updateLaunchSessionDefaults`: the flag is a user preference, not a workspace
+ * setting, so `workspaceId` only picks the membership the write is authorized
+ * through.
+ */
+export function updateWorktreeBranchAutomation(
   body: UpdateWorktreeBranchAutomationBody,
   workspaceId?: string
 ): Promise<LaunchSettingsDto> {
-  return requireDatabaseClient().transaction(async tx => {
-    const scope = await resolveLaunchSettingsScope(workspaceId, PERMISSIONS.LAUNCH_CONFIGURE, tx);
-    const settings = await readWorkspaceSettings(tx, scope.workspaceId);
-    settings[WORKTREE_BRANCH_AUTOMATION_SETTINGS_KEY] = body.enabled === true;
-    await writeWorkspaceSettings(settings, tx, scope.workspaceId);
-    // Workspace-level setting: the target is only echoed back in the DTO, so this
-    // reads the acting machine's target rather than declaring one.
-    const target = await findLocalLaunchTarget(tx, scope.ctx);
-    return launchSettingsDto({
-      target,
-      workspaceId: scope.workspaceId,
-      ctx: scope.ctx,
-      client: tx
-    });
-  });
+  return updateLaunchSessionDefaults(
+    { worktreeBranchAutomationEnabled: body.enabled === true },
+    workspaceId
+  );
 }
 
 // ---- Project launch preference ---------------------------------------------

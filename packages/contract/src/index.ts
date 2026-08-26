@@ -1082,14 +1082,14 @@ export interface MissionBranchDto {
    */
   overrideBranch: string | null;
   /**
-   * Whether the workspace-wide worktree/branch automation setting
-   * (`worktreeBranchAutomationEnabled`) is on. Surfaced here so the mission panel
-   * and the Runner Layer can resolve the mission's effective branch behavior
-   * without a separate launch-settings read.
+   * Whether the acting user's worktree/branch automation default
+   * (`launchSessionDefaults.worktreeBranchAutomationEnabled`) is on. Surfaced
+   * here so the mission panel and the Runner Layer can resolve the mission's
+   * effective branch behavior without a separate launch-settings read.
    */
   worktreeAutomationEnabled: boolean;
   /**
-   * The mission's per-mission override of the workspace setting, or `null` to
+   * The mission's per-mission override of the user default, or `null` to
    * inherit it. See `MissionWorktreePreference`. Lets a user opt an individual
    * mission into a branch/worktree while automation is globally off (and vice
    * versa). The Runner Layer reads this to decide branch preparation.
@@ -1512,6 +1512,12 @@ export type LaunchSessionSourceDto = 'target' | 'user_default';
 export interface LaunchSessionDefaultsDto {
   executionProvider: ExecutionProviderDto;
   openViewerOnLaunch: boolean;
+  /**
+   * Whether launches prepare a per-mission branch and worktree before spawn.
+   * A user preference (worktrees live on the user's machine), so it is the same
+   * in every workspace the profile belongs to (contract v126).
+   */
+  worktreeBranchAutomationEnabled: boolean;
 }
 
 /** The effective provider + viewer for the acting user on this execution target. */
@@ -1557,7 +1563,7 @@ export interface LaunchSettingsDto {
    * `null` when the calling machine has no declared execution target.
    */
   resolvedLaunchSession: ResolvedLaunchSessionDto | null;
-  /** When true, runner/direct launches prepare a per-mission branch and worktree before spawn. */
+  /** Mirrors `launchSessionDefaults.worktreeBranchAutomationEnabled` for existing readers. */
   worktreeBranchAutomationEnabled: boolean;
 }
 
@@ -1570,6 +1576,7 @@ export type UpdateTerminalProfileBody = TerminalProfileDto;
 export interface UpdateLaunchSessionDefaultsBody {
   executionProvider?: ExecutionProviderDto | null;
   openViewerOnLaunch?: boolean | null;
+  worktreeBranchAutomationEnabled?: boolean | null;
 }
 
 /**
