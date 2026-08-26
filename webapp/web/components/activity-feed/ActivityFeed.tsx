@@ -1,4 +1,4 @@
-import { CheckCircle2, CircleHelp, Filter, Loader2 } from 'lucide-react';
+import { CheckCircle2, CircleHelp, Loader2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useActivityFeed } from '../../lib/queries.ts';
@@ -15,8 +15,8 @@ import {
   isQuestionItem,
   truncationNote
 } from './activity-feed-model.ts';
-import { ProjectDot } from './ActivityFeedCardChrome.tsx';
 import { BlockingQuestionCard } from './BlockingQuestionCard.tsx';
+import { FeedProjectFilterDropdown } from './FeedProjectFilterDropdown.tsx';
 import { MissionRunCard } from './MissionRunCard.tsx';
 
 const KIND_ICONS = {
@@ -138,37 +138,11 @@ export function ActivityFeed({
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setProjectId(null)}
-            className={cn(
-              'inline-flex h-7 items-center gap-1.5 rounded-lg border px-2 text-xs transition-colors',
-              projectId === null
-                ? 'border-(--color-border) bg-(--color-surface-2) text-(--color-ink)'
-                : 'border-transparent text-(--color-ink-dim) hover:bg-(--color-surface-2)'
-            )}
-          >
-            <Filter className="size-3" aria-hidden="true" />
-            All projects
-          </button>
-          {projects.map(project => (
-            <button
-              key={project.projectId}
-              type="button"
-              onClick={() =>
-                setProjectId(current => (current === project.projectId ? null : project.projectId))
-              }
-              className={cn(
-                'inline-flex h-7 max-w-[12rem] items-center gap-1.5 rounded-lg border px-2 text-xs transition-colors',
-                projectId === project.projectId
-                  ? 'border-(--color-border) bg-(--color-surface-2) text-(--color-ink)'
-                  : 'border-transparent text-(--color-ink-dim) hover:bg-(--color-surface-2)'
-              )}
-            >
-              <ProjectDot color={project.projectColor} />
-              <span className="truncate">{project.projectName}</span>
-            </button>
-          ))}
+          <FeedProjectFilterDropdown
+            projects={projects}
+            projectId={projectId}
+            onProjectChange={setProjectId}
+          />
 
           <span className="mx-1 h-4 w-px bg-(--color-border)" aria-hidden="true" />
 
