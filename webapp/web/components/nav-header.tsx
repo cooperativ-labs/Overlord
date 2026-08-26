@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 
 import { NewMissionModal } from '@/components/NewMissionModal.tsx';
 import { NotificationDrawer } from '@/components/notifications/NotificationDrawer.tsx';
+import { QueueNavButton } from '@/components/run-queue/QueueNavButton.tsx';
 import { Button } from '@/components/ui/button';
 import { SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip.tsx';
@@ -122,6 +123,7 @@ export function NavHeader() {
             Press {isMac ? '⌘N' : 'Ctrl+N'} to create a new mission
           </TooltipContent>
         </Tooltip>
+        <QueueNavButton />
       </div>
       <NewMissionModal
         open={isNewMissionOpen}

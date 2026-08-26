@@ -79,7 +79,6 @@ import type {
   WorkspaceDto,
   WorkspaceExecutionTargetDto
 } from '../../shared/contract.ts';
-import { buildEverythingQueuedProjection } from '../components/everything-queued/everything-queued-model.ts';
 
 import { api } from './api.ts';
 import { clearAuthTokens } from './api-base.ts';
@@ -205,44 +204,6 @@ export const useProjectRunQueues = (projectId: string) =>
     enabled: Boolean(projectId),
     refetchInterval: 10_000
   });
-
-/** Read-only Inbox projection assembled from independently authorized project queue reads. */
-export const useEverythingQueued = () => {
-  const projects = useAllProjects('all');
-  const workspaces = useAccessibleWorkspaces();
-  const queueQueries = useQueries({
-    queries: projects.data.map(project => ({
-      queryKey: keys.runQueues(project.id),
-      queryFn: () => api.getProjectRunQueues(project.id),
-      enabled: !projects.isLoading,
-      refetchInterval: 10_000
-    }))
-  });
-  const data = buildEverythingQueuedProjection(
-    projects.data.map((project, index) => ({
-      project,
-      workspaceName:
-        workspaces.find(workspace => workspace.id === project.workspaceId)?.name ??
-        'Unknown workspace',
-      queues: queueQueries[index]?.data,
-      readable: !queueQueries[index]?.isError
-    }))
-  );
-  const queueLoading = queueQueries.some(query => query.isLoading);
-  const queueErrors = queueQueries.filter(query => query.isError).length;
-
-  return {
-    data,
-    isLoading: projects.isLoading || queueLoading,
-    isError:
-      !projects.isLoading &&
-      ((projects.isError && projects.data.length === 0) ||
-        (projects.data.length > 0 && queueErrors === projects.data.length)),
-    hasPartialError:
-      (projects.isError && projects.data.length > 0) ||
-      (queueErrors > 0 && queueErrors < projects.data.length)
-  };
-};
 
 function invalidateRunQueue(qc: QueryClient, projectId: string) {
   void qc.invalidateQueries({ queryKey: keys.runQueues(projectId) });

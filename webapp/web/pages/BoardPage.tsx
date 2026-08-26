@@ -6,7 +6,6 @@ import { NewMissionModal } from '@/components/NewMissionModal.tsx';
 
 import type { MissionDto, WorkspaceMemberDto } from '../../shared/contract.ts';
 import { ProjectSettingsSection } from '../components/projects/ProjectSettingsSection.tsx';
-import { RunQueueSheet } from '../components/run-queue/RunQueueSheet.tsx';
 import { Button, EmptyState, Spinner } from '../components/ui.tsx';
 import { firstObjectiveCreatePayload } from '../lib/project-resources.ts';
 import {
@@ -366,7 +365,6 @@ export function BoardPage() {
         <div className="flex flex-wrap items-center gap-2  border-(--color-border) px-5 mt-5">
           <div className="flex flex-wrap items-center gap-2">
             <MissionsViewToggle value={view} onChange={handleViewChange} />
-            <RunQueueSheet projectId={projectId} />
             <MissionStatusFilterDropdown
               statuses={statuses}
               selectedStatusIds={selectedStatusIds}

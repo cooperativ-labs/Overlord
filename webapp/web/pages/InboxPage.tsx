@@ -1,8 +1,6 @@
 import { useMemo, useState } from 'react';
 
-import { EverythingQueuedPanel } from '@/components/everything-queued/EverythingQueuedPanel.tsx';
 import { InboxMissionCard } from '@/components/InboxMissionCard.tsx';
-import { ProjectWorkspaceErrorBoundary } from '@/components/ProjectWorkspaceErrorBoundary.tsx';
 import { useInboxItems, useInboxMissions } from '@/lib/queries.ts';
 
 import type { InboxMissionDto, MissionDetailDto } from '../../shared/contract.ts';
@@ -169,7 +167,7 @@ function InboxTriageMissionCard({ mission }: { mission: InboxMissionDto }) {
 
 /**
  * The Inbox surface: unallocated capture plus agent-Next and due-today/tomorrow
- * mission triage on the left, cross-project queue on the right. Live objective
+ * mission triage. The Run Queue lives in the nav-header queue sheet. Live objective
  * activity lives on `/feed`.
  */
 export function InboxPage() {
@@ -177,9 +175,6 @@ export function InboxPage() {
     <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
       <main className="flex min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-hidden">
         <InboxColumn />
-        <ProjectWorkspaceErrorBoundary region="Everything Queued">
-          <EverythingQueuedPanel />
-        </ProjectWorkspaceErrorBoundary>
       </main>
     </div>
   );

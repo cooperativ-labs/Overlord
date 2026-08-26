@@ -208,12 +208,6 @@ const missionRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/MissionPage.tsx'), 'MissionPanelRoute')
 });
 
-const runQueueRoute = createRoute({
-  getParentRoute: () => boardRoute,
-  path: 'queue',
-  component: lazyRouteComponent(() => import('./pages/RunQueuePage.tsx'), 'RunQueuePage')
-});
-
 export const routeTree = rootRoute.addChildren([
   quickTaskShellRoute.addChildren([quickTaskRoute]),
   acceptInviteRoute,
@@ -227,7 +221,7 @@ export const routeTree = rootRoute.addChildren([
   workspaceLegacyRedirectRoute,
   workspaceMissionLegacyRedirectRoute,
   myMissionsRoute.addChildren([myMissionsPanelRoute]),
-  boardRoute.addChildren([missionRoute, runQueueRoute])
+  boardRoute.addChildren([missionRoute])
 ]);
 
 export const router = createRouter({ routeTree, defaultPreload: 'intent' });
