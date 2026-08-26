@@ -190,7 +190,7 @@ test('listInboxMissions includes human missions due today or tomorrow', async ()
   assert.equal(today.reasons.includes('agent_next'), false);
 });
 
-test('listInboxMissions omits missions due later than tomorrow or already past', async () => {
+test('listInboxMissions omits missions due later than tomorrow but includes past due', async () => {
   const project = await createProject({ name: 'Inbox due window project' });
   const execute = await statusFor(project.id, 'in_progress');
   const dueLater = await createMission({
@@ -214,11 +214,89 @@ test('listInboxMissions omits missions due later than tomorrow or already past',
     false,
     'missions due beyond tomorrow stay off the inbox'
   );
+  const yesterday = response.missions.find(item => item.id === dueYesterday.id);
+  assert.ok(yesterday, 'expected the past-due mission in the inbox list');
+  assert.ok(yesterday.reasons.includes('overdue'));
   assert.equal(
-    response.missions.some(item => item.id === dueYesterday.id),
+    yesterday.reasons.includes('due_soon'),
     false,
-    'the due window is today and tomorrow only'
+    'overdue and due_soon are mutually exclusive'
   );
+});
+
+test('listInboxMissions orders overdue rows most recently overdue first, ahead of due soon', async () => {
+  const project = await createProject({ name: 'Inbox overdue ordering project' });
+  const execute = await statusFor(project.id, 'in_progress');
+  const dueLongAgo = await createMission({
+    projectId: project.id,
+    title: 'Overdue by a month',
+    statusId: execute.id,
+    firstObjective: 'Stale work'
+  });
+  const dueRecently = await createMission({
+    projectId: project.id,
+    title: 'Overdue by two days',
+    statusId: execute.id,
+    firstObjective: 'Recently missed work'
+  });
+  const dueToday = await createMission({
+    projectId: project.id,
+    title: 'Ordering due today',
+    statusId: execute.id,
+    firstObjective: 'Due today'
+  });
+  await setDueDatetime(dueLongAgo.id, dueDatetimeDaysFromNow(-30));
+  await setDueDatetime(dueRecently.id, dueDatetimeDaysFromNow(-2));
+  await setDueDatetime(dueToday.id, dueDatetimeDaysFromNow(0));
+
+  const response = await listInboxMissions();
+  const recentIndex = response.missions.findIndex(item => item.id === dueRecently.id);
+  const staleIndex = response.missions.findIndex(item => item.id === dueLongAgo.id);
+  const todayIndex = response.missions.findIndex(item => item.id === dueToday.id);
+  assert.ok(recentIndex >= 0 && staleIndex >= 0 && todayIndex >= 0, 'expected all three rows');
+  assert.ok(recentIndex < staleIndex, 'overdue rows read most recently overdue first');
+  assert.ok(staleIndex < todayIndex, 'overdue rows lead the due-soon rows');
+});
+
+test('listInboxMissions omits completed missions that are past due', async () => {
+  const project = await createProject({ name: 'Inbox overdue finished project' });
+  const complete = await statusFor(project.id, 'done');
+  const mission = await createMission({
+    projectId: project.id,
+    title: 'Finished mission due last week',
+    statusId: complete.id,
+    firstObjective: 'Already done'
+  });
+  await setDueDatetime(mission.id, dueDatetimeDaysFromNow(-7));
+
+  const response = await listInboxMissions();
+  assert.equal(
+    response.missions.some(item => item.id === mission.id),
+    false,
+    'finished work is not triage even when its due date has passed'
+  );
+});
+
+test('listInboxMissions carries both reasons for an overdue agent Next mission', async () => {
+  const project = await createProject({ name: 'Inbox overdue agent next project' });
+  const next = await statusFor(project.id, 'next_up');
+  const mission = await createMission({
+    projectId: project.id,
+    title: 'Agent next mission past due',
+    statusId: next.id,
+    firstObjective: 'Agent work past due'
+  });
+  await requireDatabaseClient().run(
+    `UPDATE missions SET created_by_kind = 'agent', created_by_agent = 'cursor' WHERE id = ?`,
+    [mission.id]
+  );
+  await setDueDatetime(mission.id, dueDatetimeDaysFromNow(-3));
+
+  const response = await listInboxMissions();
+  const matches = response.missions.filter(item => item.id === mission.id);
+  assert.equal(matches.length, 1, 'a mission qualifying twice is still one card');
+  assert.ok(matches[0].reasons.includes('overdue'));
+  assert.ok(matches[0].reasons.includes('agent_next'));
 });
 
 test('listInboxMissions omits completed and cancelled missions due today', async () => {

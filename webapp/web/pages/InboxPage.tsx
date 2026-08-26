@@ -41,7 +41,7 @@ function InboxColumn() {
         <h1 className="text-xl font-semibold tracking-tight">Inbox</h1>
         <p className="mt-1.5 text-[13px] leading-relaxed text-(--color-ink-dim) text-pretty">
           Unassigned captures stay private until you assign a project. Agent-filed Next work and
-          anything due today or tomorrow land here for triage.
+          anything overdue or due today or tomorrow land here for triage.
         </p>
       </div>
 
@@ -88,7 +88,7 @@ function InboxColumn() {
         {isEmpty ? (
           <p className="text-sm text-(--color-ink-dim)">
             Your Inbox is empty. Create a task without a project to capture it here, or wait for
-            agent-filed Next missions and work due today or tomorrow to appear.
+            agent-filed Next missions and work that is overdue or due today or tomorrow to appear.
           </p>
         ) : null}
       </div>
@@ -97,12 +97,17 @@ function InboxColumn() {
 }
 
 /**
- * Inclusion reasons read left to right, most urgent first: when a mission is
- * due today or tomorrow that is what the operator needs to see, and `recent` is
- * a modifier rather than a reason of its own.
+ * Inclusion reasons read left to right, most urgent first: a missed due date
+ * outranks an imminent one, which outranks agent-filed Next work, and `recent`
+ * is a modifier rather than a reason of its own.
  */
 function inboxReasonLabel(mission: InboxMissionDto): string {
   const parts: string[] = [];
+  if (mission.reasons.includes('overdue')) {
+    // The server decided the row is overdue; the client only counts the days,
+    // so fall back rather than drop the label if the clocks disagree.
+    parts.push(overdueLabel(mission.dueDatetime) ?? 'Overdue');
+  }
   if (mission.reasons.includes('due_soon')) {
     // The server decided the row is due-soon; the client only names the day, so
     // fall back rather than drop the label if the clocks straddle UTC midnight.
@@ -113,8 +118,8 @@ function inboxReasonLabel(mission: InboxMissionDto): string {
   return parts.length > 0 ? parts.join(' · ') : 'Inbox';
 }
 
-/** `Due today` / `Due tomorrow` against the same UTC day boundaries the API uses. */
-function dueSoonLabel(dueDatetime: string | null): string | null {
+/** Whole UTC days between a due date and today, negative once the date has passed. */
+function dueDayOffset(dueDatetime: string | null): number | null {
   if (!dueDatetime) return null;
   const due = new Date(dueDatetime);
   if (Number.isNaN(due.getTime())) return null;
@@ -122,8 +127,22 @@ function dueSoonLabel(dueDatetime: string | null): string | null {
   const dayMs = 24 * 60 * 60 * 1000;
   const startOfToday = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   const dueDay = Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate());
-  if (dueDay === startOfToday) return 'Due today';
-  if (dueDay === startOfToday + dayMs) return 'Due tomorrow';
+  return Math.round((dueDay - startOfToday) / dayMs);
+}
+
+/** `Overdue 1 day` / `Overdue 6 days` against the UTC day boundaries the API uses. */
+function overdueLabel(dueDatetime: string | null): string | null {
+  const offset = dueDayOffset(dueDatetime);
+  if (offset === null || offset >= 0) return null;
+  const days = -offset;
+  return days === 1 ? 'Overdue 1 day' : `Overdue ${days} days`;
+}
+
+/** `Due today` / `Due tomorrow` against the same UTC day boundaries the API uses. */
+function dueSoonLabel(dueDatetime: string | null): string | null {
+  const offset = dueDayOffset(dueDatetime);
+  if (offset === 0) return 'Due today';
+  if (offset === 1) return 'Due tomorrow';
   return null;
 }
 
