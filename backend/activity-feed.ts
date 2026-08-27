@@ -1,6 +1,6 @@
 import { PERMISSIONS } from '@overlord/auth';
 import { sortObjectivesForMissionDisplay } from '@overlord/automations';
-import { formatObjectiveDisplayId } from '@overlord/database';
+import { formatObjectiveDisplayId, type DatabaseClient } from '@overlord/database';
 
 import type {
   ActivityFeedDto,
@@ -43,6 +43,17 @@ function truncate(value: string | null | undefined, max: number): string {
 
 function placeholders(count: number): string {
   return new Array(count).fill('?').join(', ');
+}
+
+/** Extract a scalar JSON field on either supported database adapter. */
+function jsonTextFieldSql(
+  column: string,
+  field: string,
+  dialect: DatabaseClient['dialect']
+): string {
+  return dialect === 'postgres'
+    ? `${column}->>'${field}'`
+    : `json_extract(${column}, '$.${field}')`;
 }
 
 interface FeedContextRow {
@@ -318,7 +329,10 @@ const QUESTION_CONTEXT_COLUMNS = CONTEXT_COLUMNS.replace(/\bo\./g, 'e.');
  */
 async function loadQuestions(workspaceIds: string[]): Promise<QuestionRow[]> {
   const askedAfter = new Date(Date.now() - QUESTION_MAX_AGE_MS).toISOString();
-  return (await requireDatabaseClient().all(
+  const db = requireDatabaseClient();
+  const requestProvider = jsonTextFieldSql('er.metadata_json', 'provider', db.dialect);
+  const answerRequestId = jsonTextFieldSql('answer.payload_json', 'agentRequestId', db.dialect);
+  return (await db.all(
     `SELECT ${QUESTION_CONTEXT_COLUMNS}, ${OBJECTIVE_PROVENANCE_COLUMNS},
             e.id AS event_id, e.objective_id, o.display_key AS objective_display_key,
             ar.id AS agent_request_id,
@@ -326,7 +340,7 @@ async function loadQuestions(workspaceIds: string[]): Promise<QuestionRow[]> {
               SELECT 1 FROM execution_requests er
                WHERE er.launched_session_id = e.session_id
                  AND er.deleted_at IS NULL
-                 AND er.metadata_json LIKE '%"provider":"latch"%'
+                 AND ${requestProvider} = 'latch'
             ) THEN 'latch' ELSE 'read_only' END AS delivery_mode,
             e.summary, e.created_at, s.agent_identifier
        FROM mission_events e
@@ -352,7 +366,7 @@ async function loadQuestions(workspaceIds: string[]): Promise<QuestionRow[]> {
            WHERE answer.mission_id = e.mission_id
              AND answer.type = 'answer'
              AND ar.id IS NOT NULL
-             AND answer.payload_json LIKE '%"agentRequestId":"' || ar.id || '"%'
+             AND ${answerRequestId} = ar.id
         )
       ORDER BY e.created_at DESC, e.id DESC
       LIMIT ?`,

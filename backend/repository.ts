@@ -22,7 +22,8 @@ import {
   DEFAULT_STATUSES,
   formatObjectiveDisplayId,
   OBJECTIVE_STATES,
-  type ObjectiveState
+  type ObjectiveState,
+  type SqlDialect
 } from '@overlord/database';
 import path from 'node:path';
 
@@ -3697,7 +3698,20 @@ export async function deleteProject(id: string): Promise<void> {
 
 // ---- Missions -------------------------------------------------------------
 
-const missionHasUnseenBlockingQuestionSql = `
+/**
+ * Extract a scalar JSON field without relying on SQLite's text-backed JSON
+ * representation. PostgreSQL stores these columns as jsonb, which cannot be
+ * compared with text operators such as LIKE.
+ */
+function jsonTextFieldSql(column: string, field: string, dialect: SqlDialect): string {
+  return dialect === 'postgres'
+    ? `${column}->>'${field}'`
+    : `json_extract(${column}, '$.${field}')`;
+}
+
+function missionHasUnseenBlockingQuestionSql(dialect: SqlDialect): string {
+  const answerRequestId = jsonTextFieldSql('answer.payload_json', 'agentRequestId', dialect);
+  return `
          (SELECT COUNT(*) > 0 FROM mission_events me
             WHERE me.mission_id = t.id AND me.type = 'ask'
               AND NOT EXISTS (
@@ -3705,7 +3719,7 @@ const missionHasUnseenBlockingQuestionSql = `
                  JOIN mission_events answer
                    ON answer.mission_id = me.mission_id
                   AND answer.type = 'answer'
-                  AND answer.payload_json LIKE '%' || '"agentRequestId":"' || ar.id || '"%'
+                  AND ${answerRequestId} = ar.id
                 WHERE ar.source_event_id = me.id AND ar.deleted_at IS NULL
               )
               AND (
@@ -3715,6 +3729,7 @@ const missionHasUnseenBlockingQuestionSql = `
                   WHERE mss.mission_id = t.id AND mss.status_id = 'blocking_question')
               ))
             AS has_unseen_blocking_question`;
+}
 
 const missionHasUnseenReturnedToExecuteSql = `
          (CASE WHEN t.returned_to_execute_at IS NOT NULL
@@ -3727,7 +3742,8 @@ const missionHasUnseenReturnedToExecuteSql = `
                THEN 1 ELSE 0 END)
             AS has_unseen_returned_to_execute`;
 
-const selectMissionsSql = `
+function selectMissionsSql(dialect: SqlDialect): string {
+  return `
   SELECT t.id, t.workspace_id, t.project_id, t.display_id, t.sequence_number, t.title,
          t.status_id, t.status_type, t.board_position, t.priority,
          t.assigned_workspace_user_id,
@@ -3756,7 +3772,7 @@ const selectMissionsSql = `
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL
               AND o.state IN ('draft', 'future') AND TRIM(o.instruction_text) != '')
             AS has_pending_objective_with_instructions,
-${missionHasUnseenBlockingQuestionSql},
+${missionHasUnseenBlockingQuestionSql(dialect)},
 ${missionHasUnseenReturnedToExecuteSql},
          (SELECT o.resource_key FROM objectives o
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'draft'
@@ -3764,6 +3780,7 @@ ${missionHasUnseenReturnedToExecuteSql},
   FROM missions t
   WHERE t.workspace_id = ? AND t.deleted_at IS NULL
 `;
+}
 
 /**
  * Every non-deleted objective belonging to `missionIds`, grouped by mission and
@@ -3825,8 +3842,9 @@ export async function listMissions(
   // Board order: ascending board_position within each column, with
   // sequence_number DESC as a stable tiebreaker (e.g. brand-new missions that
   // share a position before the column is first reordered).
-  const rows = (await requireDatabaseClient().all(
-    `${selectMissionsSql} AND t.project_id = ?
+  const db = requireDatabaseClient();
+  const rows = (await db.all(
+    `${selectMissionsSql(db.dialect)} AND t.project_id = ?
          ORDER BY t.board_position ASC, t.sequence_number DESC`,
     [workspaceId, projectId]
   )) as MissionRow[];
@@ -3853,7 +3871,7 @@ async function hydrateMissionDtos({
 }): Promise<MissionDto[]> {
   if (missionIds.length === 0) return [];
   const rows = (await client.all(
-    `${selectMissionsSql} AND t.id IN (${missionIds.map(() => '?').join(', ')})`,
+    `${selectMissionsSql(client.dialect)} AND t.id IN (${missionIds.map(() => '?').join(', ')})`,
     [workspaceId, ...missionIds]
   )) as MissionRow[];
   const byId = new Map(rows.map(row => [row.id, row]));
@@ -4260,9 +4278,10 @@ async function getMissionRow(
     permission,
     db
   });
-  const row = (await db.get(`${selectMissionsSql} AND t.id = ?`, [workspaceId, missionId])) as
-    | MissionRow
-    | undefined;
+  const row = (await db.get(`${selectMissionsSql(db.dialect)} AND t.id = ?`, [
+    workspaceId,
+    missionId
+  ])) as MissionRow | undefined;
   if (!row) throw new ApiError(404, 'Mission not found');
   return row;
 }
@@ -6510,7 +6529,7 @@ export async function callerMembershipsInActiveOrganization(
 // a `(workspace_id, assigned_workspace_user_id)` pair list rather than a single
 // workspace/actor pair, since the caller has a distinct `workspace_users.id` in
 // each workspace.
-function selectMyMissionsSql(pairPlaceholders: string): string {
+function selectMyMissionsSql(pairPlaceholders: string, dialect: SqlDialect): string {
   return `
   SELECT t.id, t.workspace_id, t.project_id, t.display_id, t.sequence_number, t.title,
          t.status_id, t.status_type, t.board_position, t.priority,
@@ -6540,7 +6559,7 @@ function selectMyMissionsSql(pairPlaceholders: string): string {
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL
               AND o.state IN ('draft', 'future') AND TRIM(o.instruction_text) != '')
             AS has_pending_objective_with_instructions,
-${missionHasUnseenBlockingQuestionSql},
+${missionHasUnseenBlockingQuestionSql(dialect)},
 ${missionHasUnseenReturnedToExecuteSql},
          (SELECT o.resource_key FROM objectives o
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'draft'
@@ -6584,8 +6603,9 @@ export async function listWorkspaceMyMissions(): Promise<MyMissionsResponse> {
   const pairPlaceholders = readableMemberships.map(() => '(?, ?)').join(', ');
   const pairParams = readableMemberships.flatMap(m => [m.workspaceId, m.workspaceUserId]);
 
-  const rows = (await requireDatabaseClient().all(
-    `${selectMyMissionsSql(pairPlaceholders)}
+  const db = requireDatabaseClient();
+  const rows = (await db.all(
+    `${selectMyMissionsSql(pairPlaceholders, db.dialect)}
          ORDER BY (mtp.position IS NULL) ASC, mtp.position ASC,
                   t.board_position ASC, t.updated_at DESC, t.sequence_number DESC, t.id ASC`,
     pairParams
@@ -6631,7 +6651,7 @@ interface InboxMissionRow extends MissionRow {
  * Shared SELECT for Inbox mission triage cards. Same MissionDto projection as
  * My Missions (without personal position), joined to project name/color.
  */
-function selectInboxMissionsSql(workspacePlaceholders: string): string {
+function selectInboxMissionsSql(workspacePlaceholders: string, dialect: SqlDialect): string {
   return `
   SELECT t.id, t.workspace_id, t.project_id, t.display_id, t.sequence_number, t.title,
          t.status_id, t.status_type, t.board_position, t.priority,
@@ -6658,7 +6678,7 @@ function selectInboxMissionsSql(workspacePlaceholders: string): string {
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL
               AND o.state IN ('draft', 'future') AND TRIM(o.instruction_text) != '')
             AS has_pending_objective_with_instructions,
-${missionHasUnseenBlockingQuestionSql},
+${missionHasUnseenBlockingQuestionSql(dialect)},
 ${missionHasUnseenReturnedToExecuteSql},
          (SELECT o.resource_key FROM objectives o
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'draft'
@@ -6718,7 +6738,7 @@ export async function listInboxMissions(): Promise<InboxMissionsResponse> {
   const recentCutoff = new Date(now.getTime() - INBOX_MISSION_RECENT_MS).toISOString();
   const dueWindow = inboxDueWindow(now);
   const client = requireDatabaseClient();
-  const baseSql = selectInboxMissionsSql(workspacePlaceholders);
+  const baseSql = selectInboxMissionsSql(workspacePlaceholders, client.dialect);
 
   // Past due leads the whole list: a missed date is the most urgent thing on
   // the surface. Descending due date puts the most recently missed work — the
