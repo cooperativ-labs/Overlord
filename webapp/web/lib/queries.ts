@@ -721,10 +721,14 @@ export const useMissionDeliveries = (id: string, enabled: boolean) =>
  * decision window, and a card that only refreshes when an SSE frame happens to arrive can keep
  * offering buttons for a decision the server already released to the terminal.
  */
-export const useMissionAgentRequests = (id: string) =>
+export const useMissionAgentRequests = (id: string, objectiveId?: string | null, enabled = true) =>
   useQuery({
-    queryKey: keys.missionAgentRequests(id),
-    queryFn: () => api.listAgentRequests(id).then(result => result.requests),
+    queryKey: keys.missionAgentRequests(id, objectiveId),
+    queryFn: () => api.listAgentRequests(id, objectiveId).then(result => result.requests),
+    enabled:
+      enabled &&
+      Boolean(id) &&
+      (objectiveId === undefined || objectiveId === null || Boolean(objectiveId)),
     refetchInterval: 5_000
   });
 
@@ -753,7 +757,12 @@ export function useResolveAgentRequest(missionId: string) {
       resolution: Record<string, unknown>;
       expectedRevision: number;
     }) => api.resolveAgentRequest(requestId, { resolution, expectedRevision }),
-    onSettled: () => qc.invalidateQueries({ queryKey: keys.missionAgentRequests(missionId) })
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: keys.missionAgentRequests(missionId) });
+      void qc.invalidateQueries({ queryKey: keys.missionEvents(missionId) });
+      void qc.invalidateQueries({ queryKey: keys.mission(missionId) });
+      void qc.invalidateQueries({ queryKey: keys.activityFeed });
+    }
   });
 }
 

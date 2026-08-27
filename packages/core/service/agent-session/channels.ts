@@ -104,6 +104,23 @@ export async function getChannel({
   return row;
 }
 
+/** Read the one durable channel bound to an attached agent session. */
+export async function getChannelForSession({
+  ctx,
+  sessionId
+}: {
+  ctx: ServiceContext;
+  sessionId: string;
+}): Promise<AgentSessionChannelRow | null> {
+  const row = await ctx.db.get<AgentSessionChannelRow>(
+    `SELECT ${CHANNEL_COLUMNS} FROM agent_session_channels
+       WHERE session_id = ? AND workspace_id = ? AND deleted_at IS NULL
+       ORDER BY updated_at DESC LIMIT 1`,
+    [sessionId, ctx.workspace.id]
+  );
+  return row ?? null;
+}
+
 export async function createSessionChannel({
   ctx,
   missionId,

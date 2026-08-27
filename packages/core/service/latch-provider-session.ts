@@ -58,6 +58,51 @@ export type ForgetLatchProviderSessionResult = {
   executionRequestId: string | null;
 };
 
+export type ResolvedLatchSession = {
+  targetId: string;
+  providerSessionId: string;
+  lastObservedState: string;
+};
+
+/**
+ * Find the Latch provider session recorded for an attached agent session.
+ * The mapping lives on the launch request so it remains a correlation record,
+ * never a session credential or a new cross-component persistence surface.
+ */
+export async function resolveLatchSessionForAgentSession({
+  ctx,
+  sessionId
+}: {
+  ctx: ServiceContext;
+  sessionId: string;
+}): Promise<ResolvedLatchSession | null> {
+  const rows = await ctx.db.all<{
+    metadata_json: string | null;
+    claimed_by_execution_target_id: string | null;
+    execution_target_id: string | null;
+  }>(
+    `SELECT metadata_json, claimed_by_execution_target_id, execution_target_id
+       FROM execution_requests
+      WHERE workspace_id = ? AND launched_session_id = ? AND deleted_at IS NULL
+      ORDER BY updated_at DESC, created_at DESC`,
+    [ctx.workspace.id, sessionId]
+  );
+  for (const row of rows) {
+    const providerSession = providerSessionFromMetadata(parseMetadata(row.metadata_json));
+    const targetId =
+      providerSession?.executionTargetId ??
+      row.claimed_by_execution_target_id ??
+      row.execution_target_id;
+    if (!providerSession || !targetId) continue;
+    return {
+      targetId,
+      providerSessionId: providerSession.providerSessionId,
+      lastObservedState: providerSession.lastObservedState
+    };
+  }
+  return null;
+}
+
 /** Drop a provider mapping after Latch reports the session absent. */
 export async function forgetLatchProviderSession({
   ctx,

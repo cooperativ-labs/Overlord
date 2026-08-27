@@ -1075,7 +1075,14 @@ const handlers: Record<string, Handler> = {
       ctx,
       missionId: missionRefFlag(body),
       sessionKey: requireFlag(body, '--session-key'),
-      question: resolveInput(body, '--question', '--question-file') ?? ''
+      question: resolveInput(body, '--question', '--question-file') ?? '',
+      options:
+        parseJsonArrayInput<{
+          optionId: string;
+          label: string;
+          kind: string;
+        }>(body, '--options-json', '--options-file', 'ask options') ?? [],
+      allowsFreeText: !boolFlag(body, '--no-free-text')
     }),
 
   deliver: (ctx, body) => {

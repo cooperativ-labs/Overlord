@@ -35,6 +35,18 @@ export type LocalTargetErrorCode =
   | 'GIT_COMMAND_FAILED'
   /** The resolved provider transport does not implement this capability yet. */
   | 'CAPABILITY_NOT_IMPLEMENTED'
+  /**
+   * The queued capability call was accepted but no result arrived before the
+   * caller's deadline. The job is still live on the target — callers show
+   * "still running", they never re-queue the same operation.
+   */
+  | 'LOCAL_TARGET_TIMEOUT'
+  /**
+   * The named capability is not one the runner will execute off-device
+   * (an unknown name, or `launchAgent`, which owns its own launch path). The
+   * generic dispatcher fails closed with this rather than guessing.
+   */
+  | 'LOCAL_TARGET_UNSUPPORTED'
   /** Generic capability failure with no more specific code. */
   | 'TARGET_OPERATION_FAILED'
   /**
@@ -44,6 +56,34 @@ export type LocalTargetErrorCode =
    */
   | 'LATCH_SESSION_ABSENT'
   | 'UNKNOWN';
+
+/**
+ * The error codes at runtime, for rehydrating a stored failure envelope that
+ * crossed a process boundary as plain JSON. Anything unrecognized becomes
+ * `UNKNOWN` rather than being trusted verbatim.
+ */
+export const LOCAL_TARGET_ERROR_CODES = [
+  'LOCAL_TARGET_REQUIRED',
+  'LOCAL_TARGET_UNREACHABLE',
+  'RESOURCE_MISSING',
+  'NOT_GIT_REPOSITORY',
+  'PERMISSION_DENIED',
+  'GIT_COMMAND_FAILED',
+  'CAPABILITY_NOT_IMPLEMENTED',
+  'LOCAL_TARGET_TIMEOUT',
+  'LOCAL_TARGET_UNSUPPORTED',
+  'TARGET_OPERATION_FAILED',
+  'LATCH_SESSION_ABSENT',
+  'UNKNOWN'
+] as const satisfies readonly LocalTargetErrorCode[];
+
+/** Narrow an untrusted string to a {@link LocalTargetErrorCode}, else `UNKNOWN`. */
+export function toLocalTargetErrorCode(value: unknown): LocalTargetErrorCode {
+  return typeof value === 'string' &&
+    (LOCAL_TARGET_ERROR_CODES as readonly string[]).includes(value)
+    ? (value as LocalTargetErrorCode)
+    : 'UNKNOWN';
+}
 
 /**
  * Per-target resource availability (§5 "Target Observation"). This is
@@ -203,9 +243,25 @@ export interface RemoveWorktreeInput {
   force?: boolean;
 }
 
-export interface PurgeMergedWorktreesInput {
-  entries: Array<{ path: string; primaryRepoPath: string }>;
-}
+/**
+ * Either the caller already knows which worktrees to purge, or it asks the
+ * target to work that out. A control-plane backend has no filesystem, so it can
+ * only ever send the `discover` form; the desktop bridge, which does, resolves
+ * the entries itself and sends them explicitly.
+ */
+export type PurgeMergedWorktreesInput =
+  | { entries: Array<{ path: string; primaryRepoPath: string }>; discover?: false }
+  | {
+      discover: true;
+      /** Repository whose worktrees are enumerated. */
+      primaryRepoPath: string;
+      /**
+       * Only worktrees under this root are managed by Overlord. Omit it and the
+       * target resolves its own root — the honest default, since the root comes
+       * from that machine's environment and home directory.
+       */
+      worktreeRoot?: string;
+    };
 
 export interface PurgeWorktreesResult {
   removed: string[];
@@ -363,6 +419,41 @@ export interface StopLatchSessionResult {
   state: 'running' | 'exited' | 'stopping' | 'lost';
 }
 
+/**
+ * Deliver one user turn into a running Latch session (coo:833). The body speaks
+ * Latch v2's Conversation Hub on loopback; it is the only sanctioned way an
+ * answer to a blocking question reaches a running agent, and it never
+ * synthesizes keystrokes or resumes a headless copy of the session.
+ */
+export interface SendLatchMessageInput extends LatchSessionInput {
+  /**
+   * Caller-supplied idempotency key for this delivery. It is the Latch
+   * `operationId` *and* the queue's idempotency key, so a retried call can
+   * never deliver the same answer twice.
+   */
+  operationId: string;
+  /** The message text delivered as a user turn. */
+  text: string;
+  /**
+   * How long to wait for a `working`/`starting` session to become able to
+   * accept a message before refusing. Defaults to 30s in the provider body.
+   */
+  waitForIdleMs?: number;
+}
+
+export interface SendLatchMessageResult {
+  providerSessionId: string;
+  operationId: string;
+  /**
+   * Latch's own `operation_result` status. `ambiguous` means the send may or
+   * may not have landed — callers record it and never resend.
+   */
+  status: 'accepted' | 'refused' | 'ambiguous';
+  /** Latch's `state.sendMessage.reason` when refused; null otherwise. */
+  reason: string | null;
+  deliveredAt: string;
+}
+
 export interface DoctorCheck {
   name: string;
   ok: boolean;
@@ -408,8 +499,58 @@ export interface LocalTargetCapabilities {
   ): Promise<CapabilityResult<InspectLatchSessionResult>>;
   openLatchSession(input: OpenLatchSessionInput): Promise<CapabilityResult<OpenLatchSessionResult>>;
   stopLatchSession(input: StopLatchSessionInput): Promise<CapabilityResult<StopLatchSessionResult>>;
+  sendLatchMessage(input: SendLatchMessageInput): Promise<CapabilityResult<SendLatchMessageResult>>;
   doctor(): Promise<CapabilityResult<DoctorResult>>;
 }
 
 /** The capability method names, useful for generic dispatch/registries. */
 export type CapabilityName = keyof Omit<LocalTargetCapabilities, 'target'>;
+
+/**
+ * The capability names at runtime. Generic dispatchers (the runner executor,
+ * the queue metadata parser) validate against this list and fail closed on
+ * anything else, so an unknown or misspelled name can never reach a provider.
+ * The `satisfies` clause makes the compiler reject a list that drifts from
+ * {@link LocalTargetCapabilities}.
+ */
+export const LOCAL_TARGET_CAPABILITY_NAMES = [
+  'writeProjectMetadata',
+  'observeResource',
+  'readRepositoryTree',
+  'listBranches',
+  'prepareBranch',
+  'listWorktrees',
+  'removeWorktree',
+  'purgeMergedWorktrees',
+  'performBranchAction',
+  'readCurrentDiff',
+  'generateCommitMessageFromLocalDiff',
+  'launchAgent',
+  'discoverLatch',
+  'inspectLatchSession',
+  'openLatchSession',
+  'stopLatchSession',
+  'sendLatchMessage',
+  'doctor'
+] as const satisfies readonly CapabilityName[];
+
+/**
+ * `launchAgent` keeps its dedicated launch path (`ovld runner` claims and
+ * spawns it directly). Excluding it from the queued capability vocabulary is
+ * what stops a queued job and a launch from racing for one execution request.
+ */
+export const QUEUEABLE_LOCAL_TARGET_CAPABILITY_NAMES = LOCAL_TARGET_CAPABILITY_NAMES.filter(
+  (name): name is QueueableCapabilityName => name !== 'launchAgent'
+);
+
+/** Every capability that may be carried over the runner queue. */
+export type QueueableCapabilityName = Exclude<CapabilityName, 'launchAgent'>;
+
+/** Type guard: is `value` a capability the runner queue will execute? */
+export function isQueueableCapabilityName(value: unknown): value is QueueableCapabilityName {
+  return (
+    typeof value === 'string' &&
+    value !== 'launchAgent' &&
+    (LOCAL_TARGET_CAPABILITY_NAMES as readonly string[]).includes(value)
+  );
+}

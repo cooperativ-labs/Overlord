@@ -105,6 +105,8 @@ interface LatestEventRow {
 
 interface QuestionRow extends FeedContextRow {
   event_id: string;
+  agent_request_id: string | null;
+  delivery_mode: 'latch' | 'read_only';
   objective_id: string | null;
   objective_display_key: string | null;
   summary: string;
@@ -311,16 +313,21 @@ const QUESTION_CONTEXT_COLUMNS = CONTEXT_COLUMNS.replace(/\bo\./g, 'e.');
 
 /**
  * Blocking questions the operator has not acknowledged yet. `mission_events` has no
- * answered-state of its own, so the existing `blocking_question` seen-marker — the
- * same predicate that drives the mission card indicator — is the only honest signal
- * for "still waiting on a person". The feed further limits to asks from the past
- * three days so stale blockers do not crowd the page (coo:757.rqtb).
+ * linked request has no later answer event. The feed further limits to asks from
+ * the past three days so stale blockers do not crowd the page (coo:757.rqtb).
  */
 async function loadQuestions(workspaceIds: string[]): Promise<QuestionRow[]> {
   const askedAfter = new Date(Date.now() - QUESTION_MAX_AGE_MS).toISOString();
   return (await requireDatabaseClient().all(
     `SELECT ${QUESTION_CONTEXT_COLUMNS}, ${OBJECTIVE_PROVENANCE_COLUMNS},
             e.id AS event_id, e.objective_id, o.display_key AS objective_display_key,
+            ar.id AS agent_request_id,
+            CASE WHEN ar.id IS NOT NULL AND ar.status = 'open' AND EXISTS (
+              SELECT 1 FROM execution_requests er
+               WHERE er.launched_session_id = e.session_id
+                 AND er.deleted_at IS NULL
+                 AND er.metadata_json LIKE '%"provider":"latch"%'
+            ) THEN 'latch' ELSE 'read_only' END AS delivery_mode,
             e.summary, e.created_at, s.agent_identifier
        FROM mission_events e
        LEFT JOIN objectives o ON o.id = e.objective_id AND o.deleted_at IS NULL
@@ -328,6 +335,7 @@ async function loadQuestions(workspaceIds: string[]): Promise<QuestionRow[]> {
        JOIN projects p ON p.id = e.project_id AND p.deleted_at IS NULL
        JOIN workspaces w ON w.id = e.workspace_id AND w.deleted_at IS NULL
        LEFT JOIN agent_sessions s ON s.id = e.session_id AND s.deleted_at IS NULL
+       LEFT JOIN agent_requests ar ON ar.source_event_id = e.id AND ar.deleted_at IS NULL
       WHERE e.type = 'ask'
         AND e.workspace_id IN (${placeholders(workspaceIds.length)})
         AND e.created_at >= ?
@@ -338,6 +346,13 @@ async function loadQuestions(workspaceIds: string[]): Promise<QuestionRow[]> {
           OR e.created_at > (SELECT mss.seen_at FROM mission_status_seen mss
                               WHERE mss.mission_id = e.mission_id
                                 AND mss.status_id = 'blocking_question')
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM mission_events answer
+           WHERE answer.mission_id = e.mission_id
+             AND answer.type = 'answer'
+             AND ar.id IS NOT NULL
+             AND answer.payload_json LIKE '%"agentRequestId":"' || ar.id || '"%'
         )
       ORDER BY e.created_at DESC, e.id DESC
       LIMIT ?`,
@@ -614,6 +629,8 @@ function toQuestionItem(row: QuestionRow): ActivityFeedQuestionItemDto {
     objectiveId: row.objective_id,
     objectiveDisplayId: objectiveDisplayId(row.mission_display_id, row.objective_display_key),
     eventId: row.event_id,
+    agentRequestId: row.agent_request_id,
+    delivery: { mode: row.delivery_mode },
     question: truncate(row.summary, EVENT_SUMMARY_CHARS * 2),
     agentIdentifier: resolveAgentIdentifier(row.agent_identifier),
     askedAt: row.created_at

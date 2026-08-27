@@ -44,6 +44,14 @@ describe('getMissionCardState', () => {
     assert.deepEqual(getMissionCardState(mission()).activeIndicators, []);
   });
 
+  it('returns the card to executing after an answer event clears the blocker', () => {
+    const state = getMissionCardState(
+      mission({ hasExecutingObjective: true, hasUnseenBlockingQuestion: false })
+    );
+    assert.equal(state.shimmer, true);
+    assert.deepEqual(state.activeIndicators, []);
+  });
+
   it('surfaces the returned-to-execute indicator from the catalog when unseen', () => {
     const state = getMissionCardState(mission({ hasUnseenReturnedToExecute: true }));
     assert.deepEqual(

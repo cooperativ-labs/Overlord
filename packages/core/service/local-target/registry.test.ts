@@ -179,10 +179,24 @@ describe('createDefaultLocalTargetRegistry', () => {
 
   it('uses runner queue for a reachable local target that is not the caller device', () => {
     const registry = createDefaultLocalTargetRegistry({
-      callerExecutionTargetId: 'laptop-1'
+      callerExecutionTargetId: 'laptop-1',
+      // The queue is a real transport now, so it needs somewhere to write. The
+      // end-to-end behaviour lives in local-target-runner-queue.test.ts; here we
+      // only pin which transport the resolver picks.
+      runnerQueue: { ctx: {} as never, projectId: 'p1', missionId: null }
     });
     const provider = registry.resolve(remoteLocal);
     assert.ok(provider instanceof RunnerQueueProvider);
+  });
+
+  it('refuses a remote target when the caller has no queue to write to', async () => {
+    const registry = createDefaultLocalTargetRegistry({
+      callerExecutionTargetId: 'laptop-1'
+    });
+    const provider = registry.resolveOrUnavailable(remoteLocal);
+    const result = await provider.doctor();
+    assert.ok(isFailure(result));
+    assert.equal(result.code, 'LOCAL_TARGET_UNREACHABLE');
   });
 
   it('marks offline remote targets unreachable', async () => {

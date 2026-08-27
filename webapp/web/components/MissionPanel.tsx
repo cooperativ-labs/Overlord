@@ -13,6 +13,7 @@ import {
 } from '../lib/queries.ts';
 import { cn } from '../lib/utils.ts';
 
+import { AgentSessionActivity } from './agent-session/AgentSessionActivity.tsx';
 import { MissionObjectivesSection } from './objectives/MissionObjectivesSection.tsx';
 import { MissionSchedulingControls } from './scheduling/MissionSchedulingControls.tsx';
 import { Button as IconButton } from './ui/button.tsx';
@@ -285,6 +286,10 @@ export function MissionPanel({
   }
 
   const mission = missionQ.data;
+  const activeObjectiveId =
+    deriveObjectiveLifecycleView(mission.objectives, {
+      allowParallelObjectives: mission.allowParallelObjectives
+    }).activeObjective?.id ?? null;
 
   return (
     <div className="flex h-full min-h-0 min-w-[375px] flex-col bg-(--color-surface-1)">
@@ -331,11 +336,7 @@ export function MissionPanel({
               workspaceId={mission.workspaceId}
               sessions={mission.terminalSessions}
               objectives={mission.objectives}
-              currentObjectiveId={
-                deriveObjectiveLifecycleView(mission.objectives, {
-                  allowParallelObjectives: mission.allowParallelObjectives
-                }).activeObjective?.id ?? null
-              }
+              currentObjectiveId={activeObjectiveId}
             />
             <div className="space-y-3">
               <h2 className="text-xs font-semibold uppercase tracking-wide text-(--color-ink-dim)">
@@ -357,6 +358,7 @@ export function MissionPanel({
                 {mission.hasExecutingObjective && <DisconnectActivityButton mission={mission} />}
               </div>
               <LiveActivityFeed missionId={mission.id} />
+              <AgentSessionActivity missionId={mission.id} objectiveId={activeObjectiveId} />
             </div>
             <div className="space-y-3 pb-5">
               <h2 className="text-xs font-semibold uppercase tracking-wide text-(--color-ink-dim)">

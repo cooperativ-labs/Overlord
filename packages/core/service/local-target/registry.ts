@@ -24,6 +24,7 @@ import type {
   ReadCurrentDiffInput,
   ReadRepositoryTreeInput,
   RemoveWorktreeInput,
+  SendLatchMessageInput,
   StopLatchSessionInput,
   TargetMetadata,
   WriteProjectMetadataInput
@@ -162,6 +163,9 @@ export class UnavailableProvider implements LocalTargetCapabilities {
     return this.#fail();
   }
   stopLatchSession(_input: StopLatchSessionInput) {
+    return this.#fail();
+  }
+  sendLatchMessage(_input: SendLatchMessageInput) {
     return this.#fail();
   }
   doctor() {

@@ -61,6 +61,12 @@ function request(overrides: Partial<AgentRequestDto> = {}): AgentRequestDto {
     windowExpiresAt: null,
     releasedReason: null,
     applicationState: 'unknown',
+    delivery: {
+      mode: 'read_only',
+      reason: 'no_latch_session',
+      state: null,
+      observedAt: null
+    },
     resolvedAt: null,
     createdAt: '2026-08-01T00:00:00.000Z',
     ...overrides

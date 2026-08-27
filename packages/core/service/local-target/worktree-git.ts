@@ -1,8 +1,23 @@
 import { existsSync, realpathSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 import { runGitResult } from './git-run.ts';
 import type { ManagedWorktreeEntry, PurgeWorktreesResult } from './types.ts';
+
+/**
+ * Where Overlord keeps the worktrees it manages **on this machine**. It is a
+ * property of the device, not of the control plane, so it is resolved wherever
+ * the filesystem actually is: the runner, the desktop bridge, or a co-located
+ * backend. A caller that cannot see the disk should send no root and let the
+ * target answer.
+ */
+export function resolveManagedWorktreeRoot(): string {
+  const override = process.env.OVERLORD_WORKTREE_ROOT?.trim();
+  if (override) return path.resolve(override);
+  const home = process.env.OVLD_HOME?.trim() || process.env.OVERLORD_HOME?.trim();
+  return path.join(home ? path.resolve(home) : path.join(os.homedir(), '.ovld'), 'worktrees');
+}
 
 export function resolveRealPath(targetPath: string): string {
   try {

@@ -12,7 +12,7 @@
 # entry) are intentionally not listed here: `capture-change` and `changes`. See
 # CONTRACT.md's contract-version-2 changelog entry for the precedent.
 
-contractVersion: '128'
+contractVersion: '129'
 referenceSpec: 'cli/docs/03-agent-protocol.md'
 
 # Transport-level shape shared by every protocol command, independent of subcommand.
@@ -91,6 +91,10 @@ sessionLifecycle:
     optionalFlags:
       - --mission-id
       - --objective-id
+      - --options-json
+      - --options-file
+      - --no-free-text
+      - --json
       - --summary
       - --summary-file
       - --phase
@@ -223,6 +227,7 @@ sessionLifecycle:
       - 'Ask exactly one blocking question per call'
     sideEffects:
       - appends-mission-event-type-ask
+      - creates-answerable-agent-request-when-session-has-bound-channel
 
   deliver:
     description: 'Final delivery — mark objective complete and move mission to review'

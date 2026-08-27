@@ -17,8 +17,9 @@ import { AuthenticatedAvatarImage, Avatar, AvatarFallback } from '@/components/u
 
 import type { MissionEventDto, MissionEventType } from '../../shared/contract.ts';
 import { groupMissionFeedItems, resolveFollowUpPresentation } from '../lib/mission-feed.ts';
-import { useMissionEvents } from '../lib/queries.ts';
+import { useMissionAgentRequests, useMissionEvents } from '../lib/queries.ts';
 
+import { QuestionAnswerForm } from './agent-session/QuestionAnswerForm.tsx';
 import { Markdown } from './Markdown.tsx';
 import { Badge, Spinner } from './ui.tsx';
 
@@ -34,6 +35,7 @@ const EVENT_META: Record<MissionEventType, { icon: LucideIcon; label: string }> 
   discussion_summary: { icon: FileText, label: 'Discussion' },
   decision: { icon: CheckCircle2, label: 'Decision' },
   ask: { icon: HelpCircle, label: 'Question' },
+  answer: { icon: CheckCircle2, label: 'Answer' },
   permission_request: { icon: ShieldQuestion, label: 'Permission' },
   delivery: { icon: Activity, label: 'Delivered' },
   execution_requested: { icon: Rocket, label: 'Launch requested' },
@@ -63,6 +65,33 @@ function actorInitials(label: string): string {
       .map(part => part[0])
       .join('')
       .toUpperCase() || 'U'
+  );
+}
+
+function eventAgentRequestId(event: MissionEventDto): string | null {
+  const value = (event as MissionEventDto & { agentRequestId?: unknown }).agentRequestId;
+  return typeof value === 'string' && value.trim() ? value : null;
+}
+
+/** Render an additive request link when an event projection supplies one. */
+function EventQuestionResponse({
+  event,
+  missionId,
+  agentRequestId
+}: {
+  event: MissionEventDto;
+  missionId: string;
+  agentRequestId: string;
+}) {
+  const requestsQ = useMissionAgentRequests(missionId, event.objectiveId);
+  const request = (requestsQ.data ?? []).find(candidate => candidate.id === agentRequestId);
+
+  if (request) return <QuestionAnswerForm request={request} />;
+  if (requestsQ.isLoading) {
+    return <p className="text-[11px] text-(--color-ink-dim)">Loading reply controls…</p>;
+  }
+  return (
+    <p className="text-[11px] text-(--color-ink-dim)">This question is no longer available.</p>
   );
 }
 
@@ -189,6 +218,8 @@ function ActivityEntry({
   // Blocking questions posted via `ovld protocol ask` land as `ask` events. Give
   // them a subtle amber/orange outline + wash so they stand out as needing a reply.
   const isBlockingQuestion = event.type === 'ask';
+  const isAnswer = event.type === 'answer';
+  const agentRequestId = eventAgentRequestId(event);
   const userLabel = actorLabel(event);
 
   return (
@@ -196,11 +227,13 @@ function ActivityEntry({
       className={
         isBlockingQuestion
           ? 'flex min-w-0 gap-3 rounded-md border border-amber-400/50 bg-amber-50/60 px-3 py-2 dark:border-amber-500/40 dark:bg-amber-500/10'
-          : isUserFollowUp
-            ? 'flex min-w-0 gap-3 rounded-md border border-sky-400/40 bg-sky-50/60 px-3 py-2 dark:border-sky-500/30 dark:bg-sky-500/10'
-            : compact
-              ? 'flex min-w-0 gap-3 py-1'
-              : 'flex min-w-0 gap-3'
+          : isAnswer
+            ? 'flex min-w-0 gap-3 rounded-md border border-emerald-400/40 bg-emerald-50/50 px-3 py-2 dark:border-emerald-500/30 dark:bg-emerald-500/10'
+            : isUserFollowUp
+              ? 'flex min-w-0 gap-3 rounded-md border border-sky-400/40 bg-sky-50/60 px-3 py-2 dark:border-sky-500/30 dark:bg-sky-500/10'
+              : compact
+                ? 'flex min-w-0 gap-3 py-1'
+                : 'flex min-w-0 gap-3'
       }
     >
       <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center">
@@ -220,7 +253,9 @@ function ActivityEntry({
             className={
               isBlockingQuestion
                 ? 'h-3.5 w-3.5 text-amber-600 dark:text-amber-400'
-                : 'h-3.5 w-3.5 text-(--color-ink-dim)'
+                : isAnswer
+                  ? 'h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400'
+                  : 'h-3.5 w-3.5 text-(--color-ink-dim)'
             }
           />
         ) : (
@@ -235,7 +270,9 @@ function ActivityEntry({
                 ? 'text-xs font-medium text-sky-600 dark:text-sky-400'
                 : isBlockingQuestion
                   ? 'text-xs font-medium text-amber-700 dark:text-amber-300'
-                  : 'text-xs font-medium text-(--color-ink)'
+                  : isAnswer
+                    ? 'text-xs font-medium text-emerald-700 dark:text-emerald-300'
+                    : 'text-xs font-medium text-(--color-ink)'
             }
           >
             {isUserFollowUp ? userLabel : label}
@@ -257,6 +294,13 @@ function ActivityEntry({
         ) : (
           <p className="text-sm italic text-(--color-ink-dim)">No summary.</p>
         )}
+        {agentRequestId ? (
+          <EventQuestionResponse
+            event={event}
+            missionId={missionId}
+            agentRequestId={agentRequestId}
+          />
+        ) : null}
         {event.externalUrl && (
           <a
             href={event.externalUrl}

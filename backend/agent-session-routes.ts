@@ -26,11 +26,16 @@ import {
   recordRequestApplication,
   RELEASE_REASONS,
   type ReleaseReason,
-  releaseRequestToTerminal
+  releaseRequestToTerminal,
+  resolveRequest
 } from '../packages/core/service/agent-session/index.ts';
 import { resolveObjectiveRef, type ServiceContext } from '../packages/core/service/context.ts';
 import { ServiceError } from '../packages/core/service/errors.ts';
 import { asRecord } from '../packages/core/service/execution-requests.ts';
+import { resolveLatchSessionForAgentSession } from '../packages/core/service/latch-provider-session.ts';
+import { resolveDefaultLocalTargetProvider } from '../packages/core/service/local-target/default-registry.ts';
+import { answerApplicationStateFromResult } from '../packages/core/service/local-target-mutations.ts';
+import { getProjectExecutionTargetSelection } from '../packages/core/service/project-execution-target.ts';
 
 import { buildWebappServiceContextForWorkspace, requireDatabaseClient } from './db.ts';
 import { requireWorkspacePermission } from './rbac.ts';
@@ -554,6 +559,138 @@ function requestDto(request: Awaited<ReturnType<typeof getRequest>>): Record<str
   };
 }
 
+type AgentRequestDeliveryDto = {
+  mode: 'latch' | 'read_only';
+  reason: 'no_latch_session' | 'latch_session_exited' | 'target_offline' | 'request_closed' | null;
+  state: 'emitted' | 'applied' | 'not_applied' | 'unknown' | null;
+  observedAt: string | null;
+};
+
+async function requestDelivery(
+  ctx: ServiceContext,
+  request: Awaited<ReturnType<typeof getRequest>>
+): Promise<AgentRequestDeliveryDto> {
+  const state = APPLICATION_STATES.includes(request.application_state as never)
+    ? (request.application_state as AgentRequestDeliveryDto['state'])
+    : null;
+  const base = { state, observedAt: request.application_observed_at };
+  if (request.status !== 'open') return { mode: 'read_only', reason: 'request_closed', ...base };
+  if (!request.session_id || !request.project_id) {
+    return { mode: 'read_only', reason: 'no_latch_session', ...base };
+  }
+  const latch = await resolveLatchSessionForAgentSession({ ctx, sessionId: request.session_id });
+  if (!latch) return { mode: 'read_only', reason: 'no_latch_session', ...base };
+  if (['exited', 'unavailable'].includes(latch.lastObservedState)) {
+    return { mode: 'read_only', reason: 'latch_session_exited', ...base };
+  }
+  const selection = await getProjectExecutionTargetSelection({
+    ctx,
+    projectId: request.project_id
+  });
+  const target = selection.eligibleTargets.find(
+    candidate => candidate.executionTargetId === latch.targetId
+  );
+  if (!target?.reachable) return { mode: 'read_only', reason: 'target_offline', ...base };
+  return { mode: 'latch', reason: null, ...base };
+}
+
+async function humanRequestDto(
+  ctx: ServiceContext,
+  request: Awaited<ReturnType<typeof getRequest>>
+): Promise<Record<string, unknown>> {
+  return { ...requestDto(request), delivery: await requestDelivery(ctx, request) };
+}
+
+function requestOptions(request: Awaited<ReturnType<typeof getRequest>>): Array<{
+  optionId: string;
+  label: string;
+  kind: string;
+}> {
+  try {
+    const parsed = JSON.parse(request.options_json) as unknown;
+    return Array.isArray(parsed)
+      ? parsed.filter(
+          (option): option is { optionId: string; label: string; kind: string } =>
+            option !== null &&
+            typeof option === 'object' &&
+            typeof (option as { optionId?: unknown }).optionId === 'string' &&
+            typeof (option as { label?: unknown }).label === 'string' &&
+            typeof (option as { kind?: unknown }).kind === 'string'
+        )
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function validateQuestionResolution({
+  request,
+  resolution
+}: {
+  request: Awaited<ReturnType<typeof getRequest>>;
+  resolution: Record<string, unknown>;
+}): { text: string; optionId: string | null } {
+  const text = typeof resolution.text === 'string' ? resolution.text.trim() : '';
+  const optionId = typeof resolution.optionId === 'string' ? resolution.optionId.trim() : '';
+  if (text && request.allows_free_text !== 1) {
+    throw new ServiceError(
+      'This request does not allow free-text answers',
+      'invalid_resolution',
+      400
+    );
+  }
+  if (optionId && !requestOptions(request).some(option => option.optionId === optionId)) {
+    throw new ServiceError('Unknown request option', 'invalid_resolution', 400);
+  }
+  if (!text && !optionId) {
+    throw new ServiceError('An answer text or optionId is required', 'invalid_resolution', 400);
+  }
+  return { text, optionId: optionId || null };
+}
+
+async function deliverQuestionAnswer({
+  ctx,
+  request,
+  text
+}: {
+  ctx: ServiceContext;
+  request: Awaited<ReturnType<typeof getRequest>>;
+  text: string;
+}): Promise<void> {
+  if (!request.session_id || !request.project_id) return;
+  const latch = await resolveLatchSessionForAgentSession({ ctx, sessionId: request.session_id });
+  if (!latch) return;
+  const selection = await getProjectExecutionTargetSelection({
+    ctx,
+    projectId: request.project_id
+  });
+  const target = selection.eligibleTargets.find(
+    candidate => candidate.executionTargetId === latch.targetId
+  );
+  if (!target) return;
+  const provider = resolveDefaultLocalTargetProvider({
+    target: {
+      executionTargetId: target.executionTargetId,
+      type: target.type,
+      deviceLabel: target.deviceLabel,
+      reachable: target.reachable
+    },
+    options: {
+      callerExecutionTargetId: null,
+      runnerQueue: { ctx, projectId: request.project_id, missionId: request.mission_id }
+    }
+  });
+  const result = await provider.sendLatchMessage({
+    providerSessionId: latch.providerSessionId,
+    operationId: request.id,
+    text
+  });
+  const applicationState = answerApplicationStateFromResult(result);
+  if (applicationState !== 'emitted') {
+    await recordRequestApplication({ ctx, requestId: request.id, applicationState });
+  }
+}
+
 /**
  * Resolve a mission the caller can actually see, then return that mission's requests.
  *
@@ -596,11 +733,10 @@ async function missionScopedRequests(
     `SELECT ${REQUEST_COLUMNS_FOR_ROUTE} FROM agent_requests
       WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
         ${objective ? 'AND objective_id = ?' : ''}
-        AND status <> 'open'
       ORDER BY created_at DESC LIMIT 200`,
     [mission.id, mission.workspace_id, ...(objective ? [objective.id] : [])]
   );
-  return rows.map(requestDto);
+  return await Promise.all(rows.map(request => humanRequestDto(ctx, request)));
 }
 
 /** Ordinary-human request inbox. This router is mounted behind normal API authentication. */
@@ -650,17 +786,88 @@ export function createAgentRequestHumanRouter(): Router {
       const rows = await client.all<Awaited<ReturnType<typeof getRequest>>>(
         `SELECT ${REQUEST_COLUMNS_FOR_ROUTE} FROM agent_requests
           WHERE workspace_id IN (${placeholders}) AND deleted_at IS NULL
-            AND status <> 'open'
           ORDER BY created_at DESC LIMIT 200`,
         authorized.map(entry => entry.workspaceId)
       );
-      return { requests: rows.map(requestDto) };
+      const ctxByWorkspace = new Map<string, ServiceContext>();
+      for (const entry of authorized) {
+        ctxByWorkspace.set(
+          entry.workspaceId,
+          await buildWebappServiceContextForWorkspace(
+            entry.workspaceId,
+            client,
+            entry.workspaceUserId
+          )
+        );
+      }
+      return {
+        requests: await Promise.all(
+          rows.map(async request => {
+            const ctx = ctxByWorkspace.get(request.workspace_id);
+            return ctx ? await humanRequestDto(ctx, request) : requestDto(request);
+          })
+        )
+      };
     })
   );
 
   router.post(
     '/:id/resolve',
-    handle(async () => sessionControlsGone())
+    handle(async req => {
+      const client = requireDatabaseClient();
+      const row = await client.get<{ workspace_id: string }>(
+        `SELECT workspace_id FROM agent_requests WHERE id = ? AND deleted_at IS NULL`,
+        [req.params.id]
+      );
+      if (!row) throw new ServiceError('Request not found', 'request_not_found', 404);
+      const workspaceUserId = await requireWorkspacePermission({
+        workspaceId: row.workspace_id,
+        permission: PERMISSIONS.SESSION_ATTACH,
+        db: client,
+        notFoundMessage: 'Request not found'
+      });
+      const ctx = await buildWebappServiceContextForWorkspace(
+        row.workspace_id,
+        client,
+        workspaceUserId
+      );
+      const request = await getRequest({ ctx, requestId: req.params.id });
+      if (request.kind !== 'question' && request.kind !== 'choice') sessionControlsGone();
+      const delivery = await requestDelivery(ctx, request);
+      if (delivery.mode !== 'latch') {
+        throw new ServiceError(
+          'This request cannot be delivered to its agent session',
+          'request_not_deliverable',
+          409
+        );
+      }
+      const body = asRecord(req.body);
+      if (typeof body.expectedRevision !== 'number') {
+        throw new ServiceError('expectedRevision is required', 'agent_request_conflict', 409);
+      }
+      const resolution = body.resolution ? asRecord(body.resolution) : {};
+      const answer = validateQuestionResolution({ request, resolution });
+      const selected = answer.optionId
+        ? requestOptions(request).find(option => option.optionId === answer.optionId)
+        : null;
+      const result = await resolveRequest({
+        ctx,
+        requestId: request.id,
+        resolution,
+        expectedRevision: body.expectedRevision
+      });
+      if (result.resolved) {
+        await deliverQuestionAnswer({
+          ctx,
+          request: result.request,
+          text: answer.text || selected?.label || 'Answer received'
+        });
+      }
+      return {
+        resolved: result.resolved,
+        request: await humanRequestDto(ctx, await getRequest({ ctx, requestId: request.id }))
+      };
+    })
   );
 
   /**

@@ -379,8 +379,8 @@ export interface ExecutionRequests {
   launch_started_at: string | null;
   launched_session_id: string | null;
   metadata_json: Generated<string>;
-  mission_id: string;
-  objective_id: string;
+  mission_id: string | null;
+  objective_id: string | null;
   project_id: string;
   requested_agent: string | null;
   requested_by_workspace_user_id: string | null;
@@ -905,7 +905,6 @@ export interface ProjectEnvironmentDefinitions {
 }
 
 export interface ProjectResources {
-  access_level: Generated<string>;
   access_mode: Generated<string>;
   created_at: string;
   deleted_at: string | null;
@@ -1007,6 +1006,45 @@ export interface RoleAssignments {
   updated_at: string;
   workspace_id: string;
   workspace_user_id: string;
+}
+
+export interface RunQueueEntries {
+  attempt_count: Generated<number>;
+  blocked_reason: string | null;
+  created_at: string;
+  deleted_at: string | null;
+  dispatched_at: string | null;
+  enqueued_at: string;
+  enqueued_by_workspace_user_id: string | null;
+  execution_request_id: string | null;
+  id: string | null;
+  mission_id: string;
+  objective_id: string;
+  position: number;
+  project_id: string;
+  queue_id: string;
+  revision: Generated<number>;
+  state: string;
+  updated_at: string;
+  waiting_on_objective_id: string | null;
+  waiting_reason: string | null;
+  workspace_id: string;
+}
+
+export interface RunQueues {
+  created_at: string;
+  created_by_workspace_user_id: string | null;
+  deleted_at: string | null;
+  id: string | null;
+  is_default: Generated<number>;
+  mission_id: string | null;
+  name: string;
+  paused: Generated<number>;
+  position: number;
+  project_id: string;
+  revision: Generated<number>;
+  updated_at: string;
+  workspace_id: string;
 }
 
 export interface Schedules {
@@ -1428,6 +1466,8 @@ export interface DB {
   project_user_preferences: ProjectUserPreferences;
   projects: Projects;
   role_assignments: RoleAssignments;
+  run_queue_entries: RunQueueEntries;
+  run_queues: RunQueues;
   schedules: Schedules;
   schema_migrations: SchemaMigrations;
   search_documents: SearchDocuments;

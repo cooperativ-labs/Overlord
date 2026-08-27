@@ -2,6 +2,12 @@ import { execFile } from 'node:child_process';
 
 import { latchBinaryMissingMessage, resolveLatchBinaryPath } from './latch-binary.ts';
 import { latchChildEnvironment } from './latch-environment.ts';
+import type { LatchGatewayConfig } from './latch-gateway.ts';
+import {
+  latchConversationSocketUrl,
+  latchConversationSubprotocol,
+  requireLatchConversationGateway
+} from './latch-gateway.ts';
 import { buildLatchOpenArgs, latchViewerFlagForKind } from './latch-launch.ts';
 import { isLatchSessionAbsentMessage } from './latch-session-absent.ts';
 import type { ViewerOpenAs } from './terminal-profile-types.ts';
@@ -225,4 +231,366 @@ export async function stopLatchSession({
     providerSessionId: trimmed(report.id) ?? sessionId,
     state
   };
+}
+
+// ---------------------------------------------------------------------------
+// Conversation Hub: delivering an answer into a running session (coo:833)
+// ---------------------------------------------------------------------------
+
+/** Default wait for a busy session to become able to accept a message. */
+export const DEFAULT_LATCH_SEND_WAIT_MS = 30_000;
+
+/** How long the gateway has to speak first with its snapshot. */
+export const LATCH_CONVERSATION_SNAPSHOT_TIMEOUT_MS = 10_000;
+
+/**
+ * How long `operation_result` may take after a `send_message` goes out. Past
+ * it the send is `ambiguous`, never retried: it may well have landed.
+ */
+export const LATCH_OPERATION_RESULT_TIMEOUT_MS = 30_000;
+
+/** Protocol bound on `send_message.text`. */
+export const LATCH_MESSAGE_MAX_LENGTH = 16_384;
+
+export type LatchConversationPhase =
+  | 'starting'
+  | 'idle'
+  | 'working'
+  | 'awaiting_input'
+  | 'exited'
+  | 'unavailable';
+
+export type LatchSendMessageStatus = 'accepted' | 'refused' | 'ambiguous';
+
+export type LatchSendMessageOutcome = {
+  providerSessionId: string;
+  operationId: string;
+  status: LatchSendMessageStatus;
+  reason: string | null;
+  deliveredAt: string;
+};
+
+/**
+ * The slice of the platform `WebSocket` this client uses. Structural so a test
+ * can drive it without a socket, and so the real global satisfies it as-is.
+ */
+export type LatchConversationSocket = {
+  send(data: string): void;
+  close(): void;
+  addEventListener(type: 'open', handler: () => void): void;
+  addEventListener(type: 'message', handler: (event: { data: unknown }) => void): void;
+  addEventListener(type: 'close', handler: () => void): void;
+  addEventListener(type: 'error', handler: () => void): void;
+};
+
+export type LatchConversationConnect = (args: {
+  url: string;
+  subprotocol: string;
+}) => LatchConversationSocket;
+
+function defaultLatchConversationConnect({
+  url,
+  subprotocol
+}: {
+  url: string;
+  subprotocol: string;
+}): LatchConversationSocket {
+  return new WebSocket(url, [subprotocol]) as unknown as LatchConversationSocket;
+}
+
+type ConversationAvailability = { enabled: boolean; reason: string | null };
+
+type ConversationState = {
+  phase: LatchConversationPhase | null;
+  sendMessage: ConversationAvailability;
+};
+
+const CONVERSATION_PHASES: readonly LatchConversationPhase[] = [
+  'starting',
+  'idle',
+  'working',
+  'awaiting_input',
+  'exited',
+  'unavailable'
+];
+
+function parseConversationState(value: unknown): ConversationState | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const cast = value as Record<string, unknown>;
+  const phaseText = trimmed(cast.phase);
+  const phase = CONVERSATION_PHASES.find(candidate => candidate === phaseText) ?? null;
+  const availability =
+    cast.sendMessage && typeof cast.sendMessage === 'object' && !Array.isArray(cast.sendMessage)
+      ? (cast.sendMessage as Record<string, unknown>)
+      : null;
+  if (!availability) return null;
+  return {
+    phase,
+    sendMessage: {
+      enabled: availability.enabled === true,
+      reason: trimmed(availability.reason)
+    }
+  };
+}
+
+/** Phases where a not-yet-enabled send is worth waiting out. */
+function isTransientPhase(phase: LatchConversationPhase | null): boolean {
+  return phase === 'starting' || phase === 'working';
+}
+
+function refusalReason(state: ConversationState): string {
+  if (state.sendMessage.reason) return state.sendMessage.reason;
+  if (state.phase === 'exited') return 'The Latch session has exited.';
+  if (state.phase === 'unavailable') return 'The Latch session is unavailable.';
+  return 'Latch is not accepting messages for this session.';
+}
+
+/**
+ * Deliver `text` into a running Latch session as a user turn, over the v2
+ * Conversation Hub (`WS /v2/sessions/{id}/conversation`).
+ *
+ * The Hub is the sole owner of conversation ordering and action durability, so
+ * this client does exactly one operation and reports what the Hub said about
+ * it: `accepted` (delivered), `refused` (not delivered — the caller may show
+ * the reason), or `ambiguous` (it may or may not have landed). An `ambiguous`
+ * outcome is **never** retried; `operationId` is the caller's idempotency key
+ * both here and in the queue that carried the job, so a retry of the whole job
+ * cannot double-deliver either.
+ */
+export async function sendLatchMessage({
+  providerSessionId,
+  operationId,
+  text,
+  waitForIdleMs = DEFAULT_LATCH_SEND_WAIT_MS,
+  gateway = null,
+  env,
+  fetchImpl,
+  connect = defaultLatchConversationConnect,
+  now = () => new Date()
+}: {
+  providerSessionId: string;
+  operationId: string;
+  text: string;
+  waitForIdleMs?: number | null;
+  gateway?: LatchGatewayConfig | null;
+  env?: NodeJS.ProcessEnv;
+  fetchImpl?: typeof fetch;
+  connect?: LatchConversationConnect;
+  now?: () => Date;
+}): Promise<LatchSendMessageOutcome> {
+  const sessionId = trimmed(providerSessionId);
+  if (!sessionId) throw new LatchSessionCommandError('A Latch session id is required.');
+  const opId = trimmed(operationId);
+  if (!opId) throw new LatchSessionCommandError('An operation id is required.');
+  const body = typeof text === 'string' ? text : '';
+  if (!body.trim()) throw new LatchSessionCommandError('An answer message is required.');
+  if (body.length > LATCH_MESSAGE_MAX_LENGTH) {
+    throw new LatchSessionCommandError(
+      `An answer may be at most ${LATCH_MESSAGE_MAX_LENGTH} characters.`
+    );
+  }
+  const idleBudgetMs =
+    typeof waitForIdleMs === 'number' && Number.isFinite(waitForIdleMs) && waitForIdleMs >= 0
+      ? Math.trunc(waitForIdleMs)
+      : DEFAULT_LATCH_SEND_WAIT_MS;
+
+  let resolved: { gateway: LatchGatewayConfig };
+  try {
+    resolved = await requireLatchConversationGateway({ gateway, env, fetchImpl });
+  } catch (error) {
+    throw new LatchSessionCommandError(
+      error instanceof Error ? error.message : 'Latch is not reachable.'
+    );
+  }
+
+  const status = await runConversationOperation({
+    socket: connect({
+      url: latchConversationSocketUrl({ gateway: resolved.gateway, providerSessionId: sessionId }),
+      subprotocol: latchConversationSubprotocol(resolved.gateway)
+    }),
+    operationId: opId,
+    text: body,
+    idleBudgetMs
+  });
+
+  return {
+    providerSessionId: sessionId,
+    operationId: opId,
+    status: status.status,
+    reason: status.reason,
+    deliveredAt: now().toISOString()
+  };
+}
+
+/**
+ * Drive one `send_message` to completion on an open conversation socket.
+ *
+ * The server speaks first, so nothing is sent on `open`: the snapshot carries
+ * the `operationEpoch` the operation must quote and the state that says whether
+ * a send is possible at all.
+ */
+function runConversationOperation({
+  socket,
+  operationId,
+  text,
+  idleBudgetMs
+}: {
+  socket: LatchConversationSocket;
+  operationId: string;
+  text: string;
+  idleBudgetMs: number;
+}): Promise<{ status: LatchSendMessageStatus; reason: string | null }> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let sent = false;
+    let epoch: string | null = null;
+    const timers: NodeJS.Timeout[] = [];
+    let idleTimer: NodeJS.Timeout | null = null;
+    let lastState: ConversationState | null = null;
+
+    const clearTimers = () => {
+      for (const timer of timers) clearTimeout(timer);
+      timers.length = 0;
+      idleTimer = null;
+    };
+    const arm = (handler: () => void, delayMs: number): NodeJS.Timeout => {
+      const timer = setTimeout(handler, delayMs);
+      if (typeof timer.unref === 'function') timer.unref();
+      timers.push(timer);
+      return timer;
+    };
+    const finish = (outcome: { status: LatchSendMessageStatus; reason: string | null }) => {
+      if (settled) return;
+      settled = true;
+      clearTimers();
+      try {
+        socket.close();
+      } catch {
+        // The outcome is already known; a close failure cannot change it.
+      }
+      resolve(outcome);
+    };
+    const abort = (message: string) => {
+      if (settled) return;
+      settled = true;
+      clearTimers();
+      try {
+        socket.close();
+      } catch {
+        // Nothing to salvage; the rejection below is the reported failure.
+      }
+      reject(new LatchSessionCommandError(message));
+    };
+
+    const deliver = () => {
+      if (sent || settled) return;
+      if (!epoch) {
+        abort('Latch did not send an operation epoch for this conversation.');
+        return;
+      }
+      sent = true;
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = null;
+      try {
+        socket.send(
+          JSON.stringify({ type: 'send_message', operationEpoch: epoch, operationId, text })
+        );
+      } catch {
+        abort('The answer could not be written to the Latch conversation socket.');
+        return;
+      }
+      // Past this point the send may have landed, so every remaining failure
+      // path is `ambiguous` rather than a refusal or an error.
+      arm(
+        () =>
+          finish({ status: 'ambiguous', reason: 'Latch did not confirm the delivery in time.' }),
+        LATCH_OPERATION_RESULT_TIMEOUT_MS
+      );
+    };
+
+    const applyState = (state: ConversationState) => {
+      lastState = state;
+      if (sent || settled) return;
+      if (state.sendMessage.enabled) {
+        deliver();
+        return;
+      }
+      if (isTransientPhase(state.phase)) {
+        if (idleTimer) return;
+        idleTimer = arm(() => {
+          finish({ status: 'refused', reason: refusalReason(lastState ?? state) });
+        }, idleBudgetMs);
+        return;
+      }
+      finish({ status: 'refused', reason: refusalReason(state) });
+    };
+
+    const snapshotTimer = arm(() => {
+      abort('Latch did not open the conversation for this session.');
+    }, LATCH_CONVERSATION_SNAPSHOT_TIMEOUT_MS);
+
+    socket.addEventListener('message', (event: { data: unknown }) => {
+      if (settled) return;
+      const raw = typeof event.data === 'string' ? event.data : String(event.data ?? '');
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        return;
+      }
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return;
+      const message = parsed as Record<string, unknown>;
+      switch (message.type) {
+        case 'snapshot': {
+          clearTimeout(snapshotTimer);
+          epoch = trimmed(message.operationEpoch);
+          const state = parseConversationState(message.state);
+          if (!state) {
+            abort('Latch returned an unsupported conversation state.');
+            return;
+          }
+          applyState(state);
+          return;
+        }
+        case 'state_changed': {
+          const state = parseConversationState(message.state);
+          if (state) applyState(state);
+          return;
+        }
+        case 'operation_result': {
+          if (trimmed(message.operationId) !== operationId) return;
+          const status = trimmed(message.status);
+          if (status !== 'accepted' && status !== 'refused' && status !== 'ambiguous') {
+            finish({ status: 'ambiguous', reason: 'Latch reported an unknown operation status.' });
+            return;
+          }
+          finish({ status, reason: trimmed(message.reason) });
+          return;
+        }
+        case 'error': {
+          const detail =
+            trimmed(message.message) ?? trimmed(message.code) ?? 'Latch reported an error.';
+          if (sent) {
+            finish({ status: 'ambiguous', reason: detail });
+            return;
+          }
+          abort(detail);
+          return;
+        }
+        default:
+          return;
+      }
+    });
+
+    const disconnected = () => {
+      if (settled) return;
+      if (sent) {
+        finish({ status: 'ambiguous', reason: 'The Latch conversation closed before confirming.' });
+        return;
+      }
+      abort('The Latch conversation closed before the answer could be delivered.');
+    };
+    socket.addEventListener('close', disconnected);
+    socket.addEventListener('error', disconnected);
+  });
 }

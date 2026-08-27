@@ -1,12 +1,17 @@
 import { bindBool, UPDATE_EVENT_TYPES, UPDATE_PHASES } from '@overlord/database';
 import { createHash } from 'node:crypto';
 
-import { bindChannelToSession, findBindableChannelForMission } from './agent-session/channels.js';
+import {
+  bindChannelToSession,
+  findBindableChannelForMission,
+  getChannelForSession
+} from './agent-session/channels.js';
 import {
   hasControlCharacters,
   isExactEvidencePath,
   isOverlordManagedEvidencePath
 } from './agent-session/pure/evidence-path.js';
+import { type AgentRequestOption, createRequest } from './agent-session/requests.js';
 import { emitNotification } from './notifications/notifications.js';
 import { recordChange } from './change-feed.js';
 import type { ServiceContext } from './context.js';
@@ -2005,16 +2010,26 @@ export async function askQuestion({
   ctx,
   missionId,
   sessionKey,
-  question
+  question,
+  options = [],
+  allowsFreeText = true
 }: {
   ctx: ServiceContext;
   missionId: string;
   sessionKey: string;
   question: string;
+  options?: AgentRequestOption[];
+  allowsFreeText?: boolean;
 }): Promise<{ eventId: string }> {
   const trimmed = question.trim();
   if (!trimmed) {
     throw new ServiceError('Question is required', 'validation_error');
+  }
+  if (!allowsFreeText && options.length === 0) {
+    throw new ServiceError(
+      'A no-free-text question requires at least one option',
+      'validation_error'
+    );
   }
 
   const mission = await resolveMissionId(ctx, missionId);
@@ -2055,6 +2070,27 @@ export async function askQuestion({
       missionId: mission.id,
       objectiveId: session.objective_id
     });
+    const channel = await getChannelForSession({ ctx: txCtx, sessionId: session.id });
+    if (channel) {
+      const request = await createRequest({
+        ctx: txCtx,
+        channel,
+        kind: !allowsFreeText && options.length > 0 ? 'choice' : 'question',
+        summary: trimmed,
+        options,
+        allowsFreeText,
+        // `source_event_id` references `agent_session_events`; an ask is a
+        // `mission_events` row, so the link lives in `details.missionEventId`
+        // one way and in the event's `payload_json.agentRequestId` the other.
+        sourceEventId: null,
+        windowExpiresAt: null,
+        details: { missionEventId: eventId }
+      });
+      await txCtx.db.run(
+        `UPDATE mission_events SET payload_json = ? WHERE id = ? AND workspace_id = ?`,
+        [JSON.stringify({ agentRequestId: request.id }), eventId, ctx.workspace.id]
+      );
+    }
     await enqueueWebhookEvent(txCtx, {
       type: 'mission.blocked',
       projectId: mission.projectId,

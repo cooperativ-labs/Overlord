@@ -34,13 +34,87 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `128`
+Current version: `129`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
 `contract/components.yaml`) — never a header duplicate. The contract version is
 incremented when any stable interface changes. All conformance manifests must
 declare the contract version they were validated against.
+
+### Version 129 Change Summary
+
+`RunnerQueueProvider` is a working transport (coo:833 Phase B). Every
+`LocalTargetCapabilities` method — not only the two branch/worktree mutations —
+now reaches an execution target the backend is not co-located with, by queueing
+an `execution_requests` row with `requested_source = 'local_target_mutation'`,
+awaiting the `CapabilityResult` the runner stores, and returning it with
+`transport: 'runner_queue'`. The runner dispatches generically over the
+capability name against a closed allowlist and fails an unknown or excluded name
+with the new `LOCAL_TARGET_UNSUPPORTED`; `launchAgent` is excluded and keeps its
+own claim path, so a launch and a queued job can never race for one request. A
+caller whose deadline passes gets the new `LOCAL_TARGET_TIMEOUT`, which means
+"still running on that target" — never "failed", and never a reason to re-queue.
+
+`execution_requests.mission_id` / `objective_id` become nullable **only** for
+`requested_source = 'local_target_mutation'`, enforced by a CHECK in both
+dialects, so a capability call with no mission (a Latch probe, a repository read,
+`doctor`) no longer has to invent one; such a row is authorized by `project_id` +
+`execution_target_id`, and `ExecutionRequestDto.missionId` / `.objectiveId` are
+nullable to match. `LocalTargetMutationKindDto` gains `capability_call`.
+`POST /api/runner/requests/:id/completed` accepts a result for any queued
+capability, and the runner reports typed failures through it rather than through
+`…/failed`, so the waiting caller receives the code and message.
+
+New capability `sendLatchMessage({ providerSessionId, operationId, text,
+waitForIdleMs })` delivers one user turn into a running Latch session and returns
+Latch's `accepted | refused | ambiguous`. Its body is Overlord's first native
+client of Latch's v2 Conversation Hub (the surface v108 reserved): the target's
+in-process provider reads `GET /v2/capabilities`, requires protocol major 2 with
+`endpoints.conversation`, opens `WS /v2/sessions/{providerSessionId}/conversation`
+and sends one `send_message` quoting the `operationEpoch` from the server-first
+snapshot. The gateway is dialed **only** over loopback — `LATCH_GATEWAY_URL`
+(default `http://127.0.0.1:4610`) must name a loopback host, and the bearer comes
+from `LATCH_GATEWAY_TOKEN` or `latch serve`'s token file
+(`LATCH_SERVE_TOKEN_FILE`, else `$LATCH_HOME/serve.token`) — because that token
+carries the `control` grant. Overlord never takes the session's terminal surface:
+the conversation channel is not an attach. A reachable gateway that declines is a
+*successful* call carrying `refused` (with Latch's `state.sendMessage.reason`); a
+busy `starting`/`working` session is waited out for `waitForIdleMs` (default 30s)
+and then refused; anything unconfirmed after the send is `ambiguous` and is never
+resent. Only an unreachable, unauthenticated, or conversation-less gateway is a
+capability failure. Answer
+delivery queues it with `operationId = agent_requests.id`, which is both Latch's
+idempotency key and the row a completion post-hook records against
+(`accepted → applied`, `refused → not_applied`, `ambiguous → unknown`; a timeout
+leaves `emitted`).
+
+`PurgeMergedWorktreesInput` additionally accepts `{ discover: true,
+primaryRepoPath, worktreeRoot }`: a control-plane caller has no filesystem, so it
+names the repository and the target decides which of its worktrees are merged and
+clean. Backend branch-action and worktree routes resolve a provider from the
+registry instead of branching on "co-located only"; the backend is still never a
+local target, so `LOCAL_FILESYSTEM_UNAVAILABLE` continues to be what a caller
+gets when no target can serve the work.
+
+`ovld protocol ask` now creates an answerable `agent_requests` row when the
+attached session has a bound channel, links its id from the `ask` event payload,
+and supports bounded structured options plus an explicit no-free-text choice
+mode. `AgentRequestDto.delivery` is the sole answerability projection:
+`latch` when a live Latch provider session on a reachable target can receive the
+answer, otherwise `read_only` with one of `no_latch_session`,
+`latch_session_exited`, `target_offline`, or `request_closed`; it also projects
+the application state and observation time. Human `POST /api/agent-requests/:id/resolve`
+is restored only for `question` and `choice`, retains revision CAS and native
+permission/retry retirement, validates text/options against the request, and
+fails `409 request_not_deliverable` unless delivery mode is `latch`.
+
+`mission_events.type` gains `answer`, a closed-vocabulary addition migrated in
+both dialects. Resolving a deliverable question records an `answer` mission event, returns its
+agent session to `execute`, clears the blocking-question seen marker, enqueues
+`mission.unblocked`, marks delivery `emitted`, and uses `sendLatchMessage` on
+the resolved target. Feed question items additively expose `agentRequestId` and
+delivery mode; an ask with a later matching answer is no longer unseen.
 
 ### Version 128 Change Summary
 
@@ -1507,7 +1581,7 @@ extension declarations and the agent-session capability vocabulary.
 - `execution_requests.status`: `queued`, `claimed`, `launching`, `launched`, `failed`, `cleared`, `cancelled`, `expired`
 - `run_queue_entries.state`: `waiting`, `blocked`, `dispatched`, `running`
 - `agent_sessions.delivery_state`: `not_delivered`, `delivered`, `pending_redelivery`
-- `mission_events.type`: `update`, `user_follow_up`, `alert`, `discussion_summary`, `decision`, `ask`, `permission_request`, `delivery`, `execution_requested`, `awaiting_approval`, `status_change`
+- `mission_events.type`: `update`, `user_follow_up`, `alert`, `discussion_summary`, `decision`, `ask`, `answer`, `permission_request`, `delivery`, `execution_requested`, `awaiting_approval`, `status_change`
 - `permission_requests.status`: `requested`, `approved`, `denied`, `expired`, `not_required`
 - `idempotency_keys.status`: `in_progress`, `completed`, `failed`
 - `audit_log.result`: `allowed`, `denied`, `failed`

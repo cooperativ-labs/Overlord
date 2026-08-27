@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
+import { createSessionChannel } from './agent-session/channels.js';
+import { resolveRequest } from './agent-session/requests.js';
 import { listChangedFilesForReview } from './changes.js';
 import type { ServiceContext } from './context.js';
 import { ServiceError } from './errors.js';
@@ -458,6 +460,92 @@ describe('deliverSession mechanical change capture', () => {
     assert.equal(eventChanges[0]?.project_id, mission.projectId);
     assert.equal(eventChanges[0]?.mission_id, mission.id);
     assert.equal(eventChanges[0]?.objective_id, objectiveId);
+
+    await db.close();
+  });
+
+  it('creates and links an answerable choice when the attached session has a channel', async () => {
+    const { db, ctx } = await setup();
+    const { project, mission, objectiveId } = await submittedMission(ctx, 'Ask Request');
+    const channel = await createSessionChannel({
+      ctx,
+      missionId: mission.id,
+      objectiveId,
+      projectId: project.id
+    });
+    const attached = await attachSession({
+      ctx,
+      missionId: mission.displayId,
+      sessionChannelId: channel.channel.id
+    });
+
+    const asked = await askQuestion({
+      ctx,
+      missionId: mission.displayId,
+      sessionKey: attached.sessionKey,
+      question: 'Choose a delivery path',
+      allowsFreeText: false,
+      options: [{ optionId: 'runner', label: 'Runner queue', kind: 'delivery_path' }]
+    });
+    const row = (await ctx.db.get(
+      `SELECT id, kind, allows_free_text, details_json FROM agent_requests
+         WHERE json_extract(details_json, '$.missionEventId') = ?`,
+      [asked.eventId]
+    )) as { id: string; kind: string; allows_free_text: number; details_json: string } | undefined;
+    assert.ok(row);
+    assert.equal(row.kind, 'choice');
+    assert.equal(row.allows_free_text, 0);
+    const event = (await ctx.db.get(`SELECT payload_json FROM mission_events WHERE id = ?`, [
+      asked.eventId
+    ])) as { payload_json: string };
+    assert.equal(JSON.parse(event.payload_json).agentRequestId, row.id);
+
+    await db.close();
+  });
+
+  it('records an answer and unblocks the session when a question resolves', async () => {
+    const { db, ctx } = await setup();
+    const { project, mission, objectiveId } = await submittedMission(ctx, 'Resolve Question');
+    const channel = await createSessionChannel({
+      ctx,
+      missionId: mission.id,
+      objectiveId,
+      projectId: project.id
+    });
+    const attached = await attachSession({
+      ctx,
+      missionId: mission.displayId,
+      sessionChannelId: channel.channel.id
+    });
+    const asked = await askQuestion({
+      ctx,
+      missionId: mission.displayId,
+      sessionKey: attached.sessionKey,
+      question: 'Which database?'
+    });
+    const request = (await ctx.db.get(
+      `SELECT id, revision FROM agent_requests
+         WHERE json_extract(details_json, '$.missionEventId') = ?`,
+      [asked.eventId]
+    )) as { id: string; revision: number };
+
+    const resolved = await resolveRequest({
+      ctx,
+      requestId: request.id,
+      resolution: { text: 'SQLite' },
+      expectedRevision: request.revision
+    });
+    assert.equal(resolved.resolved, true);
+    assert.equal(resolved.request.application_state, 'emitted');
+    const answer = (await ctx.db.get(
+      `SELECT phase, summary FROM mission_events WHERE mission_id = ? AND type = 'answer'`,
+      [mission.id]
+    )) as { phase: string; summary: string } | undefined;
+    assert.deepEqual(answer, { phase: 'execute', summary: 'SQLite' });
+    const session = (await ctx.db.get(`SELECT phase FROM agent_sessions WHERE id = ?`, [
+      attached.session.id
+    ])) as { phase: string };
+    assert.equal(session.phase, 'execute');
 
     await db.close();
   });

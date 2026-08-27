@@ -74,11 +74,19 @@ function questionItem(): ActivityFeedQuestionItemDto {
     ...base({ id: 'ask:event-1', kind: 'blocking_question' }),
     kind: 'blocking_question',
     eventId: 'event-1',
+    agentRequestId: 'request-1',
+    delivery: { mode: 'latch' },
     question: 'Which database?',
     agentIdentifier: 'claude',
     askedAt: '2026-08-17T12:00:00.000Z'
   } as ActivityFeedQuestionItemDto;
 }
+
+test('blocking questions preserve their answer request and delivery gate', () => {
+  const item = questionItem();
+  assert.equal(item.agentRequestId, 'request-1');
+  assert.equal(item.delivery.mode, 'latch');
+});
 
 test('delivered missions are a first-class kind the chips can hide', () => {
   const delivered = missionItem({

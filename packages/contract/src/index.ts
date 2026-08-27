@@ -1149,6 +1149,7 @@ export type MissionEventType =
   | 'discussion_summary'
   | 'decision'
   | 'ask'
+  | 'answer'
   | 'permission_request'
   | 'delivery'
   | 'execution_requested'
@@ -1233,6 +1234,18 @@ export interface AgentRequestDto {
   releasedReason: string | null;
   /** Whether a resolution was merely emitted or actually observed to apply in the harness. */
   applicationState: string;
+  /** Whether an answer can be delivered to the session's Latch conversation. */
+  delivery: {
+    mode: 'latch' | 'read_only';
+    reason:
+      | 'no_latch_session'
+      | 'latch_session_exited'
+      | 'target_offline'
+      | 'request_closed'
+      | null;
+    state: 'emitted' | 'applied' | 'not_applied' | 'unknown' | null;
+    observedAt: string | null;
+  };
   resolvedAt: string | null;
   createdAt: string;
 }
@@ -1762,14 +1775,19 @@ export type ExecutionRequestStatus =
   | 'cancelled'
   | 'expired';
 
-export type LocalTargetMutationKindDto = 'branch_action' | 'worktree_purge';
+export type LocalTargetMutationKindDto = 'branch_action' | 'worktree_purge' | 'capability_call';
 
 export interface ExecutionRequestDto {
   id: string;
   workspaceId: string;
   projectId: string;
-  missionId: string;
-  objectiveId: string;
+  /**
+   * Null only for a `local_target_mutation` capability call that has no mission
+   * (a Latch probe, a repository read, `doctor`); such a request is authorized
+   * by project and execution target. Every launch request carries both ids.
+   */
+  missionId: string | null;
+  objectiveId: string | null;
   executionTargetId: string | null;
   requestedAgent: string | null;
   requestedModel: string | null;
@@ -2404,6 +2422,8 @@ export interface ActivityFeedMissionItemDto extends ActivityFeedItemBaseDto {
 export interface ActivityFeedQuestionItemDto extends ActivityFeedItemBaseDto {
   kind: 'blocking_question';
   eventId: string;
+  agentRequestId: string | null;
+  delivery: { mode: 'latch' | 'read_only' };
   question: string;
   agentIdentifier: string | null;
   askedAt: string;
@@ -2733,7 +2753,8 @@ export type WebhookEventType =
   | 'mission.delivered'
   | 'mission.status_changed'
   | 'objective.completed'
-  | 'mission.blocked';
+  | 'mission.blocked'
+  | 'mission.unblocked';
 
 export interface WebhookSubscriptionDto {
   id: string;

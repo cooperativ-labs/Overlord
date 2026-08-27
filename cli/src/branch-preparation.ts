@@ -1,8 +1,8 @@
 import { parseObjectiveRef } from '@overlord/contract';
+import { resolveManagedWorktreeRoot } from '@overlord/core/service/local-target/worktree-git';
 import { deriveProjectResourceKey } from '@overlord/core/service/project-resource-key';
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, statSync } from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 
 import { type BranchDecision, type BranchIsolation, planMissionBranch } from './branch-planning.js';
@@ -312,13 +312,6 @@ function missionSequence(mission: MissionShape, missionId: string): number {
   return match ? Number.parseInt(match[1] ?? '0', 10) : 0;
 }
 
-function resolveWorktreeRoot(): string {
-  const override = process.env.OVERLORD_WORKTREE_ROOT?.trim();
-  if (override) return path.resolve(override);
-  const home = process.env.OVLD_HOME?.trim() || process.env.OVERLORD_HOME?.trim();
-  return path.join(home ? path.resolve(home) : path.join(os.homedir(), '.ovld'), 'worktrees');
-}
-
 function ensureBranchRef(gitRoot: string, decision: BranchDecision): void {
   if (decision.action === 'reuse') return;
   const check = runGit(gitRoot, ['check-ref-format', '--branch', decision.branch], {
@@ -587,7 +580,7 @@ export async function prepareMissionBranch({
     recordedBranch: recordedMissionBranch(mission),
     base,
     refs,
-    worktreeRoot: resolveWorktreeRoot(),
+    worktreeRoot: resolveManagedWorktreeRoot(),
     overrideBranch,
     isolation
   });

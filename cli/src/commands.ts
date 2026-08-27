@@ -530,6 +530,7 @@ function missionDisplayId(mission: unknown): string {
 const PROTOCOL_FILE_FLAGS = [
   '--summary-file',
   '--question-file',
+  '--options-file',
   '--payload-file',
   '--artifacts-file',
   '--change-rationales-file',
@@ -2066,19 +2067,21 @@ export async function runRunnerOnce({
     const mutation = parseMutationFromMetadata(requestRecord.metadata);
     if (mutation) {
       const mutationResult = await executeLocalTargetMutation({ mutation });
-      if (!mutationResult.ok) {
-        await runtime.backend.post({
-          path: `/api/runner/requests/${requestId}/failed`,
-          body: { error: mutationResult.message }
-        });
-        throw new CliError({ message: mutationResult.message });
-      }
+      // Report *both* outcomes through `/completed`. A typed failure is an
+      // answer — the caller waiting on this job needs the code and message, not
+      // a bare `failed` status — and storing it is what releases that waiter.
+      // `/completed` sets the request to `failed` for a failure envelope, so the
+      // queue state is the same as the old `/failed` post.
       await runtime.backend.post({
         path: `/api/runner/requests/${requestId}/completed`,
         body: { mutationResult }
       });
+      if (!mutationResult.ok) throw new CliError({ message: mutationResult.message });
       if (json) printJson({ request, mutationResult });
-      else console.log(`Completed ${mutation.kind} for ${requestRecord.missionId}`);
+      else {
+        const scope = requestRecord.missionId ?? requestRecord.projectId;
+        console.log(`Completed ${mutation.capability} for ${scope}`);
+      }
       return { launched: true, longPoll };
     }
 

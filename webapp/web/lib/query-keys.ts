@@ -51,7 +51,10 @@ export const keys = {
   missionSharedContext: (id: string) => ['mission', id, 'context'] as const,
   missionFileChanges: (id: string) => ['mission', id, 'file-changes'] as const,
   /** Answerable agent-session requests (permission / question / choice / retry) for a mission. */
-  missionAgentRequests: (id: string) => ['mission', id, 'agent-requests'] as const,
+  missionAgentRequests: (id: string, objectiveId?: string | null) =>
+    objectiveId
+      ? (['mission', id, 'agent-requests', objectiveId] as const)
+      : (['mission', id, 'agent-requests'] as const),
   /** Inbound instructions queued from Overlord into a mission's live session. */
   missionAgentSessionInputs: (id: string) => ['mission', id, 'agent-session-inputs'] as const,
   objectiveAttachments: (objectiveId: string) => ['objective', objectiveId, 'attachments'] as const,

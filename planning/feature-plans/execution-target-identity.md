@@ -471,6 +471,23 @@ rename.**
 | Native vs adopts a host target        | local runner registration (§4.2–4.3)                                          | `native` \| `adopted`                                                            |
 | How we reach it                       | resolved at runtime by the provider registry from reachability + capabilities | not persisted; `ssh`, desktop-bridge, in-process, runner-queue are **providers** |
 
+**How we reach it, as shipped (contract 129).** The registry resolves one of three
+transports and callers never branch on which: `in_process` when the caller's own
+device is the target, `runner_queue` for any other reachable `local` target, and a
+typed unavailable provider otherwise. `runner_queue` is a real transport, not a
+stub: every capability writes an `execution_requests` row with
+`requested_source = 'local_target_mutation'` and metadata
+`{ kind, capability, input }`, the runner claims it off the ordinary claim loop and
+dispatches generically over the capability name, and the caller awaits the stored
+`CapabilityResult` (Postgres `LISTEN` on a completion channel, SQLite a bounded
+poll). Two rules keep the boundary honest: `launchAgent` is excluded from the
+queued vocabulary because it already owns the claim path, and the **backend is
+never a local target** — it resolves the registry with no caller target id, so a
+hosted or Local control plane can only reach a checkout through a runner, never
+through its own filesystem. A capability call needs no mission: `mission_id` /
+`objective_id` are nullable for this one `requested_source`, and such a row is
+authorized by `project_id` + `execution_target_id`.
+
 - In a dedicated migration, **drop `ssh`** as a documented core
   `execution_targets.type` and **drop `execution_requests.target_kind` entirely.** Both are
   unreferenced. A real SSH target is a transport — it wants a provider in the registry, not a

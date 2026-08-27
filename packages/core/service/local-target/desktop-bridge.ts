@@ -20,6 +20,7 @@ import type {
   ReadCurrentDiffInput,
   ReadRepositoryTreeInput,
   RemoveWorktreeInput,
+  SendLatchMessageInput,
   StopLatchSessionInput,
   WriteProjectMetadataInput
 } from './types.ts';
@@ -48,7 +49,8 @@ export type LocalTargetBridgeCall =
   | { capability: 'discoverLatch'; input: DiscoverLatchInput }
   | { capability: 'inspectLatchSession'; input: InspectLatchSessionInput }
   | { capability: 'openLatchSession'; input: OpenLatchSessionInput }
-  | { capability: 'stopLatchSession'; input: StopLatchSessionInput };
+  | { capability: 'stopLatchSession'; input: StopLatchSessionInput }
+  | { capability: 'sendLatchMessage'; input: SendLatchMessageInput };
 
 /** Capability names exposed on the unified desktop bridge. */
 export type LocalTargetBridgeCapability = LocalTargetBridgeCall['capability'];
@@ -93,6 +95,8 @@ export async function invokeLocalTargetCapability({
       return provider.openLatchSession(call.input);
     case 'stopLatchSession':
       return provider.stopLatchSession(call.input);
+    case 'sendLatchMessage':
+      return provider.sendLatchMessage(call.input);
     case 'writeProjectMetadata':
       return provider.writeProjectMetadata(call.input);
     default:

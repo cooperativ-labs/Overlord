@@ -36,6 +36,8 @@ import type {
   RemoveWorktreeInput,
   RepositoryTreeResult,
   ResourceObservation,
+  SendLatchMessageInput,
+  SendLatchMessageResult,
   StopLatchSessionInput,
   StopLatchSessionResult,
   TargetMetadata,
@@ -224,6 +226,20 @@ export class FakeLocalTargetProvider implements LocalTargetCapabilities {
     return ok(this.target, {
       providerSessionId: input.providerSessionId,
       state: 'stopping'
+    });
+  }
+
+  async sendLatchMessage(
+    input: SendLatchMessageInput
+  ): Promise<CapabilityResult<SendLatchMessageResult>> {
+    this.#record('sendLatchMessage', [input]);
+    if (this.#handlers.sendLatchMessage) return this.#handlers.sendLatchMessage(input);
+    return ok(this.target, {
+      providerSessionId: input.providerSessionId,
+      operationId: input.operationId,
+      status: 'accepted',
+      reason: null,
+      deliveredAt: new Date(0).toISOString()
     });
   }
 

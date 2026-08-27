@@ -15,7 +15,8 @@ export const WEBHOOK_EVENT_TYPES = [
   'mission.delivered',
   'mission.status_changed',
   'objective.completed',
-  'mission.blocked'
+  'mission.blocked',
+  'mission.unblocked'
 ] as const;
 
 export type WebhookEventType = (typeof WEBHOOK_EVENT_TYPES)[number];

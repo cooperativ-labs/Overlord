@@ -91,9 +91,15 @@ export function NewMissionModal({
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const fallbackProjectId = defaultProjectQ.data?.projectId ?? null;
+  const explicitDefaultProjectId = useMemo(
+    () =>
+      defaultProjectId && projects.some(project => project.id === defaultProjectId)
+        ? defaultProjectId
+        : null,
+    [defaultProjectId, projects]
+  );
   const recentDefaultProjectId = useMemo(() => {
-    const candidate = defaultProjectId ?? fallbackProjectId;
-    const project = projects.find(item => item.id === candidate);
+    const project = projects.find(item => item.id === fallbackProjectId);
     const stored = Number(
       window.localStorage.getItem('overlord.defaultProjectWindowMinutes') ?? '15'
     );
@@ -101,10 +107,12 @@ export function NewMissionModal({
     return project && Date.now() - Date.parse(project.updatedAt) <= minutes * 60_000
       ? project.id
       : null;
-  }, [defaultProjectId, fallbackProjectId, projects]);
+  }, [fallbackProjectId, projects]);
 
   const selectedProjectId =
-    projectId === '__inbox__' ? '' : projectId || recentDefaultProjectId || '';
+    projectId === '__inbox__'
+      ? ''
+      : projectId || explicitDefaultProjectId || recentDefaultProjectId || '';
 
   const selectedProject = projects.find(project => project.id === selectedProjectId) ?? null;
 
@@ -179,13 +187,14 @@ export function NewMissionModal({
     setSelectedTagIds([]);
     setSubmitError(null);
     setProjectId(current => {
+      if (explicitDefaultProjectId) return explicitDefaultProjectId;
       if (recentDefaultProjectId) return recentDefaultProjectId;
       if (current && projects.some(project => project.id === current)) {
         return current;
       }
       return '';
     });
-  }, [open, projects, recentDefaultProjectId]);
+  }, [explicitDefaultProjectId, open, projects, recentDefaultProjectId]);
 
   // Tags are project-scoped — drop any that no longer belong to the project.
   useEffect(() => {

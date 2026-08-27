@@ -584,6 +584,10 @@ ask:
     --session-key <key>
     --mission-id <id>
     --question or --question-file <path|->
+  Optional:
+    --options-json <json> / --options-file <path|->
+    --no-free-text (requires options; creates a structured choice)
+    --json
 
 deliver:
   Purpose:

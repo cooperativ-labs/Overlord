@@ -21,11 +21,13 @@ import {
   inspectLatchSession,
   LatchSessionAbsentError,
   openLatchSession,
+  sendLatchMessage,
   stopLatchSession
 } from '../latch-session.ts';
 import { DEFAULT_LATCH_EXECUTABLE } from '../terminal-profile-types.ts';
 
 import { performBranchActionGit } from './branch-actions-git.ts';
+import { observeMissionBranchGit } from './branch-observe-git.ts';
 import { normalizeBranchRef } from './branch-status-git.ts';
 import { gatherCommitMessageDiff } from './commit-message-diff-git.ts';
 import { runLocalTargetDoctorChecks } from './doctor-checks.ts';
@@ -52,6 +54,7 @@ import type {
   ReadRepositoryTreeInput,
   RemoveWorktreeInput,
   ResourceObservation,
+  SendLatchMessageInput,
   StopLatchSessionInput,
   TargetMetadata,
   WriteProjectMetadataInput,
@@ -60,8 +63,36 @@ import type {
 import {
   collectManagedWorktrees,
   purgeManagedWorktrees,
-  removeManagedWorktree
+  removeManagedWorktree,
+  resolveManagedWorktreeRoot
 } from './worktree-git.ts';
+
+/**
+ * Resolve a purge input to the concrete worktrees to remove. Only a machine
+ * that can see the checkouts can decide which are merged and clean, so a caller
+ * without a filesystem sends `{ discover: true, … }` and the answer is computed
+ * here — the same rule the desktop bridge applies before calling in locally.
+ */
+function mergedWorktreeEntries(
+  input: PurgeMergedWorktreesInput
+): Array<{ path: string; primaryRepoPath: string }> {
+  if (input.discover !== true) return input.entries;
+  return collectManagedWorktrees({
+    worktreeRoot: input.worktreeRoot?.trim() || resolveManagedWorktreeRoot(),
+    projects: [{ primaryRepoPath: input.primaryRepoPath }]
+  })
+    .filter(worktree => {
+      if (worktree.dirty || !worktree.branch) return false;
+      const observed = observeMissionBranchGit({
+        repoPath: worktree.primaryRepoPath,
+        branchName: worktree.branch,
+        baseBranch: null,
+        worktreePathHint: worktree.path
+      });
+      return observed.status === 'merged' || observed.status === 'merged_unpushed';
+    })
+    .map(worktree => ({ path: worktree.path, primaryRepoPath: worktree.primaryRepoPath }));
+}
 
 function failLatchCommand({
   target,
@@ -216,7 +247,7 @@ export class InProcessProvider implements LocalTargetCapabilities {
 
   async purgeMergedWorktrees(input: PurgeMergedWorktreesInput) {
     try {
-      return ok(this.target, purgeManagedWorktrees(input));
+      return ok(this.target, purgeManagedWorktrees({ entries: mergedWorktreeEntries(input) }));
     } catch (error) {
       return fail(
         this.target,
@@ -320,6 +351,25 @@ export class InProcessProvider implements LocalTargetCapabilities {
         target: this.target,
         error,
         fallback: 'Could not stop the Latch session.'
+      });
+    }
+  }
+
+  /**
+   * Deliver a user turn into a running Latch session over the v2 Conversation
+   * Hub on loopback. A reachable gateway that declines the send is a *success*
+   * carrying `refused`/`ambiguous` — only an unreachable or unusable gateway is
+   * a capability failure. `operationId` is the idempotency key end to end, so a
+   * retried job cannot deliver the same answer twice.
+   */
+  async sendLatchMessage(input: SendLatchMessageInput) {
+    try {
+      return ok(this.target, await sendLatchMessage(input));
+    } catch (error) {
+      return failLatchCommand({
+        target: this.target,
+        error,
+        fallback: 'Could not deliver the answer into the Latch session.'
       });
     }
   }

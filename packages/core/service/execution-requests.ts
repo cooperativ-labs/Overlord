@@ -135,11 +135,15 @@ export type ExecutionRequestSummary = {
   id: string;
   workspaceId: string;
   projectId: string;
-  missionId: string;
-  missionDisplayId: string;
-  objectiveId: string;
-  objectiveTitle: string;
-  objectiveState: string;
+  /**
+   * Null only for a `local_target_mutation` capability call with no mission —
+   * a Latch probe, a repository read, `doctor`. Every launch request has one.
+   */
+  missionId: string | null;
+  missionDisplayId: string | null;
+  objectiveId: string | null;
+  objectiveTitle: string | null;
+  objectiveState: string | null;
   executionTargetId: string | null;
   requestedAgent: string | null;
   requestedModel: string | null;
@@ -191,11 +195,11 @@ function rowToSummary(row: {
   id: string;
   workspace_id: string;
   project_id: string;
-  mission_id: string;
-  display_id: string;
-  objective_id: string;
-  title: string;
-  state: string;
+  mission_id: string | null;
+  display_id: string | null;
+  objective_id: string | null;
+  title: string | null;
+  state: string | null;
   execution_target_id: string | null;
   requested_agent: string | null;
   requested_model: string | null;
@@ -249,8 +253,8 @@ type ExecutionRequestStateRow = {
   id: string;
   workspace_id: string;
   project_id: string;
-  mission_id: string;
-  objective_id: string;
+  mission_id: string | null;
+  objective_id: string | null;
   execution_target_id: string | null;
   status: string;
   revision: number;
@@ -289,6 +293,9 @@ async function appendExecutionRequestEvent({
   summary: string;
   payload?: Record<string, unknown>;
 }): Promise<void> {
+  // A mission event needs a mission. A `local_target_mutation` capability call
+  // queued without one is tracked by `entity_changes` alone.
+  if (row.mission_id === null || row.objective_id === null) return;
   await ctx.db.run(
     `INSERT INTO mission_events
          (id, workspace_id, project_id, mission_id, objective_id,
@@ -404,10 +411,11 @@ export async function getExecutionRequest({
   id: string;
 }): Promise<ExecutionRequestSummary> {
   const row = (await ctx.db.get(
+    // LEFT JOIN: a mission-less capability call still has to be readable.
     `SELECT er.*, t.display_id, o.title, o.state
        FROM execution_requests er
-       JOIN missions t ON t.id = er.mission_id
-       JOIN objectives o ON o.id = er.objective_id
+       LEFT JOIN missions t ON t.id = er.mission_id
+       LEFT JOIN objectives o ON o.id = er.objective_id
        WHERE er.id = ? AND er.workspace_id = ? AND er.deleted_at IS NULL`,
     [id, ctx.workspace.id]
   )) as Parameters<typeof rowToSummary>[0] | undefined;
@@ -663,8 +671,8 @@ export async function listExecutionRequests({
   const rows = (await ctx.db.all(
     `SELECT er.*, t.display_id, o.title, o.state
        FROM execution_requests er
-       JOIN missions t ON t.id = er.mission_id
-       JOIN objectives o ON o.id = er.objective_id
+       LEFT JOIN missions t ON t.id = er.mission_id
+       LEFT JOIN objectives o ON o.id = er.objective_id
        WHERE ${conditions.join(' AND ')}
        ORDER BY er.created_at ASC
        LIMIT ?`,
@@ -738,7 +746,7 @@ export async function claimNextExecutionRequest({
                 er.launched_session_id, er.resolved_working_directory, er.metadata_json,
                 o.resource_key
            FROM execution_requests er
-           JOIN objectives o ON o.id = er.objective_id
+           LEFT JOIN objectives o ON o.id = er.objective_id
           WHERE ${conditions.join(' AND ')}
           ORDER BY er.created_at ASC
           LIMIT 1`,
@@ -1065,14 +1073,17 @@ export async function markExecutionFailed({
     });
     // A failed launch strands the mission with nobody working it. The error text
     // stays in the mission event and never in the durable notification payload.
-    await emitNotification({
-      db: txCtx.db,
-      workspaceId: ctx.workspace.id,
-      missionId: row.mission_id,
-      type: 'mission_failed',
-      objectiveId: row.objective_id,
-      now
-    });
+    // A mission-less capability call has nothing to strand and nobody to notify.
+    if (row.mission_id !== null) {
+      await emitNotification({
+        db: txCtx.db,
+        workspaceId: ctx.workspace.id,
+        missionId: row.mission_id,
+        type: 'mission_failed',
+        objectiveId: row.objective_id,
+        now
+      });
+    }
     await reconcileLinkedRunQueueEntry({
       db: txCtx.db,
       requestId,
@@ -1190,31 +1201,39 @@ export async function expireStaleExecutionRequests({
     const baseMs = Number.isNaN(nowMs) ? Date.now() : nowMs;
     const attachCutoff = new Date(baseMs - launchAttachTtlMs).toISOString();
     const launchCutoff = new Date(baseMs - launchStartTtlMs).toISOString();
+    // LEFT JOIN so a mission-less capability call is swept too. Its terminal
+    // success status *is* `launched`, so it is excluded from the launched-but-
+    // never-attached branch — there is no agent to attach — while the abandoned
+    // `claimed` / `launching` cases still expire and free the waiter.
     const rows = (await txCtx.db.all(
       `SELECT er.id, er.workspace_id, er.project_id, er.mission_id, er.objective_id,
                 er.execution_target_id, er.status, er.revision, er.launch_flags_json,
                 er.launched_session_id
            FROM execution_requests er
-           JOIN objectives o ON o.id = er.objective_id
+           LEFT JOIN objectives o ON o.id = er.objective_id
           WHERE er.workspace_id = ?
             AND er.deleted_at IS NULL
             AND (
               (er.status = 'claimed' AND er.claim_expires_at IS NOT NULL AND er.claim_expires_at < ?)
               OR
-              (er.status = 'launched' AND er.launched_session_id IS NULL
+              (er.requested_source <> ?
+                AND er.status = 'launched' AND er.launched_session_id IS NULL
                 AND er.launch_completed_at IS NOT NULL AND er.launch_completed_at < ?
                 AND o.state IN (${LAUNCHABLE_OBJECTIVE_STATES.map(() => '?').join(', ')}))
               OR
               (er.status = 'launching'
                 AND er.launch_started_at IS NOT NULL AND er.launch_started_at < ?
-                AND o.state IN (${LAUNCHABLE_OBJECTIVE_STATES.map(() => '?').join(', ')}))
+                AND (er.requested_source = ?
+                     OR o.state IN (${LAUNCHABLE_OBJECTIVE_STATES.map(() => '?').join(', ')})))
             )`,
       [
         ctx.workspace.id,
         now,
+        LOCAL_TARGET_MUTATION_REQUESTED_SOURCE,
         attachCutoff,
         ...LAUNCHABLE_OBJECTIVE_STATES,
         launchCutoff,
+        LOCAL_TARGET_MUTATION_REQUESTED_SOURCE,
         ...LAUNCHABLE_OBJECTIVE_STATES
       ]
     )) as ExecutionRequestStateRow[];

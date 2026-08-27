@@ -24,7 +24,6 @@ import {
   OBJECTIVE_STATES,
   type ObjectiveState
 } from '@overlord/database';
-import os from 'node:os';
 import path from 'node:path';
 
 import type { ServiceContext } from '../packages/core/service/context.ts';
@@ -39,8 +38,15 @@ import {
   enqueueLiveActivityRefreshForMission,
   enqueueLiveActivityStartForMission
 } from '../packages/core/service/live-activity-jobs.ts';
-import { resolveBackendResourceProvider } from '../packages/core/service/local-target/index.ts';
-import type { TargetMetadata } from '../packages/core/service/local-target/types.ts';
+import {
+  resolveBackendResourceProvider,
+  resolveManagedWorktreeRoot,
+  UnavailableProvider
+} from '../packages/core/service/local-target/index.ts';
+import type {
+  CapabilityFailure,
+  TargetMetadata
+} from '../packages/core/service/local-target/types.ts';
 import {
   loadMissionBranchObservationsForMissions,
   mergeMissionBranchObservation
@@ -167,11 +173,7 @@ import {
   LAUNCHABLE_STATES,
   listMissionExecutionRequests
 } from './execution/launch.ts';
-import {
-  queueLocalTargetMutation,
-  resolveMutationAnchorMissionId,
-  resolveRemoteMutationTarget
-} from './execution/local-target-mutation-queue.ts';
+import { resolveProjectLocalTargetProvider } from './execution/local-target-mutation-queue.ts';
 import {
   createProjectInitialization,
   type ProjectInitializationRow,
@@ -221,6 +223,37 @@ function throwCheckoutLocalRequired(): never {
     'Checkout-local work must run on a local execution target (Overlord Desktop or the dev invoke proxy).',
     'The hosted Overlord backend stores metadata and queues work, but it cannot inspect or mutate your local filesystem.',
     'LOCAL_FILESYSTEM_UNAVAILABLE'
+  );
+}
+
+/**
+ * How long a REST handler waits for a queued capability call before answering.
+ * The job is not cancelled by the wait ending — a `LOCAL_TARGET_TIMEOUT` means
+ * "still running over there", which callers render as in-progress.
+ */
+const BRANCH_ACTION_WAIT_MS = 15_000;
+const WORKTREE_MUTATION_WAIT_MS = 15_000;
+
+/**
+ * Map a local-target capability failure onto the HTTP error the surfaces already
+ * understand. "No target could serve this" keeps the long-standing
+ * `LOCAL_FILESYSTEM_UNAVAILABLE` contract so the desktop client still falls back
+ * to its own bridge. `LOCAL_TARGET_TIMEOUT` never reaches here: it is not a
+ * failure, and each caller decides what "still running" looks like.
+ */
+function throwLocalTargetCapabilityFailure(failure: CapabilityFailure): never {
+  if (failure.code === 'LOCAL_TARGET_REQUIRED' || failure.code === 'LOCAL_TARGET_UNREACHABLE') {
+    throwCheckoutLocalRequired();
+  }
+  const details =
+    failure.details && typeof failure.details === 'object' && !Array.isArray(failure.details)
+      ? (failure.details as Record<string, unknown>)
+      : {};
+  throw new ApiError(
+    409,
+    failure.message,
+    typeof details.detail === 'string' ? details.detail : undefined,
+    typeof details.branchActionCode === 'string' ? details.branchActionCode : failure.code
   );
 }
 
@@ -918,13 +951,6 @@ function toMissionDto(r: MissionRow, tags: ProjectTagDto[] = []): MissionDto {
   };
 }
 
-function resolveWorktreeRoot(): string {
-  const override = process.env.OVERLORD_WORKTREE_ROOT?.trim();
-  if (override) return path.resolve(override);
-  const home = process.env.OVLD_HOME?.trim() || process.env.OVERLORD_HOME?.trim();
-  return path.join(home ? path.resolve(home) : path.join(os.homedir(), '.ovld'), 'worktrees');
-}
-
 // Derives the mission-panel branch status from the real git state in the project's
 // primary worktree. `active_branch` being set means a branch was prepared, so the
 // floor is `created`; we upgrade to `published` once a remote ref exists, to
@@ -1091,7 +1117,7 @@ async function missionBranchDto(row: MissionRow): Promise<MissionBranchDto> {
     projectId: row.project_id
   });
   const projectSlug = await getProjectSlug(row.project_id, row.workspace_id);
-  const worktreeRoot = resolveWorktreeRoot();
+  const worktreeRoot = resolveManagedWorktreeRoot();
   const resourceKey = await primaryResourceKey(row.project_id, row.workspace_id, executionTargetId);
   const overrideBranch = row.branch_override?.trim() || null;
   const worktreePreference = parseWorktreePreference(row.worktree_preference);
@@ -1360,7 +1386,7 @@ async function loadBranchActionContext(
     );
   }
   const projectSlug = await getProjectSlug(row.project_id, row.workspace_id);
-  const worktreeRoot = resolveWorktreeRoot();
+  const worktreeRoot = resolveManagedWorktreeRoot();
   const canonicalWorktree = missionWorktreePath({
     worktreeRoot,
     projectSlug,
@@ -1503,32 +1529,33 @@ export async function performBranchAction(
     return getMissionDetail(ctx.missionId);
   }
 
-  const remoteTarget = await resolveRemoteMutationTarget({
+  // One resolution, no transport branch: the registry hands back the runner-queue
+  // transport for a reachable target and a typed unavailable provider otherwise.
+  // The wait is deliberately short — the job outlives it, and a `LOCAL_TARGET_TIMEOUT`
+  // just means "still running on that machine", which the refreshed mission
+  // detail already reflects once the runner reports.
+  const provider = await resolveProjectLocalTargetProvider({
     ctx: await buildWebappServiceContextForWorkspace(ctx.workspaceId),
-    projectId: ctx.projectId
+    projectId: ctx.projectId,
+    missionId: ctx.missionId,
+    writeTimeoutMs: BRANCH_ACTION_WAIT_MS
   });
-  if (remoteTarget.queue) {
-    await queueLocalTargetMutation({
-      projectId: ctx.projectId,
-      missionId: ctx.missionId,
-      workspaceId: ctx.workspaceId,
-      executionTargetId: remoteTarget.executionTargetId,
-      kind: 'branch_action',
-      capability: 'performBranchAction',
-      input: {
-        action,
-        branchName: ctx.branchName,
-        baseBranch: ctx.baseBranch,
-        worktreePath: ctx.worktreePath,
-        primaryRepoPath: ctx.primaryRepoPath,
-        ...(typeof body.message === 'string' ? { message: body.message } : {})
-      },
-      eventSummary: `Delegated branch action "${action}" on remote execution target.`
-    });
-    return getMissionDetail(ctx.missionId);
+  const result = await provider.performBranchAction({
+    action,
+    branchName: ctx.branchName,
+    baseBranch: ctx.baseBranch,
+    worktreePath: ctx.worktreePath,
+    primaryRepoPath: ctx.primaryRepoPath,
+    ...(typeof body.message === 'string' ? { message: body.message } : {})
+  });
+  // A timeout is not a failure: the runner still holds the job, and its
+  // completion report will record the branch activity whenever it lands.
+  if (!result.ok && result.code !== 'LOCAL_TARGET_TIMEOUT') {
+    throwLocalTargetCapabilityFailure(result);
   }
-
-  throwCheckoutLocalRequired();
+  // Branch activity is recorded by the runner's completion report, not here, so
+  // a result that arrives after this response still lands on the timeline.
+  return getMissionDetail(ctx.missionId);
 }
 
 /**
@@ -1610,41 +1637,37 @@ export async function removeWorktree(body: RemoveWorktreeBody): Promise<PurgeWor
       projectId,
       permission: PERMISSIONS.PROJECT_UPDATE
     });
-    const remoteTarget = await resolveRemoteMutationTarget({
+    const provider = await resolveProjectLocalTargetProvider({
       ctx: await buildWebappServiceContextForWorkspace(
         scope.workspaceId,
         undefined,
         scope.workspaceUserId
       ),
       projectId,
-      executionTargetId: body.executionTargetId ?? null
+      executionTargetId:
+        typeof body.executionTargetId === 'string' ? body.executionTargetId.trim() : null,
+      writeTimeoutMs: WORKTREE_MUTATION_WAIT_MS
     });
-    if (remoteTarget.queue) {
-      const primaryRepoPath =
-        typeof body.primaryRepoPath === 'string' ? body.primaryRepoPath.trim() : '';
-      if (!primaryRepoPath) {
-        throw new ApiError(
-          400,
-          'primaryRepoPath is required to queue worktree removal on a remote target.'
-        );
-      }
-      const missionId = await resolveMutationAnchorMissionId(projectId, scope.workspaceId);
-      await queueLocalTargetMutation({
-        projectId,
-        missionId,
-        workspaceId: scope.workspaceId,
-        executionTargetId: remoteTarget.executionTargetId,
-        kind: 'worktree_purge',
-        capability: 'removeWorktree',
-        input: {
-          path: target,
-          primaryRepoPath,
-          force: body.force === true
-        },
-        eventSummary: `Delegated worktree removal on remote execution target.`
-      });
+    // Resolve the provider before validating the payload: when no target can
+    // serve this, the answer is "run it locally", not "your body was wrong".
+    const primaryRepoPath =
+      typeof body.primaryRepoPath === 'string' ? body.primaryRepoPath.trim() : '';
+    if (!primaryRepoPath) {
+      if (provider instanceof UnavailableProvider) throwCheckoutLocalRequired();
+      throw new ApiError(400, 'primaryRepoPath is required to remove a worktree on a target.');
+    }
+    const result = await provider.removeWorktree({
+      path: target,
+      primaryRepoPath,
+      force: body.force === true
+    });
+    // Still running on the target: report nothing removed *yet* rather than an
+    // error, exactly as the fire-and-forget queue path used to.
+    if (!result.ok && result.code === 'LOCAL_TARGET_TIMEOUT') {
       return { removed: [], skipped: [], worktrees: [] };
     }
+    if (!result.ok) throwLocalTargetCapabilityFailure(result);
+    return { removed: result.value.removed, skipped: result.value.skipped, worktrees: [] };
   }
 
   throwCheckoutLocalRequired();
@@ -1666,7 +1689,7 @@ export async function purgeMergedWorktrees(
       projectId,
       permission: PERMISSIONS.PROJECT_UPDATE
     });
-    const remoteTarget = await resolveRemoteMutationTarget({
+    const provider = await resolveProjectLocalTargetProvider({
       ctx: await buildWebappServiceContextForWorkspace(
         scope.workspaceId,
         undefined,
@@ -1674,34 +1697,30 @@ export async function purgeMergedWorktrees(
       ),
       projectId,
       executionTargetId:
-        typeof body.executionTargetId === 'string' ? body.executionTargetId.trim() : null
+        typeof body.executionTargetId === 'string' ? body.executionTargetId.trim() : null,
+      writeTimeoutMs: WORKTREE_MUTATION_WAIT_MS
     });
-    if (remoteTarget.queue) {
-      const primaryRepoPath =
-        typeof body.primaryRepoPath === 'string' ? body.primaryRepoPath.trim() : '';
-      if (!primaryRepoPath) {
-        throw new ApiError(
-          400,
-          'primaryRepoPath is required to queue merged worktree purge on a remote target.'
-        );
-      }
-      const missionId = await resolveMutationAnchorMissionId(projectId, scope.workspaceId);
-      await queueLocalTargetMutation({
-        projectId,
-        missionId,
-        workspaceId: scope.workspaceId,
-        executionTargetId: remoteTarget.executionTargetId,
-        kind: 'worktree_purge',
-        capability: 'purgeMergedWorktrees',
-        input: {
-          discover: true,
-          primaryRepoPath,
-          ...(typeof body.worktreeRoot === 'string' ? { worktreeRoot: body.worktreeRoot } : {})
-        },
-        eventSummary: 'Delegated merged worktree purge on remote execution target.'
-      });
+    // Resolve the provider before validating the payload: when no target can
+    // serve this, the answer is "run it locally", not "your body was wrong".
+    const primaryRepoPath =
+      typeof body.primaryRepoPath === 'string' ? body.primaryRepoPath.trim() : '';
+    if (!primaryRepoPath) {
+      if (provider instanceof UnavailableProvider) throwCheckoutLocalRequired();
+      throw new ApiError(400, 'primaryRepoPath is required to purge merged worktrees on a target.');
+    }
+    // The backend has no filesystem, so it names the repo and lets the target
+    // decide both where its managed worktrees live and which are merged and clean.
+    const worktreeRoot = typeof body.worktreeRoot === 'string' ? body.worktreeRoot.trim() : '';
+    const result = await provider.purgeMergedWorktrees({
+      discover: true,
+      primaryRepoPath,
+      ...(worktreeRoot ? { worktreeRoot } : {})
+    });
+    if (!result.ok && result.code === 'LOCAL_TARGET_TIMEOUT') {
       return { removed: [], skipped: [], worktrees: [] };
     }
+    if (!result.ok) throwLocalTargetCapabilityFailure(result);
+    return { removed: result.value.removed, skipped: result.value.skipped, worktrees: [] };
   }
 
   throwCheckoutLocalRequired();
@@ -3681,6 +3700,14 @@ export async function deleteProject(id: string): Promise<void> {
 const missionHasUnseenBlockingQuestionSql = `
          (SELECT COUNT(*) > 0 FROM mission_events me
             WHERE me.mission_id = t.id AND me.type = 'ask'
+              AND NOT EXISTS (
+                SELECT 1 FROM agent_requests ar
+                 JOIN mission_events answer
+                   ON answer.mission_id = me.mission_id
+                  AND answer.type = 'answer'
+                  AND answer.payload_json LIKE '%' || '"agentRequestId":"' || ar.id || '"%'
+                WHERE ar.source_event_id = me.id AND ar.deleted_at IS NULL
+              )
               AND (
                 NOT EXISTS (SELECT 1 FROM mission_status_seen mss
                   WHERE mss.mission_id = t.id AND mss.status_id = 'blocking_question')

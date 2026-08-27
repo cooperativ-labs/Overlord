@@ -2,6 +2,7 @@ import { recordChange } from '../change-feed.js';
 import type { ServiceContext } from '../context.js';
 import { ServiceError } from '../errors.js';
 import { newId, nowIso } from '../util.js';
+import { enqueueWebhookEvent } from '../webhook-events.js';
 
 import { sizeDecisionWindow } from './pure/window.js';
 import type { AgentSessionChannelRow } from './channels.js';
@@ -414,10 +415,6 @@ export async function resolveRequest({
   resolution: Record<string, unknown>;
   expectedRevision?: number;
 }): Promise<{ resolved: boolean; request: AgentRequestRow }> {
-  const existing = await getRequest({ ctx, requestId });
-  if (expectedRevision !== undefined && expectedRevision !== existing.revision) {
-    throw new ServiceError('Request changed since it was read', 'agent_request_conflict', 409);
-  }
   if (!ctx.actorWorkspaceUserId) {
     throw new ServiceError(
       'A request resolution requires an identified human actor',
@@ -425,40 +422,137 @@ export async function resolveRequest({
       403
     );
   }
-  const now = nowIso();
-  const updated = await ctx.db.run(
-    `UPDATE agent_requests
-        SET status = 'resolved', resolution_json = ?, resolved_by_workspace_user_id = ?,
-            resolved_at = ?, waiter_lease_id = NULL, waiter_lease_expires_at = NULL,
-            updated_at = ?, revision = ?
-      WHERE id = ? AND status = 'open' AND revision = ?`,
-    [
-      JSON.stringify(resolution),
-      ctx.actorWorkspaceUserId,
-      now,
-      now,
-      existing.revision + 1,
-      requestId,
-      existing.revision
-    ]
-  );
-  if (updated.changes === 0) {
-    // Lost to a release or another resolver. The caller re-reads and reports the truth rather
-    // than telling the human their answer took effect.
-    return { resolved: false, request: await getRequest({ ctx, requestId }) };
-  }
-  await recordChange({
-    ctx,
-    entityType: 'agent_request',
-    entityId: requestId,
-    operation: 'update',
-    entityRevision: existing.revision + 1,
-    projectId: existing.project_id,
-    missionId: existing.mission_id,
-    objectiveId: existing.objective_id,
-    changedFields: ['status', 'resolution_json', 'resolved_by_workspace_user_id']
+  return await ctx.db.transaction(async tx => {
+    const txCtx = { ...ctx, db: tx };
+    const existing = await getRequest({ ctx: txCtx, requestId });
+    if (expectedRevision !== undefined && expectedRevision !== existing.revision) {
+      throw new ServiceError('Request changed since it was read', 'agent_request_conflict', 409);
+    }
+    const now = nowIso();
+    const isQuestion = existing.kind === 'question' || existing.kind === 'choice';
+    const updated = await tx.run(
+      `UPDATE agent_requests
+          SET status = 'resolved', resolution_json = ?, resolved_by_workspace_user_id = ?,
+              resolved_at = ?, waiter_lease_id = NULL, waiter_lease_expires_at = NULL,
+              application_state = CASE WHEN kind IN ('question', 'choice') THEN 'emitted' ELSE application_state END,
+              application_observed_at = CASE WHEN kind IN ('question', 'choice') THEN NULL ELSE application_observed_at END,
+              updated_at = ?, revision = ?
+        WHERE id = ? AND status = 'open' AND revision = ?`,
+      [
+        JSON.stringify(resolution),
+        ctx.actorWorkspaceUserId,
+        now,
+        now,
+        existing.revision + 1,
+        requestId,
+        existing.revision
+      ]
+    );
+    if (updated.changes === 0) {
+      // Lost to a release or another resolver. The caller re-reads and reports the truth rather
+      // than telling the human their answer took effect.
+      return { resolved: false, request: await getRequest({ ctx: txCtx, requestId }) };
+    }
+    await recordChange({
+      ctx: txCtx,
+      entityType: 'agent_request',
+      entityId: requestId,
+      operation: 'update',
+      entityRevision: existing.revision + 1,
+      projectId: existing.project_id,
+      missionId: existing.mission_id,
+      objectiveId: existing.objective_id,
+      changedFields: [
+        'status',
+        'resolution_json',
+        'resolved_by_workspace_user_id',
+        ...(isQuestion ? ['application_state'] : [])
+      ]
+    });
+
+    if (isQuestion && existing.mission_id && existing.project_id && existing.session_id) {
+      const details = parseObject(existing.details_json);
+      const optionId = typeof resolution.optionId === 'string' ? resolution.optionId : null;
+      const options = parseOptions(existing.options_json);
+      const option = optionId ? options.find(candidate => candidate.optionId === optionId) : null;
+      const text = typeof resolution.text === 'string' ? resolution.text.trim() : '';
+      const answerEventId = newId();
+      await tx.run(
+        `INSERT INTO mission_events
+             (id, workspace_id, project_id, mission_id, objective_id, session_id,
+              type, phase, summary, payload_json, source, actor_workspace_user_id, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, 'answer', 'execute', ?, ?, ?, ?, ?)`,
+        [
+          answerEventId,
+          ctx.workspace.id,
+          existing.project_id,
+          existing.mission_id,
+          existing.objective_id,
+          existing.session_id,
+          (option?.label ?? text) || 'Answer received',
+          JSON.stringify({
+            agentRequestId: existing.id,
+            ...(optionId ? { optionId } : {}),
+            ...(typeof details.missionEventId === 'string'
+              ? { missionEventId: details.missionEventId }
+              : {})
+          }),
+          ctx.source,
+          ctx.actorWorkspaceUserId,
+          now
+        ]
+      );
+      await recordChange({
+        ctx: txCtx,
+        entityType: 'mission_event',
+        entityId: answerEventId,
+        operation: 'insert',
+        projectId: existing.project_id,
+        missionId: existing.mission_id,
+        objectiveId: existing.objective_id
+      });
+      await tx.run(
+        `UPDATE agent_sessions
+            SET phase = 'execute', updated_at = ?, revision = revision + 1
+          WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+        [now, existing.session_id, ctx.workspace.id]
+      );
+      await tx.run(
+        `DELETE FROM mission_status_seen WHERE mission_id = ? AND status_id = 'blocking_question'`,
+        [existing.mission_id]
+      );
+      await enqueueWebhookEvent(txCtx, {
+        type: 'mission.unblocked',
+        projectId: existing.project_id,
+        entity: {
+          missionId: existing.mission_id,
+          objectiveId: existing.objective_id,
+          sessionId: existing.session_id
+        }
+      });
+    }
+    return { resolved: true, request: await getRequest({ ctx: txCtx, requestId }) };
   });
-  return { resolved: true, request: await getRequest({ ctx, requestId }) };
+}
+
+function parseObject(value: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function parseOptions(value: string): AgentRequestOption[] {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? (parsed as AgentRequestOption[]) : [];
+  } catch {
+    return [];
+  }
 }
 
 /**

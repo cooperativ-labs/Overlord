@@ -747,8 +747,10 @@ export async function resolveClaimLaunchConfig({
   snapshot: AgentLaunchConfig;
   agentKey: string | null;
   claimingExecutionTargetId: string | null;
-  objectiveId: string;
+  /** Null for a queued capability call, which launches no agent. */
+  objectiveId: string | null;
 }): Promise<AgentLaunchConfig> {
+  if (objectiveId === null) return snapshot;
   if (!isAgentLaunchConfigEmpty(snapshot)) return snapshot;
 
   const key = agentKey?.trim();

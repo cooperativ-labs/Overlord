@@ -933,10 +933,12 @@ export const api = {
       };
     }>('POST', '/api/agent-session-inputs', body),
 
-  listAgentRequests: (missionId: string) =>
+  listAgentRequests: (missionId: string, objectiveId?: string | null) =>
     request<{ requests: AgentRequestDto[] }>(
       'GET',
-      `/api/agent-requests?missionId=${encodeURIComponent(missionId)}`
+      `/api/agent-requests?missionId=${encodeURIComponent(missionId)}${
+        objectiveId ? `&objectiveId=${encodeURIComponent(objectiveId)}` : ''
+      }`
     ),
   /**
    * Answer a request. `expectedRevision` is required by the server: a stale card must lose

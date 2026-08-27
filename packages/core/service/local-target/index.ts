@@ -52,12 +52,13 @@ export {
   resolveBackendResourceProvider
 } from './resource-status.ts';
 export * from './result.ts';
-export { RunnerQueueProvider } from './runner-queue-provider.ts';
+export { type RunnerQueueContext, RunnerQueueProvider } from './runner-queue-provider.ts';
 export * from './types.ts';
 export {
   collectManagedWorktrees,
   purgeManagedWorktrees,
   removeManagedWorktree,
+  resolveManagedWorktreeRoot,
   resolveRealPath,
   worktreeIsDirty,
   worktreePathForBranch

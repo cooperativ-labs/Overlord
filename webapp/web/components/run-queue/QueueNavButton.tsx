@@ -14,6 +14,13 @@ import { useAllProjects, useMeta, useProjectRunQueues } from '@/lib/queries.ts';
 import { cn } from '@/lib/utils.ts';
 
 import { RunQueuePanel } from './RunQueuePanel.tsx';
+import { useResizableSheetWidth } from './use-resizable-sheet-width.ts';
+
+const WIDTH_STORAGE_KEY = 'run-queue-sheet-width';
+/** Matches the sheet's previous fixed `sm:max-w-96`. */
+const DEFAULT_WIDTH = 384;
+const MIN_WIDTH = 320;
+const MAX_WIDTH = 1024;
 
 /**
  * The single Run Queue entry point. It lives in the nav header so the queue is
@@ -28,6 +35,12 @@ export function QueueNavButton() {
   const resolvedProjectId =
     projectId ?? meta.data?.defaultProjectId ?? projects.data?.[0]?.id ?? null;
   const queues = useProjectRunQueues(resolvedProjectId ?? '');
+  const { width, isResizable, onResizePointerDown } = useResizableSheetWidth({
+    storageKey: WIDTH_STORAGE_KEY,
+    defaultWidth: DEFAULT_WIDTH,
+    minWidth: MIN_WIDTH,
+    maxWidth: MAX_WIDTH
+  });
   /* Green means the queue is doing something right now: an entry has been
    * dispatched (launching) or has a live session (executing). */
   const hasActiveEntry = Boolean(
@@ -54,11 +67,23 @@ export function QueueNavButton() {
         <ListOrdered />
         <span className="hidden md:inline">Queue</span>
       </Button>
+      {/* The inline width wins over the responsive classes once the sheet is
+       * wide enough to be resizable; below `sm` it stays full width. */}
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent
           side="right"
-          className="overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-96"
+          className="overflow-y-auto data-[side=right]:w-full data-[side=right]:sm:max-w-none"
+          style={width === null ? undefined : { width, maxWidth: width }}
         >
+          {isResizable ? (
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize run queue panel"
+              className="absolute inset-y-0 left-0 z-10 w-1.5 cursor-col-resize touch-none hover:bg-accent/20"
+              onPointerDown={onResizePointerDown}
+            />
+          ) : null}
           <SheetHeader>
             <SheetTitle>Run Queue</SheetTitle>
             <SheetDescription>
