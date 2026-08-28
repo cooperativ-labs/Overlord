@@ -68,17 +68,22 @@ export function DraftObjective({
           : 'border-muted-foreground/20',
         isLaunching && 'border-sky-400/45 bg-sky-500/5 focus-within:ring-sky-400/30'
       )}
-      onFocusCapture={() => {
-        if (isFuture) setIsFutureExpanded(true);
-      }}
     >
-      {/* Instruction body — future objectives collapse until focused */}
+      {/* Instruction body — future objectives collapse until the instruction
+          text itself is focused. The expand-on-focus listener lives on this
+          body rather than the whole card so that footer controls (run queue,
+          actions menu, resource/agent pickers, Promote) never change the
+          card's height: focusing them — or the popovers they open — must
+          neither expand a collapsed card nor collapse an expanded one. */}
       <div
         className={cn(
           'relative px-3 pb-2 pt-3 transition-[max-height] duration-200 ease-in-out',
           isFuture && !isFutureExpanded && 'max-h-13 overflow-hidden',
           isFuture && isFutureExpanded && 'max-h-[500px] overflow-y-auto'
         )}
+        onFocusCapture={() => {
+          if (isFuture) setIsFutureExpanded(true);
+        }}
       >
         <div className={cn('text-sm leading-relaxed', isFuture && 'text-muted-foreground')}>
           <InlineEditField
@@ -86,7 +91,11 @@ export function DraftObjective({
             value={objective.instructionText}
             className="text-base text-foreground/90 font-medium whitespace-pre-wrap"
             inputClassName="text-base text-foreground/90 font-medium whitespace-pre-wrap"
-            minRows={objective.state === 'draft' ? 2 : undefined}
+            // Always set a minimum so the display span and the editor share
+            // the same box (min-height, block layout, 360px cap). A footer
+            // click blurs the editor and commits back to display mode; without
+            // parity that swap shrank one-line and very long objectives.
+            minRows={objective.state === 'draft' ? 2 : 1}
             placeholder="Describe what the agent should do… (@ file, # project, $ mission)"
             ariaLabel="Objective instruction"
             commitEmpty={objective.state === 'future' || objective.state === 'draft'}

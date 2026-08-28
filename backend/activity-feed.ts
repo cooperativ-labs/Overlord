@@ -1,6 +1,6 @@
 import { PERMISSIONS } from '@overlord/auth';
 import { sortObjectivesForMissionDisplay } from '@overlord/automations';
-import { formatObjectiveDisplayId, type DatabaseClient } from '@overlord/database';
+import { type DatabaseClient, formatObjectiveDisplayId } from '@overlord/database';
 
 import type {
   ActivityFeedDto,

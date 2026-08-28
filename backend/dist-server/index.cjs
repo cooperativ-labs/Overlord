@@ -150287,7 +150287,12 @@ async function deleteProject(id) {
     );
   });
 }
-var missionHasUnseenBlockingQuestionSql = `
+function jsonTextFieldSql(column, field, dialect) {
+  return dialect === "postgres" ? `${column}->>'${field}'` : `json_extract(${column}, '$.${field}')`;
+}
+function missionHasUnseenBlockingQuestionSql(dialect) {
+  const answerRequestId = jsonTextFieldSql("answer.payload_json", "agentRequestId", dialect);
+  return `
          (SELECT COUNT(*) > 0 FROM mission_events me
             WHERE me.mission_id = t.id AND me.type = 'ask'
               AND NOT EXISTS (
@@ -150295,7 +150300,7 @@ var missionHasUnseenBlockingQuestionSql = `
                  JOIN mission_events answer
                    ON answer.mission_id = me.mission_id
                   AND answer.type = 'answer'
-                  AND answer.payload_json LIKE '%' || '"agentRequestId":"' || ar.id || '"%'
+                  AND ${answerRequestId} = ar.id
                 WHERE ar.source_event_id = me.id AND ar.deleted_at IS NULL
               )
               AND (
@@ -150305,6 +150310,7 @@ var missionHasUnseenBlockingQuestionSql = `
                   WHERE mss.mission_id = t.id AND mss.status_id = 'blocking_question')
               ))
             AS has_unseen_blocking_question`;
+}
 var missionHasUnseenReturnedToExecuteSql = `
          (CASE WHEN t.returned_to_execute_at IS NOT NULL
                     AND (
@@ -150315,7 +150321,8 @@ var missionHasUnseenReturnedToExecuteSql = `
                     )
                THEN 1 ELSE 0 END)
             AS has_unseen_returned_to_execute`;
-var selectMissionsSql = `
+function selectMissionsSql(dialect) {
+  return `
   SELECT t.id, t.workspace_id, t.project_id, t.display_id, t.sequence_number, t.title,
          t.status_id, t.status_type, t.board_position, t.priority,
          t.assigned_workspace_user_id,
@@ -150344,7 +150351,7 @@ var selectMissionsSql = `
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL
               AND o.state IN ('draft', 'future') AND TRIM(o.instruction_text) != '')
             AS has_pending_objective_with_instructions,
-${missionHasUnseenBlockingQuestionSql},
+${missionHasUnseenBlockingQuestionSql(dialect)},
 ${missionHasUnseenReturnedToExecuteSql},
          (SELECT o.resource_key FROM objectives o
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'draft'
@@ -150352,6 +150359,7 @@ ${missionHasUnseenReturnedToExecuteSql},
   FROM missions t
   WHERE t.workspace_id = ? AND t.deleted_at IS NULL
 `;
+}
 async function getObjectivesByMission(missionIds, db = requireDatabaseClient()) {
   const byMission = /* @__PURE__ */ new Map();
   if (missionIds.length === 0) return byMission;
@@ -150394,8 +150402,9 @@ async function listMissions(projectId, options = {}) {
   if (options.includeObjectives) {
     await requireProjectPermission({ projectId, permission: PERMISSIONS.OBJECTIVE_READ });
   }
-  const rows = await requireDatabaseClient().all(
-    `${selectMissionsSql} AND t.project_id = ?
+  const db = requireDatabaseClient();
+  const rows = await db.all(
+    `${selectMissionsSql(db.dialect)} AND t.project_id = ?
          ORDER BY t.board_position ASC, t.sequence_number DESC`,
     [workspaceId2, projectId]
   );
@@ -150413,7 +150422,7 @@ async function hydrateMissionDtos({
 }) {
   if (missionIds.length === 0) return [];
   const rows = await client.all(
-    `${selectMissionsSql} AND t.id IN (${missionIds.map(() => "?").join(", ")})`,
+    `${selectMissionsSql(client.dialect)} AND t.id IN (${missionIds.map(() => "?").join(", ")})`,
     [workspaceId2, ...missionIds]
   );
   const byId = new Map(rows.map((row) => [row.id, row]));
@@ -150728,7 +150737,10 @@ async function getMissionRow(missionRef, db = requireDatabaseClient(), permissio
     permission,
     db
   });
-  const row = await db.get(`${selectMissionsSql} AND t.id = ?`, [workspaceId2, missionId]);
+  const row = await db.get(`${selectMissionsSql(db.dialect)} AND t.id = ?`, [
+    workspaceId2,
+    missionId
+  ]);
   if (!row) throw new ApiError(404, "Mission not found");
   return row;
 }
@@ -152399,7 +152411,7 @@ async function callerMembershipsInActiveOrganization(client = requireDatabaseCli
     workspaceUserId: row.workspace_user_id
   }));
 }
-function selectMyMissionsSql(pairPlaceholders) {
+function selectMyMissionsSql(pairPlaceholders, dialect) {
   return `
   SELECT t.id, t.workspace_id, t.project_id, t.display_id, t.sequence_number, t.title,
          t.status_id, t.status_type, t.board_position, t.priority,
@@ -152429,7 +152441,7 @@ function selectMyMissionsSql(pairPlaceholders) {
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL
               AND o.state IN ('draft', 'future') AND TRIM(o.instruction_text) != '')
             AS has_pending_objective_with_instructions,
-${missionHasUnseenBlockingQuestionSql},
+${missionHasUnseenBlockingQuestionSql(dialect)},
 ${missionHasUnseenReturnedToExecuteSql},
          (SELECT o.resource_key FROM objectives o
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'draft'
@@ -152458,8 +152470,9 @@ async function listWorkspaceMyMissions() {
   if (readableMemberships.length === 0) return { missions: [] };
   const pairPlaceholders = readableMemberships.map(() => "(?, ?)").join(", ");
   const pairParams = readableMemberships.flatMap((m3) => [m3.workspaceId, m3.workspaceUserId]);
-  const rows = await requireDatabaseClient().all(
-    `${selectMyMissionsSql(pairPlaceholders)}
+  const db = requireDatabaseClient();
+  const rows = await db.all(
+    `${selectMyMissionsSql(pairPlaceholders, db.dialect)}
          ORDER BY (mtp.position IS NULL) ASC, mtp.position ASC,
                   t.board_position ASC, t.updated_at DESC, t.sequence_number DESC, t.id ASC`,
     pairParams
@@ -152479,7 +152492,7 @@ function inboxDueWindow(now2) {
     dueSoonEnd: new Date(startOfToday + 2 * dayMs).toISOString()
   };
 }
-function selectInboxMissionsSql(workspacePlaceholders) {
+function selectInboxMissionsSql(workspacePlaceholders, dialect) {
   return `
   SELECT t.id, t.workspace_id, t.project_id, t.display_id, t.sequence_number, t.title,
          t.status_id, t.status_type, t.board_position, t.priority,
@@ -152506,7 +152519,7 @@ function selectInboxMissionsSql(workspacePlaceholders) {
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL
               AND o.state IN ('draft', 'future') AND TRIM(o.instruction_text) != '')
             AS has_pending_objective_with_instructions,
-${missionHasUnseenBlockingQuestionSql},
+${missionHasUnseenBlockingQuestionSql(dialect)},
 ${missionHasUnseenReturnedToExecuteSql},
          (SELECT o.resource_key FROM objectives o
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'draft'
@@ -152546,7 +152559,7 @@ async function listInboxMissions() {
   const recentCutoff = new Date(now2.getTime() - INBOX_MISSION_RECENT_MS).toISOString();
   const dueWindow = inboxDueWindow(now2);
   const client = requireDatabaseClient();
-  const baseSql = selectInboxMissionsSql(workspacePlaceholders);
+  const baseSql = selectInboxMissionsSql(workspacePlaceholders, client.dialect);
   const overdueRows = await client.all(
     `${baseSql}
        AND t.due_datetime IS NOT NULL
@@ -165602,6 +165615,9 @@ function truncate(value, max) {
 function placeholders(count) {
   return new Array(count).fill("?").join(", ");
 }
+function jsonTextFieldSql2(column, field, dialect) {
+  return dialect === "postgres" ? `${column}->>'${field}'` : `json_extract(${column}, '$.${field}')`;
+}
 function resolveAgentIdentifier(...candidates) {
   for (const candidate of candidates) {
     const trimmed9 = candidate?.trim();
@@ -165727,7 +165743,10 @@ async function loadLatestEvents(objectiveIds) {
 var QUESTION_CONTEXT_COLUMNS = CONTEXT_COLUMNS.replace(/\bo\./g, "e.");
 async function loadQuestions(workspaceIds) {
   const askedAfter = new Date(Date.now() - QUESTION_MAX_AGE_MS).toISOString();
-  return await requireDatabaseClient().all(
+  const db = requireDatabaseClient();
+  const requestProvider = jsonTextFieldSql2("er.metadata_json", "provider", db.dialect);
+  const answerRequestId = jsonTextFieldSql2("answer.payload_json", "agentRequestId", db.dialect);
+  return await db.all(
     `SELECT ${QUESTION_CONTEXT_COLUMNS}, ${OBJECTIVE_PROVENANCE_COLUMNS},
             e.id AS event_id, e.objective_id, o.display_key AS objective_display_key,
             ar.id AS agent_request_id,
@@ -165735,7 +165754,7 @@ async function loadQuestions(workspaceIds) {
               SELECT 1 FROM execution_requests er
                WHERE er.launched_session_id = e.session_id
                  AND er.deleted_at IS NULL
-                 AND er.metadata_json LIKE '%"provider":"latch"%'
+                 AND ${requestProvider} = 'latch'
             ) THEN 'latch' ELSE 'read_only' END AS delivery_mode,
             e.summary, e.created_at, s.agent_identifier
        FROM mission_events e
@@ -165761,7 +165780,7 @@ async function loadQuestions(workspaceIds) {
            WHERE answer.mission_id = e.mission_id
              AND answer.type = 'answer'
              AND ar.id IS NOT NULL
-             AND answer.payload_json LIKE '%"agentRequestId":"' || ar.id || '"%'
+             AND ${answerRequestId} = ar.id
         )
       ORDER BY e.created_at DESC, e.id DESC
       LIMIT ?`,
