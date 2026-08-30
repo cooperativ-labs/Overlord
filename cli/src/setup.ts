@@ -244,7 +244,16 @@ async function configureAgentsForSetup(): Promise<SetupResult[]> {
     defaultValue: 'all'
   });
   const selected = parseAgentSelection(answer);
-  const results = selected.map(agentKey => setupConnector({ agentKey }));
+  const results: SetupResult[] = [];
+  for (const agentKey of selected) {
+    const configureCodexPermissions =
+      agentKey !== 'codex' ||
+      (await promptYesNo(
+        'Configure Codex permissions to allow it to communicate with the Overlord server?',
+        true
+      ));
+    results.push(setupConnector({ agentKey, configureCodexPermissions }));
+  }
   for (const result of results) {
     printHumanResult(result);
   }
@@ -609,6 +618,14 @@ export async function runAgentSetupCommand({
   const dryRun = flagBoolean(parsed.flags, '--dry-run');
   const home = flagValue(parsed.flags, '--home');
 
+  const shouldConfigureCodexPermissions = async (agentKey: string): Promise<boolean> => {
+    if (agentKey !== 'codex' || dryRun || json || !process.stdin.isTTY) return true;
+    return promptYesNo(
+      'Configure Codex permissions to allow it to communicate with the Overlord server?',
+      true
+    );
+  };
+
   if (!target) {
     const available = listAvailableConnectors();
     if (json) {
@@ -626,8 +643,19 @@ export async function runAgentSetupCommand({
 
   const results =
     target === 'all'
-      ? setupAllConnectors({ home, dryRun })
-      : [setupConnector({ agentKey: target, home, dryRun })];
+      ? setupAllConnectors({
+          home,
+          dryRun,
+          configureCodexPermissions: await shouldConfigureCodexPermissions('codex')
+        })
+      : [
+          setupConnector({
+            agentKey: target,
+            home,
+            dryRun,
+            configureCodexPermissions: await shouldConfigureCodexPermissions(target)
+          })
+        ];
 
   if (json) {
     printJson({ ok: true, dryRun, results });

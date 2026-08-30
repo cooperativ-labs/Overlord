@@ -392,6 +392,45 @@ test('an ambiguous result is reported verbatim and never resent', async () => {
   );
 });
 
+test('event-driven observer frames may interleave before the correlated result', async () => {
+  await withGateway(
+    {
+      onOpen: session => session.send(snapshot({ phase: 'idle', enabled: true })),
+      onMessage: (message, session) => {
+        session.send({
+          type: 'items_upserted',
+          generation: 'gen-1',
+          revision: 5,
+          items: [
+            {
+              id: 'message-1',
+              ordinal: 1,
+              createdAt: '2026-08-30T00:00:00Z',
+              kind: { type: 'message', role: 'assistant', text: 'done', status: 'complete' }
+            }
+          ]
+        });
+        session.send(stateChanged({ phase: 'working', enabled: false }));
+        session.send({
+          type: 'operation_result',
+          operationId: message.operationId,
+          status: 'accepted'
+        });
+      }
+    },
+    async gateway => {
+      const outcome = await sendLatchMessage({
+        providerSessionId: SESSION_ID,
+        operationId: 'req-event-driven',
+        text: 'continue',
+        gateway: { baseUrl: gateway.baseUrl, token: gateway.token }
+      });
+      assert.equal(outcome.status, 'accepted');
+      assert.equal(gateway.received.length, 1);
+    }
+  );
+});
+
 test('a conversation that drops after the send is ambiguous, not refused', async () => {
   await withGateway(
     {

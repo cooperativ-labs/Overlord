@@ -9,6 +9,7 @@ import { managedFileSourceExists } from '../dist/connector-core-render.js';
 import {
   inspectConnector,
   listAvailableConnectors,
+  mergeCodexConfig,
   parseConnectorManifestYaml,
   readConnectorManifest,
   setupConnector
@@ -268,6 +269,11 @@ test('codex setup merges marketplace and rules without corrupting managed hook c
     const rules = readFileSync(path.join(home, '.codex', 'rules', 'default.rules'), 'utf8');
     assert.ok(rules.includes('pattern = ["ovld", "protocol"]'));
 
+    const config = readFileSync(path.join(home, '.codex', 'config.toml'), 'utf8');
+    assert.ok(config.startsWith('default_permissions = "overlord"'));
+    assert.ok(config.includes('[permissions.overlord]'));
+    assert.ok(config.includes('"**.ovld.ai" = "allow"'));
+
     const hooks = JSON.parse(
       readFileSync(path.join(result.installPath, '.codex-plugin', 'hooks.json'), 'utf8')
     );
@@ -290,6 +296,29 @@ test('codex setup merges marketplace and rules without corrupting managed hook c
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
+});
+
+test('Codex permission config merge preserves unrelated settings and is idempotent', () => {
+  const existing = [
+    '# User configuration',
+    'model = "gpt-5"',
+    '',
+    '[features]',
+    'js_repl = true',
+    'experimental_feature = true',
+    '',
+    '[permissions.personal]',
+    'extends = ":workspace"',
+    ''
+  ].join('\n');
+  const merged = mergeCodexConfig(existing);
+
+  assert.ok(merged.includes('model = "gpt-5"'));
+  assert.ok(merged.includes('experimental_feature = true'));
+  assert.ok(merged.includes('[permissions.personal]'));
+  assert.ok(merged.includes('js_repl = false'));
+  assert.ok(merged.includes('network_proxy = true'));
+  assert.equal(mergeCodexConfig(merged), merged);
 });
 
 test('claude setup writes a local marketplace pointing at the installed plugin', () => {

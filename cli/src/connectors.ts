@@ -94,6 +94,91 @@ const CODEX_RULES_END = '# overlord:permissions:end';
 const CLAUDE_MARKETPLACE_NAME = 'overlord-local';
 const CLAUDE_PLUGIN_KEY = `overlord@${CLAUDE_MARKETPLACE_NAME}`;
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Add or replace one scalar in a TOML section without touching unrelated user configuration. */
+function setTomlScalar({
+  content,
+  section,
+  key,
+  value
+}: {
+  content: string;
+  section?: string;
+  key: string;
+  value: string;
+}): string {
+  const assignment = `${key} = ${value}`;
+  const keyPattern = new RegExp(`^([ \\t]*)${escapeRegExp(key)}[ \\t]*=.*$`, 'm');
+
+  if (!section) {
+    const firstSection = content.search(/^[ \t]*\[/m);
+    const prefix = firstSection === -1 ? content : content.slice(0, firstSection);
+    const suffix = firstSection === -1 ? '' : content.slice(firstSection);
+    if (keyPattern.test(prefix)) return content.replace(keyPattern, assignment);
+    return `${assignment}\n${prefix ? `\n${prefix.replace(/^\n+/, '')}` : ''}${suffix}`;
+  }
+
+  const header = new RegExp(`^[ \\t]*\\[${escapeRegExp(section)}\\][ \\t]*(?:#.*)?$`, 'm');
+  const match = header.exec(content);
+  if (!match || match.index === undefined) {
+    const separator = content.trimEnd() ? '\n\n' : '';
+    return `${content.trimEnd()}${separator}[${section}]\n${assignment}\n`;
+  }
+
+  const sectionStart = match.index;
+  const bodyStart = sectionStart + match[0].length;
+  const nextSectionOffset = content.slice(bodyStart).search(/^[ \t]*\[/m);
+  const sectionEnd = nextSectionOffset === -1 ? content.length : bodyStart + nextSectionOffset;
+  const body = content.slice(bodyStart, sectionEnd);
+  if (keyPattern.test(body)) {
+    return `${content.slice(0, bodyStart)}${body.replace(keyPattern, assignment)}${content.slice(sectionEnd)}`;
+  }
+  const normalizedBody = body.endsWith('\n') ? body : `${body}\n`;
+  return `${content.slice(0, bodyStart)}${normalizedBody}${assignment}\n${content.slice(sectionEnd)}`;
+}
+
+/**
+ * Merge the Overlord permission profile into Codex's global config. The narrowly
+ * targeted assignments are idempotent; all unrelated TOML, including other
+ * profiles and feature flags, remains untouched.
+ */
+export function mergeCodexConfig(existingContent: string): string {
+  let content = setTomlScalar({
+    content: existingContent,
+    key: 'default_permissions',
+    value: '"overlord"'
+  });
+  content = setTomlScalar({ content, section: 'features', key: 'js_repl', value: 'false' });
+  content = setTomlScalar({ content, section: 'features', key: 'network_proxy', value: 'true' });
+  content = setTomlScalar({
+    content,
+    section: 'permissions.overlord',
+    key: 'description',
+    value: '"Workspace access with ovld.ai network access."'
+  });
+  content = setTomlScalar({
+    content,
+    section: 'permissions.overlord',
+    key: 'extends',
+    value: '":workspace"'
+  });
+  content = setTomlScalar({
+    content,
+    section: 'permissions.overlord.network',
+    key: 'enabled',
+    value: 'true'
+  });
+  return setTomlScalar({
+    content,
+    section: 'permissions.overlord.network.domains',
+    key: '"**.ovld.ai"',
+    value: '"allow"'
+  });
+}
+
 /**
  * Locate the connector adapter source tree. The CLI package ships a copy under
  * `dist/connectors`, but source checkouts and development overrides are also
@@ -429,15 +514,18 @@ function mergeCodexRules(existingContent: string): string {
 function configureCodexHarness({
   home,
   installPath,
+  configurePermissions = true,
   dryRun = false
 }: {
   home: string;
   installPath: string;
+  configurePermissions?: boolean;
   dryRun?: boolean;
 }): string[] {
   const warnings: string[] = [];
   const marketplacePath = path.join(home, '.agents', 'plugins', 'marketplace.json');
   const rulesPath = path.join(home, '.codex', 'rules', 'default.rules');
+  const configPath = path.join(home, '.codex', 'config.toml');
   const legacyAgentsPath = path.join(home, '.codex', 'AGENTS.md');
   const hooksPath = path.join(installPath, '.codex-plugin', 'hooks.json');
 
@@ -467,6 +555,9 @@ function configureCodexHarness({
   if (dryRun) {
     warnings.push(`Would update Codex marketplace at ${marketplacePath}.`);
     warnings.push(`Would merge protocol permission rules into ${rulesPath}.`);
+    if (configurePermissions) {
+      warnings.push(`Would configure Overlord permissions in ${configPath}.`);
+    }
     if (existsSync(legacyAgentsPath)) {
       warnings.push(`Would remove legacy Codex bundle at ${legacyAgentsPath}.`);
     }
@@ -497,6 +588,11 @@ function configureCodexHarness({
   const existingRules = existsSync(rulesPath) ? readFileSync(rulesPath, 'utf8') : '';
   mkdirSync(path.dirname(rulesPath), { recursive: true });
   writeFileSync(rulesPath, mergeCodexRules(existingRules));
+
+  if (configurePermissions) {
+    const existingConfig = existsSync(configPath) ? readFileSync(configPath, 'utf8') : '';
+    writeFileSync(configPath, mergeCodexConfig(existingConfig));
+  }
 
   // hooks.json is a managed connector file whose commands deliberately use CODEX_PLUGIN_ROOT
   // with an installed-path fallback. Rewriting every handler in an event used to collapse the
@@ -638,10 +734,12 @@ function configureClaudeHarness({
 export function setupConnector({
   agentKey,
   home,
+  configureCodexPermissions = true,
   dryRun = false
 }: {
   agentKey: string;
   home?: string;
+  configureCodexPermissions?: boolean;
   dryRun?: boolean;
 }): SetupResult {
   const manifest = readConnectorManifest(agentKey);
@@ -738,7 +836,14 @@ export function setupConnector({
   }
 
   if (agentKey === 'codex') {
-    warnings.push(...configureCodexHarness({ home: resolvedHome, installPath, dryRun }));
+    warnings.push(
+      ...configureCodexHarness({
+        home: resolvedHome,
+        installPath,
+        configurePermissions: configureCodexPermissions,
+        dryRun
+      })
+    );
   }
 
   if (agentKey === 'claude') {
@@ -782,16 +887,20 @@ export function setupConnector({
 
 export function setupAllConnectors({
   home,
+  configureCodexPermissions = true,
   dryRun = false
 }: {
   home?: string;
+  configureCodexPermissions?: boolean;
   dryRun?: boolean;
 }): SetupResult[] {
   const agents = listAvailableConnectors();
   if (agents.length === 0) {
     throw new CliError({ message: 'No connector adapters found under connectors/adapters.' });
   }
-  return agents.map(agentKey => setupConnector({ agentKey, home, dryRun }));
+  return agents.map(agentKey =>
+    setupConnector({ agentKey, home, configureCodexPermissions, dryRun })
+  );
 }
 
 function readInstallState(agentKey: string, home: string): InstallState | null {

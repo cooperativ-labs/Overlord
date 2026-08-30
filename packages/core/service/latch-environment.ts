@@ -1,8 +1,10 @@
 /**
  * Environment guarantee for every Latch child process Overlord spawns.
  *
- * Latch separates tmux format fields with the U+001F unit separator. When the
- * tmux client runs without a UTF-8 locale — the default for Finder/launchd
+ * Latchd is the default kernel for new sessions, but existing sessions retain
+ * their recorded kernel and may still use Latch's tmux fallback. Latch separates
+ * tmux format fields with the U+001F unit separator. When that client runs
+ * without a UTF-8 locale — the default for Finder/launchd
  * launched processes such as the packaged desktop app or an installed runner
  * service — tmux sanitizes that control character to `_` in its output and
  * Latch can no longer split session rows, failing every `inspect`/`list` with

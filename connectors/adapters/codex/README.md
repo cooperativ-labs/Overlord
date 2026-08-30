@@ -29,7 +29,7 @@ From an OpenOverlord checkout:
 ovld agent-setup codex
 ```
 
-This copies managed plugin files to `~/.codex/plugins/overlord`, merges protocol permission rules into `~/.codex/rules/default.rules`, writes the personal marketplace entry at `~/.agents/plugins/marketplace.json`, and runs `codex plugin add overlord@overlord-local` when the Codex CLI is available.
+This copies managed plugin files to `~/.codex/plugins/overlord`, merges protocol permission rules into `~/.codex/rules/default.rules`, asks before merging the Overlord workspace permission profile into `~/.codex/config.toml`, writes the personal marketplace entry at `~/.agents/plugins/marketplace.json`, and runs `codex plugin add overlord@overlord-local` when the Codex CLI is available. The profile makes `overlord` the default, disables the JS REPL, enables Codex's network proxy, and permits network access only to `**.ovld.ai`.
 
 Re-run safely any time the connector contract version changes:
 

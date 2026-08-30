@@ -97,6 +97,7 @@ Requirements:
   code changes.
 - Include permission hook to record tool permission requests.
 - Install protocol permission rules for `ovld protocol`.
+- During interactive Codex setup, ask `Configure Codex permissions to allow it to communicate with the Overlord server?` (default yes). On acceptance, merge the `overlord` workspace permission profile into `~/.codex/config.toml`: make it the default permission profile, disable `js_repl`, enable the network proxy, and allow only `**.ovld.ai` network access for that profile. Non-interactive `ovld agent-setup codex` applies the same idempotent merge so scripted setup remains usable.
 - Avoid generating or relying on a repository-local `AGENTS.md` for Overlord itself.
 - Detect or receive Codex native session/thread IDs when possible.
 - Launch with model and reasoning effort mapping:
