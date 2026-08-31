@@ -94,26 +94,26 @@ export const LAUNCH_VARIABLES: readonly LaunchVariableDefinition[] = [
   {
     name: 'OVERLORD_TMPDIR',
     description:
-      'Project-scoped scratch directory (`.overlord/tmp/`). Also mirrored as TMPDIR/TMP/TEMP.',
-    example: '/Users/you/src/overlord/.overlord/tmp',
+      'Private scratch directory for this launch (`.overlord/tmp/sessions/<objective>-<request>/`). Removed automatically when the session delivers; orphaned ones expire after 24h. Also mirrored as TMPDIR/TMP/TEMP.',
+    example: '/Users/you/src/overlord/.overlord/tmp/sessions/objective-coo-359-k7xm-4f1c',
     availableAt: ['plan_build', 'terminal_env']
   },
   {
     name: 'TMPDIR',
     description: 'Same path as OVERLORD_TMPDIR — standard temp-dir env name.',
-    example: '/Users/you/src/overlord/.overlord/tmp',
+    example: '/Users/you/src/overlord/.overlord/tmp/sessions/objective-coo-359-k7xm-4f1c',
     availableAt: ['plan_build', 'terminal_env']
   },
   {
     name: 'TMP',
     description: 'Same path as OVERLORD_TMPDIR — Windows-style temp-dir alias.',
-    example: '/Users/you/src/overlord/.overlord/tmp',
+    example: '/Users/you/src/overlord/.overlord/tmp/sessions/objective-coo-359-k7xm-4f1c',
     availableAt: ['plan_build', 'terminal_env']
   },
   {
     name: 'TEMP',
     description: 'Same path as OVERLORD_TMPDIR — Windows-style temp-dir alias.',
-    example: '/Users/you/src/overlord/.overlord/tmp',
+    example: '/Users/you/src/overlord/.overlord/tmp/sessions/objective-coo-359-k7xm-4f1c',
     availableAt: ['plan_build', 'terminal_env']
   },
   {

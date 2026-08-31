@@ -11,6 +11,7 @@ await bootstrapIntegrationTestDb({ sqlitePath: path.join(tempDir, 'webapp.sqlite
 
 const { createProject, createProjectResource } = await import('./repository.ts');
 const { runProtocolSubcommand } = await import('./protocol.ts');
+const { db } = await import('./db.ts');
 
 type CreatedMission = {
   mission: { id: string };
@@ -82,4 +83,73 @@ test('PM protocol commands preserve delivery, launch, and future-order service b
   assert.equal(deliveries[0]?.objectiveId, deliveredObjective.id);
   assert.equal(deliveries[0]?.summary, 'Delivered evidence is visible to PM agents.');
   assert.deepEqual(deliveries[0]?.report.agentReport.humanActions, []);
+});
+
+test('confirmed bulk protocol deletion is atomic for mission and objective lists', async () => {
+  const project = await createProject({ name: `Bulk deletion ${Date.now()}` });
+  const firstMission = (await runProtocolSubcommand('create', {
+    flags: { '--project-id': project.id, '--objective': 'Delete first mission' }
+  })) as CreatedMission;
+  const secondMission = (await runProtocolSubcommand('create', {
+    flags: {
+      '--project-id': project.id,
+      '--objectives-json': JSON.stringify([
+        { objective: 'Delete first objective' },
+        { objective: 'Delete second objective' }
+      ])
+    }
+  })) as CreatedMission;
+
+  await assert.rejects(
+    () =>
+      runProtocolSubcommand('delete-missions', {
+        flags: { '--mission-ids-json': JSON.stringify([firstMission.mission.id]) }
+      }),
+    /requires --confirm/
+  );
+  assert.equal(
+    (
+      db.prepare('SELECT deleted_at FROM missions WHERE id = ?').get(firstMission.mission.id) as {
+        deleted_at: string | null;
+      }
+    ).deleted_at,
+    null
+  );
+
+  await assert.rejects(
+    () =>
+      runProtocolSubcommand('delete-missions', {
+        flags: {
+          '--mission-ids-json': JSON.stringify([firstMission.mission.id, 'missing-mission']),
+          '--confirm': true
+        }
+      }),
+    /Mission not found/
+  );
+  assert.equal(
+    (
+      db.prepare('SELECT deleted_at FROM missions WHERE id = ?').get(firstMission.mission.id) as {
+        deleted_at: string | null;
+      }
+    ).deleted_at,
+    null
+  );
+
+  const deletedMissions = (await runProtocolSubcommand('delete-missions', {
+    flags: {
+      '--mission-ids-json': JSON.stringify([firstMission.mission.id]),
+      '--confirm': true
+    }
+  })) as { deletedMissionIds: string[] };
+  assert.deepEqual(deletedMissions.deletedMissionIds, [firstMission.mission.id]);
+
+  const [firstObjective, secondObjective] = secondMission.objectives;
+  assert.ok(firstObjective && secondObjective);
+  const deletedObjectives = (await runProtocolSubcommand('delete-objectives', {
+    flags: {
+      '--objective-ids-json': JSON.stringify([firstObjective.displayId, secondObjective.id]),
+      '--confirm': true
+    }
+  })) as { deletedObjectiveIds: string[] };
+  assert.deepEqual(deletedObjectives.deletedObjectiveIds, [firstObjective.id, secondObjective.id]);
 });

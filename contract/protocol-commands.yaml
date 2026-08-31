@@ -12,7 +12,7 @@
 # entry) are intentionally not listed here: `capture-change` and `changes`. See
 # CONTRACT.md's contract-version-2 changelog entry for the precedent.
 
-contractVersion: '129'
+contractVersion: '130'
 referenceSpec: 'cli/docs/03-agent-protocol.md'
 
 # Transport-level shape shared by every protocol command, independent of subcommand.
@@ -575,6 +575,33 @@ missionDiscovery:
     sideEffects:
       - updates-objective-auto-advance
       - updates-objective-instruction-text
+
+  deleteMissions:
+    description: 'Atomically soft-delete an explicitly confirmed list of missions'
+    requiredFlags:
+      - --mission-ids-json | --mission-ids-file
+      - --confirm
+    responseShape: '{ deletedMissionIds: string[] }'
+    rules:
+      - 'Accepts one to 100 unique mission UUID or display-id references. Every target is resolved and authorized with mission:delete before any write; an invalid, duplicate, deleted, or unauthorized target rejects the whole request.'
+      - 'Agents MUST show the resolved list to the user and obtain an affirmative response before passing --confirm. --confirm is required and must be the literal boolean flag, not an inferred default.'
+      - 'Soft-deletes each mission and its live objectives in one transaction, preserving existing deletion change-feed semantics.'
+    sideEffects:
+      - atomically-soft-deletes-missions-and-live-objectives
+
+  deleteObjectives:
+    description: 'Atomically soft-delete an explicitly confirmed list of objectives'
+    requiredFlags:
+      - --objective-ids-json | --objective-ids-file
+      - --confirm
+    responseShape: '{ deletedObjectiveIds: string[] }'
+    rules:
+      - 'Accepts one to 100 unique objective UUID or display-id references. Every target is resolved and authorized with objective:update before any write; an invalid, duplicate, deleted, or unauthorized target rejects the whole request.'
+      - 'Agents MUST show the resolved list to the user and obtain an affirmative response before passing --confirm. --confirm is required and must be the literal boolean flag, not an inferred default.'
+      - 'Soft-deletes each objective in one transaction and preserves existing Run Queue cleanup and deletion change-feed semantics.'
+    sideEffects:
+      - atomically-soft-deletes-objectives
+      - dequeues-deleted-objectives
 
   recordWork:
     description: 'Record already-completed chat work as a review mission without an attached session'

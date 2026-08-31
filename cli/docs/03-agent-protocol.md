@@ -96,6 +96,14 @@ Requirements:
 - `update-objective`: maps `--auto-advance` / `--no-auto-advance` to queue
   membership and can edit instruction text on draft/future objectives. The
   returned `autoAdvance` field is deprecated and derived from `queueEntry`.
+- `delete-missions` and `delete-objectives`: atomically soft-delete one to 100
+  unique mission or objective UUID/display-id references from
+  `--mission-ids-json` / `--objective-ids-json` (or the matching file flag).
+  Both require `--confirm`. Before passing that flag, an agent must show the
+  fully resolved target list to the user and receive an affirmative response.
+  Any duplicate, missing, deleted, or unauthorized target rejects the complete
+  request without deleting a subset. Mission deletion also deletes live child
+  objectives; objective deletion removes live Run Queue membership.
 - `record-work`: record already-completed chat work as a review mission with completed objective and delivery record.
 
 ### Addressing A Mission Or An Objective

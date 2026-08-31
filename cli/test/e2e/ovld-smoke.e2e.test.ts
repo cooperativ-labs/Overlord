@@ -46,6 +46,28 @@ test('ovld protocol help prints agent lifecycle reference without a backend', as
   assert.doesNotMatch(result.stdout, /claim-execution/);
 });
 
+test('every protocol subcommand has dedicated help without a backend', async () => {
+  const { SUPPORTED_PROTOCOL_SUBCOMMANDS } = await import('../../src/protocol-help.ts');
+
+  for (const subcommand of SUPPORTED_PROTOCOL_SUBCOMMANDS) {
+    const result = await runOvld({ args: ['protocol', subcommand, '--help'] });
+
+    assert.equal(result.exitCode, 0, `${subcommand}: ${result.stderr}`);
+    assert.match(result.stdout, new RegExp(`^ovld protocol ${subcommand}\\n`));
+    assert.match(result.stdout, /Purpose:/, subcommand);
+  }
+});
+
+test('ovld protocol help accepts a subcommand name', async () => {
+  const result = await runOvld({ args: ['protocol', 'help', 'delete-missions'] });
+
+  assert.equal(result.exitCode, 0, result.stderr);
+  assert.match(result.stdout, /^ovld protocol delete-missions\n/);
+  assert.match(result.stdout, /--mission-ids-json <json> or --mission-ids-file <path\|->/);
+  assert.match(result.stdout, /--confirm/);
+  assert.doesNotMatch(result.stdout, /^delete-objectives:$/m);
+});
+
 test('ovld rejects unknown commands with a non-zero exit', async () => {
   const result = await runOvld({ args: ['not-a-command'] });
 

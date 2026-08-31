@@ -5873,35 +5873,128 @@ export async function updateMission(
   return getMissionDetail(id);
 }
 
-export async function deleteMission(id: string): Promise<void> {
-  await requireDatabaseClient().transaction(async tx => {
-    const existing = await getMissionRow(id, tx, PERMISSIONS.MISSION_DELETE);
-    const now = nowIso();
-    const revision = existing.revision + 1;
-    // Soft-delete the mission and its objectives so referential integrity holds.
-    await tx.run(
-      `UPDATE objectives SET deleted_at = ?, revision = revision + 1
-       WHERE mission_id = ? AND deleted_at IS NULL`,
-      [now, id]
-    );
-    await tx.run(
-      `UPDATE missions SET deleted_at = ?, revision = ?
-       WHERE id = ? AND workspace_id = ?`,
-      [now, revision, id, existing.workspace_id]
-    );
+export async function deleteMissions(
+  missionRefs: string[]
+): Promise<{ deletedMissionIds: string[] }> {
+  if (missionRefs.length === 0) throw new ApiError(400, 'At least one mission is required');
 
-    await recordChange(
-      {
-        entityType: 'mission',
-        entityId: id,
-        operation: 'delete',
-        entityRevision: revision,
+  return requireDatabaseClient().transaction(async tx => {
+    const missions: MissionRow[] = [];
+    for (const missionRef of missionRefs) {
+      missions.push(await getMissionRow(missionRef, tx, PERMISSIONS.MISSION_DELETE));
+    }
+    if (new Set(missions.map(mission => mission.id)).size !== missions.length) {
+      throw new ApiError(400, 'missionIds contains duplicate missions');
+    }
+
+    const now = nowIso();
+    for (const existing of missions) {
+      const revision = existing.revision + 1;
+      // Soft-delete the mission and its objectives so referential integrity holds.
+      await tx.run(
+        `UPDATE objectives SET deleted_at = ?, revision = revision + 1
+         WHERE mission_id = ? AND deleted_at IS NULL`,
+        [now, existing.id]
+      );
+      await tx.run(
+        `UPDATE missions SET deleted_at = ?, revision = ?
+         WHERE id = ? AND workspace_id = ?`,
+        [now, revision, existing.id, existing.workspace_id]
+      );
+
+      await recordChange(
+        {
+          entityType: 'mission',
+          entityId: existing.id,
+          operation: 'delete',
+          entityRevision: revision,
+          projectId: existing.project_id,
+          missionId: existing.id,
+          workspaceId: existing.workspace_id
+        },
+        tx
+      );
+    }
+
+    return { deletedMissionIds: missions.map(mission => mission.id) };
+  });
+}
+
+export async function deleteMission(id: string): Promise<void> {
+  await deleteMissions([id]);
+}
+
+export async function deleteObjectives(
+  objectiveRefs: string[]
+): Promise<{ deletedObjectiveIds: string[] }> {
+  if (objectiveRefs.length === 0) throw new ApiError(400, 'At least one objective is required');
+
+  return requireDatabaseClient().transaction(async tx => {
+    const objectives: Array<{
+      existing: ObjectiveRow;
+      workspaceId: string;
+      workspaceUserId: string;
+    }> = [];
+    for (const objectiveRef of objectiveRefs) {
+      const { workspaceId, workspaceUserId, objectiveId } = await requireObjectivePermission({
+        objectiveId: objectiveRef,
+        permission: PERMISSIONS.OBJECTIVE_UPDATE,
+        db: tx
+      });
+      const existing = (await tx.get(
+        `SELECT o.*, m.display_id AS mission_display_id
+           FROM objectives o
+           JOIN missions m ON m.id = o.mission_id
+          WHERE o.id = ? AND o.workspace_id = ? AND o.deleted_at IS NULL`,
+        [objectiveId, workspaceId]
+      )) as ObjectiveRow | undefined;
+      if (!existing) throw new ApiError(404, 'Objective not found');
+      objectives.push({ existing, workspaceId, workspaceUserId });
+    }
+    if (new Set(objectives.map(({ existing }) => existing.id)).size !== objectives.length) {
+      throw new ApiError(400, 'objectiveIds contains duplicate objectives');
+    }
+
+    const now = nowIso();
+    for (const { existing, workspaceId, workspaceUserId } of objectives) {
+      const revision = existing.revision + 1;
+      await tx.run(
+        `UPDATE objectives SET deleted_at = ?, revision = ?
+         WHERE id = ? AND workspace_id = ?`,
+        [now, revision, existing.id, workspaceId]
+      );
+
+      await recordChange(
+        {
+          entityType: 'objective',
+          entityId: existing.id,
+          operation: 'delete',
+          entityRevision: revision,
+          projectId: existing.project_id,
+          missionId: existing.mission_id,
+          objectiveId: existing.id,
+          workspaceId
+        },
+        tx
+      );
+
+      // A deleted objective must also leave the runner queue: the runner's claim
+      // query joins objectives without filtering soft-deletes, so stale queued
+      // requests could otherwise still be claimed.
+      await dequeueObjective({
+        objectiveId: existing.id,
         projectId: existing.project_id,
-        missionId: id,
-        workspaceId: existing.workspace_id
-      },
-      tx
-    );
+        missionId: existing.mission_id,
+        workspaceId,
+        workspaceUserId,
+        reason: 'deleted',
+        newState: null,
+        now,
+        tx
+      });
+    }
+
+    return { deletedObjectiveIds: objectives.map(({ existing }) => existing.id) };
   });
 }
 
@@ -7799,62 +7892,7 @@ export async function updateObjective(
 }
 
 export async function deleteObjective(idRef: string): Promise<void> {
-  await requireDatabaseClient().transaction(async tx => {
-    const {
-      workspaceId,
-      workspaceUserId,
-      objectiveId: id
-    } = await requireObjectivePermission({
-      objectiveId: idRef,
-      permission: PERMISSIONS.OBJECTIVE_UPDATE,
-      db: tx
-    });
-    const existing = (await tx.get(
-      `SELECT o.*, m.display_id AS mission_display_id
-         FROM objectives o
-         JOIN missions m ON m.id = o.mission_id
-        WHERE o.id = ? AND o.workspace_id = ? AND o.deleted_at IS NULL`,
-      [id, workspaceId]
-    )) as ObjectiveRow | undefined;
-    if (!existing) throw new ApiError(404, 'Objective not found');
-
-    const now = nowIso();
-    const revision = existing.revision + 1;
-    await tx.run(
-      `UPDATE objectives SET deleted_at = ?, revision = ?
-       WHERE id = ? AND workspace_id = ?`,
-      [now, revision, id, workspaceId]
-    );
-
-    await recordChange(
-      {
-        entityType: 'objective',
-        entityId: id,
-        operation: 'delete',
-        entityRevision: revision,
-        projectId: existing.project_id,
-        missionId: existing.mission_id,
-        objectiveId: id,
-        workspaceId
-      },
-      tx
-    );
-
-    // A deleted objective must also leave the runner queue: the runner's claim
-    // query joins objectives without filtering soft-deletes, so stale queued
-    // requests could otherwise still be claimed.
-    await dequeueObjective({
-      objectiveId: id,
-      projectId: existing.project_id,
-      missionId: existing.mission_id,
-      workspaceId,
-      workspaceUserId,
-      reason: 'deleted',
-      newState: null,
-      now,
-      tx
-    });
-  });
+  await deleteObjectives([idRef]);
 }
 
 // ---- Profile -------------------------------------------------------------

@@ -23,7 +23,7 @@ General:
   ${primaryCommand} doctor [--json]              Validate backend and connector installs
   ${primaryCommand} contract check <manifest-path> [--json]
                                                  Validate a conformance-manifest.yaml against the contract schema
-  ${primaryCommand} prune [--json]               Delete the contents of .overlord/tmp in the current directory
+  ${primaryCommand} prune [--force] [--json]     Delete the contents of .overlord/tmp (keeps live session scratch unless --force)
   ${primaryCommand} config list [--json]         Show local configuration
   ${primaryCommand} config set                   Choose local/cloud backend interactively
   ${primaryCommand} config set local [url]       Use a local backend URL (default: http://127.0.0.1:4310)

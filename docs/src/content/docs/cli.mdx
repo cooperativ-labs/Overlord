@@ -18,7 +18,7 @@ return JSON by default.
 | `ovld init [--json]`                                          | Create `overlord.toml` for a local backend.                                   |
 | `ovld serve [--host <h>] [--port <p>] [--db <path>] [--json]` | Start the local web and REST server.                                          |
 | `ovld doctor [--json]`                                        | Check the backend, connectors, agent binaries, and credentials.               |
-| `ovld prune [--json]`                                         | Delete temporary contents under `.overlord/tmp`.                              |
+| `ovld prune [--force] [--json]`                               | Delete temporary contents under `.overlord/tmp` (keeps live session scratch unless `--force`). |
 | `ovld setup [--json]`                                         | Interactive first-run setup for backend, agents, and terminal.                |
 | `ovld contract check <manifest-path> [--json]`                | Validate a component conformance manifest. This is for component maintainers. |
 

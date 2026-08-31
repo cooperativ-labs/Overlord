@@ -322,6 +322,18 @@ test('PM-management MCP tools preserve the protocol contracts', () => {
   assert.equal(reorder.annotations?.readOnlyHint, false);
   assert.deepEqual(reorder.inputSchema.required, ['missionId', 'orderedObjectiveIds']);
   assert.match(reorder.description, /every future objective UUID/);
+
+  for (const [name, listProperty] of [
+    ['overlord_delete_missions', 'missionIds'],
+    ['overlord_delete_objectives', 'objectiveIds']
+  ] as const) {
+    const tool = hostedMcpToolDefinitions.find(definition => definition.name === name);
+    assert.ok(tool, `${name} is published`);
+    assert.equal(tool.annotations?.destructiveHint, true);
+    assert.deepEqual(tool.inputSchema.required, [listProperty, 'confirm']);
+    assert.equal((tool.inputSchema.properties as Record<string, any>).confirm.type, 'boolean');
+    assert.match(tool.description, /affirmative response/);
+  }
 });
 
 test('Run Queue MCP tools map arguments to Protocol flags and retain the compact read shape', () => {

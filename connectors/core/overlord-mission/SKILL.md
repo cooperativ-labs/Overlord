@@ -173,8 +173,9 @@ opened file, and never make a separate call just to declare paths.
 Artifacts, optional change rationales, and a delivery report remain current annotations when
 they add review value. Use `--payload-json` when the full delivery object fits comfortably inline
 (roughly under 8 KB). Larger inline `--*-json` values are rejected; stream them through the
-corresponding `--*-file -` flag. A real scratch path belongs under `.overlord/tmp` and should be
-removed after delivery.
+corresponding `--*-file -` flag. A real scratch path belongs under `$OVERLORD_TMPDIR` (this launch's private
+`.overlord/tmp/sessions/<id>/` directory); `deliver` removes that directory for you, and nothing
+else under `.overlord/tmp` is yours to delete.
 
 If `heartbeat` succeeds but `deliver` or `update` fails, the session is likely fine — retry with the corresponding `--*-file -` flag instead of inline `--*-json`.
 

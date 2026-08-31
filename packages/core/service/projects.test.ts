@@ -5,10 +5,14 @@ import { describe, it } from 'node:test';
 import { ensureCallerDeviceTarget } from './execution-targets.js';
 import {
   addProjectResource,
+  assertPrimaryResourceConnected,
   createProject,
   deriveProjectResourceKey,
   discoverProject,
-  resolveCwdProjectResource
+  findPrimaryProjectResource,
+  listProjectResources,
+  resolveCwdProjectResource,
+  resolveObjectiveWorkingDirectory
 } from './projects.js';
 import { createIsolatedCheckout } from './test-checkout.ts';
 import { createSeededServiceContext } from './test-helpers.js';
@@ -227,6 +231,148 @@ describe('discoverProject multi-project checkout', () => {
     });
     assert.ok(secondaryCwd);
     assert.equal(secondaryCwd?.resource.projectId, secondaryProject.id);
+
+    await db.close();
+  });
+});
+
+describe('multi-source resource resolution', () => {
+  it('resolves the local checkout, not the git URL, when a resource carries both', async () => {
+    const { db, ctx } = await createSeededServiceContext({ source: 'cli' });
+    const project = await createProject({ ctx, name: 'Multi source project' });
+    const localTarget = await ensureCallerDeviceTarget({ ctx });
+    const checkout = createIsolatedCheckout('ovld-multi-source-');
+    const now = nowIso();
+    const resourceId = newId();
+
+    await db.run(
+      `INSERT INTO project_resources
+         (id, workspace_id, project_id, resource_key, label, is_primary, status,
+          metadata_json, created_at, updated_at, revision)
+       VALUES (?, ?, ?, 'primary', 'Primary', 1, 'active', '{}', ?, ?, 1)`,
+      [resourceId, ctx.workspace.id, project.id, now, now]
+    );
+
+    const insertSource = async (
+      id: string,
+      sourceKind: string,
+      executionTargetId: string | null,
+      descriptor: Record<string, string>
+    ): Promise<void> => {
+      await db.run(
+        `INSERT INTO project_resource_sources
+           (id, workspace_id, project_id, resource_id, execution_target_id, source_kind,
+            descriptor_json, created_at, updated_at, revision)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+        [
+          id,
+          ctx.workspace.id,
+          project.id,
+          resourceId,
+          executionTargetId,
+          sourceKind,
+          JSON.stringify(descriptor),
+          now,
+          now
+        ]
+      );
+    };
+
+    // The project-global git source is written first on purpose: creation order
+    // used to decide which source the launch lookup returned, and a repository
+    // URL has no runnable directory.
+    await insertSource(`${resourceId}-git`, 'git', null, {
+      url: 'https://github.com/example/repo.git'
+    });
+    await insertSource(`${resourceId}-local`, 'local_checkout', localTarget.executionTargetId, {
+      path: checkout
+    });
+
+    const primary = await findPrimaryProjectResource({
+      ctx,
+      projectId: project.id,
+      executionTargetId: localTarget.executionTargetId
+    });
+    assert.equal(primary?.type, 'local_directory');
+    assert.equal(primary?.path, checkout);
+
+    const connected = await assertPrimaryResourceConnected({
+      ctx,
+      projectId: project.id,
+      executionTargetId: localTarget.executionTargetId
+    });
+    assert.equal(connected.workingDirectory, path.resolve(checkout));
+
+    const resolved = await resolveObjectiveWorkingDirectory({
+      ctx,
+      projectId: project.id,
+      executionTargetId: localTarget.executionTargetId
+    });
+    assert.equal(resolved.workingDirectory, path.resolve(checkout));
+    assert.equal(resolved.resourceId, resourceId);
+
+    // The join fans one row per source; callers still see one logical resource.
+    const listed = await listProjectResources({ ctx, projectId: project.id });
+    assert.equal(listed.filter(entry => entry.id === resourceId).length, 1);
+    assert.equal(listed.find(entry => entry.id === resourceId)?.type, 'local_directory');
+
+    await db.close();
+  });
+
+  it('resolves an objective-bound resource key to its local checkout', async () => {
+    const { db, ctx } = await createSeededServiceContext({ source: 'cli' });
+    const project = await createProject({ ctx, name: 'Bound key multi source' });
+    const localTarget = await ensureCallerDeviceTarget({ ctx });
+    const checkout = createIsolatedCheckout('ovld-bound-key-');
+    const now = nowIso();
+    const resourceId = newId();
+
+    await db.run(
+      `INSERT INTO project_resources
+         (id, workspace_id, project_id, resource_key, label, is_primary, status,
+          metadata_json, created_at, updated_at, revision)
+       VALUES (?, ?, ?, 'mobile', 'Mobile', 0, 'active', '{}', ?, ?, 1)`,
+      [resourceId, ctx.workspace.id, project.id, now, now]
+    );
+    await db.run(
+      `INSERT INTO project_resource_sources
+         (id, workspace_id, project_id, resource_id, execution_target_id, source_kind,
+          descriptor_json, created_at, updated_at, revision)
+       VALUES (?, ?, ?, ?, NULL, 'git', ?, ?, ?, 1)`,
+      [
+        `${resourceId}-git`,
+        ctx.workspace.id,
+        project.id,
+        resourceId,
+        JSON.stringify({ url: 'https://github.com/example/mobile.git' }),
+        now,
+        now
+      ]
+    );
+    await db.run(
+      `INSERT INTO project_resource_sources
+         (id, workspace_id, project_id, resource_id, execution_target_id, source_kind,
+          descriptor_json, created_at, updated_at, revision)
+       VALUES (?, ?, ?, ?, ?, 'local_checkout', ?, ?, ?, 1)`,
+      [
+        `${resourceId}-local`,
+        ctx.workspace.id,
+        project.id,
+        resourceId,
+        localTarget.executionTargetId,
+        JSON.stringify({ path: checkout }),
+        now,
+        now
+      ]
+    );
+
+    const resolved = await resolveObjectiveWorkingDirectory({
+      ctx,
+      projectId: project.id,
+      objectiveResourceKey: 'mobile',
+      executionTargetId: localTarget.executionTargetId
+    });
+    assert.equal(resolved.workingDirectory, path.resolve(checkout));
 
     await db.close();
   });

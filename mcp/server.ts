@@ -477,6 +477,33 @@ const toolHandlers: Record<string, ToolHandler> = {
       })
     );
   },
+  overlord_delete_missions: args => {
+    if (!Array.isArray(args.missionIds) || !args.missionIds.every(id => typeof id === 'string')) {
+      throw new Error('missionIds must be an array of strings');
+    }
+    if (args.confirm !== true) {
+      throw new Error('confirm must be true after the user has affirmatively approved deletion');
+    }
+    return runProtocolSubcommand('delete-missions', {
+      flags: { '--mission-ids-file': true, '--confirm': true },
+      fileInputs: { '--mission-ids-file': JSON.stringify(args.missionIds) }
+    });
+  },
+  overlord_delete_objectives: args => {
+    if (
+      !Array.isArray(args.objectiveIds) ||
+      !args.objectiveIds.every(id => typeof id === 'string')
+    ) {
+      throw new Error('objectiveIds must be an array of strings');
+    }
+    if (args.confirm !== true) {
+      throw new Error('confirm must be true after the user has affirmatively approved deletion');
+    }
+    return runProtocolSubcommand('delete-objectives', {
+      flags: { '--objective-ids-file': true, '--confirm': true },
+      fileInputs: { '--objective-ids-file': JSON.stringify(args.objectiveIds) }
+    });
+  },
   overlord_list_run_queues: async args => {
     const detail = optionalString(args, 'detail') ?? 'compact';
     if (detail !== 'compact' && detail !== 'full') {

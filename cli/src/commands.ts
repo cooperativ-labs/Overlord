@@ -61,8 +61,14 @@ import { fetchLaunchSettings } from './launch-settings.js';
 import { resolveNativeSessionId } from './native-session.js';
 import { runOrgSetupCommand } from './org-setup.js';
 import { printJson, printKeyValue } from './output.js';
-import { pruneStaleProjectTmp } from './project-tmp.js';
-import { printProtocolHelp } from './protocol-help.js';
+import {
+  isSessionScratchDir,
+  projectTmpDir,
+  pruneStaleProjectTmp,
+  removeSessionScratch,
+  safeTmpNamePart
+} from './project-tmp.js';
+import { hasProtocolSubcommandHelp, printProtocolHelp } from './protocol-help.js';
 import { redactSecrets } from './redact-secrets.js';
 import { reportRunnerResourceObservations } from './resource-observations.js';
 import { runnerRegistrationPayload } from './runner-identity.js';
@@ -221,6 +227,47 @@ function changeBatchEvidenceIdentities(
  * bounded batches until the ledger is empty or the backend makes no progress.
  * A failed drain is advisory and must not change the lifecycle operation.
  */
+/**
+ * Liveness check for `.overlord/tmp/sessions/<name>` directories: a directory is
+ * live when its name starts with the slug of any objective bound to an active
+ * session in this checkout.
+ */
+function sessionLivenessCheck(
+  entries: ReadonlyArray<{ objectiveId: string; objectiveAliases: string[] }>
+): (sessionDirName: string) => boolean {
+  const prefixes = new Set<string>();
+  for (const entry of entries) {
+    for (const alias of [entry.objectiveId, ...entry.objectiveAliases]) {
+      const slug = safeTmpNamePart(alias);
+      if (slug) prefixes.add(`objective-${slug}-`);
+    }
+  }
+  return name => [...prefixes].some(prefix => name.startsWith(prefix));
+}
+
+const OBJECTIVE_DISPLAY_ID_RE = /^[a-z0-9]+:\d+\.[a-z0-9]+$/i;
+
+/** Path of the launch briefing written for the delivered objective, if it can be named. */
+function deliveredBriefingPath({
+  workingDirectory,
+  objectiveAliases,
+  missionId
+}: {
+  workingDirectory: string;
+  objectiveAliases: string[];
+  missionId: string;
+}): string | null {
+  const displayId = objectiveAliases.find(alias => OBJECTIVE_DISPLAY_ID_RE.test(alias.trim()));
+  const stem = displayId
+    ? `objective-${safeTmpNamePart(displayId.trim())}`
+    : missionId.includes(':') && !missionId.includes('.')
+      ? `mission-${safeTmpNamePart(missionId.trim())}`
+      : null;
+  if (!stem) return null;
+  const candidate = path.join(projectTmpDir(workingDirectory), `${stem}.md`);
+  return isSessionScratchDir(workingDirectory, candidate) ? null : candidate;
+}
+
 async function syncObjectiveLedger({
   runtime,
   workingDirectory,
@@ -542,7 +589,9 @@ const PROTOCOL_FILE_FLAGS = [
   '--prompt-file',
   '--ordered-entries-file',
   '--ordered-queues-file',
-  '--ordered-objective-ids-file'
+  '--ordered-objective-ids-file',
+  '--mission-ids-file',
+  '--objective-ids-file'
 ] as const;
 
 /** Protocol subcommands that require a session key the cache can auto-inject. */
@@ -726,7 +775,22 @@ export async function runProtocolCommand({
 }): Promise<void> {
   const parsed = parseArgs(args);
   if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
-    printProtocolHelp({ primaryCommand });
+    const requestedSubcommand = parsed.positional[0];
+    if (requestedSubcommand && !hasProtocolSubcommandHelp(requestedSubcommand)) {
+      throw new CliError({
+        message: `Unknown protocol subcommand: ${requestedSubcommand}\nRun \`${primaryCommand} protocol help\` for usage.`
+      });
+    }
+    printProtocolHelp({ primaryCommand, subcommand: requestedSubcommand });
+    return;
+  }
+  if (parsed.flags.has('--help') || args.includes('-h')) {
+    if (!hasProtocolSubcommandHelp(subcommand)) {
+      throw new CliError({
+        message: `Unknown protocol subcommand: ${subcommand}\nRun \`${primaryCommand} protocol help\` for usage.`
+      });
+    }
+    printProtocolHelp({ primaryCommand, subcommand });
     return;
   }
 
@@ -1001,7 +1065,10 @@ export async function runProtocolCommand({
     };
   }
 
-  pruneStaleProjectTmp({ workingDirectory });
+  pruneStaleProjectTmp({
+    workingDirectory,
+    isSessionLive: sessionLivenessCheck(readActiveSessions(workingDirectory))
+  });
 
   let lifecycleActive: { missionId: string; objectiveId: string; sessionKey: string } | undefined;
   if ((subcommand === 'deliver' || subcommand === 'update') && missionId) {
@@ -1202,11 +1269,10 @@ export async function runProtocolCommand({
   if (subcommand === 'deliver' && missionId) {
     const deliveredSessionKey =
       typeof flags['--session-key'] === 'string' ? flags['--session-key'] : undefined;
-    const deliveredActive = deliveredSessionKey
-      ? (readActiveSessions(workingDirectory).find(
-          entry => entry.sessionKey === deliveredSessionKey
-        ) ?? lifecycleActive)
+    const deliveredEntry = deliveredSessionKey
+      ? readActiveSessions(workingDirectory).find(entry => entry.sessionKey === deliveredSessionKey)
       : undefined;
+    const deliveredActive = deliveredSessionKey ? (deliveredEntry ?? lifecycleActive) : undefined;
     const finalized =
       deliveredActive && deliveredSessionKey
         ? finalizeActiveSession({
@@ -1221,6 +1287,18 @@ export async function runProtocolCommand({
         workingDirectory,
         objectiveId: objectiveRef,
         sessionKey: deliveredSessionKey ?? null
+      });
+      // The ledger is synced and the session is over: drop this launch's own
+      // scratch directory and briefing. Both paths are keyed to this session,
+      // so concurrent agents in the same checkout are untouched.
+      removeSessionScratch({
+        workingDirectory,
+        scratchDir: process.env.OVERLORD_TMPDIR ?? null,
+        contextFile: deliveredBriefingPath({
+          workingDirectory,
+          objectiveAliases: deliveredEntry?.objectiveAliases ?? [],
+          missionId
+        })
       });
       if (readActiveSessions(workingDirectory).length === 0) {
         clearActiveMissionPointer(workingDirectory);

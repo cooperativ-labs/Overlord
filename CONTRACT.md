@@ -34,13 +34,31 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `129`
+Current version: `130`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
 `contract/components.yaml`) — never a header duplicate. The contract version is
 incremented when any stable interface changes. All conformance manifests must
 declare the contract version they were validated against.
+
+### Version 130 Change Summary
+
+Agents can now perform explicitly confirmed, all-or-nothing bulk soft deletion
+through `ovld protocol delete-missions --mission-ids-json|--mission-ids-file …
+--confirm` and `delete-objectives --objective-ids-json|--objective-ids-file …
+--confirm`. Each accepts one to 100 unique UUID or display-id references,
+preflights every target and its authorization before writing, and returns the
+deleted IDs. Mission deletion retains the existing cascade to live objectives;
+objective deletion retains the existing Run Queue cleanup. `--confirm` is a
+deliberate destructive-action gate: agents must first show the resolved list to
+the user and receive an affirmative response before issuing either command.
+
+Hosted MCP and the local connector shim add matching destructive tools,
+`overlord_delete_missions` and `overlord_delete_objectives`, with a required
+`confirm: true` input and destructive safety annotation. They forward only to
+these Protocol operations, share their RBAC and transactional semantics, and
+must not access mission or objective tables directly.
 
 ### Version 129 Change Summary
 

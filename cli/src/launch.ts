@@ -6,7 +6,7 @@ import {
 } from '@overlord/core/service/latch-launch';
 import type { LaunchSessionSnapshot } from '@overlord/core/service/terminal-profile-types';
 import { spawnSync, type SpawnSyncOptions, type SpawnSyncReturns } from 'node:child_process';
-import { chmodSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { writeChannelCredential } from './agent-session/channel.js';
@@ -23,7 +23,12 @@ import {
   substituteLaunchEnvVars,
   substitutePreLaunchVariables
 } from './pre-launch.js';
-import { ensureProjectTmpDir, pruneStaleProjectTmp } from './project-tmp.js';
+import {
+  ensureProjectTmpDir,
+  projectTmpSessionsDir,
+  pruneStaleProjectTmp,
+  sessionScratchName
+} from './project-tmp.js';
 import type { CliRuntime } from './runtime.js';
 import {
   composeAgentTerminalCommand,
@@ -535,6 +540,18 @@ export async function buildLaunchPlan({
     ? `objective-${context.objectiveDisplayId.replace(/[^a-zA-Z0-9_-]/g, '-')}`
     : `mission-${context.displayId.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
   const contextFile = path.join(tmpDir, `${contextFileStem}.md`);
+  // Each launch gets a private scratch directory that TMPDIR & co point at. The
+  // delivering session removes exactly this directory, so cleanup never has to
+  // guess which files in the shared `.overlord/tmp` belong to whom.
+  const sessionScratchDir = path.join(
+    projectTmpSessionsDir(options.workingDirectory),
+    sessionScratchName({
+      missionDisplayId: context.displayId,
+      objectiveDisplayId: context.objectiveDisplayId,
+      executionRequestId: options.executionRequestId
+    })
+  );
+  mkdirSync(sessionScratchDir, { recursive: true });
   // The execution request id is deliberately NOT written into the agent-facing
   // context. It is launch plumbing: it reaches the agent as the
   // `OVERLORD_EXECUTION_REQUEST_ID` env var, and `ovld protocol attach` picks it
@@ -577,7 +594,7 @@ export async function buildLaunchPlan({
     projectResources,
     workingDirectory: options.workingDirectory,
     contextFile,
-    tmpDir
+    tmpDir: sessionScratchDir
   });
 
   // Resolve `{VAR_NAME}` placeholders in the project's pre-launch commands
@@ -597,6 +614,7 @@ export async function buildLaunchPlan({
       : {};
   const exportedEnv = {
     ...agentLaunchEnv(options.agent),
+    ...tmpEnvFor(options.workingDirectory, sessionScratchDir),
     ...launchEnv,
     ...resolvedEnvVars
   };

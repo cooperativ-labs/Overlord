@@ -110,16 +110,14 @@ function compactSearchResponse(response) {
     results: value.results.map(result => ({
       ...result,
       matches: Array.isArray(result.matches)
-        ? result.matches
-            .slice(0, 2)
-            .map(match => {
-              const compactMatch = { ...match };
-              delete compactMatch.snippet;
-              delete compactMatch.matchedTerms;
-              delete compactMatch.createdAt;
-              delete compactMatch.updatedAt;
-              return compactMatch;
-            })
+        ? result.matches.slice(0, 2).map(match => {
+            const compactMatch = { ...match };
+            delete compactMatch.snippet;
+            delete compactMatch.matchedTerms;
+            delete compactMatch.createdAt;
+            delete compactMatch.updatedAt;
+            return compactMatch;
+          })
         : result.matches
     }))
   };
@@ -312,7 +310,7 @@ const tools = [
     name: 'overlord_list_deliveries',
     title: 'List mission deliveries',
     description:
-      'Use this to read a mission\'s delivered work after locating it. Returns newest-first normalized delivery records including summary, verification, follow-up notes, and authoritative delivery evidence; it never exposes raw delivery payloads.',
+      "Use this to read a mission's delivered work after locating it. Returns newest-first normalized delivery records including summary, verification, follow-up notes, and authoritative delivery evidence; it never exposes raw delivery payloads.",
     inputSchema: objectSchema({
       missionId: stringProperty(
         'Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission.'
@@ -336,7 +334,7 @@ const tools = [
           'Optional reasoning-effort setting to snapshot onto the execution request.'
         ),
         executionTargetId: stringProperty(
-          'Optional eligible execution target id. Omit to use the project\'s normal target selection.'
+          "Optional eligible execution target id. Omit to use the project's normal target selection."
         )
       },
       ['objectiveId', 'agent']
@@ -405,6 +403,44 @@ const tools = [
         )
       },
       ['objectiveId']
+    )
+  },
+  {
+    name: 'overlord_delete_missions',
+    title: 'Delete missions',
+    description:
+      'Use this only after showing the resolved mission list to the user and receiving an affirmative response. Soft-deletes one to 100 missions atomically; any missing, duplicate, deleted, or unauthorized target rejects the entire request. Deleting a mission also soft-deletes its live objectives.',
+    inputSchema: objectSchema(
+      {
+        missionIds: {
+          type: 'array',
+          description: 'One to 100 unique mission UUIDs or display IDs to delete.',
+          items: stringProperty('Mission UUID or workspace display ID.')
+        },
+        confirm: booleanProperty(
+          'Must be true only after the user has reviewed the resolved mission list and affirmatively approved deletion.'
+        )
+      },
+      ['missionIds', 'confirm']
+    )
+  },
+  {
+    name: 'overlord_delete_objectives',
+    title: 'Delete objectives',
+    description:
+      'Use this only after showing the resolved objective list to the user and receiving an affirmative response. Soft-deletes one to 100 objectives atomically; any missing, duplicate, deleted, or unauthorized target rejects the entire request. Deleting an objective also removes its live Run Queue membership.',
+    inputSchema: objectSchema(
+      {
+        objectiveIds: {
+          type: 'array',
+          description: 'One to 100 unique objective UUIDs or display IDs to delete.',
+          items: stringProperty('Objective UUID or display ID.')
+        },
+        confirm: booleanProperty(
+          'Must be true only after the user has reviewed the resolved objective list and affirmatively approved deletion.'
+        )
+      },
+      ['objectiveIds', 'confirm']
     )
   },
   {
@@ -485,12 +521,14 @@ const tools = [
           type: 'string',
           enum: ['create', 'update', 'delete', 'reorder_queues', 'retry_entry'],
           description:
-            'create a queue, update (rename/pause/resume) one, delete one, reorder the queue definitions, or retry_entry to clear one held entry\'s hold and attempt budget so the dispatcher tries it again.'
+            "create a queue, update (rename/pause/resume) one, delete one, reorder the queue definitions, or retry_entry to clear one held entry's hold and attempt budget so the dispatcher tries it again."
         },
         projectId: stringProperty(
           'Project UUID, slug, or name. Required for create and reorder_queues.'
         ),
-        queue: stringProperty('Run Queue UUID or unambiguous name. Required for update and delete.'),
+        queue: stringProperty(
+          'Run Queue UUID or unambiguous name. Required for update and delete.'
+        ),
         name: stringProperty('New queue name for create, or the replacement name for update.'),
         paused: booleanProperty(
           'update only: true pauses dispatching from the queue, false resumes it.'
@@ -512,7 +550,7 @@ const tools = [
         }
       },
       ['action']
-    ),
+    )
   },
   {
     name: 'overlord_attach_session',
@@ -862,6 +900,33 @@ async function callOverlordTool(name, args) {
       ...(hasInstructionText ? { 'instruction-text': requiredString(args, 'instructionText') } : {})
     });
   }
+  if (name === 'overlord_delete_missions') {
+    if (!Array.isArray(args.missionIds) || !args.missionIds.every(id => typeof id === 'string')) {
+      throw new Error('missionIds must be an array of strings');
+    }
+    if (args.confirm !== true) {
+      throw new Error('confirm must be true after the user has affirmatively approved deletion');
+    }
+    return runProtocol('delete-missions', {
+      'mission-ids-json': args.missionIds,
+      confirm: true
+    });
+  }
+  if (name === 'overlord_delete_objectives') {
+    if (
+      !Array.isArray(args.objectiveIds) ||
+      !args.objectiveIds.every(id => typeof id === 'string')
+    ) {
+      throw new Error('objectiveIds must be an array of strings');
+    }
+    if (args.confirm !== true) {
+      throw new Error('confirm must be true after the user has affirmatively approved deletion');
+    }
+    return runProtocol('delete-objectives', {
+      'objective-ids-json': args.objectiveIds,
+      confirm: true
+    });
+  }
   if (name === 'overlord_list_run_queues') {
     const detail = optionalString(args, 'detail') || 'compact';
     if (detail !== 'compact' && detail !== 'full') {
@@ -1110,7 +1175,7 @@ process.stdin.on('data', async chunk => {
         result: {
           protocolVersion: PROTOCOL_VERSION,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.39' }
+          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.40' }
         }
       });
       continue;

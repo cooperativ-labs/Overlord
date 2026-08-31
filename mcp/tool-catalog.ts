@@ -58,6 +58,7 @@ const changeRationalesProperty = (description: string): Record<string, unknown> 
 
 const readOnly = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
 const writeAction = { readOnlyHint: false, destructiveHint: false, openWorldHint: false };
+const destructiveAction = { readOnlyHint: false, destructiveHint: true, openWorldHint: false };
 
 function widget(uri: string): Record<string, unknown> {
   return {
@@ -383,6 +384,52 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
       'The updated objective, including autoAdvance and instructionText.'
     ),
     annotations: writeAction
+  },
+  {
+    name: 'overlord_delete_missions',
+    title: 'Delete missions',
+    description:
+      'Use this only after showing the resolved mission list to the user and receiving an affirmative response. ' +
+      'Soft-deletes one to 100 missions atomically; any missing, duplicate, deleted, or unauthorized target rejects the entire request. ' +
+      'Deleting a mission also soft-deletes its live objectives.',
+    inputSchema: objectSchema(
+      {
+        missionIds: {
+          type: 'array',
+          description: 'One to 100 unique mission UUIDs or display IDs to delete.',
+          items: stringProperty('Mission UUID or workspace display ID.')
+        },
+        confirm: booleanProperty(
+          'Must be true only after the user has reviewed the resolved mission list and affirmatively approved deletion.'
+        )
+      },
+      ['missionIds', 'confirm']
+    ),
+    outputSchema: protocolOutputSchema('The UUIDs of missions deleted together.'),
+    annotations: destructiveAction
+  },
+  {
+    name: 'overlord_delete_objectives',
+    title: 'Delete objectives',
+    description:
+      'Use this only after showing the resolved objective list to the user and receiving an affirmative response. ' +
+      'Soft-deletes one to 100 objectives atomically; any missing, duplicate, deleted, or unauthorized target rejects the entire request. ' +
+      'Deleting an objective also removes its live Run Queue membership.',
+    inputSchema: objectSchema(
+      {
+        objectiveIds: {
+          type: 'array',
+          description: 'One to 100 unique objective UUIDs or display IDs to delete.',
+          items: stringProperty('Objective UUID or display ID.')
+        },
+        confirm: booleanProperty(
+          'Must be true only after the user has reviewed the resolved objective list and affirmatively approved deletion.'
+        )
+      },
+      ['objectiveIds', 'confirm']
+    ),
+    outputSchema: protocolOutputSchema('The UUIDs of objectives deleted together.'),
+    annotations: destructiveAction
   },
   {
     name: 'overlord_list_run_queues',

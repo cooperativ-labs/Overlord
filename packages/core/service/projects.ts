@@ -92,6 +92,15 @@ export function resolveResourceAccessMode(
   return requested === 'read_write' ? 'read_write' : 'read';
 }
 
+/**
+ * A resource's sources are heterogeneous: a project-global `git` URL and any
+ * number of machine-scoped `local_checkout` directories can coexist on the same
+ * logical resource. Only a local checkout resolves to a path an agent can run
+ * in, so every single-row source lookup must sort local sources ahead of the
+ * rest instead of letting creation order hand back the repository URL.
+ */
+const LOCAL_SOURCE_FIRST_ORDER = "CASE WHEN prs.source_kind = 'local_checkout' THEN 0 ELSE 1 END";
+
 export const PRIMARY_RESOURCE_REPAIR_HINT =
   'Run `ovld add-cwd` from your project checkout or link a directory in project settings.';
 
@@ -481,15 +490,29 @@ export async function listProjectResources({
        FROM project_resources pr
        LEFT JOIN project_resource_sources prs ON prs.resource_id = pr.id AND prs.deleted_at IS NULL
        WHERE pr.project_id = ? AND pr.deleted_at IS NULL
-       ORDER BY pr.is_primary DESC, pr.created_at ASC`,
+       ORDER BY pr.is_primary DESC, pr.created_at ASC, ${LOCAL_SOURCE_FIRST_ORDER}`,
     [resolvedProjectId]
   )) as ProjectResourceRow[];
 
-  return await Promise.all(rows.map(row => rowToProjectResourceSummary(ctx, row)));
+  // The join fans a multi-source resource into one row per source. Callers want
+  // one summary per logical resource, and the ORDER BY above puts the local
+  // checkout first within each resource, so keep the first row for each id.
+  const firstRowPerResource = new Map<string, ProjectResourceRow>();
+  for (const row of rows) {
+    if (!firstRowPerResource.has(row.id)) firstRowPerResource.set(row.id, row);
+  }
+
+  return await Promise.all(
+    [...firstRowPerResource.values()].map(row => rowToProjectResourceSummary(ctx, row))
+  );
 }
 
 /**
- * Single-row lookup shared by the primary/key resource finders. A row scoped to
+ * Single-row lookup shared by the primary/key resource finders. A resource can
+ * carry several sources at once (a project-global `git` URL plus one
+ * `local_checkout` per machine), and only a local checkout names a directory an
+ * agent can actually run in — so a local source always wins, whatever the URL
+ * source's creation order. Among local sources a row scoped to
  * `executionTargetId` wins over a global (NULL-target) row, then creation order
  * breaks ties — the same precedence launch resolution uses.
  */
@@ -517,7 +540,7 @@ async function findProjectResourceRow({
     conditions.push('pr.resource_key = ?');
     params.push(resourceKey);
   }
-  const orderBy: string[] = [];
+  const orderBy: string[] = [LOCAL_SOURCE_FIRST_ORDER];
   if (executionTargetId !== null) {
     conditions.push('(prs.execution_target_id = ? OR prs.execution_target_id IS NULL)');
     params.push(executionTargetId);
@@ -781,7 +804,8 @@ export async function resolveCwdProjectResource({
              FROM project_resources pr
              LEFT JOIN project_resource_sources prs ON prs.resource_id = pr.id AND prs.deleted_at IS NULL
             WHERE pr.id = ? AND pr.project_id = ? AND pr.deleted_at IS NULL
-            ORDER BY CASE WHEN prs.execution_target_id = ? THEN 0 WHEN prs.execution_target_id IS NULL THEN 1 ELSE 2 END
+            ORDER BY ${LOCAL_SOURCE_FIRST_ORDER},
+                     CASE WHEN prs.execution_target_id = ? THEN 0 WHEN prs.execution_target_id IS NULL THEN 1 ELSE 2 END
             LIMIT 1`,
           [raw.resourceId, resolvedProjectId, preferredExecutionTargetId]
         )) as ProjectResourceRow | undefined;

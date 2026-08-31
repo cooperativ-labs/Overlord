@@ -864,26 +864,26 @@ var init_launch_variables = __esm({
       },
       {
         name: "OVERLORD_TMPDIR",
-        description: "Project-scoped scratch directory (`.overlord/tmp/`). Also mirrored as TMPDIR/TMP/TEMP.",
-        example: "/Users/you/src/overlord/.overlord/tmp",
+        description: "Private scratch directory for this launch (`.overlord/tmp/sessions/<objective>-<request>/`). Removed automatically when the session delivers; orphaned ones expire after 24h. Also mirrored as TMPDIR/TMP/TEMP.",
+        example: "/Users/you/src/overlord/.overlord/tmp/sessions/objective-coo-359-k7xm-4f1c",
         availableAt: ["plan_build", "terminal_env"]
       },
       {
         name: "TMPDIR",
         description: "Same path as OVERLORD_TMPDIR \u2014 standard temp-dir env name.",
-        example: "/Users/you/src/overlord/.overlord/tmp",
+        example: "/Users/you/src/overlord/.overlord/tmp/sessions/objective-coo-359-k7xm-4f1c",
         availableAt: ["plan_build", "terminal_env"]
       },
       {
         name: "TMP",
         description: "Same path as OVERLORD_TMPDIR \u2014 Windows-style temp-dir alias.",
-        example: "/Users/you/src/overlord/.overlord/tmp",
+        example: "/Users/you/src/overlord/.overlord/tmp/sessions/objective-coo-359-k7xm-4f1c",
         availableAt: ["plan_build", "terminal_env"]
       },
       {
         name: "TEMP",
         description: "Same path as OVERLORD_TMPDIR \u2014 Windows-style temp-dir alias.",
-        example: "/Users/you/src/overlord/.overlord/tmp",
+        example: "/Users/you/src/overlord/.overlord/tmp/sessions/objective-coo-359-k7xm-4f1c",
         availableAt: ["plan_build", "terminal_env"]
       },
       {
@@ -75777,10 +75777,16 @@ async function listProjectResources({
        FROM project_resources pr
        LEFT JOIN project_resource_sources prs ON prs.resource_id = pr.id AND prs.deleted_at IS NULL
        WHERE pr.project_id = ? AND pr.deleted_at IS NULL
-       ORDER BY pr.is_primary DESC, pr.created_at ASC`,
+       ORDER BY pr.is_primary DESC, pr.created_at ASC, ${LOCAL_SOURCE_FIRST_ORDER}`,
     [resolvedProjectId]
   );
-  return await Promise.all(rows.map((row) => rowToProjectResourceSummary(ctx, row)));
+  const firstRowPerResource = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    if (!firstRowPerResource.has(row.id)) firstRowPerResource.set(row.id, row);
+  }
+  return await Promise.all(
+    [...firstRowPerResource.values()].map((row) => rowToProjectResourceSummary(ctx, row))
+  );
 }
 async function findProjectResourceRow({
   ctx,
@@ -75800,7 +75806,7 @@ async function findProjectResourceRow({
     conditions.push("pr.resource_key = ?");
     params.push(resourceKey);
   }
-  const orderBy = [];
+  const orderBy = [LOCAL_SOURCE_FIRST_ORDER];
   if (executionTargetId !== null) {
     conditions.push("(prs.execution_target_id = ? OR prs.execution_target_id IS NULL)");
     params.push(executionTargetId);
@@ -75995,7 +76001,8 @@ async function resolveCwdProjectResource({
              FROM project_resources pr
              LEFT JOIN project_resource_sources prs ON prs.resource_id = pr.id AND prs.deleted_at IS NULL
             WHERE pr.id = ? AND pr.project_id = ? AND pr.deleted_at IS NULL
-            ORDER BY CASE WHEN prs.execution_target_id = ? THEN 0 WHEN prs.execution_target_id IS NULL THEN 1 ELSE 2 END
+            ORDER BY ${LOCAL_SOURCE_FIRST_ORDER},
+                     CASE WHEN prs.execution_target_id = ? THEN 0 WHEN prs.execution_target_id IS NULL THEN 1 ELSE 2 END
             LIMIT 1`,
           [raw.resourceId, resolvedProjectId, preferredExecutionTargetId]
         );
@@ -76180,7 +76187,7 @@ async function discoverProject({
     404
   );
 }
-var import_node_fs13, import_node_path15, PRIMARY_RESOURCE_REPAIR_HINT;
+var import_node_fs13, import_node_path15, LOCAL_SOURCE_FIRST_ORDER, PRIMARY_RESOURCE_REPAIR_HINT;
 var init_projects = __esm({
   "../packages/core/service/projects.ts"() {
     "use strict";
@@ -76195,6 +76202,7 @@ var init_projects = __esm({
     init_project_resource_key();
     init_util3();
     init_project_resource_key();
+    LOCAL_SOURCE_FIRST_ORDER = "CASE WHEN prs.source_kind = 'local_checkout' THEN 0 ELSE 1 END";
     PRIMARY_RESOURCE_REPAIR_HINT = "Run `ovld add-cwd` from your project checkout or link a directory in project settings.";
   }
 });
@@ -151919,33 +151927,105 @@ async function updateMission(id, body) {
   await patchMissionFieldsTx(id, body);
   return getMissionDetail(id);
 }
-async function deleteMission(id) {
-  await requireDatabaseClient().transaction(async (tx) => {
-    const existing = await getMissionRow(id, tx, PERMISSIONS.MISSION_DELETE);
+async function deleteMissions(missionRefs) {
+  if (missionRefs.length === 0) throw new ApiError(400, "At least one mission is required");
+  return requireDatabaseClient().transaction(async (tx) => {
+    const missions = [];
+    for (const missionRef of missionRefs) {
+      missions.push(await getMissionRow(missionRef, tx, PERMISSIONS.MISSION_DELETE));
+    }
+    if (new Set(missions.map((mission) => mission.id)).size !== missions.length) {
+      throw new ApiError(400, "missionIds contains duplicate missions");
+    }
     const now2 = nowIso2();
-    const revision = existing.revision + 1;
-    await tx.run(
-      `UPDATE objectives SET deleted_at = ?, revision = revision + 1
-       WHERE mission_id = ? AND deleted_at IS NULL`,
-      [now2, id]
-    );
-    await tx.run(
-      `UPDATE missions SET deleted_at = ?, revision = ?
-       WHERE id = ? AND workspace_id = ?`,
-      [now2, revision, id, existing.workspace_id]
-    );
-    await recordChange2(
-      {
-        entityType: "mission",
-        entityId: id,
-        operation: "delete",
-        entityRevision: revision,
+    for (const existing of missions) {
+      const revision = existing.revision + 1;
+      await tx.run(
+        `UPDATE objectives SET deleted_at = ?, revision = revision + 1
+         WHERE mission_id = ? AND deleted_at IS NULL`,
+        [now2, existing.id]
+      );
+      await tx.run(
+        `UPDATE missions SET deleted_at = ?, revision = ?
+         WHERE id = ? AND workspace_id = ?`,
+        [now2, revision, existing.id, existing.workspace_id]
+      );
+      await recordChange2(
+        {
+          entityType: "mission",
+          entityId: existing.id,
+          operation: "delete",
+          entityRevision: revision,
+          projectId: existing.project_id,
+          missionId: existing.id,
+          workspaceId: existing.workspace_id
+        },
+        tx
+      );
+    }
+    return { deletedMissionIds: missions.map((mission) => mission.id) };
+  });
+}
+async function deleteMission(id) {
+  await deleteMissions([id]);
+}
+async function deleteObjectives(objectiveRefs) {
+  if (objectiveRefs.length === 0) throw new ApiError(400, "At least one objective is required");
+  return requireDatabaseClient().transaction(async (tx) => {
+    const objectives = [];
+    for (const objectiveRef of objectiveRefs) {
+      const { workspaceId: workspaceId2, workspaceUserId, objectiveId } = await requireObjectivePermission({
+        objectiveId: objectiveRef,
+        permission: PERMISSIONS.OBJECTIVE_UPDATE,
+        db: tx
+      });
+      const existing = await tx.get(
+        `SELECT o.*, m.display_id AS mission_display_id
+           FROM objectives o
+           JOIN missions m ON m.id = o.mission_id
+          WHERE o.id = ? AND o.workspace_id = ? AND o.deleted_at IS NULL`,
+        [objectiveId, workspaceId2]
+      );
+      if (!existing) throw new ApiError(404, "Objective not found");
+      objectives.push({ existing, workspaceId: workspaceId2, workspaceUserId });
+    }
+    if (new Set(objectives.map(({ existing }) => existing.id)).size !== objectives.length) {
+      throw new ApiError(400, "objectiveIds contains duplicate objectives");
+    }
+    const now2 = nowIso2();
+    for (const { existing, workspaceId: workspaceId2, workspaceUserId } of objectives) {
+      const revision = existing.revision + 1;
+      await tx.run(
+        `UPDATE objectives SET deleted_at = ?, revision = ?
+         WHERE id = ? AND workspace_id = ?`,
+        [now2, revision, existing.id, workspaceId2]
+      );
+      await recordChange2(
+        {
+          entityType: "objective",
+          entityId: existing.id,
+          operation: "delete",
+          entityRevision: revision,
+          projectId: existing.project_id,
+          missionId: existing.mission_id,
+          objectiveId: existing.id,
+          workspaceId: workspaceId2
+        },
+        tx
+      );
+      await dequeueObjective({
+        objectiveId: existing.id,
         projectId: existing.project_id,
-        missionId: id,
-        workspaceId: existing.workspace_id
-      },
-      tx
-    );
+        missionId: existing.mission_id,
+        workspaceId: workspaceId2,
+        workspaceUserId,
+        reason: "deleted",
+        newState: null,
+        now: now2,
+        tx
+      });
+    }
+    return { deletedObjectiveIds: objectives.map(({ existing }) => existing.id) };
   });
 }
 async function reorderBoardColumn(projectId, body) {
@@ -153348,56 +153428,7 @@ async function updateObjective2(id, body) {
   return objective;
 }
 async function deleteObjective(idRef) {
-  await requireDatabaseClient().transaction(async (tx) => {
-    const {
-      workspaceId: workspaceId2,
-      workspaceUserId,
-      objectiveId: id
-    } = await requireObjectivePermission({
-      objectiveId: idRef,
-      permission: PERMISSIONS.OBJECTIVE_UPDATE,
-      db: tx
-    });
-    const existing = await tx.get(
-      `SELECT o.*, m.display_id AS mission_display_id
-         FROM objectives o
-         JOIN missions m ON m.id = o.mission_id
-        WHERE o.id = ? AND o.workspace_id = ? AND o.deleted_at IS NULL`,
-      [id, workspaceId2]
-    );
-    if (!existing) throw new ApiError(404, "Objective not found");
-    const now2 = nowIso2();
-    const revision = existing.revision + 1;
-    await tx.run(
-      `UPDATE objectives SET deleted_at = ?, revision = ?
-       WHERE id = ? AND workspace_id = ?`,
-      [now2, revision, id, workspaceId2]
-    );
-    await recordChange2(
-      {
-        entityType: "objective",
-        entityId: id,
-        operation: "delete",
-        entityRevision: revision,
-        projectId: existing.project_id,
-        missionId: existing.mission_id,
-        objectiveId: id,
-        workspaceId: workspaceId2
-      },
-      tx
-    );
-    await dequeueObjective({
-      objectiveId: id,
-      projectId: existing.project_id,
-      missionId: existing.mission_id,
-      workspaceId: workspaceId2,
-      workspaceUserId,
-      reason: "deleted",
-      newState: null,
-      now: now2,
-      tx
-    });
-  });
+  await deleteObjectives([idRef]);
 }
 async function loadOperatorUserRow(db = requireDatabaseClient()) {
   const profileId = await resolveActiveProfileId(db);
@@ -161265,6 +161296,7 @@ function objectiveText(body) {
   throw new ApiError(400, "Missing objective text (use --objective or a positional argument)");
 }
 var MAX_PROTOCOL_OBJECTIVES = 100;
+var MAX_PROTOCOL_DELETIONS = 100;
 var OBJECTIVE_INPUT_KEYS = /* @__PURE__ */ new Set([
   "objective",
   "title",
@@ -161330,6 +161362,35 @@ function parseObjectiveArrayInput(body) {
     }
     return item;
   });
+}
+function parseDeletionReferences(body, jsonFlag, fileFlag, label) {
+  const values = parseJsonArrayInput(body, jsonFlag, fileFlag, label);
+  if (!values || values.length === 0) {
+    throw new ApiError(400, `${label} requires at least one reference`, void 0, "invalid_input");
+  }
+  if (values.length > MAX_PROTOCOL_DELETIONS) {
+    throw new ApiError(
+      400,
+      `${label} accepts at most ${MAX_PROTOCOL_DELETIONS} items`,
+      void 0,
+      "invalid_input"
+    );
+  }
+  const references = values.map((value, index) => {
+    if (typeof value !== "string" || !value.trim()) {
+      throw new ApiError(
+        400,
+        `${label}[${index}] must be a non-empty string`,
+        void 0,
+        "invalid_input"
+      );
+    }
+    return value.trim();
+  });
+  if (new Set(references).size !== references.length) {
+    throw new ApiError(400, `${label} contains duplicate references`, void 0, "invalid_input");
+  }
+  return references;
 }
 function objectiveInputs(body) {
   const parsed = parseObjectiveArrayInput(body);
@@ -161711,6 +161772,32 @@ var handlers = {
     }
     return updateObjective2(objectiveId, update);
   },
+  "delete-missions": async (_ctx, body) => {
+    if (!boolFlag(body, "--confirm")) {
+      throw new ApiError(
+        400,
+        "delete-missions requires --confirm",
+        void 0,
+        "confirmation_required"
+      );
+    }
+    return deleteMissions(
+      parseDeletionReferences(body, "--mission-ids-json", "--mission-ids-file", "missionIds")
+    );
+  },
+  "delete-objectives": async (_ctx, body) => {
+    if (!boolFlag(body, "--confirm")) {
+      throw new ApiError(
+        400,
+        "delete-objectives requires --confirm",
+        void 0,
+        "confirmation_required"
+      );
+    }
+    return deleteObjectives(
+      parseDeletionReferences(body, "--objective-ids-json", "--objective-ids-file", "objectiveIds")
+    );
+  },
   "record-work": async (ctx, body) => {
     rejectRemovedProtocolFlags(body, RETIRED_RECORD_WORK_FLAGS);
     const envelope2 = parseDeliveryPayloadEnvelope(body);
@@ -161911,6 +161998,11 @@ var SUBCOMMAND_PERMISSIONS = {
   "discuss-objective": PERMISSIONS.OBJECTIVE_SUBMIT,
   "add-objectives": PERMISSIONS.OBJECTIVE_UPDATE,
   "update-objective": PERMISSIONS.OBJECTIVE_UPDATE,
+  // Every target can belong to a different authorized workspace. The bulk
+  // services preflight the corresponding permission per target inside their
+  // transaction, before any destructive write occurs.
+  "delete-missions": null,
+  "delete-objectives": null,
   "record-work": PERMISSIONS.MISSION_CREATE,
   "read-context": PERMISSIONS.MISSION_READ,
   "write-context": PERMISSIONS.MISSION_UPDATE,
@@ -162066,6 +162158,7 @@ var changeRationalesProperty = (description) => ({
 });
 var readOnly = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
 var writeAction = { readOnlyHint: false, destructiveHint: false, openWorldHint: false };
+var destructiveAction = { readOnlyHint: false, destructiveHint: true, openWorldHint: false };
 function widget(uri) {
   return {
     "openai/outputTemplate": uri,
@@ -162348,6 +162441,46 @@ var hostedMcpToolDefinitions = [
       "The updated objective, including autoAdvance and instructionText."
     ),
     annotations: writeAction
+  },
+  {
+    name: "overlord_delete_missions",
+    title: "Delete missions",
+    description: "Use this only after showing the resolved mission list to the user and receiving an affirmative response. Soft-deletes one to 100 missions atomically; any missing, duplicate, deleted, or unauthorized target rejects the entire request. Deleting a mission also soft-deletes its live objectives.",
+    inputSchema: objectSchema(
+      {
+        missionIds: {
+          type: "array",
+          description: "One to 100 unique mission UUIDs or display IDs to delete.",
+          items: stringProperty("Mission UUID or workspace display ID.")
+        },
+        confirm: booleanProperty(
+          "Must be true only after the user has reviewed the resolved mission list and affirmatively approved deletion."
+        )
+      },
+      ["missionIds", "confirm"]
+    ),
+    outputSchema: protocolOutputSchema("The UUIDs of missions deleted together."),
+    annotations: destructiveAction
+  },
+  {
+    name: "overlord_delete_objectives",
+    title: "Delete objectives",
+    description: "Use this only after showing the resolved objective list to the user and receiving an affirmative response. Soft-deletes one to 100 objectives atomically; any missing, duplicate, deleted, or unauthorized target rejects the entire request. Deleting an objective also removes its live Run Queue membership.",
+    inputSchema: objectSchema(
+      {
+        objectiveIds: {
+          type: "array",
+          description: "One to 100 unique objective UUIDs or display IDs to delete.",
+          items: stringProperty("Objective UUID or display ID.")
+        },
+        confirm: booleanProperty(
+          "Must be true only after the user has reviewed the resolved objective list and affirmatively approved deletion."
+        )
+      },
+      ["objectiveIds", "confirm"]
+    ),
+    outputSchema: protocolOutputSchema("The UUIDs of objectives deleted together."),
+    annotations: destructiveAction
   },
   {
     name: "overlord_list_run_queues",
@@ -163070,6 +163203,30 @@ var toolHandlers = {
         ...hasInstructionText ? { "--instruction-text": requiredString(args, "instructionText") } : {}
       })
     );
+  },
+  overlord_delete_missions: (args) => {
+    if (!Array.isArray(args.missionIds) || !args.missionIds.every((id) => typeof id === "string")) {
+      throw new Error("missionIds must be an array of strings");
+    }
+    if (args.confirm !== true) {
+      throw new Error("confirm must be true after the user has affirmatively approved deletion");
+    }
+    return runProtocolSubcommand("delete-missions", {
+      flags: { "--mission-ids-file": true, "--confirm": true },
+      fileInputs: { "--mission-ids-file": JSON.stringify(args.missionIds) }
+    });
+  },
+  overlord_delete_objectives: (args) => {
+    if (!Array.isArray(args.objectiveIds) || !args.objectiveIds.every((id) => typeof id === "string")) {
+      throw new Error("objectiveIds must be an array of strings");
+    }
+    if (args.confirm !== true) {
+      throw new Error("confirm must be true after the user has affirmatively approved deletion");
+    }
+    return runProtocolSubcommand("delete-objectives", {
+      flags: { "--objective-ids-file": true, "--confirm": true },
+      fileInputs: { "--objective-ids-file": JSON.stringify(args.objectiveIds) }
+    });
   },
   overlord_list_run_queues: async (args) => {
     const detail = optionalString(args, "detail") ?? "compact";

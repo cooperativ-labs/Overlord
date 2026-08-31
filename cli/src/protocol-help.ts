@@ -11,8 +11,11 @@ export const SUPPORTED_PROTOCOL_SUBCOMMANDS = [
   'changes',
   'connect',
   'create',
+  'create-project',
   'create-run-queue',
   'dequeue-objective',
+  'delete-missions',
+  'delete-objectives',
   'delete-run-queue',
   'deliver',
   'discover-project',
@@ -26,6 +29,7 @@ export const SUPPORTED_PROTOCOL_SUBCOMMANDS = [
   'prompt',
   'read-context',
   'record-work',
+  'register-target',
   'reorder-future-objectives',
   'reorder-project-run-queues',
   'reorder-run-queue',
@@ -35,6 +39,7 @@ export const SUPPORTED_PROTOCOL_SUBCOMMANDS = [
   'retry-queue-entry',
   'search',
   'search-missions',
+  'statuses',
   'sync-changes',
   'update',
   'update-artifact',
@@ -43,12 +48,26 @@ export const SUPPORTED_PROTOCOL_SUBCOMMANDS = [
   'write-context'
 ] as const;
 
+const PROTOCOL_HELP_ALIASES: Readonly<Record<string, string>> = {
+  'search-missions': 'search'
+};
+
+export function hasProtocolSubcommandHelp(subcommand: string): boolean {
+  return (SUPPORTED_PROTOCOL_SUBCOMMANDS as readonly string[]).includes(subcommand);
+}
+
 const DEFAULT_TIMEOUT_MS = 30_000;
 
-export function printProtocolHelp({ primaryCommand }: { primaryCommand: string }): void {
+export function printProtocolHelp({
+  primaryCommand,
+  subcommand
+}: {
+  primaryCommand: string;
+  subcommand?: string;
+}): void {
   const subcommands = SUPPORTED_PROTOCOL_SUBCOMMANDS.join(', ');
 
-  console.log(`${primaryCommand} protocol [flags]
+  const fullHelp = `${primaryCommand} protocol [flags]
 
 Use this for mission lifecycle work from an agent runtime: create a standalone
 draft with \`${primaryCommand} protocol create\`, create-and-attach with
@@ -92,15 +111,24 @@ Agent workflow (required):
 Subcommands:
   auth-status            Return machine-readable auth/backend readiness
   discover-project       Resolve a project from the working directory or explicit id
+  create-project         Create a project in one authorized workspace
+  register-target        Register this machine as an execution target
   list-organizations     Legacy name; returns only the caller's current workspace context (not organizations)
   attach                 Start a mission session and return full working context
   connect                Start a lightweight session without full context assembly
   load-context           Read mission context without creating a session
+  list-deliveries        List normalized deliveries for one mission
+  launch-objective       Queue an objective for execution
+  reorder-future-objectives
+                         Reorder all future objectives in one mission
   search                  Find grouped mission/objective/delivery matches (canonical)
   search-missions         Compatibility alias for search
+  statuses                List one project's ordered board columns
   discuss-objective      Mark a draft objective as submitted (does not start execution)
   add-objectives         Append ordered objectives to an existing mission
   update-objective       Set auto-advance and/or instruction text on an objective
+  delete-missions        Confirmed bulk soft-delete of missions
+  delete-objectives      Confirmed bulk soft-delete of objectives
   create                 Create a draft mission without attaching
   prompt                 Create a mission and attach to it immediately
   record-work            Record completed-from-chat work as a review mission (no attach)
@@ -119,7 +147,11 @@ Subcommands:
   update-artifact        Update an existing mission artifact in place
   attachment-list        List all attachments for the mission
   attachment-download-url  Get the download URL for a specific attachment
+  sync-changes           Retry synchronization of local objective-ledger evidence
   run-queue              Read the project's authoritative Run Queues
+  queue-objective        Add or move an objective in a Run Queue
+  dequeue-objective      Remove an objective from a Run Queue
+  retry-queue-entry      Retry a held Run Queue entry
   reorder-run-queue      Atomically reorder every entry in one Run Queue
   create-run-queue       Create an additional Run Queue in a project
   update-run-queue       Rename, pause, or resume one Run Queue
@@ -169,6 +201,33 @@ discover-project:
     and additive linkedProjects (every project this checkout is linked to).
     When the checkout is linked to more than one project, projectId is the
     isPrimary entry — the project that most recently set this resource as primary.
+
+create-project:
+  Purpose:
+    Create a project through the parentless Protocol surface. Unlike the top-level
+    \`${primaryCommand} create-project\` convenience command, this does not link a local directory.
+  Required:
+    --name <text>               Project name
+  Optional:
+    --workspace-id <id|slug|name>
+                                Workspace to create it in
+    --description <text>        Project description
+    --slug <text>               Explicit project slug
+  Returns:
+    { status: "created", project, workspace }, or workspace_selection_required
+    with the authorized choices when --workspace-id is needed.
+
+register-target:
+  Purpose:
+    Register or reuse this CLI machine as an execution target in one authorized
+    workspace. The CLI supplies its device identity in request headers.
+  Optional:
+    --workspace-id <id|slug|name>
+                                Workspace to register it in
+    --name <text>               Execution-target label
+  Returns:
+    { status: "registered", executionTarget, workspace }, or
+    workspace_selection_required with the authorized choices.
 
 attach:
   Purpose:
@@ -482,6 +541,34 @@ update-objective:
   Returns:
     The updated objective JSON. autoAdvance is deprecated and derived from live queueEntry membership.
 
+delete-missions:
+  Purpose:
+    Soft-delete one to 100 missions atomically.
+  Required:
+    --mission-ids-json <json> or --mission-ids-file <path|->
+    --confirm
+  Rules:
+    Before passing --confirm, show every resolved target to the user and obtain
+    their affirmative response. Each item may be a mission UUID or display id.
+    Any duplicate, missing, deleted, or unauthorized mission rejects the entire
+    request; mission deletion also soft-deletes live child objectives.
+  Returns:
+    { "deletedMissionIds": ["…"] }
+
+delete-objectives:
+  Purpose:
+    Soft-delete one to 100 objectives atomically.
+  Required:
+    --objective-ids-json <json> or --objective-ids-file <path|->
+    --confirm
+  Rules:
+    Before passing --confirm, show every resolved target to the user and obtain
+    their affirmative response. Each item may be an objective UUID or display id.
+    Any duplicate, missing, deleted, or unauthorized objective rejects the entire
+    request; deletion also removes live Run Queue membership.
+  Returns:
+    { "deletedObjectiveIds": ["…"] }
+
 create:
   Purpose:
     Create a draft mission without attaching. Without --project-id and
@@ -655,6 +742,22 @@ changes:
     --mission-id <id>           Required when objective id does not encode mission scope
     --session-key <key>         Validate one exact binding; every matching live/retry ledger drains
 
+sync-changes:
+  Purpose:
+    Retry synchronization of bounded metadata-only evidence from the local
+    objective ledger. Normal update, changes, and deliver calls synchronize this
+    evidence automatically, so use this command only for diagnostics or recovery.
+  Required:
+    --session-key <key>         Must identify an attached objective session in this checkout
+  Optional:
+    --mission-id <id>           Mission UUID or display id
+    --objective-id <id>         Objective UUID or display id
+    --changes-json <json> or --changes-file <path|->
+                                Explicit evidence batch; normally omitted so the CLI drains its ledger
+  Returns:
+    Per-item accepted, ignored, or warning results. Synchronization failures are
+    advisory and never block update or delivery.
+
 resume-follow-up:
   Purpose:
     Reopen a completed objective for post-delivery implementation follow-up.
@@ -766,5 +869,28 @@ list-organizations:
 
 Supported subcommands: ${subcommands}
 Run \`${primaryCommand} help\` for management commands and \`${primaryCommand} protocol help\` for this reference.
-`);
+`;
+
+  if (!subcommand) {
+    console.log(fullHelp);
+    return;
+  }
+
+  const canonical = PROTOCOL_HELP_ALIASES[subcommand] ?? subcommand;
+  const marker = `\n${canonical}:\n`;
+  const sectionStart = fullHelp.indexOf(marker);
+  if (sectionStart === -1) {
+    throw new Error(`Protocol help is missing documentation for ${subcommand}.`);
+  }
+  const contentStart = sectionStart + 1;
+  const remaining = fullHelp.slice(contentStart);
+  const nextSection = remaining.slice(marker.length - 1).search(/\n[a-z][a-z-]+:\n/);
+  const sectionEnd =
+    nextSection === -1
+      ? remaining.indexOf('\nSupported subcommands:')
+      : marker.length - 1 + nextSection;
+  const section = (sectionEnd === -1 ? remaining : remaining.slice(0, sectionEnd)).trimEnd();
+  const aliasNote = canonical === subcommand ? '' : `Alias for \`${canonical}\`.\n\n`;
+
+  console.log(`${primaryCommand} protocol ${subcommand}\n\n${aliasNote}${section}`);
 }

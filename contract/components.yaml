@@ -4,7 +4,7 @@
 # IMPORTANT: Update this file and CONTRACT.md together when adding components or surfaces.
 # Increment contractVersion when any stable interface changes.
 
-contractVersion: '129'
+contractVersion: '130'
 
 components:
   protocol:
@@ -32,6 +32,7 @@ components:
       - 'Run Queue agent operations: queue-objective, dequeue-objective, run-queue, reorder-run-queue, create-run-queue, update-run-queue, delete-run-queue, and reorder-project-run-queues resolve objective display IDs/project references and route reads, entry operations, and queue-definition lifecycle only through the Run Queue service; entry operations require execution_request:create and queue-definition lifecycle requires project:update'
       - 'deprecated autoAdvance compatibility: create/prompt/add-objectives per-item autoAdvance and --auto-advance/--no-auto-advance, plus update-objective, map to authoritative Run Queue membership; legacy storage writes retire next release and column removal requires a later contract bump'
       - 'add-objectives per-item agent/model selection: optional agent persists as assigned_agent and optional model as model; a model requires a non-empty agent and omitted fields preserve project launch-preference defaults'
+      - 'explicitly confirmed bulk deletion: delete-missions and delete-objectives accept one to 100 unique UUID/display-id references plus required --confirm, preflight authorization and existence for every target before any write, then soft-delete atomically; agents must show the resolved target list and obtain an affirmative user response before calling either command'
       - 'agent-facing mission lifecycle commands only; runner queue/device/project-resource management commands live on CLI/Runner/REST surfaces'
     dependsOn:
       - database
@@ -355,6 +356,7 @@ components:
       - 'additive autoAdvance input on overlord_create_mission and overlord_add_objectives items, forwarded to Protocol create/add-objectives'
       - "additive agent/model inputs on overlord_add_objectives items, forwarded unchanged to Protocol add-objectives so an agent can select each appended objective's launch identity"
       - 'hosted overlord_update_objective tool forwards autoAdvance compatibility to Protocol queue membership and instructionText to Protocol update-objective'
+      - 'hosted overlord_delete_missions and overlord_delete_objectives require confirm: true, carry destructive safety annotations, and forward bulk UUID/display-id lists only through Protocol; agents must obtain affirmative user confirmation after showing the resolved targets before invoking either tool'
       - 'hosted overlord_queue_objective forwards queue/add/remove intent to Protocol queue-objective or dequeue-objective; it does not access queue tables directly'
       - 'overlord_list_deliveries, overlord_launch_objective, and overlord_reorder_future_objectives forward to Protocol list-deliveries, launch-objective, and reorder-future-objectives; they preserve the existing normalized delivery response, execution-request queue semantics, and full future-objective ordering validation'
       - "read-only overlord_list_project_statuses tool forwarding to Protocol statuses, returning one project's ordered board columns; overlord_search_missions.status remains a status TYPE filter and rejects project-defined status names"
@@ -563,6 +565,7 @@ interactionSurfaces:
       - 'Hosted MCP mid-turn artifact creation uses overlord_add_artifact → Protocol add-artifact → the same createArtifact service as REST POST; MCP does not write artifact rows directly'
       - 'Hosted MCP artifact updates use overlord_update_artifact → Protocol update-artifact → the same updateArtifact service as REST PATCH; MCP does not write artifact rows directly'
       - 'Hosted MCP Run Queue operations use overlord_create_mission / overlord_add_objectives autoAdvance, overlord_update_objective, overlord_list_run_queues, overlord_reorder_run_queue, overlord_queue_objective, and overlord_manage_run_queue → Protocol create/add-objectives/update-objective/run-queue/reorder-run-queue/queue-objective/dequeue-objective/create-run-queue/update-run-queue/delete-run-queue/reorder-project-run-queues; entry operations require execution_request:create, queue-definition lifecycle requires project:update, and MCP does not write objective or queue rows directly'
+      - 'Hosted MCP bulk deletion uses overlord_delete_missions / overlord_delete_objectives → Protocol delete-missions / delete-objectives; both require explicit confirmation, inherit mission:delete / objective:update RBAC, preflight all targets, and never access mission or objective tables directly'
       - 'Hosted MCP delivery reads, objective launches, and future-objective reorders forward through Protocol to the existing authorized service operations; MCP does not query deliveries, objectives, or execution_requests directly'
       - 'Hosted MCP must not expose local filesystem/worktree inspection, runner queue claiming, execution target mutation, or branch-action tools'
       - 'MCP Apps widget resources use ui://overlord/* URIs, self-contained HTML, and associated tool structuredContent only; no third-party frames, secrets, or unrestricted network access'

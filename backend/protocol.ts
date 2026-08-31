@@ -62,6 +62,8 @@ import {
   callerWorkspaceMemberships,
   createArtifact,
   createInboxItem,
+  deleteMissions,
+  deleteObjectives,
   listMissionDeliveries,
   reorderFutureObjectives,
   searchMissionsAcrossWorkspacesV2,
@@ -764,6 +766,7 @@ type ObjectiveInput = {
 };
 
 const MAX_PROTOCOL_OBJECTIVES = 100;
+const MAX_PROTOCOL_DELETIONS = 100;
 const OBJECTIVE_INPUT_KEYS = new Set([
   'objective',
   'title',
@@ -830,6 +833,41 @@ function parseObjectiveArrayInput(body: ProtocolRequestBody): ObjectiveInput[] |
     }
     return item as ObjectiveInput;
   });
+}
+
+function parseDeletionReferences(
+  body: ProtocolRequestBody,
+  jsonFlag: '--mission-ids-json' | '--objective-ids-json',
+  fileFlag: '--mission-ids-file' | '--objective-ids-file',
+  label: 'missionIds' | 'objectiveIds'
+): string[] {
+  const values = parseJsonArrayInput<unknown>(body, jsonFlag, fileFlag, label);
+  if (!values || values.length === 0) {
+    throw new ApiError(400, `${label} requires at least one reference`, undefined, 'invalid_input');
+  }
+  if (values.length > MAX_PROTOCOL_DELETIONS) {
+    throw new ApiError(
+      400,
+      `${label} accepts at most ${MAX_PROTOCOL_DELETIONS} items`,
+      undefined,
+      'invalid_input'
+    );
+  }
+  const references = values.map((value, index) => {
+    if (typeof value !== 'string' || !value.trim()) {
+      throw new ApiError(
+        400,
+        `${label}[${index}] must be a non-empty string`,
+        undefined,
+        'invalid_input'
+      );
+    }
+    return value.trim();
+  });
+  if (new Set(references).size !== references.length) {
+    throw new ApiError(400, `${label} contains duplicate references`, undefined, 'invalid_input');
+  }
+  return references;
 }
 
 /** Objective array for create/prompt: `--objectives-json`, else a one-item `--objective`. */
@@ -1324,6 +1362,34 @@ const handlers: Record<string, Handler> = {
     return updateObjectiveRecord(objectiveId, update);
   },
 
+  'delete-missions': async (_ctx, body) => {
+    if (!boolFlag(body, '--confirm')) {
+      throw new ApiError(
+        400,
+        'delete-missions requires --confirm',
+        undefined,
+        'confirmation_required'
+      );
+    }
+    return deleteMissions(
+      parseDeletionReferences(body, '--mission-ids-json', '--mission-ids-file', 'missionIds')
+    );
+  },
+
+  'delete-objectives': async (_ctx, body) => {
+    if (!boolFlag(body, '--confirm')) {
+      throw new ApiError(
+        400,
+        'delete-objectives requires --confirm',
+        undefined,
+        'confirmation_required'
+      );
+    }
+    return deleteObjectives(
+      parseDeletionReferences(body, '--objective-ids-json', '--objective-ids-file', 'objectiveIds')
+    );
+  },
+
   'record-work': async (ctx, body) => {
     rejectRemovedProtocolFlags(body, RETIRED_RECORD_WORK_FLAGS);
     const envelope = parseDeliveryPayloadEnvelope(body);
@@ -1557,6 +1623,11 @@ export const SUBCOMMAND_PERMISSIONS: Record<string, Permission | null> = {
   'discuss-objective': PERMISSIONS.OBJECTIVE_SUBMIT,
   'add-objectives': PERMISSIONS.OBJECTIVE_UPDATE,
   'update-objective': PERMISSIONS.OBJECTIVE_UPDATE,
+  // Every target can belong to a different authorized workspace. The bulk
+  // services preflight the corresponding permission per target inside their
+  // transaction, before any destructive write occurs.
+  'delete-missions': null,
+  'delete-objectives': null,
   'record-work': PERMISSIONS.MISSION_CREATE,
   'read-context': PERMISSIONS.MISSION_READ,
   'write-context': PERMISSIONS.MISSION_UPDATE,

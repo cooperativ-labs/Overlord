@@ -86,9 +86,15 @@ export function extractAppNameFromLauncher(launcher: string): string | null {
   return match?.[1] ?? match?.[2] ?? match?.[3] ?? null;
 }
 
-/** The TMPDIR-family environment Overlord pins to the project `.overlord/tmp/`. */
-export function tmpEnvFor(workingDirectory: string): Record<string, string> {
-  const tmpDir = projectTmpDir(workingDirectory);
+/**
+ * The TMPDIR-family environment Overlord pins to the project `.overlord/tmp/`,
+ * or to one launch's private `sessions/<id>/` scratch directory when given.
+ */
+export function tmpEnvFor(
+  workingDirectory: string,
+  scratchDir?: string | null
+): Record<string, string> {
+  const tmpDir = scratchDir?.trim() ? scratchDir : projectTmpDir(workingDirectory);
   return { TMPDIR: tmpDir, TMP: tmpDir, TEMP: tmpDir, OVERLORD_TMPDIR: tmpDir };
 }
 

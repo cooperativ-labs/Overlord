@@ -448,15 +448,33 @@ export async function runLocalCommand({
       return;
     }
     case 'prune': {
-      const { pruneProjectTmpContents } = await import('./project-tmp.js');
+      const { pruneProjectTmpContents, safeTmpNamePart } = await import('./project-tmp.js');
+      const { readActiveSessions } = await import('./active-objective-sessions.js');
       const workingDirectory = process.cwd();
-      const result = pruneProjectTmpContents(workingDirectory);
+      const force = flagBoolean(parsed.flags, '--force');
+      // Scratch owned by a session that is still attached in this checkout is
+      // kept unless --force: a running agent must not lose its TMPDIR.
+      const livePrefixes = readActiveSessions(workingDirectory).flatMap(entry =>
+        [entry.objectiveId, ...entry.objectiveAliases]
+          .map(alias => safeTmpNamePart(alias))
+          .filter(Boolean)
+          .map(slug => `objective-${slug}-`)
+      );
+      const result = pruneProjectTmpContents(workingDirectory, {
+        force,
+        isSessionLive: name => livePrefixes.some(prefix => name.startsWith(prefix))
+      });
       if (json) {
         printJson({ ok: true, ...result });
       } else if (result.warned) {
         console.warn('Warning: no .overlord folder found in the current directory.');
       } else {
         console.log(`Removed ${result.removedCount} item(s) from .overlord/tmp.`);
+        if (result.skippedCount > 0) {
+          console.log(
+            `Kept ${result.skippedCount} live session scratch director${result.skippedCount === 1 ? 'y' : 'ies'} (pass --force to remove).`
+          );
+        }
       }
       return;
     }
