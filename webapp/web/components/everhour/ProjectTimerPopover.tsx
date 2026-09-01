@@ -102,7 +102,9 @@ function RecordRow({ projectId, record }: { projectId: string; record: EverhourT
       <span className="w-14 shrink-0 tabular-nums font-medium">
         {formatHoursMinutes(record.timeSeconds)}
       </span>
-      <span className="w-16 shrink-0 text-muted-foreground tabular-nums">{record.date}</span>
+      <span className="w-20 shrink-0 whitespace-nowrap text-muted-foreground tabular-nums">
+        {record.date}
+      </span>
       <span className="min-w-0 flex-1 truncate text-muted-foreground" title={record.comment ?? ''}>
         {record.comment || '—'}
       </span>
@@ -304,7 +306,7 @@ export function ProjectTimerPopover({ projectId }: { projectId: string }) {
         <Clock className="h-3.5 w-3.5" />
         <span>{running ? formatClock(liveSeconds) : 'Time'}</span>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-96">
+      <PopoverContent align="start" className="w-[26rem]">
         <div className="mb-2 text-sm font-medium">Project time (general)</div>
         {open ? (
           <PopoverBody projectId={projectId} state={state} dataUpdatedAt={dataUpdatedAt} />

@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import { AlertTriangle, ArrowUp, Check, ChevronDown, Loader2, Play, Trash2 } from 'lucide-react';
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 
 import { AgentModelChooserButton } from '@/components/objectives/AgentModelChooserButton.tsx';
 import {
@@ -23,19 +23,11 @@ import {
   objectiveResourceConnection
 } from '@/lib/project-resources.ts';
 import {
-  useAccessibleWorkspaces,
-  useAgentCatalog,
-  useAllProjects,
   useDeleteInboxItem,
   useLaunchObjective,
-  useLaunchPreference,
-  useLaunchSettings,
   useMission,
-  useProjectExecutionTarget,
-  useProjectResources,
   usePromoteInboxItem,
   useUpdateInboxItem,
-  useUpdateLaunchPreference,
   useUpdateObjective
 } from '@/lib/queries.ts';
 
@@ -46,6 +38,8 @@ import type {
   MissionDetailDto,
   ProjectResourceDto
 } from '../../shared/contract.ts';
+
+import { useInboxCardState } from './inbox-mission-card/use-inbox-card-state.ts';
 
 type InboxMissionCardProps =
   | {
@@ -80,18 +74,11 @@ function UnassignedInboxMissionCard({
   item: InboxItemDto;
   onPromoted: (mission: MissionDetailDto) => void;
 }) {
-  const projectsQ = useAllProjects();
-  const projects = useMemo(
-    () => projectsQ.data.filter(project => project.status === 'active'),
-    [projectsQ.data]
-  );
-  const workspaces = useAccessibleWorkspaces();
   const updateInbox = useUpdateInboxItem();
   const promote = usePromoteInboxItem();
   const remove = useDeleteInboxItem();
   const launchObjective = useLaunchObjective();
   const updateObjective = useUpdateObjective();
-  const settingsQ = useLaunchSettings();
 
   const [instruction, setInstruction] = useState(item.objectives[0] ?? item.title);
   const [projectId, setProjectId] = useState('');
@@ -103,79 +90,34 @@ function UnassignedInboxMissionCard({
     setInstruction(item.objectives[0] ?? item.title);
   }, [item.id, item.objectives, item.title]);
 
-  const selectedProject = projects.find(project => project.id === projectId) ?? null;
-  const catalogQ = useAgentCatalog(selectedProject?.workspaceId);
-  const preferenceQ = useLaunchPreference(projectId);
-  const resourcesQ = useProjectResources(projectId);
-  const executionTargetQ = useProjectExecutionTarget(projectId);
-  const updatePreference = useUpdateLaunchPreference(projectId);
-
-  const projectGroups = useMemo(() => {
-    return workspaces
-      .map(workspace => ({
-        workspace,
-        projects: projects.filter(project => project.workspaceId === workspace.id)
-      }))
-      .filter(group => group.projects.length > 0);
-  }, [projects, workspaces]);
-  const showWorkspaceGroups = projectGroups.length > 1;
-
-  const catalog = catalogQ.data ?? null;
-  const agentConfigs = settingsQ.data?.agentConfigs ?? {};
-  const selectionLoaded = Boolean(catalog) && !preferenceQ.isLoading && !settingsQ.isLoading;
-  const primaryConnection = objectiveResourceConnection({
-    resources: resourcesQ.data ?? [],
+  const state = useInboxCardState({
+    projectId,
+    workspaceId: undefined,
     resourceKey,
-    executionTargetId: executionTargetQ.data?.selectedExecutionTargetId ?? null
+    instruction,
+    isBusy: pendingAction !== null
   });
-  const targetAvailability = executionTargetAvailability({
-    primaryConnected: primaryConnection.connected,
-    eligibleTargets: executionTargetQ.data?.eligibleTargets
-  });
-
-  const defaultSelection = useMemo<AgentModelSelection>(() => {
-    if (preferenceQ.data?.selectedAgent) {
-      return {
-        agent: preferenceQ.data.selectedAgent,
-        model: preferenceQ.data.selectedModel,
-        reasoningEffort: preferenceQ.data.selectedReasoningEffort
-      };
-    }
-    return {
-      agent: catalog?.defaultAgent ?? 'claude',
-      model: catalog?.defaultModel ?? null,
-      reasoningEffort: null
-    };
-  }, [catalog, preferenceQ.data]);
-
-  const [selection, setSelection] = useState<AgentModelSelection>(defaultSelection);
-  const [explicitLaunchConfigs, setExplicitLaunchConfigs] = useState<
-    Record<string, AgentLaunchConfigDto>
-  >({});
-  useEffect(() => {
-    setSelection(defaultSelection);
-    setExplicitLaunchConfigs({});
-  }, [defaultSelection]);
-
-  const handleSelectionChange = (next: AgentModelSelection) => {
-    setSelection(next);
-    if (!projectId) return;
-    updatePreference.mutate({
-      selectedAgent: next.agent,
-      selectedModel: next.model,
-      selectedReasoningEffort: next.reasoningEffort
-    });
-  };
-
-  const isBusy = pendingAction !== null;
-  const isManual = selection.agent === MANUAL_AGENT_KEY;
-  const canSubmit = Boolean(instruction.trim()) && (!projectId || selectionLoaded) && !isBusy;
-  const canRun =
-    Boolean(projectId) &&
-    canSubmit &&
-    !isManual &&
-    primaryConnection.connected &&
-    targetAvailability.available;
+  const {
+    projects,
+    projectGroups,
+    showWorkspaceGroups,
+    selectedProject,
+    catalog,
+    agentConfigs,
+    resources,
+    selectionLoaded,
+    primaryConnection,
+    targetAvailability,
+    selection,
+    explicitLaunchConfigs,
+    setExplicitLaunchConfigs,
+    handleSelectionChange,
+    persistSelectionPreference,
+    isBusy,
+    isManual,
+    canSubmit,
+    canRun
+  } = state;
 
   async function persistInboxText(text: string) {
     const title = text.split('\n')[0]?.trim() || text;
@@ -248,11 +190,7 @@ function UnassignedInboxMissionCard({
               : {})
           }
         });
-        updatePreference.mutate({
-          selectedAgent: selection.agent,
-          selectedModel: selection.model,
-          selectedReasoningEffort: selection.reasoningEffort
-        });
+        persistSelectionPreference(selection);
       }
 
       onPromoted(mission);
@@ -294,7 +232,7 @@ function UnassignedInboxMissionCard({
         setResourceKey(null);
       }}
       onResourceChange={setResourceKey}
-      resources={resourcesQ.data ?? []}
+      resources={resources}
       selection={selection}
       onSelectionChange={handleSelectionChange}
       catalog={catalog}
@@ -325,15 +263,8 @@ function PromotedInboxMissionCard({ initialMission }: { initialMission: MissionD
   const mission = missionQ.data ?? initialMission;
   const objective = mission.objectives[0] ?? null;
 
-  const projectsQ = useAllProjects();
-  const projects = useMemo(
-    () => projectsQ.data.filter(project => project.status === 'active'),
-    [projectsQ.data]
-  );
-  const workspaces = useAccessibleWorkspaces();
   const launchObjective = useLaunchObjective();
   const updateObjective = useUpdateObjective();
-  const settingsQ = useLaunchSettings();
 
   const [instruction, setInstruction] = useState(objective?.instructionText ?? mission.title);
   const [resourceKey, setResourceKey] = useState<string | null>(objective?.resourceKey ?? null);
@@ -346,84 +277,43 @@ function PromotedInboxMissionCard({ initialMission }: { initialMission: MissionD
     setResourceKey(objective.resourceKey);
   }, [objective?.id, objective?.instructionText, objective?.resourceKey, objective]);
 
-  const selectedProject = projects.find(project => project.id === mission.projectId) ?? null;
-  const catalogQ = useAgentCatalog(selectedProject?.workspaceId ?? mission.workspaceId);
-  const preferenceQ = useLaunchPreference(mission.projectId);
-  const resourcesQ = useProjectResources(mission.projectId);
-  const executionTargetQ = useProjectExecutionTarget(mission.projectId);
-  const updatePreference = useUpdateLaunchPreference(mission.projectId);
-
-  const projectGroups = useMemo(() => {
-    return workspaces
-      .map(workspace => ({
-        workspace,
-        projects: projects.filter(project => project.workspaceId === workspace.id)
-      }))
-      .filter(group => group.projects.length > 0);
-  }, [projects, workspaces]);
-  const showWorkspaceGroups = projectGroups.length > 1;
-
-  const catalog = catalogQ.data ?? null;
-  const agentConfigs = {
-    ...(settingsQ.data?.agentConfigs ?? {}),
-    ...(objective?.launchConfigOverrides?.['*'] ?? {})
-  };
-  const selectionLoaded = Boolean(catalog) && !preferenceQ.isLoading && !settingsQ.isLoading;
-  const primaryConnection = objectiveResourceConnection({
-    resources: resourcesQ.data ?? [],
+  const state = useInboxCardState({
+    projectId: mission.projectId,
+    workspaceId: mission.workspaceId,
     resourceKey,
-    executionTargetId: executionTargetQ.data?.selectedExecutionTargetId ?? null
+    instruction,
+    isBusy: pendingAction !== null,
+    isActionable: Boolean(objective),
+    assignedSelection: objective
+      ? {
+          agent: objective.assignedAgent,
+          model: objective.model,
+          reasoningEffort: objective.reasoningEffort
+        }
+      : null,
+    launchConfigOverrides: objective?.launchConfigOverrides?.['*']
   });
-  const targetAvailability = executionTargetAvailability({
-    primaryConnected: primaryConnection.connected,
-    eligibleTargets: executionTargetQ.data?.eligibleTargets
-  });
-
-  const defaultSelection = useMemo<AgentModelSelection>(() => {
-    if (objective?.assignedAgent) {
-      return {
-        agent: objective.assignedAgent,
-        model: objective.model,
-        reasoningEffort: objective.reasoningEffort
-      };
-    }
-    if (preferenceQ.data?.selectedAgent) {
-      return {
-        agent: preferenceQ.data.selectedAgent,
-        model: preferenceQ.data.selectedModel,
-        reasoningEffort: preferenceQ.data.selectedReasoningEffort
-      };
-    }
-    return {
-      agent: catalog?.defaultAgent ?? 'claude',
-      model: catalog?.defaultModel ?? null,
-      reasoningEffort: null
-    };
-  }, [catalog, objective, preferenceQ.data]);
-
-  const [selection, setSelection] = useState<AgentModelSelection>(defaultSelection);
-  const [explicitLaunchConfigs, setExplicitLaunchConfigs] = useState<
-    Record<string, AgentLaunchConfigDto>
-  >(objective?.launchConfigOverrides?.['*'] ?? {});
-  useEffect(() => {
-    setSelection(defaultSelection);
-    setExplicitLaunchConfigs(objective?.launchConfigOverrides?.['*'] ?? {});
-  }, [defaultSelection, objective?.launchConfigOverrides]);
-
-  const handleSelectionChange = (next: AgentModelSelection) => {
-    setSelection(next);
-    updatePreference.mutate({
-      selectedAgent: next.agent,
-      selectedModel: next.model,
-      selectedReasoningEffort: next.reasoningEffort
-    });
-  };
-
-  const isBusy = pendingAction !== null || !objective;
-  const isManual = selection.agent === MANUAL_AGENT_KEY;
-  const canSubmit = Boolean(instruction.trim()) && selectionLoaded && !isBusy && Boolean(objective);
-  const canRun =
-    canSubmit && !isManual && primaryConnection.connected && targetAvailability.available;
+  const {
+    projects,
+    projectGroups,
+    showWorkspaceGroups,
+    selectedProject,
+    catalog,
+    agentConfigs,
+    resources,
+    selectionLoaded,
+    primaryConnection,
+    targetAvailability,
+    selection,
+    explicitLaunchConfigs,
+    setExplicitLaunchConfigs,
+    handleSelectionChange,
+    persistSelectionPreference,
+    isBusy,
+    isManual,
+    canSubmit,
+    canRun
+  } = state;
 
   async function submit(shouldLaunch: boolean) {
     const text = instruction.trim();
@@ -475,11 +365,7 @@ function PromotedInboxMissionCard({ initialMission }: { initialMission: MissionD
           }
         });
       } else {
-        updatePreference.mutate({
-          selectedAgent: selection.agent,
-          selectedModel: selection.model,
-          selectedReasoningEffort: selection.reasoningEffort
-        });
+        persistSelectionPreference(selection);
       }
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : 'Failed to update mission.');
@@ -506,7 +392,7 @@ function PromotedInboxMissionCard({ initialMission }: { initialMission: MissionD
       }}
       projectLocked
       onResourceChange={setResourceKey}
-      resources={resourcesQ.data ?? []}
+      resources={resources}
       selection={selection}
       onSelectionChange={handleSelectionChange}
       catalog={catalog}
