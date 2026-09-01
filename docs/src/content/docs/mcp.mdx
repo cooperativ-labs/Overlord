@@ -38,6 +38,8 @@ The hosted server advertises these mission-lifecycle tools:
 | `overlord_update_objective`          | Turns auto-advance on or off and/or edits instruction text on a draft or future objective. Requires `objectiveId` (UUID or display id).       |
 | `overlord_launch_objective`          | Queues the normal execution request for one objective. Requires `objectiveId` (UUID or display id) and `agent`. Does not attach this agent.  |
 | `overlord_reorder_future_objectives` | Replaces one mission's complete future-objective order.                                                                                      |
+| `overlord_delete_missions`           | Soft-deletes 1–100 missions (also soft-deletes their live objectives) atomically. Requires `confirm: true` after the resolved list is shown to and approved by the user.    |
+| `overlord_delete_objectives`         | Soft-deletes 1–100 objectives (also removes their live Run Queue membership) atomically. Requires `confirm: true` after the resolved list is shown to and approved by the user. |
 | `overlord_list_run_queues`           | Reads compact or full live Run Queue state before a mutation.                                                                                |
 | `overlord_reorder_run_queue`         | Atomically replaces every entry in one Run Queue.                                                                                            |
 | `overlord_queue_objective`           | Adds, moves, or removes one objective in the project Run Queue, including front or rank placement. Requires `objectiveId`.                   |

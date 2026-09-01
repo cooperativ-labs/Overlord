@@ -162,12 +162,23 @@ emits back to the harness.
 
 ### Where the session channel comes from
 
+**As of the Latch v2 cutover, this creation path is not currently wired into either launch
+surface.** `createSessionChannel` (`packages/core/service/agent-session/channels.ts`) has no
+production callers today: `POST /api/missions/:id/session-channel` is a permanent stub that
+throws `410 session_controls_gone` for every caller (`backend/agent-session-routes.ts`,
+`prepareMissionSessionChannel`), and neither `ovld launch`'s call site nor the runner-dispatched
+launch call site passes a `sessionChannelId`/`sessionChannelToken` into `launchAgent`. In
+practice, a launched agent's environment does not carry `OVERLORD_SESSION_CHANNEL_ID` today, so
+`connectors/core/scripts/agent-session-hook.sh` exits before spawning `ovld` on every
+invocation. Treat the table below as the intended design this module retains, not live
+behavior — do not build against it assuming a channel exists at launch.
+
 The credential your adapter's CLI call presents is not something the adapter finds or derives:
 
 | Launch                 | Channel created at                       | Credential reaches the process via                  |
 | ---------------------- | ---------------------------------------- | --------------------------------------------------- |
-| Queued (runner)        | the `launching` transition               | owner-only local cache, keyed by channel id         |
-| Manual (`ovld launch`) | `POST /api/missions/:id/session-channel` | owner-only local cache, keyed by channel id         |
+| Queued (runner)        | the `launching` transition (not wired)   | owner-only local cache, keyed by channel id         |
+| Manual (`ovld launch`) | `POST /api/missions/:id/session-channel` (retired; returns 410) | owner-only local cache, keyed by channel id |
 | Virtual gateway        | the same preparation service             | `OVERLORD_SESSION_CHANNEL_TOKEN` in the environment |
 
 Only `OVERLORD_SESSION_CHANNEL_ID` is exported into the launch environment and the terminal

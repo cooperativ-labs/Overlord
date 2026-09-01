@@ -236,6 +236,14 @@ Requirements:
 - Degrades gracefully without a web app open: the harness's own fallback
   decision (allow/deny/ask) applies when no one answers in time.
 
+As of the Latch v2 cutover, no shipped launch path currently supplies the session-channel
+credential this mechanism depends on (`createSessionChannel` has no production callers), so
+"blocks the harness's tool call until answered" does not happen end-to-end for any existing
+adapter today — do not assume a new connector can exercise this path against a real Overlord
+deployment without first restoring that wiring. The one decision kind that is still remotely
+answerable — a blocking **question** — goes through the mission protocol's `ask`/resolve flow
+and a live Latch terminal session, not through this session-channel mechanism.
+
 ### Stop Hook
 
 Future requirement:
