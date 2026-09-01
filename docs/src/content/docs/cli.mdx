@@ -72,7 +72,7 @@ Supported built-in connector names currently include `claude`, `codex`, `cursor`
 | `ovld inbox create --title <text> --objective <text> [--json]`                                                                                                                        | Create a private, account-owned unassigned task capture.                                                                                                                                 |
 | `ovld prompt "<objective>" [--objectives-json <json>] [--title <text>] [--project-id <id>] [--resource <key>] [--agent <id>] [--auto-advance\|--no-auto-advance] [--json]`            | Create a mission and queue execution.                                                                                                                                                    |
 | `ovld attach <mission-id> [agent] [--objective-id <id>] [--model <id>] [--thinking <level>] [--json]`                                                                                 | Queue an agent for an existing mission.                                                                                                                                                  |
-| `ovld execution --mission-id <id> [--objective-id <id>] [--agent <id>] [--model <id>] [--thinking <level>] [--json]`                                                                  | Alias of `attach` that requires the mission flag.                                                                                                                                        |
+| `ovld execution --mission-id <id> [--objective-id <id>] [--agent <id>] [--model <id>] [--thinking <level>] [--json]`                                                                  | Alias of `attach` without positional-`missionId` support. `--mission-id` is optional when `--objective-id` is a display id (e.g. `coo:8.k7xm`), same as `attach`.                       |
 | `ovld missions list [--status <csv>] [--query <text>] [--project-id <id>] [--limit <n>] [--json]`                                                                                     | List missions.                                                                                                                                                                           |
 | `ovld statuses list --project-id <id> [--json]`                                                                                                                                       | List one project's board columns. Status names are per project; status types are not.                                                                                                    |
 | `ovld mission context\|events\|deliveries\|artifacts\|rationales <mission-id> [--json]`                                                                                               | Inspect a mission and its work record. Accepts an objective display id, which names its mission.                                                                                         |
@@ -135,6 +135,8 @@ Every command below is available from `ovld protocol help`.
 | ---------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | `auth-status`                      | Check backend and authentication readiness.                                                               |
 | `discover-project`                 | Resolve a project from the working directory, project ID, or directory.                                   |
+| `create-project`                   | Create a project in one authorized workspace.                                                              |
+| `register-target`                  | Register this machine as an execution target.                                                              |
 | `list-organizations`               | Return the current workspace context (the historic command name is retained).                             |
 | `attach`                           | Start a full mission session and return its working context.                                              |
 | `connect`                          | Start a lightweight session without full context assembly.                                                |
@@ -151,11 +153,13 @@ Every command below is available from `ovld protocol help`.
 | `update-run-queue`                 | Rename, pause, or resume a queue definition. Requires `project:update`.                                   |
 | `delete-run-queue`                 | Delete a queue, optionally moving its entries. Requires `project:update`.                                 |
 | `reorder-project-run-queues`       | Replace the project's complete queue-definition order. Requires `project:update`.                         |
-| `search` (`search-missions` alias) | Find grouped mission, objective, and delivery matches by text, state, or project.                         |
+| `search` (`search-missions` alias) | Find grouped mission, objective, and delivery matches by text, state, or project.                          |
 | `statuses`                         | List one project's board columns.                                                                         |
 | `discuss-objective`                | Submit the latest draft objective for discussion without execution.                                       |
 | `add-objectives`                   | Append ordered objectives to a mission.                                                                   |
 | `update-objective`                 | Turn auto-advance on or off, or edit instruction text. Requires `--objective-id`.                         |
+| `delete-missions`                  | Confirmed bulk soft-delete of one to 100 missions (requires `--confirm`).                                  |
+| `delete-objectives`                | Confirmed bulk soft-delete of one to 100 objectives (requires `--confirm`).                                |
 | `create`                           | Create a draft mission without attaching.                                                                 |
 | `prompt`                           | Create a mission and attach immediately.                                                                  |
 | `record-work`                      | Record completed chat work as a review mission.                                                           |

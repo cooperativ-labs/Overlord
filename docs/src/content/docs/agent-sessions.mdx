@@ -8,6 +8,18 @@ from the mission protocol: the protocol records attach, progress, questions, and
 the agent-session connection handles activity, time-bounded decisions, and instructions while
 the harness is running.
 
+:::caution
+As of the Latch v2 cutover, no launch path (manual `ovld launch` or a runner-dispatched launch)
+currently creates the session channel this page describes, so `OVERLORD_SESSION_CHANNEL_ID`
+is not set in a launched agent's environment and the connector hooks exit immediately without
+reaching Overlord. **Observe** activity events and **Inject**ed instructions are effectively
+inactive today. Of the four **Decide** request kinds, only a blocking **question** or a fixed
+**choice** can still be answered remotely, and only while the mission's attached objective has
+a live [Latch](https://latch.sh) terminal session Overlord can reach — see
+`AgentRequestDto.delivery` in `CONTRACT.md`. **Permission** and **retry** requests can no
+longer be answered remotely at all; they fall back to native harness behavior.
+:::
+
 ## The three live paths
 
 ```text
@@ -29,17 +41,21 @@ Agent harness
   the network, or the waiter fails, Overlord emits no answer and returns control to the harness.
   Pi is different and is described below. A held decision renders in the mission panel as one of
   four request kinds — a plain allow/deny **permission**, a blocking **question**, a **choice**
-  among fixed options, or a **retry** intent — depending on what the harness asked for.
+  among fixed options, or a **retry** intent — depending on what the harness asked for. Only
+  **question** and **choice** requests can currently be answered remotely, and only when the
+  mission's objective has a live Latch terminal session Overlord can reach
+  (`AgentRequestDto.delivery.mode === 'latch'`); a **permission** or **retry** request always
+  falls back to the harness's own native prompt or policy.
 - **Inject** sends an instruction to a specific live session. The result is honest about what
   the harness proved: **Delivered**, **Queued (turn boundary)**, **Queued (next turn)**, or
   **Unsupported**. An instruction already emitted to a harness is never automatically retried.
 
 ## Why a session channel exists
 
-The channel is created before the agent process starts, so startup events have somewhere
-authorized to land before the mission protocol attaches. Its credential is scoped to one
-channel and stored hash-only by the server. It cannot read mission context or act as a human,
-and a normal user token cannot impersonate an adapter.
+When wired up, the channel is created before the agent process starts, so startup events have
+somewhere authorized to land before the mission protocol attaches. Its credential is scoped to
+one channel and stored hash-only by the server. It cannot read mission context or act as a
+human, and a normal user token cannot impersonate an adapter.
 
 ```text
 runner/manual launch
@@ -48,31 +64,25 @@ runner/manual launch
                 └─ protocol attach binds channel to agent session
 ```
 
-The native harness session id is only a correlation label. Neither it nor the checkout path
-grants access. This matters when several missions, worktrees, or agents are active on the same
-machine.
+As the caution above notes, this creation step is not currently called from either launch
+path, so a launched session today runs without a channel — the diagram describes the intended
+shape, not current behavior. The native harness session id is only a correlation label in any
+case. Neither it nor the checkout path grants access. This matters when several missions,
+worktrees, or agents are active on the same machine.
 
-## Send an instruction
-
-In a mission panel, expand **Session instructions**, enter the message, and send it to the live
-channel. The status beside the message describes the strongest acknowledgement the connector
-received. For example, Cursor's `followup_message` is shown as **Queued (turn boundary)** rather
-than Delivered because Cursor does not acknowledge that the agent consumed it.
-
-From a terminal:
-
-```bash
-ovld inputs list --mission-id <mission-id>
-ovld inputs send --channel-id <channel-id> --body "Re-run the focused test before delivery."
-```
-
-The list response identifies the addressed channel. Sending requires that channel ID on purpose:
-a mission can have more than one session, and a mission ID alone does not identify which agent
-should receive the instruction.
+## Answering a held question
 
 Use `ovld requests` to list a decision that a live adapter has already opened, then answer it
-with the request ID and revision shown. The static capability catalog is diagnostic evidence;
-it does not manufacture a request when the live harness never opened one.
+with the request ID and revision shown. Only **question** and **choice** requests are
+answerable this way, and only while `ovld requests` reports a `latch` delivery mode for that
+request; a request reporting `read_only` (no reachable Latch session) cannot be answered
+remotely — resolve it in the native harness instead. The static capability catalog is
+diagnostic evidence; it does not manufacture a request when the live harness never opened one.
+
+Sending an arbitrary instruction into a running session (`ovld inputs send`) and the mission
+panel's session-instructions control are retired along with the session channel above; the
+backend now rejects both with `session_controls_gone`. `ovld inputs list` still reads historical
+rows for a mission but cannot be used to queue a new one.
 
 ## Conflicts with hooks outside Overlord
 
@@ -148,6 +158,10 @@ ovld agent-session capabilities <agent> --json
 `ovld doctor` detects missing or stale managed connector files. The capabilities command is
 offline and shows what is fixture-proven, unsupported, not implemented, or still unverified.
 After an Overlord upgrade, refresh the connector with `ovld agent-setup <agent>`.
+
+Given the caution at the top of this page, expect `OVERLORD_SESSION_CHANNEL_ID` to be absent
+from every launched session's environment today — that reflects the current, unwired state of
+launch, not a misconfigured connector.
 
 Related: [Agents and connectors](/agents/) · [Data boundaries](/data-boundaries/) ·
 [Troubleshooting](/troubleshooting/)

@@ -21,7 +21,11 @@ not be edited.
 ## Shared diagnostic order
 
 1. Confirm `OVERLORD_SESSION_CHANNEL_ID` exists in the launched process. Without it, the hook
-   must exit before spawning `ovld`; silence is correct.
+   must exit before spawning `ovld`; silence is correct. As of the Latch v2 cutover, neither
+   `ovld launch` nor a runner-dispatched launch currently calls `createSessionChannel`, so
+   expect this variable to be absent for every session today — that is the current state of
+   launch wiring, not evidence of a broken adapter. Do not spend time debugging a specific
+   connector on this signal alone.
 2. Run `ovld doctor` and repair stale managed files with `ovld agent-setup <agent>`.
 3. Read the adapter's static capability maximum, then verify the installed descriptor and live
    binding separately. The catalog alone does not prove that the installed harness invoked a
@@ -55,6 +59,15 @@ relying on either path.
   configuration; Cursor can load Claude hooks.
 - Fork/subagent native identity remains a declared hazard. Do not bind a child session by cwd or
   assume it shares the parent's native id.
+- Two named hazards from `connectors/adapters/claude/CAPABILITIES.md` explain the
+  `not-implemented` statuses above rather than just restating them: the shipped
+  `PermissionRequest` hook script (`scripts/permission-hook.sh`) calls a
+  `ovld protocol permission-request` subcommand that does not exist, backgrounds the call with
+  `& disown`, and is gated on a mission-id environment variable a launched session does not
+  always set — it is structurally incapable of returning a decision, and it is not even
+  registered in `hooks/hooks.json` (only `UserPromptSubmit`, `PostToolUse`, and `Stop` are). The
+  shipped `Stop` hook similarly calls `ovld protocol hook-event --hook-type Stop`, which the CLI
+  rejects, and parses a `deliveryStatus` field nothing produces.
 
 ## Codex
 

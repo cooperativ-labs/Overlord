@@ -79,10 +79,12 @@ The current tool catalog is mission-first:
 - `overlord_reorder_future_objectives` — explicitly replace one mission's complete future-objective ordering
 - `overlord_add_objectives`
 - `overlord_update_objective` — turn auto-advance on or off and/or edit instruction text on draft/future objectives
+- `overlord_delete_missions` — bulk soft-delete one to 100 missions atomically (also soft-deletes live objectives); requires `confirm: true` after the resolved list is shown to and approved by the user
+- `overlord_delete_objectives` — bulk soft-delete one to 100 objectives atomically (also removes live Run Queue membership); requires `confirm: true` after the resolved list is shown to and approved by the user
 - `overlord_list_run_queues` — read compact or full live Run Queue state before changing it
 - `overlord_reorder_run_queue` — atomically replace every entry in one Run Queue
 - `overlord_queue_objective` — add, move, or remove one objective from the authoritative project Run Queue, including front or one-based rank placement
-- `overlord_manage_run_queue` — create, rename, pause, resume, delete, or reorder queue definitions (full-scope token required)
+- `overlord_manage_run_queue` — create, rename, pause, resume, delete, or reorder queue definitions (full-scope token required), or retry one held Run Queue entry with `action: 'retry_entry'` (uses `execution_request:create`, not a full-scope token)
 - `overlord_attach_session`
 - `overlord_update_session`
 - `overlord_deliver_session`
@@ -125,16 +127,20 @@ active objective" is ambiguous and returns `ambiguous_active_objective`. On
 is available. On `overlord_add_objectives` and `overlord_update_artifact` it only
 supplies the mission scope.
 
-`overlord_create_mission` and `overlord_add_objectives` accept optional
-`autoAdvance` (boolean; default false), which maps to authoritative Run Queue
+`overlord_create_mission` accepts optional top-level `autoAdvance` (boolean;
+default false); `overlord_add_objectives` accepts the same `autoAdvance` flag
+per-item inside its `objectives` array. Both map to authoritative Run Queue
 membership. `overlord_update_objective` maps its `autoAdvance` compatibility
 input the same way. Use `overlord_list_run_queues` before queue mutations;
 `overlord_reorder_run_queue` requires every live entry exactly once and returns
 the current order when it cannot safely apply a request. `overlord_queue_objective`
 adds, moves, or removes one objective with optional queue, predecessor, front,
 or one-based rank placement. `overlord_manage_run_queue` owns queue-definition
-lifecycle. Entry operations require `execution_request:create`; definition
-operations require `project:update` and therefore need a full-scope token.
+lifecycle (`create`/`update`/`delete`/`reorder_queues`) and also retries one
+held entry via `action: 'retry_entry'`. Entry operations — `overlord_queue_objective`,
+`overlord_reorder_run_queue`, and `retry_entry` — require `execution_request:create`;
+the queue-definition actions require `project:update` and therefore need a
+full-scope token.
 The returned `autoAdvance` field is deprecated and derived from live `queueEntry`
 membership; legacy storage writes retire next release and column removal requires
 a later contract bump.

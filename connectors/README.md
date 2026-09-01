@@ -86,10 +86,10 @@ contributor adding an adapter can tell signal from neglect. Source of truth for 
 
 | Adapter       | Commands      | Hooks                                                 | Local MCP shim | MCP config        | Rules    | Native resume |
 | ------------- | ------------- | ----------------------------------------------------- | -------------- | ----------------- | -------- | ------------- |
-| `claude`      | `commands/`   | `hooks/hooks.json` (5 types)                          | —              | —                 | —        | —             |
+| `claude`      | `commands/`   | `hooks/hooks.json` (3 types)                          | —              | —                 | —        | —             |
 | `codex`       | —             | `.codex-plugin/hooks.json` + `scripts/*.sh` (2 types) | rendered       | `.mcp.json`       | —        | yes           |
 | `cursor`      | `commands/`   | `hooks/*.sh` (4 types)                                | rendered       | `mcp.json`        | `rules/` | —             |
-| `antigravity` | `skills/*.md` | `hooks.json` + `scripts/*.sh` (2 types)               | rendered       | `mcp_config.json` | —        | —             |
+| `antigravity` | `skills/*.md` | `hooks.json` (0 types — none shipped yet)             | rendered       | `mcp_config.json` | —        | —             |
 | `pi`          | —             | `extensions/overlord.ts` (input/tool/session events)  | —              | —                 | —        | yes           |
 | `opencode`    | —             | none — control plane, see below                       | —              | —                 | —        | —             |
 
@@ -103,6 +103,11 @@ Intentional omissions:
   yet start it automatically. A supervised execution target must supply that launch integration.
 - **`claude` ships no local MCP shim.** The Claude plugin reaches Overlord's hosted
   MCP server, so a local stdio bridge would duplicate it.
+- **`claude` ships a 4th hook script, `scripts/permission-hook.sh`, that is not registered in
+  `hooks/hooks.json`.** It is a declared hazard (`shipped-permission-hook-inert` in
+  `connectors/adapters/claude/CAPABILITIES.md`), not live behavior: it calls a
+  `ovld protocol permission-request` subcommand that does not exist and is structurally
+  incapable of returning a decision even once wired in.
 - **`pi` ships no shim, hooks directory, or commands.** PI integrates through one TypeScript
   extension. It has no native permission dialog; its optional `tool_call` decision interceptor
   is fail-open and requires explicit workspace and project opt-in.
