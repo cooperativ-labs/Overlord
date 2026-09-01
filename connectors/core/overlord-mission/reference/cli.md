@@ -41,7 +41,7 @@ ovld protocol update --session-key <sessionKey> --mission-id $MISSION_ID --summa
 ## Heartbeat
 
 ```bash
-ovld protocol heartbeat --session-key <sessionKey> --mission-id $MISSION_ID --phase execute --percent 40 --note "Running the integration suite"
+ovld protocol heartbeat --session-key <sessionKey> --mission-id $MISSION_ID --phase execute --note "Running the integration suite"
 ```
 
 Use `heartbeat` for liveness pings and transient UI telemetry when you have no meaningful narrative summary to post. It updates the attached session without creating a mission event.
@@ -189,7 +189,7 @@ ovld protocol create --agent <agent-identifier> --objectives-json '[{"objective"
 ```
 
 ```bash
-ovld protocol prompt --agent <agent-identifier> --objectives-json '[{"objective":"Implement feature X"}]' --priority medium
+ovld protocol prompt --agent <agent-identifier> --objectives-json '[{"objective":"Implement feature X"}]'
 ```
 
 ```bash
@@ -223,17 +223,6 @@ EOF
 The full submission format, including the `record-work`-only `changedFiles` field and MCP
 equivalent, is in [record-work.md](record-work.md).
 
-### Local Durability For New Missions
-
-`create`, `prompt`, `add-objectives`, and `record-work` save the objective/mission text to a local draft (`~/.overlord/pending-missions/`) **before** sending it, and delete that draft only once the server confirms the write. If the network drops mid-call, your text is never lost — the failure message points at the saved file. Manage outstanding drafts with `pending-missions`:
-
-```bash
-ovld protocol pending-missions               # list drafts the server never confirmed
-ovld protocol pending-missions --retry <id>  # re-send a saved draft; clears it on success
-ovld protocol pending-missions --clear <id>  # delete one draft after confirming it landed
-ovld protocol pending-missions --clear-all   # delete every draft
-```
-
 To inspect project resolution explicitly:
 
 ```bash
@@ -262,11 +251,17 @@ ovld protocol create-project --name "Acme Web" --directory /path/to/repo
 ovld protocol create-project --name "Acme Web" --no-directory
 ```
 
-`ovld create-project` is a friendly top-level alias for `ovld protocol create-project`.
-When a directory is registered the command also writes `.overlord/project.json` so
-future cwd-based resolution finds the project. Pass `--organization-id <id>` to create
-in a specific organization (defaults to your membership); `--color <#rrggbb>` sets the
-project color.
+`ovld create-project --name "<name>"` is the top-level convenience command; it accepts
+only `--name`, `--directory`/`--no-directory`, and `--json`, and always creates the
+project in your resolved workspace. When a directory is registered it also writes
+`.overlord/project.json` so future cwd-based resolution finds the project.
+
+`ovld protocol create-project --name "<name>"` is the parentless Protocol surface;
+unlike the top-level command it does not link a local directory. Pass
+`--workspace-id <id|slug|name>` to choose a workspace when you belong to more than one
+(omitting it returns `workspace_selection_required` with your choices); optional
+`--description <text>` and `--slug <text>` are also accepted. There is no `--color`
+flag on either surface.
 
 ### Resolving the project ID when you don't have one
 
