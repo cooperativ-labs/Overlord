@@ -2,6 +2,12 @@
 
 **Status:** proposed — discovery and product definition only; no Slack app or integration is being implemented yet.
 
+> **Slack AI-agent surface evaluated and deferred.** See
+> [coo-880-slack-agent-surface-evaluation.md](./coo-880-slack-agent-surface-evaluation.md).
+> Slack's Agents & AI Apps container is DM-scoped and depends on the chat-capable
+> MCP surface coo:781/coo:784 are still building, so it does not replace this plan.
+> It becomes phase 2 on the same Slack app.
+
 ## 1. Product decision
 
 Slack is an **intake surface** for Overlord work. It is not a notification channel.
@@ -35,12 +41,20 @@ The app responds only to the invoking user, with an ephemeral confirmation and a
 
 ### Non-goals for the first release
 
+These are scoped to release 1. The notification non-goal in particular is
+expected to be re-opened deliberately at phase 2, when coo:637 wants Slack as a
+notification transport.
+
 - Slack notifications, subscriptions, reminders, or activity feeds.
 - Changing mission status, assigning agents, launching work, or approving requests from Slack.
 - Bidirectional synchronization between Slack and Overlord.
 - A general-purpose Slack search/indexing bot.
 - A native arbitrary multi-message selector. Slack message actions operate on one message; thread capture is the useful supported “series of messages” primitive. A later global shortcut may accept several pasted Slack permalinks if that proves necessary.
 - A Slack workspace connected to more than one Overlord workspace.
+- A conversational agent surface (Slack's Agents & AI Apps container). Deferred
+  to phase 2 on the same app; see the evaluation linked above. The app identity
+  chosen at install must be able to carry both features later, so it must not be
+  named for intake alone.
 
 ## 3. Concepts and data ownership
 
@@ -382,6 +396,9 @@ Suggested delivery sequence:
 3. **Message actions** — message and thread capture, editable modals, mapping resolution, Inbox fallback, source records, and ephemeral confirmations.
 4. **Slash commands** — `/mission` and `/obj`, with shared parsing/authorization/idempotency paths.
 5. **Verification and documentation** — security, migration, unit/integration/E2E tests, scope documentation, and operational runbook.
+6. **Phase 2 (not release 1)** — the Slack agent container on the same app, gated
+   on coo:781/coo:784 delivering the mission-management verbs and search quality.
+   See [coo-880-slack-agent-surface-evaluation.md](./coo-880-slack-agent-surface-evaluation.md).
 
 ## 10. Acceptance criteria
 

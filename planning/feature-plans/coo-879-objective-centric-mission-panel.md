@@ -60,10 +60,10 @@ So retention is already true at the data layer. The gaps are:
 
 ### Option A — Evidence sections inside the objective accordion (recommended)
 
-Keep the single flat objective list and the two card kinds we have (`ObjectiveCollapsibleItem` for executed, `DraftObjective` for editable/future). Expanding an executed objective reveals stacked, individually collapsible evidence sections in a fixed order: **Instruction → Deliveries → Terminal session → File changes → Attachments**. The header row gains compact count badges so a collapsed list still tells you which objectives have evidence.
+Keep the single flat objective list and the two card kinds we have (`ObjectiveCollapsibleItem` for executed, `DraftObjective` for editable/future). Expanding an executed objective reveals its evidence as a **flat, full-width stack** in a fixed order — **Instruction → Deliveries → Terminal session → File changes → Attachments** — separated by thin labeled rules (the `FileChangeResourceGroupHeader` pattern) that carry the counts. The rules are signposts, not accordions: primary evidence is never nested behind an inner collapsible; collapsing is reserved for secondary information (earlier runs, the reverted-draft history strip in §4.5). The header row gains compact count badges so a collapsed list still tells you which objectives have evidence.
 
 - Pros: minimal navigation model change; the list stays a timeline; deep links (`?objective=`) already open the right accordion; reuses `DeliverySummaryCard`, `TerminalSessionCard`, `LiveFileChangeCard` unchanged.
-- Cons: a long mission with several expanded objectives gets tall — mitigated by sub-sections defaulting collapsed except the latest delivery, and by "one open at a time" behaviour (see §4.4).
+- Cons: a long mission with several expanded objectives gets tall — mitigated by compact rows for secondary evidence (earlier runs), per-card collapsing that already exists on file-change cards, and "one open at a time" behaviour (see §4.4).
 
 ### Option B — Tabbed objective body
 
@@ -119,45 +119,46 @@ Removed from the mission-level tail: **Terminal session**, **Deliveries**, **Fil
 
 ### 4.2 Completed objective accordion — anatomy
 
-Header (collapsed) — extends today's `ObjectiveCollapsibleItem` header:
+Header (collapsed) — restructures today's `ObjectiveCollapsibleItem` header into three lines:
 
 ```
-[✓] [agent] Implement accordion  coo:879.efgh  [✦] [📎]      2 📄 · 30 📁 · ⏱ 14m   [⋯] ▾
-        ↳ 🗂 webapp · ⏩ Auto-advance                                      (existing secondary row)
+Implement accordion                                                          ▾
+[✓] [agent] coo:879.efgh [✦] [📎]           2 📦 · 30 📄 · ⏱ 14m · ●  [⧉] [⋯]
+🗂 webapp · ⏩ Auto-advance
 ```
 
-- Evidence badges sit right-aligned before the chevron: delivery count, file count, and elapsed (`completedAt − startedAt`) when both exist. Zero-count badges are omitted.
-- Session presence: a small dot in the badge cluster (emerald = running, muted = exited, red = lost) only when a Latch session exists for the objective.
-- Everything else in the header is unchanged (state icon, agent icon, title, display id, provenance sparkle, attachment clip, copy-session, kebab).
+- **Line 1 — title + chevron.** The title gets the full row width (truncation becomes rare); the chevron is the only other occupant.
+- **Line 2 — informational icons.** Left: state icon (check / spinner / refresh), agent icon, display id, provenance sparkle, attachment clip. Right-aligned: the evidence badges — delivery count, file count, elapsed (`completedAt − startedAt`) when both exist — plus the Latch session dot (emerald = running, muted = exited, red = lost; only when a session exists) and the header actions (copy-session, force-disconnect while executing, kebab). Zero-count badges are omitted.
+- **Line 3 — resource folder + queue status.** The resource label and auto-advance / run-queue indicator, as in today's secondary row, no longer indented under an icon column.
 
-Body (expanded) — five sub-sections, each a `Collapsible` with a 11px uppercase label row, a count, and a chevron:
+Body (expanded) — a flat, full-width stack. Sections are separated by thin labeled rules (line — `DELIVERIES · 2` — line, 10–11px uppercase, `fg3`), not by nested collapsibles; only secondary rows collapse:
 
-1. **Instruction** — collapsed by default when the objective has ≥1 delivery (the reader came for the outcome); expanded otherwise. Contains branch line, agent session id, `InlineEditField` (disabled), exactly as today.
-2. **Deliveries (n)** — expanded by default. `MissionDeliveryList` filtered to this objective, newest first; the latest card open, earlier ones collapsed and labelled *Run 2 of 2* / *Run 1 of 2* using `deliveredAt` order (not objective timestamps, see §2.3 item 4). Each delivery card keeps its existing verification/follow-up/report sections.
-3. **Terminal session** — expanded if the session is `running`, collapsed otherwise. `TerminalSessionCard` for the session(s) with `session.objectiveId === objective.id`. Multiple sessions (re-launches) render newest as the card and older ones as `OtherSessionRow`s, reusing the existing accordion footer. The objective chip inside the card becomes redundant and is dropped when rendered in-objective.
-4. **File changes (n)** — collapsed by default (these lists are long). `LiveFileChanges` body filtered to this objective, still grouped by resource via `groupMissionFileChanges`.
+1. **Instruction** — plain, exactly as today's expanded body: branch line, agent session id, `InlineEditField` (disabled). No wrapper to open, no indent.
+2. **Deliveries (n)** — rule, then `MissionDeliveryList` filtered to this objective, newest first. The latest delivery is the open card; earlier ones are compact collapsed rows labelled *Run 1 of 2* using `deliveredAt` order (not objective timestamps, see §2.3 item 4) — the one place collapsing is used here, because earlier runs are secondary. Each delivery card keeps its existing verification/follow-up/report sections.
+3. **Terminal session** — rule, then the card, full width. `TerminalSessionCard` for a `running` session; an exited session renders as the compact `OtherSessionRow`-style row instead of the full card. Multiple sessions (re-launches) render newest as the card/row and older ones as further compact rows. The objective chip inside the card becomes redundant and is dropped when rendered in-objective.
+4. **File changes (n)** — rule (carrying the count), then the `LiveFileChanges` body filtered to this objective, flat and grouped by resource via `groupMissionFileChanges`. Long lists stay manageable because each `LiveFileChangeCard` already collapses individually — no extra section-level nesting.
 5. **Attachments (n)** — as today, only when present.
 
-Sub-section order is fixed and mirrors the brief: delivery → session → files.
+Section order is fixed and mirrors the brief: delivery → session → files.
 
 Empty states inside an expanded completed objective: "No delivery recorded" / "No terminal session" / "No file changes" as one-line muted italics, so a reader can tell "ran with no changes" from "still loading".
 
 ### 4.3 Executing / pending-delivery objective accordion
 
-Same shell, different defaults and one extra section:
+Same flat shell, different order — the live things come first:
 
-1. **Terminal session** — first and expanded (the live thing).
-2. **Agent activity** — `AgentSessionActivity` for this objective (questions, permissions) — expanded.
-3. **File changes (n)** — expanded, live (already SSE-invalidated).
-4. **Deliveries** — shown only if a prior delivery exists (pending_delivery re-attach); collapsed.
-5. **Instruction** — collapsed.
+1. **Terminal session** — leads the stack, full card, no rule above it.
+2. **Agent activity** — `AgentSessionActivity` for this objective (questions, permissions), full width.
+3. **File changes (n)** — rule with count and a `live` tag, then the flat live list (already SSE-invalidated).
+4. **Deliveries** — shown only if a prior delivery exists (pending_delivery re-attach), as a compact collapsed row (secondary).
+5. **Instruction** — last, plain text under its rule.
 
 The shimmer sweep, spinner, and Force-disconnect affordance stay on the header exactly as today.
 
 ### 4.4 Interaction rules
 
 - One executed objective open at a time by default (accordion semantics), so the timeline stays scannable. Shift-click (or a settings toggle) allows multiple. `?objective=` deep links open that objective and scroll it into view as today.
-- Sub-section open/closed state is remembered per objective in component state for the panel's lifetime; not persisted.
+- The only per-section open/closed state is on secondary rows (earlier runs, individual file-change cards, the history strip); it lives in component state for the panel's lifetime, not persisted. Primary sections have no open/closed state — they are always rendered.
 - Collapsed executed objectives still mount `LatchSessionTracker` for their running sessions (today's behaviour must survive: collapsed ≠ unwatched).
 - Deliveries/file changes are fetched once per mission (existing hooks) and partitioned with a memoised selector; nothing is fetched per-objective on expand. If a mission grows very large, swap the selector for per-objective endpoints without changing the components.
 
@@ -204,7 +205,7 @@ When a completed objective is set back to draft it renders as `DraftObjective` (
 New:
 
 - `objectives/ObjectiveEvidenceSections.tsx` — renders the ordered sub-sections given `{ objective, deliveries, sessions, fileChanges, attachments, mode: 'complete' | 'active' | 'history' }`.
-- `objectives/ObjectiveEvidenceSection.tsx` — the labelled collapsible shell (label, count, default-open).
+- `objectives/ObjectiveEvidenceRule.tsx` — the thin labeled rule (line — label · count — line) that separates sections; no collapse behaviour.
 - `objectives/ObjectiveHistoryStrip.tsx` — the "Previous runs" wrapper used inside `DraftObjective`.
 - `lib/objective-evidence.ts` — `partitionMissionEvidence({ objectives, deliveries, fileChanges, terminalSessions, artifacts })` → `Map<objectiveId, ObjectiveEvidence>` plus `unassigned`. Pure, unit-tested.
 - `objectives/ObjectiveEvidenceBadges.tsx` — header count badges.
@@ -233,7 +234,7 @@ Phasing:
 ## 6. Open questions for the PM
 
 1. **Single-open vs multi-open** executed accordions — the design defaults to single-open with shift-click for multi. OK, or always multi-open?
-2. **Instruction collapsed by default** once a delivery exists (§4.2 item 1) — acceptable, or should instruction always be visible when expanded?
+2. ~~Instruction collapsed by default once a delivery exists~~ — resolved: evidence renders as a flat stack with no nested collapsibles; the instruction is always visible in an expanded objective (feedback on the design canvas, 31 Aug 2026).
 3. **Artifacts stay flat** with an objective chip (§4.7). Would you prefer artifacts also grouped into objectives, with mission-scoped ones (`objectiveId = null`) remaining below?
 4. **Run boundaries** — infer from `deliveredAt` (no schema change) or add an explicit `objective_runs` ledger / `reopened_at` stamp? Phase 1 assumes inference.
 5. Should "Mark draft" on a completed objective require a confirmation dialog at all, or is a toast ("History kept as previous runs") enough?
