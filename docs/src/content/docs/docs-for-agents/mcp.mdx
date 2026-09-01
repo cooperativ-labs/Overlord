@@ -82,10 +82,12 @@ The tool catalog is mission-first:
 - `overlord_reorder_future_objectives` — replace one mission's complete future-objective UUID order
 - `overlord_add_objectives`
 - `overlord_update_objective` — turn auto-advance on or off and/or edit instruction text; requires `objectiveId`
+- `overlord_delete_missions` — bulk soft-delete one to 100 missions (UUID or display id) atomically, also deleting their live objectives; requires `confirm: true` after the resolved list is shown to and approved by the user
+- `overlord_delete_objectives` — bulk soft-delete one to 100 objectives (UUID or display id) atomically, also removing their live Run Queue membership; requires `confirm: true` after the resolved list is shown to and approved by the user
 - `overlord_list_run_queues` — read compact or full Run Queue state before changing it
 - `overlord_reorder_run_queue` — atomically replace every entry in one Run Queue
 - `overlord_queue_objective` — add, move, or remove one objective from the project Run Queue, including front or rank placement; requires `objectiveId`
-- `overlord_manage_run_queue` — create, update, delete, or reorder queue definitions with a full-scope token
+- `overlord_manage_run_queue` — create, update, delete, or reorder queue definitions with a full-scope token, or retry one held Run Queue entry with `action: 'retry_entry'` (uses `execution_request:create`, not a full-scope token)
 - `overlord_attach_session`
 - `overlord_update_session`
 - `overlord_deliver_session`
@@ -125,8 +127,10 @@ the current order when it cannot safely apply a request. `overlord_queue_objecti
 accepts optional `queue` / `after` / `front` / `position` placement and
 `remove: true` to dequeue. Queue membership is target-neutral and sequences
 delivery-driven launches; it does not directly launch the objective. Entry
-operations require `execution_request:create`; `overlord_manage_run_queue`
-uses `project:update`, so it requires a full-scope token.
+operations require `execution_request:create`; `overlord_manage_run_queue`'s
+queue-definition actions (`create`/`update`/`delete`/`reorder_queues`) use
+`project:update` and require a full-scope token, but its `retry_entry` action
+uses `execution_request:create` like other entry operations.
 `overlord_launch_objective` is the explicit launch surface.
 
 Widgets are attached to project resolution, mission search, mission-context, and
