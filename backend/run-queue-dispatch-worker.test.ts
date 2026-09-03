@@ -10,7 +10,7 @@ const bootstrap = await bootstrapIntegrationTestDb({
 });
 const { createProject } = await import('./repository.ts');
 const { runProtocolSubcommand } = await import('./protocol.ts');
-const { postRunQueueEntry } = await import('./run-queue.ts');
+const { patchRunQueue, postRunQueueEntry } = await import('./run-queue.ts');
 const { dispatchProjectRunQueues } = await import('./run-queue-dispatch-worker.ts');
 const { requireDatabaseClient } = await import('./db.ts');
 
@@ -63,6 +63,17 @@ function exhaustAttempts(objectiveId: string): void {
     .run(objectiveId);
 }
 
+async function startObjectiveQueue(objectiveId: string): Promise<void> {
+  const queue = bootstrap.db
+    .prepare(
+      `SELECT queue_id
+         FROM run_queue_entries
+        WHERE objective_id = ? AND deleted_at IS NULL`
+    )
+    .get(objectiveId) as { queue_id: string };
+  await patchRunQueue(queue.queue_id, { paused: false });
+}
+
 test('a serial mission holds its second objective as waiting, and releases it when the sibling finishes', async () => {
   const project = await createProject({ name: `Serial dispatch ${Date.now()}` });
   const mission = await twoObjectiveMission(project.id, 'Serial');
@@ -70,6 +81,12 @@ test('a serial mission holds its second objective as waiting, and releases it wh
   await postRunQueueEntry(project.id, { objectiveId: mission.second });
   exhaustAttempts(mission.second);
 
+  // Creating the mission queue by adding its first entry must not launch it.
+  await dispatchProjectRunQueues(requireDatabaseClient(), project.id);
+  assert.equal(entryFor(mission.second).state, 'waiting');
+  assert.equal(entryFor(mission.second).waiting_reason, null);
+
+  await startObjectiveQueue(mission.second);
   await dispatchProjectRunQueues(requireDatabaseClient(), project.id);
   const held = entryFor(mission.second);
   assert.equal(held.state, 'waiting');
@@ -102,6 +119,7 @@ test('a mission that allows parallel objectives is never held for a busy sibling
   bootstrap.db.prepare("UPDATE objectives SET state = 'executing' WHERE id = ?").run(mission.first);
   await postRunQueueEntry(project.id, { objectiveId: mission.second });
   exhaustAttempts(mission.second);
+  await startObjectiveQueue(mission.second);
 
   await dispatchProjectRunQueues(requireDatabaseClient(), project.id);
   const entry = entryFor(mission.second);
@@ -118,6 +136,7 @@ test('an objective with no agent blocks, and the block is re-evaluated once one 
     .run(mission.first);
   await postRunQueueEntry(project.id, { objectiveId: mission.first });
   exhaustAttempts(mission.first);
+  await startObjectiveQueue(mission.first);
 
   await dispatchProjectRunQueues(requireDatabaseClient(), project.id);
   assert.equal(entryFor(mission.first).blocked_reason, 'no_agent');
@@ -136,6 +155,7 @@ test('an entry for a completed objective is dropped even after it was blocked', 
     .prepare('UPDATE objectives SET assigned_agent = NULL WHERE id = ?')
     .run(mission.first);
   await postRunQueueEntry(project.id, { objectiveId: mission.first });
+  await startObjectiveQueue(mission.first);
 
   await dispatchProjectRunQueues(requireDatabaseClient(), project.id);
   assert.equal(entryFor(mission.first).state, 'blocked');

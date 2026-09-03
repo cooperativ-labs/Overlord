@@ -74,8 +74,10 @@ Requirements:
   `--entry`; an entry already dispatched or running is refused.
 - `create-run-queue`, `update-run-queue`, `delete-run-queue`, and
   `reorder-project-run-queues`: manage queue definitions through the existing
-  Run Queue service. These are `project:update` operations and require a
-  full-scope token; mission-lifecycle tokens can still perform entry operations.
+  Run Queue service. New queues start paused; resume one explicitly or use
+  direct Run on a queued objective to begin dispatch. These are `project:update`
+  operations and require a full-scope token; mission-lifecycle tokens can still
+  perform entry operations.
 - `connect`: create a lightweight session key without full context. Optional
   `--objective-id` pins the session to that objective.
 - `search` (with `search-missions` retained as an alias): v1 remains compatible. `--response-version 2` returns the

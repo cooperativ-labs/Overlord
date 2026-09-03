@@ -23,6 +23,7 @@ const {
 } = await import('./repository.ts');
 const { launchObjective, getAgentCatalog, updateAgentCatalog } =
   await import('./execution/launch.ts');
+const { getProjectRunQueues, postRunQueueEntry } = await import('./run-queue.ts');
 
 after(() => {
   db.close();
@@ -78,6 +79,32 @@ test('launching an objective twice while a request is active returns the same re
     )
     .get(objectiveId) as { n: number };
   assert.equal(serviceClearEvents.n, 0);
+});
+
+test('running a queued objective resumes its paused queue', async () => {
+  const project = await createProject({ name: 'Queued Objective Starts Queue Test' });
+  await createProjectResource(project.id, {
+    directoryPath: createIsolatedCheckout('overlord-launch-queued-resource-'),
+    executionTargetId: null,
+    isPrimary: true
+  });
+  const mission = await createMission({
+    projectId: project.id,
+    firstObjective: 'Start this queue explicitly'
+  });
+  const objectiveId = mission.objectives[0]!.id;
+  await postRunQueueEntry(project.id, { objectiveId });
+
+  let queue = (await getProjectRunQueues(project.id)).queues[0]!;
+  assert.equal(queue.paused, true);
+  assert.equal(queue.entries[0]!.state, 'waiting');
+
+  const request = await launchObjective(objectiveId, { agent: 'codex' });
+
+  queue = (await getProjectRunQueues(project.id)).queues[0]!;
+  assert.equal(queue.paused, false);
+  assert.equal(queue.entries[0]!.state, 'running');
+  assert.equal(queue.entries[0]!.executionRequestId, request.id);
 });
 
 test('mission detail projects Latch terminal sessions independently of active requests', async () => {

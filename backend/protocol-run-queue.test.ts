@@ -207,7 +207,7 @@ test('protocol creates, renames, pauses, and deletes a Run Queue', async () => {
   })) as RunQueue;
   assert.equal(created.name, 'Priority');
   assert.equal(created.isDefault, false);
-  assert.equal(created.paused, false);
+  assert.equal(created.paused, true);
 
   const renamed = (await runProtocolSubcommand('update-run-queue', {
     flags: { '--project-id': project.id, '--queue': 'Priority', '--name': 'Hot path' }

@@ -63,7 +63,10 @@ import {
   resolveLaunchExecutionTarget
 } from '../../packages/core/service/project-execution-target.ts';
 import { assertLaunchResourceConnected } from '../../packages/core/service/projects.ts';
-import { removeRunQueueEntryForObjective } from '../../packages/core/service/run-queue.ts';
+import {
+  removeRunQueueEntryForObjective,
+  resumeRunQueueForObjective
+} from '../../packages/core/service/run-queue.ts';
 import type {
   AgentCatalogAgentDto,
   AgentCatalogDto,
@@ -1246,6 +1249,12 @@ export async function launchObjective(
       projectId: objective.project_id,
       objectiveResourceKey: objective.resource_key
     });
+
+    // Queue membership is inert until the user starts it. Direct Run on a
+    // queued objective is also an explicit queue-start gesture, so resume the
+    // queue in this transaction. Do this before the idempotency return because
+    // a previously delegated objective must still be able to start its queue.
+    await resumeRunQueueForObjective(tx, objective.id);
 
     // An objective stays in `launching` state until the runner claims and
     // launches its request; a second Run click in that window must not queue

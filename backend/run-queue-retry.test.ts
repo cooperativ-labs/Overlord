@@ -18,7 +18,7 @@ const { createProject, createProjectResource, updateMission, updateObjective } =
   await import('./repository.ts');
 const { createIsolatedCheckout } = await import('@overlord/core/service/test-checkout');
 const { runProtocolSubcommand } = await import('./protocol.ts');
-const { patchRunQueueEntry, postRunQueueEntry } = await import('./run-queue.ts');
+const { patchRunQueue, patchRunQueueEntry, postRunQueueEntry } = await import('./run-queue.ts');
 const { dispatchProjectRunQueues } = await import('./run-queue-dispatch-worker.ts');
 const { buildWebappServiceContextForWorkspace, requireDatabaseClient } = await import('./db.ts');
 const { createExecutionRequest, markExecutionFailed } =
@@ -75,6 +75,17 @@ function entryFor(objectiveId: string): EntryRow | undefined {
     .get(objectiveId) as EntryRow | undefined;
 }
 
+async function startObjectiveQueue(objectiveId: string): Promise<void> {
+  const queue = bootstrap.db
+    .prepare(
+      `SELECT queue_id
+         FROM run_queue_entries
+        WHERE objective_id = ? AND deleted_at IS NULL`
+    )
+    .get(objectiveId) as { queue_id: string };
+  await patchRunQueue(queue.queue_id, { paused: false });
+}
+
 /** Forget every pending dispatch job so the next assertion sees only new ones. */
 function clearDispatchJobs(): void {
   bootstrap.db.prepare('DELETE FROM worker_jobs WHERE type = ?').run(RUN_QUEUE_JOB);
@@ -95,6 +106,7 @@ test('a dispatch that fails waits and retries, and only blocks once the attempts
   const project = await createProject({ name: `Retry accounting ${Date.now()}` });
   const { ids } = await missionWithObjectives(project.id, 'Retry', 1);
   await postRunQueueEntry(project.id, { objectiveId: ids[0]! });
+  await startObjectiveQueue(ids[0]!);
 
   // No execution target is registered in this bootstrap, so every dispatch
   // attempt throws inside the worker — exactly the failure this phase makes
@@ -123,6 +135,7 @@ test('retry clears the hold, resets the attempt budget, and asks for a tick', as
   const project = await createProject({ name: `Retry operation ${Date.now()}` });
   const { ids } = await missionWithObjectives(project.id, 'Manual retry', 1);
   await postRunQueueEntry(project.id, { objectiveId: ids[0]! });
+  await startObjectiveQueue(ids[0]!);
   for (let attempt = 0; attempt < 4; attempt += 1)
     await dispatchProjectRunQueues(requireDatabaseClient(), project.id);
   const blocked = entryFor(ids[0]!)!;
@@ -256,6 +269,7 @@ test('fixing what a hold asked for, and toggling parallel objectives, each ask f
   const { missionId, ids } = await missionWithObjectives(project.id, 'Triggers', 1);
   bootstrap.db.prepare('UPDATE objectives SET assigned_agent = NULL WHERE id = ?').run(ids[0]!);
   await postRunQueueEntry(project.id, { objectiveId: ids[0]! });
+  await startObjectiveQueue(ids[0]!);
   await dispatchProjectRunQueues(requireDatabaseClient(), project.id);
   assert.equal(entryFor(ids[0]!)!.blocked_reason, 'no_agent');
 

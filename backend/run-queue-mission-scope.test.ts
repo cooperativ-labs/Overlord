@@ -47,6 +47,7 @@ test('queuing an objective creates its mission queue once and reuses it afterwar
   assert.equal(queues.length, 1);
   assert.equal(queues[0]!.missionId, first.missionId);
   assert.equal(queues[0]!.isDefault, false);
+  assert.equal(queues[0]!.paused, true);
 
   // A sibling from the same mission joins the queue rather than creating one.
   await postRunQueueEntry(project.id, { objectiveId: first.objectives[1]!.id });

@@ -191,7 +191,13 @@ function serviceSummaryToDto(row: ExecutionRequestSummary): Record<string, unkno
     projectId: row.projectId,
     missionId: row.missionId,
     objectiveId: row.objectiveId,
-    executionTargetId: row.executionTargetId,
+    // A request may be queued for "any eligible target" and therefore carry no
+    // queue-time target. Once claimed, the runner must receive the concrete
+    // target that won the claim: Latch discovery/provider launch and resource
+    // observation both execute on that target. Falling back to the nullable
+    // queue-time value here made a correctly resolved Latch snapshot launch
+    // directly instead.
+    executionTargetId: row.claimedByExecutionTargetId ?? row.executionTargetId,
     requestedAgent: row.requestedAgent,
     requestedModel: row.requestedModel,
     requestedReasoningEffort: row.requestedReasoningEffort,

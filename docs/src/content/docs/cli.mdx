@@ -149,7 +149,7 @@ Every command below is available from `ovld protocol help`.
 | `queue-objective`                  | Add or move one objective in the Run Queue. Requires `--objective-id` (UUID or display id).               |
 | `dequeue-objective`                | Remove one objective from the Run Queue. Requires `--objective-id`.                                       |
 | `retry-queue-entry`                | Retry one held Run Queue entry. Requires `--objective-id` or `--entry`.                                   |
-| `create-run-queue`                 | Create a queue definition. Requires `project:update`.                                                     |
+| `create-run-queue`                 | Create a paused queue definition. Requires `project:update`.                                              |
 | `update-run-queue`                 | Rename, pause, or resume a queue definition. Requires `project:update`.                                   |
 | `delete-run-queue`                 | Delete a queue, optionally moving its entries. Requires `project:update`.                                 |
 | `reorder-project-run-queues`       | Replace the project's complete queue-definition order. Requires `project:update`.                         |
@@ -208,6 +208,8 @@ operations (`create-run-queue`, `update-run-queue`, `delete-run-queue`, and
 `reorder-project-run-queues`) require `project:update`, so a
 mission-lifecycle-scoped token cannot perform them. `run-queue` accepts
 `--project-id`, `--objective-id`, or `--mission-id`, plus optional `--queue`.
+New queues start paused; resume one explicitly or directly launch a queued
+objective to start it.
 
 ## Environment variables
 

@@ -76497,7 +76497,7 @@ async function ensureMissionRunQueue(db, projectId, missionId, actorId = null) {
       missionId,
       name,
       position,
-      db.dialect === "postgres" ? false : 0,
+      db.dialect === "postgres" ? true : 1,
       db.dialect === "postgres" ? false : 0,
       actorId,
       now2,
@@ -76510,7 +76510,7 @@ async function ensureMissionRunQueue(db, projectId, missionId, actorId = null) {
     workspace_id: mission.workspace_id,
     name,
     position,
-    paused: false,
+    paused: true,
     is_default: false,
     mission_id: missionId
   };
@@ -76643,7 +76643,7 @@ async function createRunQueue(db, projectId, name, actorId, missionId = null) {
       missionId,
       clean3,
       (max?.value ?? 0) + STEP,
-      db.dialect === "postgres" ? false : 0,
+      db.dialect === "postgres" ? true : 1,
       db.dialect === "postgres" ? false : 0,
       actorId,
       now2,
@@ -76652,6 +76652,29 @@ async function createRunQueue(db, projectId, name, actorId, missionId = null) {
   );
   await enqueueRunQueueDispatch(db, projectId, project.workspace_id);
   return (await listProjectRunQueues(db, projectId)).queues.find((q2) => q2.id === id);
+}
+async function resumeRunQueueForObjective(db, objectiveId) {
+  const queue = await db.get(
+    `SELECT q.id, q.project_id, q.workspace_id, q.paused
+       FROM run_queues q
+       JOIN run_queue_entries e ON e.queue_id = q.id AND e.deleted_at IS NULL
+      WHERE e.objective_id = ? AND q.deleted_at IS NULL
+      LIMIT 1`,
+    [objectiveId]
+  );
+  if (!queue) return null;
+  if (!truthy(queue.paused)) return queue.id;
+  await db.run(
+    "UPDATE run_queues SET paused = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND paused = ?",
+    [
+      db.dialect === "postgres" ? false : 0,
+      nowIso(),
+      queue.id,
+      db.dialect === "postgres" ? true : 1
+    ]
+  );
+  await enqueueRunQueueDispatch(db, queue.project_id, queue.workspace_id);
+  return queue.id;
 }
 async function updateRunQueue(db, queueId, patch) {
   const queue = await db.get(
@@ -144738,6 +144761,7 @@ async function launchObjective(objectiveRef, body) {
       projectId: objective.project_id,
       objectiveResourceKey: objective.resource_key
     });
+    await resumeRunQueueForObjective(tx, objective.id);
     const activeRequestRow = await tx.get(
       `SELECT ${EXECUTION_REQUEST_COLUMNS} FROM execution_requests
           WHERE objective_id = ? AND deleted_at IS NULL
@@ -164037,7 +164061,13 @@ function serviceSummaryToDto(row) {
     projectId: row.projectId,
     missionId: row.missionId,
     objectiveId: row.objectiveId,
-    executionTargetId: row.executionTargetId,
+    // A request may be queued for "any eligible target" and therefore carry no
+    // queue-time target. Once claimed, the runner must receive the concrete
+    // target that won the claim: Latch discovery/provider launch and resource
+    // observation both execute on that target. Falling back to the nullable
+    // queue-time value here made a correctly resolved Latch snapshot launch
+    // directly instead.
+    executionTargetId: row.claimedByExecutionTargetId ?? row.executionTargetId,
     requestedAgent: row.requestedAgent,
     requestedModel: row.requestedModel,
     requestedReasoningEffort: row.requestedReasoningEffort,

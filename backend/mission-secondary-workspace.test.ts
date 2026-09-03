@@ -329,7 +329,7 @@ describe('runner claims and drives executions in a secondary (non-active) worksp
     });
     const workspaceAId = WORKSPACE.id;
 
-    const { setActiveWorkspace } = await import('./db.ts');
+    const { requireDatabaseClient, setActiveWorkspace } = await import('./db.ts');
     const { createWorkspace } = await import('./workspaces.ts');
     const { createProject, createProjectResource, createMission, getMissionDetail } =
       await import('./repository.ts');
@@ -370,6 +370,16 @@ describe('runner claims and drives executions in a secondary (non-active) worksp
     // workspace), then confirm the runner — polling with A active — sees it.
     const queued = await launchObjective(objectiveId, { agent: 'codex' });
     assert.equal(queued.status, 'queued');
+    const queuedTargetId = queued.executionTargetId;
+    assert.ok(queuedTargetId);
+    // Reproduce an any-eligible-target request. Claim resolves the concrete
+    // target, and the response must expose it so provider discovery (notably
+    // Latch) does not fall back to direct merely because queue-time routing was
+    // intentionally open.
+    await requireDatabaseClient().run(
+      'UPDATE execution_requests SET execution_target_id = NULL WHERE id = ?',
+      [queued.id]
+    );
 
     const statusBeforeClaim = await runnerStatus();
     assert.ok(
@@ -385,6 +395,10 @@ describe('runner claims and drives executions in a secondary (non-active) worksp
     assert.equal((claimed.request as { id: string }).id, queued.id);
     assert.equal((claimed.request as { workspaceId: string }).workspaceId, secondary.id);
     assert.equal((claimed.request as { status: string }).status, 'claimed');
+    assert.equal(
+      (claimed.request as { executionTargetId: string }).executionTargetId,
+      queuedTargetId
+    );
 
     // Drive the claimed request through its launch transitions.
     const launching = await updateRunnerRequestStatus({

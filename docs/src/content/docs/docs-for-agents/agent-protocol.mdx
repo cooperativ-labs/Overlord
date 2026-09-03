@@ -104,8 +104,10 @@ ovld protocol update-objective --objective-id coo:312.k7xm --no-auto-advance
 - **`reorder-run-queue`** atomically replaces one queue's complete entry order;
   every live entry is required exactly once and running/dispatched entries cannot move.
 - **`create-run-queue`**, **`update-run-queue`**, **`delete-run-queue`**, and
-  **`reorder-project-run-queues`** manage queue definitions. They require
-  `project:update`; entry operations require `execution_request:create`.
+  **`reorder-project-run-queues`** manage queue definitions. New queues start
+  paused; explicitly resume one or directly launch a queued objective to start
+  it. Queue-definition operations require `project:update`; entry operations
+  require `execution_request:create`.
 - **`reorder-future-objectives`** takes `--mission-id` and
   `--ordered-objective-ids-json` with every future objective **UUID** in the
   desired order. Display ids are not accepted there.
@@ -361,7 +363,7 @@ ovld protocol add-objectives --mission-id coo:312 \
 | `queue-objective`                | Add or move one objective in the Run Queue. Requires `--objective-id`.                            |
 | `dequeue-objective`              | Remove one objective from the Run Queue. Requires `--objective-id`.                               |
 | `retry-queue-entry`              | Retry one held Run Queue entry. Requires `--objective-id` or `--entry`.                           |
-| `create-run-queue`               | Create a queue definition; requires `project:update`.                                             |
+| `create-run-queue`               | Create a paused queue definition; requires `project:update`.                                      |
 | `update-run-queue`               | Rename, pause, or resume a queue; requires `project:update`.                                      |
 | `delete-run-queue`               | Delete a queue definition; requires `project:update`.                                             |
 | `reorder-project-run-queues`     | Replace the complete queue-definition order; requires `project:update`.                           |

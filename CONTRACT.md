@@ -34,13 +34,25 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `130`
+Current version: `131`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
 `contract/components.yaml`) — never a header duplicate. The contract version is
 incremented when any stable interface changes. All conformance manifests must
 declare the contract version they were validated against.
+
+### Version 131 Change Summary
+
+Run Queue launch is user-controlled. Every newly created queue — whether
+created explicitly or lazily for a mission's first queued objective — starts
+paused, and adding or moving entries does not implicitly resume it. A queue
+begins dispatching only after a user resumes it from the Run Queue interface or
+directly launches one of its queued objectives. Direct Run keeps its existing
+execution-request semantics and `execution_request:create` authorization, but
+also resumes the containing queue in the same transaction so later entries can
+advance; explicit queue pause/resume remains a queue-definition mutation that
+requires `project:update`. Existing active queues retain their state.
 
 ### Version 130 Change Summary
 

@@ -109,7 +109,7 @@ export async function ensureDefaultRunQueue(
       project.workspace_id,
       'Run Queue',
       STEP,
-      db.dialect === 'postgres' ? false : 0,
+      db.dialect === 'postgres' ? true : 1,
       db.dialect === 'postgres' ? true : 1,
       actorId,
       now,
@@ -122,7 +122,7 @@ export async function ensureDefaultRunQueue(
     workspace_id: project.workspace_id,
     name: 'Run Queue',
     position: STEP,
-    paused: false,
+    paused: true,
     is_default: true,
     mission_id: null
   };
@@ -189,7 +189,7 @@ export async function ensureMissionRunQueue(
       missionId,
       name,
       position,
-      db.dialect === 'postgres' ? false : 0,
+      db.dialect === 'postgres' ? true : 1,
       db.dialect === 'postgres' ? false : 0,
       actorId,
       now,
@@ -202,7 +202,7 @@ export async function ensureMissionRunQueue(
     workspace_id: mission.workspace_id,
     name,
     position,
-    paused: false,
+    paused: true,
     is_default: false,
     mission_id: missionId
   };
@@ -369,7 +369,7 @@ export async function createRunQueue(
       missionId,
       clean,
       (max?.value ?? 0) + STEP,
-      db.dialect === 'postgres' ? false : 0,
+      db.dialect === 'postgres' ? true : 1,
       db.dialect === 'postgres' ? false : 0,
       actorId,
       now,
@@ -378,6 +378,42 @@ export async function createRunQueue(
   );
   await enqueueRunQueueDispatch(db, projectId, project.workspace_id);
   return (await listProjectRunQueues(db, projectId)).queues.find(q => q.id === id)!;
+}
+
+/**
+ * Resume the queue containing an objective as part of a direct Run action.
+ *
+ * The caller owns authorization. Keeping this mutation in the Run Queue
+ * service preserves its single-writer boundary while allowing the launch
+ * transaction to make "Run this queued objective" and "start its queue" one
+ * atomic user action.
+ */
+export async function resumeRunQueueForObjective(
+  db: DatabaseClient,
+  objectiveId: string
+): Promise<string | null> {
+  const queue = await db.get<Pick<QueueRow, 'id' | 'project_id' | 'workspace_id' | 'paused'>>(
+    `SELECT q.id, q.project_id, q.workspace_id, q.paused
+       FROM run_queues q
+       JOIN run_queue_entries e ON e.queue_id = q.id AND e.deleted_at IS NULL
+      WHERE e.objective_id = ? AND q.deleted_at IS NULL
+      LIMIT 1`,
+    [objectiveId]
+  );
+  if (!queue) return null;
+  if (!truthy(queue.paused)) return queue.id;
+
+  await db.run(
+    'UPDATE run_queues SET paused = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND paused = ?',
+    [
+      db.dialect === 'postgres' ? false : 0,
+      nowIso(),
+      queue.id,
+      db.dialect === 'postgres' ? true : 1
+    ]
+  );
+  await enqueueRunQueueDispatch(db, queue.project_id, queue.workspace_id);
+  return queue.id;
 }
 
 export async function updateRunQueue(
