@@ -1,4 +1,5 @@
-import { FileText, ImageIcon, Loader2, Plus, Trash2 } from 'lucide-react';
+import { type QueryClient, useQueryClient } from '@tanstack/react-query';
+import { FileText, ImageIcon, Loader2, Plus, Trash2, X } from 'lucide-react';
 import {
   type ChangeEvent,
   type ReactNode,
@@ -9,7 +10,9 @@ import {
 } from 'react';
 
 import type { ObjectiveAttachmentDto } from '../../../shared/contract.ts';
+import { api } from '../../lib/api.ts';
 import {
+  keys,
   useDeleteObjectiveAttachment,
   useObjectiveAttachments,
   useUploadObjectiveAttachment
@@ -118,6 +121,152 @@ export function useObjectiveAttachmentState(
 
 export type ObjectiveAttachmentState = ReturnType<typeof useObjectiveAttachmentState>;
 export type { FileDropZoneDragState };
+
+/**
+ * Upload files to an objective that was created a moment ago (a new mission's
+ * first objective) and refresh its attachment list. Composer surfaces that
+ * hold files before any objective exists — BlankMissionCard, NewMissionModal —
+ * call this right after the create succeeds. Oversized files are skipped, and
+ * the first upload failure aborts the rest so the error surfaces promptly.
+ */
+export async function uploadPendingAttachments(
+  objectiveId: string,
+  files: File[],
+  qc?: QueryClient
+): Promise<void> {
+  if (files.length === 0) return;
+  try {
+    for (const file of files) {
+      if (file.size > MAX_ATTACHMENT_BYTES) continue;
+      await api.uploadObjectiveAttachment(objectiveId, file);
+    }
+  } finally {
+    void qc?.invalidateQueries({ queryKey: keys.objectiveAttachments(objectiveId) });
+  }
+}
+
+/**
+ * Client-only attachment queue for composers that create the objective on
+ * submit rather than editing an existing one. Mirrors
+ * {@link useObjectiveAttachmentState} — same size guard, drag state, and file
+ * picker wiring — but holds the `File`s in memory until `upload(objectiveId)`
+ * is called with the id the create returned.
+ */
+export function usePendingAttachments({ dropDisabled = false }: { dropDisabled?: boolean } = {}) {
+  const qc = useQueryClient();
+  const [files, setFiles] = useState<File[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const addFiles = useCallback((incoming: File[]) => {
+    setError(null);
+    const accepted: File[] = [];
+    for (const file of incoming) {
+      if (file.size > MAX_ATTACHMENT_BYTES) {
+        setError(`File too large. Attachments can be no longer than ${MAX_ATTACHMENT_LABEL}.`);
+        continue;
+      }
+      accepted.push(file);
+    }
+    if (accepted.length > 0) setFiles(prev => [...prev, ...accepted]);
+  }, []);
+
+  const removeAt = useCallback((index: number) => {
+    setError(null);
+    setFiles(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const clear = useCallback(() => {
+    setFiles([]);
+    setError(null);
+  }, []);
+
+  const dragState = useFileDropZone({ onDrop: addFiles, disabled: dropDisabled });
+
+  const handleInputChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      if (event.target.files && event.target.files.length > 0) {
+        addFiles(Array.from(event.target.files));
+        // Reset so picking the same file again still fires onChange.
+        event.target.value = '';
+      }
+    },
+    [addFiles]
+  );
+
+  const upload = useCallback(
+    (objectiveId: string, pending: File[] = files) =>
+      uploadPendingAttachments(objectiveId, pending, qc),
+    [files, qc]
+  );
+
+  return {
+    files,
+    error,
+    inputRef,
+    addFiles,
+    removeAt,
+    clear,
+    handleInputChange,
+    upload,
+    dragState
+  };
+}
+
+export type PendingAttachmentState = ReturnType<typeof usePendingAttachments>;
+
+type PendingAttachmentListProps = {
+  files: File[];
+  onRemove: (index: number) => void;
+  disabled?: boolean;
+  className?: string;
+  /** Match Overlord toolbar padding when rendered above the upload trigger row. */
+  toolbar?: boolean;
+};
+
+/**
+ * Rows for files queued by {@link usePendingAttachments} — the same shape as
+ * {@link ObjectiveAttachmentList}, minus download links since nothing has been
+ * uploaded yet.
+ */
+export function PendingAttachmentList({
+  files,
+  onRemove,
+  disabled = false,
+  className,
+  toolbar = false
+}: PendingAttachmentListProps) {
+  if (files.length === 0) return null;
+
+  return (
+    <div className={cn('space-y-0.5', toolbar ? 'px-2 pb-0 pt-1' : undefined, className)}>
+      {files.map((file, index) => (
+        <div
+          key={`${file.name}-${file.size}-${file.lastModified}-${index}`}
+          className="group flex min-h-8 items-center gap-2 rounded px-2 py-1 hover:bg-muted/40"
+        >
+          <AttachmentIcon contentType={file.type || null} />
+          <span className="min-w-0 flex-1 truncate text-left text-xs" title={file.name}>
+            {file.name}
+          </span>
+          <span className="shrink-0 text-[10px] text-muted-foreground">
+            {formatFileSize(file.size)}
+          </span>
+          <button
+            type="button"
+            onClick={() => onRemove(index)}
+            disabled={disabled}
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-50"
+            aria-label={`Remove ${file.name}`}
+            title="Remove"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function AttachmentIcon({ contentType }: { contentType: string | null }) {
   if (contentType?.startsWith('image/')) {

@@ -1,6 +1,10 @@
-import { Check, FolderOpen, Tag } from 'lucide-react';
+import { Check, FolderOpen, Plus, Tag } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import {
+  PendingAttachmentList,
+  usePendingAttachments
+} from '@/components/objectives/ObjectiveAttachments.tsx';
 import { RepositoryMentionTextarea } from '@/components/RepositoryMentionTextarea.tsx';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -13,6 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu.tsx';
+import { FileDropZone } from '@/components/ui/file-drop-zone.tsx';
 import {
   distinctProjectResourceKeys,
   primaryResourceConnection,
@@ -71,6 +76,11 @@ export type BlankMissionCreateOptions = {
    * inherit the project primary resource. Also drives the `@`-mention file source.
    */
   resourceKey?: string | null;
+  /**
+   * Files dropped or picked into the card before the mission exists. The
+   * create handler uploads them to the new mission's first objective.
+   */
+  attachments?: File[];
 };
 
 type BlankMissionCardProps = {
@@ -118,6 +128,11 @@ export function BlankMissionCard({
   const overlayOwnerId = inputId;
   const valueRef = useRef(value);
   const handleDismissRef = useRef<(currentValue: string) => Promise<void>>(async () => {});
+  // Attachments are held client-side until submit — the mission (and its first
+  // objective) does not exist yet, so there is nothing to upload to. Same
+  // whole-card drop target as DraftObjective.
+  const pending = usePendingAttachments({ dropDisabled: isCreating });
+  const clearPendingAttachments = pending.clear;
 
   valueRef.current = value;
 
@@ -149,7 +164,8 @@ export function BlankMissionCard({
   optionsRef.current = {
     projectId: selectedProjectId,
     tagIds: selectedTagIds,
-    resourceKey: selectedResourceKey
+    resourceKey: selectedResourceKey,
+    attachments: pending.files
   };
 
   // Project boards can only keep their column status when the selected project
@@ -221,18 +237,20 @@ export function BlankMissionCard({
     async (currentValue: string) => {
       if (isCreating) return;
       const trimmed = currentValue.trim();
+      const options = optionsRef.current;
       onClose();
       setValue('');
+      clearPendingAttachments();
       if (trimmed) {
         setIsCreating(true);
         try {
-          await onCreateMission(statusForSelection, trimmed, position, optionsRef.current);
+          await onCreateMission(statusForSelection, trimmed, position, options);
         } finally {
           setIsCreating(false);
         }
       }
     },
-    [isCreating, onClose, onCreateMission, position, statusForSelection]
+    [clearPendingAttachments, isCreating, onClose, onCreateMission, position, statusForSelection]
   );
 
   handleDismissRef.current = handleDismiss;
@@ -267,6 +285,7 @@ export function BlankMissionCard({
         e.preventDefault();
         onClose();
         setValue('');
+        clearPendingAttachments();
         return;
       }
 
@@ -277,15 +296,18 @@ export function BlankMissionCard({
         if (!trimmed) {
           onClose();
           setValue('');
+          clearPendingAttachments();
           return;
         }
+        const options = optionsRef.current;
         setIsCreating(true);
         setValue('');
+        clearPendingAttachments();
         try {
           if (e.metaKey && onCreateAndOpenMission) {
-            await onCreateAndOpenMission(statusForSelection, trimmed, position, optionsRef.current);
+            await onCreateAndOpenMission(statusForSelection, trimmed, position, options);
           } else {
-            await onCreateMission(statusForSelection, trimmed, position, optionsRef.current);
+            await onCreateMission(statusForSelection, trimmed, position, options);
           }
         } finally {
           setIsCreating(false);
@@ -294,6 +316,7 @@ export function BlankMissionCard({
       }
     },
     [
+      clearPendingAttachments,
       isCreating,
       onClose,
       onCreateAndOpenMission,
@@ -306,175 +329,216 @@ export function BlankMissionCard({
 
   return (
     <Card ref={cardRef} className="overflow-hidden rounded-md border-border/60 shadow-sm py-0">
-      <CardContent className="p-2 font-body">
-        <RepositoryMentionTextarea
-          id={inputId}
-          autoFocus
-          projectId={selectedProjectId}
-          resourceKey={selectedResourceKey}
-          menuOwnerId={overlayOwnerId}
-          value={value}
-          onValueChange={setValue}
-          placeholder="What needs to be done?"
-          disabled={isCreating}
-          onKeyDown={handleKeyDown}
-          className="min-h-[156px] resize-none border-0 p-1 bg-transparent text-sm shadow-none focus-visible:ring-0"
-          rows={7}
-        />
-        <div
-          className="mt-1 flex items-center justify-between gap-2 px-1"
-          onMouseDown={event => event.preventDefault()}
-        >
-          {onCreateAndOpenMission ? (
-            <p className="text-[11px] text-muted-foreground/50">⌘↵ to save &amp; open</p>
-          ) : (
-            <span />
-          )}
-          <div className="flex items-center gap-1">
-            {showProjectPicker ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 shrink-0"
-                      aria-label={
-                        selectedProject
-                          ? `Project: ${selectedProject.name}`
-                          : 'Choose project for new mission'
-                      }
-                      title={selectedProject?.name ?? 'Choose project'}
-                      disabled={isCreating}
-                    />
-                  }
-                >
-                  <span
-                    className="h-3.5 w-3.5 shrink-0 rounded-[3px] border"
-                    style={{
-                      backgroundColor: selectedProject?.color ?? undefined,
-                      borderColor: selectedProject?.color ?? undefined
-                    }}
-                  />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  className="w-48"
-                  data-blank-mission-card-owner={overlayOwnerId}
-                >
-                  <DropdownMenuLabel>Project</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {projects.map(project => (
-                    <DropdownMenuItem
-                      key={project.id}
-                      onClick={() => setSelectedProjectId(project.id)}
-                      className="gap-2"
-                    >
-                      <span
-                        className="h-2.5 w-2.5 shrink-0 rounded-[3px] border"
-                        style={{
-                          backgroundColor: project.color ?? undefined,
-                          borderColor: project.color ?? undefined
-                        }}
+      <FileDropZone
+        onDrop={pending.addFiles}
+        disabled={isCreating}
+        dragState={pending.dragState}
+        label="Drop to attach"
+      >
+        <CardContent className="p-2 font-body">
+          <RepositoryMentionTextarea
+            id={inputId}
+            autoFocus
+            projectId={selectedProjectId}
+            resourceKey={selectedResourceKey}
+            menuOwnerId={overlayOwnerId}
+            value={value}
+            onValueChange={setValue}
+            placeholder="What needs to be done?"
+            disabled={isCreating}
+            onKeyDown={handleKeyDown}
+            className="min-h-[156px] resize-none border-0 p-1 bg-transparent text-sm shadow-none focus-visible:ring-0"
+            rows={7}
+          />
+          <PendingAttachmentList
+            files={pending.files}
+            onRemove={pending.removeAt}
+            disabled={isCreating}
+          />
+          {pending.error ? (
+            <p className="px-1 pb-1 text-xs text-destructive">{pending.error}</p>
+          ) : null}
+          <div
+            className="mt-1 flex items-center justify-between gap-2 px-1"
+            onMouseDown={event => event.preventDefault()}
+          >
+            <div className="flex min-w-0 items-center gap-1.5">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 shrink-0"
+                disabled={isCreating}
+                onClick={() => pending.inputRef.current?.click()}
+                aria-label="Attach files to new mission"
+                title="Attach files"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
+              {pending.files.length > 0 ? (
+                <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums leading-none">
+                  {pending.files.length}
+                </span>
+              ) : null}
+              <input
+                ref={pending.inputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={pending.handleInputChange}
+              />
+              {onCreateAndOpenMission ? (
+                <p className="truncate text-[11px] text-muted-foreground/50">
+                  ⌘↵ to save &amp; open
+                </p>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-1">
+              {showProjectPicker ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 shrink-0"
+                        aria-label={
+                          selectedProject
+                            ? `Project: ${selectedProject.name}`
+                            : 'Choose project for new mission'
+                        }
+                        title={selectedProject?.name ?? 'Choose project'}
+                        disabled={isCreating}
                       />
-                      <span className="truncate">{project.name}</span>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : null}
-            {showResourcePicker ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className={cn('h-6 w-6 shrink-0', selectedResourceKey && 'text-foreground')}
-                      aria-label={`Resource: ${currentResourceLabel}`}
-                      title={`Resource: ${currentResourceLabel}`}
-                      disabled={isCreating}
+                    }
+                  >
+                    <span
+                      className="h-3.5 w-3.5 shrink-0 rounded-[3px] border"
+                      style={{
+                        backgroundColor: selectedProject?.color ?? undefined,
+                        borderColor: selectedProject?.color ?? undefined
+                      }}
                     />
-                  }
-                >
-                  <FolderOpen className="h-3.5 w-3.5" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  className="w-48"
-                  data-blank-mission-card-owner={overlayOwnerId}
-                >
-                  <DropdownMenuLabel>Resource</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {resourceKeys.map(key => (
-                    <DropdownMenuItem
-                      key={key}
-                      onClick={() =>
-                        setSelectedResourceKey(key === primaryResourceKey ? null : key)
-                      }
-                      className="gap-2"
-                    >
-                      <FolderOpen className="h-3.5 w-3.5 shrink-0 opacity-70" />
-                      <span className="truncate">
-                        {projectResourceLabel({ resources, resourceKey: key })}
-                      </span>
-                      {effectiveResourceKey === key ? (
-                        <Check className="ml-auto h-3 w-3 text-muted-foreground" />
-                      ) : null}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : null}
-            {showTagPicker ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className={cn(
-                        'h-6 w-6 shrink-0',
-                        selectedTagIds.length > 0 && 'text-foreground'
-                      )}
-                      aria-label="Add tags to new mission"
-                      disabled={isCreating}
-                    />
-                  }
-                >
-                  <Tag className="h-3.5 w-3.5" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  className="w-48"
-                  data-blank-mission-card-owner={overlayOwnerId}
-                >
-                  {activeTags.map(tag => (
-                    <DropdownMenuCheckboxItem
-                      key={tag.id}
-                      checked={selectedTagIds.includes(tag.id)}
-                      onCheckedChange={() => toggleTag(tag.id)}
-                      onSelect={event => event.preventDefault()}
-                      className="gap-2"
-                    >
-                      {tag.color ? (
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    className="w-48"
+                    data-blank-mission-card-owner={overlayOwnerId}
+                  >
+                    <DropdownMenuLabel>Project</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {projects.map(project => (
+                      <DropdownMenuItem
+                        key={project.id}
+                        onClick={() => setSelectedProjectId(project.id)}
+                        className="gap-2"
+                      >
                         <span
-                          className="h-2.5 w-2.5 shrink-0 rounded-full border"
-                          style={{ backgroundColor: tag.color, borderColor: tag.color }}
+                          className="h-2.5 w-2.5 shrink-0 rounded-[3px] border"
+                          style={{
+                            backgroundColor: project.color ?? undefined,
+                            borderColor: project.color ?? undefined
+                          }}
                         />
-                      ) : null}
-                      <span className="truncate">{tag.label}</span>
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : null}
+                        <span className="truncate">{project.name}</span>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
+              {showResourcePicker ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className={cn('h-6 w-6 shrink-0', selectedResourceKey && 'text-foreground')}
+                        aria-label={`Resource: ${currentResourceLabel}`}
+                        title={`Resource: ${currentResourceLabel}`}
+                        disabled={isCreating}
+                      />
+                    }
+                  >
+                    <FolderOpen className="h-3.5 w-3.5" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    className="w-48"
+                    data-blank-mission-card-owner={overlayOwnerId}
+                  >
+                    <DropdownMenuLabel>Resource</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {resourceKeys.map(key => (
+                      <DropdownMenuItem
+                        key={key}
+                        onClick={() =>
+                          setSelectedResourceKey(key === primaryResourceKey ? null : key)
+                        }
+                        className="gap-2"
+                      >
+                        <FolderOpen className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                        <span className="truncate">
+                          {projectResourceLabel({ resources, resourceKey: key })}
+                        </span>
+                        {effectiveResourceKey === key ? (
+                          <Check className="ml-auto h-3 w-3 text-muted-foreground" />
+                        ) : null}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
+              {showTagPicker ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className={cn(
+                          'h-6 w-6 shrink-0',
+                          selectedTagIds.length > 0 && 'text-foreground'
+                        )}
+                        aria-label="Add tags to new mission"
+                        disabled={isCreating}
+                      />
+                    }
+                  >
+                    <Tag className="h-3.5 w-3.5" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    className="w-48"
+                    data-blank-mission-card-owner={overlayOwnerId}
+                  >
+                    {activeTags.map(tag => (
+                      <DropdownMenuCheckboxItem
+                        key={tag.id}
+                        checked={selectedTagIds.includes(tag.id)}
+                        onCheckedChange={() => toggleTag(tag.id)}
+                        onSelect={event => event.preventDefault()}
+                        className="gap-2"
+                      >
+                        {tag.color ? (
+                          <span
+                            className="h-2.5 w-2.5 shrink-0 rounded-full border"
+                            style={{ backgroundColor: tag.color, borderColor: tag.color }}
+                          />
+                        ) : null}
+                        <span className="truncate">{tag.label}</span>
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
+            </div>
           </div>
-        </div>
-      </CardContent>
+        </CardContent>
+      </FileDropZone>
     </Card>
   );
 }

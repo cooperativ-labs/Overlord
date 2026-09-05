@@ -1,8 +1,10 @@
 import { DndContext, DragOverlay } from '@dnd-kit/core';
+import { useQueryClient } from '@tanstack/react-query';
 import { useMatch, useNavigate, useParams } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { NewMissionModal } from '@/components/NewMissionModal.tsx';
+import { uploadPendingAttachments } from '@/components/objectives/ObjectiveAttachments.tsx';
 
 import type { MissionDto, WorkspaceMemberDto } from '../../shared/contract.ts';
 import { ProjectSettingsSection } from '../components/projects/ProjectSettingsSection.tsx';
@@ -52,6 +54,7 @@ export function BoardPage() {
   const missionsQ = useMissions(projectId);
   const projectTagsQ = useProjectTags(projectId);
   const createMission = useCreateMission();
+  const queryClient = useQueryClient();
   const reorder = useReorderBoardColumn();
   const setMissionStatus = useSetMissionStatus();
   const [modalOpen, setModalOpen] = useState(false);
@@ -229,9 +232,13 @@ export function BoardPage() {
       if (statusId && targetProjectId === projectId) {
         await placeCreatedMission({ statusId, position, missionId: detail.id });
       }
+      const firstObjective = detail.objectives[0];
+      if (firstObjective && options?.attachments?.length) {
+        await uploadPendingAttachments(firstObjective.id, options.attachments, queryClient);
+      }
       return { missionId: detail.id, targetProjectId };
     },
-    [createMission, placeCreatedMission, projectId]
+    [createMission, placeCreatedMission, projectId, queryClient]
   );
 
   const handleCreateMissionFromColumn = useCallback(

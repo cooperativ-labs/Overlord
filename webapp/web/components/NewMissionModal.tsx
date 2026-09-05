@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowUp, Check, ChevronDown, Loader2, Play, Tag } from 'lucide-react';
+import { AlertTriangle, ArrowUp, Check, ChevronDown, Loader2, Play, Plus, Tag } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { AgentModelChooserButton } from '@/components/objectives/AgentModelChooserButton.tsx';
@@ -6,6 +6,10 @@ import {
   type AgentModelSelection,
   MANUAL_AGENT_KEY
 } from '@/components/objectives/AgentModelSelector.tsx';
+import {
+  PendingAttachmentList,
+  usePendingAttachments
+} from '@/components/objectives/ObjectiveAttachments.tsx';
 import { ObjectiveResourcePicker } from '@/components/objectives/ObjectiveResourcePicker.tsx';
 import { RepositoryMentionTextarea } from '@/components/RepositoryMentionTextarea.tsx';
 import { Button } from '@/components/ui.tsx';
@@ -18,6 +22,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu.tsx';
+import { FileDropZone } from '@/components/ui/file-drop-zone.tsx';
 import { api } from '@/lib/api.ts';
 import { buildDueDatetime } from '@/lib/due-datetime.ts';
 import {
@@ -89,6 +94,11 @@ export function NewMissionModal({
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [pendingAction, setPendingAction] = useState<'save' | 'run' | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Files dropped or picked before the mission exists; uploaded to the first
+  // objective once the create returns its id. The whole card is the drop
+  // target, matching DraftObjective.
+  const pending = usePendingAttachments({ dropDisabled: pendingAction !== null });
+  const clearPendingAttachments = pending.clear;
 
   const fallbackProjectId = defaultProjectQ.data?.projectId ?? null;
   const explicitDefaultProjectId = useMemo(
@@ -186,6 +196,7 @@ export function NewMissionModal({
     setResourceKey(null);
     setSelectedTagIds([]);
     setSubmitError(null);
+    clearPendingAttachments();
     setProjectId(current => {
       if (explicitDefaultProjectId) return explicitDefaultProjectId;
       if (recentDefaultProjectId) return recentDefaultProjectId;
@@ -194,7 +205,7 @@ export function NewMissionModal({
       }
       return '';
     });
-  }, [explicitDefaultProjectId, open, projects, recentDefaultProjectId]);
+  }, [clearPendingAttachments, explicitDefaultProjectId, open, projects, recentDefaultProjectId]);
 
   // Tags are project-scoped — drop any that no longer belong to the project.
   useEffect(() => {
@@ -243,6 +254,9 @@ export function NewMissionModal({
       // the same workspace as the surface that supplied it.
       if (!selectedProjectId) {
         if (shouldLaunch) throw new Error('Assign a project before running this task');
+        if (pending.files.length > 0) {
+          throw new Error('Assign a project to attach files to this task');
+        }
         await createInboxItem.mutateAsync({
           title: text,
           objectives: [text],
@@ -281,6 +295,7 @@ export function NewMissionModal({
       if (!createdObjective) {
         throw new Error('Mission was created without an objective.');
       }
+      await pending.upload(createdObjective.id);
 
       if (shouldLaunch) {
         await launchObjective.mutateAsync({
@@ -352,7 +367,13 @@ export function NewMissionModal({
       >
         <DialogTitle className="sr-only">New mission</DialogTitle>
 
-        <div className="w-full overflow-hidden rounded-xl border border-muted-foreground/20 transition-all focus-within:shadow-md dark:focus-within:ring-1 focus-within:ring-ring/50 bg-background">
+        <FileDropZone
+          onDrop={pending.addFiles}
+          disabled={isBusy}
+          dragState={pending.dragState}
+          label="Drop to attach"
+          className="w-full overflow-hidden rounded-xl border border-muted-foreground/20 transition-all focus-within:shadow-md dark:focus-within:ring-1 focus-within:ring-ring/50 bg-background"
+        >
           {/* Instruction body */}
 
           <RepositoryMentionTextarea
@@ -376,196 +397,231 @@ export function NewMissionModal({
             }}
           />
 
-          {/* Footer toolbar */}
-          <div className="flex flex-nowrap items-center justify-between gap-2 border-t border-border/40 px-3 py-2">
-            <div className="flex min-w-0 flex-nowrap items-center gap-1.5">
-              {/* Project selector */}
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2 text-xs text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={projects.length === 0 || isBusy}
-                  aria-label="Choose project"
-                  title="Choose project"
-                >
-                  <span
-                    className="h-3 w-3 shrink-0 rounded-[4px] border"
-                    style={{
-                      backgroundColor: selectedProject?.color ?? undefined,
-                      borderColor: selectedProject?.color ?? undefined
-                    }}
-                  />
-                  <span className="max-w-[140px] truncate">
-                    {selectedProject?.name ?? 'No project'}
-                  </span>
-                  <ChevronDown className="h-3 w-3 shrink-0" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="min-w-[180px]">
-                  <DropdownMenuLabel>Project</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    className="gap-2 text-xs"
-                    onClick={() => {
-                      setProjectId('__inbox__');
-                      setResourceKey(null);
-                      setSelectedTagIds([]);
-                    }}
-                  >
-                    <span className="h-3 w-3 shrink-0 rounded-[4px] border border-muted-foreground" />
-                    <span className="truncate">No project (Inbox)</span>
-                    {!selectedProjectId ? (
-                      <Check className="ml-auto h-3 w-3 text-muted-foreground" />
-                    ) : null}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  {projectGroups.map((group, groupIndex) => (
-                    <div key={group.workspace.id}>
-                      {showWorkspaceGroups ? (
-                        <>
-                          {groupIndex > 0 ? <DropdownMenuSeparator /> : null}
-                          <DropdownMenuLabel className="text-[10px] font-normal uppercase tracking-wide text-muted-foreground">
-                            {group.workspace.name}
-                          </DropdownMenuLabel>
-                        </>
-                      ) : null}
-                      {group.projects.map(project => (
-                        <DropdownMenuItem
-                          key={project.id}
-                          className="gap-2 text-xs"
-                          onClick={() => {
-                            setProjectId(project.id);
-                            setSelectedTagIds([]);
-                          }}
-                        >
-                          <span
-                            className="h-3 w-3 shrink-0 rounded-[4px] border"
-                            style={{
-                              backgroundColor: project.color ?? undefined,
-                              borderColor: project.color ?? undefined
-                            }}
-                          />
-                          <span className="truncate">{project.name}</span>
-                          {project.id === selectedProjectId && (
-                            <Check className="ml-auto h-3 w-3 text-muted-foreground" />
-                          )}
-                        </DropdownMenuItem>
-                      ))}
-                    </div>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              {/* Tag selector */}
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2 text-xs text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={!selectedProjectId || tags.length === 0 || isBusy}
-                  aria-label="Add tags"
-                  title={tags.length === 0 ? 'No tags for this project' : 'Add tags'}
-                >
-                  <Tag className="h-3.5 w-3.5 shrink-0" />
-                  {selectedTags.length > 0 ? (
-                    <span className="flex items-center gap-1">
-                      {selectedTags.slice(0, 2).map(tag => (
-                        <span key={tag.id} className="flex items-center gap-1">
-                          {tag.color ? (
-                            <span
-                              className="h-2.5 w-2.5 shrink-0 rounded-full border"
-                              style={{ backgroundColor: tag.color, borderColor: tag.color }}
-                            />
-                          ) : null}
-                          <span className="max-w-[80px] truncate">{tag.label}</span>
-                        </span>
-                      ))}
-                      {selectedTags.length > 2 ? <span>+{selectedTags.length - 2}</span> : null}
-                    </span>
-                  ) : (
-                    <span>Tags</span>
-                  )}
-                  <ChevronDown className="h-3 w-3 shrink-0" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="min-w-[200px]">
-                  <DropdownMenuLabel>Tags</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {tags.map(tag => (
-                    <DropdownMenuCheckboxItem
-                      key={tag.id}
-                      checked={selectedTagIds.includes(tag.id)}
-                      onCheckedChange={() =>
-                        setSelectedTagIds(current =>
-                          current.includes(tag.id)
-                            ? current.filter(id => id !== tag.id)
-                            : [...current, tag.id]
-                        )
-                      }
-                      onSelect={event => event.preventDefault()}
-                      className="gap-2"
-                    >
-                      {tag.color ? (
-                        <span
-                          className="h-2.5 w-2.5 shrink-0 rounded-full border"
-                          style={{ backgroundColor: tag.color, borderColor: tag.color }}
-                        />
-                      ) : null}
-                      <span className="truncate">{tag.label}</span>
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              <ObjectiveResourcePicker
-                resources={resourcesQ.data ?? []}
-                value={resourceKey}
-                disabled={isBusy}
-                onChange={setResourceKey}
-              />
-            </div>
-
-            <div className="flex shrink-0 items-center gap-1.5">
-              {selectedProjectId ? (
-                <AgentModelChooserButton
-                  catalog={catalog}
-                  selection={selection}
-                  onChange={handleSelectionChange}
-                  agentConfigs={agentConfigs}
-                  onLaunchConfigCommit={(agentKey, config) =>
-                    setExplicitLaunchConfigs(previous => ({ ...previous, [agentKey]: config }))
-                  }
-                  disabled={isBusy}
-                />
-              ) : null}
-
-              <Button
-                variant="secondary"
-                className="h-8 gap-1.5 px-3 text-xs"
-                onClick={() => void submit(false)}
-                disabled={!canSubmit}
-              >
-                {pendingAction === 'save' ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <ArrowUp className="h-3.5 w-3.5" />
-                )}
-                Save
-              </Button>
-
-              {selectedProjectId && !isManual ? (
+          {/* Pending attachments + footer toolbar */}
+          <div className="border-t border-border/40">
+            <PendingAttachmentList
+              files={pending.files}
+              onRemove={pending.removeAt}
+              disabled={isBusy}
+              toolbar
+            />
+            {pending.error ? (
+              <p className="px-3 pb-1 pt-1 text-xs text-destructive">{pending.error}</p>
+            ) : null}
+            <div className="flex flex-nowrap items-center justify-between gap-2 px-3 py-2">
+              <div className="flex min-w-0 flex-nowrap items-center gap-1.5">
                 <Button
-                  variant="primary"
-                  className="h-8 gap-1.5 px-3 text-xs"
-                  onClick={() => void submit(true)}
-                  disabled={!canRun}
+                  type="button"
+                  variant="ghost"
+                  className="h-8 w-8 shrink-0 p-0"
+                  disabled={isBusy}
+                  onClick={() => pending.inputRef.current?.click()}
+                  aria-label="Attach files"
+                  title="Attach files"
                 >
-                  {pendingAction === 'run' ? (
+                  <Plus size={18} />
+                </Button>
+                {pending.files.length > 0 ? (
+                  <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium tabular-nums leading-none">
+                    {pending.files.length}
+                  </span>
+                ) : null}
+                <input
+                  ref={pending.inputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={pending.handleInputChange}
+                />
+
+                {/* Project selector */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2 text-xs text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={projects.length === 0 || isBusy}
+                    aria-label="Choose project"
+                    title="Choose project"
+                  >
+                    <span
+                      className="h-3 w-3 shrink-0 rounded-[4px] border"
+                      style={{
+                        backgroundColor: selectedProject?.color ?? undefined,
+                        borderColor: selectedProject?.color ?? undefined
+                      }}
+                    />
+                    <span className="max-w-[140px] truncate">
+                      {selectedProject?.name ?? 'No project'}
+                    </span>
+                    <ChevronDown className="h-3 w-3 shrink-0" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="min-w-[180px]">
+                    <DropdownMenuLabel>Project</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="gap-2 text-xs"
+                      onClick={() => {
+                        setProjectId('__inbox__');
+                        setResourceKey(null);
+                        setSelectedTagIds([]);
+                      }}
+                    >
+                      <span className="h-3 w-3 shrink-0 rounded-[4px] border border-muted-foreground" />
+                      <span className="truncate">No project (Inbox)</span>
+                      {!selectedProjectId ? (
+                        <Check className="ml-auto h-3 w-3 text-muted-foreground" />
+                      ) : null}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    {projectGroups.map((group, groupIndex) => (
+                      <div key={group.workspace.id}>
+                        {showWorkspaceGroups ? (
+                          <>
+                            {groupIndex > 0 ? <DropdownMenuSeparator /> : null}
+                            <DropdownMenuLabel className="text-[10px] font-normal uppercase tracking-wide text-muted-foreground">
+                              {group.workspace.name}
+                            </DropdownMenuLabel>
+                          </>
+                        ) : null}
+                        {group.projects.map(project => (
+                          <DropdownMenuItem
+                            key={project.id}
+                            className="gap-2 text-xs"
+                            onClick={() => {
+                              setProjectId(project.id);
+                              setSelectedTagIds([]);
+                            }}
+                          >
+                            <span
+                              className="h-3 w-3 shrink-0 rounded-[4px] border"
+                              style={{
+                                backgroundColor: project.color ?? undefined,
+                                borderColor: project.color ?? undefined
+                              }}
+                            />
+                            <span className="truncate">{project.name}</span>
+                            {project.id === selectedProjectId && (
+                              <Check className="ml-auto h-3 w-3 text-muted-foreground" />
+                            )}
+                          </DropdownMenuItem>
+                        ))}
+                      </div>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                {/* Tag selector */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2 text-xs text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={!selectedProjectId || tags.length === 0 || isBusy}
+                    aria-label="Add tags"
+                    title={tags.length === 0 ? 'No tags for this project' : 'Add tags'}
+                  >
+                    <Tag className="h-3.5 w-3.5 shrink-0" />
+                    {selectedTags.length > 0 ? (
+                      <span className="flex items-center gap-1">
+                        {selectedTags.slice(0, 2).map(tag => (
+                          <span key={tag.id} className="flex items-center gap-1">
+                            {tag.color ? (
+                              <span
+                                className="h-2.5 w-2.5 shrink-0 rounded-full border"
+                                style={{ backgroundColor: tag.color, borderColor: tag.color }}
+                              />
+                            ) : null}
+                            <span className="max-w-[80px] truncate">{tag.label}</span>
+                          </span>
+                        ))}
+                        {selectedTags.length > 2 ? <span>+{selectedTags.length - 2}</span> : null}
+                      </span>
+                    ) : (
+                      <span>Tags</span>
+                    )}
+                    <ChevronDown className="h-3 w-3 shrink-0" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="min-w-[200px]">
+                    <DropdownMenuLabel>Tags</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {tags.map(tag => (
+                      <DropdownMenuCheckboxItem
+                        key={tag.id}
+                        checked={selectedTagIds.includes(tag.id)}
+                        onCheckedChange={() =>
+                          setSelectedTagIds(current =>
+                            current.includes(tag.id)
+                              ? current.filter(id => id !== tag.id)
+                              : [...current, tag.id]
+                          )
+                        }
+                        onSelect={event => event.preventDefault()}
+                        className="gap-2"
+                      >
+                        {tag.color ? (
+                          <span
+                            className="h-2.5 w-2.5 shrink-0 rounded-full border"
+                            style={{ backgroundColor: tag.color, borderColor: tag.color }}
+                          />
+                        ) : null}
+                        <span className="truncate">{tag.label}</span>
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <ObjectiveResourcePicker
+                  resources={resourcesQ.data ?? []}
+                  value={resourceKey}
+                  disabled={isBusy}
+                  onChange={setResourceKey}
+                />
+              </div>
+
+              <div className="flex shrink-0 items-center gap-1.5">
+                {selectedProjectId ? (
+                  <AgentModelChooserButton
+                    catalog={catalog}
+                    selection={selection}
+                    onChange={handleSelectionChange}
+                    agentConfigs={agentConfigs}
+                    onLaunchConfigCommit={(agentKey, config) =>
+                      setExplicitLaunchConfigs(previous => ({ ...previous, [agentKey]: config }))
+                    }
+                    disabled={isBusy}
+                  />
+                ) : null}
+
+                <Button
+                  variant="secondary"
+                  className="h-8 gap-1.5 px-3 text-xs"
+                  onClick={() => void submit(false)}
+                  disabled={!canSubmit}
+                >
+                  {pendingAction === 'save' ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   ) : (
-                    <Play className="h-3.5 w-3.5" />
+                    <ArrowUp className="h-3.5 w-3.5" />
                   )}
-                  Run
+                  Save
                 </Button>
-              ) : null}
+
+                {selectedProjectId && !isManual ? (
+                  <Button
+                    variant="primary"
+                    className="h-8 gap-1.5 px-3 text-xs"
+                    onClick={() => void submit(true)}
+                    disabled={!canRun}
+                  >
+                    {pendingAction === 'run' ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Play className="h-3.5 w-3.5" />
+                    )}
+                    Run
+                  </Button>
+                ) : null}
+              </div>
             </div>
           </div>
-        </div>
+        </FileDropZone>
 
         {submitError ? <p className="text-xs text-red-400">{submitError}</p> : null}
         {!primaryConnection.connected && selectionLoaded && selectedProjectId ? (

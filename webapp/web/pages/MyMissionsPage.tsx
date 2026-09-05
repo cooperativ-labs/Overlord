@@ -1,9 +1,10 @@
 import { DndContext, DragOverlay } from '@dnd-kit/core';
-import { useQueries } from '@tanstack/react-query';
+import { useQueries, useQueryClient } from '@tanstack/react-query';
 import { useMatch, useNavigate } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { NewMissionModal } from '@/components/NewMissionModal.tsx';
+import { uploadPendingAttachments } from '@/components/objectives/ObjectiveAttachments.tsx';
 
 import type {
   MyMissionDto,
@@ -100,6 +101,7 @@ export function MyMissionsPage() {
   // projects (lifecycle defaults to 'active').
   const activeProjectsQ = useAllProjects();
   const createMission = useCreateMission();
+  const queryClient = useQueryClient();
   const setMissionStatus = useSetMissionStatus();
   const reorder = useReorderMyMissions();
 
@@ -460,9 +462,13 @@ export function MyMissionsPage() {
         ...(statusId ? { statusId } : {}),
         ...(tagIds.length > 0 ? { tagIds } : {})
       });
+      const firstObjective = detail.objectives[0];
+      if (firstObjective && options?.attachments?.length) {
+        await uploadPendingAttachments(firstObjective.id, options.attachments, queryClient);
+      }
       return { missionId: detail.id };
     },
-    [createMission, defaultCreateProjectId, statusesByProject]
+    [createMission, defaultCreateProjectId, queryClient, statusesByProject]
   );
 
   const handleCreateMissionFromColumn = useCallback(
