@@ -282,3 +282,39 @@ Shipped, per the edge-to-edge revision in §4.1.1:
 - Renamed/removed: `TerminalSessionsSection.tsx` → `ObjectiveTerminalSessions.tsx` (provider + per-objective renderer; card and compact row no longer print an objective chip); `LiveFileChanges.tsx` → `LiveFileChangeList.tsx` (takes a pre-filtered array); `MissionDeliveriesSection.tsx` and `latch-session-display.ts` deleted as dead.
 
 Deferred (open question 4): run boundaries are still inferred from `deliveredAt`; no `reopened_at` stamp or `objective_runs` ledger. Per-objective evidence endpoints remain an optimisation for later. Contract impact: none.
+
+## 8. Blocking-request indicator on the collapsed row (coo:879.kbhe, 7 Sep 2026)
+
+Moving agent questions and structured choices into the executing objective's
+accordion body (§4.3) created one hole: a row auto-opens once when it starts
+executing, so a user who collapses it while a question is pending loses every
+sign that the agent is stopped waiting for them. The row now says so itself.
+
+- `webapp/web/lib/objective-blocking-requests.ts` (unit-tested) — pure selection
+  over the objective's agent requests. Only `status === 'open'` question and
+  choice requests block; every other status is terminal and must not keep
+  asking for an answer that can no longer be delivered. Dismissal is tracked by
+  request id, not per objective, so waving away the question you have read
+  never silences the *next* one the agent asks.
+- `ObjectiveCollapsibleItem` — calls `useAgentSessionFeed(missionId, objectiveId)`
+  for in-flight rows only (a completed row passes `null`, which leaves the
+  polled query disabled). While something is blocking:
+  - **Badge** on line two, before the evidence badges: an amber
+    `HelpCircle` + count with a tooltip naming the kind ("blocking question" vs
+    "choice"). Clicking it opens the row without closing others.
+  - **Tint** across the whole row — header and open body — in the same amber the
+    blocking-question card uses (`bg-amber-50/70` / `dark:bg-amber-500/10`).
+    It outranks the open-row wash, and it replaces the executing shimmer: an
+    agent stopped on a question is not making progress.
+  - **Dismiss** — the `×` inside the badge marks the currently active request
+    ids dismissed, clearing the badge and the tint. The request itself is
+    untouched and stays answerable inside the objective; a new request id
+    re-arms both.
+  - **Re-open** — a request id not seen before calls `onOpenForRequest`, wired
+    in `MissionObjectivesSection` to `openExecutedObjective` (opens without
+    closing others). Once per request id, mirroring the start-of-execution
+    auto-open, so a 5s refetch never re-opens a row the user collapsed.
+- The display id on line two is now the shrinkable element (`min-w-0 truncate`),
+  so the extra badge takes width from the identity text rather than clipping a
+  header action in a narrow panel.
+- The mission-wide `LiveActivityFeed` is unchanged. Contract impact: none.

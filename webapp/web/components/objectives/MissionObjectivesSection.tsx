@@ -208,6 +208,13 @@ export function MissionObjectivesSection({
   // a row instead of replacing the open one, and a `?objective=` deep link
   // opens its target without closing anything the user already had open.
   const [openObjectiveIds, setOpenObjectiveIds] = useState<ReadonlySet<string>>(() => new Set());
+  // Opens a row without closing anything else. Used by the deep link, the
+  // start-of-execution auto-open, and a row that just received a blocking
+  // agent request.
+  const openExecutedObjective = (objectiveId: string) =>
+    setOpenObjectiveIds(current =>
+      current.has(objectiveId) ? current : new Set([...current, objectiveId])
+    );
   const toggleExecutedObjective = (objectiveId: string, { additive }: { additive: boolean }) => {
     setOpenObjectiveIds(current => {
       const isOpen = current.has(objectiveId);
@@ -410,6 +417,7 @@ export function MissionObjectivesSection({
                 loading={evidenceLoading}
                 open={openObjectiveIds.has(objective.id)}
                 onToggle={options => toggleExecutedObjective(objective.id, options)}
+                onOpenForRequest={() => openExecutedObjective(objective.id)}
               />
             </ObjectiveFocusAnchor>
           ))}

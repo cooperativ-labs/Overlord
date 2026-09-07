@@ -5,18 +5,21 @@ import {
   Copy,
   FastForward,
   FolderOpen,
+  HelpCircle,
   Loader2,
   Paperclip,
   RefreshCw,
-  Unplug
+  Unplug,
+  X
 } from 'lucide-react';
-import { type MouseEvent, useId, useState } from 'react';
+import { type MouseEvent, useEffect, useId, useRef, useState } from 'react';
 
 import type { ObjectiveDto } from '../../../shared/contract.ts';
 import { getAgentIcon } from '../../lib/helpers/agent-icons.ts';
 import { buildAgentResumeCommand } from '../../lib/helpers/agent-resume-command.ts';
 import { useCopyToClipboard } from '../../lib/hooks/use-copy-to-clipboard.ts';
 import { objectiveOriginLabel } from '../../lib/mission-origin.ts';
+import { selectObjectiveBlockingRequests } from '../../lib/objective-blocking-requests.ts';
 import type { ObjectiveEvidence } from '../../lib/objective-evidence.ts';
 import { missionDraftResourceBadgeKey, projectResourceLabel } from '../../lib/project-resources.ts';
 import {
@@ -27,6 +30,7 @@ import {
   useUpdateObjective
 } from '../../lib/queries.ts';
 import { cn } from '../../lib/utils.ts';
+import { useAgentSessionFeed } from '../agent-session/AgentSessionActivity.tsx';
 import { OriginSparklesIcon } from '../OriginSparklesIcon.tsx';
 import { Button } from '../ui/button.tsx';
 import { Collapsible, CollapsibleContent } from '../ui/collapsible.tsx';
@@ -70,7 +74,16 @@ function stopRowToggle(event: MouseEvent) {
  * Rows run edge to edge across the mission panel (§4.1.1): no side borders and
  * no radius, so the hover wash and the in-flight shimmer sweep the full width,
  * and the list's dividers do the separating. The row's own padding is the
- * only horizontal inset.
+ * only horizontal inset. An open row also carries a slightly darker wash over
+ * its full height so it reads as one block against the collapsed rows around
+ * it, and the in-flight shimmer covers header and open body alike.
+ *
+ * While the row is in flight it also watches its own agent-session feed: a
+ * blocking question or structured choice renders inside this row's body, so a
+ * collapsed row would otherwise hide a request the agent is stopped on. An
+ * unanswered request tints the whole row with the blocking-question amber,
+ * puts a counted badge on line two, and opens the row once — and the user can
+ * dismiss that status without answering (coo:879).
  */
 export function ObjectiveCollapsibleItem({
   objective,
@@ -78,7 +91,8 @@ export function ObjectiveCollapsibleItem({
   evidence,
   loading,
   open,
-  onToggle
+  onToggle,
+  onOpenForRequest
 }: {
   objective: ObjectiveDto;
   index: number;
@@ -87,10 +101,16 @@ export function ObjectiveCollapsibleItem({
   open: boolean;
   /** `additive` is true for shift-click, which opens alongside other rows instead of replacing them. */
   onToggle: (options: { additive: boolean }) => void;
+  /** Opens this row without closing any other — used when the agent raises a new request. */
+  onOpenForRequest?: () => void;
 }) {
   const update = useUpdateObjective();
   const { copied, copy } = useCopyToClipboard();
   const [forceDisconnectOpen, setForceDisconnectOpen] = useState(false);
+  /** Request ids the user waved away; a new id is never in here, so it re-arms the badge. */
+  const [dismissedRequestIds, setDismissedRequestIds] = useState<ReadonlySet<string>>(
+    () => new Set()
+  );
   const panelId = useId();
   // Display labels come from the objective's own workspace's catalog (coo:324).
   const projectQuery = useProject(objective.projectId);
@@ -139,6 +159,27 @@ export function ObjectiveCollapsibleItem({
     sessionId: objective.externalSessionId
   });
 
+  // Only an in-flight objective can be blocked on a human, and passing `null`
+  // leaves the underlying polled query disabled for every completed row.
+  const agentRequests = useAgentSessionFeed(objective.missionId, inFlight ? objective.id : null);
+  const blocking = selectObjectiveBlockingRequests({
+    requests: agentRequests.items.map(item => item.request),
+    dismissedIds: dismissedRequestIds
+  });
+  // Open the row once per request id — mirroring the start-of-execution auto-open
+  // in MissionObjectivesSection — so the agent's question is visible when it
+  // arrives, without fighting a user who collapses the row on every 5s refetch.
+  const pendingRequestKey = blocking.pendingIds.join(',');
+  const openedForRequestRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const fresh = pendingRequestKey
+      .split(',')
+      .filter(id => id.length > 0 && !openedForRequestRef.current.has(id));
+    if (fresh.length === 0) return;
+    for (const id of fresh) openedForRequestRef.current.add(id);
+    onOpenForRequest?.();
+  }, [onOpenForRequest, pendingRequestKey]);
+
   const forceDisconnect = async () => {
     await update.mutateAsync({ id: objective.id, body: { state: 'draft' } });
     setForceDisconnectOpen(false);
@@ -148,7 +189,28 @@ export function ObjectiveCollapsibleItem({
 
   return (
     <Collapsible open={open}>
-      <div className="relative overflow-hidden">
+      {/*
+        An open row carries a slightly darker wash across its whole height —
+        header and evidence body — so it reads as one block distinct from the
+        collapsed rows above and below it. A row waiting on an unanswered agent
+        request wears the blocking-question amber instead, which outranks the
+        open wash: "this needs you" is the more urgent thing to say.
+      */}
+      <div
+        className={cn(
+          'relative overflow-hidden transition-colors',
+          open && !blocking.isBlocking && 'bg-muted/30',
+          blocking.isBlocking && 'bg-amber-50/70 dark:bg-amber-500/10'
+        )}
+      >
+        {/*
+          The executing shimmer sweeps the whole row — header and open body
+          alike — but not while the row is blocked: an agent stopped on a
+          question is not making progress, and the amber tint says so.
+        */}
+        {inFlight && !blocking.isBlocking ? (
+          <div className="pointer-events-none absolute inset-0 z-0 animate-[shimmer_3s_linear_infinite] bg-size-[200%_100%] bg-linear-to-r from-transparent via-emerald-500/20 to-transparent" />
+        ) : null}
         {/*
           The whole header toggles the row, but header actions live on line two
           alongside the badges, and a button cannot nest inside a button. So the
@@ -160,17 +222,14 @@ export function ObjectiveCollapsibleItem({
         */}
         <div
           className={cn(
-            'relative flex cursor-pointer flex-col gap-0.5 py-2 pl-5 pr-4 transition-colors',
-            !inFlight && 'hover:bg-muted/40'
+            'relative z-10 flex cursor-pointer flex-col gap-0.5 py-2 pl-5 pr-4 transition-colors',
+            !inFlight && (open ? 'hover:bg-muted/25' : 'hover:bg-muted/40')
           )}
           onClick={event => {
             if (!event.currentTarget.contains(event.target as Node)) return;
             toggle(event);
           }}
         >
-          {inFlight ? (
-            <div className="pointer-events-none absolute inset-0 animate-[shimmer_3s_linear_infinite] bg-size-[200%_100%] bg-linear-to-r from-transparent via-emerald-500/20 to-transparent" />
-          ) : null}
           {/* Line 1 — title and chevron. */}
           <button
             type="button"
@@ -227,7 +286,10 @@ export function ObjectiveCollapsibleItem({
                 </Tooltip>
               ) : null}
               {objective.displayId ? (
-                <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+                // The one shrinkable thing on line two: when the blocking badge
+                // joins the right-hand group in a narrow panel, the display id
+                // gives up width before an action button gets clipped.
+                <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
                   {objective.displayId}
                 </span>
               ) : null}
@@ -264,6 +326,52 @@ export function ObjectiveCollapsibleItem({
               ) : null}
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
+              {blocking.isBlocking ? (
+                <span className="inline-flex shrink-0 items-center rounded-sm border border-amber-400/50 bg-amber-100/70 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/20 dark:text-amber-300">
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <button
+                          type="button"
+                          aria-label={blocking.label ?? 'Agent request waiting'}
+                          className="inline-flex items-center gap-0.5 rounded-sm py-px pl-1 pr-0.5 font-mono text-[11px] tabular-nums hover:bg-amber-500/20"
+                          onClick={event => {
+                            stopRowToggle(event);
+                            if (!open) onToggle({ additive: true });
+                          }}
+                        />
+                      }
+                    >
+                      <HelpCircle className="h-3 w-3" aria-hidden="true" />
+                      <span>{blocking.count}</span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">{blocking.label}</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <button
+                          type="button"
+                          aria-label="Dismiss blocking status"
+                          className="inline-flex h-4 w-4 items-center justify-center rounded-sm hover:bg-amber-500/30"
+                          onClick={event => {
+                            stopRowToggle(event);
+                            setDismissedRequestIds(
+                              current => new Set([...current, ...blocking.activeIds])
+                            );
+                          }}
+                        />
+                      }
+                    >
+                      <X className="h-2.5 w-2.5" aria-hidden="true" />
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      Dismiss until the agent asks again — the request stays answerable inside this
+                      objective
+                    </TooltipContent>
+                  </Tooltip>
+                </span>
+              ) : null}
               <ObjectiveEvidenceBadges
                 evidence={evidence}
                 startedAt={objective.startedAt}
@@ -362,7 +470,7 @@ export function ObjectiveCollapsibleItem({
             </div>
           ) : null}
         </div>
-        <CollapsibleContent id={panelId} className="pb-3 pl-5 pr-4 pt-1">
+        <CollapsibleContent id={panelId} className="relative z-10 pb-3 pl-5 pr-4 pt-1">
           <ObjectiveEvidenceSections
             objective={objective}
             evidence={evidence}
