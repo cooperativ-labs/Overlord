@@ -26,17 +26,19 @@ import {
   type BoardView,
   type ColumnMap,
   getMissionTags,
+  isWindowedStatusType,
   readStoredBoardView,
   resolveAssignee,
   resolveColumnMissions,
   storeBoardView
 } from './board-shared.ts';
-import { BoardColumn } from './BoardColumn.tsx';
+import { BoardColumn, type BoardColumnStatus } from './BoardColumn.tsx';
 import { MissionCalendarView } from './MissionCalendarView.tsx';
 import { MissionListView } from './MissionListView.tsx';
 import { MissionStatusFilterDropdown } from './MissionStatusFilterDropdown.tsx';
 import { MissionsViewToggle } from './MissionsViewToggle.tsx';
 import { MissionTagFilterDropdown } from './MissionTagFilterDropdown.tsx';
+import { ShowOlderMissionsButton } from './ShowOlderMissionsButton.tsx';
 import { SortableMissionCard } from './SortableMissionCard.tsx';
 import { useBoardColumnDnd } from './useBoardColumnDnd.ts';
 
@@ -51,7 +53,6 @@ export function BoardPage() {
   const project = useProject(projectId);
   const workspaceId = project.data?.workspaceId ?? null;
   const statusesQ = useProjectStatuses(projectId);
-  const missionsQ = useMissions(projectId);
   const projectTagsQ = useProjectTags(projectId);
   const createMission = useCreateMission();
   const queryClient = useQueryClient();
@@ -62,6 +63,15 @@ export function BoardPage() {
   const [view, setView] = useState<BoardView>(() => readStoredBoardView(projectId));
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [selectedStatusIds, setSelectedStatusIds] = useState<string[]>([]);
+  // Completed and cancelled missions accumulate without bound, so the board
+  // opens on the server's rolling window and expands only on request (coo:941).
+  // The calendar is exempt: it scrolls into past months, where a windowed
+  // archive would silently leave holes.
+  const [showOlderCompleted, setShowOlderCompleted] = useState(false);
+  const missionsQ = useMissions(
+    projectId,
+    showOlderCompleted || view === 'calendar' ? 'all-completed' : 'recent'
+  );
 
   const statuses = useMemo(() => statusesQ.data ?? [], [statusesQ.data]);
   const missions = useMemo(() => missionsQ.data ?? [], [missionsQ.data]);
@@ -82,6 +92,7 @@ export function BoardPage() {
     setView(readStoredBoardView(projectId));
     setSelectedTagIds([]);
     setSelectedStatusIds([]);
+    setShowOlderCompleted(false);
   }, [projectId]);
 
   const handleViewChange = (nextView: BoardView) => {
@@ -346,6 +357,20 @@ export function BoardPage() {
     onCreateAndOpenMission: handleCreateAndOpenMissionFromColumn
   };
 
+  // The expanded scope loads under its own key while the windowed result stays
+  // on screen as placeholder data, so `isPlaceholderData` marks exactly the
+  // wait after "show older" — never an ordinary background refetch.
+  const olderCompletedPending = showOlderCompleted && missionsQ.isPlaceholderData;
+  const showOlderControl = view !== 'calendar' && (!showOlderCompleted || olderCompletedPending);
+
+  const renderStatusFooter = (status: BoardColumnStatus) =>
+    showOlderControl && isWindowedStatusType(status.type) ? (
+      <ShowOlderMissionsButton
+        onClick={() => setShowOlderCompleted(true)}
+        isLoading={olderCompletedPending}
+      />
+    ) : null;
+
   const renderBoardColumns = (columnsDraggable: boolean) =>
     visibleStatuses.map(status => {
       const colMissions = resolveColumnMissions(visibleColumns[status.id] ?? [], missionById);
@@ -356,6 +381,7 @@ export function BoardPage() {
           missions={colMissions}
           count={colMissions.length}
           draggable={columnsDraggable}
+          footer={renderStatusFooter(status)}
           {...columnProps}
         />
       );
@@ -459,6 +485,7 @@ export function BoardPage() {
             projectColor={projectColor}
             membersByWorkspaceUserId={membersByWorkspaceUserId}
             selectedMissionId={selectedMissionId}
+            renderStatusFooter={renderStatusFooter}
             onCreateMission={handleCreateMissionFromColumn}
             onCreateAndOpenMission={handleCreateAndOpenMissionFromColumn}
             onCompleteMission={completeStatusId ? handleCompleteMission : undefined}

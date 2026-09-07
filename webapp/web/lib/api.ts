@@ -518,14 +518,26 @@ export const api = {
     }>('DELETE', `/api/run-queues/entries/${entryId}`, body),
   clearRunnerQueue: (body: { objectiveId?: string; projectId?: string } = {}) =>
     request<{ cleared: number }>('POST', '/api/runner/clear', body),
-  listMissions: (projectId: string, options: { includeObjectives?: boolean } = {}) =>
-    request<MissionDto[]>(
+  listMissions: (
+    projectId: string,
+    options: { includeObjectives?: boolean; includeAllCompleted?: boolean } = {}
+  ) => {
+    const params = new URLSearchParams();
+    if (options.includeObjectives) params.set('includeObjectives', '1');
+    if (options.includeAllCompleted) params.set('includeAllCompleted', '1');
+    const query = params.toString();
+    return request<MissionDto[]>(
       'GET',
-      `/api/projects/${projectId}/missions${options.includeObjectives ? '?includeObjectives=1' : ''}`
-    ),
+      `/api/projects/${projectId}/missions${query ? `?${query}` : ''}`
+    );
+  },
   reorderBoardColumn: (projectId: string, body: ReorderBoardColumnBody) =>
     request<MissionDto[]>('PATCH', `/api/projects/${projectId}/board/reorder`, body),
-  listWorkspaceMyMissions: () => request<MyMissionsResponse>('GET', `/api/workspace/my-missions`),
+  listWorkspaceMyMissions: (options: { includeAllCompleted?: boolean } = {}) =>
+    request<MyMissionsResponse>(
+      'GET',
+      `/api/workspace/my-missions${options.includeAllCompleted ? '?includeAllCompleted=1' : ''}`
+    ),
   reorderWorkspaceMyMissions: (body: MyMissionReorderRequest) =>
     request<MyMissionsResponse>('PATCH', `/api/workspace/my-missions/order`, body),
 

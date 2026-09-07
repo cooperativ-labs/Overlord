@@ -150426,6 +150426,20 @@ async function getObjectivesByMission(missionIds, db = requireDatabaseClient()) 
   }
   return byMission;
 }
+var COMPLETED_MISSION_WINDOW_DAYS = 21;
+var WINDOWED_MISSION_STATUS_TYPES = ["complete", "cancelled"];
+var COMPLETED_MISSION_WINDOW_MS = COMPLETED_MISSION_WINDOW_DAYS * 24 * 60 * 60 * 1e3;
+function completedMissionWindowSql(includeAllCompleted, now2 = Date.now()) {
+  if (includeAllCompleted) return { sql: "", params: [] };
+  const placeholders2 = WINDOWED_MISSION_STATUS_TYPES.map(() => "?").join(", ");
+  return {
+    sql: ` AND (t.status_type NOT IN (${placeholders2}) OR t.updated_at >= ?)`,
+    params: [
+      ...WINDOWED_MISSION_STATUS_TYPES,
+      new Date(now2 - COMPLETED_MISSION_WINDOW_MS).toISOString()
+    ]
+  };
+}
 async function listMissions(projectId, options = {}) {
   const { workspaceId: workspaceId2 } = await requireProjectPermission({
     projectId,
@@ -150435,10 +150449,11 @@ async function listMissions(projectId, options = {}) {
     await requireProjectPermission({ projectId, permission: PERMISSIONS.OBJECTIVE_READ });
   }
   const db = requireDatabaseClient();
+  const completedWindow = completedMissionWindowSql(options.includeAllCompleted === true);
   const rows = await db.all(
-    `${selectMissionsSql(db.dialect)} AND t.project_id = ?
+    `${selectMissionsSql(db.dialect)} AND t.project_id = ?${completedWindow.sql}
          ORDER BY t.board_position ASC, t.sequence_number DESC`,
-    [workspaceId2, projectId]
+    [workspaceId2, projectId, ...completedWindow.params]
   );
   const tagsByMission = await getTagsByMission(rows.map((row) => row.id));
   const objectivesByMission = options.includeObjectives ? await getObjectivesByMission(rows.map((row) => row.id)) : null;
@@ -152139,7 +152154,9 @@ async function reorderBoardColumn(projectId, body) {
       }
     }
   });
-  return (await listMissions(projectId)).filter((t) => t.statusId === statusId);
+  return (await listMissions(projectId, { includeAllCompleted: true })).filter(
+    (t) => t.statusId === statusId
+  );
 }
 function parseScheduleJsonArray(json2) {
   try {
@@ -152560,7 +152577,7 @@ ${missionHasUnseenReturnedToExecuteSql},
      AND (t.workspace_id, t.assigned_workspace_user_id) IN (${pairPlaceholders})
 `;
 }
-async function listWorkspaceMyMissions() {
+async function listWorkspaceMyMissions(options = {}) {
   const memberships = await callerMembershipsInActiveOrganization();
   const readableMemberships = [];
   for (const membership of memberships) {
@@ -152575,11 +152592,12 @@ async function listWorkspaceMyMissions() {
   const pairPlaceholders = readableMemberships.map(() => "(?, ?)").join(", ");
   const pairParams = readableMemberships.flatMap((m3) => [m3.workspaceId, m3.workspaceUserId]);
   const db = requireDatabaseClient();
+  const completedWindow = completedMissionWindowSql(options.includeAllCompleted === true);
   const rows = await db.all(
-    `${selectMyMissionsSql(pairPlaceholders, db.dialect)}
+    `${selectMyMissionsSql(pairPlaceholders, db.dialect)}${completedWindow.sql}
          ORDER BY (mtp.position IS NULL) ASC, mtp.position ASC,
                   t.board_position ASC, t.updated_at DESC, t.sequence_number DESC, t.id ASC`,
-    pairParams
+    [...pairParams, ...completedWindow.params]
   );
   const tagsByMission = await getTagsByMission(rows.map((row) => row.id));
   return { missions: rows.map((row) => toMyMissionDto(row, tagsByMission.get(row.id) ?? [])) };
@@ -172962,7 +172980,13 @@ app.get(
   // The service checks MISSION_READ independently for every immutable
   // authorized-workspace entry. An ambient workspace gate would either select
   // the old oldest membership or reject valid multi-workspace aggregate reads.
-  handle3(() => listWorkspaceMyMissions())
+  // `?includeAllCompleted=1` lifts the rolling completed-mission window so the
+  // board's "load older" control can reveal the whole terminal archive.
+  handle3(
+    (req) => listWorkspaceMyMissions({
+      includeAllCompleted: isTruthyQueryFlag(req.query.includeAllCompleted)
+    })
+  )
 );
 app.patch(
   "/api/workspace/my-missions/order",
@@ -173172,9 +173196,12 @@ app.get(
   // `?includeObjectives=1` embeds each mission's objectives (one extra batched
   // query for the whole board) so chat-style clients do not fan out into one
   // `GET /api/missions/:id/objectives` per mission.
+  // `?includeAllCompleted=1` lifts the rolling completed-mission window that
+  // otherwise bounds `complete`/`cancelled` missions (coo:941).
   handle3(
     (req) => listMissions(req.params.id, {
-      includeObjectives: isTruthyQueryFlag(req.query.includeObjectives)
+      includeObjectives: isTruthyQueryFlag(req.query.includeObjectives),
+      includeAllCompleted: isTruthyQueryFlag(req.query.includeAllCompleted)
     })
   )
 );

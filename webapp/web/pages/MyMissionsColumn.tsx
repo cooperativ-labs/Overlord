@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import type { MyMissionDto, StatusType, WorkspaceMemberDto } from '../../shared/contract.ts';
 
 import type { BlankMissionCreateOptions } from './BlankMissionCard.tsx';
@@ -13,6 +15,7 @@ export function MyMissionsColumn({
   membersByWorkspaceUserId,
   selectedMissionId,
   draggable = true,
+  footer,
   onOpenMission,
   onCreateMission,
   onCreateAndOpenMission
@@ -26,6 +29,8 @@ export function MyMissionsColumn({
   membersByWorkspaceUserId: Map<string, WorkspaceMemberDto>;
   selectedMissionId?: string;
   draggable?: boolean;
+  /** Rendered beneath the loaded cards; see `BoardColumn`'s `footer`. */
+  footer?: ReactNode;
   onOpenMission: (missionId: string) => void;
   onCreateMission: (
     statusId: string,
@@ -53,6 +58,7 @@ export function MyMissionsColumn({
       membersByWorkspaceUserId={membersByWorkspaceUserId}
       selectedMissionId={selectedMissionId}
       draggable={draggable}
+      footer={footer}
       getMissionCardContext={mission => ({
         projectId: mission.projectId,
         projectName: mission.projectName,

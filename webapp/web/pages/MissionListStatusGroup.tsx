@@ -1,7 +1,7 @@
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { ChevronDown, ChevronRight, Plus } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { type ReactNode, useCallback, useState } from 'react';
 
 import { type StatusStyle } from '@/components/ui.tsx';
 import { cn } from '@/lib/utils';
@@ -26,6 +26,7 @@ export function MissionListStatusGroup<TMission extends MissionDto = MissionDto>
   selectedMissionId,
   isCollapsed,
   onToggleCollapse,
+  footer,
   getMissionCardContext,
   onCreateMission,
   onCreateAndOpenMission,
@@ -43,6 +44,11 @@ export function MissionListStatusGroup<TMission extends MissionDto = MissionDto>
   selectedMissionId?: string;
   isCollapsed: boolean;
   onToggleCollapse: (statusId: string) => void;
+  /**
+   * Rendered beneath the loaded rows. Terminal groups use it for the "show
+   * older missions" control; hidden while the group is collapsed.
+   */
+  footer?: ReactNode;
   getMissionCardContext?: (mission: TMission) => MissionCardContext;
   onCompleteMission?: (missionId: string) => void;
   onCreateMission?: (
@@ -187,6 +193,7 @@ export function MissionListStatusGroup<TMission extends MissionDto = MissionDto>
               })
             )}
           </SortableContext>
+          {footer}
         </div>
       )}
     </section>

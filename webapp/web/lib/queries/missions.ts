@@ -1,4 +1,5 @@
 import {
+  keepPreviousData,
   type QueryClient,
   useInfiniteQuery,
   useMutation,
@@ -43,7 +44,7 @@ import {
   useIsRemoteExecutionTargetForProject
 } from '../local-target-remote.ts';
 import { invalidateNonEverhourQueries } from '../query-invalidation.ts';
-import { keys } from '../query-keys.ts';
+import { keys, type MissionBoardScope } from '../query-keys.ts';
 
 import { useProjectExecutionTarget } from './agent-launch-config.ts';
 import {
@@ -56,14 +57,33 @@ function invalidateAll(qc: QueryClient) {
   invalidateNonEverhourQueries(qc);
 }
 
-export const useMissions = (projectId: string) =>
-  useQuery({ queryKey: keys.missions(projectId), queryFn: () => api.listMissions(projectId) });
+// Boards default to the server's rolling completed-mission window; the column
+// "Show older missions" control switches the scope to the full
+// archive. The scope is part of the query key so the two responses are cached
+// separately, and both stay under the `missions(projectId)` / `myMissions`
+// prefixes every existing invalidation already targets.
+export const useMissions = (projectId: string, scope: MissionBoardScope = 'recent') =>
+  useQuery({
+    queryKey: keys.missionsScoped(projectId, scope),
+    queryFn: () => api.listMissions(projectId, { includeAllCompleted: scope === 'all-completed' }),
+    // Widening the scope changes the key, and the pages gate their whole render
+    // on the first load. Holding the narrower result keeps the board on screen
+    // while the archive loads, so "show older" reads as a load-more rather than
+    // a page reload; `isPlaceholderData` is what marks that in-between state.
+    placeholderData: keepPreviousData
+  });
 
 // The active operator's assigned missions across the selected workspace. The
 // realtime SSE feed invalidates this for mission/objective workflow changes, and
 // the reorder mutation updates it optimistically.
-export const useWorkspaceMyMissions = () =>
-  useQuery({ queryKey: keys.myMissions, queryFn: () => api.listWorkspaceMyMissions() });
+export const useWorkspaceMyMissions = (scope: MissionBoardScope = 'recent') =>
+  useQuery({
+    queryKey: keys.myMissionsScoped(scope),
+    queryFn: () => api.listWorkspaceMyMissions({ includeAllCompleted: scope === 'all-completed' }),
+    // See `useMissions`: keeps the windowed board on screen while the expanded
+    // scope loads under its own key.
+    placeholderData: keepPreviousData
+  });
 
 export const useMission = (id: string, options: { refetchBranchState?: boolean } = {}) =>
   useQuery({

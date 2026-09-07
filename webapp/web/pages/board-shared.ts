@@ -7,9 +7,24 @@ import type {
   useSensors
 } from '@dnd-kit/core';
 
-import type { MissionDto, WorkspaceMemberDto } from '../../shared/contract.ts';
+import type { MissionDto, StatusType, WorkspaceMemberDto } from '../../shared/contract.ts';
 
 export const PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const;
+
+/**
+ * Status types whose columns hold finished work. The server bounds these to a
+ * rolling window on the board surfaces (coo:941), so they are the only columns
+ * that carry a "show older missions" control.
+ */
+const WINDOWED_STATUS_TYPES: ReadonlySet<StatusType> = new Set<StatusType>([
+  'complete',
+  'cancelled'
+]);
+
+/** Whether a column's missions are bounded by the completed-mission window. */
+export function isWindowedStatusType(type: StatusType | null | undefined): boolean {
+  return type !== null && type !== undefined && WINDOWED_STATUS_TYPES.has(type);
+}
 export const BOARD_VIEW_STORAGE_PREFIX = 'overlord:project-board-view:';
 
 export type BoardView = 'board' | 'list' | 'calendar';

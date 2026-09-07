@@ -1,7 +1,7 @@
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { Plus } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { type ReactNode, useCallback, useState } from 'react';
 
 import { STATUS_CONFIG, statusClasses } from '@/components/ui.tsx';
 import { cn } from '@/lib/utils';
@@ -35,6 +35,11 @@ type BoardColumnProps<TMission extends MissionDto> = {
   membersByWorkspaceUserId: Map<string, WorkspaceMemberDto>;
   selectedMissionId?: string;
   draggable?: boolean;
+  /**
+   * Rendered directly beneath the loaded cards, above the add-mission
+   * affordance. Used by terminal columns for the "show older missions" control.
+   */
+  footer?: ReactNode;
   getMissionCardContext?: (mission: TMission) => MissionCardContext;
   onCreateMission: (
     statusId: string,
@@ -62,6 +67,7 @@ export function BoardColumn<TMission extends MissionDto = MissionDto>({
   membersByWorkspaceUserId,
   selectedMissionId,
   draggable = true,
+  footer,
   getMissionCardContext,
   onCreateMission,
   onCreateAndOpenMission
@@ -129,6 +135,7 @@ export function BoardColumn<TMission extends MissionDto = MissionDto>({
 
         return <SortableMissionCard key={mission.id} {...cardProps} disabled={!draggable} />;
       })}
+      {footer}
       {canCreateMission && isAddingBottom ? (
         <div className="pb-0.52">
           <BlankMissionCard

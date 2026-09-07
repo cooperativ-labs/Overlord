@@ -1,5 +1,12 @@
 import type { ProjectListLifecycle } from '../../shared/contract.ts';
 
+/**
+ * How much of a board's terminal (`complete` / `cancelled`) history is loaded.
+ * Boards open on `recent` — the server's rolling completed-mission window — and
+ * switch to `all-completed` when the operator asks for older missions.
+ */
+export type MissionBoardScope = 'recent' | 'all-completed';
+
 export const keys = {
   meta: ['meta'] as const,
   profile: ['profile'] as const,
@@ -40,7 +47,17 @@ export const keys = {
       resourceKey ?? 'primary'
     ] as const,
   missions: (projectId: string) => ['project', projectId, 'missions'] as const,
+  /**
+   * One project board's missions for a given completed-mission scope (coo:941).
+   * `recent` holds the default rolling window; `all-completed` holds the
+   * expanded archive. Both sit under `missions(projectId)`, so every existing
+   * prefix invalidation still refreshes them together.
+   */
+  missionsScoped: (projectId: string, scope: MissionBoardScope) =>
+    ['project', projectId, 'missions', scope] as const,
   myMissions: ['workspace', 'my-missions'] as const,
+  /** My Missions for one completed-mission scope; see `missionsScoped`. */
+  myMissionsScoped: (scope: MissionBoardScope) => ['workspace', 'my-missions', scope] as const,
   mission: (id: string) => ['mission', id] as const,
   missionSchedule: (id: string) => ['mission', id, 'schedule'] as const,
   missionBranches: (id: string) => ['mission', id, 'branches'] as const,

@@ -43,6 +43,7 @@ import {
   buildMissionProjectFilterOptions,
   type ColumnMap,
   getMissionTags,
+  isWindowedStatusType,
   resolveColumnMissions
 } from './board-shared.ts';
 import type { BoardColumnStatus } from './BoardColumn.tsx';
@@ -60,6 +61,7 @@ import {
   resolveProjectStatusForColumn
 } from './my-missions-columns.ts';
 import { MyMissionsColumn } from './MyMissionsColumn.tsx';
+import { ShowOlderMissionsButton } from './ShowOlderMissionsButton.tsx';
 import { SortableMissionCard } from './SortableMissionCard.tsx';
 import { type MyMissionsDropTarget, useMyMissionsDnd } from './useMyMissionsDnd.ts';
 
@@ -95,7 +97,15 @@ function storeView(view: BoardView) {
 export function MyMissionsPage() {
   const navigate = useNavigate();
   const meta = useMeta();
-  const myMissionsQ = useWorkspaceMyMissions();
+  // Completed missions accumulate without bound, so My Missions opens on the
+  // server's rolling window and expands only when the operator asks (coo:941).
+  // The calendar view is exempt: it scrolls into past months, where a windowed
+  // archive would silently leave holes.
+  const [showOlderCompleted, setShowOlderCompleted] = useState(false);
+  const [view, setView] = useState<BoardView>(() => readStoredView());
+  const myMissionsQ = useWorkspaceMyMissions(
+    showOlderCompleted || view === 'calendar' ? 'all-completed' : 'recent'
+  );
   // My Missions spans every workspace of the active organization, so the project
   // filter is gated on the cross-workspace list, which already excludes archived
   // projects (lifecycle defaults to 'active').
@@ -130,7 +140,6 @@ export function MyMissionsPage() {
     }))
   });
 
-  const [view, setView] = useState<BoardView>(() => readStoredView());
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [selectedStatusTypes, setSelectedStatusTypes] = useState<string[]>([]);
   const [selectedProjectIds, setSelectedProjectIds] = useState<string[]>([]);
@@ -513,6 +522,20 @@ export function MyMissionsPage() {
 
   const activeMission = activeId ? missionById.get(activeId) : undefined;
 
+  // The expanded scope loads under its own key while the windowed result stays
+  // on screen as placeholder data, so `isPlaceholderData` marks exactly the
+  // wait after "show older" — never an ordinary background refetch.
+  const olderCompletedPending = showOlderCompleted && myMissionsQ.isPlaceholderData;
+  const showOlderControl = view !== 'calendar' && (!showOlderCompleted || olderCompletedPending);
+
+  const renderStatusFooter = (status: BoardColumnStatus) =>
+    showOlderControl && isWindowedStatusType(status.type) ? (
+      <ShowOlderMissionsButton
+        onClick={() => setShowOlderCompleted(true)}
+        isLoading={olderCompletedPending}
+      />
+    ) : null;
+
   const renderColumns = () => (
     <>
       {visibleStatusColumns.map(column => {
@@ -529,6 +552,11 @@ export function MyMissionsPage() {
             membersByWorkspaceUserId={membersByWorkspaceUserId}
             selectedMissionId={selectedMissionId}
             draggable
+            footer={renderStatusFooter({
+              id: column.key,
+              name: column.name,
+              type: column.type
+            })}
             onOpenMission={openMission}
             onCreateMission={handleCreateMissionFromColumn}
             onCreateAndOpenMission={handleCreateAndOpenMissionFromColumn}
@@ -644,6 +672,7 @@ export function MyMissionsPage() {
             createStatusScope="aggregate"
             membersByWorkspaceUserId={membersByWorkspaceUserId}
             selectedMissionId={selectedMissionId}
+            renderStatusFooter={renderStatusFooter}
             getMissionCardContext={getMissionCardContext}
             onCreateMission={handleCreateMissionFromColumn}
             onCreateAndOpenMission={handleCreateAndOpenMissionFromColumn}

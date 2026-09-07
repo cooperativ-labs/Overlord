@@ -3828,9 +3828,45 @@ async function getObjectivesByMission(
   return byMission;
 }
 
+/**
+ * Rolling window applied to terminal (`complete` / `cancelled`) missions on the
+ * board surfaces (coo:941). Finished missions accumulate without bound, so the
+ * project board and My Missions load only those touched inside this window by
+ * default; a client that needs the full archive opts out with
+ * `includeAllCompleted`. Missions of every other status type are never windowed.
+ */
+export const COMPLETED_MISSION_WINDOW_DAYS = 21;
+
+/** Status types the completed-mission window applies to. */
+const WINDOWED_MISSION_STATUS_TYPES = ['complete', 'cancelled'] as const;
+
+const COMPLETED_MISSION_WINDOW_MS = COMPLETED_MISSION_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+
+/**
+ * `AND` fragment restricting terminal missions to the rolling window, with the
+ * parameters it binds. Returns an empty fragment when the caller asked for the
+ * whole archive. `updated_at` stands in for a completion timestamp: the schema
+ * has none, and a finished mission's last touch is what an operator recognizes
+ * as its recency. Aligned with `idx_missions_project_status_updated`.
+ */
+function completedMissionWindowSql(
+  includeAllCompleted: boolean,
+  now: number = Date.now()
+): { sql: string; params: string[] } {
+  if (includeAllCompleted) return { sql: '', params: [] };
+  const placeholders = WINDOWED_MISSION_STATUS_TYPES.map(() => '?').join(', ');
+  return {
+    sql: ` AND (t.status_type NOT IN (${placeholders}) OR t.updated_at >= ?)`,
+    params: [
+      ...WINDOWED_MISSION_STATUS_TYPES,
+      new Date(now - COMPLETED_MISSION_WINDOW_MS).toISOString()
+    ]
+  };
+}
+
 export async function listMissions(
   projectId: string,
-  options: { includeObjectives?: boolean } = {}
+  options: { includeObjectives?: boolean; includeAllCompleted?: boolean } = {}
 ): Promise<MissionDto[]> {
   const { workspaceId } = await requireProjectPermission({
     projectId,
@@ -3843,10 +3879,11 @@ export async function listMissions(
   // sequence_number DESC as a stable tiebreaker (e.g. brand-new missions that
   // share a position before the column is first reordered).
   const db = requireDatabaseClient();
+  const completedWindow = completedMissionWindowSql(options.includeAllCompleted === true);
   const rows = (await db.all(
-    `${selectMissionsSql(db.dialect)} AND t.project_id = ?
+    `${selectMissionsSql(db.dialect)} AND t.project_id = ?${completedWindow.sql}
          ORDER BY t.board_position ASC, t.sequence_number DESC`,
-    [workspaceId, projectId]
+    [workspaceId, projectId, ...completedWindow.params]
   )) as MissionRow[];
   const tagsByMission = await getTagsByMission(rows.map(row => row.id));
   const objectivesByMission = options.includeObjectives
@@ -6105,7 +6142,12 @@ export async function reorderBoardColumn(
     }
   });
 
-  return (await listMissions(projectId)).filter(t => t.statusId === statusId);
+  // The status-change response is the full contents of one column, including a
+  // terminal column's older missions, so it opts out of the board's rolling
+  // completed-mission window (coo:941).
+  return (await listMissions(projectId, { includeAllCompleted: true })).filter(
+    t => t.statusId === statusId
+  );
 }
 
 // ---- Mission scheduling (coo:124) -----------------------------------------
@@ -6677,8 +6719,14 @@ ${missionHasUnseenReturnedToExecuteSql},
  * regroups by statusId, preserving this within-column order. Returns an empty
  * list rather than broadening when there is no active organization or no
  * memberships in it.
+ *
+ * Terminal missions are restricted to the rolling completed-mission window
+ * unless `includeAllCompleted` is set (coo:941); see
+ * `completedMissionWindowSql`.
  */
-export async function listWorkspaceMyMissions(): Promise<MyMissionsResponse> {
+export async function listWorkspaceMyMissions(
+  options: { includeAllCompleted?: boolean } = {}
+): Promise<MyMissionsResponse> {
   const memberships = await callerMembershipsInActiveOrganization();
   const readableMemberships: Array<{ workspaceId: string; workspaceUserId: string }> = [];
   for (const membership of memberships) {
@@ -6697,11 +6745,12 @@ export async function listWorkspaceMyMissions(): Promise<MyMissionsResponse> {
   const pairParams = readableMemberships.flatMap(m => [m.workspaceId, m.workspaceUserId]);
 
   const db = requireDatabaseClient();
+  const completedWindow = completedMissionWindowSql(options.includeAllCompleted === true);
   const rows = (await db.all(
-    `${selectMyMissionsSql(pairPlaceholders, db.dialect)}
+    `${selectMyMissionsSql(pairPlaceholders, db.dialect)}${completedWindow.sql}
          ORDER BY (mtp.position IS NULL) ASC, mtp.position ASC,
                   t.board_position ASC, t.updated_at DESC, t.sequence_number DESC, t.id ASC`,
-    pairParams
+    [...pairParams, ...completedWindow.params]
   )) as MyMissionRow[];
   const tagsByMission = await getTagsByMission(rows.map(row => row.id));
   return { missions: rows.map(row => toMyMissionDto(row, tagsByMission.get(row.id) ?? [])) };

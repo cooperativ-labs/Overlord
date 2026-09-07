@@ -1,5 +1,5 @@
 import { DndContext, DragOverlay } from '@dnd-kit/core';
-import { useCallback, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useMemo, useState } from 'react';
 
 import { STATUS_CONFIG, UNCATEGORIZED_STATUS_STYLE } from '@/components/ui.tsx';
 
@@ -22,6 +22,7 @@ export function MissionListView<TMission extends MissionDto = MissionDto>({
   createStatusScope = 'project',
   membersByWorkspaceUserId,
   selectedMissionId,
+  renderStatusFooter,
   getMissionCardContext,
   onCreateMission,
   onCreateAndOpenMission,
@@ -42,6 +43,11 @@ export function MissionListView<TMission extends MissionDto = MissionDto>({
   createStatusScope?: 'project' | 'aggregate';
   membersByWorkspaceUserId: Map<string, WorkspaceMemberDto>;
   selectedMissionId?: string;
+  /**
+   * Optional per-status footer beneath the loaded rows — the page uses it to
+   * hang the "show older missions" control off terminal statuses (coo:941).
+   */
+  renderStatusFooter?: (status: BoardColumnStatus) => ReactNode;
   getMissionCardContext?: (mission: TMission) => MissionCardContext;
   onCreateMission?: (
     statusId: string,
@@ -105,6 +111,7 @@ export function MissionListView<TMission extends MissionDto = MissionDto>({
             selectedMissionId={selectedMissionId}
             isCollapsed={collapsed.has(status.id)}
             onToggleCollapse={toggleCollapse}
+            footer={renderStatusFooter?.(status)}
             getMissionCardContext={getMissionCardContext}
             onCreateMission={onCreateMission}
             onCreateAndOpenMission={onCreateAndOpenMission}

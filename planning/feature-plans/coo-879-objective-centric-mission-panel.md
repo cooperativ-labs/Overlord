@@ -117,6 +117,32 @@ The objective list stays compact; selecting an objective swaps the region below 
 
 Removed from the mission-level tail: **Terminal session**, **Deliveries**, **File Changes** — they move into the objectives. `AgentSessionActivity` (permission prompts/questions for the active objective) moves into the executing objective's body; the mission-wide `LiveActivityFeed` stays below.
 
+### 4.1.1 Executed objective rows run edge to edge (revision, 7 Sep 2026)
+
+Canvas: https://claude.ai/code/artifact/7a17b8c7-00c8-43c4-94b9-a02ad9da8a2e
+
+The executed-objective accordions no longer sit inside a rounded, bordered container with the panel's 20px gutter around it. They run edge to edge across the panel and are divided by straight 1px lines spanning the full panel width:
+
+```
+│ MissionTitle · MissionSettingsBar · Tags                       │
+├───────────────────────────────────────────────────────────────┤  ← divider above first row
+│  ✓ ⌘ Design objective ordering                        ▾       │
+├───────────────────────────────────────────────────────────────┤
+│  ✓ ⌘ Implement accordion                              ▴       │
+│    … flat evidence stack …                                     │
+├───────────────────────────────────────────────────────────────┤
+│  ◌ ⌘ Write docs   (shimmer sweeps the full width)     ▾       │
+├───────────────────────────────────────────────────────────────┤  ← divider below last row
+│    ┌ DraftObjective (editable) ────────────────────┐          │  ← keeps the 20px gutter
+│    └ … future objectives … [+ Add objective]        ┘          │
+├───────────────────────────────────────────────────────────────┤
+```
+
+- **Removed:** the `rounded-md border` around the executed list, the `px-5` gutter around it, and any per-row left/right border. The trigger hover wash and the executing shimmer lose their radius and span the full width.
+- **Added:** one divider above the first executed row, one between each pair, one below the last.
+- **Row inset:** the row's own padding is the only horizontal inset — 20px left (aligns with the mission title column) and 16px right (chevron / header actions). In a 420px panel the row content gets 384px instead of 354px.
+- **Unchanged:** the three-line header and the flat evidence stack inside the row (cards inside keep their own borders); the draft, future, and add-objective block below stays in the 20px gutter because those are editable cards, not history rows.
+
 ### 4.2 Completed objective accordion — anatomy
 
 Header (collapsed) — restructures today's `ObjectiveCollapsibleItem` header into three lines:
@@ -213,9 +239,9 @@ New:
 
 Modified:
 
-- `MissionPanel.tsx` — drop mission-level Terminal/Deliveries/File Changes sections; load deliveries + file changes once and pass the partition down; add Unassigned section.
-- `MissionObjectivesSection.tsx` — thread evidence into `ObjectiveCollapsibleItem` and `DraftObjective`; single-open accordion behaviour for executed rows.
-- `ObjectiveCollapsibleItem.tsx` — header badges; body becomes `ObjectiveEvidenceSections`.
+- `MissionPanel.tsx` — drop mission-level Terminal/Deliveries/File Changes sections; load deliveries + file changes once and pass the partition down; add Unassigned section. The objectives `<section>` splits its `px-5` wrapper: executed rows render outside the gutter, the draft/future/add block inside it (§4.1.1).
+- `MissionObjectivesSection.tsx` — thread evidence into `ObjectiveCollapsibleItem` and `DraftObjective`; single-open accordion behaviour for executed rows. The executed list drops `rounded-md border` in favour of `divide-y` plus a top and bottom border (full-width dividers).
+- `ObjectiveCollapsibleItem.tsx` — header badges; body becomes `ObjectiveEvidenceSections`. Row padding becomes `pl-5 pr-4`; the trigger's `rounded-md` and the shimmer wrapper's radius go away so hover and shimmer span the full width.
 - `DraftObjective.tsx` — render `ObjectiveHistoryStrip` when history exists; discard guard.
 - `ObjectiveMenuButton.tsx` — confirmation copy for "Mark draft".
 - `TerminalSessionsSection.tsx` / `LiveFileChanges.tsx` / `MissionDeliveriesSection.tsx` — extract their list bodies so they accept pre-filtered arrays and a `hideObjectiveChip` flag.

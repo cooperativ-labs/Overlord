@@ -1354,7 +1354,13 @@ app.get(
   // The service checks MISSION_READ independently for every immutable
   // authorized-workspace entry. An ambient workspace gate would either select
   // the old oldest membership or reject valid multi-workspace aggregate reads.
-  handle(() => listWorkspaceMyMissions())
+  // `?includeAllCompleted=1` lifts the rolling completed-mission window so the
+  // board's "load older" control can reveal the whole terminal archive.
+  handle(req =>
+    listWorkspaceMyMissions({
+      includeAllCompleted: isTruthyQueryFlag(req.query.includeAllCompleted)
+    })
+  )
 );
 app.patch(
   '/api/workspace/my-missions/order',
@@ -1603,9 +1609,12 @@ app.get(
   // `?includeObjectives=1` embeds each mission's objectives (one extra batched
   // query for the whole board) so chat-style clients do not fan out into one
   // `GET /api/missions/:id/objectives` per mission.
+  // `?includeAllCompleted=1` lifts the rolling completed-mission window that
+  // otherwise bounds `complete`/`cancelled` missions (coo:941).
   handle(req =>
     listMissions(req.params.id, {
-      includeObjectives: isTruthyQueryFlag(req.query.includeObjectives)
+      includeObjectives: isTruthyQueryFlag(req.query.includeObjectives),
+      includeAllCompleted: isTruthyQueryFlag(req.query.includeAllCompleted)
     })
   )
 );
