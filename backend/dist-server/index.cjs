@@ -138249,6 +138249,11 @@ async function allocateObjectiveDisplayKey({
 var OBJECTIVE_LAUNCHED_AT_ASSIGNMENT = "launched_at = COALESCE(launched_at, ?)";
 var OBJECTIVE_STARTED_AT_ASSIGNMENT = "started_at = COALESCE(started_at, ?)";
 var OBJECTIVE_COMPLETED_AT_ASSIGNMENT = "completed_at = ?";
+var OBJECTIVE_REOPENABLE_STATES = Object.freeze([
+  "executing",
+  "pending_delivery",
+  "complete"
+]);
 
 // ../packages/core/service/missions.ts
 init_projects();
@@ -143593,6 +143598,12 @@ init_dist();
 var OBJECTIVE_LAUNCHED_AT_ASSIGNMENT2 = "launched_at = COALESCE(launched_at, ?)";
 var OBJECTIVE_STARTED_AT_ASSIGNMENT2 = "started_at = COALESCE(started_at, ?)";
 var OBJECTIVE_COMPLETED_AT_ASSIGNMENT2 = "completed_at = ?";
+var OBJECTIVE_REOPENED_AT_ASSIGNMENT = "reopened_at = ?";
+var OBJECTIVE_REOPENABLE_STATES2 = Object.freeze([
+  "executing",
+  "pending_delivery",
+  "complete"
+]);
 
 // ../packages/core/dist/service/terminal-profile-types.js
 var DEFAULT_VIEWER_OPEN_AS2 = "window";
@@ -148821,6 +148832,7 @@ function toObjectiveDto(r5) {
     launchedAt: r5.launched_at ?? null,
     startedAt: r5.started_at ?? null,
     completedAt: r5.completed_at ?? null,
+    reopenedAt: r5.reopened_at ?? null,
     revision: r5.revision,
     externalSessionId: r5.external_session_id ?? null,
     branch: r5.branch ?? null,
@@ -153233,6 +153245,11 @@ async function updateObjectiveTx(idRef, body) {
         fields.push(OBJECTIVE_COMPLETED_AT_ASSIGNMENT2);
         setParams.push(nowIso2());
         changed.push("completed_at");
+      }
+      if (body.state === "draft" && OBJECTIVE_REOPENABLE_STATES2.includes(existing.state)) {
+        fields.push(OBJECTIVE_REOPENED_AT_ASSIGNMENT);
+        setParams.push(nowIso2());
+        changed.push("reopened_at");
       }
     }
     if (body.autoAdvance !== void 0) {

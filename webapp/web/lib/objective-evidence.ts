@@ -86,6 +86,135 @@ export function partitionMissionEvidence({
   return { byObjectiveId, unassigned };
 }
 
+/**
+ * One run of an objective: everything it produced between being set to draft
+ * and (if it got that far) completing. Lists are newest first, like
+ * {@link ObjectiveEvidence}.
+ */
+export type ObjectiveRun = {
+  /** 1-based, oldest run first — the number the "Run 1 of 2" label prints. */
+  number: number;
+  /** How many runs the objective has, so a label can say "of N". */
+  total: number;
+  /** Whether this is the objective's most recent run. */
+  latest: boolean;
+  deliveries: DeliveryDto[];
+  fileChanges: FileChangeDto[];
+  terminalSessions: TerminalSessionDto[];
+};
+
+function parseTime(value: string): number {
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? 0 : time;
+}
+
+function runHasEvidence(
+  run: Pick<ObjectiveRun, 'deliveries' | 'fileChanges' | 'terminalSessions'>
+) {
+  return run.deliveries.length > 0 || run.fileChanges.length > 0 || run.terminalSessions.length > 0;
+}
+
+function emptyRun(): Pick<ObjectiveRun, 'deliveries' | 'fileChanges' | 'terminalSessions'> {
+  return { deliveries: [], fileChanges: [], terminalSessions: [] };
+}
+
+/**
+ * Split an objective's evidence into runs, newest first.
+ *
+ * The boundary is `objective.reopenedAt` (contract v133): the backend stamps
+ * it when an objective that already executed is set back to draft, and it is
+ * last-wins, so it always marks where the latest run begins. Rows stamped at
+ * or after it are the latest run; rows before it are the earlier run. Because
+ * the column keeps only the most recent reopen, an objective reopened more
+ * than once shows every earlier run merged into one — an accepted limit of
+ * the minimal boundary (plan §2.3 item 4 / open question 4). A follow-up
+ * re-attach after delivery is not a reopen, so its deliveries stay in the
+ * same run.
+ *
+ * When `reopenedAt` is null the objective predates the column (or was never
+ * reopened), and the old inference applies as the fallback only: each delivery
+ * opens a run, and a session or file change belongs to the run of the first
+ * delivery stamped at or after it. Rows newer than the last delivery belong to
+ * the latest run. With one or zero deliveries there is a single run.
+ *
+ * Runs that produced nothing are dropped, except that the latest run is kept
+ * when `keepEmptyLatest` is set — a completed objective whose latest run left
+ * no evidence still needs its empty states to render. A reverted draft passes
+ * `false`, because its latest run has not happened yet.
+ */
+export function groupEvidenceByRun(
+  evidence: ObjectiveEvidence,
+  objective: Pick<ObjectiveDto, 'reopenedAt'>,
+  { keepEmptyLatest = true }: { keepEmptyLatest?: boolean } = {}
+): ObjectiveRun[] {
+  const buckets: Array<ReturnType<typeof emptyRun>> = [];
+
+  if (objective.reopenedAt) {
+    const boundary = parseTime(objective.reopenedAt);
+    const latest = emptyRun();
+    const earlier = emptyRun();
+    for (const delivery of evidence.deliveries) {
+      (parseTime(delivery.deliveredAt) >= boundary ? latest : earlier).deliveries.push(delivery);
+    }
+    for (const fileChange of evidence.fileChanges) {
+      (parseTime(fileChange.createdAt) >= boundary ? latest : earlier).fileChanges.push(fileChange);
+    }
+    for (const session of evidence.terminalSessions) {
+      (parseTime(session.createdAt) >= boundary ? latest : earlier).terminalSessions.push(session);
+    }
+    buckets.push(latest, earlier);
+  } else {
+    // Fallback: infer boundaries from delivery order. `deliveries` is newest
+    // first; bucket i belongs to deliveries[i].
+    const deliveries = evidence.deliveries;
+    if (deliveries.length <= 1) {
+      buckets.push({
+        deliveries: [...deliveries],
+        fileChanges: [...evidence.fileChanges],
+        terminalSessions: [...evidence.terminalSessions]
+      });
+    } else {
+      const deliveredAt = deliveries.map(delivery => parseTime(delivery.deliveredAt));
+      const bucketFor = (time: number): number => {
+        // Oldest delivery first; the first one delivered at or after the row
+        // is the run the row belongs to. Nothing qualifies → latest run.
+        for (let index = deliveries.length - 1; index >= 0; index -= 1) {
+          if (deliveredAt[index]! >= time) return index;
+        }
+        return 0;
+      };
+      for (const delivery of deliveries) {
+        const run = emptyRun();
+        run.deliveries.push(delivery);
+        buckets.push(run);
+      }
+      for (const fileChange of evidence.fileChanges) {
+        buckets[bucketFor(parseTime(fileChange.createdAt))]!.fileChanges.push(fileChange);
+      }
+      for (const session of evidence.terminalSessions) {
+        buckets[bucketFor(parseTime(session.createdAt))]!.terminalSessions.push(session);
+      }
+    }
+  }
+
+  const kept = buckets.filter(
+    (bucket, index) => runHasEvidence(bucket) || (index === 0 && keepEmptyLatest)
+  );
+  if (kept.length === 0 && keepEmptyLatest) kept.push(emptyRun());
+  const total = kept.length;
+  return kept.map((bucket, index) => ({
+    number: total - index,
+    total,
+    latest: index === 0,
+    ...bucket
+  }));
+}
+
+/** The "Run 1 of 2" label for a run, or `null` for an objective that ran once. */
+export function objectiveRunLabel(run: Pick<ObjectiveRun, 'number' | 'total'>): string | null {
+  return run.total > 1 ? `Run ${run.number} of ${run.total}` : null;
+}
+
 /** The evidence for one objective, or an empty record when it produced none. */
 export function evidenceForObjective(
   partition: MissionEvidencePartition | null | undefined,

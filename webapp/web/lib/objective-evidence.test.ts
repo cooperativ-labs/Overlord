@@ -6,8 +6,10 @@ import type { DeliveryDto, FileChangeDto, TerminalSessionDto } from '../../share
 import {
   evidenceForObjective,
   formatObjectiveElapsed,
+  groupEvidenceByRun,
   hasUnassignedEvidence,
   objectiveHasHistory,
+  objectiveRunLabel,
   partitionMissionEvidence
 } from './objective-evidence.ts';
 
@@ -180,5 +182,212 @@ test('formats elapsed time compactly and refuses missing or inverted ranges', ()
       completedAt: '2026-08-30T10:00:00.000Z'
     }),
     null
+  );
+});
+
+// ---- run boundaries (contract v133) -------------------------------------
+
+function evidenceOf({
+  deliveries = [],
+  fileChanges = [],
+  terminalSessions = []
+}: {
+  deliveries?: DeliveryDto[];
+  fileChanges?: FileChangeDto[];
+  terminalSessions?: TerminalSessionDto[];
+}) {
+  return evidenceForObjective(
+    partitionMissionEvidence({
+      objectives: [{ id: 'obj-1' }],
+      deliveries,
+      fileChanges,
+      terminalSessions
+    }),
+    'obj-1'
+  );
+}
+
+test('splits evidence at reopenedAt: rows at or after it are the latest run', () => {
+  const evidence = evidenceOf({
+    deliveries: [
+      delivery({ id: 'd-run1', deliveredAt: '2026-08-30T10:00:00.000Z' }),
+      delivery({ id: 'd-run2', deliveredAt: '2026-09-02T10:00:00.000Z' })
+    ],
+    fileChanges: [
+      fileChange({ id: 'f-run1', createdAt: '2026-08-30T09:30:00.000Z' }),
+      fileChange({ id: 'f-boundary', createdAt: '2026-09-01T12:00:00.000Z' }),
+      fileChange({ id: 'f-run2', createdAt: '2026-09-02T09:00:00.000Z' })
+    ],
+    terminalSessions: [
+      session({ providerSessionId: 's-run1', createdAt: '2026-08-30T09:00:00.000Z' }),
+      session({ providerSessionId: 's-run2', createdAt: '2026-09-01T12:30:00.000Z' })
+    ]
+  });
+
+  const runs = groupEvidenceByRun(evidence, { reopenedAt: '2026-09-01T12:00:00.000Z' });
+  assert.equal(runs.length, 2);
+  const [latest, earlier] = runs;
+  assert.deepEqual(
+    { number: latest!.number, total: latest!.total, latest: latest!.latest },
+    { number: 2, total: 2, latest: true }
+  );
+  assert.deepEqual(
+    latest!.deliveries.map(item => item.id),
+    ['d-run2']
+  );
+  assert.deepEqual(
+    latest!.fileChanges.map(item => item.id),
+    ['f-run2', 'f-boundary']
+  );
+  assert.deepEqual(
+    latest!.terminalSessions.map(item => item.providerSessionId),
+    ['s-run2']
+  );
+  assert.deepEqual(
+    { number: earlier!.number, total: earlier!.total, latest: earlier!.latest },
+    { number: 1, total: 2, latest: false }
+  );
+  assert.deepEqual(
+    earlier!.deliveries.map(item => item.id),
+    ['d-run1']
+  );
+  assert.deepEqual(
+    earlier!.fileChanges.map(item => item.id),
+    ['f-run1']
+  );
+  assert.deepEqual(
+    earlier!.terminalSessions.map(item => item.providerSessionId),
+    ['s-run1']
+  );
+  assert.equal(objectiveRunLabel(latest!), 'Run 2 of 2');
+  assert.equal(objectiveRunLabel(earlier!), 'Run 1 of 2');
+});
+
+test('a run with no delivery, or with two, is still one run when reopenedAt is set', () => {
+  // Run 1 delivered twice (a follow-up re-attach); run 2 was abandoned before
+  // delivering. Delivery-order inference would have called this three runs.
+  const evidence = evidenceOf({
+    deliveries: [
+      delivery({ id: 'd-first', deliveredAt: '2026-08-30T10:00:00.000Z' }),
+      delivery({ id: 'd-follow-up', deliveredAt: '2026-08-30T15:00:00.000Z' })
+    ],
+    fileChanges: [fileChange({ id: 'f-run2', createdAt: '2026-09-02T09:00:00.000Z' })],
+    terminalSessions: [
+      session({ providerSessionId: 's-run1', createdAt: '2026-08-30T09:00:00.000Z' }),
+      session({ providerSessionId: 's-run2', createdAt: '2026-09-02T08:00:00.000Z' })
+    ]
+  });
+
+  const runs = groupEvidenceByRun(evidence, { reopenedAt: '2026-09-01T00:00:00.000Z' });
+  assert.equal(runs.length, 2);
+  assert.deepEqual(runs[0]!.deliveries, []);
+  assert.deepEqual(
+    runs[0]!.fileChanges.map(item => item.id),
+    ['f-run2']
+  );
+  assert.deepEqual(
+    runs[1]!.deliveries.map(item => item.id),
+    ['d-follow-up', 'd-first']
+  );
+  assert.deepEqual(
+    runs[1]!.terminalSessions.map(item => item.providerSessionId),
+    ['s-run1']
+  );
+});
+
+test('a reverted draft drops its not-yet-started latest run and keeps the earlier one', () => {
+  const evidence = evidenceOf({
+    deliveries: [delivery({ id: 'd-run1', deliveredAt: '2026-08-30T10:00:00.000Z' })],
+    fileChanges: [fileChange({ id: 'f-run1', createdAt: '2026-08-30T09:30:00.000Z' })]
+  });
+  const reopenedAt = '2026-09-01T12:00:00.000Z';
+
+  const history = groupEvidenceByRun(evidence, { reopenedAt }, { keepEmptyLatest: false });
+  assert.equal(history.length, 1);
+  assert.deepEqual(
+    { number: history[0]!.number, total: history[0]!.total, latest: history[0]!.latest },
+    { number: 1, total: 1, latest: true }
+  );
+  assert.equal(objectiveRunLabel(history[0]!), null);
+
+  // A completed objective keeps the empty latest run so its empty states render.
+  const complete = groupEvidenceByRun(evidence, { reopenedAt });
+  assert.equal(complete.length, 2);
+  assert.equal(complete[0]!.latest, true);
+  assert.deepEqual(complete[0]!.deliveries, []);
+  assert.deepEqual(
+    complete[1]!.deliveries.map(item => item.id),
+    ['d-run1']
+  );
+});
+
+test('falls back to delivery-order inference when reopenedAt is null', () => {
+  const evidence = evidenceOf({
+    deliveries: [
+      delivery({ id: 'd-run1', deliveredAt: '2026-08-30T10:00:00.000Z' }),
+      delivery({ id: 'd-run2', deliveredAt: '2026-09-02T10:00:00.000Z' })
+    ],
+    fileChanges: [
+      fileChange({ id: 'f-run1', createdAt: '2026-08-30T09:30:00.000Z' }),
+      fileChange({ id: 'f-run2', createdAt: '2026-09-02T09:00:00.000Z' }),
+      fileChange({ id: 'f-after', createdAt: '2026-09-03T09:00:00.000Z' })
+    ],
+    terminalSessions: [
+      session({ providerSessionId: 's-run1', createdAt: '2026-08-30T09:00:00.000Z' }),
+      session({ providerSessionId: 's-run2', createdAt: '2026-09-02T08:00:00.000Z' })
+    ]
+  });
+
+  const runs = groupEvidenceByRun(evidence, { reopenedAt: null });
+  assert.equal(runs.length, 2);
+  assert.deepEqual(
+    runs[0]!.deliveries.map(item => item.id),
+    ['d-run2']
+  );
+  // Rows newer than the last delivery belong to the latest run.
+  assert.deepEqual(
+    runs[0]!.fileChanges.map(item => item.id),
+    ['f-after', 'f-run2']
+  );
+  assert.deepEqual(
+    runs[0]!.terminalSessions.map(item => item.providerSessionId),
+    ['s-run2']
+  );
+  assert.deepEqual(
+    runs[1]!.deliveries.map(item => item.id),
+    ['d-run1']
+  );
+  assert.deepEqual(
+    runs[1]!.fileChanges.map(item => item.id),
+    ['f-run1']
+  );
+  assert.deepEqual(
+    runs[1]!.terminalSessions.map(item => item.providerSessionId),
+    ['s-run1']
+  );
+  assert.equal(objectiveRunLabel(runs[1]!), 'Run 1 of 2');
+});
+
+test('without a boundary and at most one delivery everything is a single run', () => {
+  const single = groupEvidenceByRun(
+    evidenceOf({
+      deliveries: [delivery({ id: 'd' })],
+      fileChanges: [fileChange({ id: 'f' })],
+      terminalSessions: [session({ providerSessionId: 's' })]
+    }),
+    { reopenedAt: null }
+  );
+  assert.equal(single.length, 1);
+  assert.equal(single[0]!.deliveries.length, 1);
+  assert.equal(single[0]!.fileChanges.length, 1);
+  assert.equal(single[0]!.terminalSessions.length, 1);
+  assert.equal(objectiveRunLabel(single[0]!), null);
+
+  const nothing = groupEvidenceByRun(evidenceOf({}), { reopenedAt: null });
+  assert.equal(nothing.length, 1);
+  assert.equal(objectiveHasHistory({ objectiveId: 'obj-1', ...nothing[0]! }), false);
+  assert.deepEqual(
+    groupEvidenceByRun(evidenceOf({}), { reopenedAt: null }, { keepEmptyLatest: false }),
+    []
   );
 });

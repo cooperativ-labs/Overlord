@@ -844,6 +844,7 @@ export interface Objectives {
   position: number;
   project_id: string;
   reasoning_effort: string | null;
+  reopened_at: string | null;
   resource_key: string | null;
   revision: Generated<number>;
   started_at: string | null;

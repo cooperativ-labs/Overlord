@@ -52,7 +52,7 @@ So retention is already true at the data layer. The gaps are:
 1. `DraftObjective` renders no history at all — a reverted objective looks brand new.
 2. `shouldDiscardEmptiedObjective` (UI) soft-deletes a draft whose instruction text is cleared, unless it has attachments. A reverted draft with deliveries can be deleted by emptying the field, orphaning its history.
 3. `ObjectiveMenuButton`'s "Mark draft" gives no hint that evidence is preserved.
-4. Because `completed_at` is overwritten on re-completion, "run 1 vs run 2" must be derived from `deliveries.deliveredAt` / `sessionId`, not from objective timestamps.
+4. Because `completed_at` is overwritten on re-completion, "run 1 vs run 2" could not be derived from objective timestamps. Resolved in §9: `reopened_at` is stamped on the way back to draft and is the boundary; `deliveredAt` inference is only the fallback for older rows.
 
 ---
 
@@ -262,7 +262,7 @@ Phasing:
 1. **Single-open vs multi-open** executed accordions — the design defaults to single-open with shift-click for multi. OK, or always multi-open?
 2. ~~Instruction collapsed by default once a delivery exists~~ — resolved: evidence renders as a flat stack with no nested collapsibles; the instruction is always visible in an expanded objective (feedback on the design canvas, 31 Aug 2026).
 3. **Artifacts stay flat** with an objective chip (§4.7). Would you prefer artifacts also grouped into objectives, with mission-scoped ones (`objectiveId = null`) remaining below?
-4. **Run boundaries** — infer from `deliveredAt` (no schema change) or add an explicit `objective_runs` ledger / `reopened_at` stamp? Phase 1 assumes inference.
+4. ~~Run boundaries~~ — resolved (coo:879.zvj8, 7 Sep 2026): an explicit `objectives.reopened_at` stamp, contract v133; see §9. Delivery-order inference survives only as the fallback for rows that predate the column.
 5. Should "Mark draft" on a completed objective require a confirmation dialog at all, or is a toast ("History kept as previous runs") enough?
 
 ---
@@ -281,7 +281,7 @@ Shipped, per the edge-to-edge revision in §4.1.1:
 - `MissionPanel` — mission-level Terminal session / Deliveries / File Changes sections removed; deliveries and file changes fetched once and partitioned; `MissionLatchSessionProvider` keeps every running Latch session tracked whether or not its row is open; `UnassignedEvidenceSection` at the tail.
 - Renamed/removed: `TerminalSessionsSection.tsx` → `ObjectiveTerminalSessions.tsx` (provider + per-objective renderer; card and compact row no longer print an objective chip); `LiveFileChanges.tsx` → `LiveFileChangeList.tsx` (takes a pre-filtered array); `MissionDeliveriesSection.tsx` and `latch-session-display.ts` deleted as dead.
 
-Deferred (open question 4): run boundaries are still inferred from `deliveredAt`; no `reopened_at` stamp or `objective_runs` ledger. Per-objective evidence endpoints remain an optimisation for later. Contract impact: none.
+Deferred at the time: run boundaries were still inferred from `deliveredAt` (since replaced by the `reopened_at` stamp in §9). Per-objective evidence endpoints remain an optimisation for later. Contract impact of this objective: none.
 
 ## 8. Blocking-request indicator on the collapsed row (coo:879.kbhe, 7 Sep 2026)
 
@@ -318,3 +318,147 @@ sign that the agent is stopped waiting for them. The row now says so itself.
   so the extra badge takes width from the identity text rather than clipping a
   header action in a narrow panel.
 - The mission-wide `LiveActivityFeed` is unchanged. Contract impact: none.
+
+## 9. Explicit run boundaries (coo:879.zvj8, 7 Sep 2026, contract v133)
+
+Run numbering was inferred from `deliveries.deliveredAt` order, which broke
+whenever a run produced no delivery (abandoned, or reverted before delivering)
+or more than one (a follow-up re-attach after delivery), and `completed_at`
+cannot separate runs because re-completion overwrites it. The minimal option
+from open question 4 shipped: a single last-wins stamp rather than an
+`objective_runs` ledger.
+
+- **Schema** — `objectives.reopened_at`, nullable `TimestampUTC`, both dialects
+  (`20260907120000_objective_reopened_at`). No backfill: rows that predate the
+  column keep the fallback. Schema doc updated (it also gained the missing
+  `launched_at` / `started_at` rows).
+- **Stamp** — `updateObjectiveTx` writes `reopened_at = now` when
+  `body.state === 'draft'` and the objective is in `executing`,
+  `pending_delivery`, or `complete` (`OBJECTIVE_REOPENABLE_STATES` in
+  `@overlord/core/service/objective-lifecycle-timestamps`). `future → draft`
+  promotion and the `launching → draft` wedged-launch reset are not reopens: no
+  evidence precedes them. A post-delivery re-attach (`complete →
+  pending_delivery`) is deliberately not a reopen either — its follow-up
+  deliveries belong to the same run, which is why a run may hold several.
+- **DTO** — `ObjectiveDto.reopenedAt: string | null`, additive. Kysely types
+  regenerated. `completed_at` / `started_at` / `launched_at` semantics unchanged.
+- **Grouping** — `groupEvidenceByRun(evidence, objective, { keepEmptyLatest })`
+  in `webapp/web/lib/objective-evidence.ts` returns `ObjectiveRun[]` newest
+  first. With `reopenedAt` set, deliveries (`deliveredAt`), file changes and
+  terminal sessions (`createdAt`) at or after it form the latest run and
+  everything earlier forms the previous run. With it null, the old inference
+  applies: each delivery opens a run, a row belongs to the run of the first
+  delivery stamped at or after it, and rows newer than the last delivery belong
+  to the latest run. Empty runs are dropped, except the latest when
+  `keepEmptyLatest` (complete / active modes) so the empty states still render;
+  the history strip passes `false` because a reverted draft's next run has not
+  happened yet. `objectiveRunLabel` prints "Run 1 of 2" or null for a single run.
+- **UI** — `ObjectiveEvidenceSections`: the latest run is the flat stack
+  (Deliveries / Terminal session / File changes, counts on the rules are that
+  run's); earlier runs render under an "Earlier runs · N" rule as collapsed
+  "Run 1 of 2 · 1 delivery · 8 files · 1 session" rows that open to the same
+  flat stack. Several deliveries in one run are "Delivery 1 of 2" cards, latest
+  open. `history` mode (the draft's "Previous runs" strip) renders one run flat
+  or several as rows with the most recent open; the strip's trigger adds
+  "2 runs" to its summary.
+- **Known limit** — the stamp is last-wins, so an objective reopened more than
+  once shows every run before the latest merged into one "Run 1 of 2". Header
+  badges keep total counts across runs. Promoting to an `objective_runs` ledger
+  would lift the limit without changing the UI contract; the DTO would grow a
+  `runs` array and the grouping would take boundaries from it.
+- **Tests** — backend `objectives.test.ts` (stamp on `complete → draft` and
+  `executing → draft`, last-wins, untouched by unrelated edits, not stamped by a
+  never-run draft); `database/src/objective-reopened-at-migration.test.ts`
+  (column, CHECK shape, existing rows null, Postgres dialect); webapp
+  `objective-evidence.test.ts` (boundary split, no-delivery and two-delivery
+  runs, reverted-draft empty latest, fallback inference, single run).
+
+## 10. Per-objective evidence endpoints — measured and declined (coo:879.p4n6, 7 Sep 2026)
+
+The objective-centric panel fetches a mission's deliveries and file changes once
+and partitions them client-side (`webapp/web/lib/objective-evidence.ts`,
+`partitionMissionEvidence`), so a panel open costs the whole mission's evidence
+history rather than only the objective the user expands. The proposed fix was
+additive `GET /api/objectives/:id/deliveries` and `/file-changes` routes with
+lazy per-expand loading and count fields on `ObjectiveDto`. That was gated on
+measurement first. **The measurement says the cost is immaterial, so no code
+changes shipped.**
+
+### 10.1 Method
+
+Every mission in the workspace was sampled against the two real endpoints the
+panel calls, through the CLI's own authenticated backend client — 878 missions
+across all 14 projects, zero sampling errors. Payloads were measured as the
+serialized JSON the route returns, and again gzipped for the on-the-wire figure.
+
+### 10.2 Numbers
+
+Combined deliveries + file-changes payload per mission open:
+
+| | p50 | p75 | p90 | p95 | p99 | max |
+|---|---|---|---|---|---|---|
+| Raw JSON | 7.3 KB | 16.6 KB | 37.8 KB | 62.4 KB | 130.0 KB | 217.2 KB |
+
+- 18 of 878 missions (2.0%) exceed 100 KB; exactly one exceeds 200 KB
+  (`coo:562`, 217.2 KB — 7 deliveries and 196 file changes).
+- Per row: a delivery averages **4.6 KB** (the narrative summary plus the
+  report object dominate), a file change **722 B**. 1,648 deliveries and 8,835
+  file changes were measured.
+- The worst mission in the workspace is **47 KB gzipped**, which is what
+  actually crosses the wire.
+
+Set against what the panel already fetches unconditionally on the same open:
+
+| Mission | Detail | Events | Artifacts | Deliveries | File changes | Evidence share |
+|---|---|---|---|---|---|---|
+| coo:562 | 17.2 KB | 61.0 KB | 0.0 KB | 67.7 KB | 149.6 KB | 74% |
+| coo:803 | 18.2 KB | 79.0 KB | 0.0 KB | 58.7 KB | 129.7 KB | 66% |
+| coo:135 | 28.4 KB | 108.8 KB | 2.2 KB | 74.4 KB | 109.8 KB | 57% |
+| coo:522 | 15.5 KB | 80.6 KB | 6.4 KB | 93.8 KB | 84.3 KB | 63% |
+| coo:879 | 18.0 KB | 75.4 KB | 22.5 KB | 51.0 KB | 5.8 KB | 33% |
+
+Mission events alone are 61–115 KB on these missions and are not lazy-loaded.
+Evidence is the same order of magnitude as a fetch the panel already treats as
+free, not a new class of cost.
+
+Growth trend, by mission creation month (September is a partial month, so its
+missions have had less time to accumulate evidence):
+
+| Month | n | Mean KB | Max KB | Mean file changes |
+|---|---|---|---|---|
+| 2026-06 | 51 | 9.7 | 88.1 | 8.2 |
+| 2026-07 | 354 | 13.8 | 184.2 | 9.0 |
+| 2026-08 | 359 | 19.9 | 217.2 | 12.8 |
+| 2026-09 | 114 | 9.8 | 67.1 | 5.6 |
+
+The mean roughly doubled across the two busiest months and stays in the tens of
+kilobytes. There is no runaway curve that turns this into a problem soon.
+
+### 10.3 Decision
+
+Keep the single mission-level fetch and the client-side partition. Per-objective
+endpoints would trade one bounded request for N per-expand round-trips, add two
+routes and two query hooks with objective-keyed realtime invalidation, spend a
+contract version on `deliveryCount` / `fileChangeCount` / `hasHistory`, and
+still need the mission-level partition to feed the "Unassigned evidence"
+fallback — all to save 47 KB gzipped on the single worst mission in a workspace
+holding two years of history. The complexity is not repaid.
+
+Revisit if any of these turn: p99 above ~500 KB raw, a single mission past ~50
+deliveries, or the events payload getting lazy-loaded (which would leave
+evidence as the panel's dominant cost rather than one of several comparable
+ones).
+
+### 10.4 Follow-up found while measuring (not fixed here)
+
+Both `listMissionDeliveries` and `listMissionFileChanges` in
+`backend/repository.ts` hard-cap at `LIMIT 200` ordered newest-first, and drop
+older rows **silently** — no total count, no truncation marker, so the panel
+would render a partial history as if it were complete. Deliveries are far from
+it (max 16 across the workspace). File changes are not: one mission sits at 196
+of 200, two are at or above 175, and three at or above 150. The next long
+mission crosses the cap and quietly loses its oldest file changes.
+
+This is a correctness problem rather than a performance one and is out of scope
+for this objective, but it wants its own fix: return a total alongside the page,
+or paginate, so the panel can say "showing 200 of N".

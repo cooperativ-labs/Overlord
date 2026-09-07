@@ -140,6 +140,62 @@ test('completed objectives cannot be moved back to the future queue', async () =
   );
 });
 
+test('setting an executed objective back to draft stamps reopenedAt as a last-wins run boundary', async () => {
+  const project = await createProject({ name: 'Reopen Run Boundary Test' });
+  const mission = await createMission({ projectId: project.id, firstObjective: 'Run me twice' });
+  const objectiveId = mission.objectives[0]!.id;
+
+  // A never-executed draft, and future → draft promotion, are not reopens.
+  assert.equal(mission.objectives[0]!.reopenedAt, null);
+  const stillDraft = await updateObjective(objectiveId, { state: 'draft' });
+  assert.equal(stillDraft.reopenedAt, null);
+
+  const completed = await updateObjective(objectiveId, { state: 'complete' });
+  assert.equal(completed.reopenedAt, null);
+  assert.ok(completed.completedAt);
+
+  const reopened = await updateObjective(objectiveId, { state: 'draft' });
+  assert.ok(reopened.reopenedAt, 'complete → draft stamps reopened_at');
+  assert.ok(reopened.reopenedAt! >= completed.completedAt!);
+  // Reopening keeps the run's own timestamps; only the boundary is new.
+  assert.equal(reopened.completedAt, completed.completedAt);
+  assert.equal(reopened.state, 'draft');
+
+  const changeRow = db
+    .prepare(
+      `SELECT changed_fields_json FROM entity_changes
+        WHERE entity_type = 'objective' AND entity_id = ? AND operation = 'update'
+        ORDER BY seq DESC LIMIT 1`
+    )
+    .get(objectiveId) as { changed_fields_json: string };
+  assert.ok(parseChangedFields(changeRow.changed_fields_json).includes('reopened_at'));
+
+  // Second run: re-complete, then reopen again. The stamp is last-wins.
+  await new Promise(resolve => setTimeout(resolve, 5));
+  await updateObjective(objectiveId, { state: 'complete' });
+  const reopenedAgain = await updateObjective(objectiveId, { state: 'draft' });
+  assert.ok(reopenedAgain.reopenedAt! > reopened.reopenedAt!);
+
+  // A draft that has been reopened keeps its boundary through unrelated edits.
+  const retitled = await updateObjective(objectiveId, { title: 'Renamed' });
+  assert.equal(retitled.reopenedAt, reopenedAgain.reopenedAt);
+
+  const detail = await getMissionDetail(mission.id);
+  assert.equal(detail.objectives[0]!.reopenedAt, reopenedAgain.reopenedAt);
+});
+
+test('force-disconnecting an executing objective to draft also stamps reopenedAt', async () => {
+  const project = await createProject({ name: 'Reopen From Executing Test' });
+  const mission = await createMission({ projectId: project.id, firstObjective: 'Abandon me' });
+  const objectiveId = mission.objectives[0]!.id;
+
+  const executing = await updateObjective(objectiveId, { state: 'executing' });
+  assert.equal(executing.reopenedAt, null);
+
+  const abandoned = await updateObjective(objectiveId, { state: 'draft' });
+  assert.ok(abandoned.reopenedAt);
+});
+
 test('clearing a draft objective instruction to empty leaves it blank instead of erroring', async () => {
   const project = await createProject({ name: 'Clear Instruction Test' });
   const mission = await createMission({ projectId: project.id, firstObjective: 'Do the thing' });

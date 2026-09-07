@@ -1,4 +1,4 @@
-contractVersion: "132"
+contractVersion: "133"
 componentType: connector
 componentKey: opencode
 label: "OpenCode Connector"

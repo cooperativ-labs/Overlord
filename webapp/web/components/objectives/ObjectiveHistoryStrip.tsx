@@ -2,7 +2,11 @@ import { ChevronDown, History } from 'lucide-react';
 import { useState } from 'react';
 
 import type { ObjectiveDto } from '../../../shared/contract.ts';
-import { formatObjectiveElapsed, type ObjectiveEvidence } from '../../lib/objective-evidence.ts';
+import {
+  formatObjectiveElapsed,
+  groupEvidenceByRun,
+  type ObjectiveEvidence
+} from '../../lib/objective-evidence.ts';
 import { cn } from '../../lib/utils.ts';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible.tsx';
 
@@ -25,6 +29,8 @@ function countLabel(count: number, singular: string, plural: string): string {
  *
  * Collapsed by default: the draft is being edited to run again, and its past
  * is secondary to that — which is exactly the case where nesting is allowed.
+ * Several previous runs render as one row each inside the strip, split at the
+ * objective's `reopenedAt` boundary.
  */
 export function ObjectiveHistoryStrip({
   objective,
@@ -36,7 +42,11 @@ export function ObjectiveHistoryStrip({
   loading: ObjectiveEvidenceLoading;
 }) {
   const [open, setOpen] = useState(false);
+  // Runs are split at `reopenedAt` (contract v133); the latest, not-yet-started
+  // run is dropped, so this counts only the runs the strip will show.
+  const runCount = groupEvidenceByRun(evidence, objective, { keepEmptyLatest: false }).length;
   const summary = [
+    runCount > 1 ? countLabel(runCount, 'run', 'runs') : null,
     evidence.deliveries.length > 0
       ? countLabel(evidence.deliveries.length, 'delivery', 'deliveries')
       : null,

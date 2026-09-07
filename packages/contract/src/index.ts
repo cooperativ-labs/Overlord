@@ -727,6 +727,15 @@ export interface ObjectiveDto {
   startedAt: string | null;
   /** When the objective reached `complete`. Null until then. */
   completedAt: string | null;
+  /**
+   * When the objective was last set back to `draft` after it had already
+   * executed (`executing`, `pending_delivery`, or `complete`). Null until the
+   * first reopen. Last-wins, so it always marks where the latest run begins:
+   * deliveries, terminal sessions, and file changes stamped at or after it
+   * belong to that run, earlier rows to previous runs. A post-delivery
+   * re-attach is not a reopen (contract v133).
+   */
+  reopenedAt: string | null;
   revision: number;
   /** Native harness session/resume ID from the objective's latest agent session, when captured. */
   externalSessionId: string | null;

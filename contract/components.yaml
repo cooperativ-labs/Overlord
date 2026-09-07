@@ -4,7 +4,7 @@
 # IMPORTANT: Update this file and CONTRACT.md together when adding components or surfaces.
 # Increment contractVersion when any stable interface changes.
 
-contractVersion: '132'
+contractVersion: '133'
 
 components:
   protocol:
@@ -47,6 +47,7 @@ components:
     referenceSpec: 'planning/feature-plans/09-database-schema-contract.md'
     owns:
       - 'table definitions, column types, indexes, foreign keys, CHECK constraints'
+      - 'objectives.reopened_at: nullable last-wins timestamp stamped when an executing, pending_delivery, or complete objective is set back to draft, marking where its latest run begins; never stamped by a post-delivery re-attach, a future-to-draft promotion, or a launching-to-draft reset; projected additively as ObjectiveDto.reopenedAt so clients split deliveries, terminal sessions, and file changes into runs at that moment and infer from delivery order only when it is null'
       - 'objectives.display_key: required Crockford Base32 key unique among live rows of a mission; public displayId is computed as {missions.display_id}.{display_key} and is not stored as a second column'
 
       - 'organizations table (grouping layer above workspaces) and the required workspaces.organization_id FK; workspaces remain the sole RBAC layer; slugs are unique per organization, not instance-wide'

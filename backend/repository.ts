@@ -14,6 +14,8 @@ import type { CreatedGitHubRepositoryDto } from '@overlord/contract/ext/github';
 import {
   OBJECTIVE_COMPLETED_AT_ASSIGNMENT,
   OBJECTIVE_LAUNCHED_AT_ASSIGNMENT,
+  OBJECTIVE_REOPENABLE_STATES,
+  OBJECTIVE_REOPENED_AT_ASSIGNMENT,
   OBJECTIVE_STARTED_AT_ASSIGNMENT
 } from '@overlord/core/service/objective-lifecycle-timestamps';
 import {
@@ -676,6 +678,7 @@ interface ObjectiveRow {
   launched_at?: string | null;
   started_at?: string | null;
   completed_at?: string | null;
+  reopened_at?: string | null;
   revision: number;
   branch: string | null;
   external_session_id?: string | null;
@@ -1856,6 +1859,7 @@ function toObjectiveDto(r: ObjectiveRow): ObjectiveDto {
     launchedAt: r.launched_at ?? null,
     startedAt: r.started_at ?? null,
     completedAt: r.completed_at ?? null,
+    reopenedAt: r.reopened_at ?? null,
     revision: r.revision,
     externalSessionId: r.external_session_id ?? null,
     branch: r.branch ?? null,
@@ -7650,6 +7654,14 @@ async function updateObjectiveTx(
         fields.push(OBJECTIVE_COMPLETED_AT_ASSIGNMENT);
         setParams.push(nowIso());
         changed.push('completed_at');
+      }
+      // Setting an objective that already ran back to draft opens a new run:
+      // stamp the boundary the panel groups evidence by (coo:879). Last-wins,
+      // so the stamp always marks where the latest run begins.
+      if (body.state === 'draft' && OBJECTIVE_REOPENABLE_STATES.includes(existing.state)) {
+        fields.push(OBJECTIVE_REOPENED_AT_ASSIGNMENT);
+        setParams.push(nowIso());
+        changed.push('reopened_at');
       }
     }
     if (body.autoAdvance !== undefined) {

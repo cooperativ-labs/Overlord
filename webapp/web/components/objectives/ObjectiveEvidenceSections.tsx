@@ -1,16 +1,24 @@
-import { GitBranch } from 'lucide-react';
+import { ChevronDown, GitBranch, History } from 'lucide-react';
+import { useState } from 'react';
 
 import type {
   DeliveryDto,
   ObjectiveAttachmentDto,
   ObjectiveDto
 } from '../../../shared/contract.ts';
-import type { ObjectiveEvidence } from '../../lib/objective-evidence.ts';
+import {
+  groupEvidenceByRun,
+  type ObjectiveEvidence,
+  type ObjectiveRun,
+  objectiveRunLabel
+} from '../../lib/objective-evidence.ts';
+import { cn } from '../../lib/utils.ts';
 import { AgentSessionActivity } from '../agent-session/AgentSessionActivity.tsx';
 import { MissionDeliveryCard } from '../DeliverySummaryCard.tsx';
 import { InlineEditField } from '../InlineEditField.tsx';
 import { LiveFileChangeList } from '../LiveFileChangeList.tsx';
 import { ObjectiveTerminalSessions } from '../ObjectiveTerminalSessions.tsx';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible.tsx';
 
 import { ObjectiveAttachmentList } from './ObjectiveAttachments.tsx';
 import { ObjectiveEvidenceEmpty, ObjectiveEvidenceRule } from './ObjectiveEvidenceRule.tsx';
@@ -19,13 +27,13 @@ import { ObjectiveEvidenceEmpty, ObjectiveEvidenceRule } from './ObjectiveEviden
  * Which arrangement of the evidence stack to draw (coo:879 §4.2 / §4.3 / §4.5):
  *
  * - `complete` — instruction → deliveries → terminal session → file changes →
- *   attachments. The reading order the brief asks for.
+ *   earlier runs → attachments. The reading order the brief asks for.
  * - `active` — the live things first: terminal session → agent activity →
  *   file changes (live) → prior deliveries (only on a pending-delivery
- *   re-attach) → instruction last.
- * - `history` — deliveries → terminal session → file changes, with no
- *   instruction (the reverted draft's editable field already shows it) and no
- *   attachments (the draft's own footer lists them).
+ *   re-attach) → earlier runs → instruction last.
+ * - `history` — the reverted draft's previous runs, with no instruction (the
+ *   draft's editable field already shows it) and no attachments (the draft's
+ *   own footer lists them).
  */
 export type ObjectiveEvidenceMode = 'complete' | 'active' | 'history';
 
@@ -34,20 +42,21 @@ export type ObjectiveEvidenceLoading = {
   fileChanges: boolean;
 };
 
-function runLabel(index: number, total: number): string {
-  // `deliveries` is newest first, so the oldest run is run 1.
-  return total > 1 ? `Run ${total - index} of ${total}` : 'Delivery';
+function deliveryLabel(index: number, total: number): string {
+  // A run can deliver more than once (a follow-up re-attach after delivery).
+  // `deliveries` is newest first, so the oldest delivery in the run is 1.
+  return total > 1 ? `Delivery ${total - index} of ${total}` : 'Delivery';
+}
+
+function countLabel(count: number, singular: string, plural: string): string {
+  return `${count} ${count === 1 ? singular : plural}`;
 }
 
 /**
- * The objective's deliveries, newest first. The latest is the open card; any
- * earlier runs are compact collapsed rows — the one place collapsing is used
- * among primary evidence, because earlier runs are secondary information.
- * Run numbers come from `deliveredAt` order rather than objective timestamps,
- * because `completedAt` is overwritten when a reverted objective completes
- * again (plan §2.3).
+ * One run's deliveries, newest first. The latest is the open card; any others
+ * from the same run are collapsed cards below it.
  */
-function ObjectiveDeliveries({
+function RunDeliveries({
   deliveries,
   expandLatest
 }: {
@@ -60,7 +69,7 @@ function ObjectiveDeliveries({
         <MissionDeliveryCard
           key={delivery.id}
           delivery={delivery}
-          objectiveTitle={runLabel(index, deliveries.length)}
+          objectiveTitle={deliveryLabel(index, deliveries.length)}
           defaultExpanded={expandLatest && index === 0}
         />
       ))}
@@ -105,12 +114,167 @@ function LiveTag() {
   );
 }
 
+/** The three evidence bodies of one run, so every arrangement draws them the same way. */
+function buildRunSections({
+  objective,
+  run,
+  loading,
+  expandLatestDelivery
+}: {
+  objective: ObjectiveDto;
+  run: ObjectiveRun;
+  loading: ObjectiveEvidenceLoading;
+  expandLatestDelivery: boolean;
+}) {
+  const deliveries = loading.deliveries ? (
+    <ObjectiveEvidenceEmpty>Loading deliveries…</ObjectiveEvidenceEmpty>
+  ) : run.deliveries.length === 0 ? (
+    <ObjectiveEvidenceEmpty>No delivery recorded</ObjectiveEvidenceEmpty>
+  ) : (
+    <RunDeliveries deliveries={run.deliveries} expandLatest={expandLatestDelivery} />
+  );
+
+  const terminalSessions = (
+    <ObjectiveTerminalSessions
+      sessions={run.terminalSessions}
+      emptyState={<ObjectiveEvidenceEmpty>No terminal session</ObjectiveEvidenceEmpty>}
+    />
+  );
+
+  const fileChanges = loading.fileChanges ? (
+    <ObjectiveEvidenceEmpty>Loading file changes…</ObjectiveEvidenceEmpty>
+  ) : (
+    <LiveFileChangeList
+      projectId={objective.projectId}
+      fileChanges={run.fileChanges}
+      emptyState={<ObjectiveEvidenceEmpty>No file changes</ObjectiveEvidenceEmpty>}
+    />
+  );
+
+  return {
+    deliveries,
+    terminalSessions,
+    fileChanges,
+    deliveryCount: loading.deliveries ? undefined : run.deliveries.length,
+    fileChangeCount: loading.fileChanges ? undefined : run.fileChanges.length
+  };
+}
+
+/** Deliveries → terminal session → file changes for one run, as a flat stack. */
+function RunStack({
+  objective,
+  run,
+  loading,
+  expandLatestDelivery
+}: {
+  objective: ObjectiveDto;
+  run: ObjectiveRun;
+  loading: ObjectiveEvidenceLoading;
+  expandLatestDelivery: boolean;
+}) {
+  const sections = buildRunSections({ objective, run, loading, expandLatestDelivery });
+  return (
+    <div className="grid gap-2">
+      <ObjectiveEvidenceRule label="Deliveries" count={sections.deliveryCount} />
+      {sections.deliveries}
+      <ObjectiveEvidenceRule label="Terminal session" />
+      {sections.terminalSessions}
+      <ObjectiveEvidenceRule label="File changes" count={sections.fileChangeCount} />
+      {sections.fileChanges}
+    </div>
+  );
+}
+
+/**
+ * A compact, collapsed row for a run that is not the objective's latest —
+ * secondary information, so the one place nesting is allowed inside the
+ * evidence stack. Opens to the same flat run stack the latest run uses.
+ */
+function EarlierRunRow({
+  objective,
+  run,
+  loading,
+  defaultOpen = false
+}: {
+  objective: ObjectiveDto;
+  run: ObjectiveRun;
+  loading: ObjectiveEvidenceLoading;
+  defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  const summary = [
+    run.deliveries.length > 0 ? countLabel(run.deliveries.length, 'delivery', 'deliveries') : null,
+    run.fileChanges.length > 0 ? countLabel(run.fileChanges.length, 'file', 'files') : null,
+    run.terminalSessions.length > 0
+      ? countLabel(run.terminalSessions.length, 'session', 'sessions')
+      : null
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <div className="rounded-md border border-border/50 bg-muted/20">
+        <CollapsibleTrigger className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-muted-foreground outline-none hover:bg-muted/40">
+          <History className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span className="font-medium text-foreground/80">
+            {objectiveRunLabel(run) ?? 'Earlier run'}
+          </span>
+          <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground/80">
+            {summary}
+          </span>
+          <ChevronDown
+            className={cn('h-3.5 w-3.5 shrink-0 transition-transform', open && 'rotate-180')}
+            aria-hidden="true"
+          />
+        </CollapsibleTrigger>
+        <CollapsibleContent className="px-3 pb-3">
+          <RunStack
+            objective={objective}
+            run={run}
+            loading={loading}
+            expandLatestDelivery={false}
+          />
+        </CollapsibleContent>
+      </div>
+    </Collapsible>
+  );
+}
+
+/** The collapsed rows for every run before the latest, under one rule. */
+function EarlierRuns({
+  objective,
+  runs,
+  loading
+}: {
+  objective: ObjectiveDto;
+  runs: readonly ObjectiveRun[];
+  loading: ObjectiveEvidenceLoading;
+}) {
+  if (runs.length === 0) return null;
+  return (
+    <>
+      <ObjectiveEvidenceRule label="Earlier runs" count={runs.length} />
+      <div className="grid gap-1.5">
+        {runs.map(run => (
+          <EarlierRunRow key={run.number} objective={objective} run={run} loading={loading} />
+        ))}
+      </div>
+    </>
+  );
+}
+
 /**
  * The flat, full-width stack of everything one objective produced, rendered
  * inside its accordion (coo:879 §4.2). Sections are separated by thin labeled
  * rules, never nested behind collapsibles; only secondary rows (earlier runs,
  * individual file-change cards) fold. Empty states are one-line muted italics
  * so "ran with no changes" reads distinctly from "still loading".
+ *
+ * Evidence is split into runs by `objective.reopenedAt` (contract v133), with
+ * delivery-order inference as the fallback for objectives that predate the
+ * column; see `groupEvidenceByRun`. The latest run is the flat stack; earlier
+ * runs are collapsed "Run 1 of 2" rows.
  */
 export function ObjectiveEvidenceSections({
   objective,
@@ -125,55 +289,59 @@ export function ObjectiveEvidenceSections({
   mode: ObjectiveEvidenceMode;
   loading: ObjectiveEvidenceLoading;
 }) {
-  const deliveries = (
-    <>
-      {loading.deliveries ? (
-        <ObjectiveEvidenceEmpty>Loading deliveries…</ObjectiveEvidenceEmpty>
-      ) : evidence.deliveries.length === 0 ? (
-        <ObjectiveEvidenceEmpty>No delivery recorded</ObjectiveEvidenceEmpty>
-      ) : (
-        <ObjectiveDeliveries deliveries={evidence.deliveries} expandLatest={mode !== 'active'} />
-      )}
-    </>
-  );
+  // A reverted draft's latest run has not happened yet, so it is not kept as
+  // an empty bucket; a completed or executing objective always has one.
+  const runs = groupEvidenceByRun(evidence, objective, { keepEmptyLatest: mode !== 'history' });
 
-  const terminalSessions = (
-    <ObjectiveTerminalSessions
-      sessions={evidence.terminalSessions}
-      emptyState={<ObjectiveEvidenceEmpty>No terminal session</ObjectiveEvidenceEmpty>}
-    />
-  );
+  if (mode === 'history') {
+    if (runs.length === 0) return null;
+    if (runs.length === 1) {
+      return (
+        <RunStack objective={objective} run={runs[0]!} loading={loading} expandLatestDelivery />
+      );
+    }
+    // Several previous runs: every one is a row, the most recent open.
+    return (
+      <div className="grid gap-1.5">
+        {runs.map((run, index) => (
+          <EarlierRunRow
+            key={run.number}
+            objective={objective}
+            run={run}
+            loading={loading}
+            defaultOpen={index === 0}
+          />
+        ))}
+      </div>
+    );
+  }
 
-  const fileChanges = loading.fileChanges ? (
-    <ObjectiveEvidenceEmpty>Loading file changes…</ObjectiveEvidenceEmpty>
-  ) : (
-    <LiveFileChangeList
-      projectId={objective.projectId}
-      fileChanges={evidence.fileChanges}
-      emptyState={<ObjectiveEvidenceEmpty>No file changes</ObjectiveEvidenceEmpty>}
-    />
-  );
-
-  const fileChangeCount = loading.fileChanges ? undefined : evidence.fileChanges.length;
-  const deliveryCount = loading.deliveries ? undefined : evidence.deliveries.length;
+  const [latest, ...earlier] = runs as [ObjectiveRun, ...ObjectiveRun[]];
+  const sections = buildRunSections({
+    objective,
+    run: latest,
+    loading,
+    expandLatestDelivery: mode !== 'active'
+  });
 
   if (mode === 'active') {
     return (
       <div className="grid gap-2">
-        {terminalSessions}
+        {sections.terminalSessions}
         <AgentSessionActivity missionId={objective.missionId} objectiveId={objective.id} />
         <ObjectiveEvidenceRule
           label="File changes"
-          count={fileChangeCount}
+          count={sections.fileChangeCount}
           trailing={<LiveTag />}
         />
-        {fileChanges}
-        {evidence.deliveries.length > 0 ? (
+        {sections.fileChanges}
+        {latest.deliveries.length > 0 ? (
           <>
-            <ObjectiveEvidenceRule label="Deliveries" count={deliveryCount} />
-            {deliveries}
+            <ObjectiveEvidenceRule label="Deliveries" count={sections.deliveryCount} />
+            {sections.deliveries}
           </>
         ) : null}
+        <EarlierRuns objective={objective} runs={earlier} loading={loading} />
         <ObjectiveEvidenceRule label="Instruction" />
         <ObjectiveInstruction objective={objective} />
         {attachments.length > 0 ? (
@@ -186,28 +354,16 @@ export function ObjectiveEvidenceSections({
     );
   }
 
-  if (mode === 'history') {
-    return (
-      <div className="grid gap-2">
-        <ObjectiveEvidenceRule label="Deliveries" count={deliveryCount} />
-        {deliveries}
-        <ObjectiveEvidenceRule label="Terminal session" />
-        {terminalSessions}
-        <ObjectiveEvidenceRule label="File changes" count={fileChangeCount} />
-        {fileChanges}
-      </div>
-    );
-  }
-
   return (
     <div className="grid gap-2">
       <ObjectiveInstruction objective={objective} />
-      <ObjectiveEvidenceRule label="Deliveries" count={deliveryCount} />
-      {deliveries}
+      <ObjectiveEvidenceRule label="Deliveries" count={sections.deliveryCount} />
+      {sections.deliveries}
       <ObjectiveEvidenceRule label="Terminal session" />
-      {terminalSessions}
-      <ObjectiveEvidenceRule label="File changes" count={fileChangeCount} />
-      {fileChanges}
+      {sections.terminalSessions}
+      <ObjectiveEvidenceRule label="File changes" count={sections.fileChangeCount} />
+      {sections.fileChanges}
+      <EarlierRuns objective={objective} runs={earlier} loading={loading} />
       {attachments.length > 0 ? (
         <>
           <ObjectiveEvidenceRule label="Attachments" count={attachments.length} />
