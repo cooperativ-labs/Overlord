@@ -20,7 +20,10 @@ import { buildAgentResumeCommand } from '../../lib/helpers/agent-resume-command.
 import { useCopyToClipboard } from '../../lib/hooks/use-copy-to-clipboard.ts';
 import { objectiveOriginLabel } from '../../lib/mission-origin.ts';
 import { selectObjectiveBlockingRequests } from '../../lib/objective-blocking-requests.ts';
-import type { ObjectiveEvidence } from '../../lib/objective-evidence.ts';
+import type {
+  ObjectiveEvidence,
+  ObjectiveEvidenceTruncation
+} from '../../lib/objective-evidence.ts';
 import { missionDraftResourceBadgeKey, projectResourceLabel } from '../../lib/project-resources.ts';
 import {
   useAgentCatalog,
@@ -90,6 +93,7 @@ export function ObjectiveCollapsibleItem({
   index,
   evidence,
   loading,
+  truncation,
   open,
   onToggle,
   onOpenForRequest
@@ -98,6 +102,7 @@ export function ObjectiveCollapsibleItem({
   index: number;
   evidence: ObjectiveEvidence;
   loading: ObjectiveEvidenceLoading;
+  truncation?: ObjectiveEvidenceTruncation;
   open: boolean;
   /** `additive` is true for shift-click, which opens alongside other rows instead of replacing them. */
   onToggle: (options: { additive: boolean }) => void;
@@ -477,6 +482,7 @@ export function ObjectiveCollapsibleItem({
             attachments={attachments}
             mode={inFlight ? 'active' : 'complete'}
             loading={loading}
+            truncation={truncation}
           />
         </CollapsibleContent>
       </div>

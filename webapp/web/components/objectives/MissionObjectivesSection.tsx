@@ -30,7 +30,9 @@ import type {
 import { objectiveMatchesFocus } from '../../lib/mission-panel-search.ts';
 import {
   evidenceForObjective,
-  type MissionEvidencePartition
+  type MissionEvidencePartition,
+  NO_EVIDENCE_TRUNCATION,
+  type ObjectiveEvidenceTruncation
 } from '../../lib/objective-evidence.ts';
 import {
   useEnqueueRunQueueEntry,
@@ -51,6 +53,7 @@ import {
 } from '../ui/dialog.tsx';
 
 import { DraftObjective } from './DraftObjective.tsx';
+import { mergeFutureObjectiveOrder } from './future-objective-order.ts';
 import { GhostObjective } from './GhostObjective.tsx';
 import { ObjectiveCollapsibleItem } from './ObjectiveCollapsibleItem.tsx';
 import type { ObjectiveEvidenceLoading } from './ObjectiveEvidenceSections.tsx';
@@ -69,7 +72,8 @@ function SortableFutureObjective({
   focusObjectiveRef,
   allowParallelObjectives,
   evidence,
-  evidenceLoading
+  evidenceLoading,
+  evidenceTruncation
 }: {
   objective: ObjectiveDto;
   siblings: ObjectiveDto[];
@@ -78,6 +82,7 @@ function SortableFutureObjective({
   allowParallelObjectives: boolean;
   evidence: MissionEvidencePartition;
   evidenceLoading: ObjectiveEvidenceLoading;
+  evidenceTruncation: ObjectiveEvidenceTruncation;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: objective.id
@@ -107,6 +112,7 @@ function SortableFutureObjective({
             allowParallelObjectives={allowParallelObjectives}
             evidence={evidenceForObjective(evidence, objective.id)}
             evidenceLoading={evidenceLoading}
+            evidenceTruncation={evidenceTruncation}
           />
         </ObjectiveFocusAnchor>
       </div>
@@ -187,7 +193,8 @@ export function MissionObjectivesSection({
   mission,
   focusObjectiveRef,
   evidence,
-  evidenceLoading
+  evidenceLoading,
+  evidenceTruncation = NO_EVIDENCE_TRUNCATION
 }: {
   mission: MissionDetailDto;
   /** Display id or UUID from `?objective=`, when a live surface named one. */
@@ -195,6 +202,7 @@ export function MissionObjectivesSection({
   /** Deliveries, file changes, and sessions partitioned by objective. */
   evidence: MissionEvidencePartition;
   evidenceLoading: ObjectiveEvidenceLoading;
+  evidenceTruncation?: ObjectiveEvidenceTruncation;
 }) {
   const reorder = useReorderFutureObjectives();
   const runQueues = useProjectRunQueues(mission.projectId);
@@ -287,16 +295,7 @@ export function MissionObjectivesSection({
 
   useEffect(() => {
     const incomingIds = futureObjectivesFromServer.map(o => o.id);
-    setFutureOrder(previous => {
-      const previousSet = new Set(previous);
-      const incomingSet = new Set(incomingIds);
-      const sameMembership =
-        previous.length === incomingIds.length && previous.every(id => incomingSet.has(id));
-      if (sameMembership) return previous;
-      const kept = previous.filter(id => incomingSet.has(id));
-      const additions = incomingIds.filter(id => !previousSet.has(id));
-      return [...kept, ...additions];
-    });
+    setFutureOrder(previous => mergeFutureObjectiveOrder({ previousIds: previous, incomingIds }));
   }, [futureObjectivesFromServer]);
 
   const orderedFutureObjectives = useMemo(() => {
@@ -415,6 +414,7 @@ export function MissionObjectivesSection({
                 index={index}
                 evidence={evidenceForObjective(evidence, objective.id)}
                 loading={evidenceLoading}
+                truncation={evidenceTruncation}
                 open={openObjectiveIds.has(objective.id)}
                 onToggle={options => toggleExecutedObjective(objective.id, options)}
                 onOpenForRequest={() => openExecutedObjective(objective.id)}
@@ -439,6 +439,7 @@ export function MissionObjectivesSection({
               allowParallelObjectives={mission.allowParallelObjectives}
               evidence={evidenceForObjective(evidence, objective.id)}
               evidenceLoading={evidenceLoading}
+              evidenceTruncation={evidenceTruncation}
             />
           </ObjectiveFocusAnchor>
         ))}
@@ -474,6 +475,7 @@ export function MissionObjectivesSection({
                     allowParallelObjectives={mission.allowParallelObjectives}
                     evidence={evidence}
                     evidenceLoading={evidenceLoading}
+                    evidenceTruncation={evidenceTruncation}
                   />
                 ))}
               </div>

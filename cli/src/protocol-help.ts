@@ -277,8 +277,10 @@ list-deliveries:
   Optional:
     --objective-id <id>         Supplies mission addressing when it is a display id
   Returns:
-    DeliveryDto[] including summary, verification, follow-up notes, and normalized
-    delivery report evidence.
+    MissionDeliveriesDto { items, total, limit }. items are newest-first
+    DeliveryDto records including summary, verification, follow-up notes, and
+    normalized delivery report evidence, capped at 200. total is the matching
+    row count before that cap.
 
 launch-objective:
   Purpose:

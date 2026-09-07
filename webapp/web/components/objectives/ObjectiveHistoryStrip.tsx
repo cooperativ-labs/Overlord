@@ -5,7 +5,8 @@ import type { ObjectiveDto } from '../../../shared/contract.ts';
 import {
   formatObjectiveElapsed,
   groupEvidenceByRun,
-  type ObjectiveEvidence
+  type ObjectiveEvidence,
+  type ObjectiveEvidenceTruncation
 } from '../../lib/objective-evidence.ts';
 import { cn } from '../../lib/utils.ts';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible.tsx';
@@ -35,11 +36,13 @@ function countLabel(count: number, singular: string, plural: string): string {
 export function ObjectiveHistoryStrip({
   objective,
   evidence,
-  loading
+  loading,
+  truncation
 }: {
   objective: ObjectiveDto;
   evidence: ObjectiveEvidence;
   loading: ObjectiveEvidenceLoading;
+  truncation?: ObjectiveEvidenceTruncation;
 }) {
   const [open, setOpen] = useState(false);
   // Runs are split at `reopenedAt` (contract v133); the latest, not-yet-started
@@ -85,6 +88,7 @@ export function ObjectiveHistoryStrip({
             evidence={evidence}
             mode="history"
             loading={loading}
+            truncation={truncation}
           />
         </CollapsibleContent>
       </div>

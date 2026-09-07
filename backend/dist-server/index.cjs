@@ -1085,7 +1085,7 @@ var init_search = __esm({
 function isMyMissionsColumnType(value) {
   return MY_MISSIONS_COLUMN_TYPES.includes(value);
 }
-var MY_MISSIONS_COLUMNS, MY_MISSIONS_COLUMN_TYPES;
+var MISSION_EVIDENCE_LIST_LIMIT, MY_MISSIONS_COLUMNS, MY_MISSIONS_COLUMN_TYPES;
 var init_dist = __esm({
   "../packages/contract/dist/index.js"() {
     "use strict";
@@ -1094,6 +1094,7 @@ var init_dist = __esm({
     init_objective_ref();
     init_resource_paths();
     init_search();
+    MISSION_EVIDENCE_LIST_LIMIT = 200;
     MY_MISSIONS_COLUMNS = [
       { type: "next", label: "Next" },
       { type: "execute", label: "Executing" },
@@ -150929,9 +150930,20 @@ function deliveryReportFromPayload(payloadJson, summary) {
     return readDeliveryReport({ summary, deliveryReport: void 0 });
   }
 }
-async function listMissionDeliveries(missionRef, limit = 200) {
+function asTotal(value) {
+  const total = Number(value);
+  return Number.isFinite(total) ? total : 0;
+}
+async function listMissionDeliveries(missionRef, limit = MISSION_EVIDENCE_LIST_LIMIT) {
   const mission = await getMissionRow(missionRef, void 0, PERMISSIONS.MISSION_READ);
-  const rows = await requireDatabaseClient().all(
+  const db = requireDatabaseClient();
+  const countRow = await db.get(
+    `SELECT COUNT(*) AS total
+       FROM deliveries
+      WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [mission.id, mission.workspace_id]
+  );
+  const rows = await db.all(
     `SELECT d.id, d.mission_id, d.objective_id, d.session_id, d.summary,
             d.verification_summary, d.follow_up_notes, d.payload_json, d.delivered_at,
             s.agent_identifier, s.model_identifier
@@ -150942,19 +150954,23 @@ async function listMissionDeliveries(missionRef, limit = 200) {
       LIMIT ?`,
     [mission.id, mission.workspace_id, limit]
   );
-  return rows.map((row) => ({
-    id: row.id,
-    missionId: row.mission_id,
-    objectiveId: row.objective_id,
-    sessionId: row.session_id,
-    summary: row.summary,
-    verificationSummary: row.verification_summary,
-    followUpNotes: row.follow_up_notes,
-    report: deliveryReportFromPayload(row.payload_json, row.summary),
-    deliveredAt: row.delivered_at,
-    agentIdentifier: row.agent_identifier,
-    modelIdentifier: row.model_identifier
-  }));
+  return {
+    items: rows.map((row) => ({
+      id: row.id,
+      missionId: row.mission_id,
+      objectiveId: row.objective_id,
+      sessionId: row.session_id,
+      summary: row.summary,
+      verificationSummary: row.verification_summary,
+      followUpNotes: row.follow_up_notes,
+      report: deliveryReportFromPayload(row.payload_json, row.summary),
+      deliveredAt: row.delivered_at,
+      agentIdentifier: row.agent_identifier,
+      modelIdentifier: row.model_identifier
+    })),
+    total: asTotal(countRow?.total),
+    limit
+  };
 }
 var MAX_FILE_CHANGE_HOOK_HEALTH_LENGTH = 160;
 var FILE_CHANGE_HOOK_HEALTH_PATTERN = /^[a-z0-9][a-z0-9_.:-]*$/i;
@@ -150968,9 +150984,16 @@ function projectFileChangeEvidence(metadata) {
     hookHealth: health && health.length <= MAX_FILE_CHANGE_HOOK_HEALTH_LENGTH && FILE_CHANGE_HOOK_HEALTH_PATTERN.test(health) ? health : null
   };
 }
-async function listMissionFileChanges(missionRef, limit = 200) {
+async function listMissionFileChanges(missionRef, limit = MISSION_EVIDENCE_LIST_LIMIT) {
   const mission = await getMissionRow(missionRef);
-  const rows = await requireDatabaseClient().all(
+  const db = requireDatabaseClient();
+  const countRow = await db.get(
+    `SELECT COUNT(*) AS total
+       FROM changed_files
+      WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [mission.id, mission.workspace_id]
+  );
+  const rows = await db.all(
     `WITH ranked_rationales AS (
        SELECT objective_id, file_path, label, summary, why, impact,
               ROW_NUMBER() OVER (
@@ -151000,35 +151023,39 @@ async function listMissionFileChanges(missionRef, limit = 200) {
         LIMIT ?`,
     [mission.id, mission.workspace_id, mission.id, mission.workspace_id, limit]
   );
-  return rows.map((row) => {
-    let metadata = {};
-    try {
-      const parsed = JSON.parse(row.observed_metadata_json);
-      if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-        metadata = parsed;
+  return {
+    items: rows.map((row) => {
+      let metadata = {};
+      try {
+        const parsed = JSON.parse(row.observed_metadata_json);
+        if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+          metadata = parsed;
+        }
+      } catch {
       }
-    } catch {
-    }
-    const evidence = projectFileChangeEvidence(metadata);
-    return {
-      id: row.id,
-      missionId: row.mission_id,
-      objectiveId: row.objective_id,
-      filePath: row.file_path,
-      fileName: row.file_path.split("/").pop() || row.file_path,
-      label: row.label,
-      summary: row.summary,
-      why: row.why,
-      impact: row.impact,
-      vcsStatus: row.vcs_status,
-      source: evidence.source,
-      quality: evidence.quality,
-      overlap: evidence.overlap,
-      hookHealth: evidence.hookHealth,
-      resourceKey: row.resource_key?.trim() || null,
-      createdAt: row.created_at
-    };
-  });
+      const evidence = projectFileChangeEvidence(metadata);
+      return {
+        id: row.id,
+        missionId: row.mission_id,
+        objectiveId: row.objective_id,
+        filePath: row.file_path,
+        fileName: row.file_path.split("/").pop() || row.file_path,
+        label: row.label,
+        summary: row.summary,
+        why: row.why,
+        impact: row.impact,
+        vcsStatus: row.vcs_status,
+        source: evidence.source,
+        quality: evidence.quality,
+        overlap: evidence.overlap,
+        hookHealth: evidence.hookHealth,
+        resourceKey: row.resource_key?.trim() || null,
+        createdAt: row.created_at
+      };
+    }),
+    total: asTotal(countRow?.total),
+    limit
+  };
 }
 function toArtifactDto(row) {
   return {
@@ -162393,7 +162420,7 @@ var hostedMcpToolDefinitions = [
   {
     name: "overlord_list_deliveries",
     title: "List mission deliveries",
-    description: "Use this to read a mission's delivered work after locating it. Returns newest-first normalized delivery records including summary, verification, follow-up notes, and authoritative human-action, tradeoff, risk, deferred-work, and assumption evidence; it never exposes raw delivery payloads.",
+    description: "Use this to read a mission's delivered work after locating it. Returns a newest-first MissionDeliveriesDto page { items, total, limit } of normalized delivery records including summary, verification, follow-up notes, and authoritative human-action, tradeoff, risk, deferred-work, and assumption evidence; items are capped at 200 and total is the matching count before that cap. It never exposes raw delivery payloads.",
     inputSchema: objectSchema({
       missionId: stringProperty(
         "Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission."
@@ -162403,7 +162430,7 @@ var hostedMcpToolDefinitions = [
       )
     }),
     outputSchema: protocolOutputSchema(
-      "The mission's newest-first normalized DeliveryDto records."
+      "The mission's newest-first MissionDeliveriesDto page: items (DeliveryDto, capped at 200), total, and limit."
     ),
     annotations: readOnly
   },

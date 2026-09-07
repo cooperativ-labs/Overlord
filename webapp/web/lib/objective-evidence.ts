@@ -243,6 +243,58 @@ export function hasUnassignedEvidence(partition: MissionEvidencePartition): bool
 }
 
 /**
+ * Copy for a mission-level evidence fetch that returned a bounded page instead
+ * of the full history. Null when `total` is not greater than `returned` — that
+ * page is complete. The notice is mission-scoped because
+ * {@link partitionMissionEvidence} splits one fetch across objectives, so a
+ * truncated page under-reports several objectives at once.
+ */
+export function truncatedEvidenceNotice({
+  returned,
+  total,
+  noun
+}: {
+  returned: number;
+  total: number;
+  noun: string;
+}): string | null {
+  if (total <= returned) return null;
+  return `Showing newest ${returned} of ${total} ${noun} for this mission`;
+}
+
+export type ObjectiveEvidenceTruncation = {
+  deliveries: string | null;
+  fileChanges: string | null;
+};
+
+export const NO_EVIDENCE_TRUNCATION: ObjectiveEvidenceTruncation = {
+  deliveries: null,
+  fileChanges: null
+};
+
+/** Build the accordion notices from the mission-level delivery and file-change pages. */
+export function evidenceTruncationFromPages({
+  deliveries,
+  fileChanges
+}: {
+  deliveries?: { items: readonly unknown[]; total: number } | null;
+  fileChanges?: { items: readonly unknown[]; total: number } | null;
+}): ObjectiveEvidenceTruncation {
+  return {
+    deliveries: truncatedEvidenceNotice({
+      returned: deliveries?.items.length ?? 0,
+      total: deliveries?.total ?? 0,
+      noun: 'deliveries'
+    }),
+    fileChanges: truncatedEvidenceNotice({
+      returned: fileChanges?.items.length ?? 0,
+      total: fileChanges?.total ?? 0,
+      noun: 'file changes'
+    })
+  };
+}
+
+/**
  * Wall-clock duration of the objective's run as a compact label (`14m`,
  * `2h 05m`, `3d 4h`), or `null` when either end is missing or the range is
  * inverted. `startedAt` is first-wins and `completedAt` last-wins, so on a

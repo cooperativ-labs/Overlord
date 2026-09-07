@@ -4,7 +4,10 @@ import { useMemo, useRef, useState } from 'react';
 
 import type { MissionDetailDto } from '../../shared/contract.ts';
 import { objectiveSearchFromLocation } from '../lib/mission-panel-search.ts';
-import { partitionMissionEvidence } from '../lib/objective-evidence.ts';
+import {
+  evidenceTruncationFromPages,
+  partitionMissionEvidence
+} from '../lib/objective-evidence.ts';
 import {
   useGenerateMissionTitle,
   useMission,
@@ -239,16 +242,24 @@ export function MissionPanel({
     () =>
       partitionMissionEvidence({
         objectives: missionQ.data?.objectives ?? [],
-        deliveries: deliveriesQ.data,
-        fileChanges: fileChangesQ.data,
+        deliveries: deliveriesQ.data?.items,
+        fileChanges: fileChangesQ.data?.items,
         terminalSessions: missionQ.data?.terminalSessions
       }),
     [
-      deliveriesQ.data,
-      fileChangesQ.data,
+      deliveriesQ.data?.items,
+      fileChangesQ.data?.items,
       missionQ.data?.objectives,
       missionQ.data?.terminalSessions
     ]
+  );
+  const evidenceTruncation = useMemo(
+    () =>
+      evidenceTruncationFromPages({
+        deliveries: deliveriesQ.data,
+        fileChanges: fileChangesQ.data
+      }),
+    [deliveriesQ.data, fileChangesQ.data]
   );
   const evidenceLoading = useMemo(
     () => ({ deliveries: deliveriesQ.isLoading, fileChanges: fileChangesQ.isLoading }),
@@ -356,6 +367,7 @@ export function MissionPanel({
               focusObjectiveRef={focusObjectiveRef}
               evidence={evidence}
               evidenceLoading={evidenceLoading}
+              evidenceTruncation={evidenceTruncation}
             />
           </section>
 
@@ -389,6 +401,7 @@ export function MissionPanel({
                 <UnassignedEvidenceSection
                   projectId={mission.projectId}
                   evidence={evidence.unassigned}
+                  truncation={evidenceTruncation}
                 />
               </div>
             </div>

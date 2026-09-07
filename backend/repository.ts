@@ -97,7 +97,6 @@ import type {
   CreateUserTokenBody,
   CreateUserTokenResultDto,
   DefaultProjectPreferenceDto,
-  DeliveryDto,
   DeliveryReportPayloadV1,
   FileChangeDto,
   GenerateCommitMessageResultDto,
@@ -110,9 +109,11 @@ import type {
   MissionBranchDto,
   MissionBranchListDto,
   MissionCreatedFromDto,
+  MissionDeliveriesDto,
   MissionDetailDto,
   MissionDto,
   MissionEventDto,
+  MissionFileChangesDto,
   MissionScheduleDto,
   MissionSearchDateField,
   MissionWorktreePreference,
@@ -159,6 +160,7 @@ import type {
 } from '../webapp/shared/contract.ts';
 import {
   isMyMissionsColumnType,
+  MISSION_EVIDENCE_LIST_LIMIT,
   MY_MISSIONS_COLUMN_TYPES,
   normalizeAgentLaunchFlags
 } from '../webapp/shared/contract.ts';
@@ -4532,13 +4534,25 @@ interface DeliveryRow {
   model_identifier: string | null;
 }
 
+function asTotal(value: unknown): number {
+  const total = Number(value);
+  return Number.isFinite(total) ? total : 0;
+}
+
 /** Returns delivery records without exposing their arbitrary persisted payload JSON. */
 export async function listMissionDeliveries(
   missionRef: string,
-  limit = 200
-): Promise<DeliveryDto[]> {
+  limit = MISSION_EVIDENCE_LIST_LIMIT
+): Promise<MissionDeliveriesDto> {
   const mission = await getMissionRow(missionRef, undefined, PERMISSIONS.MISSION_READ);
-  const rows = (await requireDatabaseClient().all(
+  const db = requireDatabaseClient();
+  const countRow = (await db.get(
+    `SELECT COUNT(*) AS total
+       FROM deliveries
+      WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [mission.id, mission.workspace_id]
+  )) as { total: number | string | bigint } | undefined;
+  const rows = (await db.all(
     `SELECT d.id, d.mission_id, d.objective_id, d.session_id, d.summary,
             d.verification_summary, d.follow_up_notes, d.payload_json, d.delivered_at,
             s.agent_identifier, s.model_identifier
@@ -4550,19 +4564,23 @@ export async function listMissionDeliveries(
     [mission.id, mission.workspace_id, limit]
   )) as DeliveryRow[];
 
-  return rows.map(row => ({
-    id: row.id,
-    missionId: row.mission_id,
-    objectiveId: row.objective_id,
-    sessionId: row.session_id,
-    summary: row.summary,
-    verificationSummary: row.verification_summary,
-    followUpNotes: row.follow_up_notes,
-    report: deliveryReportFromPayload(row.payload_json, row.summary),
-    deliveredAt: row.delivered_at,
-    agentIdentifier: row.agent_identifier,
-    modelIdentifier: row.model_identifier
-  }));
+  return {
+    items: rows.map(row => ({
+      id: row.id,
+      missionId: row.mission_id,
+      objectiveId: row.objective_id,
+      sessionId: row.session_id,
+      summary: row.summary,
+      verificationSummary: row.verification_summary,
+      followUpNotes: row.follow_up_notes,
+      report: deliveryReportFromPayload(row.payload_json, row.summary),
+      deliveredAt: row.delivered_at,
+      agentIdentifier: row.agent_identifier,
+      modelIdentifier: row.model_identifier
+    })),
+    total: asTotal(countRow?.total),
+    limit
+  };
 }
 
 interface FileChangeRow {
@@ -4619,10 +4637,17 @@ function projectFileChangeEvidence(metadata: {
  */
 export async function listMissionFileChanges(
   missionRef: string,
-  limit = 200
-): Promise<FileChangeDto[]> {
+  limit = MISSION_EVIDENCE_LIST_LIMIT
+): Promise<MissionFileChangesDto> {
   const mission = await getMissionRow(missionRef);
-  const rows = (await requireDatabaseClient().all(
+  const db = requireDatabaseClient();
+  const countRow = (await db.get(
+    `SELECT COUNT(*) AS total
+       FROM changed_files
+      WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [mission.id, mission.workspace_id]
+  )) as { total: number | string | bigint } | undefined;
+  const rows = (await db.all(
     `WITH ranked_rationales AS (
        SELECT objective_id, file_path, label, summary, why, impact,
               ROW_NUMBER() OVER (
@@ -4652,41 +4677,45 @@ export async function listMissionFileChanges(
         LIMIT ?`,
     [mission.id, mission.workspace_id, mission.id, mission.workspace_id, limit]
   )) as FileChangeRow[];
-  return rows.map(row => {
-    let metadata: {
-      source?: unknown;
-      quality?: unknown;
-      overlap?: unknown;
-      hookHealth?: unknown;
-    } = {};
-    try {
-      const parsed = JSON.parse(row.observed_metadata_json) as unknown;
-      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-        metadata = parsed as typeof metadata;
+  return {
+    items: rows.map(row => {
+      let metadata: {
+        source?: unknown;
+        quality?: unknown;
+        overlap?: unknown;
+        hookHealth?: unknown;
+      } = {};
+      try {
+        const parsed = JSON.parse(row.observed_metadata_json) as unknown;
+        if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+          metadata = parsed as typeof metadata;
+        }
+      } catch {
+        // Unreadable stored metadata remains reviewable without attribution labels.
       }
-    } catch {
-      // Unreadable stored metadata remains reviewable without attribution labels.
-    }
-    const evidence = projectFileChangeEvidence(metadata);
-    return {
-      id: row.id,
-      missionId: row.mission_id,
-      objectiveId: row.objective_id,
-      filePath: row.file_path,
-      fileName: row.file_path.split('/').pop() || row.file_path,
-      label: row.label,
-      summary: row.summary,
-      why: row.why,
-      impact: row.impact,
-      vcsStatus: row.vcs_status,
-      source: evidence.source,
-      quality: evidence.quality,
-      overlap: evidence.overlap,
-      hookHealth: evidence.hookHealth,
-      resourceKey: row.resource_key?.trim() || null,
-      createdAt: row.created_at
-    };
-  });
+      const evidence = projectFileChangeEvidence(metadata);
+      return {
+        id: row.id,
+        missionId: row.mission_id,
+        objectiveId: row.objective_id,
+        filePath: row.file_path,
+        fileName: row.file_path.split('/').pop() || row.file_path,
+        label: row.label,
+        summary: row.summary,
+        why: row.why,
+        impact: row.impact,
+        vcsStatus: row.vcs_status,
+        source: evidence.source,
+        quality: evidence.quality,
+        overlap: evidence.overlap,
+        hookHealth: evidence.hookHealth,
+        resourceKey: row.resource_key?.trim() || null,
+        createdAt: row.created_at
+      };
+    }),
+    total: asTotal(countRow?.total),
+    limit
+  };
 }
 
 interface ArtifactRow {

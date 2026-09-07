@@ -10,7 +10,8 @@ import {
   hasUnassignedEvidence,
   objectiveHasHistory,
   objectiveRunLabel,
-  partitionMissionEvidence
+  partitionMissionEvidence,
+  truncatedEvidenceNotice
 } from './objective-evidence.ts';
 
 function delivery(overrides: Partial<DeliveryDto> & { id: string }): DeliveryDto {
@@ -389,5 +390,27 @@ test('without a boundary and at most one delivery everything is a single run', (
   assert.deepEqual(
     groupEvidenceByRun(evidenceOf({}), { reopenedAt: null }, { keepEmptyLatest: false }),
     []
+  );
+});
+
+test('truncatedEvidenceNotice is null when the page is complete', () => {
+  assert.equal(truncatedEvidenceNotice({ returned: 199, total: 199, noun: 'file changes' }), null);
+  assert.equal(truncatedEvidenceNotice({ returned: 200, total: 200, noun: 'file changes' }), null);
+  assert.equal(truncatedEvidenceNotice({ returned: 16, total: 16, noun: 'deliveries' }), null);
+  assert.equal(truncatedEvidenceNotice({ returned: 0, total: 0, noun: 'deliveries' }), null);
+});
+
+test('truncatedEvidenceNotice names the newest-N-of-total gap', () => {
+  assert.equal(
+    truncatedEvidenceNotice({ returned: 200, total: 201, noun: 'file changes' }),
+    'Showing newest 200 of 201 file changes for this mission'
+  );
+  assert.equal(
+    truncatedEvidenceNotice({ returned: 200, total: 247, noun: 'file changes' }),
+    'Showing newest 200 of 247 file changes for this mission'
+  );
+  assert.equal(
+    truncatedEvidenceNotice({ returned: 200, total: 201, noun: 'deliveries' }),
+    'Showing newest 200 of 201 deliveries for this mission'
   );
 });

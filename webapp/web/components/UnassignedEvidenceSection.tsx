@@ -1,6 +1,9 @@
-import type { ObjectiveEvidence } from '../lib/objective-evidence.ts';
+import type { ObjectiveEvidence, ObjectiveEvidenceTruncation } from '../lib/objective-evidence.ts';
 
-import { ObjectiveEvidenceRule } from './objectives/ObjectiveEvidenceRule.tsx';
+import {
+  ObjectiveEvidenceRule,
+  ObjectiveEvidenceTruncationNotice
+} from './objectives/ObjectiveEvidenceRule.tsx';
 import { MissionDeliveryList } from './DeliverySummaryCard.tsx';
 import { LiveFileChangeList } from './LiveFileChangeList.tsx';
 import { ObjectiveTerminalSessions } from './ObjectiveTerminalSessions.tsx';
@@ -15,10 +18,12 @@ import { ObjectiveTerminalSessions } from './ObjectiveTerminalSessions.tsx';
  */
 export function UnassignedEvidenceSection({
   projectId,
-  evidence
+  evidence,
+  truncation
 }: {
   projectId: string;
   evidence: ObjectiveEvidence;
+  truncation?: ObjectiveEvidenceTruncation;
 }) {
   const hasDeliveries = evidence.deliveries.length > 0;
   const hasSessions = evidence.terminalSessions.length > 0;
@@ -40,6 +45,11 @@ export function UnassignedEvidenceSection({
           <>
             <ObjectiveEvidenceRule label="Deliveries" count={evidence.deliveries.length} />
             <MissionDeliveryList deliveries={evidence.deliveries} objectiveTitleById={new Map()} />
+            {truncation?.deliveries ? (
+              <ObjectiveEvidenceTruncationNotice>
+                {truncation.deliveries}
+              </ObjectiveEvidenceTruncationNotice>
+            ) : null}
           </>
         ) : null}
         {hasSessions ? (
@@ -55,6 +65,11 @@ export function UnassignedEvidenceSection({
           <>
             <ObjectiveEvidenceRule label="File changes" count={evidence.fileChanges.length} />
             <LiveFileChangeList projectId={projectId} fileChanges={evidence.fileChanges} />
+            {truncation?.fileChanges ? (
+              <ObjectiveEvidenceTruncationNotice>
+                {truncation.fileChanges}
+              </ObjectiveEvidenceTruncationNotice>
+            ) : null}
           </>
         ) : null}
       </div>

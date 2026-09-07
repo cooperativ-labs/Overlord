@@ -1397,6 +1397,9 @@ export interface DeliveryReportPayloadV1 {
   presentation: DeliveryPresentationV1;
 }
 
+/** Newest-first page size for mission delivery and file-change evidence reads. */
+export const MISSION_EVIDENCE_LIST_LIMIT = 200;
+
 /**
  * An authorized, normalized delivery record returned from
  * `GET /api/missions/:id/deliveries`. The REST API never exposes the raw
@@ -1451,6 +1454,28 @@ export interface FileChangeDto {
   resourceKey: string | null;
   /** Time this path evidence was last observed (`changed_files.last_observed_at`). */
   createdAt: string;
+}
+
+/**
+ * Bounded newest-first page for `GET /api/missions/:id/deliveries` and Protocol
+ * `list-deliveries`. `items` is capped at {@link MISSION_EVIDENCE_LIST_LIMIT};
+ * `total` is the matching row count before that cap.
+ */
+export interface MissionDeliveriesDto {
+  items: DeliveryDto[];
+  total: number;
+  limit: number;
+}
+
+/**
+ * Bounded newest-first page for `GET /api/missions/:id/file-changes`.
+ * `items` is capped at {@link MISSION_EVIDENCE_LIST_LIMIT}; `total` is the
+ * matching row count before that cap.
+ */
+export interface MissionFileChangesDto {
+  items: FileChangeDto[];
+  total: number;
+  limit: number;
 }
 
 // ---- Agent catalog and launch configuration ----

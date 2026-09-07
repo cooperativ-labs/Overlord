@@ -430,6 +430,16 @@ function asRecord(value: unknown): JsonRecord {
   return value && typeof value === 'object' ? (value as JsonRecord) : {};
 }
 
+/** Unwrap `{ items, total, limit }` mission evidence pages; keep a legacy bare array. */
+function missionEvidenceItems(value: unknown): unknown[] | null {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === 'object' && 'items' in value) {
+    const items = (value as { items?: unknown }).items;
+    if (Array.isArray(items)) return items;
+  }
+  return null;
+}
+
 /** Coerce an unknown API/claim value to a clean list of pre-launch command strings. */
 function parsePreLaunchCommandsValue(value: unknown): string[] {
   return Array.isArray(value)
@@ -1973,8 +1983,11 @@ export async function runManagementCommand({
       }
       const result = await runtime.backend.get<unknown>(path);
       if (json || sub === 'context') printJson(result);
-      else if (Array.isArray(result)) for (const row of result) console.log(JSON.stringify(row));
-      else printJson(result);
+      else {
+        const items = missionEvidenceItems(result);
+        if (items) for (const row of items) console.log(JSON.stringify(row));
+        else printJson(result);
+      }
       return;
     }
     case 'changes': {
@@ -1991,19 +2004,19 @@ export async function runManagementCommand({
       if (sub !== 'status' && sub !== 'rationales') {
         throw new CliError({ message: 'Usage: ovld changes status|rationales --mission-id <id>' });
       }
-      const all = await runtime.backend.get<unknown[]>(
+      const page = await runtime.backend.get<unknown>(
         `/api/missions/${encodeURIComponent(missionId)}/file-changes`
       );
       // The route is mission-scoped and each row carries its objective, so
       // narrow here rather than making `--objective-id` a flag that parses and
       // then quietly does nothing.
-      let result = all;
+      let result = missionEvidenceItems(page) ?? [];
       if (objectiveRef) {
         const mission = await runtime.backend.get<unknown>(
           `/api/missions/${encodeURIComponent(missionId)}`
         );
         const objectiveId = objectiveIdForRef(mission, objectiveRef);
-        result = all.filter(row => asRecord(row).objectiveId === objectiveId);
+        result = result.filter(row => asRecord(row).objectiveId === objectiveId);
       }
       if (json) printJson({ files: result, rationales: result });
       else for (const row of result) console.log(JSON.stringify(row));

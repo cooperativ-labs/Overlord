@@ -74,7 +74,7 @@ The current tool catalog is mission-first:
 - `overlord_create_mission`
 - `overlord_create_inbox_item`
 - `overlord_load_mission_context`
-- `overlord_list_deliveries` — read normalized delivery summaries, verification/follow-up notes, and authoritative delivery evidence for one mission
+- `overlord_list_deliveries` — read a `{ items, total, limit }` page of normalized delivery summaries, verification/follow-up notes, and authoritative delivery evidence for one mission
 - `overlord_launch_objective` — explicitly queue the normal execution request for one objective; this is distinct from attaching the MCP agent to work
 - `overlord_reorder_future_objectives` — explicitly replace one mission's complete future-objective ordering
 - `overlord_add_objectives`

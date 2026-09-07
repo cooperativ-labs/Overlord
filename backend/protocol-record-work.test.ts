@@ -125,18 +125,18 @@ test('record-work accepts the whole submission as one --payload-json envelope', 
     ]
   );
   const projected = await listMissionFileChanges(result.mission.id);
-  assert.equal(projected.filter(change => change.filePath === 'src/export.ts').length, 1);
+  assert.equal(projected.items.filter(change => change.filePath === 'src/export.ts').length, 1);
   assert.equal(
-    projected.find(change => change.filePath === 'src/export.ts')?.label,
+    projected.items.find(change => change.filePath === 'src/export.ts')?.label,
     'Newest rationale'
   );
-  const invalidEvidence = projected.find(change => change.filePath === 'src/export.ts');
+  const invalidEvidence = projected.items.find(change => change.filePath === 'src/export.ts');
   assert.equal(invalidEvidence?.createdAt, linked.last_observed_at);
   assert.equal(invalidEvidence?.source, null);
   assert.equal(invalidEvidence?.quality, null);
   assert.equal(invalidEvidence?.overlap, false);
   assert.equal(invalidEvidence?.hookHealth, null);
-  const validEvidence = projected.find(change => change.filePath === 'src/generated.ts');
+  const validEvidence = projected.items.find(change => change.filePath === 'src/generated.ts');
   assert.equal(validEvidence?.source, 'window_observed');
   assert.equal(validEvidence?.quality, 'window');
   assert.equal(validEvidence?.overlap, true);

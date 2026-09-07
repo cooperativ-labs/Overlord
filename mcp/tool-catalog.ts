@@ -271,7 +271,7 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
     name: 'overlord_list_deliveries',
     title: 'List mission deliveries',
     description:
-      "Use this to read a mission's delivered work after locating it. Returns newest-first normalized delivery records including summary, verification, follow-up notes, and authoritative human-action, tradeoff, risk, deferred-work, and assumption evidence; it never exposes raw delivery payloads.",
+      "Use this to read a mission's delivered work after locating it. Returns a newest-first MissionDeliveriesDto page { items, total, limit } of normalized delivery records including summary, verification, follow-up notes, and authoritative human-action, tradeoff, risk, deferred-work, and assumption evidence; items are capped at 200 and total is the matching count before that cap. It never exposes raw delivery payloads.",
     inputSchema: objectSchema({
       missionId: stringProperty(
         'Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission.'
@@ -281,7 +281,7 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
       )
     }),
     outputSchema: protocolOutputSchema(
-      "The mission's newest-first normalized DeliveryDto records."
+      "The mission's newest-first MissionDeliveriesDto page: items (DeliveryDto, capped at 200), total, and limit."
     ),
     annotations: readOnly
   },

@@ -74,15 +74,20 @@ test('PM protocol commands preserve delivery, launch, and future-order service b
 
   const deliveries = (await runProtocolSubcommand('list-deliveries', {
     flags: { '--objective-id': deliveredObjective.displayId }
-  })) as Array<{
-    objectiveId: string;
-    summary: string;
-    report: { agentReport: { humanActions: unknown[] } };
-  }>;
-  assert.equal(deliveries.length, 1);
-  assert.equal(deliveries[0]?.objectiveId, deliveredObjective.id);
-  assert.equal(deliveries[0]?.summary, 'Delivered evidence is visible to PM agents.');
-  assert.deepEqual(deliveries[0]?.report.agentReport.humanActions, []);
+  })) as {
+    items: Array<{
+      objectiveId: string;
+      summary: string;
+      report: { agentReport: { humanActions: unknown[] } };
+    }>;
+    total: number;
+    limit: number;
+  };
+  assert.equal(deliveries.items.length, 1);
+  assert.equal(deliveries.total, 1);
+  assert.equal(deliveries.items[0]?.objectiveId, deliveredObjective.id);
+  assert.equal(deliveries.items[0]?.summary, 'Delivered evidence is visible to PM agents.');
+  assert.deepEqual(deliveries.items[0]?.report.agentReport.humanActions, []);
 });
 
 test('confirmed bulk protocol deletion is atomic for mission and objective lists', async () => {

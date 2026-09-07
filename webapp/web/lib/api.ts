@@ -51,9 +51,7 @@ import type {
   CreateWebhookSubscriptionResultDto,
   CreateWorkspaceBody,
   DefaultProjectPreferenceDto,
-  DeliveryDto,
   ExecutionRequestDto,
-  FileChangeDto,
   GenerateCommitMessageBody,
   GenerateCommitMessageResultDto,
   InboxItemDto,
@@ -65,9 +63,11 @@ import type {
   LaunchSettingsDto,
   MetaDto,
   MissionBranchListDto,
+  MissionDeliveriesDto,
   MissionDetailDto,
   MissionDto,
   MissionEventDto,
+  MissionFileChangesDto,
   MissionScheduleDto,
   MyMissionReorderRequest,
   MyMissionsResponse,
@@ -655,7 +655,7 @@ export const api = {
       body
     ),
   listMissionDeliveries: (id: string) =>
-    request<DeliveryDto[]>('GET', `/api/missions/${id}/deliveries`),
+    request<MissionDeliveriesDto>('GET', `/api/missions/${id}/deliveries`),
   listMissionArtifacts: (id: string) =>
     request<ArtifactDto[]>('GET', `/api/missions/${id}/artifacts`),
   createMissionArtifact: (missionId: string, body: CreateArtifactBody) =>
@@ -667,7 +667,7 @@ export const api = {
   upsertMissionSharedContext: (missionId: string, body: UpsertSharedContextBody) =>
     request<SharedContextEntryDto>('PUT', `/api/missions/${missionId}/context`, body),
   listMissionFileChanges: (id: string) =>
-    request<FileChangeDto[]>('GET', `/api/missions/${id}/file-changes`),
+    request<MissionFileChangesDto>('GET', `/api/missions/${id}/file-changes`),
 
   reorderFutureObjectives: (missionId: string, body: ReorderFutureObjectivesBody) =>
     request<ObjectiveDto[]>('PATCH', `/api/missions/${missionId}/objectives/reorder`, body),

@@ -12,9 +12,9 @@ import type {
   BranchActionBody,
   CreateInboxItemBody,
   CreateMissionBody,
-  DeliveryDto,
   InboxItemDto,
   InboxMissionsResponse,
+  MissionDeliveriesDto,
   MissionDetailDto,
   MissionScheduleDto,
   PreviewScheduleBody,
@@ -165,7 +165,7 @@ export const useMissionEvents = (id: string) =>
 
 /** Delivery records are fetched for the Artifacts section delivery cards. */
 export const useMissionDeliveries = (id: string, enabled: boolean) =>
-  useQuery<DeliveryDto[]>({
+  useQuery<MissionDeliveriesDto>({
     queryKey: keys.missionDeliveries(id),
     queryFn: () => api.listMissionDeliveries(id),
     enabled

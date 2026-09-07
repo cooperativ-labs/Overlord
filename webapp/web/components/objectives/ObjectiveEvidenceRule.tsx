@@ -51,3 +51,12 @@ export function ObjectiveEvidenceRule({
 export function ObjectiveEvidenceEmpty({ children }: { children: ReactNode }) {
   return <p className="py-1 text-xs italic text-[var(--color-ink-dim)]">{children}</p>;
 }
+
+/** Mission-level cap notice so a truncated fetch is never rendered as a complete list. */
+export function ObjectiveEvidenceTruncationNotice({ children }: { children: string }) {
+  return (
+    <p className="py-1 text-xs text-[var(--color-ink-dim)]" role="status">
+      {children}
+    </p>
+  );
+}

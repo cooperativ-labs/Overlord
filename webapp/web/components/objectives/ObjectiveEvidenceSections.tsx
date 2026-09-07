@@ -8,7 +8,9 @@ import type {
 } from '../../../shared/contract.ts';
 import {
   groupEvidenceByRun,
+  NO_EVIDENCE_TRUNCATION,
   type ObjectiveEvidence,
+  type ObjectiveEvidenceTruncation,
   type ObjectiveRun,
   objectiveRunLabel
 } from '../../lib/objective-evidence.ts';
@@ -21,7 +23,11 @@ import { ObjectiveTerminalSessions } from '../ObjectiveTerminalSessions.tsx';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible.tsx';
 
 import { ObjectiveAttachmentList } from './ObjectiveAttachments.tsx';
-import { ObjectiveEvidenceEmpty, ObjectiveEvidenceRule } from './ObjectiveEvidenceRule.tsx';
+import {
+  ObjectiveEvidenceEmpty,
+  ObjectiveEvidenceRule,
+  ObjectiveEvidenceTruncationNotice
+} from './ObjectiveEvidenceRule.tsx';
 
 /**
  * Which arrangement of the evidence stack to draw (coo:879 §4.2 / §4.3 / §4.5):
@@ -46,6 +52,11 @@ function deliveryLabel(index: number, total: number): string {
   // A run can deliver more than once (a follow-up re-attach after delivery).
   // `deliveries` is newest first, so the oldest delivery in the run is 1.
   return total > 1 ? `Delivery ${total - index} of ${total}` : 'Delivery';
+}
+
+function TruncationNotice({ notice }: { notice: string | null }) {
+  if (!notice) return null;
+  return <ObjectiveEvidenceTruncationNotice>{notice}</ObjectiveEvidenceTruncationNotice>;
 }
 
 function countLabel(count: number, singular: string, plural: string): string {
@@ -165,22 +176,26 @@ function RunStack({
   objective,
   run,
   loading,
-  expandLatestDelivery
+  expandLatestDelivery,
+  truncation
 }: {
   objective: ObjectiveDto;
   run: ObjectiveRun;
   loading: ObjectiveEvidenceLoading;
   expandLatestDelivery: boolean;
+  truncation: ObjectiveEvidenceTruncation;
 }) {
   const sections = buildRunSections({ objective, run, loading, expandLatestDelivery });
   return (
     <div className="grid gap-2">
       <ObjectiveEvidenceRule label="Deliveries" count={sections.deliveryCount} />
       {sections.deliveries}
+      <TruncationNotice notice={truncation.deliveries} />
       <ObjectiveEvidenceRule label="Terminal session" />
       {sections.terminalSessions}
       <ObjectiveEvidenceRule label="File changes" count={sections.fileChangeCount} />
       {sections.fileChanges}
+      <TruncationNotice notice={truncation.fileChanges} />
     </div>
   );
 }
@@ -194,11 +209,13 @@ function EarlierRunRow({
   objective,
   run,
   loading,
+  truncation,
   defaultOpen = false
 }: {
   objective: ObjectiveDto;
   run: ObjectiveRun;
   loading: ObjectiveEvidenceLoading;
+  truncation: ObjectiveEvidenceTruncation;
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -234,6 +251,7 @@ function EarlierRunRow({
             run={run}
             loading={loading}
             expandLatestDelivery={false}
+            truncation={truncation}
           />
         </CollapsibleContent>
       </div>
@@ -245,11 +263,13 @@ function EarlierRunRow({
 function EarlierRuns({
   objective,
   runs,
-  loading
+  loading,
+  truncation
 }: {
   objective: ObjectiveDto;
   runs: readonly ObjectiveRun[];
   loading: ObjectiveEvidenceLoading;
+  truncation: ObjectiveEvidenceTruncation;
 }) {
   if (runs.length === 0) return null;
   return (
@@ -257,7 +277,13 @@ function EarlierRuns({
       <ObjectiveEvidenceRule label="Earlier runs" count={runs.length} />
       <div className="grid gap-1.5">
         {runs.map(run => (
-          <EarlierRunRow key={run.number} objective={objective} run={run} loading={loading} />
+          <EarlierRunRow
+            key={run.number}
+            objective={objective}
+            run={run}
+            loading={loading}
+            truncation={truncation}
+          />
         ))}
       </div>
     </>
@@ -281,13 +307,15 @@ export function ObjectiveEvidenceSections({
   evidence,
   attachments = [],
   mode,
-  loading
+  loading,
+  truncation = NO_EVIDENCE_TRUNCATION
 }: {
   objective: ObjectiveDto;
   evidence: ObjectiveEvidence;
   attachments?: readonly ObjectiveAttachmentDto[];
   mode: ObjectiveEvidenceMode;
   loading: ObjectiveEvidenceLoading;
+  truncation?: ObjectiveEvidenceTruncation;
 }) {
   // A reverted draft's latest run has not happened yet, so it is not kept as
   // an empty bucket; a completed or executing objective always has one.
@@ -297,7 +325,13 @@ export function ObjectiveEvidenceSections({
     if (runs.length === 0) return null;
     if (runs.length === 1) {
       return (
-        <RunStack objective={objective} run={runs[0]!} loading={loading} expandLatestDelivery />
+        <RunStack
+          objective={objective}
+          run={runs[0]!}
+          loading={loading}
+          expandLatestDelivery
+          truncation={truncation}
+        />
       );
     }
     // Several previous runs: every one is a row, the most recent open.
@@ -309,6 +343,7 @@ export function ObjectiveEvidenceSections({
             objective={objective}
             run={run}
             loading={loading}
+            truncation={truncation}
             defaultOpen={index === 0}
           />
         ))}
@@ -335,13 +370,20 @@ export function ObjectiveEvidenceSections({
           trailing={<LiveTag />}
         />
         {sections.fileChanges}
+        <TruncationNotice notice={truncation.fileChanges} />
         {latest.deliveries.length > 0 ? (
           <>
             <ObjectiveEvidenceRule label="Deliveries" count={sections.deliveryCount} />
             {sections.deliveries}
+            <TruncationNotice notice={truncation.deliveries} />
           </>
         ) : null}
-        <EarlierRuns objective={objective} runs={earlier} loading={loading} />
+        <EarlierRuns
+          objective={objective}
+          runs={earlier}
+          loading={loading}
+          truncation={truncation}
+        />
         <ObjectiveEvidenceRule label="Instruction" />
         <ObjectiveInstruction objective={objective} />
         {attachments.length > 0 ? (
@@ -359,11 +401,13 @@ export function ObjectiveEvidenceSections({
       <ObjectiveInstruction objective={objective} />
       <ObjectiveEvidenceRule label="Deliveries" count={sections.deliveryCount} />
       {sections.deliveries}
+      <TruncationNotice notice={truncation.deliveries} />
       <ObjectiveEvidenceRule label="Terminal session" />
       {sections.terminalSessions}
       <ObjectiveEvidenceRule label="File changes" count={sections.fileChangeCount} />
       {sections.fileChanges}
-      <EarlierRuns objective={objective} runs={earlier} loading={loading} />
+      <TruncationNotice notice={truncation.fileChanges} />
+      <EarlierRuns objective={objective} runs={earlier} loading={loading} truncation={truncation} />
       {attachments.length > 0 ? (
         <>
           <ObjectiveEvidenceRule label="Attachments" count={attachments.length} />

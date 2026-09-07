@@ -3,7 +3,11 @@ import { ChevronUp } from 'lucide-react';
 import { useState } from 'react';
 
 import type { ExecutionRequestDto, ObjectiveDto } from '../../../shared/contract.ts';
-import { type ObjectiveEvidence, objectiveHasHistory } from '../../lib/objective-evidence.ts';
+import {
+  type ObjectiveEvidence,
+  type ObjectiveEvidenceTruncation,
+  objectiveHasHistory
+} from '../../lib/objective-evidence.ts';
 import { useDeleteObjective, useUpdateObjective } from '../../lib/queries.ts';
 import { useRepositoryMentionOptions } from '../../lib/useRepositoryMentionOptions.ts';
 import { cn } from '../../lib/utils.ts';
@@ -34,6 +38,7 @@ type DraftObjectiveProps = {
    */
   evidence?: ObjectiveEvidence;
   evidenceLoading?: ObjectiveEvidenceLoading;
+  evidenceTruncation?: ObjectiveEvidenceTruncation;
 };
 
 /**
@@ -47,7 +52,8 @@ export function DraftObjective({
   executionRequests,
   allowParallelObjectives = false,
   evidence,
-  evidenceLoading = { deliveries: false, fileChanges: false }
+  evidenceLoading = { deliveries: false, fileChanges: false },
+  evidenceTruncation
 }: DraftObjectiveProps) {
   const update = useUpdateObjective();
   const remove = useDeleteObjective();
@@ -158,6 +164,7 @@ export function DraftObjective({
           objective={objective}
           evidence={evidence}
           loading={evidenceLoading}
+          truncation={evidenceTruncation}
         />
       ) : null}
 

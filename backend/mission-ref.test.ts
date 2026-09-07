@@ -105,9 +105,11 @@ describe('mission reference resolution', () => {
     );
 
     const deliveries = await listMissionDeliveries(created.displayId);
-    assert.equal(deliveries[0]?.id, deliveryId);
-    assert.equal(deliveries[0]?.report.presentation.markdown, 'Legacy delivery summary');
-    assert.deepEqual(deliveries[0]?.report.presentation.humanActions, []);
+    assert.equal(deliveries.total, 1);
+    assert.equal(deliveries.limit, 200);
+    assert.equal(deliveries.items[0]?.id, deliveryId);
+    assert.equal(deliveries.items[0]?.report.presentation.markdown, 'Legacy delivery summary');
+    assert.deepEqual(deliveries.items[0]?.report.presentation.humanActions, []);
     const deliveryEvent = (await listMissionEvents(created.displayId)).find(
       event => event.deliveryId === deliveryId
     );

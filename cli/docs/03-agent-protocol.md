@@ -46,8 +46,9 @@ Requirements:
   objectives in parallel, where unpinned rediscovery returns
   `ambiguous_active_objective`.
 - `list-deliveries`: read one addressed mission's newest-first normalized
-  `DeliveryDto[]`, including verification/follow-up text and normalized delivery
-  evidence without exposing raw payload JSON.
+  `MissionDeliveriesDto` page (`{ items, total, limit }`), including verification/follow-up
+  text and normalized delivery evidence without exposing raw payload JSON.
+  `items` is capped at 200; `total` is the matching count before that cap.
 - `launch-objective`: queue the normal execution request for an objective UUID
   or display id. It requires `--agent` and preserves the existing
   `execution_request:create` authorization, launchability, target-selection,
