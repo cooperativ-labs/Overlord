@@ -29,6 +29,10 @@ import type {
 } from '../../../shared/contract.ts';
 import { objectiveMatchesFocus } from '../../lib/mission-panel-search.ts';
 import {
+  evidenceForObjective,
+  type MissionEvidencePartition
+} from '../../lib/objective-evidence.ts';
+import {
   useEnqueueRunQueueEntry,
   useProjectRunQueues,
   useRemoveRunQueueEntry,
@@ -49,6 +53,7 @@ import {
 import { DraftObjective } from './DraftObjective.tsx';
 import { GhostObjective } from './GhostObjective.tsx';
 import { ObjectiveCollapsibleItem } from './ObjectiveCollapsibleItem.tsx';
+import type { ObjectiveEvidenceLoading } from './ObjectiveEvidenceSections.tsx';
 
 /**
  * A future objective wrapped for drag-and-drop reordering. Mirrors the kanban
@@ -62,13 +67,17 @@ function SortableFutureObjective({
   siblings,
   executionRequests,
   focusObjectiveRef,
-  allowParallelObjectives
+  allowParallelObjectives,
+  evidence,
+  evidenceLoading
 }: {
   objective: ObjectiveDto;
   siblings: ObjectiveDto[];
   executionRequests: ExecutionRequestDto[];
   focusObjectiveRef: string | undefined;
   allowParallelObjectives: boolean;
+  evidence: MissionEvidencePartition;
+  evidenceLoading: ObjectiveEvidenceLoading;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: objective.id
@@ -96,6 +105,8 @@ function SortableFutureObjective({
             siblings={siblings}
             executionRequests={executionRequests}
             allowParallelObjectives={allowParallelObjectives}
+            evidence={evidenceForObjective(evidence, objective.id)}
+            evidenceLoading={evidenceLoading}
           />
         </ObjectiveFocusAnchor>
       </div>
@@ -109,8 +120,9 @@ function SortableFutureObjective({
  *
  * `radiusClass` must match the corner radius of the card being wrapped so the
  * ring hugs it instead of bowing away from its corners: {@link DraftObjective}
- * cards are `rounded-xl`, while the tighter {@link ObjectiveCollapsibleItem}
- * rows are `rounded-md`.
+ * cards are `rounded-xl`, while {@link ObjectiveCollapsibleItem} rows run
+ * edge to edge with no radius, so they pass `rounded-none` and the ring is
+ * drawn inset so it is not clipped by the panel's edges.
  */
 function ObjectiveFocusAnchor({
   objective,
@@ -136,7 +148,11 @@ function ObjectiveFocusAnchor({
       ref={nodeRef}
       id={objective.displayId ? `objective-${objective.displayId}` : undefined}
       data-objective-ref={objective.displayId ?? objective.id}
-      className={focused ? cn(radiusClass, 'ring-2 ring-ring/60') : undefined}
+      className={
+        focused
+          ? cn(radiusClass, 'ring-2 ring-ring/60', radiusClass === 'rounded-none' && 'ring-inset')
+          : undefined
+      }
     >
       {children}
     </div>
@@ -147,7 +163,9 @@ function ObjectiveFocusAnchor({
  * The mission panel's objective list, split into three groups:
  *
  * 1. **Executed** (complete, then executing / pending delivery) — read-first
- *    {@link ObjectiveCollapsibleItem}s.
+ *    {@link ObjectiveCollapsibleItem}s that run edge to edge across the panel,
+ *    divided by full-width rules, each holding its own evidence (coo:879).
+ *    One is open at a time by default; shift-click opens more.
  * 2. **Editable** (launching, then draft / submitted) — full
  *    {@link DraftObjective} launch cards.
  * 3. **Future** — {@link DraftObjective} cards made sortable via dnd-kit so they
@@ -167,11 +185,16 @@ function ObjectiveFocusAnchor({
  */
 export function MissionObjectivesSection({
   mission,
-  focusObjectiveRef
+  focusObjectiveRef,
+  evidence,
+  evidenceLoading
 }: {
   mission: MissionDetailDto;
   /** Display id or UUID from `?objective=`, when a live surface named one. */
   focusObjectiveRef?: string;
+  /** Deliveries, file changes, and sessions partitioned by objective. */
+  evidence: MissionEvidencePartition;
+  evidenceLoading: ObjectiveEvidenceLoading;
 }) {
   const reorder = useReorderFutureObjectives();
   const runQueues = useProjectRunQueues(mission.projectId);
@@ -180,6 +203,55 @@ export function MissionObjectivesSection({
   const dequeue = useRemoveRunQueueEntry(mission.projectId);
   /** Whether the user asked for an extra (queued) composer via "+ Add objective". */
   const [extraSlotRequested, setExtraSlotRequested] = useState(false);
+  // Executed rows behave as an accordion: one open at a time keeps the timeline
+  // scannable now that each row holds its whole evidence stack. Shift-click adds
+  // a row instead of replacing the open one, and a `?objective=` deep link
+  // opens its target without closing anything the user already had open.
+  const [openObjectiveIds, setOpenObjectiveIds] = useState<ReadonlySet<string>>(() => new Set());
+  const toggleExecutedObjective = (objectiveId: string, { additive }: { additive: boolean }) => {
+    setOpenObjectiveIds(current => {
+      const isOpen = current.has(objectiveId);
+      if (!additive) return isOpen ? new Set() : new Set([objectiveId]);
+      const next = new Set(current);
+      if (isOpen) next.delete(objectiveId);
+      else next.add(objectiveId);
+      return next;
+    });
+  };
+  const focusedObjectiveId = useMemo(
+    () =>
+      focusObjectiveRef
+        ? (mission.objectives.find(objective =>
+            objectiveMatchesFocus({ objective, focusRef: focusObjectiveRef })
+          )?.id ?? null)
+        : null,
+    [focusObjectiveRef, mission.objectives]
+  );
+  useEffect(() => {
+    if (!focusedObjectiveId) return;
+    setOpenObjectiveIds(current =>
+      current.has(focusedObjectiveId) ? current : new Set([...current, focusedObjectiveId])
+    );
+  }, [focusedObjectiveId]);
+  // An objective that starts running opens itself once: its body now carries
+  // the live terminal session and any blocking question the agent asks, which
+  // used to sit in the mission-wide Activity section where nothing hid them.
+  // Only the transition opens it, so a user who collapses a running row is not
+  // fought on every refetch.
+  const inFlightKey = mission.objectives
+    .filter(objective => objective.state === 'executing' || objective.state === 'pending_delivery')
+    .map(objective => objective.id)
+    .sort()
+    .join(',');
+  const autoOpenedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const fresh = inFlightKey
+      .split(',')
+      .filter(id => id.length > 0 && !autoOpenedRef.current.has(id));
+    if (fresh.length === 0) return;
+    for (const id of fresh) autoOpenedRef.current.add(id);
+    setOpenObjectiveIds(current => new Set([...current, ...fresh]));
+  }, [inFlightKey]);
 
   const lifecycleView = useMemo(
     () =>
@@ -317,26 +389,35 @@ export function MissionObjectivesSection({
 
   return (
     <div className="space-y-3">
+      {/*
+        Executed rows run edge to edge (§4.1.1): no gutter, no rounded frame,
+        no side borders. Straight full-width rules divide them — one above the
+        first, one between each pair, one below the last.
+      */}
       {executedObjectives.length > 0 ? (
-        <div className="space-y-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-1)]">
+        <div className="divide-y divide-[var(--color-border)] border-y border-[var(--color-border)] bg-[var(--color-surface-1)]">
           {executedObjectives.map((objective, index) => (
             <ObjectiveFocusAnchor
               key={objective.id}
               objective={objective}
               focusRef={focusObjectiveRef}
-              radiusClass="rounded-md"
+              radiusClass="rounded-none"
             >
               <ObjectiveCollapsibleItem
                 objective={objective}
                 index={index}
-                defaultOpen={objectiveMatchesFocus({ objective, focusRef: focusObjectiveRef })}
+                evidence={evidenceForObjective(evidence, objective.id)}
+                loading={evidenceLoading}
+                open={openObjectiveIds.has(objective.id)}
+                onToggle={options => toggleExecutedObjective(objective.id, options)}
               />
             </ObjectiveFocusAnchor>
           ))}
         </div>
       ) : null}
 
-      <div className="space-y-3">
+      {/* Editable, future, and composer cards keep the panel gutter: they are cards, not history rows. */}
+      <div className="space-y-3 px-5">
         {editableObjectives.map(objective => (
           <ObjectiveFocusAnchor
             key={objective.id}
@@ -348,6 +429,8 @@ export function MissionObjectivesSection({
               siblings={objectives}
               executionRequests={mission.executionRequests}
               allowParallelObjectives={mission.allowParallelObjectives}
+              evidence={evidenceForObjective(evidence, objective.id)}
+              evidenceLoading={evidenceLoading}
             />
           </ObjectiveFocusAnchor>
         ))}
@@ -381,6 +464,8 @@ export function MissionObjectivesSection({
                     executionRequests={mission.executionRequests}
                     focusObjectiveRef={focusObjectiveRef}
                     allowParallelObjectives={mission.allowParallelObjectives}
+                    evidence={evidence}
+                    evidenceLoading={evidenceLoading}
                   />
                 ))}
               </div>

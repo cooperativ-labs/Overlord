@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 
-import type { ArtifactDto, ArtifactType } from '../../shared/contract.ts';
+import type { ArtifactDto, ArtifactType, ObjectiveDto } from '../../shared/contract.ts';
 import { useMissionArtifacts, useUpdateMissionArtifact } from '../lib/queries.ts';
 
 import { Markdown } from './Markdown.tsx';
@@ -37,7 +37,16 @@ function formatDate(iso: string): string {
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
 }
 
-function ArtifactCard({ artifact, missionId }: { artifact: ArtifactDto; missionId: string }) {
+function ArtifactCard({
+  artifact,
+  missionId,
+  objectiveDisplayId
+}: {
+  artifact: ArtifactDto;
+  missionId: string;
+  /** Display id of the objective that produced the artifact, when it still exists. */
+  objectiveDisplayId: string | null;
+}) {
   const { icon: Icon, label: typeLabel } = artifactMeta(artifact.type);
   const updateArtifact = useUpdateMissionArtifact(missionId);
   const [expanded, setExpanded] = useState(false);
@@ -99,6 +108,11 @@ function ArtifactCard({ artifact, missionId }: { artifact: ArtifactDto; missionI
           <span className="truncate text-sm font-medium text-(--color-ink)">{artifact.label}</span>
           <span className="flex flex-wrap items-center gap-2 text-[11px] text-(--color-ink-dim)">
             <Badge className="px-1.5 py-0 text-[10px] uppercase tracking-wide">{typeLabel}</Badge>
+            {objectiveDisplayId ? (
+              <span className="font-mono" title="Produced by objective">
+                {objectiveDisplayId}
+              </span>
+            ) : null}
             <span>{formatDate(artifact.createdAt)}</span>
           </span>
         </span>
@@ -191,7 +205,20 @@ function ArtifactCard({ artifact, missionId }: { artifact: ArtifactDto; missionI
   );
 }
 
-export function MissionArtifactsSection({ missionId }: { missionId: string }) {
+/**
+ * The mission's artifacts as one flat list, newest first. Artifacts stay at
+ * mission level rather than inside objectives (coo:879 §4.7) because they are
+ * frequently mission-scoped — plans, decisions — and revised across
+ * objectives; each card instead carries the display id of the objective that
+ * produced it, when there is one.
+ */
+export function MissionArtifactsSection({
+  missionId,
+  objectives = []
+}: {
+  missionId: string;
+  objectives?: readonly ObjectiveDto[];
+}) {
   const artifactsQ = useMissionArtifacts(missionId);
 
   if (artifactsQ.isLoading) {
@@ -210,15 +237,27 @@ export function MissionArtifactsSection({ missionId }: { missionId: string }) {
     );
   }
 
-  const artifacts = artifactsQ.data ?? [];
+  const artifacts = [...(artifactsQ.data ?? [])].sort((a, b) =>
+    b.createdAt.localeCompare(a.createdAt)
+  );
   if (artifacts.length === 0) {
     return <p className="text-sm italic text-(--color-ink-dim)">No artifacts yet.</p>;
   }
+  const displayIdByObjectiveId = new Map(
+    objectives.map(objective => [objective.id, objective.displayId])
+  );
 
   return (
     <div className="grid gap-3">
       {artifacts.map(artifact => (
-        <ArtifactCard key={artifact.id} artifact={artifact} missionId={missionId} />
+        <ArtifactCard
+          key={artifact.id}
+          artifact={artifact}
+          missionId={missionId}
+          objectiveDisplayId={
+            artifact.objectiveId ? (displayIdByObjectiveId.get(artifact.objectiveId) ?? null) : null
+          }
+        />
       ))}
     </div>
   );

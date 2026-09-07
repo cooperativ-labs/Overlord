@@ -1,39 +1,46 @@
+import type { ReactNode } from 'react';
+
 import { useMergedProjectRepository } from '@/components/projects/ProjectRepositoryContext.tsx';
 import { groupMissionFileChanges } from '@/lib/group-mission-file-changes.ts';
 import { resolveResourceForKey } from '@/lib/project-resources.ts';
-import {
-  useMissionFileChanges,
-  useProfile,
-  useProjectExecutionTarget,
-  useProjectResources
-} from '@/lib/queries';
+import { useProfile, useProjectExecutionTarget, useProjectResources } from '@/lib/queries';
+
+import type { FileChangeDto } from '../../shared/contract.ts';
 
 import { FileChangeResourceGroupHeader } from './FileChangeResourceGroupHeader.tsx';
 import { LiveFileChangeCard } from './LiveFileChangeCard.tsx';
 import { Spinner } from './ui.tsx';
 
 /**
- * Realtime File Changes section for the mission panel. Lists the structured
- * mechanically observed per-file changes with optional rationales, newest-first,
- * each rendered as a collapsible {@link LiveFileChangeCard}. The
- * query is invalidated by the global SSE change feed, so rationales written by
- * the agent or CLI in another process stream in without a manual refresh.
- * Adapted from the reference `LiveFileChanges` for this app's stack.
+ * The structured, mechanically observed per-file changes for one objective (or
+ * the mission's unassigned remainder), each rendered as a collapsible
+ * {@link LiveFileChangeCard} and grouped by resource when the project has more
+ * than one. The caller owns the query: the mission-level file-change list is
+ * fetched once and partitioned by objective (coo:879), and the query is
+ * invalidated by the global SSE change feed, so rationales written by the
+ * agent or CLI in another process stream in without a manual refresh.
+ * `fileChanges` should already be newest first.
  */
-export function LiveFileChanges({
-  missionId,
-  projectId
+export function LiveFileChangeList({
+  projectId,
+  fileChanges,
+  emptyState
 }: {
-  missionId: string;
   projectId: string;
+  fileChanges: readonly FileChangeDto[];
+  /** Rendered instead of the list when there is nothing to show. */
+  emptyState?: ReactNode;
 }) {
-  const fileChangesQ = useMissionFileChanges(missionId);
   const profileQ = useProfile();
   const resourcesQ = useProjectResources(projectId);
   const executionTargetQ = useProjectExecutionTarget(projectId);
   const { repository } = useMergedProjectRepository(projectId);
 
-  if (fileChangesQ.isLoading || resourcesQ.isLoading) {
+  if (fileChanges.length === 0) {
+    return <>{emptyState ?? null}</>;
+  }
+
+  if (resourcesQ.isLoading) {
     return (
       <div className="flex justify-center py-4">
         <Spinner />
@@ -41,24 +48,15 @@ export function LiveFileChanges({
     );
   }
 
-  if (fileChangesQ.isError) {
-    return (
-      <p className="text-sm text-red-400">
-        Could not load file changes: {(fileChangesQ.error as Error)?.message ?? 'unknown error'}
-      </p>
-    );
-  }
-
-  const fileChanges = fileChangesQ.data ?? [];
   const resources = resourcesQ.data ?? [];
   const selectedExecutionTargetId = executionTargetQ.data?.selectedExecutionTargetId ?? null;
   const fallbackRootPath = repository?.rootPath ?? null;
   const editorScheme = profileQ.data?.editorScheme ?? null;
-  if (fileChanges.length === 0) {
-    return <p className="text-sm italic text-[var(--color-ink-dim)]">No file changes yet.</p>;
-  }
 
-  const { shouldGroup, groups } = groupMissionFileChanges({ fileChanges, resources });
+  const { shouldGroup, groups } = groupMissionFileChanges({
+    fileChanges: [...fileChanges],
+    resources
+  });
 
   const rootPathForResourceKey = (resourceKey: string): string | null => {
     const resource = resolveResourceForKey({

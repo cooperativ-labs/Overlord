@@ -1,7 +1,7 @@
 # Objective-Centric Mission Panel
 
-**Mission:** coo:879 (objective coo:879.hkpr)
-**Status:** design proposal — nothing built yet
+**Mission:** coo:879 (design: coo:879.hkpr, coo:879.8jbc, coo:879.vxw8; build: coo:879.x5tg)
+**Status:** implemented (7 Sep 2026) — see §7 for what shipped and what was deferred
 **Scope:** `webapp/web/components/MissionPanel.tsx` and the components it composes
 **Companion:** `coo-756-objective-centric-execution.md` (the execution-side move to objectives that this panel redesign catches up with)
 
@@ -226,7 +226,7 @@ When a completed objective is set back to draft it renders as `DraftObjective` (
 
 ---
 
-## 5. Component plan (for the build objective — not started)
+## 5. Component plan (as built in coo:879.x5tg)
 
 New:
 
@@ -264,3 +264,21 @@ Phasing:
 3. **Artifacts stay flat** with an objective chip (§4.7). Would you prefer artifacts also grouped into objectives, with mission-scoped ones (`objectiveId = null`) remaining below?
 4. **Run boundaries** — infer from `deliveredAt` (no schema change) or add an explicit `objective_runs` ledger / `reopened_at` stamp? Phase 1 assumes inference.
 5. Should "Mark draft" on a completed objective require a confirmation dialog at all, or is a toast ("History kept as previous runs") enough?
+
+---
+
+## 7. Build notes (coo:879.x5tg, 7 Sep 2026)
+
+Shipped, per the edge-to-edge revision in §4.1.1:
+
+- `webapp/web/lib/objective-evidence.ts` — `partitionMissionEvidence`, `evidenceForObjective`, `objectiveHasHistory`, `hasUnassignedEvidence`, `formatObjectiveElapsed`; unit-tested.
+- `objectives/ObjectiveEvidenceRule.tsx`, `ObjectiveEvidenceBadges.tsx`, `ObjectiveEvidenceSections.tsx` (modes `complete` / `active` / `history`), `ObjectiveHistoryStrip.tsx`, and `UnassignedEvidenceSection.tsx`.
+- `ObjectiveCollapsibleItem` — three-line header, edge-to-edge row (`pl-5 pr-4`, no radius, shimmer and hover span the width), body is the evidence stack. Controlled open state.
+- `MissionObjectivesSection` — executed rows in a `divide-y border-y` list with no gutter; editable/future/composer cards keep `px-5`. Single-open accordion with shift-click for multi (open question 1 resolved that way); `?objective=` deep links open their target; an objective entering `executing` / `pending_delivery` opens itself once, because its body now holds the live session and any blocking question.
+- `DraftObjective` — "Previous runs" strip when the objective has history; discard guard passes `hasHistory`. `shouldDiscardEmptiedObjective` gained the `hasHistory` option (automations, tested).
+- `ObjectiveMenuButton` — "Mark draft" on a completed objective confirms with the §4.6 copy (open question 5 resolved as a dialog); the executing-disconnect dialogs carry the same last sentence.
+- `MissionArtifactsSection` — newest first, objective display-id chip per card (open question 3 resolved: artifacts stay flat).
+- `MissionPanel` — mission-level Terminal session / Deliveries / File Changes sections removed; deliveries and file changes fetched once and partitioned; `MissionLatchSessionProvider` keeps every running Latch session tracked whether or not its row is open; `UnassignedEvidenceSection` at the tail.
+- Renamed/removed: `TerminalSessionsSection.tsx` → `ObjectiveTerminalSessions.tsx` (provider + per-objective renderer; card and compact row no longer print an objective chip); `LiveFileChanges.tsx` → `LiveFileChangeList.tsx` (takes a pre-filtered array); `MissionDeliveriesSection.tsx` and `latch-session-display.ts` deleted as dead.
+
+Deferred (open question 4): run boundaries are still inferred from `deliveredAt`; no `reopened_at` stamp or `objective_runs` ledger. Per-objective evidence endpoints remain an optimisation for later. Contract impact: none.

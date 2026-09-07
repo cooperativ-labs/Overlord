@@ -1,19 +1,20 @@
-import { deriveObjectiveLifecycleView } from '@overlord/automations/objective-manager';
 import { useNavigate, useRouterState } from '@tanstack/react-router';
 import { ArrowRightToLine, Loader2, Sparkles, Unplug } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import type { MissionDetailDto } from '../../shared/contract.ts';
 import { objectiveSearchFromLocation } from '../lib/mission-panel-search.ts';
+import { partitionMissionEvidence } from '../lib/objective-evidence.ts';
 import {
   useGenerateMissionTitle,
   useMission,
+  useMissionDeliveries,
+  useMissionFileChanges,
   useUpdateMission,
   useUpdateObjective
 } from '../lib/queries.ts';
 import { cn } from '../lib/utils.ts';
 
-import { AgentSessionActivity } from './agent-session/AgentSessionActivity.tsx';
 import { MissionObjectivesSection } from './objectives/MissionObjectivesSection.tsx';
 import { MissionSchedulingControls } from './scheduling/MissionSchedulingControls.tsx';
 import { Button as IconButton } from './ui/button.tsx';
@@ -30,9 +31,7 @@ import { Separator } from './ui/separator.tsx';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.tsx';
 import { InlineEditField } from './InlineEditField.tsx';
 import { LiveActivityFeed } from './LiveActivityFeed.tsx';
-import { LiveFileChanges } from './LiveFileChanges.tsx';
 import { MissionArtifactsSection } from './MissionArtifactsSection.tsx';
-import { MissionDeliveriesSection } from './MissionDeliveriesSection.tsx';
 import { MissionMemberSelect } from './MissionMemberSelect.tsx';
 import { MissionNotes } from './MissionNotes.tsx';
 import { MissionPanelHeader } from './MissionPanelHeader.tsx';
@@ -40,8 +39,9 @@ import { MissionProjectSelect } from './MissionProjectSelect.tsx';
 import { MissionSharedStateFooter } from './MissionSharedStateFooter.tsx';
 import { MissionStatusSelect } from './MissionStatusSelect.tsx';
 import { MissionTagSelect } from './MissionTagSelect.tsx';
-import { TerminalSessionsSection } from './TerminalSessionsSection.tsx';
+import { MissionLatchSessionProvider } from './ObjectiveTerminalSessions.tsx';
 import { Button, Spinner } from './ui.tsx';
+import { UnassignedEvidenceSection } from './UnassignedEvidenceSection.tsx';
 
 /** Generates the mission title from its primary objective via the Automations Layer summarizer. */
 function GenerateMissionTitleButton({ mission }: { mission: MissionDetailDto }) {
@@ -230,6 +230,30 @@ export function MissionPanel({
     select: state => objectiveSearchFromLocation(state.location.search)
   });
   const missionQ = useMission(missionId, { refetchBranchState: true });
+  // Evidence is fetched once per mission and partitioned by objective (coo:879);
+  // nothing is fetched per objective on expand. Terminal sessions ride on the
+  // mission detail itself.
+  const deliveriesQ = useMissionDeliveries(missionId, true);
+  const fileChangesQ = useMissionFileChanges(missionId);
+  const evidence = useMemo(
+    () =>
+      partitionMissionEvidence({
+        objectives: missionQ.data?.objectives ?? [],
+        deliveries: deliveriesQ.data,
+        fileChanges: fileChangesQ.data,
+        terminalSessions: missionQ.data?.terminalSessions
+      }),
+    [
+      deliveriesQ.data,
+      fileChangesQ.data,
+      missionQ.data?.objectives,
+      missionQ.data?.terminalSessions
+    ]
+  );
+  const evidenceLoading = useMemo(
+    () => ({ deliveries: deliveriesQ.isLoading, fileChanges: fileChangesQ.isLoading }),
+    [deliveriesQ.isLoading, fileChangesQ.isLoading]
+  );
   const [isScrolling, setIsScrolling] = useState(false);
   const scrollIdleTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -286,10 +310,6 @@ export function MissionPanel({
   }
 
   const mission = missionQ.data;
-  const activeObjectiveId =
-    deriveObjectiveLifecycleView(mission.objectives, {
-      allowParallelObjectives: mission.allowParallelObjectives
-    }).activeObjective?.id ?? null;
 
   return (
     <div className="flex h-full min-h-0 min-w-[375px] flex-col bg-(--color-surface-1)">
@@ -319,55 +339,61 @@ export function MissionPanel({
         )}
         onScroll={handleScroll}
       >
-        {/* Card section — primary work surface: objectives */}
-        <section className="border-b border-(--color-border) bg-(--color-surface-1) pb-5 pt-2">
-          <div className="flex flex-col gap-3 px-5 ">
-            <MissionObjectivesSection mission={mission} focusObjectiveRef={focusObjectiveRef} />
-          </div>
-        </section>
-
-        {/* Subtle section — supporting context: notes and activity */}
-        <section className="flex flex-col px-5 pt-5 bg-muted h-full pb-10">
-          <MissionNotes missionId={mission.id} notes={mission.notes} />
-          <Separator />
-          <div className="flex flex-col gap-6 mt-8">
-            <TerminalSessionsSection
-              missionId={mission.id}
-              workspaceId={mission.workspaceId}
-              sessions={mission.terminalSessions}
-              objectives={mission.objectives}
-              currentObjectiveId={activeObjectiveId}
+        {/*
+          Card section — primary work surface: objectives. The section itself
+          carries no horizontal gutter: executed objective rows run edge to edge
+          (§4.1.1) and the objectives section applies the gutter only around the
+          editable cards below them.
+        */}
+        <MissionLatchSessionProvider
+          missionId={mission.id}
+          workspaceId={mission.workspaceId}
+          sessions={mission.terminalSessions}
+        >
+          <section className="border-b border-(--color-border) bg-(--color-surface-1) pb-5 pt-2">
+            <MissionObjectivesSection
+              mission={mission}
+              focusObjectiveRef={focusObjectiveRef}
+              evidence={evidence}
+              evidenceLoading={evidenceLoading}
             />
-            <div className="space-y-3">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-(--color-ink-dim)">
-                Artifacts
-              </h2>
-              <MissionArtifactsSection missionId={mission.id} />
-            </div>
-            <div className="space-y-3">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-(--color-ink-dim)">
-                Deliveries
-              </h2>
-              <MissionDeliveriesSection missionId={mission.id} objectives={mission.objectives} />
-            </div>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
+          </section>
+
+          {/* Subtle section — supporting context: notes, artifacts, and activity */}
+          <section className="flex flex-col px-5 pt-5 bg-muted h-full pb-10">
+            <MissionNotes missionId={mission.id} notes={mission.notes} />
+            <Separator />
+            <div className="flex flex-col gap-6 mt-8">
+              <div className="space-y-3">
                 <h2 className="text-xs font-semibold uppercase tracking-wide text-(--color-ink-dim)">
-                  Activity
+                  Artifacts
                 </h2>
-                {mission.hasExecutingObjective && <DisconnectActivityButton mission={mission} />}
+                <MissionArtifactsSection missionId={mission.id} objectives={mission.objectives} />
               </div>
-              <LiveActivityFeed missionId={mission.id} />
-              <AgentSessionActivity missionId={mission.id} objectiveId={activeObjectiveId} />
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xs font-semibold uppercase tracking-wide text-(--color-ink-dim)">
+                    Activity
+                  </h2>
+                  {mission.hasExecutingObjective && <DisconnectActivityButton mission={mission} />}
+                </div>
+                <LiveActivityFeed missionId={mission.id} />
+              </div>
+              {deliveriesQ.isError || fileChangesQ.isError ? (
+                <p className="text-sm text-red-400">
+                  Could not load objective evidence:{' '}
+                  {((deliveriesQ.error ?? fileChangesQ.error) as Error)?.message ?? 'unknown error'}
+                </p>
+              ) : null}
+              <div className="pb-5">
+                <UnassignedEvidenceSection
+                  projectId={mission.projectId}
+                  evidence={evidence.unassigned}
+                />
+              </div>
             </div>
-            <div className="space-y-3 pb-5">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-(--color-ink-dim)">
-                File Changes
-              </h2>
-              <LiveFileChanges missionId={mission.id} projectId={mission.projectId} />
-            </div>{' '}
-          </div>
-        </section>
+          </section>
+        </MissionLatchSessionProvider>
       </div>
       <MissionSharedStateFooter missionId={mission.id} />
     </div>

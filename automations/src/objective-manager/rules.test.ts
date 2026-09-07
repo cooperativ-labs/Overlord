@@ -246,6 +246,16 @@ describe('objective lifecycle rules', () => {
       false
     );
 
+    // A reverted draft that already ran keeps its deliveries, file changes,
+    // and sessions as previous runs, so it is never deleted by an empty commit.
+    assert.equal(
+      shouldDiscardEmptiedObjective(
+        objective({ id: 'reverted', state: 'draft', instructionText: '' }),
+        { hasHistory: true }
+      ),
+      false
+    );
+
     // Text present — nothing to discard, whatever the state.
     assert.equal(
       shouldDiscardEmptiedObjective(objective({ id: 'authored', state: 'draft' })),

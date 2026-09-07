@@ -62,6 +62,7 @@ export function ObjectiveMenuButton({
   const { copied, copy } = useCopyToClipboard();
   const { copied: resumeCopied, copy: copyResume } = useCopyToClipboard();
   const [confirmDisconnectOpen, setConfirmDisconnectOpen] = useState(false);
+  const [confirmReopenOpen, setConfirmReopenOpen] = useState(false);
 
   const pending = update.isPending || remove.isPending;
 
@@ -77,12 +78,23 @@ export function ObjectiveMenuButton({
       setConfirmDisconnectOpen(true);
       return;
     }
+    if (state === 'complete') {
+      // A completed objective carries evidence. The confirmation exists to say
+      // that reopening keeps it (coo:879 §4.6), not to make the action harder.
+      setConfirmReopenOpen(true);
+      return;
+    }
     setState('draft');
   }
 
   async function confirmDisconnect() {
     await update.mutateAsync({ id: objectiveId, body: { state: 'draft' } });
     setConfirmDisconnectOpen(false);
+  }
+
+  async function confirmReopen() {
+    await update.mutateAsync({ id: objectiveId, body: { state: 'draft' } });
+    setConfirmReopenOpen(false);
   }
 
   function handleDelete() {
@@ -166,7 +178,8 @@ export function ObjectiveMenuButton({
             <DialogTitle>Disconnect this executing objective?</DialogTitle>
             <DialogDescription>
               Moving an executing objective to Draft ends its active session and clears its pending
-              launch. Any existing draft becomes the first future objective.
+              launch. Any existing draft becomes the first future objective. Its deliveries, file
+              changes, and terminal session are kept as previous runs.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -179,6 +192,25 @@ export function ObjectiveMenuButton({
               onClick={() => void confirmDisconnect()}
             >
               {update.isPending ? 'Disconnecting…' : 'Move to Draft'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={confirmReopenOpen} onOpenChange={setConfirmReopenOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mark this objective as draft?</DialogTitle>
+            <DialogDescription>
+              Returns this objective to Draft so it can be edited and run again. Its deliveries,
+              file changes, and terminal session are kept as previous runs.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setConfirmReopenOpen(false)}>
+              Cancel
+            </Button>
+            <Button disabled={pending} onClick={() => void confirmReopen()}>
+              {update.isPending ? 'Reopening…' : 'Mark draft'}
             </Button>
           </DialogFooter>
         </DialogContent>

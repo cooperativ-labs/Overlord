@@ -3,6 +3,7 @@ import { ChevronUp } from 'lucide-react';
 import { useState } from 'react';
 
 import type { ExecutionRequestDto, ObjectiveDto } from '../../../shared/contract.ts';
+import { type ObjectiveEvidence, objectiveHasHistory } from '../../lib/objective-evidence.ts';
 import { useDeleteObjective, useUpdateObjective } from '../../lib/queries.ts';
 import { useRepositoryMentionOptions } from '../../lib/useRepositoryMentionOptions.ts';
 import { cn } from '../../lib/utils.ts';
@@ -15,6 +16,8 @@ import {
   ObjectiveAttachmentUploadTrigger,
   useObjectiveAttachmentState
 } from './ObjectiveAttachments.tsx';
+import type { ObjectiveEvidenceLoading } from './ObjectiveEvidenceSections.tsx';
+import { ObjectiveHistoryStrip } from './ObjectiveHistoryStrip.tsx';
 
 type DraftObjectiveProps = {
   objective: ObjectiveDto;
@@ -23,6 +26,14 @@ type DraftObjectiveProps = {
   /** Active execution requests for the mission (from MissionDetailDto). */
   executionRequests: ExecutionRequestDto[];
   allowParallelObjectives?: boolean;
+  /**
+   * What this objective produced in earlier runs, when it was completed and
+   * then set back to draft (coo:879 §4.5). Renders the read-only "Previous
+   * runs" strip and stops an emptied instruction from deleting the objective
+   * out from under that history. Omitted on surfaces with no evidence to show.
+   */
+  evidence?: ObjectiveEvidence;
+  evidenceLoading?: ObjectiveEvidenceLoading;
 };
 
 /**
@@ -34,7 +45,9 @@ export function DraftObjective({
   objective,
   siblings,
   executionRequests,
-  allowParallelObjectives = false
+  allowParallelObjectives = false,
+  evidence,
+  evidenceLoading = { deliveries: false, fileChanges: false }
 }: DraftObjectiveProps) {
   const update = useUpdateObjective();
   const remove = useDeleteObjective();
@@ -55,6 +68,7 @@ export function DraftObjective({
     dragState
   } = useObjectiveAttachmentState(objective.id);
   const isLaunching = objective.state === 'launching';
+  const hasHistory = objectiveHasHistory(evidence);
 
   return (
     <FileDropZone
@@ -111,7 +125,7 @@ export function DraftObjective({
               if (
                 shouldDiscardEmptiedObjective(
                   { ...objective, instructionText },
-                  { attachmentCount: attachments.length }
+                  { attachmentCount: attachments.length, hasHistory }
                 )
               ) {
                 remove.mutate(objective.id);
@@ -138,6 +152,14 @@ export function DraftObjective({
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-linear-to-t from-background/80 to-transparent" />
         ) : null}
       </div>
+
+      {hasHistory && evidence ? (
+        <ObjectiveHistoryStrip
+          objective={objective}
+          evidence={evidence}
+          loading={evidenceLoading}
+        />
+      ) : null}
 
       {/* Attachments + toolbar. The whole card is the drop target (FileDropZone);
           the footer + button opens the file browser. */}

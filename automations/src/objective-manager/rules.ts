@@ -405,10 +405,23 @@ export function canEditObjectiveInstruction(objective: ObjectiveLifecycleObjecti
  */
 export function shouldDiscardEmptiedObjective(
   objective: ObjectiveLifecycleObjective,
-  { attachmentCount = 0 }: { attachmentCount?: number } = {}
+  {
+    attachmentCount = 0,
+    hasHistory = false
+  }: {
+    attachmentCount?: number;
+    /**
+     * Whether the objective already ran: it has at least one delivery, file
+     * change, or terminal session. A completed objective set back to draft
+     * keeps that evidence as previous runs (coo:879), so emptying its text must
+     * leave a blank draft rather than soft-deleting the row and orphaning them.
+     */
+    hasHistory?: boolean;
+  } = {}
 ): boolean {
   if (objectiveHasInstructionText(objective)) return false;
   if (attachmentCount > 0) return false;
+  if (hasHistory) return false;
   return isFutureObjective(objective) || objective.state === 'draft';
 }
 

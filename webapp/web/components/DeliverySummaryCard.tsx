@@ -248,12 +248,20 @@ export function useCollapseOnDismiss(
 
 export function MissionDeliveryCard({
   delivery,
-  objectiveTitle
+  objectiveTitle,
+  defaultExpanded = false
 }: {
   delivery: DeliveryDto;
+  /**
+   * Card heading. The mission-level list passes the objective's title; a card
+   * rendered inside its own objective passes a run label instead ("Run 1 of 2"),
+   * since the objective chip would be redundant there (coo:879).
+   */
   objectiveTitle: string | null;
+  /** Open on first render — used for the latest delivery inside an objective. */
+  defaultExpanded?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const preview = deliveryOneSentenceSummary(delivery);
 
   // The trigger is the only thing that opens or closes this accordion — no
