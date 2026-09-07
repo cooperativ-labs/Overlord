@@ -193,7 +193,7 @@ export function ObjectiveCollapsibleItem({
   const toggle = (event: MouseEvent) => onToggle({ additive: event.shiftKey });
 
   return (
-    <Collapsible open={open}>
+    <Collapsible className="min-w-0" open={open}>
       {/*
         An open row carries a slightly darker wash across its whole height —
         header and evidence body — so it reads as one block distinct from the
@@ -203,7 +203,7 @@ export function ObjectiveCollapsibleItem({
       */}
       <div
         className={cn(
-          'relative overflow-hidden transition-colors',
+          'relative min-w-0 overflow-hidden transition-colors',
           open && !blocking.isBlocking && 'bg-muted/30',
           blocking.isBlocking && 'bg-amber-50/70 dark:bg-amber-500/10'
         )}
@@ -475,7 +475,21 @@ export function ObjectiveCollapsibleItem({
             </div>
           ) : null}
         </div>
-        <CollapsibleContent id={panelId} className="relative z-10 pb-3 pl-5 pr-4 pt-1">
+        {/*
+          `min-w-0` + `wrap-anywhere` are the row's wrapping floor. Both are
+          load-bearing and neither substitutes for the other: `min-w-0` stops
+          the panel from being widened to its content's min-content width (a
+          flex/grid item defaults to `min-width: auto`, which the row's
+          `overflow-hidden` does *not* reset), and `overflow-wrap: anywhere` —
+          inherited by every descendant that does not `truncate` — gives an
+          unbroken token somewhere to break. Without them a single long path or
+          URL in an instruction, delivery summary, or agent message pushes the
+          whole mission panel past the right edge of the window.
+        */}
+        <CollapsibleContent
+          id={panelId}
+          className="relative z-10 min-w-0 pb-3 pl-5 pr-4 pt-1 wrap-anywhere"
+        >
           <ObjectiveEvidenceSections
             objective={objective}
             evidence={evidence}

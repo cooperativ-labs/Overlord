@@ -26,6 +26,7 @@ import { ObjectiveAttachmentList } from './ObjectiveAttachments.tsx';
 import {
   ObjectiveEvidenceEmpty,
   ObjectiveEvidenceRule,
+  ObjectiveEvidenceSection,
   ObjectiveEvidenceTruncationNotice
 } from './ObjectiveEvidenceRule.tsx';
 
@@ -75,7 +76,7 @@ function RunDeliveries({
   expandLatest: boolean;
 }) {
   return (
-    <div className="grid gap-2">
+    <div className="grid min-w-0 gap-2">
       {deliveries.map((delivery, index) => (
         <MissionDeliveryCard
           key={delivery.id}
@@ -90,7 +91,7 @@ function RunDeliveries({
 
 function ObjectiveInstruction({ objective }: { objective: ObjectiveDto }) {
   return (
-    <div>
+    <div className="min-w-0">
       {objective.branch ? (
         <p className="mb-2 flex items-center gap-1 truncate font-mono text-[11px] text-muted-foreground/80">
           <GitBranch className="h-3 w-3 shrink-0" />
@@ -102,12 +103,19 @@ function ObjectiveInstruction({ objective }: { objective: ObjectiveDto }) {
           Agent session: {objective.externalSessionId}
         </p>
       ) : null}
-      <div className="text-sm leading-relaxed text-muted-foreground">
+      <div className="min-w-0 text-sm leading-relaxed text-muted-foreground">
+        {/*
+          `wrap-anywhere` (not just `break-words`): instruction text routinely
+          carries an unbroken token with no break opportunity at all — a long
+          absolute path, a URL, a base64 blob — and without it that single word
+          sets the row's min-content width and pushes the panel past the
+          viewport edge.
+        */}
         <InlineEditField
           multiline
           disabled
           value={objective.instructionText}
-          className="block whitespace-pre-wrap"
+          className="block whitespace-pre-wrap wrap-anywhere"
           ariaLabel="Objective instruction"
           onSave={() => undefined}
         />
@@ -187,15 +195,16 @@ function RunStack({
 }) {
   const sections = buildRunSections({ objective, run, loading, expandLatestDelivery });
   return (
-    <div className="grid gap-2">
+    <div className="grid min-w-0 gap-2">
       <ObjectiveEvidenceRule label="Deliveries" count={sections.deliveryCount} />
       {sections.deliveries}
       <TruncationNotice notice={truncation.deliveries} />
       <ObjectiveEvidenceRule label="Terminal session" />
       {sections.terminalSessions}
-      <ObjectiveEvidenceRule label="File changes" count={sections.fileChangeCount} />
-      {sections.fileChanges}
-      <TruncationNotice notice={truncation.fileChanges} />
+      <ObjectiveEvidenceSection label="File changes" count={sections.fileChangeCount}>
+        {sections.fileChanges}
+        <TruncationNotice notice={truncation.fileChanges} />
+      </ObjectiveEvidenceSection>
     </div>
   );
 }
@@ -275,7 +284,7 @@ function EarlierRuns({
   return (
     <>
       <ObjectiveEvidenceRule label="Earlier runs" count={runs.length} />
-      <div className="grid gap-1.5">
+      <div className="grid min-w-0 gap-1.5">
         {runs.map(run => (
           <EarlierRunRow
             key={run.number}
@@ -293,9 +302,18 @@ function EarlierRuns({
 /**
  * The flat, full-width stack of everything one objective produced, rendered
  * inside its accordion (coo:879 §4.2). Sections are separated by thin labeled
- * rules, never nested behind collapsibles; only secondary rows (earlier runs,
+ * rules. Two of those rules — Instruction and File changes — are also
+ * disclosure triggers that start closed (chevron left of the label), because
+ * their bodies are unbounded and an objective that ran for an hour would
+ * otherwise open onto pages of text; deliveries and the terminal session stay
+ * flat and always visible. Beyond those, only secondary rows (earlier runs,
  * individual file-change cards) fold. Empty states are one-line muted italics
  * so "ran with no changes" reads distinctly from "still loading".
+ *
+ * Every stack container is `min-w-0` and the row's panel forces
+ * `overflow-wrap: anywhere`, so a single unbroken token in an instruction, a
+ * delivery summary, or a path can never set the min-content width and drag the
+ * mission panel past the viewport edge.
  *
  * Evidence is split into runs by `objective.reopenedAt` (contract v133), with
  * delivery-order inference as the fallback for objectives that predate the
@@ -336,7 +354,7 @@ export function ObjectiveEvidenceSections({
     }
     // Several previous runs: every one is a row, the most recent open.
     return (
-      <div className="grid gap-1.5">
+      <div className="grid min-w-0 gap-1.5">
         {runs.map((run, index) => (
           <EarlierRunRow
             key={run.number}
@@ -361,16 +379,17 @@ export function ObjectiveEvidenceSections({
 
   if (mode === 'active') {
     return (
-      <div className="grid gap-2">
+      <div className="grid min-w-0 gap-2">
         {sections.terminalSessions}
         <AgentSessionActivity missionId={objective.missionId} objectiveId={objective.id} />
-        <ObjectiveEvidenceRule
+        <ObjectiveEvidenceSection
           label="File changes"
           count={sections.fileChangeCount}
           trailing={<LiveTag />}
-        />
-        {sections.fileChanges}
-        <TruncationNotice notice={truncation.fileChanges} />
+        >
+          {sections.fileChanges}
+          <TruncationNotice notice={truncation.fileChanges} />
+        </ObjectiveEvidenceSection>
         {latest.deliveries.length > 0 ? (
           <>
             <ObjectiveEvidenceRule label="Deliveries" count={sections.deliveryCount} />
@@ -384,8 +403,9 @@ export function ObjectiveEvidenceSections({
           loading={loading}
           truncation={truncation}
         />
-        <ObjectiveEvidenceRule label="Instruction" />
-        <ObjectiveInstruction objective={objective} />
+        <ObjectiveEvidenceSection label="Instruction">
+          <ObjectiveInstruction objective={objective} />
+        </ObjectiveEvidenceSection>
         {attachments.length > 0 ? (
           <>
             <ObjectiveEvidenceRule label="Attachments" count={attachments.length} />
@@ -397,16 +417,19 @@ export function ObjectiveEvidenceSections({
   }
 
   return (
-    <div className="grid gap-2">
-      <ObjectiveInstruction objective={objective} />
+    <div className="grid min-w-0 gap-2">
+      <ObjectiveEvidenceSection label="Instruction">
+        <ObjectiveInstruction objective={objective} />
+      </ObjectiveEvidenceSection>
       <ObjectiveEvidenceRule label="Deliveries" count={sections.deliveryCount} />
       {sections.deliveries}
       <TruncationNotice notice={truncation.deliveries} />
       <ObjectiveEvidenceRule label="Terminal session" />
       {sections.terminalSessions}
-      <ObjectiveEvidenceRule label="File changes" count={sections.fileChangeCount} />
-      {sections.fileChanges}
-      <TruncationNotice notice={truncation.fileChanges} />
+      <ObjectiveEvidenceSection label="File changes" count={sections.fileChangeCount}>
+        {sections.fileChanges}
+        <TruncationNotice notice={truncation.fileChanges} />
+      </ObjectiveEvidenceSection>
       <EarlierRuns objective={objective} runs={earlier} loading={loading} truncation={truncation} />
       {attachments.length > 0 ? (
         <>
