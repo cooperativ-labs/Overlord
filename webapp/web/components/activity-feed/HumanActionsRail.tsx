@@ -10,7 +10,12 @@ import {
 import { useMemo, useState } from 'react';
 
 import type { HumanActionItemDto } from '../../../shared/contract.ts';
-import { useHumanActions, useReopenHumanAction, useResolveHumanAction } from '../../lib/queries.ts';
+import {
+  useClearAllHumanActions,
+  useHumanActions,
+  useReopenHumanAction,
+  useResolveHumanAction
+} from '../../lib/queries.ts';
 import { cn } from '../../lib/utils.ts';
 import { HumanActionDetails } from '../HumanActionDetails.tsx';
 import { Spinner } from '../ui.tsx';
@@ -260,8 +265,13 @@ export function HumanActionsRail({
 }) {
   const [showResolved, setShowResolved] = useState(false);
   const { data, error, isError, isLoading } = useHumanActions(showResolved);
+  const clearAll = useClearAllHumanActions();
   const groups = useMemo(() => groupHumanActions(data?.items ?? []), [data?.items]);
   const counts = data?.counts;
+  const openItems = useMemo(
+    () => (data?.items ?? []).filter(item => item.resolution === null),
+    [data?.items]
+  );
 
   return (
     <aside
@@ -269,10 +279,31 @@ export function HumanActionsRail({
       className="flex w-[340px] min-w-[300px] max-w-[40vw] flex-none flex-col border-r border-(--color-border) bg-(--color-surface)"
     >
       <div className="flex-none border-b border-(--color-border) px-4 pb-3 pt-5">
-        <p className="font-mono text-[11px] font-medium uppercase tracking-[0.24em] text-(--color-ink-dim)">
-          Waiting on you
-        </p>
-        <h2 className="flex items-center gap-2 text-base font-semibold tracking-tight">
+        <div className="flex items-center justify-between gap-2">
+          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.24em] text-(--color-ink-dim)">
+            Waiting on you
+          </p>
+          {openItems.length > 0 ? (
+            <button
+              type="button"
+              disabled={clearAll.isPending}
+              title="Dismiss all open human actions"
+              aria-label="Clear all human actions"
+              onClick={() =>
+                clearAll.mutate({
+                  items: openItems.map(item => ({
+                    deliveryId: item.deliveryId,
+                    actionId: item.actionId
+                  }))
+                })
+              }
+              className="rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-(--color-ink-dim) transition-colors hover:bg-(--color-surface-2) hover:text-(--color-ink) disabled:opacity-50"
+            >
+              {clearAll.isPending ? 'Clearing…' : 'Clear all'}
+            </button>
+          ) : null}
+        </div>
+        <h2 className="mt-0.5 flex items-center gap-2 text-base font-semibold tracking-tight">
           <ListChecks className="size-4 text-(--color-ink-dim)" aria-hidden="true" />
           Human actions
           {counts ? (

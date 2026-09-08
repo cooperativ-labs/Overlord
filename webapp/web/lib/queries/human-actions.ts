@@ -80,3 +80,25 @@ export function useReopenHumanAction() {
     onSuccess: apply
   });
 }
+
+/** Dismiss every open human action currently shown in the Feed rail. */
+export function useClearAllHumanActions() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      items
+    }: {
+      items: Array<{ deliveryId: string; actionId: string }>;
+    }) => {
+      if (items.length === 0) return [] as HumanActionItemDto[];
+      return Promise.all(
+        items.map(({ deliveryId, actionId }) =>
+          api.resolveHumanAction(deliveryId, actionId, { status: 'dismissed' })
+        )
+      );
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.humanActions });
+    }
+  });
+}
