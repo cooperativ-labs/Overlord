@@ -3,7 +3,9 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Clock3,
   ListChecks,
+  Plus,
   RotateCcw,
   X
 } from 'lucide-react';
@@ -12,6 +14,7 @@ import { useMemo, useState } from 'react';
 import type { HumanActionItemDto } from '../../../shared/contract.ts';
 import {
   useClearAllHumanActions,
+  useCreateMission,
   useHumanActions,
   useReopenHumanAction,
   useResolveHumanAction
@@ -35,21 +38,59 @@ const iconButtonClass =
   'inline-flex size-6 shrink-0 items-center justify-center rounded-md border border-transparent text-(--color-ink-dim) transition-colors hover:border-(--color-border) hover:bg-(--color-surface-2) hover:text-(--color-ink) disabled:opacity-50';
 
 /**
- * One reported action: a check box to mark it done, a dismiss control for
- * actions that turn out not to apply, and reopen for either. The text is the
- * agent's own; the rail never rewrites it.
+ * One reported action or deferred-work item: a check box to mark it done, a
+ * dismiss control for items that do not apply, and reopen for either. The text
+ * is the delivery's own; the rail never rewrites it.
  */
-function HumanActionRow({ item, nowIso }: { item: HumanActionItemDto; nowIso: string }) {
+function HumanActionRow({
+  item,
+  nowIso,
+  onOpenMission
+}: {
+  item: HumanActionItemDto;
+  nowIso: string;
+  onOpenMission: OpenMission;
+}) {
   const resolve = useResolveHumanAction();
   const reopen = useReopenHumanAction();
-  const busy = resolve.isPending || reopen.isPending;
+  const createMission = useCreateMission();
+  const [conversionError, setConversionError] = useState<string | null>(null);
+  const busy = resolve.isPending || reopen.isPending || createMission.isPending;
   const resolved = item.resolution !== null;
+
+  const createDeferredObjective = async () => {
+    setConversionError(null);
+    try {
+      const mission = await createMission.mutateAsync({
+        projectId: item.projectId,
+        firstObjective: item.action
+        // Omitting statusId intentionally applies this project's default status.
+      });
+      await resolve.mutateAsync({
+        deliveryId: item.deliveryId,
+        actionId: item.actionId,
+        status: 'done'
+      });
+      onOpenMission({
+        missionId: mission.id,
+        objectiveDisplayId: mission.objectives[0]?.displayId ?? null
+      });
+    } catch (error) {
+      setConversionError(error instanceof Error ? error.message : 'Could not create objective.');
+    }
+  };
 
   return (
     <li
       className={cn(
-        'group flex min-w-0 items-start gap-2 rounded-lg px-2 py-1.5',
-        resolved ? 'opacity-60' : 'hover:bg-(--color-surface-2)'
+        'group flex min-w-0 items-start gap-2 rounded-lg border border-transparent px-2 py-1.5',
+        resolved
+          ? 'opacity-60'
+          : item.kind === 'blocking_question'
+            ? 'border-amber-300 bg-amber-50 dark:border-amber-500/50 dark:bg-amber-500/10'
+            : item.kind === 'deferred_work'
+              ? 'border-violet-300 bg-violet-50 dark:border-violet-500/50 dark:bg-violet-500/10'
+              : 'hover:bg-(--color-surface-2)'
       )}
     >
       {resolved ? (
@@ -91,7 +132,7 @@ function HumanActionRow({ item, nowIso }: { item: HumanActionItemDto; nowIso: st
             resolved && 'line-through'
           )}
         >
-          {item.blocking && !resolved ? (
+          {item.kind === 'blocking_question' && !resolved ? (
             <AlertTriangle
               className="mr-1 inline size-3.5 -translate-y-px text-amber-500"
               aria-label="Blocking"
@@ -105,10 +146,36 @@ function HumanActionRow({ item, nowIso }: { item: HumanActionItemDto; nowIso: st
           </p>
         ) : null}
         {!resolved ? <HumanActionDetails action={item} /> : null}
+        {!resolved && item.kind === 'deferred_work' ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void createDeferredObjective()}
+            className="mt-2 inline-flex items-center gap-1 rounded-md border border-violet-300 bg-white/70 px-2 py-1 text-xs font-medium text-violet-800 transition-colors hover:bg-white disabled:opacity-50 dark:border-violet-500/50 dark:bg-violet-950/30 dark:text-violet-200 dark:hover:bg-violet-950/50"
+          >
+            <Plus className="size-3.5" aria-hidden="true" />
+            {createMission.isPending ? 'Creating…' : 'Create objective'}
+          </button>
+        ) : null}
+        {conversionError ? (
+          <p className="mt-1 text-xs text-red-600 dark:text-red-300" role="alert">
+            {conversionError}
+          </p>
+        ) : null}
         <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] uppercase tracking-wide text-(--color-ink-dim)">
-          <span className="rounded bg-(--color-surface-3) px-1 py-px font-mono normal-case tracking-normal">
-            {humanActionCategoryLabel(item.category)}
-          </span>
+          {item.kind === 'blocking_question' ? (
+            <span className="rounded bg-amber-100 px-1 py-px font-mono normal-case tracking-normal text-amber-900 dark:bg-amber-500/20 dark:text-amber-100">
+              Blocking question
+            </span>
+          ) : item.kind === 'deferred_work' ? (
+            <span className="inline-flex items-center gap-1 rounded bg-violet-100 px-1 py-px font-mono normal-case tracking-normal text-violet-900 dark:bg-violet-500/20 dark:text-violet-100">
+              <Clock3 className="size-3" aria-hidden="true" /> Deferred work
+            </span>
+          ) : (
+            <span className="rounded bg-(--color-surface-3) px-1 py-px font-mono normal-case tracking-normal">
+              {humanActionCategoryLabel(item.category)}
+            </span>
+          )}
           {item.source !== 'agent' ? <span>inferred</span> : null}
           {resolved ? (
             <span>
@@ -171,7 +238,7 @@ function ObjectiveGroup({
       </button>
       <ul className="mt-0.5 flex flex-col">
         {group.items.map(item => (
-          <HumanActionRow key={item.id} item={item} nowIso={nowIso} />
+          <HumanActionRow key={item.id} item={item} nowIso={nowIso} onOpenMission={onOpenMission} />
         ))}
       </ul>
     </div>
@@ -194,7 +261,11 @@ function MissionGroup({
     <section
       className={cn(
         'min-w-0 rounded-xl border bg-(--color-surface) p-2',
-        group.blocking ? 'border-amber-300 dark:border-amber-500/50' : 'border-(--color-border)'
+        group.blocking
+          ? 'border-amber-300 dark:border-amber-500/50'
+          : group.deferred
+            ? 'border-violet-300 dark:border-violet-500/50'
+            : 'border-(--color-border)'
       )}
     >
       <div className="flex min-w-0 items-center gap-1.5">
@@ -222,7 +293,9 @@ function MissionGroup({
               'shrink-0 rounded-full px-1.5 font-mono text-[10px]',
               group.blocking
                 ? 'bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-100'
-                : 'bg-(--color-surface-3) text-(--color-ink-dim)'
+                : group.deferred
+                  ? 'bg-violet-100 text-violet-900 dark:bg-violet-500/20 dark:text-violet-100'
+                  : 'bg-(--color-surface-3) text-(--color-ink-dim)'
             )}
           >
             {group.openCount}
@@ -253,8 +326,8 @@ function MissionGroup({
  * The Feed page's left rail: every human follow-up action agents reported on
  * recent deliveries, grouped by mission and objective, with the operator's
  * done / dismissed decisions recorded against each one (coo:963). Blocking
- * actions and the missions carrying them lead. Resolved actions stay out of
- * the way until asked for.
+ * questions lead, deferred work follows, and regular follow-ups remain neutral.
+ * Resolved items stay out of the way until asked for.
  */
 export function HumanActionsRail({
   nowIso,
@@ -315,6 +388,12 @@ export function HumanActionsRail({
             <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-1.5 font-mono text-[11px] font-normal text-amber-900 dark:bg-amber-500/20 dark:text-amber-100">
               <AlertTriangle className="size-3" aria-hidden="true" />
               {counts.blocking} blocking
+            </span>
+          ) : null}
+          {counts && counts.deferred > 0 ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-1.5 font-mono text-[11px] font-normal text-violet-900 dark:bg-violet-500/20 dark:text-violet-100">
+              <Clock3 className="size-3" aria-hidden="true" />
+              {counts.deferred} deferred
             </span>
           ) : null}
         </h2>

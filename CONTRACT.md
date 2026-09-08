@@ -34,13 +34,30 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `137`
+Current version: `138`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
 `contract/components.yaml`) — never a header duplicate. The contract version is
 incremented when any stable interface changes. All conformance manifests must
 declare the contract version they were validated against.
+
+### Version 138 Change Summary
+
+Deferred delivery work joins the cross-workspace Human Actions rail (coo:971).
+`GET /api/human-actions` now projects both `presentation.humanActions` and
+`presentation.deferredWork` from each qualifying delivery. Every
+`HumanActionItemDto` carries an additive `kind` (`follow_up`,
+`blocking_question`, or `deferred_work`); deferred strings receive stable
+delivery-local action ids derived from their text and duplicate occurrence, use
+the existing done/dismiss resolution lifecycle, and contribute to the additive
+`counts.deferred` total. Open ordering is blocking questions first, deferred work
+second, and regular follow-ups last, newest delivery first within each kind. The
+webapp uses the established amber and violet treatments for blocking questions
+and deferred work respectively. A deferred item can create a new mission with
+the item as its first objective in the associated project; the client omits
+`statusId`, deliberately applying that project's default status, and marks the
+source item done after creation. No database or new route change.
 
 ### Version 137 Change Summary
 

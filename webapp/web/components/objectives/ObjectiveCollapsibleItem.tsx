@@ -3,9 +3,9 @@ import {
   CheckCircle2,
   ChevronDown,
   Copy,
-  FastForward,
   FolderOpen,
   HelpCircle,
+  ListOrdered,
   Loader2,
   Paperclip,
   RefreshCw,
@@ -450,7 +450,7 @@ export function ObjectiveCollapsibleItem({
           </div>
 
           {/* Line 3 — resource folder and queue status. */}
-          {resourceLabel || objective.autoAdvance ? (
+          {resourceLabel || objective.queueEntry ? (
             <div className="relative flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
               {resourceLabel ? (
                 <span
@@ -461,15 +461,18 @@ export function ObjectiveCollapsibleItem({
                   <span className="truncate">{resourceLabel}</span>
                 </span>
               ) : null}
-              {resourceLabel && objective.autoAdvance ? (
+              {resourceLabel && objective.queueEntry ? (
                 <span aria-hidden="true" className="text-muted-foreground/60">
                   ·
                 </span>
               ) : null}
-              {objective.autoAdvance ? (
-                <span className="inline-flex shrink-0 items-center gap-1">
-                  <FastForward className="h-3 w-3" />
-                  <span>Auto-advance</span>
+              {objective.queueEntry ? (
+                <span
+                  className="inline-flex shrink-0 items-center gap-1"
+                  title={`Queued in ${objective.queueEntry.queueName}`}
+                >
+                  <ListOrdered className="h-3 w-3" />
+                  <span>Queued</span>
                 </span>
               ) : null}
             </div>

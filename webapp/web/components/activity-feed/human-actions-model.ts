@@ -20,6 +20,8 @@ export interface HumanActionMissionGroup {
   projectColor: string | null;
   /** Any open action in the mission is blocking. */
   blocking: boolean;
+  /** Any open action in the mission is deferred work. */
+  deferred: boolean;
   /** The newest delivery among the mission's objectives, for ordering. */
   deliveredAt: string;
   openCount: number;
@@ -45,6 +47,7 @@ export function groupHumanActions(items: HumanActionItemDto[]): HumanActionMissi
         projectName: item.projectName,
         projectColor: item.projectColor,
         blocking: false,
+        deferred: false,
         deliveredAt: item.deliveredAt,
         openCount: 0,
         objectives: []
@@ -67,6 +70,7 @@ export function groupHumanActions(items: HumanActionItemDto[]): HumanActionMissi
     if (item.resolution === null) {
       mission.openCount += 1;
       if (item.blocking) mission.blocking = true;
+      if (item.kind === 'deferred_work') mission.deferred = true;
     }
     if (item.deliveredAt > mission.deliveredAt) mission.deliveredAt = item.deliveredAt;
   }

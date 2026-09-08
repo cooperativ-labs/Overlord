@@ -110528,7 +110528,7 @@ var require_dist_cjs16 = __commonJS({
     var { setCredentialFeature: setCredentialFeature2 } = (init_client4(), __toCommonJS(client_exports2));
     var { CredentialsProviderError: CredentialsProviderError2, readFile: readFile4, parseKnownFiles: parseKnownFiles2, getProfileName: getProfileName2 } = (init_config3(), __toCommonJS(config_exports));
     var { HttpRequest: HttpRequest2 } = (init_protocols(), __toCommonJS(protocols_exports));
-    var { createHash: createHash18, createPrivateKey, createPublicKey, sign: sign3 } = require("node:crypto");
+    var { createHash: createHash19, createPrivateKey, createPublicKey, sign: sign3 } = require("node:crypto");
     var { promises } = require("node:fs");
     var { homedir: homedir2 } = require("node:os");
     var { dirname, join: join6 } = require("node:path");
@@ -110689,7 +110689,7 @@ var require_dist_cjs16 = __commonJS({
       getTokenFilePath() {
         const directory = process.env.AWS_LOGIN_CACHE_DIRECTORY ?? join6(homedir2(), ".aws", "login", "cache");
         const loginSessionBytes = Buffer.from(this.loginSession, "utf8");
-        const loginSessionSha256 = createHash18("sha256").update(loginSessionBytes).digest("hex");
+        const loginSessionSha256 = createHash19("sha256").update(loginSessionBytes).digest("hex");
         return join6(directory, `${loginSessionSha256}.json`);
       }
       derToRawSignature(derSignature) {
@@ -135553,7 +135553,7 @@ function decideAutoAdvanceAfterDelivery(objectives, options = {}) {
     return {
       action: "await_approval",
       objectiveId: nextDraft.id,
-      reason: "Auto-advance requires an assigned agent."
+      reason: "Queue launch requires an assigned agent."
     };
   }
   return {
@@ -168775,6 +168775,7 @@ init_env_profile();
 
 // human-actions.ts
 init_dist2();
+var import_node_crypto23 = require("node:crypto");
 init_db();
 var DELIVERY_WINDOW_MS = 90 * 24 * 60 * 60 * 1e3;
 var DELIVERY_SCAN_LIMIT = 400;
@@ -168783,12 +168784,15 @@ var RESOLUTION_STATUSES = /* @__PURE__ */ new Set(["done", "dismissed"]);
 function placeholders2(count) {
   return new Array(count).fill("?").join(", ");
 }
-function hasHumanActionsSql(dialect) {
+function hasHumanActionItemsSql(dialect) {
   if (dialect === "postgres") {
-    return `(jsonb_typeof(d.payload_json #> '{deliveryReport,presentation,humanActions}') = 'array'
-         AND jsonb_array_length(d.payload_json #> '{deliveryReport,presentation,humanActions}') > 0)`;
+    return `((jsonb_typeof(d.payload_json #> '{deliveryReport,presentation,humanActions}') = 'array'
+          AND jsonb_array_length(d.payload_json #> '{deliveryReport,presentation,humanActions}') > 0)
+         OR (jsonb_typeof(d.payload_json #> '{deliveryReport,presentation,deferredWork}') = 'array'
+          AND jsonb_array_length(d.payload_json #> '{deliveryReport,presentation,deferredWork}') > 0))`;
   }
-  return `COALESCE(json_array_length(d.payload_json, '$.deliveryReport.presentation.humanActions'), 0) > 0`;
+  return `(COALESCE(json_array_length(d.payload_json, '$.deliveryReport.presentation.humanActions'), 0) > 0
+       OR COALESCE(json_array_length(d.payload_json, '$.deliveryReport.presentation.deferredWork'), 0) > 0)`;
 }
 var DELIVERY_SELECT = `
   SELECT d.id AS delivery_id, d.summary AS delivery_summary, d.payload_json, d.delivered_at,
@@ -168820,7 +168824,7 @@ async function loadDeliveriesWithActions(workspaceIds) {
    WHERE d.deleted_at IS NULL
      AND d.workspace_id IN (${placeholders2(workspaceIds.length)})
      AND d.delivered_at >= ?
-     AND ${hasHumanActionsSql(db.dialect)}
+     AND ${hasHumanActionItemsSql(db.dialect)}
      ${LATEST_PER_OBJECTIVE}
    ORDER BY d.delivered_at DESC, d.id DESC
    LIMIT ?`,
@@ -168860,14 +168864,39 @@ function toResolution(row) {
     resolvedByWorkspaceUserId: row.resolved_by_workspace_user_id
   };
 }
+function deferredWorkId(text, occurrence) {
+  const digest3 = (0, import_node_crypto23.createHash)("sha256").update(text).digest("hex").slice(0, 16);
+  return `deferred-work-${digest3}-${occurrence}`;
+}
 function deliveryActions(row) {
-  return deliveryReportFromPayload(row.payload_json, row.delivery_summary).presentation.humanActions;
+  const presentation = deliveryReportFromPayload(
+    row.payload_json,
+    row.delivery_summary
+  ).presentation;
+  const humanActions = presentation.humanActions.map((action) => ({
+    ...action,
+    kind: action.blocking === true ? "blocking_question" : "follow_up"
+  }));
+  const occurrences = /* @__PURE__ */ new Map();
+  const deferredWork = presentation.deferredWork.map((action) => {
+    const occurrence = (occurrences.get(action) ?? 0) + 1;
+    occurrences.set(action, occurrence);
+    return {
+      id: deferredWorkId(action, occurrence),
+      kind: "deferred_work",
+      action,
+      category: "other",
+      source: "agent"
+    };
+  });
+  return [...humanActions, ...deferredWork];
 }
 function toItem(row, action, resolution) {
   return {
     id: `human-action:${row.delivery_id}:${action.id}`,
     deliveryId: row.delivery_id,
     actionId: action.id,
+    kind: action.kind,
     action: action.action,
     reason: action.reason ?? null,
     category: action.category,
@@ -168896,7 +168925,12 @@ function toItem(row, action, resolution) {
   };
 }
 function openFirst(a5, b5) {
-  if (a5.blocking !== b5.blocking) return a5.blocking ? -1 : 1;
+  const kindRank = {
+    blocking_question: 0,
+    deferred_work: 1,
+    follow_up: 2
+  };
+  if (a5.kind !== b5.kind) return kindRank[a5.kind] - kindRank[b5.kind];
   if (a5.deliveredAt !== b5.deliveredAt) return a5.deliveredAt < b5.deliveredAt ? 1 : -1;
   return a5.id < b5.id ? -1 : 1;
 }
@@ -168929,6 +168963,7 @@ async function listHumanActions({
     counts: {
       open: open.length,
       blocking: open.filter((item) => item.blocking).length,
+      deferred: open.filter((item) => item.kind === "deferred_work").length,
       resolved: resolved.length
     }
   };
@@ -169040,7 +169075,7 @@ async function reopenHumanAction(deliveryId, actionId) {
 
 // live-activities.ts
 init_dist2();
-var import_node_crypto23 = require("node:crypto");
+var import_node_crypto24 = require("node:crypto");
 init_util3();
 init_db();
 
@@ -169328,7 +169363,7 @@ async function buildLiveActivityContentState(db, profileId, now2 = /* @__PURE__ 
   };
 }
 function liveActivityContentHash(state2) {
-  return (0, import_node_crypto23.createHash)("sha256").update(
+  return (0, import_node_crypto24.createHash)("sha256").update(
     JSON.stringify(
       state2 && {
         running: state2.running,
@@ -169342,7 +169377,7 @@ function liveActivityContentHash(state2) {
 init_util3();
 
 // apns-client.ts
-var import_node_crypto24 = require("node:crypto");
+var import_node_crypto25 = require("node:crypto");
 var import_node_http2 = __toESM(require("node:http2"), 1);
 var SANDBOX_HOST = "https://api.sandbox.push.apple.com";
 var PRODUCTION_HOST = "https://api.push.apple.com";
@@ -169371,7 +169406,7 @@ function apnsJwt(config4) {
   const signingInput = `${b64url(JSON.stringify({ alg: "ES256", kid: config4.keyId }))}.${b64url(
     JSON.stringify({ iss: config4.teamId, iat: now2 })
   )}`;
-  const signer = (0, import_node_crypto24.createSign)("SHA256");
+  const signer = (0, import_node_crypto25.createSign)("SHA256");
   signer.update(signingInput);
   signer.end();
   const signature = signer.sign({ key: config4.privateKey, dsaEncoding: "ieee-p1363" });
@@ -170448,7 +170483,7 @@ async function dismissNotification(id, body) {
 }
 
 // oauth.ts
-var import_node_crypto25 = require("node:crypto");
+var import_node_crypto26 = require("node:crypto");
 init_db();
 var CLIENT_ID_PREFIX = "ovlc_";
 var AUTH_CODE_PREFIX = "ovla_";
@@ -170483,12 +170518,12 @@ function oauthSigningSecret() {
   return process.env.OVERLORD_OAUTH_SIGNING_SECRET?.trim() || process.env.BETTER_AUTH_SECRET?.trim() || "overlord-local-oauth-development-secret";
 }
 function signPayload(payload) {
-  return (0, import_node_crypto25.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
+  return (0, import_node_crypto26.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
 }
 function fixedTimeEqual(a5, b5) {
   const left = Buffer.from(a5);
   const right = Buffer.from(b5);
-  return left.length === right.length && (0, import_node_crypto25.timingSafeEqual)(left, right);
+  return left.length === right.length && (0, import_node_crypto26.timingSafeEqual)(left, right);
 }
 function jsonError(res, status, error53, description) {
   res.status(status).json({ error: error53, error_description: description });
@@ -170809,7 +170844,7 @@ async function handleOAuthApprove(req, res) {
       issuanceWorkspaceUserId: consent.issuanceWorkspace.workspaceUserId
     }
   );
-  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto25.randomBytes)(32).toString("base64url")}`;
+  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto26.randomBytes)(32).toString("base64url")}`;
   authorizationCodes.set(code, {
     clientId: parsed.clientId,
     redirectUri: parsed.redirectUri,
@@ -170853,7 +170888,7 @@ async function handleOAuthToken(req, res) {
     jsonError(res, 400, "invalid_target", "OAuth resource does not match the authorization code.");
     return;
   }
-  const challenge = (0, import_node_crypto25.createHash)("sha256").update(codeVerifier).digest("base64url");
+  const challenge = (0, import_node_crypto26.createHash)("sha256").update(codeVerifier).digest("base64url");
   if (!codeVerifier || challenge !== entry.codeChallenge) {
     await revokeOrphanedAccessToken(entry.accessToken);
     jsonError(res, 400, "invalid_grant", "PKCE verification failed.");
@@ -171221,7 +171256,7 @@ var RunQueueDispatchWorker = class extends WorkerJobPoller {
 var runQueueDispatchWorker = new RunQueueDispatchWorker();
 
 // storage.ts
-var import_node_crypto26 = require("node:crypto");
+var import_node_crypto27 = require("node:crypto");
 var import_node_fs18 = require("node:fs");
 var import_node_path32 = __toESM(require("node:path"), 1);
 var import_node_url7 = require("node:url");
@@ -171304,7 +171339,7 @@ async function writeImageObject(bucket, input, storageKeyFor) {
     storageKey,
     sizeBytes: input.bytes.length,
     contentType,
-    checksum: (0, import_node_crypto26.createHash)("sha256").update(input.bytes).digest("hex"),
+    checksum: (0, import_node_crypto27.createHash)("sha256").update(input.bytes).digest("hex"),
     publicUrl: publicUrlFor(bucket.bucket_key, storageKey)
   };
 }
@@ -171543,7 +171578,7 @@ async function uploadObjectiveAttachment(input) {
     contentType: contentType ?? "application/octet-stream"
   });
   const filename = input.filename.trim() || `attachment${import_node_path32.default.extname(storageKey)}`;
-  const checksum3 = (0, import_node_crypto26.createHash)("sha256").update(input.bytes).digest("hex");
+  const checksum3 = (0, import_node_crypto27.createHash)("sha256").update(input.bytes).digest("hex");
   return requireDatabaseClient().transaction(async (tx) => {
     await tx.run(
       `INSERT INTO attachments (
@@ -171794,13 +171829,13 @@ init_webhook_events();
 init_db();
 
 // webhook-security.ts
-var import_node_crypto27 = require("node:crypto");
+var import_node_crypto28 = require("node:crypto");
 var import_promises5 = __toESM(require("node:dns/promises"), 1);
 var import_node_net = require("node:net");
 init_db();
 function signWebhookPayload(secret, rawBody) {
   const timestamp = Math.floor(Date.now() / 1e3);
-  const signature = (0, import_node_crypto27.createHmac)("sha256", secret).update(`${timestamp}.${rawBody}`).digest("hex");
+  const signature = (0, import_node_crypto28.createHmac)("sha256", secret).update(`${timestamp}.${rawBody}`).digest("hex");
   return { header: `t=${timestamp},v1=${signature}`, timestamp };
 }
 function internalHostPatterns() {
@@ -172127,7 +172162,7 @@ var webhookDispatcher = new WebhookDispatcher();
 
 // webhooks.ts
 init_dist2();
-var import_node_crypto28 = require("node:crypto");
+var import_node_crypto29 = require("node:crypto");
 init_webhook_events();
 init_db();
 var WEBHOOK_SECRET_SCHEME = "whsec";
@@ -172162,7 +172197,7 @@ function toSubscriptionDto(row) {
   };
 }
 function generateWebhookSecret() {
-  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto28.randomBytes)(24).toString("hex")}` };
+  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto29.randomBytes)(24).toString("hex")}` };
 }
 function normalizeEventTypes(input) {
   if (!Array.isArray(input) || input.length === 0) {

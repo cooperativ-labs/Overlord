@@ -2,9 +2,9 @@ import {
   CheckCircle2,
   Circle,
   Clock,
-  FastForward,
   FolderOpen,
   GitBranch,
+  ListOrdered,
   Loader2,
   RefreshCw,
   Rocket
@@ -74,10 +74,7 @@ function MissionObjectiveRow({ objective }: { objective: ActivityFeedMissionObje
           {objective.title ?? 'Untitled objective'}
         </span>
         {objective.autoAdvance ? (
-          <FastForward
-            className="size-3 shrink-0 text-(--color-ink-dim)"
-            aria-label="Auto-advance"
-          />
+          <ListOrdered className="size-3 shrink-0 text-(--color-ink-dim)" aria-label="Queued" />
         ) : null}
         <span className="shrink-0 font-mono text-[11px] text-(--color-ink-dim)">
           {objective.displayId}

@@ -9,9 +9,10 @@ import { api } from '../api.ts';
 import { keys } from '../query-keys.ts';
 
 /**
- * Human follow-up actions from recent deliveries (coo:963). Freshness comes from
- * the realtime link invalidating `keys.humanActions` on delivery and resolution
- * changes; the query itself never polls.
+ * Human follow-up actions and deferred work from recent deliveries (coo:963,
+ * coo:971). Freshness comes from the realtime link invalidating
+ * `keys.humanActions` on delivery and resolution changes; the query itself never
+ * polls.
  */
 export function useHumanActions(includeResolved = false) {
   return useQuery<HumanActionsDto>({
@@ -38,6 +39,10 @@ function patchCachedItem(
     counts: {
       open: Math.max(0, cached.counts.open + openDelta),
       blocking: Math.max(0, cached.counts.blocking + (item.blocking ? openDelta : 0)),
+      deferred: Math.max(
+        0,
+        cached.counts.deferred + (item.kind === 'deferred_work' ? openDelta : 0)
+      ),
       resolved: Math.max(0, cached.counts.resolved - openDelta)
     }
   };
@@ -85,11 +90,7 @@ export function useReopenHumanAction() {
 export function useClearAllHumanActions() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({
-      items
-    }: {
-      items: Array<{ deliveryId: string; actionId: string }>;
-    }) => {
+    mutationFn: async ({ items }: { items: Array<{ deliveryId: string; actionId: string }> }) => {
       if (items.length === 0) return [] as HumanActionItemDto[];
       return Promise.all(
         items.map(({ deliveryId, actionId }) =>

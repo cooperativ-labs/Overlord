@@ -28,7 +28,8 @@ function seedDelivery({
   missionId,
   objectiveId,
   deliveredAt,
-  humanActions
+  humanActions,
+  deferredWork = []
 }: {
   workspaceId: string;
   projectId: string;
@@ -44,12 +45,13 @@ function seedDelivery({
     verify?: string;
     link?: string;
   }>;
+  deferredWork?: string[];
 }): string {
   const id = newId('delivery');
   const summary = 'Delivered.';
   const report = buildDeliveryReport({
     summary,
-    deliveryReport: { schemaVersion: 1, agentReport: { humanActions } }
+    deliveryReport: { schemaVersion: 1, agentReport: { humanActions, deferredWork } }
   });
   db.prepare(
     `INSERT INTO deliveries
@@ -104,12 +106,14 @@ test('reported actions surface with mission context, blocking first', async () =
 
   assert.equal(mine.length, 2, 'the Git-only action is filtered out at normalization');
   assert.equal(mine[0]!.action, 'Run the pending migration');
+  assert.equal(mine[0]!.kind, 'blocking_question');
   assert.equal(mine[0]!.blocking, true);
   assert.equal(mine[0]!.category, 'database');
   assert.equal(mine[0]!.command, 'yarn db:migrate');
   assert.equal(mine[0]!.verify, 'schema_migrations lists 20260907_human_actions');
   assert.equal(mine[0]!.link, 'database/sqlite/migrations/20260907_human_actions.sql');
   assert.equal(mine[1]!.command, null);
+  assert.equal(mine[1]!.kind, 'follow_up');
   assert.equal(mine[1]!.verify, null);
   assert.equal(mine[1]!.link, null);
   assert.equal(mine[0]!.resolution, null);
@@ -120,6 +124,37 @@ test('reported actions surface with mission context, blocking first', async () =
   assert.equal(mine[0]!.id, `human-action:${deliveryId}:${mine[0]!.actionId}`);
   assert.ok(result.counts.open >= 2);
   assert.ok(result.counts.blocking >= 1);
+});
+
+test('deferred work joins the rail after blocking questions and uses the same resolution', async () => {
+  const { project, mission, objective } = await seedMission('HA Deferred');
+  const deliveryId = seedDelivery({
+    workspaceId: mission.workspaceId,
+    projectId: project.id,
+    missionId: mission.id,
+    objectiveId: objective.id,
+    deliveredAt: new Date().toISOString(),
+    humanActions: [
+      { action: 'Answer the rollout question', blocking: true },
+      { action: 'Configure the optional webhook' }
+    ],
+    deferredWork: ['Add the audit-log export', 'Add the audit-log export']
+  });
+
+  const result = await listHumanActions();
+  const mine = result.items.filter(item => item.deliveryId === deliveryId);
+
+  assert.deepEqual(
+    mine.map(item => item.kind),
+    ['blocking_question', 'deferred_work', 'deferred_work', 'follow_up']
+  );
+  assert.notEqual(mine[1]!.actionId, mine[2]!.actionId, 'duplicate deferred items stay distinct');
+  assert.equal(mine[1]!.category, 'other');
+  assert.ok(result.counts.deferred >= 2);
+
+  const resolved = await resolveHumanAction(deliveryId, mine[1]!.actionId, { status: 'done' });
+  assert.equal(resolved.kind, 'deferred_work');
+  assert.equal(resolved.resolution?.status, 'done');
 });
 
 test('resolving hides an action from the open list and records a change', async () => {

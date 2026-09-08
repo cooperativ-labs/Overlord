@@ -1,8 +1,10 @@
 import { PERMISSIONS } from '@overlord/auth';
 import { formatObjectiveDisplayId } from '@overlord/database';
+import { createHash } from 'node:crypto';
 
 import type {
   HumanActionItemDto,
+  HumanActionItemKind,
   HumanActionResolutionDto,
   HumanActionResolutionStatus,
   HumanActionsDto,
@@ -23,10 +25,10 @@ import { requireWorkspacePermission } from './rbac.ts';
 import { deliveryReportFromPayload, readProjectColor } from './repository.ts';
 
 /**
- * Human follow-up actions, collected across every mission the operator can read
- * (coo:963). The delivery report is the only place an action's text lives; this
- * module projects those lists into one rail and records the operator's decision
- * per action in `human_action_resolutions`.
+ * Human follow-up actions and deferred work, collected across every mission the
+ * operator can read (coo:963, coo:971). The delivery report is the only place an
+ * item's text lives; this module projects those lists into one rail and records
+ * the operator's decision per item in `human_action_resolutions`.
  */
 
 /** How far back a delivery still contributes actions. An older unresolved action is stale by definition. */
@@ -44,14 +46,18 @@ function placeholders(count: number): string {
 
 /**
  * SQL that is true when the delivery presentation carries at least one human
- * action, so the read never parses deliveries that could not contribute.
+ * action or deferred-work item, so the read never parses deliveries that could
+ * not contribute.
  */
-function hasHumanActionsSql(dialect: 'postgres' | 'sqlite'): string {
+function hasHumanActionItemsSql(dialect: 'postgres' | 'sqlite'): string {
   if (dialect === 'postgres') {
-    return `(jsonb_typeof(d.payload_json #> '{deliveryReport,presentation,humanActions}') = 'array'
-         AND jsonb_array_length(d.payload_json #> '{deliveryReport,presentation,humanActions}') > 0)`;
+    return `((jsonb_typeof(d.payload_json #> '{deliveryReport,presentation,humanActions}') = 'array'
+          AND jsonb_array_length(d.payload_json #> '{deliveryReport,presentation,humanActions}') > 0)
+         OR (jsonb_typeof(d.payload_json #> '{deliveryReport,presentation,deferredWork}') = 'array'
+          AND jsonb_array_length(d.payload_json #> '{deliveryReport,presentation,deferredWork}') > 0))`;
   }
-  return `COALESCE(json_array_length(d.payload_json, '$.deliveryReport.presentation.humanActions'), 0) > 0`;
+  return `(COALESCE(json_array_length(d.payload_json, '$.deliveryReport.presentation.humanActions'), 0) > 0
+       OR COALESCE(json_array_length(d.payload_json, '$.deliveryReport.presentation.deferredWork'), 0) > 0)`;
 }
 
 interface DeliveryActionRow {
@@ -115,7 +121,7 @@ async function loadDeliveriesWithActions(workspaceIds: string[]): Promise<Delive
    WHERE d.deleted_at IS NULL
      AND d.workspace_id IN (${placeholders(workspaceIds.length)})
      AND d.delivered_at >= ?
-     AND ${hasHumanActionsSql(db.dialect)}
+     AND ${hasHumanActionItemsSql(db.dialect)}
      ${LATEST_PER_OBJECTIVE}
    ORDER BY d.delivered_at DESC, d.id DESC
    LIMIT ?`,
@@ -160,20 +166,49 @@ function toResolution(row: ResolutionRow | undefined): HumanActionResolutionDto 
   };
 }
 
-function deliveryActions(row: DeliveryActionRow): HumanActionV1[] {
-  return deliveryReportFromPayload(row.payload_json, row.delivery_summary).presentation
-    .humanActions;
+interface HumanActionRailEntry extends HumanActionV1 {
+  kind: HumanActionItemKind;
+}
+
+function deferredWorkId(text: string, occurrence: number): string {
+  const digest = createHash('sha256').update(text).digest('hex').slice(0, 16);
+  return `deferred-work-${digest}-${occurrence}`;
+}
+
+function deliveryActions(row: DeliveryActionRow): HumanActionRailEntry[] {
+  const presentation = deliveryReportFromPayload(
+    row.payload_json,
+    row.delivery_summary
+  ).presentation;
+  const humanActions = presentation.humanActions.map(action => ({
+    ...action,
+    kind: action.blocking === true ? 'blocking_question' : 'follow_up'
+  })) satisfies HumanActionRailEntry[];
+  const occurrences = new Map<string, number>();
+  const deferredWork = presentation.deferredWork.map(action => {
+    const occurrence = (occurrences.get(action) ?? 0) + 1;
+    occurrences.set(action, occurrence);
+    return {
+      id: deferredWorkId(action, occurrence),
+      kind: 'deferred_work',
+      action,
+      category: 'other',
+      source: 'agent'
+    } satisfies HumanActionRailEntry;
+  });
+  return [...humanActions, ...deferredWork];
 }
 
 function toItem(
   row: DeliveryActionRow,
-  action: HumanActionV1,
+  action: HumanActionRailEntry,
   resolution: ResolutionRow | undefined
 ): HumanActionItemDto {
   return {
     id: `human-action:${row.delivery_id}:${action.id}`,
     deliveryId: row.delivery_id,
     actionId: action.id,
+    kind: action.kind,
     action: action.action,
     reason: action.reason ?? null,
     category: action.category,
@@ -203,7 +238,12 @@ function toItem(
 }
 
 function openFirst(a: HumanActionItemDto, b: HumanActionItemDto): number {
-  if (a.blocking !== b.blocking) return a.blocking ? -1 : 1;
+  const kindRank: Record<HumanActionItemKind, number> = {
+    blocking_question: 0,
+    deferred_work: 1,
+    follow_up: 2
+  };
+  if (a.kind !== b.kind) return kindRank[a.kind] - kindRank[b.kind];
   if (a.deliveredAt !== b.deliveredAt) return a.deliveredAt < b.deliveredAt ? 1 : -1;
   return a.id < b.id ? -1 : 1;
 }
@@ -216,9 +256,10 @@ function resolvedNewestFirst(a: HumanActionItemDto, b: HumanActionItemDto): numb
 }
 
 /**
- * Every human action from the latest delivery of each objective delivered in
- * the last 90 days, across every workspace the caller can read missions in.
- * Open actions lead, blocking first; resolved ones follow only when asked for.
+ * Every human action and deferred-work item from the latest delivery of each
+ * objective delivered in the last 90 days, across every workspace the caller
+ * can read missions in. Open items lead by kind; resolved ones follow only when
+ * asked for.
  */
 export async function listHumanActions({
   includeResolved = false
@@ -245,6 +286,7 @@ export async function listHumanActions({
     counts: {
       open: open.length,
       blocking: open.filter(item => item.blocking).length,
+      deferred: open.filter(item => item.kind === 'deferred_work').length,
       resolved: resolved.length
     }
   };
@@ -253,7 +295,7 @@ export async function listHumanActions({
 async function requireDeliveryAction(
   deliveryId: string,
   actionId: string
-): Promise<{ row: DeliveryActionRow; action: HumanActionV1; workspaceUserId: string }> {
+): Promise<{ row: DeliveryActionRow; action: HumanActionRailEntry; workspaceUserId: string }> {
   const row = await loadDelivery(deliveryId);
   if (!row) throw new ApiError(404, 'Delivery not found');
   const workspaceUserId = await requireWorkspacePermission({
@@ -268,7 +310,7 @@ async function requireDeliveryAction(
 
 async function currentItem(
   row: DeliveryActionRow,
-  action: HumanActionV1
+  action: HumanActionRailEntry
 ): Promise<HumanActionItemDto> {
   const resolutions = await loadResolutions([row.delivery_id]);
   return toItem(row, action, resolutions.get(`${row.delivery_id}:${action.id}`));

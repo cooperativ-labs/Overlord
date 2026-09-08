@@ -10,6 +10,7 @@ function item(overrides: Partial<HumanActionItemDto>): HumanActionItemDto {
     id: 'human-action:d1:human-action-1',
     deliveryId: 'd1',
     actionId: 'human-action-1',
+    kind: 'follow_up',
     action: 'Do the thing',
     reason: null,
     category: 'other',
@@ -83,6 +84,16 @@ test('resolved actions do not count as open or blocking', () => {
   assert.equal(groups.length, 1);
   assert.equal(groups[0]!.openCount, 1);
   assert.equal(groups[0]!.blocking, false);
+});
+
+test('tracks open deferred work separately from blocking questions', () => {
+  const groups = groupHumanActions([
+    item({ id: 'deferred', kind: 'deferred_work' }),
+    item({ id: 'follow-up', actionId: 'human-action-2' })
+  ]);
+
+  assert.equal(groups[0]!.blocking, false);
+  assert.equal(groups[0]!.deferred, true);
 });
 
 test('unknown categories fall back to Other', () => {

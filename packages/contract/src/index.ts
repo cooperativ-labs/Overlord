@@ -1449,9 +1449,13 @@ export interface HumanActionResolutionDto {
   resolvedByWorkspaceUserId: string | null;
 }
 
+/** Presentation role of one item in the cross-workspace Human Actions rail. */
+export type HumanActionItemKind = 'follow_up' | 'blocking_question' | 'deferred_work';
+
 /**
- * One `HumanActionV1` from the latest delivery of an objective, decorated with
- * enough context to open the mission and to say which agent reported it.
+ * One `HumanActionV1` or deferred-work entry from the latest delivery of an
+ * objective, decorated with enough context to open the mission and to say
+ * which agent reported it.
  * Returned by `GET /api/human-actions` (contract v136).
  */
 export interface HumanActionItemDto {
@@ -1459,6 +1463,7 @@ export interface HumanActionItemDto {
   id: string;
   deliveryId: string;
   actionId: string;
+  kind: HumanActionItemKind;
   action: string;
   reason: string | null;
   category: HumanActionCategory;
@@ -1487,11 +1492,11 @@ export interface HumanActionItemDto {
 }
 
 export interface HumanActionsDto {
-  /** Open actions first (blocking, then newest delivery); resolved ones after when requested. */
+  /** Open actions first (blocking, deferred, follow-up); resolved ones after when requested. */
   items: HumanActionItemDto[];
   generatedAt: string;
   /** Totals before any cap, so the rail can show a count the list may not fully render. */
-  counts: { open: number; blocking: number; resolved: number };
+  counts: { open: number; blocking: number; deferred: number; resolved: number };
 }
 
 export interface ResolveHumanActionBody {

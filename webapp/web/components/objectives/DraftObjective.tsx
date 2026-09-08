@@ -43,7 +43,7 @@ type DraftObjectiveProps = {
 
 /**
  * One objective card with the launch surface: state-aware styling, inline
- * instruction editing, auto-advance toggle, agent/model chooser, and the
+ * instruction editing, Run Queue control, agent/model chooser, and the
  * split run button (or Promote for `future` objectives).
  */
 export function DraftObjective({

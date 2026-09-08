@@ -33,7 +33,8 @@ import {
 } from '../ui/dropdown-menu.tsx';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover.tsx';
 
-const AUTO_ADVANCE_TOGGLE_STATES: ObjectiveState[] = ['future', 'draft', 'submitted', 'launching'];
+/** States that may show the Run Queue membership control. */
+const QUEUE_CONTROL_STATES: ObjectiveState[] = ['future', 'draft', 'submitted', 'launching'];
 /** Sentinel for "this mission's queue" before that queue has been created. */
 const MISSION_QUEUE_OPTION = 'mission-queue';
 // The lifecycle pipeline owns submitted through pending-delivery; people can
@@ -65,7 +66,7 @@ export function DraftObjectiveActions({ objective }: DraftObjectiveActionsProps)
   const [forceRemove, setForceRemove] = useState(false);
   const [selectedQueueId, setSelectedQueueId] = useState<string | null>(null);
 
-  const canToggleAutoAdvance = AUTO_ADVANCE_TOGGLE_STATES.includes(objective.state);
+  const canShowQueueControl = QUEUE_CONTROL_STATES.includes(objective.state);
   const queueEntry = objective.queueEntry ?? null;
   const queuePending = enqueue.isPending || dequeue.isPending || move.isPending || retry.isPending;
   const allQueues = queues.data?.queues ?? [];
@@ -137,7 +138,7 @@ export function DraftObjectiveActions({ objective }: DraftObjectiveActionsProps)
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {canToggleAutoAdvance ? (
+      {canShowQueueControl ? (
         <Popover>
           <PopoverTrigger
             className={cn(

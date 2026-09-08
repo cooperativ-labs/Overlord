@@ -662,7 +662,7 @@ export function decideAutoAdvanceAfterDelivery(
     return {
       action: 'await_approval',
       objectiveId: nextDraft.id,
-      reason: 'Auto-advance requires an assigned agent.'
+      reason: 'Queue launch requires an assigned agent.'
     };
   }
 
