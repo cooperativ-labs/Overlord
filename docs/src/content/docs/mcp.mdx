@@ -31,7 +31,7 @@ The hosted server advertises these mission-lifecycle tools:
 | `overlord_list_project_statuses`     | Lists one project's board columns (names and order are per project; the status type is not).                                                 |
 | `overlord_search_missions`           | Searches mission groups with matching objectives and deliveries; compact detail is the default.                                              |
 | `overlord_load_mission_context`      | Shows one mission's objectives, history, artifacts, and shared context. Pass `objectiveId` to read a specific objective.                     |
-| `overlord_list_deliveries`           | Reads normalized delivery summaries for one mission. A display id such as `coo:756.k7xm` supplies the mission.                               |
+| `overlord_list_deliveries`           | Reads a `{ items, total, limit }` page (items capped at 200) of normalized delivery summaries for one mission. A display id such as `coo:756.k7xm` supplies the mission. |
 | `overlord_create_mission`            | Creates a draft mission in a project you specify, or an account-owned inbox item when no project is given (never chooses a project for you). |
 | `overlord_create_inbox_item`         | Creates a private, account-owned unassigned task capture.                                                                                    |
 | `overlord_add_objectives`            | Appends draft objectives to an existing mission.                                                                                             |
