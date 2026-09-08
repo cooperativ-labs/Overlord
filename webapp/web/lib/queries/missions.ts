@@ -1,6 +1,5 @@
 import {
   keepPreviousData,
-  type QueryClient,
   useInfiniteQuery,
   useMutation,
   useQuery,
@@ -43,7 +42,7 @@ import {
   isRemoteExecutionTargetSelected,
   useIsRemoteExecutionTargetForProject
 } from '../local-target-remote.ts';
-import { invalidateNonEverhourQueries } from '../query-invalidation.ts';
+import { invalidateNonEverhourQueries as invalidateAll } from '../query-invalidation.ts';
 import { keys, type MissionBoardScope } from '../query-keys.ts';
 
 import { useProjectExecutionTarget } from './agent-launch-config.ts';
@@ -52,10 +51,6 @@ import {
   createReorderMyMissionsMutation
 } from './optimistic-updates.ts';
 import { useAllProjects, useProjectResources } from './projects.ts';
-
-function invalidateAll(qc: QueryClient) {
-  invalidateNonEverhourQueries(qc);
-}
 
 // Boards default to the server's rolling completed-mission window; the column
 // "Show older missions" control switches the scope to the full

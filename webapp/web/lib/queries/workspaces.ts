@@ -1,4 +1,4 @@
-import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type {
   AcceptWorkspaceInvitationBody,
@@ -9,14 +9,10 @@ import type {
   WorkspaceExecutionTargetDto
 } from '../../../shared/contract.ts';
 import { api } from '../api.ts';
-import { invalidateNonEverhourQueries } from '../query-invalidation.ts';
+import { invalidateNonEverhourQueries as invalidateAll } from '../query-invalidation.ts';
 import { keys } from '../query-keys.ts';
 
 import { useMeta } from './profile.ts';
-
-function invalidateAll(qc: QueryClient) {
-  invalidateNonEverhourQueries(qc);
-}
 
 export const useWorkspaceExecutionTargets = (workspaceId: string) =>
   useQuery<WorkspaceExecutionTargetDto[]>({
@@ -32,7 +28,7 @@ export function useDeleteWorkspaceExecutionTarget(workspaceId: string) {
       api.deleteWorkspaceExecutionTarget(workspaceId, executionTargetId),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.workspaceExecutionTargets(workspaceId) });
-      invalidateNonEverhourQueries(qc);
+      invalidateAll(qc);
     }
   });
 }
@@ -44,7 +40,7 @@ export function useRegisterWorkspaceExecutionTarget(workspaceId: string) {
       api.registerWorkspaceExecutionTarget(workspaceId, body),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.workspaceExecutionTargets(workspaceId) });
-      invalidateNonEverhourQueries(qc);
+      invalidateAll(qc);
     }
   });
 }
@@ -56,7 +52,7 @@ export function useRenameWorkspaceExecutionTarget(workspaceId: string) {
       api.updateWorkspaceExecutionTarget(workspaceId, executionTargetId, { label }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.workspaceExecutionTargets(workspaceId) });
-      invalidateNonEverhourQueries(qc);
+      invalidateAll(qc);
     }
   });
 }
@@ -73,7 +69,7 @@ export function useUpdateWorkspaceExecutionTargetStatus(workspaceId: string) {
     }) => api.updateWorkspaceExecutionTarget(workspaceId, executionTargetId, { status }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.workspaceExecutionTargets(workspaceId) });
-      invalidateNonEverhourQueries(qc);
+      invalidateAll(qc);
     }
   });
 }

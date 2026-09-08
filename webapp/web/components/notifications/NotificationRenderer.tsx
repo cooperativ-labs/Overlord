@@ -1,7 +1,7 @@
+import { NOTIFICATION_CATALOG } from '@overlord/contract';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 
-import { NOTIFICATION_CATALOG } from '../../../../packages/core/service/notifications/catalog.ts';
 import type { NotificationDto } from '../../../shared/contract.ts';
 import { api } from '../../lib/api.ts';
 import { getDesktopBridge } from '../../lib/desktop-chrome.ts';

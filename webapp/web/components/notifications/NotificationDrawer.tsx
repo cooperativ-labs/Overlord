@@ -1,7 +1,7 @@
+import { NOTIFICATION_CATALOG } from '@overlord/contract';
 import { Bell, Check, Inbox, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
-import { NOTIFICATION_CATALOG } from '../../../../packages/core/service/notifications/catalog.ts';
 import {
   useDismissNotification,
   useMarkNotificationRead,

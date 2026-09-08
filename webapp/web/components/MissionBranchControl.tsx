@@ -22,7 +22,6 @@ import type {
   MissionBranchStatus,
   MissionDetailDto
 } from '../../shared/contract.ts';
-import { ApiRequestError } from '../lib/api.ts';
 import { useCopyToClipboard } from '../lib/hooks/use-copy-to-clipboard.ts';
 import {
   resolvePrimaryResourceForTarget,
@@ -30,13 +29,7 @@ import {
 } from '../lib/local-target-branch.ts';
 import { useLocalTargetUnavailable } from '../lib/local-target-client.ts';
 import {
-  hasPendingLocalTargetMutation,
-  useIsRemoteExecutionTargetForProject
-} from '../lib/local-target-remote.ts';
-import {
-  useBranchAction,
   useCreateMissionGitHubPullRequest,
-  useGenerateCommitMessage,
   useMissionBranches,
   useMissionGitHubPullRequest,
   useProjectExecutionTarget,
@@ -60,8 +53,8 @@ import { Switch } from './ui/switch.tsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip.tsx';
 import { LocalTargetRequiredNotice } from './LocalTargetRequiredNotice.tsx';
 import { Button } from './ui.tsx';
-
-type BranchActionName = 'integrate' | 'commit' | 'push_parent' | 'publish';
+import { describeBranchError, useBranchActions } from './use-branch-actions.ts';
+import { useBranchPanelView } from './use-branch-panel-view.ts';
 
 type BranchSetupMode = 'new' | 'existing';
 type BranchSetupIntent = 'setup' | 'switch';
@@ -446,93 +439,6 @@ function MissionBranchSetupForm({
   );
 }
 
-// A branch-action failure, reshaped for display: a short title, one clear
-// instruction, and optional factual specifics (paths, conflicting files).
-interface BranchErrorView {
-  title: string;
-  instruction: string;
-  detail?: string;
-}
-
-/**
- * Turns a raw branch-action error into a short title + plain-language instruction
- * the user can act on, instead of a single run-on red sentence. Common typed
- * failures (merge conflicts, a dirty worktree, a failed push) each get tailored
- * guidance; the server's `detail` (worktree path, conflicting files) rides along
- * as secondary context. Anything unrecognized falls back to the server message.
- */
-function describeBranchError(err: unknown, parent: string): BranchErrorView {
-  if (!(err instanceof ApiRequestError)) {
-    return {
-      title: 'Branch action failed',
-      instruction: err instanceof Error ? err.message : 'Something went wrong. Please try again.'
-    };
-  }
-  switch (err.code) {
-    case 'BRANCH_MERGE_CONFLICT':
-      return {
-        title: 'Merge conflicts need resolving',
-        instruction: `Open the branch's worktree, resolve the conflicting files, commit them, then run "Merge in ${parent}" again.`,
-        detail: err.detail
-      };
-    case 'BRANCH_DIRTY':
-      return {
-        title: 'Uncommitted changes',
-        instruction: 'Commit or discard the changes in the worktree, then try again.',
-        detail: err.detail
-      };
-    case 'BRANCH_NOTHING_TO_COMMIT':
-      return {
-        title: 'Nothing to commit',
-        instruction: 'The branch worktree has no changes to commit.',
-        detail: err.detail
-      };
-    case 'BRANCH_PARENT_NOT_CHECKED_OUT':
-      return {
-        title: `${parent} isn't checked out`,
-        instruction: `Check out ${parent} in the primary working directory, then try again.`,
-        detail: err.detail
-      };
-    case 'BRANCH_PUSH_FAILED':
-      return {
-        title: 'Push to origin failed',
-        instruction: 'Check your network and git remote credentials, then try again.',
-        detail: err.detail
-      };
-    case 'BRANCH_NO_WORKTREE':
-      return {
-        title: 'Branch not checked out',
-        instruction:
-          'This branch is not checked out in any worktree on this device. Run the mission to check it out, or switch the mission to another branch.',
-        detail: err.detail
-      };
-    case 'LOCAL_FILESYSTEM_UNAVAILABLE':
-      return {
-        title: 'Desktop required',
-        instruction:
-          'Git actions run on the device holding the checkout. Open Overlord Desktop on that machine, or select it as the execution target.',
-        detail: err.detail
-      };
-    case 'BRANCH_NO_PRIMARY':
-      return {
-        title: 'No working directory',
-        instruction:
-          'Connect a primary working directory for this project on this device, then try again.',
-        detail: err.detail
-      };
-    case 'LOCAL_TARGET_REQUIRED':
-      return {
-        title: 'Desktop required',
-        instruction:
-          'Open Overlord Desktop on this machine to run git branch actions against linked checkouts.',
-        detail: err.detail
-      };
-    default:
-      // Unrecognized: the merged server message is the best we have.
-      return { title: 'Branch action failed', instruction: err.message };
-  }
-}
-
 /**
  * The full git control surface for a mission's branch: status, identity, and the
  * lifecycle actions (commit, merge in parent, push, publish, open a PR). Rendered
@@ -541,137 +447,62 @@ function describeBranchError(err: unknown, parent: string): BranchErrorView {
  */
 function BranchPanel({ mission }: { mission: MissionDetailDto }) {
   const branch = mission.branch;
-  const localTargetUnavailable = useLocalTargetUnavailable();
-  const isRemoteTarget = useIsRemoteExecutionTargetForProject(mission.projectId);
-  const pendingMutation = hasPendingLocalTargetMutation(mission.executionRequests);
-  const branchAction = useBranchAction(mission);
-  const generateCommitMessage = useGenerateCommitMessage(mission);
+  const view = useBranchPanelView(mission);
   const update = useUpdateMission(mission.id);
   const githubLink = useProjectGitHubLink(mission.projectId);
   const githubPullRequest = useMissionGitHubPullRequest(mission.id);
   const createGitHubPullRequest = useCreateMissionGitHubPullRequest(mission.id);
-  const [actionError, setActionError] = useState<BranchErrorView | null>(null);
-  // When an action needs confirmation (an objective is executing on the branch),
-  // we stash the intended action and surface an inline confirm prompt.
-  const [confirmAction, setConfirmAction] = useState<BranchActionName | null>(null);
-  // The commit message captured before merging, while the branch worktree is dirty.
-  const [commitMessage, setCommitMessage] = useState('');
+  const {
+    actionError,
+    branchAction,
+    commitMessage,
+    commitMessageValid,
+    confirmAction,
+    generateCommitMessage,
+    handleAction,
+    handleGenerateCommitMessage,
+    runAction,
+    setActionError,
+    setCommitMessage,
+    setConfirmAction
+  } = useBranchActions({
+    mission,
+    parent: view?.parent ?? 'main',
+    isExecuting: view?.isExecuting ?? false
+  });
   // The switch form is always reachable for a prepared branch, but only a merged
   // branch opens it by default — otherwise it sits behind a disclosure.
   const [switchOpen, setSwitchOpen] = useState(false);
   const branchName = branch?.name;
   useEffect(() => setSwitchOpen(false), [branchName]);
 
-  if (!branch) return null;
+  if (!branch || !view) return null;
   // Worktree automation is off for this mission and it hasn't been opted in, so it
   // runs off the base branch: offer the per-mission create-branch affordance.
   if (!branch.willPrepareBranch) {
     return <MissionBranchSetupForm mission={mission} intent="setup" />;
   }
   const status = BRANCH_STATUS_META[branch.status];
-  const canConfigureBranch = branch.status === 'pending';
-  const isMerged = branch.status === 'merged' || branch.status === 'merged_unpushed';
-  const showSwitchForm = !canConfigureBranch && (isMerged || switchOpen);
-  const showBranchIdentity = !canConfigureBranch;
-  // A local target looked and found the branch checked out nowhere on this
-  // device: git actions cannot run until the mission runs (which checks it out
-  // again) or the mission moves to another branch.
-  const notCheckedOutHere =
-    branch.observationSource === 'client' && !canConfigureBranch && branch.worktreePath === null;
-  // A per-mission opt-in that hasn't been prepared yet can still be reverted to
-  // "work off the base branch" (only meaningful while automation is globally off).
-  const canRevertToBase =
-    !branch.worktreeAutomationEnabled &&
-    branch.worktreePreference !== null &&
-    branch.status === 'pending';
-
-  const parent = branch.baseBranch ?? 'main';
-  // A GitHub PR can only target a pushed branch, so this is offered on `published`.
-  const prCommand = `gh pr create --base ${parent} --head ${branch.name} --fill --web`;
-  // The DTO carries only the active (queued/claimed/launching) execution requests.
-  const isExecuting = mission.executionRequests.length > 0;
-  const actionLabels: Record<BranchActionName, string> = {
-    integrate: `Merge in ${parent}`,
-    commit: 'Commit changes',
-    push_parent: `Push ${parent}`,
-    publish: 'Publish'
-  };
-
-  async function runAction(
-    action: BranchActionName,
-    confirmBusy: boolean,
-    message?: string
-  ): Promise<void> {
-    setActionError(null);
-    try {
-      await branchAction.mutateAsync({ action, confirmBusy, message });
-      setConfirmAction(null);
-      if (action === 'commit') setCommitMessage('');
-    } catch (err) {
-      // The server re-checks execution state; a fresh busy result re-opens the prompt.
-      if (err instanceof ApiRequestError && err.code === 'BRANCH_BUSY_EXECUTING' && !confirmBusy) {
-        setConfirmAction(action);
-        return;
-      }
-      setConfirmAction(null);
-      setActionError(describeBranchError(err, parent));
-    }
-  }
-
-  function handleAction(action: BranchActionName, message?: string): void {
-    if (isExecuting) {
-      setActionError(null);
-      setConfirmAction(action);
-      return;
-    }
-    void runAction(action, false, message);
-  }
-
-  // Drafts a commit message from the worktree diff and drops it into the field
-  // for the user to edit before committing.
-  function handleGenerateCommitMessage(): void {
-    if (generateCommitMessage.isPending || branchAction.isPending) return;
-    generateCommitMessage.mutate(undefined, {
-      onSuccess: result => setCommitMessage(result.message)
-    });
-  }
-
-  const onMergeableBranch = branch.status === 'created' || branch.status === 'published';
-  // The branch must be committed before it can be merged: while its worktree has
-  // uncommitted changes we ask the user to commit first; only a clean worktree
-  // gets the "Update from parent & merge" affordance.
-  const showCommit = onMergeableBranch && branch.dirty;
-  const showIntegrate = onMergeableBranch && !branch.dirty;
-  const showPushParent = branch.status === 'merged_unpushed';
-  const showPublish =
-    branch.status === 'created' ||
-    (branch.status === 'published' && branch.hasUnpushedCommits === true);
-  const showCreatePr = branch.status === 'published';
+  const showSwitchForm = !view.canConfigureBranch && (view.isMerged || switchOpen);
   const linkedGitHubRepo = githubLink.data?.repo ?? null;
   const existingGitHubPullRequest = githubPullRequest.data;
-  const commitMessageValid = commitMessage.trim().length > 0;
-  const gitUnavailable =
-    (localTargetUnavailable && !isRemoteTarget && branch.status !== 'pending') ||
-    pendingMutation ||
-    notCheckedOutHere;
-  const hasActions = (showIntegrate || showPushParent || showPublish) && !gitUnavailable;
 
   return (
     <TooltipProvider>
       <div className="space-y-3 text-sm">
-        {pendingMutation && (
+        {view.pendingMutation && (
           <p className="rounded-md border border-border/60 bg-muted/30 p-2.5 text-xs text-muted-foreground">
             A branch action was delegated to the selected execution target. It will finish when that
             device&apos;s runner claims the job.
           </p>
         )}
-        {isRemoteTarget && !localTargetUnavailable && branch.status !== 'pending' && (
+        {view.isRemoteTarget && !view.localTargetUnavailable && branch.status !== 'pending' && (
           <p className="rounded-md border border-border/60 bg-muted/30 p-2.5 text-xs text-muted-foreground">
             Branch actions queue on the selected remote execution target and run when its runner is
             online.
           </p>
         )}
-        {localTargetUnavailable && !isRemoteTarget && branch.status !== 'pending' && (
+        {view.localTargetUnavailable && !view.isRemoteTarget && branch.status !== 'pending' && (
           <LocalTargetRequiredNotice className="rounded-md border border-border/60 bg-muted/30 p-2.5 text-xs text-muted-foreground" />
         )}
         {/* Status indicator + the single copy affordance. */}
@@ -689,11 +520,13 @@ function BranchPanel({ mission }: { mission: MissionDetailDto }) {
         </div>
 
         {/* Branch identity for prepared branches, or setup/switch forms when allowed. */}
-        {showBranchIdentity && <BranchIdentity branchName={branch.name} parent={parent} />}
+        {view.showBranchIdentity && (
+          <BranchIdentity branchName={branch.name} parent={view.parent} />
+        )}
 
-        {canConfigureBranch && <MissionBranchSetupForm mission={mission} intent="setup" />}
+        {view.canConfigureBranch && <MissionBranchSetupForm mission={mission} intent="setup" />}
 
-        {notCheckedOutHere && (
+        {view.notCheckedOutHere && (
           <p className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-800 dark:text-amber-200">
             This branch is not checked out on this device — its worktree was removed. Running the
             mission checks it out again, or switch to another branch below.
@@ -702,7 +535,7 @@ function BranchPanel({ mission }: { mission: MissionDetailDto }) {
 
         {showSwitchForm && <MissionBranchSetupForm mission={mission} intent="switch" />}
 
-        {!canConfigureBranch && !isMerged && (
+        {!view.canConfigureBranch && !view.isMerged && (
           <button
             type="button"
             onClick={() => setSwitchOpen(open => !open)}
@@ -712,21 +545,21 @@ function BranchPanel({ mission }: { mission: MissionDetailDto }) {
           </button>
         )}
 
-        {canRevertToBase && (
+        {view.canRevertToBase && (
           <button
             type="button"
             disabled={update.isPending}
             onClick={() => update.mutate({ worktreePreference: null })}
             className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-60"
           >
-            Cancel — work off {parent} instead
+            Cancel — work off {view.parent} instead
           </button>
         )}
 
-        {showCommit && !gitUnavailable && (
+        {view.showCommit && !view.gitUnavailable && (
           <div className="space-y-2.5 rounded-md border border-amber-500/30 bg-amber-500/10 p-2.5">
             <p className="text-xs text-amber-800 dark:text-amber-200">
-              Uncommitted changes on this branch. Commit them before updating from {parent}.
+              Uncommitted changes on this branch. Commit them before updating from {view.parent}.
             </p>
             {/* The Sparkles button overlays the textarea's top-right corner so
                 the AI-draft affordance reads as part of the field. Cmd/Ctrl+Enter
@@ -793,15 +626,15 @@ function BranchPanel({ mission }: { mission: MissionDetailDto }) {
                 disabled={branchAction.isPending || !commitMessageValid}
                 onClick={() => handleAction('commit', commitMessage.trim())}
               >
-                {branchAction.isPending ? 'Committing…' : actionLabels.commit}
+                {branchAction.isPending ? 'Committing…' : view.actionLabels.commit}
               </Button>
             </div>
           </div>
         )}
 
-        {hasActions && (
+        {view.hasActions && (
           <div className="flex flex-wrap gap-2 border-t border-border/60 pt-2">
-            {showIntegrate && (
+            {view.showIntegrate && (
               <Tooltip>
                 <TooltipTrigger
                   render={
@@ -812,17 +645,17 @@ function BranchPanel({ mission }: { mission: MissionDetailDto }) {
                         onClick={() => handleAction('integrate')}
                       >
                         <RefreshCw className="h-3.5 w-3.5" />
-                        Merge in {parent}
+                        Merge in {view.parent}
                       </Button>
                     </span>
                   }
                 />
                 <TooltipContent>
-                  This will merge the {parent} branch into the working branch
+                  This will merge the {view.parent} branch into the working branch
                 </TooltipContent>
               </Tooltip>
             )}
-            {showPushParent && (
+            {view.showPushParent && (
               <LoadingButton
                 variant="default"
                 buttonState={branchAction.isPending ? 'loading' : 'default'}
@@ -830,13 +663,13 @@ function BranchPanel({ mission }: { mission: MissionDetailDto }) {
                 text={
                   <>
                     <ArrowUp className="h-3.5 w-3.5" />
-                    Push {parent}
+                    Push {view.parent}
                   </>
                 }
-                loadingText={`Push ${parent}`}
+                loadingText={`Push ${view.parent}`}
               />
             )}
-            {showPublish && (
+            {view.showPublish && (
               <Button
                 variant="secondary"
                 disabled={branchAction.isPending}
@@ -849,7 +682,7 @@ function BranchPanel({ mission }: { mission: MissionDetailDto }) {
           </div>
         )}
 
-        {showCreatePr && linkedGitHubRepo && (
+        {view.showCreatePr && linkedGitHubRepo && (
           <div className="space-y-1.5 border-t border-border/60 pt-2">
             {existingGitHubPullRequest ? (
               <Button
@@ -875,7 +708,7 @@ function BranchPanel({ mission }: { mission: MissionDetailDto }) {
                 onClick={() =>
                   void createGitHubPullRequest
                     .mutateAsync()
-                    .catch(err => setActionError(describeBranchError(err, parent)))
+                    .catch(err => setActionError(describeBranchError(err, view.parent)))
                 }
               />
             )}
@@ -885,14 +718,14 @@ function BranchPanel({ mission }: { mission: MissionDetailDto }) {
           </div>
         )}
 
-        {showCreatePr && !linkedGitHubRepo && (
+        {view.showCreatePr && !linkedGitHubRepo && (
           <div className="space-y-1.5 border-t border-border/60 pt-2">
             <p className="text-xs text-muted-foreground">Open a pull request:</p>
             <div className="flex min-w-0 items-center gap-2">
               <code className="min-w-0 flex-1 truncate rounded bg-muted px-2 py-1 text-[0.7rem] text-muted-foreground">
-                {prCommand}
+                {view.prCommand}
               </code>
-              <CopyIconButton value={prCommand} label="Copy PR command" />
+              <CopyIconButton value={view.prCommand} label="Copy PR command" />
             </div>
           </div>
         )}

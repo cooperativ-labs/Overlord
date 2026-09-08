@@ -1,4 +1,4 @@
-import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type {
   CreateObjectiveBody,
@@ -6,14 +6,10 @@ import type {
   UpdateObjectiveBody
 } from '../../../shared/contract.ts';
 import { api } from '../api.ts';
-import { invalidateNonEverhourQueries } from '../query-invalidation.ts';
+import { invalidateNonEverhourQueries as invalidateAll } from '../query-invalidation.ts';
 import { keys } from '../query-keys.ts';
 
 import { createReorderFutureObjectivesMutation } from './optimistic-updates.ts';
-
-function invalidateAll(qc: QueryClient) {
-  invalidateNonEverhourQueries(qc);
-}
 
 export function useCreateObjective() {
   const qc = useQueryClient();

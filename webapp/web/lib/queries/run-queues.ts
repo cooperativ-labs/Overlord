@@ -3,12 +3,8 @@ import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tansta
 import type { ProjectRunQueuesDto } from '../../../shared/contract.ts';
 import { api } from '../api.ts';
 import { getDesktopBridge } from '../desktop-chrome.ts';
-import { invalidateNonEverhourQueries } from '../query-invalidation.ts';
+import { invalidateNonEverhourQueries as invalidateAll } from '../query-invalidation.ts';
 import { keys } from '../query-keys.ts';
-
-function invalidateAll(qc: QueryClient) {
-  invalidateNonEverhourQueries(qc);
-}
 
 export const useRunnerStatus = (options?: { enabled?: boolean; refetchInterval?: number }) =>
   useQuery({

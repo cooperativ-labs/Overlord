@@ -24,14 +24,10 @@ import type {
   UpdateProjectTagBody
 } from '../../../shared/contract.ts';
 import { api } from '../api.ts';
-import { invalidateNonEverhourQueries } from '../query-invalidation.ts';
+import { invalidateNonEverhourQueries as invalidateAll } from '../query-invalidation.ts';
 import { keys } from '../query-keys.ts';
 
 import { useMeta } from './profile.ts';
-
-function invalidateAll(qc: QueryClient) {
-  invalidateNonEverhourQueries(qc);
-}
 
 export const useProjects = (workspaceId?: string, lifecycle: ProjectListLifecycle = 'active') => {
   return useQuery({

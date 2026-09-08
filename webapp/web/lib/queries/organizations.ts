@@ -1,4 +1,4 @@
-import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type {
   AddOrganizationAdminBody,
@@ -7,12 +7,8 @@ import type {
 } from '../../../shared/contract.ts';
 import { api } from '../api.ts';
 import { persistActiveOrganizationId } from '../org-preferences.ts';
-import { invalidateNonEverhourQueries } from '../query-invalidation.ts';
+import { invalidateNonEverhourQueries as invalidateAll } from '../query-invalidation.ts';
 import { keys } from '../query-keys.ts';
-
-function invalidateAll(qc: QueryClient) {
-  invalidateNonEverhourQueries(qc);
-}
 
 export const useOrganizations = () =>
   useQuery({ queryKey: keys.organizations, queryFn: api.listOrganizations });

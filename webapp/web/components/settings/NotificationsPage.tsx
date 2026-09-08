@@ -1,3 +1,5 @@
+import type { NotificationMode, NotificationType } from '@overlord/contract';
+import { NOTIFICATION_CATALOG, NOTIFICATION_TYPES } from '@overlord/contract';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 
@@ -11,15 +13,6 @@ import {
   subscribeNativeNotificationsEnabled
 } from '@/lib/native-notification-preferences';
 import { keys, useNotificationPreferences } from '@/lib/queries';
-
-import type {
-  NotificationMode,
-  NotificationType
-} from '../../../../packages/core/service/notifications/catalog.ts';
-import {
-  NOTIFICATION_CATALOG,
-  NOTIFICATION_TYPES
-} from '../../../../packages/core/service/notifications/catalog.ts';
 
 type PermissionStatus = NotificationPermission | 'unsupported';
 

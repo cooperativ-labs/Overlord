@@ -34,10 +34,8 @@ import { Switch } from '@/components/ui/switch';
 import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
 import {
   useAllProjects,
-  useCreateWebhookSubscription,
   useDeleteWebhookSubscription,
   useRedeliverWebhookDelivery,
-  useRotateWebhookSecret,
   useTestWebhookSubscription,
   useUpdateWebhookSubscription,
   useWebhookDeliveries,
@@ -46,12 +44,14 @@ import {
 } from '@/lib/queries';
 
 import type {
-  CreateWebhookSubscriptionBody,
-  UpdateWebhookSubscriptionBody,
   WebhookDeliveryAttemptDto,
   WebhookEventType,
   WebhookSubscriptionDto
 } from '../../../shared/contract.ts';
+
+import type { WebhookDialogTarget } from './use-webhook-dialog-form.ts';
+import { useWebhookDialogForm } from './use-webhook-dialog-form.ts';
+import { useWebhookTestSend } from './use-webhook-test-send.ts';
 
 const EVENT_TYPE_OPTIONS: { value: WebhookEventType; label: string; description: string }[] = [
   {
@@ -75,9 +75,6 @@ const EVENT_TYPE_OPTIONS: { value: WebhookEventType; label: string; description:
     description: 'An agent posts a blocking question (ask).'
   }
 ];
-
-/** `'auto'` omits `payloadMode` from the request so the server applies its internal-host-aware default. */
-type PayloadModeSelection = 'auto' | 'thin' | 'full';
 
 function hostFromUrl(url: string): string {
   try {
@@ -116,7 +113,7 @@ export function WebhooksPage({ open }: { open: boolean }) {
   const selectedWorkspaceId =
     workspaceId || (workspaces.data?.length === 1 ? workspaces.data[0]!.id : '');
   const subscriptions = useWebhookSubscriptions(selectedWorkspaceId);
-  const [dialogTarget, setDialogTarget] = useState<'create' | WebhookSubscriptionDto | null>(null);
+  const [dialogTarget, setDialogTarget] = useState<WebhookDialogTarget>(null);
   const [deleteTarget, setDeleteTarget] = useState<WebhookSubscriptionDto | null>(null);
   const [logTarget, setLogTarget] = useState<WebhookSubscriptionDto | null>(null);
   const deleteSubscription = useDeleteWebhookSubscription();
@@ -375,122 +372,23 @@ function WebhookDialog({
   workspaceId,
   onOpenChange
 }: {
-  target: 'create' | WebhookSubscriptionDto | null;
+  target: WebhookDialogTarget;
   workspaceId: string;
   onOpenChange: (open: boolean) => void;
 }) {
-  const isEdit = target !== null && target !== 'create';
-  const existing = isEdit ? (target as WebhookSubscriptionDto) : null;
-
   const projectsQ = useAllProjects();
-  const createSubscription = useCreateWebhookSubscription();
-  const updateSubscription = useUpdateWebhookSubscription();
-  const rotateSecret = useRotateWebhookSecret();
-  const testSubscription = useTestWebhookSubscription();
-
-  const [name, setName] = useState(existing?.name ?? '');
-  const [endpointUrl, setEndpointUrl] = useState(existing?.endpointUrl ?? '');
-  const [projectId, setProjectId] = useState<string>(existing?.projectId ?? 'all');
-  const [eventTypes, setEventTypes] = useState<WebhookEventType[]>(existing?.eventTypes ?? []);
-  const [payloadMode, setPayloadMode] = useState<PayloadModeSelection>(
-    existing?.payloadMode ?? 'auto'
-  );
-  const [saveState, setSaveState] = useState<ButtonLoadingState>('default');
-  const [error, setError] = useState<string | null>(null);
-  const [revealedSecret, setRevealedSecret] = useState<string | null>(null);
-  const [testResult, setTestResult] = useState<string | null>(null);
-
-  function resetForm(nextTarget: 'create' | WebhookSubscriptionDto | null) {
-    const next = nextTarget !== null && nextTarget !== 'create' ? nextTarget : null;
-    setName(next?.name ?? '');
-    setEndpointUrl(next?.endpointUrl ?? '');
-    setProjectId(next?.projectId ?? 'all');
-    setEventTypes(next?.eventTypes ?? []);
-    setPayloadMode(next?.payloadMode ?? 'auto');
-    setSaveState('default');
-    setError(null);
-    setRevealedSecret(null);
-    setTestResult(null);
-  }
-
-  function toggleEventType(value: WebhookEventType) {
-    setEventTypes(current =>
-      current.includes(value) ? current.filter(v => v !== value) : [...current, value]
-    );
-  }
-
-  async function handleSave() {
-    const trimmedName = name.trim();
-    if (!trimmedName) {
-      setError('Name is required.');
-      setSaveState('error');
-      return;
-    }
-    if (eventTypes.length === 0) {
-      setError('Select at least one event type.');
-      setSaveState('error');
-      return;
-    }
-    setSaveState('loading');
-    setError(null);
-    try {
-      const resolvedProjectId = projectId === 'all' ? null : projectId;
-      if (isEdit && existing) {
-        const body: UpdateWebhookSubscriptionBody = {
-          name: trimmedName,
-          endpointUrl,
-          projectId: resolvedProjectId,
-          eventTypes,
-          ...(payloadMode !== 'auto' ? { payloadMode } : {})
-        };
-        await updateSubscription.mutateAsync({ id: existing.id, body });
-        setSaveState('success');
-      } else {
-        const body: CreateWebhookSubscriptionBody = {
-          name: trimmedName,
-          endpointUrl,
-          workspaceId,
-          projectId: resolvedProjectId,
-          eventTypes,
-          ...(payloadMode !== 'auto' ? { payloadMode } : {})
-        };
-        const result = await createSubscription.mutateAsync(body);
-        setRevealedSecret(result.secret);
-        setSaveState('success');
-      }
-    } catch (err) {
-      setSaveState('error');
-      setError(err instanceof Error ? err.message : 'Failed to save webhook.');
-    }
-  }
-
-  async function handleRotateSecret() {
-    if (!existing) return;
-    try {
-      const result = await rotateSecret.mutateAsync(existing.id);
-      setRevealedSecret(result.secret);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to rotate secret.');
-    }
-  }
-
-  async function handleSendTest() {
-    const id = existing?.id;
-    if (!id) return;
-    setTestResult(null);
-    try {
-      await testSubscription.mutateAsync(id);
-      setTestResult('Test delivery sent successfully.');
-    } catch (err) {
-      setTestResult(err instanceof Error ? err.message : 'Test delivery failed.');
-    }
-  }
+  const form = useWebhookDialogForm({ target, workspaceId });
+  const testSend = useWebhookTestSend(form.existing?.id);
+  const { isEdit, existing, fields, revealedSecret } = form;
 
   return (
     <Dialog
       open={target !== null}
       onOpenChange={open => {
-        if (!open) resetForm(null);
+        if (!open) {
+          form.reset(null);
+          testSend.clearResult();
+        }
         onOpenChange(open);
       }}
     >
@@ -507,45 +405,22 @@ function WebhookDialog({
         </DialogHeader>
 
         {revealedSecret ? (
-          <div className="space-y-3 rounded-md border border-primary/40 bg-primary/5 p-3">
-            <p className="text-xs font-medium">
-              Copy your signing secret now — it won&apos;t be shown again.
-            </p>
-            <CopyField label="Signing secret" value={revealedSecret} />
-            {isEdit ? (
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8"
-                  onClick={() => void handleSendTest()}
-                >
-                  Send test delivery
-                </Button>
-                {testResult ? <p className="text-xs text-muted-foreground">{testResult}</p> : null}
-              </div>
-            ) : (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-7"
-                onClick={() => setRevealedSecret(null)}
-              >
-                Done
-              </Button>
-            )}
-          </div>
+          <WebhookSecretReveal
+            secret={revealedSecret}
+            canSendTest={isEdit}
+            testResult={testSend.result}
+            onSendTest={() => void testSend.send()}
+            onDismiss={form.dismissSecret}
+          />
         ) : (
           <div className="space-y-4">
             <div className="grid gap-2">
               <Label htmlFor="webhook-name">Name</Label>
               <Input
                 id="webhook-name"
-                value={name}
+                value={fields.name}
                 placeholder="e.g. Feed post generator"
-                onChange={e => setName(e.target.value)}
+                onChange={e => form.setName(e.target.value)}
               />
             </div>
 
@@ -553,9 +428,9 @@ function WebhookDialog({
               <Label htmlFor="webhook-url">Endpoint URL</Label>
               <Input
                 id="webhook-url"
-                value={endpointUrl}
+                value={fields.endpointUrl}
                 placeholder="https://example.com/webhooks/overlord"
-                onChange={e => setEndpointUrl(e.target.value)}
+                onChange={e => form.setEndpointUrl(e.target.value)}
               />
               <p className="text-xs text-muted-foreground">
                 Must be <code className="text-xs">https://</code> unless the host matches your
@@ -566,7 +441,10 @@ function WebhookDialog({
 
             <div className="grid gap-2">
               <Label htmlFor="webhook-project">Project</Label>
-              <Select value={projectId} onValueChange={value => setProjectId(value ?? 'all')}>
+              <Select
+                value={fields.projectId}
+                onValueChange={value => form.setProjectId(value ?? 'all')}
+              >
                 <SelectTrigger id="webhook-project">
                   <SelectValue />
                 </SelectTrigger>
@@ -592,8 +470,8 @@ function WebhookDialog({
                   <input
                     type="checkbox"
                     className="mt-0.5 size-4"
-                    checked={eventTypes.includes(option.value)}
-                    onChange={() => toggleEventType(option.value)}
+                    checked={fields.eventTypes.includes(option.value)}
+                    onChange={() => form.toggleEventType(option.value)}
                   />
                   <span>
                     <span className="font-medium">{option.label}</span>
@@ -612,8 +490,8 @@ function WebhookDialog({
                   type="radio"
                   name="webhook-payload-mode"
                   className="mt-0.5 size-4"
-                  checked={payloadMode === 'auto'}
-                  onChange={() => setPayloadMode('auto')}
+                  checked={fields.payloadMode === 'auto'}
+                  onChange={() => form.setPayloadMode('auto')}
                 />
                 <span>
                   <span className="font-medium">Auto (recommended)</span>
@@ -628,8 +506,8 @@ function WebhookDialog({
                   type="radio"
                   name="webhook-payload-mode"
                   className="mt-0.5 size-4"
-                  checked={payloadMode === 'thin'}
-                  onChange={() => setPayloadMode('thin')}
+                  checked={fields.payloadMode === 'thin'}
+                  onChange={() => form.setPayloadMode('thin')}
                 />
                 <span>
                   <span className="font-medium">Thin</span>
@@ -643,8 +521,8 @@ function WebhookDialog({
                   type="radio"
                   name="webhook-payload-mode"
                   className="mt-0.5 size-4"
-                  checked={payloadMode === 'full'}
-                  onChange={() => setPayloadMode('full')}
+                  checked={fields.payloadMode === 'full'}
+                  onChange={() => form.setPayloadMode('full')}
                 />
                 <span>
                   <span className="font-medium">Full</span>
@@ -656,7 +534,7 @@ function WebhookDialog({
               </label>
             </div>
 
-            {error ? <p className="text-xs text-destructive">{error}</p> : null}
+            {form.error ? <p className="text-xs text-destructive">{form.error}</p> : null}
           </div>
         )}
 
@@ -668,8 +546,8 @@ function WebhookDialog({
                 variant="outline"
                 size="sm"
                 className="h-8 gap-1.5"
-                disabled={rotateSecret.isPending}
-                onClick={() => void handleRotateSecret()}
+                disabled={form.isRotating}
+                onClick={() => void form.rotate()}
               >
                 <RotateCw className="size-3.5" />
                 Rotate secret
@@ -678,8 +556,8 @@ function WebhookDialog({
               <span />
             )}
             <LoadingButton
-              buttonState={saveState}
-              setButtonState={setSaveState}
+              buttonState={form.saveState}
+              setButtonState={form.setSaveState}
               text={isEdit ? 'Save changes' : 'Create webhook'}
               loadingText="Saving…"
               successText="Saved"
@@ -687,12 +565,51 @@ function WebhookDialog({
               reset
               size="sm"
               className="h-8"
-              onClick={handleSave}
+              onClick={form.save}
             />
           </DialogFooter>
         ) : null}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * One-shot display of a signing secret after creation or rotation — the value is
+ * never readable again once this block is dismissed or the dialog closes.
+ */
+function WebhookSecretReveal({
+  secret,
+  canSendTest,
+  testResult,
+  onSendTest,
+  onDismiss
+}: {
+  secret: string;
+  canSendTest: boolean;
+  testResult: string | null;
+  onSendTest: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div className="space-y-3 rounded-md border border-primary/40 bg-primary/5 p-3">
+      <p className="text-xs font-medium">
+        Copy your signing secret now — it won&apos;t be shown again.
+      </p>
+      <CopyField label="Signing secret" value={secret} />
+      {canSendTest ? (
+        <div className="flex items-center gap-2">
+          <Button type="button" variant="outline" size="sm" className="h-8" onClick={onSendTest}>
+            Send test delivery
+          </Button>
+          {testResult ? <p className="text-xs text-muted-foreground">{testResult}</p> : null}
+        </div>
+      ) : (
+        <Button type="button" variant="ghost" size="sm" className="h-7" onClick={onDismiss}>
+          Done
+        </Button>
+      )}
+    </div>
   );
 }
 

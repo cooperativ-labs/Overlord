@@ -1,4 +1,4 @@
-import { NOTIFICATION_CATALOG } from '../../../packages/core/service/notifications/catalog.ts';
+import { NOTIFICATION_CATALOG } from '@overlord/contract';
 
 /**
  * Declarative catalog of mission "status indicators" — the single source of truth
