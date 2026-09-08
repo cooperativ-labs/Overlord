@@ -22,14 +22,31 @@ const humanActionCategorySchema = z.enum([
   'other'
 ]);
 
+const MAX_COMMAND_LENGTH = 600;
+const MAX_LINK_LENGTH = 400;
+
 const conciseTextSchema = z.string().trim().min(1).max(MAX_DETAIL_LENGTH);
+const commandTextSchema = z.string().trim().min(1).max(MAX_COMMAND_LENGTH);
+
+const LINK_PATTERN = /^(?:https?:\/\/\S+|(?![a-z][a-z0-9+.-]*:)[^\s<>"'`]+)$/i;
+
+/** An HTTP(S) URL or a repository-relative file path; other URI schemes are rejected. */
+const linkSchema = z.string().trim().min(1).max(MAX_LINK_LENGTH).regex(LINK_PATTERN);
 
 const humanActionSchema = z.strictObject({
   action: z.string().trim().min(1).max(MAX_ACTION_LENGTH),
   reason: conciseTextSchema.optional(),
   category: humanActionCategorySchema.optional(),
-  blocking: z.boolean().optional()
+  blocking: z.boolean().optional(),
+  command: commandTextSchema.optional(),
+  verify: conciseTextSchema.optional(),
+  link: linkSchema.optional()
 });
+
+/** Returns true when `link` is an acceptable human-action link (HTTP(S) URL or relative path). */
+export function isValidHumanActionLink(link: string): boolean {
+  return linkSchema.safeParse(link).success;
+}
 
 const tradeoffSchema = z.strictObject({
   decision: z.string().trim().min(1).max(MAX_ACTION_LENGTH),
@@ -59,6 +76,9 @@ function normalizeAgentReport(input: DeliveryAgentReportInputV1): DeliveryAgentR
       ...(action.reason ? { reason: action.reason } : {}),
       category: action.category ?? 'other',
       ...(action.blocking === undefined ? {} : { blocking: action.blocking }),
+      ...(action.command ? { command: action.command } : {}),
+      ...(action.verify ? { verify: action.verify } : {}),
+      ...(action.link ? { link: action.link } : {}),
       source: 'agent'
     }));
   const tradeoffsMade: TradeoffMadeV1[] = tradeoffInputs.map((tradeoff, index) => ({
@@ -189,6 +209,9 @@ const normalizedHumanActionSchema = z.strictObject({
   reason: conciseTextSchema.optional(),
   category: humanActionCategorySchema,
   blocking: z.boolean().optional(),
+  command: commandTextSchema.optional(),
+  verify: conciseTextSchema.optional(),
+  link: linkSchema.optional(),
   source: z.enum(['agent', 'change_rationale', 'deterministic_rule']),
   sourceRef: z.string().trim().min(1).max(200).optional()
 });
@@ -296,5 +319,7 @@ export const DELIVERY_REPORT_LIMITS = {
   maxItems: MAX_ITEMS,
   maxAlternatives: MAX_ALTERNATIVES,
   maxActionLength: MAX_ACTION_LENGTH,
-  maxDetailLength: MAX_DETAIL_LENGTH
+  maxDetailLength: MAX_DETAIL_LENGTH,
+  maxCommandLength: MAX_COMMAND_LENGTH,
+  maxLinkLength: MAX_LINK_LENGTH
 } as const;

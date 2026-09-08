@@ -54,6 +54,8 @@ import type {
   ExecutionRequestDto,
   GenerateCommitMessageBody,
   GenerateCommitMessageResultDto,
+  HumanActionItemDto,
+  HumanActionsDto,
   InboxItemDto,
   InboxMissionsResponse,
   InviteWorkspaceMemberBody,
@@ -101,6 +103,7 @@ import type {
   ReorderFutureObjectivesBody,
   ReorderProjectsBody,
   ReorderProjectStatusesBody,
+  ResolveHumanActionBody,
   RotateWebhookSecretResultDto,
   RunQueueDto,
   RunQueueEntryDto,
@@ -609,6 +612,23 @@ export const api = {
     const query = params.toString();
     return request<ActivityFeedDto>('GET', `/api/activity-feed${query ? `?${query}` : ''}`);
   },
+  /** Human follow-up actions from recent deliveries across every readable workspace (coo:963). */
+  listHumanActions: (includeResolved: boolean) =>
+    request<HumanActionsDto>(
+      'GET',
+      `/api/human-actions${includeResolved ? '?includeResolved=1' : ''}`
+    ),
+  resolveHumanAction: (deliveryId: string, actionId: string, body: ResolveHumanActionBody) =>
+    request<HumanActionItemDto>(
+      'PUT',
+      `/api/human-actions/${deliveryId}/${encodeURIComponent(actionId)}/resolution`,
+      body
+    ),
+  reopenHumanAction: (deliveryId: string, actionId: string) =>
+    request<HumanActionItemDto>(
+      'DELETE',
+      `/api/human-actions/${deliveryId}/${encodeURIComponent(actionId)}/resolution`
+    ),
   createInboxItem: (body: CreateInboxItemBody) => request<InboxItemDto>('POST', '/api/inbox', body),
   updateInboxItem: (id: string, body: UpdateInboxItemBody) =>
     request<InboxItemDto>('PATCH', `/api/inbox/${id}`, body),

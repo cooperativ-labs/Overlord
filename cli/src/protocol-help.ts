@@ -524,10 +524,13 @@ add-objectives:
   Optional:
     --auto-advance / --no-auto-advance
         Default auto-advance for items that omit "autoAdvance". Defaults to off.
+    --objective-agent <id> / --objective-model <id>
+        Default launch selection for items that name no "agent" of their own.
+        --objective-model requires --objective-agent.
   Notes:
     Each item is { "objective": "...", "title": "...", "agent": "codex",
     "model": "gpt-5.6-terra", "autoAdvance": true|false, "resourceKey": "..." }.
-    model requires agent. Per-item autoAdvance wins over the flag.
+    model requires agent. Per-item autoAdvance and agent win over the flags.
 
 update-objective:
   Purpose:
@@ -586,6 +589,12 @@ create:
     --auto-advance / --no-auto-advance
         Add matching objectives to the authoritative Run Queue. Defaults to off.
         Per-item override: "autoAdvance": true|false in --objectives-json items.
+    --objective-agent <id> / --objective-model <id>
+        Assign a launch agent (and its model) to the objectives created here, so
+        a mission can be created already assigned instead of appending a second
+        objective just to name an agent. This is not --agent, which records
+        creation provenance. Seeds only items with no "agent" of their own;
+        --objective-model requires --objective-agent.
 
 prompt:
   Purpose:
@@ -602,6 +611,9 @@ prompt:
     --auto-advance / --no-auto-advance
         Add matching objectives to the authoritative Run Queue. Defaults to off.
         Per-item override: "autoAdvance": true|false in --objectives-json items.
+    --objective-agent <id> / --objective-model <id>
+        Assign a launch agent (and its model) to the objectives created here.
+        Distinct from --agent, which names the attaching agent for the session.
   Returns:
     New mission/session JSON plus SESSION_KEY on stderr when available.
 
@@ -689,6 +701,21 @@ deliver:
     The payload may also include deliveryReport: { schemaVersion: 1, agentReport: {
       humanActions, tradeoffsMade, knownRisks, deferredWork, assumptions } }. Use empty arrays
     when none apply. Human actions exclude Git operations and routine review/testing.
+  Human action shape (each item in agentReport.humanActions):
+    {
+      "action":   "Add GEMINI_API_KEY to the production backend service on Railway.", // required. one imperative sentence: what, where, which value.
+      "reason":   "Compose falls back to the raw summary without it.",  // expected. why, and what stays broken until done.
+      "category": "environment",  // expected. environment | database | deployment | codegen | packaging | external_service | other
+      "blocking": false,          // optional. true when the delivered work does not function until this is done.
+      "command":  "railway variables set GEMINI_API_KEY=<key> --service backend", // when known. exact command/setting, verbatim.
+      "verify":   "Next delivery card shows a composed presentation.", // when known. how the operator confirms it worked.
+      "link":     ".env.example"  // when known. HTTP(S) URL or repo-relative path only.
+    }
+    Vague: { "action": "Set up the env var for Gemini." } forces the operator to rediscover
+    the name, the place, and the check. Actions are read from the Feed rail without the
+    delivery, so each must stand alone. Overlord adds deterministic_rule actions for new
+    migrations, .env.example edits, dependency manifests, and CI workflow files on its own;
+    report those yourself when you can supply the real command and verify step.
   Optional:
     --artifacts-json / --artifacts-file <path|->
     --change-rationales-json / --change-rationales-file <path|->

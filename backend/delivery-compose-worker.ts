@@ -261,6 +261,7 @@ async function persistFallbackPresentation(
   const presentation = reconcileDeliveryComposeDraft({
     report: context.report,
     draft: null,
+    candidates: deriveDeterministicActionCandidates({ filePaths: context.filePaths }),
     model: readGeminiConfigFromEnv()?.model ?? null
   });
   presentation.status = 'fallback';
@@ -442,6 +443,9 @@ function toComposeInput({
       action: action.action,
       ...(action.reason ? { reason: action.reason } : {}),
       category: action.category,
+      ...(action.command ? { command: action.command } : {}),
+      ...(action.verify ? { verify: action.verify } : {}),
+      ...(action.link ? { link: action.link } : {}),
       source: action.source,
       ...(action.sourceRef ? { sourceRef: action.sourceRef } : {})
     })),
@@ -462,7 +466,11 @@ function toComposeInput({
       action: action.action,
       ...(action.reason ? { reason: action.reason } : {}),
       category: action.category,
-      source: action.source
+      ...(action.command ? { command: action.command } : {}),
+      ...(action.verify ? { verify: action.verify } : {}),
+      ...(action.link ? { link: action.link } : {}),
+      source: action.source,
+      ...(action.sourceRef ? { sourceRef: action.sourceRef } : {})
     })),
     changeRationales: rationales.slice(0, 20).map(rationale => ({
       id: rationale.id,

@@ -2764,6 +2764,10 @@ export async function protocolCreate({
     objective: string;
     title?: string | null;
     autoAdvance?: boolean;
+    /** Explicit launch selection for this objective; omitted keeps project defaulting. */
+    agent?: string | null;
+    /** Model for `agent`; rejected without a non-empty agent. */
+    model?: string | null;
     resourceKey?: string | null;
   }>;
   title?: string | null;
@@ -2798,6 +2802,10 @@ export async function protocolPrompt({
     objective: string;
     title?: string | null;
     autoAdvance?: boolean;
+    /** Explicit launch selection for this objective; omitted keeps project defaulting. */
+    agent?: string | null;
+    /** Model for `agent`; rejected without a non-empty agent. */
+    model?: string | null;
     resourceKey?: string | null;
   }>;
   title?: string | null;

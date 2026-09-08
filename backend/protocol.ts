@@ -384,6 +384,43 @@ function withDefaultAutoAdvance(
 }
 
 /**
+ * Seed the launch selection for items that name no `agent` of their own, so a
+ * mission can be created with its first objective already assigned instead of
+ * needing a second `add-objectives` call. `--agent` is taken: on `create` and
+ * `prompt` it records creation provenance (and, on `prompt`, the attaching
+ * agent), so objective assignment gets its own explicit flag pair.
+ */
+function withDefaultAgentSelection(
+  items: ObjectiveInput[],
+  body: ProtocolRequestBody
+): ObjectiveInput[] {
+  const agent = strFlag(body, '--objective-agent')?.trim() || undefined;
+  const model = strFlag(body, '--objective-model')?.trim() || undefined;
+  if (agent === undefined && model === undefined) return items;
+  if (model !== undefined && agent === undefined) {
+    throw new ApiError(
+      400,
+      '--objective-model requires --objective-agent',
+      undefined,
+      'invalid_input'
+    );
+  }
+  // A per-item selection is always the more specific statement of intent, so the
+  // flags fill in only what the item left unsaid.
+  return items.map(item =>
+    item.agent === undefined || item.agent === null
+      ? {
+          ...item,
+          agent,
+          ...(model !== undefined && (item.model === undefined || item.model === null)
+            ? { model }
+            : {})
+        }
+      : item
+  );
+}
+
+/**
  * Resolve `agent_sessions.id` from `--session-key` when present. Soft lookup —
  * a missing or unknown key yields null rather than failing the create path.
  */
@@ -875,17 +912,20 @@ function objectiveInputs(body: ProtocolRequestBody): ObjectiveInput[] {
   const parsed = parseObjectiveArrayInput(body);
   const autoAdvance = optionalAutoAdvanceFlag(body);
   if (parsed !== undefined) {
-    return withDefaultAutoAdvance(parsed, autoAdvance);
+    return withDefaultAgentSelection(withDefaultAutoAdvance(parsed, autoAdvance), body);
   }
   const resourceKey = strFlag(body, '--resource');
-  return withDefaultAutoAdvance(
-    [
-      {
-        objective: objectiveText(body),
-        ...(resourceKey ? { resourceKey } : {})
-      }
-    ],
-    autoAdvance
+  return withDefaultAgentSelection(
+    withDefaultAutoAdvance(
+      [
+        {
+          objective: objectiveText(body),
+          ...(resourceKey ? { resourceKey } : {})
+        }
+      ],
+      autoAdvance
+    ),
+    body
   );
 }
 
@@ -1335,9 +1375,9 @@ const handlers: Record<string, Handler> = {
     addObjectivesToMission({
       ctx: await withAgentOrigin({ ctx, body }),
       missionId: missionRefFlag(body),
-      objectives: withDefaultAutoAdvance(
-        parseObjectiveArrayInput(body) ?? [],
-        optionalAutoAdvanceFlag(body)
+      objectives: withDefaultAgentSelection(
+        withDefaultAutoAdvance(parseObjectiveArrayInput(body) ?? [], optionalAutoAdvanceFlag(body)),
+        body
       )
     }),
 

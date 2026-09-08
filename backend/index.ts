@@ -107,6 +107,7 @@ import {
 } from './desktop-oauth-handoff.ts';
 import { ENV_PROFILE } from './env-profile.ts';
 import { apiErrorFromBodyParser, apiErrorFromDatabaseError } from './errors.ts';
+import { listHumanActions, reopenHumanAction, resolveHumanAction } from './human-actions.ts';
 import {
   registerLiveActivityPushToken,
   registerLiveActivityStartToken,
@@ -1381,6 +1382,26 @@ app.get(
       before: typeof req.query.before === 'string' ? req.query.before : null
     })
   )
+);
+
+// ---- Human follow-up actions (cross-workspace) ----------------------------
+// Every reported human action from recent deliveries, with the operator's
+// decision per action. Same membership / mission:read fan-out as the feed.
+app.get(
+  '/api/human-actions',
+  handle(req => listHumanActions({ includeResolved: isTruthyQueryFlag(req.query.includeResolved) }))
+);
+app.put(
+  '/api/human-actions/:deliveryId/:actionId/resolution',
+  handle(req => resolveHumanAction(req.params.deliveryId, req.params.actionId, req.body), {
+    mutates: true
+  })
+);
+app.delete(
+  '/api/human-actions/:deliveryId/:actionId/resolution',
+  handle(req => reopenHumanAction(req.params.deliveryId, req.params.actionId), {
+    mutates: true
+  })
 );
 
 // ---- Inbox missions triage (cross-workspace) ------------------------------

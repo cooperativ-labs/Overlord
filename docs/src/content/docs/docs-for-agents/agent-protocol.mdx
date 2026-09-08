@@ -214,6 +214,47 @@ Include optional `deliveryReport.agentReport` evidence in `--payload-json` or
 nothing to report. Human actions must be real user follow-up work — never Git
 operations or routine testing/review.
 
+#### Human actions the operator can complete
+
+Reported human actions are collected across every mission into the Feed page's
+**Human actions** rail, where the operator reads them without the delivery. Each
+item must stand on its own:
+
+- `action` (required): one imperative sentence naming what to do, where, and with which value.
+- `reason` (expected): why it is needed and what stays broken until it is done.
+- `category` (expected): `environment`, `database`, `deployment`, `codegen`,
+  `packaging`, `external_service`, or `other`.
+- `blocking` (optional): `true` when the delivered work does not function until this is done.
+- `command` (when known): the exact command, setting, or value to apply, verbatim, with
+  placeholders in `<angle brackets>`.
+- `verify` (when known): how the operator confirms it worked.
+- `link` (when known): an HTTP(S) URL or a repository-relative file path.
+
+Vague, so the operator must rediscover everything:
+
+```json
+{ "action": "Set up the env var for Gemini." }
+```
+
+Complete, so the operator can finish it from the rail alone:
+
+```json
+{
+  "action": "Add GEMINI_API_KEY to the production backend service on Railway.",
+  "reason": "The delivery-compose worker falls back to the raw summary until a provider key is present.",
+  "category": "environment",
+  "command": "railway variables set GEMINI_API_KEY=<key> --service backend",
+  "verify": "The next delivery card shows a composed presentation instead of a fallback.",
+  "link": ".env.example"
+}
+```
+
+Overlord also derives `deterministic_rule` actions from the changed paths (new
+migrations, `.env.example` edits, dependency manifests, CI workflow files) and
+always shows them, so an omitted report never hides a real step. Reporting the
+same step yourself with a concrete `command` and `verify` gives the operator
+something better than the generic wording.
+
 Delivery remains immediate: Overlord stores a deterministic report first, then
 may compose a clearer presentation asynchronously. The original summary is
 never replaced.
@@ -347,6 +388,22 @@ existing mission for sequential steps toward the same goal:
 ovld protocol add-objectives --mission-id coo:312 \
   --objectives-json '[{"objective":"Implement the API"},{"objective":"Add CLI docs"}]'
 ```
+
+### Assigning an agent to an objective
+
+Every objective item on `create`, `prompt`, and `add-objectives` takes an
+optional `agent` (and `model`, which requires an agent). `--objective-agent` /
+`--objective-model` supply that selection for items naming no `agent` of their
+own. Assign the agent on the objectives you are already creating — never create
+a mission and then append a second objective just to name one:
+
+```bash
+ovld protocol create \
+  --objectives-json '[{"objective":"Implement the API","agent":"codex","model":"gpt-5.6-terra"}]'
+```
+
+This is distinct from `--agent`, which records who created the mission (and, on
+`prompt`, which agent attaches to it).
 
 ## Command quick reference
 

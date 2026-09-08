@@ -1348,6 +1348,34 @@ Indexes:
 - `(objective_id, delivered_at)`.
 - `(session_id)`.
 
+### `human_action_resolutions`
+
+Operator decisions layered over the human follow-up actions an agent reports in a delivery
+(coo:963, contract v136). The action text is never copied here: `action_id` names the stable
+`HumanActionV1.id` inside `deliveries.payload_json.deliveryReport.presentation.humanActions`,
+which the compose worker preserves when it rewrites the presentation. Reopening an action
+deletes its row; there is no soft delete or revision.
+
+| Column                          | Type         | Required | Notes                                                                 |
+| ------------------------------- | ------------ | -------- | --------------------------------------------------------------------- |
+| `delivery_id`                   | Id           | yes      | FK to `deliveries`, cascade delete. Part of the primary key.          |
+| `action_id`                     | text         | yes      | `HumanActionV1.id` within that delivery's presentation. Part of the primary key. |
+| `workspace_id`                  | Id           | yes      | FK to `workspaces`; denormalized from the delivery.                   |
+| `mission_id`                    | Id           | yes      | FK to `missions`; denormalized from the delivery.                     |
+| `objective_id`                  | Id           | yes      | FK to `objectives`; denormalized from the delivery.                   |
+| `status`                        | text         | yes      | Closed: `done`, `dismissed`.                                          |
+| `resolved_by_workspace_user_id` | Id           | no       | FK to `workspace_users`, set null on delete.                          |
+| `resolved_at`                   | TimestampUTC | yes      |                                                                       |
+
+Indexes:
+
+- Primary key `(delivery_id, action_id)`.
+- `(workspace_id, resolved_at)`.
+
+Mutations emit `entity_changes` rows with `entity_type = 'human_action_resolution'`,
+`entity_id = '<delivery_id>:<action_id>'`, and the mission and objective ids, so the webapp
+can refresh the human-actions rail and the mission's delivery cards.
+
 ### `artifacts`
 
 Structured review artifacts, usually attached to a delivery.

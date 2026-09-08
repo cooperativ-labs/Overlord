@@ -616,6 +616,10 @@ export async function createMissionWithObjectives({
     objective: string;
     title?: string | null;
     autoAdvance?: boolean;
+    /** Explicit launch selection for this objective; omitted keeps project defaulting. */
+    agent?: string | null;
+    /** Model for `agent`; rejected without a non-empty agent. */
+    model?: string | null;
     resourceKey?: string | null;
   }>;
   title?: string | null;
@@ -718,6 +722,8 @@ export async function createMissionWithObjectives({
           ...(item.title !== undefined ? { title: item.title } : {}),
           state: objectiveState,
           autoAdvance: item.autoAdvance ?? false,
+          ...(item.agent !== undefined ? { assignedAgent: item.agent } : {}),
+          ...(item.model !== undefined ? { model: item.model } : {}),
           ...(item.resourceKey !== undefined ? { resourceKey: item.resourceKey } : {})
         })
       );

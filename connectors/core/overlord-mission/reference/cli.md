@@ -181,11 +181,18 @@ When creating missions from within a repository:
 - Add objectives to the same mission when each prompt is a sequential step toward the same feature or goal; use `ovld protocol add-objectives --mission-id <mission_id> --objectives-json '[{"objective":"..."}]'`.
 - `create` and `prompt` require `--objectives-json` or `--objectives-file` with an ordered array of `{ "objective": "...", "title": "...", "autoAdvance": true }` objects. A single objective is just an array with one item. `--auto-advance` / `--no-auto-advance` map each opted-in item to authoritative Run Queue membership (default off).
 - `add-objectives` uses the same per-item `autoAdvance` field and `--auto-advance` / `--no-auto-advance` mapping.
+- Every objective item on `create`, `prompt`, and `add-objectives` also takes optional `"agent"` and `"model"` (a model requires an agent), and `--objective-agent <id>` / `--objective-model <id>` set the default for items that name no `agent` of their own. Assign the agent on the objectives you are already creating rather than appending a second objective just to name one. `--objective-agent` is distinct from `--agent`, which records creation provenance (and, on `prompt`, the attaching agent).
 - Use `ovld protocol run-queue [--project-id <id|slug|name>|--objective-id <id>|--mission-id <id>] [--queue <id|name>]` to inspect live queues. Entry operations use `queue-objective --objective-id <id> [--queue <id|name>] [--after <queued-entry|objective>|--front|--position <rank>]`, `dequeue-objective --objective-id <id>`, and `reorder-run-queue --queue <id|name> --ordered-entries-json <json>`; they require `execution_request:create`. Queue-definition operations use `create-run-queue`, `update-run-queue`, `delete-run-queue`, and `reorder-project-run-queues`; they require `project:update` and therefore a full-scope token.
 - `record-work` creates exactly one **completed** objective from a single `--objective` (or positional / an `objective` field in `--payload-json`) plus a `--summary` and file-change data — it does not take `--objectives-json`. See [record-work.md](record-work.md).
 
 ```bash
 ovld protocol create --agent <agent-identifier> --objectives-json '[{"objective":"Capture follow-up work from this repository"}]'
+```
+
+```bash
+# One call: a draft mission whose first objective is already assigned to Codex.
+ovld protocol create --agent <agent-identifier> \
+  --objectives-json '[{"objective":"Implement the API","agent":"codex","model":"gpt-5.6-terra"},{"objective":"Add CLI docs","agent":"claude"}]'
 ```
 
 ```bash

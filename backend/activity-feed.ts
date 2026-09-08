@@ -187,7 +187,7 @@ function objectiveDisplayId(missionDisplayId: string, displayKey: string | null)
  * a membership without the permission rather than failing the whole feed — one
  * restricted workspace must not blank out every other one.
  */
-async function readableWorkspaceIds(): Promise<string[]> {
+export async function readableWorkspaceIds(): Promise<string[]> {
   const memberships = await callerMembershipsInActiveOrganization();
   const readable: string[] = [];
   for (const membership of memberships) {

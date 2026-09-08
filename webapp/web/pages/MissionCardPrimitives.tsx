@@ -4,28 +4,11 @@ import { OriginSparklesIcon } from '@/components/OriginSparklesIcon.tsx';
 import { formatDueDatetimeLabel } from '@/components/scheduling/schedule-utils.ts';
 import { AuthenticatedAvatarImage, Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { formatOrdinalDayOfMonth } from '@/lib/due-datetime.ts';
 import { missionOriginLabel, objectiveOriginLabel } from '@/lib/mission-origin.ts';
 import { cn } from '@/lib/utils';
 
 import type { CreatedByKind, WorkspaceMemberDto } from '../../shared/contract.ts';
-
-function formatOrdinalDayOfMonth({ date }: { date: Date }): string {
-  const day = date.getDate();
-  const mod100 = day % 100;
-  if (mod100 >= 11 && mod100 <= 13) {
-    return `${day}th`;
-  }
-  switch (day % 10) {
-    case 1:
-      return `${day}st`;
-    case 2:
-      return `${day}nd`;
-    case 3:
-      return `${day}rd`;
-    default:
-      return `${day}th`;
-  }
-}
 
 export function MissionDueDateBadge({ dueDatetime }: { dueDatetime: string | null }) {
   if (!dueDatetime) return null;
@@ -33,7 +16,7 @@ export function MissionDueDateBadge({ dueDatetime }: { dueDatetime: string | nul
   const parsed = new Date(dueDatetime);
   if (Number.isNaN(parsed.getTime())) return null;
 
-  const ordinalDay = formatOrdinalDayOfMonth({ date: parsed });
+  const ordinalDay = formatOrdinalDayOfMonth(parsed);
   const fullDateLabel = formatDueDatetimeLabel(dueDatetime);
 
   return (

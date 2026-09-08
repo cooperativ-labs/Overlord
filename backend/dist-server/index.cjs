@@ -73226,6 +73226,9 @@ var init_registry = __esm({
 });
 
 // ../packages/core/service/delivery-report.ts
+function isValidHumanActionLink(link) {
+  return linkSchema.safeParse(link).success;
+}
 function isDisplayableHumanAction(action) {
   return !GIT_ACTION_PATTERN.test(action) && !ROUTINE_QA_PATTERN.test(action);
 }
@@ -73238,6 +73241,9 @@ function normalizeAgentReport(input) {
     ...action.reason ? { reason: action.reason } : {},
     category: action.category ?? "other",
     ...action.blocking === void 0 ? {} : { blocking: action.blocking },
+    ...action.command ? { command: action.command } : {},
+    ...action.verify ? { verify: action.verify } : {},
+    ...action.link ? { link: action.link } : {},
     source: "agent"
   }));
   const tradeoffsMade = tradeoffInputs.map((tradeoff, index) => ({
@@ -73378,7 +73384,7 @@ function markDeliveryPresentationPending(report) {
     }
   };
 }
-var MAX_ITEMS, MAX_ALTERNATIVES, MAX_ACTION_LENGTH, MAX_DETAIL_LENGTH, humanActionCategorySchema, conciseTextSchema, humanActionSchema, tradeoffSchema, GIT_ACTION_PATTERN, ROUTINE_QA_PATTERN, MAX_WARNINGS, DELIVERY_REPORT_ROOT_KEYS, AGENT_REPORT_INPUT_KEYS, normalizedHumanActionSchema, normalizedTradeoffSchema, normalizedAgentReportSchema, deliveryPresentationSchema, persistedDeliveryReportSchema, DELIVERY_REPORT_LIMITS;
+var MAX_ITEMS, MAX_ALTERNATIVES, MAX_ACTION_LENGTH, MAX_DETAIL_LENGTH, humanActionCategorySchema, MAX_COMMAND_LENGTH, MAX_LINK_LENGTH, conciseTextSchema, commandTextSchema, LINK_PATTERN, linkSchema, humanActionSchema, tradeoffSchema, GIT_ACTION_PATTERN, ROUTINE_QA_PATTERN, MAX_WARNINGS, DELIVERY_REPORT_ROOT_KEYS, AGENT_REPORT_INPUT_KEYS, normalizedHumanActionSchema, normalizedTradeoffSchema, normalizedAgentReportSchema, deliveryPresentationSchema, persistedDeliveryReportSchema, DELIVERY_REPORT_LIMITS;
 var init_delivery_report = __esm({
   "../packages/core/service/delivery-report.ts"() {
     "use strict";
@@ -73396,12 +73402,20 @@ var init_delivery_report = __esm({
       "external_service",
       "other"
     ]);
+    MAX_COMMAND_LENGTH = 600;
+    MAX_LINK_LENGTH = 400;
     conciseTextSchema = external_exports.string().trim().min(1).max(MAX_DETAIL_LENGTH);
+    commandTextSchema = external_exports.string().trim().min(1).max(MAX_COMMAND_LENGTH);
+    LINK_PATTERN = /^(?:https?:\/\/\S+|(?![a-z][a-z0-9+.-]*:)[^\s<>"'`]+)$/i;
+    linkSchema = external_exports.string().trim().min(1).max(MAX_LINK_LENGTH).regex(LINK_PATTERN);
     humanActionSchema = external_exports.strictObject({
       action: external_exports.string().trim().min(1).max(MAX_ACTION_LENGTH),
       reason: conciseTextSchema.optional(),
       category: humanActionCategorySchema.optional(),
-      blocking: external_exports.boolean().optional()
+      blocking: external_exports.boolean().optional(),
+      command: commandTextSchema.optional(),
+      verify: conciseTextSchema.optional(),
+      link: linkSchema.optional()
     });
     tradeoffSchema = external_exports.strictObject({
       decision: external_exports.string().trim().min(1).max(MAX_ACTION_LENGTH),
@@ -73426,6 +73440,9 @@ var init_delivery_report = __esm({
       reason: conciseTextSchema.optional(),
       category: humanActionCategorySchema,
       blocking: external_exports.boolean().optional(),
+      command: commandTextSchema.optional(),
+      verify: conciseTextSchema.optional(),
+      link: linkSchema.optional(),
       source: external_exports.enum(["agent", "change_rationale", "deterministic_rule"]),
       sourceRef: external_exports.string().trim().min(1).max(200).optional()
     });
@@ -73467,7 +73484,9 @@ var init_delivery_report = __esm({
       maxItems: MAX_ITEMS,
       maxAlternatives: MAX_ALTERNATIVES,
       maxActionLength: MAX_ACTION_LENGTH,
-      maxDetailLength: MAX_DETAIL_LENGTH
+      maxDetailLength: MAX_DETAIL_LENGTH,
+      maxCommandLength: MAX_COMMAND_LENGTH,
+      maxLinkLength: MAX_LINK_LENGTH
     };
   }
 });
@@ -77333,12 +77352,12 @@ async function readRunnerLiveness({
   const liveness = /* @__PURE__ */ new Map();
   const unique = [...new Set(executionTargetIds.filter((id) => id))];
   if (unique.length === 0) return liveness;
-  const placeholders2 = unique.map(() => "?").join(", ");
+  const placeholders3 = unique.map(() => "?").join(", ");
   const rows = await ctx.db.all(
     `SELECT execution_target_id, relation, health, last_heartbeat_at
        FROM execution_target_runner_registrations
       WHERE workspace_id = ? AND deleted_at IS NULL
-        AND execution_target_id IN (${placeholders2})`,
+        AND execution_target_id IN (${placeholders3})`,
     [ctx.workspace.id, ...unique]
   );
   for (const row of rows) {
@@ -77936,14 +77955,14 @@ async function deleteWorkspaceExecutionTarget({
   if (!target) {
     throw new ServiceError("Execution target not found", "not_found", 404);
   }
-  const placeholders2 = ACTIVE_QUEUE_STATUSES.map(() => "?").join(", ");
+  const placeholders3 = ACTIVE_QUEUE_STATUSES.map(() => "?").join(", ");
   const activeQueue = await ctx.db.get(
     `SELECT COUNT(*) AS count
        FROM execution_requests
       WHERE workspace_id = ?
         AND deleted_at IS NULL
         AND (execution_target_id = ? OR claimed_by_execution_target_id = ?)
-        AND status IN (${placeholders2})`,
+        AND status IN (${placeholders3})`,
     [ctx.workspace.id, id, id, ...ACTIVE_QUEUE_STATUSES]
   );
   if (Number(activeQueue?.count ?? 0) > 0) {
@@ -78276,11 +78295,11 @@ function getActorWorkspaceUserId() {
 async function resolveActiveProfileId(client = requireDatabaseClient()) {
   const activeProfileId2 = getActiveProfileId();
   if (activeProfileId2) return activeProfileId2;
-  const actorWorkspaceUserId = getActorWorkspaceUserId();
-  if (actorWorkspaceUserId) {
+  const actorWorkspaceUserId2 = getActorWorkspaceUserId();
+  if (actorWorkspaceUserId2) {
     const row = await client.get(
       `SELECT profile_id FROM workspace_users WHERE id = ?`,
-      [actorWorkspaceUserId]
+      [actorWorkspaceUserId2]
     );
     if (row) return row.profile_id;
   }
@@ -78327,7 +78346,7 @@ function buildWebappServiceContext(client = requireDatabaseClient()) {
     clientDevice: getClientDeviceIdentity()
   };
 }
-async function buildWebappServiceContextForWorkspace(workspaceId2, client = requireDatabaseClient(), actorWorkspaceUserId = getActorWorkspaceUserId()) {
+async function buildWebappServiceContextForWorkspace(workspaceId2, client = requireDatabaseClient(), actorWorkspaceUserId2 = getActorWorkspaceUserId()) {
   const workspace = await client.get(
     `SELECT id, slug, name FROM workspaces WHERE id = ? AND deleted_at IS NULL`,
     [workspaceId2]
@@ -78338,30 +78357,30 @@ async function buildWebappServiceContextForWorkspace(workspaceId2, client = requ
   return {
     db: client,
     workspace,
-    actorWorkspaceUserId,
+    actorWorkspaceUserId: actorWorkspaceUserId2,
     actorTokenId: getActiveTokenId(),
     source: "webapp",
     clientDevice: getClientDeviceIdentity()
   };
 }
-function setProcessDefaultWorkspace(workspace, actorWorkspaceUserId) {
+function setProcessDefaultWorkspace(workspace, actorWorkspaceUserId2) {
   defaultWorkspace = workspace;
-  ACTOR_WORKSPACE_USER_ID = actorWorkspaceUserId;
+  ACTOR_WORKSPACE_USER_ID = actorWorkspaceUserId2;
 }
 async function setActiveWorkspace(id) {
   const row = await loadWorkspaceRowAsync(id);
   if (!row) return null;
   const workspace = { id: row.id, slug: row.slug, name: row.name, kind: row.kind };
   if (!requestContextStorage.getStore()) {
-    const actorWorkspaceUserId2 = await resolveActorForWorkspace(row.id);
-    setProcessDefaultWorkspace(workspace, actorWorkspaceUserId2);
+    const actorWorkspaceUserId3 = await resolveActorForWorkspace(row.id);
+    setProcessDefaultWorkspace(workspace, actorWorkspaceUserId3);
     return row;
   }
-  const actorWorkspaceUserId = await resolveRequestActorForWorkspace(row.id) ?? await resolveActorForWorkspace(row.id);
+  const actorWorkspaceUserId2 = await resolveRequestActorForWorkspace(row.id) ?? await resolveActorForWorkspace(row.id);
   mutateRequestContext({
     ...requestContext(),
     activeWorkspace: workspace,
-    actorWorkspaceUserId
+    actorWorkspaceUserId: actorWorkspaceUserId2
   });
   return row;
 }
@@ -78426,15 +78445,15 @@ function serviceDatabaseClient() {
   return requireDatabaseClient();
 }
 async function recordChange2(input, client = requireDatabaseClient()) {
-  let actorWorkspaceUserId = input.actorWorkspaceUserId;
-  if (actorWorkspaceUserId === void 0) {
+  let actorWorkspaceUserId2 = input.actorWorkspaceUserId;
+  if (actorWorkspaceUserId2 === void 0) {
     const profileId = await resolveActiveProfileId(client);
-    actorWorkspaceUserId = profileId ? await findActiveMembershipId(input.workspaceId, profileId, client) : null;
-  } else if (actorWorkspaceUserId) {
+    actorWorkspaceUserId2 = profileId ? await findActiveMembershipId(input.workspaceId, profileId, client) : null;
+  } else if (actorWorkspaceUserId2) {
     const matchingMembership = await client.get(
       `SELECT 1 FROM workspace_users
         WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
-      [actorWorkspaceUserId, input.workspaceId]
+      [actorWorkspaceUserId2, input.workspaceId]
     );
     if (!matchingMembership) {
       throw new Error("recordChange actor membership does not belong to the supplied workspace");
@@ -78450,7 +78469,7 @@ async function recordChange2(input, client = requireDatabaseClient()) {
     operation: input.operation,
     entityRevision: input.entityRevision,
     changedFields: input.changedFields,
-    actorWorkspaceUserId,
+    actorWorkspaceUserId: actorWorkspaceUserId2,
     actorTokenId: getActiveTokenId(),
     source: "webapp"
   });
@@ -135157,7 +135176,10 @@ var COMPOSE_DELIVERY_RESPONSE_SCHEMA = {
           sourceId: { type: import_genai2.Type.STRING },
           action: { type: import_genai2.Type.STRING },
           reason: { type: import_genai2.Type.STRING },
-          category: { type: import_genai2.Type.STRING }
+          category: { type: import_genai2.Type.STRING },
+          command: { type: import_genai2.Type.STRING },
+          verify: { type: import_genai2.Type.STRING },
+          link: { type: import_genai2.Type.STRING }
         },
         required: ["sourceId", "action"]
       }
@@ -135189,6 +135211,8 @@ Rules:
 - Use the agent summary as the factual spine; improve clarity and organization in markdown.
 - Human actions and tradeoffs MUST cite sourceId values from the provided evidence or candidateActions.
 - Never invent mandatory human actions or implementation tradeoffs without a sourceId match.
+- Every deterministic candidate action is real follow-up work: cite each one unless an agent-reported action already covers the same step.
+- Carry each action's command, verify, and link fields through unchanged when the evidence supplies them; never fabricate a command, URL, or path that is not in the evidence.
 - Never include git commit/push/PR actions or routine "review/test the code" actions.
 - Prefer concise, scannable Markdown. Do not include secrets, tokens, or raw diffs.`;
 function buildComposeDeliveryPrompt(input) {
@@ -138687,6 +138711,8 @@ async function createMissionWithObjectives({
           ...item.title !== void 0 ? { title: item.title } : {},
           state: objectiveState,
           autoAdvance: item.autoAdvance ?? false,
+          ...item.agent !== void 0 ? { assignedAgent: item.agent } : {},
+          ...item.model !== void 0 ? { model: item.model } : {},
           ...item.resourceKey !== void 0 ? { resourceKey: item.resourceKey } : {}
         })
       );
@@ -141030,13 +141056,13 @@ async function loadTargetResourceObservations({
 }) {
   const byResource = /* @__PURE__ */ new Map();
   if (resourceIds.length === 0) return byResource;
-  const placeholders2 = resourceIds.map(() => "?").join(", ");
+  const placeholders3 = resourceIds.map(() => "?").join(", ");
   const rows = await ctx.db.all(
     `SELECT execution_target_id, resource_id, state, git_root, branch, git_commit,
             observed_at, updated_at
        FROM target_resource_observations
       WHERE workspace_id = ?
-        AND resource_id IN (${placeholders2})`,
+        AND resource_id IN (${placeholders3})`,
     [ctx.workspace.id, ...resourceIds]
   );
   for (const row of rows) {
@@ -145443,7 +145469,7 @@ async function loadMissionBranchObservationsForMissions({
 }) {
   const byMission = /* @__PURE__ */ new Map();
   if (!executionTargetId || missionIds.length === 0) return byMission;
-  const placeholders2 = missionIds.map(() => "?").join(", ");
+  const placeholders3 = missionIds.map(() => "?").join(", ");
   const normalizedKey = resourceKey?.trim() || null;
   const params = [ctx.workspace.id, executionTargetId, ...missionIds];
   const resourceFilter = normalizedKey ? "AND resource_key = ?" : "";
@@ -145455,7 +145481,7 @@ async function loadMissionBranchObservationsForMissions({
        FROM mission_branch_observations
       WHERE workspace_id = ?
         AND execution_target_id = ?
-        AND mission_id IN (${placeholders2})
+        AND mission_id IN (${placeholders3})
         ${resourceFilter}`,
     params
   );
@@ -147636,11 +147662,11 @@ function toOrganizationAdminDto(row) {
 async function loadOrganizationAdmins(organizationId, client) {
   const profileIds = await listOrganizationAdminProfileIds(organizationId, client);
   if (profileIds.length === 0) return [];
-  const placeholders2 = profileIds.map(() => "?").join(", ");
+  const placeholders3 = profileIds.map(() => "?").join(", ");
   const rows = await client.all(
     `SELECT id AS user_id, display_name, handle, email, metadata_json
        FROM profiles
-      WHERE id IN (${placeholders2}) AND deleted_at IS NULL
+      WHERE id IN (${placeholders3}) AND deleted_at IS NULL
       ORDER BY display_name ASC`,
     profileIds
   );
@@ -148547,7 +148573,7 @@ async function recordBranchActionActivity(ctx, summary) {
     );
     const now2 = nowIso2();
     const profileId = await resolveActiveProfileId(tx);
-    const actorWorkspaceUserId = profileId ? await findActiveMembershipId(ctx.workspaceId, profileId, tx) : null;
+    const actorWorkspaceUserId2 = profileId ? await findActiveMembershipId(ctx.workspaceId, profileId, tx) : null;
     if (mission) {
       const revision = mission.revision + 1;
       await tx.run(
@@ -148564,7 +148590,7 @@ async function recordBranchActionActivity(ctx, summary) {
           projectId: ctx.projectId,
           missionId: ctx.missionId,
           workspaceId: ctx.workspaceId,
-          actorWorkspaceUserId,
+          actorWorkspaceUserId: actorWorkspaceUserId2,
           changedFields: ["updated_at"]
         },
         tx
@@ -148582,7 +148608,7 @@ async function recordBranchActionActivity(ctx, summary) {
         ctx.missionId,
         summary,
         JSON.stringify({ branch: ctx.branchName, baseBranch: ctx.baseBranch }),
-        actorWorkspaceUserId,
+        actorWorkspaceUserId2,
         now2
       ]
     );
@@ -148761,12 +148787,12 @@ async function getMissionTags(missionId) {
 async function getTagsByMission(missionIds) {
   const byMission = /* @__PURE__ */ new Map();
   if (missionIds.length === 0) return byMission;
-  const placeholders2 = missionIds.map(() => "?").join(", ");
+  const placeholders3 = missionIds.map(() => "?").join(", ");
   const rows = await requireDatabaseClient().all(
     `SELECT tt.mission_id, pt.id, pt.workspace_id, pt.project_id, pt.label, pt.color, pt.active, pt.revision
          FROM mission_tags tt
          JOIN project_tags pt ON pt.id = tt.tag_id AND pt.deleted_at IS NULL
-        WHERE tt.mission_id IN (${placeholders2})
+        WHERE tt.mission_id IN (${placeholders3})
         ORDER BY ${orderByLabelAsc("pt.label")}`,
     missionIds
   );
@@ -150408,7 +150434,7 @@ ${missionHasUnseenReturnedToExecuteSql},
 async function getObjectivesByMission(missionIds, db = requireDatabaseClient()) {
   const byMission = /* @__PURE__ */ new Map();
   if (missionIds.length === 0) return byMission;
-  const placeholders2 = missionIds.map(() => "?").join(", ");
+  const placeholders3 = missionIds.map(() => "?").join(", ");
   const rows = await db.all(
     `SELECT o.*, m.display_id AS mission_display_id,
          e.id AS queue_entry_id, e.queue_id, q.name AS queue_name,
@@ -150428,7 +150454,7 @@ async function getObjectivesByMission(missionIds, db = requireDatabaseClient()) 
          LEFT JOIN run_queue_entries e ON e.objective_id = o.id AND e.deleted_at IS NULL
          LEFT JOIN run_queues q ON q.id = e.queue_id AND q.deleted_at IS NULL
          LEFT JOIN objectives wo ON wo.id = e.waiting_on_objective_id AND wo.deleted_at IS NULL
-        WHERE o.mission_id IN (${placeholders2}) AND o.deleted_at IS NULL
+        WHERE o.mission_id IN (${placeholders3}) AND o.deleted_at IS NULL
         ORDER BY o.mission_id ASC, o.position ASC`,
     missionIds
   );
@@ -150444,9 +150470,9 @@ var WINDOWED_MISSION_STATUS_TYPES = ["complete", "cancelled"];
 var COMPLETED_MISSION_WINDOW_MS = COMPLETED_MISSION_WINDOW_DAYS * 24 * 60 * 60 * 1e3;
 function completedMissionWindowSql(includeAllCompleted, now2 = Date.now()) {
   if (includeAllCompleted) return { sql: "", params: [] };
-  const placeholders2 = WINDOWED_MISSION_STATUS_TYPES.map(() => "?").join(", ");
+  const placeholders3 = WINDOWED_MISSION_STATUS_TYPES.map(() => "?").join(", ");
   return {
-    sql: ` AND (t.status_type NOT IN (${placeholders2}) OR t.updated_at >= ?)`,
+    sql: ` AND (t.status_type NOT IN (${placeholders3}) OR t.updated_at >= ?)`,
     params: [
       ...WINDOWED_MISSION_STATUS_TYPES,
       new Date(now2 - COMPLETED_MISSION_WINDOW_MS).toISOString()
@@ -151426,6 +151452,14 @@ async function createMissionTx(body, client = requireDatabaseClient(), alreadyIn
     if (body.dueDatetime !== void 0 && body.dueDatetime !== null && Number.isNaN(Date.parse(body.dueDatetime))) {
       throw new ApiError(400, "dueDatetime must be a valid ISO-8601 datetime or null");
     }
+    for (const [index, item] of objectiveInputs2.entries()) {
+      for (const key of ["agent", "model"]) {
+        const value = item[key];
+        if (value !== void 0 && value !== null && typeof value !== "string") {
+          throw new ApiError(400, `objectives[${index}].${key} must be a string or null`);
+        }
+      }
+    }
     if (body.statusId) await getProjectStatus(tx, body.projectId, body.statusId);
     const assignedWorkspaceUserId = body.assignedWorkspaceUserId === void 0 ? workspaceUserId : await resolveAssignedWorkspaceUserId(tx, workspaceId2, body.assignedWorkspaceUserId);
     const ctx = await buildWebappServiceContextForWorkspace(workspaceId2, tx, workspaceUserId);
@@ -151436,6 +151470,8 @@ async function createMissionTx(body, client = requireDatabaseClient(), alreadyIn
         objective: item.objective,
         ...item.title !== void 0 ? { title: item.title } : {},
         autoAdvance: item.autoAdvance ?? false,
+        ...item.agent !== void 0 ? { agent: item.agent } : {},
+        ...item.model !== void 0 ? { model: item.model } : {},
         ...item.resourceKey !== void 0 ? { resourceKey: item.resourceKey } : {}
       })),
       title: explicitTitle || initialTitleFromInstruction2(instruction),
@@ -151474,9 +151510,9 @@ async function syncMissionTags(db, {
     await db.run(`DELETE FROM mission_tags WHERE mission_id = ?`, [missionId]);
     return;
   }
-  const placeholders2 = unique.map(() => "?").join(", ");
+  const placeholders3 = unique.map(() => "?").join(", ");
   await db.run(
-    `DELETE FROM mission_tags WHERE mission_id = ? AND tag_id NOT IN (${placeholders2})`,
+    `DELETE FROM mission_tags WHERE mission_id = ? AND tag_id NOT IN (${placeholders3})`,
     [missionId, ...unique]
   );
   for (const tagId of unique) {
@@ -151693,9 +151729,10 @@ async function resolveAssignedWorkspaceUserId(db, workspaceId2, value) {
   if (!member2) throw new ApiError(400, "Assignee is not a member of this workspace");
   return member2.id;
 }
-async function patchMissionFieldsTx(id, body) {
+async function patchMissionFieldsTx(missionRef, body) {
   await requireDatabaseClient().transaction(async (tx) => {
-    const existing = await getMissionRow(id, tx, PERMISSIONS.MISSION_UPDATE);
+    const existing = await getMissionRow(missionRef, tx, PERMISSIONS.MISSION_UPDATE);
+    const id = existing.id;
     const fields = [];
     const setParams = [];
     const changed = [];
@@ -151862,12 +151899,12 @@ async function patchMissionFieldsTx(id, body) {
   });
 }
 async function moveMissionProjectTx({
-  id,
   body,
   existing,
   targetProjectId,
   statusRow
 }) {
+  const id = existing.id;
   await requireDatabaseClient().transaction(async (tx) => {
     if (tx.dialect === "postgres") {
       await tx.exec("SET CONSTRAINTS ALL DEFERRED");
@@ -151954,9 +151991,9 @@ async function moveMissionProjectTx({
     }
   });
 }
-async function updateMission(id, body) {
+async function updateMission(missionRef, body) {
   const client = requireDatabaseClient();
-  const existing = await getMissionRow(id, void 0, PERMISSIONS.MISSION_UPDATE);
+  const existing = await getMissionRow(missionRef, void 0, PERMISSIONS.MISSION_UPDATE);
   if (body.projectId !== void 0 && body.projectId !== existing.project_id) {
     const targetProject = await client.get(
       `SELECT id FROM projects WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
@@ -151991,7 +152028,6 @@ async function updateMission(id, body) {
     if (client.dialect === "sqlite") await client.exec("PRAGMA foreign_keys = OFF");
     try {
       await moveMissionProjectTx({
-        id,
         body,
         existing,
         targetProjectId: body.projectId,
@@ -152000,10 +152036,10 @@ async function updateMission(id, body) {
     } finally {
       if (client.dialect === "sqlite") await client.exec("PRAGMA foreign_keys = ON");
     }
-    return getMissionDetail(id);
+    return getMissionDetail(existing.id);
   }
-  await patchMissionFieldsTx(id, body);
-  return getMissionDetail(id);
+  await patchMissionFieldsTx(existing.id, body);
+  return getMissionDetail(existing.id);
 }
 async function deleteMissions(missionRefs) {
   if (missionRefs.length === 0) throw new ApiError(400, "At least one mission is required");
@@ -160663,7 +160699,7 @@ async function listWorkspaceInvitations(workspaceId2) {
   return rows.map(toWorkspaceInvitationDto);
 }
 async function revokeWorkspaceInvitation(workspaceId2, invitationId) {
-  const { workspaceUserId: actorWorkspaceUserId } = await requireWorkspaceManager(workspaceId2);
+  const { workspaceUserId: actorWorkspaceUserId2 } = await requireWorkspaceManager(workspaceId2);
   await requireDatabaseClient().transaction(async (tx) => {
     const invitation = await tx.get(
       `SELECT id, status, revision FROM workspace_invitations
@@ -160687,7 +160723,7 @@ async function revokeWorkspaceInvitation(workspaceId2, invitationId) {
         operation: "update",
         entityRevision: revision,
         workspaceId: workspaceId2,
-        actorWorkspaceUserId
+        actorWorkspaceUserId: actorWorkspaceUserId2
       },
       tx
     );
@@ -160859,7 +160895,7 @@ async function assertNotLastWorkspaceAdmin({
   }
 }
 async function updateWorkspaceMemberRole(workspaceId2, workspaceUserId, body) {
-  const { isAdmin, workspaceUserId: actorWorkspaceUserId } = await requireWorkspaceManager(workspaceId2);
+  const { isAdmin, workspaceUserId: actorWorkspaceUserId2 } = await requireWorkspaceManager(workspaceId2);
   const roleKey = (body.roleKey ?? "").trim().toUpperCase();
   if (!WORKSPACE_ROLE_KEYS.has(roleKey)) throw new ApiError(400, `Unknown role: ${roleKey}`);
   if (roleKey === "ADMIN" && !isAdmin) {
@@ -160892,7 +160928,7 @@ async function updateWorkspaceMemberRole(workspaceId2, workspaceUserId, body) {
          (id, workspace_id, workspace_user_id, role_key, resource_type, resource_id,
           assigned_by_workspace_user_id, created_at, updated_at, revision)
        VALUES (?, ?, ?, ?, '', '', ?, ?, ?, 1)`,
-      [newId2(), workspaceId2, workspaceUserId, roleKey, actorWorkspaceUserId, now2, now2]
+      [newId2(), workspaceId2, workspaceUserId, roleKey, actorWorkspaceUserId2, now2, now2]
     );
     await recordChange2(
       {
@@ -160900,7 +160936,7 @@ async function updateWorkspaceMemberRole(workspaceId2, workspaceUserId, body) {
         entityId: workspaceUserId,
         operation: "update",
         workspaceId: workspaceId2,
-        actorWorkspaceUserId,
+        actorWorkspaceUserId: actorWorkspaceUserId2,
         changedFields: ["role_key"]
       },
       tx
@@ -160913,7 +160949,7 @@ async function updateWorkspaceMemberRole(workspaceId2, workspaceUserId, body) {
   return updated;
 }
 async function removeWorkspaceMember(workspaceId2, workspaceUserId) {
-  const { isAdmin, workspaceUserId: actorWorkspaceUserId } = await requireWorkspaceManager(workspaceId2);
+  const { isAdmin, workspaceUserId: actorWorkspaceUserId2 } = await requireWorkspaceManager(workspaceId2);
   await requireDatabaseClient().transaction(async (tx) => {
     const membership = await tx.get(
       `SELECT id, revision FROM workspace_users
@@ -160955,7 +160991,7 @@ async function removeWorkspaceMember(workspaceId2, workspaceUserId) {
         operation: "delete",
         entityRevision: revision,
         workspaceId: workspaceId2,
-        actorWorkspaceUserId
+        actorWorkspaceUserId: actorWorkspaceUserId2
       },
       tx
     );
@@ -160980,12 +161016,12 @@ async function resolveProjectRefChoices({
 }) {
   if (workspaceIds.length === 0) return [];
   const db = serviceDatabaseClient();
-  const placeholders2 = workspaceIds.map(() => "?").join(", ");
+  const placeholders3 = workspaceIds.map(() => "?").join(", ");
   const selectChoice = `SELECT p.id, p.name, p.slug, p.workspace_id, w.name AS workspace_name,
             w.slug AS workspace_slug
        FROM projects p
        JOIN workspaces w ON w.id = p.workspace_id
-      WHERE p.deleted_at IS NULL AND p.workspace_id IN (${placeholders2})`;
+      WHERE p.deleted_at IS NULL AND p.workspace_id IN (${placeholders3})`;
   const toChoice = (row) => ({
     id: row.id,
     name: row.name,
@@ -161014,13 +161050,13 @@ async function protocolWorkspaceId(body) {
   const scopes = await callerWorkspaceMemberships();
   if (scopes.length === 0) return null;
   const workspaceIds = scopes.map((scope) => scope.workspaceId);
-  const placeholders2 = workspaceIds.map(() => "?").join(", ");
+  const placeholders3 = workspaceIds.map(() => "?").join(", ");
   const db = serviceDatabaseClient();
   const executionRequestId = strFlag(body, "--execution-request-id");
   if (executionRequestId) {
     const request = await db.get(
       `SELECT workspace_id FROM execution_requests
-        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders2})`,
+        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders3})`,
       [executionRequestId, ...workspaceIds]
     );
     if (request) return request.workspace_id;
@@ -161029,7 +161065,7 @@ async function protocolWorkspaceId(body) {
   if (sessionKey) {
     const session = await db.get(
       `SELECT workspace_id FROM agent_sessions
-        WHERE session_key_hash = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders2})`,
+        WHERE session_key_hash = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders3})`,
       [hashSessionKey(sessionKey), ...workspaceIds]
     );
     if (session) return session.workspace_id;
@@ -161038,7 +161074,7 @@ async function protocolWorkspaceId(body) {
   if (objectiveRef) {
     const objective = await db.get(
       `SELECT workspace_id FROM objectives
-        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders2})`,
+        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders3})`,
       [objectiveRef, ...workspaceIds]
     );
     if (objective) return objective.workspace_id;
@@ -161047,13 +161083,13 @@ async function protocolWorkspaceId(body) {
   if (missionRef) {
     const byId = await db.get(
       `SELECT workspace_id FROM missions
-        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders2})`,
+        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders3})`,
       [missionRef, ...workspaceIds]
     );
     if (byId) return byId.workspace_id;
     const byDisplay = await db.all(
       `SELECT workspace_id FROM missions
-        WHERE display_id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders2})`,
+        WHERE display_id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders3})`,
       [missionRef, ...workspaceIds]
     );
     if (byDisplay.length > 1) {
@@ -161139,6 +161175,26 @@ function withDefaultAutoAdvance(items, autoAdvance) {
     ...item,
     autoAdvance: item.autoAdvance ?? autoAdvance
   }));
+}
+function withDefaultAgentSelection(items, body) {
+  const agent = strFlag(body, "--objective-agent")?.trim() || void 0;
+  const model = strFlag(body, "--objective-model")?.trim() || void 0;
+  if (agent === void 0 && model === void 0) return items;
+  if (model !== void 0 && agent === void 0) {
+    throw new ApiError(
+      400,
+      "--objective-model requires --objective-agent",
+      void 0,
+      "invalid_input"
+    );
+  }
+  return items.map(
+    (item) => item.agent === void 0 || item.agent === null ? {
+      ...item,
+      agent,
+      ...model !== void 0 && (item.model === void 0 || item.model === null) ? { model } : {}
+    } : item
+  );
 }
 async function resolveSessionId(body) {
   const sessionKey = strFlag(body, "--session-key");
@@ -161482,17 +161538,20 @@ function objectiveInputs(body) {
   const parsed = parseObjectiveArrayInput(body);
   const autoAdvance = optionalAutoAdvanceFlag(body);
   if (parsed !== void 0) {
-    return withDefaultAutoAdvance(parsed, autoAdvance);
+    return withDefaultAgentSelection(withDefaultAutoAdvance(parsed, autoAdvance), body);
   }
   const resourceKey = strFlag(body, "--resource");
-  return withDefaultAutoAdvance(
-    [
-      {
-        objective: objectiveText(body),
-        ...resourceKey ? { resourceKey } : {}
-      }
-    ],
-    autoAdvance
+  return withDefaultAgentSelection(
+    withDefaultAutoAdvance(
+      [
+        {
+          objective: objectiveText(body),
+          ...resourceKey ? { resourceKey } : {}
+        }
+      ],
+      autoAdvance
+    ),
+    body
   );
 }
 async function resolveParentlessWorkspace(body, selectionMessage) {
@@ -161834,9 +161893,9 @@ var handlers = {
   "add-objectives": async (ctx, body) => addObjectivesToMission({
     ctx: await withAgentOrigin({ ctx, body }),
     missionId: missionRefFlag(body),
-    objectives: withDefaultAutoAdvance(
-      parseObjectiveArrayInput(body) ?? [],
-      optionalAutoAdvanceFlag(body)
+    objectives: withDefaultAgentSelection(
+      withDefaultAutoAdvance(parseObjectiveArrayInput(body) ?? [], optionalAutoAdvanceFlag(body)),
+      body
     )
   }),
   "update-objective": async (_ctx, body) => {
@@ -162370,6 +162429,12 @@ var hostedMcpToolDefinitions = [
         objective: stringProperty("Initial objective text."),
         title: stringProperty("Optional mission title."),
         resourceKey: stringProperty("Optional logical project resource key for the objective."),
+        agent: stringProperty(
+          "Optional agent identifier to assign to the initial objective, such as codex or claude. Omitted leaves the project launch-preference default; set it here instead of appending a second objective just to name an agent."
+        ),
+        model: stringProperty(
+          "Optional model identifier for the assigned agent. Requires agent; rejected without it."
+        ),
         assignedTo: stringProperty(
           "Optional workspace member to own the mission (workspace_users.id, profile UUID, orgid:username, bare username, or email). Rejected when the member is not in the workspace; meaningless on the inbox fallback."
         ),
@@ -162765,15 +162830,34 @@ var hostedMcpToolDefinitions = [
         ),
         humanActions: {
           type: "array",
-          description: "Concrete actions a human must perform outside completed agent work. Exclude Git operations and routine review/testing.",
-          items: objectSchema({
-            action: stringProperty("The required human action."),
-            reason: stringProperty("Why the action is required."),
-            category: stringProperty(
-              "environment, database, deployment, codegen, packaging, external_service, or other."
-            ),
-            blocking: { type: "boolean", description: "Whether this blocks the intended outcome." }
-          })
+          description: 'Concrete actions a human must perform outside completed agent work. Exclude Git operations and routine review/testing. Each item is read on its own in the Feed human-actions rail, so give every one an action, reason, and category, plus command, verify, and link whenever they exist. Vague: { action: "Set up the env var for Gemini." }. Good: { action: "Add GEMINI_API_KEY to the production backend service on Railway.", reason: "Compose falls back to the raw summary without it.", category: "environment", command: "railway variables set GEMINI_API_KEY=<key> --service backend", verify: "The next delivery card shows a composed presentation.", link: ".env.example" }.',
+          items: objectSchema(
+            {
+              action: stringProperty(
+                "Required. One imperative sentence naming what to do, where, and with which value."
+              ),
+              reason: stringProperty(
+                "Expected. Why the step is needed and what stays broken until it is done."
+              ),
+              category: stringProperty(
+                "Expected. environment, database, deployment, codegen, packaging, external_service, or other."
+              ),
+              blocking: {
+                type: "boolean",
+                description: "True when the delivered work does not function until this is done."
+              },
+              command: stringProperty(
+                "The exact command, setting name, or value to apply, verbatim; placeholders in <angle brackets>."
+              ),
+              verify: stringProperty(
+                "How the operator confirms it worked: a command, a URL, or the state to observe."
+              ),
+              link: stringProperty(
+                "An HTTP(S) URL or repository-relative file path relevant to the action. No other URI schemes."
+              )
+            },
+            ["action"]
+          )
         },
         tradeoffsMade: {
           type: "array",
@@ -163221,6 +163305,8 @@ var toolHandlers = {
       "--objective": requiredString(args, "objective"),
       ...optionalString(args, "title") ? { "--title": requiredString(args, "title") } : {},
       ...optionalString(args, "resourceKey") ? { "--resource": requiredString(args, "resourceKey") } : {},
+      ...optionalString(args, "agent") ? { "--objective-agent": requiredString(args, "agent") } : {},
+      ...optionalString(args, "model") ? { "--objective-model": requiredString(args, "model") } : {},
       ...optionalString(args, "assignedTo") ? { "--assigned-to": requiredString(args, "assignedTo") } : {},
       ...autoAdvanceFlags(args)
     })
@@ -163670,13 +163756,13 @@ async function countQueuedRequestsForTargets({
   executionTargetIds
 }) {
   if (executionTargetIds.length === 0) return 0;
-  const placeholders2 = executionTargetIds.map(() => "?").join(", ");
+  const placeholders3 = executionTargetIds.map(() => "?").join(", ");
   const row = await ctx.db.get(
     `SELECT COUNT(*) AS count
        FROM execution_requests
       WHERE workspace_id = ?
         AND deleted_at IS NULL
-        AND execution_target_id IN (${placeholders2})
+        AND execution_target_id IN (${placeholders3})
         AND status IN (${STALE_QUEUE_STATUSES.map(() => "?").join(", ")})`,
     [ctx.workspace.id, ...executionTargetIds, ...STALE_QUEUE_STATUSES]
   );
@@ -164063,11 +164149,11 @@ async function longPollRunnerClaim({
 }
 
 // execution/runner.ts
-async function workspaceServiceContext(workspaceId2, actorWorkspaceUserId, clientDevice) {
+async function workspaceServiceContext(workspaceId2, actorWorkspaceUserId2, clientDevice) {
   const ctx = await buildWebappServiceContextForWorkspace(
     workspaceId2,
     requireDatabaseClient(),
-    actorWorkspaceUserId
+    actorWorkspaceUserId2
   );
   return {
     ...ctx,
@@ -164473,12 +164559,12 @@ async function recordBranchPrepared({
 }) {
   const scopes = await callerWorkspaceMemberships();
   if (scopes.length === 0) throw new ApiError(404, "Mission not found");
-  const placeholders2 = scopes.map(() => "?").join(", ");
+  const placeholders3 = scopes.map(() => "?").join(", ");
   const mission = await requireDatabaseClient().get(
     `SELECT workspace_id FROM missions
       WHERE (id = ? OR display_id = ?)
         AND deleted_at IS NULL
-        AND workspace_id IN (${placeholders2})`,
+        AND workspace_id IN (${placeholders3})`,
     [missionId, missionId, ...scopes.map((scope) => scope.workspaceId)]
   );
   if (!mission) throw new ApiError(404, "Mission not found");
@@ -167144,11 +167230,11 @@ async function missionScopedRequests(client, missionRef, objectiveRef = null) {
   const memberships = await callerWorkspaceMemberships(client);
   if (memberships.length === 0)
     throw new ServiceError("Mission not found", "mission_not_found", 404);
-  const placeholders2 = memberships.map(() => "?").join(", ");
+  const placeholders3 = memberships.map(() => "?").join(", ");
   const mission = await client.get(
     `SELECT id, workspace_id FROM missions
        WHERE (id = ? OR display_id = ?) AND deleted_at IS NULL
-         AND workspace_id IN (${placeholders2})`,
+         AND workspace_id IN (${placeholders3})`,
     [missionRef, missionRef, ...memberships.map((entry) => entry.workspaceId)]
   );
   if (!mission) throw new ServiceError("Mission not found", "mission_not_found", 404);
@@ -167207,10 +167293,10 @@ function createAgentRequestHumanRouter() {
         }
       }
       if (authorized.length === 0) return { requests: [] };
-      const placeholders2 = authorized.map(() => "?").join(", ");
+      const placeholders3 = authorized.map(() => "?").join(", ");
       const rows = await client.all(
         `SELECT ${REQUEST_COLUMNS_FOR_ROUTE} FROM agent_requests
-          WHERE workspace_id IN (${placeholders2}) AND deleted_at IS NULL
+          WHERE workspace_id IN (${placeholders3}) AND deleted_at IS NULL
           ORDER BY created_at DESC LIMIT 200`,
         authorized.map((entry) => entry.workspaceId)
       );
@@ -167339,11 +167425,11 @@ function createAgentSessionInputHumanRouter() {
       const client = requireDatabaseClient();
       const memberships = await callerWorkspaceMemberships(client);
       if (memberships.length === 0) return { inputs: [] };
-      const placeholders2 = memberships.map(() => "?").join(", ");
+      const placeholders3 = memberships.map(() => "?").join(", ");
       const mission = await client.get(
         `SELECT id, workspace_id FROM missions
            WHERE (id = ? OR display_id = ?) AND deleted_at IS NULL
-             AND workspace_id IN (${placeholders2})`,
+             AND workspace_id IN (${placeholders3})`,
         [missionId, missionId, ...memberships.map((entry) => entry.workspaceId)]
       );
       if (!mission) throw new ServiceError("Mission not found", "mission_not_found", 404);
@@ -168017,7 +168103,9 @@ function deriveDeterministicActionCandidates({
   const add = ({
     action,
     reason,
-    category
+    category,
+    verify: verify2,
+    filePath
   }) => {
     if (!isDisplayableHumanAction(action) || seen.has(action)) return;
     seen.add(action);
@@ -168026,7 +168114,10 @@ function deriveDeterministicActionCandidates({
       action,
       reason,
       category,
-      source: "deterministic_rule"
+      verify: verify2,
+      ...isValidHumanActionLink(filePath) ? { link: filePath } : {},
+      source: "deterministic_rule",
+      sourceRef: filePath
     });
   };
   for (const rawPath of filePaths) {
@@ -168036,32 +168127,63 @@ function deriveDeterministicActionCandidates({
       add({
         action: "Apply the database migration(s) included in this delivery.",
         reason: `Changed path ${filePath} looks like a schema/migration update.`,
-        category: "database"
+        category: "database",
+        verify: "The new migration is recorded as applied and the service starts without schema errors.",
+        filePath
       });
     }
     if (/(?:^|\/)\.env(?:\.|$)|\.env\.[^/]+$/i.test(filePath) || /env\.example$/i.test(base)) {
       add({
         action: "Review and set any new environment variables.",
         reason: `Changed path ${filePath} may introduce required configuration.`,
-        category: "environment"
+        category: "environment",
+        verify: "Every variable added to the example file has a value in each environment and the service boots without a missing-configuration error.",
+        filePath
       });
     }
     if (/docker-compose|Dockerfile|fly\.toml|vercel\.json|railway/i.test(filePath)) {
       add({
         action: "Redeploy the affected service with the updated configuration.",
         reason: `Changed path ${filePath} suggests a deployment/config change.`,
-        category: "deployment"
+        category: "deployment",
+        verify: "The new deployment is healthy and serving traffic with the updated configuration.",
+        filePath
+      });
+    }
+    if (/(?:^|\/)\.github\/workflows\/[^/]+\.ya?ml$/i.test(filePath)) {
+      add({
+        action: "Confirm the new or changed CI workflow runs green on the next push.",
+        reason: `Changed path ${filePath} adds or edits a GitHub Actions workflow.`,
+        category: "deployment",
+        verify: "The workflow appears in the Actions tab for the next push and completes successfully.",
+        filePath
       });
     }
     if (/package\.json$|Cargo\.toml$|\.csproj$/i.test(base)) {
       add({
         action: "Reinstall or rebuild package dependencies if your environment is stale.",
         reason: `Changed path ${filePath} may alter dependency resolution.`,
-        category: "packaging"
+        category: "packaging",
+        verify: "The install completes without lockfile drift and the build passes locally.",
+        filePath
       });
     }
   }
   return candidates.slice(0, DELIVERY_REPORT_LIMITS.maxItems);
+}
+function mergeDeterministicActionCandidates({
+  actions,
+  candidates
+}) {
+  const merged = actions.slice(0, DELIVERY_REPORT_LIMITS.maxItems);
+  const seen = new Set(merged.map((action) => action.id));
+  for (const candidate of candidates) {
+    if (merged.length >= DELIVERY_REPORT_LIMITS.maxItems) break;
+    if (seen.has(candidate.id)) continue;
+    seen.add(candidate.id);
+    merged.push(candidate);
+  }
+  return merged;
 }
 function clampText(value, maxLength) {
   if (typeof value !== "string") return null;
@@ -168111,6 +168233,32 @@ function evidenceTradeoffs({
   }
   return byId;
 }
+function optionalActionText(draftValue, sourceValue, maxLength) {
+  return clampText(draftValue, maxLength) ?? sourceValue;
+}
+function optionalActionLink(draftValue, source) {
+  const fromDraft = clampText(draftValue, DELIVERY_REPORT_LIMITS.maxLinkLength);
+  if (fromDraft && isValidHumanActionLink(fromDraft)) return fromDraft;
+  return source.link && isValidHumanActionLink(source.link) ? source.link : void 0;
+}
+function composedActionDetails(item, source) {
+  const command = optionalActionText(
+    item.command,
+    source.command,
+    DELIVERY_REPORT_LIMITS.maxCommandLength
+  );
+  const verify2 = optionalActionText(
+    item.verify,
+    source.verify,
+    DELIVERY_REPORT_LIMITS.maxDetailLength
+  );
+  const link = optionalActionLink(item.link, source);
+  return {
+    ...command ? { command } : {},
+    ...verify2 ? { verify: verify2 } : {},
+    ...link ? { link } : {}
+  };
+}
 function reconcileDeliveryComposeDraft({
   report,
   draft,
@@ -168122,6 +168270,10 @@ function reconcileDeliveryComposeDraft({
   const fallback2 = {
     ...report.presentation,
     status: "fallback",
+    humanActions: mergeDeterministicActionCandidates({
+      actions: report.presentation.humanActions,
+      candidates
+    }),
     generatedBy: "deterministic",
     generatedAt,
     ...model ? { model } : {}
@@ -168153,7 +168305,8 @@ function reconcileDeliveryComposeDraft({
         ...source,
         action: actionText,
         ...clampText(item.reason, DELIVERY_REPORT_LIMITS.maxDetailLength) ? { reason: clampText(item.reason, DELIVERY_REPORT_LIMITS.maxDetailLength) } : source.reason ? { reason: source.reason } : {},
-        category: asCategory(item.category ?? source.category)
+        category: asCategory(item.category ?? source.category),
+        ...composedActionDetails(item, source)
       });
       if (humanActions.length >= DELIVERY_REPORT_LIMITS.maxItems) break;
     }
@@ -168177,7 +168330,10 @@ function reconcileDeliveryComposeDraft({
       if (tradeoffsMade.length >= DELIVERY_REPORT_LIMITS.maxItems) break;
     }
   }
-  const resolvedActions = humanActions.length > 0 ? humanActions : report.presentation.humanActions;
+  const resolvedActions = mergeDeterministicActionCandidates({
+    actions: humanActions.length > 0 ? humanActions : report.presentation.humanActions,
+    candidates
+  });
   const resolvedTradeoffs = tradeoffsMade.length > 0 ? tradeoffsMade : report.presentation.tradeoffsMade;
   return {
     status: "composed",
@@ -168376,6 +168532,7 @@ async function persistFallbackPresentation(client, deliveryId, lastError) {
   const presentation = reconcileDeliveryComposeDraft({
     report: context.report,
     draft: null,
+    candidates: deriveDeterministicActionCandidates({ filePaths: context.filePaths }),
     model: readGeminiConfigFromEnv()?.model ?? null
   });
   presentation.status = "fallback";
@@ -168509,6 +168666,9 @@ function toComposeInput({
       action: action.action,
       ...action.reason ? { reason: action.reason } : {},
       category: action.category,
+      ...action.command ? { command: action.command } : {},
+      ...action.verify ? { verify: action.verify } : {},
+      ...action.link ? { link: action.link } : {},
       source: action.source,
       ...action.sourceRef ? { sourceRef: action.sourceRef } : {}
     })),
@@ -168529,7 +168689,11 @@ function toComposeInput({
       action: action.action,
       ...action.reason ? { reason: action.reason } : {},
       category: action.category,
-      source: action.source
+      ...action.command ? { command: action.command } : {},
+      ...action.verify ? { verify: action.verify } : {},
+      ...action.link ? { link: action.link } : {},
+      source: action.source,
+      ...action.sourceRef ? { sourceRef: action.sourceRef } : {}
     })),
     changeRationales: rationales.slice(0, 20).map((rationale) => ({
       id: rationale.id,
@@ -168608,6 +168772,271 @@ function beginDesktopGitHubOAuth(auth2, authBaseUrl2) {
 
 // index.ts
 init_env_profile();
+
+// human-actions.ts
+init_dist2();
+init_db();
+var DELIVERY_WINDOW_MS = 90 * 24 * 60 * 60 * 1e3;
+var DELIVERY_SCAN_LIMIT = 400;
+var RESOLVED_LIMIT = 100;
+var RESOLUTION_STATUSES = /* @__PURE__ */ new Set(["done", "dismissed"]);
+function placeholders2(count) {
+  return new Array(count).fill("?").join(", ");
+}
+function hasHumanActionsSql(dialect) {
+  if (dialect === "postgres") {
+    return `(jsonb_typeof(d.payload_json #> '{deliveryReport,presentation,humanActions}') = 'array'
+         AND jsonb_array_length(d.payload_json #> '{deliveryReport,presentation,humanActions}') > 0)`;
+  }
+  return `COALESCE(json_array_length(d.payload_json, '$.deliveryReport.presentation.humanActions'), 0) > 0`;
+}
+var DELIVERY_SELECT = `
+  SELECT d.id AS delivery_id, d.summary AS delivery_summary, d.payload_json, d.delivered_at,
+         d.workspace_id, w.name AS workspace_name,
+         d.project_id, p.name AS project_name, p.settings_json AS project_settings_json,
+         d.mission_id, m.display_id AS mission_display_id, m.title AS mission_title,
+         o.id AS objective_id, o.display_key AS objective_display_key, o.title AS objective_title,
+         o.assigned_agent,
+         s.agent_identifier AS session_agent_identifier
+    FROM deliveries d
+    JOIN objectives o ON o.id = d.objective_id AND o.deleted_at IS NULL
+    JOIN missions m ON m.id = d.mission_id AND m.deleted_at IS NULL
+    JOIN projects p ON p.id = d.project_id AND p.deleted_at IS NULL
+    JOIN workspaces w ON w.id = d.workspace_id AND w.deleted_at IS NULL
+    LEFT JOIN agent_sessions s ON s.id = d.session_id AND s.deleted_at IS NULL`;
+var LATEST_PER_OBJECTIVE = `
+     AND d.id = (
+       SELECT x.id FROM deliveries x
+        WHERE x.objective_id = d.objective_id AND x.deleted_at IS NULL
+        ORDER BY x.delivered_at DESC, x.id DESC
+        LIMIT 1
+     )`;
+async function loadDeliveriesWithActions(workspaceIds) {
+  if (workspaceIds.length === 0) return [];
+  const db = requireDatabaseClient();
+  const since = new Date(Date.now() - DELIVERY_WINDOW_MS).toISOString();
+  return await db.all(
+    `${DELIVERY_SELECT}
+   WHERE d.deleted_at IS NULL
+     AND d.workspace_id IN (${placeholders2(workspaceIds.length)})
+     AND d.delivered_at >= ?
+     AND ${hasHumanActionsSql(db.dialect)}
+     ${LATEST_PER_OBJECTIVE}
+   ORDER BY d.delivered_at DESC, d.id DESC
+   LIMIT ?`,
+    [...workspaceIds, since, DELIVERY_SCAN_LIMIT]
+  );
+}
+async function loadDelivery(deliveryId) {
+  return await requireDatabaseClient().get(
+    `${DELIVERY_SELECT}
+   WHERE d.id = ? AND d.deleted_at IS NULL`,
+    [deliveryId]
+  );
+}
+async function loadResolutions(deliveryIds) {
+  if (deliveryIds.length === 0) return /* @__PURE__ */ new Map();
+  const rows = await requireDatabaseClient().all(
+    `SELECT delivery_id, action_id, status, resolved_at, resolved_by_workspace_user_id
+       FROM human_action_resolutions
+      WHERE delivery_id IN (${placeholders2(deliveryIds.length)})`,
+    deliveryIds
+  );
+  return new Map(rows.map((row) => [`${row.delivery_id}:${row.action_id}`, row]));
+}
+function resolveAgentIdentifier2(...candidates) {
+  for (const candidate of candidates) {
+    const trimmed9 = candidate?.trim();
+    if (!trimmed9 || trimmed9.toLowerCase() === "unknown") continue;
+    return trimmed9;
+  }
+  return null;
+}
+function toResolution(row) {
+  if (!row || !RESOLUTION_STATUSES.has(row.status)) return null;
+  return {
+    status: row.status,
+    resolvedAt: row.resolved_at,
+    resolvedByWorkspaceUserId: row.resolved_by_workspace_user_id
+  };
+}
+function deliveryActions(row) {
+  return deliveryReportFromPayload(row.payload_json, row.delivery_summary).presentation.humanActions;
+}
+function toItem(row, action, resolution) {
+  return {
+    id: `human-action:${row.delivery_id}:${action.id}`,
+    deliveryId: row.delivery_id,
+    actionId: action.id,
+    action: action.action,
+    reason: action.reason ?? null,
+    category: action.category,
+    blocking: action.blocking === true,
+    command: action.command ?? null,
+    verify: action.verify ?? null,
+    link: action.link ?? null,
+    source: action.source,
+    workspaceId: row.workspace_id,
+    workspaceName: row.workspace_name,
+    projectId: row.project_id,
+    projectName: row.project_name,
+    projectColor: readProjectColor(row.project_settings_json),
+    missionId: row.mission_id,
+    missionDisplayId: row.mission_display_id,
+    missionTitle: row.mission_title,
+    objectiveId: row.objective_id,
+    objectiveDisplayId: formatObjectiveDisplayId({
+      missionDisplayId: row.mission_display_id,
+      displayKey: row.objective_display_key
+    }),
+    objectiveTitle: row.objective_title,
+    deliveredAt: row.delivered_at,
+    agentIdentifier: resolveAgentIdentifier2(row.session_agent_identifier, row.assigned_agent),
+    resolution: toResolution(resolution)
+  };
+}
+function openFirst(a5, b5) {
+  if (a5.blocking !== b5.blocking) return a5.blocking ? -1 : 1;
+  if (a5.deliveredAt !== b5.deliveredAt) return a5.deliveredAt < b5.deliveredAt ? 1 : -1;
+  return a5.id < b5.id ? -1 : 1;
+}
+function resolvedNewestFirst(a5, b5) {
+  const left = a5.resolution?.resolvedAt ?? "";
+  const right = b5.resolution?.resolvedAt ?? "";
+  if (left !== right) return left < right ? 1 : -1;
+  return a5.id < b5.id ? -1 : 1;
+}
+async function listHumanActions({
+  includeResolved = false
+} = {}) {
+  const generatedAt = (/* @__PURE__ */ new Date()).toISOString();
+  const workspaceIds = await readableWorkspaceIds();
+  const rows = await loadDeliveriesWithActions(workspaceIds);
+  const resolutions = await loadResolutions(rows.map((row) => row.delivery_id));
+  const open = [];
+  const resolved = [];
+  for (const row of rows) {
+    for (const action of deliveryActions(row)) {
+      const item = toItem(row, action, resolutions.get(`${row.delivery_id}:${action.id}`));
+      (item.resolution ? resolved : open).push(item);
+    }
+  }
+  open.sort(openFirst);
+  resolved.sort(resolvedNewestFirst);
+  return {
+    items: includeResolved ? [...open, ...resolved.slice(0, RESOLVED_LIMIT)] : open,
+    generatedAt,
+    counts: {
+      open: open.length,
+      blocking: open.filter((item) => item.blocking).length,
+      resolved: resolved.length
+    }
+  };
+}
+async function requireDeliveryAction(deliveryId, actionId) {
+  const row = await loadDelivery(deliveryId);
+  if (!row) throw new ApiError(404, "Delivery not found");
+  const workspaceUserId = await requireWorkspacePermission({
+    workspaceId: row.workspace_id,
+    permission: PERMISSIONS.MISSION_UPDATE,
+    notFoundMessage: "Delivery not found"
+  });
+  const action = deliveryActions(row).find((candidate) => candidate.id === actionId);
+  if (!action) throw new ApiError(404, "Human action not found");
+  return { row, action, workspaceUserId };
+}
+async function currentItem(row, action) {
+  const resolutions = await loadResolutions([row.delivery_id]);
+  return toItem(row, action, resolutions.get(`${row.delivery_id}:${action.id}`));
+}
+async function actorWorkspaceUserId(workspaceId2, fallback2) {
+  const profileId = await resolveActiveProfileId();
+  if (!profileId) return fallback2;
+  return await findActiveMembershipId(workspaceId2, profileId) ?? fallback2;
+}
+function parseStatus(body) {
+  const status = body && typeof body === "object" ? body.status : void 0;
+  if (typeof status !== "string" || !RESOLUTION_STATUSES.has(status)) {
+    throw new ApiError(400, "status must be 'done' or 'dismissed'");
+  }
+  return status;
+}
+async function resolveHumanAction(deliveryId, actionId, body) {
+  const status = parseStatus(body);
+  const { row, action, workspaceUserId } = await requireDeliveryAction(deliveryId, actionId);
+  const db = requireDatabaseClient();
+  const resolvedBy = await actorWorkspaceUserId(row.workspace_id, workspaceUserId);
+  const now2 = nowIso2();
+  await db.transaction(async (tx) => {
+    await tx.run(
+      `INSERT INTO human_action_resolutions
+         (delivery_id, action_id, workspace_id, mission_id, objective_id, status,
+          resolved_by_workspace_user_id, resolved_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (delivery_id, action_id) DO UPDATE SET
+         status = excluded.status,
+         resolved_by_workspace_user_id = excluded.resolved_by_workspace_user_id,
+         resolved_at = excluded.resolved_at`,
+      [
+        row.delivery_id,
+        action.id,
+        row.workspace_id,
+        row.mission_id,
+        row.objective_id,
+        status,
+        resolvedBy,
+        now2
+      ]
+    );
+    await recordChange2(
+      {
+        entityType: "human_action_resolution",
+        entityId: `${row.delivery_id}:${action.id}`,
+        operation: "update",
+        projectId: row.project_id,
+        missionId: row.mission_id,
+        objectiveId: row.objective_id,
+        workspaceId: row.workspace_id,
+        changedFields: ["status"],
+        actorWorkspaceUserId: resolvedBy
+      },
+      tx
+    );
+  });
+  return currentItem(row, action);
+}
+async function reopenHumanAction(deliveryId, actionId) {
+  const { row, action, workspaceUserId } = await requireDeliveryAction(deliveryId, actionId);
+  const db = requireDatabaseClient();
+  const existing = await db.get(
+    `SELECT 1 FROM human_action_resolutions WHERE delivery_id = ? AND action_id = ?`,
+    [row.delivery_id, action.id]
+  );
+  if (existing) {
+    const actor = await actorWorkspaceUserId(row.workspace_id, workspaceUserId);
+    await db.transaction(async (tx) => {
+      await tx.run(`DELETE FROM human_action_resolutions WHERE delivery_id = ? AND action_id = ?`, [
+        row.delivery_id,
+        action.id
+      ]);
+      await recordChange2(
+        {
+          entityType: "human_action_resolution",
+          entityId: `${row.delivery_id}:${action.id}`,
+          operation: "delete",
+          projectId: row.project_id,
+          missionId: row.mission_id,
+          objectiveId: row.objective_id,
+          workspaceId: row.workspace_id,
+          changedFields: ["status"],
+          actorWorkspaceUserId: actor
+        },
+        tx
+      );
+    });
+  }
+  return currentItem(row, action);
+}
 
 // live-activities.ts
 init_dist2();
@@ -173046,6 +173475,22 @@ app.get(
       before: typeof req.query.before === "string" ? req.query.before : null
     })
   )
+);
+app.get(
+  "/api/human-actions",
+  handle3((req) => listHumanActions({ includeResolved: isTruthyQueryFlag(req.query.includeResolved) }))
+);
+app.put(
+  "/api/human-actions/:deliveryId/:actionId/resolution",
+  handle3((req) => resolveHumanAction(req.params.deliveryId, req.params.actionId, req.body), {
+    mutates: true
+  })
+);
+app.delete(
+  "/api/human-actions/:deliveryId/:actionId/resolution",
+  handle3((req) => reopenHumanAction(req.params.deliveryId, req.params.actionId), {
+    mutates: true
+  })
 );
 app.get(
   "/api/inbox/missions",

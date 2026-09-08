@@ -96,6 +96,55 @@ describe('objective creation agent defaulting', () => {
     await db.close();
   });
 
+  it('honors an explicit per-objective agent and model over the project preference', async () => {
+    const { db, ctx } = await setup();
+    const project = await createProject({ ctx, name: 'Explicit Agent' });
+    await setLaunchPreference(ctx, project.id, {
+      selectedAgent: 'claude',
+      selectedModel: 'claude-opus-4-8',
+      selectedReasoningEffort: 'high'
+    });
+
+    // The point of the change: a mission can be created with its first objective
+    // already assigned, instead of appending a second objective just to name one.
+    const { objectives } = await createMissionWithObjectives({
+      ctx,
+      projectId: project.id,
+      objectives: [
+        { objective: 'Draft step', agent: 'codex', model: 'gpt-5.6-terra' },
+        { objective: 'Future step' }
+      ]
+    });
+
+    const first = await agentOf(ctx, objectives[0]?.id as string);
+    assert.equal(first.assigned_agent, 'codex');
+    assert.equal(first.model, 'gpt-5.6-terra');
+    // An explicit selection carries no reasoning effort of its own, and must not
+    // borrow the project preference's.
+    assert.equal(first.reasoning_effort, null);
+
+    const second = await agentOf(ctx, objectives[1]?.id as string);
+    assert.equal(second.assigned_agent, 'claude');
+
+    await db.close();
+  });
+
+  it('rejects a per-objective model with no agent', async () => {
+    const { db, ctx } = await setup();
+    const project = await createProject({ ctx, name: 'Model Without Agent' });
+
+    await assert.rejects(
+      createMissionWithObjectives({
+        ctx,
+        projectId: project.id,
+        objectives: [{ objective: 'Draft step', model: 'gpt-5.6-terra' }]
+      }),
+      /model requires an assigned agent/
+    );
+
+    await db.close();
+  });
+
   it('leaves the agent unset when the project has no launch preference', async () => {
     const { db, ctx } = await setup();
     const project = await createProject({ ctx, name: 'No Preference' });

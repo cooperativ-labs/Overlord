@@ -9,6 +9,7 @@ import {
 } from '@/components/objectives/AgentModelSelector.tsx';
 import { ObjectiveResourcePicker } from '@/components/objectives/ObjectiveResourcePicker.tsx';
 import { RepositoryMentionTextarea } from '@/components/RepositoryMentionTextarea.tsx';
+import { DueDatePickerButton } from '@/components/scheduling/DueDatePickerButton.tsx';
 import { Button } from '@/components/ui.tsx';
 import {
   DropdownMenu,
@@ -28,6 +29,7 @@ import {
   useMission,
   usePromoteInboxItem,
   useUpdateInboxItem,
+  useUpdateMission,
   useUpdateObjective
 } from '@/lib/queries.ts';
 
@@ -47,6 +49,8 @@ type InboxMissionCardProps =
       item: InboxItemDto;
       /** Called after promotion so the Inbox page can keep this card sticky. */
       onPromoted: (mission: MissionDetailDto) => void;
+      /** Called after a plain (non-promoting) save; the task list collapses the editor. */
+      onSaved?: () => void;
     }
   | {
       variant: 'mission';
@@ -64,15 +68,23 @@ export function InboxMissionCard(props: InboxMissionCardProps) {
   if (props.variant === 'mission') {
     return <PromotedInboxMissionCard initialMission={props.mission} />;
   }
-  return <UnassignedInboxMissionCard item={props.item} onPromoted={props.onPromoted} />;
+  return (
+    <UnassignedInboxMissionCard
+      item={props.item}
+      onPromoted={props.onPromoted}
+      onSaved={props.onSaved}
+    />
+  );
 }
 
 function UnassignedInboxMissionCard({
   item,
-  onPromoted
+  onPromoted,
+  onSaved
 }: {
   item: InboxItemDto;
   onPromoted: (mission: MissionDetailDto) => void;
+  onSaved?: () => void;
 }) {
   const updateInbox = useUpdateInboxItem();
   const promote = usePromoteInboxItem();
@@ -81,6 +93,7 @@ function UnassignedInboxMissionCard({
   const updateObjective = useUpdateObjective();
 
   const [instruction, setInstruction] = useState(item.objectives[0] ?? item.title);
+  const [dueDatetime, setDueDatetime] = useState<string | null>(item.dueDatetime);
   const [projectId, setProjectId] = useState('');
   const [resourceKey, setResourceKey] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<'save' | 'run' | 'delete' | null>(null);
@@ -88,7 +101,8 @@ function UnassignedInboxMissionCard({
 
   useEffect(() => {
     setInstruction(item.objectives[0] ?? item.title);
-  }, [item.id, item.objectives, item.title]);
+    setDueDatetime(item.dueDatetime);
+  }, [item.id, item.objectives, item.title, item.dueDatetime]);
 
   const state = useInboxCardState({
     projectId,
@@ -127,6 +141,16 @@ function UnassignedInboxMissionCard({
     });
   }
 
+  /**
+   * The due date saves on its own rather than waiting for Save, so an unassigned
+   * capture can be scheduled without also committing an in-progress text edit.
+   * Promotion carries `due_datetime` onto the mission, so this survives Run too.
+   */
+  async function persistDueDatetime(next: string | null) {
+    await updateInbox.mutateAsync({ id: item.id, body: { dueDatetime: next } });
+    setDueDatetime(next);
+  }
+
   async function submit(shouldLaunch: boolean) {
     const text = instruction.trim();
     if (!text || (projectId && !selectionLoaded) || isBusy) return;
@@ -137,6 +161,7 @@ function UnassignedInboxMissionCard({
     try {
       if (!projectId) {
         await persistInboxText(text);
+        onSaved?.();
         return;
       }
 
@@ -232,6 +257,8 @@ function UnassignedInboxMissionCard({
         setResourceKey(null);
       }}
       onResourceChange={setResourceKey}
+      dueDatetime={dueDatetime}
+      onDueDatetimeChange={persistDueDatetime}
       resources={resources}
       selection={selection}
       onSelectionChange={handleSelectionChange}
@@ -265,6 +292,7 @@ function PromotedInboxMissionCard({ initialMission }: { initialMission: MissionD
 
   const launchObjective = useLaunchObjective();
   const updateObjective = useUpdateObjective();
+  const updateMission = useUpdateMission(mission.id);
 
   const [instruction, setInstruction] = useState(objective?.instructionText ?? mission.title);
   const [resourceKey, setResourceKey] = useState<string | null>(objective?.resourceKey ?? null);
@@ -392,6 +420,10 @@ function PromotedInboxMissionCard({ initialMission }: { initialMission: MissionD
       }}
       projectLocked
       onResourceChange={setResourceKey}
+      dueDatetime={mission.dueDatetime}
+      onDueDatetimeChange={async next => {
+        await updateMission.mutateAsync({ dueDatetime: next });
+      }}
       resources={resources}
       selection={selection}
       onSelectionChange={handleSelectionChange}
@@ -452,6 +484,8 @@ type InboxCardShellProps = {
   onSelectInbox: () => void;
   projectLocked?: boolean;
   onResourceChange: (resourceKey: string | null) => void;
+  dueDatetime: string | null;
+  onDueDatetimeChange: (next: string | null) => void | Promise<void>;
   resources: ProjectResourceDto[];
   selection: AgentModelSelection;
   onSelectionChange: (next: AgentModelSelection) => void;
@@ -487,6 +521,8 @@ function InboxCardShell({
   onSelectInbox,
   projectLocked = false,
   onResourceChange,
+  dueDatetime,
+  onDueDatetimeChange,
   resources,
   selection,
   onSelectionChange,
@@ -615,6 +651,16 @@ function InboxCardShell({
                 onChange={onResourceChange}
               />
             ) : null}
+
+            <DueDatePickerButton
+              size="sm"
+              emptyLabel="Due date"
+              heading="Due date"
+              description="Schedule when this task is due."
+              value={dueDatetime}
+              onChange={onDueDatetimeChange}
+              disabled={isBusy}
+            />
           </div>
 
           <div className="flex shrink-0 items-center gap-1.5">

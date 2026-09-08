@@ -7,7 +7,11 @@ import type {
   TradeoffMadeV1
 } from '@overlord/contract';
 
-import { DELIVERY_REPORT_LIMITS, isDisplayableHumanAction } from './delivery-report.js';
+import {
+  DELIVERY_REPORT_LIMITS,
+  isDisplayableHumanAction,
+  isValidHumanActionLink
+} from './delivery-report.js';
 import { nowIso } from './util.js';
 
 const HUMAN_ACTION_CATEGORIES = new Set<HumanActionCategory>([
@@ -43,8 +47,12 @@ export type ChangeRationaleEvidence = {
 };
 
 /**
- * Derives optional human-action candidates from changed file paths. These are
- * provenance `deterministic_rule` sources Gemini may cite but never invent beyond.
+ * Derives human-action candidates from changed file paths. They carry
+ * `deterministic_rule` provenance: the model may rephrase or cite them but never
+ * invent beyond them, and reconciliation always keeps them in the presentation
+ * (see `mergeDeterministicActionCandidates`) so a missing agent report never
+ * hides a real step. The first matching path becomes the candidate's `link`
+ * and `sourceRef`.
  */
 export function deriveDeterministicActionCandidates({
   filePaths
@@ -57,11 +65,15 @@ export function deriveDeterministicActionCandidates({
   const add = ({
     action,
     reason,
-    category
+    category,
+    verify,
+    filePath
   }: {
     action: string;
     reason: string;
     category: HumanActionCategory;
+    verify: string;
+    filePath: string;
   }) => {
     if (!isDisplayableHumanAction(action) || seen.has(action)) return;
     seen.add(action);
@@ -70,7 +82,10 @@ export function deriveDeterministicActionCandidates({
       action,
       reason,
       category,
-      source: 'deterministic_rule'
+      verify,
+      ...(isValidHumanActionLink(filePath) ? { link: filePath } : {}),
+      source: 'deterministic_rule',
+      sourceRef: filePath
     });
   };
 
@@ -84,33 +99,76 @@ export function deriveDeterministicActionCandidates({
       add({
         action: 'Apply the database migration(s) included in this delivery.',
         reason: `Changed path ${filePath} looks like a schema/migration update.`,
-        category: 'database'
+        category: 'database',
+        verify:
+          'The new migration is recorded as applied and the service starts without schema errors.',
+        filePath
       });
     }
     if (/(?:^|\/)\.env(?:\.|$)|\.env\.[^/]+$/i.test(filePath) || /env\.example$/i.test(base)) {
       add({
         action: 'Review and set any new environment variables.',
         reason: `Changed path ${filePath} may introduce required configuration.`,
-        category: 'environment'
+        category: 'environment',
+        verify:
+          'Every variable added to the example file has a value in each environment and the service boots without a missing-configuration error.',
+        filePath
       });
     }
     if (/docker-compose|Dockerfile|fly\.toml|vercel\.json|railway/i.test(filePath)) {
       add({
         action: 'Redeploy the affected service with the updated configuration.',
         reason: `Changed path ${filePath} suggests a deployment/config change.`,
-        category: 'deployment'
+        category: 'deployment',
+        verify: 'The new deployment is healthy and serving traffic with the updated configuration.',
+        filePath
+      });
+    }
+    if (/(?:^|\/)\.github\/workflows\/[^/]+\.ya?ml$/i.test(filePath)) {
+      add({
+        action: 'Confirm the new or changed CI workflow runs green on the next push.',
+        reason: `Changed path ${filePath} adds or edits a GitHub Actions workflow.`,
+        category: 'deployment',
+        verify:
+          'The workflow appears in the Actions tab for the next push and completes successfully.',
+        filePath
       });
     }
     if (/package\.json$|Cargo\.toml$|\.csproj$/i.test(base)) {
       add({
         action: 'Reinstall or rebuild package dependencies if your environment is stale.',
         reason: `Changed path ${filePath} may alter dependency resolution.`,
-        category: 'packaging'
+        category: 'packaging',
+        verify: 'The install completes without lockfile drift and the build passes locally.',
+        filePath
       });
     }
   }
 
   return candidates.slice(0, DELIVERY_REPORT_LIMITS.maxItems);
+}
+
+/**
+ * Appends every deterministic candidate that `actions` does not already carry
+ * (matched by id), bounded to the report limit. Agent and composed actions keep
+ * their order and lead the list; rule-derived actions follow.
+ */
+export function mergeDeterministicActionCandidates({
+  actions,
+  candidates
+}: {
+  actions: HumanActionV1[];
+  candidates: DeterministicActionCandidate[];
+}): HumanActionV1[] {
+  const merged = actions.slice(0, DELIVERY_REPORT_LIMITS.maxItems);
+  const seen = new Set(merged.map(action => action.id));
+  for (const candidate of candidates) {
+    if (merged.length >= DELIVERY_REPORT_LIMITS.maxItems) break;
+    if (seen.has(candidate.id)) continue;
+    seen.add(candidate.id);
+    merged.push(candidate);
+  }
+  return merged;
 }
 
 function clampText(value: unknown, maxLength: number): string | null {
@@ -177,10 +235,50 @@ function evidenceTradeoffs({
   return byId;
 }
 
+function optionalActionText(
+  draftValue: unknown,
+  sourceValue: string | undefined,
+  maxLength: number
+): string | undefined {
+  return clampText(draftValue, maxLength) ?? sourceValue;
+}
+
+/** Prefers the model's link when it is well-formed, else the evidence link, else nothing. */
+function optionalActionLink(draftValue: unknown, source: HumanActionV1): string | undefined {
+  const fromDraft = clampText(draftValue, DELIVERY_REPORT_LIMITS.maxLinkLength);
+  if (fromDraft && isValidHumanActionLink(fromDraft)) return fromDraft;
+  return source.link && isValidHumanActionLink(source.link) ? source.link : undefined;
+}
+
+/** Composed `command`, `verify`, and `link` fields, present only when they have a value. */
+function composedActionDetails(
+  item: Record<string, unknown>,
+  source: HumanActionV1
+): Pick<HumanActionV1, 'command' | 'verify' | 'link'> {
+  const command = optionalActionText(
+    item.command,
+    source.command,
+    DELIVERY_REPORT_LIMITS.maxCommandLength
+  );
+  const verify = optionalActionText(
+    item.verify,
+    source.verify,
+    DELIVERY_REPORT_LIMITS.maxDetailLength
+  );
+  const link = optionalActionLink(item.link, source);
+  return {
+    ...(command ? { command } : {}),
+    ...(verify ? { verify } : {}),
+    ...(link ? { link } : {})
+  };
+}
+
 /**
  * Reconciles a model draft against authoritative evidence. Invented actions or
- * tradeoffs without a matching source id are dropped. On null/invalid drafts the
- * deterministic presentation is retained with status `fallback`.
+ * tradeoffs without a matching source id are dropped. Deterministic candidates
+ * the draft did not cite are appended so a rule-derived step always lands. On
+ * null/invalid drafts the deterministic presentation (plus candidates) is
+ * retained with status `fallback`.
  */
 export function reconcileDeliveryComposeDraft({
   report,
@@ -200,6 +298,10 @@ export function reconcileDeliveryComposeDraft({
   const fallback: DeliveryPresentationV1 = {
     ...report.presentation,
     status: 'fallback',
+    humanActions: mergeDeterministicActionCandidates({
+      actions: report.presentation.humanActions,
+      candidates
+    }),
     generatedBy: 'deterministic',
     generatedAt,
     ...(model ? { model } : {})
@@ -240,7 +342,8 @@ export function reconcileDeliveryComposeDraft({
           : source.reason
             ? { reason: source.reason }
             : {}),
-        category: asCategory(item.category ?? source.category)
+        category: asCategory(item.category ?? source.category),
+        ...composedActionDetails(item, source)
       });
       if (humanActions.length >= DELIVERY_REPORT_LIMITS.maxItems) break;
     }
@@ -277,7 +380,11 @@ export function reconcileDeliveryComposeDraft({
   }
 
   // If the model returned nothing usable for structured sections, keep evidence.
-  const resolvedActions = humanActions.length > 0 ? humanActions : report.presentation.humanActions;
+  // Rule-derived candidates always land, cited by the model or not.
+  const resolvedActions = mergeDeterministicActionCandidates({
+    actions: humanActions.length > 0 ? humanActions : report.presentation.humanActions,
+    candidates
+  });
   const resolvedTradeoffs =
     tradeoffsMade.length > 0 ? tradeoffsMade : report.presentation.tradeoffsMade;
 

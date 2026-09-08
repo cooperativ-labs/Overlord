@@ -104,6 +104,92 @@ test('protocol add-objectives persists per-item agent and model', async () => {
   assert.equal(stored?.model, 'gpt-5.6-terra');
 });
 
+test('protocol create persists per-item agent and model on the initial objective', async () => {
+  const project = await createProject({ name: `Agent model create ${Date.now()}` });
+  const result = (await runProtocolSubcommand('create', {
+    flags: {
+      '--project-id': project.id,
+      '--objectives-json': JSON.stringify([
+        { objective: 'Draft with Codex', agent: 'codex', model: 'gpt-5.6-terra' },
+        { objective: 'Future with Claude', agent: 'claude' }
+      ])
+    }
+  })) as CreatedMission;
+
+  const first = await serviceDatabaseClient().get<{
+    assigned_agent: string | null;
+    model: string | null;
+  }>(`SELECT assigned_agent, model FROM objectives WHERE id = ?`, [result.objectives[0]!.id]);
+  assert.equal(first?.assigned_agent, 'codex');
+  assert.equal(first?.model, 'gpt-5.6-terra');
+
+  const second = await serviceDatabaseClient().get<{
+    assigned_agent: string | null;
+    model: string | null;
+  }>(`SELECT assigned_agent, model FROM objectives WHERE id = ?`, [result.objectives[1]!.id]);
+  assert.equal(second?.assigned_agent, 'claude');
+  assert.equal(second?.model, null);
+});
+
+test('protocol create assigns an agent to the single --objective form', async () => {
+  const project = await createProject({ name: `Objective agent flag ${Date.now()}` });
+  const result = (await runProtocolSubcommand('create', {
+    flags: {
+      '--project-id': project.id,
+      '--objective': 'One objective, already assigned',
+      '--objective-agent': 'codex',
+      '--objective-model': 'gpt-5.6-terra'
+    }
+  })) as CreatedMission;
+
+  assert.equal(result.objectives.length, 1);
+  const stored = await serviceDatabaseClient().get<{
+    assigned_agent: string | null;
+    model: string | null;
+  }>(`SELECT assigned_agent, model FROM objectives WHERE id = ?`, [result.objectives[0]!.id]);
+  assert.equal(stored?.assigned_agent, 'codex');
+  assert.equal(stored?.model, 'gpt-5.6-terra');
+});
+
+test('--objective-agent seeds only the items that name no agent of their own', async () => {
+  const project = await createProject({ name: `Objective agent default ${Date.now()}` });
+  const result = (await runProtocolSubcommand('create', {
+    flags: {
+      '--project-id': project.id,
+      '--objective-agent': 'claude',
+      '--objectives-json': JSON.stringify([
+        { objective: 'Inherits the flag' },
+        { objective: 'Keeps its own', agent: 'codex' }
+      ])
+    }
+  })) as CreatedMission;
+
+  const rows = await Promise.all(
+    result.objectives.map(objective =>
+      serviceDatabaseClient().get<{ assigned_agent: string | null }>(
+        `SELECT assigned_agent FROM objectives WHERE id = ?`,
+        [objective.id]
+      )
+    )
+  );
+  assert.equal(rows[0]?.assigned_agent, 'claude');
+  assert.equal(rows[1]?.assigned_agent, 'codex');
+});
+
+test('protocol create rejects an objective model with no agent', async () => {
+  const project = await createProject({ name: `Objective model no agent ${Date.now()}` });
+  await assert.rejects(
+    runProtocolSubcommand('create', {
+      flags: {
+        '--project-id': project.id,
+        '--objective': 'Model without an agent',
+        '--objective-model': 'gpt-5.6-terra'
+      }
+    }),
+    (error: unknown) => error instanceof ApiError && error.status === 400
+  );
+});
+
 test('agent queue commands keep legacy auto-advance work in mission-local queue order', async () => {
   const project = await createProject({ name: `Run Queue protocol ${Date.now()}` });
   const created = (await runProtocolSubcommand('create', {

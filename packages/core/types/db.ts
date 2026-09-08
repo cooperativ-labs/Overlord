@@ -604,6 +604,17 @@ export interface ExtGithubUserOauthStates {
   updated_at: string;
 }
 
+export interface HumanActionResolutions {
+  action_id: string;
+  delivery_id: string;
+  mission_id: string;
+  objective_id: string;
+  resolved_at: string;
+  resolved_by_workspace_user_id: string | null;
+  status: string;
+  workspace_id: string;
+}
+
 export interface IdempotencyKeys {
   actor_workspace_user_id: string | null;
   created_at: string;
@@ -1440,6 +1451,7 @@ export interface DB {
   ext_github_project_links: ExtGithubProjectLinks;
   ext_github_user_connections: ExtGithubUserConnections;
   ext_github_user_oauth_states: ExtGithubUserOauthStates;
+  human_action_resolutions: HumanActionResolutions;
   idempotency_keys: IdempotencyKeys;
   inbox_items: InboxItems;
   live_activity_push_tokens: LiveActivityPushTokens;

@@ -83,6 +83,8 @@ export const COMMAND_FLAGS: Record<string, readonly string[]> = {
     '--project-id',
     '--title',
     '--resource',
+    '--objective-agent',
+    '--objective-model',
     '--auto-advance',
     '--no-auto-advance'
   ],
@@ -94,6 +96,8 @@ export const COMMAND_FLAGS: Record<string, readonly string[]> = {
     '--title',
     '--resource',
     '--agent',
+    '--objective-agent',
+    '--objective-model',
     '--auto-advance',
     '--no-auto-advance'
   ],

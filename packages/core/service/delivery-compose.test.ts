@@ -5,6 +5,7 @@ import { describe, it } from 'node:test';
 import {
   applyDeliveryPresentation,
   deriveDeterministicActionCandidates,
+  mergeDeterministicActionCandidates,
   reconcileDeliveryComposeDraft
 } from './delivery-compose.js';
 import { buildDeliveryReport } from './delivery-report.js';
@@ -19,7 +20,10 @@ function baseReport(): DeliveryReportPayloadV1 {
           {
             action: 'Set GEMINI_API_KEY in production.',
             reason: 'Composition needs a provider credential.',
-            category: 'environment'
+            category: 'environment',
+            command: 'railway variables set GEMINI_API_KEY=<key>',
+            verify: 'The next delivery composes instead of falling back.',
+            link: 'https://railway.app/project/overlord/variables'
           }
         ],
         tradeoffsMade: [
@@ -115,6 +119,146 @@ describe('delivery-compose reconciliation', () => {
     assert.ok(candidates.some(candidate => candidate.category === 'database'));
     assert.ok(candidates.some(candidate => candidate.category === 'environment'));
     assert.ok(candidates.every(candidate => candidate.source === 'deterministic_rule'));
+  });
+
+  it('links each candidate to the path that triggered it and gives it a verify step', () => {
+    const candidates = deriveDeterministicActionCandidates({
+      filePaths: [
+        'database/sqlite/migrations/20260907_human_actions.sql',
+        'database/postgres/migrations/20260907_human_actions.sql',
+        '.github/workflows/release.yml',
+        'package.json',
+        'src/feature.ts'
+      ]
+    });
+    const byCategory = new Map(candidates.map(candidate => [candidate.category, candidate]));
+    assert.equal(
+      byCategory.get('database')?.link,
+      'database/sqlite/migrations/20260907_human_actions.sql'
+    );
+    assert.equal(
+      byCategory.get('database')?.sourceRef,
+      'database/sqlite/migrations/20260907_human_actions.sql'
+    );
+    assert.equal(byCategory.get('deployment')?.link, '.github/workflows/release.yml');
+    assert.equal(byCategory.get('packaging')?.link, 'package.json');
+    assert.ok(candidates.every(candidate => typeof candidate.verify === 'string'));
+    assert.equal(candidates.length, 3, 'one candidate per rule, not per path');
+  });
+
+  it('keeps command, verify, and link on composed actions the model does not restate', () => {
+    const report = baseReport();
+    const presentation = reconcileDeliveryComposeDraft({
+      report,
+      draft: {
+        markdown: 'Done.',
+        humanActions: [{ sourceId: 'human-action-1', action: 'Set the Gemini key in prod.' }],
+        tradeoffsMade: []
+      }
+    });
+    const [action] = presentation.humanActions;
+    assert.equal(action?.command, 'railway variables set GEMINI_API_KEY=<key>');
+    assert.equal(action?.verify, 'The next delivery composes instead of falling back.');
+    assert.equal(action?.link, 'https://railway.app/project/overlord/variables');
+  });
+
+  it('accepts a model-supplied link only when it is an HTTP(S) URL or relative path', () => {
+    const report = baseReport();
+    const presentation = reconcileDeliveryComposeDraft({
+      report,
+      draft: {
+        markdown: 'Done.',
+        humanActions: [
+          {
+            sourceId: 'human-action-1',
+            action: 'Set the key.',
+            command: 'railway variables set GEMINI_API_KEY=abc',
+            verify: 'Check the worker log.',
+            link: 'javascript:alert(1)'
+          }
+        ],
+        tradeoffsMade: []
+      }
+    });
+    const [action] = presentation.humanActions;
+    assert.equal(action?.command, 'railway variables set GEMINI_API_KEY=abc');
+    assert.equal(action?.verify, 'Check the worker log.');
+    assert.equal(action?.link, 'https://railway.app/project/overlord/variables');
+  });
+
+  it('appends uncited deterministic candidates after the composed actions', () => {
+    const report = baseReport();
+    const candidates = deriveDeterministicActionCandidates({
+      filePaths: ['database/sqlite/migrations/20260907_x.sql', '.env.example']
+    });
+    const presentation = reconcileDeliveryComposeDraft({
+      report,
+      draft: {
+        markdown: 'Done.',
+        humanActions: [
+          { sourceId: 'human-action-1', action: 'Set the Gemini key in prod.' },
+          { sourceId: 'rule-action-2', action: 'Set the new variables from .env.example.' }
+        ],
+        tradeoffsMade: []
+      },
+      candidates
+    });
+    assert.deepEqual(
+      presentation.humanActions.map(action => action.id),
+      ['human-action-1', 'rule-action-2', 'rule-action-1']
+    );
+    assert.equal(
+      presentation.humanActions[1]?.action,
+      'Set the new variables from .env.example.',
+      'the cited candidate keeps the model wording'
+    );
+    assert.equal(presentation.humanActions[2]?.source, 'deterministic_rule');
+    assert.equal(presentation.humanActions[2]?.category, 'database');
+  });
+
+  it('lands deterministic candidates even when the agent reported no actions', () => {
+    const report = buildDeliveryReport({ summary: 'Shipped.', deliveryReport: undefined });
+    assert.equal(report.agentReport.humanActions.length, 0);
+    const candidates = deriveDeterministicActionCandidates({
+      filePaths: ['.github/workflows/ci.yml']
+    });
+
+    const composed = reconcileDeliveryComposeDraft({
+      report,
+      draft: { markdown: 'Polished.', humanActions: [], tradeoffsMade: [] },
+      candidates
+    });
+    assert.equal(composed.status, 'composed');
+    assert.deepEqual(
+      composed.humanActions.map(action => action.source),
+      ['deterministic_rule']
+    );
+
+    const fallback = reconcileDeliveryComposeDraft({ report, draft: null, candidates });
+    assert.equal(fallback.status, 'fallback');
+    assert.deepEqual(
+      fallback.humanActions.map(action => action.id),
+      ['rule-action-1']
+    );
+    assert.equal(report.presentation.humanActions.length, 0, 'the stored report is untouched');
+  });
+
+  it('merges candidates by id without duplicating and within the item bound', () => {
+    const report = baseReport();
+    const candidates = deriveDeterministicActionCandidates({
+      filePaths: ['database/migrations/a.sql']
+    });
+    const merged = mergeDeterministicActionCandidates({
+      actions: [...report.agentReport.humanActions, ...candidates],
+      candidates
+    });
+    assert.equal(merged.length, 2);
+
+    const many = Array.from({ length: 12 }, (_, index) => ({
+      ...report.agentReport.humanActions[0]!,
+      id: `human-action-${index + 1}`
+    }));
+    assert.equal(mergeDeterministicActionCandidates({ actions: many, candidates }).length, 12);
   });
 
   it('preserves normalization warnings when composition replaces the presentation', () => {

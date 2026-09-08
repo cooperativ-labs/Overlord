@@ -12,6 +12,7 @@ import {
 } from '@/components/objectives/ObjectiveAttachments.tsx';
 import { ObjectiveResourcePicker } from '@/components/objectives/ObjectiveResourcePicker.tsx';
 import { RepositoryMentionTextarea } from '@/components/RepositoryMentionTextarea.tsx';
+import { DueDatePickerButton } from '@/components/scheduling/DueDatePickerButton.tsx';
 import { Button } from '@/components/ui.tsx';
 import {
   DropdownMenu,
@@ -89,6 +90,9 @@ export function NewMissionModal({
   const settingsQ = useLaunchSettings();
 
   const [instruction, setInstruction] = useState('');
+  // Held as an ISO string so the picker, the Inbox create body, and the mission
+  // PATCH all speak the same shape a saved mission already stores.
+  const [dueDatetime, setDueDatetime] = useState<string | null>(null);
   const [resourceKey, setResourceKey] = useState<string | null>(null);
   const [projectId, setProjectId] = useState('');
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
@@ -193,6 +197,11 @@ export function NewMissionModal({
   useEffect(() => {
     if (!open) return;
     setInstruction('');
+    setDueDatetime(
+      defaultDueDate
+        ? buildDueDatetime({ selectedDate: defaultDueDate, currentDueDatetime: null })
+        : null
+    );
     setResourceKey(null);
     setSelectedTagIds([]);
     setSubmitError(null);
@@ -205,7 +214,14 @@ export function NewMissionModal({
       }
       return '';
     });
-  }, [clearPendingAttachments, explicitDefaultProjectId, open, projects, recentDefaultProjectId]);
+  }, [
+    clearPendingAttachments,
+    defaultDueDate,
+    explicitDefaultProjectId,
+    open,
+    projects,
+    recentDefaultProjectId
+  ]);
 
   // Tags are project-scoped — drop any that no longer belong to the project.
   useEffect(() => {
@@ -260,9 +276,7 @@ export function NewMissionModal({
         await createInboxItem.mutateAsync({
           title: text,
           objectives: [text],
-          dueDatetime: defaultDueDate
-            ? buildDueDatetime({ selectedDate: defaultDueDate, currentDueDatetime: null })
-            : null
+          dueDatetime
         });
         onClose();
         return;
@@ -283,13 +297,8 @@ export function NewMissionModal({
         statusId: applicableStatusId,
         tagIds: selectedTagIds.length > 0 ? selectedTagIds : undefined
       });
-      if (defaultDueDate) {
-        await api.updateMission(detail.id, {
-          dueDatetime: buildDueDatetime({
-            selectedDate: defaultDueDate,
-            currentDueDatetime: null
-          })
-        });
+      if (dueDatetime) {
+        await api.updateMission(detail.id, { dueDatetime });
       }
       const createdObjective = detail.objectives[0];
       if (!createdObjective) {
@@ -572,6 +581,16 @@ export function NewMissionModal({
                   value={resourceKey}
                   disabled={isBusy}
                   onChange={setResourceKey}
+                />
+
+                <DueDatePickerButton
+                  size="sm"
+                  emptyLabel="Due date"
+                  heading="Due date"
+                  description="Schedule when this task is due."
+                  value={dueDatetime}
+                  onChange={setDueDatetime}
+                  disabled={isBusy}
                 />
               </div>
 

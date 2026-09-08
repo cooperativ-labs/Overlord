@@ -5204,6 +5204,18 @@ async function createMissionTx(
       throw new ApiError(400, 'dueDatetime must be a valid ISO-8601 datetime or null');
     }
 
+    // Per-objective launch selection is free-form connector/model text, so the
+    // only REST-side rule is the shape; the service layer owns the semantic
+    // "a model needs an agent" rejection.
+    for (const [index, item] of objectiveInputs.entries()) {
+      for (const key of ['agent', 'model'] as const) {
+        const value = item[key];
+        if (value !== undefined && value !== null && typeof value !== 'string') {
+          throw new ApiError(400, `objectives[${index}].${key} must be a string or null`);
+        }
+      }
+    }
+
     // The board can create a mission straight into a chosen column; validating
     // the id here keeps a project-scoped error and lets
     // the shared create take an already-checked status.
@@ -5224,6 +5236,8 @@ async function createMissionTx(
         objective: item.objective,
         ...(item.title !== undefined ? { title: item.title } : {}),
         autoAdvance: item.autoAdvance ?? false,
+        ...(item.agent !== undefined ? { agent: item.agent } : {}),
+        ...(item.model !== undefined ? { model: item.model } : {}),
         ...(item.resourceKey !== undefined ? { resourceKey: item.resourceKey } : {})
       })),
       title: explicitTitle || initialTitleFromInstruction(instruction),
@@ -5586,9 +5600,13 @@ async function resolveAssignedWorkspaceUserId(
   return member.id;
 }
 
-async function patchMissionFieldsTx(id: string, body: UpdateMissionBody): Promise<void> {
+async function patchMissionFieldsTx(missionRef: string, body: UpdateMissionBody): Promise<void> {
   await requireDatabaseClient().transaction(async tx => {
-    const existing = await getMissionRow(id, tx, PERMISSIONS.MISSION_UPDATE);
+    const existing = await getMissionRow(missionRef, tx, PERMISSIONS.MISSION_UPDATE);
+    // `missionRef` may be a display id (`coo:955`). Everything below writes rows
+    // and change-feed entries keyed on the mission's UUID, so work from the
+    // resolved row rather than the caller's reference (coo:957).
+    const id = existing.id;
 
     const fields: string[] = [];
     const setParams: unknown[] = [];
@@ -5772,18 +5790,19 @@ async function patchMissionFieldsTx(id: string, body: UpdateMissionBody): Promis
 }
 
 async function moveMissionProjectTx({
-  id,
   body,
   existing,
   targetProjectId,
   statusRow
 }: {
-  id: string;
   body: UpdateMissionBody;
   existing: MissionRow;
   targetProjectId: string;
   statusRow: ProjectStatusRow;
 }): Promise<void> {
+  // The caller may have been handed a display id (`coo:955`); every write below
+  // is keyed on the mission's UUID, so take it from the resolved row (coo:957).
+  const id = existing.id;
   await requireDatabaseClient().transaction(async tx => {
     // On PostgreSQL the composite mission/objective FKs are deferred for the unit
     // of work instead of toggling a connection pragma (the SQLite path disables
@@ -5880,11 +5899,11 @@ async function moveMissionProjectTx({
 
 /** PATCH /api/missions/:id — field updates and cross-project moves. */
 export async function updateMission(
-  id: string,
+  missionRef: string,
   body: UpdateMissionBody
 ): Promise<MissionDetailDto> {
   const client = requireDatabaseClient();
-  const existing = await getMissionRow(id, undefined, PERMISSIONS.MISSION_UPDATE);
+  const existing = await getMissionRow(missionRef, undefined, PERMISSIONS.MISSION_UPDATE);
   if (body.projectId !== undefined && body.projectId !== existing.project_id) {
     // A cross-project move must stay within the mission's own workspace — the
     // mission's display_id and workspace-scoped statuses/sequence are tied to
@@ -5927,7 +5946,6 @@ export async function updateMission(
     if (client.dialect === 'sqlite') await client.exec('PRAGMA foreign_keys = OFF');
     try {
       await moveMissionProjectTx({
-        id,
         body,
         existing,
         targetProjectId: body.projectId,
@@ -5936,11 +5954,11 @@ export async function updateMission(
     } finally {
       if (client.dialect === 'sqlite') await client.exec('PRAGMA foreign_keys = ON');
     }
-    return getMissionDetail(id);
+    return getMissionDetail(existing.id);
   }
 
-  await patchMissionFieldsTx(id, body);
-  return getMissionDetail(id);
+  await patchMissionFieldsTx(existing.id, body);
+  return getMissionDetail(existing.id);
 }
 
 export async function deleteMissions(

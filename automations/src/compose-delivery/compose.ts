@@ -13,6 +13,9 @@ export type ComposeDeliveryEvidenceItem = {
   rationale?: string;
   impact?: string;
   category?: string;
+  command?: string;
+  verify?: string;
+  link?: string;
   alternativesConsidered?: string[];
   source: string;
   sourceRef?: string;
@@ -63,7 +66,10 @@ export const COMPOSE_DELIVERY_RESPONSE_SCHEMA: Schema = {
           sourceId: { type: Type.STRING },
           action: { type: Type.STRING },
           reason: { type: Type.STRING },
-          category: { type: Type.STRING }
+          category: { type: Type.STRING },
+          command: { type: Type.STRING },
+          verify: { type: Type.STRING },
+          link: { type: Type.STRING }
         },
         required: ['sourceId', 'action']
       }
@@ -96,6 +102,8 @@ Rules:
 - Use the agent summary as the factual spine; improve clarity and organization in markdown.
 - Human actions and tradeoffs MUST cite sourceId values from the provided evidence or candidateActions.
 - Never invent mandatory human actions or implementation tradeoffs without a sourceId match.
+- Every deterministic candidate action is real follow-up work: cite each one unless an agent-reported action already covers the same step.
+- Carry each action's command, verify, and link fields through unchanged when the evidence supplies them; never fabricate a command, URL, or path that is not in the evidence.
 - Never include git commit/push/PR actions or routine "review/test the code" actions.
 - Prefer concise, scannable Markdown. Do not include secrets, tokens, or raw diffs.`;
 

@@ -71,7 +71,7 @@ The current tool catalog is mission-first:
 - `overlord_create_project`
 - `overlord_list_project_statuses` — read one project's board columns (names and order are per project; the status type is not)
 - `overlord_search_missions`
-- `overlord_create_mission`
+- `overlord_create_mission` — optional `agent` / `model` assign the initial objective's launch selection in the same call, so a follow-up `overlord_add_objectives` is never needed just to name an agent
 - `overlord_create_inbox_item`
 - `overlord_load_mission_context`
 - `overlord_list_deliveries` — read a `{ items, total, limit }` page of normalized delivery summaries, verification/follow-up notes, and authoritative delivery evidence for one mission

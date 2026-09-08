@@ -584,6 +584,16 @@ function missionDisplayId(mission: unknown): string {
       : 'unknown';
 }
 
+/** One `objectives[]` entry in the REST `POST /api/missions` body. */
+type CreateObjectiveInput = {
+  objective: string;
+  title?: string | null;
+  autoAdvance?: boolean;
+  agent?: string | null;
+  model?: string | null;
+  resourceKey?: string | null;
+};
+
 const PROTOCOL_FILE_FLAGS = [
   '--summary-file',
   '--question-file',
@@ -1515,29 +1525,42 @@ export async function runManagementCommand({
         name: '--auto-advance',
         negatedName: '--no-auto-advance'
       });
+      // `--agent` already names the launching agent on `ovld prompt`, so the
+      // objective's own launch selection gets an explicit flag pair. It seeds
+      // only items that name no agent of their own.
+      const objectiveAgent = flagValue(parsed.flags, '--objective-agent')?.trim() || undefined;
+      const objectiveModel = flagValue(parsed.flags, '--objective-model')?.trim() || undefined;
+      if (objectiveModel && !objectiveAgent) {
+        throw new CliError({ message: '--objective-model requires --objective-agent' });
+      }
+      // A per-item selection is the more specific statement of intent, so the
+      // flags fill in only what the item left unsaid.
+      const withAgentSelection = (item: CreateObjectiveInput): CreateObjectiveInput =>
+        objectiveAgent && !item.agent
+          ? { ...item, agent: objectiveAgent, model: item.model ?? objectiveModel ?? null }
+          : item;
       const parsedObjectives = objectivesJson
-        ? (JSON.parse(objectivesJson) as Array<{
-            objective: string;
-            title?: string | null;
-            autoAdvance?: boolean;
-            resourceKey?: string | null;
-          }>)
+        ? (JSON.parse(objectivesJson) as CreateObjectiveInput[])
         : null;
       const objectives = parsedObjectives
-        ? parsedObjectives.map(item => ({
-            ...item,
-            ...(item.autoAdvance === undefined && autoAdvance !== undefined ? { autoAdvance } : {})
-          }))
+        ? parsedObjectives.map(item =>
+            withAgentSelection({
+              ...item,
+              ...(item.autoAdvance === undefined && autoAdvance !== undefined
+                ? { autoAdvance }
+                : {})
+            })
+          )
         : objective
           ? [
-              {
+              withAgentSelection({
                 objective,
                 title: flagValue(parsed.flags, '--title') ?? null,
                 ...(autoAdvance !== undefined ? { autoAdvance } : {}),
                 ...(flagValue(parsed.flags, '--resource')
                   ? { resourceKey: flagValue(parsed.flags, '--resource') }
                   : {})
-              }
+              })
             ]
           : [];
       const first = objectives[0];

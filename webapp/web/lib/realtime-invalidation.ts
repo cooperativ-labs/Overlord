@@ -120,7 +120,13 @@ function routeChange(change: EntityChangeDto): QueryKey[] | null {
     case 'delivery': {
       const missionId = missionIdFor(change);
       if (!missionId) return null;
-      return [keys.missionDeliveries(missionId), keys.activityFeed];
+      // A new or recomposed delivery can add, reword, or drop human actions.
+      return [keys.missionDeliveries(missionId), keys.activityFeed, keys.humanActions];
+    }
+    case 'human_action_resolution': {
+      const missionId = missionIdFor(change);
+      if (!missionId) return null;
+      return [keys.humanActions, keys.missionDeliveries(missionId)];
     }
     case 'changed_file':
     case 'change_rationale': {

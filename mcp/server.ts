@@ -394,6 +394,12 @@ const toolHandlers: Record<string, ToolHandler> = {
         ...(optionalString(args, 'resourceKey')
           ? { '--resource': requiredString(args, 'resourceKey') }
           : {}),
+        ...(optionalString(args, 'agent')
+          ? { '--objective-agent': requiredString(args, 'agent') }
+          : {}),
+        ...(optionalString(args, 'model')
+          ? { '--objective-model': requiredString(args, 'model') }
+          : {}),
         ...(optionalString(args, 'assignedTo')
           ? { '--assigned-to': requiredString(args, 'assignedTo') }
           : {}),

@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 
 import {
   buildDueDatetime,
+  formatDueDateLabel,
   fromDateInputValue,
   parseDueDate,
   toDateInputValue
@@ -51,5 +52,18 @@ describe('buildDueDatetime', () => {
     const next = buildDueDatetime({ selectedDate, currentDueDatetime: null });
 
     assert.equal(next, '2026-03-10T12:00:00.000Z');
+  });
+});
+
+describe('formatDueDateLabel', () => {
+  it('falls back to the caller label when no due date is set', () => {
+    assert.equal(formatDueDateLabel(null, 'Due date'), 'Due date');
+    assert.equal(formatDueDateLabel('not-a-date', 'Set due date'), 'Set due date');
+  });
+
+  it('prefixes a formatted date once one is set', () => {
+    const label = formatDueDateLabel('2026-03-04T12:00:00.000Z', 'Due date');
+    assert.ok(label.startsWith('Due '));
+    assert.ok(label.includes('2026'));
   });
 });

@@ -1314,12 +1314,27 @@ export type HumanActionCategory =
   | 'external_service'
   | 'other';
 
-/** Raw agent-provided action evidence accepted in a delivery envelope. */
+/**
+ * Raw agent-provided action evidence accepted in a delivery envelope.
+ *
+ * `action` is the imperative step. `reason` and `category` are expected on
+ * every item (normalization tolerates their absence, defaulting `category` to
+ * `other`). The optional `command`, `verify`, and `link` fields (contract v137)
+ * make the step executable without re-reading the delivery: the exact command
+ * or setting to apply, how the operator confirms it worked, and a URL or
+ * repository-relative file path to open.
+ */
 export interface HumanActionInputV1 {
   action: string;
   reason?: string;
   category?: HumanActionCategory;
   blocking?: boolean;
+  /** Exact shell command, setting, or value to apply verbatim. */
+  command?: string;
+  /** How the operator confirms the action took effect. */
+  verify?: string;
+  /** HTTP(S) URL or repository-relative file path relevant to the action. */
+  link?: string;
 }
 
 /** Raw agent-provided implementation-decision evidence accepted in a delivery envelope. */
@@ -1336,6 +1351,9 @@ export interface HumanActionV1 extends Required<Pick<HumanActionInputV1, 'action
   reason?: string;
   category: HumanActionCategory;
   blocking?: boolean;
+  command?: string;
+  verify?: string;
+  link?: string;
   source: DeliveryEvidenceSource;
   sourceRef?: string;
 }
@@ -1418,6 +1436,66 @@ export interface DeliveryDto {
   deliveredAt: string;
   agentIdentifier: string | null;
   modelIdentifier: string | null;
+}
+
+// ---- Human actions (cross-workspace follow-up rail) ----
+
+/** The operator's decision on one reported human action. */
+export type HumanActionResolutionStatus = 'done' | 'dismissed';
+
+export interface HumanActionResolutionDto {
+  status: HumanActionResolutionStatus;
+  resolvedAt: string;
+  resolvedByWorkspaceUserId: string | null;
+}
+
+/**
+ * One `HumanActionV1` from the latest delivery of an objective, decorated with
+ * enough context to open the mission and to say which agent reported it.
+ * Returned by `GET /api/human-actions` (contract v136).
+ */
+export interface HumanActionItemDto {
+  /** `human-action:<deliveryId>:<actionId>`. */
+  id: string;
+  deliveryId: string;
+  actionId: string;
+  action: string;
+  reason: string | null;
+  category: HumanActionCategory;
+  blocking: boolean;
+  /** Exact command or setting to apply, when the agent supplied one. */
+  command: string | null;
+  /** How to confirm the action worked, when the agent supplied it. */
+  verify: string | null;
+  /** HTTP(S) URL or repository-relative path, when the agent supplied one. */
+  link: string | null;
+  source: DeliveryEvidenceSource;
+  workspaceId: string;
+  workspaceName: string;
+  projectId: string;
+  projectName: string;
+  projectColor: string | null;
+  missionId: string;
+  missionDisplayId: string;
+  missionTitle: string;
+  objectiveId: string;
+  objectiveDisplayId: string;
+  objectiveTitle: string | null;
+  deliveredAt: string;
+  agentIdentifier: string | null;
+  resolution: HumanActionResolutionDto | null;
+}
+
+export interface HumanActionsDto {
+  /** Open actions first (blocking, then newest delivery); resolved ones after when requested. */
+  items: HumanActionItemDto[];
+  generatedAt: string;
+  /** Totals before any cap, so the rail can show a count the list may not fully render. */
+  counts: { open: number; blocking: number; resolved: number };
+}
+
+export interface ResolveHumanActionBody {
+  status: HumanActionResolutionStatus;
 }
 
 // ---- Mission file changes ----
@@ -2134,6 +2212,10 @@ export interface CreateMissionBody {
     objective: string;
     title?: string | null;
     autoAdvance?: boolean;
+    /** Explicit launch selection for this objective; omitted keeps project launch-preference defaulting. */
+    agent?: string | null;
+    /** Model for `agent`; rejected without a non-empty agent. */
+    model?: string | null;
     resourceKey?: string | null;
   }>;
   /** Optional `project_tags.id` values to assign to the new mission. Must belong to `projectId`. */

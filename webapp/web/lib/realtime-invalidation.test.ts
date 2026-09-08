@@ -120,6 +120,7 @@ test('routes mission events, deliveries, attachments, and shared context to scop
     ['mission', 'mission-1', 'events'],
     ['mission', 'mission-1', 'deliveries'],
     ['activity-feed'],
+    ['human-actions'],
     ['objective', 'objective-1', 'attachments'],
     ['mission', 'mission-1', 'context']
   ]);
@@ -223,4 +224,20 @@ test('falls back to full invalidation for malformed or unroutable changes', () =
     assert.equal(mode, 'full');
     assert.deepEqual(calls, ['all']);
   }
+});
+
+test('routes human-action resolutions to the rail and the mission deliveries', () => {
+  const { client, calls } = fakeClient();
+
+  const mode = invalidateRealtimeChanges(client, [
+    change({
+      entityType: 'human_action_resolution',
+      entityId: 'delivery-1:human-action-1',
+      objectiveId: 'objective-1',
+      changedFields: ['status']
+    })
+  ]);
+
+  assert.equal(mode, 'targeted');
+  assert.deepEqual(calls, [['human-actions'], ['mission', 'mission-1', 'deliveries']]);
 });

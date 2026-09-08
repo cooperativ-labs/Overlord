@@ -38,3 +38,34 @@ export function buildDueDatetime({
     Date.UTC(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 12, 0, 0)
   ).toISOString();
 }
+
+/**
+ * Trigger label for a due-date control: `Due Mar 4, 2026` once a date is set,
+ * otherwise the caller's empty label (`Set due date`, `Due date`, …).
+ */
+export function formatDueDateLabel(value: string | null, emptyLabel: string): string {
+  const date = parseDueDate(value);
+  if (!date) return emptyLabel;
+  return `Due ${new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  }).format(date)}`;
+}
+
+/** `1st` / `22nd` / `13th` for the compact due-date pill on list rows. */
+export function formatOrdinalDayOfMonth(date: Date): string {
+  const day = date.getDate();
+  const mod100 = day % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${day}th`;
+  switch (day % 10) {
+    case 1:
+      return `${day}st`;
+    case 2:
+      return `${day}nd`;
+    case 3:
+      return `${day}rd`;
+    default:
+      return `${day}th`;
+  }
+}

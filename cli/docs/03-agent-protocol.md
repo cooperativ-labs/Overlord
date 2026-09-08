@@ -38,8 +38,16 @@ Requirements:
   `--auto-advance` / `--no-auto-advance` map to authoritative Run Queue
   membership (default off). `--objectives-json` items may set per-objective
   `autoAdvance`; the deprecated compatibility projection is derived from live
-  queue membership.
-- `prompt`: create a mission and attach or queue execution immediately.
+  queue membership. Items may also set `agent` and `model` (`model` requires
+  `agent`), and `--objective-agent` / `--objective-model` supply that launch
+  selection for items naming no `agent` of their own — so a mission is created
+  with its first objective already assigned instead of needing a second
+  objective appended just to name an agent. These are distinct from `--agent`,
+  which records creation provenance only.
+- `prompt`: create a mission and attach or queue execution immediately. It takes
+  the same per-item `agent` / `model` and `--objective-agent` /
+  `--objective-model` selection as create; its `--agent` names the attaching
+  agent for the session.
 - `load-context`: read mission context without creating a session. Optional
   `--objective-id` returns that objective as the current one instead of
   rediscovering the mission's active objective — required on a mission running
@@ -94,8 +102,10 @@ Requirements:
   objective must be in `draft` state.
 - `add-objectives`: append ordered objectives to a mission. Each JSON/file item
   may select its `agent` and `model` (`model` requires `agent`); omitted fields
-  retain project launch-preference defaults. It uses the same `autoAdvance` JSON
-  field and `--auto-advance` / `--no-auto-advance` Run Queue mapping as create.
+  retain project launch-preference defaults, and `--objective-agent` /
+  `--objective-model` supply the default for items omitting `agent`. It uses the
+  same `autoAdvance` JSON field and `--auto-advance` / `--no-auto-advance` Run
+  Queue mapping as create.
 - `update-objective`: maps `--auto-advance` / `--no-auto-advance` to queue
   membership and can edit instruction text on draft/future objectives. The
   returned `autoAdvance` field is deprecated and derived from `queueEntry`.
@@ -357,8 +367,16 @@ Delivery rules:
   `agentReport` accepts `humanActions`, `tradeoffsMade`, `knownRisks`, `deferredWork`,
   and `assumptions`; each missing array becomes `[]`. Human actions are for concrete
   work outside the agent's completed changes and must never include Git actions or
-  routine review/testing. The protocol stores a deterministic presentation immediately;
-  delivery does not wait for an AI provider.
+  routine review/testing. Each human action carries a required `action`, an expected
+  `reason` and `category`, an optional `blocking`, and, whenever they exist, `command`
+  (the exact command or setting), `verify` (how the operator confirms it worked), and
+  `link` (an HTTP(S) URL or repository-relative path). Write
+  `"Add GEMINI_API_KEY to the production backend service on Railway."` with a `command`
+  and `verify`, not `"Set up the env var for Gemini."`. The protocol stores a
+  deterministic presentation immediately; delivery does not wait for an AI provider,
+  and the compose worker always adds `deterministic_rule` actions for new migrations,
+  `.env.example` edits, dependency manifests, and CI workflow files even when the agent
+  reported none.
 
 ### Change Ledger Preflight
 

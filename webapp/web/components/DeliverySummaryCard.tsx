@@ -10,6 +10,7 @@ import {
 
 import type { DeliveryDto } from '../../shared/contract.ts';
 
+import { HumanActionDetails } from './HumanActionDetails.tsx';
 import { Markdown } from './Markdown.tsx';
 import { Badge } from './ui.tsx';
 
@@ -120,6 +121,7 @@ export function DeliveryPresentation({
                 {action.reason ? (
                   <span className="block text-sky-800 dark:text-sky-200">{action.reason}</span>
                 ) : null}
+                <HumanActionDetails action={action} tone="sky" />
               </li>
             ))}
           </ul>

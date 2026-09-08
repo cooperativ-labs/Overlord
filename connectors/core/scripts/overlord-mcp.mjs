@@ -264,6 +264,12 @@ const tools = [
         objective: stringProperty('Initial objective text.'),
         title: stringProperty('Optional mission title.'),
         resourceKey: stringProperty('Optional logical project resource key for the objective.'),
+        agent: stringProperty(
+          'Optional agent identifier to assign to the initial objective, such as codex or claude. Omitted leaves the project launch-preference default; set it here instead of appending a second objective just to name an agent.'
+        ),
+        model: stringProperty(
+          'Optional model identifier for the assigned agent. Requires agent; rejected without it.'
+        ),
         assignedTo: stringProperty(
           'Optional workspace member to own the mission (workspace_users.id, profile UUID, orgid:username, bare username, or email). Rejected when the member is not in the workspace; meaningless on the inbox fallback.'
         ),
@@ -622,7 +628,25 @@ const tools = [
         humanActions: {
           type: 'array',
           description:
-            'Concrete actions a human must perform; exclude Git operations and routine review/testing.'
+            'Concrete actions a human must perform; exclude Git operations and routine review/testing. ' +
+            'Each item needs action, reason, and category, plus command (exact command or setting), verify (how to confirm it worked), and link (HTTP(S) URL or repo-relative path) whenever they exist. ' +
+            'Vague: { action: "Set up the env var for Gemini." }. Good: { action: "Add GEMINI_API_KEY to the production backend service on Railway.", reason: "Compose falls back to the raw summary without it.", category: "environment", command: "railway variables set GEMINI_API_KEY=<key> --service backend", verify: "The next delivery card shows a composed presentation.", link: ".env.example" }.',
+          items: {
+            type: 'object',
+            properties: {
+              action: { type: 'string', description: 'Required. One imperative sentence: what, where, which value.' },
+              reason: { type: 'string', description: 'Expected. Why it is needed and what stays broken until done.' },
+              category: {
+                type: 'string',
+                description: 'Expected. environment, database, deployment, codegen, packaging, external_service, or other.'
+              },
+              blocking: { type: 'boolean', description: 'True when the delivered work does not function until this is done.' },
+              command: { type: 'string', description: 'Exact command, setting, or value to apply, verbatim.' },
+              verify: { type: 'string', description: 'How the operator confirms it worked.' },
+              link: { type: 'string', description: 'HTTP(S) URL or repository-relative file path.' }
+            },
+            required: ['action']
+          }
         },
         tradeoffsMade: {
           type: 'array',
@@ -829,6 +853,12 @@ async function callOverlordTool(name, args) {
       ...(optionalString(args, 'title') ? { title: requiredString(args, 'title') } : {}),
       ...(optionalString(args, 'resourceKey')
         ? { resource: requiredString(args, 'resourceKey') }
+        : {}),
+      ...(optionalString(args, 'agent')
+        ? { 'objective-agent': requiredString(args, 'agent') }
+        : {}),
+      ...(optionalString(args, 'model')
+        ? { 'objective-model': requiredString(args, 'model') }
         : {}),
       ...(optionalString(args, 'assignedTo')
         ? { 'assigned-to': requiredString(args, 'assignedTo') }
@@ -1175,7 +1205,7 @@ process.stdin.on('data', async chunk => {
         result: {
           protocolVersion: PROTOCOL_VERSION,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.41' }
+          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.43' }
         }
       });
       continue;

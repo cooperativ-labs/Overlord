@@ -23,11 +23,14 @@ import {
 import { WorkspaceSettingsModal } from '@/components/workspaces/WorkspaceSettingsModal';
 import { WorkspaceSidebarSection } from '@/components/WorkspaceSidebarSection';
 import { DRAG_REGION, getDesktopChrome, NO_DRAG_REGION } from '@/lib/desktop-chrome';
-import { useInboxItems, useMeta } from '@/lib/queries';
+import { useHumanActions, useInboxItems, useMeta } from '@/lib/queries';
 
 export function AppSidebar() {
   const meta = useMeta();
   const inbox = useInboxItems();
+  // Open human follow-up actions ride the Feed entry so the count is visible from any page.
+  const humanActions = useHumanActions();
+  const openHumanActions = humanActions.data?.counts.open ?? 0;
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsInitialNav, setSettingsInitialNav] = useState<SettingsNavSection | undefined>();
   const [workspaceSettingsId, setWorkspaceSettingsId] = useState<string | null>(null);
@@ -69,7 +72,17 @@ export function AppSidebar() {
                     tooltip="Feed"
                   >
                     <Activity />
-                    <span>Feed</span>
+                    <span>Feed{openHumanActions > 0 ? ` (${openHumanActions})` : ''}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    render={<Link to="/user" />}
+                    isActive={isMyMissionsActive}
+                    tooltip="My Missions"
+                  >
+                    <KanbanIcon />
+                    <span>My Missions</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
@@ -82,16 +95,6 @@ export function AppSidebar() {
                     <span>
                       Inbox{(inbox.data?.length ?? 0) > 0 ? ` (${inbox.data?.length})` : ''}
                     </span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    render={<Link to="/user" />}
-                    isActive={isMyMissionsActive}
-                    tooltip="My Missions"
-                  >
-                    <KanbanIcon />
-                    <span>My Missions</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               </SidebarMenu>

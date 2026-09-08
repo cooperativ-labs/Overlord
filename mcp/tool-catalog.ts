@@ -219,6 +219,12 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
         objective: stringProperty('Initial objective text.'),
         title: stringProperty('Optional mission title.'),
         resourceKey: stringProperty('Optional logical project resource key for the objective.'),
+        agent: stringProperty(
+          'Optional agent identifier to assign to the initial objective, such as codex or claude. Omitted leaves the project launch-preference default; set it here instead of appending a second objective just to name an agent.'
+        ),
+        model: stringProperty(
+          'Optional model identifier for the assigned agent. Requires agent; rejected without it.'
+        ),
         assignedTo: stringProperty(
           'Optional workspace member to own the mission (workspace_users.id, profile UUID, orgid:username, bare username, or email). Rejected when the member is not in the workspace; meaningless on the inbox fallback.'
         ),
@@ -641,15 +647,36 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
         humanActions: {
           type: 'array',
           description:
-            'Concrete actions a human must perform outside completed agent work. Exclude Git operations and routine review/testing.',
-          items: objectSchema({
-            action: stringProperty('The required human action.'),
-            reason: stringProperty('Why the action is required.'),
-            category: stringProperty(
-              'environment, database, deployment, codegen, packaging, external_service, or other.'
-            ),
-            blocking: { type: 'boolean', description: 'Whether this blocks the intended outcome.' }
-          })
+            'Concrete actions a human must perform outside completed agent work. Exclude Git operations and routine review/testing. ' +
+            'Each item is read on its own in the Feed human-actions rail, so give every one an action, reason, and category, plus command, verify, and link whenever they exist. ' +
+            'Vague: { action: "Set up the env var for Gemini." }. Good: { action: "Add GEMINI_API_KEY to the production backend service on Railway.", reason: "Compose falls back to the raw summary without it.", category: "environment", command: "railway variables set GEMINI_API_KEY=<key> --service backend", verify: "The next delivery card shows a composed presentation.", link: ".env.example" }.',
+          items: objectSchema(
+            {
+              action: stringProperty(
+                'Required. One imperative sentence naming what to do, where, and with which value.'
+              ),
+              reason: stringProperty(
+                'Expected. Why the step is needed and what stays broken until it is done.'
+              ),
+              category: stringProperty(
+                'Expected. environment, database, deployment, codegen, packaging, external_service, or other.'
+              ),
+              blocking: {
+                type: 'boolean',
+                description: 'True when the delivered work does not function until this is done.'
+              },
+              command: stringProperty(
+                'The exact command, setting name, or value to apply, verbatim; placeholders in <angle brackets>.'
+              ),
+              verify: stringProperty(
+                'How the operator confirms it worked: a command, a URL, or the state to observe.'
+              ),
+              link: stringProperty(
+                'An HTTP(S) URL or repository-relative file path relevant to the action. No other URI schemes.'
+              )
+            },
+            ['action']
+          )
         },
         tradeoffsMade: {
           type: 'array',

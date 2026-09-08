@@ -1,6 +1,7 @@
 export * from './queries/agent-launch-config.ts';
 export * from './queries/everhour.ts';
 export * from './queries/github.ts';
+export * from './queries/human-actions.ts';
 export * from './queries/missions.ts';
 export * from './queries/objectives.ts';
 export type {

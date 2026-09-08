@@ -21,6 +21,10 @@ export const keys = {
   inboxMissions: ['inbox-missions'] as const,
   /** Cross-workspace objective activity feed rendered on the Feed page. */
   activityFeed: ['activity-feed'] as const,
+  /** Cross-workspace human follow-up actions rail on the Feed page; prefix for both scopes. */
+  humanActions: ['human-actions'] as const,
+  humanActionsScoped: (includeResolved: boolean) =>
+    ['human-actions', includeResolved ? 'all' : 'open'] as const,
   notifications: ['notifications'] as const,
   notificationPreferences: ['profile', 'notification-preferences'] as const,
   workspaces: ['workspaces'] as const,

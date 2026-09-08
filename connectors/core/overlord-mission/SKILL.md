@@ -29,8 +29,11 @@ Use this mode when the prompt already contains a mission ID or explicitly says t
 When review facts genuinely apply, you may add `deliveryReport.agentReport` through `--payload-json` / `--payload-file`: use
 `humanActions`, `tradeoffsMade`, `knownRisks`, `deferredWork`, and `assumptions`, with empty arrays
 when none apply. Human actions are concrete work a user must perform outside completed agent work;
-never include Git operations or routine review/testing. Tradeoffs record the implementation decision,
-alternatives considered, and rationale. These fields improve review visibility but never block delivery.
+never include Git operations or routine review/testing. Every human action needs `action`, `reason`,
+and `category`; add `command`, `verify`, and `link` whenever they exist so the operator can act
+without re-reading the delivery (see **Delivery Evidence** below). Tradeoffs record the
+implementation decision, alternatives considered, and rationale. These fields improve review
+visibility but never block delivery.
 
 For full command syntax, flags, phase values, and event types see **CLI Command Reference** below.
 
@@ -205,6 +208,46 @@ configure an external integration). Never list committing, pushing, opening a pu
 reviewing code, or ordinary tests. A tradeoff must state the decision, alternatives considered,
 and rationale. Omit the report when none of these facts apply.
 
+#### Writing a human action the operator can complete
+
+Human actions are collected across every mission into the Feed page's **Human actions** rail,
+where the operator reads them without the delivery context. Each item must stand alone:
+
+| Field      | Expected | What to write                                                                                  |
+| ---------- | -------- | ---------------------------------------------------------------------------------------------- |
+| `action`   | required | One imperative sentence naming the exact thing to do, where, and with what value.              |
+| `reason`   | expected | Why the step is needed and what breaks or stays incomplete until it is done.                   |
+| `category` | expected | `environment`, `database`, `deployment`, `codegen`, `packaging`, `external_service`, or `other`.|
+| `blocking` | optional | `true` when the delivered work does not function until this is done.                           |
+| `command`  | when known | The exact command, setting name, or value to apply, verbatim. Placeholders in `<angle brackets>`. |
+| `verify`   | when known | How the operator confirms it worked: a command to run, a URL to open, or the state to observe. |
+| `link`     | when known | An HTTP(S) URL or a repository-relative file path (never another URI scheme).                   |
+
+Vague (the operator has to rediscover everything):
+
+```json
+{ "action": "Set up the env var for Gemini." }
+```
+
+Good (the operator can finish it from the rail alone):
+
+```json
+{
+  "action": "Add GEMINI_API_KEY to the production backend service on Railway.",
+  "reason": "The delivery-compose worker falls back to the raw summary until a provider key is present.",
+  "category": "environment",
+  "blocking": false,
+  "command": "railway variables set GEMINI_API_KEY=<key> --service backend",
+  "verify": "The next delivery card shows a composed presentation instead of 'fallback' in the worker log.",
+  "link": ".env.example"
+}
+```
+
+Overlord also derives its own `deterministic_rule` actions from the changed paths (new
+migrations, `.env.example` changes, dependency manifests, CI workflow files) and always shows
+them, so leaving one out never hides it; reporting it yourself with a real `command` and
+`verify` replaces the generic wording with something the operator can follow.
+
 ### Change ledger health (diagnostic)
 
 Use this only to inspect or troubleshoot objective-ledger synchronization and hook health:
@@ -284,12 +327,19 @@ When creating missions from within a repository:
 - Add objectives to the same mission when each prompt is a sequential step toward the same feature or goal; use `ovld protocol add-objectives --mission-id <mission_id> --objectives-json '[{"objective":"..."}]'`.
 - `create` and `prompt` require `--objectives-json` or `--objectives-file` with an ordered array of `{ "objective": "...", "title": "...", "autoAdvance": true }` objects. A single objective is just an array with one item. `--auto-advance` / `--no-auto-advance` set the default when an item omits `autoAdvance` (default off).
 - `add-objectives` uses the same per-item `autoAdvance` field and `--auto-advance` / `--no-auto-advance` default.
+- **Assign the agent on the objectives you are already creating.** Every objective item on `create`, `prompt`, and `add-objectives` takes optional `"agent"` (and `"model"`, which requires an agent), and `--objective-agent <id>` / `--objective-model <id>` set the default for items that name no `agent` of their own. Never create a mission and then append a second objective just to name an agent — that leaves a duplicate objective behind. Note this is **not** `--agent`, which records who created the mission (and, on `prompt`, which agent attaches).
 - To change auto-advance on an existing objective: `ovld protocol update-objective --objective-id <id> --auto-advance` or `--no-auto-advance`.
 - `record-work` is different: it creates exactly one **completed** objective. It takes a single `--objective` (or positional / an `objective` field in `--payload-json`) plus a `--summary` and the file-change data — not `--objectives-json`. See [reference/record-work.md](reference/record-work.md).
 - `create`, `prompt`, `create-mission`, and `record-work` accept `--assigned-to <member>` to set the mission's human owner. Accepts a username, an email, a user-id UUID, or the `orgid:username` member ID. When omitted, the assignee defaults to the mission creator.
 
 ```bash
 ovld protocol create --agent <agent-identifier> --objectives-json '[{"objective":"Capture follow-up work from this repository"}]'
+```
+
+```bash
+# One call: a draft mission whose first objective is already assigned to Codex.
+ovld protocol create --agent <agent-identifier> \
+  --objectives-json '[{"objective":"Implement the API","agent":"codex","model":"gpt-5.6-terra"},{"objective":"Add CLI docs","agent":"claude"}]'
 ```
 
 ```bash
