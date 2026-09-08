@@ -918,6 +918,101 @@ var init_launch_variables = __esm({
   }
 });
 
+// ../packages/contract/dist/notifications.js
+function notificationTypesForTransport(transport) {
+  return NOTIFICATION_TYPES.filter((type) => NOTIFICATION_CATALOG[type].transports.includes(transport));
+}
+var NOTIFICATION_TYPES, NOTIFICATION_MODES, NOTIFICATION_TRANSPORTS, NOTIFICATION_CATALOG;
+var init_notifications = __esm({
+  "../packages/contract/dist/notifications.js"() {
+    "use strict";
+    NOTIFICATION_TYPES = [
+      "mission_awaiting_review",
+      "agent_question",
+      "mission_complete",
+      "mission_failed",
+      "agent_started",
+      "returned_to_execute"
+    ];
+    NOTIFICATION_MODES = ["alert", "silent", "off"];
+    NOTIFICATION_TRANSPORTS = ["apns", "realtime", "in_app"];
+    NOTIFICATION_CATALOG = {
+      agent_question: {
+        id: "agent_question",
+        label: "Agent questions",
+        detail: "An agent is blocked and asked a question.",
+        verb: "needs your input",
+        defaultMode: "alert",
+        transports: ["apns", "realtime", "in_app"],
+        icon: "questionmark.bubble.fill",
+        dotClassName: "bg-orange-500",
+        soundUrl: null,
+        seenTracked: true
+      },
+      mission_awaiting_review: {
+        id: "mission_awaiting_review",
+        label: "Ready for review",
+        detail: "A mission is ready for your review.",
+        verb: "is ready for review",
+        defaultMode: "alert",
+        transports: ["apns", "realtime", "in_app"],
+        icon: "checkmark.circle.fill",
+        dotClassName: null,
+        soundUrl: null,
+        seenTracked: false
+      },
+      mission_failed: {
+        id: "mission_failed",
+        label: "Launch failed",
+        detail: "An agent run could not be launched.",
+        verb: "failed",
+        defaultMode: "alert",
+        transports: ["apns", "realtime", "in_app"],
+        icon: "exclamationmark.triangle.fill",
+        dotClassName: null,
+        soundUrl: null,
+        seenTracked: false
+      },
+      mission_complete: {
+        id: "mission_complete",
+        label: "Mission complete",
+        detail: "A mission has been completed.",
+        verb: "finished",
+        defaultMode: "alert",
+        transports: ["apns", "realtime", "in_app"],
+        icon: "checkmark.seal.fill",
+        dotClassName: null,
+        soundUrl: null,
+        seenTracked: false
+      },
+      agent_started: {
+        id: "agent_started",
+        label: "Agent started",
+        detail: "An agent started work on an objective.",
+        verb: "started working",
+        defaultMode: "silent",
+        transports: ["realtime", "in_app"],
+        icon: "play.circle.fill",
+        dotClassName: null,
+        soundUrl: null,
+        seenTracked: false
+      },
+      returned_to_execute: {
+        id: "returned_to_execute",
+        label: "Returned to execute",
+        detail: "A mission was returned to the execute stage.",
+        verb: "returned to execute",
+        defaultMode: "alert",
+        transports: ["realtime", "in_app"],
+        icon: "arrow.uturn.backward.circle.fill",
+        dotClassName: "bg-blue-500",
+        soundUrl: null,
+        seenTracked: true
+      }
+    };
+  }
+});
+
 // ../packages/contract/dist/objective-ref.js
 function formatObjectiveDisplayId({ missionDisplayId, displayKey }) {
   return `${missionDisplayId}${OBJECTIVE_DISPLAY_ID_SEPARATOR}${displayKey}`;
@@ -1091,6 +1186,7 @@ var init_dist = __esm({
     "use strict";
     init_agent_launch_flags();
     init_launch_variables();
+    init_notifications();
     init_objective_ref();
     init_resource_paths();
     init_search();
@@ -169744,95 +169840,7 @@ var liveActivityDispatcher = new LiveActivityDispatcher();
 init_change_feed();
 
 // ../packages/core/service/notifications/catalog.ts
-var NOTIFICATION_TYPES = [
-  "mission_awaiting_review",
-  "agent_question",
-  "mission_complete",
-  "mission_failed",
-  "agent_started",
-  "returned_to_execute"
-];
-var NOTIFICATION_MODES = ["alert", "silent", "off"];
-var NOTIFICATION_TRANSPORTS = ["apns", "realtime", "in_app"];
-var NOTIFICATION_CATALOG = {
-  agent_question: {
-    id: "agent_question",
-    label: "Agent questions",
-    detail: "An agent is blocked and asked a question.",
-    verb: "needs your input",
-    defaultMode: "alert",
-    transports: ["apns", "realtime", "in_app"],
-    icon: "questionmark.bubble.fill",
-    dotClassName: "bg-orange-500",
-    soundUrl: null,
-    seenTracked: true
-  },
-  mission_awaiting_review: {
-    id: "mission_awaiting_review",
-    label: "Ready for review",
-    detail: "A mission is ready for your review.",
-    verb: "is ready for review",
-    defaultMode: "alert",
-    transports: ["apns", "realtime", "in_app"],
-    icon: "checkmark.circle.fill",
-    dotClassName: null,
-    soundUrl: null,
-    seenTracked: false
-  },
-  mission_failed: {
-    id: "mission_failed",
-    label: "Launch failed",
-    detail: "An agent run could not be launched.",
-    verb: "failed",
-    defaultMode: "alert",
-    transports: ["apns", "realtime", "in_app"],
-    icon: "exclamationmark.triangle.fill",
-    dotClassName: null,
-    soundUrl: null,
-    seenTracked: false
-  },
-  mission_complete: {
-    id: "mission_complete",
-    label: "Mission complete",
-    detail: "A mission has been completed.",
-    verb: "finished",
-    defaultMode: "alert",
-    transports: ["apns", "realtime", "in_app"],
-    icon: "checkmark.seal.fill",
-    dotClassName: null,
-    soundUrl: null,
-    seenTracked: false
-  },
-  agent_started: {
-    id: "agent_started",
-    label: "Agent started",
-    detail: "An agent started work on an objective.",
-    verb: "started working",
-    defaultMode: "silent",
-    transports: ["realtime", "in_app"],
-    icon: "play.circle.fill",
-    dotClassName: null,
-    soundUrl: null,
-    seenTracked: false
-  },
-  returned_to_execute: {
-    id: "returned_to_execute",
-    label: "Returned to execute",
-    detail: "A mission was returned to the execute stage.",
-    verb: "returned to execute",
-    defaultMode: "alert",
-    transports: ["realtime", "in_app"],
-    icon: "arrow.uturn.backward.circle.fill",
-    dotClassName: "bg-blue-500",
-    soundUrl: null,
-    seenTracked: true
-  }
-};
-function notificationTypesForTransport(transport) {
-  return NOTIFICATION_TYPES.filter(
-    (type) => NOTIFICATION_CATALOG[type].transports.includes(transport)
-  );
-}
+init_dist();
 
 // ../packages/core/service/push-notification-jobs.ts
 init_util3();
