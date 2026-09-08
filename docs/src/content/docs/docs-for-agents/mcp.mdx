@@ -77,7 +77,7 @@ The tool catalog is mission-first:
 - `overlord_create_mission` — optional `agent` / `model` assign the initial objective's launch selection in the same call, so no follow-up `overlord_add_objectives` is needed just to name an agent
 - `overlord_create_inbox_item` — create a private, account-owned unassigned task capture
 - `overlord_load_mission_context`
-- `overlord_list_deliveries` — read normalized delivery summaries for one mission; an objective display id such as `coo:756.k7xm` supplies the mission
+- `overlord_list_deliveries` — read a `{ items, total, limit }` page (items capped at 200) of normalized delivery summaries for one mission; an objective display id such as `coo:756.k7xm` supplies the mission
 - `overlord_launch_objective` — queue the normal execution request for one objective; requires `objectiveId` (UUID or display id) and `agent`; does not attach this MCP agent
 - `overlord_reorder_future_objectives` — replace one mission's complete future-objective UUID order
 - `overlord_add_objectives`
