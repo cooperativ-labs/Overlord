@@ -193,6 +193,33 @@ function clampStringList(
   return out;
 }
 
+/**
+ * Chooses the deferred-work list for a composed presentation. The compose
+ * automation is asked to rewrite each agent-listed item as a standalone
+ * objective statement, so a draft item may only replace its source when it is
+ * at least as detailed (never shorter). A draft that drops items keeps the
+ * agent list untouched; extra draft items beyond the agent's count are kept,
+ * bounded, because the model may surface leftover work the summary states
+ * explicitly. With no agent items at all, the draft list is used as-is.
+ */
+export function reconcileDeferredWork({
+  agentItems,
+  draftItems,
+  maxItems = DELIVERY_REPORT_LIMITS.maxItems
+}: {
+  agentItems: string[];
+  draftItems: string[];
+  maxItems?: number;
+}): string[] {
+  if (agentItems.length === 0) return draftItems.slice(0, maxItems);
+  if (draftItems.length < agentItems.length) return agentItems.slice(0, maxItems);
+  const merged = agentItems.map((agentItem, index) => {
+    const draftItem = draftItems[index]!;
+    return draftItem.length >= agentItem.length ? draftItem : agentItem;
+  });
+  return [...merged, ...draftItems.slice(agentItems.length)].slice(0, maxItems);
+}
+
 function asCategory(value: unknown): HumanActionCategory {
   return typeof value === 'string' && HUMAN_ACTION_CATEGORIES.has(value as HumanActionCategory)
     ? (value as HumanActionCategory)
@@ -397,10 +424,10 @@ export function reconcileDeliveryComposeDraft({
       clampStringList(draft.knownRisks).length > 0
         ? clampStringList(draft.knownRisks)
         : report.presentation.knownRisks,
-    deferredWork:
-      clampStringList(draft.deferredWork).length > 0
-        ? clampStringList(draft.deferredWork)
-        : report.presentation.deferredWork,
+    deferredWork: reconcileDeferredWork({
+      agentItems: report.presentation.deferredWork,
+      draftItems: clampStringList(draft.deferredWork)
+    }),
     assumptions:
       clampStringList(draft.assumptions).length > 0
         ? clampStringList(draft.assumptions)

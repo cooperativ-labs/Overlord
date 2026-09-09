@@ -34,13 +34,38 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `138`
+Current version: `139`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
 `contract/components.yaml`) — never a header duplicate. The contract version is
 incremented when any stable interface changes. All conformance manifests must
 declare the contract version they were validated against.
+
+### Version 139 Change Summary
+
+Run Queue recovery is now a transactional safety boundary (coo:977). Forcing
+an entry removal pauses its containing queue before its removal can enqueue a
+dispatch tick. Likewise, disconnecting an objective from `launching`,
+`executing`, or `pending_delivery` back to `draft` or `submitted` pauses its
+containing queue in that same transaction. The existing force-removal and
+objective-update authorizations remain unchanged; this is the narrow automatic
+pause exception to user-initiated queue-definition pause/resume, and prevents a
+recovery action from immediately launching the following entry. Existing queue
+and objective response shapes are unchanged.
+
+The same version enriches deferred work for objective creation (coo:986). The
+compose-delivery automation now asks the model to rewrite each agent-listed
+`deferredWork` item as a standalone objective statement (imperative, naming the
+component and data involved, and stating what was delivered and why the piece
+was left), resolving delivery-local references from the summary, objective
+instruction, change rationales, and recent events, and it may add an item only
+when the summary explicitly states work was left undone. Core reconciliation
+guards the result: a draft item replaces its agent source only when it is at
+least as detailed, a draft that drops items leaves the agent list untouched, and
+extra items are kept within the existing bound. `agentReport.deferredWork` is
+never rewritten; only `presentation.deferredWork` changes. No schema, route, or
+DTO change.
 
 ### Version 138 Change Summary
 
@@ -721,7 +746,8 @@ objective still parked in `launching` back to `draft` so it can be launched
 again. An objective already `executing` keeps its live session. The response is
 additive (`forced`, `objectiveId`, `previousState`, `objectiveReset`,
 `clearedExecutionRequests`, `removedEmptyQueueId`); unforced removal behavior is
-unchanged.
+unchanged. Forced removal also pauses the containing queue transactionally, so
+its removal tick cannot dispatch the next entry.
 
 The same release additively exposes the existing Run Queue service to agents.
 Protocol provides `reorder-run-queue`, `create-run-queue`, `update-run-queue`,
@@ -1187,7 +1213,7 @@ Owns:
 - Project resource-source launch-default mutation through additive `PATCH /api/projects/:id/resources/:resourceId/sources/:sourceId`, authorized as a project update and preserving materialization descriptor fields
 
 - URL paths and HTTP method contracts
-- Project Run Queue REST family: `GET /api/projects/:id/run-queues`, `POST /api/projects/:id/run-queues`, `PATCH /api/projects/:id/run-queues/order`, `POST /api/projects/:id/run-queues/entries`, `PATCH /api/run-queues/:queueId`, `DELETE /api/run-queues/:queueId`, `PATCH /api/run-queues/:queueId/order`, `PATCH /api/run-queues/entries/:entryId`, and `DELETE /api/run-queues/entries/:entryId`. Reads require project/objective read access; planning mutations require `execution_request:create`; queue-definition mutations require `project:update`. The matching Protocol commands are `queue-objective`, `dequeue-objective`, `retry-queue-entry`, `run-queue`, `reorder-run-queue`, `create-run-queue`, `update-run-queue`, `delete-run-queue`, and `reorder-project-run-queues`; MCP maps them through `overlord_queue_objective`, `overlord_list_run_queues`, `overlord_reorder_run_queue`, and `overlord_manage_run_queue`. Queue entries never select an execution target. `ObjectiveDto.queueEntry` additively projects live membership and `autoAdvance` is derived from that membership for compatibility. A queue may be mission-scoped (`RunQueueDto.missionId`/`missionDisplayId`); an entry POST without `queueId` targets the objective's own mission queue and creates it only if that mission has none, and emptying a mission queue retires it. `DELETE /api/run-queues/entries/:entryId` accepts an additive `{ force?: boolean }` body that also drops an entry wedged in `dispatched`/`running`, clears the objective's active execution requests, and resets a stuck `launching` objective to `draft`. `PATCH /api/run-queues/entries/:entryId` accepts an additive `{ retry?: boolean }` body that returns a held entry to `waiting` with `attemptCount` reset to 0 and enqueues a dispatch tick; it is refused (409) for an entry already `dispatched`/`running` and may not be combined with a move.
+- Project Run Queue REST family: `GET /api/projects/:id/run-queues`, `POST /api/projects/:id/run-queues`, `PATCH /api/projects/:id/run-queues/order`, `POST /api/projects/:id/run-queues/entries`, `PATCH /api/run-queues/:queueId`, `DELETE /api/run-queues/:queueId`, `PATCH /api/run-queues/:queueId/order`, `PATCH /api/run-queues/entries/:entryId`, and `DELETE /api/run-queues/entries/:entryId`. Reads require project/objective read access; planning mutations require `execution_request:create`; queue-definition mutations require `project:update`. The matching Protocol commands are `queue-objective`, `dequeue-objective`, `retry-queue-entry`, `run-queue`, `reorder-run-queue`, `create-run-queue`, `update-run-queue`, `delete-run-queue`, and `reorder-project-run-queues`; MCP maps them through `overlord_queue_objective`, `overlord_list_run_queues`, `overlord_reorder_run_queue`, and `overlord_manage_run_queue`. Queue entries never select an execution target. `ObjectiveDto.queueEntry` additively projects live membership and `autoAdvance` is derived from that membership for compatibility. A queue may be mission-scoped (`RunQueueDto.missionId`/`missionDisplayId`); an entry POST without `queueId` targets the objective's own mission queue and creates it only if that mission has none, and emptying a mission queue retires it. `DELETE /api/run-queues/entries/:entryId` accepts an additive `{ force?: boolean }` body that also drops an entry wedged in `dispatched`/`running`, clears the objective's active execution requests, resets a stuck `launching` objective to `draft`, and pauses the containing queue before its removal tick can dispatch a successor. Moving an active objective back to `draft` or `submitted` likewise pauses its containing queue transactionally. `PATCH /api/run-queues/entries/:entryId` accepts an additive `{ retry?: boolean }` body that returns a held entry to `waiting` with `attemptCount` reset to 0 and enqueues a dispatch tick; it is refused (409) for an entry already `dispatched`/`running` and may not be combined with a move.
 - Request/response DTO shapes (derived from the logical schema's camelCase field names)
 - Creation-provenance projection: `MissionDto` and `ObjectiveDto` carry `createdByKind` (`human` \| `agent` \| `automation`; non-optional, with a `human` fallback in the mapper so no client writes a null branch), `createdByAgent` (connector/agent identifier or null), and `createdByWorkspaceUserId` (the workspace member the authoring actor acted as, or on behalf of). `MissionDetailDto` additionally carries `createdFrom` — `{ sessionId, missionId, missionDisplayId, agentIdentifier }` or null — resolved from the soft `created_by_session_id` reference by a `LEFT JOIN` that tolerates a missing session; it is paid once per mission page and is deliberately absent from the board/list projections. Provenance is a permanent row attribute, never seen-tracked mission state, and REST exposes no filter or sort on it.
 - Objective display ids: `ObjectiveDto` additively carries `displayKey` and computed `displayId` (`{mission.displayId}.{displayKey}`). `/api/objectives/:id` (and launch/prompt/attachment routes that take an objective id) accept an objective UUID or a full display id. UUID lookup stays globally unique; display ids resolve within the selected organization's `authorizedWorkspaces` set, return `404` outside that set, and return `409` on genuine ambiguity.

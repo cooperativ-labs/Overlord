@@ -11,7 +11,8 @@ import {
   secretFromSaveResult,
   toggleWebhookEventType,
   validateWebhookFormFields,
-  webhookDialogSubscription
+  webhookDialogSubscription,
+  webhookDialogTargetKey
 } from './use-webhook-dialog-form.ts';
 
 function subscription(overrides: Partial<WebhookSubscriptionDto> = {}): WebhookSubscriptionDto {
@@ -59,6 +60,52 @@ test('seeds a create form blank and an edit form from the subscription', () => {
     eventTypes: ['mission.delivered'],
     payloadMode: 'thin'
   });
+});
+
+test('re-seeds each dialog target and keeps a reopened create form blank and secret-free', () => {
+  const first = subscription({
+    id: 'wh_first',
+    name: 'First webhook',
+    endpointUrl: 'https://example.com/first',
+    projectId: 'proj_first',
+    eventTypes: ['mission.delivered'],
+    payloadMode: 'thin'
+  });
+  const second = subscription({
+    id: 'wh_second',
+    name: 'Second webhook',
+    endpointUrl: 'https://example.com/second',
+    projectId: 'proj_second',
+    eventTypes: ['mission.blocked'],
+    payloadMode: 'full'
+  });
+
+  assert.notEqual(webhookDialogTargetKey(first), webhookDialogTargetKey(second));
+  assert.deepEqual(initialWebhookFormFields(first), {
+    name: 'First webhook',
+    endpointUrl: 'https://example.com/first',
+    projectId: 'proj_first',
+    eventTypes: ['mission.delivered'],
+    payloadMode: 'thin'
+  });
+  assert.deepEqual(initialWebhookFormFields(second), {
+    name: 'Second webhook',
+    endpointUrl: 'https://example.com/second',
+    projectId: 'proj_second',
+    eventTypes: ['mission.blocked'],
+    payloadMode: 'full'
+  });
+
+  assert.notEqual(webhookDialogTargetKey(null), webhookDialogTargetKey('create'));
+  const reopenedCreate = initialWebhookFormFields('create');
+  assert.deepEqual(reopenedCreate, {
+    name: '',
+    endpointUrl: '',
+    projectId: 'all',
+    eventTypes: [],
+    payloadMode: 'auto'
+  });
+  assert.equal('secret' in reopenedCreate, false);
 });
 
 test('a create reveals its signing secret once and a reopened dialog reveals none', () => {

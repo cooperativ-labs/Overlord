@@ -653,7 +653,11 @@ const tools = [
           description: 'Implementation decisions, alternatives considered, and rationale.'
         },
         knownRisks: { type: 'array', description: 'Residual risks or limitations.' },
-        deferredWork: { type: 'array', description: 'Intentionally deferred work.' },
+        deferredWork: {
+          type: 'array',
+          description:
+            'Intentionally deferred work. Name the component or file involved and say why the work was left.'
+        },
         assumptions: { type: 'array', description: 'Material implementation assumptions.' }
       },
       ['sessionKey', 'summary']
@@ -1205,7 +1209,7 @@ process.stdin.on('data', async chunk => {
         result: {
           protocolVersion: PROTOCOL_VERSION,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.43' }
+          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.44' }
         }
       });
       continue;

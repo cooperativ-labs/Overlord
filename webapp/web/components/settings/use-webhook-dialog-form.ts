@@ -36,6 +36,17 @@ export function webhookDialogSubscription(
   return target !== null && target !== 'create' ? target : null;
 }
 
+/**
+ * A stable identity for the dialog's mount. Changing it starts a fresh form for
+ * the newly selected target, while refreshed data for the same subscription
+ * keeps an in-progress edit intact.
+ */
+export function webhookDialogTargetKey(target: WebhookDialogTarget): string {
+  const existing = webhookDialogSubscription(target);
+  if (existing) return `subscription:${existing.id}`;
+  return target === 'create' ? 'create' : 'closed';
+}
+
 export function initialWebhookFormFields(target: WebhookDialogTarget): WebhookFormFields {
   const existing = webhookDialogSubscription(target);
   return {

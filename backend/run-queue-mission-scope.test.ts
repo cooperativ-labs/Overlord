@@ -8,7 +8,7 @@ const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
 const bootstrap = await bootstrapIntegrationTestDb({
   sqlitePath: path.join(tempDir, 'webapp.sqlite')
 });
-const { createProject } = await import('./repository.ts');
+const { createProject, updateObjective } = await import('./repository.ts');
 const { runProtocolSubcommand } = await import('./protocol.ts');
 const { deleteRunQueueEntry, getProjectRunQueues, postRunQueueEntry } =
   await import('./run-queue.ts');
@@ -103,6 +103,7 @@ test('forced removal frees an in-flight entry whose objective is stuck launching
   bootstrap.db
     .prepare("UPDATE run_queue_entries SET state = 'dispatched' WHERE id = ?")
     .run(entry.id);
+  bootstrap.db.prepare('UPDATE run_queues SET paused = 0 WHERE id = ?').run(entry.queueId);
   bootstrap.db.prepare("UPDATE objectives SET state = 'launching' WHERE id = ?").run(objectiveId);
 
   const result = await deleteRunQueueEntry(entry.id, { force: true });
@@ -118,9 +119,31 @@ test('forced removal frees an in-flight entry whose objective is stuck launching
 
   const queues = (await getProjectRunQueues(project.id)).queues;
   assert.equal(queues.length, 1);
+  assert.equal(queues[0]!.paused, true);
   assert.deepEqual(
     queues[0]!.entries.map(item => item.objectiveId),
     [stuck.objectives[1]!.id]
+  );
+});
+
+test('disconnecting an executing objective pauses its active queue', async () => {
+  const project = await createProject({ name: `Disconnect queue ${Date.now()}` });
+  const queued = await mission(project.id, 2, 'Disconnect');
+  const objectiveId = queued.objectives[0]!.id;
+
+  await postRunQueueEntry(project.id, { objectiveId });
+  await postRunQueueEntry(project.id, { objectiveId: queued.objectives[1]!.id });
+  const queue = (await getProjectRunQueues(project.id)).queues[0]!;
+  bootstrap.db.prepare('UPDATE run_queues SET paused = 0 WHERE id = ?').run(queue.id);
+  bootstrap.db.prepare("UPDATE objectives SET state = 'executing' WHERE id = ?").run(objectiveId);
+
+  await updateObjective(objectiveId, { state: 'draft' });
+
+  const afterDisconnect = (await getProjectRunQueues(project.id)).queues[0]!;
+  assert.equal(afterDisconnect.paused, true);
+  assert.deepEqual(
+    afterDisconnect.entries.map(item => item.objectiveId),
+    [queued.objectives[1]!.id]
   );
 });
 

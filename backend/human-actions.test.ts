@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -16,6 +17,29 @@ const { buildDeliveryReport } = await import('../packages/core/service/delivery-
 
 function newId(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function legacyDeferredWorkId(text: string, occurrence: number): string {
+  const digest = createHash('sha256').update(text).digest('hex').slice(0, 16);
+  return `deferred-work-${digest}-${occurrence}`;
+}
+
+function rewritePresentationDeferredWork(deliveryId: string, deferredWork: string[]): void {
+  const row = db.prepare(`SELECT payload_json FROM deliveries WHERE id = ?`).get(deliveryId) as {
+    payload_json: string;
+  };
+  const payload = JSON.parse(row.payload_json) as {
+    deliveryReport: {
+      presentation: { deferredWork: string[]; status: string; generatedBy: string };
+    };
+  };
+  payload.deliveryReport.presentation.deferredWork = deferredWork;
+  payload.deliveryReport.presentation.status = 'composed';
+  payload.deliveryReport.presentation.generatedBy = 'gemini';
+  db.prepare(`UPDATE deliveries SET payload_json = ? WHERE id = ?`).run(
+    JSON.stringify(payload),
+    deliveryId
+  );
 }
 
 /**
@@ -155,6 +179,123 @@ test('deferred work joins the rail after blocking questions and uses the same re
   const resolved = await resolveHumanAction(deliveryId, mine[1]!.actionId, { status: 'done' });
   assert.equal(resolved.kind, 'deferred_work');
   assert.equal(resolved.resolution?.status, 'done');
+});
+
+test('deferred-work ids stay stable across presentation composition', async () => {
+  const { project, mission, objective } = await seedMission('HA Deferred Stable');
+  const deliveryId = seedDelivery({
+    workspaceId: mission.workspaceId,
+    projectId: project.id,
+    missionId: mission.id,
+    objectiveId: objective.id,
+    deliveredAt: new Date().toISOString(),
+    humanActions: [],
+    deferredWork: ['Finish the initial audit-log export implementation']
+  });
+
+  const [before] = (await listHumanActions()).items.filter(item => item.deliveryId === deliveryId);
+  assert.ok(before);
+  const resolvedBefore = await resolveHumanAction(deliveryId, before.actionId, { status: 'done' });
+  assert.equal(resolvedBefore.resolution?.status, 'done');
+
+  rewritePresentationDeferredWork(deliveryId, [
+    'Extend the audit-log export implementation with the remaining retention filters.'
+  ]);
+
+  const [after] = (await listHumanActions({ includeResolved: true })).items.filter(
+    item => item.deliveryId === deliveryId
+  );
+  assert.ok(after);
+  assert.equal(after.actionId, before.actionId);
+  assert.equal(
+    after.action,
+    'Extend the audit-log export implementation with the remaining retention filters.'
+  );
+  assert.equal(after.resolution?.status, 'done');
+});
+
+test('a compose-added deferred-work item gets a distinct stable id', async () => {
+  const { project, mission, objective } = await seedMission('HA Deferred Extra');
+  const deliveryId = seedDelivery({
+    workspaceId: mission.workspaceId,
+    projectId: project.id,
+    missionId: mission.id,
+    objectiveId: objective.id,
+    deliveredAt: new Date().toISOString(),
+    humanActions: [],
+    deferredWork: ['Complete the initial export implementation']
+  });
+  rewritePresentationDeferredWork(deliveryId, [
+    'Complete the initial export implementation with the missing retention filters.',
+    'Document the new retention-filter configuration.'
+  ]);
+
+  const items = (await listHumanActions()).items.filter(item => item.deliveryId === deliveryId);
+  assert.equal(items.length, 2);
+  assert.notEqual(items[0]!.actionId, items[1]!.actionId);
+  assert.equal(items[1]!.actionId, 'deferred-work-1-composed');
+});
+
+test('a legacy deferred-work resolution remains visible through the fallback', async () => {
+  const { project, mission, objective } = await seedMission('HA Deferred Legacy Read');
+  const deferredWork = 'Complete the initial audit-log export implementation';
+  const deliveryId = seedDelivery({
+    workspaceId: mission.workspaceId,
+    projectId: project.id,
+    missionId: mission.id,
+    objectiveId: objective.id,
+    deliveredAt: new Date().toISOString(),
+    humanActions: [],
+    deferredWork: [deferredWork]
+  });
+  const legacyId = legacyDeferredWorkId(deferredWork, 1);
+  db.prepare(
+    `INSERT INTO human_action_resolutions
+       (delivery_id, action_id, workspace_id, mission_id, objective_id, status,
+        resolved_by_workspace_user_id, resolved_at)
+     VALUES (?, ?, ?, ?, ?, 'done', ?, ?)`
+  ).run(
+    deliveryId,
+    legacyId,
+    mission.workspaceId,
+    mission.id,
+    objective.id,
+    'operator-workspace-user',
+    new Date().toISOString()
+  );
+
+  const [item] = (await listHumanActions({ includeResolved: true })).items.filter(
+    candidate => candidate.deliveryId === deliveryId
+  );
+  assert.ok(item);
+  assert.equal(item.resolution?.status, 'done');
+  assert.notEqual(item.actionId, legacyId);
+
+  const reopened = await reopenHumanAction(deliveryId, legacyId);
+  assert.equal(reopened.resolution, null);
+});
+
+test('resolving through a legacy deferred-work id writes the stable id', async () => {
+  const { project, mission, objective } = await seedMission('HA Deferred Legacy Write');
+  const deferredWork = 'Complete the initial audit-log export implementation';
+  const deliveryId = seedDelivery({
+    workspaceId: mission.workspaceId,
+    projectId: project.id,
+    missionId: mission.id,
+    objectiveId: objective.id,
+    deliveredAt: new Date().toISOString(),
+    humanActions: [],
+    deferredWork: [deferredWork]
+  });
+  const legacyId = legacyDeferredWorkId(deferredWork, 1);
+
+  const resolved = await resolveHumanAction(deliveryId, legacyId, { status: 'done' });
+  assert.equal(resolved.resolution?.status, 'done');
+  assert.notEqual(resolved.actionId, legacyId);
+  const row = db
+    .prepare(`SELECT action_id FROM human_action_resolutions WHERE delivery_id = ?`)
+    .get(deliveryId) as { action_id: string };
+  assert.equal(row.action_id, resolved.actionId);
 });
 
 test('resolving hides an action from the open list and records a change', async () => {

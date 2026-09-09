@@ -10,7 +10,7 @@ import {
   useState
 } from 'react';
 
-import type { TerminalSessionDto } from '../../shared/contract.ts';
+import type { ObjectiveDto, TerminalSessionDto } from '../../shared/contract.ts';
 import { useCopyToClipboard } from '../lib/hooks/use-copy-to-clipboard.ts';
 import {
   forgetAbsentLatchSession,
@@ -45,6 +45,24 @@ function viewerLabel(kind: string): string {
 
 function sessionRowKey(session: TerminalSessionDto): string {
   return `${session.executionRequestId}:${session.providerSessionId}`;
+}
+
+export type ObjectiveSessionLabel = { displayId: string; title: string };
+
+/**
+ * How a Latch session identifies itself in the mission-level section.
+ *
+ * A session is an execution of one **objective** (coo:756 §9.2), so a card
+ * drawn outside that objective's row has to name it. Sessions whose objective
+ * has since been deleted fall back to the recorded Latch session name.
+ */
+function objectiveLabelFor(
+  session: TerminalSessionDto,
+  objectives: readonly ObjectiveDto[]
+): ObjectiveSessionLabel | null {
+  const objective = objectives.find(candidate => candidate.id === session.objectiveId);
+  if (!objective?.displayId) return null;
+  return { displayId: objective.displayId, title: objective.title?.trim() || 'Untitled objective' };
 }
 
 /**
@@ -118,17 +136,21 @@ function LatchSessionTracker({
   return null;
 }
 
-/** Destructive stop, with its confirmation, shared by the card and the compact rows. */
+/** Destructive stop, with its confirmation, shared by the card, the compact rows, and the objective line. */
 function EndSessionButton({
   session,
   name,
   disabled,
-  compact
+  compact,
+  label
 }: {
   session: TerminalSessionDto;
   name: string;
   disabled: boolean;
+  /** Icon-only ghost styling for tight rows. */
   compact?: boolean;
+  /** Text next to the icon. Defaults to "End session" on the full card, nothing when compact. */
+  label?: string;
 }) {
   const [confirmStop, setConfirmStop] = useState(false);
   const stopSession = useStopLatchSession(session);
@@ -153,7 +175,7 @@ function EndSessionButton({
         onClick={() => setConfirmStop(true)}
       >
         <Octagon />
-        {compact ? null : 'End session'}
+        {label ?? (compact ? null : 'End session')}
       </Button>
       <Dialog open={confirmStop} onOpenChange={setConfirmStop}>
         <DialogContent showCloseButton={false}>
@@ -195,11 +217,14 @@ function EndSessionButton({
 function TerminalSessionCard({
   missionId,
   session,
+  objectiveLabel,
   localExecutionTargetId,
   onAbsent
 }: {
   missionId: string;
   session: TerminalSessionDto;
+  /** Set only in the mission-level section, where the card is not inside its objective's row. */
+  objectiveLabel?: ObjectiveSessionLabel | null;
   localExecutionTargetId: string | null;
   onAbsent?: (providerSessionId: string) => void;
 }) {
@@ -223,10 +248,20 @@ function TerminalSessionCard({
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <Monitor className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <p className="truncate text-sm font-medium">{name}</p>
+            {objectiveLabel ? (
+              <p className="min-w-0 truncate text-sm font-medium">
+                <span className="font-mono text-[11px] text-muted-foreground">
+                  {objectiveLabel.displayId}
+                </span>{' '}
+                {objectiveLabel.title}
+              </p>
+            ) : (
+              <p className="truncate text-sm font-medium">{name}</p>
+            )}
           </div>
           <p className="mt-1 truncate text-xs text-muted-foreground">
             Latch · {session.deviceLabel ?? 'Unknown device'}
+            {objectiveLabel ? ` · ${name}` : ''}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5 text-xs capitalize text-muted-foreground">
@@ -281,11 +316,14 @@ function TerminalSessionCard({
 function CompactSessionRow({
   missionId,
   session,
+  objectiveLabel,
   localExecutionTargetId,
   onAbsent
 }: {
   missionId: string;
   session: TerminalSessionDto;
+  /** Set only in the mission-level section, where the row is not inside its objective's row. */
+  objectiveLabel?: ObjectiveSessionLabel | null;
   localExecutionTargetId: string | null;
   onAbsent?: (providerSessionId: string) => void;
 }) {
@@ -304,7 +342,18 @@ function CompactSessionRow({
     <div className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/30 px-2 py-1.5">
       <span className={cn('h-2 w-2 shrink-0 rounded-full', stateTone[state])} />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-xs font-medium">{name}</p>
+        <p className="truncate text-xs font-medium">
+          {objectiveLabel ? (
+            <>
+              <span className="font-mono text-[10px] text-muted-foreground">
+                {objectiveLabel.displayId}
+              </span>{' '}
+              {objectiveLabel.title}
+            </>
+          ) : (
+            name
+          )}
+        </p>
         <p className="truncate text-[11px] capitalize text-muted-foreground">
           {state} · {session.deviceLabel ?? 'Unknown device'}
         </p>
@@ -347,12 +396,13 @@ function useLatchSessionContext(): LatchSessionContextValue {
 }
 
 /**
- * Mission-wide Latch bookkeeping for the objective-centric panel (coo:879).
+ * Mission-wide Latch bookkeeping for the mission panel (coo:879, coo:990).
  *
- * Sessions now render inside the objective that launched them, and a
- * collapsed objective draws nothing — but a running session must stay under
- * observation whether or not its row is open, otherwise collapsing a row would
- * silently stop detecting a session Latch has reclaimed. The provider mounts a
+ * The full controls render once per mission in
+ * {@link MissionTerminalSessionsSection}, and each objective row keeps a
+ * minimal line — but a running session must stay under observation whether or
+ * not either is on screen, otherwise collapsing a row would silently stop
+ * detecting a session Latch has reclaimed. The provider mounts a
  * {@link LatchSessionTracker} for every running session on the mission
  * regardless of what is drawn; rendered cards share the same query keys, so an
  * expanded objective never doubles the polling. It also owns the set of
@@ -411,14 +461,122 @@ export function MissionLatchSessionProvider({
 }
 
 /**
- * The Latch sessions one objective launched, rendered inside that objective's
- * accordion (coo:879 §4.2 item 3). `sessions` must be newest first.
+ * The mission-wide Latch controls (coo:990): every session the mission
+ * launched, drawn together above the artifacts rather than scattered across the
+ * objective rows that produced them. This is where the full controls live —
+ * open in a viewer, copy the attach command, end the session — because the
+ * reader wants "what terminals does this mission have open" answered in one
+ * place, not one accordion at a time.
  *
- * The newest session gets the full card while it is running; once it has
- * exited it renders as the compact row instead, and earlier sessions
- * (re-launches) are always compact rows. The objective chip the mission-level
- * card used to print is redundant here — the row is the objective — so the
- * card leads with the session name.
+ * Live sessions (running or stopping) get full cards, newest first; everything
+ * else is a compact row below them. Each one names its objective, since the
+ * card no longer sits inside it.
+ */
+export function MissionTerminalSessionsSection({
+  sessions,
+  objectives
+}: {
+  /** Every session on the mission, newest first. */
+  sessions: readonly TerminalSessionDto[];
+  /** The mission's objectives, used to label each session with what it ran. */
+  objectives: readonly ObjectiveDto[];
+}) {
+  const { missionId, localExecutionTargetId, onAbsent, isAbsent } = useLatchSessionContext();
+  const visible = sessions.filter(session => !isAbsent(session.providerSessionId));
+  if (visible.length === 0) return null;
+
+  const live = visible.filter(
+    session => session.lastObservedState === 'running' || session.lastObservedState === 'stopping'
+  );
+  const past = visible.filter(
+    session => session.lastObservedState !== 'running' && session.lastObservedState !== 'stopping'
+  );
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-(--color-ink-dim)">
+          Terminal sessions
+        </h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Terminal state is independent from mission and agent-session status.
+        </p>
+      </div>
+      <div className="space-y-1.5">
+        {live.map(session => (
+          <TerminalSessionCard
+            key={sessionRowKey(session)}
+            missionId={missionId}
+            session={session}
+            objectiveLabel={objectiveLabelFor(session, objectives)}
+            localExecutionTargetId={localExecutionTargetId}
+            onAbsent={onAbsent}
+          />
+        ))}
+        {past.map(session => (
+          <CompactSessionRow
+            key={sessionRowKey(session)}
+            missionId={missionId}
+            session={session}
+            objectiveLabel={objectiveLabelFor(session, objectives)}
+            localExecutionTargetId={localExecutionTargetId}
+            onAbsent={onAbsent}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** The minimal one-line control strip for one session inside its objective row. */
+function ObjectiveSessionLine({
+  session,
+  missionId,
+  localExecutionTargetId,
+  onAbsent
+}: {
+  session: TerminalSessionDto;
+  missionId: string;
+  localExecutionTargetId: string | null;
+  onAbsent?: (providerSessionId: string) => void;
+}) {
+  const { copied, copy } = useCopyToClipboard();
+  const { state, name, reachable, absent } = useLatchSessionTracking({
+    session,
+    missionId,
+    localExecutionTargetId,
+    onAbsent
+  });
+  const attachCommand = `${session.executable} attach ${session.providerSessionId}`;
+
+  if (absent) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className={cn('h-2 w-2 shrink-0 rounded-full', stateTone[state])} aria-hidden="true" />
+      <Button type="button" size="sm" variant="ghost" onClick={() => void copy(attachCommand)}>
+        {copied ? <Check /> : <Copy />}
+        {copied ? 'Copied' : 'Latch attach'}
+      </Button>
+      <EndSessionButton
+        session={session}
+        name={name}
+        disabled={!reachable || state !== 'running'}
+        compact
+        label="End session"
+      />
+    </div>
+  );
+}
+
+/**
+ * The Latch sessions one objective launched, rendered inside that objective's
+ * accordion. `sessions` must be newest first.
+ *
+ * Deliberately minimal (coo:990): the full controls now live in the
+ * mission-level {@link MissionTerminalSessionsSection}, so an objective row
+ * keeps only what is worth acting on without leaving it — one line per session
+ * with a "Latch attach" copy button and an end-session button.
  */
 export function ObjectiveTerminalSessions({
   sessions,
@@ -432,32 +590,13 @@ export function ObjectiveTerminalSessions({
   const visible = sessions.filter(session => !isAbsent(session.providerSessionId));
   if (visible.length === 0) return <>{emptyState ?? null}</>;
 
-  const [newest, ...older] = visible;
-  const newestIsLive =
-    newest!.lastObservedState === 'running' || newest!.lastObservedState === 'stopping';
-
   return (
-    <div className="space-y-1.5">
-      {newestIsLive ? (
-        <TerminalSessionCard
-          missionId={missionId}
-          session={newest!}
-          localExecutionTargetId={localExecutionTargetId}
-          onAbsent={onAbsent}
-        />
-      ) : (
-        <CompactSessionRow
-          missionId={missionId}
-          session={newest!}
-          localExecutionTargetId={localExecutionTargetId}
-          onAbsent={onAbsent}
-        />
-      )}
-      {older.map(session => (
-        <CompactSessionRow
+    <div className="space-y-1">
+      {visible.map(session => (
+        <ObjectiveSessionLine
           key={sessionRowKey(session)}
-          missionId={missionId}
           session={session}
+          missionId={missionId}
           localExecutionTargetId={localExecutionTargetId}
           onAbsent={onAbsent}
         />

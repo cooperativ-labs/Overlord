@@ -975,9 +975,12 @@ export async function dequeueObjective({
   // completed, disconnected, or deleted has no queue membership left to plan,
   // and clearing its request first would reconcile the still-live entry back to
   // `waiting('retry_pending')` — a hold on work nobody is going to do. Removal
-  // also enqueues its own dispatch tick, so the queues behind this objective
-  // move immediately rather than on the next sweep.
-  await removeRunQueueEntryForObjective(tx, projectId, objectiveId);
+  // also enqueues its own dispatch tick. A forced disconnect is an intentional
+  // intervention point, however, so it pauses that queue transactionally and
+  // cannot release the following objective.
+  await removeRunQueueEntryForObjective(tx, projectId, objectiveId, {
+    pauseQueue: reason === 'disconnected'
+  });
 
   const { cleared } = await clearExecutionRequests({
     ctx: {

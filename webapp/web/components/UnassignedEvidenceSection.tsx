@@ -6,7 +6,6 @@ import {
 } from './objectives/ObjectiveEvidenceRule.tsx';
 import { MissionDeliveryList } from './DeliverySummaryCard.tsx';
 import { LiveFileChangeList } from './LiveFileChangeList.tsx';
-import { ObjectiveTerminalSessions } from './ObjectiveTerminalSessions.tsx';
 
 /**
  * Mission-level fallback for evidence whose objective is gone (coo:879 §4.6
@@ -26,9 +25,11 @@ export function UnassignedEvidenceSection({
   truncation?: ObjectiveEvidenceTruncation;
 }) {
   const hasDeliveries = evidence.deliveries.length > 0;
-  const hasSessions = evidence.terminalSessions.length > 0;
   const hasFileChanges = evidence.fileChanges.length > 0;
-  if (!hasDeliveries && !hasSessions && !hasFileChanges) return null;
+  // Terminal sessions are not repeated here: the mission-level Latch section
+  // (coo:990) already lists every session on the mission, including the ones
+  // whose objective has been deleted.
+  if (!hasDeliveries && !hasFileChanges) return null;
 
   return (
     <div className="space-y-3">
@@ -50,15 +51,6 @@ export function UnassignedEvidenceSection({
                 {truncation.deliveries}
               </ObjectiveEvidenceTruncationNotice>
             ) : null}
-          </>
-        ) : null}
-        {hasSessions ? (
-          <>
-            <ObjectiveEvidenceRule
-              label="Terminal sessions"
-              count={evidence.terminalSessions.length}
-            />
-            <ObjectiveTerminalSessions sessions={evidence.terminalSessions} />
           </>
         ) : null}
         {hasFileChanges ? (

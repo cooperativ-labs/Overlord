@@ -42,7 +42,10 @@ import { MissionProjectSelect } from './MissionProjectSelect.tsx';
 import { MissionSharedStateFooter } from './MissionSharedStateFooter.tsx';
 import { MissionStatusSelect } from './MissionStatusSelect.tsx';
 import { MissionTagSelect } from './MissionTagSelect.tsx';
-import { MissionLatchSessionProvider } from './ObjectiveTerminalSessions.tsx';
+import {
+  MissionLatchSessionProvider,
+  MissionTerminalSessionsSection
+} from './ObjectiveTerminalSessions.tsx';
 import { Button, Spinner } from './ui.tsx';
 import { UnassignedEvidenceSection } from './UnassignedEvidenceSection.tsx';
 
@@ -376,6 +379,15 @@ export function MissionPanel({
             <MissionNotes missionId={mission.id} notes={mission.notes} />
             <Separator />
             <div className="flex flex-col gap-6 mt-8">
+              {/*
+                Every Latch session the mission has, in one place above the
+                artifacts (coo:990). The objective rows keep only a minimal
+                attach/end line.
+              */}
+              <MissionTerminalSessionsSection
+                sessions={mission.terminalSessions}
+                objectives={mission.objectives}
+              />
               <div className="space-y-3">
                 <h2 className="text-xs font-semibold uppercase tracking-wide text-(--color-ink-dim)">
                   Artifacts

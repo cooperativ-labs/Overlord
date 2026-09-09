@@ -50,7 +50,7 @@ import type {
 } from '../../../shared/contract.ts';
 
 import type { WebhookDialogTarget } from './use-webhook-dialog-form.ts';
-import { useWebhookDialogForm } from './use-webhook-dialog-form.ts';
+import { useWebhookDialogForm, webhookDialogTargetKey } from './use-webhook-dialog-form.ts';
 import { useWebhookTestSend } from './use-webhook-test-send.ts';
 
 const EVENT_TYPE_OPTIONS: { value: WebhookEventType; label: string; description: string }[] = [
@@ -205,6 +205,7 @@ export function WebhooksPage({ open }: { open: boolean }) {
       </div>
 
       <WebhookDialog
+        key={webhookDialogTargetKey(dialogTarget)}
         target={dialogTarget}
         workspaceId={selectedWorkspaceId}
         onOpenChange={open => !open && setDialogTarget(null)}

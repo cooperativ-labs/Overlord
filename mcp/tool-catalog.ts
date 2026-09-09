@@ -692,7 +692,12 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
           })
         },
         knownRisks: { type: 'array', items: stringProperty('Residual risk or limitation.') },
-        deferredWork: { type: 'array', items: stringProperty('Intentionally deferred work.') },
+        deferredWork: {
+          type: 'array',
+          items: stringProperty(
+            'Intentionally deferred work. Name the component or file involved and say why the work was left.'
+          )
+        },
         assumptions: { type: 'array', items: stringProperty('Material implementation assumption.') }
       },
       ['sessionKey', 'summary']

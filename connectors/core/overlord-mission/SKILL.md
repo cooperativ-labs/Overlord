@@ -32,8 +32,9 @@ when none apply. Human actions are concrete work a user must perform outside com
 never include Git operations or routine review/testing. Every human action needs `action`, `reason`,
 and `category`; add `command`, `verify`, and `link` whenever they exist so the operator can act
 without re-reading the delivery (see **Delivery Evidence** below). Tradeoffs record the
-implementation decision, alternatives considered, and rationale. These fields improve review
-visibility but never block delivery.
+implementation decision, alternatives considered, and rationale. Each `deferredWork` item
+should name the component or file involved and say why the work was left. These fields improve
+review visibility but never block delivery.
 
 For full command syntax, flags, phase values, and event types see **CLI Command Reference** below.
 
@@ -206,7 +207,8 @@ Only list a human action when a person must perform a concrete non-Git step outs
 agent's completed work (for example, add a secret, run a production migration, deploy, or
 configure an external integration). Never list committing, pushing, opening a pull request,
 reviewing code, or ordinary tests. A tradeoff must state the decision, alternatives considered,
-and rationale. Omit the report when none of these facts apply.
+and rationale. Each `deferredWork` item should name the component or file involved and say why
+the work was left. Omit the report when none of these facts apply.
 
 #### Writing a human action the operator can complete
 

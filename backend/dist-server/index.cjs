@@ -76938,6 +76938,12 @@ async function removeRunQueueEntry(db, entryId, options = {}) {
       "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE id = ? AND deleted_at IS NULL",
       [row.queue_id]
     );
+    if (queue && (options.force === true || options.pauseQueue === true) && !truthy(queue.paused)) {
+      await tx.run(
+        "UPDATE run_queues SET paused = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND paused = ?",
+        [tx.dialect === "postgres" ? true : 1, now2, queue.id, tx.dialect === "postgres" ? false : 0]
+      );
+    }
     if (queue?.mission_id && !truthy(queue.is_default)) {
       const remaining = await tx.get(
         "SELECT id FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL LIMIT 1",
@@ -76990,13 +76996,13 @@ async function enqueueObjectiveAfterLastQueuedSibling(db, projectId, objectiveId
     actorId
   });
 }
-async function removeRunQueueEntryForObjective(db, projectId, objectiveId) {
+async function removeRunQueueEntryForObjective(db, projectId, objectiveId, options = {}) {
   const entry = await db.get(
     "SELECT id FROM run_queue_entries WHERE project_id = ? AND objective_id = ? AND deleted_at IS NULL",
     [projectId, objectiveId]
   );
   if (!entry) return { removed: false };
-  await removeRunQueueEntry(db, entry.id);
+  await removeRunQueueEntry(db, entry.id, options);
   return { removed: true };
 }
 async function reorderRunQueue(db, queueId, orderedEntryIds) {
@@ -135295,12 +135301,17 @@ var COMPOSE_DELIVERY_RESPONSE_SCHEMA = {
       }
     },
     knownRisks: { type: import_genai2.Type.ARRAY, items: { type: import_genai2.Type.STRING } },
-    deferredWork: { type: import_genai2.Type.ARRAY, items: { type: import_genai2.Type.STRING } },
+    deferredWork: {
+      type: import_genai2.Type.ARRAY,
+      description: "Deferred work rewritten as self-contained objective statements (see DEFERRED WORK rules). Same order and at least the same count as the agent list.",
+      items: { type: import_genai2.Type.STRING }
+    },
     assumptions: { type: import_genai2.Type.ARRAY, items: { type: import_genai2.Type.STRING } },
     reviewHighlights: { type: import_genai2.Type.ARRAY, items: { type: import_genai2.Type.STRING } }
   },
-  required: ["markdown", "humanActions", "tradeoffsMade"]
+  required: ["markdown", "humanActions", "tradeoffsMade", "deferredWork"]
 };
+var DEFERRED_WORK_MAX_CHARS = 800;
 var SYSTEM_INSTRUCTION = `You compose a polished delivery review message for a coding agent handoff.
 Return JSON only matching the schema.
 Rules:
@@ -135310,7 +135321,14 @@ Rules:
 - Every deterministic candidate action is real follow-up work: cite each one unless an agent-reported action already covers the same step.
 - Carry each action's command, verify, and link fields through unchanged when the evidence supplies them; never fabricate a command, URL, or path that is not in the evidence.
 - Never include git commit/push/PR actions or routine "review/test the code" actions.
-- Prefer concise, scannable Markdown. Do not include secrets, tokens, or raw diffs.`;
+- Prefer concise, scannable Markdown. Do not include secrets, tokens, or raw diffs.
+DEFERRED WORK rules (deferredWork array):
+- Each deferred-work item becomes the full text of a future objective handed to another coding agent that has NOT read this delivery, so every item must stand alone.
+- Rewrite every agent-listed item as a self-contained statement of one to three sentences: start with an imperative verb naming the work; name the component, feature, file, command, or data set involved; state what the delivered work already covers and why this piece was left; and state what done looks like when the evidence says so.
+- Resolve references that only make sense inside this delivery ("finding 3", "P2 items", "the next objective", "remaining ~60 moves") by pulling the referenced detail from the agent summary, objective instruction, change rationales, or recent events.
+- Never shorten an item, merge two items, drop an item, or reorder them: output at least as many deferredWork entries as the agent listed, in the same order, each at least as detailed as its source.
+- Only add an item beyond the agent's list when the agent summary explicitly says work was left undone, is out of scope, remains, or is pre-existing and untouched; never infer new work from silence, and never restate a human action or known risk as deferred work.
+- Use only facts present in the evidence. Do not invent files, commands, scope, or acceptance criteria. Keep each item under ${DEFERRED_WORK_MAX_CHARS} characters.`;
 function buildComposeDeliveryPrompt(input) {
   return [
     "Compose a delivery presentation from this bounded evidence.",
@@ -135328,7 +135346,7 @@ ${JSON.stringify(input.humanActions)}`,
 ${JSON.stringify(input.tradeoffsMade)}`,
     `Known risks:
 ${JSON.stringify(input.knownRisks)}`,
-    `Deferred work:
+    `Deferred work (agent-listed, ${input.deferredWork.length} item(s); rewrite each as a standalone objective per the DEFERRED WORK rules):
 ${JSON.stringify(input.deferredWork)}`,
     `Assumptions:
 ${JSON.stringify(input.assumptions)}`,
@@ -135380,7 +135398,7 @@ async function generateComposeJson(params) {
       config: {
         systemInstruction,
         temperature: 0.2,
-        maxOutputTokens: 2048,
+        maxOutputTokens: 4096,
         responseMimeType: "application/json",
         responseSchema: COMPOSE_DELIVERY_RESPONSE_SCHEMA
       }
@@ -144668,7 +144686,9 @@ async function dequeueObjective({
   now: now2,
   tx = requireDatabaseClient()
 }) {
-  await removeRunQueueEntryForObjective(tx, projectId, objectiveId);
+  await removeRunQueueEntryForObjective(tx, projectId, objectiveId, {
+    pauseQueue: reason === "disconnected"
+  });
   const { cleared } = await clearExecutionRequests({
     ctx: {
       ...await buildWebappServiceContextForWorkspace(workspaceId2, tx, workspaceUserId),
@@ -162969,7 +162989,12 @@ var hostedMcpToolDefinitions = [
           })
         },
         knownRisks: { type: "array", items: stringProperty("Residual risk or limitation.") },
-        deferredWork: { type: "array", items: stringProperty("Intentionally deferred work.") },
+        deferredWork: {
+          type: "array",
+          items: stringProperty(
+            "Intentionally deferred work. Name the component or file involved and say why the work was left."
+          )
+        },
         assumptions: { type: "array", items: stringProperty("Material implementation assumption.") }
       },
       ["sessionKey", "summary"]
@@ -168298,6 +168323,19 @@ function clampStringList(value, maxItems = DELIVERY_REPORT_LIMITS.maxItems) {
   }
   return out;
 }
+function reconcileDeferredWork({
+  agentItems,
+  draftItems,
+  maxItems = DELIVERY_REPORT_LIMITS.maxItems
+}) {
+  if (agentItems.length === 0) return draftItems.slice(0, maxItems);
+  if (draftItems.length < agentItems.length) return agentItems.slice(0, maxItems);
+  const merged = agentItems.map((agentItem, index) => {
+    const draftItem = draftItems[index];
+    return draftItem.length >= agentItem.length ? draftItem : agentItem;
+  });
+  return [...merged, ...draftItems.slice(agentItems.length)].slice(0, maxItems);
+}
 function asCategory(value) {
   return typeof value === "string" && HUMAN_ACTION_CATEGORIES.has(value) ? value : "other";
 }
@@ -168437,7 +168475,10 @@ function reconcileDeliveryComposeDraft({
     humanActions: resolvedActions,
     tradeoffsMade: resolvedTradeoffs,
     knownRisks: clampStringList(draft.knownRisks).length > 0 ? clampStringList(draft.knownRisks) : report.presentation.knownRisks,
-    deferredWork: clampStringList(draft.deferredWork).length > 0 ? clampStringList(draft.deferredWork) : report.presentation.deferredWork,
+    deferredWork: reconcileDeferredWork({
+      agentItems: report.presentation.deferredWork,
+      draftItems: clampStringList(draft.deferredWork)
+    }),
     assumptions: clampStringList(draft.assumptions).length > 0 ? clampStringList(draft.assumptions) : report.presentation.assumptions,
     generatedBy: "gemini",
     generatedAt,
@@ -168964,21 +169005,25 @@ function deferredWorkId(text, occurrence) {
   const digest3 = (0, import_node_crypto23.createHash)("sha256").update(text).digest("hex").slice(0, 16);
   return `deferred-work-${digest3}-${occurrence}`;
 }
+function agentDeferredWorkId(index, agentText) {
+  if (!agentText) return `deferred-work-${index}-composed`;
+  const digest3 = (0, import_node_crypto23.createHash)("sha256").update(agentText).digest("hex").slice(0, 16);
+  return `deferred-work-${index}-${digest3}`;
+}
 function deliveryActions(row) {
-  const presentation = deliveryReportFromPayload(
-    row.payload_json,
-    row.delivery_summary
-  ).presentation;
+  const report = deliveryReportFromPayload(row.payload_json, row.delivery_summary);
+  const { presentation, agentReport } = report;
   const humanActions = presentation.humanActions.map((action) => ({
     ...action,
     kind: action.blocking === true ? "blocking_question" : "follow_up"
   }));
   const occurrences = /* @__PURE__ */ new Map();
-  const deferredWork = presentation.deferredWork.map((action) => {
+  const deferredWork = presentation.deferredWork.map((action, index) => {
     const occurrence = (occurrences.get(action) ?? 0) + 1;
     occurrences.set(action, occurrence);
     return {
-      id: deferredWorkId(action, occurrence),
+      id: agentDeferredWorkId(index, agentReport.deferredWork[index]),
+      legacyId: deferredWorkId(action, occurrence),
       kind: "deferred_work",
       action,
       category: "other",
@@ -169047,7 +169092,8 @@ async function listHumanActions({
   const resolved = [];
   for (const row of rows) {
     for (const action of deliveryActions(row)) {
-      const item = toItem(row, action, resolutions.get(`${row.delivery_id}:${action.id}`));
+      const resolution = resolutions.get(`${row.delivery_id}:${action.id}`) ?? (action.legacyId ? resolutions.get(`${row.delivery_id}:${action.legacyId}`) : void 0);
+      const item = toItem(row, action, resolution);
       (item.resolution ? resolved : open).push(item);
     }
   }
@@ -169072,13 +169118,16 @@ async function requireDeliveryAction(deliveryId, actionId) {
     permission: PERMISSIONS.MISSION_UPDATE,
     notFoundMessage: "Delivery not found"
   });
-  const action = deliveryActions(row).find((candidate) => candidate.id === actionId);
+  const action = deliveryActions(row).find(
+    (candidate) => candidate.id === actionId || candidate.legacyId === actionId
+  );
   if (!action) throw new ApiError(404, "Human action not found");
   return { row, action, workspaceUserId };
 }
 async function currentItem(row, action) {
   const resolutions = await loadResolutions([row.delivery_id]);
-  return toItem(row, action, resolutions.get(`${row.delivery_id}:${action.id}`));
+  const resolution = resolutions.get(`${row.delivery_id}:${action.id}`) ?? (action.legacyId ? resolutions.get(`${row.delivery_id}:${action.legacyId}`) : void 0);
+  return toItem(row, action, resolution);
 }
 async function actorWorkspaceUserId(workspaceId2, fallback2) {
   const profileId = await resolveActiveProfileId();
@@ -169139,17 +169188,22 @@ async function resolveHumanAction(deliveryId, actionId, body) {
 async function reopenHumanAction(deliveryId, actionId) {
   const { row, action, workspaceUserId } = await requireDeliveryAction(deliveryId, actionId);
   const db = requireDatabaseClient();
+  const resolutionIds = [action.id, action.legacyId].filter(
+    (candidate) => candidate !== void 0
+  );
   const existing = await db.get(
-    `SELECT 1 FROM human_action_resolutions WHERE delivery_id = ? AND action_id = ?`,
-    [row.delivery_id, action.id]
+    `SELECT 1 FROM human_action_resolutions
+      WHERE delivery_id = ? AND action_id IN (${placeholders2(resolutionIds.length)})`,
+    [row.delivery_id, ...resolutionIds]
   );
   if (existing) {
     const actor = await actorWorkspaceUserId(row.workspace_id, workspaceUserId);
     await db.transaction(async (tx) => {
-      await tx.run(`DELETE FROM human_action_resolutions WHERE delivery_id = ? AND action_id = ?`, [
-        row.delivery_id,
-        action.id
-      ]);
+      await tx.run(
+        `DELETE FROM human_action_resolutions
+          WHERE delivery_id = ? AND action_id IN (${placeholders2(resolutionIds.length)})`,
+        [row.delivery_id, ...resolutionIds]
+      );
       await recordChange2(
         {
           entityType: "human_action_resolution",

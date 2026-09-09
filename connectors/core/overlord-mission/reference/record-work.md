@@ -60,7 +60,8 @@ identical across the CLI (`--payload-file -`) and the hosted MCP tool
   or `decision`.
 - **`deliveryReport`** (optional) — you may include a `deliveryReport.agentReport`
   (`humanActions`, `tradeoffsMade`, `knownRisks`, `deferredWork`, `assumptions`) just as
-  in `deliver`. It improves review visibility but never blocks the record.
+  in `deliver`. Each `deferredWork` item should name the component or file involved and say
+  why the work was left. It improves review visibility but never blocks the record.
 
 ## CLI
 

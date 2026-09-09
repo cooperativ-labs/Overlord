@@ -701,6 +701,8 @@ deliver:
     The payload may also include deliveryReport: { schemaVersion: 1, agentReport: {
       humanActions, tradeoffsMade, knownRisks, deferredWork, assumptions } }. Use empty arrays
     when none apply. Human actions exclude Git operations and routine review/testing.
+    Each deferredWork item should name the component or file involved and say why the work
+    was left.
   Human action shape (each item in agentReport.humanActions):
     {
       "action":   "Add GEMINI_API_KEY to the production backend service on Railway.", // required. one imperative sentence: what, where, which value.

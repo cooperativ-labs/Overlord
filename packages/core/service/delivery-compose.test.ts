@@ -6,6 +6,7 @@ import {
   applyDeliveryPresentation,
   deriveDeterministicActionCandidates,
   mergeDeterministicActionCandidates,
+  reconcileDeferredWork,
   reconcileDeliveryComposeDraft
 } from './delivery-compose.js';
 import { buildDeliveryReport } from './delivery-report.js';
@@ -266,5 +267,68 @@ describe('delivery-compose reconciliation', () => {
     const presentation = reconcileDeliveryComposeDraft({ report, draft: null });
 
     assert.deepEqual(applyDeliveryPresentation({ report, presentation }).warnings, report.warnings);
+  });
+});
+
+describe('deferred-work reconciliation', () => {
+  const agentItems = ['Webhook full-payload parity', 'Remaining ~60 unassigned moves.'];
+
+  it('accepts enriched draft items in place of their agent sources', () => {
+    const draftItems = [
+      'Bring the webhook payload to parity with the delivery DTO: the dispatcher currently sends only the summary, so add the normalized report fields the docs promise.',
+      'Match the remaining 60 unassigned Cooperativ Labs, Inc. journal moves to vendors; the memo-text pass covered OpenAI, Stratechery, Everhour, and Medium, and the rest need manual matching.'
+    ];
+    assert.deepEqual(reconcileDeferredWork({ agentItems, draftItems }), draftItems);
+  });
+
+  it('keeps the agent text for any item the draft made shorter', () => {
+    const draftItems = ['Webhook parity', agentItems[1]! + ' They belong to Cooperativ Labs, Inc.'];
+    assert.deepEqual(reconcileDeferredWork({ agentItems, draftItems }), [
+      agentItems[0],
+      draftItems[1]
+    ]);
+  });
+
+  it('keeps the whole agent list when the draft drops items', () => {
+    assert.deepEqual(
+      reconcileDeferredWork({
+        agentItems,
+        draftItems: ['One merged and much longer item covering both.']
+      }),
+      agentItems
+    );
+  });
+
+  it('keeps extra draft items the summary surfaced and bounds the total', () => {
+    const extra =
+      'Fix the date-dependent employee lifecycle test that failed before this delivery.';
+    assert.deepEqual(reconcileDeferredWork({ agentItems, draftItems: [...agentItems, extra] }), [
+      ...agentItems,
+      extra
+    ]);
+    const many = Array.from({ length: 15 }, (_, index) => `Deferred item ${index + 1}`);
+    assert.equal(reconcileDeferredWork({ agentItems: [], draftItems: many }).length, 12);
+  });
+
+  it('applies the guard inside reconcileDeliveryComposeDraft', () => {
+    const report = baseReport();
+    const shortened = reconcileDeliveryComposeDraft({
+      report,
+      draft: { markdown: 'x', deferredWork: ['Parity'] }
+    });
+    assert.deepEqual(shortened.deferredWork, ['Webhook full-payload parity']);
+
+    const enriched = reconcileDeliveryComposeDraft({
+      report,
+      draft: {
+        markdown: 'x',
+        deferredWork: [
+          'Bring webhook payloads to full parity with the delivery DTO so consumers receive the normalized report fields.'
+        ]
+      }
+    });
+    assert.deepEqual(enriched.deferredWork, [
+      'Bring webhook payloads to full parity with the delivery DTO so consumers receive the normalized report fields.'
+    ]);
   });
 });

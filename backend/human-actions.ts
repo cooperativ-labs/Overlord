@@ -168,6 +168,11 @@ function toResolution(row: ResolutionRow | undefined): HumanActionResolutionDto 
 
 interface HumanActionRailEntry extends HumanActionV1 {
   kind: HumanActionItemKind;
+  /**
+   * The pre-composition deferred-work id. It remains readable during the
+   * identifier migration, but mutation paths always write `id`.
+   */
+  legacyId?: string;
 }
 
 function deferredWorkId(text: string, occurrence: number): string {
@@ -175,21 +180,26 @@ function deferredWorkId(text: string, occurrence: number): string {
   return `deferred-work-${digest}-${occurrence}`;
 }
 
+function agentDeferredWorkId(index: number, agentText: string | undefined): string {
+  if (!agentText) return `deferred-work-${index}-composed`;
+  const digest = createHash('sha256').update(agentText).digest('hex').slice(0, 16);
+  return `deferred-work-${index}-${digest}`;
+}
+
 function deliveryActions(row: DeliveryActionRow): HumanActionRailEntry[] {
-  const presentation = deliveryReportFromPayload(
-    row.payload_json,
-    row.delivery_summary
-  ).presentation;
+  const report = deliveryReportFromPayload(row.payload_json, row.delivery_summary);
+  const { presentation, agentReport } = report;
   const humanActions = presentation.humanActions.map(action => ({
     ...action,
     kind: action.blocking === true ? 'blocking_question' : 'follow_up'
   })) satisfies HumanActionRailEntry[];
   const occurrences = new Map<string, number>();
-  const deferredWork = presentation.deferredWork.map(action => {
+  const deferredWork = presentation.deferredWork.map((action, index) => {
     const occurrence = (occurrences.get(action) ?? 0) + 1;
     occurrences.set(action, occurrence);
     return {
-      id: deferredWorkId(action, occurrence),
+      id: agentDeferredWorkId(index, agentReport.deferredWork[index]),
+      legacyId: deferredWorkId(action, occurrence),
       kind: 'deferred_work',
       action,
       category: 'other',
@@ -273,7 +283,10 @@ export async function listHumanActions({
   const resolved: HumanActionItemDto[] = [];
   for (const row of rows) {
     for (const action of deliveryActions(row)) {
-      const item = toItem(row, action, resolutions.get(`${row.delivery_id}:${action.id}`));
+      const resolution =
+        resolutions.get(`${row.delivery_id}:${action.id}`) ??
+        (action.legacyId ? resolutions.get(`${row.delivery_id}:${action.legacyId}`) : undefined);
+      const item = toItem(row, action, resolution);
       (item.resolution ? resolved : open).push(item);
     }
   }
@@ -303,7 +316,9 @@ async function requireDeliveryAction(
     permission: PERMISSIONS.MISSION_UPDATE,
     notFoundMessage: 'Delivery not found'
   });
-  const action = deliveryActions(row).find(candidate => candidate.id === actionId);
+  const action = deliveryActions(row).find(
+    candidate => candidate.id === actionId || candidate.legacyId === actionId
+  );
   if (!action) throw new ApiError(404, 'Human action not found');
   return { row, action, workspaceUserId };
 }
@@ -313,7 +328,10 @@ async function currentItem(
   action: HumanActionRailEntry
 ): Promise<HumanActionItemDto> {
   const resolutions = await loadResolutions([row.delivery_id]);
-  return toItem(row, action, resolutions.get(`${row.delivery_id}:${action.id}`));
+  const resolution =
+    resolutions.get(`${row.delivery_id}:${action.id}`) ??
+    (action.legacyId ? resolutions.get(`${row.delivery_id}:${action.legacyId}`) : undefined);
+  return toItem(row, action, resolution);
 }
 
 async function actorWorkspaceUserId(workspaceId: string, fallback: string): Promise<string> {
@@ -390,17 +408,22 @@ export async function reopenHumanAction(
 ): Promise<HumanActionItemDto> {
   const { row, action, workspaceUserId } = await requireDeliveryAction(deliveryId, actionId);
   const db = requireDatabaseClient();
+  const resolutionIds = [action.id, action.legacyId].filter(
+    (candidate): candidate is string => candidate !== undefined
+  );
   const existing = await db.get(
-    `SELECT 1 FROM human_action_resolutions WHERE delivery_id = ? AND action_id = ?`,
-    [row.delivery_id, action.id]
+    `SELECT 1 FROM human_action_resolutions
+      WHERE delivery_id = ? AND action_id IN (${placeholders(resolutionIds.length)})`,
+    [row.delivery_id, ...resolutionIds]
   );
   if (existing) {
     const actor = await actorWorkspaceUserId(row.workspace_id, workspaceUserId);
     await db.transaction(async tx => {
-      await tx.run(`DELETE FROM human_action_resolutions WHERE delivery_id = ? AND action_id = ?`, [
-        row.delivery_id,
-        action.id
-      ]);
+      await tx.run(
+        `DELETE FROM human_action_resolutions
+          WHERE delivery_id = ? AND action_id IN (${placeholders(resolutionIds.length)})`,
+        [row.delivery_id, ...resolutionIds]
+      );
       await recordChange(
         {
           entityType: 'human_action_resolution',

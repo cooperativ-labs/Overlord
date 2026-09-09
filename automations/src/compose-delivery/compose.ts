@@ -89,14 +89,22 @@ export const COMPOSE_DELIVERY_RESPONSE_SCHEMA: Schema = {
       }
     },
     knownRisks: { type: Type.ARRAY, items: { type: Type.STRING } },
-    deferredWork: { type: Type.ARRAY, items: { type: Type.STRING } },
+    deferredWork: {
+      type: Type.ARRAY,
+      description:
+        'Deferred work rewritten as self-contained objective statements (see DEFERRED WORK rules). Same order and at least the same count as the agent list.',
+      items: { type: Type.STRING }
+    },
     assumptions: { type: Type.ARRAY, items: { type: Type.STRING } },
     reviewHighlights: { type: Type.ARRAY, items: { type: Type.STRING } }
   },
-  required: ['markdown', 'humanActions', 'tradeoffsMade']
+  required: ['markdown', 'humanActions', 'tradeoffsMade', 'deferredWork']
 };
 
-const SYSTEM_INSTRUCTION = `You compose a polished delivery review message for a coding agent handoff.
+/** Per-item ceiling for a rewritten deferred-work statement; matches the core detail limit. */
+export const DEFERRED_WORK_MAX_CHARS = 800;
+
+export const SYSTEM_INSTRUCTION = `You compose a polished delivery review message for a coding agent handoff.
 Return JSON only matching the schema.
 Rules:
 - Use the agent summary as the factual spine; improve clarity and organization in markdown.
@@ -105,7 +113,14 @@ Rules:
 - Every deterministic candidate action is real follow-up work: cite each one unless an agent-reported action already covers the same step.
 - Carry each action's command, verify, and link fields through unchanged when the evidence supplies them; never fabricate a command, URL, or path that is not in the evidence.
 - Never include git commit/push/PR actions or routine "review/test the code" actions.
-- Prefer concise, scannable Markdown. Do not include secrets, tokens, or raw diffs.`;
+- Prefer concise, scannable Markdown. Do not include secrets, tokens, or raw diffs.
+DEFERRED WORK rules (deferredWork array):
+- Each deferred-work item becomes the full text of a future objective handed to another coding agent that has NOT read this delivery, so every item must stand alone.
+- Rewrite every agent-listed item as a self-contained statement of one to three sentences: start with an imperative verb naming the work; name the component, feature, file, command, or data set involved; state what the delivered work already covers and why this piece was left; and state what done looks like when the evidence says so.
+- Resolve references that only make sense inside this delivery ("finding 3", "P2 items", "the next objective", "remaining ~60 moves") by pulling the referenced detail from the agent summary, objective instruction, change rationales, or recent events.
+- Never shorten an item, merge two items, drop an item, or reorder them: output at least as many deferredWork entries as the agent listed, in the same order, each at least as detailed as its source.
+- Only add an item beyond the agent's list when the agent summary explicitly says work was left undone, is out of scope, remains, or is pre-existing and untouched; never infer new work from silence, and never restate a human action or known risk as deferred work.
+- Use only facts present in the evidence. Do not invent files, commands, scope, or acceptance criteria. Keep each item under ${DEFERRED_WORK_MAX_CHARS} characters.`;
 
 export function buildComposeDeliveryPrompt(input: ComposeDeliveryInput): string {
   return [
@@ -121,7 +136,7 @@ export function buildComposeDeliveryPrompt(input: ComposeDeliveryInput): string 
     `Human actions evidence:\n${JSON.stringify(input.humanActions)}`,
     `Tradeoffs evidence:\n${JSON.stringify(input.tradeoffsMade)}`,
     `Known risks:\n${JSON.stringify(input.knownRisks)}`,
-    `Deferred work:\n${JSON.stringify(input.deferredWork)}`,
+    `Deferred work (agent-listed, ${input.deferredWork.length} item(s); rewrite each as a standalone objective per the DEFERRED WORK rules):\n${JSON.stringify(input.deferredWork)}`,
     `Assumptions:\n${JSON.stringify(input.assumptions)}`,
     `Deterministic candidate actions:\n${JSON.stringify(input.candidateActions)}`,
     `Change rationales:\n${JSON.stringify(input.changeRationales.slice(0, 20))}`,
@@ -197,7 +212,7 @@ async function generateComposeJson(params: {
       config: {
         systemInstruction,
         temperature: 0.2,
-        maxOutputTokens: 2048,
+        maxOutputTokens: 4096,
         responseMimeType: 'application/json',
         responseSchema: COMPOSE_DELIVERY_RESPONSE_SCHEMA
       }

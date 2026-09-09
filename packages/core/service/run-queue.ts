@@ -586,6 +586,12 @@ export type RunQueueEntryRemoval = {
   removedEmptyQueueId: string | null;
 };
 
+type RunQueueEntryRemovalOptions = {
+  force?: boolean;
+  /** Pause the containing queue as part of a recovery/disconnect mutation. */
+  pauseQueue?: boolean;
+};
+
 /**
  * Detach an objective from its queue.
  *
@@ -598,7 +604,7 @@ export type RunQueueEntryRemoval = {
 export async function removeRunQueueEntry(
   db: DatabaseClient,
   entryId: string,
-  options: { force?: boolean } = {}
+  options: RunQueueEntryRemovalOptions = {}
 ): Promise<RunQueueEntryRemoval> {
   return db.transaction(async tx => {
     const row = await tx.get<{
@@ -645,6 +651,16 @@ export async function removeRunQueueEntry(
       'SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE id = ? AND deleted_at IS NULL',
       [row.queue_id]
     );
+    // Recovery actions must not let the dispatch tick released by this removal
+    // start the next entry. A force removal and an active-objective disconnect
+    // are intentional intervention points, so pause the containing queue in
+    // this same transaction before scheduling that tick.
+    if (queue && (options.force === true || options.pauseQueue === true) && !truthy(queue.paused)) {
+      await tx.run(
+        'UPDATE run_queues SET paused = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND paused = ?',
+        [tx.dialect === 'postgres' ? true : 1, now, queue.id, tx.dialect === 'postgres' ? false : 0]
+      );
+    }
     if (queue?.mission_id && !truthy(queue.is_default)) {
       const remaining = await tx.get<{ id: string }>(
         'SELECT id FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL LIMIT 1',
@@ -721,14 +737,15 @@ export async function enqueueObjectiveAfterLastQueuedSibling(
 export async function removeRunQueueEntryForObjective(
   db: DatabaseClient,
   projectId: string,
-  objectiveId: string
+  objectiveId: string,
+  options: Pick<RunQueueEntryRemovalOptions, 'pauseQueue'> = {}
 ): Promise<{ removed: boolean }> {
   const entry = await db.get<{ id: string }>(
     'SELECT id FROM run_queue_entries WHERE project_id = ? AND objective_id = ? AND deleted_at IS NULL',
     [projectId, objectiveId]
   );
   if (!entry) return { removed: false };
-  await removeRunQueueEntry(db, entry.id);
+  await removeRunQueueEntry(db, entry.id, options);
   return { removed: true };
 }
 
