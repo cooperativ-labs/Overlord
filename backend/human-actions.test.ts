@@ -236,6 +236,28 @@ test('a compose-added deferred-work item gets a distinct stable id', async () =>
   assert.equal(items[1]!.actionId, 'deferred-work-1-composed');
 });
 
+test('deferred-work ids follow the agent source after an earlier item is dropped', async () => {
+  const { project, mission, objective } = await seedMission('HA Deferred Dropped');
+  const kept = 'Fix the date-dependent employee lifecycle test that failed in payroll.';
+  const deliveryId = seedDelivery({
+    workspaceId: mission.workspaceId,
+    projectId: project.id,
+    missionId: mission.id,
+    objectiveId: objective.id,
+    deliveredAt: new Date().toISOString(),
+    humanActions: [],
+    deferredWork: ['Implement the CSV export API for reports.', kept]
+  });
+  const digest = createHash('sha256').update(kept).digest('hex').slice(0, 16);
+  rewritePresentationDeferredWork(deliveryId, [
+    'Fix the date-dependent employee lifecycle test that failed in payroll before the next close.'
+  ]);
+
+  const items = (await listHumanActions()).items.filter(item => item.deliveryId === deliveryId);
+  assert.equal(items.length, 1);
+  assert.equal(items[0]!.actionId, `deferred-work-1-${digest}`);
+});
+
 test('a legacy deferred-work resolution remains visible through the fallback', async () => {
   const { project, mission, objective } = await seedMission('HA Deferred Legacy Read');
   const deferredWork = 'Complete the initial audit-log export implementation';

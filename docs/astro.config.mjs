@@ -11,7 +11,7 @@ export default defineConfig({
       description: 'Guides for using Overlord to manage and coordinate AI coding agents.',
       favicon: '/favicon.ico',
       logo: {
-        src: '../webapp/public/images/256.png',
+        src: './src/assets/overlord-logo.png',
         alt: 'Overlord'
       },
       customCss: [

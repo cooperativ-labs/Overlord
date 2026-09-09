@@ -21,10 +21,17 @@ export type ComposeDeliveryEvidenceItem = {
   sourceRef?: string;
 };
 
+export type ComposeDeliveryPlannedObjective = {
+  title?: string | null;
+  instruction?: string | null;
+};
+
 export type ComposeDeliveryInput = {
   summary: string;
   objectiveTitle?: string | null;
   objectiveInstruction?: string | null;
+  plannedObjectives?: ComposeDeliveryPlannedObjective[];
+  omittedDeferredWork?: string[];
   verificationSummary?: string | null;
   followUpNotes?: string | null;
   humanActions: ComposeDeliveryEvidenceItem[];
@@ -92,7 +99,7 @@ export const COMPOSE_DELIVERY_RESPONSE_SCHEMA: Schema = {
     deferredWork: {
       type: Type.ARRAY,
       description:
-        'Deferred work rewritten as self-contained objective statements (see DEFERRED WORK rules). Same order and at least the same count as the agent list.',
+        'Eligible deferred work rewritten as self-contained out-of-mission objective statements (see DEFERRED WORK rules). Same order as the eligible agent list; omit items that restated planned work or human follow-up. Empty array is correct when nothing qualifies.',
       items: { type: Type.STRING }
     },
     assumptions: { type: Type.ARRAY, items: { type: Type.STRING } },
@@ -115,11 +122,12 @@ Rules:
 - Never include git commit/push/PR actions or routine "review/test the code" actions.
 - Prefer concise, scannable Markdown. Do not include secrets, tokens, or raw diffs.
 DEFERRED WORK rules (deferredWork array):
-- Each deferred-work item becomes the full text of a future objective handed to another coding agent that has NOT read this delivery, so every item must stand alone.
-- Rewrite every agent-listed item as a self-contained statement of one to three sentences: start with an imperative verb naming the work; name the component, feature, file, command, or data set involved; state what the delivered work already covers and why this piece was left; and state what done looks like when the evidence says so.
+- deferredWork is only for recommended NEW objectives that are not part of this mission. Out-of-scope bugs discovered during the work are the canonical example. It is not leftover implementation of the current objective, the next queued objective on this mission, or human follow-up.
+- The prompt lists this mission's planned future objectives and any agent items already omitted as ineligible. Never restate those, never restate a human action or known risk, and never restate leftover slices of the current objective.
+- The deferred-work evidence list is already the eligible subset. Rewrite every remaining item as a self-contained statement of one to three sentences: start with an imperative verb naming the work; name the component, feature, file, command, or data set involved; state what the delivered work already covers and why this piece was left; and state what done looks like when the evidence says so.
 - Resolve references that only make sense inside this delivery ("finding 3", "P2 items", "the next objective", "remaining ~60 moves") by pulling the referenced detail from the agent summary, objective instruction, change rationales, or recent events.
-- Never shorten an item, merge two items, drop an item, or reorder them: output at least as many deferredWork entries as the agent listed, in the same order, each at least as detailed as its source.
-- Only add an item beyond the agent's list when the agent summary explicitly says work was left undone, is out of scope, remains, or is pre-existing and untouched; never infer new work from silence, and never restate a human action or known risk as deferred work.
+- Never shorten a kept item, merge two kept items, or reorder them. Empty array is correct when the eligible list is empty or when a remaining item is still leftover in-mission work or human follow-up that slipped through.
+- Only add an item beyond the eligible list when the agent summary explicitly recommends new work outside this mission (for example an out-of-scope bug). Never add leftover in-mission work, a queued future objective, a human action, or a known risk.
 - Use only facts present in the evidence. Do not invent files, commands, scope, or acceptance criteria. Keep each item under ${DEFERRED_WORK_MAX_CHARS} characters.`;
 
 export function buildComposeDeliveryPrompt(input: ComposeDeliveryInput): string {
@@ -131,12 +139,22 @@ export function buildComposeDeliveryPrompt(input: ComposeDeliveryInput): string 
     input.objectiveInstruction
       ? `Objective instruction (bounded):\n${input.objectiveInstruction.slice(0, 2000)}`
       : null,
+    input.plannedObjectives && input.plannedObjectives.length > 0
+      ? `Planned future objectives on this mission (already queued — not deferred work; never restate):\n${JSON.stringify(
+          input.plannedObjectives
+        )}`
+      : null,
+    input.omittedDeferredWork && input.omittedDeferredWork.length > 0
+      ? `Agent deferred-work items omitted as ineligible (queued on this mission, leftover current-objective work, or human follow-up — do not restate):\n${JSON.stringify(
+          input.omittedDeferredWork
+        )}`
+      : null,
     input.verificationSummary ? `Verification: ${input.verificationSummary}` : null,
     input.followUpNotes ? `Follow-up notes: ${input.followUpNotes}` : null,
     `Human actions evidence:\n${JSON.stringify(input.humanActions)}`,
     `Tradeoffs evidence:\n${JSON.stringify(input.tradeoffsMade)}`,
     `Known risks:\n${JSON.stringify(input.knownRisks)}`,
-    `Deferred work (agent-listed, ${input.deferredWork.length} item(s); rewrite each as a standalone objective per the DEFERRED WORK rules):\n${JSON.stringify(input.deferredWork)}`,
+    `Deferred work (eligible agent-listed, ${input.deferredWork.length} item(s); rewrite each as a standalone out-of-mission objective per the DEFERRED WORK rules; empty array is correct when none qualify):\n${JSON.stringify(input.deferredWork)}`,
     `Assumptions:\n${JSON.stringify(input.assumptions)}`,
     `Deterministic candidate actions:\n${JSON.stringify(input.candidateActions)}`,
     `Change rationales:\n${JSON.stringify(input.changeRationales.slice(0, 20))}`,

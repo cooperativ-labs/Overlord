@@ -33,7 +33,12 @@ never include Git operations or routine review/testing. Every human action needs
 and `category`; add `command`, `verify`, and `link` whenever they exist so the operator can act
 without re-reading the delivery (see **Delivery Evidence** below). Tradeoffs record the
 implementation decision, alternatives considered, and rationale. Each `deferredWork` item
-should name the component or file involved and say why the work was left. These fields improve
+must be a recommended new objective that is not part of this mission (for example a bug
+discovered here that belongs outside it). Name the component or file involved and say why
+the work was left. Never list work already covered by this mission's future objectives,
+leftover slices of the current objective (add an objective to this mission instead), or
+human implementation follow-up such as deploy, secrets, or migrations (those belong in
+`humanActions`). Use an empty array when nothing qualifies. These fields improve
 review visibility but never block delivery.
 
 For full command syntax, flags, phase values, and event types see **CLI Command Reference** below.
@@ -207,8 +212,13 @@ Only list a human action when a person must perform a concrete non-Git step outs
 agent's completed work (for example, add a secret, run a production migration, deploy, or
 configure an external integration). Never list committing, pushing, opening a pull request,
 reviewing code, or ordinary tests. A tradeoff must state the decision, alternatives considered,
-and rationale. Each `deferredWork` item should name the component or file involved and say why
-the work was left. Omit the report when none of these facts apply.
+and rationale. Each `deferredWork` item must be a recommended new objective that is not
+part of this mission (for example a bug discovered here that belongs outside it). Name
+the component or file involved and say why the work was left. Never list work already
+covered by this mission's future objectives, leftover slices of the current objective
+(add an objective to this mission instead), or human implementation follow-up such as
+deploy, secrets, or migrations (those belong in `humanActions`). Use an empty array when
+nothing qualifies. Omit the report when none of these facts apply.
 
 #### Writing a human action the operator can complete
 

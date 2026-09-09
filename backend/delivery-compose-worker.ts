@@ -11,7 +11,9 @@ import type { DatabaseClient } from '@overlord/database';
 import {
   applyDeliveryPresentation,
   type ChangeRationaleEvidence,
+  type DeferredWorkObjectiveRef,
   deriveDeterministicActionCandidates,
+  filterDeferredWork,
   reconcileDeliveryComposeDraft
 } from '../packages/core/service/delivery-compose.ts';
 import { newId, nowIso } from '../packages/core/service/util.ts';
@@ -193,7 +195,8 @@ class DeliveryComposeWorker {
     const context = await loadComposeContext(client, deliveryId);
     if (!context) return { kind: 'missing' };
 
-    const { delivery, report, rationales, filePaths, objective, recentEvents } = context;
+    const { delivery, report, rationales, filePaths, objective, plannedObjectives, recentEvents } =
+      context;
     const candidates = deriveDeterministicActionCandidates({ filePaths });
     const model = readGeminiConfigFromEnv()?.model ?? null;
 
@@ -206,6 +209,7 @@ class DeliveryComposeWorker {
         rationales,
         candidates,
         objective,
+        plannedObjectives,
         recentEvents
       });
       inputBytes = Buffer.byteLength(JSON.stringify(input), 'utf8');
@@ -225,7 +229,9 @@ class DeliveryComposeWorker {
       draft,
       candidates,
       rationales,
-      model
+      model,
+      currentObjective: objective,
+      plannedObjectives
     });
 
     // No provider and no draft → leave deterministic content as fallback.
@@ -262,7 +268,9 @@ async function persistFallbackPresentation(
     report: context.report,
     draft: null,
     candidates: deriveDeterministicActionCandidates({ filePaths: context.filePaths }),
-    model: readGeminiConfigFromEnv()?.model ?? null
+    model: readGeminiConfigFromEnv()?.model ?? null,
+    currentObjective: context.objective,
+    plannedObjectives: context.plannedObjectives
   });
   presentation.status = 'fallback';
   const nextReport = applyDeliveryPresentation({
@@ -332,7 +340,8 @@ async function loadComposeContext(
   report: DeliveryReportPayloadV1;
   rationales: ChangeRationaleEvidence[];
   filePaths: string[];
-  objective: { title: string | null; instruction: string | null };
+  objective: DeferredWorkObjectiveRef;
+  plannedObjectives: DeferredWorkObjectiveRef[];
   recentEvents: Array<{ type: string; summary: string }>;
 } | null> {
   const delivery = (await client.get(
@@ -389,6 +398,13 @@ async function loadComposeContext(
     [delivery.objective_id]
   )) as { title: string | null; instruction_text: string | null } | undefined;
 
+  const siblingObjectives = (await client.all(
+    `SELECT title, instruction_text, state
+       FROM objectives
+      WHERE mission_id = ? AND id != ? AND deleted_at IS NULL`,
+    [delivery.mission_id, delivery.objective_id]
+  )) as Array<{ title: string | null; instruction_text: string | null; state: string }>;
+
   const recentEvents = (await client.all(
     `SELECT type, summary FROM mission_events
       WHERE objective_id = ?
@@ -406,6 +422,12 @@ async function loadComposeContext(
       title: objective?.title ?? null,
       instruction: objective?.instruction_text ?? null
     },
+    plannedObjectives: siblingObjectives
+      .filter(row => row.state !== 'complete' && Boolean(row.instruction_text?.trim()))
+      .map(row => ({
+        title: row.title,
+        instruction: row.instruction_text
+      })),
     recentEvents: recentEvents.map(event => ({
       type: event.type,
       summary: event.summary
@@ -419,19 +441,33 @@ function toComposeInput({
   rationales,
   candidates,
   objective,
+  plannedObjectives,
   recentEvents
 }: {
   delivery: DeliveryRow;
   report: DeliveryReportPayloadV1;
   rationales: ChangeRationaleEvidence[];
   candidates: ReturnType<typeof deriveDeterministicActionCandidates>;
-  objective: { title: string | null; instruction: string | null };
+  objective: DeferredWorkObjectiveRef;
+  plannedObjectives: DeferredWorkObjectiveRef[];
   recentEvents: Array<{ type: string; summary: string }>;
 }): ComposeDeliveryInput {
+  const eligibleDeferredWork = filterDeferredWork({
+    items: report.agentReport.deferredWork,
+    currentObjective: objective,
+    plannedObjectives,
+    humanActions: report.agentReport.humanActions,
+    candidateActions: candidates
+  });
+  const omittedDeferredWork = report.agentReport.deferredWork.filter(
+    item => !eligibleDeferredWork.includes(item)
+  );
   return {
     summary: boundComposeText(delivery.summary, MAX_COMPOSE_SUMMARY_CHARS),
-    objectiveTitle: objective.title,
-    objectiveInstruction: objective.instruction,
+    objectiveTitle: objective.title ?? null,
+    objectiveInstruction: objective.instruction ?? null,
+    plannedObjectives,
+    omittedDeferredWork,
     verificationSummary: delivery.verification_summary
       ? boundComposeText(delivery.verification_summary, MAX_COMPOSE_AUXILIARY_CHARS)
       : null,
@@ -459,7 +495,7 @@ function toComposeInput({
       ...(tradeoff.sourceRef ? { sourceRef: tradeoff.sourceRef } : {})
     })),
     knownRisks: report.agentReport.knownRisks,
-    deferredWork: report.agentReport.deferredWork,
+    deferredWork: eligibleDeferredWork,
     assumptions: report.agentReport.assumptions,
     candidateActions: candidates.map(action => ({
       id: action.id,

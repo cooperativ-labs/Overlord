@@ -2,6 +2,7 @@ import { PERMISSIONS } from '@overlord/auth';
 import { formatObjectiveDisplayId } from '@overlord/database';
 import { createHash } from 'node:crypto';
 
+import { matchDeferredWorkAgentIndex } from '../packages/core/service/delivery-compose.ts';
 import type {
   HumanActionItemDto,
   HumanActionItemKind,
@@ -194,11 +195,21 @@ function deliveryActions(row: DeliveryActionRow): HumanActionRailEntry[] {
     kind: action.blocking === true ? 'blocking_question' : 'follow_up'
   })) satisfies HumanActionRailEntry[];
   const occurrences = new Map<string, number>();
+  const usedAgentIndexes = new Set<number>();
   const deferredWork = presentation.deferredWork.map((action, index) => {
     const occurrence = (occurrences.get(action) ?? 0) + 1;
     occurrences.set(action, occurrence);
+    const agentIndex = matchDeferredWorkAgentIndex({
+      presentationItem: action,
+      agentItems: agentReport.deferredWork,
+      usedIndexes: usedAgentIndexes
+    });
+    if (agentIndex !== null) usedAgentIndexes.add(agentIndex);
     return {
-      id: agentDeferredWorkId(index, agentReport.deferredWork[index]),
+      id:
+        agentIndex === null
+          ? agentDeferredWorkId(index, undefined)
+          : agentDeferredWorkId(agentIndex, agentReport.deferredWork[agentIndex]),
       legacyId: deferredWorkId(action, occurrence),
       kind: 'deferred_work',
       action,

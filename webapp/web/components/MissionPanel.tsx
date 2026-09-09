@@ -380,9 +380,9 @@ export function MissionPanel({
             <Separator />
             <div className="flex flex-col gap-6 mt-8">
               {/*
-                Every Latch session the mission has, in one place above the
-                artifacts (coo:990). The objective rows keep only a minimal
-                attach/end line.
+                The current Latch session as a full card above the artifacts,
+                with previous sessions collapsed in an accordion (coo:990).
+                Objective rows keep only a minimal attach/end line.
               */}
               <MissionTerminalSessionsSection
                 sessions={mission.terminalSessions}

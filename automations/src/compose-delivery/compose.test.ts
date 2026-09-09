@@ -77,29 +77,36 @@ describe('compose-delivery automation', () => {
 });
 
 describe('compose-delivery deferred-work enrichment', () => {
-  it('instructs the model to rewrite deferred work as standalone objectives', () => {
+  it('instructs the model to rewrite eligible deferred work as out-of-mission objectives', () => {
     assert.match(SYSTEM_INSTRUCTION, /DEFERRED WORK rules/);
-    assert.match(SYSTEM_INSTRUCTION, /stand alone/);
-    assert.match(
-      SYSTEM_INSTRUCTION,
-      /Never shorten an item, merge two items, drop an item, or reorder them/
-    );
-    assert.match(SYSTEM_INSTRUCTION, /explicitly says work was left undone/);
+    assert.match(SYSTEM_INSTRUCTION, /not part of this mission/);
+    assert.match(SYSTEM_INSTRUCTION, /Never shorten a kept item/);
+    assert.match(SYSTEM_INSTRUCTION, /out-of-scope bug/);
   });
 
   it('requires the deferredWork array so the model cannot silently omit it', () => {
     assert.ok(COMPOSE_DELIVERY_RESPONSE_SCHEMA.required?.includes('deferredWork'));
   });
 
-  it('labels the deferred-work evidence with its count and the rewrite instruction', () => {
+  it('labels the deferred-work evidence with its eligible count and planned objectives', () => {
     const prompt = buildComposeDeliveryPrompt({
       ...sampleInput,
-      deferredWork: ['Remaining ~60 unassigned moves.', 'P2 composites']
+      plannedObjectives: [
+        {
+          title: 'CSV export API',
+          instruction: 'Implement the CSV export API for the reports page.'
+        }
+      ],
+      omittedDeferredWork: ['Implement the CSV export API for reports.'],
+      deferredWork: ['Fix the date-dependent employee lifecycle test that failed in payroll.']
     });
     assert.match(
       prompt,
-      /Deferred work \(agent-listed, 2 item\(s\); rewrite each as a standalone objective/
+      /Deferred work \(eligible agent-listed, 1 item\(s\); rewrite each as a standalone out-of-mission objective/
     );
-    assert.match(prompt, /Remaining ~60 unassigned moves\./);
+    assert.match(prompt, /Fix the date-dependent employee lifecycle test that failed in payroll\./);
+    assert.match(prompt, /Planned future objectives on this mission/);
+    assert.match(prompt, /CSV export API/);
+    assert.match(prompt, /omitted as ineligible/);
   });
 });

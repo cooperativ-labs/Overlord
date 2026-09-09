@@ -16,6 +16,10 @@ import { emitNotification } from './notifications/notifications.js';
 import { recordChange } from './change-feed.js';
 import type { ServiceContext } from './context.js';
 import { resolveMissionId, resolveObjectiveRef, resolveProjectId } from './context.js';
+import {
+  applyDeferredWorkEligibility,
+  deriveDeterministicActionCandidates
+} from './delivery-compose.js';
 import { buildDeliveryReport, markDeliveryPresentationPending } from './delivery-report.js';
 import { ServiceError } from './errors.js';
 import { linkExecutionRequestToSession } from './execution-requests.js';
@@ -131,9 +135,14 @@ Optional change-rationale format:
 Delivery evidence:
   Every delivery should also provide a \`deliveryReport.agentReport\` in \`--payload-json\` or
   \`--payload-file\`: \`humanActions\`, \`tradeoffsMade\`, \`knownRisks\`, \`deferredWork\`, and
-  \`assumptions\`. Use empty arrays when none apply. Human actions are only concrete work a
+  \`assumptions\`. Use empty arrays when none apply.   Human actions are only concrete work a
   human must perform outside completed agent work; never include Git actions or routine review/testing.
-  Tradeoffs must describe an implementation decision, alternatives considered, and why it was chosen.`;
+  Tradeoffs must describe an implementation decision, alternatives considered, and why it was chosen.
+  Deferred work is only a recommended new objective that is not part of this mission (for
+  example an out-of-scope bug); name the component or file and why it was left. Never list
+  work already in this mission's future objectives, leftover slices of the current
+  objective, or human follow-up such as deploy, secrets, or migrations (those belong in
+  humanActions).`;
 
 function resolveActiveObjective(objectives: ObjectiveSummary[]): ObjectiveSummary {
   const rankedStates = ['executing', 'launching', 'pending_delivery'] as const;
@@ -2493,6 +2502,18 @@ export async function deliverSession({
     ),
     normalizedRationales.warnings
   );
+  const missionObjectives = await listObjectives({ ctx, missionId: mission.id });
+  const currentObjectiveRow = missionObjectives.find(
+    objective => objective.id === session.objective_id
+  );
+  const plannedObjectives = missionObjectives
+    .filter(
+      objective =>
+        objective.id !== session.objective_id &&
+        objective.state !== 'complete' &&
+        hasInstruction(objective)
+    )
+    .map(objective => ({ title: objective.title, instruction: objective.objective }));
 
   const now = nowIso();
   const deliveryId = newId();
@@ -2509,6 +2530,16 @@ export async function deliverSession({
       file_path: string;
     }>;
     const changedFileIdByPath = new Map(objectiveChangedFiles.map(row => [row.file_path, row.id]));
+    const eligibleDeliveryReport = applyDeferredWorkEligibility({
+      report: deliveryReport,
+      currentObjective: currentObjectiveRow
+        ? { title: currentObjectiveRow.title, instruction: currentObjectiveRow.objective }
+        : null,
+      plannedObjectives,
+      candidateActions: deriveDeterministicActionCandidates({
+        filePaths: objectiveChangedFiles.map(row => row.file_path)
+      })
+    });
 
     await txCtx.db.run(
       `INSERT INTO deliveries
@@ -2526,7 +2557,7 @@ export async function deliverSession({
         trimmedSummary,
         JSON.stringify({
           ...(payloadJson ?? {}),
-          deliveryReport
+          deliveryReport: eligibleDeliveryReport
         }),
         verificationSummary ?? null,
         followUpNotes ?? null,
@@ -2877,9 +2908,19 @@ export async function recordWork({
   const normalizedArtifacts = validateProtocolArtifacts(artifacts);
   const deliveryReport = appendDeliveryWarnings(
     markDeliveryPresentationPending(
-      buildDeliveryReport({
-        summary: trimmedSummary,
-        deliveryReport: payloadJson?.deliveryReport
+      applyDeferredWorkEligibility({
+        report: buildDeliveryReport({
+          summary: trimmedSummary,
+          deliveryReport: payloadJson?.deliveryReport
+        }),
+        currentObjective: { title: title ?? null, instruction: objective },
+        plannedObjectives: [],
+        candidateActions: deriveDeterministicActionCandidates({
+          filePaths: [
+            ...normalizedChangedFiles.files.map(file => file.filePath),
+            ...normalizedRationales.rationales.map(item => item.filePath)
+          ]
+        })
       })
     ),
     [...normalizedRationales.warnings, ...normalizedChangedFiles.warnings]

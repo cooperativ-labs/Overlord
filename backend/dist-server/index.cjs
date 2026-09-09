@@ -135303,7 +135303,7 @@ var COMPOSE_DELIVERY_RESPONSE_SCHEMA = {
     knownRisks: { type: import_genai2.Type.ARRAY, items: { type: import_genai2.Type.STRING } },
     deferredWork: {
       type: import_genai2.Type.ARRAY,
-      description: "Deferred work rewritten as self-contained objective statements (see DEFERRED WORK rules). Same order and at least the same count as the agent list.",
+      description: "Eligible deferred work rewritten as self-contained out-of-mission objective statements (see DEFERRED WORK rules). Same order as the eligible agent list; omit items that restated planned work or human follow-up. Empty array is correct when nothing qualifies.",
       items: { type: import_genai2.Type.STRING }
     },
     assumptions: { type: import_genai2.Type.ARRAY, items: { type: import_genai2.Type.STRING } },
@@ -135323,11 +135323,12 @@ Rules:
 - Never include git commit/push/PR actions or routine "review/test the code" actions.
 - Prefer concise, scannable Markdown. Do not include secrets, tokens, or raw diffs.
 DEFERRED WORK rules (deferredWork array):
-- Each deferred-work item becomes the full text of a future objective handed to another coding agent that has NOT read this delivery, so every item must stand alone.
-- Rewrite every agent-listed item as a self-contained statement of one to three sentences: start with an imperative verb naming the work; name the component, feature, file, command, or data set involved; state what the delivered work already covers and why this piece was left; and state what done looks like when the evidence says so.
+- deferredWork is only for recommended NEW objectives that are not part of this mission. Out-of-scope bugs discovered during the work are the canonical example. It is not leftover implementation of the current objective, the next queued objective on this mission, or human follow-up.
+- The prompt lists this mission's planned future objectives and any agent items already omitted as ineligible. Never restate those, never restate a human action or known risk, and never restate leftover slices of the current objective.
+- The deferred-work evidence list is already the eligible subset. Rewrite every remaining item as a self-contained statement of one to three sentences: start with an imperative verb naming the work; name the component, feature, file, command, or data set involved; state what the delivered work already covers and why this piece was left; and state what done looks like when the evidence says so.
 - Resolve references that only make sense inside this delivery ("finding 3", "P2 items", "the next objective", "remaining ~60 moves") by pulling the referenced detail from the agent summary, objective instruction, change rationales, or recent events.
-- Never shorten an item, merge two items, drop an item, or reorder them: output at least as many deferredWork entries as the agent listed, in the same order, each at least as detailed as its source.
-- Only add an item beyond the agent's list when the agent summary explicitly says work was left undone, is out of scope, remains, or is pre-existing and untouched; never infer new work from silence, and never restate a human action or known risk as deferred work.
+- Never shorten a kept item, merge two kept items, or reorder them. Empty array is correct when the eligible list is empty or when a remaining item is still leftover in-mission work or human follow-up that slipped through.
+- Only add an item beyond the eligible list when the agent summary explicitly recommends new work outside this mission (for example an out-of-scope bug). Never add leftover in-mission work, a queued future objective, a human action, or a known risk.
 - Use only facts present in the evidence. Do not invent files, commands, scope, or acceptance criteria. Keep each item under ${DEFERRED_WORK_MAX_CHARS} characters.`;
 function buildComposeDeliveryPrompt(input) {
   return [
@@ -135338,6 +135339,10 @@ ${input.summary}`,
     input.objectiveTitle ? `Objective title: ${input.objectiveTitle}` : null,
     input.objectiveInstruction ? `Objective instruction (bounded):
 ${input.objectiveInstruction.slice(0, 2e3)}` : null,
+    input.plannedObjectives && input.plannedObjectives.length > 0 ? `Planned future objectives on this mission (already queued \u2014 not deferred work; never restate):
+${JSON.stringify(input.plannedObjectives)}` : null,
+    input.omittedDeferredWork && input.omittedDeferredWork.length > 0 ? `Agent deferred-work items omitted as ineligible (queued on this mission, leftover current-objective work, or human follow-up \u2014 do not restate):
+${JSON.stringify(input.omittedDeferredWork)}` : null,
     input.verificationSummary ? `Verification: ${input.verificationSummary}` : null,
     input.followUpNotes ? `Follow-up notes: ${input.followUpNotes}` : null,
     `Human actions evidence:
@@ -135346,7 +135351,7 @@ ${JSON.stringify(input.humanActions)}`,
 ${JSON.stringify(input.tradeoffsMade)}`,
     `Known risks:
 ${JSON.stringify(input.knownRisks)}`,
-    `Deferred work (agent-listed, ${input.deferredWork.length} item(s); rewrite each as a standalone objective per the DEFERRED WORK rules):
+    `Deferred work (eligible agent-listed, ${input.deferredWork.length} item(s); rewrite each as a standalone out-of-mission objective per the DEFERRED WORK rules; empty array is correct when none qualify):
 ${JSON.stringify(input.deferredWork)}`,
     `Assumptions:
 ${JSON.stringify(input.assumptions)}`,
@@ -139746,6 +139751,541 @@ async function emitNotification({
 // ../packages/core/service/protocol.ts
 init_change_feed();
 init_context();
+
+// ../packages/core/service/delivery-compose.ts
+init_delivery_report();
+init_util3();
+var HUMAN_ACTION_CATEGORIES = /* @__PURE__ */ new Set([
+  "environment",
+  "database",
+  "deployment",
+  "codegen",
+  "packaging",
+  "external_service",
+  "other"
+]);
+function deriveDeterministicActionCandidates({
+  filePaths
+}) {
+  const candidates = [];
+  const seen = /* @__PURE__ */ new Set();
+  const add = ({
+    action,
+    reason,
+    category,
+    verify: verify2,
+    filePath
+  }) => {
+    if (!isDisplayableHumanAction(action) || seen.has(action)) return;
+    seen.add(action);
+    candidates.push({
+      id: `rule-action-${candidates.length + 1}`,
+      action,
+      reason,
+      category,
+      verify: verify2,
+      ...isValidHumanActionLink(filePath) ? { link: filePath } : {},
+      source: "deterministic_rule",
+      sourceRef: filePath
+    });
+  };
+  for (const rawPath of filePaths) {
+    const filePath = rawPath.replace(/\\/g, "/");
+    const base = filePath.split("/").pop() ?? filePath;
+    if (/(?:^|\/)(?:migrations?|supabase\/migrations)\//i.test(filePath) || /\.(?:sql)$/i.test(base)) {
+      add({
+        action: "Apply the database migration(s) included in this delivery.",
+        reason: `Changed path ${filePath} looks like a schema/migration update.`,
+        category: "database",
+        verify: "The new migration is recorded as applied and the service starts without schema errors.",
+        filePath
+      });
+    }
+    if (/(?:^|\/)\.env(?:\.|$)|\.env\.[^/]+$/i.test(filePath) || /env\.example$/i.test(base)) {
+      add({
+        action: "Review and set any new environment variables.",
+        reason: `Changed path ${filePath} may introduce required configuration.`,
+        category: "environment",
+        verify: "Every variable added to the example file has a value in each environment and the service boots without a missing-configuration error.",
+        filePath
+      });
+    }
+    if (/docker-compose|Dockerfile|fly\.toml|vercel\.json|railway/i.test(filePath)) {
+      add({
+        action: "Redeploy the affected service with the updated configuration.",
+        reason: `Changed path ${filePath} suggests a deployment/config change.`,
+        category: "deployment",
+        verify: "The new deployment is healthy and serving traffic with the updated configuration.",
+        filePath
+      });
+    }
+    if (/(?:^|\/)\.github\/workflows\/[^/]+\.ya?ml$/i.test(filePath)) {
+      add({
+        action: "Confirm the new or changed CI workflow runs green on the next push.",
+        reason: `Changed path ${filePath} adds or edits a GitHub Actions workflow.`,
+        category: "deployment",
+        verify: "The workflow appears in the Actions tab for the next push and completes successfully.",
+        filePath
+      });
+    }
+    if (/package\.json$|Cargo\.toml$|\.csproj$/i.test(base)) {
+      add({
+        action: "Reinstall or rebuild package dependencies if your environment is stale.",
+        reason: `Changed path ${filePath} may alter dependency resolution.`,
+        category: "packaging",
+        verify: "The install completes without lockfile drift and the build passes locally.",
+        filePath
+      });
+    }
+  }
+  return candidates.slice(0, DELIVERY_REPORT_LIMITS.maxItems);
+}
+function mergeDeterministicActionCandidates({
+  actions,
+  candidates
+}) {
+  const merged = actions.slice(0, DELIVERY_REPORT_LIMITS.maxItems);
+  const seen = new Set(merged.map((action) => action.id));
+  for (const candidate of candidates) {
+    if (merged.length >= DELIVERY_REPORT_LIMITS.maxItems) break;
+    if (seen.has(candidate.id)) continue;
+    seen.add(candidate.id);
+    merged.push(candidate);
+  }
+  return merged;
+}
+function clampText(value, maxLength) {
+  if (typeof value !== "string") return null;
+  const trimmed9 = value.trim();
+  if (!trimmed9) return null;
+  return trimmed9.length > maxLength ? trimmed9.slice(0, maxLength) : trimmed9;
+}
+function clampStringList(value, maxItems = DELIVERY_REPORT_LIMITS.maxItems) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  for (const item of value) {
+    const text = clampText(item, DELIVERY_REPORT_LIMITS.maxDetailLength);
+    if (!text) continue;
+    out.push(text);
+    if (out.length >= maxItems) break;
+  }
+  return out;
+}
+var DEFERRED_WORK_STOP_WORDS = /* @__PURE__ */ new Set([
+  "a",
+  "an",
+  "the",
+  "and",
+  "for",
+  "that",
+  "this",
+  "with",
+  "from",
+  "into",
+  "then",
+  "than",
+  "when",
+  "been",
+  "have",
+  "does",
+  "doing",
+  "just",
+  "like",
+  "over",
+  "under",
+  "after",
+  "before",
+  "during",
+  "each",
+  "only",
+  "not",
+  "but",
+  "was",
+  "were",
+  "are",
+  "will",
+  "can",
+  "could",
+  "would",
+  "should",
+  "must",
+  "make",
+  "need",
+  "needs",
+  "using",
+  "used",
+  "also",
+  "its",
+  "their",
+  "them",
+  "they",
+  "you",
+  "your",
+  "our",
+  "any",
+  "all",
+  "some",
+  "more",
+  "most",
+  "other",
+  "such",
+  "work",
+  "item",
+  "items",
+  "remaining",
+  "left",
+  "undone",
+  "phase",
+  "step",
+  "next",
+  "add",
+  "update",
+  "implement"
+]);
+function normalizeDeferredWorkText(value) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+function significantDeferredWorkTokens(value) {
+  const tokens = /* @__PURE__ */ new Set();
+  for (const token of normalizeDeferredWorkText(value).split(" ")) {
+    if (token.length < 4 || DEFERRED_WORK_STOP_WORDS.has(token)) continue;
+    tokens.add(token);
+  }
+  return tokens;
+}
+function deferredWorkTextsOverlap(left, right) {
+  const normalizedLeft = normalizeDeferredWorkText(left);
+  const normalizedRight = normalizeDeferredWorkText(right);
+  if (!normalizedLeft || !normalizedRight) return false;
+  const shorter = normalizedLeft.length <= normalizedRight.length ? normalizedLeft : normalizedRight;
+  const longer = normalizedLeft.length <= normalizedRight.length ? normalizedRight : normalizedLeft;
+  if (shorter.length >= 12 && longer.includes(shorter)) return true;
+  const leftTokens = significantDeferredWorkTokens(left);
+  const rightTokens = significantDeferredWorkTokens(right);
+  if (leftTokens.size === 0 || rightTokens.size === 0) return false;
+  let intersection2 = 0;
+  for (const token of leftTokens) {
+    if (rightTokens.has(token)) intersection2 += 1;
+  }
+  if (intersection2 < 2) return false;
+  const union2 = leftTokens.size + rightTokens.size - intersection2;
+  const coverage = intersection2 / Math.min(leftTokens.size, rightTokens.size);
+  return intersection2 / union2 >= 0.4 || coverage >= 0.75;
+}
+function collectDeferredWorkExclusionTexts({
+  currentObjective,
+  plannedObjectives,
+  humanActions,
+  candidateActions
+}) {
+  const texts = [];
+  const pushObjective = (objective) => {
+    const title = objective?.title?.trim();
+    const instruction = objective?.instruction?.trim();
+    if (title) texts.push(title);
+    if (instruction) texts.push(instruction);
+  };
+  pushObjective(currentObjective);
+  for (const planned of plannedObjectives ?? []) pushObjective(planned);
+  for (const action of [...humanActions ?? [], ...candidateActions ?? []]) {
+    if (action.action.trim()) texts.push(action.action);
+    if (action.reason?.trim()) texts.push(action.reason);
+  }
+  return texts;
+}
+function filterDeferredWork({
+  items,
+  currentObjective,
+  plannedObjectives,
+  humanActions,
+  candidateActions
+}) {
+  const excluded = collectDeferredWorkExclusionTexts({
+    currentObjective,
+    plannedObjectives,
+    humanActions,
+    candidateActions
+  });
+  if (excluded.length === 0) return items.slice();
+  return items.filter((item) => !excluded.some((text) => deferredWorkTextsOverlap(item, text)));
+}
+function isDeferredWorkRewrite({
+  agentItem,
+  presentationItem
+}) {
+  if (agentItem === presentationItem) return true;
+  const normalizedAgent = normalizeDeferredWorkText(agentItem);
+  const normalizedPresentation = normalizeDeferredWorkText(presentationItem);
+  if (normalizedAgent.length >= 12 && (normalizedPresentation.includes(normalizedAgent) || normalizedAgent.includes(normalizedPresentation))) {
+    return true;
+  }
+  if (deferredWorkTextsOverlap(agentItem, presentationItem)) return true;
+  const agentTokens = significantDeferredWorkTokens(agentItem);
+  const presentationTokens = significantDeferredWorkTokens(presentationItem);
+  if (agentTokens.size === 0 || presentationTokens.size === 0) return false;
+  let intersection2 = 0;
+  for (const token of agentTokens) {
+    if (presentationTokens.has(token)) intersection2 += 1;
+  }
+  return intersection2 >= 2 && intersection2 / agentTokens.size >= 0.5;
+}
+function matchDeferredWorkAgentIndex({
+  presentationItem,
+  agentItems,
+  usedIndexes
+}) {
+  for (let index = 0; index < agentItems.length; index += 1) {
+    if (usedIndexes.has(index)) continue;
+    if (isDeferredWorkRewrite({ agentItem: agentItems[index], presentationItem })) return index;
+  }
+  return null;
+}
+function applyDeferredWorkEligibility({
+  report,
+  currentObjective,
+  plannedObjectives,
+  candidateActions
+}) {
+  const deferredWork = filterDeferredWork({
+    items: report.agentReport.deferredWork,
+    currentObjective,
+    plannedObjectives,
+    humanActions: report.agentReport.humanActions,
+    candidateActions
+  });
+  return {
+    ...report,
+    presentation: {
+      ...report.presentation,
+      deferredWork
+    }
+  };
+}
+function composeEligibility({
+  report,
+  candidates,
+  currentObjective,
+  plannedObjectives
+}) {
+  return {
+    currentObjective,
+    plannedObjectives,
+    humanActions: report.agentReport.humanActions,
+    candidateActions: candidates
+  };
+}
+function composeDeferredWorkPresentation({
+  eligibleItems,
+  draftItems,
+  currentObjective,
+  plannedObjectives,
+  humanActions,
+  candidateActions
+}) {
+  const merged = reconcileDeferredWork({
+    agentItems: eligibleItems,
+    draftItems
+  });
+  const kept = merged.slice(0, eligibleItems.length);
+  const extras = filterDeferredWork({
+    items: merged.slice(eligibleItems.length),
+    currentObjective,
+    plannedObjectives,
+    humanActions,
+    candidateActions
+  });
+  return [...kept, ...extras];
+}
+function reconcileDeferredWork({
+  agentItems,
+  draftItems,
+  maxItems = DELIVERY_REPORT_LIMITS.maxItems
+}) {
+  if (agentItems.length === 0) return draftItems.slice(0, maxItems);
+  if (draftItems.length < agentItems.length) return agentItems.slice(0, maxItems);
+  const merged = agentItems.map((agentItem, index) => {
+    const draftItem = draftItems[index];
+    return draftItem.length >= agentItem.length ? draftItem : agentItem;
+  });
+  return [...merged, ...draftItems.slice(agentItems.length)].slice(0, maxItems);
+}
+function asCategory(value) {
+  return typeof value === "string" && HUMAN_ACTION_CATEGORIES.has(value) ? value : "other";
+}
+function evidenceActions({
+  agentReport,
+  candidates
+}) {
+  const byId = /* @__PURE__ */ new Map();
+  for (const action of agentReport.humanActions) byId.set(action.id, action);
+  for (const action of candidates) byId.set(action.id, action);
+  return byId;
+}
+function evidenceTradeoffs({
+  agentReport,
+  rationales
+}) {
+  const byId = /* @__PURE__ */ new Map();
+  for (const tradeoff of agentReport.tradeoffsMade) byId.set(tradeoff.id, tradeoff);
+  for (const rationale of rationales) {
+    byId.set(rationale.id, {
+      id: rationale.id,
+      decision: rationale.label,
+      alternativesConsidered: [],
+      rationale: rationale.why,
+      impact: rationale.impact,
+      source: "change_rationale",
+      sourceRef: rationale.filePath
+    });
+  }
+  return byId;
+}
+function optionalActionText(draftValue, sourceValue, maxLength) {
+  return clampText(draftValue, maxLength) ?? sourceValue;
+}
+function optionalActionLink(draftValue, source) {
+  const fromDraft = clampText(draftValue, DELIVERY_REPORT_LIMITS.maxLinkLength);
+  if (fromDraft && isValidHumanActionLink(fromDraft)) return fromDraft;
+  return source.link && isValidHumanActionLink(source.link) ? source.link : void 0;
+}
+function composedActionDetails(item, source) {
+  const command = optionalActionText(
+    item.command,
+    source.command,
+    DELIVERY_REPORT_LIMITS.maxCommandLength
+  );
+  const verify2 = optionalActionText(
+    item.verify,
+    source.verify,
+    DELIVERY_REPORT_LIMITS.maxDetailLength
+  );
+  const link = optionalActionLink(item.link, source);
+  return {
+    ...command ? { command } : {},
+    ...verify2 ? { verify: verify2 } : {},
+    ...link ? { link } : {}
+  };
+}
+function reconcileDeliveryComposeDraft({
+  report,
+  draft,
+  candidates = [],
+  rationales = [],
+  model,
+  generatedAt = nowIso(),
+  currentObjective,
+  plannedObjectives
+}) {
+  const eligibility = composeEligibility({
+    report,
+    candidates,
+    currentObjective,
+    plannedObjectives
+  });
+  const eligibleAgentItems = filterDeferredWork({
+    items: report.agentReport.deferredWork,
+    ...eligibility
+  });
+  const fallback2 = {
+    ...report.presentation,
+    status: "fallback",
+    humanActions: mergeDeterministicActionCandidates({
+      actions: report.presentation.humanActions,
+      candidates
+    }),
+    deferredWork: filterDeferredWork({
+      items: report.presentation.deferredWork,
+      ...eligibility
+    }),
+    generatedBy: "deterministic",
+    generatedAt,
+    ...model ? { model } : {}
+  };
+  if (!draft || typeof draft !== "object") {
+    return fallback2;
+  }
+  const markdown = clampText(draft.markdown, 12e3) ?? report.presentation.markdown;
+  const actionsById = evidenceActions({
+    agentReport: report.agentReport,
+    candidates
+  });
+  const tradeoffsById = evidenceTradeoffs({
+    agentReport: report.agentReport,
+    rationales
+  });
+  const humanActions = [];
+  if (Array.isArray(draft.humanActions)) {
+    for (const raw of draft.humanActions) {
+      if (!raw || typeof raw !== "object") continue;
+      const item = raw;
+      const sourceId = clampText(item.sourceId ?? item.id, 80);
+      if (!sourceId) continue;
+      const source = actionsById.get(sourceId);
+      if (!source) continue;
+      const actionText = clampText(item.action, DELIVERY_REPORT_LIMITS.maxActionLength) ?? source.action;
+      if (!isDisplayableHumanAction(actionText)) continue;
+      humanActions.push({
+        ...source,
+        action: actionText,
+        ...clampText(item.reason, DELIVERY_REPORT_LIMITS.maxDetailLength) ? { reason: clampText(item.reason, DELIVERY_REPORT_LIMITS.maxDetailLength) } : source.reason ? { reason: source.reason } : {},
+        category: asCategory(item.category ?? source.category),
+        ...composedActionDetails(item, source)
+      });
+      if (humanActions.length >= DELIVERY_REPORT_LIMITS.maxItems) break;
+    }
+  }
+  const tradeoffsMade = [];
+  if (Array.isArray(draft.tradeoffsMade)) {
+    for (const raw of draft.tradeoffsMade) {
+      if (!raw || typeof raw !== "object") continue;
+      const item = raw;
+      const sourceId = clampText(item.sourceId ?? item.id, 80);
+      if (!sourceId) continue;
+      const source = tradeoffsById.get(sourceId);
+      if (!source) continue;
+      tradeoffsMade.push({
+        ...source,
+        decision: clampText(item.decision, DELIVERY_REPORT_LIMITS.maxActionLength) ?? source.decision,
+        rationale: clampText(item.rationale, DELIVERY_REPORT_LIMITS.maxDetailLength) ?? source.rationale,
+        alternativesConsidered: clampStringList(item.alternativesConsidered, DELIVERY_REPORT_LIMITS.maxAlternatives).length > 0 ? clampStringList(item.alternativesConsidered, DELIVERY_REPORT_LIMITS.maxAlternatives) : source.alternativesConsidered,
+        ...clampText(item.impact, DELIVERY_REPORT_LIMITS.maxDetailLength) ? { impact: clampText(item.impact, DELIVERY_REPORT_LIMITS.maxDetailLength) } : source.impact ? { impact: source.impact } : {}
+      });
+      if (tradeoffsMade.length >= DELIVERY_REPORT_LIMITS.maxItems) break;
+    }
+  }
+  const resolvedActions = mergeDeterministicActionCandidates({
+    actions: humanActions.length > 0 ? humanActions : report.presentation.humanActions,
+    candidates
+  });
+  const resolvedTradeoffs = tradeoffsMade.length > 0 ? tradeoffsMade : report.presentation.tradeoffsMade;
+  return {
+    status: "composed",
+    markdown: markdown || report.presentation.markdown,
+    humanActions: resolvedActions,
+    tradeoffsMade: resolvedTradeoffs,
+    knownRisks: clampStringList(draft.knownRisks).length > 0 ? clampStringList(draft.knownRisks) : report.presentation.knownRisks,
+    deferredWork: composeDeferredWorkPresentation({
+      eligibleItems: eligibleAgentItems,
+      draftItems: clampStringList(draft.deferredWork),
+      ...eligibility
+    }),
+    assumptions: clampStringList(draft.assumptions).length > 0 ? clampStringList(draft.assumptions) : report.presentation.assumptions,
+    generatedBy: "gemini",
+    generatedAt,
+    ...model ? { model } : {}
+  };
+}
+function applyDeliveryPresentation({
+  report,
+  presentation
+}) {
+  return {
+    ...report,
+    presentation
+  };
+}
+
+// ../packages/core/service/protocol.ts
 init_delivery_report();
 init_errors4();
 
@@ -141468,9 +142008,14 @@ Optional change-rationale format:
 Delivery evidence:
   Every delivery should also provide a \`deliveryReport.agentReport\` in \`--payload-json\` or
   \`--payload-file\`: \`humanActions\`, \`tradeoffsMade\`, \`knownRisks\`, \`deferredWork\`, and
-  \`assumptions\`. Use empty arrays when none apply. Human actions are only concrete work a
+  \`assumptions\`. Use empty arrays when none apply.   Human actions are only concrete work a
   human must perform outside completed agent work; never include Git actions or routine review/testing.
-  Tradeoffs must describe an implementation decision, alternatives considered, and why it was chosen.`;
+  Tradeoffs must describe an implementation decision, alternatives considered, and why it was chosen.
+  Deferred work is only a recommended new objective that is not part of this mission (for
+  example an out-of-scope bug); name the component or file and why it was left. Never list
+  work already in this mission's future objectives, leftover slices of the current
+  objective, or human follow-up such as deploy, secrets, or migrations (those belong in
+  humanActions).`;
 function resolveActiveObjective(objectives) {
   const rankedStates = ["executing", "launching", "pending_delivery"];
   for (const state2 of rankedStates) {
@@ -143262,6 +143807,13 @@ async function deliverSession({
     ),
     normalizedRationales.warnings
   );
+  const missionObjectives = await listObjectives({ ctx, missionId: mission.id });
+  const currentObjectiveRow = missionObjectives.find(
+    (objective) => objective.id === session.objective_id
+  );
+  const plannedObjectives = missionObjectives.filter(
+    (objective) => objective.id !== session.objective_id && objective.state !== "complete" && hasInstruction(objective)
+  ).map((objective) => ({ title: objective.title, instruction: objective.objective }));
   const now2 = nowIso();
   const deliveryId = newId();
   const eventId = newId();
@@ -143273,6 +143825,14 @@ async function deliverSession({
       [session.objective_id]
     );
     const changedFileIdByPath = new Map(objectiveChangedFiles.map((row) => [row.file_path, row.id]));
+    const eligibleDeliveryReport = applyDeferredWorkEligibility({
+      report: deliveryReport,
+      currentObjective: currentObjectiveRow ? { title: currentObjectiveRow.title, instruction: currentObjectiveRow.objective } : null,
+      plannedObjectives,
+      candidateActions: deriveDeterministicActionCandidates({
+        filePaths: objectiveChangedFiles.map((row) => row.file_path)
+      })
+    });
     await txCtx.db.run(
       `INSERT INTO deliveries
            (id, workspace_id, project_id, mission_id, objective_id, session_id,
@@ -143289,7 +143849,7 @@ async function deliverSession({
         trimmedSummary,
         JSON.stringify({
           ...payloadJson ?? {},
-          deliveryReport
+          deliveryReport: eligibleDeliveryReport
         }),
         verificationSummary ?? null,
         followUpNotes ?? null,
@@ -143557,9 +144117,19 @@ async function recordWork({
   const normalizedArtifacts = validateProtocolArtifacts(artifacts);
   const deliveryReport = appendDeliveryWarnings(
     markDeliveryPresentationPending(
-      buildDeliveryReport({
-        summary: trimmedSummary,
-        deliveryReport: payloadJson?.deliveryReport
+      applyDeferredWorkEligibility({
+        report: buildDeliveryReport({
+          summary: trimmedSummary,
+          deliveryReport: payloadJson?.deliveryReport
+        }),
+        currentObjective: { title: title ?? null, instruction: objective },
+        plannedObjectives: [],
+        candidateActions: deriveDeterministicActionCandidates({
+          filePaths: [
+            ...normalizedChangedFiles.files.map((file2) => file2.filePath),
+            ...normalizedRationales.rationales.map((item) => item.filePath)
+          ]
+        })
       })
     ),
     [...normalizedRationales.warnings, ...normalizedChangedFiles.warnings]
@@ -162992,7 +163562,7 @@ var hostedMcpToolDefinitions = [
         deferredWork: {
           type: "array",
           items: stringProperty(
-            "Intentionally deferred work. Name the component or file involved and say why the work was left."
+            "Recommended new objective outside this mission (for example an out-of-scope bug). Name the component or file and why it was left. Omit queued future objectives, leftover current-objective work, and human follow-up (those belong in humanActions)."
           )
         },
         assumptions: { type: "array", items: stringProperty("Material implementation assumption.") }
@@ -168204,297 +168774,6 @@ async function requireAuthenticatedSession(req, res, next) {
 // index.ts
 init_db();
 
-// ../packages/core/service/delivery-compose.ts
-init_delivery_report();
-init_util3();
-var HUMAN_ACTION_CATEGORIES = /* @__PURE__ */ new Set([
-  "environment",
-  "database",
-  "deployment",
-  "codegen",
-  "packaging",
-  "external_service",
-  "other"
-]);
-function deriveDeterministicActionCandidates({
-  filePaths
-}) {
-  const candidates = [];
-  const seen = /* @__PURE__ */ new Set();
-  const add = ({
-    action,
-    reason,
-    category,
-    verify: verify2,
-    filePath
-  }) => {
-    if (!isDisplayableHumanAction(action) || seen.has(action)) return;
-    seen.add(action);
-    candidates.push({
-      id: `rule-action-${candidates.length + 1}`,
-      action,
-      reason,
-      category,
-      verify: verify2,
-      ...isValidHumanActionLink(filePath) ? { link: filePath } : {},
-      source: "deterministic_rule",
-      sourceRef: filePath
-    });
-  };
-  for (const rawPath of filePaths) {
-    const filePath = rawPath.replace(/\\/g, "/");
-    const base = filePath.split("/").pop() ?? filePath;
-    if (/(?:^|\/)(?:migrations?|supabase\/migrations)\//i.test(filePath) || /\.(?:sql)$/i.test(base)) {
-      add({
-        action: "Apply the database migration(s) included in this delivery.",
-        reason: `Changed path ${filePath} looks like a schema/migration update.`,
-        category: "database",
-        verify: "The new migration is recorded as applied and the service starts without schema errors.",
-        filePath
-      });
-    }
-    if (/(?:^|\/)\.env(?:\.|$)|\.env\.[^/]+$/i.test(filePath) || /env\.example$/i.test(base)) {
-      add({
-        action: "Review and set any new environment variables.",
-        reason: `Changed path ${filePath} may introduce required configuration.`,
-        category: "environment",
-        verify: "Every variable added to the example file has a value in each environment and the service boots without a missing-configuration error.",
-        filePath
-      });
-    }
-    if (/docker-compose|Dockerfile|fly\.toml|vercel\.json|railway/i.test(filePath)) {
-      add({
-        action: "Redeploy the affected service with the updated configuration.",
-        reason: `Changed path ${filePath} suggests a deployment/config change.`,
-        category: "deployment",
-        verify: "The new deployment is healthy and serving traffic with the updated configuration.",
-        filePath
-      });
-    }
-    if (/(?:^|\/)\.github\/workflows\/[^/]+\.ya?ml$/i.test(filePath)) {
-      add({
-        action: "Confirm the new or changed CI workflow runs green on the next push.",
-        reason: `Changed path ${filePath} adds or edits a GitHub Actions workflow.`,
-        category: "deployment",
-        verify: "The workflow appears in the Actions tab for the next push and completes successfully.",
-        filePath
-      });
-    }
-    if (/package\.json$|Cargo\.toml$|\.csproj$/i.test(base)) {
-      add({
-        action: "Reinstall or rebuild package dependencies if your environment is stale.",
-        reason: `Changed path ${filePath} may alter dependency resolution.`,
-        category: "packaging",
-        verify: "The install completes without lockfile drift and the build passes locally.",
-        filePath
-      });
-    }
-  }
-  return candidates.slice(0, DELIVERY_REPORT_LIMITS.maxItems);
-}
-function mergeDeterministicActionCandidates({
-  actions,
-  candidates
-}) {
-  const merged = actions.slice(0, DELIVERY_REPORT_LIMITS.maxItems);
-  const seen = new Set(merged.map((action) => action.id));
-  for (const candidate of candidates) {
-    if (merged.length >= DELIVERY_REPORT_LIMITS.maxItems) break;
-    if (seen.has(candidate.id)) continue;
-    seen.add(candidate.id);
-    merged.push(candidate);
-  }
-  return merged;
-}
-function clampText(value, maxLength) {
-  if (typeof value !== "string") return null;
-  const trimmed9 = value.trim();
-  if (!trimmed9) return null;
-  return trimmed9.length > maxLength ? trimmed9.slice(0, maxLength) : trimmed9;
-}
-function clampStringList(value, maxItems = DELIVERY_REPORT_LIMITS.maxItems) {
-  if (!Array.isArray(value)) return [];
-  const out = [];
-  for (const item of value) {
-    const text = clampText(item, DELIVERY_REPORT_LIMITS.maxDetailLength);
-    if (!text) continue;
-    out.push(text);
-    if (out.length >= maxItems) break;
-  }
-  return out;
-}
-function reconcileDeferredWork({
-  agentItems,
-  draftItems,
-  maxItems = DELIVERY_REPORT_LIMITS.maxItems
-}) {
-  if (agentItems.length === 0) return draftItems.slice(0, maxItems);
-  if (draftItems.length < agentItems.length) return agentItems.slice(0, maxItems);
-  const merged = agentItems.map((agentItem, index) => {
-    const draftItem = draftItems[index];
-    return draftItem.length >= agentItem.length ? draftItem : agentItem;
-  });
-  return [...merged, ...draftItems.slice(agentItems.length)].slice(0, maxItems);
-}
-function asCategory(value) {
-  return typeof value === "string" && HUMAN_ACTION_CATEGORIES.has(value) ? value : "other";
-}
-function evidenceActions({
-  agentReport,
-  candidates
-}) {
-  const byId = /* @__PURE__ */ new Map();
-  for (const action of agentReport.humanActions) byId.set(action.id, action);
-  for (const action of candidates) byId.set(action.id, action);
-  return byId;
-}
-function evidenceTradeoffs({
-  agentReport,
-  rationales
-}) {
-  const byId = /* @__PURE__ */ new Map();
-  for (const tradeoff of agentReport.tradeoffsMade) byId.set(tradeoff.id, tradeoff);
-  for (const rationale of rationales) {
-    byId.set(rationale.id, {
-      id: rationale.id,
-      decision: rationale.label,
-      alternativesConsidered: [],
-      rationale: rationale.why,
-      impact: rationale.impact,
-      source: "change_rationale",
-      sourceRef: rationale.filePath
-    });
-  }
-  return byId;
-}
-function optionalActionText(draftValue, sourceValue, maxLength) {
-  return clampText(draftValue, maxLength) ?? sourceValue;
-}
-function optionalActionLink(draftValue, source) {
-  const fromDraft = clampText(draftValue, DELIVERY_REPORT_LIMITS.maxLinkLength);
-  if (fromDraft && isValidHumanActionLink(fromDraft)) return fromDraft;
-  return source.link && isValidHumanActionLink(source.link) ? source.link : void 0;
-}
-function composedActionDetails(item, source) {
-  const command = optionalActionText(
-    item.command,
-    source.command,
-    DELIVERY_REPORT_LIMITS.maxCommandLength
-  );
-  const verify2 = optionalActionText(
-    item.verify,
-    source.verify,
-    DELIVERY_REPORT_LIMITS.maxDetailLength
-  );
-  const link = optionalActionLink(item.link, source);
-  return {
-    ...command ? { command } : {},
-    ...verify2 ? { verify: verify2 } : {},
-    ...link ? { link } : {}
-  };
-}
-function reconcileDeliveryComposeDraft({
-  report,
-  draft,
-  candidates = [],
-  rationales = [],
-  model,
-  generatedAt = nowIso()
-}) {
-  const fallback2 = {
-    ...report.presentation,
-    status: "fallback",
-    humanActions: mergeDeterministicActionCandidates({
-      actions: report.presentation.humanActions,
-      candidates
-    }),
-    generatedBy: "deterministic",
-    generatedAt,
-    ...model ? { model } : {}
-  };
-  if (!draft || typeof draft !== "object") {
-    return fallback2;
-  }
-  const markdown = clampText(draft.markdown, 12e3) ?? report.presentation.markdown;
-  const actionsById = evidenceActions({
-    agentReport: report.agentReport,
-    candidates
-  });
-  const tradeoffsById = evidenceTradeoffs({
-    agentReport: report.agentReport,
-    rationales
-  });
-  const humanActions = [];
-  if (Array.isArray(draft.humanActions)) {
-    for (const raw of draft.humanActions) {
-      if (!raw || typeof raw !== "object") continue;
-      const item = raw;
-      const sourceId = clampText(item.sourceId ?? item.id, 80);
-      if (!sourceId) continue;
-      const source = actionsById.get(sourceId);
-      if (!source) continue;
-      const actionText = clampText(item.action, DELIVERY_REPORT_LIMITS.maxActionLength) ?? source.action;
-      if (!isDisplayableHumanAction(actionText)) continue;
-      humanActions.push({
-        ...source,
-        action: actionText,
-        ...clampText(item.reason, DELIVERY_REPORT_LIMITS.maxDetailLength) ? { reason: clampText(item.reason, DELIVERY_REPORT_LIMITS.maxDetailLength) } : source.reason ? { reason: source.reason } : {},
-        category: asCategory(item.category ?? source.category),
-        ...composedActionDetails(item, source)
-      });
-      if (humanActions.length >= DELIVERY_REPORT_LIMITS.maxItems) break;
-    }
-  }
-  const tradeoffsMade = [];
-  if (Array.isArray(draft.tradeoffsMade)) {
-    for (const raw of draft.tradeoffsMade) {
-      if (!raw || typeof raw !== "object") continue;
-      const item = raw;
-      const sourceId = clampText(item.sourceId ?? item.id, 80);
-      if (!sourceId) continue;
-      const source = tradeoffsById.get(sourceId);
-      if (!source) continue;
-      tradeoffsMade.push({
-        ...source,
-        decision: clampText(item.decision, DELIVERY_REPORT_LIMITS.maxActionLength) ?? source.decision,
-        rationale: clampText(item.rationale, DELIVERY_REPORT_LIMITS.maxDetailLength) ?? source.rationale,
-        alternativesConsidered: clampStringList(item.alternativesConsidered, DELIVERY_REPORT_LIMITS.maxAlternatives).length > 0 ? clampStringList(item.alternativesConsidered, DELIVERY_REPORT_LIMITS.maxAlternatives) : source.alternativesConsidered,
-        ...clampText(item.impact, DELIVERY_REPORT_LIMITS.maxDetailLength) ? { impact: clampText(item.impact, DELIVERY_REPORT_LIMITS.maxDetailLength) } : source.impact ? { impact: source.impact } : {}
-      });
-      if (tradeoffsMade.length >= DELIVERY_REPORT_LIMITS.maxItems) break;
-    }
-  }
-  const resolvedActions = mergeDeterministicActionCandidates({
-    actions: humanActions.length > 0 ? humanActions : report.presentation.humanActions,
-    candidates
-  });
-  const resolvedTradeoffs = tradeoffsMade.length > 0 ? tradeoffsMade : report.presentation.tradeoffsMade;
-  return {
-    status: "composed",
-    markdown: markdown || report.presentation.markdown,
-    humanActions: resolvedActions,
-    tradeoffsMade: resolvedTradeoffs,
-    knownRisks: clampStringList(draft.knownRisks).length > 0 ? clampStringList(draft.knownRisks) : report.presentation.knownRisks,
-    deferredWork: reconcileDeferredWork({
-      agentItems: report.presentation.deferredWork,
-      draftItems: clampStringList(draft.deferredWork)
-    }),
-    assumptions: clampStringList(draft.assumptions).length > 0 ? clampStringList(draft.assumptions) : report.presentation.assumptions,
-    generatedBy: "gemini",
-    generatedAt,
-    ...model ? { model } : {}
-  };
-}
-function applyDeliveryPresentation({
-  report,
-  presentation
-}) {
-  return {
-    ...report,
-    presentation
-  };
-}
-
 // delivery-compose-worker.ts
 init_util3();
 init_worker_jobs();
@@ -168614,7 +168893,7 @@ var DeliveryComposeWorker = class {
   async composeAndPersist(client, deliveryId) {
     const context = await loadComposeContext(client, deliveryId);
     if (!context) return { kind: "missing" };
-    const { delivery, report, rationales, filePaths, objective, recentEvents } = context;
+    const { delivery, report, rationales, filePaths, objective, plannedObjectives, recentEvents } = context;
     const candidates = deriveDeterministicActionCandidates({ filePaths });
     const model = readGeminiConfigFromEnv()?.model ?? null;
     let draft = null;
@@ -168626,6 +168905,7 @@ var DeliveryComposeWorker = class {
         rationales,
         candidates,
         objective,
+        plannedObjectives,
         recentEvents
       });
       inputBytes = Buffer.byteLength(JSON.stringify(input), "utf8");
@@ -168641,7 +168921,9 @@ var DeliveryComposeWorker = class {
       draft,
       candidates,
       rationales,
-      model
+      model,
+      currentObjective: objective,
+      plannedObjectives
     });
     if (!draft && !isGeminiConfigured() && !this.generateOverride) {
       presentation.status = "fallback";
@@ -168670,7 +168952,9 @@ async function persistFallbackPresentation(client, deliveryId, lastError) {
     report: context.report,
     draft: null,
     candidates: deriveDeterministicActionCandidates({ filePaths: context.filePaths }),
-    model: readGeminiConfigFromEnv()?.model ?? null
+    model: readGeminiConfigFromEnv()?.model ?? null,
+    currentObjective: context.objective,
+    plannedObjectives: context.plannedObjectives
   });
   presentation.status = "fallback";
   const nextReport = applyDeliveryPresentation({
@@ -168762,6 +169046,12 @@ async function loadComposeContext(client, deliveryId) {
     `SELECT title, instruction_text FROM objectives WHERE id = ?`,
     [delivery.objective_id]
   );
+  const siblingObjectives = await client.all(
+    `SELECT title, instruction_text, state
+       FROM objectives
+      WHERE mission_id = ? AND id != ? AND deleted_at IS NULL`,
+    [delivery.mission_id, delivery.objective_id]
+  );
   const recentEvents = await client.all(
     `SELECT type, summary FROM mission_events
       WHERE objective_id = ?
@@ -168778,6 +169068,10 @@ async function loadComposeContext(client, deliveryId) {
       title: objective?.title ?? null,
       instruction: objective?.instruction_text ?? null
     },
+    plannedObjectives: siblingObjectives.filter((row) => row.state !== "complete" && Boolean(row.instruction_text?.trim())).map((row) => ({
+      title: row.title,
+      instruction: row.instruction_text
+    })),
     recentEvents: recentEvents.map((event) => ({
       type: event.type,
       summary: event.summary
@@ -168790,12 +169084,25 @@ function toComposeInput({
   rationales,
   candidates,
   objective,
+  plannedObjectives,
   recentEvents
 }) {
+  const eligibleDeferredWork = filterDeferredWork({
+    items: report.agentReport.deferredWork,
+    currentObjective: objective,
+    plannedObjectives,
+    humanActions: report.agentReport.humanActions,
+    candidateActions: candidates
+  });
+  const omittedDeferredWork = report.agentReport.deferredWork.filter(
+    (item) => !eligibleDeferredWork.includes(item)
+  );
   return {
     summary: boundComposeText(delivery.summary, MAX_COMPOSE_SUMMARY_CHARS),
-    objectiveTitle: objective.title,
-    objectiveInstruction: objective.instruction,
+    objectiveTitle: objective.title ?? null,
+    objectiveInstruction: objective.instruction ?? null,
+    plannedObjectives,
+    omittedDeferredWork,
     verificationSummary: delivery.verification_summary ? boundComposeText(delivery.verification_summary, MAX_COMPOSE_AUXILIARY_CHARS) : null,
     followUpNotes: delivery.follow_up_notes ? boundComposeText(delivery.follow_up_notes, MAX_COMPOSE_AUXILIARY_CHARS) : null,
     humanActions: report.agentReport.humanActions.map((action) => ({
@@ -168819,7 +169126,7 @@ function toComposeInput({
       ...tradeoff.sourceRef ? { sourceRef: tradeoff.sourceRef } : {}
     })),
     knownRisks: report.agentReport.knownRisks,
-    deferredWork: report.agentReport.deferredWork,
+    deferredWork: eligibleDeferredWork,
     assumptions: report.agentReport.assumptions,
     candidateActions: candidates.map((action) => ({
       id: action.id,
@@ -169018,11 +169325,18 @@ function deliveryActions(row) {
     kind: action.blocking === true ? "blocking_question" : "follow_up"
   }));
   const occurrences = /* @__PURE__ */ new Map();
+  const usedAgentIndexes = /* @__PURE__ */ new Set();
   const deferredWork = presentation.deferredWork.map((action, index) => {
     const occurrence = (occurrences.get(action) ?? 0) + 1;
     occurrences.set(action, occurrence);
+    const agentIndex = matchDeferredWorkAgentIndex({
+      presentationItem: action,
+      agentItems: agentReport.deferredWork,
+      usedIndexes: usedAgentIndexes
+    });
+    if (agentIndex !== null) usedAgentIndexes.add(agentIndex);
     return {
-      id: agentDeferredWorkId(index, agentReport.deferredWork[index]),
+      id: agentIndex === null ? agentDeferredWorkId(index, void 0) : agentDeferredWorkId(agentIndex, agentReport.deferredWork[agentIndex]),
       legacyId: deferredWorkId(action, occurrence),
       kind: "deferred_work",
       action,

@@ -193,14 +193,318 @@ function clampStringList(
   return out;
 }
 
+export type DeferredWorkObjectiveRef = {
+  title?: string | null;
+  instruction?: string | null;
+};
+
+const DEFERRED_WORK_STOP_WORDS = new Set([
+  'a',
+  'an',
+  'the',
+  'and',
+  'for',
+  'that',
+  'this',
+  'with',
+  'from',
+  'into',
+  'then',
+  'than',
+  'when',
+  'been',
+  'have',
+  'does',
+  'doing',
+  'just',
+  'like',
+  'over',
+  'under',
+  'after',
+  'before',
+  'during',
+  'each',
+  'only',
+  'not',
+  'but',
+  'was',
+  'were',
+  'are',
+  'will',
+  'can',
+  'could',
+  'would',
+  'should',
+  'must',
+  'make',
+  'need',
+  'needs',
+  'using',
+  'used',
+  'also',
+  'its',
+  'their',
+  'them',
+  'they',
+  'you',
+  'your',
+  'our',
+  'any',
+  'all',
+  'some',
+  'more',
+  'most',
+  'other',
+  'such',
+  'work',
+  'item',
+  'items',
+  'remaining',
+  'left',
+  'undone',
+  'phase',
+  'step',
+  'next',
+  'add',
+  'update',
+  'implement'
+]);
+
+function normalizeDeferredWorkText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function significantDeferredWorkTokens(value: string): Set<string> {
+  const tokens = new Set<string>();
+  for (const token of normalizeDeferredWorkText(value).split(' ')) {
+    if (token.length < 4 || DEFERRED_WORK_STOP_WORDS.has(token)) continue;
+    tokens.add(token);
+  }
+  return tokens;
+}
+
+/** True when two statements are restating the same work closely enough to treat as duplicates. */
+export function deferredWorkTextsOverlap(left: string, right: string): boolean {
+  const normalizedLeft = normalizeDeferredWorkText(left);
+  const normalizedRight = normalizeDeferredWorkText(right);
+  if (!normalizedLeft || !normalizedRight) return false;
+  const shorter =
+    normalizedLeft.length <= normalizedRight.length ? normalizedLeft : normalizedRight;
+  const longer = normalizedLeft.length <= normalizedRight.length ? normalizedRight : normalizedLeft;
+  if (shorter.length >= 12 && longer.includes(shorter)) return true;
+  const leftTokens = significantDeferredWorkTokens(left);
+  const rightTokens = significantDeferredWorkTokens(right);
+  if (leftTokens.size === 0 || rightTokens.size === 0) return false;
+  let intersection = 0;
+  for (const token of leftTokens) {
+    if (rightTokens.has(token)) intersection += 1;
+  }
+  if (intersection < 2) return false;
+  const union = leftTokens.size + rightTokens.size - intersection;
+  const coverage = intersection / Math.min(leftTokens.size, rightTokens.size);
+  return intersection / union >= 0.4 || coverage >= 0.75;
+}
+
+function collectDeferredWorkExclusionTexts({
+  currentObjective,
+  plannedObjectives,
+  humanActions,
+  candidateActions
+}: {
+  currentObjective?: DeferredWorkObjectiveRef | null;
+  plannedObjectives?: DeferredWorkObjectiveRef[];
+  humanActions?: Array<{ action: string; reason?: string }>;
+  candidateActions?: Array<{ action: string; reason?: string }>;
+}): string[] {
+  const texts: string[] = [];
+  const pushObjective = (objective?: DeferredWorkObjectiveRef | null) => {
+    const title = objective?.title?.trim();
+    const instruction = objective?.instruction?.trim();
+    if (title) texts.push(title);
+    if (instruction) texts.push(instruction);
+  };
+  pushObjective(currentObjective);
+  for (const planned of plannedObjectives ?? []) pushObjective(planned);
+  for (const action of [...(humanActions ?? []), ...(candidateActions ?? [])]) {
+    if (action.action.trim()) texts.push(action.action);
+    if (action.reason?.trim()) texts.push(action.reason);
+  }
+  return texts;
+}
+
+/**
+ * Drops deferred-work statements that restate planned work on this mission,
+ * leftover slices of the current objective, or human implementation follow-up.
+ * Eligible items stay in their original order.
+ */
+export function filterDeferredWork({
+  items,
+  currentObjective,
+  plannedObjectives,
+  humanActions,
+  candidateActions
+}: {
+  items: string[];
+  currentObjective?: DeferredWorkObjectiveRef | null;
+  plannedObjectives?: DeferredWorkObjectiveRef[];
+  humanActions?: Array<{ action: string; reason?: string }>;
+  candidateActions?: Array<{ action: string; reason?: string }>;
+}): string[] {
+  const excluded = collectDeferredWorkExclusionTexts({
+    currentObjective,
+    plannedObjectives,
+    humanActions,
+    candidateActions
+  });
+  if (excluded.length === 0) return items.slice();
+  return items.filter(item => !excluded.some(text => deferredWorkTextsOverlap(item, text)));
+}
+
+function isDeferredWorkRewrite({
+  agentItem,
+  presentationItem
+}: {
+  agentItem: string;
+  presentationItem: string;
+}): boolean {
+  if (agentItem === presentationItem) return true;
+  const normalizedAgent = normalizeDeferredWorkText(agentItem);
+  const normalizedPresentation = normalizeDeferredWorkText(presentationItem);
+  if (
+    normalizedAgent.length >= 12 &&
+    (normalizedPresentation.includes(normalizedAgent) ||
+      normalizedAgent.includes(normalizedPresentation))
+  ) {
+    return true;
+  }
+  if (deferredWorkTextsOverlap(agentItem, presentationItem)) return true;
+  const agentTokens = significantDeferredWorkTokens(agentItem);
+  const presentationTokens = significantDeferredWorkTokens(presentationItem);
+  if (agentTokens.size === 0 || presentationTokens.size === 0) return false;
+  let intersection = 0;
+  for (const token of agentTokens) {
+    if (presentationTokens.has(token)) intersection += 1;
+  }
+  return intersection >= 2 && intersection / agentTokens.size >= 0.5;
+}
+
+/**
+ * Maps a presentation deferred-work item onto the unused agent-report index it
+ * was rewritten from. Returns null for compose-added extras. Walks agent items
+ * in order so dropped earlier items do not steal a later rewrite's identity.
+ */
+export function matchDeferredWorkAgentIndex({
+  presentationItem,
+  agentItems,
+  usedIndexes
+}: {
+  presentationItem: string;
+  agentItems: string[];
+  usedIndexes: Set<number>;
+}): number | null {
+  for (let index = 0; index < agentItems.length; index += 1) {
+    if (usedIndexes.has(index)) continue;
+    if (isDeferredWorkRewrite({ agentItem: agentItems[index]!, presentationItem })) return index;
+  }
+  return null;
+}
+
+/**
+ * Presentation deferred work is the operator-facing eligible subset of
+ * `agentReport.deferredWork`. The agent list itself is never rewritten.
+ */
+export function applyDeferredWorkEligibility({
+  report,
+  currentObjective,
+  plannedObjectives,
+  candidateActions
+}: {
+  report: DeliveryReportPayloadV1;
+  currentObjective?: DeferredWorkObjectiveRef | null;
+  plannedObjectives?: DeferredWorkObjectiveRef[];
+  candidateActions?: Array<{ action: string; reason?: string }>;
+}): DeliveryReportPayloadV1 {
+  const deferredWork = filterDeferredWork({
+    items: report.agentReport.deferredWork,
+    currentObjective,
+    plannedObjectives,
+    humanActions: report.agentReport.humanActions,
+    candidateActions
+  });
+  return {
+    ...report,
+    presentation: {
+      ...report.presentation,
+      deferredWork
+    }
+  };
+}
+
+function composeEligibility({
+  report,
+  candidates,
+  currentObjective,
+  plannedObjectives
+}: {
+  report: DeliveryReportPayloadV1;
+  candidates: DeterministicActionCandidate[];
+  currentObjective?: DeferredWorkObjectiveRef | null;
+  plannedObjectives?: DeferredWorkObjectiveRef[];
+}): {
+  currentObjective?: DeferredWorkObjectiveRef | null;
+  plannedObjectives?: DeferredWorkObjectiveRef[];
+  humanActions: Array<{ action: string; reason?: string }>;
+  candidateActions: DeterministicActionCandidate[];
+} {
+  return {
+    currentObjective,
+    plannedObjectives,
+    humanActions: report.agentReport.humanActions,
+    candidateActions: candidates
+  };
+}
+
+function composeDeferredWorkPresentation({
+  eligibleItems,
+  draftItems,
+  currentObjective,
+  plannedObjectives,
+  humanActions,
+  candidateActions
+}: {
+  eligibleItems: string[];
+  draftItems: string[];
+  currentObjective?: DeferredWorkObjectiveRef | null;
+  plannedObjectives?: DeferredWorkObjectiveRef[];
+  humanActions?: Array<{ action: string; reason?: string }>;
+  candidateActions?: Array<{ action: string; reason?: string }>;
+}): string[] {
+  const merged = reconcileDeferredWork({
+    agentItems: eligibleItems,
+    draftItems
+  });
+  const kept = merged.slice(0, eligibleItems.length);
+  const extras = filterDeferredWork({
+    items: merged.slice(eligibleItems.length),
+    currentObjective,
+    plannedObjectives,
+    humanActions,
+    candidateActions
+  });
+  return [...kept, ...extras];
+}
+
 /**
  * Chooses the deferred-work list for a composed presentation. The compose
- * automation is asked to rewrite each agent-listed item as a standalone
- * objective statement, so a draft item may only replace its source when it is
- * at least as detailed (never shorter). A draft that drops items keeps the
- * agent list untouched; extra draft items beyond the agent's count are kept,
- * bounded, because the model may surface leftover work the summary states
- * explicitly. With no agent items at all, the draft list is used as-is.
+ * automation is asked to rewrite each *eligible* agent-listed item as a
+ * standalone objective statement, so a draft item may only replace its source
+ * when it is at least as detailed (never shorter). A draft that drops eligible
+ * items keeps that eligible list untouched; extra draft items beyond it are
+ * kept only when they still pass eligibility, bounded. With no eligible agent
+ * items, the filtered draft list is used as-is.
  */
 export function reconcileDeferredWork({
   agentItems,
@@ -313,7 +617,9 @@ export function reconcileDeliveryComposeDraft({
   candidates = [],
   rationales = [],
   model,
-  generatedAt = nowIso()
+  generatedAt = nowIso(),
+  currentObjective,
+  plannedObjectives
 }: {
   report: DeliveryReportPayloadV1;
   draft: ComposeDeliveryDraft | null;
@@ -321,13 +627,29 @@ export function reconcileDeliveryComposeDraft({
   rationales?: ChangeRationaleEvidence[];
   model?: string | null;
   generatedAt?: string;
+  currentObjective?: DeferredWorkObjectiveRef | null;
+  plannedObjectives?: DeferredWorkObjectiveRef[];
 }): DeliveryPresentationV1 {
+  const eligibility = composeEligibility({
+    report,
+    candidates,
+    currentObjective,
+    plannedObjectives
+  });
+  const eligibleAgentItems = filterDeferredWork({
+    items: report.agentReport.deferredWork,
+    ...eligibility
+  });
   const fallback: DeliveryPresentationV1 = {
     ...report.presentation,
     status: 'fallback',
     humanActions: mergeDeterministicActionCandidates({
       actions: report.presentation.humanActions,
       candidates
+    }),
+    deferredWork: filterDeferredWork({
+      items: report.presentation.deferredWork,
+      ...eligibility
     }),
     generatedBy: 'deterministic',
     generatedAt,
@@ -424,9 +746,10 @@ export function reconcileDeliveryComposeDraft({
       clampStringList(draft.knownRisks).length > 0
         ? clampStringList(draft.knownRisks)
         : report.presentation.knownRisks,
-    deferredWork: reconcileDeferredWork({
-      agentItems: report.presentation.deferredWork,
-      draftItems: clampStringList(draft.deferredWork)
+    deferredWork: composeDeferredWorkPresentation({
+      eligibleItems: eligibleAgentItems,
+      draftItems: clampStringList(draft.deferredWork),
+      ...eligibility
     }),
     assumptions:
       clampStringList(draft.assumptions).length > 0

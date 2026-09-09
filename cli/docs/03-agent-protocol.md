@@ -367,7 +367,10 @@ Delivery rules:
   `agentReport` accepts `humanActions`, `tradeoffsMade`, `knownRisks`, `deferredWork`,
   and `assumptions`; each missing array becomes `[]`. Human actions are for concrete
   work outside the agent's completed changes and must never include Git actions or
-  routine review/testing. Each human action carries a required `action`, an expected
+  routine review/testing. Deferred work is only a recommended new objective that is
+  not part of the current mission (for example an out-of-scope bug); it must not
+  restate this mission's future objectives, leftover slices of the current objective,
+  or human follow-up such as deploy, secrets, or migrations. Each human action carries a required `action`, an expected
   `reason` and `category`, an optional `blocking`, and, whenever they exist, `command`
   (the exact command or setting), `verify` (how the operator confirms it worked), and
   `link` (an HTTP(S) URL or repository-relative path). Write

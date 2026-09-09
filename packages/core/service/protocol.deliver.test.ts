@@ -412,6 +412,73 @@ describe('deliverSession mechanical change capture', () => {
     await db.close();
   });
 
+  it('omits ineligible deferred work from presentation while keeping the agent list', async () => {
+    const { db, ctx } = await setup();
+    const project = await createProject({ ctx, name: 'Deferred Work Eligibility' });
+    const { mission, objectives } = await createMissionWithObjectives({
+      ctx,
+      projectId: project.id,
+      objectives: [
+        {
+          objective: 'Add form validation to the settings page including email and password fields.'
+        },
+        {
+          objective:
+            'Implement the CSV export API for the reports page so operators can download filtered rows.'
+        }
+      ]
+    });
+    await ctx.db.run(`UPDATE objectives SET state = 'submitted' WHERE id = ?`, [objectives[0]?.id]);
+    const attached = await attachSession({
+      ctx,
+      missionId: mission.displayId,
+      objectiveId: objectives[0]?.id
+    });
+
+    const delivered = await deliverSession({
+      ctx,
+      missionId: mission.displayId,
+      sessionKey: attached.sessionKey,
+      summary: 'Shipped settings validation.',
+      payloadJson: {
+        deliveryReport: {
+          schemaVersion: 1,
+          agentReport: {
+            humanActions: [
+              {
+                action: 'Add GEMINI_API_KEY to the production backend service on Railway.',
+                reason: 'Composition needs a provider credential.',
+                category: 'environment'
+              }
+            ],
+            deferredWork: [
+              'Implement the CSV export API for the reports page.',
+              'Add GEMINI_API_KEY to the production backend service on Railway.',
+              'Investigate the payroll timezone bug found in employee-lifecycle.ts; left because it is outside this settings work.'
+            ]
+          }
+        }
+      }
+    });
+
+    const row = (await ctx.db.get(`SELECT payload_json FROM deliveries WHERE id = ?`, [
+      delivered.deliveryId
+    ])) as { payload_json: string };
+    const payload = JSON.parse(row.payload_json) as {
+      deliveryReport: {
+        agentReport: { deferredWork: string[] };
+        presentation: { deferredWork: string[] };
+      };
+    };
+
+    assert.equal(payload.deliveryReport.agentReport.deferredWork.length, 3);
+    assert.deepEqual(payload.deliveryReport.presentation.deferredWork, [
+      'Investigate the payroll timezone bug found in employee-lifecycle.ts; left because it is outside this settings work.'
+    ]);
+
+    await db.close();
+  });
+
   it('salvages malformed or oversized delivery evidence without blocking completion', async () => {
     const { db, ctx } = await setup();
     const { mission, objectiveId } = await submittedMission(ctx, 'Invalid Delivery Evidence');

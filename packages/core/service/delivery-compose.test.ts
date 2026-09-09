@@ -3,8 +3,11 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import {
+  applyDeferredWorkEligibility,
   applyDeliveryPresentation,
   deriveDeterministicActionCandidates,
+  filterDeferredWork,
+  matchDeferredWorkAgentIndex,
   mergeDeterministicActionCandidates,
   reconcileDeferredWork,
   reconcileDeliveryComposeDraft
@@ -330,5 +333,152 @@ describe('deferred-work reconciliation', () => {
     assert.deepEqual(enriched.deferredWork, [
       'Bring webhook payloads to full parity with the delivery DTO so consumers receive the normalized report fields.'
     ]);
+  });
+});
+
+describe('deferred-work eligibility', () => {
+  it('keeps an out-of-scope bug that does not restate planned or current work', () => {
+    assert.deepEqual(
+      filterDeferredWork({
+        items: [
+          'Investigate the race in webhook-dispatcher.ts that dropped a retry while composing deliveries; left because it belongs outside this enrichment work.'
+        ],
+        currentObjective: {
+          title: 'Enrich deferred work',
+          instruction: 'Rewrite sparse deferred-work items into standalone objective statements.'
+        },
+        plannedObjectives: [
+          {
+            title: 'Stable rail ids',
+            instruction:
+              'Give Feed rail deferred-work items an identifier that survives composition.'
+          }
+        ]
+      }),
+      [
+        'Investigate the race in webhook-dispatcher.ts that dropped a retry while composing deliveries; left because it belongs outside this enrichment work.'
+      ]
+    );
+  });
+
+  it('drops items that restate a planned future objective', () => {
+    assert.deepEqual(
+      filterDeferredWork({
+        items: [
+          'Implement the CSV export API for the reports page.',
+          'Fix the date-dependent employee lifecycle test that failed in payroll.'
+        ],
+        plannedObjectives: [
+          {
+            title: 'CSV export API',
+            instruction:
+              'Implement the CSV export API for the reports page so operators can download filtered rows.'
+          }
+        ]
+      }),
+      ['Fix the date-dependent employee lifecycle test that failed in payroll.']
+    );
+  });
+
+  it('drops items that restate a human action or leftover current-objective work', () => {
+    assert.deepEqual(
+      filterDeferredWork({
+        items: [
+          'Add GEMINI_API_KEY to the production backend service on Railway.',
+          'Finish remaining form validation on the settings page.',
+          'Investigate the payroll timezone bug found in employee-lifecycle.ts; left because it is outside this settings work.'
+        ],
+        currentObjective: {
+          title: 'Settings validation',
+          instruction:
+            'Add form validation to the settings page including email and password fields.'
+        },
+        humanActions: [
+          {
+            action: 'Add GEMINI_API_KEY to the production backend service on Railway.',
+            reason: 'Composition needs a provider credential.'
+          }
+        ]
+      }),
+      [
+        'Investigate the payroll timezone bug found in employee-lifecycle.ts; left because it is outside this settings work.'
+      ]
+    );
+  });
+
+  it('applies eligibility to presentation without rewriting agentReport', () => {
+    const report = applyDeferredWorkEligibility({
+      report: buildDeliveryReport({
+        summary: 'Shipped.',
+        deliveryReport: {
+          schemaVersion: 1,
+          agentReport: {
+            deferredWork: [
+              'Implement the CSV export API for reports.',
+              'Fix the date-dependent employee lifecycle test that failed in payroll.'
+            ]
+          }
+        }
+      }),
+      plannedObjectives: [
+        {
+          title: 'CSV export API',
+          instruction: 'Implement the CSV export API for the reports page.'
+        }
+      ]
+    });
+    assert.deepEqual(report.agentReport.deferredWork, [
+      'Implement the CSV export API for reports.',
+      'Fix the date-dependent employee lifecycle test that failed in payroll.'
+    ]);
+    assert.deepEqual(report.presentation.deferredWork, [
+      'Fix the date-dependent employee lifecycle test that failed in payroll.'
+    ]);
+  });
+
+  it('drops ineligible extras from a compose draft while keeping eligible rewrites', () => {
+    const report = buildDeliveryReport({
+      summary: 'Shipped.',
+      deliveryReport: {
+        schemaVersion: 1,
+        agentReport: {
+          deferredWork: ['Fix the date-dependent employee lifecycle test that failed in payroll.']
+        }
+      }
+    });
+    const presentation = reconcileDeliveryComposeDraft({
+      report,
+      draft: {
+        markdown: 'x',
+        deferredWork: [
+          'Fix the date-dependent employee lifecycle test that failed in payroll before the next close; the previous run broke when the fixture clock crossed a month boundary.',
+          'Implement the CSV export API for the reports page.'
+        ]
+      },
+      plannedObjectives: [
+        {
+          title: 'CSV export API',
+          instruction: 'Implement the CSV export API for the reports page.'
+        }
+      ]
+    });
+    assert.deepEqual(presentation.deferredWork, [
+      'Fix the date-dependent employee lifecycle test that failed in payroll before the next close; the previous run broke when the fixture clock crossed a month boundary.'
+    ]);
+  });
+
+  it('matches a presentation rewrite to its original agent index after an earlier item was dropped', () => {
+    const usedIndexes = new Set<number>();
+    const agentItems = [
+      'Implement the CSV export API for reports.',
+      'Fix the date-dependent employee lifecycle test that failed in payroll.'
+    ];
+    const matched = matchDeferredWorkAgentIndex({
+      presentationItem:
+        'Fix the date-dependent employee lifecycle test that failed in payroll before the next close.',
+      agentItems,
+      usedIndexes
+    });
+    assert.equal(matched, 1);
   });
 });

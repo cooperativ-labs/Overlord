@@ -81,6 +81,11 @@ export function NavHeader() {
         style={isDesktop ? NO_DRAG_REGION : undefined}
       >
         <SidebarTrigger className={isMacDesktop && state === 'collapsed' ? 'ml-5' : undefined} />
+        <img
+          src="/images/overlord-logo.png"
+          alt="Overlord"
+          className="size-7 shrink-0 object-contain"
+        />
         <Button
           type="button"
           variant="ghost"

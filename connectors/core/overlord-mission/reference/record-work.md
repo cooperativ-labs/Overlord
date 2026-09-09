@@ -60,8 +60,12 @@ identical across the CLI (`--payload-file -`) and the hosted MCP tool
   or `decision`.
 - **`deliveryReport`** (optional) — you may include a `deliveryReport.agentReport`
   (`humanActions`, `tradeoffsMade`, `knownRisks`, `deferredWork`, `assumptions`) just as
-  in `deliver`. Each `deferredWork` item should name the component or file involved and say
-  why the work was left. It improves review visibility but never blocks the record.
+  in `deliver`. Each `deferredWork` item must be a recommended new objective that is not
+  part of this mission (for example a bug discovered here that belongs outside it). Name
+  the component or file involved and say why the work was left. Never list work already
+  covered by this mission's future objectives, leftover slices of the current objective,
+  or human implementation follow-up (those belong in `humanActions`). Use an empty array
+  when nothing qualifies. It improves review visibility but never blocks the record.
 
 ## CLI
 

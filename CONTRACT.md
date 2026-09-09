@@ -34,13 +34,30 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `139`
+Current version: `140`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
 `contract/components.yaml`) — never a header duplicate. The contract version is
 incremented when any stable interface changes. All conformance manifests must
 declare the contract version they were validated against.
+
+### Version 140 Change Summary
+
+Deferred work is narrowed to recommended new objectives outside the current
+mission (coo:986). Agent instructions, compose-delivery, and persistence now
+treat `deferredWork` as suggested future work that is not already queued on
+this mission — out-of-scope bugs are the canonical example — and omit leftover
+slices of the current objective and human implementation follow-up (those stay
+in `humanActions`). `agentReport.deferredWork` is still never rewritten.
+`presentation.deferredWork` is the eligible subset: persist-time filtering
+drops items that restate planned sibling objectives, leftover current-objective
+work, or human/deterministic follow-up, and compose rewrites only that eligible
+list. Core reconciliation still refuses to shorten or drop remaining eligible
+items; extras are kept only when they also pass eligibility. Feed-rail
+deferred-work ids match the original agent-report index rather than the
+presentation index, so omitting an earlier ineligible item does not reattach a
+resolution to a different statement. No schema, route, or DTO change.
 
 ### Version 139 Change Summary
 
@@ -1447,7 +1464,7 @@ These are the **only sanctioned paths** between components. Bypassing these surf
 - **Response format**: JSON on stdout; non-zero exit on error
 - **Inbox capture**: `ovld protocol create --inbox` creates an account-owned unassigned capture. Ordinary non-executing `create` uses an explicit project first, then discovered project, then this inbox fallback; `prompt` and `record-work` continue to fail without a project because they imply executable work.
 - **Shell-special content**: Must use `--summary-file -` / `--payload-file -` with stdin heredoc
-- **Delivery evidence**: `deliver` accepts an optional versioned `deliveryReport.agentReport` object. Its `humanActions`, `tradeoffsMade`, `knownRisks`, `deferredWork`, and `assumptions` fields are advisory agent evidence, normalized to empty arrays when absent. Malformed advisory items are discarded independently with bounded warnings; evidence, change tracking, and model availability never delay delivery. Human actions must exclude Git operations and routine review/testing; the protocol applies this exclusion before persistence. Each human action carries a required `action`, expected `reason` and `category`, optional `blocking`, and optional `command`, `verify`, and `link` (HTTP(S) URL or repository-relative path only) that are preserved verbatim through normalization and composition. The stored `deliveryReport.presentation` begins as an immediate deterministic fallback and is marked `pending` when a compose job is enqueued; a background worker may later replace only `presentation` with a Gemini-composed or `fallback` result, and in every outcome it appends the deterministic path-derived `deterministic_rule` actions (migrations, env examples, deployment configs, dependency manifests, CI workflow files) that the agent and model did not already cover. The original delivery summary remains immutable.
+- **Delivery evidence**: `deliver` accepts an optional versioned `deliveryReport.agentReport` object. Its `humanActions`, `tradeoffsMade`, `knownRisks`, `deferredWork`, and `assumptions` fields are advisory agent evidence, normalized to empty arrays when absent. Malformed advisory items are discarded independently with bounded warnings; evidence, change tracking, and model availability never delay delivery. Human actions must exclude Git operations and routine review/testing; the protocol applies this exclusion before persistence. Each human action carries a required `action`, expected `reason` and `category`, optional `blocking`, and optional `command`, `verify`, and `link` (HTTP(S) URL or repository-relative path only) that are preserved verbatim through normalization and composition. Deferred work is recommended new work outside the current mission; `presentation.deferredWork` is the eligible subset after dropping items that restate planned sibling objectives, leftover current-objective work, or human follow-up, while `agentReport.deferredWork` is never rewritten. The stored `deliveryReport.presentation` begins as an immediate deterministic fallback and is marked `pending` when a compose job is enqueued; a background worker may later replace only `presentation` with a Gemini-composed or `fallback` result, and in every outcome it appends the deterministic path-derived `deterministic_rule` actions (migrations, env examples, deployment configs, dependency manifests, CI workflow files) that the agent and model did not already cover. The original delivery summary remains immutable.
 
 ### Protocol → Database (Service Layer)
 

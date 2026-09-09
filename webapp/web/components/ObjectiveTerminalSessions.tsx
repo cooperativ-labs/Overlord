@@ -19,9 +19,11 @@ import {
   useOpenLatchSession,
   useStopLatchSession
 } from '../lib/latch-session-client.ts';
+import { selectLatchSessionDisplay } from '../lib/latch-session-display.ts';
 import { useLaunchSettings } from '../lib/queries.ts';
 import { cn } from '../lib/utils.ts';
 
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion.tsx';
 import { Button } from './ui/button.tsx';
 import {
   Dialog,
@@ -69,11 +71,12 @@ function objectiveLabelFor(
  * Live view of one Latch session through its terminal reachability probe.
  *
  * Tracking is deliberately separate from rendering. The panel only ever draws
- * one full card, but a session that is still running has to keep reporting even
- * while it sits collapsed inside the accordion — otherwise streamlining the
- * display would silently stop detecting a session Latch has reclaimed. Queries
- * are keyed by provider session id, so a tracked session that also gets rendered
- * shares one poll rather than doubling it.
+ * one full card; previous sessions sit collapsed inside the accordion. A
+ * session that is still running has to keep reporting even while it is
+ * collapsed — otherwise streamlining the display would silently stop detecting
+ * a session Latch has reclaimed. Queries are keyed by provider session id, so a
+ * tracked session that also gets rendered shares one poll rather than doubling
+ * it.
  */
 function useLatchSessionTracking({
   session,
@@ -213,13 +216,14 @@ function EndSessionButton({
   );
 }
 
-/** The full card for a session that is still live. */
+/** The full card for the current Latch session. */
 function TerminalSessionCard({
   missionId,
   session,
   objectiveLabel,
   localExecutionTargetId,
-  onAbsent
+  onAbsent,
+  footer
 }: {
   missionId: string;
   session: TerminalSessionDto;
@@ -227,6 +231,8 @@ function TerminalSessionCard({
   objectiveLabel?: ObjectiveSessionLabel | null;
   localExecutionTargetId: string | null;
   onAbsent?: (providerSessionId: string) => void;
+  /** Rendered inside the card, below its own controls (the previous-sessions accordion). */
+  footer?: ReactNode;
 }) {
   const { copied, copy } = useCopyToClipboard();
   const { inspection, absent, state, name, reachable, checking } = useLatchSessionTracking({
@@ -308,6 +314,8 @@ function TerminalSessionCard({
           {(inspection.error ?? openSession.error)?.message ?? 'Latch session action failed.'}
         </p>
       ) : null}
+
+      {footer}
     </div>
   );
 }
@@ -461,16 +469,81 @@ export function MissionLatchSessionProvider({
 }
 
 /**
+ * Previous Latch sessions, collapsed under the current card so a long-running
+ * mission does not turn into a stack of widgets (coo:990). The trigger counts
+ * other connections that are still running when any are; otherwise it counts
+ * the previous sessions themselves.
+ */
+function PreviousLatchSessionsAccordion({
+  sessions,
+  runningOtherCount,
+  objectives
+}: {
+  sessions: readonly TerminalSessionDto[];
+  runningOtherCount: number;
+  objectives: readonly ObjectiveDto[];
+}) {
+  const { missionId, localExecutionTargetId, onAbsent } = useLatchSessionContext();
+  if (sessions.length === 0) return null;
+
+  const liveTrigger = runningOtherCount > 0;
+  const count = liveTrigger ? runningOtherCount : sessions.length;
+  let label = 'previous sessions';
+  if (liveTrigger) {
+    label = count === 1 ? 'other Latch connection running' : 'other Latch connections running';
+  } else if (count === 1) {
+    label = 'previous session';
+  }
+
+  return (
+    <Accordion className="mt-3 border-t border-border pt-1">
+      <AccordionItem value="previous-latch-sessions" className="border-b-0">
+        <AccordionTrigger className="py-2 text-xs font-medium text-muted-foreground hover:no-underline">
+          <span className="flex items-center gap-2">
+            <span
+              className={cn(
+                'inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold',
+                liveTrigger
+                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                  : 'bg-muted text-muted-foreground'
+              )}
+            >
+              {count}
+            </span>
+            {label}
+          </span>
+        </AccordionTrigger>
+        <AccordionContent className="[&_p:not(:last-child)]:mb-0">
+          <div className="space-y-1.5">
+            {sessions.map(session => (
+              <CompactSessionRow
+                key={sessionRowKey(session)}
+                missionId={missionId}
+                session={session}
+                objectiveLabel={objectiveLabelFor(session, objectives)}
+                localExecutionTargetId={localExecutionTargetId}
+                onAbsent={onAbsent}
+              />
+            ))}
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
+  );
+}
+
+/**
  * The mission-wide Latch controls (coo:990): every session the mission
  * launched, drawn together above the artifacts rather than scattered across the
  * objective rows that produced them. This is where the full controls live —
  * open in a viewer, copy the attach command, end the session — because the
  * reader wants "what terminals does this mission have open" answered in one
- * place, not one accordion at a time.
+ * place.
  *
- * Live sessions (running or stopping) get full cards, newest first; everything
- * else is a compact row below them. Each one names its objective, since the
- * card no longer sits inside it.
+ * One current session gets the full card; previous sessions collapse into an
+ * accordion below its controls, the same pattern the mission-level section used
+ * before coo:879. Each one names its objective, since the card no longer sits
+ * inside it.
  */
 export function MissionTerminalSessionsSection({
   sessions,
@@ -483,14 +556,8 @@ export function MissionTerminalSessionsSection({
 }) {
   const { missionId, localExecutionTargetId, onAbsent, isAbsent } = useLatchSessionContext();
   const visible = sessions.filter(session => !isAbsent(session.providerSessionId));
-  if (visible.length === 0) return null;
-
-  const live = visible.filter(
-    session => session.lastObservedState === 'running' || session.lastObservedState === 'stopping'
-  );
-  const past = visible.filter(
-    session => session.lastObservedState !== 'running' && session.lastObservedState !== 'stopping'
-  );
+  const { current, others, runningOtherCount } = selectLatchSessionDisplay(visible);
+  if (!current) return null;
 
   return (
     <div className="space-y-3">
@@ -502,28 +569,22 @@ export function MissionTerminalSessionsSection({
           Terminal state is independent from mission and agent-session status.
         </p>
       </div>
-      <div className="space-y-1.5">
-        {live.map(session => (
-          <TerminalSessionCard
-            key={sessionRowKey(session)}
-            missionId={missionId}
-            session={session}
-            objectiveLabel={objectiveLabelFor(session, objectives)}
-            localExecutionTargetId={localExecutionTargetId}
-            onAbsent={onAbsent}
-          />
-        ))}
-        {past.map(session => (
-          <CompactSessionRow
-            key={sessionRowKey(session)}
-            missionId={missionId}
-            session={session}
-            objectiveLabel={objectiveLabelFor(session, objectives)}
-            localExecutionTargetId={localExecutionTargetId}
-            onAbsent={onAbsent}
-          />
-        ))}
-      </div>
+      <TerminalSessionCard
+        missionId={missionId}
+        session={current}
+        objectiveLabel={objectiveLabelFor(current, objectives)}
+        localExecutionTargetId={localExecutionTargetId}
+        onAbsent={onAbsent}
+        footer={
+          others.length > 0 ? (
+            <PreviousLatchSessionsAccordion
+              sessions={others}
+              runningOtherCount={runningOtherCount}
+              objectives={objectives}
+            />
+          ) : null
+        }
+      />
     </div>
   );
 }

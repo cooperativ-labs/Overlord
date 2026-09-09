@@ -695,7 +695,7 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
         deferredWork: {
           type: 'array',
           items: stringProperty(
-            'Intentionally deferred work. Name the component or file involved and say why the work was left.'
+            'Recommended new objective outside this mission (for example an out-of-scope bug). Name the component or file and why it was left. Omit queued future objectives, leftover current-objective work, and human follow-up (those belong in humanActions).'
           )
         },
         assumptions: { type: 'array', items: stringProperty('Material implementation assumption.') }
