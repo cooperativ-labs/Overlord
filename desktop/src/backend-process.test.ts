@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 import { pathToFileURL } from 'node:url';
@@ -188,22 +190,37 @@ describe('process supervisor escalation on an idle event loop', () => {
       console.log('stopped:' + supervisor.isRunning());
     `;
 
-    const result = await new Promise<{ code: number | null; stdout: string; stderr: string }>(
-      resolve => {
-        const child = spawn(
-          process.execPath,
-          ['--import', 'tsx', '--input-type=module', '--eval', source],
-          { stdio: ['ignore', 'pipe', 'pipe'] }
-        );
-        let stdout = '';
-        let stderr = '';
-        child.stdout.setEncoding('utf8');
-        child.stderr.setEncoding('utf8');
-        child.stdout.on('data', chunk => (stdout += chunk));
-        child.stderr.on('data', chunk => (stderr += chunk));
-        child.once('close', code => resolve({ code, stdout, stderr }));
-      }
-    );
+    // `node --eval --input-type=module` runs the source through a different
+    // (and, for this tsx version, buggy) static-export-analysis path than a
+    // real on-disk entry file: it fails to see a *generic* named export
+    // (`createProcessSupervisor<TChild>`) and throws "does not provide an
+    // export named …" even though the export is real — reproduced in
+    // isolation outside this suite. Writing the script to a temp file and
+    // running that sidesteps the `--eval` quirk without touching the export
+    // itself or the assertion this test exists to make.
+    const scriptDir = mkdtempSync(path.join(tmpdir(), 'overlord-backend-process-escalation-'));
+    const scriptPath = path.join(scriptDir, 'child.mts');
+    writeFileSync(scriptPath, source);
+
+    let result: { code: number | null; stdout: string; stderr: string };
+    try {
+      result = await new Promise<{ code: number | null; stdout: string; stderr: string }>(
+        resolve => {
+          const child = spawn(process.execPath, ['--import', 'tsx', scriptPath], {
+            stdio: ['ignore', 'pipe', 'pipe']
+          });
+          let stdout = '';
+          let stderr = '';
+          child.stdout.setEncoding('utf8');
+          child.stderr.setEncoding('utf8');
+          child.stdout.on('data', chunk => (stdout += chunk));
+          child.stderr.on('data', chunk => (stderr += chunk));
+          child.once('close', code => resolve({ code, stdout, stderr }));
+        }
+      );
+    } finally {
+      rmSync(scriptDir, { recursive: true, force: true });
+    }
 
     assert.equal(result.code, 0, `child exited non-zero: ${result.stderr}`);
     assert.match(

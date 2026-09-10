@@ -53,6 +53,16 @@ async function seedProjectAndMission(): Promise<{ projectId: string; missionId: 
      VALUES (?, ?, ?, ?, ?, 'active', '{}', 'operator-workspace-user', ?, ?, 1, ?)`,
     [projectId, workspaceId, slug, 'Init Test', 'desc', now, now, position]
   );
+  // Statuses are project-scoped, not workspace-scoped: a raw project insert
+  // (bypassing createProject's seedProjectStatuses) must seed its own default
+  // status row for the mission's status_id foreign key to resolve.
+  const statusId = `${projectId}-backlog`;
+  await db.run(
+    `INSERT INTO project_statuses (id, workspace_id, project_id, key, name, type, position,
+        is_default, is_terminal, created_at, updated_at, revision)
+     VALUES (?, ?, ?, 'backlog', 'Backlog', 'draft', 0, 1, 0, ?, ?, 1)`,
+    [statusId, workspaceId, projectId, now, now]
+  );
   await db.run(
     `INSERT INTO missions (id, workspace_id, project_id, display_id, sequence_number, title,
         status_id, status_type, board_position, created_at, updated_at, revision)
@@ -64,7 +74,7 @@ async function seedProjectAndMission(): Promise<{ projectId: string; missionId: 
       `${slug}:1`,
       sequenceNumber,
       'Init Test',
-      `${workspaceId}-backlog`,
+      statusId,
       now,
       now
     ]

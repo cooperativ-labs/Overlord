@@ -157,7 +157,10 @@ test('help documents statuses discovery and --status as a TYPE filter', () => {
 
 test('missions list forwards --status as a statusTypes CSV', async () => {
   const recorded: Recorded[] = [];
-  const runtime = fakeRuntime({ recorded, get: () => ({ missions: [] }) });
+  const runtime = fakeRuntime({
+    recorded,
+    get: path => (path === '/api/projects/p1' ? { id: 'p1', slug: 'alpha' } : { missions: [] })
+  });
 
   await runManagementCommand({
     runtime,

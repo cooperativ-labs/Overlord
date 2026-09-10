@@ -24,6 +24,7 @@ import type {
 } from '../webapp/shared/contract.ts';
 
 import {
+  getActiveWorkspaceIdOrNull,
   getAuthorizedWorkspacesContext,
   getBootstrapWorkspaceIdOrNull,
   newId,
@@ -112,7 +113,7 @@ export async function getActiveOrganizationIdOrNull(
 ): Promise<string | null> {
   const authorized = getAuthorizedWorkspacesContext();
   if (authorized) return authorized.organizationId;
-  const workspaceId = getBootstrapWorkspaceIdOrNull();
+  const workspaceId = getActiveWorkspaceIdOrNull() ?? getBootstrapWorkspaceIdOrNull();
   if (!workspaceId) return null;
   return resolveOrganizationIdForWorkspace(workspaceId, client);
 }

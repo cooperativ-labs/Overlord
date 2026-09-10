@@ -19,6 +19,7 @@ import {
 
 import {
   DATABASE_DIALECT,
+  getActiveWorkspaceIdOrNull,
   getAuthorizedWorkspacesContext,
   getBootstrapWorkspaceIdOrNull,
   newId,
@@ -187,7 +188,9 @@ export async function listWebhookSubscriptions(
   const client = requireDatabaseClient();
   const workspaceId =
     explicitWorkspaceId?.trim() ||
-    (getAuthorizedWorkspacesContext() ? null : getBootstrapWorkspaceIdOrNull());
+    (getAuthorizedWorkspacesContext()
+      ? null
+      : (getActiveWorkspaceIdOrNull() ?? getBootstrapWorkspaceIdOrNull()));
   if (!workspaceId) throw new ApiError(400, 'workspaceId is required');
   await requireWorkspacePermission({
     workspaceId,

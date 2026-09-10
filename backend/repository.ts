@@ -195,6 +195,7 @@ import {
   DATABASE_DIALECT,
   enqueueWebhookEventRest,
   findActiveMembershipId,
+  getActiveWorkspaceIdOrNull,
   getActorWorkspaceUserId,
   getAuthorizedWorkspacesContext,
   getBootstrapWorkspaceIdOrNull,
@@ -3240,7 +3241,9 @@ export async function createProject(body: CreateProjectBody): Promise<ProjectDto
 
     const targetWorkspaceId =
       body.workspaceId?.trim() ||
-      (getAuthorizedWorkspacesContext() ? null : getBootstrapWorkspaceIdOrNull());
+      (getAuthorizedWorkspacesContext()
+        ? null
+        : (getActiveWorkspaceIdOrNull() ?? getBootstrapWorkspaceIdOrNull()));
     if (!targetWorkspaceId) {
       throw new ApiError(400, 'workspaceId is required when creating a project');
     }
