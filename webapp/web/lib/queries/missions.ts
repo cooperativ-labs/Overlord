@@ -471,7 +471,10 @@ export function useGenerateCommitMessage(mission: MissionDetailDto) {
 
 export function useBranchAction(mission: MissionDetailDto) {
   const qc = useQueryClient();
-  const isRemoteTarget = useIsRemoteExecutionTargetForProject(mission.projectId);
+  const isRemoteTarget = useIsRemoteExecutionTargetForProject(
+    mission.projectId,
+    mission.workspaceId
+  );
   return useMutation({
     mutationFn: async (body: BranchActionBody) => {
       if (isRemoteTarget) {
@@ -529,10 +532,12 @@ export function useRemoveWorktree() {
         : [];
       const match = worktrees.find(worktree => worktree.path === body.path);
       const projectId = body.projectId ?? match?.projectId;
-      const isRemoteTarget = projectId
+      const project = projectId ? projectList.find(candidate => candidate.id === projectId) : null;
+      const isRemoteTarget = project
         ? isRemoteExecutionTargetSelected({
-            localExecutionTargetId: (await api.getLaunchSettings()).executionTargetId,
-            selectedExecutionTargetId: (await api.getProjectExecutionTarget(projectId))
+            localExecutionTargetId: (await api.getLaunchSettings(project.workspaceId))
+              .executionTargetId,
+            selectedExecutionTargetId: (await api.getProjectExecutionTarget(project.id))
               .selectedExecutionTargetId
           })
         : false;
@@ -581,11 +586,13 @@ export function usePurgeMergedWorktrees() {
   return useMutation({
     mutationFn: async () => {
       const projectList = projects.data ?? [];
-      const launchSettings = await api.getLaunchSettings();
       const remoteProjects = (
         await Promise.all(
           projectList.map(async project => {
-            const executionTarget = await api.getProjectExecutionTarget(project.id);
+            const [launchSettings, executionTarget] = await Promise.all([
+              api.getLaunchSettings(project.workspaceId),
+              api.getProjectExecutionTarget(project.id)
+            ]);
             const isRemote = isRemoteExecutionTargetSelected({
               localExecutionTargetId: launchSettings.executionTargetId,
               selectedExecutionTargetId: executionTarget.selectedExecutionTargetId

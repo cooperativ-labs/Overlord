@@ -8,6 +8,21 @@ import { createSeededServiceContext } from './test-helpers.js';
 import { newId, nowIso } from './util.js';
 
 describe('protocol objective creation', () => {
+  it('requires an explicit project instead of discovering one for create and prompt', async () => {
+    const { db, ctx } = await createSeededServiceContext({ source: 'protocol' });
+
+    await assert.rejects(
+      protocolCreate({ ctx, objectives: [{ objective: 'Require project routing' }] }),
+      /explicit project ID/
+    );
+    await assert.rejects(
+      protocolPrompt({ ctx, objectives: [{ objective: 'Require prompt routing' }] }),
+      /explicit project ID/
+    );
+
+    await db.close();
+  });
+
   it('creates ordered objectives from an array payload', async () => {
     const { db, ctx } = await createSeededServiceContext({ source: 'protocol' });
     const project = await createProject({ ctx, name: 'Protocol Objectives' });

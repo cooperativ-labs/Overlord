@@ -388,7 +388,8 @@ const toolHandlers: Record<string, ToolHandler> = {
       protocolBody({
         ...(optionalString(args, 'projectId')
           ? { '--project-id': requiredString(args, 'projectId') }
-          : { '--inbox': true }),
+          : {}),
+        ...(args.unassignedToProject === true ? { '--unassigned-to-project': true } : {}),
         '--objective': requiredString(args, 'objective'),
         ...(optionalString(args, 'title') ? { '--title': requiredString(args, 'title') } : {}),
         ...(optionalString(args, 'resourceKey')
@@ -410,7 +411,7 @@ const toolHandlers: Record<string, ToolHandler> = {
     runProtocolSubcommand(
       'create',
       protocolBody({
-        '--inbox': true,
+        '--unassigned-to-project': true,
         '--title': requiredString(args, 'title'),
         '--objective': requiredString(args, 'objective')
       })

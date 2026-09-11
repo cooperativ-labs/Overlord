@@ -2406,6 +2406,8 @@ app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
 async function start(): Promise<void> {
   await initDatabase();
 
+  // Process bootstrap at boot — there is no request context yet. SQL Studio is a
+  // process singleton bound to this default workspace, not a per-request tenant.
   const bootWorkspaceId = getBootstrapWorkspaceIdOrNull();
   syncSqlStudioForWorkspace({
     enabled:

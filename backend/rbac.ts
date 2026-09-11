@@ -13,7 +13,7 @@ import {
   getActiveTokenScopes,
   getAuthorizedWorkspace,
   getAuthorizedWorkspacesContext,
-  getBootstrapWorkspaceIdOrNull,
+  getImplicitWorkspaceIdOrNull,
   getResourceLookupWorkspaceIds,
   requireDatabaseClient,
   resolveActiveProfileId,
@@ -180,8 +180,10 @@ export async function requireAnyWorkspacePermission(
 
   // Bootstrap/direct-service tests and the loopback local operator do not have
   // an authenticated request snapshot. Preserve that non-HTTP compatibility
-  // path without allowing it to participate in Cloud request scoping.
-  const workspaceId = getBootstrapWorkspaceIdOrNull();
+  // path without allowing it to participate in Cloud request scoping. Prefer
+  // the per-request active workspace (e.g. after onboarding switched this
+  // request) and fall back to the process default only when they still agree.
+  const workspaceId = getImplicitWorkspaceIdOrNull();
   const profileId = await resolveActiveProfileId();
   const workspaceUserId =
     workspaceId && profileId ? await findActiveMembershipId(workspaceId, profileId) : null;

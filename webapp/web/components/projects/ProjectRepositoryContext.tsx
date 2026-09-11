@@ -13,6 +13,7 @@ import type {
 import { hasDesktopLocalTargetBridge, invokeLocalTarget } from '../../lib/local-target-client.ts';
 import {
   useLaunchSettings,
+  useProject,
   useProjectExecutionTarget,
   useProjectRepository,
   useProjectResources,
@@ -122,7 +123,10 @@ export function ProjectRepositoryProvider({
   } = useMergedProjectRepository(projectId);
   const updateExecutionTarget = useUpdateProjectExecutionTarget(projectId);
   const resources = useProjectResources(projectId);
-  const launchSettings = useLaunchSettings();
+  const project = useProject(projectId);
+  const launchSettings = useLaunchSettings(project.data?.workspaceId, {
+    enabled: Boolean(project.data?.workspaceId)
+  });
   const localExecutionTargetId = launchSettings.data?.executionTargetId ?? null;
 
   useResourceObservationReporter({

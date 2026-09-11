@@ -269,8 +269,10 @@ sessionLifecycle:
 
 missionDiscovery:
   create:
-    description: 'Create a draft mission and objective without attaching, or an account-owned inbox item with --inbox/fallback when no project resolves'
+    description: 'Create a draft mission and objective without attaching, or an explicitly requested account-owned inbox item'
     optionalFlags:
+      - --project-id
+      - --unassigned-to-project
       - --inbox
       - --agent
       - --assigned-to
@@ -280,6 +282,7 @@ missionDiscovery:
       - --objective-agent
       - --objective-model
     rules:
+      - 'Supply --project-id to create a mission, or --unassigned-to-project to deliberately create an account-owned inbox item. --inbox remains a compatibility alias for the latter. Omitting both is rejected; the Protocol never discovers a project for agent-created work.'
       - '--agent names the connector/agent identifier authoring the row and is recorded as creation provenance (missions.created_by_agent / objectives.created_by_agent); it does not select the agent that will run the work'
       - 'Each --objectives-json / --objectives-file item may set agent and model. agent persists as the created objective''s assignedAgent; model requires a non-empty agent. When both are omitted, existing project launch-preference defaults apply.'
       - '--objective-agent / --objective-model supply the launch selection for items that name no agent of their own; a per-item agent wins, and --objective-model without --objective-agent is rejected. These are distinct from --agent, which is creation provenance only.'
@@ -293,6 +296,7 @@ missionDiscovery:
   prompt:
     description: 'Create a mission and immediately attach or queue execution'
     optionalFlags:
+      - --project-id
       - --agent
       - --assigned-to
       - --session-key
@@ -301,6 +305,7 @@ missionDiscovery:
       - --objective-agent
       - --objective-model
     rules:
+      - 'Requires --project-id. prompt attaches work immediately and therefore cannot create an inbox item or discover a project implicitly.'
       - '--agent, --assigned-to, and --session-key carry the same meaning and resolution rules as on create; on prompt --agent additionally names the attaching agent for the session'
       - '--auto-advance / --no-auto-advance and per-item autoAdvance follow the same rules as on create'
       - 'Per-item agent / model and --objective-agent / --objective-model follow the same rules as on create'
@@ -619,8 +624,10 @@ missionDiscovery:
   recordWork:
     description: 'Record already-completed chat work as a review mission without an attached session'
     optionalFlags:
+      - --project-id
       - --assigned-to
     rules:
+      - 'Requires --project-id; completed work always records a normal project mission and never discovers a project implicitly.'
       - 'For work already done in chat, not for in-progress work'
       - '--assigned-to resolves one workspace member by the same rules as on create; an unresolvable member is rejected rather than silently left unassigned'
       - 'Explicit changed-file paths set current_diff_state to unknown; record-work does not inspect a current checkout.'

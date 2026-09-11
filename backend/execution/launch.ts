@@ -91,8 +91,7 @@ import type {
 import {
   buildWebappServiceContextForWorkspace,
   findActiveMembershipId,
-  getAuthorizedWorkspacesContext,
-  getBootstrapWorkspaceIdOrNull,
+  getImplicitWorkspaceIdOrNull,
   newId,
   nowIso,
   recordChange,
@@ -201,8 +200,7 @@ async function resolveCatalogWorkspaceId(
   db: DatabaseClient
 ): Promise<string> {
   if (!workspaceId) {
-    if (getAuthorizedWorkspacesContext()) throw new ApiError(400, 'workspaceId is required');
-    const fallback = getBootstrapWorkspaceIdOrNull();
+    const fallback = getImplicitWorkspaceIdOrNull();
     if (!fallback) throw new ApiError(400, 'workspaceId is required');
     return fallback;
   }
@@ -261,8 +259,7 @@ async function resolveLaunchSettingsScope(
   client: DatabaseClient
 ): Promise<{ workspaceId: string; ctx: ServiceContext }> {
   if (!workspaceId) {
-    if (getAuthorizedWorkspacesContext()) throw new ApiError(400, 'workspaceId is required');
-    const fallback = getBootstrapWorkspaceIdOrNull();
+    const fallback = getImplicitWorkspaceIdOrNull();
     if (!fallback) throw new ApiError(400, 'workspaceId is required');
     const ctx = await buildWebappServiceContextForWorkspace(fallback, client);
     return { workspaceId: fallback, ctx };

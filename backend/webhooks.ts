@@ -19,8 +19,7 @@ import {
 
 import {
   DATABASE_DIALECT,
-  getAuthorizedWorkspacesContext,
-  getBootstrapWorkspaceIdOrNull,
+  getImplicitWorkspaceIdOrNull,
   newId,
   nowIso,
   recordChange,
@@ -149,8 +148,7 @@ async function resolveWebhookCreateScope(
     if (!project) throw new ApiError(400, `Project not found: ${projectId}`);
     workspaceId = project.workspace_id;
   }
-  if (!workspaceId && !getAuthorizedWorkspacesContext())
-    workspaceId = getBootstrapWorkspaceIdOrNull();
+  if (!workspaceId) workspaceId = getImplicitWorkspaceIdOrNull();
   if (!workspaceId) throw new ApiError(400, 'workspaceId is required');
   const workspaceUserId = await requireWorkspacePermission({
     workspaceId,
@@ -185,9 +183,7 @@ export async function listWebhookSubscriptions(
   explicitWorkspaceId?: string | null
 ): Promise<WebhookSubscriptionDto[]> {
   const client = requireDatabaseClient();
-  const workspaceId =
-    explicitWorkspaceId?.trim() ||
-    (getAuthorizedWorkspacesContext() ? null : getBootstrapWorkspaceIdOrNull());
+  const workspaceId = explicitWorkspaceId?.trim() || getImplicitWorkspaceIdOrNull();
   if (!workspaceId) throw new ApiError(400, 'workspaceId is required');
   await requireWorkspacePermission({
     workspaceId,

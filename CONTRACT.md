@@ -34,13 +34,28 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `140`
+Current version: `141`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
 `contract/components.yaml`) — never a header duplicate. The contract version is
 incremented when any stable interface changes. All conformance manifests must
 declare the contract version they were validated against.
+
+### Version 141 Change Summary
+
+Agent-created work now requires deliberate project routing (coo:981). Protocol
+`create`, `prompt`, and `record-work` no longer infer a project from the current
+directory or other discovery. A normal mission/objective creation supplies an
+explicit `--project-id` (or MCP `projectId`); non-executing Protocol `create`
+may instead supply the explicit `--unassigned-to-project` intent flag (with
+`--inbox` retained as its compatibility alias) to create the account-owned inbox
+item. Hosted MCP `overlord_create_mission` mirrors this with
+`unassignedToProject: true`; the dedicated `overlord_create_inbox_item` tool is
+already explicit intent. `prompt` and `record-work` cannot create inbox items,
+so they reject an omitted project reference. This removes accidental inbox
+submissions while retaining intentional unassigned capture. No database, REST,
+or response-shape change.
 
 ### Version 140 Change Summary
 
@@ -1103,6 +1118,12 @@ Owns:
   All three commands additionally accept `--objective-agent` / `--objective-model`,
   which seed only the items that name no `agent` of their own and are distinct
   from `--agent` (creation provenance, and the attaching agent on `prompt`)
+- Explicit project routing for agent-created work: Protocol `create`, `prompt`,
+  and `record-work` never infer a project. Normal creation requires
+  `--project-id`; the non-executing `create` command may create an account-owned
+  inbox item only with `--unassigned-to-project` (or compatibility alias
+  `--inbox`). Hosted MCP exposes the same deliberate choice as `projectId` or
+  `unassignedToProject: true`; its dedicated inbox tool is explicit by name.
 
 Does NOT own:
 

@@ -257,10 +257,15 @@ const tools = [
     name: 'overlord_create_mission',
     title: 'Create Overlord mission',
     description:
-      'Create a draft mission in projectId, or an account-owned inbox item when projectId is omitted. This connector never chooses a project implicitly.',
+      'Create a draft mission with projectId. To intentionally create an account-owned inbox item, set unassignedToProject to true; omission of both is rejected.',
     inputSchema: objectSchema(
       {
-        projectId: stringProperty('Optional Overlord project id, slug, or name.'),
+        projectId: stringProperty(
+          'Overlord project id, slug, or name. Required unless unassignedToProject is true.'
+        ),
+        unassignedToProject: booleanProperty(
+          'Set true only to intentionally create an account-owned inbox item instead of a project mission. Cannot be combined with projectId.'
+        ),
         objective: stringProperty('Initial objective text.'),
         title: stringProperty('Optional mission title.'),
         resourceKey: stringProperty('Optional logical project resource key for the objective.'),
@@ -271,7 +276,7 @@ const tools = [
           'Optional model identifier for the assigned agent. Requires agent; rejected without it.'
         ),
         assignedTo: stringProperty(
-          'Optional workspace member to own the mission (workspace_users.id, profile UUID, orgid:username, bare username, or email). Rejected when the member is not in the workspace; meaningless on the inbox fallback.'
+          'Optional workspace member to own the mission (workspace_users.id, profile UUID, orgid:username, bare username, or email). Rejected when the member is not in the workspace; meaningless for an unassigned inbox item.'
         ),
         autoAdvance: booleanProperty(
           'When true, Overlord queues the next objective for execution after this one is delivered. Defaults to false.'
@@ -634,14 +639,27 @@ const tools = [
           items: {
             type: 'object',
             properties: {
-              action: { type: 'string', description: 'Required. One imperative sentence: what, where, which value.' },
-              reason: { type: 'string', description: 'Expected. Why it is needed and what stays broken until done.' },
+              action: {
+                type: 'string',
+                description: 'Required. One imperative sentence: what, where, which value.'
+              },
+              reason: {
+                type: 'string',
+                description: 'Expected. Why it is needed and what stays broken until done.'
+              },
               category: {
                 type: 'string',
-                description: 'Expected. environment, database, deployment, codegen, packaging, external_service, or other.'
+                description:
+                  'Expected. environment, database, deployment, codegen, packaging, external_service, or other.'
               },
-              blocking: { type: 'boolean', description: 'True when the delivered work does not function until this is done.' },
-              command: { type: 'string', description: 'Exact command, setting, or value to apply, verbatim.' },
+              blocking: {
+                type: 'boolean',
+                description: 'True when the delivered work does not function until this is done.'
+              },
+              command: {
+                type: 'string',
+                description: 'Exact command, setting, or value to apply, verbatim.'
+              },
               verify: { type: 'string', description: 'How the operator confirms it worked.' },
               link: { type: 'string', description: 'HTTP(S) URL or repository-relative file path.' }
             },
@@ -852,7 +870,8 @@ async function callOverlordTool(name, args) {
     return runProtocol('create', {
       ...(optionalString(args, 'projectId')
         ? { 'project-id': requiredString(args, 'projectId') }
-        : { inbox: true }),
+        : {}),
+      ...(args.unassignedToProject === true ? { 'unassigned-to-project': true } : {}),
       objective: requiredString(args, 'objective'),
       ...(optionalString(args, 'title') ? { title: requiredString(args, 'title') } : {}),
       ...(optionalString(args, 'resourceKey')
@@ -873,7 +892,7 @@ async function callOverlordTool(name, args) {
   }
   if (name === 'overlord_create_inbox_item') {
     return runProtocol('create', {
-      inbox: true,
+      'unassigned-to-project': true,
       title: requiredString(args, 'title'),
       objective: requiredString(args, 'objective')
     });
@@ -1209,7 +1228,7 @@ process.stdin.on('data', async chunk => {
         result: {
           protocolVersion: PROTOCOL_VERSION,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.45' }
+          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.46' }
         }
       });
       continue;

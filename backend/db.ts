@@ -472,9 +472,42 @@ export function getActiveWorkspaceIdOrNull(): string | null {
  * Process-local bootstrap workspace used only outside authenticated request
  * scoping (server startup, direct service tests, and loopback compatibility).
  * Request handlers must use authorized/resolved workspace context instead.
+ *
+ * This is the literal process default: it ignores a per-request override from
+ * `setActiveWorkspace` / `setActiveWorkspaceContext`. Call sites that mean
+ * "what workspace is this request scoped to" must use
+ * `getImplicitWorkspaceIdOrNull()` instead.
  */
 export function getBootstrapWorkspaceIdOrNull(): string | null {
   return defaultWorkspace?.id ?? null;
+}
+
+/**
+ * Implicit workspace for loopback / direct-service callers that omitted an
+ * explicit id: the per-request `activeWorkspace` when one is set (including an
+ * override from `setActiveWorkspace` inside `withRequestContextAsync`),
+ * otherwise the process-wide bootstrap default.
+ *
+ * Authenticated HTTP that established an authorization snapshot but no ambient
+ * workspace returns `null` so those callers must pass an explicit id — Cloud
+ * must not silently fall back to this process's bootstrap workspace.
+ *
+ * `defaultRequestContext()` seeds `activeWorkspace` from the same process
+ * default, so this agrees with `getBootstrapWorkspaceIdOrNull()` except where
+ * a request explicitly overrode the per-request value.
+ *
+ * Do **not** use this to ask "is this literally the process bootstrap
+ * workspace" (server boot, loopback identity, process-level SQL Studio).
+ *
+ * Defined here so production call sites do not read `getActiveWorkspaceIdOrNull`
+ * directly (`scripts/check-workspace-scoping.mjs` forbids those ambient reads
+ * outside this file).
+ */
+export function getImplicitWorkspaceIdOrNull(): string | null {
+  return (
+    getActiveWorkspaceIdOrNull() ??
+    (getAuthorizedWorkspacesContext() ? null : getBootstrapWorkspaceIdOrNull())
+  );
 }
 
 /** Point the current request's tenant scoping at `workspace` (or `null` for no active membership). */

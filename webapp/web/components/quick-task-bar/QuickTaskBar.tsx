@@ -67,7 +67,6 @@ export function QuickTaskBar({ defaultProjectId = null }: QuickTaskBarProps) {
   const createInboxItem = useCreateInboxItem();
   const launchObjective = useLaunchObjective();
   const updateObjective = useUpdateObjective();
-  const settingsQ = useLaunchSettings();
 
   const projects = useMemo<ProjectOption[]>(
     () =>
@@ -125,6 +124,9 @@ export function QuickTaskBar({ defaultProjectId = null }: QuickTaskBarProps) {
   // The agent/model catalog follows the selected project's own workspace, so
   // cross-workspace projects offer their workspace's agents (coo:324).
   const catalogQ = useAgentCatalog(selectedProject?.workspaceId);
+  const settingsQ = useLaunchSettings(selectedProject?.workspaceId, {
+    enabled: Boolean(selectedProject)
+  });
 
   const catalog = catalogQ.data ?? null;
   const agentConfigs = settingsQ.data?.agentConfigs ?? {};

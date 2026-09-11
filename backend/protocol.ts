@@ -1219,7 +1219,18 @@ const handlers: Record<string, Handler> = {
   // Mission creation and discovery -----------------------------------------
   create: async (ctx, body) => {
     const objectives = objectiveInputs(body);
-    if (boolFlag(body, '--inbox')) {
+    const projectId = strFlag(body, '--project-id');
+    const unassignedToProject =
+      boolFlag(body, '--unassigned-to-project') || boolFlag(body, '--inbox');
+    if (unassignedToProject) {
+      if (projectId) {
+        throw new ApiError(
+          400,
+          '--project-id cannot be combined with --unassigned-to-project',
+          undefined,
+          'project_creation_scope_conflict'
+        );
+      }
       const first = objectives[0]?.objective?.trim();
       if (!first) throw new ApiError(400, 'Inbox creation requires an objective');
       return {
@@ -1230,40 +1241,38 @@ const handlers: Record<string, Handler> = {
         })
       };
     }
-    try {
-      const assignedTo = strFlag(body, '--assigned-to');
-      return await protocolCreate({
-        ctx: await withAgentOrigin({ ctx, body }),
-        projectId: strFlag(body, '--project-id') ?? null,
-        objectives,
-        title: strFlag(body, '--title') ?? null,
-        ...(assignedTo !== undefined ? { assignedTo } : {})
-      });
-    } catch (error) {
-      if (
-        strFlag(body, '--project-id') ||
-        !(error instanceof ServiceError) ||
-        error.code !== 'project_not_found'
-      ) {
-        throw error;
-      }
-      const first = objectives[0]?.objective?.trim();
-      if (!first) throw error;
-      return {
-        unassigned: true,
-        inboxItem: await createInboxItem({
-          title: strFlag(body, '--title')?.trim() || first,
-          objectives: [first]
-        })
-      };
+    if (!projectId) {
+      throw new ApiError(
+        400,
+        'Mission creation requires --project-id or --unassigned-to-project',
+        undefined,
+        'project_id_required'
+      );
     }
+    const assignedTo = strFlag(body, '--assigned-to');
+    return await protocolCreate({
+      ctx: await withAgentOrigin({ ctx, body }),
+      projectId,
+      objectives,
+      title: strFlag(body, '--title') ?? null,
+      ...(assignedTo !== undefined ? { assignedTo } : {})
+    });
   },
 
   prompt: async (ctx, body) => {
+    const projectId = strFlag(body, '--project-id');
+    if (!projectId) {
+      throw new ApiError(
+        400,
+        'Mission prompt requires --project-id',
+        undefined,
+        'project_id_required'
+      );
+    }
     const assignedTo = strFlag(body, '--assigned-to');
     return protocolPrompt({
       ctx: await withAgentOrigin({ ctx, body }),
-      projectId: strFlag(body, '--project-id') ?? null,
+      projectId,
       objectives: objectiveInputs(body),
       title: strFlag(body, '--title') ?? null,
       agentIdentifier: strFlag(body, '--agent') ?? 'unknown',
@@ -1480,10 +1489,19 @@ const handlers: Record<string, Handler> = {
         'Missing objective text (use --objective, a positional argument, or an "objective" field in --payload-json)'
       );
     }
+    const projectId = strFlag(body, '--project-id');
+    if (!projectId) {
+      throw new ApiError(
+        400,
+        'record-work requires --project-id',
+        undefined,
+        'project_id_required'
+      );
+    }
     const assignedTo = strFlag(body, '--assigned-to');
     return recordWork({
       ctx: await withAgentOrigin({ ctx, body }),
-      projectId: strFlag(body, '--project-id') ?? null,
+      projectId,
       summary: resolveInput(body, '--summary', '--summary-file') ?? envelope.summary ?? '',
       objective,
       title: strFlag(body, '--title') ?? (typeof payloadTitle === 'string' ? payloadTitle : null),

@@ -31,7 +31,7 @@ import type { ObjectiveAttachmentDto, StoredImageDto } from '../webapp/shared/co
 
 import {
   getActorWorkspaceUserId,
-  getBootstrapWorkspaceIdOrNull,
+  getImplicitWorkspaceIdOrNull,
   newId,
   nowIso,
   recordChange,
@@ -218,7 +218,7 @@ async function operatorUserId(): Promise<string> {
  * operator. Returns the stored-image descriptor including the URL to serve it.
  */
 function uploadWorkspaceId(explicitWorkspaceId?: string): string {
-  const workspaceId = explicitWorkspaceId?.trim() || getBootstrapWorkspaceIdOrNull();
+  const workspaceId = explicitWorkspaceId?.trim() || getImplicitWorkspaceIdOrNull();
   if (!workspaceId) throw new ApiError(400, 'workspaceId is required');
   return workspaceId;
 }

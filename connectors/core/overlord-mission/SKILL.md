@@ -82,9 +82,9 @@ Do not attach to a mission just because it was mentioned or opened in conversati
 
 Use this mode when the conversation starts normally and the user asks the agent to create, inspect, connect to, or otherwise use Overlord.
 
-1. If the user wants to create missions (and does not ask to start execution), run `ovld protocol create --agent <agent-identifier> --objectives-json '[{"objective":"..."}]'`.
+1. If the user wants to create missions (and does not ask to start execution), resolve the intended project and run `ovld protocol create --project-id <project-id> --agent <agent-identifier> --objectives-json '[{"objective":"..."}]'`.
    - When `--session-key` and `--mission-id` are provided, it creates a follow-up draft.
-   - When session flags are omitted, it resolves the project by matching current working directory (or `--working-directory`) to Overlord project resource directories, then creates a standalone draft.
+   - Creation never infers a project. If the user explicitly asks to capture work outside every project, use `--unassigned-to-project`; otherwise resolve a project first with `ovld protocol discover-project` and pass its id.
    - Pass multiple items in `--objectives-json` when creating ordered steps for the same feature or goal.
    - If the user wants to **add more objectives to an existing mission** (not create a new mission), use `ovld protocol add-objectives --mission-id <mission_id> --objectives-json '[{"objective":"..."}]'` instead.
 2. Default to `create` for new missions. Only use `ovld protocol prompt --agent <agent-identifier> --objectives-json '[{"objective":"..."}]'` when the user explicitly asks to create and execute immediately.
@@ -95,7 +95,7 @@ Use this mode when the conversation starts normally and the user asks the agent 
 5. If the user wants to establish a persistent session with a mission by ID, run `ovld protocol attach --mission-id <mission_id>`.
 6. If the user wants to find a mission but does not know the ID, run `ovld protocol search-missions --query "..." --status execute,review` and ask the user to confirm.
 7. If you need to understand project routing before prompting, use `ovld protocol discover-project`.
-8. If the user wants to **record work that is already finished** in this chat (for example, something you just built in a chat app) as a completed mission, run `ovld protocol record-work` (or the hosted `overlord_record_work` MCP tool). This creates a mission with one completed objective, records explicitly supplied changed files and optional rationales, lands it in the review column, and runs the standard Gemini delivery summary — all in one call, with no `attach`/`deliver`. Do **not** use it for in-progress work. The exact submission format is in [reference/record-work.md](reference/record-work.md).
+8. If the user wants to **record work that is already finished** in this chat (for example, something you just built in a chat app) as a completed mission, run `ovld protocol record-work --project-id <project-id>` (or the hosted `overlord_record_work` MCP tool). This creates a mission with one completed objective, records explicitly supplied changed files and optional rationales, lands it in the review column, and runs the standard Gemini delivery summary — all in one call, with no `attach`/`deliver`. Do **not** use it for in-progress work. The exact submission format is in [reference/record-work.md](reference/record-work.md).
 9. If you need other lifecycle commands or flags, run `ovld protocol help` and use the real subcommand list instead of guessing.
 10. Once you attach to a mission, switch back to Mode 1 and follow the full mission lifecycle.
 
@@ -225,15 +225,15 @@ nothing qualifies. Omit the report when none of these facts apply.
 Human actions are collected across every mission into the Feed page's **Human actions** rail,
 where the operator reads them without the delivery context. Each item must stand alone:
 
-| Field      | Expected | What to write                                                                                  |
-| ---------- | -------- | ---------------------------------------------------------------------------------------------- |
-| `action`   | required | One imperative sentence naming the exact thing to do, where, and with what value.              |
-| `reason`   | expected | Why the step is needed and what breaks or stays incomplete until it is done.                   |
-| `category` | expected | `environment`, `database`, `deployment`, `codegen`, `packaging`, `external_service`, or `other`.|
-| `blocking` | optional | `true` when the delivered work does not function until this is done.                           |
+| Field      | Expected   | What to write                                                                                     |
+| ---------- | ---------- | ------------------------------------------------------------------------------------------------- |
+| `action`   | required   | One imperative sentence naming the exact thing to do, where, and with what value.                 |
+| `reason`   | expected   | Why the step is needed and what breaks or stays incomplete until it is done.                      |
+| `category` | expected   | `environment`, `database`, `deployment`, `codegen`, `packaging`, `external_service`, or `other`.  |
+| `blocking` | optional   | `true` when the delivered work does not function until this is done.                              |
 | `command`  | when known | The exact command, setting name, or value to apply, verbatim. Placeholders in `<angle brackets>`. |
-| `verify`   | when known | How the operator confirms it worked: a command to run, a URL to open, or the state to observe. |
-| `link`     | when known | An HTTP(S) URL or a repository-relative file path (never another URI scheme).                   |
+| `verify`   | when known | How the operator confirms it worked: a command to run, a URL to open, or the state to observe.    |
+| `link`     | when known | An HTTP(S) URL or a repository-relative file path (never another URI scheme).                     |
 
 Vague (the operator has to rediscover everything):
 
@@ -333,8 +333,8 @@ When creating missions from within a repository:
 
 - Prefer `create` by default for draft mission creation.
 - Use `prompt` only when the user explicitly asks to start execution immediately.
-- Both commands can resolve the project from the current working directory; use `--working-directory` to override or `--project-id` to be explicit.
-- Follow-up `create` calls under an active session inherit the current mission's project by default, but `--project-id` can override that when the follow-up belongs in a different project.
+- `create`, `prompt`, and `record-work` require an explicit `--project-id`; use `discover-project` first when the project is known only from the checkout. They never infer a destination project.
+- Use `create --unassigned-to-project` only when the user deliberately requests an account-owned inbox capture. `--inbox` is a compatibility alias.
 - Create multiple missions when each prompt represents a different feature or goal.
 - Add objectives to the same mission when each prompt is a sequential step toward the same feature or goal; use `ovld protocol add-objectives --mission-id <mission_id> --objectives-json '[{"objective":"..."}]'`.
 - `create` and `prompt` require `--objectives-json` or `--objectives-file` with an ordered array of `{ "objective": "...", "title": "...", "autoAdvance": true }` objects. A single objective is just an array with one item. `--auto-advance` / `--no-auto-advance` set the default when an item omits `autoAdvance` (default off).
@@ -345,17 +345,18 @@ When creating missions from within a repository:
 - `create`, `prompt`, `create-mission`, and `record-work` accept `--assigned-to <member>` to set the mission's human owner. Accepts a username, an email, a user-id UUID, or the `orgid:username` member ID. When omitted, the assignee defaults to the mission creator.
 
 ```bash
-ovld protocol create --agent <agent-identifier> --objectives-json '[{"objective":"Capture follow-up work from this repository"}]'
+ovld protocol create --project-id <project-id> --agent <agent-identifier> --objectives-json '[{"objective":"Capture follow-up work from this repository"}]'
 ```
 
 ```bash
 # One call: a draft mission whose first objective is already assigned to Codex.
 ovld protocol create --agent <agent-identifier> \
+  --project-id <project-id> \
   --objectives-json '[{"objective":"Implement the API","agent":"codex","model":"gpt-5.6-terra"},{"objective":"Add CLI docs","agent":"claude"}]'
 ```
 
 ```bash
-ovld protocol prompt --agent <agent-identifier> --objectives-json '[{"objective":"Implement feature X"}]'
+ovld protocol prompt --project-id <project-id> --agent <agent-identifier> --objectives-json '[{"objective":"Implement feature X"}]'
 ```
 
 ```bash
@@ -413,8 +414,8 @@ When you need a project ID for a protocol command and the mission prompt did not
 **Locally (CLI inside a shell on the user's machine):**
 
 1. `--project-id` if explicitly provided.
-2. Otherwise, let the CLI match the current working directory (the default behavior of `create`, `prompt`, `discover-project`).
-3. If working-directory resolution returns nothing, read `.overlord/project.json` from the cwd (or any ancestor you have access to). Select the `projects[]` entry with `isPrimary: true` and pass its id via `--project-id`. If the array or primary entry is missing, treat the metadata as invalid and run `ovld doctor`; do not fall back to a top-level projection. To associate missions with a different linked project, pass that project's id explicitly.
+2. Otherwise, run `ovld protocol discover-project` for the current working directory, then pass its returned id via `--project-id`.
+3. If discovery returns nothing, read `.overlord/project.json` from the cwd (or any ancestor you have access to). Select the `projects[]` entry with `isPrimary: true` and pass its id via `--project-id`. If the array or primary entry is missing, treat the metadata as invalid and run `ovld doctor`; do not fall back to a top-level projection. To associate missions with a different linked project, pass that project's id explicitly.
 
 **Over MCP (web agents and hosted tools, where the server cannot see the agent's cwd):**
 

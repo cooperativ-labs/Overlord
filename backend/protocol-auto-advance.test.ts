@@ -41,6 +41,54 @@ type CreatedMission = {
   objectives: Array<{ id: string; displayId: string; autoAdvance: boolean; objective: string }>;
 };
 
+test('protocol mission creation requires explicit project intent', async () => {
+  await assert.rejects(
+    runProtocolSubcommand('create', {
+      flags: { '--objective': 'Do not submit this to an inferred inbox' }
+    }),
+    (error: unknown) =>
+      error instanceof ApiError &&
+      error.status === 400 &&
+      error.message.includes('--project-id or --unassigned-to-project')
+  );
+});
+
+test('protocol creates an inbox item only with explicit unassigned-project intent', async () => {
+  const result = (await runProtocolSubcommand('create', {
+    flags: {
+      '--unassigned-to-project': true,
+      '--objective': 'Capture this deliberately outside a project'
+    }
+  })) as { unassigned: boolean; inboxItem: { objectives: string[] } };
+
+  assert.equal(result.unassigned, true);
+  assert.deepEqual(result.inboxItem.objectives, ['Capture this deliberately outside a project']);
+});
+
+test('protocol rejects conflicting project and unassigned-project intent', async () => {
+  const project = await createProject({ name: `Creation intent conflict ${Date.now()}` });
+  await assert.rejects(
+    runProtocolSubcommand('create', {
+      flags: {
+        '--project-id': project.id,
+        '--unassigned-to-project': true,
+        '--objective': 'This must not choose between a mission and inbox item'
+      }
+    }),
+    (error: unknown) => error instanceof ApiError && error.status === 400
+  );
+});
+
+test('protocol prompt requires an explicit project instead of discovering one', async () => {
+  await assert.rejects(
+    runProtocolSubcommand('prompt', {
+      flags: { '--objective': 'Do not attach a project inferred from this checkout' }
+    }),
+    (error: unknown) =>
+      error instanceof ApiError && error.status === 400 && error.message.includes('--project-id')
+  );
+});
+
 test('protocol create persists --auto-advance on a single objective', async () => {
   const project = await createProject({ name: `Auto advance create ${Date.now()}` });
   const result = (await runProtocolSubcommand('create', {

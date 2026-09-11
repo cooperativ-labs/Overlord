@@ -212,10 +212,15 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
     name: 'overlord_create_mission',
     title: 'Create Overlord mission',
     description:
-      'Use this to create a draft mission in projectId, or an account-owned inbox item when projectId is omitted. Hosted MCP never chooses a project implicitly.',
+      'Use this to create a draft mission with projectId. To intentionally create an account-owned inbox item, set unassignedToProject to true; omission of both is rejected.',
     inputSchema: objectSchema(
       {
-        projectId: stringProperty('Optional Overlord project id, slug, or name.'),
+        projectId: stringProperty(
+          'Overlord project id, slug, or name. Required unless unassignedToProject is true.'
+        ),
+        unassignedToProject: booleanProperty(
+          'Set true only to intentionally create an account-owned inbox item instead of a project mission. Cannot be combined with projectId.'
+        ),
         objective: stringProperty('Initial objective text.'),
         title: stringProperty('Optional mission title.'),
         resourceKey: stringProperty('Optional logical project resource key for the objective.'),
@@ -226,7 +231,7 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
           'Optional model identifier for the assigned agent. Requires agent; rejected without it.'
         ),
         assignedTo: stringProperty(
-          'Optional workspace member to own the mission (workspace_users.id, profile UUID, orgid:username, bare username, or email). Rejected when the member is not in the workspace; meaningless on the inbox fallback.'
+          'Optional workspace member to own the mission (workspace_users.id, profile UUID, orgid:username, bare username, or email). Rejected when the member is not in the workspace; meaningless for an unassigned inbox item.'
         ),
         autoAdvance: booleanProperty(
           'When true, Overlord queues the next objective for execution after this one is delivered. Defaults to false.'
@@ -235,7 +240,7 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
       ['objective']
     ),
     outputSchema: protocolOutputSchema(
-      'The newly created draft mission, or an explicit unassigned inbox item.'
+      'The newly created draft mission, or an intentional unassigned inbox item.'
     ),
     annotations: writeAction
   },

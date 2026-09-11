@@ -5,9 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { ApiRequestError } from '@/lib/api';
+import { resolveLaunchSettingsWorkspaceId } from '@/lib/launch-settings-workspace';
 import { useLocalTargetUnavailable } from '@/lib/local-target-client.ts';
 import {
   useLaunchSettings,
+  useMeta,
   usePurgeMergedWorktrees,
   useRemoveWorktree,
   useUpdateLaunchSessionDefaults,
@@ -133,8 +135,14 @@ function WorktreeRow({ worktree }: { worktree: WorktreeDto }) {
 }
 
 export function WorktreesPage() {
-  const launchSettings = useLaunchSettings();
-  const updateWorktrees = useUpdateLaunchSessionDefaults();
+  const meta = useMeta();
+  const workspaceId = resolveLaunchSettingsWorkspaceId({
+    selectedWorkspaceId: null,
+    defaultWorkspaceId: meta.data?.workspace?.id,
+    workspaces: meta.data?.workspaces ?? []
+  });
+  const launchSettings = useLaunchSettings(workspaceId, { enabled: Boolean(workspaceId) });
+  const updateWorktrees = useUpdateLaunchSessionDefaults(workspaceId);
   const worktreesEnabled = launchSettings.data?.worktreeBranchAutomationEnabled ?? false;
   const localTargetUnavailable = useLocalTargetUnavailable();
 
@@ -163,7 +171,7 @@ export function WorktreesPage() {
           <Switch
             id="worktree-branch-automation"
             checked={worktreesEnabled}
-            disabled={launchSettings.isLoading || updateWorktrees.isPending}
+            disabled={!workspaceId || launchSettings.isLoading || updateWorktrees.isPending}
             onCheckedChange={enabled =>
               updateWorktrees.mutate({ worktreeBranchAutomationEnabled: enabled })
             }

@@ -71,7 +71,7 @@ The current tool catalog is mission-first:
 - `overlord_create_project`
 - `overlord_list_project_statuses` — read one project's board columns (names and order are per project; the status type is not)
 - `overlord_search_missions`
-- `overlord_create_mission` — optional `agent` / `model` assign the initial objective's launch selection in the same call, so a follow-up `overlord_add_objectives` is never needed just to name an agent
+- `overlord_create_mission` — requires `projectId`, unless `unassignedToProject: true` deliberately creates an account-owned inbox item; optional `agent` / `model` assign the initial objective's launch selection in the same call
 - `overlord_create_inbox_item`
 - `overlord_load_mission_context`
 - `overlord_list_deliveries` — read a `{ items, total, limit }` page of normalized delivery summaries, verification/follow-up notes, and authoritative delivery evidence for one mission
@@ -146,7 +146,7 @@ membership; legacy storage writes retire next release and column removal require
 a later contract bump.
 
 Hosted MCP cannot observe an agent's local current working directory. Tools
-that create missions require explicit `projectId`; clients should call
+that create project missions require explicit `projectId`; clients should call
 `overlord_resolve_project` first when project identity comes from an exposed
 repository resource carrying `.overlord/project.json`. If that file lists
 multiple projects, use the entry with `isPrimary: true` (also the top-level

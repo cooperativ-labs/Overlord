@@ -175,8 +175,8 @@ When creating missions from within a repository:
 
 - Prefer `create` by default for draft mission creation.
 - Use `prompt` only when the user explicitly asks to start execution immediately.
-- Both commands can resolve the project from the current working directory; use `--working-directory` to override or `--project-id` to be explicit.
-- Follow-up `create` calls under an active session inherit the current mission's project by default, but `--project-id` can override that when the follow-up belongs in a different project.
+- `create`, `prompt`, and `record-work` require an explicit `--project-id`; use `discover-project` first when the project is known only from the checkout. They never infer a destination project.
+- Use `create --unassigned-to-project` only when the user deliberately requests an account-owned inbox capture. `--inbox` is a compatibility alias.
 - Create multiple missions when each prompt represents a different feature or goal.
 - Add objectives to the same mission when each prompt is a sequential step toward the same feature or goal; use `ovld protocol add-objectives --mission-id <mission_id> --objectives-json '[{"objective":"..."}]'`.
 - `create` and `prompt` require `--objectives-json` or `--objectives-file` with an ordered array of `{ "objective": "...", "title": "...", "autoAdvance": true }` objects. A single objective is just an array with one item. `--auto-advance` / `--no-auto-advance` map each opted-in item to authoritative Run Queue membership (default off).
@@ -186,17 +186,18 @@ When creating missions from within a repository:
 - `record-work` creates exactly one **completed** objective from a single `--objective` (or positional / an `objective` field in `--payload-json`) plus a `--summary` and file-change data — it does not take `--objectives-json`. See [record-work.md](record-work.md).
 
 ```bash
-ovld protocol create --agent <agent-identifier> --objectives-json '[{"objective":"Capture follow-up work from this repository"}]'
+ovld protocol create --project-id <project-id> --agent <agent-identifier> --objectives-json '[{"objective":"Capture follow-up work from this repository"}]'
 ```
 
 ```bash
 # One call: a draft mission whose first objective is already assigned to Codex.
 ovld protocol create --agent <agent-identifier> \
+  --project-id <project-id> \
   --objectives-json '[{"objective":"Implement the API","agent":"codex","model":"gpt-5.6-terra"},{"objective":"Add CLI docs","agent":"claude"}]'
 ```
 
 ```bash
-ovld protocol prompt --agent <agent-identifier> --objectives-json '[{"objective":"Implement feature X"}]'
+ovld protocol prompt --project-id <project-id> --agent <agent-identifier> --objectives-json '[{"objective":"Implement feature X"}]'
 ```
 
 ```bash
@@ -277,8 +278,8 @@ When you need a project ID for a protocol command and the mission prompt did not
 **Locally (CLI inside a shell on the user's machine):**
 
 1. `--project-id` if explicitly provided.
-2. Otherwise, let the CLI match the current working directory (the default behavior of `create`, `prompt`, `discover-project`).
-3. If working-directory resolution returns nothing, read `.overlord/project.json` from the cwd (or any ancestor you have access to). Select the `projects[]` entry with `isPrimary: true` and pass its id via `--project-id`. If the array or primary entry is missing, treat the metadata as invalid and run `ovld doctor`; do not fall back to a top-level projection. To associate missions with a different linked project, pass that project's id explicitly.
+2. Otherwise, run `ovld protocol discover-project` for the current working directory, then pass its returned id via `--project-id`.
+3. If discovery returns nothing, read `.overlord/project.json` from the cwd (or any ancestor you have access to). Select the `projects[]` entry with `isPrimary: true` and pass its id via `--project-id`. If the array or primary entry is missing, treat the metadata as invalid and run `ovld doctor`; do not fall back to a top-level projection. To associate missions with a different linked project, pass that project's id explicitly.
 
 **Over MCP (web agents and hosted tools, where the server cannot see the agent's cwd):**
 

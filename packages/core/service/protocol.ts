@@ -2805,9 +2805,14 @@ export async function protocolCreate({
   /** Explicit `--assigned-to` member ref; when omitted, the §7.1 default chain applies. */
   assignedTo?: string | null;
 }): Promise<{ mission: MissionSummary; objectives: ObjectiveSummary[] }> {
-  const resolvedProjectId = projectId
-    ? await resolveProjectId(ctx, projectId)
-    : (await discoverProject({ ctx })).projectId;
+  if (!projectId) {
+    throw new ServiceError(
+      'Mission creation requires an explicit project ID',
+      'project_id_required',
+      400
+    );
+  }
+  const resolvedProjectId = await resolveProjectId(ctx, projectId);
   const assignedWorkspaceUserId = await resolveAgentMissionAssignee({ ctx, assignedTo });
   return await createMissionWithObjectives({
     ctx,
@@ -2845,13 +2850,18 @@ export async function protocolPrompt({
   /** Explicit `--assigned-to` member ref; when omitted, the §7.1 default chain applies. */
   assignedTo?: string | null;
 }): Promise<AttachResponse & { sessionKey: string }> {
-  const discovery = projectId
-    ? { projectId: await resolveProjectId(ctx, projectId) }
-    : await discoverProject({ ctx });
+  if (!projectId) {
+    throw new ServiceError(
+      'Mission prompt requires an explicit project ID',
+      'project_id_required',
+      400
+    );
+  }
+  const resolvedProjectId = await resolveProjectId(ctx, projectId);
   const assignedWorkspaceUserId = await resolveAgentMissionAssignee({ ctx, assignedTo });
   const created = await createMissionWithObjectives({
     ctx,
-    projectId: discovery.projectId,
+    projectId: resolvedProjectId,
     objectives,
     assignedWorkspaceUserId,
     ...(title !== undefined ? { title } : {})
@@ -2926,9 +2936,14 @@ export async function recordWork({
     [...normalizedRationales.warnings, ...normalizedChangedFiles.warnings]
   );
 
-  const resolvedProjectId = projectId
-    ? await resolveProjectId(ctx, projectId)
-    : (await discoverProject({ ctx })).projectId;
+  if (!projectId) {
+    throw new ServiceError(
+      'record-work requires an explicit project ID',
+      'project_id_required',
+      400
+    );
+  }
+  const resolvedProjectId = await resolveProjectId(ctx, projectId);
 
   const assignedWorkspaceUserId = await resolveAgentMissionAssignee({ ctx, assignedTo });
   const created = await createMissionWithObjectives({

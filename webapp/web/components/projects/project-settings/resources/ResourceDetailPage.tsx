@@ -56,11 +56,11 @@ export function ResourceDetailPage({
 }) {
   const resourcesQ = useProjectResources(projectId);
   const executionTargetQ = useProjectExecutionTarget(projectId);
-  const launchSettingsQ = useLaunchSettings();
   const projectQ = useProject(projectId);
   // The launch defaults belong to the project's workspace catalog, which is not
   // necessarily the caller's active workspace, so scope the read explicitly.
   const workspaceId = projectQ.data?.workspaceId ?? null;
+  const launchSettingsQ = useLaunchSettings(workspaceId, { enabled: Boolean(workspaceId) });
   const agentCatalogQ = useAgentCatalog(workspaceId, { enabled: Boolean(workspaceId) });
   const updateResource = useUpdateProjectResource(projectId);
   const deleteResource = useDeleteProjectResource(projectId);

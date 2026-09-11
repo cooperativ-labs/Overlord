@@ -197,7 +197,7 @@ import {
   findActiveMembershipId,
   getActorWorkspaceUserId,
   getAuthorizedWorkspacesContext,
-  getBootstrapWorkspaceIdOrNull,
+  getImplicitWorkspaceIdOrNull,
   newId,
   nowIso,
   recordChange,
@@ -3238,9 +3238,7 @@ export async function createProject(body: CreateProjectBody): Promise<ProjectDto
     const name = (body.name ?? '').trim();
     if (!name) throw new ApiError(400, 'Project name is required');
 
-    const targetWorkspaceId =
-      body.workspaceId?.trim() ||
-      (getAuthorizedWorkspacesContext() ? null : getBootstrapWorkspaceIdOrNull());
+    const targetWorkspaceId = body.workspaceId?.trim() || getImplicitWorkspaceIdOrNull();
     if (!targetWorkspaceId) {
       throw new ApiError(400, 'workspaceId is required when creating a project');
     }
@@ -8115,7 +8113,7 @@ async function toProfileDto(row: UserRow): Promise<ProfileDto> {
   const roles = authorized
     ? [...new Set(authorized.workspaces.flatMap(workspace => workspace.roleKeys))].sort()
     : await loadActorRoles({
-        workspaceId: getBootstrapWorkspaceIdOrNull() ?? '',
+        workspaceId: getImplicitWorkspaceIdOrNull() ?? '',
         workspaceUserId: getActorWorkspaceUserId()
       });
   return {
@@ -8404,15 +8402,16 @@ export async function updateProfile(body: UpdateProfileBody): Promise<ProfileDto
     );
 
     const authorized = getAuthorizedWorkspacesContext();
+    const implicitWorkspaceId = getImplicitWorkspaceIdOrNull();
     const changeScopes = authorized?.workspaces.length
       ? authorized.workspaces.map(workspace => ({
           workspaceId: workspace.workspaceId,
           workspaceUserId: workspace.workspaceUserId
         }))
-      : getBootstrapWorkspaceIdOrNull()
+      : implicitWorkspaceId
         ? [
             {
-              workspaceId: getBootstrapWorkspaceIdOrNull()!,
+              workspaceId: implicitWorkspaceId,
               workspaceUserId: getActorWorkspaceUserId()
             }
           ]
@@ -8543,7 +8542,7 @@ function selfIssuedTokenConsent(): TokenIssuanceConsent {
       issuanceWorkspaceUserId: issuance.workspaceUserId
     };
   }
-  const workspaceId = getBootstrapWorkspaceIdOrNull();
+  const workspaceId = getImplicitWorkspaceIdOrNull();
   const workspaceUserId = getActorWorkspaceUserId();
   if (!workspaceId || !workspaceUserId) {
     throw new ApiError(409, 'No workspace membership is available for token issuance');
