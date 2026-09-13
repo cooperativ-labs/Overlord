@@ -34,6 +34,15 @@ If the change touches URL paths, HTTP methods, DTO response shapes, SSE events, 
 3. **Cache keys** — use the shared `keys` factory in `webapp/web/lib/query-keys.ts` for TanStack Query keys that participate in realtime invalidation.
 4. **Desktop parity** — confine `window.overlord` / Electron bridge detection to `webapp/web/lib/desktop-chrome.ts` (and callers of its helpers), not inline in components.
 
+## Component rendering tests
+
+The `yarn test` command stays on Node's built-in test runner. It preloads
+`scripts/test-dom.ts`, which provides a `happy-dom` browser environment, and
+discovers both `web/**/*.test.ts` and `web/**/*.test.tsx`. For a component test,
+use `node:test` plus `@testing-library/react`; call `cleanup` in `afterEach` so
+each test releases its rendered DOM. Keep pure helper tests as `.test.ts` and
+put JSX rendering tests beside their component as `.test.tsx`.
+
 ---
 
 ## File Placement Convention

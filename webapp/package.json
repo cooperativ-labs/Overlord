@@ -1,6 +1,6 @@
 {
   "name": "@overlord/webapp",
-  "version": "0.2609110907.0",
+  "version": "0.2609131213.0",
   "private": true,
   "type": "module",
   "description": "Overlord React SPA that consumes the Overlord backend REST and realtime API.",
@@ -17,7 +17,7 @@
     "start": "yarn workspace @overlord/backend start",
     "start:bundle": "yarn workspace @overlord/backend start:bundle",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test 'web/**/*.test.ts'"
+    "test": "node --import tsx --import ./scripts/test-dom.ts --test 'web/**/*.test.ts' 'web/**/*.test.tsx'"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
@@ -44,10 +44,13 @@
     "@tailwindcss/vite": "^4.0.0",
     "@tanstack/react-query": "^5.62.0",
     "@tanstack/react-router": "^1.95.0",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.3",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.1.0",
+    "happy-dom": "^20.14.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "serwist": "^9.5.11",
