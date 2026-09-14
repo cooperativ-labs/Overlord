@@ -78419,8 +78419,14 @@ function getActiveWorkspace() {
 function getActiveWorkspaceId() {
   return getActiveWorkspace().id;
 }
+function getActiveWorkspaceIdOrNull() {
+  return requestContext().activeWorkspace?.id ?? null;
+}
 function getBootstrapWorkspaceIdOrNull() {
   return defaultWorkspace?.id ?? null;
+}
+function getImplicitWorkspaceIdOrNull() {
+  return getActiveWorkspaceIdOrNull() ?? (getAuthorizedWorkspacesContext() ? null : getBootstrapWorkspaceIdOrNull());
 }
 function setActiveWorkspaceContext(workspace) {
   mutateRequestContext({ ...requestContext(), activeWorkspace: workspace });
@@ -136630,7 +136636,6 @@ init_dist();
 // protocol.ts
 init_dist();
 init_context();
-init_errors4();
 
 // ../packages/core/service/missions.ts
 init_dist2();
@@ -144053,7 +144058,14 @@ async function protocolCreate({
   title,
   assignedTo
 }) {
-  const resolvedProjectId = projectId ? await resolveProjectId(ctx, projectId) : (await discoverProject({ ctx })).projectId;
+  if (!projectId) {
+    throw new ServiceError(
+      "Mission creation requires an explicit project ID",
+      "project_id_required",
+      400
+    );
+  }
+  const resolvedProjectId = await resolveProjectId(ctx, projectId);
   const assignedWorkspaceUserId = await resolveAgentMissionAssignee({ ctx, assignedTo });
   return await createMissionWithObjectives({
     ctx,
@@ -144072,11 +144084,18 @@ async function protocolPrompt({
   externalSessionId: externalSessionId2,
   assignedTo
 }) {
-  const discovery = projectId ? { projectId: await resolveProjectId(ctx, projectId) } : await discoverProject({ ctx });
+  if (!projectId) {
+    throw new ServiceError(
+      "Mission prompt requires an explicit project ID",
+      "project_id_required",
+      400
+    );
+  }
+  const resolvedProjectId = await resolveProjectId(ctx, projectId);
   const assignedWorkspaceUserId = await resolveAgentMissionAssignee({ ctx, assignedTo });
   const created = await createMissionWithObjectives({
     ctx,
-    projectId: discovery.projectId,
+    projectId: resolvedProjectId,
     objectives,
     assignedWorkspaceUserId,
     ...title !== void 0 ? { title } : {}
@@ -144134,7 +144153,14 @@ async function recordWork({
     ),
     [...normalizedRationales.warnings, ...normalizedChangedFiles.warnings]
   );
-  const resolvedProjectId = projectId ? await resolveProjectId(ctx, projectId) : (await discoverProject({ ctx })).projectId;
+  if (!projectId) {
+    throw new ServiceError(
+      "record-work requires an explicit project ID",
+      "project_id_required",
+      400
+    );
+  }
+  const resolvedProjectId = await resolveProjectId(ctx, projectId);
   const assignedWorkspaceUserId = await resolveAgentMissionAssignee({ ctx, assignedTo });
   const created = await createMissionWithObjectives({
     ctx,
@@ -144619,7 +144645,7 @@ async function requireAnyWorkspacePermission(permission) {
     }
     throw new ApiError(403, `Permission denied: ${permission}`);
   }
-  const workspaceId2 = getBootstrapWorkspaceIdOrNull();
+  const workspaceId2 = getImplicitWorkspaceIdOrNull();
   const profileId = await resolveActiveProfileId();
   const workspaceUserId = workspaceId2 && profileId ? await findActiveMembershipId(workspaceId2, profileId) : null;
   if (!workspaceId2 || !workspaceUserId || !await actorCan(permission, { workspaceId: workspaceId2, workspaceUserId })) {
@@ -144775,8 +144801,7 @@ async function persistCatalog(catalog, client, workspaceId2) {
 }
 async function resolveCatalogWorkspaceId(workspaceId2, permission, db) {
   if (!workspaceId2) {
-    if (getAuthorizedWorkspacesContext()) throw new ApiError(400, "workspaceId is required");
-    const fallback2 = getBootstrapWorkspaceIdOrNull();
+    const fallback2 = getImplicitWorkspaceIdOrNull();
     if (!fallback2) throw new ApiError(400, "workspaceId is required");
     return fallback2;
   }
@@ -144810,8 +144835,7 @@ async function launchSettingsDto({
 }
 async function resolveLaunchSettingsScope(workspaceId2, permission, client) {
   if (!workspaceId2) {
-    if (getAuthorizedWorkspacesContext()) throw new ApiError(400, "workspaceId is required");
-    const fallback2 = getBootstrapWorkspaceIdOrNull();
+    const fallback2 = getImplicitWorkspaceIdOrNull();
     if (!fallback2) throw new ApiError(400, "workspaceId is required");
     const ctx2 = await buildWebappServiceContextForWorkspace(fallback2, client);
     return { workspaceId: fallback2, ctx: ctx2 };
@@ -148181,7 +148205,7 @@ async function resolveOrganizationIdForWorkspace(workspaceId2, client = requireD
 async function getActiveOrganizationIdOrNull(client = requireDatabaseClient()) {
   const authorized = getAuthorizedWorkspacesContext();
   if (authorized) return authorized.organizationId;
-  const workspaceId2 = getBootstrapWorkspaceIdOrNull();
+  const workspaceId2 = getImplicitWorkspaceIdOrNull();
   if (!workspaceId2) return null;
   return resolveOrganizationIdForWorkspace(workspaceId2, client);
 }
@@ -150655,7 +150679,7 @@ async function createProject2(body) {
   return requireDatabaseClient().transaction(async (tx) => {
     const name = (body.name ?? "").trim();
     if (!name) throw new ApiError(400, "Project name is required");
-    const targetWorkspaceId = body.workspaceId?.trim() || (getAuthorizedWorkspacesContext() ? null : getBootstrapWorkspaceIdOrNull());
+    const targetWorkspaceId = body.workspaceId?.trim() || getImplicitWorkspaceIdOrNull();
     if (!targetWorkspaceId) {
       throw new ApiError(400, "workspaceId is required when creating a project");
     }
@@ -154304,7 +154328,7 @@ function mergeProfileMetadataJson2({
 async function toProfileDto(row) {
   const authorized = getAuthorizedWorkspacesContext();
   const roles = authorized ? [...new Set(authorized.workspaces.flatMap((workspace) => workspace.roleKeys))].sort() : await loadActorRoles({
-    workspaceId: getBootstrapWorkspaceIdOrNull() ?? "",
+    workspaceId: getImplicitWorkspaceIdOrNull() ?? "",
     workspaceUserId: getActorWorkspaceUserId()
   });
   return {
@@ -154521,12 +154545,13 @@ async function updateProfile(body) {
       [...setParams, now2, revision, existing.id]
     );
     const authorized = getAuthorizedWorkspacesContext();
+    const implicitWorkspaceId = getImplicitWorkspaceIdOrNull();
     const changeScopes = authorized?.workspaces.length ? authorized.workspaces.map((workspace) => ({
       workspaceId: workspace.workspaceId,
       workspaceUserId: workspace.workspaceUserId
-    })) : getBootstrapWorkspaceIdOrNull() ? [
+    })) : implicitWorkspaceId ? [
       {
-        workspaceId: getBootstrapWorkspaceIdOrNull(),
+        workspaceId: implicitWorkspaceId,
         workspaceUserId: getActorWorkspaceUserId()
       }
     ] : [];
@@ -154584,7 +154609,7 @@ function selfIssuedTokenConsent() {
       issuanceWorkspaceUserId: issuance.workspaceUserId
     };
   }
-  const workspaceId2 = getBootstrapWorkspaceIdOrNull();
+  const workspaceId2 = getImplicitWorkspaceIdOrNull();
   const workspaceUserId = getActorWorkspaceUserId();
   if (!workspaceId2 || !workspaceUserId) {
     throw new ApiError(409, "No workspace membership is available for token issuance");
@@ -160686,7 +160711,7 @@ function toWorkspaceDto(r5) {
     slug: r5.slug,
     name: r5.name,
     kind: r5.kind,
-    isActive: r5.id === getBootstrapWorkspaceIdOrNull(),
+    isActive: r5.id === getImplicitWorkspaceIdOrNull(),
     projectCount: r5.project_count,
     memberCount: r5.member_count,
     sqlStudioEnabled: sqlStudioEnabledFromSettingsJson(r5.settings_json),
@@ -161102,7 +161127,7 @@ async function updateWorkspace(id, body) {
       tx
     );
   });
-  if (!getAuthorizedWorkspacesContext() && id === getBootstrapWorkspaceIdOrNull()) {
+  if (id === getImplicitWorkspaceIdOrNull()) {
     await reloadActiveWorkspace();
   }
   const updated = (await listWorkspaces()).find((w) => w.id === id);
@@ -161136,7 +161161,7 @@ async function deleteWorkspace(id) {
     );
     await deleteOrganizationIfEmpty(existing.organization_id, tx);
   });
-  if (!getAuthorizedWorkspacesContext() && id === getBootstrapWorkspaceIdOrNull()) {
+  if (id === getImplicitWorkspaceIdOrNull()) {
     const next = (await listWorkspaces())[0];
     if (next) {
       await setActiveWorkspace(next.id);
@@ -162449,7 +162474,17 @@ var handlers = {
   // Mission creation and discovery -----------------------------------------
   create: async (ctx, body) => {
     const objectives = objectiveInputs(body);
-    if (boolFlag(body, "--inbox")) {
+    const projectId = strFlag(body, "--project-id");
+    const unassignedToProject = boolFlag(body, "--unassigned-to-project") || boolFlag(body, "--inbox");
+    if (unassignedToProject) {
+      if (projectId) {
+        throw new ApiError(
+          400,
+          "--project-id cannot be combined with --unassigned-to-project",
+          void 0,
+          "project_creation_scope_conflict"
+        );
+      }
       const first = objectives[0]?.objective?.trim();
       if (!first) throw new ApiError(400, "Inbox creation requires an objective");
       return {
@@ -162460,35 +162495,37 @@ var handlers = {
         })
       };
     }
-    try {
-      const assignedTo = strFlag(body, "--assigned-to");
-      return await protocolCreate({
-        ctx: await withAgentOrigin({ ctx, body }),
-        projectId: strFlag(body, "--project-id") ?? null,
-        objectives,
-        title: strFlag(body, "--title") ?? null,
-        ...assignedTo !== void 0 ? { assignedTo } : {}
-      });
-    } catch (error53) {
-      if (strFlag(body, "--project-id") || !(error53 instanceof ServiceError) || error53.code !== "project_not_found") {
-        throw error53;
-      }
-      const first = objectives[0]?.objective?.trim();
-      if (!first) throw error53;
-      return {
-        unassigned: true,
-        inboxItem: await createInboxItem({
-          title: strFlag(body, "--title")?.trim() || first,
-          objectives: [first]
-        })
-      };
+    if (!projectId) {
+      throw new ApiError(
+        400,
+        "Mission creation requires --project-id or --unassigned-to-project",
+        void 0,
+        "project_id_required"
+      );
     }
+    const assignedTo = strFlag(body, "--assigned-to");
+    return await protocolCreate({
+      ctx: await withAgentOrigin({ ctx, body }),
+      projectId,
+      objectives,
+      title: strFlag(body, "--title") ?? null,
+      ...assignedTo !== void 0 ? { assignedTo } : {}
+    });
   },
   prompt: async (ctx, body) => {
+    const projectId = strFlag(body, "--project-id");
+    if (!projectId) {
+      throw new ApiError(
+        400,
+        "Mission prompt requires --project-id",
+        void 0,
+        "project_id_required"
+      );
+    }
     const assignedTo = strFlag(body, "--assigned-to");
     return protocolPrompt({
       ctx: await withAgentOrigin({ ctx, body }),
-      projectId: strFlag(body, "--project-id") ?? null,
+      projectId,
       objectives: objectiveInputs(body),
       title: strFlag(body, "--title") ?? null,
       agentIdentifier: strFlag(body, "--agent") ?? "unknown",
@@ -162671,10 +162708,19 @@ var handlers = {
         'Missing objective text (use --objective, a positional argument, or an "objective" field in --payload-json)'
       );
     }
+    const projectId = strFlag(body, "--project-id");
+    if (!projectId) {
+      throw new ApiError(
+        400,
+        "record-work requires --project-id",
+        void 0,
+        "project_id_required"
+      );
+    }
     const assignedTo = strFlag(body, "--assigned-to");
     return recordWork({
       ctx: await withAgentOrigin({ ctx, body }),
-      projectId: strFlag(body, "--project-id") ?? null,
+      projectId,
       summary: resolveInput(body, "--summary", "--summary-file") ?? envelope2.summary ?? "",
       objective,
       title: strFlag(body, "--title") ?? (typeof payloadTitle === "string" ? payloadTitle : null),
@@ -163108,10 +163154,15 @@ var hostedMcpToolDefinitions = [
   {
     name: "overlord_create_mission",
     title: "Create Overlord mission",
-    description: "Use this to create a draft mission in projectId, or an account-owned inbox item when projectId is omitted. Hosted MCP never chooses a project implicitly.",
+    description: "Use this to create a draft mission with projectId. To intentionally create an account-owned inbox item, set unassignedToProject to true; omission of both is rejected.",
     inputSchema: objectSchema(
       {
-        projectId: stringProperty("Optional Overlord project id, slug, or name."),
+        projectId: stringProperty(
+          "Overlord project id, slug, or name. Required unless unassignedToProject is true."
+        ),
+        unassignedToProject: booleanProperty(
+          "Set true only to intentionally create an account-owned inbox item instead of a project mission. Cannot be combined with projectId."
+        ),
         objective: stringProperty("Initial objective text."),
         title: stringProperty("Optional mission title."),
         resourceKey: stringProperty("Optional logical project resource key for the objective."),
@@ -163122,7 +163173,7 @@ var hostedMcpToolDefinitions = [
           "Optional model identifier for the assigned agent. Requires agent; rejected without it."
         ),
         assignedTo: stringProperty(
-          "Optional workspace member to own the mission (workspace_users.id, profile UUID, orgid:username, bare username, or email). Rejected when the member is not in the workspace; meaningless on the inbox fallback."
+          "Optional workspace member to own the mission (workspace_users.id, profile UUID, orgid:username, bare username, or email). Rejected when the member is not in the workspace; meaningless for an unassigned inbox item."
         ),
         autoAdvance: booleanProperty(
           "When true, Overlord queues the next objective for execution after this one is delivered. Defaults to false."
@@ -163131,7 +163182,7 @@ var hostedMcpToolDefinitions = [
       ["objective"]
     ),
     outputSchema: protocolOutputSchema(
-      "The newly created draft mission, or an explicit unassigned inbox item."
+      "The newly created draft mission, or an intentional unassigned inbox item."
     ),
     annotations: writeAction
   },
@@ -163992,7 +164043,8 @@ var toolHandlers = {
   overlord_create_mission: (args) => runProtocolSubcommand(
     "create",
     protocolBody({
-      ...optionalString(args, "projectId") ? { "--project-id": requiredString(args, "projectId") } : { "--inbox": true },
+      ...optionalString(args, "projectId") ? { "--project-id": requiredString(args, "projectId") } : {},
+      ...args.unassignedToProject === true ? { "--unassigned-to-project": true } : {},
       "--objective": requiredString(args, "objective"),
       ...optionalString(args, "title") ? { "--title": requiredString(args, "title") } : {},
       ...optionalString(args, "resourceKey") ? { "--resource": requiredString(args, "resourceKey") } : {},
@@ -164005,7 +164057,7 @@ var toolHandlers = {
   overlord_create_inbox_item: (args) => runProtocolSubcommand(
     "create",
     protocolBody({
-      "--inbox": true,
+      "--unassigned-to-project": true,
       "--title": requiredString(args, "title"),
       "--objective": requiredString(args, "objective")
     })
@@ -166598,7 +166650,7 @@ async function buildMeta() {
   const organizations = profileId ? await listOrganizationsForUser(profileId) : [];
   const organization = organizations.find((org) => org.isActive) ?? null;
   const workspaces = activeOrganizationId ? await listWorkspacesForOrganization(activeOrganizationId) : [];
-  const activeWorkspaceId = getAuthorizedWorkspacesContext() ? null : getBootstrapWorkspaceIdOrNull();
+  const activeWorkspaceId = getImplicitWorkspaceIdOrNull();
   const workspace = activeWorkspaceId ? workspaces.find((w) => w.isActive) ?? null : null;
   const { projectId: defaultProjectId } = await getDefaultProjectPreference();
   return { organization, organizations, workspaces, workspace, defaultProjectId };
@@ -171737,7 +171789,7 @@ async function operatorUserId() {
   return fallback2.id;
 }
 function uploadWorkspaceId(explicitWorkspaceId) {
-  const workspaceId2 = explicitWorkspaceId?.trim() || getBootstrapWorkspaceIdOrNull();
+  const workspaceId2 = explicitWorkspaceId?.trim() || getImplicitWorkspaceIdOrNull();
   if (!workspaceId2) throw new ApiError(400, "workspaceId is required");
   return workspaceId2;
 }
@@ -172607,8 +172659,7 @@ async function resolveWebhookCreateScope(db, projectId, explicitWorkspaceId) {
     if (!project) throw new ApiError(400, `Project not found: ${projectId}`);
     workspaceId2 = project.workspace_id;
   }
-  if (!workspaceId2 && !getAuthorizedWorkspacesContext())
-    workspaceId2 = getBootstrapWorkspaceIdOrNull();
+  if (!workspaceId2) workspaceId2 = getImplicitWorkspaceIdOrNull();
   if (!workspaceId2) throw new ApiError(400, "workspaceId is required");
   const workspaceUserId = await requireWorkspacePermission({
     workspaceId: workspaceId2,
@@ -172635,7 +172686,7 @@ async function loadSubscriptionForUpdate(db, id, permission = PERMISSIONS.WEBHOO
 }
 async function listWebhookSubscriptions(explicitWorkspaceId) {
   const client = requireDatabaseClient();
-  const workspaceId2 = explicitWorkspaceId?.trim() || (getAuthorizedWorkspacesContext() ? null : getBootstrapWorkspaceIdOrNull());
+  const workspaceId2 = explicitWorkspaceId?.trim() || getImplicitWorkspaceIdOrNull();
   if (!workspaceId2) throw new ApiError(400, "workspaceId is required");
   await requireWorkspacePermission({
     workspaceId: workspaceId2,

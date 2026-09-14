@@ -576,15 +576,16 @@ delete-objectives:
 
 create:
   Purpose:
-    Create a draft mission without attaching. Without --project-id and
-    without a resolvable working-directory project, falls back to an
-    account-owned inbox item instead of failing.
+    Create a draft mission without attaching. A project must be named
+    explicitly; use --unassigned-to-project only for deliberate account-owned
+    inbox capture.
   Required:
     --objective "<text>" or --objectives-json / --objectives-file <path|->
   Optional:
     --title <text>
-    --project-id <id>           Skips working-directory project resolution
-    --inbox                     Force an account-owned inbox item instead of a project mission
+    --project-id <id>           Required for a project mission; never inferred
+    --unassigned-to-project     Intentionally create an account-owned inbox item
+    --inbox                     Compatibility alias for --unassigned-to-project
     --assigned-to <id>          Workspace member to own the mission (meaningless on the inbox fallback)
     --auto-advance / --no-auto-advance
         Add matching objectives to the authoritative Run Queue. Defaults to off.
@@ -601,9 +602,9 @@ prompt:
     Create a mission and attach to it in one call.
   Required:
     --objective "<text>" or --objectives-json / --objectives-file <path|->
+    --project-id <id>
   Optional:
     --title <text>
-    --project-id <id>
     --agent <identifier>
     --model <identifier>
     --external-session-id <id>
@@ -627,9 +628,9 @@ record-work:
   Required:
     --objective "<text>" (or positional, or an "objective" field in --payload-json)
     --summary or --summary-file <path|->
+    --project-id <id>
   Optional:
     --title <text>
-    --project-id <id>
     --assigned-to <id>          Workspace member to own the mission
     --artifacts-json / --artifacts-file <path|->
     --change-rationales-json / --change-rationales-file <path|->

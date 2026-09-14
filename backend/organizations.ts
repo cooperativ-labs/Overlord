@@ -24,9 +24,8 @@ import type {
 } from '../webapp/shared/contract.ts';
 
 import {
-  getActiveWorkspaceIdOrNull,
   getAuthorizedWorkspacesContext,
-  getBootstrapWorkspaceIdOrNull,
+  getImplicitWorkspaceIdOrNull,
   newId,
   nowIso,
   recordChange,
@@ -105,15 +104,15 @@ export async function resolveOrganizationIdForWorkspace(
 
 /**
  * The request's selected organization. Authenticated requests read the
- * immutable authorization snapshot; bootstrap/direct-service callers retain
- * the process-local workspace fallback.
+ * immutable authorization snapshot; loopback/direct-service callers use the
+ * request-active workspace (falling back to the process bootstrap default).
  */
 export async function getActiveOrganizationIdOrNull(
   client: DatabaseClient = requireDatabaseClient()
 ): Promise<string | null> {
   const authorized = getAuthorizedWorkspacesContext();
   if (authorized) return authorized.organizationId;
-  const workspaceId = getActiveWorkspaceIdOrNull() ?? getBootstrapWorkspaceIdOrNull();
+  const workspaceId = getImplicitWorkspaceIdOrNull();
   if (!workspaceId) return null;
   return resolveOrganizationIdForWorkspace(workspaceId, client);
 }

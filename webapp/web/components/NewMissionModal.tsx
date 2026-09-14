@@ -87,7 +87,6 @@ export function NewMissionModal({
   const defaultProjectQ = useDefaultProject();
   const launchObjective = useLaunchObjective();
   const updateObjective = useUpdateObjective();
-  const settingsQ = useLaunchSettings();
 
   const [instruction, setInstruction] = useState('');
   // Held as an ISO string so the picker, the Inbox create body, and the mission
@@ -134,6 +133,9 @@ export function NewMissionModal({
   // workspace, not the caller's active one, so cross-workspace projects offer
   // their workspace's agents (coo:324).
   const catalogQ = useAgentCatalog(selectedProject?.workspaceId);
+  const settingsQ = useLaunchSettings(selectedProject?.workspaceId, {
+    enabled: Boolean(selectedProject)
+  });
 
   // Group the chooser by workspace only when more than one workspace has
   // projects to offer.

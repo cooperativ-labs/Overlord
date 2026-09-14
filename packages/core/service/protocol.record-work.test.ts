@@ -13,6 +13,21 @@ async function setup() {
 }
 
 describe('recordWork (record completed chat work as a review mission)', () => {
+  it('requires an explicit project instead of discovering one', async () => {
+    const { db, ctx } = await setup();
+
+    await assert.rejects(
+      recordWork({
+        ctx,
+        objective: 'Do not infer a destination project.',
+        summary: 'This submission needs explicit routing.'
+      }),
+      /explicit project ID/
+    );
+
+    await db.close();
+  });
+
   it('creates a review mission with one completed objective and a delivery', async () => {
     const { db, ctx } = await setup();
     const project = await createProject({ ctx, name: 'Record Basic' });

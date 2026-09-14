@@ -129,7 +129,10 @@ export function useInboxCardState({
   const resourcesQ = useProjectResources(projectId);
   const executionTargetQ = useProjectExecutionTarget(projectId);
   const updatePreference = useUpdateLaunchPreference(projectId);
-  const settingsQ = useLaunchSettings();
+  const launchWorkspaceId = selectedProject?.workspaceId ?? workspaceId ?? null;
+  const settingsQ = useLaunchSettings(launchWorkspaceId, {
+    enabled: Boolean(launchWorkspaceId)
+  });
 
   const projectGroups = useMemo(
     () =>

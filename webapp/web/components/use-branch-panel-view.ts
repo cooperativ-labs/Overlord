@@ -98,7 +98,10 @@ export function deriveBranchPanelView({
 
 export function useBranchPanelView(mission: MissionDetailDto): BranchPanelView | null {
   const localTargetUnavailable = useLocalTargetUnavailable();
-  const isRemoteTarget = useIsRemoteExecutionTargetForProject(mission.projectId);
+  const isRemoteTarget = useIsRemoteExecutionTargetForProject(
+    mission.projectId,
+    mission.workspaceId
+  );
   const pendingMutation = hasPendingLocalTargetMutation(mission.executionRequests);
   const branch = mission.branch;
 

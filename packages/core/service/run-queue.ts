@@ -311,29 +311,72 @@ export async function listProjectRunQueues(
 }
 
 async function rewriteMissionPositions(db: DatabaseClient, missionId: string) {
-  const rows = await db.all<{
+  type MissionPositionRow = {
     id: string;
     state: string;
     position: number;
+    queue_entry_id: string | null;
     queue_position: number | null;
     queue_order: number | null;
-  }>(
-    `SELECT o.id, o.state, o.position, e.position queue_position, q.position queue_order FROM objectives o LEFT JOIN run_queue_entries e ON e.objective_id = o.id AND e.deleted_at IS NULL LEFT JOIN run_queues q ON q.id = e.queue_id AND q.deleted_at IS NULL WHERE o.mission_id = ? AND o.deleted_at IS NULL ORDER BY CASE WHEN o.state IN ('executing','pending_delivery','complete') THEN 0 WHEN e.id IS NOT NULL THEN 1 ELSE 2 END, q.position, e.position, o.position`,
+  };
+  const rows = await db.all<MissionPositionRow>(
+    `SELECT o.id, o.state, o.position, e.id queue_entry_id, e.position queue_position, q.position queue_order
+       FROM objectives o
+       LEFT JOIN run_queue_entries e ON e.objective_id = o.id AND e.deleted_at IS NULL
+       LEFT JOIN run_queues q ON q.id = e.queue_id AND q.deleted_at IS NULL
+      WHERE o.mission_id = ? AND o.deleted_at IS NULL
+      ORDER BY o.position, o.id`,
     [missionId]
   );
+  const historicalStates = new Set(['executing', 'pending_delivery', 'complete']);
+  const historical = rows.filter(row => historicalStates.has(row.state));
+  const tail = rows.filter(row => !historicalStates.has(row.state));
+  const orderedTail: MissionPositionRow[] = [];
+  let queuedSpan: MissionPositionRow[] = [];
+
+  const flushQueuedSpan = () => {
+    queuedSpan.sort(
+      (left, right) =>
+        (left.queue_order ?? Number.MAX_SAFE_INTEGER) -
+          (right.queue_order ?? Number.MAX_SAFE_INTEGER) ||
+        (left.queue_position ?? Number.MAX_SAFE_INTEGER) -
+          (right.queue_position ?? Number.MAX_SAFE_INTEGER) ||
+        left.position - right.position ||
+        left.id.localeCompare(right.id)
+    );
+    orderedTail.push(...queuedSpan);
+    queuedSpan = [];
+  };
+
+  // Queue order is authoritative among queued siblings, but an unqueued
+  // non-terminal objective is an authored-order anchor. Sorting every queued
+  // row into a separate bucket would let a later auto-advance objective jump
+  // ahead of the current draft/submitted objective. Sorting queued spans keeps
+  // reorder/move write-through while preventing that cross-boundary leapfrog.
+  for (const row of tail) {
+    if (row.queue_entry_id) {
+      queuedSpan.push(row);
+      continue;
+    }
+    flushQueuedSpan();
+    orderedTail.push(row);
+  }
+  flushQueuedSpan();
+
+  const orderedRows = [...historical, ...orderedTail];
   const now = nowIso();
   // Position has a per-mission uniqueness constraint. Use a high non-negative
   // staging range to avoid swap collisions without violating SQLite's
   // `position >= 0` constraint.
-  for (let i = 0; i < rows.length; i++)
+  for (let i = 0; i < orderedRows.length; i++)
     await db.run(
       'UPDATE objectives SET position = ?, updated_at = ?, revision = revision + 1 WHERE id = ?',
-      [1_000_000_000 + i, now, rows[i]!.id]
+      [1_000_000_000 + i, now, orderedRows[i]!.id]
     );
-  for (let i = 0; i < rows.length; i++)
+  for (let i = 0; i < orderedRows.length; i++)
     await db.run(
       'UPDATE objectives SET position = ?, updated_at = ?, revision = revision + 1 WHERE id = ?',
-      [i, now, rows[i]!.id]
+      [i, now, orderedRows[i]!.id]
     );
 }
 

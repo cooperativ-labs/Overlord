@@ -383,6 +383,9 @@ export async function requireAuthenticatedSession(
       //    workspace created yet) has no default workspace to resolve against;
       //    proceed unauthenticated-actor rather than throwing, mirroring the
       //    zero-membership USER_TOKEN branch above.
+      //    Uses getBootstrapWorkspaceIdOrNull() on purpose: this path *establishes*
+      //    request identity against the process default inside a fresh
+      //    withRequestContextAsync, so there is no per-request override to honor.
       if (nonBrowser && isLoopbackRequest(req)) {
         const defaultWorkspaceId = getBootstrapWorkspaceIdOrNull();
         const workspaceUserId = defaultWorkspaceId

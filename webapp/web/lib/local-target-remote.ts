@@ -13,8 +13,14 @@ export function isRemoteExecutionTargetSelected({
   return selectedExecutionTargetId !== localExecutionTargetId;
 }
 
-export function useIsRemoteExecutionTargetForProject(projectId: string): boolean {
-  const launchSettings = useLaunchSettings();
+export function useIsRemoteExecutionTargetForProject(
+  projectId: string,
+  workspaceId: string
+): boolean {
+  // Launch settings belong to a workspace. A project-scoped Git action can be
+  // rendered for any accessible workspace, so never rely on the legacy
+  // active-workspace route here.
+  const launchSettings = useLaunchSettings(workspaceId);
   const executionTarget = useProjectExecutionTarget(projectId);
   return isRemoteExecutionTargetSelected({
     localExecutionTargetId: launchSettings.data?.executionTargetId ?? null,

@@ -11,11 +11,7 @@
  */
 
 import type { MetaDto } from '../../webapp/shared/contract.ts';
-import {
-  getActiveProfileId,
-  getAuthorizedWorkspacesContext,
-  getBootstrapWorkspaceIdOrNull
-} from '../db.ts';
+import { getActiveProfileId, getImplicitWorkspaceIdOrNull } from '../db.ts';
 import { getActiveOrganizationIdOrNull, listOrganizationsForUser } from '../organizations.ts';
 import { getDefaultProjectPreference } from '../repository.ts';
 import { listWorkspacesForOrganization } from '../workspaces.ts';
@@ -28,9 +24,7 @@ export async function buildMeta(): Promise<MetaDto> {
   const workspaces = activeOrganizationId
     ? await listWorkspacesForOrganization(activeOrganizationId)
     : [];
-  const activeWorkspaceId = getAuthorizedWorkspacesContext()
-    ? null
-    : getBootstrapWorkspaceIdOrNull();
+  const activeWorkspaceId = getImplicitWorkspaceIdOrNull();
   const workspace = activeWorkspaceId ? (workspaces.find(w => w.isActive) ?? null) : null;
   const { projectId: defaultProjectId } = await getDefaultProjectPreference();
 

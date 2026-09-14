@@ -20,6 +20,7 @@ import {
   getActiveProfileId,
   getAuthorizedWorkspacesContext,
   getBootstrapWorkspaceIdOrNull,
+  getImplicitWorkspaceIdOrNull,
   newId,
   nowIso,
   recordChange,
@@ -65,7 +66,7 @@ function toWorkspaceDto(r: WorkspaceListRow): WorkspaceDto {
     slug: r.slug,
     name: r.name,
     kind: r.kind,
-    isActive: r.id === getBootstrapWorkspaceIdOrNull(),
+    isActive: r.id === getImplicitWorkspaceIdOrNull(),
     projectCount: r.project_count,
     memberCount: r.member_count,
     sqlStudioEnabled: sqlStudioEnabledFromSettingsJson(r.settings_json),
@@ -632,6 +633,8 @@ export async function updateWorkspace(
           client: tx
         });
         changed.push('settings_json');
+        // Process-level SQL Studio is a singleton bound to this server's
+        // bootstrap workspace, not the request's active workspace.
         if (id === getBootstrapWorkspaceIdOrNull()) {
           syncSqlStudioForWorkspace({ enabled: body.sqlStudioEnabled });
         }
@@ -659,9 +662,9 @@ export async function updateWorkspace(
     );
   });
 
-  // Renaming the active workspace must be observed by the `WORKSPACE` live
-  // binding so `/api/meta` and change attribution stay accurate.
-  if (!getAuthorizedWorkspacesContext() && id === getBootstrapWorkspaceIdOrNull()) {
+  // Renaming the request-active workspace must be observed by the `WORKSPACE`
+  // live binding so `/api/meta` and change attribution stay accurate.
+  if (id === getImplicitWorkspaceIdOrNull()) {
     await reloadActiveWorkspace();
   }
   const updated = (await listWorkspaces()).find(w => w.id === id);
@@ -709,7 +712,10 @@ export async function deleteWorkspace(id: string): Promise<WorkspaceDto[]> {
     await deleteOrganizationIfEmpty(existing.organization_id, tx);
   });
 
-  if (!getAuthorizedWorkspacesContext() && id === getBootstrapWorkspaceIdOrNull()) {
+  // Deleting the request-active workspace (not "is this literally the process
+  // bootstrap row") re-points this request at a remaining membership, matching
+  // the operation's documented "activate the next remaining one" behavior.
+  if (id === getImplicitWorkspaceIdOrNull()) {
     const next = (await listWorkspaces())[0];
     if (next) {
       await setActiveWorkspace(next.id);

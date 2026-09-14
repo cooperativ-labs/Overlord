@@ -165,6 +165,19 @@ test('hosted MCP tool metadata is publication-ready', () => {
   }
 });
 
+test('MCP mission creation requires explicit project or unassigned-project intent', () => {
+  const create = hostedMcpToolDefinitions.find(
+    definition => definition.name === 'overlord_create_mission'
+  );
+  assert.ok(create);
+  const properties = create.inputSchema.properties as Record<string, { description: string }>;
+  assert.ok(properties.projectId);
+  assert.ok(properties.unassignedToProject);
+  assert.match(properties.projectId.description, /Required unless unassignedToProject/);
+  assert.match(properties.unassignedToProject.description, /intentionally create/);
+  assert.match(create.description, /omission of both is rejected/);
+});
+
 test('MCP search compact and full detail modes preserve navigation semantics', () => {
   const full = {
     version: 3,

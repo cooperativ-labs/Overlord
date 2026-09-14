@@ -579,7 +579,7 @@ function WebhookDialog({
  * One-shot display of a signing secret after creation or rotation — the value is
  * never readable again once this block is dismissed or the dialog closes.
  */
-function WebhookSecretReveal({
+export function WebhookSecretReveal({
   secret,
   canSendTest,
   testResult,

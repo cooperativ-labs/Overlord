@@ -32,6 +32,7 @@ import { writeLocalProjectMetadata } from '@/lib/project-metadata';
 import {
   useCreateProjectResource,
   useLaunchSettings,
+  useProject,
   useProjectExecutionTarget,
   useProjectResources
 } from '@/lib/queries';
@@ -55,7 +56,9 @@ export function AddResourcePage({
 }) {
   const resourcesQ = useProjectResources(projectId);
   const executionTargetQ = useProjectExecutionTarget(projectId);
-  const launchSettingsQ = useLaunchSettings();
+  const projectQ = useProject(projectId);
+  const workspaceId = projectQ.data?.workspaceId ?? null;
+  const launchSettingsQ = useLaunchSettings(workspaceId, { enabled: Boolean(workspaceId) });
   const createResource = useCreateProjectResource(projectId);
 
   const resources = resourcesQ.data ?? [];

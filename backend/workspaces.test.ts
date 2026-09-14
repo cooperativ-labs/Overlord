@@ -91,8 +91,10 @@ test('a brand-new authenticated user onboards into their own organization and wo
       [created.id],
       'new user should only see the workspace they created'
     );
+    assert.equal(visibleWorkspaces[0]?.isActive, true);
 
-    await createProject({ name: 'Private Project' });
+    const project = await createProject({ name: 'Private Project' });
+    assert.equal(project.workspaceId, created.id);
     assert.deepEqual(
       (await listProjects()).map(project => project.name),
       ['Private Project'],
