@@ -168,7 +168,13 @@ Requirements:
 - `deliver`: finish work, store artifacts/rationales, mark objective complete, and move mission to review.
 - `hook-event`: record connector lifecycle events such as `UserPromptSubmit` and future `Stop`. `UserPromptSubmit` records follow-up user activity without requiring a live session and without reopening execution.
 - `resume-follow-up`: explicitly reopen a completed objective for post-delivery implementation follow-up, returning a new session key.
-- `permission-request`: record that an agent asked for tool permission.
+
+There is no `ovld protocol permission-request` subcommand today. Permission/tool-approval
+requests are the Agent Session Module's **Decide** capability (`ovld agent-session request`),
+not a mission-protocol command — see
+`docs/src/content/docs/docs-for-agents/agent-sessions.mdx`. A shipped Claude connector hook
+script still calls a `permission-request` subcommand that was never implemented; treat that
+script as inert rather than as evidence this subcommand exists.
 
 ### Shared Context And Attachments
 
@@ -189,12 +195,12 @@ Requirements:
   `--expected-revision` for optimistic concurrency; does not require a session
   key so a later objective or follow-up can update an artifact created earlier.
 - `attachment-list`: list visible objective attachments.
-- `attachment-prepare-upload`: prepare an attachment upload.
-- `attachment-finalize-upload`: finalize an uploaded attachment.
 - `attachment-download-url`: get a download URL or local file path reference.
-- `attachment-upload-file`: one-command local attachment upload.
 
-For the SQLite/local MVP, attachments can use local file storage instead of signed URLs, but keep the command contract compatible.
+`attachment-prepare-upload`, `attachment-finalize-upload`, and `attachment-upload-file` are not
+implemented as `ovld protocol` subcommands today — only `attachment-list` and
+`attachment-download-url` exist. Do not build against the other three as a requirements spec;
+treat them as an unbuilt upload path if that work is picked up later.
 
 ### Runner, Device, And Project Resource Management
 
