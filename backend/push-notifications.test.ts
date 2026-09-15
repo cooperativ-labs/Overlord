@@ -12,7 +12,7 @@ const { db } = await bootstrapIntegrationTestDb({
 
 const { requireDatabaseClient, setActiveProfileId, withRequestContextAsync } =
   await import('./db.ts');
-const { createMission, createObjective, createProject, updateMission } =
+const { createMission, createObjective, createProject, listProjectStatuses, updateMission } =
   await import('./repository.ts');
 const {
   buildPushNotificationPresentation,
@@ -514,9 +514,10 @@ test('closing a mission emits mission_complete exactly once', async () => {
   db.prepare(`DELETE FROM notifications`).run();
   const project = await createProject({ name: 'Completion Project' });
   const mission = await createMission({ projectId: project.id, firstObjective: 'Work' });
+  const doneStatus = (await listProjectStatuses(project.id)).find(status => status.key === 'done')!;
 
-  await updateMission(mission.id, { statusId: 'local-workspace-done' });
-  await updateMission(mission.id, { statusId: 'local-workspace-done' });
+  await updateMission(mission.id, { statusId: doneStatus.id });
+  await updateMission(mission.id, { statusId: doneStatus.id });
 
   const notifications = db
     .prepare(`SELECT type FROM notifications WHERE mission_id = ? ORDER BY created_at ASC`)
