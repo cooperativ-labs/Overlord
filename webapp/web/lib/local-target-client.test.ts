@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { mock, test } from 'node:test';
 
-import type { LocalTargetBridgeCall } from '../../../packages/core/service/local-target/desktop-bridge.ts';
 import type {
   CapabilityResult,
+  LocalTargetBridgeCall,
   RepositoryTreeResult
-} from '../../../packages/core/service/local-target/types.ts';
+} from './local-target-types.ts';
 
 import { api } from './api.ts';
 

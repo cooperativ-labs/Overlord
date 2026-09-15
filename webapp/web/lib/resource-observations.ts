@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 
-import type { ResourceObservation } from '../../../packages/core/service/local-target/types.ts';
+import type { ResourceObservation } from './local-target-types.ts';
 import type {
   ProjectResourceDto,
   RecordTargetResourceObservationsBody

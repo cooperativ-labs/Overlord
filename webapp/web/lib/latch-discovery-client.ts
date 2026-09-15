@@ -10,7 +10,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type { DiscoverLatchResult } from '../../../packages/core/service/local-target/types.ts';
+import type { DiscoverLatchResult } from './local-target-types.ts';
 
 import { invokeLocalTarget, useLocalTargetCapabilityAvailable } from './local-target-client.ts';
 

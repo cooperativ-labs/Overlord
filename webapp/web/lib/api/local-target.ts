@@ -1,5 +1,4 @@
-import type { LocalTargetBridgeCall } from '../../../../packages/core/service/local-target/desktop-bridge.ts';
-import type { CapabilityResult } from '../../../../packages/core/service/local-target/types.ts';
+import type { CapabilityResult, LocalTargetBridgeCall } from '../local-target-types.ts';
 
 import { request } from './request.ts';
 

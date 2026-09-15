@@ -15,7 +15,7 @@ import { useProject, useUpdateProject } from '@/lib/queries';
 import {
   detectLatchInvocation,
   latchInvocationWarning
-} from '../../../../../packages/core/service/latch-invocation.ts';
+} from '@/lib/local-target-types';
 
 type LaunchPageProps = {
   open: boolean;

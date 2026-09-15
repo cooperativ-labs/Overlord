@@ -4,7 +4,7 @@ import { createContext, type ReactNode, useCallback, useContext, useMemo } from 
 import type {
   CapabilityResult,
   RepositoryTreeResult
-} from '../../../../packages/core/service/local-target/types.ts';
+} from '../../lib/local-target-types.ts';
 import type {
   EligibleExecutionTargetDto,
   ProjectRepositoryDto,

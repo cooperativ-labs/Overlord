@@ -1,7 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type { BranchObservationResult } from '../../../packages/core/service/local-target/branch-observe-git.ts';
-import type { BranchListResult } from '../../../packages/core/service/local-target/types.ts';
+import type { BranchListResult, BranchObservationResult } from './local-target-types.ts';
 import type {
   BranchActionBody,
   MissionBranchDto,

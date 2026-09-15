@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
-import type { RepositoryTreeResult } from '../../../packages/core/service/local-target/types.ts';
+import type { RepositoryTreeResult } from './local-target-types.ts';
 import type {
   MissionMentionOption,
   ProjectMentionOption

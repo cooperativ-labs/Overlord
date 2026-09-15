@@ -1,4 +1,4 @@
-import type { ClientDeviceIdentity } from '../../../packages/core/service/device-identity.ts';
+import type { ClientDeviceIdentity } from './local-target-types.ts';
 
 import { isRemoteBackend } from './api-base.ts';
 import { getDesktopBridge } from './desktop-chrome.ts';

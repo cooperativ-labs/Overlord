@@ -12,7 +12,7 @@ import {
 import {
   detectLatchInvocation,
   latchInvocationWarning
-} from '../../../../packages/core/service/latch-invocation.ts';
+} from '../../lib/local-target-types.ts';
 import {
   type AgentLaunchConfigDto,
   type AgentLaunchFlagDto,
