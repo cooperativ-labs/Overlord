@@ -1461,8 +1461,12 @@ export interface HumanActionResolutionDto {
   resolvedByWorkspaceUserId: string | null;
 }
 
-/** Presentation role of one item in the cross-workspace Human Actions rail. */
-export type HumanActionItemKind = 'follow_up' | 'blocking_question' | 'deferred_work';
+/**
+ * Presentation role of one item in the cross-workspace Human Actions rail.
+ * `blocking_action` is a follow-up the delivered work needs before it functions
+ * (`HumanActionV1.blocking`); it is not an `ask` blocking question (contract v142).
+ */
+export type HumanActionItemKind = 'follow_up' | 'blocking_action' | 'deferred_work';
 
 /**
  * One `HumanActionV1` or deferred-work entry from the latest delivery of an

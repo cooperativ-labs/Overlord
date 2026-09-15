@@ -86,7 +86,7 @@ function HumanActionRow({
         'group flex min-w-0 items-start gap-2 rounded-lg border border-transparent px-2 py-1.5',
         resolved
           ? 'opacity-60'
-          : item.kind === 'blocking_question'
+          : item.kind === 'blocking_action'
             ? 'border-amber-300 bg-amber-50 dark:border-amber-500/50 dark:bg-amber-500/10'
             : item.kind === 'deferred_work'
               ? 'border-violet-300 bg-violet-50 dark:border-violet-500/50 dark:bg-violet-500/10'
@@ -132,10 +132,10 @@ function HumanActionRow({
             resolved && 'line-through'
           )}
         >
-          {item.kind === 'blocking_question' && !resolved ? (
+          {item.kind === 'blocking_action' && !resolved ? (
             <AlertTriangle
               className="mr-1 inline size-3.5 -translate-y-px text-amber-500"
-              aria-label="Blocking"
+              aria-label="Required before this works"
             />
           ) : null}
           {item.action}
@@ -163,9 +163,9 @@ function HumanActionRow({
           </p>
         ) : null}
         <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] uppercase tracking-wide text-(--color-ink-dim)">
-          {item.kind === 'blocking_question' ? (
+          {item.kind === 'blocking_action' ? (
             <span className="rounded bg-amber-100 px-1 py-px font-mono normal-case tracking-normal text-amber-900 dark:bg-amber-500/20 dark:text-amber-100">
-              Blocking question
+              Required before this works
             </span>
           ) : item.kind === 'deferred_work' ? (
             <span className="inline-flex items-center gap-1 rounded bg-violet-100 px-1 py-px font-mono normal-case tracking-normal text-violet-900 dark:bg-violet-500/20 dark:text-violet-100">
@@ -326,7 +326,7 @@ function MissionGroup({
  * The Feed page's left rail: every human follow-up action agents reported on
  * recent deliveries, grouped by mission and objective, with the operator's
  * done / dismissed decisions recorded against each one (coo:963). Blocking
- * questions lead, deferred work follows, and regular follow-ups remain neutral.
+ * actions lead, deferred work follows, and regular follow-ups remain neutral.
  * Resolved items stay out of the way until asked for.
  */
 export function HumanActionsRail({
@@ -387,7 +387,7 @@ export function HumanActionsRail({
           {counts && counts.blocking > 0 ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-1.5 font-mono text-[11px] font-normal text-amber-900 dark:bg-amber-500/20 dark:text-amber-100">
               <AlertTriangle className="size-3" aria-hidden="true" />
-              {counts.blocking} blocking
+              {counts.blocking} required
             </span>
           ) : null}
           {counts && counts.deferred > 0 ? (

@@ -130,7 +130,7 @@ test('reported actions surface with mission context, blocking first', async () =
 
   assert.equal(mine.length, 2, 'the Git-only action is filtered out at normalization');
   assert.equal(mine[0]!.action, 'Run the pending migration');
-  assert.equal(mine[0]!.kind, 'blocking_question');
+  assert.equal(mine[0]!.kind, 'blocking_action');
   assert.equal(mine[0]!.blocking, true);
   assert.equal(mine[0]!.category, 'database');
   assert.equal(mine[0]!.command, 'yarn db:migrate');
@@ -150,7 +150,7 @@ test('reported actions surface with mission context, blocking first', async () =
   assert.ok(result.counts.blocking >= 1);
 });
 
-test('deferred work joins the rail after blocking questions and uses the same resolution', async () => {
+test('deferred work joins the rail after blocking actions and uses the same resolution', async () => {
   const { project, mission, objective } = await seedMission('HA Deferred');
   const deliveryId = seedDelivery({
     workspaceId: mission.workspaceId,
@@ -170,7 +170,7 @@ test('deferred work joins the rail after blocking questions and uses the same re
 
   assert.deepEqual(
     mine.map(item => item.kind),
-    ['blocking_question', 'deferred_work', 'deferred_work', 'follow_up']
+    ['blocking_action', 'deferred_work', 'deferred_work', 'follow_up']
   );
   assert.notEqual(mine[1]!.actionId, mine[2]!.actionId, 'duplicate deferred items stay distinct');
   assert.equal(mine[1]!.category, 'other');

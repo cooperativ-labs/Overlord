@@ -192,7 +192,7 @@ function deliveryActions(row: DeliveryActionRow): HumanActionRailEntry[] {
   const { presentation, agentReport } = report;
   const humanActions = presentation.humanActions.map(action => ({
     ...action,
-    kind: action.blocking === true ? 'blocking_question' : 'follow_up'
+    kind: action.blocking === true ? 'blocking_action' : 'follow_up'
   })) satisfies HumanActionRailEntry[];
   const occurrences = new Map<string, number>();
   const usedAgentIndexes = new Set<number>();
@@ -260,7 +260,7 @@ function toItem(
 
 function openFirst(a: HumanActionItemDto, b: HumanActionItemDto): number {
   const kindRank: Record<HumanActionItemKind, number> = {
-    blocking_question: 0,
+    blocking_action: 0,
     deferred_work: 1,
     follow_up: 2
   };

@@ -34,13 +34,29 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `141`
+Current version: `142`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
 `contract/components.yaml`) — never a header duplicate. The contract version is
 incremented when any stable interface changes. All conformance manifests must
 declare the contract version they were validated against.
+
+### Version 142 Change Summary
+
+The Human Actions rail renames its `blocking_question` item kind to
+`blocking_action`. A `HumanActionItemDto` whose source `HumanActionV1` carries
+`blocking: true` is a required follow-up step (the delivered work does not
+function until a person completes it), not a question the agent asked. Blocking
+questions remain exclusively `ask` mission events, surfaced by the activity
+feed's `blocking_question` item kind and the mission `blocking_question` status
+indicator; both are unchanged. `HumanActionItemKind` is now `follow_up`,
+`blocking_action`, or `deferred_work`. Open ordering (blocking actions first,
+deferred work second, follow-ups last), the `blocking` field, and
+`counts.blocking` are unchanged. The webapp labels these items "Required before
+this works". Clients matching `kind === 'blocking_question'` on
+`GET /api/human-actions` must match `blocking_action`. No database, route, or
+delivery-report change.
 
 ### Version 141 Change Summary
 
