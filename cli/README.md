@@ -257,9 +257,9 @@ colocation convention):
 The packaged CLI lives in this module as a self-contained Yarn sub-project:
 
 ```bash
-yarn build:cli:prod       # tsc emit + esbuild bundle to cli/dist/index.js
+yarn cli:build:prod       # tsc emit + esbuild bundle to cli/dist/index.js
 yarn test:cli             # unit + subprocess smoke tests
-yarn pack:cli:prod        # produce an installable tarball
+yarn cli:pack:prod        # produce an installable tarball
 node cli/bin/ovld.mjs version
 ```
 
@@ -276,7 +276,7 @@ cli/
 ```
 
 The CLI ships command parsing, config/auth onboarding, connector setup, backend
-client calls, and local runner/agent launch logic. Run `yarn build:cli:prod` before using
+client calls, and local runner/agent launch logic. Run `yarn cli:build:prod` before using
 the compiled CLI (`node cli/bin/ovld.mjs …`).
 
 ### In-repo build vs installed CLI

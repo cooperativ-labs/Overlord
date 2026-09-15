@@ -127,9 +127,7 @@ Setup should work without the desktop app and should not fail hard when the Clau
 
 ## Cursor Connector
 
-Can be implemented after Codex and Claude.
-
-Requirements:
+Shipped. Requirements:
 
 - Install local Cursor plugin/rules/commands.
 - Add `beforeSubmitPrompt` hook to record follow-ups.
@@ -156,9 +154,8 @@ Requirements:
 
 ## Antigravity Connector
 
-Can be implemented after local MVP.
-
-Requirements:
+Shipped, currently fixture-proven only at tier 0 — see
+`connectors/adapters/antigravity/CAPABILITIES.md`. Requirements:
 
 - Install Antigravity plugin.
 - Provide protocol skill and commands.

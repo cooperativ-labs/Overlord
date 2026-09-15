@@ -12,9 +12,10 @@ follows workspace permissions and the mission lifecycle.
 
 <Aside type="note">
   This is the **backend-hosted** MCP surface, intentionally not a CLI shim. Local connector MCP
-  scripts for Codex, Claude Code, Cursor, and Antigravity continue to use [`ovld
+  scripts for Codex, Cursor, and Antigravity continue to use [`ovld
   protocol`](/docs-for-agents/agent-protocol/) for checkout-local workflows — but they advertise the
-  **same canonical tool names and input contract** as the hosted registry.
+  **same canonical tool names and input contract** as the hosted registry. Claude Code ships no
+  local MCP shim; it reaches this hosted MCP server directly.
 </Aside>
 
 ## Endpoints

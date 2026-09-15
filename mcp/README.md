@@ -25,8 +25,9 @@ MCP Apps HTML; they render only a tool result's `structuredContent` and make no
 third-party network or iframe requests.
 
 The endpoint is intentionally backend-hosted, not a CLI shim. Local connector
-MCP scripts for Codex, Claude Code, Cursor, and Antigravity continue to use
-`ovld protocol` for checkout-local workflows.
+MCP scripts for Codex, Cursor, and Antigravity continue to use `ovld protocol`
+for checkout-local workflows. Claude Code ships no local MCP shim; it reaches
+this hosted MCP server directly.
 
 ## Authentication
 
