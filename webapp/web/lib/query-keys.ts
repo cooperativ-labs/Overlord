@@ -11,6 +11,8 @@ export const keys = {
   meta: ['meta'] as const,
   profile: ['profile'] as const,
   userTokens: ['user-tokens'] as const,
+  /** Prefix for invalidating webhook subscriptions across all workspaces. */
+  webhooksPrefix: ['webhooks'] as const,
   webhookSubscriptions: (workspaceId: string) => ['webhooks', workspaceId] as const,
   webhookDeliveries: (id: string) => ['webhooks', id, 'deliveries'] as const,
   organizations: ['organizations'] as const,

@@ -2,14 +2,10 @@ import { ChevronDown, ChevronRight, PenLine, Plus } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 
 import type { SharedContextEntryDto } from '../../shared/contract.ts';
+import { formatTimestamp } from '../lib/format-date.ts';
 import { useMissionSharedContext, useUpsertMissionSharedContext } from '../lib/queries.ts';
 
 import { Button, Spinner, TextArea, TextInput } from './ui.tsx';
-
-function formatDate(iso: string): string {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
-}
 
 function formatValue(value: unknown): string {
   if (typeof value === 'string') return value;
@@ -126,7 +122,7 @@ function SharedContextEntryRow({
             <div className="grid gap-2">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[10px] text-(--color-ink-dim)">
-                  Updated {formatDate(entry.updatedAt)}
+                  Updated {formatTimestamp(entry.updatedAt)}
                 </span>
                 <Button
                   type="button"

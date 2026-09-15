@@ -5,6 +5,7 @@ import { formatDueDatetimeLabel } from '@/components/scheduling/schedule-utils.t
 import { AuthenticatedAvatarImage, Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatOrdinalDayOfMonth } from '@/lib/due-datetime.ts';
+import { memberInitials, memberLabel } from '@/lib/member-display.ts';
 import { missionOriginLabel, objectiveOriginLabel } from '@/lib/mission-origin.ts';
 import { cn } from '@/lib/utils';
 
@@ -153,14 +154,6 @@ export function ProjectColorDot({
       title={name ?? 'Project'}
     />
   );
-}
-
-function memberLabel(member: WorkspaceMemberDto): string {
-  return member.displayName?.trim() || member.handle || member.email || 'Member';
-}
-
-function memberInitials(member: WorkspaceMemberDto): string {
-  return memberLabel(member).slice(0, 2).toUpperCase();
 }
 
 export function MissionAssigneeAvatar({

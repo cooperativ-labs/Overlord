@@ -14,7 +14,8 @@ import {
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { api } from '@/lib/api';
-import { useDeleteWorkspace, useMeta, useWorkspaceMembers } from '@/lib/queries';
+import { useWorkspaceOperatorRole } from '@/lib/hooks/use-workspace-operator-role';
+import { useDeleteWorkspace, useMeta } from '@/lib/queries';
 
 import type { WorkspaceDto } from '../../../../shared/contract.ts';
 
@@ -28,9 +29,7 @@ type DangerZonePageProps = {
 export function DangerZonePage({ workspace, isOnlyWorkspace, onOpenChange }: DangerZonePageProps) {
   const navigate = useNavigate();
   const deleteWorkspace = useDeleteWorkspace();
-  const members = useWorkspaceMembers(workspace.id);
-  const operator = (members.data ?? []).find(member => member.isOperator);
-  const isAdmin = operator?.isAdmin ?? false;
+  const { isAdmin } = useWorkspaceOperatorRole(workspace.id);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [exportState, setExportState] = useState<ButtonLoadingState>('default');
   const [exportError, setExportError] = useState<string | null>(null);

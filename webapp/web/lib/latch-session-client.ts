@@ -1,6 +1,9 @@
 import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { isLatchSessionAbsentMessage } from './local-target-types.ts';
+import type { TerminalSessionDto } from '../../shared/contract.ts';
+
+import { api } from './api.ts';
+import { invokeLocalTarget, useLocalTargetCapabilityAvailable } from './local-target-client.ts';
 import type {
   CapabilityFailure,
   CapabilityResult,
@@ -9,10 +12,7 @@ import type {
   OpenLatchSessionResult,
   StopLatchSessionResult
 } from './local-target-types.ts';
-import type { TerminalSessionDto } from '../../shared/contract.ts';
-
-import { api } from './api.ts';
-import { invokeLocalTarget, useLocalTargetCapabilityAvailable } from './local-target-client.ts';
+import { isLatchSessionAbsentMessage } from './local-target-types.ts';
 import { keys } from './query-keys.ts';
 
 export const latchSessionKey = (providerSessionId: string) =>

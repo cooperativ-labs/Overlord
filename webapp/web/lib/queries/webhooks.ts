@@ -25,7 +25,7 @@ export function useCreateWebhookSubscription() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: CreateWebhookSubscriptionBody) => api.createWebhookSubscription(body),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['webhooks'] })
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.webhooksPrefix })
   });
 }
 
@@ -34,7 +34,7 @@ export function useUpdateWebhookSubscription() {
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: UpdateWebhookSubscriptionBody }) =>
       api.updateWebhookSubscription(id, body),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['webhooks'] })
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.webhooksPrefix })
   });
 }
 
@@ -42,7 +42,7 @@ export function useDeleteWebhookSubscription() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.deleteWebhookSubscription(id),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['webhooks'] })
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.webhooksPrefix })
   });
 }
 
@@ -50,7 +50,7 @@ export function useRotateWebhookSecret() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.rotateWebhookSecret(id),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ['webhooks'] })
+    onSuccess: () => void qc.invalidateQueries({ queryKey: keys.webhooksPrefix })
   });
 }
 

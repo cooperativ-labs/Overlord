@@ -76718,19 +76718,46 @@ async function listProjectRunQueues(db, projectId) {
 }
 async function rewriteMissionPositions(db, missionId) {
   const rows = await db.all(
-    `SELECT o.id, o.state, o.position, e.position queue_position, q.position queue_order FROM objectives o LEFT JOIN run_queue_entries e ON e.objective_id = o.id AND e.deleted_at IS NULL LEFT JOIN run_queues q ON q.id = e.queue_id AND q.deleted_at IS NULL WHERE o.mission_id = ? AND o.deleted_at IS NULL ORDER BY CASE WHEN o.state IN ('executing','pending_delivery','complete') THEN 0 WHEN e.id IS NOT NULL THEN 1 ELSE 2 END, q.position, e.position, o.position`,
+    `SELECT o.id, o.state, o.position, e.id queue_entry_id, e.position queue_position, q.position queue_order
+       FROM objectives o
+       LEFT JOIN run_queue_entries e ON e.objective_id = o.id AND e.deleted_at IS NULL
+       LEFT JOIN run_queues q ON q.id = e.queue_id AND q.deleted_at IS NULL
+      WHERE o.mission_id = ? AND o.deleted_at IS NULL
+      ORDER BY o.position, o.id`,
     [missionId]
   );
-  const now2 = nowIso();
-  for (let i5 = 0; i5 < rows.length; i5++)
-    await db.run(
-      "UPDATE objectives SET position = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
-      [1e9 + i5, now2, rows[i5].id]
+  const historicalStates = /* @__PURE__ */ new Set(["executing", "pending_delivery", "complete"]);
+  const historical = rows.filter((row) => historicalStates.has(row.state));
+  const tail = rows.filter((row) => !historicalStates.has(row.state));
+  const orderedTail = [];
+  let queuedSpan = [];
+  const flushQueuedSpan = () => {
+    queuedSpan.sort(
+      (left, right) => (left.queue_order ?? Number.MAX_SAFE_INTEGER) - (right.queue_order ?? Number.MAX_SAFE_INTEGER) || (left.queue_position ?? Number.MAX_SAFE_INTEGER) - (right.queue_position ?? Number.MAX_SAFE_INTEGER) || left.position - right.position || left.id.localeCompare(right.id)
     );
-  for (let i5 = 0; i5 < rows.length; i5++)
+    orderedTail.push(...queuedSpan);
+    queuedSpan = [];
+  };
+  for (const row of tail) {
+    if (row.queue_entry_id) {
+      queuedSpan.push(row);
+      continue;
+    }
+    flushQueuedSpan();
+    orderedTail.push(row);
+  }
+  flushQueuedSpan();
+  const orderedRows = [...historical, ...orderedTail];
+  const now2 = nowIso();
+  for (let i5 = 0; i5 < orderedRows.length; i5++)
     await db.run(
       "UPDATE objectives SET position = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
-      [i5, now2, rows[i5].id]
+      [1e9 + i5, now2, orderedRows[i5].id]
+    );
+  for (let i5 = 0; i5 < orderedRows.length; i5++)
+    await db.run(
+      "UPDATE objectives SET position = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
+      [i5, now2, orderedRows[i5].id]
     );
 }
 async function createRunQueue(db, projectId, name, actorId, missionId = null) {
@@ -169374,7 +169401,7 @@ function deliveryActions(row) {
   const { presentation, agentReport } = report;
   const humanActions = presentation.humanActions.map((action) => ({
     ...action,
-    kind: action.blocking === true ? "blocking_question" : "follow_up"
+    kind: action.blocking === true ? "blocking_action" : "follow_up"
   }));
   const occurrences = /* @__PURE__ */ new Map();
   const usedAgentIndexes = /* @__PURE__ */ new Set();
@@ -169433,7 +169460,7 @@ function toItem(row, action, resolution) {
 }
 function openFirst(a5, b5) {
   const kindRank = {
-    blocking_question: 0,
+    blocking_action: 0,
     deferred_work: 1,
     follow_up: 2
   };

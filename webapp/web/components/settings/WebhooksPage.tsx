@@ -31,6 +31,7 @@ import {
   SheetTitle
 } from '@/components/ui/sheet';
 import { Switch } from '@/components/ui/switch';
+import { formatDateTime } from '@/lib/format-date';
 import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
 import {
   useAllProjects,
@@ -82,19 +83,6 @@ function hostFromUrl(url: string): string {
   } catch {
     return url;
   }
-}
-
-function formatDate(iso: string | null): string {
-  if (!iso) return '—';
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit'
-  });
 }
 
 function statusPill(subscription: WebhookSubscriptionDto): { label: string; className: string } {
@@ -326,8 +314,8 @@ function WebhookSubscriptionRow({
           className="text-xs text-muted-foreground hover:underline"
           onClick={onViewLog}
         >
-          Last success {formatDate(subscription.lastSuccessAt)} · Last failure{' '}
-          {formatDate(subscription.lastFailureAt)} · View delivery log
+          Last success {formatDateTime(subscription.lastSuccessAt)} · Last failure{' '}
+          {formatDateTime(subscription.lastFailureAt)} · View delivery log
         </button>
         {testError ? <p className="text-xs text-destructive">{testError}</p> : null}
       </div>
@@ -700,7 +688,7 @@ function DeliveryLogSheet({
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Attempt {attempt.attemptNumber} · {formatDate(attempt.attemptedAt)} ·{' '}
+                    Attempt {attempt.attemptNumber} · {formatDateTime(attempt.attemptedAt)} ·{' '}
                     {attempt.durationMs !== null && attempt.durationMs !== undefined
                       ? `${attempt.durationMs}ms`
                       : '—'}

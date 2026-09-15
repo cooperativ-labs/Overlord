@@ -215,7 +215,7 @@ function routeChange(change: EntityChangeDto): QueryKey[] | null {
       return [keys.userTokens];
     }
     case 'webhook_subscription': {
-      return [['webhooks']];
+      return [keys.webhooksPrefix];
     }
     case 'user_image': {
       return [keys.profile, keys.meta];

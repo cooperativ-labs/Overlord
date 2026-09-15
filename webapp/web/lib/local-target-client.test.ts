@@ -1,13 +1,12 @@
 import assert from 'node:assert/strict';
 import { mock, test } from 'node:test';
 
+import { api } from './api.ts';
 import type {
   CapabilityResult,
   LocalTargetBridgeCall,
   RepositoryTreeResult
 } from './local-target-types.ts';
-
-import { api } from './api.ts';
 
 const bridgeCall: LocalTargetBridgeCall = {
   capability: 'readRepositoryTree',

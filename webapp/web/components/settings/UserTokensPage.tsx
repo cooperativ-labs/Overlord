@@ -15,6 +15,7 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { formatDate } from '@/lib/format-date';
 import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
 import {
   useCreateUserToken,
@@ -80,14 +81,6 @@ function tokenExpiryPresetToExpiresAt(preset: TokenExpiryPreset): string | null 
 type UserTokensPageProps = {
   open: boolean;
 };
-
-/** Human-readable date, or an em-dash when absent. */
-function formatDate(iso: string | null): string {
-  if (!iso) return '—';
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-}
 
 const STATUS_VARIANT: Record<UserTokenStatus, 'secondary' | 'outline' | 'destructive'> = {
   active: 'secondary',

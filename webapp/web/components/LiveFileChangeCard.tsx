@@ -2,6 +2,7 @@ import { ChevronDown, ChevronRight, FileCode2, FileText } from 'lucide-react';
 import { useState } from 'react';
 
 import type { FileChangeDto } from '../../shared/contract.ts';
+import { formatTimestamp } from '../lib/format-date.ts';
 import { buildEditorFileHref, getEditorSchemeLabel } from '../lib/helpers/editor-scheme.ts';
 
 import { Badge } from './ui.tsx';
@@ -11,11 +12,6 @@ const MARKDOWN_EXTENSIONS = ['.md', '.mdx', '.markdown'];
 function isMarkdownFile(name: string): boolean {
   const lower = name.toLowerCase();
   return MARKDOWN_EXTENSIONS.some(ext => lower.endsWith(ext));
-}
-
-function formatTimestamp(iso: string): string {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
 }
 
 function formatEvidenceValue(value: string): string {

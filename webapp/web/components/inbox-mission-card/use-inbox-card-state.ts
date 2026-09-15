@@ -222,3 +222,27 @@ export function useInboxCardState({
     ...readiness
   };
 }
+
+/** Maps shared card state onto the matching {@link InboxCardShell} props. */
+export function inboxCardShellStateProps(state: ReturnType<typeof useInboxCardState>) {
+  return {
+    projects: state.projects,
+    projectGroups: state.projectGroups,
+    showWorkspaceGroups: state.showWorkspaceGroups,
+    selectedProject: state.selectedProject,
+    catalog: state.catalog,
+    agentConfigs: state.agentConfigs,
+    resources: state.resources,
+    selection: state.selection,
+    onSelectionChange: state.handleSelectionChange,
+    onLaunchConfigCommit: (agentKey: string, config: AgentLaunchConfigDto) =>
+      state.setExplicitLaunchConfigs(previous => ({ ...previous, [agentKey]: config })),
+    selectionLoaded: state.selectionLoaded,
+    primaryConnection: state.primaryConnection,
+    targetAvailability: state.targetAvailability,
+    isBusy: state.isBusy,
+    canSubmit: state.canSubmit,
+    canRun: state.canRun,
+    isManual: state.isManual
+  };
+}

@@ -1,7 +1,6 @@
-import type { ClientDeviceIdentity } from './local-target-types.ts';
-
 import { isRemoteBackend } from './api-base.ts';
 import { getDesktopBridge } from './desktop-chrome.ts';
+import type { ClientDeviceIdentity } from './local-target-types.ts';
 
 const DEVICE_FINGERPRINT_HEADER = 'x-overlord-device-fingerprint';
 const DEVICE_LABEL_HEADER = 'x-overlord-device-label';

@@ -608,13 +608,26 @@ function ObjectiveSessionLine({
     localExecutionTargetId,
     onAbsent
   });
+  const openSession = useOpenLatchSession(session);
   const attachCommand = `${session.executable} attach ${session.providerSessionId}`;
+  const viewer = viewerLabel(session.viewerKind);
 
   if (absent) return null;
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       <span className={cn('h-2 w-2 shrink-0 rounded-full', stateTone[state])} aria-hidden="true" />
+      <Button
+        type="button"
+        size="sm"
+        variant="ghost"
+        title={`Open ${name} in ${viewer}`}
+        disabled={!reachable || openSession.isPending}
+        onClick={() => openSession.mutate()}
+      >
+        {openSession.isPending ? <Loader2 className="animate-spin" /> : <ExternalLink />}
+        Open session
+      </Button>
       <Button type="button" size="sm" variant="ghost" onClick={() => void copy(attachCommand)}>
         {copied ? <Check /> : <Copy />}
         {copied ? 'Copied' : 'Latch attach'}
@@ -626,6 +639,13 @@ function ObjectiveSessionLine({
         compact
         label="End session"
       />
+      {openSession.isError ? (
+        <p className="w-full text-xs text-destructive">
+          {openSession.error instanceof Error
+            ? openSession.error.message
+            : 'Latch session action failed.'}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -637,7 +657,8 @@ function ObjectiveSessionLine({
  * Deliberately minimal (coo:990): the full controls now live in the
  * mission-level {@link MissionTerminalSessionsSection}, so an objective row
  * keeps only what is worth acting on without leaving it — one line per session
- * with a "Latch attach" copy button and an end-session button.
+ * with an open-in-terminal button, a "Latch attach" copy button, and an
+ * end-session button.
  */
 export function ObjectiveTerminalSessions({
   sessions,

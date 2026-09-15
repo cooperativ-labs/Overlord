@@ -10,12 +10,8 @@ import { Label } from '@/components/ui/label';
 import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { Textarea } from '@/components/ui/textarea';
+import { detectLatchInvocation, latchInvocationWarning } from '@/lib/local-target-types';
 import { useProject, useUpdateProject } from '@/lib/queries';
-
-import {
-  detectLatchInvocation,
-  latchInvocationWarning
-} from '@/lib/local-target-types';
 
 type LaunchPageProps = {
   open: boolean;

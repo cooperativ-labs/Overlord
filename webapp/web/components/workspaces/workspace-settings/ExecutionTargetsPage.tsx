@@ -20,13 +20,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { type ButtonLoadingState, LoadingButton } from '@/components/ui/loading-button';
 import { getDesktopChrome } from '@/lib/desktop-chrome';
+import { useWorkspaceOperatorRole } from '@/lib/hooks/use-workspace-operator-role';
 import {
   useDeleteWorkspaceExecutionTarget,
   useRegisterWorkspaceExecutionTarget,
   useRenameWorkspaceExecutionTarget,
   useUpdateWorkspaceExecutionTargetStatus,
-  useWorkspaceExecutionTargets,
-  useWorkspaceMembers
+  useWorkspaceExecutionTargets
 } from '@/lib/queries';
 
 import type { WorkspaceExecutionTargetDto } from '../../../../shared/contract.ts';
@@ -202,10 +202,8 @@ function RegisterThisMachine({ workspaceId }: { workspaceId: string }) {
 
 export function ExecutionTargetsPage({ workspaceId }: { workspaceId: string }) {
   const targets = useWorkspaceExecutionTargets(workspaceId);
-  const members = useWorkspaceMembers(workspaceId);
+  const { isAdmin: canManageTargets } = useWorkspaceOperatorRole(workspaceId);
   const deleteTarget = useDeleteWorkspaceExecutionTarget(workspaceId);
-  const operator = (members.data ?? []).find(member => member.isOperator);
-  const canManageTargets = operator?.isAdmin ?? false;
 
   const [selectedTargetIds, setSelectedTargetIds] = useState<Set<string>>(new Set());
   const [deleteTargetRows, setDeleteTargetRows] = useState<WorkspaceExecutionTargetDto[]>([]);

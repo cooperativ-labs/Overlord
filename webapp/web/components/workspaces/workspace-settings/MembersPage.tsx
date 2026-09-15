@@ -22,13 +22,13 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
+import { useWorkspaceOperatorRole } from '@/lib/hooks/use-workspace-operator-role';
 import {
   useInviteWorkspaceMember,
   useRemoveWorkspaceMember,
   useRevokeWorkspaceInvitation,
   useUpdateWorkspaceMemberRole,
-  useWorkspaceInvitations,
-  useWorkspaceMembers
+  useWorkspaceInvitations
 } from '@/lib/queries';
 
 type WorkspaceRoleKey = 'ADMIN' | 'MANAGER' | 'MEMBER';
@@ -49,10 +49,8 @@ function memberRoleLabel(member: { isAdmin: boolean; roleKeys: string[] }): stri
 }
 
 export function MembersPage({ workspaceId }: MembersPageProps) {
-  const members = useWorkspaceMembers(workspaceId);
+  const { members, operator, isAdmin: operatorIsAdmin } = useWorkspaceOperatorRole(workspaceId);
   const memberRows = members.data ?? [];
-  const operator = memberRows.find(member => member.isOperator);
-  const operatorIsAdmin = operator?.isAdmin ?? false;
   const operatorIsManager = !operatorIsAdmin && (operator?.roleKeys.includes('MANAGER') ?? false);
   const canManageMembers = operatorIsAdmin || operatorIsManager;
   const invitations = useWorkspaceInvitations(workspaceId);

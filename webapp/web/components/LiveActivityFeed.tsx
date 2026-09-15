@@ -16,6 +16,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AuthenticatedAvatarImage, Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 import type { MissionEventDto, MissionEventType } from '../../shared/contract.ts';
+import { formatTimestamp } from '../lib/format-date.ts';
 import { groupMissionFeedItems, resolveFollowUpPresentation } from '../lib/mission-feed.ts';
 import { useMissionAgentRequests, useMissionEvents } from '../lib/queries.ts';
 
@@ -45,11 +46,6 @@ const EVENT_META: Record<MissionEventType, { icon: LucideIcon; label: string }> 
 
 function eventMeta(type: string): { icon: LucideIcon | null; label: string } {
   return EVENT_META[type as MissionEventType] ?? { icon: null, label: type.replace(/_/g, ' ') };
-}
-
-function formatTimestamp(iso: string): string {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
 }
 
 function actorLabel(event: MissionEventDto): string {

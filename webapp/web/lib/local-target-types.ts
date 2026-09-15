@@ -6,16 +6,16 @@
  * these pure types and helpers, while the webapp remains otherwise independent
  * of the core service layout.
  */
-export type {
-  BranchObservationResult,
-  LocalTargetBridgeCall
-} from '../../../packages/core/service/local-target/desktop-bridge.ts';
+export type { ClientDeviceIdentity } from '../../../packages/core/service/device-identity.ts';
 export {
   detectLatchInvocation,
   latchInvocationWarning
 } from '../../../packages/core/service/latch-invocation.ts';
 export { isLatchSessionAbsentMessage } from '../../../packages/core/service/latch-session-absent.ts';
-export type { ClientDeviceIdentity } from '../../../packages/core/service/device-identity.ts';
+export type {
+  BranchObservationResult,
+  LocalTargetBridgeCall
+} from '../../../packages/core/service/local-target/desktop-bridge.ts';
 export type {
   BranchListResult,
   CapabilityFailure,

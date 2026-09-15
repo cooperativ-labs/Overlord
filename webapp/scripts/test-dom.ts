@@ -8,6 +8,7 @@ const globals = {
   navigator: testWindow.navigator,
   location: testWindow.location,
   history: testWindow.history,
+  Element: testWindow.Element,
   HTMLElement: testWindow.HTMLElement,
   Node: testWindow.Node,
   Event: testWindow.Event,

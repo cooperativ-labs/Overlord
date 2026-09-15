@@ -10,15 +10,12 @@ import {
 } from 'react';
 
 import {
-  detectLatchInvocation,
-  latchInvocationWarning
-} from '../../lib/local-target-types.ts';
-import {
   type AgentLaunchConfigDto,
   type AgentLaunchFlagDto,
   agentLaunchFlagKey,
   formatAgentLaunchFlagText
 } from '../../../shared/contract.ts';
+import { detectLatchInvocation, latchInvocationWarning } from '../../lib/local-target-types.ts';
 import {
   filterRecentAgentLaunchFlags,
   readRecentAgentLaunchFlags,

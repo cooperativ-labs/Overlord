@@ -1,10 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 
-import type { CapabilityResult, LocalTargetBridgeCall } from './local-target-types.ts';
-
 import type { LocalTargetServerCapability } from './api.ts';
 import { api } from './api.ts';
 import { getDesktopBridge } from './desktop-chrome.ts';
+import type { CapabilityResult, LocalTargetBridgeCall } from './local-target-types.ts';
 
 let cachedServerLocalTarget: LocalTargetServerCapability | null = null;
 let serverLocalTargetPromise: Promise<LocalTargetServerCapability> | null = null;

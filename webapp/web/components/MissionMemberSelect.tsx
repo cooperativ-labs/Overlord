@@ -6,6 +6,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
+import { memberInitials, memberLabel } from '@/lib/member-display.ts';
 import { useUpdateMission, useWorkspaceMembers } from '@/lib/queries.ts';
 
 import type { WorkspaceMemberDto } from '../../shared/contract.ts';
@@ -17,14 +18,6 @@ type MissionMemberSelectProps = {
   workspaceId: string;
   assignedWorkspaceUserId: string | null;
 };
-
-function memberLabel(member: WorkspaceMemberDto): string {
-  return member.displayName?.trim() || member.email || 'Member';
-}
-
-function memberInitials(member: WorkspaceMemberDto): string {
-  return memberLabel(member).slice(0, 2).toUpperCase();
-}
 
 function MemberAvatar({ member }: { member: WorkspaceMemberDto }) {
   return (

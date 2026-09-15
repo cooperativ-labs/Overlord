@@ -1,7 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 
-import type { ResourceObservation } from './local-target-types.ts';
 import type {
   ProjectResourceDto,
   RecordTargetResourceObservationsBody
@@ -9,6 +8,7 @@ import type {
 
 import { api } from './api.ts';
 import { invokeLocalTarget, isLocalTargetCapabilityAvailable } from './local-target-client.ts';
+import type { ResourceObservation } from './local-target-types.ts';
 import { keys } from './queries.ts';
 
 const OBSERVATION_INTERVAL_MS = 60_000;

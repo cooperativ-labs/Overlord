@@ -6,7 +6,8 @@ import type { ButtonLoadingState } from '@/components/ui/loading-button';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
-import { useMeta, useUpdateWorkspace, useWorkspaceMembers } from '@/lib/queries';
+import { useWorkspaceOperatorRole } from '@/lib/hooks/use-workspace-operator-role';
+import { useMeta, useUpdateWorkspace } from '@/lib/queries';
 
 import type { WorkspaceDto } from '../../../../shared/contract.ts';
 
@@ -17,10 +18,8 @@ type GeneralPageProps = {
 
 export function GeneralPage({ open, workspace }: GeneralPageProps) {
   const updateWorkspace = useUpdateWorkspace();
-  const members = useWorkspaceMembers(workspace.id);
+  const { isAdmin } = useWorkspaceOperatorRole(workspace.id);
   const meta = useMeta();
-  const operator = (members.data ?? []).find(member => member.isOperator);
-  const isAdmin = operator?.isAdmin ?? false;
   const [name, setName] = useState(workspace.name);
   const [savedName, setSavedName] = useState(workspace.name);
   const [nameSaveState, setNameSaveState] = useState<ButtonLoadingState>('default');

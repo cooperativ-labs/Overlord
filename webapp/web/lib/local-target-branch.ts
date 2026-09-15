@@ -1,6 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type { BranchListResult, BranchObservationResult } from './local-target-types.ts';
 import type {
   BranchActionBody,
   MissionBranchDto,
@@ -21,6 +20,7 @@ import {
   isLocalTargetCapabilityAvailable,
   useLocalTargetCapabilityAvailable
 } from './local-target-client.ts';
+import type { BranchListResult, BranchObservationResult } from './local-target-types.ts';
 import { reportMissionBranchObservation } from './mission-branch-observations.ts';
 import { resolveResourceForKey } from './project-resources.ts';
 import { keys } from './query-keys.ts';

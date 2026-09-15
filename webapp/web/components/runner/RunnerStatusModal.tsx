@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { api } from '@/lib/api';
 import { getDesktopBridge } from '@/lib/desktop-chrome';
+import { relativeTime } from '@/lib/format-date';
 import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
 import { keys, useRunnerStatus } from '@/lib/queries';
 import {
@@ -40,16 +41,12 @@ interface ServiceStatus {
 const SERVICE_INSTALL_COMMAND = 'ovld runner service install';
 const FOREGROUND_COMMAND = 'ovld runner start';
 
-function relativeTime(iso: string | null | undefined): string {
-  if (!iso) return 'never';
-  const ms = Date.parse(iso);
-  if (Number.isNaN(ms)) return 'unknown';
-  const diff = Date.now() - ms;
-  if (diff < 60_000) return 'just now';
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
-  return `${Math.floor(diff / 86_400_000)}d ago`;
-}
+const RUNNER_TIME_OPTIONS = {
+  missing: 'never',
+  invalid: 'unknown',
+  immediate: 'just now',
+  rounding: 'floor'
+} as const;
 
 function CommandRow({ command }: { command: string }) {
   const { copied, copy } = useCopyToClipboard();
@@ -175,9 +172,13 @@ function ServiceControls() {
         <dt className="text-muted-foreground">Poll interval</dt>
         <dd>{status?.currentPollIntervalMs ? `${status.currentPollIntervalMs} ms` : 'idle'}</dd>
         <dt className="text-muted-foreground">Last heartbeat</dt>
-        <dd>{relativeTime(status?.lastHeartbeatAt)}</dd>
+        <dd>
+          {relativeTime(status?.lastHeartbeatAt, new Date().toISOString(), RUNNER_TIME_OPTIONS)}
+        </dd>
         <dt className="text-muted-foreground">Last launch</dt>
-        <dd>{relativeTime(status?.lastLaunchedAt)}</dd>
+        <dd>
+          {relativeTime(status?.lastLaunchedAt, new Date().toISOString(), RUNNER_TIME_OPTIONS)}
+        </dd>
         {status?.processType ? (
           <>
             <dt className="text-muted-foreground">Process type</dt>

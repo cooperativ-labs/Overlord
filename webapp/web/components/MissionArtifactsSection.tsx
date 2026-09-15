@@ -14,6 +14,7 @@ import {
 import { type FormEvent, useState } from 'react';
 
 import type { ArtifactDto, ArtifactType, ObjectiveDto } from '../../shared/contract.ts';
+import { formatTimestamp } from '../lib/format-date.ts';
 import { useMissionArtifacts, useUpdateMissionArtifact } from '../lib/queries.ts';
 
 import { Markdown } from './Markdown.tsx';
@@ -30,11 +31,6 @@ const ARTIFACT_META: Record<ArtifactType, { icon: LucideIcon; label: string }> =
 
 function artifactMeta(type: string): { icon: LucideIcon | null; label: string } {
   return ARTIFACT_META[type as ArtifactType] ?? { icon: null, label: type.replace(/_/g, ' ') };
-}
-
-function formatDate(iso: string): string {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
 }
 
 function ArtifactCard({
@@ -113,7 +109,7 @@ function ArtifactCard({
                 {objectiveDisplayId}
               </span>
             ) : null}
-            <span>{formatDate(artifact.createdAt)}</span>
+            <span>{formatTimestamp(artifact.createdAt)}</span>
           </span>
         </span>
       </button>

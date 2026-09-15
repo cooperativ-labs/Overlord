@@ -1,13 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
-import type { RepositoryTreeResult } from './local-target-types.ts';
 import type {
   MissionMentionOption,
   ProjectMentionOption
 } from '../components/MentionableTextarea.tsx';
 
 import { hasDesktopLocalTargetBridge, invokeLocalTarget } from './local-target-client.ts';
+import type { RepositoryTreeResult } from './local-target-types.ts';
 import { resolveResourceForKey } from './project-resources.ts';
 import {
   useAllProjects,
