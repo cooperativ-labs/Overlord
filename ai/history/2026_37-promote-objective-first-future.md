@@ -1,4 +1,8 @@
-# coo:954.jsn2 — Promote objective to first future (2026-09-07)
+# Week 37, 2026 (7–13 Sep)
+
+Consolidated from per-objective reports created this week.
+
+## coo:954.jsn2 — Promote objective to first future (2026-09-07)
 
 Promoting a future objective already spliced the current draft into the first
 future slot on the server. The mission panel then ignored that order: its
