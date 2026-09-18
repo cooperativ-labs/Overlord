@@ -23,6 +23,20 @@ export function viewerOpenAsForPlacement(
     : DEFAULT_VIEWER_OPEN_AS;
 }
 
+/**
+ * Whether a delegated viewer open should stay in the background. Mirrors the
+ * direct launcher's rule: `chord` must foreground the terminal, so background
+ * mode never applies to it.
+ */
+export function viewerBackgroundForProfile(
+  profile:
+    | { background?: boolean; placement?: TerminalLaunchPlacement | string | null }
+    | null
+    | undefined
+): boolean {
+  return profile?.background === true && profile.placement !== 'chord';
+}
+
 /** Parse a stored/wire `openAs` value; anything unrecognized degrades to `window`. */
 export function parseViewerOpenAs(value: unknown): ViewerOpenAs {
   return typeof value === 'string' && value.trim().toLowerCase() === 'tab'
@@ -144,6 +158,12 @@ export type ResolvedLaunchSession = {
      * terminal launch does, instead of the viewer's own separate default.
      */
     openAs: ViewerOpenAs;
+    /**
+     * Open the viewer without stealing keyboard focus, projected from the
+     * profile's `background`. Carried here so a delegated open (Latch) honors
+     * the same "Open in the background" choice a direct terminal launch does.
+     */
+    background: boolean;
   };
   executionProviderSource: LaunchSessionSource;
   viewerOpenSource: LaunchSessionSource;
@@ -372,7 +392,8 @@ export function resolveLaunchSession({
       kind: viewerKindForLauncher(launcher),
       launcher: launcher ?? null,
       openOnLaunch: openOnLaunch ?? defaults.openViewerOnLaunch !== false,
-      openAs: viewerOpenAsForPlacement(profile?.placement ?? DEFAULT_TERMINAL_PROFILE.placement)
+      openAs: viewerOpenAsForPlacement(profile?.placement ?? DEFAULT_TERMINAL_PROFILE.placement),
+      background: viewerBackgroundForProfile(profile)
     },
     executionProviderSource: provider ? 'target' : 'user_default',
     viewerOpenSource: openOnLaunch === null ? 'user_default' : 'target'
@@ -413,6 +434,7 @@ export function launchSessionSnapshotFromMetadata(
           launcher?: unknown;
           openOnLaunch?: unknown;
           openAs?: unknown;
+          background?: unknown;
         })
       : null;
   const launcher = trimmed(viewer?.launcher);
@@ -432,7 +454,10 @@ export function launchSessionSnapshotFromMetadata(
       openOnLaunch: viewer?.openOnLaunch !== false,
       // A snapshot frozen before `openAs` existed carries none; `window` is what
       // those runs actually did, so the absent case must not become `tab`.
-      openAs: parseViewerOpenAs(viewer?.openAs)
+      openAs: parseViewerOpenAs(viewer?.openAs),
+      // A snapshot frozen before `background` existed carries none; those runs
+      // opened in the foreground, so absent must not become background.
+      background: viewer?.background === true
     },
     executionProviderSource: source(cast.executionProviderSource),
     viewerOpenSource: source(cast.viewerOpenSource),

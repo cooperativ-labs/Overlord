@@ -495,7 +495,7 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
     name: 'overlord_queue_objective',
     title: 'Queue objective',
     description:
-      'Use this only when the user explicitly asks to add, move, or remove an objective in the project Run Queue. Queue membership is target-neutral and sequences delivery-driven launches; it does not directly launch the objective.',
+      'Use this only when the user explicitly asks to add, move, or remove an objective in the project Run Queue. Queue membership is target-neutral and sequences delivery-driven launches; it does not directly launch the objective. Adding an objective also queues every not-yet-started objective after it in the mission; a removed objective moves to the end of its mission.',
     inputSchema: objectSchema(
       {
         objectiveId: stringProperty('Objective UUID or display id such as coo:756.k7xm.'),

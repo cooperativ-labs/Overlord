@@ -43,7 +43,22 @@ function fakeClient(initial: Map<string, unknown>) {
         initial.set(serialized, updater(initial.get(serialized)));
       }
     },
-    invalidateQueries: ({ queryKey }: { queryKey: readonly unknown[] }) => {
+    invalidateQueries: ({
+      queryKey,
+      predicate
+    }: {
+      queryKey?: readonly unknown[];
+      predicate?: (query: { queryKey: readonly unknown[] }) => boolean;
+    }) => {
+      // A predicate invalidation is recorded by whether it matches a project's
+      // Run Queue projection, the only predicate these mutations use.
+      if (predicate) {
+        const matches =
+          predicate({ queryKey: ['project', 'project-1', 'run-queues'] }) &&
+          !predicate({ queryKey: ['mission', 'mission-1'] });
+        calls.push(`invalidate-predicate:${matches ? 'run-queues' : 'unknown'}`);
+        return Promise.resolve();
+      }
       calls.push(`invalidate:${JSON.stringify(queryKey)}`);
       return Promise.resolve();
     }
@@ -139,7 +154,8 @@ test('future-objective reorder patches, rolls back, and invalidates its mission'
     'cancel:["mission","mission-1"]',
     'set:["mission","mission-1"]',
     'set:["mission","mission-1"]',
-    'invalidate:["mission","mission-1"]'
+    'invalidate:["mission","mission-1"]',
+    'invalidate-predicate:run-queues'
   ]);
   assert.equal(initial.get(JSON.stringify(key)), previous);
 });

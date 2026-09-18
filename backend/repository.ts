@@ -75,7 +75,8 @@ import { resolveProjectExecutionTargetForLaunch } from '../packages/core/service
 import {
   enqueueObjectiveAfterLastQueuedSibling,
   enqueueRunQueueDispatch,
-  removeRunQueueEntryForObjective
+  removeRunQueueEntryForObjective,
+  syncRunQueueOrderFromMissionPositions
 } from '../packages/core/service/run-queue.ts';
 import {
   loadTargetResourceObservations,
@@ -7425,6 +7426,10 @@ export async function reorderFutureObjectives(
         tx
       );
     }
+
+    // Mission order and Run Queue order are one sequence. Carry the new
+    // objective order into every queue holding this mission's entries.
+    await syncRunQueueOrderFromMissionPositions(tx, mission.id);
   });
 
   return listObjectives(missionId);

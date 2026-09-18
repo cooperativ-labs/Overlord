@@ -126,7 +126,9 @@ Use `overlord_list_run_queues` before mutating a Run Queue.
 the current order when it cannot safely apply a request. `overlord_queue_objective`
 accepts optional `queue` / `after` / `front` / `position` placement and
 `remove: true` to dequeue. Queue membership is target-neutral and sequences
-delivery-driven launches; it does not directly launch the objective. Entry
+delivery-driven launches; it does not directly launch the objective. Adding an
+objective also queues every not-yet-started objective after it in the mission,
+and a removed objective moves to the end of its mission. Entry
 operations require `execution_request:create`; `overlord_manage_run_queue`'s
 queue-definition actions (`create`/`update`/`delete`/`reorder_queues`) use
 `project:update` and require a full-scope token, but its `retry_entry` action

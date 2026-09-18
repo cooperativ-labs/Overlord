@@ -73,6 +73,15 @@ ovld protocol queue-objective --objective-id coo:312.k7xm
 ovld protocol dequeue-objective --objective-id coo:312.k7xm
 ```
 
+Queueing an objective also queues every objective after it in the mission. The
+Run Queue and the mission's objective list share one order, so reordering either
+one reorders the other. An objective removed from the queue moves to the end of
+the mission's objectives and stays last when queued again, unless you move it.
+
+A queue that has run out of objectives deletes itself, whether its last
+objective completed, was removed, or moved to another queue. A queue you create
+by hand stays until it has been used, so you can add the first objective to it.
+
 For a direct local launch, run:
 
 ```bash

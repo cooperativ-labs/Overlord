@@ -8,8 +8,10 @@ import {
   existingLatchProviderSession,
   formatObjectiveLatchDisplay,
   LATCH_OPEN_AS_MIN_PRODUCT_VERSION,
+  LATCH_OPEN_BACKGROUND_MIN_PRODUCT_VERSION,
   latchAttachCommand,
   latchSupportsOpenAs,
+  latchSupportsOpenBackground,
   latchViewerFlagForKind,
   mergeProviderSessionIntoMetadata,
   parseLatchCreateReport,
@@ -252,5 +254,44 @@ test('buildLatchOpenArgs sends --as only when the CLI understands it', () => {
       productVersion: LATCH_OPEN_AS_MIN_PRODUCT_VERSION
     }),
     ['open', 'ses_01J', '--with', 'iterm', '--as', 'window', '--json']
+  );
+});
+
+test('buildLatchOpenArgs sends the focus flag only when the CLI understands it', () => {
+  assert.equal(latchSupportsOpenBackground(LATCH_OPEN_BACKGROUND_MIN_PRODUCT_VERSION), true);
+  assert.equal(latchSupportsOpenBackground(LATCH_OPEN_AS_MIN_PRODUCT_VERSION), false);
+  assert.equal(latchSupportsOpenBackground(null), false);
+
+  assert.deepEqual(
+    buildLatchOpenArgs({
+      providerSessionId: 'ses_01J',
+      viewer: 'iterm',
+      openAs: 'tab',
+      background: true,
+      productVersion: LATCH_OPEN_BACKGROUND_MIN_PRODUCT_VERSION
+    }),
+    ['open', 'ses_01J', '--with', 'iterm', '--as', 'tab', '--background', '--json']
+  );
+  // Foreground is stated too, so Latch's own `open.background` cannot override
+  // the setting the user sees in Overlord.
+  assert.deepEqual(
+    buildLatchOpenArgs({
+      providerSessionId: 'ses_01J',
+      viewer: 'iterm',
+      background: false,
+      productVersion: LATCH_OPEN_BACKGROUND_MIN_PRODUCT_VERSION
+    }),
+    ['open', 'ses_01J', '--with', 'iterm', '--foreground', '--json']
+  );
+  // clap rejects unknown flags: an older Latch keeps the pre-existing argv.
+  assert.deepEqual(
+    buildLatchOpenArgs({
+      providerSessionId: 'ses_01J',
+      viewer: 'iterm',
+      openAs: 'tab',
+      background: true,
+      productVersion: LATCH_OPEN_AS_MIN_PRODUCT_VERSION
+    }),
+    ['open', 'ses_01J', '--with', 'iterm', '--as', 'tab', '--json']
   );
 });

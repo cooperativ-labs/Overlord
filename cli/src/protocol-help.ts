@@ -357,6 +357,8 @@ create-run-queue:
   Returns:
     The created RunQueueDto, unpaused and positioned after the existing queues.
   Rules:
+    A new queue stays until it is used. Once it has held an entry and its last
+    entry completes, is removed, or moves away, the queue deletes itself.
     Queue definitions are project configuration and require the project:update
     permission, so a mission_lifecycle-scoped agent token cannot run this. Entry
     operations (queue-objective, dequeue-objective, reorder-run-queue) are
@@ -432,6 +434,9 @@ queue-objective:
     Choose at most one of --after, --front, and --position. Without --queue,
     --after selects its queue; otherwise the default queue is used. Re-running
     without placement is idempotent.
+    Queueing an objective also queues every not-yet-started objective after it
+    in the mission, directly behind it. Queue order and mission objective order
+    are one sequence: reordering either reorders the other.
 
 dequeue-objective:
   Purpose:
@@ -442,6 +447,9 @@ dequeue-objective:
     --project-id <id|slug|name> Confirms the objective's project
   Returns:
     { removed, objectiveId }. Already-unqueued objectives return removed: false.
+  Rules:
+    A removed objective that has not started moves to the end of its mission's
+    objectives, and stays last when queued again unless it is moved.
 
 retry-queue-entry:
   Purpose:

@@ -8,10 +8,17 @@ const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
 const bootstrap = await bootstrapIntegrationTestDb({
   sqlitePath: path.join(tempDir, 'webapp.sqlite')
 });
-const { createProject, updateObjective } = await import('./repository.ts');
+const { createProject, reorderFutureObjectives, updateObjective } = await import('./repository.ts');
 const { runProtocolSubcommand } = await import('./protocol.ts');
-const { deleteRunQueueEntry, getProjectRunQueues, postRunQueueEntry } =
-  await import('./run-queue.ts');
+const {
+  deleteRunQueueEntry,
+  getProjectRunQueues,
+  patchRunQueueEntry,
+  postProjectRunQueue,
+  postRunQueueEntry
+} = await import('./run-queue.ts');
+const { dispatchProjectRunQueues } = await import('./run-queue-dispatch-worker.ts');
+const { requireDatabaseClient } = await import('./db.ts');
 
 type CreatedMission = {
   missionId: string;
@@ -92,6 +99,58 @@ test('removing the last entry retires the mission queue it emptied', async () =>
   assert.equal((await getProjectRunQueues(project.id)).queues.length, 0);
 });
 
+test('a manual queue stays while pristine and retires once used and emptied', async () => {
+  const project = await createProject({ name: `Manual queue ${Date.now()}` });
+  const only = await mission(project.id, 1, 'Manual');
+  const manual = await postProjectRunQueue(project.id, { name: 'Hand made' });
+
+  // Never used: survives a dispatch sweep so an objective can be added to it.
+  await dispatchProjectRunQueues(requireDatabaseClient(), project.id);
+  assert.deepEqual(
+    (await getProjectRunQueues(project.id)).queues.map(queue => queue.id),
+    [manual.id]
+  );
+
+  const entry = await postRunQueueEntry(project.id, {
+    objectiveId: only.objectives[0]!.id,
+    queueId: manual.id
+  });
+  const removal = await deleteRunQueueEntry(entry.id);
+  assert.equal(removal.removedEmptyQueueId, manual.id);
+  assert.equal((await getProjectRunQueues(project.id)).queues.length, 0);
+});
+
+test('moving the last entry out retires the source queue', async () => {
+  const project = await createProject({ name: `Move cleanup ${Date.now()}` });
+  const only = await mission(project.id, 1, 'Mover');
+  const target = await postProjectRunQueue(project.id, { name: 'Target' });
+
+  const entry = await postRunQueueEntry(project.id, { objectiveId: only.objectives[0]!.id });
+  await patchRunQueueEntry(entry.id, { queueId: target.id });
+
+  const queues = (await getProjectRunQueues(project.id)).queues;
+  assert.deepEqual(
+    queues.map(queue => queue.id),
+    [target.id]
+  );
+  assert.equal(queues[0]!.entries.length, 1);
+});
+
+test('a queue whose entries all completed retires on the next dispatch tick', async () => {
+  const project = await createProject({ name: `Completed queue ${Date.now()}` });
+  const only = await mission(project.id, 1, 'Done');
+  const entry = await postRunQueueEntry(project.id, { objectiveId: only.objectives[0]!.id });
+
+  // The planner only drops finished entries from a running queue.
+  bootstrap.db.prepare('UPDATE run_queues SET paused = 0 WHERE id = ?').run(entry.queueId);
+  bootstrap.db
+    .prepare("UPDATE objectives SET state = 'complete' WHERE id = ?")
+    .run(only.objectives[0]!.id);
+  await dispatchProjectRunQueues(requireDatabaseClient(), project.id);
+
+  assert.equal((await getProjectRunQueues(project.id)).queues.length, 0);
+});
+
 test('forced removal frees an in-flight entry whose objective is stuck launching', async () => {
   const project = await createProject({ name: `Stuck queue ${Date.now()}` });
   const stuck = await mission(project.id, 2, 'Stuck');
@@ -164,4 +223,23 @@ test('an unforced removal leaves a stuck objective state alone', async () => {
     .prepare('SELECT state FROM objectives WHERE id = ?')
     .get(objectiveId) as { state: string };
   assert.equal(objective.state, 'launching');
+});
+
+test('reordering a mission carries the new order into its Run Queue', async () => {
+  const project = await createProject({ name: `Mission reorder ${Date.now()}` });
+  const created = await mission(project.id, 4, 'Reorder');
+  const [, second, third, fourth] = created.objectives.map(objective => objective.id);
+
+  // Queuing the second objective queues everything after it as well.
+  await postRunQueueEntry(project.id, { objectiveId: second! });
+  const queueOrder = async () =>
+    (await getProjectRunQueues(project.id)).queues
+      .find(queue => queue.missionId === created.missionId)!
+      .entries.map(entry => entry.objectiveId);
+  assert.deepEqual(await queueOrder(), [second, third, fourth]);
+
+  await reorderFutureObjectives(created.missionId, {
+    orderedObjectiveIds: [fourth!, second!, third!]
+  });
+  assert.deepEqual(await queueOrder(), [fourth, second, third]);
 });

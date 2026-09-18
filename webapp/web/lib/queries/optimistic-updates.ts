@@ -167,7 +167,13 @@ export function createReorderFutureObjectivesMutation(qc: QueryClient) {
     ) => {
       if (context?.previous) qc.setQueryData(keys.mission(vars.missionId), context.previous);
     },
-    onSettled: (_data: unknown, _err: unknown, vars: ReorderFutureObjectivesVars) =>
-      void qc.invalidateQueries({ queryKey: keys.mission(vars.missionId) })
+    onSettled: (_data: unknown, _err: unknown, vars: ReorderFutureObjectivesVars) => {
+      void qc.invalidateQueries({ queryKey: keys.mission(vars.missionId) });
+      // The server carries a mission reorder into its Run Queue entries, so
+      // every cached project queue projection may now be stale.
+      void qc.invalidateQueries({
+        predicate: query => query.queryKey[0] === 'project' && query.queryKey[2] === 'run-queues'
+      });
+    }
   };
 }

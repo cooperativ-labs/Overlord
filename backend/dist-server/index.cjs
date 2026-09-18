@@ -71428,6 +71428,9 @@ var init_latch_environment = __esm({
 function viewerOpenAsForPlacement(placement) {
   return typeof placement === "string" && placement.trim().toLowerCase() === "tab" ? "tab" : DEFAULT_VIEWER_OPEN_AS;
 }
+function viewerBackgroundForProfile(profile) {
+  return profile?.background === true && profile.placement !== "chord";
+}
 function parseViewerOpenAs(value) {
   return typeof value === "string" && value.trim().toLowerCase() === "tab" ? "tab" : DEFAULT_VIEWER_OPEN_AS;
 }
@@ -71548,7 +71551,8 @@ function resolveLaunchSession({
       kind: viewerKindForLauncher(launcher),
       launcher: launcher ?? null,
       openOnLaunch: openOnLaunch ?? defaults2.openViewerOnLaunch !== false,
-      openAs: viewerOpenAsForPlacement(profile?.placement ?? DEFAULT_TERMINAL_PROFILE.placement)
+      openAs: viewerOpenAsForPlacement(profile?.placement ?? DEFAULT_TERMINAL_PROFILE.placement),
+      background: viewerBackgroundForProfile(profile)
     },
     executionProviderSource: provider ? "target" : "user_default",
     viewerOpenSource: openOnLaunch === null ? "user_default" : "target"
@@ -71576,7 +71580,10 @@ function launchSessionSnapshotFromMetadata(metadata) {
       openOnLaunch: viewer?.openOnLaunch !== false,
       // A snapshot frozen before `openAs` existed carries none; `window` is what
       // those runs actually did, so the absent case must not become `tab`.
-      openAs: parseViewerOpenAs(viewer?.openAs)
+      openAs: parseViewerOpenAs(viewer?.openAs),
+      // A snapshot frozen before `background` existed carries none; those runs
+      // opened in the foreground, so absent must not become background.
+      background: viewer?.background === true
     },
     executionProviderSource: source(cast.executionProviderSource),
     viewerOpenSource: source(cast.viewerOpenSource),
@@ -72187,26 +72194,36 @@ function latchSupportsOpenAs(productVersion) {
   if (!version4) return false;
   return compareLatchProductVersions(version4, LATCH_OPEN_AS_MIN_PRODUCT_VERSION) >= 0;
 }
+function latchSupportsOpenBackground(productVersion) {
+  const version4 = trimmed5(productVersion);
+  if (!version4) return false;
+  return compareLatchProductVersions(version4, LATCH_OPEN_BACKGROUND_MIN_PRODUCT_VERSION) >= 0;
+}
 function buildLatchOpenArgs({
   providerSessionId,
   viewer,
   openAs,
+  background,
   productVersion
 }) {
   const args = ["open", providerSessionId, "--with", viewer];
   if (openAs && latchSupportsOpenAs(productVersion)) {
     args.push("--as", parseViewerOpenAs(openAs));
   }
+  if (typeof background === "boolean" && latchSupportsOpenBackground(productVersion)) {
+    args.push(background ? "--background" : "--foreground");
+  }
   args.push("--json");
   return args;
 }
-var PROVIDER_SESSION_METADATA_KEY, LATCH_OPEN_AS_MIN_PRODUCT_VERSION;
+var PROVIDER_SESSION_METADATA_KEY, LATCH_OPEN_AS_MIN_PRODUCT_VERSION, LATCH_OPEN_BACKGROUND_MIN_PRODUCT_VERSION;
 var init_latch_launch = __esm({
   "../packages/core/service/latch-launch.ts"() {
     "use strict";
     init_terminal_profile_types();
     PROVIDER_SESSION_METADATA_KEY = "providerSession";
     LATCH_OPEN_AS_MIN_PRODUCT_VERSION = "0.2608140931.0";
+    LATCH_OPEN_BACKGROUND_MIN_PRODUCT_VERSION = "0.2609181007.0";
   }
 });
 
@@ -76716,7 +76733,44 @@ async function listProjectRunQueues(db, projectId) {
     })
   };
 }
-async function rewriteMissionPositions(db, missionId) {
+async function retireRunQueueIfEmpty(db, queueId) {
+  const queue = await db.get(
+    "SELECT id, is_default FROM run_queues WHERE id = ? AND deleted_at IS NULL",
+    [queueId]
+  );
+  if (!queue || truthy(queue.is_default)) return null;
+  const remaining = await db.get(
+    "SELECT id FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL LIMIT 1",
+    [queueId]
+  );
+  if (remaining) return null;
+  const now2 = nowIso();
+  await db.run(
+    "UPDATE run_queues SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND deleted_at IS NULL",
+    [now2, now2, queueId]
+  );
+  return queueId;
+}
+async function retireEmptyRunQueues(db, projectId) {
+  const rows = await db.all(
+    `SELECT q.id FROM run_queues q
+      WHERE q.project_id = ? AND q.deleted_at IS NULL AND q.is_default = ?
+        AND NOT EXISTS (
+          SELECT 1 FROM run_queue_entries e WHERE e.queue_id = q.id AND e.deleted_at IS NULL
+        )
+        AND EXISTS (SELECT 1 FROM run_queue_entries e WHERE e.queue_id = q.id)`,
+    [projectId, db.dialect === "postgres" ? false : 0]
+  );
+  if (!rows.length) return [];
+  const now2 = nowIso();
+  for (const row of rows)
+    await db.run(
+      "UPDATE run_queues SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND deleted_at IS NULL",
+      [now2, now2, row.id]
+    );
+  return rows.map((row) => row.id);
+}
+async function rewriteMissionPositions(db, missionId, options = {}) {
   const rows = await db.all(
     `SELECT o.id, o.state, o.position, e.id queue_entry_id, e.position queue_position, q.position queue_order
        FROM objectives o
@@ -76728,26 +76782,18 @@ async function rewriteMissionPositions(db, missionId) {
   );
   const historicalStates = /* @__PURE__ */ new Set(["executing", "pending_delivery", "complete"]);
   const historical = rows.filter((row) => historicalStates.has(row.state));
-  const tail = rows.filter((row) => !historicalStates.has(row.state));
-  const orderedTail = [];
-  let queuedSpan = [];
-  const flushQueuedSpan = () => {
-    queuedSpan.sort(
-      (left, right) => (left.queue_order ?? Number.MAX_SAFE_INTEGER) - (right.queue_order ?? Number.MAX_SAFE_INTEGER) || (left.queue_position ?? Number.MAX_SAFE_INTEGER) - (right.queue_position ?? Number.MAX_SAFE_INTEGER) || left.position - right.position || left.id.localeCompare(right.id)
-    );
-    orderedTail.push(...queuedSpan);
-    queuedSpan = [];
-  };
-  for (const row of tail) {
-    if (row.queue_entry_id) {
-      queuedSpan.push(row);
-      continue;
-    }
-    flushQueuedSpan();
-    orderedTail.push(row);
-  }
-  flushQueuedSpan();
+  let tail = rows.filter((row) => !historicalStates.has(row.state));
+  const movedToEnd = options.moveToEndObjectiveId ? tail.find((row) => row.id === options.moveToEndObjectiveId) : void 0;
+  if (movedToEnd) tail = [...tail.filter((row) => row !== movedToEnd), movedToEnd];
+  const queuedInQueueOrder = tail.filter((row) => row.queue_entry_id).sort(
+    (left, right) => (left.queue_order ?? Number.MAX_SAFE_INTEGER) - (right.queue_order ?? Number.MAX_SAFE_INTEGER) || (left.queue_position ?? Number.MAX_SAFE_INTEGER) - (right.queue_position ?? Number.MAX_SAFE_INTEGER) || left.position - right.position || left.id.localeCompare(right.id)
+  );
+  let nextQueued = 0;
+  const orderedTail = tail.map(
+    (row) => row.queue_entry_id ? queuedInQueueOrder[nextQueued++] : row
+  );
   const orderedRows = [...historical, ...orderedTail];
+  if (orderedRows.every((row, index) => row.position === index)) return;
   const now2 = nowIso();
   for (let i5 = 0; i5 < orderedRows.length; i5++)
     await db.run(
@@ -76759,6 +76805,35 @@ async function rewriteMissionPositions(db, missionId) {
       "UPDATE objectives SET position = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
       [i5, now2, orderedRows[i5].id]
     );
+}
+async function syncRunQueueOrderFromMissionPositions(db, missionId) {
+  const rows = await db.all(
+    `SELECT e.id, e.queue_id, e.project_id, e.workspace_id, e.position, o.position objective_position
+       FROM run_queue_entries e
+       JOIN objectives o ON o.id = e.objective_id AND o.deleted_at IS NULL
+      WHERE e.mission_id = ? AND e.deleted_at IS NULL AND e.state IN ('waiting', 'blocked')
+      ORDER BY e.position, e.id`,
+    [missionId]
+  );
+  let changed = false;
+  const now2 = nowIso();
+  for (const queueId of new Set(rows.map((row) => row.queue_id))) {
+    const slots = rows.filter((row) => row.queue_id === queueId);
+    const desired = [...slots].sort(
+      (left, right) => left.objective_position - right.objective_position || left.id.localeCompare(right.id)
+    );
+    for (let i5 = 0; i5 < slots.length; i5++) {
+      if (desired[i5].id === slots[i5].id) continue;
+      changed = true;
+      await db.run(
+        "UPDATE run_queue_entries SET position = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
+        [slots[i5].position, now2, desired[i5].id]
+      );
+    }
+  }
+  if (changed && rows[0])
+    await enqueueRunQueueDispatch(db, rows[0].project_id, rows[0].workspace_id);
+  return { changed };
 }
 async function createRunQueue(db, projectId, name, actorId, missionId = null) {
   const project = await projectRow(db, projectId);
@@ -76869,7 +76944,7 @@ async function reorderProjectRunQueues(db, projectId, orderedQueueIds) {
 async function enqueueRunQueueEntry(db, projectId, objectiveId, options = {}) {
   return db.transaction(async (tx) => {
     const objective = await tx.get(
-      "SELECT id, project_id, workspace_id, mission_id FROM objectives WHERE id = ? AND deleted_at IS NULL",
+      "SELECT id, project_id, workspace_id, mission_id, position FROM objectives WHERE id = ? AND deleted_at IS NULL",
       [objectiveId]
     );
     if (!objective || objective.project_id !== projectId)
@@ -76928,6 +77003,62 @@ async function enqueueRunQueueEntry(db, projectId, objectiveId, options = {}) {
       "UPDATE objectives SET auto_advance = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
       [tx.dialect === "postgres" ? true : 1, now2, objectiveId]
     );
+    if (options.cascade !== false) {
+      const followers = await tx.all(
+        `SELECT o.id FROM objectives o
+          WHERE o.mission_id = ? AND o.deleted_at IS NULL AND o.position > ?
+            AND o.state IN ('draft', 'submitted', 'future')
+            AND TRIM(o.instruction_text) <> ''
+            AND NOT EXISTS (
+              SELECT 1 FROM run_queue_entries e WHERE e.objective_id = o.id AND e.deleted_at IS NULL
+            )
+          ORDER BY o.position, o.id`,
+        [objective.mission_id, objective.position]
+      );
+      if (followers.length) {
+        const followerIds = [];
+        for (const follower of followers) {
+          const followerId = newId();
+          followerIds.push(followerId);
+          await tx.run(
+            `INSERT INTO run_queue_entries (id, queue_id, project_id, workspace_id, mission_id, objective_id, position, state, enqueued_by_workspace_user_id, enqueued_at, created_at, updated_at, revision) VALUES (?, ?, ?, ?, ?, ?, ?, 'waiting', ?, ?, ?, ?, 1)`,
+            [
+              followerId,
+              queue.id,
+              projectId,
+              objective.workspace_id,
+              objective.mission_id,
+              follower.id,
+              position,
+              options.actorId ?? null,
+              now2,
+              now2,
+              now2
+            ]
+          );
+          await tx.run(
+            "UPDATE objectives SET auto_advance = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
+            [tx.dialect === "postgres" ? true : 1, now2, follower.id]
+          );
+        }
+        const current = await tx.all(
+          "SELECT id FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL ORDER BY position, id",
+          [queue.id]
+        );
+        const others = current.map((row) => row.id).filter((entryId) => !followerIds.includes(entryId));
+        const anchor = others.indexOf(id);
+        const renumbered = [
+          ...others.slice(0, anchor + 1),
+          ...followerIds,
+          ...others.slice(anchor + 1)
+        ];
+        for (let i5 = 0; i5 < renumbered.length; i5++)
+          await tx.run("UPDATE run_queue_entries SET position = ? WHERE id = ?", [
+            (i5 + 1) * STEP,
+            renumbered[i5]
+          ]);
+      }
+    }
     await rewriteMissionPositions(tx, objective.mission_id);
     await enqueueRunQueueDispatch(tx, projectId, objective.workspace_id);
     return (await listProjectRunQueues(tx, projectId)).queues.flatMap((q2) => q2.entries).find((e5) => e5.id === id);
@@ -76971,20 +77102,13 @@ async function removeRunQueueEntry(db, entryId, options = {}) {
         [tx.dialect === "postgres" ? true : 1, now2, queue.id, tx.dialect === "postgres" ? false : 0]
       );
     }
-    if (queue?.mission_id && !truthy(queue.is_default)) {
-      const remaining = await tx.get(
-        "SELECT id FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL LIMIT 1",
-        [queue.id]
-      );
-      if (!remaining) {
-        await tx.run(
-          "UPDATE run_queues SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
-          [now2, now2, queue.id]
-        );
-        removedEmptyQueueId = queue.id;
-      }
-    }
-    await rewriteMissionPositions(tx, row.mission_id);
+    if (queue) removedEmptyQueueId = await retireRunQueueIfEmpty(tx, queue.id);
+    const resultingState = objectiveReset ? "draft" : objective?.state;
+    await rewriteMissionPositions(
+      tx,
+      row.mission_id,
+      resultingState && SEQUENCEABLE_OBJECTIVE_STATES.has(resultingState) ? { moveToEndObjectiveId: row.objective_id } : {}
+    );
     await enqueueRunQueueDispatch(tx, row.project_id, row.workspace_id);
     return {
       removed: true,
@@ -77106,6 +77230,7 @@ async function moveRunQueueEntry(db, entryId, options) {
       "UPDATE run_queue_entries SET queue_id = ?, position = ?, state = 'waiting', blocked_reason = NULL, waiting_reason = NULL, waiting_on_objective_id = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?",
       [queueId, position, nowIso(), entryId]
     );
+    if (queueId !== current.queue_id) await retireRunQueueIfEmpty(tx, current.queue_id);
     await rewriteMissionPositions(tx, current.mission_id);
     await enqueueRunQueueDispatch(tx, current.project_id, current.workspace_id);
     return (await listProjectRunQueues(tx, current.project_id)).queues.flatMap((q2) => q2.entries).find((e5) => e5.id === entryId);
@@ -77198,7 +77323,7 @@ async function deleteRunQueue(db, queueId, moveEntriesTo) {
     return { removed: true, projectId: queue.project_id };
   });
 }
-var RUN_QUEUE_DISPATCH_JOB_TYPE, STEP, truthy, MISSION_QUEUE_NAME_LIMIT;
+var RUN_QUEUE_DISPATCH_JOB_TYPE, STEP, truthy, MISSION_QUEUE_NAME_LIMIT, SEQUENCEABLE_OBJECTIVE_STATES;
 var init_run_queue = __esm({
   "../packages/core/service/run-queue.ts"() {
     "use strict";
@@ -77210,6 +77335,7 @@ var init_run_queue = __esm({
     STEP = 1e3;
     truthy = (value) => value === true || value === 1;
     MISSION_QUEUE_NAME_LIMIT = 80;
+    SEQUENCEABLE_OBJECTIVE_STATES = /* @__PURE__ */ new Set(["draft", "submitted", "future"]);
   }
 });
 
@@ -143972,6 +144098,7 @@ async function deliverSession({
          WHERE objective_id = ? AND deleted_at IS NULL`,
       [now2, now2, session.objective_id]
     );
+    await retireEmptyRunQueues(txCtx.db, mission.projectId);
     const objectiveRevision = (await txCtx.db.get(`SELECT revision FROM objectives WHERE id = ?`, [
       session.objective_id
     ]))?.revision;
@@ -144374,6 +144501,9 @@ var DEFAULT_VIEWER_OPEN_AS2 = "window";
 function viewerOpenAsForPlacement2(placement) {
   return typeof placement === "string" && placement.trim().toLowerCase() === "tab" ? "tab" : DEFAULT_VIEWER_OPEN_AS2;
 }
+function viewerBackgroundForProfile2(profile) {
+  return profile?.background === true && profile.placement !== "chord";
+}
 function parseViewerOpenAs2(value) {
   return typeof value === "string" && value.trim().toLowerCase() === "tab" ? "tab" : DEFAULT_VIEWER_OPEN_AS2;
 }
@@ -144433,7 +144563,8 @@ function resolveLaunchSession2({ profile, defaults: defaults2 = DEFAULT_LAUNCH_S
       kind: viewerKindForLauncher2(launcher),
       launcher: launcher ?? null,
       openOnLaunch: openOnLaunch ?? defaults2.openViewerOnLaunch !== false,
-      openAs: viewerOpenAsForPlacement2(profile?.placement ?? DEFAULT_TERMINAL_PROFILE2.placement)
+      openAs: viewerOpenAsForPlacement2(profile?.placement ?? DEFAULT_TERMINAL_PROFILE2.placement),
+      background: viewerBackgroundForProfile2(profile)
     },
     executionProviderSource: provider ? "target" : "user_default",
     viewerOpenSource: openOnLaunch === null ? "user_default" : "target"
@@ -144460,7 +144591,10 @@ function launchSessionSnapshotFromMetadata2(metadata) {
       openOnLaunch: viewer?.openOnLaunch !== false,
       // A snapshot frozen before `openAs` existed carries none; `window` is what
       // those runs actually did, so the absent case must not become `tab`.
-      openAs: parseViewerOpenAs2(viewer?.openAs)
+      openAs: parseViewerOpenAs2(viewer?.openAs),
+      // A snapshot frozen before `background` existed carries none; those runs
+      // opened in the foreground, so absent must not become background.
+      background: viewer?.background === true
     },
     executionProviderSource: source(cast.executionProviderSource),
     viewerOpenSource: source(cast.viewerOpenSource),
@@ -153842,6 +153976,7 @@ async function reorderFutureObjectives(missionId, body) {
         tx
       );
     }
+    await syncRunQueueOrderFromMissionPositions(tx, mission.id);
   });
   return listObjectives2(missionId);
 }
@@ -163445,7 +163580,7 @@ var hostedMcpToolDefinitions = [
   {
     name: "overlord_queue_objective",
     title: "Queue objective",
-    description: "Use this only when the user explicitly asks to add, move, or remove an objective in the project Run Queue. Queue membership is target-neutral and sequences delivery-driven launches; it does not directly launch the objective.",
+    description: "Use this only when the user explicitly asks to add, move, or remove an objective in the project Run Queue. Queue membership is target-neutral and sequences delivery-driven launches; it does not directly launch the objective. Adding an objective also queues every not-yet-started objective after it in the mission; a removed objective moves to the end of its mission.",
     inputSchema: objectSchema(
       {
         objectiveId: stringProperty("Objective UUID or display id such as coo:756.k7xm."),
@@ -171496,6 +171631,7 @@ function entryHoldIsUnchanged(entry, next) {
   return entry.state === next.state && (entry.waiting_reason ?? null) === next.waitingReason && (entry.waiting_on_objective_id ?? null) === next.waitingOnObjectiveId && (entry.blocked_reason ?? null) === next.blockedReason;
 }
 async function dispatchProjectRunQueues(db, projectId) {
+  await retireEmptyRunQueues(db, projectId);
   const queues = await db.all(
     "SELECT id, paused, position FROM run_queues WHERE project_id = ? AND deleted_at IS NULL ORDER BY position",
     [projectId]
@@ -171666,6 +171802,7 @@ async function dispatchProjectRunQueues(db, projectId) {
       );
     }
   }
+  if (actions.some((action) => action.action === "drop")) await retireEmptyRunQueues(db, projectId);
 }
 var RunQueueDispatchWorker = class extends WorkerJobPoller {
   sweepTimer = null;

@@ -861,8 +861,9 @@ export interface RunQueueDto {
   /**
    * Mission this queue belongs to, or `null` for a free-standing project queue.
    * A mission queue is created lazily the first time one of that mission's
-   * objectives is queued without an explicit destination, and is retired again
-   * once its last entry is removed.
+   * objectives is queued without an explicit destination. Every non-default
+   * queue, mission-scoped or not, is retired once it has held an entry and its
+   * last live entry leaves; a queue that was never used is kept.
    */
   missionId: string | null;
   /** Display id of {@link missionId}, when the queue is mission-scoped. */

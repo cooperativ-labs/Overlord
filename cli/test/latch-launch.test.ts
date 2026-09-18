@@ -1,4 +1,7 @@
-import { LATCH_OPEN_AS_MIN_PRODUCT_VERSION } from '@overlord/core/service/latch-launch';
+import {
+  LATCH_OPEN_AS_MIN_PRODUCT_VERSION,
+  LATCH_OPEN_BACKGROUND_MIN_PRODUCT_VERSION
+} from '@overlord/core/service/latch-launch';
 import assert from 'node:assert/strict';
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -80,6 +83,52 @@ process.stdout.write(JSON.stringify({
     if (!legacy.ok) throw new Error('expected success');
     assert.equal(legacy.openAs, null);
   } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('openLatchViewer forwards the background choice only to a Latch that supports it', () => {
+  const tempDir = mkdtempSync(path.join(tmpdir(), 'overlord-latch-open-bg-'));
+  const fakeLatch = path.join(tempDir, 'latch');
+  // Mirrors clap: an unknown flag fails the open outright.
+  writeFileSync(
+    fakeLatch,
+    `#!/usr/bin/env node
+const args = process.argv.slice(2);
+if (process.env.FAKE_LATCH_LEGACY && args.some(arg => arg === '--background' || arg === '--foreground')) {
+  process.stderr.write('error: unexpected argument');
+  process.exit(2);
+}
+process.stdout.write(JSON.stringify({ id: args[1], opened: true, background: args.includes('--background') }));
+`
+  );
+  chmodSync(fakeLatch, 0o700);
+
+  try {
+    const background = openLatchViewer({
+      executable: fakeLatch,
+      providerSessionId: 'ses_01JTEST',
+      viewerKind: 'iterm',
+      background: true,
+      productVersion: LATCH_OPEN_BACKGROUND_MIN_PRODUCT_VERSION
+    });
+    assert.equal(background.ok, true);
+    if (!background.ok) throw new Error('expected success');
+    assert.equal(background.background, true);
+
+    process.env.FAKE_LATCH_LEGACY = '1';
+    const legacy = openLatchViewer({
+      executable: fakeLatch,
+      providerSessionId: 'ses_01JTEST',
+      viewerKind: 'iterm',
+      background: true,
+      productVersion: LATCH_OPEN_AS_MIN_PRODUCT_VERSION
+    });
+    assert.equal(legacy.ok, true);
+    if (!legacy.ok) throw new Error('expected success');
+    assert.equal(legacy.background, null);
+  } finally {
+    delete process.env.FAKE_LATCH_LEGACY;
     rmSync(tempDir, { recursive: true, force: true });
   }
 });

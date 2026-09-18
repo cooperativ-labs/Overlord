@@ -13,7 +13,10 @@ import {
   resolveLaunchExecutionTarget
 } from '../packages/core/service/project-execution-target.ts';
 import { RUN_QUEUE_DISPATCH_JOB_TYPE } from '../packages/core/service/run-queue.ts';
-import { enqueueRunQueueDispatch } from '../packages/core/service/run-queue.ts';
+import {
+  enqueueRunQueueDispatch,
+  retireEmptyRunQueues
+} from '../packages/core/service/run-queue.ts';
 import { nowIso } from '../packages/core/service/util.ts';
 import type { ClaimedWorkerJob } from '../packages/core/service/worker-jobs.ts';
 
@@ -102,6 +105,9 @@ export async function dispatchProjectRunQueues(
   db: DatabaseClient,
   projectId: string
 ): Promise<void> {
+  // Entries finish outside the queue service (delivery, the drop action below),
+  // so every tick retires queues that were used and now hold nothing.
+  await retireEmptyRunQueues(db, projectId);
   const queues = await db.all<QueueRow>(
     'SELECT id, paused, position FROM run_queues WHERE project_id = ? AND deleted_at IS NULL ORDER BY position',
     [projectId]
@@ -314,6 +320,7 @@ export async function dispatchProjectRunQueues(
       );
     }
   }
+  if (actions.some(action => action.action === 'drop')) await retireEmptyRunQueues(db, projectId);
 }
 
 class RunQueueDispatchWorker extends WorkerJobPoller {

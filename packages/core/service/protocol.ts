@@ -65,7 +65,7 @@ import {
   findPrimaryProjectResource,
   findProjectResourceByKey
 } from './projects.js';
-import { enqueueRunQueueDispatch } from './run-queue.js';
+import { enqueueRunQueueDispatch, retireEmptyRunQueues } from './run-queue.js';
 import { generateSessionKey, hashSessionKey, newId, nowIso } from './util.js';
 import { enqueueWebhookEvent } from './webhook-events.js';
 import { enqueueDeliveryComposeJob } from './worker-jobs.js';
@@ -2652,6 +2652,8 @@ export async function deliverSession({
          WHERE objective_id = ? AND deleted_at IS NULL`,
       [now, now, session.objective_id]
     );
+    // A completed queue no longer needs to exist.
+    await retireEmptyRunQueues(txCtx.db, mission.projectId);
     const objectiveRevision = (
       (await txCtx.db.get(`SELECT revision FROM objectives WHERE id = ?`, [
         session.objective_id

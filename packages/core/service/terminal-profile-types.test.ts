@@ -243,6 +243,51 @@ describe('window-or-tab preference reaching a delegated viewer', () => {
     assert.equal(read?.viewer.openAs, 'tab');
   });
 
+  test('the background choice reaches a delegated viewer open, except for chord', () => {
+    const profile = (
+      placement: TerminalProfile['placement'],
+      background: boolean
+    ): TerminalProfile => ({
+      launcher: 'iTerm2',
+      placement,
+      chord: placement === 'chord' ? 'cmd d' : null,
+      background,
+      executionProvider: { kind: 'latch', executable: 'latch' }
+    });
+
+    assert.equal(
+      resolveLaunchSession({ profile: profile('window', true) }).viewer.background,
+      true
+    );
+    assert.equal(resolveLaunchSession({ profile: profile('tab', true) }).viewer.background, true);
+    assert.equal(resolveLaunchSession({ profile: profile('tab', false) }).viewer.background, false);
+    // Chord must foreground the terminal in a direct launch; keep the same rule.
+    assert.equal(
+      resolveLaunchSession({ profile: profile('chord', true) }).viewer.background,
+      false
+    );
+    assert.equal(resolveLaunchSession({ profile: null }).viewer.background, false);
+
+    const claimed = toLaunchSessionSnapshot(
+      resolveLaunchSession({ profile: profile('window', true) }),
+      '2026-09-18T00:00:00.000Z'
+    );
+    const read = launchSessionSnapshotFromMetadata({ [LAUNCH_SESSION_METADATA_KEY]: claimed });
+    assert.equal(read?.viewer.background, true);
+  });
+
+  test('a snapshot frozen before background existed reads as foreground', () => {
+    const read = launchSessionSnapshotFromMetadata({
+      [LAUNCH_SESSION_METADATA_KEY]: {
+        version: 1,
+        executionProvider: { kind: 'latch', executable: 'latch' },
+        viewer: { kind: 'iterm', launcher: 'iTerm2', openOnLaunch: true, openAs: 'tab' },
+        resolvedAt: '2026-08-20T00:00:00.000Z'
+      }
+    });
+    assert.equal(read?.viewer.background, false);
+  });
+
   test('a snapshot frozen before the shape existed reads as window', () => {
     const read = launchSessionSnapshotFromMetadata({
       [LAUNCH_SESSION_METADATA_KEY]: {

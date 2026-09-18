@@ -265,6 +265,9 @@ export function DraftObjectiveActions({ objective }: DraftObjectiveActionsProps)
                       ? `It will follow ${predecessor.objectiveTitle ?? predecessor.objectiveDisplayId} · ${predecessor.missionTitle}.`
                       : `This will be the first entry in ${selectedQueue?.name ?? "this mission's new queue"}.`}
                   </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Every objective after this one in the mission is queued with it.
+                  </p>
                 </div>
                 <label className="space-y-1 text-xs text-muted-foreground">
                   <span>Queue</span>
@@ -311,7 +314,7 @@ export function DraftObjectiveActions({ objective }: DraftObjectiveActionsProps)
             <DialogDescription>
               {forceRemove
                 ? 'This drops the in-flight entry, clears the execution requests it left behind, and returns an objective still stuck in Launching to Draft so it can be run again. An objective already Executing keeps its live session.'
-                : 'This objective will no longer wait for the queue. It will not be launched automatically.'}
+                : 'This objective will no longer wait for the queue and will not be launched automatically. It moves to the end of the mission’s objectives.'}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

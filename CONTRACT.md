@@ -34,13 +34,83 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `142`
+Current version: `144`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
 `contract/components.yaml`) — never a header duplicate. The contract version is
 incremented when any stable interface changes. All conformance manifests must
 declare the contract version they were validated against.
+
+### Version 144 Change Summary
+
+"Open in the background" delegated to Latch (coo:1025). The resolved launch
+session's viewer additively carries `background` (boolean), projected from the
+stored `TerminalProfile.background` rather than stored a second time; as in a
+direct launch it is always `false` for the `chord` placement. It is frozen onto
+the claim-time `launchSession` snapshot, and a snapshot frozen before this field
+reads as `false` (foreground), which is what those runs did. The runner's viewer
+open sends it explicitly as `latch open --background` or `--foreground`, never
+relying on Latch's own `open.background` default, for the same reason `--as` is
+explicit. The flag is gated on the `productVersion` from
+`latch capabilities --json` (minimum `0.2609181007.0`): clap rejects unknown
+arguments, so an older CLI is sent the pre-existing argv and opens in the
+foreground. The mission-panel re-open is a deliberate user action and stays
+foreground. No route, DTO, flag, or database shape changes; `viewer.openOnLaunch
+= false` remains the way to launch into Latch with no window at all.
+
+### Version 143 Change Summary
+
+Run Queue order and mission objective order are one sequence, and finished
+queues retire themselves. Four behavior
+changes apply to every Run Queue surface (REST, Protocol `queue-objective` /
+`dequeue-objective` / `reorder-run-queue` / `reorder-future-objectives`, hosted
+MCP and connector shims, and the legacy `autoAdvance` compatibility input); no
+route, DTO, flag, or database shape changes.
+
+1. **Enqueue cascades.** Queueing an objective also queues every objective that
+   follows it in the mission (by position) and has not started — `draft`,
+   `submitted`, or `future`, with instruction text, and not already queued. The
+   followers join the same queue directly behind the queued objective, in
+   mission order. The response is still the single `RunQueueEntryDto` of the
+   requested objective. The core service accepts an internal `cascade: false`
+   option; no external surface exposes it.
+2. **Order writes through in both directions.** A queue reorder or move
+   redistributes the mission's queued objectives, in queue order, across the
+   position slots queued objectives already occupy; unqueued objectives never
+   move. This replaces the Version 106 "queued span" rule, under which an
+   unqueued objective between two queued ones stopped the queue order from
+   reaching the mission. Conversely, `reorderFutureObjectives` now carries the
+   new objective order into every queue holding that mission's entries: the
+   mission's `waiting`/`blocked` entries keep the queue slots they occupy and
+   are redistributed across them in objective-position order. In-flight entries
+   and other missions' entries never move, and a changed queue requests a
+   dispatch tick.
+3. **Dequeue moves to the end.** Removing a queue entry whose objective has not
+   started (`draft`, `submitted`, `future`, or a forced removal that reset
+   `launching` to `draft`) moves that objective to the end of the mission's
+   objective positions. Re-queueing appends it to the queue, so it stays last
+   until a user moves it. Removal on completion, disconnect, or deletion leaves
+   positions alone because executed objectives are ordered by their timestamps.
+4. **Empty queues retire automatically.** Any non-default queue that has held
+   an entry and no longer holds a live one is soft-deleted, whichever way its
+   last entry left: removal, a move to another queue, the dispatcher's drop, or
+   delivery completing the objective. This widens the Version 106 rule, which
+   retired only mission-scoped queues and only on entry removal. A pristine
+   queue — created by a user and never given an entry — is kept so an objective
+   can be added to it, and the default queue is never retired. The dispatch
+   tick also sweeps the project, so queues left empty before this version
+   retire on their next tick. `removedEmptyQueueId` on the entry DELETE response
+   now reports any retired queue, not only a mission-scoped one. Clients must
+   tolerate a queue id disappearing from `ProjectRunQueuesDto` after any entry
+   mutation or delivery.
+
+Impact on other modules: the webapp mission panel drops its drag-across-the-
+queue-boundary enqueue/dequeue prompts and treats every future-objective drag as
+a mission reorder; it also accepts server-side order changes whenever no local
+reorder is pending. The dispatch worker, runners, CLI, MCP, connectors, desktop,
+and mobile consume the same DTOs and need no change; agents calling
+`queue-objective` should expect later siblings to become queued as well.
 
 ### Version 142 Change Summary
 
@@ -1267,7 +1337,7 @@ Owns:
 - Project resource-source launch-default mutation through additive `PATCH /api/projects/:id/resources/:resourceId/sources/:sourceId`, authorized as a project update and preserving materialization descriptor fields
 
 - URL paths and HTTP method contracts
-- Project Run Queue REST family: `GET /api/projects/:id/run-queues`, `POST /api/projects/:id/run-queues`, `PATCH /api/projects/:id/run-queues/order`, `POST /api/projects/:id/run-queues/entries`, `PATCH /api/run-queues/:queueId`, `DELETE /api/run-queues/:queueId`, `PATCH /api/run-queues/:queueId/order`, `PATCH /api/run-queues/entries/:entryId`, and `DELETE /api/run-queues/entries/:entryId`. Reads require project/objective read access; planning mutations require `execution_request:create`; queue-definition mutations require `project:update`. The matching Protocol commands are `queue-objective`, `dequeue-objective`, `retry-queue-entry`, `run-queue`, `reorder-run-queue`, `create-run-queue`, `update-run-queue`, `delete-run-queue`, and `reorder-project-run-queues`; MCP maps them through `overlord_queue_objective`, `overlord_list_run_queues`, `overlord_reorder_run_queue`, and `overlord_manage_run_queue`. Queue entries never select an execution target. `ObjectiveDto.queueEntry` additively projects live membership and `autoAdvance` is derived from that membership for compatibility. A queue may be mission-scoped (`RunQueueDto.missionId`/`missionDisplayId`); an entry POST without `queueId` targets the objective's own mission queue and creates it only if that mission has none, and emptying a mission queue retires it. `DELETE /api/run-queues/entries/:entryId` accepts an additive `{ force?: boolean }` body that also drops an entry wedged in `dispatched`/`running`, clears the objective's active execution requests, resets a stuck `launching` objective to `draft`, and pauses the containing queue before its removal tick can dispatch a successor. Moving an active objective back to `draft` or `submitted` likewise pauses its containing queue transactionally. `PATCH /api/run-queues/entries/:entryId` accepts an additive `{ retry?: boolean }` body that returns a held entry to `waiting` with `attemptCount` reset to 0 and enqueues a dispatch tick; it is refused (409) for an entry already `dispatched`/`running` and may not be combined with a move.
+- Project Run Queue REST family: `GET /api/projects/:id/run-queues`, `POST /api/projects/:id/run-queues`, `PATCH /api/projects/:id/run-queues/order`, `POST /api/projects/:id/run-queues/entries`, `PATCH /api/run-queues/:queueId`, `DELETE /api/run-queues/:queueId`, `PATCH /api/run-queues/:queueId/order`, `PATCH /api/run-queues/entries/:entryId`, and `DELETE /api/run-queues/entries/:entryId`. Reads require project/objective read access; planning mutations require `execution_request:create`; queue-definition mutations require `project:update`. The matching Protocol commands are `queue-objective`, `dequeue-objective`, `retry-queue-entry`, `run-queue`, `reorder-run-queue`, `create-run-queue`, `update-run-queue`, `delete-run-queue`, and `reorder-project-run-queues`; MCP maps them through `overlord_queue_objective`, `overlord_list_run_queues`, `overlord_reorder_run_queue`, and `overlord_manage_run_queue`. Queue entries never select an execution target. `ObjectiveDto.queueEntry` additively projects live membership and `autoAdvance` is derived from that membership for compatibility. A queue may be mission-scoped (`RunQueueDto.missionId`/`missionDisplayId`); an entry POST without `queueId` targets the objective's own mission queue and creates it only if that mission has none. Any non-default queue that has held an entry retires (soft-deletes) once its last live entry leaves by removal, move, drop, or delivery completion; a never-used queue is kept. `DELETE /api/run-queues/entries/:entryId` accepts an additive `{ force?: boolean }` body that also drops an entry wedged in `dispatched`/`running`, clears the objective's active execution requests, resets a stuck `launching` objective to `draft`, and pauses the containing queue before its removal tick can dispatch a successor. Moving an active objective back to `draft` or `submitted` likewise pauses its containing queue transactionally. `PATCH /api/run-queues/entries/:entryId` accepts an additive `{ retry?: boolean }` body that returns a held entry to `waiting` with `attemptCount` reset to 0 and enqueues a dispatch tick; it is refused (409) for an entry already `dispatched`/`running` and may not be combined with a move.
 - Request/response DTO shapes (derived from the logical schema's camelCase field names)
 - Creation-provenance projection: `MissionDto` and `ObjectiveDto` carry `createdByKind` (`human` \| `agent` \| `automation`; non-optional, with a `human` fallback in the mapper so no client writes a null branch), `createdByAgent` (connector/agent identifier or null), and `createdByWorkspaceUserId` (the workspace member the authoring actor acted as, or on behalf of). `MissionDetailDto` additionally carries `createdFrom` — `{ sessionId, missionId, missionDisplayId, agentIdentifier }` or null — resolved from the soft `created_by_session_id` reference by a `LEFT JOIN` that tolerates a missing session; it is paid once per mission page and is deliberately absent from the board/list projections. Provenance is a permanent row attribute, never seen-tracked mission state, and REST exposes no filter or sort on it.
 - Objective display ids: `ObjectiveDto` additively carries `displayKey` and computed `displayId` (`{mission.displayId}.{displayKey}`). `/api/objectives/:id` (and launch/prompt/attachment routes that take an objective id) accept an objective UUID or a full display id. UUID lookup stays globally unique; display ids resolve within the selected organization's `authorizedWorkspaces` set, return `404` outside that set, and return `409` on genuine ambiguity.

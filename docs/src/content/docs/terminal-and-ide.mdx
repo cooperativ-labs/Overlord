@@ -50,6 +50,23 @@ For terminals that support it, you can choose how a launch opens:
 - **Custom** — send a specific hotkey, then type the launch command into the
   active terminal
 
+### Open in the background
+
+Turn on **Open in the background** to launch the terminal without it taking
+keyboard focus (macOS; not available for the hotkey placement, which has to
+foreground the terminal).
+
+With a **Persistent (Latch)** session, Overlord starts the agent with
+`latch create` and then asks Latch to show it with `latch open`. Overlord passes
+your background choice along as `latch open --background`, which requires Latch
+`0.2609181007.0` or later — older Latch builds always bring iTerm to the front.
+Latch Desktop's own **Open in background** setting only applies to sessions you
+open from Latch Desktop, not to launches that come from Overlord.
+
+If you don't need a window at all, set **Show it in** to **Don't open a window
+automatically**. The agent still runs in Latch, fully in the background, and you
+can attach later from the mission panel, Latch Desktop, or `latch attach`.
+
 ### tmux and cmux
 
 When the selected profile is `tmux` or `cmux`, Overlord exposes tmux-specific

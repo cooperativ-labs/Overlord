@@ -378,6 +378,20 @@ export function latchSupportsOpenAs(productVersion: string | null | undefined): 
   return compareLatchProductVersions(version, LATCH_OPEN_AS_MIN_PRODUCT_VERSION) >= 0;
 }
 
+/** First Latch product version whose `latch open` accepts `--background` / `--foreground`. */
+export const LATCH_OPEN_BACKGROUND_MIN_PRODUCT_VERSION = '0.2609181007.0';
+
+/**
+ * Whether this Latch build understands `latch open --background`. Unknown /
+ * unparseable versions answer `false`: clap rejects unknown flags, and a viewer
+ * that opens in the foreground is better than one that fails to open.
+ */
+export function latchSupportsOpenBackground(productVersion: string | null | undefined): boolean {
+  const version = trimmed(productVersion);
+  if (!version) return false;
+  return compareLatchProductVersions(version, LATCH_OPEN_BACKGROUND_MIN_PRODUCT_VERSION) >= 0;
+}
+
 /**
  * Build the argv for `latch open`.
  *
@@ -390,16 +404,26 @@ export function buildLatchOpenArgs({
   providerSessionId,
   viewer,
   openAs,
+  background,
   productVersion
 }: {
   providerSessionId: string;
   viewer: string;
   openAs?: ViewerOpenAs | string | null;
+  /**
+   * Focus preference. `undefined`/`null` sends neither flag (Latch's own
+   * `open.background` decides); a boolean is sent explicitly for the same
+   * reason `--as` is — Overlord's visible setting should be the one that wins.
+   */
+  background?: boolean | null;
   productVersion?: string | null;
 }): string[] {
   const args = ['open', providerSessionId, '--with', viewer];
   if (openAs && latchSupportsOpenAs(productVersion)) {
     args.push('--as', parseViewerOpenAs(openAs));
+  }
+  if (typeof background === 'boolean' && latchSupportsOpenBackground(productVersion)) {
+    args.push(background ? '--background' : '--foreground');
   }
   args.push('--json');
   return args;

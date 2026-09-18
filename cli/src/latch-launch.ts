@@ -15,6 +15,7 @@ import {
   type LatchCreateReport,
   type LatchLaunchManifest,
   latchSupportsOpenAs,
+  latchSupportsOpenBackground,
   latchViewerFlagForKind,
   parseLatchCreateReport,
   toExecutionProviderSession
@@ -52,6 +53,8 @@ export type LatchOpenResult =
       viewer: string;
       /** Shape actually requested; null when this Latch build predates `--as`. */
       openAs: ViewerOpenAs | null;
+      /** Focus actually requested; null when not sent (unset, or Latch predates `--background`). */
+      background: boolean | null;
     }
   | { ok: false; warning: string; attachCommand: string };
 
@@ -148,11 +151,17 @@ export function openLatchViewer({
   providerSessionId,
   viewerKind,
   openAs,
+  background,
   productVersion
 }: {
   executable?: string;
   providerSessionId: string;
   viewerKind: TerminalViewerKind | string | null | undefined;
+  /**
+   * Overlord's "Open in the background" preference from the launch snapshot.
+   * Without it `latch open` activates the terminal and steals focus.
+   */
+  background?: boolean | null;
   /**
    * Overlord's window-or-tab preference, from the launch snapshot. Sent
    * explicitly rather than left to Latch's stored `open.behavior`, so the
@@ -178,7 +187,7 @@ export function openLatchViewer({
   const sendsOpenAs = Boolean(openAs) && latchSupportsOpenAs(productVersion);
   const result = spawnLatchJson({
     executable,
-    args: buildLatchOpenArgs({ providerSessionId, viewer, openAs, productVersion })
+    args: buildLatchOpenArgs({ providerSessionId, viewer, openAs, background, productVersion })
   });
   if (result.status !== 0) {
     const detail = (result.stderr || result.stdout || `exit ${result.status ?? 'null'}`).trim();
@@ -188,5 +197,12 @@ export function openLatchViewer({
       attachCommand
     };
   }
-  return { ok: true, viewer, openAs: sendsOpenAs ? parseViewerOpenAs(openAs) : null };
+  const sendsBackground =
+    typeof background === 'boolean' && latchSupportsOpenBackground(productVersion);
+  return {
+    ok: true,
+    viewer,
+    openAs: sendsOpenAs ? parseViewerOpenAs(openAs) : null,
+    background: sendsBackground ? background : null
+  };
 }

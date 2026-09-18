@@ -611,6 +611,9 @@ export function IdePage({ open }: IdePageProps) {
                 Launch the terminal without stealing keyboard focus (macOS). Not available for
                 keyboard-shortcut placement, which must foreground the terminal to send its
                 shortcut.
+                {persistent
+                  ? ' With a persistent (Latch) session this needs Latch 0.2609181007.0 or later; to skip the window entirely, choose "Don\'t open a window automatically" above.'
+                  : ''}
               </p>
             </div>
             <Switch

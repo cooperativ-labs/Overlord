@@ -16,6 +16,7 @@ import {
   syncChanges,
   updateSession
 } from './protocol.js';
+import { createRunQueue, enqueueRunQueueEntry, listProjectRunQueues } from './run-queue.js';
 import { createIsolatedCheckout } from './test-checkout.ts';
 import { createSeededServiceContext } from './test-helpers.js';
 import { nowIso } from './util.js';
@@ -793,6 +794,35 @@ describe('deliverSession mechanical change capture', () => {
     );
     assert.ok(job);
     assert.equal(JSON.parse(job.payload_json).projectId, project.id);
+
+    await db.close();
+  });
+
+  it('retires a Run Queue once delivery completes its last entry', async () => {
+    const { db, ctx } = await setup();
+    const project = await createProject({ ctx, name: 'Deliver Retires Queue' });
+    const { mission, objectives } = await createMissionWithObjectives({
+      ctx,
+      projectId: project.id,
+      objectives: [{ objective: 'Only queued objective' }]
+    });
+    const pristine = await createRunQueue(ctx.db, project.id, 'Pristine', null);
+    await enqueueRunQueueEntry(ctx.db, project.id, objectives[0]?.id as string);
+    assert.equal((await listProjectRunQueues(ctx.db, project.id)).queues.length, 2);
+
+    const attached = await attachSession({ ctx, missionId: mission.displayId });
+    await deliverSession({
+      ctx,
+      missionId: mission.displayId,
+      sessionKey: attached.sessionKey,
+      summary: 'Delivered the only queued objective.'
+    });
+
+    // The completed queue is gone; the never-used manual queue stays.
+    assert.deepEqual(
+      (await listProjectRunQueues(ctx.db, project.id)).queues.map(queue => queue.id),
+      [pristine.id]
+    );
 
     await db.close();
   });

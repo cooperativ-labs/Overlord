@@ -818,6 +818,9 @@ export async function launchAgent({
         providerSessionId: created.providerSession.providerSessionId,
         viewerKind: snapshot?.viewer.kind ?? 'iterm',
         openAs: snapshot?.viewer.openAs ?? null,
+        // Falls back to the resolved profile for a request claimed before the
+        // snapshot carried `background`.
+        background: snapshot?.viewer.background ?? options.terminalLaunchBackground ?? false,
         productVersion: latchProductVersion
       });
     }

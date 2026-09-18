@@ -310,7 +310,89 @@ export async function listProjectRunQueues(
   };
 }
 
-async function rewriteMissionPositions(db: DatabaseClient, missionId: string) {
+/**
+ * Retire `queueId` when an entry just left it and nothing live remains.
+ *
+ * A queue exists only to hold work. Once its last entry leaves — removed,
+ * moved elsewhere, dropped, or completed — it is soft-deleted so projects never
+ * silt up with finished queues. The default queue is exempt. Returns the
+ * retired queue id, or null when the queue still holds work.
+ */
+export async function retireRunQueueIfEmpty(
+  db: DatabaseClient,
+  queueId: string
+): Promise<string | null> {
+  const queue = await db.get<Pick<QueueRow, 'id' | 'is_default'>>(
+    'SELECT id, is_default FROM run_queues WHERE id = ? AND deleted_at IS NULL',
+    [queueId]
+  );
+  if (!queue || truthy(queue.is_default)) return null;
+  const remaining = await db.get<{ id: string }>(
+    'SELECT id FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL LIMIT 1',
+    [queueId]
+  );
+  if (remaining) return null;
+  const now = nowIso();
+  await db.run(
+    'UPDATE run_queues SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND deleted_at IS NULL',
+    [now, now, queueId]
+  );
+  return queueId;
+}
+
+/**
+ * Retire every used-and-empty queue in a project.
+ *
+ * "Used" means the queue has held an entry at some point, which the soft-deleted
+ * entry rows record. A pristine queue a user created by hand has no entry rows
+ * at all and is kept, so there is somewhere to add the first objective. Callers
+ * that finish entries without going through this service (delivery completion,
+ * the dispatcher's drop action) sweep here instead of tracking queue ids.
+ */
+export async function retireEmptyRunQueues(
+  db: DatabaseClient,
+  projectId: string
+): Promise<string[]> {
+  const rows = await db.all<{ id: string }>(
+    `SELECT q.id FROM run_queues q
+      WHERE q.project_id = ? AND q.deleted_at IS NULL AND q.is_default = ?
+        AND NOT EXISTS (
+          SELECT 1 FROM run_queue_entries e WHERE e.queue_id = q.id AND e.deleted_at IS NULL
+        )
+        AND EXISTS (SELECT 1 FROM run_queue_entries e WHERE e.queue_id = q.id)`,
+    [projectId, db.dialect === 'postgres' ? false : 0]
+  );
+  if (!rows.length) return [];
+  const now = nowIso();
+  for (const row of rows)
+    await db.run(
+      'UPDATE run_queues SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND deleted_at IS NULL',
+      [now, now, row.id]
+    );
+  return rows.map(row => row.id);
+}
+
+/** Objective states that have not started and may still be sequenced. */
+const SEQUENCEABLE_OBJECTIVE_STATES = new Set(['draft', 'submitted', 'future']);
+
+/**
+ * Write Run Queue order through to a mission's objective positions.
+ *
+ * Queue order is authoritative among queued siblings: they are redistributed,
+ * in queue order, across the position slots queued objectives already occupy.
+ * Unqueued objectives never move, so a later queued objective cannot leapfrog
+ * an earlier unqueued draft/submitted objective, yet the relative order of a
+ * mission's queued objectives always equals their queue order.
+ *
+ * `moveToEndObjectiveId` names an objective that just left the queue. It is
+ * placed after every other objective so a dequeued objective reads as "last",
+ * and stays there when re-queued unless a user moves it.
+ */
+async function rewriteMissionPositions(
+  db: DatabaseClient,
+  missionId: string,
+  options: { moveToEndObjectiveId?: string } = {}
+) {
   type MissionPositionRow = {
     id: string;
     state: string;
@@ -330,12 +412,15 @@ async function rewriteMissionPositions(db: DatabaseClient, missionId: string) {
   );
   const historicalStates = new Set(['executing', 'pending_delivery', 'complete']);
   const historical = rows.filter(row => historicalStates.has(row.state));
-  const tail = rows.filter(row => !historicalStates.has(row.state));
-  const orderedTail: MissionPositionRow[] = [];
-  let queuedSpan: MissionPositionRow[] = [];
+  let tail = rows.filter(row => !historicalStates.has(row.state));
+  const movedToEnd = options.moveToEndObjectiveId
+    ? tail.find(row => row.id === options.moveToEndObjectiveId)
+    : undefined;
+  if (movedToEnd) tail = [...tail.filter(row => row !== movedToEnd), movedToEnd];
 
-  const flushQueuedSpan = () => {
-    queuedSpan.sort(
+  const queuedInQueueOrder = tail
+    .filter(row => row.queue_entry_id)
+    .sort(
       (left, right) =>
         (left.queue_order ?? Number.MAX_SAFE_INTEGER) -
           (right.queue_order ?? Number.MAX_SAFE_INTEGER) ||
@@ -344,26 +429,13 @@ async function rewriteMissionPositions(db: DatabaseClient, missionId: string) {
         left.position - right.position ||
         left.id.localeCompare(right.id)
     );
-    orderedTail.push(...queuedSpan);
-    queuedSpan = [];
-  };
-
-  // Queue order is authoritative among queued siblings, but an unqueued
-  // non-terminal objective is an authored-order anchor. Sorting every queued
-  // row into a separate bucket would let a later auto-advance objective jump
-  // ahead of the current draft/submitted objective. Sorting queued spans keeps
-  // reorder/move write-through while preventing that cross-boundary leapfrog.
-  for (const row of tail) {
-    if (row.queue_entry_id) {
-      queuedSpan.push(row);
-      continue;
-    }
-    flushQueuedSpan();
-    orderedTail.push(row);
-  }
-  flushQueuedSpan();
+  let nextQueued = 0;
+  const orderedTail = tail.map(row =>
+    row.queue_entry_id ? queuedInQueueOrder[nextQueued++]! : row
+  );
 
   const orderedRows = [...historical, ...orderedTail];
+  if (orderedRows.every((row, index) => row.position === index)) return;
   const now = nowIso();
   // Position has a per-mission uniqueness constraint. Use a high non-negative
   // staging range to avoid swap collisions without violating SQLite's
@@ -378,6 +450,55 @@ async function rewriteMissionPositions(db: DatabaseClient, missionId: string) {
       'UPDATE objectives SET position = ?, updated_at = ?, revision = revision + 1 WHERE id = ?',
       [i, now, orderedRows[i]!.id]
     );
+}
+
+/**
+ * Write a mission's objective order through to its Run Queue entries — the
+ * inverse of {@link rewriteMissionPositions}, called after a mission-side
+ * reorder. Within each queue, the mission's movable entries keep the set of
+ * queue slots they already occupy and are redistributed across those slots in
+ * objective-position order, so entries from other missions and in-flight
+ * entries never move.
+ */
+export async function syncRunQueueOrderFromMissionPositions(
+  db: DatabaseClient,
+  missionId: string
+): Promise<{ changed: boolean }> {
+  const rows = await db.all<{
+    id: string;
+    queue_id: string;
+    project_id: string;
+    workspace_id: string;
+    position: number;
+    objective_position: number;
+  }>(
+    `SELECT e.id, e.queue_id, e.project_id, e.workspace_id, e.position, o.position objective_position
+       FROM run_queue_entries e
+       JOIN objectives o ON o.id = e.objective_id AND o.deleted_at IS NULL
+      WHERE e.mission_id = ? AND e.deleted_at IS NULL AND e.state IN ('waiting', 'blocked')
+      ORDER BY e.position, e.id`,
+    [missionId]
+  );
+  let changed = false;
+  const now = nowIso();
+  for (const queueId of new Set(rows.map(row => row.queue_id))) {
+    const slots = rows.filter(row => row.queue_id === queueId);
+    const desired = [...slots].sort(
+      (left, right) =>
+        left.objective_position - right.objective_position || left.id.localeCompare(right.id)
+    );
+    for (let i = 0; i < slots.length; i++) {
+      if (desired[i]!.id === slots[i]!.id) continue;
+      changed = true;
+      await db.run(
+        'UPDATE run_queue_entries SET position = ?, updated_at = ?, revision = revision + 1 WHERE id = ?',
+        [slots[i]!.position, now, desired[i]!.id]
+      );
+    }
+  }
+  if (changed && rows[0])
+    await enqueueRunQueueDispatch(db, rows[0].project_id, rows[0].workspace_id);
+  return { changed };
 }
 
 export async function createRunQueue(
@@ -530,6 +651,11 @@ export async function enqueueRunQueueEntry(
     afterEntryId?: string;
     position?: number;
     actorId?: string | null;
+    /**
+     * Also queue every not-yet-started objective that follows this one in the
+     * mission, directly behind it and in mission order. Defaults to true.
+     */
+    cascade?: boolean;
   } = {}
 ): Promise<RunQueueEntryDto> {
   return db.transaction(async tx => {
@@ -538,8 +664,9 @@ export async function enqueueRunQueueEntry(
       project_id: string;
       workspace_id: string;
       mission_id: string;
+      position: number;
     }>(
-      'SELECT id, project_id, workspace_id, mission_id FROM objectives WHERE id = ? AND deleted_at IS NULL',
+      'SELECT id, project_id, workspace_id, mission_id, position FROM objectives WHERE id = ? AND deleted_at IS NULL',
       [objectiveId]
     );
     if (!objective || objective.project_id !== projectId)
@@ -605,6 +732,66 @@ export async function enqueueRunQueueEntry(
       'UPDATE objectives SET auto_advance = ?, updated_at = ?, revision = revision + 1 WHERE id = ?',
       [tx.dialect === 'postgres' ? true : 1, now, objectiveId]
     );
+    if (options.cascade !== false) {
+      // Queueing an objective queues the rest of the mission behind it. Blank
+      // legacy rows are skipped: they are not work and would only block.
+      const followers = await tx.all<{ id: string }>(
+        `SELECT o.id FROM objectives o
+          WHERE o.mission_id = ? AND o.deleted_at IS NULL AND o.position > ?
+            AND o.state IN ('draft', 'submitted', 'future')
+            AND TRIM(o.instruction_text) <> ''
+            AND NOT EXISTS (
+              SELECT 1 FROM run_queue_entries e WHERE e.objective_id = o.id AND e.deleted_at IS NULL
+            )
+          ORDER BY o.position, o.id`,
+        [objective.mission_id, objective.position]
+      );
+      if (followers.length) {
+        const followerIds: string[] = [];
+        for (const follower of followers) {
+          const followerId = newId();
+          followerIds.push(followerId);
+          await tx.run(
+            `INSERT INTO run_queue_entries (id, queue_id, project_id, workspace_id, mission_id, objective_id, position, state, enqueued_by_workspace_user_id, enqueued_at, created_at, updated_at, revision) VALUES (?, ?, ?, ?, ?, ?, ?, 'waiting', ?, ?, ?, ?, 1)`,
+            [
+              followerId,
+              queue.id,
+              projectId,
+              objective.workspace_id,
+              objective.mission_id,
+              follower.id,
+              position,
+              options.actorId ?? null,
+              now,
+              now,
+              now
+            ]
+          );
+          await tx.run(
+            'UPDATE objectives SET auto_advance = ?, updated_at = ?, revision = revision + 1 WHERE id = ?',
+            [tx.dialect === 'postgres' ? true : 1, now, follower.id]
+          );
+        }
+        // Renumber the queue with the followers slotted directly behind the
+        // new entry, so they never land past a later sibling or another mission.
+        const current = await tx.all<{ id: string }>(
+          'SELECT id FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL ORDER BY position, id',
+          [queue.id]
+        );
+        const others = current.map(row => row.id).filter(entryId => !followerIds.includes(entryId));
+        const anchor = others.indexOf(id);
+        const renumbered = [
+          ...others.slice(0, anchor + 1),
+          ...followerIds,
+          ...others.slice(anchor + 1)
+        ];
+        for (let i = 0; i < renumbered.length; i++)
+          await tx.run('UPDATE run_queue_entries SET position = ? WHERE id = ?', [
+            (i + 1) * STEP,
+            renumbered[i]
+          ]);
+      }
+    }
     await rewriteMissionPositions(tx, objective.mission_id);
     await enqueueRunQueueDispatch(tx, projectId, objective.workspace_id);
     return (await listProjectRunQueues(tx, projectId)).queues
@@ -625,7 +812,7 @@ export type RunQueueEntryRemoval = {
   executionRequestId: string | null;
   /** True when a forced removal reset a stuck `launching` objective to `draft`. */
   objectiveReset: boolean;
-  /** Mission-scoped queue soft-deleted because this removal emptied it. */
+  /** Non-default queue soft-deleted because this removal emptied it. */
   removedEmptyQueueId: string | null;
 };
 
@@ -687,8 +874,8 @@ export async function removeRunQueueEntry(
         "UPDATE objectives SET state = 'draft', updated_at = ?, revision = revision + 1 WHERE id = ?",
         [now, row.objective_id]
       );
-    // A mission queue exists only to hold that mission's work. Retire it once
-    // the last entry leaves so projects never silt up with empty queues.
+    // A queue exists only to hold work. Retire it once the last entry leaves
+    // so projects never silt up with empty queues.
     let removedEmptyQueueId: string | null = null;
     const queue = await tx.get<QueueRow>(
       'SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE id = ? AND deleted_at IS NULL',
@@ -704,20 +891,18 @@ export async function removeRunQueueEntry(
         [tx.dialect === 'postgres' ? true : 1, now, queue.id, tx.dialect === 'postgres' ? false : 0]
       );
     }
-    if (queue?.mission_id && !truthy(queue.is_default)) {
-      const remaining = await tx.get<{ id: string }>(
-        'SELECT id FROM run_queue_entries WHERE queue_id = ? AND deleted_at IS NULL LIMIT 1',
-        [queue.id]
-      );
-      if (!remaining) {
-        await tx.run(
-          'UPDATE run_queues SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ?',
-          [now, now, queue.id]
-        );
-        removedEmptyQueueId = queue.id;
-      }
-    }
-    await rewriteMissionPositions(tx, row.mission_id);
+    if (queue) removedEmptyQueueId = await retireRunQueueIfEmpty(tx, queue.id);
+    // An objective that leaves the queue before it starts moves to the end of
+    // the mission's order, and keeps that place if it is queued again. Started
+    // or finished objectives are history and are ordered by their timestamps.
+    const resultingState = objectiveReset ? 'draft' : objective?.state;
+    await rewriteMissionPositions(
+      tx,
+      row.mission_id,
+      resultingState && SEQUENCEABLE_OBJECTIVE_STATES.has(resultingState)
+        ? { moveToEndObjectiveId: row.objective_id }
+        : {}
+    );
     await enqueueRunQueueDispatch(tx, row.project_id, row.workspace_id);
     return {
       removed: true,
@@ -889,6 +1074,8 @@ export async function moveRunQueueEntry(
       "UPDATE run_queue_entries SET queue_id = ?, position = ?, state = 'waiting', blocked_reason = NULL, waiting_reason = NULL, waiting_on_objective_id = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?",
       [queueId, position, nowIso(), entryId]
     );
+    // Moving the last entry out leaves the source queue finished, not pristine.
+    if (queueId !== current.queue_id) await retireRunQueueIfEmpty(tx, current.queue_id);
     await rewriteMissionPositions(tx, current.mission_id);
     await enqueueRunQueueDispatch(tx, current.project_id, current.workspace_id);
     return (await listProjectRunQueues(tx, current.project_id)).queues
