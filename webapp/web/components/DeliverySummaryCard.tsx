@@ -10,6 +10,7 @@ import {
 
 import type { DeliveryDto } from '../../shared/contract.ts';
 
+import { DeferredWorkActions } from './DeferredWorkActions.tsx';
 import { HumanActionDetails } from './HumanActionDetails.tsx';
 import { Markdown } from './Markdown.tsx';
 import { Badge } from './ui.tsx';
@@ -49,7 +50,8 @@ function DeliveryBulletSection({
   items,
   className,
   titleClassName,
-  itemClassName
+  itemClassName,
+  renderItemActions
 }: {
   deliveryId: string;
   sectionKey: string;
@@ -59,6 +61,8 @@ function DeliveryBulletSection({
   className: string;
   titleClassName: string;
   itemClassName: string;
+  /** Optional per-item controls drawn under the item text. */
+  renderItemActions?: (item: string) => ReactNode;
 }) {
   const headingId = `delivery-${sectionKey}-${deliveryId}`;
   return (
@@ -71,7 +75,10 @@ function DeliveryBulletSection({
         {items.map((item, index) => (
           <li key={`${sectionKey}-${index}`} className="flex min-w-0 items-start gap-2">
             <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-current" aria-hidden="true" />
-            <span className="min-w-0">{item}</span>
+            <div className="min-w-0">
+              {item}
+              {renderItemActions ? renderItemActions(item) : null}
+            </div>
           </li>
         ))}
       </ul>
@@ -178,6 +185,13 @@ export function DeliveryPresentation({
           className="min-w-0 rounded-md border border-violet-300 bg-violet-50 p-3 dark:border-violet-500/50 dark:bg-violet-500/10"
           titleClassName="flex items-center gap-1.5 wrap-anywhere text-sm font-semibold text-violet-950 dark:text-violet-100"
           itemClassName="text-violet-950 dark:text-violet-100"
+          renderItemActions={item => (
+            <DeferredWorkActions
+              item={item}
+              missionId={delivery.missionId}
+              objectiveId={delivery.objectiveId}
+            />
+          )}
         />
       ) : null}
       {presentation.assumptions.length > 0 ? (
