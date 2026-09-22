@@ -662,27 +662,33 @@ function ObjectiveSessionLine({
  */
 export function ObjectiveTerminalSessions({
   sessions,
-  emptyState
+  emptyState,
+  heading
 }: {
   sessions: readonly TerminalSessionDto[];
   /** Rendered when the objective launched no session (or every session was forgotten). */
   emptyState?: ReactNode;
+  /** Rendered above the list only when at least one session is visible. */
+  heading?: ReactNode;
 }) {
   const { missionId, localExecutionTargetId, onAbsent, isAbsent } = useLatchSessionContext();
   const visible = sessions.filter(session => !isAbsent(session.providerSessionId));
   if (visible.length === 0) return <>{emptyState ?? null}</>;
 
   return (
-    <div className="space-y-1">
-      {visible.map(session => (
-        <ObjectiveSessionLine
-          key={sessionRowKey(session)}
-          session={session}
-          missionId={missionId}
-          localExecutionTargetId={localExecutionTargetId}
-          onAbsent={onAbsent}
-        />
-      ))}
-    </div>
+    <>
+      {heading}
+      <div className="space-y-1">
+        {visible.map(session => (
+          <ObjectiveSessionLine
+            key={sessionRowKey(session)}
+            session={session}
+            missionId={missionId}
+            localExecutionTargetId={localExecutionTargetId}
+            onAbsent={onAbsent}
+          />
+        ))}
+      </div>
+    </>
   );
 }

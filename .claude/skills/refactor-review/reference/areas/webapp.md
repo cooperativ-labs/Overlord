@@ -26,16 +26,15 @@ Two hard rules bound findings here: the SPA talks to the backend only through th
 (never to the database), and it must behave identically in the browser and inside the Electron
 renderer.
 
-## Known hot spots (baseline, contract v35)
+## Known hot spots (baseline, contract v144)
 
 | File | Lines | Why it is a standing candidate |
 |---|---:|---|
-| `webapp/web/lib/queries.ts` | ~1860 | Every query and mutation hook in one module |
-| `webapp/web/components/projects/project-settings/ResourcesPage.tsx` | ~1500 | Screen holding form state, mutations, and layout |
-| `webapp/web/components/MissionBranchControl.tsx` | ~995 | Branch UI plus branch decision logic |
-| `webapp/web/components/settings/WebhooksPage.tsx` | ~790 | CRUD screen with inline forms |
-| `webapp/web/components/MentionableTextarea.tsx` | ~775 | Editor behavior, mention parsing, keyboard handling |
-| `webapp/web/pages/MyMissionsPage.tsx` | ~735 | Page-level state, filtering, drag-and-drop wiring |
+| `webapp/web/components/MissionBranchControl.tsx` | 856 | Branch UI plus branch decision logic |
+| `webapp/web/components/settings/WebhooksPage.tsx` | 722 | CRUD screen with inline forms |
+| `webapp/web/components/MentionableTextarea.tsx` | 775 | Editor behavior, mention parsing, keyboard handling |
+| `webapp/web/pages/MyMissionsPage.tsx` | 715 | Page-level state, filtering, drag-and-drop wiring |
+| `webapp/web/components/quick-task-bar/QuickTaskBar.tsx` | 336 | Container composition now separated from state and mutations in `useQuickTaskBar` (F2) |
 
 ## Area-specific checks
 

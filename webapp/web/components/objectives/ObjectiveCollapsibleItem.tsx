@@ -71,8 +71,8 @@ function stopRowToggle(event: MouseEvent) {
  * icons (state, agent, display id, provenance, attachments) with the evidence
  * badges and header actions right-aligned; then the resource folder and queue
  * status. Expanding the row reveals the flat evidence stack
- * ({@link ObjectiveEvidenceSections}) — deliveries, terminal session, file
- * changes — rather than only the instruction text.
+ * ({@link ObjectiveEvidenceSections}) — the instruction, flat and unlabeled,
+ * then deliveries, file changes, and any terminal session (coo:1041).
  *
  * Rows run edge to edge across the mission panel (§4.1.1): no side borders and
  * no radius, so the hover wash and the in-flight shimmer sweep the full width,

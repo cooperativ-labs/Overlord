@@ -33,14 +33,17 @@ import {
 /**
  * Which arrangement of the evidence stack to draw (coo:879 §4.2 / §4.3 / §4.5):
  *
- * - `complete` — instruction → deliveries → terminal session → file changes →
- *   earlier runs → attachments. The reading order the brief asks for.
- * - `active` — the live things first: terminal session → agent activity →
- *   file changes (live) → prior deliveries (only on a pending-delivery
- *   re-attach) → earlier runs → instruction last.
+ * - `complete` — instruction → deliveries → file changes → terminal session
+ *   (only when one exists) → earlier runs → attachments.
+ * - `active` — instruction → agent activity → prior deliveries (only on a
+ *   pending-delivery re-attach) → file changes (live) → terminal session
+ *   (only when one exists) → earlier runs → attachments.
  * - `history` — the reverted draft's previous runs, with no instruction (the
  *   draft's editable field already shows it) and no attachments (the draft's
  *   own footer lists them).
+ *
+ * In `complete` and `active`, the instruction is the first thing under the
+ * row's trigger, drawn flat with no rule or disclosure of its own (coo:1041).
  */
 export type ObjectiveEvidenceMode = 'complete' | 'active' | 'history';
 
@@ -153,10 +156,11 @@ function buildRunSections({
     <RunDeliveries deliveries={run.deliveries} expandLatest={expandLatestDelivery} />
   );
 
+  // A run without a (visible) terminal session draws nothing for it — no rule, no empty state.
   const terminalSessions = (
     <ObjectiveTerminalSessions
       sessions={run.terminalSessions}
-      emptyState={<ObjectiveEvidenceEmpty>No terminal session</ObjectiveEvidenceEmpty>}
+      heading={<ObjectiveEvidenceRule label="Terminal session" />}
     />
   );
 
@@ -179,7 +183,7 @@ function buildRunSections({
   };
 }
 
-/** Deliveries → terminal session → file changes for one run, as a flat stack. */
+/** Deliveries → file changes → terminal session (if any) for one run, as a flat stack. */
 function RunStack({
   objective,
   run,
@@ -199,12 +203,11 @@ function RunStack({
       <ObjectiveEvidenceRule label="Deliveries" count={sections.deliveryCount} />
       {sections.deliveries}
       <TruncationNotice notice={truncation.deliveries} />
-      <ObjectiveEvidenceRule label="Terminal session" />
-      {sections.terminalSessions}
       <ObjectiveEvidenceSection label="File changes" count={sections.fileChangeCount}>
         {sections.fileChanges}
         <TruncationNotice notice={truncation.fileChanges} />
       </ObjectiveEvidenceSection>
+      {sections.terminalSessions}
     </div>
   );
 }
@@ -301,13 +304,14 @@ function EarlierRuns({
 
 /**
  * The flat, full-width stack of everything one objective produced, rendered
- * inside its accordion (coo:879 §4.2). Sections are separated by thin labeled
- * rules. Two of those rules — Instruction and File changes — are also
- * disclosure triggers that start closed (chevron left of the label), because
- * their bodies are unbounded and an objective that ran for an hour would
- * otherwise open onto pages of text; deliveries and the terminal session stay
- * flat and always visible. Beyond those, only secondary rows (earlier runs,
- * individual file-change cards) fold. Empty states are one-line muted italics
+ * inside its accordion (coo:879 §4.2). The instruction leads, flat and
+ * unlabeled, directly under the row's trigger (coo:1041); the sections after
+ * it are separated by thin labeled rules. The File changes rule is also a
+ * disclosure trigger that starts closed (chevron left of the label), because
+ * its body is unbounded; deliveries and the terminal session stay flat and
+ * always visible, and the terminal session is omitted entirely when the run
+ * has none. Beyond those, only secondary rows (earlier runs, individual
+ * file-change cards) fold. Empty states are one-line muted italics
  * so "ran with no changes" reads distinctly from "still loading".
  *
  * Every stack container is `min-w-0` and the row's panel forces
@@ -380,8 +384,15 @@ export function ObjectiveEvidenceSections({
   if (mode === 'active') {
     return (
       <div className="grid min-w-0 gap-2">
-        {sections.terminalSessions}
+        <ObjectiveInstruction objective={objective} />
         <AgentSessionActivity missionId={objective.missionId} objectiveId={objective.id} />
+        {latest.deliveries.length > 0 ? (
+          <>
+            <ObjectiveEvidenceRule label="Deliveries" count={sections.deliveryCount} />
+            {sections.deliveries}
+            <TruncationNotice notice={truncation.deliveries} />
+          </>
+        ) : null}
         <ObjectiveEvidenceSection
           label="File changes"
           count={sections.fileChangeCount}
@@ -390,22 +401,13 @@ export function ObjectiveEvidenceSections({
           {sections.fileChanges}
           <TruncationNotice notice={truncation.fileChanges} />
         </ObjectiveEvidenceSection>
-        {latest.deliveries.length > 0 ? (
-          <>
-            <ObjectiveEvidenceRule label="Deliveries" count={sections.deliveryCount} />
-            {sections.deliveries}
-            <TruncationNotice notice={truncation.deliveries} />
-          </>
-        ) : null}
+        {sections.terminalSessions}
         <EarlierRuns
           objective={objective}
           runs={earlier}
           loading={loading}
           truncation={truncation}
         />
-        <ObjectiveEvidenceSection label="Instruction">
-          <ObjectiveInstruction objective={objective} />
-        </ObjectiveEvidenceSection>
         {attachments.length > 0 ? (
           <>
             <ObjectiveEvidenceRule label="Attachments" count={attachments.length} />
@@ -418,18 +420,15 @@ export function ObjectiveEvidenceSections({
 
   return (
     <div className="grid min-w-0 gap-2">
-      <ObjectiveEvidenceSection label="Instruction">
-        <ObjectiveInstruction objective={objective} />
-      </ObjectiveEvidenceSection>
+      <ObjectiveInstruction objective={objective} />
       <ObjectiveEvidenceRule label="Deliveries" count={sections.deliveryCount} />
       {sections.deliveries}
       <TruncationNotice notice={truncation.deliveries} />
-      <ObjectiveEvidenceRule label="Terminal session" />
-      {sections.terminalSessions}
       <ObjectiveEvidenceSection label="File changes" count={sections.fileChangeCount}>
         {sections.fileChanges}
         <TruncationNotice notice={truncation.fileChanges} />
       </ObjectiveEvidenceSection>
+      {sections.terminalSessions}
       <EarlierRuns objective={objective} runs={earlier} loading={loading} truncation={truncation} />
       {attachments.length > 0 ? (
         <>

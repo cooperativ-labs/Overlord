@@ -20,7 +20,6 @@ import {
 import { Badge as ShadcnBadge } from '@/components/ui/badge';
 import { Button as ShadcnButton } from '@/components/ui/button';
 import { Card as ShadcnCard } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -257,29 +256,6 @@ export function Field({ label, children }: { label: string; children: ReactNode 
       </Label>
       {children}
     </div>
-  );
-}
-
-export function Modal({
-  title,
-  open,
-  onClose,
-  children
-}: {
-  title: string;
-  open: boolean;
-  onClose: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <Dialog open={open} onOpenChange={next => !next && onClose()}>
-      <DialogContent className="gap-0 p-0 sm:max-w-lg" showCloseButton>
-        <DialogHeader className="border-b px-5 py-3">
-          <DialogTitle className="text-sm font-semibold">{title}</DialogTitle>
-        </DialogHeader>
-        <div className="p-5">{children}</div>
-      </DialogContent>
-    </Dialog>
   );
 }
 
