@@ -32,9 +32,9 @@ Ask (or detect) three things before running anything:
    at some URL. A **local** backend runs on their own machine (default
    `http://127.0.0.1:4310`). If they were given a URL by a team, they are on
    cloud. If they are experimenting solo, local is fine.
-3. **What agent do they already use?** Claude Code, Codex, Cursor, and `pi` have
-   built-in connectors. Match the setup to the tool they already pay for —
-   Overlord does not replace it.
+3. **What agent do they already use?** Claude Code, Codex, Cursor, `pi`,
+   Antigravity, and OpenCode have built-in connectors. Match the setup to the
+   tool they already pay for — Overlord does not replace it.
 
 ## Step 1 — Install the CLI and sign in
 
@@ -104,7 +104,7 @@ browser round-trip.
 
    ```bash
    ovld agent-setup            # lists installable connectors
-   ovld agent-setup claude     # or: codex, cursor, pi
+   ovld agent-setup claude     # or: codex, cursor, pi, antigravity, opencode
    ovld agent-setup all        # prepare every supported connector
    ```
 
