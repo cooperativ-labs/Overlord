@@ -205,6 +205,12 @@ import {
   requireDatabaseClient,
   resolveActiveProfileId
 } from './db.ts';
+import {
+  deferredWorkEntries,
+  findResolution,
+  loadResolutions,
+  toResolution
+} from './deferred-work.ts';
 import { ApiError } from './errors.ts';
 import { resolveObjectiveIdForRest } from './objective-ref.ts';
 import { getActiveOrganizationIdOrNull } from './organizations.ts';
@@ -4562,21 +4568,30 @@ export async function listMissionDeliveries(
       LIMIT ?`,
     [mission.id, mission.workspace_id, limit]
   )) as DeliveryRow[];
+  const resolutions = await loadResolutions(rows.map(row => row.id));
 
   return {
-    items: rows.map(row => ({
-      id: row.id,
-      missionId: row.mission_id,
-      objectiveId: row.objective_id,
-      sessionId: row.session_id,
-      summary: row.summary,
-      verificationSummary: row.verification_summary,
-      followUpNotes: row.follow_up_notes,
-      report: deliveryReportFromPayload(row.payload_json, row.summary),
-      deliveredAt: row.delivered_at,
-      agentIdentifier: row.agent_identifier,
-      modelIdentifier: row.model_identifier
-    })),
+    items: rows.map(row => {
+      const report = deliveryReportFromPayload(row.payload_json, row.summary);
+      return {
+        id: row.id,
+        missionId: row.mission_id,
+        objectiveId: row.objective_id,
+        sessionId: row.session_id,
+        summary: row.summary,
+        verificationSummary: row.verification_summary,
+        followUpNotes: row.follow_up_notes,
+        report,
+        deliveredAt: row.delivered_at,
+        agentIdentifier: row.agent_identifier,
+        modelIdentifier: row.model_identifier,
+        deferredWorkItems: deferredWorkEntries(report).map(entry => ({
+          actionId: entry.id,
+          action: entry.action,
+          resolution: toResolution(findResolution(resolutions, row.id, entry))
+        }))
+      };
+    }),
     total: asTotal(countRow?.total),
     limit
   };

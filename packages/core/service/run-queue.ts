@@ -144,11 +144,21 @@ export async function ensureMissionRunQueue(
   missionId: string,
   actorId: string | null = null
 ): Promise<QueueRow> {
+  return (await resolveMissionRunQueue(db, projectId, missionId, actorId)).queue;
+}
+
+/** {@link ensureMissionRunQueue}, also reporting whether this call created the queue. */
+async function resolveMissionRunQueue(
+  db: DatabaseClient,
+  projectId: string,
+  missionId: string,
+  actorId: string | null
+): Promise<{ queue: QueueRow; created: boolean }> {
   const existing = await db.get<QueueRow>(
     'SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE project_id = ? AND mission_id = ? AND deleted_at IS NULL',
     [projectId, missionId]
   );
-  if (existing) return existing;
+  if (existing) return { queue: existing, created: false };
   const mission = await db.get<{
     id: string;
     project_id: string;
@@ -172,7 +182,7 @@ export async function ensureMissionRunQueue(
       'UPDATE run_queues SET mission_id = ?, updated_at = ?, revision = revision + 1 WHERE id = ?',
       [missionId, now, adopted.id]
     );
-    return { ...adopted, mission_id: missionId };
+    return { queue: { ...adopted, mission_id: missionId }, created: false };
   }
   const max = await db.get<{ value: number | null }>(
     'SELECT MAX(position) value FROM run_queues WHERE project_id = ? AND deleted_at IS NULL',
@@ -197,15 +207,96 @@ export async function ensureMissionRunQueue(
     ]
   );
   return {
-    id,
-    project_id: projectId,
-    workspace_id: mission.workspace_id,
-    name,
-    position,
-    paused: true,
-    is_default: false,
-    mission_id: missionId
+    queue: {
+      id,
+      project_id: projectId,
+      workspace_id: mission.workspace_id,
+      name,
+      position,
+      paused: true,
+      is_default: false,
+      mission_id: missionId
+    },
+    created: true
   };
+}
+
+/** Mirrors `ACTIVE_EXECUTION_REQUEST_STATUSES` in `execution-requests.ts`, which imports this module. */
+const ACTIVE_REQUEST_STATUSES = ['queued', 'claimed', 'launching'] as const;
+
+/**
+ * Seed a just-created mission queue with the mission's already-running
+ * objectives that precede `beforePosition`, as `running` entries, and resume it.
+ *
+ * Queueing behind a sibling that is already running means "run this next", so
+ * the queue shows that sibling in flight ahead of the new work instead of
+ * starting paused. The planner never dispatches past an in-flight entry, and
+ * delivery removes the entry and ticks the dispatcher, so the queued objective
+ * starts once its predecessor finishes. `launching` counts only while it still
+ * holds an active execution request; the entry links the objective's latest
+ * request, as a direct Run does, so a launch that fails is retried or blocked
+ * by the usual request reconciliation. Returns how many entries were seeded.
+ */
+async function seedRunningPredecessors(
+  db: DatabaseClient,
+  queue: QueueRow,
+  missionId: string,
+  beforePosition: number,
+  actorId: string | null
+): Promise<number> {
+  const running = await db.all<{ id: string; workspace_id: string }>(
+    `SELECT o.id, o.workspace_id FROM objectives o
+      WHERE o.mission_id = ? AND o.deleted_at IS NULL AND o.position < ?
+        AND (
+          o.state IN ('executing', 'pending_delivery')
+          OR (o.state = 'launching' AND EXISTS (
+            SELECT 1 FROM execution_requests er
+             WHERE er.objective_id = o.id AND er.deleted_at IS NULL
+               AND er.status IN (${ACTIVE_REQUEST_STATUSES.map(() => '?').join(',')})
+          ))
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM run_queue_entries e WHERE e.objective_id = o.id AND e.deleted_at IS NULL
+        )
+      ORDER BY o.position, o.id`,
+    [missionId, beforePosition, ...ACTIVE_REQUEST_STATUSES]
+  );
+  if (!running.length) return 0;
+  const now = nowIso();
+  for (let i = 0; i < running.length; i++) {
+    const objective = running[i]!;
+    const request = await db.get<{ id: string }>(
+      'SELECT id FROM execution_requests WHERE objective_id = ? AND deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 1',
+      [objective.id]
+    );
+    await db.run(
+      `INSERT INTO run_queue_entries (id, queue_id, project_id, workspace_id, mission_id, objective_id, position, state, execution_request_id, dispatched_at, enqueued_by_workspace_user_id, enqueued_at, created_at, updated_at, revision) VALUES (?, ?, ?, ?, ?, ?, ?, 'running', ?, ?, ?, ?, ?, ?, 1)`,
+      [
+        newId(),
+        queue.id,
+        queue.project_id,
+        objective.workspace_id,
+        missionId,
+        objective.id,
+        (i + 1) * STEP,
+        request?.id ?? null,
+        now,
+        actorId,
+        now,
+        now,
+        now
+      ]
+    );
+    await db.run(
+      'UPDATE objectives SET auto_advance = ?, updated_at = ?, revision = revision + 1 WHERE id = ?',
+      [db.dialect === 'postgres' ? true : 1, now, objective.id]
+    );
+  }
+  await db.run(
+    'UPDATE run_queues SET paused = ?, updated_at = ?, revision = revision + 1 WHERE id = ?',
+    [db.dialect === 'postgres' ? false : 0, now, queue.id]
+  );
+  return running.length;
 }
 
 function entryDto(row: EntryRow, rank: number): RunQueueEntryDto {
@@ -682,13 +773,28 @@ export async function enqueueRunQueueEntry(
     // No explicit queue means "this objective's own mission queue". It is
     // created on demand here — the only automatic queue creation path — so
     // projects never accumulate a queue per mission before one is needed.
-    const queue = options.queueId
-      ? await tx.get<QueueRow>(
-          'SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE id = ? AND project_id = ? AND deleted_at IS NULL',
-          [options.queueId, projectId]
-        )
-      : await ensureMissionRunQueue(tx, projectId, objective.mission_id, options.actorId ?? null);
+    const resolved = options.queueId
+      ? {
+          queue: await tx.get<QueueRow>(
+            'SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE id = ? AND project_id = ? AND deleted_at IS NULL',
+            [options.queueId, projectId]
+          ),
+          created: false
+        }
+      : await resolveMissionRunQueue(tx, projectId, objective.mission_id, options.actorId ?? null);
+    const queue = resolved.queue;
     if (!queue) throw new ServiceError('Run Queue not found', 'run_queue_not_found', 404);
+    // A new queue starts paused, except when an earlier sibling is already
+    // running: then the running work joins the queue ahead of this objective
+    // and the queue runs, so this objective starts as soon as it finishes.
+    if (resolved.created)
+      await seedRunningPredecessors(
+        tx,
+        queue,
+        objective.mission_id,
+        objective.position,
+        options.actorId ?? null
+      );
     let position = options.position;
     if (options.afterEntryId) {
       const after = await tx.get<{ position: number }>(

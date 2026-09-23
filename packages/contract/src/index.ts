@@ -1449,6 +1449,19 @@ export interface DeliveryDto {
   deliveredAt: string;
   agentIdentifier: string | null;
   modelIdentifier: string | null;
+  /**
+   * One entry per `report.presentation.deferredWork` item, in the same order,
+   * carrying the stable action id the human-actions resolution routes take and
+   * the operator's current decision (contract v147).
+   */
+  deferredWorkItems: DeliveryDeferredWorkItemDto[];
+}
+
+/** A deferred-work item of one delivery, addressable by the human-actions resolution routes. */
+export interface DeliveryDeferredWorkItemDto {
+  actionId: string;
+  action: string;
+  resolution: HumanActionResolutionDto | null;
 }
 
 // ---- Human actions (cross-workspace follow-up rail) ----
@@ -1456,10 +1469,20 @@ export interface DeliveryDto {
 /** The operator's decision on one reported human action. */
 export type HumanActionResolutionStatus = 'done' | 'dismissed';
 
+/**
+ * How a deferred-work item was promoted when it was marked `done` (contract v147):
+ * into a new mission, or onto the delivering mission as a future objective.
+ */
+export type HumanActionResolutionOutcome = 'mission_created' | 'objective_added';
+
 export interface HumanActionResolutionDto {
   status: HumanActionResolutionStatus;
   resolvedAt: string;
   resolvedByWorkspaceUserId: string | null;
+  /** Set only for a promoted deferred-work item. */
+  outcome: HumanActionResolutionOutcome | null;
+  /** Display id of the mission or objective the promotion created, when known. */
+  outcomeRef: string | null;
 }
 
 /**
@@ -1518,6 +1541,10 @@ export interface HumanActionsDto {
 
 export interface ResolveHumanActionBody {
   status: HumanActionResolutionStatus;
+  /** Deferred-work items only, and only with `status: 'done'` (contract v147). */
+  outcome?: HumanActionResolutionOutcome;
+  /** Display id of the created mission or objective; requires `outcome`. */
+  outcomeRef?: string;
 }
 
 // ---- Mission file changes ----

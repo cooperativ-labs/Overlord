@@ -1,12 +1,10 @@
 import { PERMISSIONS } from '@overlord/auth';
 import { formatObjectiveDisplayId } from '@overlord/database';
-import { createHash } from 'node:crypto';
 
-import { matchDeferredWorkAgentIndex } from '../packages/core/service/delivery-compose.ts';
 import type {
   HumanActionItemDto,
   HumanActionItemKind,
-  HumanActionResolutionDto,
+  HumanActionResolutionOutcome,
   HumanActionResolutionStatus,
   HumanActionsDto,
   HumanActionV1,
@@ -21,6 +19,15 @@ import {
   requireDatabaseClient,
   resolveActiveProfileId
 } from './db.ts';
+import {
+  deferredWorkEntries,
+  findResolution,
+  loadResolutions,
+  RESOLUTION_OUTCOMES,
+  RESOLUTION_STATUSES,
+  type ResolutionRow,
+  toResolution
+} from './deferred-work.ts';
 import { ApiError } from './errors.ts';
 import { requireWorkspacePermission } from './rbac.ts';
 import { deliveryReportFromPayload, readProjectColor } from './repository.ts';
@@ -39,7 +46,8 @@ const DELIVERY_SCAN_LIMIT = 400;
 /** Resolved actions are history; the rail shows only the most recent of them. */
 const RESOLVED_LIMIT = 100;
 
-const RESOLUTION_STATUSES: ReadonlySet<string> = new Set(['done', 'dismissed']);
+/** Bound on the display id a promotion records; real display ids are far shorter. */
+const OUTCOME_REF_MAX_LENGTH = 64;
 
 function placeholders(count: number): string {
   return new Array(count).fill('?').join(', ');
@@ -79,14 +87,6 @@ interface DeliveryActionRow {
   objective_title: string | null;
   assigned_agent: string | null;
   session_agent_identifier: string | null;
-}
-
-interface ResolutionRow {
-  delivery_id: string;
-  action_id: string;
-  status: string;
-  resolved_at: string;
-  resolved_by_workspace_user_id: string | null;
 }
 
 const DELIVERY_SELECT = `
@@ -138,17 +138,6 @@ async function loadDelivery(deliveryId: string): Promise<DeliveryActionRow | und
   )) as DeliveryActionRow | undefined;
 }
 
-async function loadResolutions(deliveryIds: string[]): Promise<Map<string, ResolutionRow>> {
-  if (deliveryIds.length === 0) return new Map();
-  const rows = (await requireDatabaseClient().all(
-    `SELECT delivery_id, action_id, status, resolved_at, resolved_by_workspace_user_id
-       FROM human_action_resolutions
-      WHERE delivery_id IN (${placeholders(deliveryIds.length)})`,
-    deliveryIds
-  )) as ResolutionRow[];
-  return new Map(rows.map(row => [`${row.delivery_id}:${row.action_id}`, row]));
-}
-
 function resolveAgentIdentifier(...candidates: Array<string | null | undefined>): string | null {
   for (const candidate of candidates) {
     const trimmed = candidate?.trim();
@@ -156,15 +145,6 @@ function resolveAgentIdentifier(...candidates: Array<string | null | undefined>)
     return trimmed;
   }
   return null;
-}
-
-function toResolution(row: ResolutionRow | undefined): HumanActionResolutionDto | null {
-  if (!row || !RESOLUTION_STATUSES.has(row.status)) return null;
-  return {
-    status: row.status as HumanActionResolutionStatus,
-    resolvedAt: row.resolved_at,
-    resolvedByWorkspaceUserId: row.resolved_by_workspace_user_id
-  };
 }
 
 interface HumanActionRailEntry extends HumanActionV1 {
@@ -176,47 +156,23 @@ interface HumanActionRailEntry extends HumanActionV1 {
   legacyId?: string;
 }
 
-function deferredWorkId(text: string, occurrence: number): string {
-  const digest = createHash('sha256').update(text).digest('hex').slice(0, 16);
-  return `deferred-work-${digest}-${occurrence}`;
-}
-
-function agentDeferredWorkId(index: number, agentText: string | undefined): string {
-  if (!agentText) return `deferred-work-${index}-composed`;
-  const digest = createHash('sha256').update(agentText).digest('hex').slice(0, 16);
-  return `deferred-work-${index}-${digest}`;
-}
-
 function deliveryActions(row: DeliveryActionRow): HumanActionRailEntry[] {
   const report = deliveryReportFromPayload(row.payload_json, row.delivery_summary);
-  const { presentation, agentReport } = report;
-  const humanActions = presentation.humanActions.map(action => ({
+  const humanActions = report.presentation.humanActions.map(action => ({
     ...action,
     kind: action.blocking === true ? 'blocking_action' : 'follow_up'
   })) satisfies HumanActionRailEntry[];
-  const occurrences = new Map<string, number>();
-  const usedAgentIndexes = new Set<number>();
-  const deferredWork = presentation.deferredWork.map((action, index) => {
-    const occurrence = (occurrences.get(action) ?? 0) + 1;
-    occurrences.set(action, occurrence);
-    const agentIndex = matchDeferredWorkAgentIndex({
-      presentationItem: action,
-      agentItems: agentReport.deferredWork,
-      usedIndexes: usedAgentIndexes
-    });
-    if (agentIndex !== null) usedAgentIndexes.add(agentIndex);
-    return {
-      id:
-        agentIndex === null
-          ? agentDeferredWorkId(index, undefined)
-          : agentDeferredWorkId(agentIndex, agentReport.deferredWork[agentIndex]),
-      legacyId: deferredWorkId(action, occurrence),
-      kind: 'deferred_work',
-      action,
-      category: 'other',
-      source: 'agent'
-    } satisfies HumanActionRailEntry;
-  });
+  const deferredWork = deferredWorkEntries(report).map(
+    entry =>
+      ({
+        id: entry.id,
+        legacyId: entry.legacyId,
+        kind: 'deferred_work',
+        action: entry.action,
+        category: 'other',
+        source: 'agent'
+      }) satisfies HumanActionRailEntry
+  );
   return [...humanActions, ...deferredWork];
 }
 
@@ -294,10 +250,7 @@ export async function listHumanActions({
   const resolved: HumanActionItemDto[] = [];
   for (const row of rows) {
     for (const action of deliveryActions(row)) {
-      const resolution =
-        resolutions.get(`${row.delivery_id}:${action.id}`) ??
-        (action.legacyId ? resolutions.get(`${row.delivery_id}:${action.legacyId}`) : undefined);
-      const item = toItem(row, action, resolution);
+      const item = toItem(row, action, findResolution(resolutions, row.delivery_id, action));
       (item.resolution ? resolved : open).push(item);
     }
   }
@@ -339,10 +292,7 @@ async function currentItem(
   action: HumanActionRailEntry
 ): Promise<HumanActionItemDto> {
   const resolutions = await loadResolutions([row.delivery_id]);
-  const resolution =
-    resolutions.get(`${row.delivery_id}:${action.id}`) ??
-    (action.legacyId ? resolutions.get(`${row.delivery_id}:${action.legacyId}`) : undefined);
-  return toItem(row, action, resolution);
+  return toItem(row, action, findResolution(resolutions, row.delivery_id, action));
 }
 
 async function actorWorkspaceUserId(workspaceId: string, fallback: string): Promise<string> {
@@ -351,13 +301,39 @@ async function actorWorkspaceUserId(workspaceId: string, fallback: string): Prom
   return (await findActiveMembershipId(workspaceId, profileId)) ?? fallback;
 }
 
-function parseStatus(body: unknown): HumanActionResolutionStatus {
-  const status =
-    body && typeof body === 'object' ? (body as Partial<ResolveHumanActionBody>).status : undefined;
+interface ParsedResolution {
+  status: HumanActionResolutionStatus;
+  outcome: HumanActionResolutionOutcome | null;
+  outcomeRef: string | null;
+}
+
+function parseResolution(body: unknown): ParsedResolution {
+  const input = body && typeof body === 'object' ? (body as Partial<ResolveHumanActionBody>) : {};
+  const { status, outcome, outcomeRef } = input;
   if (typeof status !== 'string' || !RESOLUTION_STATUSES.has(status)) {
     throw new ApiError(400, "status must be 'done' or 'dismissed'");
   }
-  return status as HumanActionResolutionStatus;
+  if (outcome !== undefined && (typeof outcome !== 'string' || !RESOLUTION_OUTCOMES.has(outcome))) {
+    throw new ApiError(400, "outcome must be 'mission_created' or 'objective_added'");
+  }
+  if (outcome !== undefined && status !== 'done') {
+    throw new ApiError(400, "outcome requires status 'done'");
+  }
+  if (outcomeRef !== undefined) {
+    if (outcome === undefined) throw new ApiError(400, 'outcomeRef requires outcome');
+    if (
+      typeof outcomeRef !== 'string' ||
+      !outcomeRef.trim() ||
+      outcomeRef.length > OUTCOME_REF_MAX_LENGTH
+    ) {
+      throw new ApiError(400, 'outcomeRef must be a non-empty display id');
+    }
+  }
+  return {
+    status: status as HumanActionResolutionStatus,
+    outcome: (outcome as HumanActionResolutionOutcome | undefined) ?? null,
+    outcomeRef: outcomeRef?.trim() ?? null
+  };
 }
 
 /** Records the operator's decision on one action. Re-resolving overwrites the earlier decision. */
@@ -366,8 +342,11 @@ export async function resolveHumanAction(
   actionId: string,
   body: unknown
 ): Promise<HumanActionItemDto> {
-  const status = parseStatus(body);
+  const { status, outcome, outcomeRef } = parseResolution(body);
   const { row, action, workspaceUserId } = await requireDeliveryAction(deliveryId, actionId);
+  if (outcome !== null && action.kind !== 'deferred_work') {
+    throw new ApiError(400, 'outcome applies only to deferred work');
+  }
   const db = requireDatabaseClient();
   const resolvedBy = await actorWorkspaceUserId(row.workspace_id, workspaceUserId);
   const now = nowIso();
@@ -376,10 +355,12 @@ export async function resolveHumanAction(
     await tx.run(
       `INSERT INTO human_action_resolutions
          (delivery_id, action_id, workspace_id, mission_id, objective_id, status,
-          resolved_by_workspace_user_id, resolved_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          outcome, outcome_ref, resolved_by_workspace_user_id, resolved_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (delivery_id, action_id) DO UPDATE SET
          status = excluded.status,
+         outcome = excluded.outcome,
+         outcome_ref = excluded.outcome_ref,
          resolved_by_workspace_user_id = excluded.resolved_by_workspace_user_id,
          resolved_at = excluded.resolved_at`,
       [
@@ -389,6 +370,8 @@ export async function resolveHumanAction(
         row.mission_id,
         row.objective_id,
         status,
+        outcome,
+        outcomeRef,
         resolvedBy,
         now
       ]
@@ -402,7 +385,7 @@ export async function resolveHumanAction(
         missionId: row.mission_id,
         objectiveId: row.objective_id,
         workspaceId: row.workspace_id,
-        changedFields: ['status'],
+        changedFields: outcome === null ? ['status'] : ['status', 'outcome', 'outcome_ref'],
         actorWorkspaceUserId: resolvedBy
       },
       tx

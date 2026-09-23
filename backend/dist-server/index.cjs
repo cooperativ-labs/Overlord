@@ -76590,12 +76590,12 @@ async function projectRow(db, projectId) {
   if (!row) throw new ServiceError("Project not found", "project_not_found", 404);
   return row;
 }
-async function ensureMissionRunQueue(db, projectId, missionId, actorId = null) {
+async function resolveMissionRunQueue(db, projectId, missionId, actorId) {
   const existing = await db.get(
     "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE project_id = ? AND mission_id = ? AND deleted_at IS NULL",
     [projectId, missionId]
   );
-  if (existing) return existing;
+  if (existing) return { queue: existing, created: false };
   const mission = await db.get(
     "SELECT id, project_id, workspace_id, display_id, title FROM missions WHERE id = ? AND deleted_at IS NULL",
     [missionId]
@@ -76613,7 +76613,7 @@ async function ensureMissionRunQueue(db, projectId, missionId, actorId = null) {
       "UPDATE run_queues SET mission_id = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
       [missionId, now2, adopted.id]
     );
-    return { ...adopted, mission_id: missionId };
+    return { queue: { ...adopted, mission_id: missionId }, created: false };
   }
   const max = await db.get(
     "SELECT MAX(position) value FROM run_queues WHERE project_id = ? AND deleted_at IS NULL",
@@ -76638,15 +76638,73 @@ async function ensureMissionRunQueue(db, projectId, missionId, actorId = null) {
     ]
   );
   return {
-    id,
-    project_id: projectId,
-    workspace_id: mission.workspace_id,
-    name,
-    position,
-    paused: true,
-    is_default: false,
-    mission_id: missionId
+    queue: {
+      id,
+      project_id: projectId,
+      workspace_id: mission.workspace_id,
+      name,
+      position,
+      paused: true,
+      is_default: false,
+      mission_id: missionId
+    },
+    created: true
   };
+}
+async function seedRunningPredecessors(db, queue, missionId, beforePosition, actorId) {
+  const running = await db.all(
+    `SELECT o.id, o.workspace_id FROM objectives o
+      WHERE o.mission_id = ? AND o.deleted_at IS NULL AND o.position < ?
+        AND (
+          o.state IN ('executing', 'pending_delivery')
+          OR (o.state = 'launching' AND EXISTS (
+            SELECT 1 FROM execution_requests er
+             WHERE er.objective_id = o.id AND er.deleted_at IS NULL
+               AND er.status IN (${ACTIVE_REQUEST_STATUSES.map(() => "?").join(",")})
+          ))
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM run_queue_entries e WHERE e.objective_id = o.id AND e.deleted_at IS NULL
+        )
+      ORDER BY o.position, o.id`,
+    [missionId, beforePosition, ...ACTIVE_REQUEST_STATUSES]
+  );
+  if (!running.length) return 0;
+  const now2 = nowIso();
+  for (let i5 = 0; i5 < running.length; i5++) {
+    const objective = running[i5];
+    const request = await db.get(
+      "SELECT id FROM execution_requests WHERE objective_id = ? AND deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 1",
+      [objective.id]
+    );
+    await db.run(
+      `INSERT INTO run_queue_entries (id, queue_id, project_id, workspace_id, mission_id, objective_id, position, state, execution_request_id, dispatched_at, enqueued_by_workspace_user_id, enqueued_at, created_at, updated_at, revision) VALUES (?, ?, ?, ?, ?, ?, ?, 'running', ?, ?, ?, ?, ?, ?, 1)`,
+      [
+        newId(),
+        queue.id,
+        queue.project_id,
+        objective.workspace_id,
+        missionId,
+        objective.id,
+        (i5 + 1) * STEP,
+        request?.id ?? null,
+        now2,
+        actorId,
+        now2,
+        now2,
+        now2
+      ]
+    );
+    await db.run(
+      "UPDATE objectives SET auto_advance = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
+      [db.dialect === "postgres" ? true : 1, now2, objective.id]
+    );
+  }
+  await db.run(
+    "UPDATE run_queues SET paused = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
+    [db.dialect === "postgres" ? false : 0, now2, queue.id]
+  );
+  return running.length;
 }
 function entryDto(row, rank) {
   const diagnosticCode = runQueueDiagnosticCode({
@@ -76955,11 +77013,23 @@ async function enqueueRunQueueEntry(db, projectId, objectiveId, options = {}) {
     );
     if (existing)
       return (await listProjectRunQueues(tx, projectId)).queues.flatMap((q2) => q2.entries).find((e5) => e5.id === existing.id);
-    const queue = options.queueId ? await tx.get(
-      "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE id = ? AND project_id = ? AND deleted_at IS NULL",
-      [options.queueId, projectId]
-    ) : await ensureMissionRunQueue(tx, projectId, objective.mission_id, options.actorId ?? null);
+    const resolved = options.queueId ? {
+      queue: await tx.get(
+        "SELECT id, project_id, workspace_id, name, position, paused, is_default, mission_id FROM run_queues WHERE id = ? AND project_id = ? AND deleted_at IS NULL",
+        [options.queueId, projectId]
+      ),
+      created: false
+    } : await resolveMissionRunQueue(tx, projectId, objective.mission_id, options.actorId ?? null);
+    const queue = resolved.queue;
     if (!queue) throw new ServiceError("Run Queue not found", "run_queue_not_found", 404);
+    if (resolved.created)
+      await seedRunningPredecessors(
+        tx,
+        queue,
+        objective.mission_id,
+        objective.position,
+        options.actorId ?? null
+      );
     let position = options.position;
     if (options.afterEntryId) {
       const after = await tx.get(
@@ -77323,7 +77393,7 @@ async function deleteRunQueue(db, queueId, moveEntriesTo) {
     return { removed: true, projectId: queue.project_id };
   });
 }
-var RUN_QUEUE_DISPATCH_JOB_TYPE, STEP, truthy, MISSION_QUEUE_NAME_LIMIT, SEQUENCEABLE_OBJECTIVE_STATES;
+var RUN_QUEUE_DISPATCH_JOB_TYPE, STEP, truthy, MISSION_QUEUE_NAME_LIMIT, ACTIVE_REQUEST_STATUSES, SEQUENCEABLE_OBJECTIVE_STATES;
 var init_run_queue = __esm({
   "../packages/core/service/run-queue.ts"() {
     "use strict";
@@ -77335,6 +77405,7 @@ var init_run_queue = __esm({
     STEP = 1e3;
     truthy = (value) => value === true || value === 1;
     MISSION_QUEUE_NAME_LIMIT = 80;
+    ACTIVE_REQUEST_STATUSES = ["queued", "claimed", "launching"];
     SEQUENCEABLE_OBJECTIVE_STATES = /* @__PURE__ */ new Set(["draft", "submitted", "future"]);
   }
 });
@@ -77607,12 +77678,12 @@ async function readRunnerLiveness({
   const liveness = /* @__PURE__ */ new Map();
   const unique = [...new Set(executionTargetIds.filter((id) => id))];
   if (unique.length === 0) return liveness;
-  const placeholders3 = unique.map(() => "?").join(", ");
+  const placeholders4 = unique.map(() => "?").join(", ");
   const rows = await ctx.db.all(
     `SELECT execution_target_id, relation, health, last_heartbeat_at
        FROM execution_target_runner_registrations
       WHERE workspace_id = ? AND deleted_at IS NULL
-        AND execution_target_id IN (${placeholders3})`,
+        AND execution_target_id IN (${placeholders4})`,
     [ctx.workspace.id, ...unique]
   );
   for (const row of rows) {
@@ -78210,14 +78281,14 @@ async function deleteWorkspaceExecutionTarget({
   if (!target) {
     throw new ServiceError("Execution target not found", "not_found", 404);
   }
-  const placeholders3 = ACTIVE_QUEUE_STATUSES.map(() => "?").join(", ");
+  const placeholders4 = ACTIVE_QUEUE_STATUSES.map(() => "?").join(", ");
   const activeQueue = await ctx.db.get(
     `SELECT COUNT(*) AS count
        FROM execution_requests
       WHERE workspace_id = ?
         AND deleted_at IS NULL
         AND (execution_target_id = ? OR claimed_by_execution_target_id = ?)
-        AND status IN (${placeholders3})`,
+        AND status IN (${placeholders4})`,
     [ctx.workspace.id, id, id, ...ACTIVE_QUEUE_STATUSES]
   );
   if (Number(activeQueue?.count ?? 0) > 0) {
@@ -82758,14 +82829,14 @@ var init_getProfileName = __esm({
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getSSOTokenFilepath.js
-var import_node_crypto15, import_node_path20, getSSOTokenFilepath;
+var import_node_crypto16, import_node_path20, getSSOTokenFilepath;
 var init_getSSOTokenFilepath = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getSSOTokenFilepath.js"() {
-    import_node_crypto15 = require("node:crypto");
+    import_node_crypto16 = require("node:crypto");
     import_node_path20 = require("node:path");
     init_getHomeDir();
     getSSOTokenFilepath = (id) => {
-      const hasher = (0, import_node_crypto15.createHash)("sha1");
+      const hasher = (0, import_node_crypto16.createHash)("sha1");
       const cacheName = hasher.update(id).digest("hex");
       return (0, import_node_path20.join)(getHomeDir(), ".aws", "sso", "cache", `${cacheName}.json`);
     };
@@ -84936,10 +85007,10 @@ function castSourceData(toCast, encoding) {
   }
   return fromArrayBuffer(toCast);
 }
-var import_node_crypto16, Hash;
+var import_node_crypto17, Hash;
 var init_hash_node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/serde/hash-node/hash-node.js"() {
-    import_node_crypto16 = require("node:crypto");
+    import_node_crypto17 = require("node:crypto");
     init_buffer_from();
     init_toUint8Array();
     Hash = class {
@@ -84958,7 +85029,7 @@ var init_hash_node = __esm({
         return Promise.resolve(this.hash.digest());
       }
       reset() {
-        this.hash = this.secret ? (0, import_node_crypto16.createHmac)(this.algorithmIdentifier, castSourceData(this.secret)) : (0, import_node_crypto16.createHash)(this.algorithmIdentifier);
+        this.hash = this.secret ? (0, import_node_crypto17.createHmac)(this.algorithmIdentifier, castSourceData(this.secret)) : (0, import_node_crypto17.createHash)(this.algorithmIdentifier);
       }
     };
   }
@@ -85852,10 +85923,10 @@ __export(serde_exports, {
   toUtf8: () => toUtf8,
   v4: () => v4
 });
-var import_node_crypto17, Uint8ArrayBlobAdapter, _getRandomValues, v4, generateIdempotencyToken;
+var import_node_crypto18, Uint8ArrayBlobAdapter, _getRandomValues, v4, generateIdempotencyToken;
 var init_serde = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/serde/index.js"() {
-    import_node_crypto17 = require("node:crypto");
+    import_node_crypto18 = require("node:crypto");
     init_fromBase64();
     init_toBase64();
     init_Uint8ArrayBlobAdapter();
@@ -85892,7 +85963,7 @@ var init_serde = __esm({
     init_stream_collector();
     Uint8ArrayBlobAdapter = class extends bindUint8ArrayBlobAdapter(toUtf8, fromUtf8, toBase64, fromBase64) {
     };
-    _getRandomValues = import_node_crypto17.getRandomValues;
+    _getRandomValues = import_node_crypto18.getRandomValues;
     v4 = bindV4(_getRandomValues);
     generateIdempotencyToken = v4;
   }
@@ -112979,7 +113050,7 @@ var init_Md5Js = __esm({
 function buildNativeClass() {
   return class Md5Node {
     digestLength = 16;
-    hash = (0, import_node_crypto18.createHash)("md5");
+    hash = (0, import_node_crypto19.createHash)("md5");
     update(data) {
       this.hash.update(toUint8Array(data));
     }
@@ -112988,19 +113059,19 @@ function buildNativeClass() {
       return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
     }
     reset() {
-      this.hash = (0, import_node_crypto18.createHash)("md5");
+      this.hash = (0, import_node_crypto19.createHash)("md5");
     }
   };
 }
-var import_node_crypto18, hasNativeCrypto, Md5Node;
+var import_node_crypto19, hasNativeCrypto, Md5Node;
 var init_Md5Node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/checksum/md5/Md5Node.js"() {
-    import_node_crypto18 = require("node:crypto");
+    import_node_crypto19 = require("node:crypto");
     init_serde();
     init_Md5Js();
     hasNativeCrypto = (() => {
       try {
-        (0, import_node_crypto18.createHash)("md5");
+        (0, import_node_crypto19.createHash)("md5");
         return true;
       } catch {
         return false;
@@ -113344,7 +113415,7 @@ function buildNativeClass3() {
       this.finished = false;
     }
     createHash() {
-      return this.secret ? (0, import_node_crypto19.createHmac)("sha256", toBuffer(this.secret)) : (0, import_node_crypto19.createHash)("sha256");
+      return this.secret ? (0, import_node_crypto20.createHmac)("sha256", toBuffer(this.secret)) : (0, import_node_crypto20.createHash)("sha256");
     }
   };
 }
@@ -113357,14 +113428,14 @@ function toBuffer(data) {
   }
   return Buffer.from(data);
 }
-var import_node_crypto19, hasNativeCrypto2, Sha256Node;
+var import_node_crypto20, hasNativeCrypto2, Sha256Node;
 var init_Sha256Node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/checksum/sha256/Sha256Node.js"() {
-    import_node_crypto19 = require("node:crypto");
+    import_node_crypto20 = require("node:crypto");
     init_Sha256Js();
     hasNativeCrypto2 = (() => {
       try {
-        (0, import_node_crypto19.createHash)("sha256");
+        (0, import_node_crypto20.createHash)("sha256");
         return true;
       } catch {
         return false;
@@ -141868,13 +141939,13 @@ async function loadTargetResourceObservations({
 }) {
   const byResource = /* @__PURE__ */ new Map();
   if (resourceIds.length === 0) return byResource;
-  const placeholders3 = resourceIds.map(() => "?").join(", ");
+  const placeholders4 = resourceIds.map(() => "?").join(", ");
   const rows = await ctx.db.all(
     `SELECT execution_target_id, resource_id, state, git_root, branch, git_commit,
             observed_at, updated_at
        FROM target_resource_observations
       WHERE workspace_id = ?
-        AND resource_id IN (${placeholders3})`,
+        AND resource_id IN (${placeholders4})`,
     [ctx.workspace.id, ...resourceIds]
   );
   for (const row of rows) {
@@ -146340,7 +146411,7 @@ async function loadMissionBranchObservationsForMissions({
 }) {
   const byMission = /* @__PURE__ */ new Map();
   if (!executionTargetId || missionIds.length === 0) return byMission;
-  const placeholders3 = missionIds.map(() => "?").join(", ");
+  const placeholders4 = missionIds.map(() => "?").join(", ");
   const normalizedKey = resourceKey?.trim() || null;
   const params = [ctx.workspace.id, executionTargetId, ...missionIds];
   const resourceFilter = normalizedKey ? "AND resource_key = ?" : "";
@@ -146352,7 +146423,7 @@ async function loadMissionBranchObservationsForMissions({
        FROM mission_branch_observations
       WHERE workspace_id = ?
         AND execution_target_id = ?
-        AND mission_id IN (${placeholders3})
+        AND mission_id IN (${placeholders4})
         ${resourceFilter}`,
     params
   );
@@ -148152,6 +148223,71 @@ function previewMissionBranch(input) {
 // repository.ts
 init_db();
 
+// deferred-work.ts
+var import_node_crypto15 = require("node:crypto");
+init_db();
+var RESOLUTION_STATUSES = /* @__PURE__ */ new Set(["done", "dismissed"]);
+var RESOLUTION_OUTCOMES = /* @__PURE__ */ new Set([
+  "mission_created",
+  "objective_added"
+]);
+function legacyDeferredWorkId(text, occurrence) {
+  const digest3 = (0, import_node_crypto15.createHash)("sha256").update(text).digest("hex").slice(0, 16);
+  return `deferred-work-${digest3}-${occurrence}`;
+}
+function agentDeferredWorkId(index, agentText) {
+  if (!agentText) return `deferred-work-${index}-composed`;
+  const digest3 = (0, import_node_crypto15.createHash)("sha256").update(agentText).digest("hex").slice(0, 16);
+  return `deferred-work-${index}-${digest3}`;
+}
+function deferredWorkEntries(report) {
+  const { presentation, agentReport } = report;
+  const occurrences = /* @__PURE__ */ new Map();
+  const usedAgentIndexes = /* @__PURE__ */ new Set();
+  return presentation.deferredWork.map((action, index) => {
+    const occurrence = (occurrences.get(action) ?? 0) + 1;
+    occurrences.set(action, occurrence);
+    const agentIndex = matchDeferredWorkAgentIndex({
+      presentationItem: action,
+      agentItems: agentReport.deferredWork,
+      usedIndexes: usedAgentIndexes
+    });
+    if (agentIndex !== null) usedAgentIndexes.add(agentIndex);
+    return {
+      id: agentIndex === null ? agentDeferredWorkId(index, void 0) : agentDeferredWorkId(agentIndex, agentReport.deferredWork[agentIndex]),
+      legacyId: legacyDeferredWorkId(action, occurrence),
+      action
+    };
+  });
+}
+function placeholders(count) {
+  return new Array(count).fill("?").join(", ");
+}
+async function loadResolutions(deliveryIds) {
+  if (deliveryIds.length === 0) return /* @__PURE__ */ new Map();
+  const rows = await requireDatabaseClient().all(
+    `SELECT delivery_id, action_id, status, outcome, outcome_ref, resolved_at,
+            resolved_by_workspace_user_id
+       FROM human_action_resolutions
+      WHERE delivery_id IN (${placeholders(deliveryIds.length)})`,
+    deliveryIds
+  );
+  return new Map(rows.map((row) => [`${row.delivery_id}:${row.action_id}`, row]));
+}
+function findResolution(resolutions, deliveryId, entry) {
+  return resolutions.get(`${deliveryId}:${entry.id}`) ?? (entry.legacyId ? resolutions.get(`${deliveryId}:${entry.legacyId}`) : void 0);
+}
+function toResolution(row) {
+  if (!row || !RESOLUTION_STATUSES.has(row.status)) return null;
+  return {
+    status: row.status,
+    resolvedAt: row.resolved_at,
+    resolvedByWorkspaceUserId: row.resolved_by_workspace_user_id,
+    outcome: row.outcome && RESOLUTION_OUTCOMES.has(row.outcome) ? row.outcome : null,
+    outcomeRef: row.outcome_ref ?? null
+  };
+}
+
 // organizations.ts
 var import_node_path27 = __toESM(require("node:path"), 1);
 var import_node_url5 = require("node:url");
@@ -148533,11 +148669,11 @@ function toOrganizationAdminDto(row) {
 async function loadOrganizationAdmins(organizationId, client) {
   const profileIds = await listOrganizationAdminProfileIds(organizationId, client);
   if (profileIds.length === 0) return [];
-  const placeholders3 = profileIds.map(() => "?").join(", ");
+  const placeholders4 = profileIds.map(() => "?").join(", ");
   const rows = await client.all(
     `SELECT id AS user_id, display_name, handle, email, metadata_json
        FROM profiles
-      WHERE id IN (${placeholders3}) AND deleted_at IS NULL
+      WHERE id IN (${placeholders4}) AND deleted_at IS NULL
       ORDER BY display_name ASC`,
     profileIds
   );
@@ -149658,12 +149794,12 @@ async function getMissionTags(missionId) {
 async function getTagsByMission(missionIds) {
   const byMission = /* @__PURE__ */ new Map();
   if (missionIds.length === 0) return byMission;
-  const placeholders3 = missionIds.map(() => "?").join(", ");
+  const placeholders4 = missionIds.map(() => "?").join(", ");
   const rows = await requireDatabaseClient().all(
     `SELECT tt.mission_id, pt.id, pt.workspace_id, pt.project_id, pt.label, pt.color, pt.active, pt.revision
          FROM mission_tags tt
          JOIN project_tags pt ON pt.id = tt.tag_id AND pt.deleted_at IS NULL
-        WHERE tt.mission_id IN (${placeholders3})
+        WHERE tt.mission_id IN (${placeholders4})
         ORDER BY ${orderByLabelAsc("pt.label")}`,
     missionIds
   );
@@ -151305,7 +151441,7 @@ ${missionHasUnseenReturnedToExecuteSql},
 async function getObjectivesByMission(missionIds, db = requireDatabaseClient()) {
   const byMission = /* @__PURE__ */ new Map();
   if (missionIds.length === 0) return byMission;
-  const placeholders3 = missionIds.map(() => "?").join(", ");
+  const placeholders4 = missionIds.map(() => "?").join(", ");
   const rows = await db.all(
     `SELECT o.*, m.display_id AS mission_display_id,
          e.id AS queue_entry_id, e.queue_id, q.name AS queue_name,
@@ -151325,7 +151461,7 @@ async function getObjectivesByMission(missionIds, db = requireDatabaseClient()) 
          LEFT JOIN run_queue_entries e ON e.objective_id = o.id AND e.deleted_at IS NULL
          LEFT JOIN run_queues q ON q.id = e.queue_id AND q.deleted_at IS NULL
          LEFT JOIN objectives wo ON wo.id = e.waiting_on_objective_id AND wo.deleted_at IS NULL
-        WHERE o.mission_id IN (${placeholders3}) AND o.deleted_at IS NULL
+        WHERE o.mission_id IN (${placeholders4}) AND o.deleted_at IS NULL
         ORDER BY o.mission_id ASC, o.position ASC`,
     missionIds
   );
@@ -151341,9 +151477,9 @@ var WINDOWED_MISSION_STATUS_TYPES = ["complete", "cancelled"];
 var COMPLETED_MISSION_WINDOW_MS = COMPLETED_MISSION_WINDOW_DAYS * 24 * 60 * 60 * 1e3;
 function completedMissionWindowSql(includeAllCompleted, now2 = Date.now()) {
   if (includeAllCompleted) return { sql: "", params: [] };
-  const placeholders3 = WINDOWED_MISSION_STATUS_TYPES.map(() => "?").join(", ");
+  const placeholders4 = WINDOWED_MISSION_STATUS_TYPES.map(() => "?").join(", ");
   return {
-    sql: ` AND (t.status_type NOT IN (${placeholders3}) OR t.updated_at >= ?)`,
+    sql: ` AND (t.status_type NOT IN (${placeholders4}) OR t.updated_at >= ?)`,
     params: [
       ...WINDOWED_MISSION_STATUS_TYPES,
       new Date(now2 - COMPLETED_MISSION_WINDOW_MS).toISOString()
@@ -151851,20 +151987,29 @@ async function listMissionDeliveries(missionRef, limit = MISSION_EVIDENCE_LIST_L
       LIMIT ?`,
     [mission.id, mission.workspace_id, limit]
   );
+  const resolutions = await loadResolutions(rows.map((row) => row.id));
   return {
-    items: rows.map((row) => ({
-      id: row.id,
-      missionId: row.mission_id,
-      objectiveId: row.objective_id,
-      sessionId: row.session_id,
-      summary: row.summary,
-      verificationSummary: row.verification_summary,
-      followUpNotes: row.follow_up_notes,
-      report: deliveryReportFromPayload(row.payload_json, row.summary),
-      deliveredAt: row.delivered_at,
-      agentIdentifier: row.agent_identifier,
-      modelIdentifier: row.model_identifier
-    })),
+    items: rows.map((row) => {
+      const report = deliveryReportFromPayload(row.payload_json, row.summary);
+      return {
+        id: row.id,
+        missionId: row.mission_id,
+        objectiveId: row.objective_id,
+        sessionId: row.session_id,
+        summary: row.summary,
+        verificationSummary: row.verification_summary,
+        followUpNotes: row.follow_up_notes,
+        report,
+        deliveredAt: row.delivered_at,
+        agentIdentifier: row.agent_identifier,
+        modelIdentifier: row.model_identifier,
+        deferredWorkItems: deferredWorkEntries(report).map((entry) => ({
+          actionId: entry.id,
+          action: entry.action,
+          resolution: toResolution(findResolution(resolutions, row.id, entry))
+        }))
+      };
+    }),
     total: asTotal(countRow?.total),
     limit
   };
@@ -152381,9 +152526,9 @@ async function syncMissionTags(db, {
     await db.run(`DELETE FROM mission_tags WHERE mission_id = ?`, [missionId]);
     return;
   }
-  const placeholders3 = unique.map(() => "?").join(", ");
+  const placeholders4 = unique.map(() => "?").join(", ");
   await db.run(
-    `DELETE FROM mission_tags WHERE mission_id = ? AND tag_id NOT IN (${placeholders3})`,
+    `DELETE FROM mission_tags WHERE mission_id = ? AND tag_id NOT IN (${placeholders4})`,
     [missionId, ...unique]
   );
   for (const tagId of unique) {
@@ -155059,7 +155204,7 @@ async function revokeUserTokenSecret(rawToken) {
 }
 
 // workspaces.ts
-var import_node_crypto20 = require("node:crypto");
+var import_node_crypto21 = require("node:crypto");
 
 // sql-studio/sql-studio.ts
 var import_node_child_process7 = require("node:child_process");
@@ -161441,9 +161586,9 @@ var INVITATION_HASH_ALGORITHM = "sha256";
 var INVITATION_TTL_DAYS = 14;
 var WORKSPACE_ROLE_KEYS = /* @__PURE__ */ new Set(["ADMIN", "MANAGER", "MEMBER"]);
 function generateInvitationSecret() {
-  const prefix = `${INVITATION_TOKEN_SCHEME}_${(0, import_node_crypto20.randomBytes)(4).toString("hex")}`;
-  const secret = `${prefix}${(0, import_node_crypto20.randomBytes)(24).toString("hex")}`;
-  const hash2 = (0, import_node_crypto20.createHash)(INVITATION_HASH_ALGORITHM).update(secret).digest("hex");
+  const prefix = `${INVITATION_TOKEN_SCHEME}_${(0, import_node_crypto21.randomBytes)(4).toString("hex")}`;
+  const secret = `${prefix}${(0, import_node_crypto21.randomBytes)(24).toString("hex")}`;
+  const hash2 = (0, import_node_crypto21.createHash)(INVITATION_HASH_ALGORITHM).update(secret).digest("hex");
   return { secret, prefix, hash: hash2 };
 }
 var INVITATION_COLUMNS = "id, workspace_id, email, role_key, token_prefix, status, invited_by_workspace_user_id, expires_at, created_at, revision";
@@ -161607,7 +161752,7 @@ async function acceptWorkspaceInvitation(body) {
   if (!rawToken) throw new ApiError(400, "Invitation token is required");
   const profileId = getActiveProfileId();
   if (!profileId) throw new ApiError(401, "Authentication required");
-  const tokenHash = (0, import_node_crypto20.createHash)(INVITATION_HASH_ALGORITHM).update(rawToken).digest("hex");
+  const tokenHash = (0, import_node_crypto21.createHash)(INVITATION_HASH_ALGORITHM).update(rawToken).digest("hex");
   const client = requireDatabaseClient();
   const outcome = await client.transaction(async (tx) => {
     const invitation = await tx.get(
@@ -161889,12 +162034,12 @@ async function resolveProjectRefChoices({
 }) {
   if (workspaceIds.length === 0) return [];
   const db = serviceDatabaseClient();
-  const placeholders3 = workspaceIds.map(() => "?").join(", ");
+  const placeholders4 = workspaceIds.map(() => "?").join(", ");
   const selectChoice = `SELECT p.id, p.name, p.slug, p.workspace_id, w.name AS workspace_name,
             w.slug AS workspace_slug
        FROM projects p
        JOIN workspaces w ON w.id = p.workspace_id
-      WHERE p.deleted_at IS NULL AND p.workspace_id IN (${placeholders3})`;
+      WHERE p.deleted_at IS NULL AND p.workspace_id IN (${placeholders4})`;
   const toChoice = (row) => ({
     id: row.id,
     name: row.name,
@@ -161923,13 +162068,13 @@ async function protocolWorkspaceId(body) {
   const scopes = await callerWorkspaceMemberships();
   if (scopes.length === 0) return null;
   const workspaceIds = scopes.map((scope) => scope.workspaceId);
-  const placeholders3 = workspaceIds.map(() => "?").join(", ");
+  const placeholders4 = workspaceIds.map(() => "?").join(", ");
   const db = serviceDatabaseClient();
   const executionRequestId = strFlag(body, "--execution-request-id");
   if (executionRequestId) {
     const request = await db.get(
       `SELECT workspace_id FROM execution_requests
-        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders3})`,
+        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders4})`,
       [executionRequestId, ...workspaceIds]
     );
     if (request) return request.workspace_id;
@@ -161938,7 +162083,7 @@ async function protocolWorkspaceId(body) {
   if (sessionKey) {
     const session = await db.get(
       `SELECT workspace_id FROM agent_sessions
-        WHERE session_key_hash = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders3})`,
+        WHERE session_key_hash = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders4})`,
       [hashSessionKey(sessionKey), ...workspaceIds]
     );
     if (session) return session.workspace_id;
@@ -161947,7 +162092,7 @@ async function protocolWorkspaceId(body) {
   if (objectiveRef) {
     const objective = await db.get(
       `SELECT workspace_id FROM objectives
-        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders3})`,
+        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders4})`,
       [objectiveRef, ...workspaceIds]
     );
     if (objective) return objective.workspace_id;
@@ -161956,13 +162101,13 @@ async function protocolWorkspaceId(body) {
   if (missionRef) {
     const byId = await db.get(
       `SELECT workspace_id FROM missions
-        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders3})`,
+        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders4})`,
       [missionRef, ...workspaceIds]
     );
     if (byId) return byId.workspace_id;
     const byDisplay = await db.all(
       `SELECT workspace_id FROM missions
-        WHERE display_id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders3})`,
+        WHERE display_id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders4})`,
       [missionRef, ...workspaceIds]
     );
     if (byDisplay.length > 1) {
@@ -164661,13 +164806,13 @@ async function countQueuedRequestsForTargets({
   executionTargetIds
 }) {
   if (executionTargetIds.length === 0) return 0;
-  const placeholders3 = executionTargetIds.map(() => "?").join(", ");
+  const placeholders4 = executionTargetIds.map(() => "?").join(", ");
   const row = await ctx.db.get(
     `SELECT COUNT(*) AS count
        FROM execution_requests
       WHERE workspace_id = ?
         AND deleted_at IS NULL
-        AND execution_target_id IN (${placeholders3})
+        AND execution_target_id IN (${placeholders4})
         AND status IN (${STALE_QUEUE_STATUSES.map(() => "?").join(", ")})`,
     [ctx.workspace.id, ...executionTargetIds, ...STALE_QUEUE_STATUSES]
   );
@@ -165464,12 +165609,12 @@ async function recordBranchPrepared({
 }) {
   const scopes = await callerWorkspaceMemberships();
   if (scopes.length === 0) throw new ApiError(404, "Mission not found");
-  const placeholders3 = scopes.map(() => "?").join(", ");
+  const placeholders4 = scopes.map(() => "?").join(", ");
   const mission = await requireDatabaseClient().get(
     `SELECT workspace_id FROM missions
       WHERE (id = ? OR display_id = ?)
         AND deleted_at IS NULL
-        AND workspace_id IN (${placeholders3})`,
+        AND workspace_id IN (${placeholders4})`,
     [missionId, missionId, ...scopes.map((scope) => scope.workspaceId)]
   );
   if (!mission) throw new ApiError(404, "Mission not found");
@@ -165553,7 +165698,7 @@ function missionRoute(permission, fn) {
 init_db();
 
 // ext/everhour/crypto.ts
-var import_node_crypto21 = require("node:crypto");
+var import_node_crypto22 = require("node:crypto");
 function decodeEncryptionKey(encoded) {
   const trimmed9 = encoded?.trim();
   if (!trimmed9) return null;
@@ -165582,8 +165727,8 @@ function encryptEverhourApiKey({
   profileId,
   key
 }) {
-  const nonce = (0, import_node_crypto21.randomBytes)(12);
-  const cipher = (0, import_node_crypto21.createCipheriv)("aes-256-gcm", key, nonce);
+  const nonce = (0, import_node_crypto22.randomBytes)(12);
+  const cipher = (0, import_node_crypto22.createCipheriv)("aes-256-gcm", key, nonce);
   cipher.setAAD(apiKeyAad(profileId));
   const ciphertext = Buffer.concat([cipher.update(apiKey, "utf8"), cipher.final()]);
   const tag2 = cipher.getAuthTag();
@@ -165599,7 +165744,7 @@ function decryptEverhourApiKey({
     throw new ApiError(503, "The stored Everhour connection cannot be decrypted.");
   }
   try {
-    const decipher = (0, import_node_crypto21.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
+    const decipher = (0, import_node_crypto22.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
     decipher.setAAD(apiKeyAad(profileId));
     decipher.setAuthTag(Buffer.from(tagText, "base64url"));
     return Buffer.concat([
@@ -166852,7 +166997,7 @@ function truncate(value, max) {
   if (text.length <= max) return text;
   return `${text.slice(0, max - 1).trimEnd()}\u2026`;
 }
-function placeholders(count) {
+function placeholders2(count) {
   return new Array(count).fill("?").join(", ");
 }
 function jsonTextFieldSql2(column, field, dialect) {
@@ -166935,8 +167080,8 @@ async function loadRuns(workspaceIds) {
               ORDER BY r.created_at DESC, r.id DESC LIMIT 1) AS request_created_at
        FROM objectives o${CONTEXT_JOIN}
       WHERE o.deleted_at IS NULL
-        AND o.state IN (${placeholders(RUNNING_STATES.length)})
-        AND o.workspace_id IN (${placeholders(workspaceIds.length)})
+        AND o.state IN (${placeholders2(RUNNING_STATES.length)})
+        AND o.workspace_id IN (${placeholders2(workspaceIds.length)})
       ORDER BY o.updated_at DESC, o.id ASC`,
     [...RUNNING_STATES, ...workspaceIds]
   );
@@ -166951,7 +167096,7 @@ async function loadMissionObjectives(missionIds) {
        FROM objectives o
        JOIN missions m ON m.id = o.mission_id AND m.deleted_at IS NULL
       WHERE o.deleted_at IS NULL
-        AND o.mission_id IN (${placeholders(missionIds.length)})
+        AND o.mission_id IN (${placeholders2(missionIds.length)})
       ORDER BY o.mission_id ASC, o.position ASC`,
     missionIds
   );
@@ -166968,7 +167113,7 @@ async function loadLatestEvents(objectiveIds) {
   const rows = await requireDatabaseClient().all(
     `SELECT e.objective_id, e.summary, e.created_at
        FROM mission_events e
-      WHERE e.objective_id IN (${placeholders(objectiveIds.length)})
+      WHERE e.objective_id IN (${placeholders2(objectiveIds.length)})
         AND e.created_at = (SELECT MAX(x.created_at) FROM mission_events x
                              WHERE x.objective_id = e.objective_id)`,
     objectiveIds
@@ -167005,7 +167150,7 @@ async function loadQuestions(workspaceIds) {
        LEFT JOIN agent_sessions s ON s.id = e.session_id AND s.deleted_at IS NULL
        LEFT JOIN agent_requests ar ON ar.source_event_id = e.id AND ar.deleted_at IS NULL
       WHERE e.type = 'ask'
-        AND e.workspace_id IN (${placeholders(workspaceIds.length)})
+        AND e.workspace_id IN (${placeholders2(workspaceIds.length)})
         AND e.created_at >= ?
         AND (
           NOT EXISTS (SELECT 1 FROM mission_status_seen mss
@@ -167056,7 +167201,7 @@ async function loadDelivered({
        ${CONTEXT_JOIN}
        LEFT JOIN agent_sessions s ON s.id = d.session_id AND s.deleted_at IS NULL
       WHERE d.deleted_at IS NULL
-        AND d.workspace_id IN (${placeholders(workspaceIds.length)})
+        AND d.workspace_id IN (${placeholders2(workspaceIds.length)})
         AND d.delivered_at > ?
         AND d.delivered_at <= ?
         AND d.id = (
@@ -167070,7 +167215,7 @@ async function loadDelivered({
           SELECT 1 FROM objectives live
            WHERE live.mission_id = d.mission_id
              AND live.deleted_at IS NULL
-             AND live.state IN (${placeholders(RUNNING_STATES.length)})
+             AND live.state IN (${placeholders2(RUNNING_STATES.length)})
         )
       ORDER BY d.delivered_at DESC, d.id DESC`,
     [...workspaceIds, windowStart, windowEnd, ...RUNNING_STATES]
@@ -167084,7 +167229,7 @@ async function latestDeliveredAtOnOrBefore({
     `SELECT MAX(d.delivered_at) AS latest
        FROM deliveries d
       WHERE d.deleted_at IS NULL
-        AND d.workspace_id IN (${placeholders(workspaceIds.length)})
+        AND d.workspace_id IN (${placeholders2(workspaceIds.length)})
         AND d.delivered_at <= ?
         AND d.id = (
           SELECT x.id FROM deliveries x
@@ -167097,7 +167242,7 @@ async function latestDeliveredAtOnOrBefore({
           SELECT 1 FROM objectives live
            WHERE live.mission_id = d.mission_id
              AND live.deleted_at IS NULL
-             AND live.state IN (${placeholders(RUNNING_STATES.length)})
+             AND live.state IN (${placeholders2(RUNNING_STATES.length)})
         )`,
     [...workspaceIds, onOrBefore, ...RUNNING_STATES]
   );
@@ -168135,11 +168280,11 @@ async function missionScopedRequests(client, missionRef, objectiveRef = null) {
   const memberships = await callerWorkspaceMemberships(client);
   if (memberships.length === 0)
     throw new ServiceError("Mission not found", "mission_not_found", 404);
-  const placeholders3 = memberships.map(() => "?").join(", ");
+  const placeholders4 = memberships.map(() => "?").join(", ");
   const mission = await client.get(
     `SELECT id, workspace_id FROM missions
        WHERE (id = ? OR display_id = ?) AND deleted_at IS NULL
-         AND workspace_id IN (${placeholders3})`,
+         AND workspace_id IN (${placeholders4})`,
     [missionRef, missionRef, ...memberships.map((entry) => entry.workspaceId)]
   );
   if (!mission) throw new ServiceError("Mission not found", "mission_not_found", 404);
@@ -168198,10 +168343,10 @@ function createAgentRequestHumanRouter() {
         }
       }
       if (authorized.length === 0) return { requests: [] };
-      const placeholders3 = authorized.map(() => "?").join(", ");
+      const placeholders4 = authorized.map(() => "?").join(", ");
       const rows = await client.all(
         `SELECT ${REQUEST_COLUMNS_FOR_ROUTE} FROM agent_requests
-          WHERE workspace_id IN (${placeholders3}) AND deleted_at IS NULL
+          WHERE workspace_id IN (${placeholders4}) AND deleted_at IS NULL
           ORDER BY created_at DESC LIMIT 200`,
         authorized.map((entry) => entry.workspaceId)
       );
@@ -168330,11 +168475,11 @@ function createAgentSessionInputHumanRouter() {
       const client = requireDatabaseClient();
       const memberships = await callerWorkspaceMemberships(client);
       if (memberships.length === 0) return { inputs: [] };
-      const placeholders3 = memberships.map(() => "?").join(", ");
+      const placeholders4 = memberships.map(() => "?").join(", ");
       const mission = await client.get(
         `SELECT id, workspace_id FROM missions
            WHERE (id = ? OR display_id = ?) AND deleted_at IS NULL
-             AND workspace_id IN (${placeholders3})`,
+             AND workspace_id IN (${placeholders4})`,
         [missionId, missionId, ...memberships.map((entry) => entry.workspaceId)]
       );
       if (!mission) throw new ServiceError("Mission not found", "mission_not_found", 404);
@@ -169373,7 +169518,7 @@ function boundComposeText(value, maxChars) {
 var deliveryComposeWorker = new DeliveryComposeWorker();
 
 // desktop-oauth-handoff.ts
-var import_node_crypto22 = require("node:crypto");
+var import_node_crypto23 = require("node:crypto");
 var HANDOFF_TTL_MS = 6e4;
 var TICKET_PATTERN = /^[A-Za-z0-9_-]{32,128}$/;
 var handoffs = /* @__PURE__ */ new Map();
@@ -169384,7 +169529,7 @@ function discardExpiredHandoffs(now2 = Date.now()) {
 }
 function createOAuthHandoff(sessionToken, audience) {
   discardExpiredHandoffs();
-  const ticket = (0, import_node_crypto22.randomBytes)(32).toString("base64url");
+  const ticket = (0, import_node_crypto23.randomBytes)(32).toString("base64url");
   handoffs.set(ticket, { audience, sessionToken, expiresAt: Date.now() + HANDOFF_TTL_MS });
   return ticket;
 }
@@ -169433,13 +169578,12 @@ init_env_profile();
 
 // human-actions.ts
 init_dist2();
-var import_node_crypto23 = require("node:crypto");
 init_db();
 var DELIVERY_WINDOW_MS = 90 * 24 * 60 * 60 * 1e3;
 var DELIVERY_SCAN_LIMIT = 400;
 var RESOLVED_LIMIT = 100;
-var RESOLUTION_STATUSES = /* @__PURE__ */ new Set(["done", "dismissed"]);
-function placeholders2(count) {
+var OUTCOME_REF_MAX_LENGTH = 64;
+function placeholders3(count) {
   return new Array(count).fill("?").join(", ");
 }
 function hasHumanActionItemsSql(dialect) {
@@ -169480,7 +169624,7 @@ async function loadDeliveriesWithActions(workspaceIds) {
   return await db.all(
     `${DELIVERY_SELECT}
    WHERE d.deleted_at IS NULL
-     AND d.workspace_id IN (${placeholders2(workspaceIds.length)})
+     AND d.workspace_id IN (${placeholders3(workspaceIds.length)})
      AND d.delivered_at >= ?
      AND ${hasHumanActionItemsSql(db.dialect)}
      ${LATEST_PER_OBJECTIVE}
@@ -169496,16 +169640,6 @@ async function loadDelivery(deliveryId) {
     [deliveryId]
   );
 }
-async function loadResolutions(deliveryIds) {
-  if (deliveryIds.length === 0) return /* @__PURE__ */ new Map();
-  const rows = await requireDatabaseClient().all(
-    `SELECT delivery_id, action_id, status, resolved_at, resolved_by_workspace_user_id
-       FROM human_action_resolutions
-      WHERE delivery_id IN (${placeholders2(deliveryIds.length)})`,
-    deliveryIds
-  );
-  return new Map(rows.map((row) => [`${row.delivery_id}:${row.action_id}`, row]));
-}
 function resolveAgentIdentifier2(...candidates) {
   for (const candidate of candidates) {
     const trimmed9 = candidate?.trim();
@@ -169514,50 +169648,22 @@ function resolveAgentIdentifier2(...candidates) {
   }
   return null;
 }
-function toResolution(row) {
-  if (!row || !RESOLUTION_STATUSES.has(row.status)) return null;
-  return {
-    status: row.status,
-    resolvedAt: row.resolved_at,
-    resolvedByWorkspaceUserId: row.resolved_by_workspace_user_id
-  };
-}
-function deferredWorkId(text, occurrence) {
-  const digest3 = (0, import_node_crypto23.createHash)("sha256").update(text).digest("hex").slice(0, 16);
-  return `deferred-work-${digest3}-${occurrence}`;
-}
-function agentDeferredWorkId(index, agentText) {
-  if (!agentText) return `deferred-work-${index}-composed`;
-  const digest3 = (0, import_node_crypto23.createHash)("sha256").update(agentText).digest("hex").slice(0, 16);
-  return `deferred-work-${index}-${digest3}`;
-}
 function deliveryActions(row) {
   const report = deliveryReportFromPayload(row.payload_json, row.delivery_summary);
-  const { presentation, agentReport } = report;
-  const humanActions = presentation.humanActions.map((action) => ({
+  const humanActions = report.presentation.humanActions.map((action) => ({
     ...action,
     kind: action.blocking === true ? "blocking_action" : "follow_up"
   }));
-  const occurrences = /* @__PURE__ */ new Map();
-  const usedAgentIndexes = /* @__PURE__ */ new Set();
-  const deferredWork = presentation.deferredWork.map((action, index) => {
-    const occurrence = (occurrences.get(action) ?? 0) + 1;
-    occurrences.set(action, occurrence);
-    const agentIndex = matchDeferredWorkAgentIndex({
-      presentationItem: action,
-      agentItems: agentReport.deferredWork,
-      usedIndexes: usedAgentIndexes
-    });
-    if (agentIndex !== null) usedAgentIndexes.add(agentIndex);
-    return {
-      id: agentIndex === null ? agentDeferredWorkId(index, void 0) : agentDeferredWorkId(agentIndex, agentReport.deferredWork[agentIndex]),
-      legacyId: deferredWorkId(action, occurrence),
+  const deferredWork = deferredWorkEntries(report).map(
+    (entry) => ({
+      id: entry.id,
+      legacyId: entry.legacyId,
       kind: "deferred_work",
-      action,
+      action: entry.action,
       category: "other",
       source: "agent"
-    };
-  });
+    })
+  );
   return [...humanActions, ...deferredWork];
 }
 function toItem(row, action, resolution) {
@@ -169620,8 +169726,7 @@ async function listHumanActions({
   const resolved = [];
   for (const row of rows) {
     for (const action of deliveryActions(row)) {
-      const resolution = resolutions.get(`${row.delivery_id}:${action.id}`) ?? (action.legacyId ? resolutions.get(`${row.delivery_id}:${action.legacyId}`) : void 0);
-      const item = toItem(row, action, resolution);
+      const item = toItem(row, action, findResolution(resolutions, row.delivery_id, action));
       (item.resolution ? resolved : open).push(item);
     }
   }
@@ -169654,24 +169759,43 @@ async function requireDeliveryAction(deliveryId, actionId) {
 }
 async function currentItem(row, action) {
   const resolutions = await loadResolutions([row.delivery_id]);
-  const resolution = resolutions.get(`${row.delivery_id}:${action.id}`) ?? (action.legacyId ? resolutions.get(`${row.delivery_id}:${action.legacyId}`) : void 0);
-  return toItem(row, action, resolution);
+  return toItem(row, action, findResolution(resolutions, row.delivery_id, action));
 }
 async function actorWorkspaceUserId(workspaceId2, fallback2) {
   const profileId = await resolveActiveProfileId();
   if (!profileId) return fallback2;
   return await findActiveMembershipId(workspaceId2, profileId) ?? fallback2;
 }
-function parseStatus(body) {
-  const status = body && typeof body === "object" ? body.status : void 0;
+function parseResolution(body) {
+  const input = body && typeof body === "object" ? body : {};
+  const { status, outcome, outcomeRef } = input;
   if (typeof status !== "string" || !RESOLUTION_STATUSES.has(status)) {
     throw new ApiError(400, "status must be 'done' or 'dismissed'");
   }
-  return status;
+  if (outcome !== void 0 && (typeof outcome !== "string" || !RESOLUTION_OUTCOMES.has(outcome))) {
+    throw new ApiError(400, "outcome must be 'mission_created' or 'objective_added'");
+  }
+  if (outcome !== void 0 && status !== "done") {
+    throw new ApiError(400, "outcome requires status 'done'");
+  }
+  if (outcomeRef !== void 0) {
+    if (outcome === void 0) throw new ApiError(400, "outcomeRef requires outcome");
+    if (typeof outcomeRef !== "string" || !outcomeRef.trim() || outcomeRef.length > OUTCOME_REF_MAX_LENGTH) {
+      throw new ApiError(400, "outcomeRef must be a non-empty display id");
+    }
+  }
+  return {
+    status,
+    outcome: outcome ?? null,
+    outcomeRef: outcomeRef?.trim() ?? null
+  };
 }
 async function resolveHumanAction(deliveryId, actionId, body) {
-  const status = parseStatus(body);
+  const { status, outcome, outcomeRef } = parseResolution(body);
   const { row, action, workspaceUserId } = await requireDeliveryAction(deliveryId, actionId);
+  if (outcome !== null && action.kind !== "deferred_work") {
+    throw new ApiError(400, "outcome applies only to deferred work");
+  }
   const db = requireDatabaseClient();
   const resolvedBy = await actorWorkspaceUserId(row.workspace_id, workspaceUserId);
   const now2 = nowIso2();
@@ -169679,10 +169803,12 @@ async function resolveHumanAction(deliveryId, actionId, body) {
     await tx.run(
       `INSERT INTO human_action_resolutions
          (delivery_id, action_id, workspace_id, mission_id, objective_id, status,
-          resolved_by_workspace_user_id, resolved_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          outcome, outcome_ref, resolved_by_workspace_user_id, resolved_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (delivery_id, action_id) DO UPDATE SET
          status = excluded.status,
+         outcome = excluded.outcome,
+         outcome_ref = excluded.outcome_ref,
          resolved_by_workspace_user_id = excluded.resolved_by_workspace_user_id,
          resolved_at = excluded.resolved_at`,
       [
@@ -169692,6 +169818,8 @@ async function resolveHumanAction(deliveryId, actionId, body) {
         row.mission_id,
         row.objective_id,
         status,
+        outcome,
+        outcomeRef,
         resolvedBy,
         now2
       ]
@@ -169705,7 +169833,7 @@ async function resolveHumanAction(deliveryId, actionId, body) {
         missionId: row.mission_id,
         objectiveId: row.objective_id,
         workspaceId: row.workspace_id,
-        changedFields: ["status"],
+        changedFields: outcome === null ? ["status"] : ["status", "outcome", "outcome_ref"],
         actorWorkspaceUserId: resolvedBy
       },
       tx
@@ -169721,7 +169849,7 @@ async function reopenHumanAction(deliveryId, actionId) {
   );
   const existing = await db.get(
     `SELECT 1 FROM human_action_resolutions
-      WHERE delivery_id = ? AND action_id IN (${placeholders2(resolutionIds.length)})`,
+      WHERE delivery_id = ? AND action_id IN (${placeholders3(resolutionIds.length)})`,
     [row.delivery_id, ...resolutionIds]
   );
   if (existing) {
@@ -169729,7 +169857,7 @@ async function reopenHumanAction(deliveryId, actionId) {
     await db.transaction(async (tx) => {
       await tx.run(
         `DELETE FROM human_action_resolutions
-          WHERE delivery_id = ? AND action_id IN (${placeholders2(resolutionIds.length)})`,
+          WHERE delivery_id = ? AND action_id IN (${placeholders3(resolutionIds.length)})`,
         [row.delivery_id, ...resolutionIds]
       );
       await recordChange2(

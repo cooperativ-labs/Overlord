@@ -26,6 +26,7 @@ function delivery(overrides: Partial<DeliveryDto> & { id: string }): DeliveryDto
     deliveredAt: '2026-08-30T10:00:00.000Z',
     agentIdentifier: null,
     modelIdentifier: null,
+    deferredWorkItems: [],
     ...overrides
   };
 }

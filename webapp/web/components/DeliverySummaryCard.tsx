@@ -10,7 +10,7 @@ import {
 
 import type { DeliveryDto } from '../../shared/contract.ts';
 
-import { DeferredWorkActions } from './DeferredWorkActions.tsx';
+import { DeferredWorkItem } from './DeferredWorkItem.tsx';
 import { HumanActionDetails } from './HumanActionDetails.tsx';
 import { Markdown } from './Markdown.tsx';
 import { Badge } from './ui.tsx';
@@ -50,8 +50,7 @@ function DeliveryBulletSection({
   items,
   className,
   titleClassName,
-  itemClassName,
-  renderItemActions
+  itemClassName
 }: {
   deliveryId: string;
   sectionKey: string;
@@ -61,8 +60,6 @@ function DeliveryBulletSection({
   className: string;
   titleClassName: string;
   itemClassName: string;
-  /** Optional per-item controls drawn under the item text. */
-  renderItemActions?: (item: string) => ReactNode;
 }) {
   const headingId = `delivery-${sectionKey}-${deliveryId}`;
   return (
@@ -75,10 +72,7 @@ function DeliveryBulletSection({
         {items.map((item, index) => (
           <li key={`${sectionKey}-${index}`} className="flex min-w-0 items-start gap-2">
             <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-current" aria-hidden="true" />
-            <div className="min-w-0">
-              {item}
-              {renderItemActions ? renderItemActions(item) : null}
-            </div>
+            <div className="min-w-0">{item}</div>
           </li>
         ))}
       </ul>
@@ -175,24 +169,37 @@ export function DeliveryPresentation({
           itemClassName="text-red-950 dark:text-red-100"
         />
       ) : null}
-      {presentation.deferredWork.length > 0 ? (
-        <DeliveryBulletSection
-          deliveryId={delivery.id}
-          sectionKey="deferred"
-          title="Deferred work"
-          icon={<Clock3 className="size-4" aria-hidden="true" />}
-          items={presentation.deferredWork}
+      {delivery.deferredWorkItems.length > 0 ? (
+        <section
+          aria-labelledby={`delivery-deferred-${delivery.id}`}
           className="min-w-0 rounded-md border border-violet-300 bg-violet-50 p-3 dark:border-violet-500/50 dark:bg-violet-500/10"
-          titleClassName="flex items-center gap-1.5 wrap-anywhere text-sm font-semibold text-violet-950 dark:text-violet-100"
-          itemClassName="text-violet-950 dark:text-violet-100"
-          renderItemActions={item => (
-            <DeferredWorkActions
-              item={item}
-              missionId={delivery.missionId}
-              objectiveId={delivery.objectiveId}
-            />
-          )}
-        />
+        >
+          <h4
+            id={`delivery-deferred-${delivery.id}`}
+            className="flex items-center gap-1.5 wrap-anywhere text-sm font-semibold text-violet-950 dark:text-violet-100"
+          >
+            <Clock3 className="size-4" aria-hidden="true" />
+            Deferred work
+          </h4>
+          <ul className="mt-2 grid min-w-0 gap-2 text-sm text-violet-950 dark:text-violet-100">
+            {delivery.deferredWorkItems.map(item => (
+              <li key={item.actionId} className="flex min-w-0 items-start gap-2">
+                <span
+                  className="mt-1.5 size-1.5 shrink-0 rounded-full bg-current"
+                  aria-hidden="true"
+                />
+                <DeferredWorkItem
+                  item={{
+                    ...item,
+                    deliveryId: delivery.id,
+                    missionId: delivery.missionId,
+                    objectiveId: delivery.objectiveId
+                  }}
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
       ) : null}
       {presentation.assumptions.length > 0 ? (
         <DeliveryBulletSection

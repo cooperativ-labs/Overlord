@@ -2,6 +2,7 @@ import { type AgentLaunchFlagDto, agentLaunchFlagsToArgv } from '@overlord/contr
 import {
   existingLatchProviderSession,
   formatObjectiveLatchDisplay,
+  selectLatchAgentLaunch,
   shouldUseLatchProvider
 } from '@overlord/core/service/latch-launch';
 import type { LaunchSessionSnapshot } from '@overlord/core/service/terminal-profile-types';
@@ -182,6 +183,7 @@ type LaunchPlan = {
   env: Record<string, string>;
   /** Present when this plan will (or did) use Latch create-then-open. */
   latchCommandString?: string | null;
+  latchPreLaunchCommands?: string[];
   launchSession?: LaunchSessionSnapshot | null;
   missionTitle?: string | null;
   missionDisplayId?: string | null;
@@ -687,6 +689,7 @@ export async function buildLaunchPlan({
     execution,
     env: exportedEnv,
     latchCommandString,
+    latchPreLaunchCommands: preLaunchCommands,
     launchSession: options.launchSession ?? null,
     missionTitle: options.missionTitle ?? context.title,
     missionDisplayId: options.missionDisplayId ?? context.displayId,
@@ -723,6 +726,7 @@ export async function launchAgent({
   // Captured from the discovery probe below so the viewer open can gate `--as`
   // on the CLI version without spawning a second `latch capabilities`.
   let latchProductVersion: string | null = null;
+  let latchExtensions: string[] = [];
   // This inherited marker correlates the launch with an already-running Latch
   // PTY; it is not consulted for any Overlord authorization decision.
   const existingProviderSession =
@@ -781,6 +785,7 @@ export async function launchAgent({
         // for create/open too, rather than resolving the bare name again.
         resolvedLatchExecutable = discovery.resolvedPath;
         latchProductVersion = discovery.productVersion;
+        latchExtensions = discovery.capabilities.extensions;
       }
       if (!useLatch) {
         providerFallbackWarning =
@@ -794,6 +799,15 @@ export async function launchAgent({
   }
 
   if (useLatch && plan.latchCommandString) {
+    const shell = process.env.SHELL?.trim() || '/bin/bash';
+    const agentLaunch = selectLatchAgentLaunch({
+      agent: options.agent,
+      argv: [plan.command, ...plan.args],
+      preCommand: options.preCommand,
+      preLaunchCommands: plan.latchPreLaunchCommands,
+      extensions: latchExtensions,
+      shell
+    });
     const latchDisplay = formatObjectiveLatchDisplay({
       objectiveDisplayId: plan.objectiveDisplayId ?? plan.missionDisplayId ?? options.missionId,
       objectiveTitle: plan.objectiveTitle ?? plan.missionTitle
@@ -801,6 +815,8 @@ export async function launchAgent({
     const created = createLatchSession({
       executable: resolvedLatchExecutable,
       commandString: plan.latchCommandString,
+      agentLaunch,
+      shell,
       cwd: options.workingDirectory,
       env: plan.env,
       title: latchDisplay.title,

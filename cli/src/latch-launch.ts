@@ -11,6 +11,7 @@ import {
   buildLatchCreateManifest,
   buildLatchOpenArgs,
   type ExecutionProviderSession,
+  type LatchAgentLaunch,
   latchAttachCommand,
   type LatchCreateReport,
   type LatchLaunchManifest,
@@ -81,12 +82,14 @@ function spawnLatchJson({
 }
 
 /**
- * Create a Latch session from the already-composed terminal command string S.
+ * Create a Latch session from structured agent argv when available, otherwise
+ * the already-composed terminal command string S.
  * The manifest travels on stdin so launch material never reaches argv.
  */
 export function createLatchSession({
   executable = DEFAULT_LATCH_EXECUTABLE,
   commandString,
+  agentLaunch,
   cwd,
   env,
   title,
@@ -98,6 +101,7 @@ export function createLatchSession({
 }: {
   executable?: string;
   commandString: string;
+  agentLaunch?: LatchAgentLaunch | null;
   cwd: string;
   env: Record<string, string>;
   title?: string | null;
@@ -109,6 +113,7 @@ export function createLatchSession({
 }): LatchCreateResult {
   const manifest = buildLatchCreateManifest({
     commandString,
+    agentLaunch,
     shell,
     cwd,
     env,

@@ -16,6 +16,7 @@ import {
   mergeProviderSessionIntoMetadata,
   parseLatchCreateReport,
   providerSessionFromMetadata,
+  selectLatchAgentLaunch,
   shouldUseLatchProvider,
   stripProviderSessionFromMetadata,
   toExecutionProviderSession
@@ -49,6 +50,57 @@ test('buildLatchCreateManifest runs S through an interactive login shell and kee
   });
   // Secrets must live in the body, never as argv fragments beyond the shell wrapper.
   assert.equal(manifest.launch.argv.length, 3);
+});
+
+test('buildLatchCreateManifest declares Claude and Codex with their actual argv and login shell', () => {
+  for (const agent of ['claude', 'codex'] as const) {
+    const argv = [agent, '--model', 'test model', 'prompt with spaces'];
+    const agentLaunch = selectLatchAgentLaunch({
+      agent,
+      argv,
+      preLaunchCommands: ['echo preparing', '', 'export READY=yes'],
+      extensions: ['agent-launch'],
+      shell: '/bin/zsh'
+    });
+    assert.ok(agentLaunch);
+    const manifest = buildLatchCreateManifest({
+      commandString: `legacy ${agent} command`,
+      agentLaunch,
+      shell: '/bin/zsh',
+      cwd: '/tmp/project',
+      env: { MISSION_ID: 'coo:1036' }
+    });
+    assert.deepEqual(manifest.launch.argv, argv);
+    assert.equal(manifest.launch.agent, agent);
+    assert.deepEqual(manifest.launch.login_shell, {
+      path: '/bin/zsh',
+      prelude: 'echo preparing; export READY=yes'
+    });
+    assert.equal(manifest.launch.env.MISSION_ID, 'coo:1036');
+    assert.equal(manifest.launch.cwd, '/tmp/project');
+  }
+});
+
+test('structured agent launch requires the extension and an unwrapped supported agent', () => {
+  const input = {
+    agent: 'claude',
+    argv: ['claude', 'prompt'],
+    extensions: ['agent-launch'],
+    shell: '/bin/zsh'
+  };
+  assert.equal(selectLatchAgentLaunch({ ...input, extensions: [] }), null);
+  assert.equal(selectLatchAgentLaunch({ ...input, agent: 'pi' }), null);
+  assert.equal(selectLatchAgentLaunch({ ...input, preCommand: 'agp' }), null);
+  assert.equal(selectLatchAgentLaunch({ ...input, shell: 'zsh' }), null);
+  assert.equal(selectLatchAgentLaunch({ ...input, argv: ['/bin/zsh', '-ilc', 'claude'] }), null);
+  assert.throws(() =>
+    buildLatchCreateManifest({
+      commandString: 'claude',
+      agentLaunch: { agent: 'claude', argv: ['codex'] },
+      cwd: '/tmp/project',
+      env: {}
+    })
+  );
 });
 
 test('formatObjectiveLatchDisplay uses objective display id as name and title prefix', () => {

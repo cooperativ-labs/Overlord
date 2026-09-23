@@ -1364,6 +1364,8 @@ deletes its row; there is no soft delete or revision.
 | `mission_id`                    | Id           | yes      | FK to `missions`; denormalized from the delivery.                     |
 | `objective_id`                  | Id           | yes      | FK to `objectives`; denormalized from the delivery.                   |
 | `status`                        | text         | yes      | Closed: `done`, `dismissed`.                                          |
+| `outcome`                       | text         | no       | Closed: `mission_created`, `objective_added`. Deferred-work promotion recorded with `status = 'done'` (coo:1045, contract v147). |
+| `outcome_ref`                   | text         | no       | Display id of the mission or objective the promotion created.         |
 | `resolved_by_workspace_user_id` | Id           | no       | FK to `workspace_users`, set null on delete.                          |
 | `resolved_at`                   | TimestampUTC | yes      |                                                                       |
 

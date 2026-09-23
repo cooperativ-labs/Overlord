@@ -2,8 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type {
   HumanActionItemDto,
-  HumanActionResolutionStatus,
-  HumanActionsDto
+  HumanActionsDto,
+  ResolveHumanActionBody
 } from '../../../shared/contract.ts';
 import { api } from '../api.ts';
 import { keys } from '../query-keys.ts';
@@ -67,12 +67,11 @@ export function useResolveHumanAction() {
     mutationFn: ({
       deliveryId,
       actionId,
-      status
-    }: {
+      ...body
+    }: ResolveHumanActionBody & {
       deliveryId: string;
       actionId: string;
-      status: HumanActionResolutionStatus;
-    }) => api.resolveHumanAction(deliveryId, actionId, { status }),
+    }) => api.resolveHumanAction(deliveryId, actionId, body),
     onSuccess: apply
   });
 }

@@ -214,7 +214,10 @@ operations (`create-run-queue`, `update-run-queue`, `delete-run-queue`, and
 mission-lifecycle-scoped token cannot perform them. `run-queue` accepts
 `--project-id`, `--objective-id`, or `--mission-id`, plus optional `--queue`.
 New queues start paused; resume one explicitly or directly launch a queued
-objective to start it.
+objective to start it. The exception is queueing an objective behind a sibling
+that is already running: its new mission queue shows that sibling in flight
+ahead of it and starts running, so the queued objective launches as soon as
+the sibling delivers.
 
 ## Environment variables
 

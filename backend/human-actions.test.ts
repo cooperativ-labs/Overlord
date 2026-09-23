@@ -10,7 +10,7 @@ const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
 await bootstrapIntegrationTestDb({ sqlitePath: path.join(tempDir, 'webapp.sqlite') });
 
 const { db } = await import('./db.ts');
-const { createProject, createMission } = await import('./repository.ts');
+const { createProject, createMission, listMissionDeliveries } = await import('./repository.ts');
 const { listHumanActions, reopenHumanAction, resolveHumanAction } =
   await import('./human-actions.ts');
 const { buildDeliveryReport } = await import('../packages/core/service/delivery-report.ts');
@@ -366,6 +366,91 @@ test('resolving hides an action from the open list and records a change', async 
   const reopened = await reopenHumanAction(deliveryId, open.actionId);
   assert.equal(reopened.resolution, null);
   assert.ok((await listHumanActions()).items.some(item => item.id === open.id));
+});
+
+test('a deferred-work promotion records which button was chosen on every surface', async () => {
+  const { project, mission, objective } = await seedMission('HA Outcome');
+  const deliveryId = seedDelivery({
+    workspaceId: mission.workspaceId,
+    projectId: project.id,
+    missionId: mission.id,
+    objectiveId: objective.id,
+    deliveredAt: new Date().toISOString(),
+    humanActions: [{ action: 'Rotate the signing key' }],
+    deferredWork: ['Split the exporter', 'Add retries', 'Rename the flag']
+  });
+
+  const before = (await listMissionDeliveries(mission.id)).items.find(d => d.id === deliveryId)!;
+  assert.deepEqual(
+    before.deferredWorkItems.map(item => [item.action, item.resolution]),
+    [
+      ['Split the exporter', null],
+      ['Add retries', null],
+      ['Rename the flag', null]
+    ]
+  );
+  const [first, second, third] = before.deferredWorkItems;
+
+  const promoted = await resolveHumanAction(deliveryId, first!.actionId, {
+    status: 'done',
+    outcome: 'mission_created',
+    outcomeRef: 'coo:77'
+  });
+  assert.equal(promoted.resolution?.outcome, 'mission_created');
+  assert.equal(promoted.resolution?.outcomeRef, 'coo:77');
+  await resolveHumanAction(deliveryId, second!.actionId, {
+    status: 'done',
+    outcome: 'objective_added'
+  });
+  await resolveHumanAction(deliveryId, third!.actionId, { status: 'dismissed' });
+
+  const after = (await listMissionDeliveries(mission.id)).items.find(d => d.id === deliveryId)!;
+  assert.deepEqual(
+    after.deferredWorkItems.map(item => [
+      item.actionId,
+      item.resolution?.status,
+      item.resolution?.outcome,
+      item.resolution?.outcomeRef
+    ]),
+    [
+      [first!.actionId, 'done', 'mission_created', 'coo:77'],
+      [second!.actionId, 'done', 'objective_added', null],
+      [third!.actionId, 'dismissed', null, null]
+    ]
+  );
+
+  const rail = await listHumanActions({ includeResolved: true });
+  const railItem = rail.items.find(item => item.actionId === first!.actionId)!;
+  assert.equal(railItem.resolution?.outcome, 'mission_created');
+
+  const reopened = await reopenHumanAction(deliveryId, first!.actionId);
+  assert.equal(reopened.resolution, null);
+});
+
+test('an outcome is rejected off deferred work, without done, or when malformed', async () => {
+  const { project, mission, objective } = await seedMission('HA Outcome Reject');
+  const deliveryId = seedDelivery({
+    workspaceId: mission.workspaceId,
+    projectId: project.id,
+    missionId: mission.id,
+    objectiveId: objective.id,
+    deliveredAt: new Date().toISOString(),
+    humanActions: [{ action: 'Deploy the worker' }],
+    deferredWork: ['Split the exporter']
+  });
+  const deferredId = (await listMissionDeliveries(mission.id)).items[0]!.deferredWorkItems[0]!
+    .actionId;
+  const rejects400 = (body: unknown, actionId = deferredId) =>
+    assert.rejects(
+      resolveHumanAction(deliveryId, actionId, body),
+      (error: { status?: number }) => error.status === 400
+    );
+
+  await rejects400({ status: 'done', outcome: 'mission_created' }, 'human-action-1');
+  await rejects400({ status: 'dismissed', outcome: 'mission_created' });
+  await rejects400({ status: 'done', outcome: 'shipped' });
+  await rejects400({ status: 'done', outcomeRef: 'coo:1' });
+  await rejects400({ status: 'done', outcome: 'objective_added', outcomeRef: '  ' });
 });
 
 test('an unknown action id or a bad status is rejected', async () => {

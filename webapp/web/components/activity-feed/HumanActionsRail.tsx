@@ -5,7 +5,6 @@ import {
   ChevronRight,
   Clock3,
   ListChecks,
-  Plus,
   RotateCcw,
   X
 } from 'lucide-react';
@@ -14,12 +13,12 @@ import { useMemo, useState } from 'react';
 import type { HumanActionItemDto } from '../../../shared/contract.ts';
 import {
   useClearAllHumanActions,
-  useCreateMission,
   useHumanActions,
   useReopenHumanAction,
   useResolveHumanAction
 } from '../../lib/queries.ts';
 import { cn } from '../../lib/utils.ts';
+import { DeferredWorkItem } from '../DeferredWorkItem.tsx';
 import { HumanActionDetails } from '../HumanActionDetails.tsx';
 import { Spinner } from '../ui.tsx';
 
@@ -38,9 +37,54 @@ const iconButtonClass =
   'inline-flex size-6 shrink-0 items-center justify-center rounded-md border border-transparent text-(--color-ink-dim) transition-colors hover:border-(--color-border) hover:bg-(--color-surface-2) hover:text-(--color-ink) disabled:opacity-50';
 
 /**
- * One reported action or deferred-work item: a check box to mark it done, a
- * dismiss control for items that do not apply, and reopen for either. The text
- * is the delivery's own; the rail never rewrites it.
+ * A deferred-work item in the rail. It renders the same `DeferredWorkItem` the
+ * delivery card does, so Create mission / Add objective / Dismiss and the
+ * handled state read identically on both surfaces (coo:1045).
+ */
+function DeferredWorkRow({
+  item,
+  nowIso,
+  onOpenMission
+}: {
+  item: HumanActionItemDto;
+  nowIso: string;
+  onOpenMission: OpenMission;
+}) {
+  const resolved = item.resolution !== null;
+  return (
+    <li
+      className={cn(
+        'flex min-w-0 items-start rounded-lg border px-2 py-1.5 text-sm leading-snug text-(--color-ink)',
+        resolved
+          ? 'border-transparent'
+          : 'border-violet-300 bg-violet-50 dark:border-violet-500/50 dark:bg-violet-500/10'
+      )}
+    >
+      <DeferredWorkItem
+        className="flex-1"
+        item={item}
+        onMissionCreated={mission =>
+          onOpenMission({ missionId: mission.id, objectiveDisplayId: mission.objectiveDisplayId })
+        }
+        details={
+          <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] uppercase tracking-wide text-(--color-ink-dim)">
+            <span className="inline-flex items-center gap-1 rounded bg-violet-100 px-1 py-px font-mono normal-case tracking-normal text-violet-900 dark:bg-violet-500/20 dark:text-violet-100">
+              <Clock3 className="size-3" aria-hidden="true" /> Deferred work
+            </span>
+            {resolved ? (
+              <span>{relativeTime(item.resolution?.resolvedAt ?? null, nowIso)}</span>
+            ) : null}
+          </p>
+        }
+      />
+    </li>
+  );
+}
+
+/**
+ * One reported human action: a check box to mark it done, a dismiss control for
+ * items that do not apply, and reopen for either. The text is the delivery's
+ * own; the rail never rewrites it. Deferred work renders as `DeferredWorkRow`.
  */
 function HumanActionRow({
   item,
@@ -53,32 +97,12 @@ function HumanActionRow({
 }) {
   const resolve = useResolveHumanAction();
   const reopen = useReopenHumanAction();
-  const createMission = useCreateMission();
-  const [conversionError, setConversionError] = useState<string | null>(null);
-  const busy = resolve.isPending || reopen.isPending || createMission.isPending;
+  const busy = resolve.isPending || reopen.isPending;
   const resolved = item.resolution !== null;
 
-  const createDeferredObjective = async () => {
-    setConversionError(null);
-    try {
-      const mission = await createMission.mutateAsync({
-        projectId: item.projectId,
-        firstObjective: item.action
-        // Omitting statusId intentionally applies this project's default status.
-      });
-      await resolve.mutateAsync({
-        deliveryId: item.deliveryId,
-        actionId: item.actionId,
-        status: 'done'
-      });
-      onOpenMission({
-        missionId: mission.id,
-        objectiveDisplayId: mission.objectives[0]?.displayId ?? null
-      });
-    } catch (error) {
-      setConversionError(error instanceof Error ? error.message : 'Could not create objective.');
-    }
-  };
+  if (item.kind === 'deferred_work') {
+    return <DeferredWorkRow item={item} nowIso={nowIso} onOpenMission={onOpenMission} />;
+  }
 
   return (
     <li
@@ -88,9 +112,7 @@ function HumanActionRow({
           ? 'opacity-60'
           : item.kind === 'blocking_action'
             ? 'border-amber-300 bg-amber-50 dark:border-amber-500/50 dark:bg-amber-500/10'
-            : item.kind === 'deferred_work'
-              ? 'border-violet-300 bg-violet-50 dark:border-violet-500/50 dark:bg-violet-500/10'
-              : 'hover:bg-(--color-surface-2)'
+            : 'hover:bg-(--color-surface-2)'
       )}
     >
       {resolved ? (
@@ -146,30 +168,10 @@ function HumanActionRow({
           </p>
         ) : null}
         {!resolved ? <HumanActionDetails action={item} /> : null}
-        {!resolved && item.kind === 'deferred_work' ? (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void createDeferredObjective()}
-            className="mt-2 inline-flex items-center gap-1 rounded-md border border-violet-300 bg-white/70 px-2 py-1 text-xs font-medium text-violet-800 transition-colors hover:bg-white disabled:opacity-50 dark:border-violet-500/50 dark:bg-violet-950/30 dark:text-violet-200 dark:hover:bg-violet-950/50"
-          >
-            <Plus className="size-3.5" aria-hidden="true" />
-            {createMission.isPending ? 'Creating…' : 'Create objective'}
-          </button>
-        ) : null}
-        {conversionError ? (
-          <p className="mt-1 text-xs text-red-600 dark:text-red-300" role="alert">
-            {conversionError}
-          </p>
-        ) : null}
         <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] uppercase tracking-wide text-(--color-ink-dim)">
           {item.kind === 'blocking_action' ? (
             <span className="rounded bg-amber-100 px-1 py-px font-mono normal-case tracking-normal text-amber-900 dark:bg-amber-500/20 dark:text-amber-100">
               Required before this works
-            </span>
-          ) : item.kind === 'deferred_work' ? (
-            <span className="inline-flex items-center gap-1 rounded bg-violet-100 px-1 py-px font-mono normal-case tracking-normal text-violet-900 dark:bg-violet-500/20 dark:text-violet-100">
-              <Clock3 className="size-3" aria-hidden="true" /> Deferred work
             </span>
           ) : (
             <span className="rounded bg-(--color-surface-3) px-1 py-px font-mono normal-case tracking-normal">

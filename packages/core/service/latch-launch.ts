@@ -6,6 +6,8 @@
  * never installs Latch and never treats a Latch session id as a credential.
  */
 
+import path from 'node:path';
+
 import type { TerminalViewerKind, ViewerOpenAs } from './terminal-profile-types.ts';
 import { parseViewerOpenAs } from './terminal-profile-types.ts';
 
@@ -23,6 +25,42 @@ export type LatchTerminalSize = {
   rows: number;
 };
 
+export type LatchAgentLaunch = {
+  agent: 'claude' | 'codex';
+  argv: string[];
+  prelude?: string;
+};
+
+/** Older Latch builds silently ignore the structured agent fields. */
+export const LATCH_AGENT_LAUNCH_EXTENSION = 'agent-launch';
+
+/** Preserve opaque wrappers and non-agent launches on the original shell path. */
+export function selectLatchAgentLaunch({
+  agent,
+  argv,
+  preCommand,
+  preLaunchCommands,
+  extensions,
+  shell
+}: {
+  agent: string;
+  argv: string[];
+  preCommand?: string | null;
+  preLaunchCommands?: string[] | null;
+  extensions: string[];
+  shell: string;
+}): LatchAgentLaunch | null {
+  if (!extensions.includes(LATCH_AGENT_LAUNCH_EXTENSION)) return null;
+  if (agent !== 'claude' && agent !== 'codex') return null;
+  if (preCommand?.trim() || !path.isAbsolute(shell)) return null;
+  if (path.basename(argv[0] ?? '') !== agent) return null;
+  const prelude = (preLaunchCommands ?? [])
+    .map(command => command.trim())
+    .filter(Boolean)
+    .join('; ');
+  return { agent, argv, ...(prelude ? { prelude } : {}) };
+}
+
 /**
  * Latch wire-format launch manifest (snake_case). Matches
  * `latch create --manifest-file -` in the Latch CLI.
@@ -35,6 +73,8 @@ export type LatchLaunchManifest = {
     env: Record<string, string>;
     inherit_env?: boolean;
     size: LatchTerminalSize;
+    agent?: 'claude' | 'codex';
+    login_shell?: { path: string; prelude?: string };
   };
   display: {
     name?: string;
@@ -94,13 +134,13 @@ export function formatObjectiveLatchDisplay({
 }
 
 /**
- * Build the Latch create manifest. `commandString` is the same terminal inner
- * command S Overlord already composes (including `cd`); it is run through a
- * interactive login shell so quoting / `&&` / multi-line pre-launch *and*
- * `.zshrc` PATH setup (nvm, `agp`, `ovld`) match iTerm/Terminal.
+ * Build the Latch create manifest. A supported agent is passed as structured
+ * argv so Latch can prepare its connector before wrapping it in a login shell.
+ * Other launches keep the original terminal command string S.
  */
 export function buildLatchCreateManifest({
   commandString,
+  agentLaunch,
   shell = process.env.SHELL?.trim() || '/bin/bash',
   cwd,
   env,
@@ -111,6 +151,7 @@ export function buildLatchCreateManifest({
   externalRunId
 }: {
   commandString: string;
+  agentLaunch?: LatchAgentLaunch | null;
   shell?: string;
   cwd: string;
   env: Record<string, string>;
@@ -121,6 +162,9 @@ export function buildLatchCreateManifest({
   externalRunId?: string | null;
 }): LatchLaunchManifest {
   const shellPath = trimmed(shell) ?? '/bin/bash';
+  if (agentLaunch && path.basename(agentLaunch.argv[0] ?? '') !== agentLaunch.agent) {
+    throw new Error('Latch agent launch argv must start with the declared agent executable');
+  }
   const cleanedEnv: Record<string, string> = {};
   for (const [key, value] of Object.entries(env)) {
     if (key.trim() && typeof value === 'string') cleanedEnv[key] = value;
@@ -139,14 +183,23 @@ export function buildLatchCreateManifest({
   return {
     format_version: LATCH_MANIFEST_FORMAT_VERSION,
     launch: {
-      argv: [shellPath, '-ilc', commandString],
+      argv: agentLaunch ? [...agentLaunch.argv] : [shellPath, '-ilc', commandString],
       cwd,
       env: cleanedEnv,
       inherit_env: true,
       size: {
         cols: Math.max(1, Math.floor(size.cols) || DEFAULT_LATCH_TERMINAL_SIZE.cols),
         rows: Math.max(1, Math.floor(size.rows) || DEFAULT_LATCH_TERMINAL_SIZE.rows)
-      }
+      },
+      ...(agentLaunch
+        ? {
+            agent: agentLaunch.agent,
+            login_shell: {
+              path: shellPath,
+              ...(agentLaunch.prelude ? { prelude: agentLaunch.prelude } : {})
+            }
+          }
+        : {})
     },
     display
   };

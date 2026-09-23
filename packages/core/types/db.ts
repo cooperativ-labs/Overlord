@@ -609,6 +609,8 @@ export interface HumanActionResolutions {
   delivery_id: string;
   mission_id: string;
   objective_id: string;
+  outcome: string | null;
+  outcome_ref: string | null;
   resolved_at: string;
   resolved_by_workspace_user_id: string | null;
   status: string;

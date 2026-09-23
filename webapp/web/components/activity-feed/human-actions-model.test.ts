@@ -76,7 +76,9 @@ test('resolved actions do not count as open or blocking', () => {
       resolution: {
         status: 'done',
         resolvedAt: '2026-09-07T11:00:00.000Z',
-        resolvedByWorkspaceUserId: null
+        resolvedByWorkspaceUserId: null,
+        outcome: null,
+        outcomeRef: null
       }
     }),
     item({ id: 'b', actionId: 'human-action-2' })

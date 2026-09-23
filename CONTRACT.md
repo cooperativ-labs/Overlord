@@ -34,13 +34,65 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `144`
+Current version: `147`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
 `contract/components.yaml`) — never a header duplicate. The contract version is
 incremented when any stable interface changes. All conformance manifests must
 declare the contract version they were validated against.
+
+### Version 147 Change Summary
+
+Deferred work records how it was handled (coo:1045). A deferred-work item in a
+delivery can be promoted into a new mission, added to the delivering mission as
+a future objective, or dismissed, and every surface that shows the item — the
+mission delivery card and the Feed's Human actions rail — now shows the same
+handled state. `human_action_resolutions` gains nullable `outcome`
+(`mission_created` \| `objective_added`) and `outcome_ref` (the created mission
+or objective display id). `ResolveHumanActionBody` accepts optional `outcome`
+and `outcomeRef`; an outcome is valid only for a deferred-work item with
+`status: 'done'`, and `outcomeRef` requires `outcome` (400 otherwise).
+`HumanActionResolutionDto` additively carries `outcome` and `outcomeRef`
+(`null` for plain `done`/`dismissed` and older rows). `DeliveryDto` additively
+carries `deferredWorkItems`, one `{ actionId, action, resolution }` per
+`report.presentation.deferredWork` entry in the same order, using the same
+stable deferred-work ids as `GET /api/human-actions`, so the delivery card can
+resolve items through the existing `PUT`/`DELETE` resolution routes. Protocol
+`list-deliveries` and MCP `overlord_list_deliveries` return the same additive
+field. Promotion itself still uses the existing mission and objective create
+routes; the resolution is recorded afterwards. No route, permission, or
+realtime change.
+
+### Version 146 Change Summary
+
+Queueing behind a running objective runs next (coo:1044). Version 131's rule
+that every lazily created queue starts paused gains one exception: when adding
+an objective creates its mission's queue and an earlier sibling in that mission
+is already running (`executing` or `pending_delivery`, or `launching` with an
+active execution request) and is not in any queue, that sibling is added ahead
+of the new objective as a `running` entry linked to its latest execution
+request, the same shape a direct Run of a queued objective produces, and the
+new queue is created unpaused. The dispatcher never passes an in-flight entry,
+and delivery removes the entry and ticks the dispatcher, so the queued objective
+launches as soon as its predecessor delivers. Explicitly created queues, an
+existing mission queue, a manual queue adopted by name, and an explicit
+`queueId` keep the paused default. No route, DTO, flag, or database shape
+changes; queue read projections simply show the in-flight predecessor.
+
+### Version 145 Change Summary
+
+Latch agent launches now use its `agent-launch` extension when advertised by
+`latch capabilities --json`: for Claude and Codex, the runner sends the actual
+agent executable and arguments in `launch.argv`, declares `launch.agent`, and
+uses `launch.login_shell` for interactive login shell setup and project
+pre-launch commands. `launch.cwd` and `launch.env` retain their existing values.
+Latch can therefore persist the harness identity and prepare the conversation
+connector before starting the agent. An older Latch without this extension, an
+unsupported agent, or an opaque pre-command wrapper keeps the prior shell
+command launch. Existing Latch sessions retain their creation-time identity;
+they are not retroactively upgraded. Direct and inline launches are unchanged.
+No Overlord route, DTO, flag, or database shape changes.
 
 ### Version 144 Change Summary
 
@@ -1234,7 +1286,7 @@ Owns:
 - The virtual execution target core tables (`execution_target_registrations`, `project_environment_definitions`, `project_resource_sources`, `execution_request_snapshots`, `execution_request_grants`, `execution_request_observations`, `mission_target_resources`) and the additive `execution_requests` snapshot/failure/gateway columns — these are **core** (not `ext_` extension) because they drive queue status, audit, authorization, and UI. The immutable `execution_request_snapshots` row (canonical `payload_json` + SHA-256 `payload_digest`) is created in the same transaction as its `queued` request and is never updated; retrying only increments `attempt_count`. Grant records store hashes/opaque IDs, never bearer values
 - Optional per-agent `launchDefaults` in each `project_resource_sources.descriptor_json`; these source-owned pre-commands and normalized flags are project configuration and contain no credentials
 - The **Agent Session Exchange** core tables — `agent_session_channels`, `agent_session_events`, `agent_requests`, and `agent_session_inputs` — declared by this contract and migrated with the channel bootstrap. They are core rather than `ext_` because they drive authorization, audit, presence, and UI gating. The scoped channel credential is stored hash-only and scoped to exactly one channel; `native_session_id` is a correlation alias and never an authorization key; raw native payloads are never persisted (no transcripts or transcript paths, no raw tool input or output, no file contents, no environment variables), and stored summaries are bounded, redacted, and carry a `formatter_version`. No derived capability tier is persisted — a connector's static tier is derived from fixtures at build time and a session's effective capabilities live in `capabilities_json` on its channel. The documented-but-never-migrated `hook_events` and `permission_requests` designs are **superseded** by them: sanitized hook events become normalized `agent_session_events`, and a permission becomes one kind of `agent_requests`. The closed `permission_requests.status` vocabulary and the `mission_events.type = permission_request` value remain valid; only the dedicated tables are retired, and no component may begin writing them
-- `human_action_resolutions`: per-action operator decisions layered over delivery reports. Primary key `(delivery_id, action_id)` where `action_id` is the stable `HumanActionV1.id` inside `deliveries.payload_json.deliveryReport.presentation.humanActions`; denormalized `workspace_id`, `mission_id`, `objective_id`; closed `status` (`done` \| `dismissed`); `resolved_by_workspace_user_id`; `resolved_at`. Rows cascade with their delivery, are never soft-deleted (reopening deletes the row), and never duplicate the action text — the delivery report stays the sole source of what the action says.
+- `human_action_resolutions`: per-action operator decisions layered over delivery reports. Primary key `(delivery_id, action_id)` where `action_id` is the stable `HumanActionV1.id` inside `deliveries.payload_json.deliveryReport.presentation.humanActions`; denormalized `workspace_id`, `mission_id`, `objective_id`; closed `status` (`done` \| `dismissed`); nullable closed `outcome` (`mission_created` \| `objective_added`) and `outcome_ref` recording a deferred-work promotion (v147); `resolved_by_workspace_user_id`; `resolved_at`. Rows cascade with their delivery, are never soft-deleted (reopening deletes the row), and never duplicate the action text — the delivery report stays the sole source of what the action says.
 - Controlled vocabularies (closed and open sets)
 - Soft-delete and revision semantics
 - Migration versioning via `schema_migrations`
@@ -1345,8 +1397,8 @@ Owns:
 - Profile-owned inbox capture: authenticated `/api/inbox` CRUD and `/api/inbox/:id/promote`. Every item route resolves the caller's profile and returns `404` for an item owned by another profile. Promotion checks `mission:create` only on the destination project, calls the ordinary mission-create transaction with the capture fields, and consumes the item atomically. Account-owned inbox mutations are intentionally absent from workspace `entity_changes`; promotion retains normal mission realtime behavior.
 - Cross-workspace inbox missions: authenticated `GET /api/inbox/missions` returns a bounded `InboxMissionsResponse` unioning agent-authored missions in status type `next` with missions of any creator that are past due or due today or tomorrow (UTC day boundaries; `complete` and `cancelled` status types excluded from both due slices), across every workspace the caller actively belongs to in the active organization and may `mission:read`. Only active projects contribute Inbox cards; archived projects are excluded regardless of inclusion reason. Human-created missions appear only through the overdue and due-soon windows. Each row is an `InboxMissionDto` (`MissionDto` plus project name/color and inclusion `reasons` of `agent_next`, `overdue`, `due_soon`, and/or `recent`); a mission qualifying several ways is one card carrying every reason, and `overdue` and `due_soon` are mutually exclusive. Overdue rows lead, most recently overdue first (due date descending), then due-soon rows soonest first, then agent-Next rows newest-first, each slice capped independently. The additive `recent` reason labels rows created within the past 7 days. Distinct from profile-owned `/api/inbox` capture.
 - Cross-workspace activity feed: authenticated `GET /api/activity-feed` returns a bounded, mission-anchored `ActivityFeedDto` across every workspace the caller actively belongs to in the active organization, authorized with `mission:read` per workspace. Its kinds are `mission_run`, `mission_delivered`, and `blocking_question`. A mission with at least one `launching` / `executing` / `pending_delivery` objective is a single `ActivityFeedMissionItemDto` keyed `mission:<missionId>` — never one card per objective — carrying `runState` (`launching` \| `executing`), every objective of that mission as `ActivityFeedMissionObjectiveDto` in mission-panel display order, and `activeObjectiveIds` for the objectives that are live. Its chrome fields describe the mission's _primary_ running objective: the launching one when there is one, else the oldest active one. `pending_delivery` counts as live work, so a re-attached objective keeps its mission on the feed instead of dropping out between its last update and delivery. A mission whose most recent live delivery falls in the requested two-week window and that has no live objective is a `mission_delivered` card of the same DTO shape with `runState: 'delivered'` and empty `activeObjectiveIds`. Optional `before` (ISO-8601 UTC) selects the next older two-week delivered window and omits live runs and questions; `nextBefore` is that window's start when older delivered missions exist, else null. `blocking_question` items remain unseen `ask` mission events from the past 3 days. `items` is grouped rather than purely time-descending — launching missions, then executing ones, then questions, then delivered, newest-first within each group. `createdByKind` / `createdByAgent` describe the item's subject: the mission for `mission_run` and `mission_delivered`, the objective behind the ask for `blocking_question`. Agent identity treats the protocol session sentinel `unknown` as absent and falls back to the objective's `assigned_agent`. Truncation is reported through `counts` rather than implied, and no raw payload JSON is exposed.
-- Cross-workspace human actions: authenticated `GET /api/human-actions` returns a bounded `HumanActionsDto` across every workspace the caller actively belongs to in the active organization, authorized with `mission:read` per workspace. Each `HumanActionItemDto` is one `HumanActionV1` entry taken from `deliveryReport.presentation.humanActions` of the **latest** delivery of an objective delivered within the last 90 days, keyed `human-action:<deliveryId>:<actionId>` and decorated with workspace, project (name and color), mission (id, display id, title), objective (id, display id, title), `deliveredAt`, `agentIdentifier`, and `resolution` (`null`, or `{ status: 'done' | 'dismissed', resolvedAt, resolvedByWorkspaceUserId }`). Open items lead — `blocking` first, then newest delivery first — and resolved items follow newest-first only when `includeResolved=1`; `counts` reports `open`, `blocking`, and `resolved` before any cap. Authenticated `PUT /api/human-actions/:deliveryId/:actionId/resolution` with `{ status }` upserts a `human_action_resolutions` row and `DELETE` on the same path removes it; both require `mission:update` on the delivery's workspace, return the refreshed `HumanActionItemDto`, 404 an unknown delivery or an action id absent from its presentation, and emit a `human_action_resolution` entity-change row carrying the mission and objective ids. No raw payload JSON is exposed.
-- Delivery read projection: `GET /api/missions/:id/deliveries` returns a bounded `MissionDeliveriesDto` page (`items`, `total`, `limit`) of authorized `DeliveryDto` records with a normalized versioned report, while delivery mission events expose their additive `deliveryId` without exposing raw event or delivery payload JSON. `items` is newest-first and capped at 200; `total` is the matching row count before that cap.
+- Cross-workspace human actions: authenticated `GET /api/human-actions` returns a bounded `HumanActionsDto` across every workspace the caller actively belongs to in the active organization, authorized with `mission:read` per workspace. Each `HumanActionItemDto` is one `HumanActionV1` entry taken from `deliveryReport.presentation.humanActions` of the **latest** delivery of an objective delivered within the last 90 days, keyed `human-action:<deliveryId>:<actionId>` and decorated with workspace, project (name and color), mission (id, display id, title), objective (id, display id, title), `deliveredAt`, `agentIdentifier`, and `resolution` (`null`, or `{ status: 'done' | 'dismissed', resolvedAt, resolvedByWorkspaceUserId, outcome, outcomeRef }`, where `outcome` is `mission_created` \| `objective_added` \| `null`). Open items lead — `blocking` first, then newest delivery first — and resolved items follow newest-first only when `includeResolved=1`; `counts` reports `open`, `blocking`, and `resolved` before any cap. Authenticated `PUT /api/human-actions/:deliveryId/:actionId/resolution` with `{ status, outcome?, outcomeRef? }` (an outcome only on deferred work with `status: 'done'`) upserts a `human_action_resolutions` row and `DELETE` on the same path removes it; both require `mission:update` on the delivery's workspace, return the refreshed `HumanActionItemDto`, 404 an unknown delivery or an action id absent from its presentation, and emit a `human_action_resolution` entity-change row carrying the mission and objective ids. No raw payload JSON is exposed.
+- Delivery read projection: `GET /api/missions/:id/deliveries` returns a bounded `MissionDeliveriesDto` page (`items`, `total`, `limit`) of authorized `DeliveryDto` records with a normalized versioned report, while delivery mission events expose their additive `deliveryId` without exposing raw event or delivery payload JSON. `items` is newest-first and capped at 200; `total` is the matching row count before that cap. Each `DeliveryDto` carries `deferredWorkItems` — `{ actionId, action, resolution }` per presentation deferred-work entry, addressed with the same stable ids as the human-actions routes (v147).
 - Editable mission artifacts: authenticated `PATCH /api/missions/:id/artifacts/:artifactId` accepts `expectedRevision` plus a non-empty subset of `{ label, contentText, externalUrl }`, requires `mission:update` on the named mission, retains delivery/session/objective provenance and `contentJson`, rejects stale edits with `409` and non-HTTP(S) external URLs, and emits an `artifact` entity-change row in the write transaction. The client renders `contentText` as safe Markdown and edits these human-facing fields in place. The same mutation is also reachable through Protocol `update-artifact` and MCP `overlord_update_artifact` (see Protocol / MCP ownership).
 - Mid-turn mission artifact creation: authenticated `POST /api/missions/:id/artifacts` accepts `{ type, label }` plus at least one of `{ contentText, externalUrl }`, requires `artifact:create` on the named mission, optionally stamps `objectiveId` / `sessionId` provenance, leaves `delivery_id` null, rejects non-HTTP(S) external URLs, and emits an `artifact` entity-change insert in the same transaction. The same mutation is reachable through Protocol `add-artifact` and MCP `overlord_add_artifact`.
 - Mission shared context: authenticated `GET /api/missions/:id/context` returns `SharedContextEntryDto` records (`key`, `value`, `valueKind`, `tags`, `updatedAt`, `revision`) authorized with `mission:read`; authenticated `PUT /api/missions/:id/context` upserts one entry by `{ key, value }` with `mission:update`, mirrors Protocol `write-context`/`read-context`, and emits a `shared_context_entry` entity-change in the same transaction. The web client renders these entries in a collapsed Shared State mission footer and supports in-place edits.

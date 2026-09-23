@@ -77,8 +77,11 @@ async function startObjectiveQueue(objectiveId: string): Promise<void> {
 test('a serial mission holds its second objective as waiting, and releases it when the sibling finishes', async () => {
   const project = await createProject({ name: `Serial dispatch ${Date.now()}` });
   const mission = await twoObjectiveMission(project.id, 'Serial');
-  bootstrap.db.prepare("UPDATE objectives SET state = 'executing' WHERE id = ?").run(mission.first);
+  // Queue before the sibling starts: queueing behind an already-running
+  // sibling would seed it into the queue ahead (covered below), and the point
+  // here is the sibling lock across a queue that does not hold the sibling.
   await postRunQueueEntry(project.id, { objectiveId: mission.second });
+  bootstrap.db.prepare("UPDATE objectives SET state = 'executing' WHERE id = ?").run(mission.first);
   exhaustAttempts(mission.second);
 
   // Creating the mission queue by adding its first entry must not launch it.
@@ -110,14 +113,48 @@ test('a serial mission holds its second objective as waiting, and releases it wh
   assert.equal(released.blocked_reason, 'dispatch_failed');
 });
 
+test('queueing behind a running sibling seeds it ahead in a running queue, then advances on delivery', async () => {
+  const project = await createProject({ name: `Running predecessor ${Date.now()}` });
+  const mission = await twoObjectiveMission(project.id, 'Predecessor');
+  bootstrap.db.prepare("UPDATE objectives SET state = 'executing' WHERE id = ?").run(mission.first);
+  await postRunQueueEntry(project.id, { objectiveId: mission.second });
+  exhaustAttempts(mission.second);
+
+  const queue = bootstrap.db
+    .prepare(
+      `SELECT q.paused FROM run_queues q
+         JOIN run_queue_entries e ON e.queue_id = q.id AND e.deleted_at IS NULL
+        WHERE e.objective_id = ?`
+    )
+    .get(mission.second) as { paused: number };
+  assert.equal(queue.paused, 0);
+  assert.equal(entryFor(mission.first).state, 'running');
+
+  // The running predecessor holds the queue; nothing is dispatched or held.
+  await dispatchProjectRunQueues(requireDatabaseClient(), project.id);
+  assert.equal(entryFor(mission.first).state, 'running');
+  assert.equal(entryFor(mission.second).state, 'waiting');
+  assert.equal(entryFor(mission.second).waiting_reason, null);
+
+  // Delivery completes the predecessor and removes its entry; the next tick
+  // reaches the queued objective without the user resuming anything.
+  bootstrap.db.prepare("UPDATE objectives SET state = 'complete' WHERE id = ?").run(mission.first);
+  bootstrap.db
+    .prepare("UPDATE run_queue_entries SET deleted_at = datetime('now') WHERE objective_id = ?")
+    .run(mission.first);
+  await dispatchProjectRunQueues(requireDatabaseClient(), project.id);
+  assert.equal(entryFor(mission.second).state, 'blocked');
+  assert.equal(entryFor(mission.second).blocked_reason, 'dispatch_failed');
+});
+
 test('a mission that allows parallel objectives is never held for a busy sibling', async () => {
   const project = await createProject({ name: `Parallel dispatch ${Date.now()}` });
   const mission = await twoObjectiveMission(project.id, 'Parallel');
   bootstrap.db
     .prepare('UPDATE missions SET allow_parallel_objectives = 1 WHERE id = ?')
     .run(mission.missionId);
-  bootstrap.db.prepare("UPDATE objectives SET state = 'executing' WHERE id = ?").run(mission.first);
   await postRunQueueEntry(project.id, { objectiveId: mission.second });
+  bootstrap.db.prepare("UPDATE objectives SET state = 'executing' WHERE id = ?").run(mission.first);
   exhaustAttempts(mission.second);
   await startObjectiveQueue(mission.second);
 
