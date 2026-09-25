@@ -14,7 +14,7 @@ import {
   parseMutationFromMetadata
 } from '@overlord/core/service/local-target-mutation-runner';
 import { launchSessionSnapshotFromMetadata } from '@overlord/core/service/terminal-profile-types';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { readBoundedStdin } from './agent-session/event.js';
@@ -459,15 +459,23 @@ function parseLaunchEnvVarsValue(value: unknown): Record<string, string> {
 
 /**
  * Whether the acting user's worktree/branch automation default is on. It is a
- * user preference (identical in every workspace), so no workspace is passed.
- * Read failures are reported rather than silently disabling automation, which
+ * user preference is resolved through the launch settings for the mission or
+ * claim's workspace. Read failures are reported rather than silently disabling
+ * automation, which
  * previously made a runner prepare no branch at all and launch straight into
  * the main checkout.
  */
-async function readWorktreeBranchAutomationEnabled(runtime: CliRuntime): Promise<boolean> {
+export async function readWorktreeBranchAutomationEnabled({
+  runtime,
+  workspaceId
+}: {
+  runtime: CliRuntime;
+  workspaceId: string | null;
+}): Promise<boolean> {
   try {
     const settings = await fetchLaunchSettings<LaunchSettingsShape>({
-      backend: runtime.backend
+      backend: runtime.backend,
+      workspaceId
     });
     return settings.worktreeBranchAutomationEnabled === true;
   } catch (error) {
@@ -1334,6 +1342,30 @@ export async function runProtocolCommand({
   if (subcommand === 'attachment-download-url') {
     const relUrl = resultRecord.url;
     if (typeof relUrl === 'string' && relUrl.startsWith('/')) {
+      const output = flags['--output'];
+      if (output !== undefined) {
+        if (typeof output !== 'string' || !output.trim()) {
+          throw new CliError({ message: '--output requires a file path.' });
+        }
+        if (!relUrl.startsWith('/api/storage/attachments/')) {
+          throw new CliError({ message: 'Unexpected attachment download path.' });
+        }
+        const bytes = await runtime.backend.getBytes(relUrl);
+        try {
+          writeFileSync(output, bytes, { flag: 'wx', mode: 0o600 });
+        } catch (error) {
+          throw new CliError({
+            message: `Could not create attachment file ${output}: ${String(error)}`
+          });
+        }
+        printJson({
+          id: resultRecord.id,
+          filename: resultRecord.filename,
+          output,
+          sizeBytes: bytes.length
+        });
+        return;
+      }
       printJson({ ...resultRecord, url: `${runtime.backend.baseUrl}${relUrl}` });
       return;
     }
@@ -1715,7 +1747,10 @@ export async function runManagementCommand({
           missionId,
           workingDirectory,
           objectiveId: objectiveId ?? undefined,
-          automationEnabled: await readWorktreeBranchAutomationEnabled(scopedRuntime),
+          automationEnabled: await readWorktreeBranchAutomationEnabled({
+            runtime: scopedRuntime,
+            workspaceId: missionWorkspaceId
+          }),
           dryRun,
           overrideBranch: flagValue(parsed.flags, '--branch'),
           noWorktree: flagBoolean(parsed.flags, '--no-worktree')
@@ -2230,7 +2265,10 @@ export async function runRunnerOnce({
         missionId,
         workingDirectory: String(requestRecord.workingDirectory ?? process.cwd()),
         objectiveId: String(requestRecord.objectiveId ?? ''),
-        automationEnabled: await readWorktreeBranchAutomationEnabled(runtime),
+        automationEnabled: await readWorktreeBranchAutomationEnabled({
+          runtime,
+          workspaceId: requestWorkspaceId
+        }),
         dryRun,
         overrideBranch: flagValue(parsed.flags, '--branch'),
         noWorktree: flagBoolean(parsed.flags, '--no-worktree')

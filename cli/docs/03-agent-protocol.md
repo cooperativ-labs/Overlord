@@ -195,7 +195,10 @@ Requirements:
   `--expected-revision` for optimistic concurrency; does not require a session
   key so a later objective or follow-up can update an artifact created earlier.
 - `attachment-list`: list visible objective attachments.
-- `attachment-download-url`: get a download URL or local file path reference.
+- `attachment-download-url`: get an authenticated download URL. Pass
+  `--output <path>` to have the CLI download it with its existing authentication
+  into a new local file. The URL alone is not accessible to plain `curl`; agents
+  should use `--output` rather than read or print credential files.
 
 `attachment-prepare-upload`, `attachment-finalize-upload`, and `attachment-upload-file` are not
 implemented as `ovld protocol` subcommands today — only `attachment-list` and

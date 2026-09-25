@@ -895,12 +895,14 @@ attachment-list:
 
 attachment-download-url:
   Purpose:
-    Return the download URL for a specific attachment on the mission.
+    Return the authenticated download URL for a specific attachment, or save it
+    to a new file using the CLI's existing authentication.
   Required:
     --mission-id <id>
     --attachment-id <id>  (use the id from attachment-list output)
   Optional:
     --objective-id <id>         Restrict the lookup to one objective
+    --output <path>             Download to a new local file (never overwrites)
 
 list-organizations:
   Purpose:

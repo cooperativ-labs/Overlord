@@ -10,9 +10,16 @@ ovld protocol update-artifact --mission-id $MISSION_ID --artifact-id <artifact-i
 ovld protocol attachment-list --session-key <sessionKey> --objective-id <objective-id>
 ovld protocol attachment-upload-file --session-key <sessionKey> --objective-id <objective-id> --file ./spec.pdf --content-type application/pdf
 ovld protocol attachment-download-url --session-key <sessionKey> --attachment-id <attachment-id>
+ovld protocol attachment-download-url --session-key <sessionKey> --attachment-id <attachment-id> --output ./attachment.pdf
 ```
 
 The `attach` and `load-context` responses already include an `attachments` array plus `previousObjectives` and `futureObjectives` arrays — use those for `<attachment-id>` and `<objective-id>` values. The objective currently being executed is not repeated in those arrays; it is the top-level `objective`. `previousObjectives` are the objectives already worked (before the current one) and `futureObjectives` are the ones queued after it. Run `attachment-list` mid-session if new files have been uploaded since attach. `--mission-id` is optional for attachment calls when `--objective-id` is a full display ID that lets the server derive the mission; an attachment ID alone does not carry mission scope.
+
+Attachment HTTPS URLs require Overlord authentication. Use `--output` to save
+the bytes through the CLI's existing authenticated client; it creates a new
+file and will not overwrite one. Do not read CLI credential files or pass their
+contents to `curl`. Hosted MCP callers can use their authenticated tool or
+client transport to retrieve the same attachment.
 
 ## Creating artifacts during a turn
 

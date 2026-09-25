@@ -11,6 +11,7 @@ export type BackendClient = {
   baseUrl: string;
   health: () => Promise<{ ok: boolean; [key: string]: unknown }>;
   get: <T>(path: string) => Promise<T>;
+  getBytes: (path: string) => Promise<Buffer>;
   post: <T>({ path, body }: { path: string; body?: unknown }) => Promise<T>;
   patch: <T>({ path, body }: { path: string; body?: unknown }) => Promise<T>;
   delete: <T>(path: string) => Promise<T>;
@@ -105,13 +106,15 @@ export function createBackendClient(): BackendClient {
     path,
     body,
     extraHeaders,
-    rawBody
+    rawBody,
+    responseType = 'json'
   }: {
     method: string;
     path: string;
     body?: unknown;
     extraHeaders?: Record<string, string>;
     rawBody?: Buffer;
+    responseType?: 'json' | 'bytes';
   }): Promise<T> {
     const url = `${baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
     const auth = resolveAuthHeaders({ baseUrl });
@@ -127,7 +130,7 @@ export function createBackendClient(): BackendClient {
       response = await fetch(url, {
         method,
         headers: {
-          Accept: 'application/json',
+          Accept: responseType === 'bytes' ? 'application/octet-stream' : 'application/json',
           ...(rawBody === undefined && body !== undefined
             ? { 'Content-Type': 'application/json' }
             : {}),
@@ -149,7 +152,10 @@ export function createBackendClient(): BackendClient {
       });
     }
 
-    const payload = await readResponseJson(response);
+    const payload =
+      response.ok && responseType === 'bytes'
+        ? Buffer.from(await response.arrayBuffer())
+        : await readResponseJson(response);
     if (!response.ok) {
       if (isExecutionRequestAlreadyLinkedPayload(payload)) {
         throw new CliError({ message: formatExecutionRequestAlreadyLinkedDiagnostic() });
@@ -185,6 +191,7 @@ export function createBackendClient(): BackendClient {
     baseUrl,
     health: () => request({ method: 'GET', path: '/api/health' }),
     get: path => request({ method: 'GET', path }),
+    getBytes: path => request<Buffer>({ method: 'GET', path, responseType: 'bytes' }),
     post: ({ path, body }) => request({ method: 'POST', path, body }),
     patch: ({ path, body }) => request({ method: 'PATCH', path, body }),
     delete: path => request({ method: 'DELETE', path }),

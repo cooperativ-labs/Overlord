@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import type { BackendClient } from '../src/backend-client.ts';
+import { readWorktreeBranchAutomationEnabled } from '../src/commands.ts';
 import { fetchLaunchSettings, resetLaunchSettingsWorkspaceCache } from '../src/launch-settings.ts';
 import { fetchTerminalProfile, saveTerminalProfile } from '../src/terminal-profile.ts';
 
@@ -91,4 +92,22 @@ test('active-workspace fallback caching is isolated by backend client identity',
   assert.equal(secondCalls.filter(call => call.path === '/api/workspaces').length, 1);
   assert.ok(firstCalls.every(call => call.path !== '/api/launch-settings'));
   assert.ok(secondCalls.every(call => call.path !== '/api/launch-settings'));
+});
+
+test('branch automation reads settings from the mission or claim workspace', async () => {
+  const calls: Array<{ method: string; path: string }> = [];
+  const client = backend(
+    {
+      '/api/workspaces/workspace-b/launch-settings': { worktreeBranchAutomationEnabled: true }
+    },
+    calls
+  );
+
+  const enabled = await readWorktreeBranchAutomationEnabled({
+    runtime: { backend: client, close: () => {} },
+    workspaceId: 'workspace-b'
+  });
+
+  assert.equal(enabled, true);
+  assert.deepEqual(calls, [{ method: 'GET', path: '/api/workspaces/workspace-b/launch-settings' }]);
 });

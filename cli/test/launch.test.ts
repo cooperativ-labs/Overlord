@@ -20,6 +20,7 @@ import {
 
 function runtime({
   title = 'Prompt Capture',
+  attachments = [],
   objectives = [
     {
       id: 'objective-uuid',
@@ -32,6 +33,7 @@ function runtime({
   ]
 }: {
   title?: string;
+  attachments?: Array<Record<string, unknown>>;
   objectives?: Array<Record<string, unknown>>;
 } = {}): CliRuntime {
   return {
@@ -46,7 +48,7 @@ function runtime({
           return [] as T;
         }
         if (requestPath.startsWith('/api/objectives/') && requestPath.endsWith('/attachments')) {
-          return [] as T;
+          return attachments as T;
         }
         if (requestPath.startsWith('/api/missions/')) {
           return {
@@ -71,6 +73,34 @@ function runtime({
     close: () => {}
   };
 }
+
+test('launch context gives an authenticated download command for every attachment', async () => {
+  const workingDirectory = mkdtempSync(path.join('/tmp', 'ovld-launch-attachment-'));
+  const plan = await buildLaunchPlan({
+    runtime: runtime({
+      attachments: [
+        {
+          id: 'attachment-123',
+          filename: 'spec.pdf',
+          contentType: 'application/pdf',
+          storageKey: 'private/spec.pdf'
+        }
+      ]
+    }),
+    options: { agent: 'codex', missionId: 'coo:11', workingDirectory }
+  });
+
+  const context = readFileSync(plan.contextFile, 'utf8');
+  assert.match(
+    context,
+    /http:\/\/127\.0\.0\.1:4310\/api\/storage\/attachments\/private%2Fspec\.pdf/
+  );
+  assert.match(
+    context,
+    /attachment-download-url --objective-id 'coo:11\.k7xm' --attachment-id 'attachment-123' --output '\.\/\.overlord\/tmp\/attachment-attachment-123-spec\.pdf'/
+  );
+  assert.match(context, /URLs require Overlord authentication/);
+});
 
 test('shell-composed launches use the configured interactive login shell', () => {
   assert.deepEqual(interactiveLoginShellInvocation("agp 'codex'", '/bin/zsh'), {

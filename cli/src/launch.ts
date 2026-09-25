@@ -35,6 +35,7 @@ import {
   composeAgentTerminalCommand,
   type LaunchExecution,
   resolveLaunchExecution,
+  shellQuote,
   TERMINAL_OPEN_SPAWN_KILL_SIGNAL,
   TERMINAL_OPEN_SPAWN_TIMEOUT_MS,
   terminalLaunchScriptContent,
@@ -370,12 +371,23 @@ async function loadMissionContext({
       const attachments = await runtime.backend
         .get<unknown[]>(`/api/objectives/${encodeURIComponent(id)}/attachments`)
         .catch(() => []);
-      const label = objectiveDisplayRef(objective) ?? 'objective';
+      const label = objectiveDisplayRef(objective) ?? id;
       for (const attachment of attachments) {
         const record = asRecord(attachment);
         const filename = String(record.filename ?? 'attachment');
         const contentType = record.contentType ? ` (${String(record.contentType)})` : '';
-        attachmentLines.push(`- [${label}] ${filename}${contentType}`);
+        const attachmentId = typeof record.id === 'string' ? record.id : null;
+        const storageKey = typeof record.storageKey === 'string' ? record.storageKey : null;
+        const url = storageKey
+          ? `${runtime.backend.baseUrl}/api/storage/attachments/${encodeURIComponent(storageKey)}`
+          : null;
+        attachmentLines.push(`- [${label}] ${filename}${contentType}${url ? ` — ${url}` : ''}`);
+        if (attachmentId) {
+          const output = `./.overlord/tmp/attachment-${attachmentId}-${path.basename(filename)}`;
+          attachmentLines.push(
+            `  Download: \`ovld protocol attachment-download-url --objective-id ${shellQuote(label)} --attachment-id ${shellQuote(attachmentId)} --output ${shellQuote(output)}\``
+          );
+        }
       }
     })
   );
@@ -403,7 +415,7 @@ async function loadMissionContext({
     ...(attachmentLines.length > 0
       ? [
           '## Attachments',
-          'Files attached to the objective(s) below. Use `ovld protocol attachment-list` and `ovld protocol attachment-download-url` to retrieve them.',
+          'Attachment URLs require Overlord authentication. Use the download commands below; the CLI supplies its own credentials. Use `ovld protocol attachment-list` to refresh this list.',
           ...attachmentLines,
           ''
         ]

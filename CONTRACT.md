@@ -34,13 +34,25 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `147`
+Current version: `148`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
 `contract/components.yaml`) — never a header duplicate. The contract version is
 incremented when any stable interface changes. All conformance manifests must
 declare the contract version they were validated against.
+
+### Version 148 Change Summary
+
+Objective launch context lists each attachment's authenticated HTTPS URL and an
+`ovld protocol attachment-download-url --attachment-id <id> --output <path>`
+command. The optional CLI-only `--output` flag downloads the attachment through
+the CLI's existing authenticated backend client and writes it to a new local
+file; it never exposes the user's token to the agent or places it in a URL.
+Without `--output`, the existing URL response is unchanged. The hosted MCP
+attachment tool keeps its existing authenticated URL behavior. No REST route,
+database shape, or permission changes. Agents must use the CLI download command
+or an authenticated MCP/client request; the URL alone is not a public link.
 
 ### Version 147 Change Summary
 
