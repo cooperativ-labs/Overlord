@@ -9,7 +9,7 @@ const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
 await bootstrapIntegrationTestDb({ sqlitePath: path.join(tempDir, 'webapp.sqlite') });
 
 const { db, nowIso } = await import('./db.ts');
-const { createProject, createMission, createObjective, updateObjective } =
+const { createProject, createMission, createObjective, updateObjective, listMissions } =
   await import('./repository.ts');
 const { listActivityFeed } = await import('./activity-feed.ts');
 
@@ -63,7 +63,8 @@ function seedAskEvent({
   missionId,
   objectiveId,
   summary,
-  createdAt
+  createdAt,
+  agentRequestId = null
 }: {
   workspaceId: string;
   projectId: string;
@@ -71,15 +72,76 @@ function seedAskEvent({
   objectiveId: string | null;
   summary: string;
   createdAt: string;
+  agentRequestId?: string | null;
 }): string {
   const id = newId('event');
+  // `ovld protocol ask` links its request through the ask's payload, never
+  // through `agent_requests.source_event_id`.
+  const payload = agentRequestId ? JSON.stringify({ agentRequestId }) : '{}';
   db.prepare(
     `INSERT INTO mission_events
        (id, workspace_id, project_id, mission_id, objective_id, type, phase, summary,
         payload_json, source, created_at)
-     VALUES (?, ?, ?, ?, ?, 'ask', 'blocked', ?, '{}', 'agent', ?)`
-  ).run(id, workspaceId, projectId, missionId, objectiveId, summary, createdAt);
+     VALUES (?, ?, ?, ?, ?, 'ask', 'blocked', ?, ?, 'agent', ?)`
+  ).run(id, workspaceId, projectId, missionId, objectiveId, summary, payload, createdAt);
   return id;
+}
+
+/** The `agent_requests` row `ovld protocol ask` opens on a channel-bound session. */
+function seedQuestionRequest({
+  workspaceId,
+  projectId,
+  missionId
+}: {
+  workspaceId: string;
+  projectId: string;
+  missionId: string;
+}): string {
+  const now = nowIso();
+  const channelId = newId('channel');
+  db.prepare(
+    `INSERT INTO agent_session_channels
+       (id, workspace_id, project_id, mission_id, launch_kind, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'unknown', ?, ?)`
+  ).run(channelId, workspaceId, projectId, missionId, now, now);
+  const requestId = newId('request');
+  db.prepare(
+    `INSERT INTO agent_requests
+       (id, workspace_id, project_id, mission_id, channel_id, kind, summary,
+        created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, 'question', 'Which database?', ?, ?)`
+  ).run(requestId, workspaceId, projectId, missionId, channelId, now, now);
+  return requestId;
+}
+
+/** The `answer` mission event written when a question request is resolved. */
+function seedAnswerEvent({
+  workspaceId,
+  projectId,
+  missionId,
+  objectiveId,
+  agentRequestId
+}: {
+  workspaceId: string;
+  projectId: string;
+  missionId: string;
+  objectiveId: string | null;
+  agentRequestId: string;
+}): void {
+  db.prepare(
+    `INSERT INTO mission_events
+       (id, workspace_id, project_id, mission_id, objective_id, type, phase, summary,
+        payload_json, source, created_at)
+     VALUES (?, ?, ?, ?, ?, 'answer', 'execute', 'Postgres', ?, 'webapp', ?)`
+  ).run(
+    newId('event'),
+    workspaceId,
+    projectId,
+    missionId,
+    objectiveId,
+    JSON.stringify({ agentRequestId }),
+    nowIso()
+  );
 }
 
 test('a mission with an executing objective appears with its project context', async () => {
@@ -370,6 +432,41 @@ test('an unseen blocking question surfaces and a seen one drops out', async () =
     !after.items.some(entry => entry.id === `ask:${eventId}`),
     'an acknowledged question leaves the feed'
   );
+});
+
+test('an answered blocking question leaves the feed and the mission card', async () => {
+  const project = await createProject({ name: 'AF Ask Answered' });
+  const mission = await createMission({ projectId: project.id, firstObjective: 'Answer me' });
+  const objective = mission.objectives[0]!;
+  const scope = {
+    workspaceId: mission.workspaceId,
+    projectId: project.id,
+    missionId: mission.id
+  };
+  const agentRequestId = seedQuestionRequest(scope);
+  const eventId = seedAskEvent({
+    ...scope,
+    objectiveId: objective.id,
+    summary: 'Which database should I use?',
+    createdAt: nowIso(),
+    agentRequestId
+  });
+  const cardFlag = async () =>
+    (await listMissions(project.id)).find(entry => entry.id === mission.id)
+      ?.hasUnseenBlockingQuestion;
+
+  const open = (await listActivityFeed()).items.find(entry => entry.id === `ask:${eventId}`);
+  assert.ok(open && open.kind === 'blocking_question');
+  assert.equal(open.agentRequestId, agentRequestId, 'the feed resolves the ask payload link');
+  assert.equal(await cardFlag(), true);
+
+  seedAnswerEvent({ ...scope, objectiveId: objective.id, agentRequestId });
+
+  assert.ok(
+    !(await listActivityFeed()).items.some(entry => entry.id === `ask:${eventId}`),
+    'an answered question leaves the feed without being marked seen'
+  );
+  assert.equal(await cardFlag(), false, 'an answered question no longer flags the card');
 });
 
 test('blocking questions older than three days stay out of the feed', async () => {

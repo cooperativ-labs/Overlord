@@ -52,15 +52,6 @@ The plugin prompts for `overlord_url` and, when needed for non-interactive use, 
 claude --plugin-dir /absolute/path/to/Overlord/connectors/adapters/claude
 ```
 
-### Install (published marketplace)
-
-Once published:
-
-```bash
-claude plugin marketplace add cooperativ/overlord-marketplace
-claude plugin install overlord@cooperativ
-```
-
 ### Namespaced components
 
 Inside Claude Code the components are surfaced with the plugin prefix:

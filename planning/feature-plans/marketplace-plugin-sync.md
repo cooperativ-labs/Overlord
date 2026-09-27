@@ -1,5 +1,14 @@
 # Keeping the Cooperativ plugin marketplace in sync
 
+> **Status (2026-09-27): Overlord retired from the marketplace.** The marketplace
+> Overlord plugin needs the `ovld` CLI on `PATH`, so it only duplicated
+> `ovld agent-setup codex` (minus the Codex rules and permission profile), and a
+> Git marketplace plugin cannot reach the ChatGPT mobile or web apps. The
+> Overlord package, its catalog entry, and `.github/workflows/publish-marketplace-plugin.yml`
+> were removed; the `MARKETPLACE_APP_*` secrets and GitHub App are no longer
+> needed by Overlord. The marketplace remains for Scribe. The analysis below is
+> kept for the Scribe sync design.
+
 Mission: coo:1080 (objective coo:1080.r2zx)
 Marketplace repo: https://github.com/cooperativ-labs/overlord-marketplace (public)
 Catalog: `.agents/plugins/marketplace.json` (OpenAI ChatGPT/Codex repo format)

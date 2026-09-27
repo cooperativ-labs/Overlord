@@ -3721,17 +3721,19 @@ function jsonTextFieldSql(column: string, field: string, dialect: SqlDialect): s
 }
 
 function missionHasUnseenBlockingQuestionSql(dialect: SqlDialect): string {
+  // An ask links its request through its own `payload_json.agentRequestId`;
+  // `agent_requests.source_event_id` references `agent_session_events` and is
+  // never set for an ask.
+  const askRequestId = jsonTextFieldSql('me.payload_json', 'agentRequestId', dialect);
   const answerRequestId = jsonTextFieldSql('answer.payload_json', 'agentRequestId', dialect);
   return `
          (SELECT COUNT(*) > 0 FROM mission_events me
             WHERE me.mission_id = t.id AND me.type = 'ask'
               AND NOT EXISTS (
-                SELECT 1 FROM agent_requests ar
-                 JOIN mission_events answer
-                   ON answer.mission_id = me.mission_id
-                  AND answer.type = 'answer'
-                  AND ${answerRequestId} = ar.id
-                WHERE ar.source_event_id = me.id AND ar.deleted_at IS NULL
+                SELECT 1 FROM mission_events answer
+                 WHERE answer.mission_id = me.mission_id
+                   AND answer.type = 'answer'
+                   AND ${answerRequestId} = ${askRequestId}
               )
               AND (
                 NOT EXISTS (SELECT 1 FROM mission_status_seen mss

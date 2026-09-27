@@ -323,14 +323,18 @@ async function loadLatestEvents(objectiveIds: string[]): Promise<Map<string, Lat
 const QUESTION_CONTEXT_COLUMNS = CONTEXT_COLUMNS.replace(/\bo\./g, 'e.');
 
 /**
- * Blocking questions the operator has not acknowledged yet. `mission_events` has no
- * linked request has no later answer event. The feed further limits to asks from
+ * Blocking questions the operator has not acknowledged yet and whose linked
+ * request (`payload_json.agentRequestId`) has no later answer event. The feed further limits to asks from
  * the past three days so stale blockers do not crowd the page (coo:757.rqtb).
  */
 async function loadQuestions(workspaceIds: string[]): Promise<QuestionRow[]> {
   const askedAfter = new Date(Date.now() - QUESTION_MAX_AGE_MS).toISOString();
   const db = requireDatabaseClient();
   const requestProvider = jsonTextFieldSql('er.metadata_json', 'provider', db.dialect);
+  // An ask links its request through its own `payload_json.agentRequestId`;
+  // `agent_requests.source_event_id` references `agent_session_events` and is
+  // never set for an ask.
+  const askRequestId = jsonTextFieldSql('e.payload_json', 'agentRequestId', db.dialect);
   const answerRequestId = jsonTextFieldSql('answer.payload_json', 'agentRequestId', db.dialect);
   return (await db.all(
     `SELECT ${QUESTION_CONTEXT_COLUMNS}, ${OBJECTIVE_PROVENANCE_COLUMNS},
@@ -349,7 +353,7 @@ async function loadQuestions(workspaceIds: string[]): Promise<QuestionRow[]> {
        JOIN projects p ON p.id = e.project_id AND p.deleted_at IS NULL
        JOIN workspaces w ON w.id = e.workspace_id AND w.deleted_at IS NULL
        LEFT JOIN agent_sessions s ON s.id = e.session_id AND s.deleted_at IS NULL
-       LEFT JOIN agent_requests ar ON ar.source_event_id = e.id AND ar.deleted_at IS NULL
+       LEFT JOIN agent_requests ar ON ar.id = ${askRequestId} AND ar.deleted_at IS NULL
       WHERE e.type = 'ask'
         AND e.workspace_id IN (${placeholders(workspaceIds.length)})
         AND e.created_at >= ?
@@ -365,8 +369,7 @@ async function loadQuestions(workspaceIds: string[]): Promise<QuestionRow[]> {
           SELECT 1 FROM mission_events answer
            WHERE answer.mission_id = e.mission_id
              AND answer.type = 'answer'
-             AND ar.id IS NOT NULL
-             AND ${answerRequestId} = ar.id
+             AND ${answerRequestId} = ${askRequestId}
         )
       ORDER BY e.created_at DESC, e.id DESC
       LIMIT ?`,
