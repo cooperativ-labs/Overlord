@@ -735,18 +735,35 @@ export function setupConnector({
   agentKey,
   home,
   configureCodexPermissions = true,
-  dryRun = false
+  dryRun = false,
+  exportPath
 }: {
   agentKey: string;
   home?: string;
   configureCodexPermissions?: boolean;
   dryRun?: boolean;
+  /** Materialize the connector package here without installing or configuring the host agent. */
+  exportPath?: string;
 }): SetupResult {
+  if (exportPath && agentKey !== 'codex') {
+    throw new CliError({
+      message: 'Export mode is currently supported only for the Codex connector.'
+    });
+  }
   const manifest = readConnectorManifest(agentKey);
   const resolvedHome = resolveHome(home);
-  const installPath = expandInstallPath(manifest.connector.installPath, resolvedHome);
+  const installPath = exportPath
+    ? path.resolve(exportPath)
+    : expandInstallPath(manifest.connector.installPath, resolvedHome);
   const sourceDir = connectorDir(agentKey);
   const warnings: string[] = [];
+
+  if (exportPath) {
+    mkdirSync(installPath, { recursive: true });
+    if (readdirSync(installPath).length > 0) {
+      throw new CliError({ message: `Export destination must be empty: ${installPath}` });
+    }
+  }
 
   const files: ManagedFileResult[] = [];
   const stateFiles: Array<{ path: string; sha256: string }> = [];
@@ -831,11 +848,11 @@ export function setupConnector({
     );
   }
 
-  if (agentKey === 'cursor') {
+  if (!exportPath && agentKey === 'cursor') {
     warnings.push(...configureCursorHarness({ home: resolvedHome, dryRun }));
   }
 
-  if (agentKey === 'codex') {
+  if (!exportPath && agentKey === 'codex') {
     warnings.push(
       ...configureCodexHarness({
         home: resolvedHome,
@@ -846,11 +863,11 @@ export function setupConnector({
     );
   }
 
-  if (agentKey === 'claude') {
+  if (!exportPath && agentKey === 'claude') {
     warnings.push(...configureClaudeHarness({ home: resolvedHome, installPath, dryRun }));
   }
 
-  if (!dryRun) {
+  if (!dryRun && !exportPath) {
     const installedStateFiles = manifest.connector.managedFiles
       .map(relativePath => {
         const target = path.join(installPath, relativePath);

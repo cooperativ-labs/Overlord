@@ -172,6 +172,93 @@ test('running snapshots are one row per executing objective, capped at two', asy
   assert.equal(state?.running[1]?.title, 'Objective B');
 });
 
+test('leads with the newest unseen, unanswered ask on an executing objective', async () => {
+  db.prepare(
+    `UPDATE objectives SET state = 'complete' WHERE deleted_at IS NULL AND state = 'executing'`
+  ).run();
+  const project = await createProject({ name: 'Ask Project', color: '#f59e0b' });
+  const mission = await createMission({ projectId: project.id, firstObjective: 'Migrate users' });
+  const objective = mission.objectives[0]!;
+  db.prepare(`UPDATE objectives SET state = 'executing', updated_at = ? WHERE id = ?`).run(
+    new Date().toISOString(),
+    objective.id
+  );
+  const missionRow = db
+    .prepare(`SELECT workspace_id, project_id FROM missions WHERE id = ?`)
+    .get(mission.id) as { workspace_id: string; project_id: string };
+  const insertEvent = db.prepare(
+    `INSERT INTO mission_events
+       (id, workspace_id, project_id, mission_id, objective_id, type, phase, summary,
+        payload_json, source, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, 'blocked', ?, ?, 'test', ?)`
+  );
+  const askAt = (offsetMs: number) => new Date(Date.now() - offsetMs).toISOString();
+  insertEvent.run(
+    'ask-old',
+    missionRow.workspace_id,
+    missionRow.project_id,
+    mission.id,
+    objective.id,
+    'ask',
+    'Older question',
+    '{}',
+    askAt(60_000)
+  );
+  insertEvent.run(
+    'ask-new',
+    missionRow.workspace_id,
+    missionRow.project_id,
+    mission.id,
+    objective.id,
+    'ask',
+    `Should I **migrate** the users table now?\n\n${'x'.repeat(200)}`,
+    JSON.stringify({ agentRequestId: 'request-1' }),
+    askAt(1_000)
+  );
+
+  const client = requireDatabaseClient();
+  const asking = await buildLiveActivityContentState(client, 'operator-user');
+  assert.equal(asking?.pendingAsk?.missionId, mission.id);
+  assert.equal(asking?.pendingAsk?.missionDisplayId, mission.displayId);
+  assert.equal(asking?.pendingAsk?.agentRequestId, 'request-1');
+  assert.ok(asking?.pendingAsk?.question?.startsWith('Should I migrate the users table now? x'));
+  assert.equal(asking?.pendingAsk?.question?.length, 140);
+  assert.ok(Number.isInteger(asking?.pendingAsk?.askedAt));
+  assert.notEqual(
+    liveActivityContentHash(asking),
+    liveActivityContentHash(asking && { ...asking, pendingAsk: null }),
+    'a pending ask is visible content'
+  );
+
+  // Answering the newest ask falls back to the older unanswered one.
+  insertEvent.run(
+    'answer-1',
+    missionRow.workspace_id,
+    missionRow.project_id,
+    mission.id,
+    objective.id,
+    'answer',
+    'Yes',
+    JSON.stringify({ agentRequestId: 'request-1' }),
+    askAt(500)
+  );
+  const answered = await buildLiveActivityContentState(client, 'operator-user');
+  assert.equal(answered?.pendingAsk?.question, 'Older question');
+
+  // Opening the mission marks the ask seen, which clears it.
+  db.prepare(
+    `INSERT INTO mission_status_seen (mission_id, status_id, seen_at) VALUES (?, 'blocking_question', ?)`
+  ).run(mission.id, new Date().toISOString());
+  const seen = await buildLiveActivityContentState(client, 'operator-user');
+  assert.equal(seen?.pendingAsk, null);
+  db.prepare(`DELETE FROM mission_status_seen WHERE mission_id = ?`).run(mission.id);
+
+  // An ask on an objective that has finished never leaves the card amber.
+  db.prepare(`UPDATE objectives SET state = 'complete' WHERE id = ?`).run(objective.id);
+  const finished = await buildLiveActivityContentState(client, 'operator-user');
+  assert.equal(finished?.pendingAsk ?? null, null);
+});
+
 test('the dispatcher claims and completes a live-activity job without APNs credentials', async () => {
   db.prepare(`DELETE FROM worker_jobs WHERE type = 'overlord.live_activity.dispatch.v1'`).run();
   await enqueueLiveActivityDispatchJob({

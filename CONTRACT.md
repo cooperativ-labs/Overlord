@@ -34,13 +34,37 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `148`
+Current version: `149`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
 `contract/components.yaml`) — never a header duplicate. The contract version is
 incremented when any stable interface changes. All conformance manifests must
 declare the contract version they were validated against.
+
+### Version 149 Change Summary
+
+Live Activity content-state carries the pending blocking ask (coo:1083). The
+APNs `liveactivity` `content-state` gains an additive `pendingAsk` object, or
+`null`: `{ missionId, missionDisplayId, question, askedAt, agentRequestId }`.
+It names the newest `ask` on one of the account's assigned missions that is
+unanswered, unseen (`mission_status_seen.blocking_question`), at most three days
+old, and whose objective is still `executing` or `pending_delivery`, matching the
+activity feed's `blocking_question` rule. `question` is markdown-stripped,
+condensed to one line, and capped at 140 characters; `askedAt` is Unix epoch
+seconds like `updatedAt`; `agentRequestId` is present when the ask opened an
+`agent_requests` row. `pendingAsk` is visible content and participates in the
+content hash. Posting an ask, resolving its agent request, and marking a
+mission's blocking question seen each enqueue the existing coalesced
+`overlord.live_activity.dispatch.v1` refresh, so asks are pushed as transitions.
+This deliberately admits one bounded question line into the Live Activity
+payload — the single most useful thing the watchOS Smart Stack card can say —
+while answer options, transcripts, objective instructions, and event payloads
+stay excluded. Standard push notifications are unchanged and still carry no
+question text. Impact: mobile `OverlordActivityAttributes.ContentState` decodes
+`pendingAsk` leniently (absent or `null` means no ask), so older app builds
+ignore the key and older servers keep updating newer builds; no REST route,
+database shape, or permission changes.
 
 ### Version 148 Change Summary
 
@@ -1766,12 +1790,12 @@ answering a decision it is blocked on, and injecting an instruction into it.
 - **Transport**: Authenticated HTTPS/JSON with the existing Better Auth session or `out_…` bearer token; no ambient workspace input is accepted.
 - **Registration**: `PUT /api/mobile/live-activities/:activityId/push-token` accepts `{ pushToken, environment, bundleId, startedByPush? }`, upserts the caller's private `(profile, activityId)` registration, and replaces a rotated token. `environment` is `sandbox` or `production` and selects the APNs host per registration; `bundleId` forms the `…push-type.liveactivity` topic. `activityId` and `pushToken` are opaque values and are never returned or exposed through realtime, logs, or read APIs.
 - **Revocation**: `DELETE /api/mobile/live-activities/:activityId/push-token` deletes only the caller's registration and returns `204`; it is safe to retry after a local activity has already ended.
-- **Delivery**: Server lifecycle mutations enqueue coalesced `overlord.live_activity.dispatch.v1` jobs. The dispatcher recomputes the caller's two-running-objectives-plus-one-recent-completion snapshot and delivers APNs `liveactivity` update/end events on each registration's own `<bundleId>.push-type.liveactivity` topic and environment host (not the process-wide `OVERLORD_APNS_ENV` default). Running rows are **objective-grain**: `title` and `displayId` name the executing objective (`coo:756.k7xm`), `id` stays the parent mission id so ActivityKit attributes need not change, and additive `objectiveId` / `missionDisplayId` / `missionTitle` carry the mission as secondary context. Completing one objective does not end the activity while another objective for the same account is still executing. `content-state.updatedAt` is Unix epoch seconds (JSON number), never an ISO-8601 string — ActivityKit's push decoder cannot parse ISO timestamps into `Date`. State transitions are sent promptly; progress that leaves visible content unchanged is suppressed for at least five minutes. Invalid APNs tokens are retired.
+- **Delivery**: Server lifecycle mutations enqueue coalesced `overlord.live_activity.dispatch.v1` jobs. The dispatcher recomputes the caller's two-running-objectives-plus-one-recent-completion snapshot and delivers APNs `liveactivity` update/end events on each registration's own `<bundleId>.push-type.liveactivity` topic and environment host (not the process-wide `OVERLORD_APNS_ENV` default). Running rows are **objective-grain**: `title` and `displayId` name the executing objective (`coo:756.k7xm`), `id` stays the parent mission id so ActivityKit attributes need not change, and additive `objectiveId` / `missionDisplayId` / `missionTitle` carry the mission as secondary context. Completing one objective does not end the activity while another objective for the same account is still executing. `content-state.updatedAt` is Unix epoch seconds (JSON number), never an ISO-8601 string — ActivityKit's push decoder cannot parse ISO timestamps into `Date`. `content-state.pendingAsk` (Version 149) is the newest unanswered, unseen ask on a still-executing objective of the account's missions, or `null`; asking, answering, and marking the question seen are transitions. State transitions are sent promptly; progress that leaves visible content unchanged is suppressed for at least five minutes. Invalid APNs tokens are retired.
 - **Push-to-start registration**: `PUT /api/mobile/live-activities/start-token` accepts `{ startToken, environment, bundleId, activityType?, appVersion? }` and upserts the caller's private push-to-start registration, rotating an existing token in place. `environment` is `sandbox` or `production` and selects the APNs host per registration; `activityType` defaults to the account-level mission activity attributes type. A start token is globally unique and bound to exactly one profile, so registering a token held by another profile reassigns it. Like a device token it is opaque, travels in the request body rather than the URL, and is never returned or exposed through realtime, logs, entity changes, or read APIs.
 - **Push-to-start consent and revocation**: Holding a `live_activity_start_tokens` row **is** the account's consent to desktop-initiated Live Activities; with no row the server can never remotely start one. `POST /api/mobile/live-activities/start-token/revoke` accepts `{ startToken }`, deletes only the caller's registration, returns `204`, is safe to retry, and is how that consent is withdrawn. Clients must revoke before clearing credentials on sign-out.
 - **Push-to-start delivery**: A mission entering execution enqueues a coalesced `overlord.live_activity.start.v1` job for the mission's assigned profile only — never broadcast to a workspace — alongside the ordinary refresh job. The payload carries only the target profile and triggering mission ids; the worker recomputes the bounded snapshot at delivery time and sends an APNs `liveactivity` payload with `event: "start"`, `attributes-type`, `attributes`, `content-state`, a stale date, and a bounded alert, at `apns-priority: 10` on the registration's own `<bundleId>.push-type.liveactivity` topic and environment host. A start is suppressed when the account already holds any `live_activity_push_tokens` registration, when no mission is running, and for five minutes after a start was sent to that token. Delivery is durable and retried with backoff; `410 Unregistered` and `400 BadDeviceToken` retire the start registration. With no APNs credentials configured, enqueueing still succeeds and dispatch no-ops.
 - **Update-token handoff**: after APNs remotely starts an activity, the client registers the per-activity **update** token through `PUT /api/mobile/live-activities/:activityId/push-token` with the additive optional `startedByPush: true`, recorded as `live_activity_push_tokens.origin = 'push_to_start'` (default `local`). From that point the ordinary dispatch job owns every update and the end for that activity. A push-to-start token, a per-activity update token, and a standard device token are three distinct credentials with distinct lifetimes and are never interchangeable: separate tables, routes, and payload events. Local starts from the app remain supported and unchanged.
-- **Privacy**: APNs payloads include only the bounded display snapshot, the epoch-seconds `updatedAt` timestamp, and — for a start — the static account label attribute and an alert built from that same bounded snapshot. They never include bearer tokens, ActivityKit tokens, objective instructions, agent prompts, event payloads, or full mission detail.
+- **Privacy**: APNs payloads include only the bounded display snapshot, the epoch-seconds `updatedAt` timestamp, and — for a start — the static account label attribute and an alert built from that same bounded snapshot. The snapshot may include one pending ask's question as a markdown-stripped single line capped at 140 characters (Version 149). They never include bearer tokens, ActivityKit tokens, objective instructions, agent prompts, answer options, event payloads, or full mission detail.
 
 ### Mobile → REST (Standard Push Notification Surface)
 

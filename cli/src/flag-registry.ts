@@ -58,7 +58,7 @@ export const COMMAND_FLAGS: Record<string, readonly string[]> = {
   init: [],
   doctor: [],
   setup: [],
-  'agent-setup': ['--dry-run', '--home'],
+  'agent-setup': ['--dry-run', '--home', '--export'],
   config: ['--path', '--url'],
   auth: ['--token', '--organization-id'],
   'user-token': ['--label', '--expires-in', '--no-expiry', '--scope', '--id'],

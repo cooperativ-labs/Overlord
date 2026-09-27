@@ -2116,6 +2116,14 @@ export async function askQuestion({
       objectiveId: session.objective_id,
       now
     });
+    // The Live Activity leads with a pending ask (the watch Smart Stack card
+    // turns amber), so an ask is a transition that must reach the device now.
+    await enqueueLiveActivityRefreshForMission({
+      db: txCtx.db,
+      workspaceId: ctx.workspace.id,
+      missionId: mission.id,
+      now
+    });
 
     await moveMissionToReview({ ctx: txCtx, missionId: mission.id });
   });

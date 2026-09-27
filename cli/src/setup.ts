@@ -617,9 +617,14 @@ export async function runAgentSetupCommand({
   const target = parsed.positional[0];
   const dryRun = flagBoolean(parsed.flags, '--dry-run');
   const home = flagValue(parsed.flags, '--home');
+  const exportPath = flagValue(parsed.flags, '--export');
+
+  if (exportPath && target !== 'codex') {
+    throw new CliError({ message: '`--export` requires `agent-setup codex`.' });
+  }
 
   const shouldConfigureCodexPermissions = async (agentKey: string): Promise<boolean> => {
-    if (agentKey !== 'codex' || dryRun || json || !process.stdin.isTTY) return true;
+    if (agentKey !== 'codex' || exportPath || dryRun || json || !process.stdin.isTTY) return true;
     return promptYesNo(
       'Configure Codex permissions to allow it to communicate with the Overlord server?',
       true
@@ -652,16 +657,22 @@ export async function runAgentSetupCommand({
           setupConnector({
             agentKey: target,
             home,
+            exportPath,
             dryRun,
             configureCodexPermissions: await shouldConfigureCodexPermissions(target)
           })
         ];
 
   if (json) {
-    printJson({ ok: true, dryRun, results });
+    printJson({ ok: true, dryRun, exported: Boolean(exportPath), results });
   } else {
     for (const result of results) {
-      printHumanResult(result);
+      if (exportPath) {
+        printLine(`Exported connector "${result.agentKey}" → ${result.installPath}`);
+        for (const file of result.files) printLine(`  + ${file.path}`);
+      } else {
+        printHumanResult(result);
+      }
     }
   }
 }

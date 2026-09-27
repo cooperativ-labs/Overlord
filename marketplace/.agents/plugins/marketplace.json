@@ -1,0 +1,32 @@
+{
+  "name": "cooperativ",
+  "interface": {
+    "displayName": "Cooperativ Plugins"
+  },
+  "plugins": [
+    {
+      "name": "overlord",
+      "source": {
+        "source": "local",
+        "path": "./plugins/overlord"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "scribe",
+      "source": {
+        "source": "local",
+        "path": "./plugins/scribe"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

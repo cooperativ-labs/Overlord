@@ -1,0 +1,77 @@
+name: Publish Overlord plugin to marketplace
+
+on:
+  push:
+    tags:
+      - 'connectors-v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Overlord
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Verify connector release tag
+        if: github.ref_type == 'tag'
+        run: |
+          expected="connectors-v$(cat connectors/VERSION)"
+          test "$GITHUB_REF_NAME" = "$expected" || {
+            echo "Expected tag $expected, received $GITHUB_REF_NAME" >&2
+            exit 1
+          }
+
+      - name: Install dependencies and build CLI
+        run: |
+          yarn install --immutable
+          yarn cli:build:prod
+
+      - name: Export installable Codex plugin
+        run: node cli/bin/ovld.mjs agent-setup codex --export "$RUNNER_TEMP/overlord-plugin"
+
+      - name: Create marketplace-scoped GitHub App token
+        id: marketplace-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.MARKETPLACE_APP_ID }}
+          private-key: ${{ secrets.MARKETPLACE_APP_PRIVATE_KEY }}
+          owner: cooperativ-labs
+          repositories: overlord-marketplace
+
+      - name: Check out marketplace
+        uses: actions/checkout@v4
+        with:
+          repository: cooperativ-labs/overlord-marketplace
+          token: ${{ steps.marketplace-token.outputs.token }}
+          path: marketplace-repo
+
+      - name: Stage exported package
+        run: rsync -a --delete "$RUNNER_TEMP/overlord-plugin/" marketplace-repo/plugins/overlord/
+
+      - name: Open or update marketplace sync pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ steps.marketplace-token.outputs.token }}
+          path: marketplace-repo
+          branch: sync/overlord
+          delete-branch: true
+          add-paths: plugins/overlord/
+          commit-message: 'chore(marketplace): sync Overlord plugin'
+          title: 'chore(marketplace): sync Overlord plugin'
+          body: |
+            Updates the marketplace copy from the Overlord Codex connector export.
+
+            The package was rendered by `ovld agent-setup codex --export` from the same
+            managed-file sources used by local installation.

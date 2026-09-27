@@ -11,7 +11,8 @@ export function bounded(value: string, max: number): string {
   return value.length <= max ? value : `${value.slice(0, max - 1)}…`;
 }
 
-export function presentationTitle(value: string): string {
+/** Markdown-stripped, whitespace-condensed single line capped at `max` characters. */
+export function presentationText(value: string, max: number): string {
   return bounded(
     value
       .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
@@ -19,6 +20,10 @@ export function presentationTitle(value: string): string {
       .replace(/^[#>\-+*]\s+/gm, '')
       .replace(/\s+/g, ' ')
       .trim(),
-    TITLE_MAX_LENGTH
+    max
   );
+}
+
+export function presentationTitle(value: string): string {
+  return presentationText(value, TITLE_MAX_LENGTH);
 }

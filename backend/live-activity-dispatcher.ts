@@ -65,6 +65,7 @@ function apnsPayload(state: LiveActivityContentState | null): {
   const finalState: LiveActivityContentState = state ?? {
     running: [],
     recentCompletion: null,
+    pendingAsk: null,
     updatedAt: Math.floor(now / 1000)
   };
   const aps: Record<string, unknown> = {

@@ -73338,6 +73338,233 @@ var init_registry = __esm({
   }
 });
 
+// ../packages/core/service/worker-jobs.ts
+function workerJobJsonFieldPredicate(dialect, field) {
+  if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(field)) {
+    throw new Error(`Invalid worker job JSON field: ${field}`);
+  }
+  return dialect === "postgres" ? `payload_json->>'${field}' = ?` : `json_extract(payload_json, '$.${field}') = ?`;
+}
+function workerJobRetryDelay(attemptCount) {
+  return WORKER_JOB_RETRY_BACKOFF_MS[Math.min(Math.max(attemptCount - 1, 0), WORKER_JOB_RETRY_BACKOFF_MS.length - 1)];
+}
+async function claimNextWorkerJob({
+  db,
+  jobType,
+  workerId,
+  now: now2 = nowIso(),
+  lockTtlMs = DEFAULT_LOCK_TTL_MS
+}) {
+  return db.transaction(async (tx) => {
+    await tx.run(
+      `UPDATE worker_jobs SET status = 'queued', locked_by = NULL, locked_until = NULL, updated_at = ?, revision = revision + 1
+       WHERE type = ? AND status = 'running' AND deleted_at IS NULL AND locked_until < ?`,
+      [now2, jobType, now2]
+    );
+    const lockClause = tx.dialect === "postgres" ? "FOR UPDATE SKIP LOCKED" : "";
+    const candidate = await tx.get(
+      `SELECT id, payload_json, attempt_count, max_attempts, revision FROM worker_jobs
+        WHERE type = ? AND status = 'queued' AND deleted_at IS NULL AND run_after <= ?
+        ORDER BY priority ASC, run_after ASC LIMIT 1 ${lockClause}`,
+      [jobType, now2]
+    );
+    if (!candidate) return null;
+    const updated = await tx.run(
+      `UPDATE worker_jobs SET status = 'running', attempt_count = attempt_count + 1, locked_by = ?, locked_until = ?, updated_at = ?, revision = revision + 1
+        WHERE id = ? AND status = 'queued' AND revision = ?`,
+      [
+        workerId,
+        new Date(Date.parse(now2) + lockTtlMs).toISOString(),
+        now2,
+        candidate.id,
+        candidate.revision
+      ]
+    );
+    return updated.changes === 0 ? null : {
+      ...candidate,
+      attempt_count: candidate.attempt_count + 1,
+      revision: candidate.revision + 1
+    };
+  });
+}
+async function finishWorkerJob(db, id, status, lastError, now2 = nowIso()) {
+  await db.run(
+    `UPDATE worker_jobs SET status = ?, last_error = ?, locked_by = NULL, locked_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?`,
+    [status, lastError, now2, id]
+  );
+}
+async function retryWorkerJob(db, id, attemptCount, lastError, now2 = nowIso()) {
+  await db.run(
+    `UPDATE worker_jobs SET status = 'queued', run_after = ?, last_error = ?, locked_by = NULL,
+       locked_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?`,
+    [
+      new Date(Date.parse(now2) + workerJobRetryDelay(attemptCount)).toISOString(),
+      lastError,
+      now2,
+      id
+    ]
+  );
+}
+async function enqueueWorkerJob({
+  db,
+  workspaceId: workspaceId2,
+  type,
+  dedupeBy,
+  payload,
+  priority = DEFAULT_PRIORITY,
+  maxAttempts = DEFAULT_MAX_ATTEMPTS,
+  now: now2 = nowIso()
+}) {
+  const existing = await db.get(
+    `SELECT id FROM worker_jobs
+       WHERE workspace_id = ?
+         AND type = ?
+         AND status IN ('queued', 'running')
+         AND deleted_at IS NULL
+         AND ${workerJobJsonFieldPredicate(db.dialect, dedupeBy.field)}
+       ORDER BY created_at ASC
+       LIMIT 1`,
+    [workspaceId2, type, dedupeBy.value]
+  );
+  if (existing) return { jobId: existing.id, enqueued: false };
+  const jobId = newId();
+  await db.run(
+    `INSERT INTO worker_jobs
+         (id, workspace_id, type, status, priority, run_after, attempt_count, max_attempts,
+          payload_json, created_at, updated_at, revision)
+       VALUES (?, ?, ?, 'queued', ?, ?, 0, ?, ?, ?, ?, 1)`,
+    [jobId, workspaceId2, type, priority, now2, maxAttempts, JSON.stringify(payload), now2, now2]
+  );
+  return { jobId, enqueued: true };
+}
+async function enqueueDeliveryComposeJob({
+  ctx,
+  deliveryId,
+  now: now2 = nowIso(),
+  maxAttempts = DEFAULT_MAX_ATTEMPTS,
+  priority = DEFAULT_PRIORITY
+}) {
+  const result = await enqueueWorkerJob({
+    db: ctx.db,
+    workspaceId: ctx.workspace.id,
+    type: DELIVERY_COMPOSE_JOB_TYPE,
+    dedupeBy: { field: "deliveryId", value: deliveryId },
+    payload: { deliveryId },
+    priority,
+    maxAttempts,
+    now: now2
+  });
+  if (result.enqueued) {
+    console.info(
+      "[delivery-compose-worker]",
+      JSON.stringify({
+        event: "delivery_compose_queued",
+        deliveryId,
+        jobId: result.jobId,
+        maxAttempts,
+        priority
+      })
+    );
+  }
+  return result;
+}
+async function missionOwnerProfileId({
+  db,
+  workspaceId: workspaceId2,
+  missionId
+}) {
+  const owner = await db.get(
+    `SELECT wu.profile_id
+       FROM missions m
+       JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
+      WHERE m.id = ? AND m.workspace_id = ? AND m.deleted_at IS NULL
+        AND wu.deleted_at IS NULL AND wu.status = 'active'`,
+    [missionId, workspaceId2]
+  );
+  return owner?.profile_id ?? null;
+}
+var DELIVERY_COMPOSE_JOB_TYPE, DEFAULT_MAX_ATTEMPTS, DEFAULT_PRIORITY, DEFAULT_LOCK_TTL_MS, WORKER_JOB_RETRY_BACKOFF_MS;
+var init_worker_jobs = __esm({
+  "../packages/core/service/worker-jobs.ts"() {
+    "use strict";
+    init_util3();
+    DELIVERY_COMPOSE_JOB_TYPE = "overlord.delivery.compose.v1";
+    DEFAULT_MAX_ATTEMPTS = 5;
+    DEFAULT_PRIORITY = 50;
+    DEFAULT_LOCK_TTL_MS = 6e4;
+    WORKER_JOB_RETRY_BACKOFF_MS = [15e3, 6e4, 3e5, 9e5, 36e5];
+  }
+});
+
+// ../packages/core/service/live-activity-jobs.ts
+async function enqueueLiveActivityDispatchJob({
+  db,
+  workspaceId: workspaceId2,
+  profileId,
+  now: now2 = nowIso()
+}) {
+  const result = await enqueueWorkerJob({
+    db,
+    workspaceId: workspaceId2,
+    type: LIVE_ACTIVITY_DISPATCH_JOB_TYPE,
+    dedupeBy: { field: "profileId", value: profileId },
+    payload: { profileId },
+    priority: 40,
+    maxAttempts: 5,
+    now: now2
+  });
+  return result.enqueued;
+}
+async function enqueueLiveActivityRefreshForMission({
+  db,
+  workspaceId: workspaceId2,
+  missionId,
+  now: now2 = nowIso()
+}) {
+  const profileId = await missionOwnerProfileId({ db, workspaceId: workspaceId2, missionId });
+  return profileId ? enqueueLiveActivityDispatchJob({ db, workspaceId: workspaceId2, profileId, now: now2 }) : false;
+}
+async function enqueueLiveActivityStartJob({
+  db,
+  workspaceId: workspaceId2,
+  profileId,
+  missionId,
+  now: now2 = nowIso()
+}) {
+  const result = await enqueueWorkerJob({
+    db,
+    workspaceId: workspaceId2,
+    type: LIVE_ACTIVITY_START_JOB_TYPE,
+    dedupeBy: { field: "profileId", value: profileId },
+    payload: { profileId, missionId },
+    priority: 40,
+    maxAttempts: 5,
+    now: now2
+  });
+  return result.enqueued;
+}
+async function enqueueLiveActivityStartForMission({
+  db,
+  workspaceId: workspaceId2,
+  missionId,
+  now: now2 = nowIso()
+}) {
+  const profileId = await missionOwnerProfileId({ db, workspaceId: workspaceId2, missionId });
+  if (!profileId) return false;
+  await enqueueLiveActivityDispatchJob({ db, workspaceId: workspaceId2, profileId, now: now2 });
+  return enqueueLiveActivityStartJob({ db, workspaceId: workspaceId2, profileId, missionId, now: now2 });
+}
+var LIVE_ACTIVITY_DISPATCH_JOB_TYPE, LIVE_ACTIVITY_START_JOB_TYPE;
+var init_live_activity_jobs = __esm({
+  "../packages/core/service/live-activity-jobs.ts"() {
+    "use strict";
+    init_util3();
+    init_worker_jobs();
+    LIVE_ACTIVITY_DISPATCH_JOB_TYPE = "overlord.live_activity.dispatch.v1";
+    LIVE_ACTIVITY_START_JOB_TYPE = "overlord.live_activity.start.v1";
+  }
+});
+
 // ../packages/core/service/delivery-report.ts
 function isValidHumanActionLink(link) {
   return linkSchema.safeParse(link).success;
@@ -74171,6 +74398,12 @@ async function resolveRequest({
           sessionId: existing.session_id
         }
       });
+      await enqueueLiveActivityRefreshForMission({
+        db: tx,
+        workspaceId: ctx.workspace.id,
+        missionId: existing.mission_id,
+        now: now2
+      });
     }
     return { resolved: true, request: await getRequest2({ ctx: txCtx, requestId }) };
   });
@@ -74210,6 +74443,7 @@ var init_requests = __esm({
     "use strict";
     init_change_feed();
     init_errors4();
+    init_live_activity_jobs();
     init_util3();
     init_webhook_events();
     init_window();
@@ -76406,164 +76640,6 @@ var init_dispatch_diagnostics = __esm({
   "../packages/core/service/dispatch-diagnostics.ts"() {
     "use strict";
     init_redact();
-  }
-});
-
-// ../packages/core/service/worker-jobs.ts
-function workerJobJsonFieldPredicate(dialect, field) {
-  if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(field)) {
-    throw new Error(`Invalid worker job JSON field: ${field}`);
-  }
-  return dialect === "postgres" ? `payload_json->>'${field}' = ?` : `json_extract(payload_json, '$.${field}') = ?`;
-}
-function workerJobRetryDelay(attemptCount) {
-  return WORKER_JOB_RETRY_BACKOFF_MS[Math.min(Math.max(attemptCount - 1, 0), WORKER_JOB_RETRY_BACKOFF_MS.length - 1)];
-}
-async function claimNextWorkerJob({
-  db,
-  jobType,
-  workerId,
-  now: now2 = nowIso(),
-  lockTtlMs = DEFAULT_LOCK_TTL_MS
-}) {
-  return db.transaction(async (tx) => {
-    await tx.run(
-      `UPDATE worker_jobs SET status = 'queued', locked_by = NULL, locked_until = NULL, updated_at = ?, revision = revision + 1
-       WHERE type = ? AND status = 'running' AND deleted_at IS NULL AND locked_until < ?`,
-      [now2, jobType, now2]
-    );
-    const lockClause = tx.dialect === "postgres" ? "FOR UPDATE SKIP LOCKED" : "";
-    const candidate = await tx.get(
-      `SELECT id, payload_json, attempt_count, max_attempts, revision FROM worker_jobs
-        WHERE type = ? AND status = 'queued' AND deleted_at IS NULL AND run_after <= ?
-        ORDER BY priority ASC, run_after ASC LIMIT 1 ${lockClause}`,
-      [jobType, now2]
-    );
-    if (!candidate) return null;
-    const updated = await tx.run(
-      `UPDATE worker_jobs SET status = 'running', attempt_count = attempt_count + 1, locked_by = ?, locked_until = ?, updated_at = ?, revision = revision + 1
-        WHERE id = ? AND status = 'queued' AND revision = ?`,
-      [
-        workerId,
-        new Date(Date.parse(now2) + lockTtlMs).toISOString(),
-        now2,
-        candidate.id,
-        candidate.revision
-      ]
-    );
-    return updated.changes === 0 ? null : {
-      ...candidate,
-      attempt_count: candidate.attempt_count + 1,
-      revision: candidate.revision + 1
-    };
-  });
-}
-async function finishWorkerJob(db, id, status, lastError, now2 = nowIso()) {
-  await db.run(
-    `UPDATE worker_jobs SET status = ?, last_error = ?, locked_by = NULL, locked_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?`,
-    [status, lastError, now2, id]
-  );
-}
-async function retryWorkerJob(db, id, attemptCount, lastError, now2 = nowIso()) {
-  await db.run(
-    `UPDATE worker_jobs SET status = 'queued', run_after = ?, last_error = ?, locked_by = NULL,
-       locked_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?`,
-    [
-      new Date(Date.parse(now2) + workerJobRetryDelay(attemptCount)).toISOString(),
-      lastError,
-      now2,
-      id
-    ]
-  );
-}
-async function enqueueWorkerJob({
-  db,
-  workspaceId: workspaceId2,
-  type,
-  dedupeBy,
-  payload,
-  priority = DEFAULT_PRIORITY,
-  maxAttempts = DEFAULT_MAX_ATTEMPTS,
-  now: now2 = nowIso()
-}) {
-  const existing = await db.get(
-    `SELECT id FROM worker_jobs
-       WHERE workspace_id = ?
-         AND type = ?
-         AND status IN ('queued', 'running')
-         AND deleted_at IS NULL
-         AND ${workerJobJsonFieldPredicate(db.dialect, dedupeBy.field)}
-       ORDER BY created_at ASC
-       LIMIT 1`,
-    [workspaceId2, type, dedupeBy.value]
-  );
-  if (existing) return { jobId: existing.id, enqueued: false };
-  const jobId = newId();
-  await db.run(
-    `INSERT INTO worker_jobs
-         (id, workspace_id, type, status, priority, run_after, attempt_count, max_attempts,
-          payload_json, created_at, updated_at, revision)
-       VALUES (?, ?, ?, 'queued', ?, ?, 0, ?, ?, ?, ?, 1)`,
-    [jobId, workspaceId2, type, priority, now2, maxAttempts, JSON.stringify(payload), now2, now2]
-  );
-  return { jobId, enqueued: true };
-}
-async function enqueueDeliveryComposeJob({
-  ctx,
-  deliveryId,
-  now: now2 = nowIso(),
-  maxAttempts = DEFAULT_MAX_ATTEMPTS,
-  priority = DEFAULT_PRIORITY
-}) {
-  const result = await enqueueWorkerJob({
-    db: ctx.db,
-    workspaceId: ctx.workspace.id,
-    type: DELIVERY_COMPOSE_JOB_TYPE,
-    dedupeBy: { field: "deliveryId", value: deliveryId },
-    payload: { deliveryId },
-    priority,
-    maxAttempts,
-    now: now2
-  });
-  if (result.enqueued) {
-    console.info(
-      "[delivery-compose-worker]",
-      JSON.stringify({
-        event: "delivery_compose_queued",
-        deliveryId,
-        jobId: result.jobId,
-        maxAttempts,
-        priority
-      })
-    );
-  }
-  return result;
-}
-async function missionOwnerProfileId({
-  db,
-  workspaceId: workspaceId2,
-  missionId
-}) {
-  const owner = await db.get(
-    `SELECT wu.profile_id
-       FROM missions m
-       JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
-      WHERE m.id = ? AND m.workspace_id = ? AND m.deleted_at IS NULL
-        AND wu.deleted_at IS NULL AND wu.status = 'active'`,
-    [missionId, workspaceId2]
-  );
-  return owner?.profile_id ?? null;
-}
-var DELIVERY_COMPOSE_JOB_TYPE, DEFAULT_MAX_ATTEMPTS, DEFAULT_PRIORITY, DEFAULT_LOCK_TTL_MS, WORKER_JOB_RETRY_BACKOFF_MS;
-var init_worker_jobs = __esm({
-  "../packages/core/service/worker-jobs.ts"() {
-    "use strict";
-    init_util3();
-    DELIVERY_COMPOSE_JOB_TYPE = "overlord.delivery.compose.v1";
-    DEFAULT_MAX_ATTEMPTS = 5;
-    DEFAULT_PRIORITY = 50;
-    DEFAULT_LOCK_TTL_MS = 6e4;
-    WORKER_JOB_RETRY_BACKOFF_MS = [15e3, 6e4, 3e5, 9e5, 36e5];
   }
 });
 
@@ -141699,70 +141775,8 @@ async function forgetLatchProviderSession({
   });
 }
 
-// ../packages/core/service/live-activity-jobs.ts
-init_util3();
-init_worker_jobs();
-var LIVE_ACTIVITY_DISPATCH_JOB_TYPE = "overlord.live_activity.dispatch.v1";
-var LIVE_ACTIVITY_START_JOB_TYPE = "overlord.live_activity.start.v1";
-async function enqueueLiveActivityDispatchJob({
-  db,
-  workspaceId: workspaceId2,
-  profileId,
-  now: now2 = nowIso()
-}) {
-  const result = await enqueueWorkerJob({
-    db,
-    workspaceId: workspaceId2,
-    type: LIVE_ACTIVITY_DISPATCH_JOB_TYPE,
-    dedupeBy: { field: "profileId", value: profileId },
-    payload: { profileId },
-    priority: 40,
-    maxAttempts: 5,
-    now: now2
-  });
-  return result.enqueued;
-}
-async function enqueueLiveActivityRefreshForMission({
-  db,
-  workspaceId: workspaceId2,
-  missionId,
-  now: now2 = nowIso()
-}) {
-  const profileId = await missionOwnerProfileId({ db, workspaceId: workspaceId2, missionId });
-  return profileId ? enqueueLiveActivityDispatchJob({ db, workspaceId: workspaceId2, profileId, now: now2 }) : false;
-}
-async function enqueueLiveActivityStartJob({
-  db,
-  workspaceId: workspaceId2,
-  profileId,
-  missionId,
-  now: now2 = nowIso()
-}) {
-  const result = await enqueueWorkerJob({
-    db,
-    workspaceId: workspaceId2,
-    type: LIVE_ACTIVITY_START_JOB_TYPE,
-    dedupeBy: { field: "profileId", value: profileId },
-    payload: { profileId, missionId },
-    priority: 40,
-    maxAttempts: 5,
-    now: now2
-  });
-  return result.enqueued;
-}
-async function enqueueLiveActivityStartForMission({
-  db,
-  workspaceId: workspaceId2,
-  missionId,
-  now: now2 = nowIso()
-}) {
-  const profileId = await missionOwnerProfileId({ db, workspaceId: workspaceId2, missionId });
-  if (!profileId) return false;
-  await enqueueLiveActivityDispatchJob({ db, workspaceId: workspaceId2, profileId, now: now2 });
-  return enqueueLiveActivityStartJob({ db, workspaceId: workspaceId2, profileId, missionId, now: now2 });
-}
-
 // ../packages/core/service/protocol.ts
+init_live_activity_jobs();
 init_profiles();
 
 // ../packages/core/service/project-resource-manifest.ts
@@ -143742,6 +143756,12 @@ async function askQuestion({
       missionId: mission.id,
       type: "agent_question",
       objectiveId: session.objective_id,
+      now: now2
+    });
+    await enqueueLiveActivityRefreshForMission({
+      db: txCtx.db,
+      workspaceId: ctx.workspace.id,
+      missionId: mission.id,
       now: now2
     });
     await moveMissionToReview({ ctx: txCtx, missionId: mission.id });
@@ -146236,6 +146256,7 @@ var import_node_path28 = __toESM(require("node:path"), 1);
 init_delivery_report();
 init_errors4();
 init_execution_targets();
+init_live_activity_jobs();
 init_local_target();
 
 // ../packages/core/service/mission-branch-observations.ts
@@ -151867,6 +151888,14 @@ async function markMissionStatusesSeen(missionRef) {
       },
       tx
     );
+    if (toMark.includes("blocking_question")) {
+      await enqueueLiveActivityRefreshForMission({
+        db: tx,
+        workspaceId: row.workspace_id,
+        missionId: row.id,
+        now: now2
+      });
+    }
   });
 }
 async function missionCreatedFromDto(row, db = requireDatabaseClient()) {
@@ -169882,6 +169911,7 @@ async function reopenHumanAction(deliveryId, actionId) {
 // live-activities.ts
 init_dist2();
 var import_node_crypto24 = require("node:crypto");
+init_live_activity_jobs();
 init_util3();
 init_db();
 
@@ -169890,11 +169920,14 @@ var TITLE_MAX_LENGTH = 80;
 function bounded(value, max) {
   return value.length <= max ? value : `${value.slice(0, max - 1)}\u2026`;
 }
-function presentationTitle(value) {
+function presentationText(value, max) {
   return bounded(
     value.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/[*_`]/g, "").replace(/^[#>\-+*]\s+/gm, "").replace(/\s+/g, " ").trim(),
-    TITLE_MAX_LENGTH
+    max
   );
+}
+function presentationTitle(value) {
+  return presentationText(value, TITLE_MAX_LENGTH);
 }
 
 // live-activities.ts
@@ -169904,8 +169937,13 @@ var START_TOKEN_MAX_LENGTH = 512;
 var BUNDLE_ID_MAX_LENGTH = 255;
 var ACTIVITY_TYPE_MAX_LENGTH = 128;
 var APP_VERSION_MAX_LENGTH = 64;
+var ASK_QUESTION_MAX_LENGTH = 140;
+var ASK_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1e3;
 var LIVE_ACTIVITY_ATTRIBUTES_TYPE = "OverlordActivityAttributes";
 var LIVE_ACTIVITY_ACCOUNT_LABEL = "My Missions";
+function jsonTextFieldSql3(column, field, dialect) {
+  return dialect === "postgres" ? `${column}->>'${field}'` : `json_extract(${column}, '$.${field}')`;
+}
 function projectColor(settingsJson) {
   try {
     const value = JSON.parse(settingsJson);
@@ -170126,6 +170164,51 @@ async function revokeLiveActivityPushToken(activityId) {
     normalizedActivityId
   ]);
 }
+async function loadPendingAsk(db, profileId, now2) {
+  const askRequestId = jsonTextFieldSql3("e.payload_json", "agentRequestId", db.dialect);
+  const answerRequestId = jsonTextFieldSql3("answer.payload_json", "agentRequestId", db.dialect);
+  const row = await db.get(
+    `SELECT e.mission_id, m.display_id AS mission_display_id, e.summary, e.created_at,
+            ${askRequestId} AS agent_request_id
+       FROM mission_events e
+       JOIN missions m ON m.id = e.mission_id AND m.deleted_at IS NULL
+       JOIN projects p ON p.id = m.project_id AND p.deleted_at IS NULL
+       JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
+       JOIN workspaces w ON w.id = m.workspace_id AND w.deleted_at IS NULL
+      WHERE e.type = 'ask'
+        AND wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
+        AND e.created_at >= ?
+        AND EXISTS (
+          SELECT 1 FROM objectives ao
+           WHERE ao.mission_id = e.mission_id AND ao.deleted_at IS NULL
+             AND ao.state IN ('executing', 'pending_delivery')
+             AND (e.objective_id IS NULL OR ao.id = e.objective_id)
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM mission_status_seen mss
+           WHERE mss.mission_id = e.mission_id AND mss.status_id = 'blocking_question'
+             AND mss.seen_at >= e.created_at
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM mission_events answer
+           WHERE answer.mission_id = e.mission_id AND answer.type = 'answer'
+             AND ${answerRequestId} = ${askRequestId}
+        )
+      ORDER BY e.created_at DESC, e.id DESC
+      LIMIT 1`,
+    [profileId, new Date(now2.getTime() - ASK_MAX_AGE_MS).toISOString()]
+  );
+  if (!row) return null;
+  const question = presentationText(row.summary, ASK_QUESTION_MAX_LENGTH);
+  const askedAt = Date.parse(row.created_at);
+  return {
+    missionId: row.mission_id,
+    missionDisplayId: row.mission_display_id,
+    question: question || null,
+    askedAt: Math.floor((Number.isFinite(askedAt) ? askedAt : now2.getTime()) / 1e3),
+    agentRequestId: row.agent_request_id
+  };
+}
 async function buildLiveActivityContentState(db, profileId, now2 = /* @__PURE__ */ new Date()) {
   const rows = await db.all(
     `SELECT m.id, m.title, m.display_id, p.name AS project_name, p.settings_json AS project_settings_json,
@@ -170165,6 +170248,9 @@ async function buildLiveActivityContentState(db, profileId, now2 = /* @__PURE__ 
   return {
     running: running.map(toRunningSnapshot),
     recentCompletion: completion ? await toCompletionSnapshot(db, completion) : null,
+    // Only an executing objective can hold a pending ask, so a state with no
+    // running rows never needs one.
+    pendingAsk: running.length > 0 ? await loadPendingAsk(db, profileId, now2) : null,
     updatedAt: Math.floor(now2.getTime() / 1e3)
   };
 }
@@ -170173,13 +170259,15 @@ function liveActivityContentHash(state2) {
     JSON.stringify(
       state2 && {
         running: state2.running,
-        recentCompletion: state2.recentCompletion
+        recentCompletion: state2.recentCompletion,
+        pendingAsk: state2.pendingAsk
       }
     )
   ).digest("hex");
 }
 
 // live-activity-dispatcher.ts
+init_live_activity_jobs();
 init_util3();
 
 // apns-client.ts
@@ -170346,6 +170434,7 @@ function apnsPayload(state2) {
   const finalState = state2 ?? {
     running: [],
     recentCompletion: null,
+    pendingAsk: null,
     updatedAt: Math.floor(now2 / 1e3)
   };
   const aps = {

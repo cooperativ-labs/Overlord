@@ -7,7 +7,7 @@ import { newId, nowIso } from '../packages/core/service/util.ts';
 
 import { requireDatabaseClient, resolveActiveProfileId } from './db.ts';
 import { ApiError } from './errors.ts';
-import { bounded, presentationTitle } from './text-presentation.ts';
+import { bounded, presentationText, presentationTitle } from './text-presentation.ts';
 
 // Re-exported so existing importers (push notifications, tests) keep one source
 // for bounded APNs text while the helpers themselves stay free of database imports.
@@ -19,6 +19,10 @@ const START_TOKEN_MAX_LENGTH = 512;
 const BUNDLE_ID_MAX_LENGTH = 255;
 const ACTIVITY_TYPE_MAX_LENGTH = 128;
 const APP_VERSION_MAX_LENGTH = 64;
+/** Two lines on the watch Smart Stack card, still truncating cleanly on 49 mm. */
+const ASK_QUESTION_MAX_LENGTH = 140;
+/** Same staleness window as the activity feed's blocking questions (coo:757.rqtb). */
+const ASK_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 
 /** Static ActivityKit attributes for the account-level mission activity. */
 export const LIVE_ACTIVITY_ATTRIBUTES_TYPE = 'OverlordActivityAttributes';
@@ -45,9 +49,26 @@ export type LiveActivityMissionSnapshot = {
   missionTitle: string;
 };
 
+/**
+ * The newest blocking `ask` still waiting on the account (coo:1083). The watch
+ * Smart Stack card leads with it, so the operator sees what the agent needs
+ * without opening the phone.
+ */
+export type LiveActivityAskSnapshot = {
+  missionId: string;
+  missionDisplayId: string;
+  /** Markdown-stripped single line capped at 140 characters. */
+  question: string | null;
+  /** Unix epoch seconds, the same convention as `updatedAt`. */
+  askedAt: number;
+  /** The `agent_requests` row the ask opened, when it is answerable in place. */
+  agentRequestId: string | null;
+};
+
 export type LiveActivityContentState = {
   running: LiveActivityMissionSnapshot[];
   recentCompletion: LiveActivityMissionSnapshot | null;
+  pendingAsk: LiveActivityAskSnapshot | null;
   /** Unix epoch seconds. ActivityKit's push JSONDecoder cannot parse ISO-8601. */
   updatedAt: number;
 };
@@ -90,6 +111,24 @@ type RunningObjectiveRow = {
   project_name: string;
   project_settings_json: string;
 };
+
+type PendingAskRow = {
+  mission_id: string;
+  mission_display_id: string;
+  summary: string;
+  created_at: string;
+  agent_request_id: string | null;
+};
+
+function jsonTextFieldSql(
+  column: string,
+  field: string,
+  dialect: DatabaseClient['dialect']
+): string {
+  return dialect === 'postgres'
+    ? `${column}->>'${field}'`
+    : `json_extract(${column}, '$.${field}')`;
+}
 
 function projectColor(settingsJson: string): string {
   try {
@@ -367,6 +406,63 @@ export async function revokeLiveActivityPushToken(activityId: string): Promise<v
   ]);
 }
 
+/**
+ * The newest unanswered, unseen blocking question on one of the account's
+ * missions whose agent is still on the objective. Mirrors the activity feed's
+ * `blocking_question` rule (unseen, unanswered, asked within three days) and
+ * additionally drops asks whose objective has since finished, so a delivered
+ * mission never leaves the card amber.
+ */
+async function loadPendingAsk(
+  db: DatabaseClient,
+  profileId: string,
+  now: Date
+): Promise<LiveActivityAskSnapshot | null> {
+  const askRequestId = jsonTextFieldSql('e.payload_json', 'agentRequestId', db.dialect);
+  const answerRequestId = jsonTextFieldSql('answer.payload_json', 'agentRequestId', db.dialect);
+  const row = await db.get<PendingAskRow>(
+    `SELECT e.mission_id, m.display_id AS mission_display_id, e.summary, e.created_at,
+            ${askRequestId} AS agent_request_id
+       FROM mission_events e
+       JOIN missions m ON m.id = e.mission_id AND m.deleted_at IS NULL
+       JOIN projects p ON p.id = m.project_id AND p.deleted_at IS NULL
+       JOIN workspace_users wu ON wu.id = m.assigned_workspace_user_id
+       JOIN workspaces w ON w.id = m.workspace_id AND w.deleted_at IS NULL
+      WHERE e.type = 'ask'
+        AND wu.profile_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL
+        AND e.created_at >= ?
+        AND EXISTS (
+          SELECT 1 FROM objectives ao
+           WHERE ao.mission_id = e.mission_id AND ao.deleted_at IS NULL
+             AND ao.state IN ('executing', 'pending_delivery')
+             AND (e.objective_id IS NULL OR ao.id = e.objective_id)
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM mission_status_seen mss
+           WHERE mss.mission_id = e.mission_id AND mss.status_id = 'blocking_question'
+             AND mss.seen_at >= e.created_at
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM mission_events answer
+           WHERE answer.mission_id = e.mission_id AND answer.type = 'answer'
+             AND ${answerRequestId} = ${askRequestId}
+        )
+      ORDER BY e.created_at DESC, e.id DESC
+      LIMIT 1`,
+    [profileId, new Date(now.getTime() - ASK_MAX_AGE_MS).toISOString()]
+  );
+  if (!row) return null;
+  const question = presentationText(row.summary, ASK_QUESTION_MAX_LENGTH);
+  const askedAt = Date.parse(row.created_at);
+  return {
+    missionId: row.mission_id,
+    missionDisplayId: row.mission_display_id,
+    question: question || null,
+    askedAt: Math.floor((Number.isFinite(askedAt) ? askedAt : now.getTime()) / 1000),
+    agentRequestId: row.agent_request_id
+  };
+}
+
 /** Recomputes the same bounded presentation state used by the mobile mapper. */
 export async function buildLiveActivityContentState(
   db: DatabaseClient,
@@ -415,6 +511,9 @@ export async function buildLiveActivityContentState(
   return {
     running: running.map(toRunningSnapshot),
     recentCompletion: completion ? await toCompletionSnapshot(db, completion) : null,
+    // Only an executing objective can hold a pending ask, so a state with no
+    // running rows never needs one.
+    pendingAsk: running.length > 0 ? await loadPendingAsk(db, profileId, now) : null,
     updatedAt: Math.floor(now.getTime() / 1000)
   };
 }
@@ -427,7 +526,8 @@ export function liveActivityContentHash(state: LiveActivityContentState | null):
       JSON.stringify(
         state && {
           running: state.running,
-          recentCompletion: state.recentCompletion
+          recentCompletion: state.recentCompletion,
+          pendingAsk: state.pendingAsk
         }
       )
     )

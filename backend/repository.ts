@@ -4374,6 +4374,16 @@ export async function markMissionStatusesSeen(missionRef: string): Promise<void>
       },
       tx
     );
+    // A seen ask no longer leads the Live Activity, so the card drops back to
+    // the objective meter on the next push.
+    if (toMark.includes('blocking_question')) {
+      await enqueueLiveActivityRefreshForMission({
+        db: tx,
+        workspaceId: row.workspace_id,
+        missionId: row.id,
+        now
+      });
+    }
   });
 }
 

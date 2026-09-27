@@ -32,8 +32,9 @@ General:
 
 Connectors:
   ${primaryCommand} agent-setup [--json]         List installable agent connectors
-  ${primaryCommand} agent-setup <agent> [--dry-run]
-                                                 Install/repair one connector (e.g. claude)
+  ${primaryCommand} agent-setup <agent> [--dry-run] [--export <dir>]
+                                                 Install/repair one connector; Codex --export
+                                                 writes a package without installing it
   ${primaryCommand} agent-setup all [--dry-run]  Install/repair all supported connectors
   ${primaryCommand} agent-session capabilities [<agent>] [--json]
                                                  What a harness can really do on the agent-session

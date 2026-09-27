@@ -1,0 +1,50 @@
+{
+  "name": "overlord",
+  "version": "0.3.48",
+  "description": "Chat-driven access to Overlord mission protocol workflows with hook-driven activity capture.",
+  "author": {
+    "name": "Cooperativ",
+    "url": "https://github.com/cooperativ-labs"
+  },
+  "homepage": "https://www.ovld.ai",
+  "repository": "https://github.com/cooperativ-labs/overlord",
+  "license": "UNLICENSED",
+  "keywords": [
+    "overlord",
+    "ticket",
+    "agents",
+    "mission",
+    "workflow",
+    "protocol",
+    "mcp",
+    "codex-plugin"
+  ],
+  "skills": "./skills/",
+  "hooks": "./.codex-plugin/hooks.json",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Overlord",
+    "shortDescription": "Run Overlord mission workflows from Codex chat",
+    "longDescription": "Connect Codex to Overlord's local mission workflow through the existing `ovld protocol` CLI. The plugin bundles workflow skills plus MCP tools for mission attachment, progress updates, shared context, artifacts, delivery, and follow-up mission creation.",
+    "developerName": "Cooperativ",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://www.ovld.ai/docs",
+    "privacyPolicyURL": "https://www.ovld.ai/privacy",
+    "termsOfServiceURL": "https://www.ovld.ai/terms",
+    "defaultPrompt": [
+      "Attach to Overlord mission 123 and summarize the context before editing code",
+      "Post an execute update to this Overlord mission after a meaningful implementation step",
+      "Deliver this Overlord mission with artifacts and change rationales"
+    ],
+    "brandColor": "#1E6B5C",
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/logo.png",
+    "screenshots": [
+      "./assets/screenshot.svg"
+    ]
+  }
+}

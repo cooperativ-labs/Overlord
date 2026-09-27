@@ -202,6 +202,7 @@ test('the start payload carries the ActivityKit start event, attributes, and bou
           }
         ],
         recentCompletion: null,
+        pendingAsk: null,
         updatedAt: 1_754_438_400
       },
       'OverlordActivityAttributes'
@@ -218,7 +219,12 @@ test('the start payload carries the ActivityKit start event, attributes, and bou
     running: unknown[];
     updatedAt: unknown;
   };
-  assert.deepEqual(Object.keys(contentState).sort(), ['recentCompletion', 'running', 'updatedAt']);
+  assert.deepEqual(Object.keys(contentState).sort(), [
+    'pendingAsk',
+    'recentCompletion',
+    'running',
+    'updatedAt'
+  ]);
   assert.equal(contentState.updatedAt, 1_754_438_400);
   assert.equal(typeof contentState.updatedAt, 'number');
 });

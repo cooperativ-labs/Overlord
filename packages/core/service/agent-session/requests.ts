@@ -1,6 +1,7 @@
 import { recordChange } from '../change-feed.js';
 import type { ServiceContext } from '../context.js';
 import { ServiceError } from '../errors.js';
+import { enqueueLiveActivityRefreshForMission } from '../live-activity-jobs.js';
 import { newId, nowIso } from '../util.js';
 import { enqueueWebhookEvent } from '../webhook-events.js';
 
@@ -529,6 +530,13 @@ export async function resolveRequest({
           objectiveId: existing.objective_id,
           sessionId: existing.session_id
         }
+      });
+      // Clears the pending ask the Live Activity was leading with.
+      await enqueueLiveActivityRefreshForMission({
+        db: tx,
+        workspaceId: ctx.workspace.id,
+        missionId: existing.mission_id,
+        now
       });
     }
     return { resolved: true, request: await getRequest({ ctx: txCtx, requestId }) };

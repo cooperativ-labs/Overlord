@@ -1,0 +1,23 @@
+{
+  "name": "scribe",
+  "version": "0.1.0",
+  "description": "Search and read transcripts from a local Scribe library.",
+  "author": {
+    "name": "Cooperativ",
+    "url": "https://github.com/cooperativ-labs"
+  },
+  "repository": "https://github.com/cooperativ-labs/Scribe",
+  "license": "UNLICENSED",
+  "keywords": ["scribe", "transcripts", "meetings", "mcp"],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Scribe",
+    "shortDescription": "Find and read saved Scribe meeting transcripts.",
+    "longDescription": "Search and retrieve transcripts from the Scribe library on this computer. The plugin runs a local MCP server and reads the library selected by Scribe. Remote ChatGPT web access requires the separately hosted Scribe service.",
+    "developerName": "Cooperativ",
+    "category": "Productivity",
+    "capabilities": ["Read"],
+    "websiteURL": "https://github.com/cooperativ-labs/Scribe"
+  }
+}

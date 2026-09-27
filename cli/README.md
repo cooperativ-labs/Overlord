@@ -202,6 +202,8 @@ Notes for headless use:
 - `ovld agent-setup` accepts `--home <dir>` to target a specific `OVLD_HOME`,
   `--dry-run` to preview, and `--json` for machine-readable output. List
   installable connectors with `ovld agent-setup --json`.
+- `ovld agent-setup codex --export <dir>` renders the self-contained plugin
+  package into an empty directory without changing the user's Codex setup.
 - Set `OVLD_HOME=/some/writable/dir` if the default `~/.ovld` is not writable in
   your container; it relocates the entire CLI data directory.
 - Interactive `ovld auth login` / `ovld config set` (no args) and `ovld setup`
