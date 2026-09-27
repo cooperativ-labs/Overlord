@@ -5,7 +5,8 @@
 > `ovld agent-setup codex` (minus the Codex rules and permission profile), and a
 > Git marketplace plugin cannot reach the ChatGPT mobile or web apps. The
 > Overlord package, its catalog entry, and `.github/workflows/publish-marketplace-plugin.yml`
-> were removed; the `MARKETPLACE_APP_*` secrets and GitHub App are no longer
+> were removed, along with the marketplace `Validate marketplace` workflow and
+> `scripts/validate-marketplace.mjs`; the `MARKETPLACE_APP_*` secrets and GitHub App are no longer
 > needed by Overlord. The marketplace remains for Scribe. The analysis below is
 > kept for the Scribe sync design.
 

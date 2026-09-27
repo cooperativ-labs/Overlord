@@ -41,17 +41,11 @@ Refresh each package from its source project when that project releases a new
 version, then update the catalog in the same change. Do not include credentials,
 owner keys, or meeting data.
 
-## Automated sync and validation
+## Updates
 
-Marketplace updates arrive as pull requests on `sync/<plugin-name>`. The owning
-project builds its installable package and opens or refreshes that pull request;
-the marketplace `Validate marketplace` workflow checks local catalog paths,
-manifest references, package names, version increases, and obvious secret files
-or values before merge.
-
-Scribe sync is owned by the Scribe repository: that workflow needs to build its
-package and keep the Codex manifest in the source repo before it can open the
-same kind of marketplace pull request.
+Marketplace updates arrive as pull requests from the owning project. Scribe
+updates are owned by the Scribe repository, which needs to build its package and
+keep the Codex manifest in the source repo before refreshing `plugins/scribe`.
 
 ## Distribution scope
 

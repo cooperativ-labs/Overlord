@@ -9,15 +9,17 @@ import {
   type LucideIcon,
   MessageSquare,
   Rocket,
-  ShieldQuestion
+  ShieldQuestion,
+  SquareTerminal
 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { AuthenticatedAvatarImage, Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 import type { MissionEventDto, MissionEventType } from '../../shared/contract.ts';
+import { formatAgentHarnessText } from '../lib/agent-harness-text.ts';
 import { formatTimestamp } from '../lib/format-date.ts';
-import { groupMissionFeedItems, resolveFollowUpPresentation } from '../lib/mission-feed.ts';
+import { groupMissionFeedItems, resolveEventPresentation } from '../lib/mission-feed.ts';
 import { useMissionAgentRequests, useMissionEvents } from '../lib/queries.ts';
 
 import { QuestionAnswerForm } from './agent-session/QuestionAnswerForm.tsx';
@@ -208,9 +210,18 @@ function ActivityEntry({
   /** Nested row inside an expanded execution-status section. */
   compact?: boolean;
 }) {
-  const { icon: Icon, label } = eventMeta(event.type);
-  // A follow-up is the user speaking, whether the hook posted it or the agent relayed it.
-  const { isFollowUp: isUserFollowUp, summary } = resolveFollowUpPresentation(event);
+  // A follow-up is the user speaking, whether the hook posted it or the agent relayed it. A
+  // harness notification (a background task finishing) arrives the same way but is not.
+  const { isFollowUp: isUserFollowUp, summary, notification } = resolveEventPresentation(event);
+  const typeMeta = eventMeta(event.type);
+  const Icon = notification ? SquareTerminal : typeMeta.icon;
+  const label = notification ? notification.label : typeMeta.label;
+  const notificationTone =
+    notification?.tone === 'failure'
+      ? 'text-red-600 dark:text-red-400'
+      : notification?.tone === 'success'
+        ? 'text-emerald-600 dark:text-emerald-400'
+        : null;
   // Blocking questions posted via `ovld protocol ask` land as `ask` events. Give
   // them a subtle amber/orange outline + wash so they stand out as needing a reply.
   const isBlockingQuestion = event.type === 'ask';
@@ -251,7 +262,7 @@ function ActivityEntry({
                 ? 'h-3.5 w-3.5 text-amber-600 dark:text-amber-400'
                 : isAnswer
                   ? 'h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400'
-                  : 'h-3.5 w-3.5 text-(--color-ink-dim)'
+                  : `h-3.5 w-3.5 ${notificationTone ?? 'text-(--color-ink-dim)'}`
             }
           />
         ) : (
@@ -268,7 +279,7 @@ function ActivityEntry({
                   ? 'text-xs font-medium text-amber-700 dark:text-amber-300'
                   : isAnswer
                     ? 'text-xs font-medium text-emerald-700 dark:text-emerald-300'
-                    : 'text-xs font-medium text-(--color-ink)'
+                    : `text-xs font-medium ${notificationTone ?? 'text-(--color-ink)'}`
             }
           >
             {isUserFollowUp ? userLabel : label}
@@ -371,7 +382,7 @@ function ExecutionStatusSection({
           </div>
           <p className="line-clamp-2 text-sm text-(--color-ink-dim)">
             <span className="font-medium text-(--color-ink)/80">{latestLabel}: </span>
-            {latest.summary || 'No summary.'}
+            {formatAgentHarnessText(latest.summary ?? '') || 'No summary.'}
           </p>
         </div>
       </button>

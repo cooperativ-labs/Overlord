@@ -5,6 +5,11 @@ import type {
   MissionEventDto
 } from '../../shared/contract.ts';
 
+import {
+  type HarnessNotificationPresentation,
+  presentAgentHarnessText
+} from './agent-harness-text.ts';
+
 /**
  * Pure shaping and gating rules for the mission activity feed.
  *
@@ -67,6 +72,29 @@ export function resolveFollowUpPresentation(
       : { isFollowUp: false, summary };
   }
   return { isFollowUp: false, summary };
+}
+
+export interface EventPresentation extends FollowUpPresentation {
+  /** Set when the summary was only harness notifications (e.g. a finished background task). */
+  notification: HarnessNotificationPresentation | null;
+}
+
+/**
+ * Full summary presentation for a feed row: harness markup is rewritten into readable text first,
+ * then follow-up rules apply. A summary that was only a harness notification is never a follow-up,
+ * whatever route posted it — the hook relays those as prompts, but no person wrote them.
+ */
+export function resolveEventPresentation(
+  event: Pick<MissionEventDto, 'type' | 'summary'>
+): EventPresentation {
+  const harness = presentAgentHarnessText(event.summary ?? '');
+  if (harness.notification) {
+    return { isFollowUp: false, summary: harness.text, notification: harness.notification };
+  }
+  return {
+    ...resolveFollowUpPresentation({ type: event.type, summary: harness.text }),
+    notification: null
+  };
 }
 
 /** One Agent Session Module row: an answerable request, or an instruction sent into the session. */

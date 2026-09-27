@@ -14,6 +14,7 @@ import type {
   ActivityFeedMissionItemDto,
   ActivityFeedMissionObjectiveDto
 } from '../../../shared/contract.ts';
+import { formatAgentHarnessText } from '../../lib/agent-harness-text.ts';
 import { cn } from '../../lib/utils.ts';
 import { AgentIcon } from '../objectives/AgentIcon.tsx';
 
@@ -161,7 +162,10 @@ export function MissionRunCard({
         </div>
 
         <p className="line-clamp-2 wrap-anywhere text-base text-(--color-ink-dim)">
-          {item.latestEventSummary ?? item.instructionPreview}
+          {/* The latest event may be raw harness markup (a background task finishing); show it the
+              way the mission feed does rather than as tag soup. */}
+          {(item.latestEventSummary && formatAgentHarnessText(item.latestEventSummary)) ||
+            item.instructionPreview}
         </p>
 
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--color-ink-dim)">
