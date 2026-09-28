@@ -120,13 +120,13 @@ function routeChange(change: EntityChangeDto): QueryKey[] | null {
     case 'delivery': {
       const missionId = missionIdFor(change);
       if (!missionId) return null;
-      // A new or recomposed delivery can add, reword, or drop human actions.
-      return [keys.missionDeliveries(missionId), keys.activityFeed, keys.humanActions];
+      return [keys.missionDeliveries(missionId), keys.activityFeed];
     }
     case 'human_action_resolution': {
+      // A deferred-work decision changes the delivery card that shows it.
       const missionId = missionIdFor(change);
       if (!missionId) return null;
-      return [keys.humanActions, keys.missionDeliveries(missionId)];
+      return [keys.missionDeliveries(missionId)];
     }
     case 'changed_file':
     case 'change_rationale': {

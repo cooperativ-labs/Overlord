@@ -13,8 +13,8 @@ import { requireDatabaseClient } from './db.ts';
 /**
  * Stable addressing and resolution state for the deferred-work items of a
  * delivery (coo:971, coo:1045). The delivery report is the only place an item's
- * text lives; this module derives the id every surface (Feed rail, delivery
- * card) uses to record the operator's decision in `human_action_resolutions`.
+ * text lives; this module derives the id the delivery card uses to record the
+ * operator's decision in `human_action_resolutions`.
  */
 
 export const RESOLUTION_STATUSES: ReadonlySet<string> = new Set(['done', 'dismissed']);

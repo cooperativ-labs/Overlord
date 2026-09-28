@@ -1350,21 +1350,23 @@ Indexes:
 
 ### `human_action_resolutions`
 
-Operator decisions layered over the human follow-up actions an agent reports in a delivery
-(coo:963, contract v136). The action text is never copied here: `action_id` names the stable
-`HumanActionV1.id` inside `deliveries.payload_json.deliveryReport.presentation.humanActions`,
-which the compose worker preserves when it rewrites the presentation. Reopening an action
-deletes its row; there is no soft delete or revision.
+Operator decisions on the deferred-work items an agent reports in a delivery (coo:971,
+coo:1045). The item text is never copied here: `action_id` names the stable delivery-local
+deferred-work id derived from the item's agent-report index and text digest, which stays the
+same when the compose worker rewrites `presentation.deferredWork`. Reopening an item deletes
+its row; there is no soft delete or revision. The table was introduced for reported human
+actions (coo:963, contract v136); those resolutions were deleted when the Human Actions feed
+was removed (coo:1098, contract v150), and only `deferred-work-*` ids are written now.
 
 | Column                          | Type         | Required | Notes                                                                 |
 | ------------------------------- | ------------ | -------- | --------------------------------------------------------------------- |
 | `delivery_id`                   | Id           | yes      | FK to `deliveries`, cascade delete. Part of the primary key.          |
-| `action_id`                     | text         | yes      | `HumanActionV1.id` within that delivery's presentation. Part of the primary key. |
+| `action_id`                     | text         | yes      | Stable deferred-work id within that delivery (`deferred-work-*`). Part of the primary key. |
 | `workspace_id`                  | Id           | yes      | FK to `workspaces`; denormalized from the delivery.                   |
 | `mission_id`                    | Id           | yes      | FK to `missions`; denormalized from the delivery.                     |
 | `objective_id`                  | Id           | yes      | FK to `objectives`; denormalized from the delivery.                   |
 | `status`                        | text         | yes      | Closed: `done`, `dismissed`.                                          |
-| `outcome`                       | text         | no       | Closed: `mission_created`, `objective_added`. Deferred-work promotion recorded with `status = 'done'` (coo:1045, contract v147). |
+| `outcome`                       | text         | no       | Closed: `mission_created`, `objective_added`. Promotion recorded with `status = 'done'` (coo:1045, contract v147). |
 | `outcome_ref`                   | text         | no       | Display id of the mission or objective the promotion created.         |
 | `resolved_by_workspace_user_id` | Id           | no       | FK to `workspace_users`, set null on delete.                          |
 | `resolved_at`                   | TimestampUTC | yes      |                                                                       |
@@ -1376,7 +1378,7 @@ Indexes:
 
 Mutations emit `entity_changes` rows with `entity_type = 'human_action_resolution'`,
 `entity_id = '<delivery_id>:<action_id>'`, and the mission and objective ids, so the webapp
-can refresh the human-actions rail and the mission's delivery cards.
+can refresh the mission's delivery cards.
 
 ### `artifacts`
 

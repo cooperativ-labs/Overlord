@@ -1451,22 +1451,22 @@ export interface DeliveryDto {
   modelIdentifier: string | null;
   /**
    * One entry per `report.presentation.deferredWork` item, in the same order,
-   * carrying the stable action id the human-actions resolution routes take and
+   * carrying the stable action id the deferred-work resolution routes take and
    * the operator's current decision (contract v147).
    */
   deferredWorkItems: DeliveryDeferredWorkItemDto[];
 }
 
-/** A deferred-work item of one delivery, addressable by the human-actions resolution routes. */
+/** A deferred-work item of one delivery, addressable by the deferred-work resolution routes. */
 export interface DeliveryDeferredWorkItemDto {
   actionId: string;
   action: string;
   resolution: HumanActionResolutionDto | null;
 }
 
-// ---- Human actions (cross-workspace follow-up rail) ----
+// ---- Deferred-work resolutions ----
 
-/** The operator's decision on one reported human action. */
+/** The operator's decision on one deferred-work item of a delivery. */
 export type HumanActionResolutionStatus = 'done' | 'dismissed';
 
 /**
@@ -1485,63 +1485,10 @@ export interface HumanActionResolutionDto {
   outcomeRef: string | null;
 }
 
-/**
- * Presentation role of one item in the cross-workspace Human Actions rail.
- * `blocking_action` is a follow-up the delivered work needs before it functions
- * (`HumanActionV1.blocking`); it is not an `ask` blocking question (contract v142).
- */
-export type HumanActionItemKind = 'follow_up' | 'blocking_action' | 'deferred_work';
-
-/**
- * One `HumanActionV1` or deferred-work entry from the latest delivery of an
- * objective, decorated with enough context to open the mission and to say
- * which agent reported it.
- * Returned by `GET /api/human-actions` (contract v136).
- */
-export interface HumanActionItemDto {
-  /** `human-action:<deliveryId>:<actionId>`. */
-  id: string;
-  deliveryId: string;
-  actionId: string;
-  kind: HumanActionItemKind;
-  action: string;
-  reason: string | null;
-  category: HumanActionCategory;
-  blocking: boolean;
-  /** Exact command or setting to apply, when the agent supplied one. */
-  command: string | null;
-  /** How to confirm the action worked, when the agent supplied it. */
-  verify: string | null;
-  /** HTTP(S) URL or repository-relative path, when the agent supplied one. */
-  link: string | null;
-  source: DeliveryEvidenceSource;
-  workspaceId: string;
-  workspaceName: string;
-  projectId: string;
-  projectName: string;
-  projectColor: string | null;
-  missionId: string;
-  missionDisplayId: string;
-  missionTitle: string;
-  objectiveId: string;
-  objectiveDisplayId: string;
-  objectiveTitle: string | null;
-  deliveredAt: string;
-  agentIdentifier: string | null;
-  resolution: HumanActionResolutionDto | null;
-}
-
-export interface HumanActionsDto {
-  /** Open actions first (blocking, deferred, follow-up); resolved ones after when requested. */
-  items: HumanActionItemDto[];
-  generatedAt: string;
-  /** Totals before any cap, so the rail can show a count the list may not fully render. */
-  counts: { open: number; blocking: number; deferred: number; resolved: number };
-}
-
+/** Body of `PUT /api/deliveries/:deliveryId/deferred-work/:actionId/resolution`. */
 export interface ResolveHumanActionBody {
   status: HumanActionResolutionStatus;
-  /** Deferred-work items only, and only with `status: 'done'` (contract v147). */
+  /** Only with `status: 'done'` (contract v147). */
   outcome?: HumanActionResolutionOutcome;
   /** Display id of the created mission or objective; requires `outcome`. */
   outcomeRef?: string;

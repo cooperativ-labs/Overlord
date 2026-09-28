@@ -653,7 +653,7 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
           type: 'array',
           description:
             'Concrete actions a human must perform outside completed agent work. Exclude Git operations and routine review/testing. ' +
-            'Each item is read on its own in the Feed human-actions rail, so give every one an action, reason, and category, plus command, verify, and link whenever they exist. ' +
+            'Each item is read on its own from the delivery card, so give every one an action, reason, and category, plus command, verify, and link whenever they exist. ' +
             'Vague: { action: "Set up the env var for Gemini." }. Good: { action: "Add GEMINI_API_KEY to the production backend service on Railway.", reason: "Compose falls back to the raw summary without it.", category: "environment", command: "railway variables set GEMINI_API_KEY=<key> --service backend", verify: "The next delivery card shows a composed presentation.", link: ".env.example" }.',
           items: objectSchema(
             {

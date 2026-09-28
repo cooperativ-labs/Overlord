@@ -13,8 +13,8 @@ import {
   keys,
   useCreateMission,
   useCreateObjective,
-  useReopenHumanAction,
-  useResolveHumanAction
+  useReopenDeferredWork,
+  useResolveDeferredWork
 } from '../lib/queries.ts';
 import { cn } from '../lib/utils.ts';
 
@@ -57,11 +57,10 @@ function OutcomeIcon({ resolution }: { resolution: HumanActionResolutionDto }) {
 }
 
 /**
- * One deferred-work item from a delivery, with the same state on every surface
- * that shows it — the delivery card and the Feed's Human actions rail
- * (coo:1045). While open it offers Create mission, Add objective, and Dismiss;
- * once handled it fades, drops the buttons, and shows which one was chosen. The
- * decision is recorded in `human_action_resolutions`, so both surfaces agree.
+ * One deferred-work item from a delivery card (coo:1045). While open it offers
+ * Create mission, Add objective, and Dismiss; once handled it fades, drops the
+ * buttons, and shows which one was chosen. The decision is recorded in
+ * `human_action_resolutions`.
  */
 export function DeferredWorkItem({
   item,
@@ -70,7 +69,7 @@ export function DeferredWorkItem({
   className
 }: {
   item: DeferredWorkItemData;
-  /** Extra context drawn between the text and the controls (the rail's meta line). */
+  /** Extra context drawn between the text and the controls. */
   details?: ReactNode;
   /** Called with the new mission once a Create mission promotion is recorded. */
   onMissionCreated?: (mission: {
@@ -83,8 +82,8 @@ export function DeferredWorkItem({
   const qc = useQueryClient();
   const createMission = useCreateMission();
   const createObjective = useCreateObjective();
-  const resolve = useResolveHumanAction();
-  const reopen = useReopenHumanAction();
+  const resolve = useResolveDeferredWork();
+  const reopen = useReopenDeferredWork();
   const [pending, setPending] = useState<Pending>(null);
   const [error, setError] = useState<string | null>(null);
   // The server answer lands before the delivery/rail queries refetch; show it at once.
@@ -100,6 +99,7 @@ export function DeferredWorkItem({
     const updated = await resolve.mutateAsync({
       deliveryId: item.deliveryId,
       actionId: item.actionId,
+      missionId: item.missionId,
       ...body
     });
     setLocalResolution(updated.resolution);
@@ -164,7 +164,8 @@ export function DeferredWorkItem({
     run('reopen', async () => {
       const updated = await reopen.mutateAsync({
         deliveryId: item.deliveryId,
-        actionId: item.actionId
+        actionId: item.actionId,
+        missionId: item.missionId
       });
       setLocalResolution(updated.resolution);
     });

@@ -95,6 +95,7 @@ import {
   getBootstrapWorkspaceIdOrNull,
   initDatabase
 } from './db.ts';
+import { reopenDeferredWork, resolveDeferredWork } from './deferred-work-resolutions.ts';
 import { deliveryComposeWorker } from './delivery-compose-worker.ts';
 import {
   beginDesktopGitHubOAuth,
@@ -107,7 +108,6 @@ import {
 } from './desktop-oauth-handoff.ts';
 import { ENV_PROFILE } from './env-profile.ts';
 import { apiErrorFromBodyParser, apiErrorFromDatabaseError } from './errors.ts';
-import { listHumanActions, reopenHumanAction, resolveHumanAction } from './human-actions.ts';
 import {
   registerLiveActivityPushToken,
   registerLiveActivityStartToken,
@@ -1384,22 +1384,18 @@ app.get(
   )
 );
 
-// ---- Human follow-up actions (cross-workspace) ----------------------------
-// Every reported human action from recent deliveries, with the operator's
-// decision per action. Same membership / mission:read fan-out as the feed.
-app.get(
-  '/api/human-actions',
-  handle(req => listHumanActions({ includeResolved: isTruthyQueryFlag(req.query.includeResolved) }))
-);
+// ---- Deferred-work resolutions ---------------------------------------------
+// The operator's decision on one deferred-work item of a delivery, shown on the
+// delivery card. Requires mission:update on the delivery's workspace.
 app.put(
-  '/api/human-actions/:deliveryId/:actionId/resolution',
-  handle(req => resolveHumanAction(req.params.deliveryId, req.params.actionId, req.body), {
+  '/api/deliveries/:deliveryId/deferred-work/:actionId/resolution',
+  handle(req => resolveDeferredWork(req.params.deliveryId, req.params.actionId, req.body), {
     mutates: true
   })
 );
 app.delete(
-  '/api/human-actions/:deliveryId/:actionId/resolution',
-  handle(req => reopenHumanAction(req.params.deliveryId, req.params.actionId), {
+  '/api/deliveries/:deliveryId/deferred-work/:actionId/resolution',
+  handle(req => reopenDeferredWork(req.params.deliveryId, req.params.actionId), {
     mutates: true
   })
 );

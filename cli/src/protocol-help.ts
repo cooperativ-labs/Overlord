@@ -726,8 +726,8 @@ deliver:
       "link":     ".env.example"  // when known. HTTP(S) URL or repo-relative path only.
     }
     Vague: { "action": "Set up the env var for Gemini." } forces the operator to rediscover
-    the name, the place, and the check. Actions are read from the Feed rail without the
-    delivery, so each must stand alone. Overlord adds deterministic_rule actions for new
+    the name, the place, and the check. Actions are read from the delivery card without
+    your transcript, so each must stand alone. Overlord adds deterministic_rule actions for new
     migrations, .env.example edits, dependency manifests, and CI workflow files on its own;
     report those yourself when you can supply the real command and verify step.
   Optional:

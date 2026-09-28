@@ -2,7 +2,7 @@ import { ExternalLink, FileText, Terminal } from 'lucide-react';
 
 import { cn } from '../lib/utils.ts';
 
-/** Shape shared by `HumanActionV1` (delivery card) and `HumanActionItemDto` (Feed rail). */
+/** The optional detail fields of a `HumanActionV1` shown on the delivery card. */
 export type HumanActionDetailFields = {
   command?: string | null;
   verify?: string | null;

@@ -218,9 +218,8 @@ operations or routine testing/review.
 
 #### Human actions the operator can complete
 
-Reported human actions are collected across every mission into the Feed page's
-**Human actions** rail, where the operator reads them without the delivery. Each
-item must stand on its own:
+Reported human actions are shown on the delivery card, where the operator reads
+them without your session transcript. Each item must stand on its own:
 
 - `action` (required): one imperative sentence naming what to do, where, and with which value.
 - `reason` (expected): why it is needed and what stays broken until it is done.
@@ -238,7 +237,7 @@ Vague, so the operator must rediscover everything:
 { "action": "Set up the env var for Gemini." }
 ```
 
-Complete, so the operator can finish it from the rail alone:
+Complete, so the operator can finish it from the card alone:
 
 ```json
 {

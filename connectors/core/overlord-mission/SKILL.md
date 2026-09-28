@@ -222,8 +222,8 @@ nothing qualifies. Omit the report when none of these facts apply.
 
 #### Writing a human action the operator can complete
 
-Human actions are collected across every mission into the Feed page's **Human actions** rail,
-where the operator reads them without the delivery context. Each item must stand alone:
+Human actions are shown on the delivery card, where the operator reads them without your
+session transcript. Each item must stand alone:
 
 | Field      | Expected   | What to write                                                                                     |
 | ---------- | ---------- | ------------------------------------------------------------------------------------------------- |
@@ -241,7 +241,7 @@ Vague (the operator has to rediscover everything):
 { "action": "Set up the env var for Gemini." }
 ```
 
-Good (the operator can finish it from the rail alone):
+Good (the operator can finish it from the card alone):
 
 ```json
 {

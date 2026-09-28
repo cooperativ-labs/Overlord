@@ -23,14 +23,11 @@ import {
 import { WorkspaceSettingsModal } from '@/components/workspaces/WorkspaceSettingsModal';
 import { WorkspaceSidebarSection } from '@/components/WorkspaceSidebarSection';
 import { DRAG_REGION, getDesktopChrome, NO_DRAG_REGION } from '@/lib/desktop-chrome';
-import { useHumanActions, useInboxItems, useMeta } from '@/lib/queries';
+import { useInboxItems, useMeta } from '@/lib/queries';
 
 export function AppSidebar() {
   const meta = useMeta();
   const inbox = useInboxItems();
-  // Open human follow-up actions ride the Feed entry so the count is visible from any page.
-  const humanActions = useHumanActions();
-  const openHumanActions = humanActions.data?.counts.open ?? 0;
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsInitialNav, setSettingsInitialNav] = useState<SettingsNavSection | undefined>();
   const [workspaceSettingsId, setWorkspaceSettingsId] = useState<string | null>(null);
@@ -72,7 +69,7 @@ export function AppSidebar() {
                     tooltip="Feed"
                   >
                     <Activity />
-                    <span>Feed{openHumanActions > 0 ? ` (${openHumanActions})` : ''}</span>
+                    <span>Feed</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
