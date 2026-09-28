@@ -1,6 +1,6 @@
 {
   "name": "overlord",
-  "version": "0.2609270909.0",
+  "version": "0.2609280950.0",
   "description": "Open-source management and coordination layer for AI coding agents",
   "type": "module",
   "private": true,

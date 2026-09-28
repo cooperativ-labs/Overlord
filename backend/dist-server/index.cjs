@@ -151390,17 +151390,16 @@ function jsonTextFieldSql(column, field, dialect) {
   return dialect === "postgres" ? `${column}->>'${field}'` : `json_extract(${column}, '$.${field}')`;
 }
 function missionHasUnseenBlockingQuestionSql(dialect) {
+  const askRequestId = jsonTextFieldSql("me.payload_json", "agentRequestId", dialect);
   const answerRequestId = jsonTextFieldSql("answer.payload_json", "agentRequestId", dialect);
   return `
          (SELECT COUNT(*) > 0 FROM mission_events me
             WHERE me.mission_id = t.id AND me.type = 'ask'
               AND NOT EXISTS (
-                SELECT 1 FROM agent_requests ar
-                 JOIN mission_events answer
-                   ON answer.mission_id = me.mission_id
-                  AND answer.type = 'answer'
-                  AND ${answerRequestId} = ar.id
-                WHERE ar.source_event_id = me.id AND ar.deleted_at IS NULL
+                SELECT 1 FROM mission_events answer
+                 WHERE answer.mission_id = me.mission_id
+                   AND answer.type = 'answer'
+                   AND ${answerRequestId} = ${askRequestId}
               )
               AND (
                 NOT EXISTS (SELECT 1 FROM mission_status_seen mss
@@ -163903,7 +163902,7 @@ var hostedMcpToolDefinitions = [
         ),
         humanActions: {
           type: "array",
-          description: 'Concrete actions a human must perform outside completed agent work. Exclude Git operations and routine review/testing. Each item is read on its own in the Feed human-actions rail, so give every one an action, reason, and category, plus command, verify, and link whenever they exist. Vague: { action: "Set up the env var for Gemini." }. Good: { action: "Add GEMINI_API_KEY to the production backend service on Railway.", reason: "Compose falls back to the raw summary without it.", category: "environment", command: "railway variables set GEMINI_API_KEY=<key> --service backend", verify: "The next delivery card shows a composed presentation.", link: ".env.example" }.',
+          description: 'Concrete actions a human must perform outside completed agent work. Exclude Git operations and routine review/testing. Each item is read on its own from the delivery card, so give every one an action, reason, and category, plus command, verify, and link whenever they exist. Vague: { action: "Set up the env var for Gemini." }. Good: { action: "Add GEMINI_API_KEY to the production backend service on Railway.", reason: "Compose falls back to the raw summary without it.", category: "environment", command: "railway variables set GEMINI_API_KEY=<key> --service backend", verify: "The next delivery card shows a composed presentation.", link: ".env.example" }.',
           items: objectSchema(
             {
               action: stringProperty(
@@ -167159,6 +167158,7 @@ async function loadQuestions(workspaceIds) {
   const askedAfter = new Date(Date.now() - QUESTION_MAX_AGE_MS).toISOString();
   const db = requireDatabaseClient();
   const requestProvider = jsonTextFieldSql2("er.metadata_json", "provider", db.dialect);
+  const askRequestId = jsonTextFieldSql2("e.payload_json", "agentRequestId", db.dialect);
   const answerRequestId = jsonTextFieldSql2("answer.payload_json", "agentRequestId", db.dialect);
   return await db.all(
     `SELECT ${QUESTION_CONTEXT_COLUMNS}, ${OBJECTIVE_PROVENANCE_COLUMNS},
@@ -167177,7 +167177,7 @@ async function loadQuestions(workspaceIds) {
        JOIN projects p ON p.id = e.project_id AND p.deleted_at IS NULL
        JOIN workspaces w ON w.id = e.workspace_id AND w.deleted_at IS NULL
        LEFT JOIN agent_sessions s ON s.id = e.session_id AND s.deleted_at IS NULL
-       LEFT JOIN agent_requests ar ON ar.source_event_id = e.id AND ar.deleted_at IS NULL
+       LEFT JOIN agent_requests ar ON ar.id = ${askRequestId} AND ar.deleted_at IS NULL
       WHERE e.type = 'ask'
         AND e.workspace_id IN (${placeholders2(workspaceIds.length)})
         AND e.created_at >= ?
@@ -167193,8 +167193,7 @@ async function loadQuestions(workspaceIds) {
           SELECT 1 FROM mission_events answer
            WHERE answer.mission_id = e.mission_id
              AND answer.type = 'answer'
-             AND ar.id IS NOT NULL
-             AND ${answerRequestId} = ar.id
+             AND ${answerRequestId} = ${askRequestId}
         )
       ORDER BY e.created_at DESC, e.id DESC
       LIMIT ?`,
@@ -169162,6 +169161,157 @@ async function requireAuthenticatedSession(req, res, next) {
 // index.ts
 init_db();
 
+// deferred-work-resolutions.ts
+init_db();
+var OUTCOME_REF_MAX_LENGTH = 64;
+function placeholders3(count) {
+  return new Array(count).fill("?").join(", ");
+}
+async function loadDelivery(deliveryId) {
+  return await requireDatabaseClient().get(
+    `SELECT d.id AS delivery_id, d.summary AS delivery_summary, d.payload_json,
+            d.workspace_id, d.project_id, d.mission_id, d.objective_id
+       FROM deliveries d
+      WHERE d.id = ? AND d.deleted_at IS NULL`,
+    [deliveryId]
+  );
+}
+async function requireDeferredWorkEntry(deliveryId, actionId) {
+  const row = await loadDelivery(deliveryId);
+  if (!row) throw new ApiError(404, "Delivery not found");
+  const workspaceUserId = await requireWorkspacePermission({
+    workspaceId: row.workspace_id,
+    permission: PERMISSIONS.MISSION_UPDATE,
+    notFoundMessage: "Delivery not found"
+  });
+  const report = deliveryReportFromPayload(row.payload_json, row.delivery_summary);
+  const entry = deferredWorkEntries(report).find(
+    (candidate) => candidate.id === actionId || candidate.legacyId === actionId
+  );
+  if (!entry) throw new ApiError(404, "Deferred work item not found");
+  return { row, entry, workspaceUserId };
+}
+async function currentItem(row, entry) {
+  const resolutions = await loadResolutions([row.delivery_id]);
+  return {
+    actionId: entry.id,
+    action: entry.action,
+    resolution: toResolution(findResolution(resolutions, row.delivery_id, entry))
+  };
+}
+async function actorWorkspaceUserId(workspaceId2, fallback2) {
+  const profileId = await resolveActiveProfileId();
+  if (!profileId) return fallback2;
+  return await findActiveMembershipId(workspaceId2, profileId) ?? fallback2;
+}
+function parseResolution(body) {
+  const input = body && typeof body === "object" ? body : {};
+  const { status, outcome, outcomeRef } = input;
+  if (typeof status !== "string" || !RESOLUTION_STATUSES.has(status)) {
+    throw new ApiError(400, "status must be 'done' or 'dismissed'");
+  }
+  if (outcome !== void 0 && (typeof outcome !== "string" || !RESOLUTION_OUTCOMES.has(outcome))) {
+    throw new ApiError(400, "outcome must be 'mission_created' or 'objective_added'");
+  }
+  if (outcome !== void 0 && status !== "done") {
+    throw new ApiError(400, "outcome requires status 'done'");
+  }
+  if (outcomeRef !== void 0) {
+    if (outcome === void 0) throw new ApiError(400, "outcomeRef requires outcome");
+    if (typeof outcomeRef !== "string" || !outcomeRef.trim() || outcomeRef.length > OUTCOME_REF_MAX_LENGTH) {
+      throw new ApiError(400, "outcomeRef must be a non-empty display id");
+    }
+  }
+  return {
+    status,
+    outcome: outcome ?? null,
+    outcomeRef: outcomeRef?.trim() ?? null
+  };
+}
+async function resolveDeferredWork(deliveryId, actionId, body) {
+  const { status, outcome, outcomeRef } = parseResolution(body);
+  const { row, entry, workspaceUserId } = await requireDeferredWorkEntry(deliveryId, actionId);
+  const db = requireDatabaseClient();
+  const resolvedBy = await actorWorkspaceUserId(row.workspace_id, workspaceUserId);
+  const now2 = nowIso2();
+  await db.transaction(async (tx) => {
+    await tx.run(
+      `INSERT INTO human_action_resolutions
+         (delivery_id, action_id, workspace_id, mission_id, objective_id, status,
+          outcome, outcome_ref, resolved_by_workspace_user_id, resolved_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (delivery_id, action_id) DO UPDATE SET
+         status = excluded.status,
+         outcome = excluded.outcome,
+         outcome_ref = excluded.outcome_ref,
+         resolved_by_workspace_user_id = excluded.resolved_by_workspace_user_id,
+         resolved_at = excluded.resolved_at`,
+      [
+        row.delivery_id,
+        entry.id,
+        row.workspace_id,
+        row.mission_id,
+        row.objective_id,
+        status,
+        outcome,
+        outcomeRef,
+        resolvedBy,
+        now2
+      ]
+    );
+    await recordChange2(
+      {
+        entityType: "human_action_resolution",
+        entityId: `${row.delivery_id}:${entry.id}`,
+        operation: "update",
+        projectId: row.project_id,
+        missionId: row.mission_id,
+        objectiveId: row.objective_id,
+        workspaceId: row.workspace_id,
+        changedFields: outcome === null ? ["status"] : ["status", "outcome", "outcome_ref"],
+        actorWorkspaceUserId: resolvedBy
+      },
+      tx
+    );
+  });
+  return currentItem(row, entry);
+}
+async function reopenDeferredWork(deliveryId, actionId) {
+  const { row, entry, workspaceUserId } = await requireDeferredWorkEntry(deliveryId, actionId);
+  const db = requireDatabaseClient();
+  const resolutionIds = [entry.id, entry.legacyId];
+  const existing = await db.get(
+    `SELECT 1 FROM human_action_resolutions
+      WHERE delivery_id = ? AND action_id IN (${placeholders3(resolutionIds.length)})`,
+    [row.delivery_id, ...resolutionIds]
+  );
+  if (existing) {
+    const actor = await actorWorkspaceUserId(row.workspace_id, workspaceUserId);
+    await db.transaction(async (tx) => {
+      await tx.run(
+        `DELETE FROM human_action_resolutions
+          WHERE delivery_id = ? AND action_id IN (${placeholders3(resolutionIds.length)})`,
+        [row.delivery_id, ...resolutionIds]
+      );
+      await recordChange2(
+        {
+          entityType: "human_action_resolution",
+          entityId: `${row.delivery_id}:${entry.id}`,
+          operation: "delete",
+          projectId: row.project_id,
+          missionId: row.mission_id,
+          objectiveId: row.objective_id,
+          workspaceId: row.workspace_id,
+          changedFields: ["status"],
+          actorWorkspaceUserId: actor
+        },
+        tx
+      );
+    });
+  }
+  return currentItem(row, entry);
+}
+
 // delivery-compose-worker.ts
 init_util3();
 init_worker_jobs();
@@ -169604,309 +169754,6 @@ function beginDesktopGitHubOAuth(auth2, authBaseUrl2) {
 
 // index.ts
 init_env_profile();
-
-// human-actions.ts
-init_dist2();
-init_db();
-var DELIVERY_WINDOW_MS = 90 * 24 * 60 * 60 * 1e3;
-var DELIVERY_SCAN_LIMIT = 400;
-var RESOLVED_LIMIT = 100;
-var OUTCOME_REF_MAX_LENGTH = 64;
-function placeholders3(count) {
-  return new Array(count).fill("?").join(", ");
-}
-function hasHumanActionItemsSql(dialect) {
-  if (dialect === "postgres") {
-    return `((jsonb_typeof(d.payload_json #> '{deliveryReport,presentation,humanActions}') = 'array'
-          AND jsonb_array_length(d.payload_json #> '{deliveryReport,presentation,humanActions}') > 0)
-         OR (jsonb_typeof(d.payload_json #> '{deliveryReport,presentation,deferredWork}') = 'array'
-          AND jsonb_array_length(d.payload_json #> '{deliveryReport,presentation,deferredWork}') > 0))`;
-  }
-  return `(COALESCE(json_array_length(d.payload_json, '$.deliveryReport.presentation.humanActions'), 0) > 0
-       OR COALESCE(json_array_length(d.payload_json, '$.deliveryReport.presentation.deferredWork'), 0) > 0)`;
-}
-var DELIVERY_SELECT = `
-  SELECT d.id AS delivery_id, d.summary AS delivery_summary, d.payload_json, d.delivered_at,
-         d.workspace_id, w.name AS workspace_name,
-         d.project_id, p.name AS project_name, p.settings_json AS project_settings_json,
-         d.mission_id, m.display_id AS mission_display_id, m.title AS mission_title,
-         o.id AS objective_id, o.display_key AS objective_display_key, o.title AS objective_title,
-         o.assigned_agent,
-         s.agent_identifier AS session_agent_identifier
-    FROM deliveries d
-    JOIN objectives o ON o.id = d.objective_id AND o.deleted_at IS NULL
-    JOIN missions m ON m.id = d.mission_id AND m.deleted_at IS NULL
-    JOIN projects p ON p.id = d.project_id AND p.deleted_at IS NULL
-    JOIN workspaces w ON w.id = d.workspace_id AND w.deleted_at IS NULL
-    LEFT JOIN agent_sessions s ON s.id = d.session_id AND s.deleted_at IS NULL`;
-var LATEST_PER_OBJECTIVE = `
-     AND d.id = (
-       SELECT x.id FROM deliveries x
-        WHERE x.objective_id = d.objective_id AND x.deleted_at IS NULL
-        ORDER BY x.delivered_at DESC, x.id DESC
-        LIMIT 1
-     )`;
-async function loadDeliveriesWithActions(workspaceIds) {
-  if (workspaceIds.length === 0) return [];
-  const db = requireDatabaseClient();
-  const since = new Date(Date.now() - DELIVERY_WINDOW_MS).toISOString();
-  return await db.all(
-    `${DELIVERY_SELECT}
-   WHERE d.deleted_at IS NULL
-     AND d.workspace_id IN (${placeholders3(workspaceIds.length)})
-     AND d.delivered_at >= ?
-     AND ${hasHumanActionItemsSql(db.dialect)}
-     ${LATEST_PER_OBJECTIVE}
-   ORDER BY d.delivered_at DESC, d.id DESC
-   LIMIT ?`,
-    [...workspaceIds, since, DELIVERY_SCAN_LIMIT]
-  );
-}
-async function loadDelivery(deliveryId) {
-  return await requireDatabaseClient().get(
-    `${DELIVERY_SELECT}
-   WHERE d.id = ? AND d.deleted_at IS NULL`,
-    [deliveryId]
-  );
-}
-function resolveAgentIdentifier2(...candidates) {
-  for (const candidate of candidates) {
-    const trimmed9 = candidate?.trim();
-    if (!trimmed9 || trimmed9.toLowerCase() === "unknown") continue;
-    return trimmed9;
-  }
-  return null;
-}
-function deliveryActions(row) {
-  const report = deliveryReportFromPayload(row.payload_json, row.delivery_summary);
-  const humanActions = report.presentation.humanActions.map((action) => ({
-    ...action,
-    kind: action.blocking === true ? "blocking_action" : "follow_up"
-  }));
-  const deferredWork = deferredWorkEntries(report).map(
-    (entry) => ({
-      id: entry.id,
-      legacyId: entry.legacyId,
-      kind: "deferred_work",
-      action: entry.action,
-      category: "other",
-      source: "agent"
-    })
-  );
-  return [...humanActions, ...deferredWork];
-}
-function toItem(row, action, resolution) {
-  return {
-    id: `human-action:${row.delivery_id}:${action.id}`,
-    deliveryId: row.delivery_id,
-    actionId: action.id,
-    kind: action.kind,
-    action: action.action,
-    reason: action.reason ?? null,
-    category: action.category,
-    blocking: action.blocking === true,
-    command: action.command ?? null,
-    verify: action.verify ?? null,
-    link: action.link ?? null,
-    source: action.source,
-    workspaceId: row.workspace_id,
-    workspaceName: row.workspace_name,
-    projectId: row.project_id,
-    projectName: row.project_name,
-    projectColor: readProjectColor(row.project_settings_json),
-    missionId: row.mission_id,
-    missionDisplayId: row.mission_display_id,
-    missionTitle: row.mission_title,
-    objectiveId: row.objective_id,
-    objectiveDisplayId: formatObjectiveDisplayId({
-      missionDisplayId: row.mission_display_id,
-      displayKey: row.objective_display_key
-    }),
-    objectiveTitle: row.objective_title,
-    deliveredAt: row.delivered_at,
-    agentIdentifier: resolveAgentIdentifier2(row.session_agent_identifier, row.assigned_agent),
-    resolution: toResolution(resolution)
-  };
-}
-function openFirst(a5, b5) {
-  const kindRank = {
-    blocking_action: 0,
-    deferred_work: 1,
-    follow_up: 2
-  };
-  if (a5.kind !== b5.kind) return kindRank[a5.kind] - kindRank[b5.kind];
-  if (a5.deliveredAt !== b5.deliveredAt) return a5.deliveredAt < b5.deliveredAt ? 1 : -1;
-  return a5.id < b5.id ? -1 : 1;
-}
-function resolvedNewestFirst(a5, b5) {
-  const left = a5.resolution?.resolvedAt ?? "";
-  const right = b5.resolution?.resolvedAt ?? "";
-  if (left !== right) return left < right ? 1 : -1;
-  return a5.id < b5.id ? -1 : 1;
-}
-async function listHumanActions({
-  includeResolved = false
-} = {}) {
-  const generatedAt = (/* @__PURE__ */ new Date()).toISOString();
-  const workspaceIds = await readableWorkspaceIds();
-  const rows = await loadDeliveriesWithActions(workspaceIds);
-  const resolutions = await loadResolutions(rows.map((row) => row.delivery_id));
-  const open = [];
-  const resolved = [];
-  for (const row of rows) {
-    for (const action of deliveryActions(row)) {
-      const item = toItem(row, action, findResolution(resolutions, row.delivery_id, action));
-      (item.resolution ? resolved : open).push(item);
-    }
-  }
-  open.sort(openFirst);
-  resolved.sort(resolvedNewestFirst);
-  return {
-    items: includeResolved ? [...open, ...resolved.slice(0, RESOLVED_LIMIT)] : open,
-    generatedAt,
-    counts: {
-      open: open.length,
-      blocking: open.filter((item) => item.blocking).length,
-      deferred: open.filter((item) => item.kind === "deferred_work").length,
-      resolved: resolved.length
-    }
-  };
-}
-async function requireDeliveryAction(deliveryId, actionId) {
-  const row = await loadDelivery(deliveryId);
-  if (!row) throw new ApiError(404, "Delivery not found");
-  const workspaceUserId = await requireWorkspacePermission({
-    workspaceId: row.workspace_id,
-    permission: PERMISSIONS.MISSION_UPDATE,
-    notFoundMessage: "Delivery not found"
-  });
-  const action = deliveryActions(row).find(
-    (candidate) => candidate.id === actionId || candidate.legacyId === actionId
-  );
-  if (!action) throw new ApiError(404, "Human action not found");
-  return { row, action, workspaceUserId };
-}
-async function currentItem(row, action) {
-  const resolutions = await loadResolutions([row.delivery_id]);
-  return toItem(row, action, findResolution(resolutions, row.delivery_id, action));
-}
-async function actorWorkspaceUserId(workspaceId2, fallback2) {
-  const profileId = await resolveActiveProfileId();
-  if (!profileId) return fallback2;
-  return await findActiveMembershipId(workspaceId2, profileId) ?? fallback2;
-}
-function parseResolution(body) {
-  const input = body && typeof body === "object" ? body : {};
-  const { status, outcome, outcomeRef } = input;
-  if (typeof status !== "string" || !RESOLUTION_STATUSES.has(status)) {
-    throw new ApiError(400, "status must be 'done' or 'dismissed'");
-  }
-  if (outcome !== void 0 && (typeof outcome !== "string" || !RESOLUTION_OUTCOMES.has(outcome))) {
-    throw new ApiError(400, "outcome must be 'mission_created' or 'objective_added'");
-  }
-  if (outcome !== void 0 && status !== "done") {
-    throw new ApiError(400, "outcome requires status 'done'");
-  }
-  if (outcomeRef !== void 0) {
-    if (outcome === void 0) throw new ApiError(400, "outcomeRef requires outcome");
-    if (typeof outcomeRef !== "string" || !outcomeRef.trim() || outcomeRef.length > OUTCOME_REF_MAX_LENGTH) {
-      throw new ApiError(400, "outcomeRef must be a non-empty display id");
-    }
-  }
-  return {
-    status,
-    outcome: outcome ?? null,
-    outcomeRef: outcomeRef?.trim() ?? null
-  };
-}
-async function resolveHumanAction(deliveryId, actionId, body) {
-  const { status, outcome, outcomeRef } = parseResolution(body);
-  const { row, action, workspaceUserId } = await requireDeliveryAction(deliveryId, actionId);
-  if (outcome !== null && action.kind !== "deferred_work") {
-    throw new ApiError(400, "outcome applies only to deferred work");
-  }
-  const db = requireDatabaseClient();
-  const resolvedBy = await actorWorkspaceUserId(row.workspace_id, workspaceUserId);
-  const now2 = nowIso2();
-  await db.transaction(async (tx) => {
-    await tx.run(
-      `INSERT INTO human_action_resolutions
-         (delivery_id, action_id, workspace_id, mission_id, objective_id, status,
-          outcome, outcome_ref, resolved_by_workspace_user_id, resolved_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT (delivery_id, action_id) DO UPDATE SET
-         status = excluded.status,
-         outcome = excluded.outcome,
-         outcome_ref = excluded.outcome_ref,
-         resolved_by_workspace_user_id = excluded.resolved_by_workspace_user_id,
-         resolved_at = excluded.resolved_at`,
-      [
-        row.delivery_id,
-        action.id,
-        row.workspace_id,
-        row.mission_id,
-        row.objective_id,
-        status,
-        outcome,
-        outcomeRef,
-        resolvedBy,
-        now2
-      ]
-    );
-    await recordChange2(
-      {
-        entityType: "human_action_resolution",
-        entityId: `${row.delivery_id}:${action.id}`,
-        operation: "update",
-        projectId: row.project_id,
-        missionId: row.mission_id,
-        objectiveId: row.objective_id,
-        workspaceId: row.workspace_id,
-        changedFields: outcome === null ? ["status"] : ["status", "outcome", "outcome_ref"],
-        actorWorkspaceUserId: resolvedBy
-      },
-      tx
-    );
-  });
-  return currentItem(row, action);
-}
-async function reopenHumanAction(deliveryId, actionId) {
-  const { row, action, workspaceUserId } = await requireDeliveryAction(deliveryId, actionId);
-  const db = requireDatabaseClient();
-  const resolutionIds = [action.id, action.legacyId].filter(
-    (candidate) => candidate !== void 0
-  );
-  const existing = await db.get(
-    `SELECT 1 FROM human_action_resolutions
-      WHERE delivery_id = ? AND action_id IN (${placeholders3(resolutionIds.length)})`,
-    [row.delivery_id, ...resolutionIds]
-  );
-  if (existing) {
-    const actor = await actorWorkspaceUserId(row.workspace_id, workspaceUserId);
-    await db.transaction(async (tx) => {
-      await tx.run(
-        `DELETE FROM human_action_resolutions
-          WHERE delivery_id = ? AND action_id IN (${placeholders3(resolutionIds.length)})`,
-        [row.delivery_id, ...resolutionIds]
-      );
-      await recordChange2(
-        {
-          entityType: "human_action_resolution",
-          entityId: `${row.delivery_id}:${action.id}`,
-          operation: "delete",
-          projectId: row.project_id,
-          missionId: row.mission_id,
-          objectiveId: row.objective_id,
-          workspaceId: row.workspace_id,
-          changedFields: ["status"],
-          actorWorkspaceUserId: actor
-        },
-        tx
-      );
-    });
-  }
-  return currentItem(row, action);
-}
 
 // live-activities.ts
 init_dist2();
@@ -174319,19 +174166,15 @@ app.get(
     })
   )
 );
-app.get(
-  "/api/human-actions",
-  handle3((req) => listHumanActions({ includeResolved: isTruthyQueryFlag(req.query.includeResolved) }))
-);
 app.put(
-  "/api/human-actions/:deliveryId/:actionId/resolution",
-  handle3((req) => resolveHumanAction(req.params.deliveryId, req.params.actionId, req.body), {
+  "/api/deliveries/:deliveryId/deferred-work/:actionId/resolution",
+  handle3((req) => resolveDeferredWork(req.params.deliveryId, req.params.actionId, req.body), {
     mutates: true
   })
 );
 app.delete(
-  "/api/human-actions/:deliveryId/:actionId/resolution",
-  handle3((req) => reopenHumanAction(req.params.deliveryId, req.params.actionId), {
+  "/api/deliveries/:deliveryId/deferred-work/:actionId/resolution",
+  handle3((req) => reopenDeferredWork(req.params.deliveryId, req.params.actionId), {
     mutates: true
   })
 );
