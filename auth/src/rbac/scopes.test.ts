@@ -3,7 +3,12 @@ import test from 'node:test';
 
 import { defaultAuthorizer, makeActor } from './authorizer.js';
 import { grantCoversAction, tokenScopeAllows } from './authorizer.js';
-import { MISSION_LIFECYCLE_GRANTS, PERMISSIONS, scopeGrantsForPreset } from './permissions.js';
+import {
+  MISSION_LIFECYCLE_GRANTS,
+  PERMISSIONS,
+  PROJECT_AUTOMATION_GRANTS,
+  scopeGrantsForPreset
+} from './permissions.js';
 import { Role } from './types.js';
 
 /** Effective decision: role grants ∩ token scope, mirroring webapp `actorCan`. */
@@ -15,6 +20,30 @@ function effectiveCan(roles: Role[], scopeGrants: string[] | null, action: strin
 test('scopeGrantsForPreset: full has no rows, mission_lifecycle has the runner set', () => {
   assert.deepEqual(scopeGrantsForPreset('full'), []);
   assert.deepEqual(scopeGrantsForPreset('mission_lifecycle'), [...MISSION_LIFECYCLE_GRANTS]);
+});
+
+test('project automation grants reads and mission creation without edits or launches', () => {
+  const scope = scopeGrantsForPreset('project_automation');
+  assert.deepEqual(scope, [...PROJECT_AUTOMATION_GRANTS]);
+  for (const action of [
+    PERMISSIONS.PROJECT_READ,
+    PERMISSIONS.MISSION_READ,
+    PERMISSIONS.MISSION_CREATE,
+    PERMISSIONS.OBJECTIVE_READ,
+    PERMISSIONS.ATTACHMENT_READ
+  ]) {
+    assert.equal(effectiveCan([Role.ADMIN], scope, action), true);
+  }
+  for (const action of [
+    PERMISSIONS.PROJECT_CREATE,
+    PERMISSIONS.MISSION_UPDATE,
+    PERMISSIONS.OBJECTIVE_UPDATE,
+    PERMISSIONS.SESSION_ATTACH,
+    PERMISSIONS.EXECUTION_REQUEST_CREATE,
+    PERMISSIONS.USER_TOKEN_SELF_CREATE
+  ]) {
+    assert.equal(effectiveCan([Role.ADMIN], scope, action), false);
+  }
 });
 
 test('tokenScopeAllows: null means no token-level restriction', () => {

@@ -36,6 +36,17 @@ type MissionPanelHeaderProps = {
 function MissionOriginLine({ mission }: { mission: MissionDetailDto }) {
   const membersQ = useWorkspaceMembers(mission.workspaceId);
 
+  if (mission.createdByToken) {
+    return (
+      <div className="flex min-w-0 items-center gap-1.5 border-b border-[var(--color-border)] px-4 py-1.5 text-[11px] text-muted-foreground">
+        <span className="truncate">
+          Created via token:{' '}
+          <span className="text-foreground/80">{mission.createdByToken.label}</span>
+        </span>
+      </div>
+    );
+  }
+
   if (mission.createdByKind === 'human') return null;
 
   const author =

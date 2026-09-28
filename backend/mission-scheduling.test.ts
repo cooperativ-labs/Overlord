@@ -147,6 +147,10 @@ describe('scheduled mission completion trigger', () => {
       tagIds: [tag.id]
     });
     const { dueDatetime, schedule } = await upsertMissionSchedule(mission.id, DAILY_UTC_SCHEDULE);
+    // A scheduled copy has its own origin even when the source came from a token.
+    db.prepare(
+      `UPDATE missions SET created_by_token_id = ?, created_by_token_label = ? WHERE id = ?`
+    ).run('source-token', 'Source importer', mission.id);
 
     const beforeMissions = await listMissions(project.id);
     assert.equal(beforeMissions.length, 1);
@@ -165,6 +169,7 @@ describe('scheduled mission completion trigger', () => {
     assert.equal(duplicate?.tags[0]?.id, tag.id);
     assert.notEqual(duplicate?.dueDatetime, dueDatetime);
     assert.ok(duplicate?.dueDatetime && duplicate.dueDatetime > (dueDatetime ?? ''));
+    assert.equal(duplicate?.createdByToken, null);
 
     const duplicateDetail = await getMissionDetail(duplicate!.id);
     assert.equal(duplicateDetail.objectives[0]?.instructionText, 'Write the weekly report');

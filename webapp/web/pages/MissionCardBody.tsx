@@ -57,6 +57,14 @@ export function MissionCardBody({
           <h4 className="font-body text-sm font-medium leading-snug text-foreground">
             {mission.title}
           </h4>
+          {mission.createdByToken ? (
+            <p
+              className="mt-1 truncate text-[11px] text-muted-foreground"
+              title={`Created via token: ${mission.createdByToken.label}`}
+            >
+              Created via token: {mission.createdByToken.label}
+            </p>
+          ) : null}
 
           <MissionDraftResourceBadge
             projectId={projectId}

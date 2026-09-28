@@ -6,7 +6,11 @@ import {
 } from '../packages/core/service/context.ts';
 import { ServiceError } from '../packages/core/service/errors.ts';
 
-import { buildWebappServiceContextForWorkspace, getResourceLookupWorkspaceIds } from './db.ts';
+import {
+  buildWebappServiceContextForWorkspace,
+  getResourceLookupWorkspaceIds,
+  projectInTokenScope
+} from './db.ts';
 import { ApiError } from './errors.ts';
 
 async function resolveObjectiveRefInWorkspace({
@@ -61,27 +65,28 @@ export async function resolveObjectiveIdForRest({
   }
   const rows =
     parsed.kind === 'display_id'
-      ? await db.all<{ workspace_id: string }>(
-          `SELECT workspace_id FROM missions
+      ? await db.all<{ workspace_id: string; project_id: string }>(
+          `SELECT workspace_id, project_id FROM missions
           WHERE display_id = ?
             AND workspace_id IN (${workspaceIds.map(() => '?').join(', ')})
             AND deleted_at IS NULL`,
           [parsed.missionDisplayId, ...workspaceIds]
         )
-      : await db.all<{ workspace_id: string }>(
-          `SELECT workspace_id FROM objectives
+      : await db.all<{ workspace_id: string; project_id: string }>(
+          `SELECT workspace_id, project_id FROM objectives
           WHERE id = ?
             AND workspace_id IN (${workspaceIds.map(() => '?').join(', ')})
             AND deleted_at IS NULL`,
           [ref, ...workspaceIds]
         );
-  if (rows.length > 1) {
+  const visibleRows = rows.filter(row => projectInTokenScope(row.project_id));
+  if (visibleRows.length > 1) {
     throw new ApiError(409, `Objective reference is ambiguous in this organization: ${ref}`);
   }
-  if (!rows[0]) throw new ApiError(404, 'Objective not found');
+  if (!visibleRows[0]) throw new ApiError(404, 'Objective not found');
   return resolveObjectiveRefInWorkspace({
     ref,
-    workspaceId: rows[0].workspace_id,
+    workspaceId: visibleRows[0].workspace_id,
     db,
     uuidWorkspaceScoped
   });

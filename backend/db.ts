@@ -271,6 +271,8 @@ export interface RequestContext {
   actorWorkspaceUserId: string | null;
   activeTokenId: string | null;
   activeTokenScopes: string[] | null;
+  /** Null means unrestricted; an empty array denies every project. */
+  activeTokenProjectIds: readonly string[] | null;
   clientDevice: ClientDeviceIdentity | null;
   /** `null` before authentication; otherwise the authoritative request snapshot. */
   authorizedWorkspaces: { organizationId: string | null; workspaces: AuthorizedWorkspace[] } | null;
@@ -292,6 +294,7 @@ function defaultRequestContext(): RequestContext {
     actorWorkspaceUserId: ACTOR_WORKSPACE_USER_ID,
     activeTokenId: ACTIVE_TOKEN_ID,
     activeTokenScopes: ACTIVE_TOKEN_SCOPES,
+    activeTokenProjectIds: ACTIVE_TOKEN_PROJECT_IDS,
     clientDevice: null,
     authorizedWorkspaces: null,
     resolvedWorkspaceId: null,
@@ -318,6 +321,7 @@ function mutateRequestContext(next: RequestContext): void {
     store.activeProfileId = next.activeProfileId;
     store.activeTokenId = next.activeTokenId;
     store.activeTokenScopes = next.activeTokenScopes;
+    store.activeTokenProjectIds = next.activeTokenProjectIds;
     store.clientDevice = next.clientDevice;
     store.authorizedWorkspaces = next.authorizedWorkspaces;
     store.resolvedWorkspaceId = next.resolvedWorkspaceId;
@@ -327,6 +331,7 @@ function mutateRequestContext(next: RequestContext): void {
   ACTOR_WORKSPACE_USER_ID = next.actorWorkspaceUserId;
   ACTIVE_TOKEN_ID = next.activeTokenId;
   ACTIVE_TOKEN_SCOPES = next.activeTokenScopes;
+  ACTIVE_TOKEN_PROJECT_IDS = next.activeTokenProjectIds;
   // `activeWorkspace` has no legacy module-global fallback to write through to:
   // `defaultWorkspace` is maintained solely by `refreshActiveWorkspaceFromClient`/
   // `bindDatabaseClient`, and this branch only runs when a setter is invoked
@@ -545,6 +550,17 @@ export function getActiveTokenScopes(): string[] | null {
   return requestContext().activeTokenScopes;
 }
 
+let ACTIVE_TOKEN_PROJECT_IDS: readonly string[] | null = null;
+
+export function getActiveTokenProjectIds(): readonly string[] | null {
+  return requestContext().activeTokenProjectIds;
+}
+
+export function projectInTokenScope(projectId: string): boolean {
+  const ids = getActiveTokenProjectIds();
+  return ids === null || ids.includes(projectId);
+}
+
 export function getClientDeviceIdentity(): ClientDeviceIdentity | null {
   return requestContext().clientDevice;
 }
@@ -562,6 +578,7 @@ export function buildWebappServiceContext(
     workspace: { id: workspace.id, slug: workspace.slug, name: workspace.name },
     actorWorkspaceUserId: getActorWorkspaceUserId(),
     actorTokenId: getActiveTokenId(),
+    allowedProjectIds: getActiveTokenProjectIds(),
     source: 'webapp',
     clientDevice: getClientDeviceIdentity()
   };
@@ -592,6 +609,7 @@ export async function buildWebappServiceContextForWorkspace(
     workspace,
     actorWorkspaceUserId,
     actorTokenId: getActiveTokenId(),
+    allowedProjectIds: getActiveTokenProjectIds(),
     source: 'webapp',
     clientDevice: getClientDeviceIdentity()
   };
@@ -715,7 +733,8 @@ export function setActiveWorkspaceUser(workspaceUserId: string | null): void {
     ...requestContext(),
     actorWorkspaceUserId: workspaceUserId,
     activeTokenId: null,
-    activeTokenScopes: null
+    activeTokenScopes: null,
+    activeTokenProjectIds: null
   });
 }
 
@@ -727,17 +746,25 @@ export function setActiveWorkspaceUser(workspaceUserId: string | null): void {
 export function setActiveTokenAuth({
   workspaceUserId,
   tokenId,
-  scopeGrants
+  scopeGrants,
+  projectIds = null
 }: {
   workspaceUserId: string | null;
   tokenId: string | null;
   scopeGrants: string[] | null;
+  projectIds?: string[] | null;
 }): void {
   mutateRequestContext({
     ...requestContext(),
     actorWorkspaceUserId: workspaceUserId,
     activeTokenId: tokenId,
-    activeTokenScopes: scopeGrants && scopeGrants.length > 0 ? scopeGrants : null
+    activeTokenScopes:
+      projectIds !== null
+        ? (scopeGrants ?? [])
+        : scopeGrants && scopeGrants.length > 0
+          ? scopeGrants
+          : null,
+    activeTokenProjectIds: projectIds === null ? null : Object.freeze([...projectIds])
   });
 }
 

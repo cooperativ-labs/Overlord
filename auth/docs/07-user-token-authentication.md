@@ -211,6 +211,33 @@ across REST, protocol, and runner routes.
 The `ovld user-token create --scope full|mission-lifecycle` CLI flag and the webapp settings token
 form both surface these two presets.
 
+### `project_automation` (contract v151)
+
+A third preset for external automations that must read specific projects and file missions into
+them. It is minted with a required, non-empty `projectIds` list (rejected for the other two presets)
+and persists `user_tokens.scope = 'project_automation'`, the grant list `project:read`,
+`mission:read`, `mission:create`, `objective:read`, `event:read`, `session:read`, `artifact:read`,
+`attachment:read`, `execution_request:read` in `user_token_scopes`, and the selected projects in
+`user_token_projects`. Issuance validates that the owner can `project:read` and `mission:create` in
+every selected project and derives workspace consent from them: `user_token_workspaces` receives
+exactly the owning workspaces and `all_workspaces` stays `false`. Selection is immutable.
+
+At authentication the selected project ids join the request authorization snapshot. Two
+default-deny layers then apply: the `/api` guard admits only the route allowlist published in
+`CONTRACT.md` Version 151 (everything else is `404` before a handler runs), and inside it one
+project-scope predicate makes any project, mission, objective, attachment storage key, or agent
+request outside the selection read as `404` without revealing existence, while account-wide lists,
+search, `/sync/changes`, and SSE filter by the selection before pagination and totals. Protocol
+`create` requires `mission:create` in its target project for every caller; `prompt`, `record-work`,
+`add-objectives`, inbox capture, and all session, launch, queue, token, webhook, and administration
+commands are denied for this preset before any write. `full`, `mission_lifecycle`, and OAuth
+issuance are unchanged.
+
+Every mission a direct `out_` bearer creates is stamped with `missions.created_by_token_id` (a soft
+reference, no foreign key) and `missions.created_by_token_label` (a label snapshot), exposed
+read-only as `MissionDto.createdByToken`. Rename changes only future snapshots; revoke and
+soft-delete leave attribution readable; scheduled duplicates never copy it.
+
 ## Earlier Design Notes (now implemented)
 
 The initial full-user-permission behavior was implemented through an authorization resolver that

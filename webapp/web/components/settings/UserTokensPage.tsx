@@ -18,6 +18,7 @@ import { Separator } from '@/components/ui/separator';
 import { formatDate } from '@/lib/format-date';
 import { useCopyToClipboard } from '@/lib/hooks/use-copy-to-clipboard';
 import {
+  useAllProjects,
   useCreateUserToken,
   useDeleteRevokedUserToken,
   useRenameUserToken,
@@ -29,7 +30,8 @@ import type { TokenScope, UserTokenDto, UserTokenStatus } from '../../../shared/
 
 const SCOPE_LABELS: Record<TokenScope, string> = {
   full: 'Full user privileges',
-  mission_lifecycle: 'Mission lifecycle + runner'
+  mission_lifecycle: 'Mission lifecycle + runner',
+  project_automation: 'Project automation'
 };
 
 type TokenExpiryPreset =
@@ -138,9 +140,11 @@ export function UserTokensPage({ open }: UserTokensPageProps) {
 
 function CreateTokenForm() {
   const createToken = useCreateUserToken();
+  const projects = useAllProjects('all');
   const [label, setLabel] = useState('');
   const [expiryPreset, setExpiryPreset] = useState<TokenExpiryPreset>(DEFAULT_TOKEN_EXPIRY_PRESET);
   const [scope, setScope] = useState<TokenScope>('full');
+  const [projectIds, setProjectIds] = useState<string[]>([]);
   const [createState, setCreateState] = useState<ButtonLoadingState>('default');
   const [error, setError] = useState<string | null>(null);
   const [secret, setSecret] = useState<string | null>(null);
@@ -152,6 +156,11 @@ function CreateTokenForm() {
       setCreateState('error');
       return;
     }
+    if (scope === 'project_automation' && projectIds.length === 0) {
+      setError('Select at least one project for this token.');
+      setCreateState('error');
+      return;
+    }
     setCreateState('loading');
     setError(null);
     try {
@@ -159,12 +168,14 @@ function CreateTokenForm() {
       const result = await createToken.mutateAsync({
         label: trimmed,
         ...(expiresAt !== undefined ? { expiresAt } : {}),
-        scope
+        scope,
+        ...(scope === 'project_automation' ? { projectIds } : {})
       });
       setSecret(result.secret);
       setLabel('');
       setExpiryPreset(DEFAULT_TOKEN_EXPIRY_PRESET);
       setScope('full');
+      setProjectIds([]);
       setCreateState('success');
     } catch (err) {
       setCreateState('error');
@@ -238,6 +249,54 @@ function CreateTokenForm() {
                 </span>
               </span>
             </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="radio"
+                name="token-scope"
+                className="mt-0.5 size-4"
+                checked={scope === 'project_automation'}
+                disabled={createState === 'loading'}
+                onChange={() => setScope('project_automation')}
+              />
+              <span>
+                <span className="font-medium">{SCOPE_LABELS.project_automation}</span>
+                <span className="block text-xs text-muted-foreground">
+                  Read selected projects and create missions in them. No edits or agent launches.
+                </span>
+              </span>
+            </label>
+            {scope === 'project_automation' ? (
+              <div className="space-y-2 rounded-md border p-3">
+                <p className="text-sm font-medium">Projects this token can access</p>
+                {projects.isLoading ? (
+                  <p className="text-xs text-muted-foreground">Loading projects…</p>
+                ) : null}
+                {projects.isError ? (
+                  <p className="text-xs text-destructive">Projects are unavailable right now.</p>
+                ) : null}
+                {projects.data.map(project => (
+                  <label key={project.id} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={projectIds.includes(project.id)}
+                      disabled={createState === 'loading'}
+                      onChange={event =>
+                        setProjectIds(ids =>
+                          event.target.checked
+                            ? [...ids, project.id]
+                            : ids.filter(id => id !== project.id)
+                        )
+                      }
+                    />
+                    {project.name}
+                  </label>
+                ))}
+                <p className="text-xs text-muted-foreground">
+                  Review the expiry above. Automations stop working when a token expires; choose No
+                  Expiration if you manage rotation yourself.
+                </p>
+              </div>
+            ) : null}
             <label className="flex items-start gap-2 text-sm">
               <input
                 type="radio"
@@ -428,6 +487,14 @@ function TokenRow({ token }: { token: UserTokenDto }) {
           Created {formatDate(token.createdAt)} · Last used {formatDate(token.lastUsedAt)} ·{' '}
           {token.expiresAt ? `Expires ${formatDate(token.expiresAt)}` : 'No expiry'}
         </p>
+        {token.scope === 'project_automation' ? (
+          <p className="text-xs text-muted-foreground">
+            Projects:{' '}
+            {token.projects.length
+              ? token.projects.map(project => project.name).join(', ')
+              : 'None available'}
+          </p>
+        ) : null}
         {error ? <p className="text-xs text-destructive">{error}</p> : null}
       </div>
 

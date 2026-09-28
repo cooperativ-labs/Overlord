@@ -248,6 +248,34 @@ describe('createMissionWithObjectives — optional board fields', () => {
 });
 
 describe('createMissionWithObjectives — creation provenance', () => {
+  it('stamps a direct protocol bearer token from the service context', async () => {
+    const { db, ctx } = await createSeededServiceContext({ source: 'protocol' });
+    const project = await createProject({ ctx, name: 'Token protocol provenance' });
+    const now = new Date().toISOString();
+    await db.run(
+      `INSERT INTO user_tokens
+         (id, workspace_id, profile_id, workspace_user_id, label, token_prefix,
+          token_hash, hash_algorithm, status, created_at, updated_at)
+       VALUES (?, ?, 'operator-user', ?, 'Protocol importer', 'protocol',
+               'protocol-hash', 'sha256', 'active', ?, ?)`,
+      ['protocol-token', ctx.workspace.id, ctx.actorWorkspaceUserId, now, now]
+    );
+
+    const { mission } = await createMissionWithObjectives({
+      ctx: { ...ctx, actorTokenId: 'protocol-token' },
+      projectId: project.id,
+      objectives: [{ objective: 'Create from protocol' }]
+    });
+    const row = await db.get<{ created_by_token_id: string; created_by_token_label: string }>(
+      `SELECT created_by_token_id, created_by_token_label FROM missions WHERE id = ?`,
+      [mission.id]
+    );
+    assert.deepEqual(row, {
+      created_by_token_id: 'protocol-token',
+      created_by_token_label: 'Protocol importer'
+    });
+  });
+
   async function provenanceRow(
     db: DatabaseClient,
     missionId: string

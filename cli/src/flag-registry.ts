@@ -61,7 +61,7 @@ export const COMMAND_FLAGS: Record<string, readonly string[]> = {
   'agent-setup': ['--dry-run', '--home', '--export'],
   config: ['--path', '--url'],
   auth: ['--token', '--organization-id'],
-  'user-token': ['--label', '--expires-in', '--no-expiry', '--scope', '--id'],
+  'user-token': ['--label', '--expires-in', '--no-expiry', '--scope', '--project', '--id'],
   prune: [],
   'agent-session': AGENT_SESSION_FLAGS,
   'create-project': ['--name', '--directory', '--no-directory'],

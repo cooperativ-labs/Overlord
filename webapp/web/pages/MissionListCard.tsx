@@ -105,6 +105,14 @@ export function MissionListCard({
             draftObjectiveResourceKey={mission.draftObjectiveResourceKey}
           />
         </div>
+        {mission.createdByToken ? (
+          <div
+            className="truncate text-[11px] text-muted-foreground"
+            title={`Created via token: ${mission.createdByToken.label}`}
+          >
+            Created via token: {mission.createdByToken.label}
+          </div>
+        ) : null}
       </div>
 
       {/* Right metadata row */}

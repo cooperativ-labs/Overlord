@@ -23,13 +23,13 @@ complete an interactive browser flow.
   It is the right choice for headless, cloud, or CI environments, and for any CLI
   that runs separately from the desktop app.
 
-| Situation | Use |
-| --- | --- |
-| Desktop app on your machine | OAuth |
-| CLI on the same machine as the desktop app | OAuth (shared session) |
-| CLI in a separate container or remote target | `USER_TOKEN` |
-| Cloud / hosted agent over MCP, OAuth-capable runtime | OAuth |
-| Cloud / hosted agent over MCP, OAuth unreliable | `USER_TOKEN` |
+| Situation                                            | Use                    |
+| ---------------------------------------------------- | ---------------------- |
+| Desktop app on your machine                          | OAuth                  |
+| CLI on the same machine as the desktop app           | OAuth (shared session) |
+| CLI in a separate container or remote target         | `USER_TOKEN`           |
+| Cloud / hosted agent over MCP, OAuth-capable runtime | OAuth                  |
+| Cloud / hosted agent over MCP, OAuth unreliable      | `USER_TOKEN`           |
 
 ## Sign in from the CLI
 
@@ -49,6 +49,10 @@ default organization. Each command resolves its organization from the mission id
 
 ```bash
 ovld user-token create --label "CI runner" --scope mission-lifecycle
+
+# For an external importer, select each project it may use.
+ovld user-token create --label "Feedback importer" \
+  --scope project-automation --project <project-id> --no-expiry
 ```
 
 Every token is created with a scope:
@@ -59,6 +63,34 @@ Every token is created with a scope:
   (project read, mission/objective/session/event/artifact/attachment actions, and
   execution-request create/read/claim). It excludes administration and cannot
   mint further tokens.
+- **`project_automation`** — reads only the selected projects and creates new
+  missions with initial objectives in those projects. Select at least one
+  project with `--project`; create a new token to change the selection. The
+  token label is saved on each mission as **Created via token**. Renaming or
+  revoking the token does not change earlier missions.
+
+Choose an expiry deliberately for an unattended integration. The default is 90
+days; `--no-expiry` creates a token without an expiry. A mission's `statusId` is
+optional; omitting it uses the project's default status. Missions created with a
+project automation token are unassigned unless the request supplies
+`assignedWorkspaceUserId`. Read existing missions before creating one to avoid
+duplicates on retries; mission creation does not yet accept an idempotency key.
+
+The preset permits the following API calls. Every project-bearing read must be
+within the token's selected projects; other routes return 404:
+
+| Area                   | Allowed calls                                                                                                                                                                                                                                                     |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Projects               | `GET /api/authorized-workspaces`, `/api/projects`, `/api/projects/:id`, `/api/projects/:id/statuses`, `/api/projects/:id/tags`, `/api/projects/:id/missions`                                                                                                      |
+| Missions               | `POST /api/missions`; `GET /api/missions/:id`, `/api/missions/:id/objectives`, `/api/missions/:id/events`, `/api/missions/:id/deliveries`, `/api/missions/:id/artifacts`, `/api/missions/:id/context`, `/api/missions/:id/file-changes`                           |
+| Search and attachments | `GET /api/search/v3`, `/api/objectives/:id/attachments`, `/api/storage/attachments/:storageKey`                                                                                                                                                                   |
+| Changes and MCP        | `GET /api/stream`, `/realtime`, `/sync/changes`, `/mcp`; `POST /mcp`                                                                                                                                                                                              |
+| Protocol               | `POST /api/protocol/:subcommand` for `create` (selected project only), `load-context`, `search-missions` (`search`), `discover-project` (explicit `--project-id`), `statuses`, `list-deliveries`, `attachment-list`, `attachment-download-url`, and `auth-status` |
+
+The preset cannot manage webhook subscriptions. Create subscriptions from the
+web app with an account that has the required webhook permission. It also cannot
+use `prompt`, `record-work`, `add-objectives`, session or launch commands, or
+standalone objective creation.
 
 A token is never more powerful than its owner: effective permissions are the
 owner's role grants in the active workspace intersected with the token's scope.

@@ -91,6 +91,7 @@ import {
   DATABASE_DIALECT,
   DATABASE_PATH,
   getActiveProfileId,
+  getActiveTokenProjectIds,
   getActorWorkspaceUserId,
   getBootstrapWorkspaceIdOrNull,
   initDatabase
@@ -134,6 +135,7 @@ import {
   removeOrganizationAdmin,
   updateOrganization
 } from './organizations.ts';
+import { projectAutomationRouteGuard } from './project-automation-routes.ts';
 import { runProtocolSubcommand } from './protocol.ts';
 import { pushNotificationDispatcher } from './push-notification-dispatcher.ts';
 import {
@@ -589,10 +591,10 @@ app.post(
 );
 
 if (mcpEnabled) {
-  app.get('/mcp', requireAuthenticatedSession, (req, res) => {
+  app.get('/mcp', requireAuthenticatedSession, projectAutomationRouteGuard, (req, res) => {
     res.json(mcpServerInfo(req));
   });
-  app.post('/mcp', requireAuthenticatedSession, (req, res, next) => {
+  app.post('/mcp', requireAuthenticatedSession, projectAutomationRouteGuard, (req, res, next) => {
     void (async () => {
       await handleMcpPost(req, res, next);
       realtime.pollNow();
@@ -619,6 +621,7 @@ if (mcpEnabled) {
 app.use(AGENT_SESSION_CHANNEL_ROUTE_PREFIX, createAgentSessionChannelRouter());
 
 app.use('/api', requireAuthenticatedSession);
+app.use('/api', projectAutomationRouteGuard);
 
 app.get(
   '/api/meta',
@@ -1219,7 +1222,8 @@ function streamRealtime(req: Request, res: Response, next: NextFunction): void {
         undefined;
       realtime.addClient(res, {
         afterSeq,
-        workspaceIds
+        workspaceIds,
+        projectIds: getActiveTokenProjectIds()
       });
       req.on('close', () => realtime.removeClient(res));
     } catch (err) {
@@ -1229,10 +1233,11 @@ function streamRealtime(req: Request, res: Response, next: NextFunction): void {
 }
 
 app.get('/api/stream', streamRealtime);
-app.get('/realtime', requireAuthenticatedSession, streamRealtime);
+app.get('/realtime', requireAuthenticatedSession, projectAutomationRouteGuard, streamRealtime);
 app.get(
   '/sync/changes',
   requireAuthenticatedSession,
+  projectAutomationRouteGuard,
   (req: Request, res: Response, next: NextFunction) => {
     void (async () => {
       try {
@@ -1639,10 +1644,16 @@ app.get(
 // Extension routers run behind `requireAuthenticatedSession` exactly like every
 // `/api` route. Authentication resolves the profile; extension resource routes
 // derive their workspace from the named project or mission before authorization.
-app.use('/ext/everhour', requireAuthenticatedSession, createEverhourExtensionRouter(handle));
+app.use(
+  '/ext/everhour',
+  requireAuthenticatedSession,
+  projectAutomationRouteGuard,
+  createEverhourExtensionRouter(handle)
+);
 app.use(
   '/ext/github',
   requireAuthenticatedSession,
+  projectAutomationRouteGuard,
   createGitHubExtensionRouter(handle, { allowedBrowserOrigins: getAllowedBrowserOrigins() })
 );
 app.patch(
@@ -1861,7 +1872,7 @@ app.get(
   // board/My Missions cards drop the corner dots immediately.
   handle(
     async req => {
-      await markMissionStatusesSeen(req.params.id);
+      if (getActiveTokenProjectIds() === null) await markMissionStatusesSeen(req.params.id);
       return getMissionDetail(req.params.id);
     },
     { mutates: true }

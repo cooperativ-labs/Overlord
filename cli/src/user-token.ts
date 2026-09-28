@@ -5,7 +5,7 @@ import { printJson } from './output.js';
 
 // Light local mirrors of the relevant shared DTOs (the CLI package does not
 // depend on the webapp shared contract). Only the fields the CLI reads/sends.
-type TokenScope = 'full' | 'mission_lifecycle';
+type TokenScope = 'full' | 'mission_lifecycle' | 'project_automation';
 
 interface UserTokenDto {
   id: string;
@@ -14,6 +14,7 @@ interface UserTokenDto {
   status: string;
   scope: TokenScope;
   scopeGrants: string[];
+  projects: { id: string; name: string }[];
   expiresAt: string | null;
   lastUsedAt: string | null;
   revokedAt: string | null;
@@ -72,9 +73,28 @@ function normalizeScope(raw: string | undefined): TokenScope | undefined {
   const value = raw.trim().toLowerCase();
   if (value === 'full') return 'full';
   if (value === 'mission-lifecycle' || value === 'mission_lifecycle') return 'mission_lifecycle';
+  if (value === 'project-automation' || value === 'project_automation') return 'project_automation';
   throw new CliError({
-    message: `Unknown --scope '${raw}'. Use 'full' or 'mission-lifecycle'.`
+    message: `Unknown --scope '${raw}'. Use 'full', 'mission-lifecycle', or 'project-automation'.`
   });
+}
+
+export function projectFlags(args: string[]): string[] {
+  const projects: string[] = [];
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === '--project') {
+      const value = args[++i];
+      if (!value || value.startsWith('--'))
+        throw new CliError({ message: '--project requires an ID or name' });
+      projects.push(value);
+    } else if (arg?.startsWith('--project=')) {
+      const value = arg.slice('--project='.length);
+      if (!value) throw new CliError({ message: '--project requires an ID or name' });
+      projects.push(value);
+    }
+  }
+  return projects;
 }
 
 function formatDate(iso: string | null): string {
@@ -92,6 +112,8 @@ function printTokenTable(tokens: UserTokenDto[]): void {
       `${token.tokenPrefix}…  ${token.status.padEnd(8)}  ${token.scope.padEnd(16)}  ${expiry}  ${token.label}`
     );
     console.log(`    id: ${token.id}`);
+    if (token.projects.length)
+      console.log(`    projects: ${token.projects.map(project => project.name).join(', ')}`);
   }
 }
 
@@ -113,6 +135,15 @@ export async function runUserTokenCommand({ rest }: { rest: string[] }): Promise
         throw new CliError({ message: 'A label is required: --label "macbook runner".' });
       }
       const scope = normalizeScope(flagValue(parsed.flags, '--scope'));
+      const selectedProjects = projectFlags(subArgs);
+      if (scope === 'project_automation' && selectedProjects.length === 0) {
+        throw new CliError({
+          message: 'Project automation tokens require at least one --project.'
+        });
+      }
+      if (scope !== 'project_automation' && selectedProjects.length > 0) {
+        throw new CliError({ message: '--project requires --scope project-automation.' });
+      }
 
       // Expiry: --no-expiry sends null (never expires); --expires-in sets it;
       // omitting both lets the backend apply its 90-day default (send undefined).
@@ -127,6 +158,22 @@ export async function runUserTokenCommand({ rest }: { rest: string[] }): Promise
       const body: Record<string, unknown> = { label: label.trim() };
       if (expiresAt !== undefined) body.expiresAt = expiresAt;
       if (scope !== undefined) body.scope = scope;
+      if (scope === 'project_automation') {
+        const projects = await backend.get<Array<{ id: string; name: string }>>(
+          '/api/projects?lifecycle=all'
+        );
+        body.projectIds = selectedProjects.map(selection => {
+          const matches = projects.filter(
+            project =>
+              project.id === selection || project.name.toLowerCase() === selection.toLowerCase()
+          );
+          if (matches.length !== 1)
+            throw new CliError({
+              message: `Project '${selection}' must identify one authorized project; use its ID if ambiguous.`
+            });
+          return matches[0]!.id;
+        });
+      }
 
       const result = await backend.post<CreateUserTokenResultDto>({
         path: '/api/user-tokens',
@@ -141,9 +188,16 @@ export async function runUserTokenCommand({ rest }: { rest: string[] }): Promise
       console.log(`  ${result.secret}\n`);
       console.log(`  label:  ${result.token.label}`);
       console.log(`  scope:  ${result.token.scope}`);
+      if (result.token.projects.length)
+        console.log(`  projects: ${result.token.projects.map(project => project.name).join(', ')}`);
       console.log(
         `  expiry: ${result.token.expiresAt ? formatDate(result.token.expiresAt) : 'no expiry'}`
       );
+      if (result.token.scope === 'project_automation' && result.token.expiresAt) {
+        console.log(
+          '  Renew this automation token before it expires, or choose --no-expiry when creating its replacement.'
+        );
+      }
       console.log('\nAuthenticate with:  ovld auth login --token <secret>');
       return;
     }

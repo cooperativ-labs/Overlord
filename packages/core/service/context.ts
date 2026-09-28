@@ -36,11 +36,31 @@ export type ServiceContext = {
    * this unset; the REST layer supplies the active token.
    */
   actorTokenId?: string | null;
+  /** Null for ordinary callers; empty for an automation token with no live projects. */
+  allowedProjectIds?: readonly string[] | null;
   /** Client machine identity (browser/desktop/CLI). Required on hosted backends. */
   clientDevice?: ClientDeviceIdentity | null;
   /** Who authored rows written through this context. Defaults from `source`. */
   origin?: CreationOrigin;
 };
+
+/** A null restriction is unrestricted; an empty automation allowlist is deny-all. */
+export function projectAllowed(
+  projectId: string,
+  allowedProjectIds: readonly string[] | null | undefined
+): boolean {
+  return (
+    allowedProjectIds === null ||
+    allowedProjectIds === undefined ||
+    allowedProjectIds.includes(projectId)
+  );
+}
+
+export function requireProjectInScope(ctx: ServiceContext, projectId: string): void {
+  if (!projectAllowed(projectId, ctx.allowedProjectIds)) {
+    throw new ServiceError('Project not found', 'project_not_found', 404);
+  }
+}
 
 /**
  * Resolve the creation provenance stamped onto mission/objective inserts.
@@ -104,6 +124,7 @@ export async function resolveMissionId(
   );
 
   if (byId) {
+    requireProjectInScope(ctx, byId.project_id);
     return { id: byId.id, displayId: byId.display_id, projectId: byId.project_id };
   }
 
@@ -114,6 +135,7 @@ export async function resolveMissionId(
   );
 
   if (byDisplay) {
+    requireProjectInScope(ctx, byDisplay.project_id);
     return {
       id: byDisplay.id,
       displayId: byDisplay.display_id,
@@ -130,22 +152,36 @@ export async function resolveProjectId(ctx: ServiceContext, projectRef: string):
        WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
     [projectRef, ctx.workspace.id]
   );
-  if (byId) return byId.id;
+  if (byId) {
+    requireProjectInScope(ctx, byId.id);
+    return byId.id;
+  }
 
   const bySlug = await ctx.db.get<{ id: string }>(
     `SELECT id FROM projects
        WHERE slug = ? AND workspace_id = ? AND deleted_at IS NULL`,
     [projectRef, ctx.workspace.id]
   );
-  if (bySlug) return bySlug.id;
+  if (bySlug) {
+    requireProjectInScope(ctx, bySlug.id);
+    return bySlug.id;
+  }
 
   const byName = await ctx.db.get<{ id: string }>(
     `SELECT id FROM projects
        WHERE lower(name) = lower(?) AND workspace_id = ? AND deleted_at IS NULL`,
     [projectRef, ctx.workspace.id]
   );
-  if (byName) return byName.id;
+  if (byName) {
+    requireProjectInScope(ctx, byName.id);
+    return byName.id;
+  }
 
+  // A project-restricted token gets one uniform message so a 404 never reveals
+  // whether the reference names a real project it cannot see.
+  if (ctx.allowedProjectIds !== null && ctx.allowedProjectIds !== undefined) {
+    throw new ServiceError('Project not found', 'project_not_found', 404);
+  }
   throw new ServiceError(`Project not found: ${projectRef}`, 'project_not_found', 404);
 }
 
@@ -249,6 +285,7 @@ export async function resolveObjectiveRef({
     if (!byId) {
       throw new ServiceError(`Objective not found: ${ref}`, 'objective_not_found', 404);
     }
+    requireProjectInScope(ctx, byId.project_id);
     if (scopedMissionId && byId.mission_id !== scopedMissionId) {
       throw new ServiceError(
         `Objective ${ref} does not belong to the given mission`,
@@ -277,6 +314,7 @@ export async function resolveObjectiveRef({
   if (!mission) {
     throw new ServiceError(`Objective not found: ${ref}`, 'objective_not_found', 404);
   }
+  requireProjectInScope(ctx, mission.project_id);
   if (scopedMissionId && mission.id !== scopedMissionId) {
     throw new ServiceError(
       `Objective ${ref} does not belong to the given mission`,
@@ -328,6 +366,7 @@ async function loadObjectiveByKey({
   if (!row) {
     throw new ServiceError(`Objective not found: ${ref}`, 'objective_not_found', 404);
   }
+  requireProjectInScope(ctx, row.project_id);
   const resolvedDisplayId = missionDisplayId ?? row.mission_display_id;
   return {
     id: row.id,

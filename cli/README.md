@@ -31,6 +31,7 @@ queue operations all reach persistence through the backend URL you configure —
 ### First run
 
 Install the published package:
+
 ```bash
 npm install -g --no-fund overlord-cli
 ```
@@ -86,10 +87,10 @@ Configuration lives in `overlord.toml` — a per-instance, uncommitted file
 discovered from the current directory upward, or in `~/.ovld/overlord.toml` for a
 global install.
 
-| Mode | Config key | How to set it |
-| ---- | ---------- | ------------- |
-| **Local backend** | `backend_url` | `ovld config set local [url]` — defaults to `http://127.0.0.1:4310` |
-| **Hosted backend** | `backend_url` | `ovld config set cloud <url>` |
+| Mode               | Config key    | How to set it                                                       |
+| ------------------ | ------------- | ------------------------------------------------------------------- |
+| **Local backend**  | `backend_url` | `ovld config set local [url]` — defaults to `http://127.0.0.1:4310` |
+| **Hosted backend** | `backend_url` | `ovld config set cloud <url>`                                       |
 
 `ovld config set` without arguments opens the interactive backend selector.
 `ovld config list` shows the resolved target; `ovld doctor` checks that the
@@ -98,7 +99,7 @@ backend is reachable.
 Environment overrides (useful in scripts and CI):
 
 - `OVLD_HOME` — relocate the entire global `~/.ovld` data directory (SQLite, object storage, objective ledgers, and native-session caches)
-- `OVERLORD_BACKEND_URL` — production/global backend target; an *explicit* runtime value (shell export, container/launcher injection) takes precedence over the resolved `overlord.toml` `backend_url`
+- `OVERLORD_BACKEND_URL` — production/global backend target; an _explicit_ runtime value (shell export, container/launcher injection) takes precedence over the resolved `overlord.toml` `backend_url`
 - `OVERLORD_BACKEND_URL_DEV` — **development-only** backend target, read solely by the in-repo source build and the dev/test tooling that runs it (`yarn dev`, the test harness). An installed/published `ovld` never reads it, and nothing aliases it into the production `OVERLORD_BACKEND_URL`
 - `OVERLORD_WEB_PORT` — port the local backend binds when launched
 - `OVERLORD_USER_TOKEN` / `OVLD_USER_TOKEN` / `USER_TOKEN` — bearer token sent to the backend when set (checked in that order; takes precedence over stored credentials)
@@ -138,6 +139,27 @@ Both the desktop app and the CLI authenticate to `/api/*` with a bearer token:
   surfaces authenticate with a consistent, long-lived credential. (Local logins
   previously stored the raw 7-day Better Auth session token, which is why they
   expired far sooner than cloud logins.)
+
+For an external automation that files missions in selected projects, create a
+project automation token:
+
+```bash
+ovld user-token create --label "Feedback importer" \
+  --scope project-automation --project <project-id> --no-expiry
+```
+
+Repeat `--project` to select more projects. The token can read those projects
+and create missions with initial objectives using `ovld protocol create
+--project-id <project-id> --objectives-json '[{"objective":"..."}]'` or
+`POST /api/missions`. The project default status applies when `statusId` is
+omitted, and the mission is unassigned unless `assignedWorkspaceUserId` is
+supplied. The token label appears as **Created via token** on its missions and
+remains there after rename or revocation. The default expiry is 90 days;
+`--no-expiry` disables it. Read the project's missions before creating a new
+one on retry, since create has no idempotency key. This preset cannot manage
+webhooks or call `prompt`, `record-work`, `add-objectives`, session, or launch
+commands. Its exact REST and protocol route allowlist is in the
+[authentication guide](../docs/src/content/docs/authentication-and-permissions.mdx).
 
 For the **local** backend, desktop and CLI share `~/.ovld/auth.json`:
 

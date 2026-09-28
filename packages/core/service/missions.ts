@@ -662,6 +662,12 @@ export async function createMissionWithObjectives({
   await ctx.db.transaction(async tx => {
     const txCtx = { ...ctx, db: tx };
     const origin = resolveOrigin(txCtx);
+    const creatorToken = ctx.actorTokenId
+      ? await tx.get<{ id: string; label: string }>(
+          `SELECT id, label FROM user_tokens WHERE id = ?`,
+          [ctx.actorTokenId]
+        )
+      : null;
     await txCtx.db.run(
       `INSERT INTO missions
            (id, workspace_id, project_id, display_id, sequence_number, title,
@@ -669,8 +675,9 @@ export async function createMissionWithObjectives({
             execution_target_intent_json, metadata_json, created_by_workspace_user_id,
             assigned_workspace_user_id, due_datetime,
             created_by_kind, created_by_agent, created_by_session_id,
+            created_by_token_id, created_by_token_label,
             created_at, updated_at, revision)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', '{}', ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', '{}', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
       [
         missionId,
         ctx.workspace.id,
@@ -688,6 +695,8 @@ export async function createMissionWithObjectives({
         origin.kind,
         origin.agent,
         origin.sessionId,
+        creatorToken?.id ?? null,
+        creatorToken?.label ?? null,
         now,
         now
       ]
@@ -870,7 +879,13 @@ async function searchMissionsWorkspace({
   to?: string | null;
   limit?: number;
 }) {
-  const projectIds = projectId ? [await resolveProjectId(ctx, projectId)] : [];
+  const projectIds = projectId
+    ? [await resolveProjectId(ctx, projectId)]
+    : ctx.allowedProjectIds === null || ctx.allowedProjectIds === undefined
+      ? []
+      : ctx.allowedProjectIds.length
+        ? [...ctx.allowedProjectIds]
+        : ['__no_project__'];
   return searchWorkspaceMissions({
     db: ctx.db,
     workspaceId: ctx.workspace.id,
@@ -995,7 +1010,13 @@ export async function searchMissionsV3({
   matchesPerResult?: number | string | null;
   candidateLimit?: number | null;
 }): Promise<SearchResponseV3> {
-  const projectIds = projectId ? [await resolveProjectId(ctx, projectId)] : [];
+  const projectIds = projectId
+    ? [await resolveProjectId(ctx, projectId)]
+    : ctx.allowedProjectIds === null || ctx.allowedProjectIds === undefined
+      ? []
+      : ctx.allowedProjectIds.length
+        ? [...ctx.allowedProjectIds]
+        : ['__no_project__'];
   const result = await searchWorkspaceMissionsV3({
     db: ctx.db,
     workspaceId: ctx.workspace.id,

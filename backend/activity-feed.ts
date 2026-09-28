@@ -12,7 +12,7 @@ import type {
   ObjectiveState
 } from '../webapp/shared/contract.ts';
 
-import { requireDatabaseClient } from './db.ts';
+import { getActiveTokenProjectIds, requireDatabaseClient } from './db.ts';
 import { ApiError } from './errors.ts';
 import { requireWorkspacePermission } from './rbac.ts';
 import { callerMembershipsInActiveOrganization, readProjectColor } from './repository.ts';
@@ -675,6 +675,7 @@ export async function listActivityFeed({
 }: {
   before?: string | null;
 } = {}): Promise<ActivityFeedDto> {
+  if (getActiveTokenProjectIds() !== null) throw new ApiError(404, 'Not found');
   const generatedAt = new Date().toISOString();
   const empty = {
     items: [] as ActivityFeedItemDto[],

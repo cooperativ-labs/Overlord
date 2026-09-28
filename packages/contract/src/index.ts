@@ -604,6 +604,18 @@ export interface ProjectRepositoryDto {
   message: string | null;
 }
 
+/**
+ * Creator-token attribution on a mission (`missions.created_by_token_id` /
+ * `created_by_token_label`). `tokenId` is a soft reference: the token row may
+ * be revoked, soft-deleted, or gone. The token secret and prefix are never
+ * exposed here.
+ */
+export interface MissionCreatorTokenDto {
+  tokenId: string;
+  /** `user_tokens.label` as it was when the mission was created. */
+  label: string;
+}
+
 export interface MissionDto {
   id: string;
   workspaceId: string;
@@ -694,6 +706,16 @@ export interface MissionDto {
    * behalf of — for an agent row, the human behind the token it used.
    */
   createdByWorkspaceUserId: string | null;
+  /**
+   * The `USER_TOKEN` whose direct `out_` bearer request created this mission
+   * (REST, protocol `create`, hosted MCP), or `null` for a browser session,
+   * loopback, `sess_` session call, scheduled duplicate, or any other
+   * system-generated row. Read-only and server-stamped (contract v151): never
+   * accepted from a request body, never copied to a duplicate, and `label` is a
+   * snapshot that survives token rename, revoke, and soft-delete. This is the
+   * "Created via token" display; `createdByKind` keeps its existing value.
+   */
+  createdByToken: MissionCreatorTokenDto | null;
   /**
    * Every non-deleted objective on this mission, ordered by `position`, present
    * only when the caller opted in (`GET /api/projects/:id/missions?includeObjectives=1`).
@@ -2790,11 +2812,29 @@ export type UserTokenStatus = 'active' | 'revoked' | 'expired' | 'rotated';
  * Permission scope preset a `USER_TOKEN` is minted with.
  *  - `full`: no token-level restriction — inherits the creating user's role grants.
  *  - `mission_lifecycle`: mission/objective/session/runner work only (see `scopeGrants`).
+ *  - `project_automation` (contract v151): an external automation's token. Reads
+ *    and creates missions in the projects selected at issuance and nothing else:
+ *    grants `project:read`, `mission:read`, `mission:create`, `objective:read`,
+ *    `event:read`, `session:read`, `artifact:read`, `attachment:read`,
+ *    `execution_request:read`, bounded by the token's `projects` allowlist and a
+ *    default-deny route allowlist (see CONTRACT.md Version 151). It cannot edit
+ *    existing work, add objectives, launch or attach agents, capture inbox items,
+ *    create projects, manage tokens or webhooks, or administer a workspace.
  *
  * A token's effective permissions are always its creating user's role grants
  * intersected with its scope grants, so a scope can only restrict, never widen.
  */
-export type TokenScope = 'full' | 'mission_lifecycle';
+export type TokenScope = 'full' | 'mission_lifecycle' | 'project_automation';
+
+/**
+ * One project a `project_automation` token was issued for. `name` is the
+ * project's current name at read time, not a snapshot; a hard-deleted project
+ * simply disappears from the list and never widens the token.
+ */
+export interface UserTokenProjectDto {
+  id: string;
+  name: string;
+}
 
 /**
  * A `USER_TOKEN` as surfaced to the settings UI. Derived from the `user_tokens`
@@ -2812,6 +2852,12 @@ export interface UserTokenDto {
   scope: TokenScope;
   /** Resolved scope grant patterns; empty for a `full` token. */
   scopeGrants: string[];
+  /**
+   * Projects selected at issuance. Non-empty only for `project_automation`
+   * (always `[]` for `full` and `mission_lifecycle`); an automation token whose
+   * every project was deleted reports `[]` and authorizes nothing.
+   */
+  projects: UserTokenProjectDto[];
   /** Optional expiry; `null` means the token never expires. */
   expiresAt: string | null;
   /** Last time the token successfully authenticated, when recorded. */
@@ -2830,6 +2876,16 @@ export interface CreateUserTokenBody {
   expiresAt?: string | null;
   /** Permission scope preset; defaults to `full` when omitted. */
   scope?: TokenScope;
+  /**
+   * Project ids the token may read and create missions in. Required, non-empty,
+   * and de-duplicated when `scope` is `project_automation`; every id must name a
+   * live project the caller can `project:read` and `mission:create` in, and all
+   * must sit in the caller's active organization. Rejected (400) for any other
+   * `scope`. The selection is immutable: mint a new token to change it. Workspace
+   * consent is derived from these projects (`user_token_workspaces` receives
+   * exactly their owning workspaces); the caller never selects workspaces here.
+   */
+  projectIds?: string[];
 }
 
 /**

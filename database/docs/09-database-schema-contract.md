@@ -371,7 +371,8 @@ completes onboarding or joins a workspace.
 | `id`                           | Id           | yes      | Token identifier.                                                                                                                                                                           |
 | `workspace_id`                 | Id           | no       | Issuance workspace FK to `workspaces`; not the token's authorization scope. `NULL` for a token minted before the profile has any workspace membership.                                      |
 | `organization_id`              | Id           | no       | Approved organization FK. Required for a token that authorizes workspace data; `NULL` pre-onboarding tokens authorize no workspace data.                                                    |
-| `all_workspaces`               | boolean      | yes      | `true` authorizes current and future live memberships only within `organization_id`; `false` uses `user_token_workspaces`. A token the signed-in user mints for themselves (CLI login, settings) is written with `true`; `false` comes from third-party OAuth approval. |
+| `all_workspaces`               | boolean      | yes      | `true` authorizes current and future live memberships only within `organization_id`; `false` uses `user_token_workspaces`. A token the signed-in user mints for themselves (CLI login, settings) is written with `true`; `false` comes from third-party OAuth approval or from a `project_automation` token, whose consent is derived from its selected projects. |
+| `scope`                        | text         | yes      | Persisted permission preset: `full`, `mission_lifecycle`, or `project_automation` (closed vocabulary, CHECK). `full` has no `user_token_scopes` rows; the other two persist their grant lists there. `project_automation` additionally requires a non-empty `user_token_projects` allowlist and is written with `all_workspaces = false` plus one `user_token_workspaces` row per workspace owning a selected project. Migration backfills legacy rows to `full` when they have no scope rows and `mission_lifecycle` when they have any. Immutable after issuance. |
 | `profile_id`                   | Id           | yes      | Profile that owns the token.                                                                                                                                                                |
 | `workspace_user_id`            | Id           | no       | Issuing workspace membership for audit. Runtime permissions come from the owner's active membership in the requested workspace. `NULL` alongside `workspace_id` for a pre-onboarding token. |
 | `label`                        | text         | yes      | User supplied.                                                                                                                                                                              |
@@ -430,6 +431,36 @@ Indexes and constraints:
   `user_tokens.workspace_id` to exactly that one row and sets `all_workspaces = false`;
   it never widens a legacy token to all workspaces.
 
+### `user_token_projects`
+
+Project allowlist for a `USER_TOKEN` whose `user_tokens.scope` is
+`project_automation`. The token may read, and create missions in, exactly these
+projects and no other project — including projects in the same consented
+workspace. Rows are written only at issuance and never edited: a different
+selection is a new token. Presets other than `project_automation` never have rows
+here and are not restricted by this dimension. An automation token with zero
+remaining rows (every selected project hard-deleted) is fail-closed and
+authorizes no project data.
+
+| Column       | Type         | Required | Notes                                                                                                  |
+| ------------ | ------------ | -------- | ------------------------------------------------------------------------------------------------------ |
+| `token_id`   | Id           | yes      | FK to `user_tokens`, `ON DELETE CASCADE`.                                                              |
+| `project_id` | Id           | yes      | FK to `projects`, `ON DELETE CASCADE`; a hard-deleted project removes its row and infers no replacement. |
+| `created_at` | TimestampUTC | yes      | Selection audit timestamp.                                                                             |
+
+Indexes and constraints:
+
+- Primary key `(token_id, project_id)`.
+- Adapter/service enforcement on both editions that every row's project belongs
+  to the token's `organization_id` and to a workspace present in the token's
+  `user_token_workspaces` consent (Postgres trigger, SQLite trigger, plus the
+  service check at issuance).
+- Issuance validates that the owner can `project:read` and `mission:create` in
+  every selected project; runtime access is the intersection of the token's
+  grants, the owner's live membership and RBAC, workspace consent, and this list.
+- The selected project ids are loaded into the request authorization snapshot at
+  token authentication; every project-bearing lookup outside them reads as 404.
+
 ### Better Auth Implementation Tables
 
 Better Auth (the embedded authentication library) manages its own tables in the same configured adapter database. These tables are **owned by the Auth Layer** and must not be read or written by other components directly.
@@ -465,7 +496,7 @@ grants after the requested workspace membership is resolved.
 | `deleted_at`    | TimestampUTC | no       | Tombstone.                                                                          |
 | `revision`      | integer      | yes      |                                                                                     |
 
-Absence of scope rows means "no token-level restriction" in v1.
+Absence of scope rows means "no token-level restriction" (`scope = full`). `mission_lifecycle` and `project_automation` persist their preset grant lists here; the project restriction of `project_automation` lives in `user_token_projects`, not in `resource_type` / `resource_id`, which remain unused.
 
 ## Project Model
 
@@ -879,6 +910,8 @@ Durable work unit and review record.
 | `created_by_kind`              | text         | yes      | Class of actor that authored the row: `human`, `agent`, or `automation` (closed vocabulary, enforced by CHECK). Defaults to `human`, which is also what every pre-provenance row reports.                                                                                                                                                                                                                                                                                                                                                       |
 | `created_by_agent`             | text         | no       | Connector/agent identifier that authored the row (open vocabulary, e.g. `claude-code`). Null for human and automation authorship.                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `created_by_session_id`        | Id           | no       | Agent session the creating call ran inside. This is a **deliberate soft reference** to `agent_sessions.id` with **no foreign key**: sessions are mission-scoped and restricted on delete elsewhere in the schema, and a dangling provenance pointer must never block a delete. Resolve it with a `LEFT JOIN` and tolerate a miss.                                                                                                                                                                                                               |
+| `created_by_token_id`          | Id           | no       | `USER_TOKEN` whose direct `out_` bearer request created the mission (REST, protocol `create`, hosted MCP). A **deliberate soft reference** to `user_tokens.id` with **no foreign key**, so revoking, soft-deleting, or hard-purging the token never blocks or erases mission history. Null for browser sessions, loopback, `sess_` session calls, scheduled duplicates, and every other system-generated row; never copied from a source mission and never accepted from a request body. Written only by `createMissionWithObjectives`.          |
+| `created_by_token_label`       | text         | no       | Snapshot of `user_tokens.label` at creation, the "Created via token" display. Stable after a later token rename, revoke, or soft-delete; set alongside `created_by_token_id` and null otherwise. Account deletion clears it under the same policy that erases the owner's other identifying text, so erasure leaves no label behind.                                                                                                                                                                                                             |
 | `assigned_workspace_user_id`   | Id           | no       | FK to `workspace_users`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `created_at`                   | TimestampUTC | yes      |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `updated_at`                   | TimestampUTC | yes      |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -893,7 +926,7 @@ Indexes:
 - `(project_id, status_id, board_position)` — ordered reads of a board column.
 - `(workspace_id, created_by_workspace_user_id, updated_at)`.
 
-Creation provenance (`created_by_kind` / `created_by_agent` / `created_by_session_id`, present in the same shape on `objectives`) carries **no new index**: it is read as a column on rows already being selected and is never filtered or sorted on. A board filter for agent-filed work would justify a partial index on `(project_id, created_by_kind) WHERE created_by_kind <> 'human'`; do not add one before that filter exists. Labelling of rows created before these columns existed is best-effort — a migration may backfill `agent` from the `entity_changes` insert row's `source`, and anything it cannot prove stays `human`. That bias is intentional: an unmarked agent mission looks like prior behavior, while a wrongly marked one is a visible lie.
+Creation provenance (`created_by_kind` / `created_by_agent` / `created_by_session_id`, present in the same shape on `objectives`, plus the mission-only `created_by_token_id` / `created_by_token_label`) carries **no new index**: it is read as a column on rows already being selected and is never filtered or sorted on. A board filter for agent-filed work would justify a partial index on `(project_id, created_by_kind) WHERE created_by_kind <> 'human'`; do not add one before that filter exists. Labelling of rows created before these columns existed is best-effort — a migration may backfill `agent` from the `entity_changes` insert row's `source`, and anything it cannot prove stays `human`. That bias is intentional: an unmarked agent mission looks like prior behavior, while a wrongly marked one is a visible lie.
 
 The default human ID format is workspace-scoped, for example `1:1204`, and `sequence_number` uniqueness must match that scope. If a future deployment introduces project-scoped display IDs, it must add a new `mission_sequences.scope_type = 'project'` migration and adjust the unique index at the same time.
 
@@ -2484,6 +2517,7 @@ Closed values:
 - `project_statuses.type`: `draft`, `next`, `execute`, `review`, `complete`, `blocked`, `cancelled`.
 - Default status mapping: `draft -> draft`, `next-up -> next`, `execute -> execute`, `review -> review`, `complete -> complete`, `blocked -> blocked`, `cancelled -> cancelled`.
 - `objectives.state`: `future`, `draft`, `submitted`, `launching`, `executing`, `pending_delivery`, `complete`.
+- `user_tokens.scope`: `full`, `mission_lifecycle`, `project_automation`. A token-created mission keeps `created_by_kind` as the creating actor's class; the token itself is recorded on `missions.created_by_token_id` / `created_by_token_label`.
 - `missions.created_by_kind`, `objectives.created_by_kind`: `human`, `agent`, `automation`. `human` is the default and covers every pre-provenance row; `agent` is the protocol surface (CLI-forwarded agent commands, connector harness, MCP); `automation` is Overlord itself creating a row with no actor in the loop, such as scheduled-mission regeneration. The companion `created_by_agent` identifier stays **open** (see connector identifiers below).
 - `execution_requests.status`: `queued`, `claimed`, `launching`, `launched`, `failed`, `cleared`, `cancelled`, `expired`.
 - `run_queue_entries.state`: `waiting`, `blocked`, `dispatched`, `running`.
@@ -2925,6 +2959,7 @@ Auth/RBAC expansion can then add:
 - `role_assignments`
 - `user_tokens`
 - `user_token_workspaces`
+- `user_token_projects`
 - `user_token_scopes`
 - `audit_log`
 

@@ -12,6 +12,7 @@ const { db, initDatabase, setActiveWorkspace, setActiveWorkspaceUser } = dbModul
 await initDatabase();
 const { seedAuthenticatedOperator } = await import('./test-helpers.ts');
 const { cascadeDeleteAccount } = await import('./account-deletion.ts');
+const { createProject, createMission } = await import('./repository.ts');
 
 const operatorWorkspaceUserId = seedAuthenticatedOperator({ db });
 // `seedAuthenticatedOperator` only inserts rows; the organizations migration's
@@ -66,6 +67,22 @@ test('cascadeDeleteAccount purges workspace membership, tokens, and images so th
   const workspaceUserId = 'victim-workspace-user';
   seedAuthenticatedOperator({ db, profileId, workspaceUserId });
   seedToken({ id: 'victim-token', profileId, workspaceUserId });
+  const project = await createProject({ name: 'Account erasure provenance' });
+  const mission = await createMission({
+    projectId: project.id,
+    title: 'Imported before account erasure',
+    firstObjective: 'Check provenance'
+  });
+  db.prepare(
+    `UPDATE missions SET created_by_token_id = ?, created_by_token_label = ? WHERE id = ?`
+  ).run('victim-token', 'Personal importer label', mission.id);
+  db.prepare(`UPDATE user_tokens SET scope = 'mission_lifecycle' WHERE id = 'victim-token'`).run();
+  const now = new Date().toISOString();
+  db.prepare(
+    `INSERT INTO user_token_scopes
+    (id, workspace_id, token_id, permission, created_at, updated_at, revision)
+    VALUES ('victim-token-scope', 'local-workspace', 'victim-token', 'mission:read', ?, ?, 1)`
+  ).run(now, now);
   seedImage({ id: 'victim-image', profileId });
 
   // seedAuthenticatedOperator also grants an ADMIN role_assignment, which is
@@ -76,6 +93,12 @@ test('cascadeDeleteAccount purges workspace membership, tokens, and images so th
   assert.ok(roleAssignment, 'expected seedAuthenticatedOperator to grant a role assignment');
 
   await cascadeDeleteAccount(profileId);
+
+  const provenance = db
+    .prepare(`SELECT created_by_token_id, created_by_token_label FROM missions WHERE id = ?`)
+    .get(mission.id) as { created_by_token_id: string; created_by_token_label: string | null };
+  assert.equal(provenance.created_by_token_id, 'victim-token');
+  assert.equal(provenance.created_by_token_label, null);
 
   assert.equal(
     db.prepare(`SELECT id FROM workspace_users WHERE id = ?`).get(workspaceUserId),
@@ -91,6 +114,10 @@ test('cascadeDeleteAccount purges workspace membership, tokens, and images so th
     db.prepare(`SELECT id FROM user_tokens WHERE id = ?`).get('victim-token'),
     undefined,
     'expected the token to be purged'
+  );
+  assert.equal(
+    db.prepare(`SELECT id FROM user_token_scopes WHERE token_id = 'victim-token'`).get(),
+    undefined
   );
   assert.equal(
     db.prepare(`SELECT id FROM user_images WHERE id = ?`).get('victim-image'),

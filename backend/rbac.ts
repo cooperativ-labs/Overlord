@@ -8,8 +8,11 @@ import {
 } from '@overlord/auth';
 import { type DatabaseClient } from '@overlord/database';
 
+import { projectAllowed } from '../packages/core/service/context.ts';
+
 import {
   findActiveMembershipId,
+  getActiveTokenProjectIds,
   getActiveTokenScopes,
   getAuthorizedWorkspace,
   getAuthorizedWorkspacesContext,
@@ -227,6 +230,8 @@ export async function requireProjectPermission({
     [projectId]
   )) as { workspace_id: string } | undefined;
   if (!project) throw new ApiError(404, 'Project not found');
+  if (!projectAllowed(projectId, getActiveTokenProjectIds()))
+    throw new ApiError(404, 'Project not found');
   return requireWorkspaceScope({
     workspaceId: project.workspace_id,
     permission,
@@ -247,28 +252,33 @@ export async function requireMissionPermission({
   db?: DatabaseClient;
 }): Promise<AuthorizedWorkspaceScope & { missionId: string }> {
   const mission = (await db.get(
-    `SELECT id, workspace_id FROM missions WHERE id = ? AND deleted_at IS NULL`,
+    `SELECT id, workspace_id, project_id FROM missions WHERE id = ? AND deleted_at IS NULL`,
     [missionRef]
-  )) as { id: string; workspace_id: string } | undefined;
+  )) as { id: string; workspace_id: string; project_id: string } | undefined;
   let resolved = mission;
   if (!resolved) {
     const workspaceIds = await getResourceLookupWorkspaceIds(db);
     if (workspaceIds.length === 0) {
       throw new ApiError(404, 'Mission not found');
     }
-    const rows = await db.all<{ id: string; workspace_id: string }>(
-      `SELECT id, workspace_id FROM missions
+    const rows = await db.all<{ id: string; workspace_id: string; project_id: string }>(
+      `SELECT id, workspace_id, project_id FROM missions
         WHERE display_id = ?
           AND workspace_id IN (${workspaceIds.map(() => '?').join(', ')})
           AND deleted_at IS NULL`,
       [missionRef, ...workspaceIds]
     );
-    if (rows.length > 1) {
+    const visibleRows = rows.filter(row =>
+      projectAllowed(row.project_id, getActiveTokenProjectIds())
+    );
+    if (visibleRows.length > 1) {
       throw new ApiError(409, `Mission reference is ambiguous in this organization: ${missionRef}`);
     }
-    resolved = rows[0];
+    resolved = visibleRows[0];
   }
   if (!resolved) throw new ApiError(404, 'Mission not found');
+  if (!projectAllowed(resolved.project_id, getActiveTokenProjectIds()))
+    throw new ApiError(404, 'Mission not found');
   const scope = await requireWorkspaceScope({
     workspaceId: resolved.workspace_id,
     permission,

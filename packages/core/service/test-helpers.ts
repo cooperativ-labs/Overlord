@@ -26,64 +26,70 @@ export async function seedServiceOperator({
   workspaceUserId?: string;
 }): Promise<string> {
   const now = new Date().toISOString();
+  // `INSERT OR IGNORE` is SQLite-only; Postgres spells the same idempotent
+  // insert as `INSERT ... ON CONFLICT DO NOTHING`.
+  const postgres = db.dialect === 'postgres';
+  const insertIgnore = postgres ? 'INSERT INTO' : 'INSERT OR IGNORE INTO';
+  const orIgnore = postgres ? ' ON CONFLICT DO NOTHING' : '';
+  const emailVerified = postgres ? true : 1;
 
   await db.run(
-    `INSERT OR IGNORE INTO organizations (id, name, created_at, updated_at)
-     VALUES (?, ?, ?, ?)`,
+    `${insertIgnore} organizations (id, name, created_at, updated_at)
+     VALUES (?, ?, ?, ?)${orIgnore}`,
     [`${workspaceId}-org`, 'Test Organization', now, now]
   );
 
   await db.run(
-    `INSERT OR IGNORE INTO workspaces (id, organization_id, slug, name, kind, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'local', ?, ?)`,
+    `${insertIgnore} workspaces (id, organization_id, slug, name, kind, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'local', ?, ?)${orIgnore}`,
     [workspaceId, `${workspaceId}-org`, workspaceId, 'Test Workspace', now, now]
   );
 
   await db.run(
-    `INSERT OR IGNORE INTO mission_sequences
+    `${insertIgnore} mission_sequences
        (id, workspace_id, scope_type, scope_id, counter_name, next_value, updated_at)
-     VALUES (?, ?, 'workspace', ?, 'mission', 1, ?)`,
+     VALUES (?, ?, 'workspace', ?, 'mission', 1, ?)${orIgnore}`,
     [`${workspaceId}-mission-seq`, workspaceId, workspaceId, now]
   );
 
   await db.run(
-    `INSERT OR IGNORE INTO "user" (
+    `${insertIgnore} "user" (
        "id", "name", "email", "emailVerified", "image", "createdAt", "updatedAt"
-     ) VALUES (?, ?, ?, 1, NULL, ?, ?)`,
-    [profileId, profileId, `${profileId}@overlord.local`, now, now]
+     ) VALUES (?, ?, ?, ?, NULL, ?, ?)${orIgnore}`,
+    [profileId, profileId, `${profileId}@overlord.local`, emailVerified, now, now]
   );
 
   await db.run(
-    `INSERT OR IGNORE INTO workspace_users (
+    `${insertIgnore} workspace_users (
        id, workspace_id, profile_id, member_key, status, metadata_json,
        created_at, updated_at, revision
-     ) VALUES (?, ?, ?, ?, 'active', '{}', ?, ?, 1)`,
+     ) VALUES (?, ?, ?, ?, 'active', '{}', ?, ?, 1)${orIgnore}`,
     [workspaceUserId, workspaceId, profileId, `auth:${profileId}`, now, now]
   );
 
   await db.run(
-    `INSERT OR IGNORE INTO role_assignments (
+    `${insertIgnore} role_assignments (
        id, workspace_id, workspace_user_id, role_key, resource_type, resource_id,
        assigned_by_workspace_user_id, created_at, updated_at, revision
-     ) VALUES (?, ?, ?, 'ADMIN', '', '', ?, ?, ?, 1)`,
+     ) VALUES (?, ?, ?, 'ADMIN', '', '', ?, ?, ?, 1)${orIgnore}`,
     [`${workspaceUserId}-admin-role`, workspaceId, workspaceUserId, workspaceUserId, now, now]
   );
 
   // Mirrors createWorkspace's seedWorkspaceStorageBuckets/seedOrganizationStorageBucket.
   for (const bucketKey of ['workspace-images', 'user-images', 'attachments']) {
     await db.run(
-      `INSERT OR IGNORE INTO storage_buckets (
+      `${insertIgnore} storage_buckets (
          id, workspace_id, bucket_key, storage_backend, base_url, local_path, settings_json,
          created_by_workspace_user_id, created_at, updated_at, revision
-       ) VALUES (?, ?, ?, 'local_fs', NULL, 'database/.local/storage', '{}', ?, ?, ?, 1)`,
+       ) VALUES (?, ?, ?, 'local_fs', NULL, 'database/.local/storage', '{}', ?, ?, ?, 1)${orIgnore}`,
       [`${workspaceId}-bucket-${bucketKey}`, workspaceId, bucketKey, workspaceUserId, now, now]
     );
   }
   await db.run(
-    `INSERT OR IGNORE INTO storage_buckets (
+    `${insertIgnore} storage_buckets (
        id, organization_id, bucket_key, storage_backend, base_url, local_path, settings_json,
        created_by_workspace_user_id, created_at, updated_at, revision
-     ) VALUES (?, ?, 'organization-images', 'local_fs', NULL, 'database/.local/storage', '{}', ?, ?, ?, 1)`,
+     ) VALUES (?, ?, 'organization-images', 'local_fs', NULL, 'database/.local/storage', '{}', ?, ?, ?, 1)${orIgnore}`,
     [`${workspaceId}-org-bucket`, `${workspaceId}-org`, workspaceUserId, now, now]
   );
 

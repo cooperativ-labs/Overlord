@@ -34,13 +34,111 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `150`
+Current version: `151`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
 `contract/components.yaml`) — never a header duplicate. The contract version is
 incremented when any stable interface changes. All conformance manifests must
 declare the contract version they were validated against.
+
+### Version 151 Change Summary
+
+Project automation tokens and mission creator attribution (coo:1093). A third
+`USER_TOKEN` preset, `project_automation`, joins `full` and `mission_lifecycle`,
+whose grants, issuance, CLI flags, and settings behavior are unchanged; OAuth
+approval still issues the same `mission_lifecycle` token with the same workspace
+consent flow and never acquires a project allowlist. The preset is persisted in a
+new `user_tokens.scope` column (legacy rows backfill to `full` when they have no
+scope rows and `mission_lifecycle` when they carry the existing grants) so the
+three presets stay distinguishable if their grant lists ever diverge. Its grants
+are `project:read`, `mission:read`, `mission:create`, `objective:read`,
+`event:read`, `session:read`, `artifact:read`, `attachment:read`, and
+`execution_request:read`, still intersected with the owner's live role grants.
+
+A `project_automation` token requires a non-empty list of selected project ids at
+issuance (`CreateUserTokenBody.projectIds`, rejected for every other preset),
+stored in the new `user_token_projects` allowlist (`token_id`, `project_id`,
+`created_at`, unique pair, same-organization and workspace-consent enforcement on
+both editions). There is no all-projects setting, and selection is immutable: a
+different selection is a new token. Issuance validates that the owner can
+`project:read` and `mission:create` in every selected project, and derives
+workspace consent from the selection: `user_token_workspaces` receives exactly
+the workspaces that own the selected projects and `all_workspaces` stays false,
+so existing consent enforcement hides every other workspace and the project
+predicate only separates projects inside consented workspaces. `UserTokenDto`
+additively exposes `projects` (id and current name; a deleted project drops out
+and never widens access).
+
+Authorization for this preset is default-deny at two layers. First, the `/api`
+guard consults an explicit route allowlist (published below); any other route,
+including every write except mission creation, returns 404 before a handler
+runs, so an audit omission fails closed. Second, one reusable project-scope
+check applies inside the allowlist: the selected project ids are loaded into the
+request authorization snapshot at token authentication, and every project,
+mission, objective, attachment storage key, agent request, or other
+project-bearing lookup outside them returns 404 without revealing existence,
+for UUID and display-id addressing alike. Account-wide lists (projects, project
+missions, My Missions, inbox missions, search v1/v2/v3, activity feed, protocol
+search and discovery), `/sync/changes`, SSE catch-up, and live SSE broadcast
+filter by the allowlist before pagination and totals, and `project_id IS NULL`
+change rows reach the preset only for individually audited non-project entity
+types. Protocol `create` now checks `mission:create` against its target project
+for every caller (its gate was previously null); for `project_automation` the
+`--unassigned-to-project` / `--inbox` branch, `prompt`, `record-work`,
+`add-objectives`, and every session, launch, queue, and project-management
+command are denied before any row is written. Hosted MCP tools that dispatch to
+those subcommands inherit the same outcome.
+
+Route allowlist for `project_automation` (METHOD path; everything else under
+`/api`, `/ext`, `/sync`, and `/realtime` 404s): `GET /api/authorized-workspaces`,
+`GET /api/projects`, `GET /api/projects/:id`, `GET /api/projects/:id/statuses`,
+`GET /api/projects/:id/tags`, `GET /api/projects/:id/missions`,
+`POST /api/missions`, `GET /api/missions/:id`, `GET /api/missions/:id/objectives`,
+`GET /api/missions/:id/events`, `GET /api/missions/:id/deliveries`,
+`GET /api/missions/:id/artifacts`, `GET /api/missions/:id/context`,
+`GET /api/missions/:id/file-changes`, `GET /api/search/v3`,
+`GET /api/objectives/:id/attachments`,
+`GET /api/storage/attachments/:storageKey` (the attachments bucket only),
+`GET /api/stream`, `GET /realtime`, `GET /sync/changes`, `GET /mcp`, `POST /mcp`,
+and `POST /api/protocol/:subcommand` for exactly `create` (project form only),
+`load-context`, `search-missions` (alias `search`), `discover-project`
+(`--project-id` form only; the working-directory form and the
+`project_selection_required` choice list would name hidden projects),
+`statuses`, `list-deliveries`, `attachment-list`, `attachment-download-url`, and
+`auth-status`. `GET /api/meta`, legacy `GET /api/missions/search` and
+`GET /api/missions/search/v2`, the `/api/agent-requests` and
+`/api/agent-session-inputs` readers, protocol `read-context`, and every
+`/ext/*` route are deliberately outside the list even where a grant would pass;
+they may be added later only with the project predicate in place. `GET
+/api/missions/:id` does not record `mission_status_seen` for this preset. No
+`project_id IS NULL` change row reaches the preset: the audited non-project
+entity-type list starts empty. No route on the list is widened for any other
+caller. The full route-by-route audit is
+`planning/feature-plans/project-automation-token-read-surface-inventory.md`.
+
+Every mission created by a direct `out_` bearer request — REST `POST
+/api/missions`, protocol `create`, hosted MCP — is stamped server-side in
+`createMissionWithObjectives` with `missions.created_by_token_id` (a deliberate
+soft reference with no foreign key, so token deletion never blocks or erases
+mission history) and `missions.created_by_token_label` (a snapshot of the
+token's label at creation). Neither field is accepted from a request body; a
+later token rename changes only future snapshots; revoke and soft-delete leave
+attribution readable; account deletion clears the snapshot with the owner's
+other identifying text. Scheduled duplicates and other system-generated
+missions never copy the source mission's token fields, and a `sess_` session
+call inherits no bearer identity. `MissionDto` additively exposes
+`createdByToken: { tokenId, label } | null`; `created_by_kind` keeps its
+existing user value, the label snapshot being the "Created via token" display.
+For this preset a create body without `assignedWorkspaceUserId` yields an
+unassigned mission, `statusId` remains optional with the project default, and
+webhooks are excluded (`webhook:*` is not granted). Impact: database adds the
+column, table, and two mission columns on both editions; auth defines the preset
+grants; core carries the project allowlist on the service context and stamps
+attribution; REST/protocol/MCP enforce the allowlist and predicate; CLI adds
+`--scope project-automation` with repeatable `--project`; webapp adds project
+selection and prominent expiry to the token form and the creator caption to
+mission surfaces. Desktop, runner, and mobile need only additive DTO tolerance.
 
 ### Version 150 Change Summary
 

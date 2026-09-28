@@ -138,7 +138,7 @@ async function seedGraph(client: DatabaseClient): Promise<{
     `INSERT INTO project_statuses
        (id, workspace_id, project_id, key, name, type, position, is_default, is_terminal,
         created_at, updated_at, revision)
-     VALUES (?, ?, ?, 'draft', 'Draft', 'draft', 0, 1, 0, ?, ?, 1)`,
+     VALUES (?, ?, ?, 'draft', 'Draft', 'draft', 0, TRUE, FALSE, ?, ?, 1)`,
     [draftStatusId, WORKSPACE_ID, projectId, now, now]
   );
   await client.run(

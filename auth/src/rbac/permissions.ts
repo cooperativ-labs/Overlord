@@ -128,12 +128,26 @@ export type KnownPermission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
  *    it deliberately still excludes project update/delete and user/role/connector
  *    administration and `user_token:self:*` (a scoped token must not be able to mint
  *    further tokens).
+ *  - `project_automation` grants project-bound reads and mission creation only;
+ *    selected project IDs are an independent, mandatory authorization limit.
  *
  *  Stored grants are wildcard patterns matched by `grantCoversAction`. A token's
  *  effective permissions are always its creating user's role grants intersected
  *  with these scope grants, so a scope can only ever restrict, never widen, access.
  */
-export type TokenScope = 'full' | 'mission_lifecycle';
+export type TokenScope = 'full' | 'mission_lifecycle' | 'project_automation';
+
+export const PROJECT_AUTOMATION_GRANTS: readonly string[] = [
+  'project:read',
+  'mission:read',
+  'mission:create',
+  'objective:read',
+  'event:read',
+  'session:read',
+  'artifact:read',
+  'attachment:read',
+  'execution_request:read'
+] as const;
 
 export const MISSION_LIFECYCLE_GRANTS: readonly string[] = [
   'workspace:read',
@@ -156,5 +170,7 @@ export const MISSION_LIFECYCLE_GRANTS: readonly string[] = [
  * an empty list — no `user_token_scopes` rows, meaning no token-level restriction.
  */
 export function scopeGrantsForPreset(scope: TokenScope): string[] {
-  return scope === 'mission_lifecycle' ? [...MISSION_LIFECYCLE_GRANTS] : [];
+  if (scope === 'mission_lifecycle') return [...MISSION_LIFECYCLE_GRANTS];
+  if (scope === 'project_automation') return [...PROJECT_AUTOMATION_GRANTS];
+  return [];
 }

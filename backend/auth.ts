@@ -362,12 +362,28 @@ export async function requireAuthenticatedSession(
         setActiveProfileId(verified.profileId);
         const authorized = await resolveAuthorizedWorkspaces(verified.profileId, verified);
         const scopeGrants = await listActiveTokenScopeGrants(authDomainDatabase(), verified.id);
+        const tokenPreset = await requireDatabaseClient().get<{ scope: string }>(
+          `SELECT scope FROM user_tokens WHERE id = ?`,
+          [verified.id]
+        );
+        const projectIds =
+          tokenPreset?.scope === 'project_automation'
+            ? (
+                await requireDatabaseClient().all<{ project_id: string }>(
+                  `SELECT utp.project_id FROM user_token_projects utp
+               JOIN projects p ON p.id = utp.project_id AND p.deleted_at IS NULL
+               WHERE utp.token_id = ?`,
+                  [verified.id]
+                )
+              ).map(row => row.project_id)
+            : null;
         setAuthorizedWorkspacesContext(authorized);
         setActiveWorkspaceContext(null);
         setActiveTokenAuth({
           workspaceUserId: null,
           tokenId: verified.id,
-          scopeGrants
+          scopeGrants,
+          projectIds
         });
         next();
         return;

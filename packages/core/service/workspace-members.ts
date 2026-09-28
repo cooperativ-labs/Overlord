@@ -106,6 +106,7 @@ export async function resolveAgentMissionAssignee({
   if (assignedTo !== undefined && assignedTo !== null) {
     return resolveWorkspaceMemberId({ ctx, member: assignedTo });
   }
+  if (ctx.allowedProjectIds !== null && ctx.allowedProjectIds !== undefined) return null;
 
   const sessionId = ctx.origin?.sessionId ?? null;
   if (sessionId) {

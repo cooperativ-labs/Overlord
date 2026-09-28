@@ -716,6 +716,8 @@ export interface Missions {
   created_by_agent: string | null;
   created_by_kind: Generated<string>;
   created_by_session_id: string | null;
+  created_by_token_id: string | null;
+  created_by_token_label: string | null;
   created_by_workspace_user_id: string | null;
   deleted_at: string | null;
   display_id: string;
@@ -1233,6 +1235,12 @@ export interface UserImages {
   workspace_id: string;
 }
 
+export interface UserTokenProjects {
+  created_at: string;
+  project_id: string;
+  token_id: string;
+}
+
 export interface UserTokens {
   all_workspaces: Generated<number>;
   created_at: string;
@@ -1250,6 +1258,7 @@ export interface UserTokens {
   revision: Generated<number>;
   revoked_at: string | null;
   revoked_by_workspace_user_id: string | null;
+  scope: Generated<string>;
   status: string;
   token_hash: string;
   token_prefix: string;
@@ -1498,6 +1507,7 @@ export interface DB {
   user: User;
   user_execution_target_preferences: UserExecutionTargetPreferences;
   user_images: UserImages;
+  user_token_projects: UserTokenProjects;
   user_token_scopes: UserTokenScopes;
   user_token_workspaces: UserTokenWorkspaces;
   user_tokens: UserTokens;

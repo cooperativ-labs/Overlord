@@ -77,6 +77,12 @@ export async function cascadeDeleteAccount(profileId: string): Promise<void> {
       [profileId]
     );
     for (const token of tokens) {
+      await tx.run(
+        `UPDATE missions SET created_by_token_label = NULL
+         WHERE created_by_token_id = ?`,
+        [token.id]
+      );
+      await tx.run(`DELETE FROM user_token_scopes WHERE token_id = ?`, [token.id]);
       await tx.run(`DELETE FROM user_tokens WHERE id = ?`, [token.id]);
       await recordChange(
         {

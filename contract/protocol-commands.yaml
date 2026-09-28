@@ -12,7 +12,7 @@
 # entry) are intentionally not listed here: `capture-change` and `changes`. See
 # CONTRACT.md's contract-version-2 changelog entry for the precedent.
 
-contractVersion: '139'
+contractVersion: '151'
 referenceSpec: 'cli/docs/03-agent-protocol.md'
 
 # Transport-level shape shared by every protocol command, independent of subcommand.
@@ -79,6 +79,7 @@ sessionLifecycle:
     responseShape: attach-response-v3
     rules:
       - 'When --objective-id or --execution-request-id is present, attach pins to that objective and must not rediscover via mission state'
+      - 'Session commands (attach, connect, resume-follow-up, update, heartbeat, sync-changes, hook-event, ask, deliver) and launch/queue commands are denied for a project_automation USER_TOKEN (contract v151); it holds no session:attach, event:create, or execution_request:create grant, and the REST allowlist for that preset does not admit them'
     sideEffects:
       - creates-agent-session
       - objective-state-to-executing
@@ -289,6 +290,7 @@ missionDiscovery:
       - '--assigned-to resolves one workspace member by workspace_users.id, profile UUID, orgid:username, bare username, or email; an unresolvable member is rejected with the same "Assignee is not a member of this workspace" error REST uses and is never silently left unassigned'
       - '--session-key additionally attributes the created row to the calling agent session (created_by_session_id) and lets an omitted --assigned-to inherit the session mission assignee'
       - '--auto-advance / --no-auto-advance set the default autoAdvance for created objectives; per-item autoAdvance in --objectives-json / --objectives-file wins when present; omitted defaults to false'
+      - 'Authorization (contract v151): the project form requires mission:create in the resolved target project for every caller; the gate is no longer null. A project_automation USER_TOKEN may create only in one of its selected projects (any other project id, including one in the same workspace, is 404) and is denied the --unassigned-to-project / --inbox form before any row is written. A mission created by a direct out_ bearer records created_by_token_id and a created_by_token_label snapshot; for project_automation an omitted --assigned-to leaves the mission unassigned'
     sideEffects:
       - creates-mission-or-inbox-item
       - creates-objective-in-draft-state-when-project-resolved
@@ -309,6 +311,7 @@ missionDiscovery:
       - '--agent, --assigned-to, and --session-key carry the same meaning and resolution rules as on create; on prompt --agent additionally names the attaching agent for the session'
       - '--auto-advance / --no-auto-advance and per-item autoAdvance follow the same rules as on create'
       - 'Per-item agent / model and --objective-agent / --objective-model follow the same rules as on create'
+      - 'Denied for a project_automation USER_TOKEN before any write (contract v151): prompt attaches a session, which that preset cannot hold. full and mission_lifecycle behavior is unchanged'
     sideEffects:
       - creates-mission
       - attaches-or-queues-execution
@@ -573,6 +576,7 @@ missionDiscovery:
     rules:
       - 'Each --objectives-json / --objectives-file item may set autoAdvance; --auto-advance / --no-auto-advance supply the default when an item omits it; omitted defaults to false'
       - 'Each item may set agent and model. agent persists as the new objective''s assignedAgent; model requires a non-empty agent. When both are omitted, existing project launch-preference defaults apply.'
+      - 'Denied for a project_automation USER_TOKEN before any write (contract v151): that preset creates objectives only as the initial objectives of a mission it creates and never edits an existing mission'
       - '--objective-agent / --objective-model supply the launch selection for items that name no agent of their own; a per-item agent wins, and --objective-model without --objective-agent is rejected'
     sideEffects:
       - creates-objectives-in-draft-state
@@ -631,6 +635,7 @@ missionDiscovery:
       - 'For work already done in chat, not for in-progress work'
       - '--assigned-to resolves one workspace member by the same rules as on create; an unresolvable member is rejected rather than silently left unassigned'
       - 'Explicit changed-file paths set current_diff_state to unknown; record-work does not inspect a current checkout.'
+      - 'Denied for a project_automation USER_TOKEN before any write (contract v151): record-work creates a completed objective and a delivery, which exceed mission:create'
     sideEffects:
       - creates-mission-in-review-status
       - creates-completed-objective

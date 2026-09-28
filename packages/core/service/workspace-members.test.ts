@@ -104,6 +104,22 @@ describe('resolveWorkspaceMemberId', () => {
 });
 
 describe('resolveAgentMissionAssignee / protocolCreate assignment', () => {
+  it('leaves an automation-created mission unassigned by default', async () => {
+    const { db, ctx } = await createSeededServiceContext({ source: 'protocol' });
+    const project = await createProject({ ctx, name: 'Automation Assignment' });
+    const created = await protocolCreate({
+      ctx: { ...ctx, allowedProjectIds: [project.id] },
+      projectId: project.id,
+      objectives: [{ objective: 'Import feedback' }]
+    });
+    const row = await db.get<{ assigned_workspace_user_id: string | null }>(
+      `SELECT assigned_workspace_user_id FROM missions WHERE id = ?`,
+      [created.mission.id]
+    );
+    assert.equal(row?.assigned_workspace_user_id, null);
+    await db.close();
+  });
+
   it('falls back to the token workspace user for an unattached create', async () => {
     const { db, ctx } = await createSeededServiceContext({ source: 'protocol' });
     const project = await createProject({ ctx, name: 'Assign Default' });

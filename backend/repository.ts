@@ -196,11 +196,13 @@ import {
   DATABASE_DIALECT,
   enqueueWebhookEventRest,
   findActiveMembershipId,
+  getActiveTokenProjectIds,
   getActorWorkspaceUserId,
   getAuthorizedWorkspacesContext,
   getImplicitWorkspaceIdOrNull,
   newId,
   nowIso,
+  projectInTokenScope,
   recordChange,
   requireDatabaseClient,
   resolveActiveProfileId
@@ -659,6 +661,8 @@ interface MissionRow {
   created_by_kind: string | null;
   created_by_agent: string | null;
   created_by_workspace_user_id: string | null;
+  created_by_token_id?: string | null;
+  created_by_token_label?: string | null;
   /**
    * Only selected by `selectMissionsSql`, which the detail read goes through.
    * The search and My Missions projections omit it: nothing renders
@@ -710,8 +714,10 @@ interface ObjectiveRow {
 
 // ---- serializers ---------------------------------------------------------
 
-function orderByLabelAsc(column: string): string {
-  return DATABASE_DIALECT === 'sqlite' ? `${column} COLLATE NOCASE ASC` : `LOWER(${column}) ASC`;
+function orderByLabelAsc(column: string, db: DatabaseClient = requireDatabaseClient()): string {
+  // Read the dialect from the bound client, not the process default: the
+  // Postgres conformance batteries bind a Postgres client into a SQLite process.
+  return db.dialect === 'sqlite' ? `${column} COLLATE NOCASE ASC` : `LOWER(${column}) ASC`;
 }
 
 function toProjectDto(r: ProjectRow): ProjectDto {
@@ -960,7 +966,13 @@ function toMissionDto(r: MissionRow, tags: ProjectTagDto[] = []): MissionDto {
     tags,
     createdByKind: toCreatedByKind(r.created_by_kind),
     createdByAgent: r.created_by_agent ?? null,
-    createdByWorkspaceUserId: r.created_by_workspace_user_id ?? null
+    createdByWorkspaceUserId: r.created_by_workspace_user_id ?? null,
+    createdByToken:
+      r.created_by_token_id &&
+      r.created_by_token_label !== null &&
+      r.created_by_token_label !== undefined
+        ? { tokenId: r.created_by_token_id, label: r.created_by_token_label }
+        : null
   };
 }
 
@@ -1296,11 +1308,12 @@ async function activeResourceRow({
   }
   orderBy.push('pr.is_primary DESC', 'pr.created_at ASC');
 
+  const db = requireDatabaseClient();
   const pathExpression =
-    DATABASE_DIALECT === 'postgres'
+    db.dialect === 'postgres'
       ? "prs.descriptor_json->>'path'"
       : "json_extract(prs.descriptor_json, '$.path')";
-  return (await requireDatabaseClient().get(
+  return (await db.get(
     `SELECT pr.id, ${pathExpression} AS path, pr.resource_key FROM project_resources pr
         JOIN project_resource_sources prs ON prs.resource_id = pr.id AND prs.deleted_at IS NULL
         WHERE ${conditions.join(' AND ')}
@@ -1970,12 +1983,22 @@ export async function listProjects(
   // in every workspace they actively belong to, so aggregate those workspaces
   // explicitly instead of letting the request preference select one tenant.
   const scopes = await callerAuthorizedWorkspaceScopes(PERMISSIONS.PROJECT_READ, db);
+  const allowedProjectIds = getActiveTokenProjectIds();
+  if (allowedProjectIds?.length === 0) return [];
+  const projectFilter =
+    allowedProjectIds === null
+      ? ''
+      : ` AND p.id IN (${allowedProjectIds.map(() => '?').join(', ')})`;
   const rows = (
     await Promise.all(
       scopes.map(scope =>
         db.all(
-          `${selectProjectsSql}${projectListLifecyclePredicate(lifecycle)} ORDER BY p.status ASC, p.position ASC, p.created_at ASC`,
-          [scope.workspaceId, ...projectListLifecycleParams(lifecycle)]
+          `${selectProjectsSql}${projectListLifecyclePredicate(lifecycle)}${projectFilter} ORDER BY p.status ASC, p.position ASC, p.created_at ASC`,
+          [
+            scope.workspaceId,
+            ...projectListLifecycleParams(lifecycle),
+            ...(allowedProjectIds ?? [])
+          ]
         )
       )
     )
@@ -2007,10 +2030,16 @@ export async function listProjectsForWorkspace(
     db,
     notFoundMessage: 'Workspace not found or no active membership'
   });
+  const allowedProjectIds = getActiveTokenProjectIds();
+  if (allowedProjectIds?.length === 0) return [];
+  const projectFilter =
+    allowedProjectIds === null
+      ? ''
+      : ` AND p.id IN (${allowedProjectIds.map(() => '?').join(', ')})`;
 
   const rows = (await db.all(
-    `${selectProjectsSql}${projectListLifecyclePredicate(lifecycle)} ORDER BY p.status ASC, p.position ASC, p.created_at ASC`,
-    [workspaceId, ...projectListLifecycleParams(lifecycle)]
+    `${selectProjectsSql}${projectListLifecyclePredicate(lifecycle)}${projectFilter} ORDER BY p.status ASC, p.position ASC, p.created_at ASC`,
+    [workspaceId, ...projectListLifecycleParams(lifecycle), ...(allowedProjectIds ?? [])]
   )) as ProjectRow[];
   return rows.map(toProjectDto);
 }
@@ -3765,6 +3794,7 @@ function selectMissionsSql(dialect: SqlDialect): string {
          t.created_at, t.updated_at, t.revision, t.active_branch, t.branch_override,
          t.worktree_preference, t.allow_parallel_objectives,
          t.created_by_kind, t.created_by_agent, t.created_by_workspace_user_id,
+         t.created_by_token_id, t.created_by_token_label,
          t.created_by_session_id,
          (SELECT COUNT(*) FROM objectives o
             WHERE o.mission_id = t.id AND o.deleted_at IS NULL) AS objective_count,
@@ -3972,6 +4002,15 @@ async function searchMissionsInWorkspace({
   });
 }
 
+function authorizedSearchProjectIds(requested: string[] | null | undefined): string[] | undefined {
+  const allowed = getActiveTokenProjectIds();
+  if (allowed === null) return requested ?? undefined;
+  if (requested?.some(id => !allowed.includes(id))) throw new ApiError(404, 'Project not found');
+  // Search helpers interpret [] as all projects, so use an impossible key for
+  // a token whose selected projects have all been deleted.
+  return requested?.length ? requested : allowed.length ? [...allowed] : ['__no_project__'];
+}
+
 export async function searchMissions({
   query,
   projectId,
@@ -3992,6 +4031,7 @@ export async function searchMissions({
   limit?: number;
 }): Promise<MissionDto[]> {
   const client = requireDatabaseClient();
+  const scopedProjects = authorizedSearchProjectIds(projectId ? [projectId] : null);
   if (projectId) {
     const { workspaceId } = await requireProjectPermission({
       projectId,
@@ -4000,7 +4040,7 @@ export async function searchMissions({
     });
     const result = await searchMissionsInWorkspace({
       query,
-      projectId,
+      projectIds: scopedProjects,
       statusTypes,
       resourceKeys,
       dateField,
@@ -4027,6 +4067,7 @@ export async function searchMissions({
       scopes.map(async scope => {
         const result = await searchMissionsInWorkspace({
           query,
+          projectIds: scopedProjects,
           statusTypes,
           resourceKeys,
           dateField,
@@ -4086,8 +4127,9 @@ export async function searchMissionsAcrossWorkspacesV2({
   limit?: number;
 }): Promise<SearchMissionsResponseV2> {
   const client = requireDatabaseClient();
-  const projects = projectIds?.filter(id => id.trim() !== '') ?? [];
-  if (projects.length === 1) {
+  const projects =
+    authorizedSearchProjectIds(projectIds?.filter(id => id.trim() !== '') ?? null) ?? [];
+  if (projects.length === 1 && projects[0] !== '__no_project__') {
     const { workspaceId } = await requireProjectPermission({
       projectId: projects[0]!,
       permission: PERMISSIONS.MISSION_READ,
@@ -4160,7 +4202,8 @@ export async function searchMissionsAcrossWorkspacesV3({
   candidateLimit?: number | null;
 }): Promise<SearchResponseV3> {
   const client = requireDatabaseClient();
-  const projects = projectIds?.filter(id => id.trim() !== '') ?? [];
+  const projects =
+    authorizedSearchProjectIds(projectIds?.filter(id => id.trim() !== '') ?? null) ?? [];
   const searchInWorkspace = ({
     workspaceId,
     workspaceLimit
@@ -4185,7 +4228,7 @@ export async function searchMissionsAcrossWorkspacesV3({
       candidateLimit
     });
 
-  if (projects.length === 1) {
+  if (projects.length === 1 && projects[0] !== '__no_project__') {
     const { workspaceId } = await requireProjectPermission({
       projectId: projects[0]!,
       permission: PERMISSIONS.MISSION_READ,
@@ -4405,15 +4448,22 @@ async function missionCreatedFromDto(
   const sessionId = row.created_by_session_id?.trim();
   if (!sessionId) return null;
   const found = (await db.get(
-    `SELECT s.id, s.mission_id, s.agent_identifier, m.display_id
+    `SELECT s.id, s.mission_id, s.agent_identifier, m.display_id, m.project_id
        FROM agent_sessions s
        LEFT JOIN missions m ON m.id = s.mission_id AND m.deleted_at IS NULL
       WHERE s.id = ? AND s.workspace_id = ? AND s.deleted_at IS NULL`,
     [sessionId, row.workspace_id]
   )) as
-    | { id: string; mission_id: string; agent_identifier: string; display_id: string | null }
+    | {
+        id: string;
+        mission_id: string;
+        agent_identifier: string;
+        display_id: string | null;
+        project_id: string | null;
+      }
     | undefined;
-  if (!found?.display_id) return null;
+  if (!found?.display_id || !found.project_id || !projectInTokenScope(found.project_id))
+    return null;
   return {
     sessionId: found.id,
     missionId: found.mission_id,
@@ -5247,11 +5297,12 @@ async function createMissionTx(
     // the shared create take an already-checked status.
     if (body.statusId) await getProjectStatus(tx, body.projectId, body.statusId);
 
-    // Unlike the agent surfaces, a REST-created mission defaults to being owned
-    // by whoever created it.
+    // Automation-created work is unassigned unless the caller names a member.
     const assignedWorkspaceUserId =
       body.assignedWorkspaceUserId === undefined
-        ? workspaceUserId
+        ? getActiveTokenProjectIds() === null
+          ? workspaceUserId
+          : null
         : await resolveAssignedWorkspaceUserId(tx, workspaceId, body.assignedWorkspaceUserId);
 
     const ctx = await buildWebappServiceContextForWorkspace(workspaceId, tx, workspaceUserId);
@@ -6750,6 +6801,7 @@ function selectMyMissionsSql(pairPlaceholders: string, dialect: SqlDialect): str
          t.schedule_id, t.due_datetime,
          t.created_at, t.updated_at, t.revision,
          t.created_by_kind, t.created_by_agent, t.created_by_workspace_user_id,
+         t.created_by_token_id, t.created_by_token_label,
          p.name AS project_name, p.settings_json AS project_settings_json,
          mtp.position AS my_position,
          (SELECT COUNT(*) FROM objectives o
@@ -6817,6 +6869,12 @@ export async function listWorkspaceMyMissions(
     }
   }
   if (readableMemberships.length === 0) return { missions: [] };
+  const allowedProjectIds = getActiveTokenProjectIds();
+  if (allowedProjectIds?.length === 0) return { missions: [] };
+  const projectFilter =
+    allowedProjectIds === null
+      ? ''
+      : ` AND t.project_id IN (${allowedProjectIds.map(() => '?').join(', ')})`;
 
   const pairPlaceholders = readableMemberships.map(() => '(?, ?)').join(', ');
   const pairParams = readableMemberships.flatMap(m => [m.workspaceId, m.workspaceUserId]);
@@ -6824,10 +6882,10 @@ export async function listWorkspaceMyMissions(
   const db = requireDatabaseClient();
   const completedWindow = completedMissionWindowSql(options.includeAllCompleted === true);
   const rows = (await db.all(
-    `${selectMyMissionsSql(pairPlaceholders, db.dialect)}${completedWindow.sql}
+    `${selectMyMissionsSql(pairPlaceholders, db.dialect)}${completedWindow.sql}${projectFilter}
          ORDER BY (mtp.position IS NULL) ASC, mtp.position ASC,
                   t.board_position ASC, t.updated_at DESC, t.sequence_number DESC, t.id ASC`,
-    [...pairParams, ...completedWindow.params]
+    [...pairParams, ...completedWindow.params, ...(allowedProjectIds ?? [])]
   )) as MyMissionRow[];
   const tagsByMission = await getTagsByMission(rows.map(row => row.id));
   return { missions: rows.map(row => toMyMissionDto(row, tagsByMission.get(row.id) ?? [])) };
@@ -6951,13 +7009,20 @@ export async function listInboxMissions(): Promise<InboxMissionsResponse> {
   if (readableWorkspaceIds.length === 0) {
     return { missions: [], generatedAt };
   }
+  const allowedProjectIds = getActiveTokenProjectIds();
+  if (allowedProjectIds?.length === 0) return { missions: [], generatedAt };
 
   const workspacePlaceholders = readableWorkspaceIds.map(() => '?').join(', ');
   const now = new Date();
   const recentCutoff = new Date(now.getTime() - INBOX_MISSION_RECENT_MS).toISOString();
   const dueWindow = inboxDueWindow(now);
   const client = requireDatabaseClient();
-  const baseSql = selectInboxMissionsSql(workspacePlaceholders, client.dialect);
+  const baseSql =
+    selectInboxMissionsSql(workspacePlaceholders, client.dialect) +
+    (allowedProjectIds === null
+      ? ''
+      : ` AND t.project_id IN (${allowedProjectIds.map(() => '?').join(', ')})`);
+  const baseParams = [...readableWorkspaceIds, ...(allowedProjectIds ?? [])];
 
   // Past due leads the whole list: a missed date is the most urgent thing on
   // the surface. Descending due date puts the most recently missed work — the
@@ -6970,7 +7035,7 @@ export async function listInboxMissions(): Promise<InboxMissionsResponse> {
        AND t.status_type NOT IN ('complete', 'cancelled')
      ORDER BY t.due_datetime DESC, t.sequence_number DESC, t.id ASC
      LIMIT ?`,
-    [...readableWorkspaceIds, dueWindow.todayStart, INBOX_MISSION_OVERDUE_LIMIT]
+    [...baseParams, dueWindow.todayStart, INBOX_MISSION_OVERDUE_LIMIT]
   )) as InboxMissionRow[];
 
   // Due today/tomorrow follows: time-sensitive regardless of who filed the
@@ -6983,12 +7048,7 @@ export async function listInboxMissions(): Promise<InboxMissionsResponse> {
        AND t.status_type NOT IN ('complete', 'cancelled')
      ORDER BY t.due_datetime ASC, t.sequence_number DESC, t.id ASC
      LIMIT ?`,
-    [
-      ...readableWorkspaceIds,
-      dueWindow.todayStart,
-      dueWindow.dueSoonEnd,
-      INBOX_MISSION_DUE_SOON_LIMIT
-    ]
+    [...baseParams, dueWindow.todayStart, dueWindow.dueSoonEnd, INBOX_MISSION_DUE_SOON_LIMIT]
   )) as InboxMissionRow[];
 
   const agentNextRows = (await client.all(
@@ -6997,7 +7057,7 @@ export async function listInboxMissions(): Promise<InboxMissionsResponse> {
        AND t.status_type = 'next'
      ORDER BY t.created_at DESC, t.sequence_number DESC, t.id ASC
      LIMIT ?`,
-    [...readableWorkspaceIds, INBOX_MISSION_AGENT_NEXT_LIMIT]
+    [...baseParams, INBOX_MISSION_AGENT_NEXT_LIMIT]
   )) as InboxMissionRow[];
 
   // A mission can qualify several ways; it is one card carrying every reason,
@@ -8480,11 +8540,12 @@ export async function updateProfile(body: UpdateProfileBody): Promise<ProfileDto
 // storage per CONTRACT.md); this module owns persistence and lifecycle state.
 
 const USER_TOKEN_COLUMNS =
-  'id, label, token_prefix, status, expires_at, last_used_at, revoked_at, created_at';
+  'id, label, scope, token_prefix, status, expires_at, last_used_at, revoked_at, created_at';
 
 interface UserTokenRow {
   id: string;
   label: string;
+  scope: TokenScope;
   token_prefix: string;
   status: string;
   expires_at: string | null;
@@ -8508,13 +8569,20 @@ interface OperatorIdentity {
 
 async function toUserTokenDto(db: DatabaseClient, row: UserTokenRow): Promise<UserTokenDto> {
   const scopeGrants = await listActiveTokenScopeGrants(db, row.id);
+  const projects = await db.all<{ id: string; name: string }>(
+    `SELECT p.id, p.name FROM user_token_projects utp
+     JOIN projects p ON p.id = utp.project_id AND p.deleted_at IS NULL
+     WHERE utp.token_id = ? ORDER BY p.name`,
+    [row.id]
+  );
   return {
     id: row.id,
     label: row.label,
     tokenPrefix: row.token_prefix,
     status: row.status as UserTokenDto['status'],
-    scope: scopeGrants.length > 0 ? 'mission_lifecycle' : 'full',
+    scope: row.scope,
     scopeGrants,
+    projects,
     expiresAt: row.expires_at,
     lastUsedAt: row.last_used_at,
     revokedAt: row.revoked_at,
@@ -8650,14 +8718,46 @@ export async function createUserToken(
     }
 
     const scope: TokenScope = body.scope ?? 'full';
-    if (scope !== 'full' && scope !== 'mission_lifecycle') {
+    if (scope !== 'full' && scope !== 'mission_lifecycle' && scope !== 'project_automation') {
       throw new ApiError(400, `Unknown token scope: ${String(scope)}`);
     }
     const scopeGrants = scopeGrantsForPreset(scope);
+    const suppliedProjectIds = body.projectIds;
+    if (scope !== 'project_automation' && suppliedProjectIds !== undefined) {
+      throw new ApiError(400, 'Project selection is only available for project automation tokens');
+    }
+    if (
+      scope === 'project_automation' &&
+      (!Array.isArray(suppliedProjectIds) ||
+        suppliedProjectIds.length === 0 ||
+        suppliedProjectIds.some(id => typeof id !== 'string' || !/^[0-9a-f-]{36}$/i.test(id)) ||
+        new Set(suppliedProjectIds).size !== suppliedProjectIds.length)
+    ) {
+      throw new ApiError(400, 'Select one or more unique project IDs');
+    }
 
     // An OAuth client supplies the consent its approval screen collected; a
     // token the user mints for themselves consents to their whole organization.
-    const issuance: TokenIssuanceConsent = consent ?? selfIssuedTokenConsent();
+    let issuance: TokenIssuanceConsent = consent ?? selfIssuedTokenConsent();
+    if (scope === 'project_automation') {
+      if (consent) throw new ApiError(400, 'OAuth consent cannot issue project automation tokens');
+      const workspaceIds = new Set<string>();
+      for (const projectId of suppliedProjectIds!) {
+        const project = await tx.get<{ workspace_id: string }>(
+          `SELECT workspace_id FROM projects WHERE id = ? AND deleted_at IS NULL`,
+          [projectId]
+        );
+        if (!project) throw new ApiError(404, 'Project not found');
+        await requireProjectPermission({ projectId, permission: PERMISSIONS.PROJECT_READ, db: tx });
+        await requireProjectPermission({
+          projectId,
+          permission: PERMISSIONS.MISSION_CREATE,
+          db: tx
+        });
+        workspaceIds.add(project.workspace_id);
+      }
+      issuance = { ...issuance, allWorkspaces: false, workspaceIds: [...workspaceIds] };
+    }
     const { userId } = await loadOperatorIdentity(tx);
     if (!userId) throw new ApiError(401, 'Authentication required');
     const workspaceUserId = issuance.issuanceWorkspaceUserId;
@@ -8706,10 +8806,10 @@ export async function createUserToken(
     const now = nowIso();
     await tx.run(
       `INSERT INTO user_tokens (
-         id, workspace_id, organization_id, all_workspaces, profile_id, workspace_user_id, label,
+         id, workspace_id, organization_id, all_workspaces, profile_id, workspace_user_id, label, scope,
          token_prefix, token_hash, hash_algorithm, status, expires_at,
          last_used_context_json, metadata_json, created_at, updated_at, revision
-       ) VALUES (?, ?, ?, false, ?, ?, ?, ?, ?, ?, 'active', ?, '{}', '{}', ?, ?, 1)`,
+       ) VALUES (?, ?, ?, false, ?, ?, ?, ?, ?, ?, ?, 'active', ?, '{}', '{}', ?, ?, 1)`,
       [
         id,
         workspaceId,
@@ -8717,6 +8817,7 @@ export async function createUserToken(
         userId,
         workspaceUserId,
         label,
+        scope,
         generated.prefix,
         generated.hash,
         USER_TOKEN_HASH_ALGORITHM,
@@ -8734,6 +8835,15 @@ export async function createUserToken(
           `INSERT INTO user_token_workspaces (token_id, workspace_id, created_at)
            VALUES (?, ?, ?)`,
           [id, consentedWorkspaceId, now]
+        );
+      }
+    }
+
+    if (scope === 'project_automation') {
+      for (const projectId of suppliedProjectIds!) {
+        await tx.run(
+          `INSERT INTO user_token_projects (token_id, project_id, created_at) VALUES (?, ?, ?)`,
+          [id, projectId, now]
         );
       }
     }

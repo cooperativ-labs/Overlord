@@ -38,6 +38,7 @@ export {
   makeActor,
   MISSION_LIFECYCLE_GRANTS,
   PERMISSIONS,
+  PROJECT_AUTOMATION_GRANTS,
   Role,
   scopeGrantsForPreset,
   tokenScopeAllows

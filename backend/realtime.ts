@@ -3,7 +3,12 @@ import type { Response } from 'express';
 
 import type { EntityChangeDto, SyncChangesDto } from '../webapp/shared/contract.ts';
 
-import { currentMaxSeq, getAuthorizedWorkspacesContext, requireDatabaseClient } from './db.ts';
+import {
+  currentMaxSeq,
+  getActiveTokenProjectIds,
+  getAuthorizedWorkspacesContext,
+  requireDatabaseClient
+} from './db.ts';
 import { actorCan } from './rbac.ts';
 
 const CHANGE_BATCH_LIMIT = 500;
@@ -89,7 +94,8 @@ export async function readableChangeFeedWorkspaceIds(): Promise<string[]> {
 export async function readChangesAfter(
   afterSeq: number,
   workspaceIds: readonly string[],
-  limit = CHANGE_BATCH_LIMIT
+  limit = CHANGE_BATCH_LIMIT,
+  projectIds: readonly string[] | null = getActiveTokenProjectIds()
 ): Promise<ChangeFeedBatch> {
   const normalizedAfter = Number.isFinite(afterSeq) && afterSeq > 0 ? Math.floor(afterSeq) : 0;
   const requestedLimit = Number.isFinite(limit) ? Math.floor(limit) : CHANGE_BATCH_LIMIT;
@@ -104,14 +110,25 @@ export async function readChangesAfter(
     return { changes: [], cursor: scanThroughSeq, hasMore: false };
   }
   const workspacePlaceholders = authorizedWorkspaceIds.map(() => '?').join(', ');
+  if (projectIds !== null && projectIds.length === 0) {
+    return { changes: [], cursor: scanThroughSeq, hasMore: false };
+  }
+  const projectPredicate =
+    projectIds === null ? '' : ` AND project_id IN (${projectIds.map(() => '?').join(', ')})`;
   const rows = await client.all<ChangeRow>(
     `SELECT seq, workspace_id, entity_type, entity_id, operation, project_id, mission_id,
             objective_id, changed_fields_json, occurred_at
        FROM entity_changes
-      WHERE seq > ? AND seq <= ? AND workspace_id IN (${workspacePlaceholders})
+      WHERE seq > ? AND seq <= ? AND workspace_id IN (${workspacePlaceholders})${projectPredicate}
       ORDER BY seq ASC
       LIMIT ?`,
-    [normalizedAfter, scanThroughSeq, ...authorizedWorkspaceIds, normalizedLimit + 1]
+    [
+      normalizedAfter,
+      scanThroughSeq,
+      ...authorizedWorkspaceIds,
+      ...(projectIds ?? []),
+      normalizedLimit + 1
+    ]
   );
   const hasMore = rows.length > normalizedLimit;
   const returnedRows = hasMore ? rows.slice(0, normalizedLimit) : rows;
@@ -124,11 +141,13 @@ export async function readChangesAfter(
 interface RealtimeClient {
   response: Response;
   workspaceIds: Set<string>;
+  projectIds: Set<string> | null;
 }
 
 export interface AddRealtimeClientOptions {
   afterSeq?: number;
   workspaceIds: readonly string[];
+  projectIds?: readonly string[] | null;
 }
 
 /**
@@ -165,7 +184,11 @@ export class RealtimeHub {
     res.write('retry: 2000\n\n');
     const client: RealtimeClient = {
       response: res,
-      workspaceIds: new Set(options.workspaceIds)
+      workspaceIds: new Set(options.workspaceIds),
+      projectIds:
+        options.projectIds === null || options.projectIds === undefined
+          ? null
+          : new Set(options.projectIds)
     };
     this.clients.set(res, client);
     this.send(res, 'hello', { type: 'hello', cursor: this.cursor });
@@ -189,7 +212,9 @@ export class RealtimeHub {
    * changes what every scoped query returns.
    */
   refreshAll(): void {
-    this.broadcast('refresh', { type: 'refresh' });
+    for (const client of this.clients.values()) {
+      if (client.projectIds === null) this.send(client.response, 'refresh', { type: 'refresh' });
+    }
   }
 
   private async initializeCursor(): Promise<void> {
@@ -230,7 +255,10 @@ export class RealtimeHub {
       this.lastDataVersion = version;
       if (rows.length === 0) {
         // External write that did not (or has not yet) produced feed rows.
-        this.broadcast('refresh', { type: 'refresh' });
+        for (const client of this.clients.values()) {
+          if (client.projectIds === null)
+            this.send(client.response, 'refresh', { type: 'refresh' });
+        }
       }
     }
   }
@@ -239,14 +267,15 @@ export class RealtimeHub {
     for (const { response } of this.clients.values()) response.write(': ping\n\n');
   }
 
-  private broadcast(event: string, data: unknown): void {
-    for (const { response } of this.clients.values()) this.send(response, event, data);
-  }
-
   private broadcastChanges(rows: ChangeRow[], cursor: number): void {
     for (const client of this.clients.values()) {
       const changes = rows
-        .filter(row => client.workspaceIds.has(row.workspace_id))
+        .filter(
+          row =>
+            client.workspaceIds.has(row.workspace_id) &&
+            (client.projectIds === null ||
+              (row.project_id !== null && client.projectIds.has(row.project_id)))
+        )
         .map(entityChangeDtoFromRow);
       if (changes.length > 0) {
         this.send(client.response, 'change', { type: 'change', changes, cursor });
@@ -265,7 +294,12 @@ export class RealtimeHub {
     let cursor = afterSeq;
     while (this.clients.has(res)) {
       const client = this.clients.get(res)!;
-      const batch = await readChangesAfter(cursor, [...client.workspaceIds]);
+      const batch = await readChangesAfter(
+        cursor,
+        [...client.workspaceIds],
+        CHANGE_BATCH_LIMIT,
+        client.projectIds === null ? null : [...client.projectIds]
+      );
       // A concurrent poll may have ended this stream because its authorization
       // snapshot changed while the filtered query was in flight.
       if (!this.clients.has(res)) return;

@@ -30,10 +30,12 @@ import { fileURLToPath } from 'node:url';
 import type { ObjectiveAttachmentDto, StoredImageDto } from '../webapp/shared/contract.ts';
 
 import {
+  getActiveTokenProjectIds,
   getActorWorkspaceUserId,
   getImplicitWorkspaceIdOrNull,
   newId,
   nowIso,
+  projectInTokenScope,
   recordChange,
   requireDatabaseClient,
   resolveActiveProfileId
@@ -804,6 +806,16 @@ export async function resolveStoredObject(
 
   const table = SERVABLE_OBJECT_TABLES[bucketKey];
   if (!table) throw new ApiError(404, `Serving is not configured for bucket '${bucketKey}'`);
+
+  if (bucketKey === 'attachments' && getActiveTokenProjectIds() !== null) {
+    const attachment = await requireDatabaseClient().get<{ project_id: string | null }>(
+      `SELECT project_id FROM attachments WHERE storage_key = ? AND deleted_at IS NULL`,
+      [storageKey]
+    );
+    if (!attachment?.project_id || !projectInTokenScope(attachment.project_id)) {
+      throw new ApiError(404, 'File not found');
+    }
+  }
 
   let row = await requireDatabaseClient().get<{
     workspace_id: string;

@@ -7,7 +7,11 @@ import {
   type UpdateObjectiveBody
 } from '@overlord/contract';
 
-import { resolveObjectiveRef, type ServiceContext } from '../packages/core/service/context.ts';
+import {
+  resolveObjectiveRef,
+  resolveProjectId,
+  type ServiceContext
+} from '../packages/core/service/context.ts';
 import { ServiceError } from '../packages/core/service/errors.ts';
 import { listAttachments } from '../packages/core/service/missions.ts';
 import { registerActingExecutionTarget } from '../packages/core/service/project-execution-target.ts';
@@ -45,8 +49,10 @@ import { runQueueHandlers, runQueueSubcommandPermissions } from './protocol/run-
 import {
   buildWebappServiceContext,
   buildWebappServiceContextForWorkspace,
+  getActiveTokenProjectIds,
   getActorWorkspaceUserId,
   getAuthorizedWorkspacesContext,
+  projectInTokenScope,
   requireDatabaseClient,
   serviceDatabaseClient
 } from './db.ts';
@@ -55,6 +61,7 @@ import { resolveObjectiveIdForRest } from './objective-ref.ts';
 import {
   requireAnyWorkspacePermission,
   requirePermission,
+  requireProjectPermission,
   requireWorkspacePermission
 } from './rbac.ts';
 import {
@@ -151,13 +158,20 @@ async function resolveProjectRefChoices({
   workspaceIds: string[];
 }): Promise<ProjectChoice[]> {
   if (workspaceIds.length === 0) return [];
+  const allowedProjectIds = getActiveTokenProjectIds();
+  if (allowedProjectIds?.length === 0) return [];
   const db = serviceDatabaseClient();
   const placeholders = workspaceIds.map(() => '?').join(', ');
   const selectChoice = `SELECT p.id, p.name, p.slug, p.workspace_id, w.name AS workspace_name,
             w.slug AS workspace_slug
        FROM projects p
        JOIN workspaces w ON w.id = p.workspace_id
-      WHERE p.deleted_at IS NULL AND p.workspace_id IN (${placeholders})`;
+      WHERE p.deleted_at IS NULL AND p.workspace_id IN (${placeholders})${
+        allowedProjectIds === null
+          ? ''
+          : ` AND p.id IN (${allowedProjectIds.map(() => '?').join(', ')})`
+      }`;
+  const choiceParams = [...workspaceIds, ...(allowedProjectIds ?? [])];
   type ChoiceRow = {
     id: string;
     name: string;
@@ -176,7 +190,7 @@ async function resolveProjectRefChoices({
   });
 
   const byId = await db.get<ChoiceRow>(`${selectChoice} AND p.id = ?`, [
-    ...workspaceIds,
+    ...choiceParams,
     projectRef
   ]);
   if (byId) return [toChoice(byId)];
@@ -184,7 +198,7 @@ async function resolveProjectRefChoices({
   const matches = (
     await db.all<ChoiceRow>(
       `${selectChoice} AND (lower(p.slug) = lower(?) OR lower(p.name) = lower(?))`,
-      [...workspaceIds, projectRef, projectRef]
+      [...choiceParams, projectRef, projectRef]
     )
   ).map(toChoice);
 
@@ -250,15 +264,16 @@ async function protocolWorkspaceId(body: ProtocolRequestBody): Promise<string | 
     );
     if (byId) return byId.workspace_id;
 
-    const byDisplay = await db.all<{ workspace_id: string }>(
-      `SELECT workspace_id FROM missions
+    const byDisplay = await db.all<{ workspace_id: string; project_id: string }>(
+      `SELECT workspace_id, project_id FROM missions
         WHERE display_id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders})`,
       [missionRef, ...workspaceIds]
     );
-    if (byDisplay.length > 1) {
+    const visible = byDisplay.filter(row => projectInTokenScope(row.project_id));
+    if (visible.length > 1) {
       throw new ApiError(409, `Mission reference is ambiguous across workspaces: ${missionRef}`);
     }
-    if (byDisplay[0]) return byDisplay[0].workspace_id;
+    if (visible[0]) return visible[0].workspace_id;
   }
 
   // Human project references (slug/name) are unique per workspace only, so this
@@ -1223,6 +1238,7 @@ const handlers: Record<string, Handler> = {
     const unassignedToProject =
       boolFlag(body, '--unassigned-to-project') || boolFlag(body, '--inbox');
     if (unassignedToProject) {
+      if (getActiveTokenProjectIds() !== null) throw new ApiError(404, 'Not found');
       if (projectId) {
         throw new ApiError(
           400,
@@ -1249,6 +1265,11 @@ const handlers: Record<string, Handler> = {
         'project_id_required'
       );
     }
+    const resolvedProjectId = await resolveProjectId(ctx, projectId);
+    await requireProjectPermission({
+      projectId: resolvedProjectId,
+      permission: PERMISSIONS.MISSION_CREATE
+    });
     const assignedTo = strFlag(body, '--assigned-to');
     return await protocolCreate({
       ctx: await withAgentOrigin({ ctx, body }),
@@ -1713,6 +1734,29 @@ export async function runProtocolSubcommand(
   body: ProtocolRequestBody
 ): Promise<unknown> {
   const canonicalSubcommand = subcommand === 'search' ? 'search-missions' : subcommand;
+  if (
+    getActiveTokenProjectIds() !== null &&
+    !new Set([
+      'create',
+      'load-context',
+      'search-missions',
+      'discover-project',
+      'statuses',
+      'list-deliveries',
+      'attachment-list',
+      'attachment-download-url',
+      'auth-status'
+    ]).has(canonicalSubcommand)
+  ) {
+    throw new ApiError(404, 'Not found');
+  }
+  if (
+    getActiveTokenProjectIds() !== null &&
+    canonicalSubcommand === 'discover-project' &&
+    !strFlag(body, '--project-id')
+  ) {
+    throw new ApiError(404, 'Not found');
+  }
   const handler = handlers[canonicalSubcommand];
   if (!handler) {
     throw new ApiError(
