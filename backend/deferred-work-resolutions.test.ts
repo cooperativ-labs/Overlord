@@ -10,6 +10,7 @@ const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
 await bootstrapIntegrationTestDb({ sqlitePath: path.join(tempDir, 'webapp.sqlite') });
 
 const { db } = await import('./db.ts');
+const { seedDelivery: seedDeliveryRow } = await import('./test-helpers.ts');
 const { createProject, createMission, listMissionDeliveries } = await import('./repository.ts');
 const { reopenDeferredWork, resolveDeferredWork } = await import('./deferred-work-resolutions.ts');
 const { buildDeliveryReport } = await import('../packages/core/service/delivery-report.ts');
@@ -67,24 +68,16 @@ function seedDelivery({
     summary,
     deliveryReport: { schemaVersion: 1, agentReport: { humanActions, deferredWork } }
   });
-  db.prepare(
-    `INSERT INTO deliveries
-       (id, workspace_id, project_id, mission_id, objective_id, summary, payload_json,
-        delivered_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
+  return seedDeliveryRow(db, {
     id,
     workspaceId,
     projectId,
     missionId,
     objectiveId,
     summary,
-    JSON.stringify({ deliveryReport: report }),
-    deliveredAt,
-    deliveredAt,
+    payload: { deliveryReport: report },
     deliveredAt
-  );
-  return id;
+  });
 }
 
 async function seedMission(name: string) {

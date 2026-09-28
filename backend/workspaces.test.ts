@@ -1,16 +1,15 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
+import { rmSync } from 'node:fs';
 import test from 'node:test';
 
-const tempDir = mkdtempSync(path.join(tmpdir(), 'overlord-webapp-workspaces-'));
-process.env.OVERLORD_SQLITE_PATH = path.join(tempDir, 'webapp.sqlite');
+const { createIntegrationTestDb } = await import('./test-helpers.ts');
+const { db, tempDir, operatorWorkspaceUserId } =
+  await createIntegrationTestDb('overlord-workspaces-');
 
 const dbModule = await import('./db.ts');
+const { createTestWorkspaceContext } = await import('./test-helpers.ts');
+const testWorkspaceContext = createTestWorkspaceContext(dbModule);
 const {
-  db,
-  initDatabase,
   resolveActorForWorkspace,
   setActiveProfileId,
   setActiveWorkspace,
@@ -18,12 +17,10 @@ const {
   setActiveWorkspaceUser,
   withRequestContextAsync
 } = dbModule;
-await initDatabase();
 const { actorCan, loadActorRoles } = await import('./rbac.ts');
 const { createMission, createObjective, createProject, listProjects } =
   await import('./repository.ts');
-const { DEFAULT_TEST_ORGANIZATION_ID, seedAuthenticatedOperator } =
-  await import('./test-helpers.ts');
+const { DEFAULT_TEST_ORGANIZATION_ID } = await import('./test-helpers.ts');
 const {
   createOrganizationOnboarding,
   createWorkspace,
@@ -33,9 +30,6 @@ const {
   listWorkspaces,
   updateWorkspace
 } = await import('./workspaces.ts');
-
-const operatorWorkspaceUserId = seedAuthenticatedOperator({ db });
-setActiveWorkspaceUser(operatorWorkspaceUserId);
 
 test('createWorkspace grants ADMIN to the creator so switching workspaces keeps permissions', async () => {
   const created = await createWorkspace({
@@ -369,7 +363,11 @@ test('deleteWorkspace tombstones the workspace and activates the oldest remainin
     organizationId: DEFAULT_TEST_ORGANIZATION_ID,
     name: 'Doomed Workspace'
   });
-  assert.equal(dbModule.WORKSPACE.id, doomed.id, 'creation makes the new workspace active');
+  assert.equal(
+    testWorkspaceContext.WORKSPACE.id,
+    doomed.id,
+    'creation makes the new workspace active'
+  );
 
   const list = await deleteWorkspace(doomed.id);
 
@@ -381,7 +379,11 @@ test('deleteWorkspace tombstones the workspace and activates the oldest remainin
     deleted_at: string | null;
   };
   assert.ok(row.deleted_at, 'the workspace row is tombstoned, not removed');
-  assert.notEqual(dbModule.WORKSPACE.id, doomed.id, 'the active workspace moved off the tombstone');
+  assert.notEqual(
+    testWorkspaceContext.WORKSPACE.id,
+    doomed.id,
+    'the active workspace moved off the tombstone'
+  );
 });
 
 test.after(async () => {

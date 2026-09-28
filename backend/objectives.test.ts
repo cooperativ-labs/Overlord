@@ -8,8 +8,9 @@ const tempDir = mkdtempSync(path.join(tmpdir(), 'overlord-webapp-objectives-'));
 const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
 await bootstrapIntegrationTestDb({ sqlitePath: path.join(tempDir, 'webapp.sqlite') });
 
-const { db, WORKSPACE, setActiveWorkspaceUser, nowIso, newId, recordChange } =
-  await import('./db.ts');
+const { db, setActiveWorkspaceUser, nowIso, newId, recordChange } = await import('./db.ts');
+const { createTestWorkspaceContext } = await import('./test-helpers.ts');
+const { WORKSPACE } = createTestWorkspaceContext(await import('./db.ts'));
 const { entityChangeDtoFromRow, parseChangedFields, readChangesAfter } =
   await import('./realtime.ts');
 const {

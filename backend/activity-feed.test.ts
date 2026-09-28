@@ -9,6 +9,7 @@ const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
 await bootstrapIntegrationTestDb({ sqlitePath: path.join(tempDir, 'webapp.sqlite') });
 
 const { db, nowIso } = await import('./db.ts');
+const { seedDelivery: seedDeliveryRow } = await import('./test-helpers.ts');
 const { createProject, createMission, createObjective, updateObjective, listMissions } =
   await import('./repository.ts');
 const { listActivityFeed } = await import('./activity-feed.ts');
@@ -38,23 +39,15 @@ function seedDelivery({
   deliveredAt: string;
 }): string {
   const id = newId('delivery');
-  db.prepare(
-    `INSERT INTO deliveries
-       (id, workspace_id, project_id, mission_id, objective_id, summary, payload_json,
-        delivered_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, '{}', ?, ?, ?)`
-  ).run(
+  return seedDeliveryRow(db, {
     id,
     workspaceId,
     projectId,
     missionId,
     objectiveId,
     summary,
-    deliveredAt,
-    deliveredAt,
     deliveredAt
-  );
-  return id;
+  });
 }
 
 function seedAskEvent({

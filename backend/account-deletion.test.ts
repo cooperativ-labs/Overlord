@@ -1,27 +1,16 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
 import test from 'node:test';
 
-const tempDir = mkdtempSync(path.join(tmpdir(), 'overlord-webapp-account-deletion-'));
-process.env.OVERLORD_SQLITE_PATH = path.join(tempDir, 'webapp.sqlite');
+const { createIntegrationTestDb } = await import('./test-helpers.ts');
+const { db, operatorWorkspaceUserId } = await createIntegrationTestDb('overlord-account-deletion-');
 
 const dbModule = await import('./db.ts');
-const { db, initDatabase, setActiveWorkspace, setActiveWorkspaceUser } = dbModule;
-await initDatabase();
+const { createTestWorkspaceContext } = await import('./test-helpers.ts');
+const testWorkspaceContext = createTestWorkspaceContext(dbModule);
+const { setActiveWorkspaceUser } = dbModule;
 const { seedAuthenticatedOperator } = await import('./test-helpers.ts');
 const { cascadeDeleteAccount } = await import('./account-deletion.ts');
 const { createProject, createMission } = await import('./repository.ts');
-
-const operatorWorkspaceUserId = seedAuthenticatedOperator({ db });
-// `seedAuthenticatedOperator` only inserts rows; the organizations migration's
-// no-seed cleanup (coo:135, Q10) means a fresh database has zero workspaces
-// until something activates one, so `getActiveWorkspaceId()` calls below need
-// this explicit activation (previously implicit via the migration-seeded
-// `local-workspace` row).
-await setActiveWorkspace('local-workspace');
-setActiveWorkspaceUser(operatorWorkspaceUserId);
 
 function seedToken({
   id,
@@ -38,7 +27,7 @@ function seedToken({
        id, workspace_id, profile_id, workspace_user_id, label, token_prefix,
        token_hash, hash_algorithm, status, created_at, updated_at, revision
      ) VALUES (?, ?, ?, ?, 'Test token', ?, 'hash', 'sha256', 'active', ?, ?, 1)`
-  ).run(id, dbModule.WORKSPACE.id, profileId, workspaceUserId, id, now, now);
+  ).run(id, testWorkspaceContext.WORKSPACE.id, profileId, workspaceUserId, id, now, now);
 }
 
 function seedImage({ id, profileId }: { id: string; profileId: string }): void {
@@ -53,9 +42,9 @@ function seedImage({ id, profileId }: { id: string; profileId: string }): void {
      ) VALUES (?, ?, ?, ?, ?, 'avatar.png', 'image/png', ?, ?, 1)`
   ).run(
     id,
-    dbModule.WORKSPACE.id,
+    testWorkspaceContext.WORKSPACE.id,
     profileId,
-    `${dbModule.WORKSPACE.id}-user-images`,
+    `${testWorkspaceContext.WORKSPACE.id}-user-images`,
     `${id}.png`,
     now,
     now

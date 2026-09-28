@@ -126,27 +126,28 @@ export async function deleteRunQueueEntry(entryId: string, body: { force?: boole
   const projectId = await projectForEntry(db, entryId);
   await authorize(projectId, PERMISSIONS.EXECUTION_REQUEST_CREATE, db);
   const force = body.force === true;
-  const result = await removeEntry(db, entryId, { force });
-  let clearedExecutionRequests = 0;
-  if (force) {
-    const ctx = await buildWebappServiceContextForWorkspace(
-      result.workspaceId,
-      db,
-      getActorWorkspaceUserId()
-    );
-    ({ cleared: clearedExecutionRequests } = await clearExecutionRequests({
-      ctx,
-      objectiveId: result.objectiveId,
-      eventSummary: 'Cleared execution request by forced Run Queue removal.'
-    }));
-  }
+  const actorId = getActorWorkspaceUserId();
+  // The requests are cleared inside the removal transaction, before the
+  // wedged-objective reset, so that reset's active-request guard sees them gone.
+  const result = await removeEntry(db, entryId, {
+    force,
+    clearActiveRequests: async (tx, { objectiveId, workspaceId }) => {
+      const ctx = await buildWebappServiceContextForWorkspace(workspaceId, tx, actorId);
+      const { cleared } = await clearExecutionRequests({
+        ctx,
+        objectiveId,
+        eventSummary: 'Cleared execution request by forced Run Queue removal.'
+      });
+      return cleared;
+    }
+  });
   return {
     removed: result.removed,
     forced: force,
     objectiveId: result.objectiveId,
     previousState: result.previousState,
     objectiveReset: result.objectiveReset,
-    clearedExecutionRequests,
+    clearedExecutionRequests: result.clearedExecutionRequests,
     removedEmptyQueueId: result.removedEmptyQueueId
   };
 }

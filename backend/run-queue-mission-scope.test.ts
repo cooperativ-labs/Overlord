@@ -185,6 +185,43 @@ test('forced removal frees an in-flight entry whose objective is stuck launching
   );
 });
 
+test('forced removal clears a still-active request before resetting the launching objective', async () => {
+  const project = await createProject({ name: `Stuck with request ${Date.now()}` });
+  const stuck = await mission(project.id, 1, 'Stuck request');
+  const objectiveId = stuck.objectives[0]!.id;
+  const entry = await postRunQueueEntry(project.id, { objectiveId });
+  // The dispatch created a request no runner ever claimed: it is still active,
+  // so the wedged-objective guard only lets the reset through once the route
+  // has cleared it inside the same removal transaction.
+  const now = new Date().toISOString();
+  bootstrap.db
+    .prepare(
+      `INSERT INTO execution_requests
+         (id, workspace_id, project_id, mission_id, objective_id, launch_mode, requested_source,
+          idempotency_key, status, created_at, updated_at)
+       VALUES (?, 'local-workspace', ?, ?, ?, 'run', 'run_queue', ?, 'queued', ?, ?)`
+    )
+    .run(`req-${entry.id}`, project.id, stuck.missionId, objectiveId, `rq-${entry.id}`, now, now);
+  bootstrap.db
+    .prepare(
+      "UPDATE run_queue_entries SET state = 'dispatched', execution_request_id = ? WHERE id = ?"
+    )
+    .run(`req-${entry.id}`, entry.id);
+  bootstrap.db.prepare("UPDATE objectives SET state = 'launching' WHERE id = ?").run(objectiveId);
+
+  const result = await deleteRunQueueEntry(entry.id, { force: true });
+  assert.equal(result.clearedExecutionRequests, 1);
+  assert.equal(result.objectiveReset, true);
+  const request = bootstrap.db
+    .prepare('SELECT status FROM execution_requests WHERE id = ?')
+    .get(`req-${entry.id}`) as { status: string };
+  assert.equal(request.status, 'cleared');
+  const objective = bootstrap.db
+    .prepare('SELECT state FROM objectives WHERE id = ?')
+    .get(objectiveId) as { state: string };
+  assert.equal(objective.state, 'draft');
+});
+
 test('disconnecting an executing objective pauses its active queue', async () => {
   const project = await createProject({ name: `Disconnect queue ${Date.now()}` });
   const queued = await mission(project.id, 2, 'Disconnect');

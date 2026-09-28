@@ -16,7 +16,9 @@ await bootstrapIntegrationTestDb({ sqlitePath: path.join(tempDir, 'webapp.sqlite
 
 const { createMission, createProject, createProjectTag, getMissionDetail, listProjectStatuses } =
   await import('./repository.ts');
-const { db, WORKSPACE } = await import('./db.ts');
+const { db } = await import('./db.ts');
+const { createTestWorkspaceContext } = await import('./test-helpers.ts');
+const { WORKSPACE } = createTestWorkspaceContext(await import('./db.ts'));
 const { ApiError } = await import('./errors.ts');
 
 function operatorWorkspaceUserId(): string {

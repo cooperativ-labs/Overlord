@@ -1,29 +1,25 @@
 import { PERMISSIONS } from '@overlord/auth';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
+import { rmSync } from 'node:fs';
 import test from 'node:test';
 
-const tempDir = mkdtempSync(path.join(tmpdir(), 'overlord-request-workspace-context-'));
-process.env.OVERLORD_SQLITE_PATH = path.join(tempDir, 'webapp.sqlite');
+const { createIntegrationTestDb } = await import('./test-helpers.ts');
+const { db, tempDir, operatorWorkspaceUserId } = await createIntegrationTestDb(
+  'overlord-request-workspace-context-'
+);
 
 const dbModule = await import('./db.ts');
+const { createTestWorkspaceContext } = await import('./test-helpers.ts');
 const {
-  db,
-  getActiveWorkspace,
-  getActiveWorkspaceIdOrNull,
   getBootstrapWorkspaceIdOrNull,
   getImplicitWorkspaceIdOrNull,
-  initDatabase,
   setActiveProfileId,
-  setActiveWorkspace,
   setActiveWorkspaceContext,
   setActiveWorkspaceUser,
   setAuthorizedWorkspacesContext,
   withRequestContextAsync
 } = dbModule;
-await initDatabase();
+const { getActiveWorkspace, getActiveWorkspaceIdOrNull } = createTestWorkspaceContext(dbModule);
 
 const { resolveAuthorizedWorkspaces } = await import('./auth.ts');
 const { getAgentCatalog } = await import('./execution/launch.ts');
@@ -33,8 +29,7 @@ const { requireAnyWorkspacePermission } = await import('./rbac.ts');
 const { createProject, createUserToken, getProfile, updateProfile } =
   await import('./repository.ts');
 const { uploadUserImage } = await import('./storage.ts');
-const { DEFAULT_TEST_ORGANIZATION_ID, seedAuthenticatedOperator } =
-  await import('./test-helpers.ts');
+const { DEFAULT_TEST_ORGANIZATION_ID } = await import('./test-helpers.ts');
 const { createWebhookSubscription, listWebhookSubscriptions } = await import('./webhooks.ts');
 const {
   createOrganizationOnboarding,
@@ -43,10 +38,6 @@ const {
   listWorkspaces,
   updateWorkspace
 } = await import('./workspaces.ts');
-
-const operatorWorkspaceUserId = seedAuthenticatedOperator({ db });
-setActiveWorkspaceUser(operatorWorkspaceUserId);
-await setActiveWorkspace('local-workspace');
 
 const PNG_BYTES = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',

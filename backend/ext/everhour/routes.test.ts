@@ -11,12 +11,10 @@ const tempDir = mkdtempSync(path.join(tmpdir(), 'overlord-everhour-routes-'));
 const { bootstrapIntegrationTestDb } = await import('../../test-helpers.ts');
 await bootstrapIntegrationTestDb({ sqlitePath: path.join(tempDir, 'everhour-routes.sqlite') });
 
-const {
-  getActiveWorkspaceId,
-  getActorWorkspaceUserId,
-  setActiveTokenAuth,
-  setActiveWorkspaceUser
-} = await import('../../db.ts');
+const { getActorWorkspaceUserId, setActiveTokenAuth, setActiveWorkspaceUser } =
+  await import('../../db.ts');
+const { createTestWorkspaceContext } = await import('../../test-helpers.ts');
+const { getActiveWorkspaceId } = createTestWorkspaceContext(await import('../../db.ts'));
 const { ApiError } = await import('../../errors.ts');
 const { requirePermission } = await import('../../rbac.ts');
 const { createMission, createProject } = await import('../../repository.ts');

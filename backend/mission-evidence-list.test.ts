@@ -14,6 +14,7 @@ const { db, WORKSPACE } = await bootstrapIntegrationTestDb({
 const { createMission, createProject, listMissionDeliveries, listMissionFileChanges } =
   await import('./repository.ts');
 const { newId } = await import('./db.ts');
+const { seedDelivery } = await import('./test-helpers.ts');
 
 const JUST_UNDER = MISSION_EVIDENCE_LIST_LIMIT - 1;
 const AT_CAP = MISSION_EVIDENCE_LIST_LIMIT;
@@ -46,27 +47,18 @@ function insertDeliveries({
   objectiveId: string;
   count: number;
 }) {
-  const insert = db.prepare(
-    `INSERT INTO deliveries
-       (id, workspace_id, project_id, mission_id, objective_id, session_id,
-        summary, payload_json, verification_summary, follow_up_notes,
-        delivered_at, delivered_by_workspace_user_id, created_at, updated_at, revision)
-     VALUES (?, ?, ?, ?, ?, NULL, ?, '{}', NULL, NULL, ?, NULL, ?, ?, 1)`
-  );
   const run = db.transaction(() => {
     for (let index = 0; index < count; index += 1) {
       const at = isoAt(index);
-      insert.run(
-        newId(),
-        WORKSPACE.id,
+      seedDelivery(db, {
+        id: newId(),
+        workspaceId: WORKSPACE.id,
         projectId,
         missionId,
         objectiveId,
-        `Delivery ${index}`,
-        at,
-        at,
-        at
-      );
+        summary: `Delivery ${index}`,
+        deliveredAt: at
+      });
     }
   });
   run();

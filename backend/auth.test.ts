@@ -1,22 +1,15 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
+import { rmSync } from 'node:fs';
 import test from 'node:test';
 
-const tempDir = mkdtempSync(path.join(tmpdir(), 'overlord-webapp-auth-'));
-process.env.OVERLORD_SQLITE_PATH = path.join(tempDir, 'webapp.sqlite');
+const { createIntegrationTestDb } = await import('./test-helpers.ts');
+const { db, tempDir, operatorWorkspaceUserId } = await createIntegrationTestDb('overlord-auth-');
 
 const dbModule = await import('./db.ts');
-const { db, initDatabase, setActiveWorkspaceUser } = dbModule;
-await initDatabase();
+const { setActiveWorkspaceUser } = dbModule;
 const { ensureWorkspaceUser, resolveAuthorizedWorkspaces } = await import('./auth.ts');
-const { DEFAULT_TEST_ORGANIZATION_ID, seedAuthenticatedOperator } =
-  await import('./test-helpers.ts');
+const { DEFAULT_TEST_ORGANIZATION_ID } = await import('./test-helpers.ts');
 const { createWorkspace } = await import('./workspaces.ts');
-
-const operatorWorkspaceUserId = seedAuthenticatedOperator({ db });
-setActiveWorkspaceUser(operatorWorkspaceUserId);
 
 function insertUnaffiliatedProfile(profileId: string): void {
   const now = new Date().toISOString();

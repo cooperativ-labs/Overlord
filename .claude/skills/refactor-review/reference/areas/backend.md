@@ -66,10 +66,13 @@ Flag helpers that take no workspace parameter but read one from module scope —
 there.
 
 ### RBAC annotation integrity
-Routes in `index.ts` declare the permission they need via the `requires` annotation, enforced
-centrally (`backend/rbac.ts`). When proposing route reorganization, every moved route must keep
-its `requires` declaration. A refactor that silently drops one is a privilege escalation, so
-treat "route reorganization" findings as at least `M` effort with an explicit check step.
+Authorization is enforced through one of two paths: a route declares its permission with the
+`requires` annotation, which `backend/rbac.ts` checks centrally, or it calls a repository/service
+function that resolves the resource and authorizes against that resource's own workspace. The
+second path is required for resources that may belong to a workspace other than the caller's active
+workspace. When proposing route reorganization, verify that every moved route still reaches one of
+these authorization paths; a route that reaches neither is the defect. Treat route reorganization
+findings as at least `M` effort with an explicit check step.
 
 ### Dialect parity
 Anything touching SQL must work on both SQLite and Postgres. Flag dialect-specific SQL that has

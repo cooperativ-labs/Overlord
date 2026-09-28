@@ -15,13 +15,13 @@ const harness = await bootstrapIntegrationTestDb({
 
 const {
   db,
-  getActiveWorkspaceId,
   getActorWorkspaceUserId,
   setActiveTokenAuth,
   setActiveWorkspace,
-  setActiveWorkspaceUser,
-  WORKSPACE
+  setActiveWorkspaceUser
 } = await import('./db.ts');
+const { createTestWorkspaceContext } = await import('./test-helpers.ts');
+const { getActiveWorkspaceId, WORKSPACE } = createTestWorkspaceContext(await import('./db.ts'));
 const { ApiError } = await import('./errors.ts');
 const { requirePermission } = await import('./rbac.ts');
 const { createMission, createProject } = await import('./repository.ts');

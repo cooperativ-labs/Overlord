@@ -1,3 +1,4 @@
+import type { SqlDialect } from '@overlord/database';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 
 const SESSION_KEY_PREFIX = 'sess_';
@@ -38,4 +39,16 @@ export function hashSessionKey(rawKey: string): string {
 
 export function sessionKeyPrefix(rawKey: string): string {
   return rawKey.slice(0, 'sess_'.length + 8);
+}
+
+/**
+ * Extract a scalar JSON field as text on either supported database adapter.
+ * PostgreSQL stores these columns as jsonb, which cannot be compared with text
+ * operators such as LIKE, so it uses `->>`; SQLite uses json_extract.
+ * `column` and `field` are interpolated verbatim and must be trusted identifiers.
+ */
+export function jsonTextFieldSql(column: string, field: string, dialect: SqlDialect): string {
+  return dialect === 'postgres'
+    ? `${column}->>'${field}'`
+    : `json_extract(${column}, '$.${field}')`;
 }

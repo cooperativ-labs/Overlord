@@ -8,12 +8,10 @@ const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
 const bootstrap = await bootstrapIntegrationTestDb({
   sqlitePath: path.join(tempDir, 'webapp.sqlite')
 });
-const {
-  getActiveWorkspace,
-  serviceDatabaseClient,
-  setAuthorizedWorkspacesContext,
-  withRequestContextAsync
-} = await import('./db.ts');
+const { serviceDatabaseClient, setAuthorizedWorkspacesContext, withRequestContextAsync } =
+  await import('./db.ts');
+const { createTestWorkspaceContext } = await import('./test-helpers.ts');
+const { getActiveWorkspace } = createTestWorkspaceContext(await import('./db.ts'));
 
 const { createProject, updateObjective } = await import('./repository.ts');
 const { ApiError } = await import('./errors.ts');

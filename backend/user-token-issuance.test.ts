@@ -1,7 +1,4 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
 import test from 'node:test';
 
 // A `USER_TOKEN` a signed-in user mints for themselves — `ovld login` and the
@@ -11,24 +8,19 @@ import test from 'node:test';
 // their own CLI, and requiring a selection broke login for anyone with more
 // than one workspace.
 
-const tempDir = mkdtempSync(path.join(tmpdir(), 'overlord-token-issuance-'));
-process.env.OVERLORD_SQLITE_PATH = path.join(tempDir, 'issuance.sqlite');
+const { createIntegrationTestDb } = await import('./test-helpers.ts');
+const { db } = await createIntegrationTestDb('overlord-token-issuance-', {
+  filename: 'issuance.sqlite'
+});
 
 const dbModule = await import('./db.ts');
-const { db, initDatabase } = dbModule;
-await initDatabase();
 
 const { resolveAuthorizedWorkspaces } = await import('./auth.ts');
-const { DEFAULT_TEST_ORGANIZATION_ID, seedAuthenticatedOperator } =
-  await import('./test-helpers.ts');
+const { DEFAULT_TEST_ORGANIZATION_ID } = await import('./test-helpers.ts');
 const { createWorkspace } = await import('./workspaces.ts');
 const { createUserToken, listUserTokens } = await import('./repository.ts');
 const { verifyUserToken } = await import('../auth/src/index.ts');
 const { authDomainDatabase } = await import('./db.ts');
-
-const operatorWorkspaceUserId = seedAuthenticatedOperator({ db });
-dbModule.setActiveWorkspaceUser(operatorWorkspaceUserId);
-await dbModule.setActiveWorkspace('local-workspace');
 
 // A second workspace in the same organization, with the operator an active
 // member of both — the shape that produced "Token creation requires explicit

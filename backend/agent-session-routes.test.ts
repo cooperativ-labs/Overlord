@@ -1,17 +1,15 @@
 import express from 'express';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
+import { rmSync } from 'node:fs';
 import { after, before, describe, it } from 'node:test';
 
-const tempDir = mkdtempSync(path.join(tmpdir(), 'overlord-agent-session-routes-'));
-process.env.OVERLORD_SQLITE_PATH = path.join(tempDir, 'webapp.sqlite');
 process.env.BETTER_AUTH_SECRET = 'test-better-auth-secret-32-chars-min';
 process.env.BETTER_AUTH_URL = 'http://127.0.0.1:4319';
 
+const { createIntegrationTestDb } = await import('./test-helpers.ts');
+const { tempDir } = await createIntegrationTestDb('overlord-agent-session-routes-');
 const dbModule = await import('./db.ts');
-const client = await dbModule.initDatabase();
+const client = dbModule.requireDatabaseClient();
 
 const {
   createAgentRequestHumanRouter,

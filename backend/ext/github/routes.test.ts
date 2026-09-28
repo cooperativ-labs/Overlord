@@ -15,12 +15,13 @@ const { WORKSPACE } = await bootstrapIntegrationTestDb({
 
 const workspaceAId = WORKSPACE.id;
 const {
-  getActiveWorkspaceId,
   getActorWorkspaceUserId,
   requireDatabaseClient,
   setActiveWorkspace,
   setActiveWorkspaceUser
 } = await import('../../db.ts');
+const { createTestWorkspaceContext } = await import('../../test-helpers.ts');
+const { getActiveWorkspaceId } = createTestWorkspaceContext(await import('../../db.ts'));
 const { ApiError } = await import('../../errors.ts');
 const { requirePermission } = await import('../../rbac.ts');
 const { createProject } = await import('../../repository.ts');

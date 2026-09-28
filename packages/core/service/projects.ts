@@ -18,7 +18,7 @@ import {
   findActingDeviceExecutionTargetId
 } from './execution-targets.js';
 import { deriveProjectResourceKey } from './project-resource-key.js';
-import { newId, nowIso, slugify } from './util.js';
+import { jsonTextFieldSql, newId, nowIso, slugify } from './util.js';
 
 export { deriveProjectResourceKey } from './project-resource-key.js';
 
@@ -975,7 +975,7 @@ export async function discoverProject({
 
         if (chosenProject && chosenLink) {
           const resource = (await ctx.db.get(
-            `SELECT pr.id, ${ctx.db.dialect === 'postgres' ? "prs.descriptor_json->>'path'" : "json_extract(prs.descriptor_json, '$.path')"} AS path, pr.is_primary, pr.resource_key
+            `SELECT pr.id, ${jsonTextFieldSql('prs.descriptor_json', 'path', ctx.db.dialect)} AS path, pr.is_primary, pr.resource_key
              FROM project_resources pr
              LEFT JOIN project_resource_sources prs
                ON prs.resource_id = pr.id AND prs.deleted_at IS NULL AND prs.source_kind = 'local_checkout'

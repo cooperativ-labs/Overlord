@@ -1,7 +1,7 @@
 import type { DatabaseClient } from '@overlord/database';
 
 import type { ServiceContext } from './context.js';
-import { newId, nowIso } from './util.js';
+import { jsonTextFieldSql, newId, nowIso } from './util.js';
 
 /** Core-documented worker job type for asynchronous delivery presentation composition. */
 export const DELIVERY_COMPOSE_JOB_TYPE = 'overlord.delivery.compose.v1';
@@ -39,9 +39,7 @@ export function workerJobJsonFieldPredicate(
   if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(field)) {
     throw new Error(`Invalid worker job JSON field: ${field}`);
   }
-  return dialect === 'postgres'
-    ? `payload_json->>'${field}' = ?`
-    : `json_extract(payload_json, '$.${field}') = ?`;
+  return `${jsonTextFieldSql('payload_json', field, dialect)} = ?`;
 }
 
 export function workerJobRetryDelay(attemptCount: number): number {

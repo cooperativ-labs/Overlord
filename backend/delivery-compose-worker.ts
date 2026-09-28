@@ -16,18 +16,15 @@ import {
   filterDeferredWork,
   reconcileDeliveryComposeDraft
 } from '../packages/core/service/delivery-compose.ts';
-import { newId, nowIso } from '../packages/core/service/util.ts';
+import { nowIso } from '../packages/core/service/util.ts';
 import {
   type ClaimedWorkerJob,
-  claimNextWorkerJob,
-  DELIVERY_COMPOSE_JOB_TYPE,
-  finishWorkerJob,
-  retryWorkerJob
+  DELIVERY_COMPOSE_JOB_TYPE
 } from '../packages/core/service/worker-jobs.ts';
 
 import { recordChange, requireDatabaseClient } from './db.ts';
+import { WorkerJobPoller } from './worker-job-poller.ts';
 
-const POLL_INTERVAL_MS = 1500;
 const CLAIM_BATCH_SIZE = 5;
 const MAX_COMPOSE_SUMMARY_CHARS = 6_000;
 const MAX_COMPOSE_AUXILIARY_CHARS = 2_000;
@@ -73,18 +70,20 @@ function logComposeMetric(
 }
 
 /**
- * In-process, database-backed delivery composition worker. Modeled on
- * webhook-dispatcher: singleton poll loop, leased claims, bounded retries.
+ * In-process, database-backed delivery composition worker on the shared
+ * WorkerJobPoller loop. Drains up to CLAIM_BATCH_SIZE jobs per tick and skips
+ * ticks entirely while OVERLORD_DELIVERY_COMPOSE_DISABLED=1.
  */
-class DeliveryComposeWorker {
-  private pollTimer: NodeJS.Timeout | null = null;
-  private polling = false;
-  private readonly workerId = `delivery-compose:${process.pid}:${newId().slice(0, 8)}`;
+class DeliveryComposeWorker extends WorkerJobPoller {
   private generateOverride: ComposeGenerator | null = null;
 
-  start(): void {
-    if (this.pollTimer) return;
-    this.pollTimer = setInterval(() => void this.poll(), POLL_INTERVAL_MS);
+  constructor() {
+    super({
+      workerIdPrefix: 'delivery-compose',
+      jobTypes: [DELIVERY_COMPOSE_JOB_TYPE],
+      logPrefix: 'delivery-compose-worker',
+      claimBatchSize: CLAIM_BATCH_SIZE
+    });
   }
 
   /** Test seam: inject a fake Gemini generator. */
@@ -92,33 +91,15 @@ class DeliveryComposeWorker {
     this.generateOverride = generate;
   }
 
-  pollNow(): void {
-    void this.poll();
+  protected shouldPoll(): boolean {
+    return process.env.OVERLORD_DELIVERY_COMPOSE_DISABLED !== '1';
   }
 
-  private async poll(): Promise<void> {
-    if (this.polling) return;
-    if (process.env.OVERLORD_DELIVERY_COMPOSE_DISABLED === '1') return;
-    this.polling = true;
-    try {
-      const client = requireDatabaseClient();
-      for (let i = 0; i < CLAIM_BATCH_SIZE; i++) {
-        const row = await claimNextWorkerJob({
-          db: client,
-          jobType: DELIVERY_COMPOSE_JOB_TYPE,
-          workerId: this.workerId
-        });
-        if (!row) break;
-        await this.processJob(client, row);
-      }
-    } catch (err) {
-      console.error('[delivery-compose-worker] poll failed', err);
-    } finally {
-      this.polling = false;
-    }
+  protected databaseClient(): DatabaseClient {
+    return requireDatabaseClient();
   }
 
-  private async processJob(client: DatabaseClient, job: WorkerJobRow): Promise<void> {
+  protected async processJob(client: DatabaseClient, job: WorkerJobRow): Promise<void> {
     const startedAt = Date.now();
     let deliveryId: string;
     try {
@@ -128,7 +109,7 @@ class DeliveryComposeWorker {
       }
       deliveryId = payload.deliveryId.trim();
     } catch (err) {
-      await finishWorkerJob(client, job.id, 'failed', `Malformed payload: ${String(err)}`);
+      await this.finishJob(client, job, 'failed', `Malformed payload: ${String(err)}`);
       return;
     }
 
@@ -136,7 +117,7 @@ class DeliveryComposeWorker {
     try {
       const result = await this.composeAndPersist(client, deliveryId);
       if (result.kind === 'missing') {
-        await finishWorkerJob(client, job.id, 'cancelled', 'Delivery not found');
+        await this.finishJob(client, job, 'cancelled', 'Delivery not found');
         logComposeMetric('delivery_compose_failed', {
           jobId: job.id,
           deliveryId,
@@ -146,7 +127,7 @@ class DeliveryComposeWorker {
         });
         return;
       }
-      await finishWorkerJob(client, job.id, 'succeeded', null);
+      await this.finishJob(client, job);
       logComposeMetric(
         result.presentationStatus === 'composed'
           ? 'delivery_compose_composed'
@@ -164,8 +145,8 @@ class DeliveryComposeWorker {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.warn(`[delivery-compose-worker] job ${job.id} failed:`, message);
-      if (attemptNumber >= job.max_attempts) {
-        await finishWorkerJob(client, job.id, 'failed', message);
+      const outcome = await this.failOrRetry(client, job, err);
+      if (outcome === 'failed') {
         await persistFallbackPresentation(client, deliveryId, message).catch(persistErr => {
           console.warn('[delivery-compose-worker] fallback persist failed', persistErr);
         });
@@ -177,7 +158,6 @@ class DeliveryComposeWorker {
         });
         return;
       }
-      await retryWorkerJob(client, job.id, attemptNumber, message);
       logComposeMetric('delivery_compose_failed', {
         jobId: job.id,
         deliveryId,

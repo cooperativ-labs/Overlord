@@ -1,4 +1,4 @@
-import { type Permission, PERMISSIONS } from '@overlord/auth';
+import { PERMISSIONS } from '@overlord/auth';
 
 import {
   resolveMissionId,
@@ -20,23 +20,23 @@ import {
   updateRunQueue
 } from '../../packages/core/service/run-queue.ts';
 import { ApiError } from '../errors.ts';
+
 import {
   boolFlag,
   objectiveRefFlag,
   parseJsonInput,
   type ProtocolRequestBody,
   requireFlag,
-  strFlag
-} from '../protocol.ts';
+  strFlag,
+  type SubcommandTable
+} from './flags.ts';
 
 // ---- Run Queue protocol adapters -----------------------------------------
 //
 // The `ovld protocol` Run Queue subcommands, split out of backend/protocol.ts:
 // flag parsing and queue-reference resolution on top of the same
 // packages/core/service/run-queue.ts the REST sibling (backend/run-queue.ts)
-// calls. protocol.ts spreads `runQueueHandlers` and
-// `runQueueSubcommandPermissions` into its dispatch and permission maps; the
-// import back into protocol.ts is for its shared flag helpers only.
+// calls. protocol.ts spreads `runQueueSubcommands` into its dispatch table.
 
 type QueueEntryProjection = {
   id: string;
@@ -418,55 +418,64 @@ async function retryRunQueueEntryFromProtocol(
   return retryRunQueueEntry(ctx.db, entry.id);
 }
 
-type Handler = (ctx: ServiceContext, body: ProtocolRequestBody) => unknown;
+/** Run Queue subcommands, spread into the dispatch table in backend/protocol.ts. */
+export const runQueueSubcommands: SubcommandTable = {
+  'queue-objective': {
+    permission: PERMISSIONS.EXECUTION_REQUEST_CREATE,
+    handler: (ctx, body) => queueObjectiveFromProtocol(ctx, body)
+  },
 
-/** Run Queue subcommands, spread into `handlers` in backend/protocol.ts. */
-export const runQueueHandlers: Record<string, Handler> = {
-  'queue-objective': (ctx, body) => queueObjectiveFromProtocol(ctx, body),
+  'dequeue-objective': {
+    permission: PERMISSIONS.EXECUTION_REQUEST_CREATE,
+    handler: (ctx, body) => dequeueObjectiveFromProtocol(ctx, body)
+  },
 
-  'dequeue-objective': (ctx, body) => dequeueObjectiveFromProtocol(ctx, body),
+  'retry-queue-entry': {
+    permission: PERMISSIONS.EXECUTION_REQUEST_CREATE,
+    handler: (ctx, body) => retryRunQueueEntryFromProtocol(ctx, body)
+  },
 
-  'retry-queue-entry': (ctx, body) => retryRunQueueEntryFromProtocol(ctx, body),
+  'reorder-run-queue': {
+    permission: PERMISSIONS.EXECUTION_REQUEST_CREATE,
+    handler: (ctx, body) => reorderRunQueueFromProtocol(ctx, body)
+  },
 
-  'reorder-run-queue': (ctx, body) => reorderRunQueueFromProtocol(ctx, body),
-
-  'create-run-queue': (ctx, body) => createRunQueueFromProtocol(ctx, body),
-
-  'update-run-queue': (ctx, body) => updateRunQueueFromProtocol(ctx, body),
-
-  'delete-run-queue': (ctx, body) => deleteRunQueueFromProtocol(ctx, body),
-
-  'reorder-project-run-queues': (ctx, body) => reorderProjectRunQueuesFromProtocol(ctx, body),
-
-  'run-queue': async (ctx, body) => {
-    const projection = await listProjectRunQueues(
-      ctx.db,
-      await runQueueProjectIdFromProtocol(ctx, body)
-    );
-    const queueRef = strFlag(body, '--queue');
-    if (!queueRef) return projection;
-    return {
-      ...projection,
-      queues: [queueByRef(projection.queues as QueueProjection[], queueRef)]
-    };
-  }
-};
-
-/**
- * RBAC permission each Run Queue subcommand requires, spread into
- * `SUBCOMMAND_PERMISSIONS` in backend/protocol.ts.
- */
-export const runQueueSubcommandPermissions: Record<string, Permission | null> = {
-  'queue-objective': PERMISSIONS.EXECUTION_REQUEST_CREATE,
-  'dequeue-objective': PERMISSIONS.EXECUTION_REQUEST_CREATE,
-  'retry-queue-entry': PERMISSIONS.EXECUTION_REQUEST_CREATE,
-  'reorder-run-queue': PERMISSIONS.EXECUTION_REQUEST_CREATE,
   // Queue definitions are project configuration, matching the REST mapping in
   // backend/run-queue.ts. `project:update` is not in MISSION_LIFECYCLE_GRANTS,
   // so these four are full-token operations by design.
-  'create-run-queue': PERMISSIONS.PROJECT_UPDATE,
-  'update-run-queue': PERMISSIONS.PROJECT_UPDATE,
-  'delete-run-queue': PERMISSIONS.PROJECT_UPDATE,
-  'reorder-project-run-queues': PERMISSIONS.PROJECT_UPDATE,
-  'run-queue': PERMISSIONS.OBJECTIVE_READ
+  'create-run-queue': {
+    permission: PERMISSIONS.PROJECT_UPDATE,
+    handler: (ctx, body) => createRunQueueFromProtocol(ctx, body)
+  },
+
+  'update-run-queue': {
+    permission: PERMISSIONS.PROJECT_UPDATE,
+    handler: (ctx, body) => updateRunQueueFromProtocol(ctx, body)
+  },
+
+  'delete-run-queue': {
+    permission: PERMISSIONS.PROJECT_UPDATE,
+    handler: (ctx, body) => deleteRunQueueFromProtocol(ctx, body)
+  },
+
+  'reorder-project-run-queues': {
+    permission: PERMISSIONS.PROJECT_UPDATE,
+    handler: (ctx, body) => reorderProjectRunQueuesFromProtocol(ctx, body)
+  },
+
+  'run-queue': {
+    permission: PERMISSIONS.OBJECTIVE_READ,
+    handler: async (ctx, body) => {
+      const projection = await listProjectRunQueues(
+        ctx.db,
+        await runQueueProjectIdFromProtocol(ctx, body)
+      );
+      const queueRef = strFlag(body, '--queue');
+      if (!queueRef) return projection;
+      return {
+        ...projection,
+        queues: [queueByRef(projection.queues as QueueProjection[], queueRef)]
+      };
+    }
+  }
 };

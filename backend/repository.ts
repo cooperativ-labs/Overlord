@@ -83,7 +83,7 @@ import {
   mergeResourceStatusWithObservation,
   type TargetResourceObservationRow
 } from '../packages/core/service/target-resource-observations.ts';
-import { hashSessionKey } from '../packages/core/service/util.ts';
+import { hashSessionKey, jsonTextFieldSql } from '../packages/core/service/util.ts';
 import type {
   ArtifactDto,
   CreateArtifactBody,
@@ -3737,17 +3737,6 @@ export async function deleteProject(id: string): Promise<void> {
 }
 
 // ---- Missions -------------------------------------------------------------
-
-/**
- * Extract a scalar JSON field without relying on SQLite's text-backed JSON
- * representation. PostgreSQL stores these columns as jsonb, which cannot be
- * compared with text operators such as LIKE.
- */
-function jsonTextFieldSql(column: string, field: string, dialect: SqlDialect): string {
-  return dialect === 'postgres'
-    ? `${column}->>'${field}'`
-    : `json_extract(${column}, '$.${field}')`;
-}
 
 function missionHasUnseenBlockingQuestionSql(dialect: SqlDialect): string {
   // An ask links its request through its own `payload_json.agentRequestId`;

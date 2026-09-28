@@ -1,5 +1,54 @@
 import { type DatabaseClient } from '@overlord/database';
 import type Database from 'better-sqlite3';
+import { randomUUID } from 'node:crypto';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
+import type * as DbModule from './db.ts';
+
+/** Legacy ambient workspace reads for integration tests only. */
+export function createTestWorkspaceContext(dbModule: typeof DbModule) {
+  const getActiveWorkspace = () => {
+    const workspace = dbModule.buildWebappServiceContext().workspace;
+    const row = dbModule.db
+      .prepare('SELECT kind FROM workspaces WHERE id = ?')
+      .get(workspace.id) as { kind: string } | undefined;
+    return { ...workspace, kind: row?.kind ?? 'local' };
+  };
+  const WORKSPACE = {
+    get id() {
+      return getActiveWorkspace().id;
+    },
+    get slug() {
+      return getActiveWorkspace().slug;
+    },
+    get name() {
+      return getActiveWorkspace().name;
+    },
+    get kind() {
+      return getActiveWorkspace().kind;
+    }
+  };
+  return {
+    WORKSPACE,
+    getActiveWorkspace,
+    getActiveWorkspaceId: () => getActiveWorkspace().id,
+    getActiveWorkspaceIdOrNull: () => {
+      try {
+        return getActiveWorkspace().id;
+      } catch (error) {
+        if (
+          error instanceof Error &&
+          error.message.startsWith('No active workspace for this request:')
+        )
+          return null;
+        throw error;
+      }
+    },
+    getDefaultActorWorkspaceUserId: () => dbModule.getActorWorkspaceUserId()
+  };
+}
 
 /**
  * Stable organization id every test bootstrap helper below creates (idempotently)
@@ -237,6 +286,68 @@ export async function bootstrapIntegrationTestDb({
     db: dbModule.db,
     operatorWorkspaceUserId,
     setActiveWorkspaceUser: dbModule.setActiveWorkspaceUser,
-    WORKSPACE: dbModule.WORKSPACE
+    WORKSPACE: createTestWorkspaceContext(dbModule).WORKSPACE
   };
+}
+
+/** Create an isolated SQLite file and bootstrap the usual integration operator. */
+export async function createIntegrationTestDb(
+  prefix: string,
+  options: { organizationId?: string; workspaceId?: string; filename?: string } = {}
+) {
+  const tempDir = mkdtempSync(path.join(tmpdir(), prefix));
+  const sqlitePath = path.join(tempDir, options.filename ?? 'webapp.sqlite');
+  const bootstrap = await bootstrapIntegrationTestDb({
+    sqlitePath,
+    organizationId: options.organizationId,
+    workspaceId: options.workspaceId
+  });
+  return { ...bootstrap, tempDir, sqlitePath };
+}
+
+/** Insert a delivery with one consistent set of defaults across backend tests. */
+export function seedDelivery(
+  db: Database.Database,
+  {
+    id = randomUUID(),
+    workspaceId,
+    projectId,
+    missionId,
+    objectiveId,
+    summary,
+    payload = {},
+    deliveredAt = new Date().toISOString(),
+    deliveredByWorkspaceUserId = null
+  }: {
+    id?: string;
+    workspaceId: string;
+    projectId: string;
+    missionId: string;
+    objectiveId: string;
+    summary: string;
+    payload?: unknown;
+    deliveredAt?: string;
+    deliveredByWorkspaceUserId?: string | null;
+  }
+): string {
+  db.prepare(
+    `INSERT INTO deliveries (
+       id, workspace_id, project_id, mission_id, objective_id, session_id,
+       summary, payload_json, verification_summary, follow_up_notes,
+       delivered_at, delivered_by_workspace_user_id, created_at, updated_at, revision
+     ) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, NULL, NULL, ?, ?, ?, ?, 1)`
+  ).run(
+    id,
+    workspaceId,
+    projectId,
+    missionId,
+    objectiveId,
+    summary,
+    JSON.stringify(payload),
+    deliveredAt,
+    deliveredByWorkspaceUserId,
+    deliveredAt,
+    deliveredAt
+  );
+  return id;
 }

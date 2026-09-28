@@ -1,7 +1,8 @@
 import { PERMISSIONS } from '@overlord/auth';
 import { sortObjectivesForMissionDisplay } from '@overlord/automations';
-import { type DatabaseClient, formatObjectiveDisplayId } from '@overlord/database';
+import { formatObjectiveDisplayId } from '@overlord/database';
 
+import { jsonTextFieldSql } from '../packages/core/service/util.ts';
 import type {
   ActivityFeedDto,
   ActivityFeedItemDto,
@@ -43,17 +44,6 @@ function truncate(value: string | null | undefined, max: number): string {
 
 function placeholders(count: number): string {
   return new Array(count).fill('?').join(', ');
-}
-
-/** Extract a scalar JSON field on either supported database adapter. */
-function jsonTextFieldSql(
-  column: string,
-  field: string,
-  dialect: DatabaseClient['dialect']
-): string {
-  return dialect === 'postgres'
-    ? `${column}->>'${field}'`
-    : `json_extract(${column}, '$.${field}')`;
 }
 
 interface FeedContextRow {

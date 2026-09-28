@@ -19,7 +19,9 @@ export type MissionSearchMatchKind =
  * a `dueDatetime` range excludes missions that have no due date at all, which
  * is the opposite of the created/updated columns.
  */
-export type MissionSearchDateField = 'createdAt' | 'updatedAt' | 'dueDatetime';
+export const MISSION_SEARCH_DATE_FIELDS = ['createdAt', 'updatedAt', 'dueDatetime'] as const;
+
+export type MissionSearchDateField = (typeof MISSION_SEARCH_DATE_FIELDS)[number];
 
 /**
  * Filters that actually constrained a v2 search. Omitted or empty fields were

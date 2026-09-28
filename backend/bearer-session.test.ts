@@ -1,18 +1,14 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
+import { rmSync } from 'node:fs';
 import { after, describe, it } from 'node:test';
 
 import { resolveSessionFromBrowserRequest } from './http/bearer-session.ts';
 
-const tempDir = mkdtempSync(path.join(tmpdir(), 'overlord-bearer-session-'));
-process.env.OVERLORD_SQLITE_PATH = path.join(tempDir, 'webapp.sqlite');
 process.env.BETTER_AUTH_SECRET = 'test-better-auth-secret-32-chars-min';
 process.env.BETTER_AUTH_URL = 'http://127.0.0.1:4310';
 
-const dbModule = await import('./db.ts');
-await dbModule.initDatabase();
+const { createIntegrationTestDb } = await import('./test-helpers.ts');
+const { tempDir } = await createIntegrationTestDb('overlord-bearer-session-');
 const { auth } = await import('./auth.ts');
 
 describe('resolveSessionFromBrowserRequest', () => {

@@ -906,6 +906,153 @@ export async function enqueueRunQueueEntry(
   });
 }
 
+// ---- Entry state transitions ---------------------------------------------
+//
+// `run_queue_entries.state` is a closed four-value machine (CONTRACT.md) whose
+// hold columns — `waiting_reason`, `waiting_on_objective_id`, `blocked_reason`,
+// `execution_request_id`, `attempt_count` — must move together. Each function
+// below owns one transition's column set, so the dispatch worker and the
+// user-initiated operations in this module cannot drift apart. Orchestration
+// (the planner, launch, transactions) stays with the caller; each function
+// is one guarded UPDATE against whatever `db`/`tx` it is handed.
+
+/** Soft-delete an entry whose objective left the pipeline. */
+export async function dropRunQueueEntry(
+  db: DatabaseClient,
+  entryId: string,
+  now: string
+): Promise<void> {
+  await db.run(
+    'UPDATE run_queue_entries SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND deleted_at IS NULL',
+    [now, now, entryId]
+  );
+}
+
+export type RunQueueEntryHold = {
+  /** `null` for a plain waiting entry whose turn has not come. */
+  reason: string | null;
+  waitingOnObjectiveId?: string | null;
+  /**
+   * Leave `blocked_reason` as written. A `retry_pending` hold written by a
+   * failed attempt keeps the detail explaining it; every other hold clears it.
+   */
+  keepFailureDetail?: boolean;
+  /**
+   * Start a fresh attempt budget: `attempt_count = 0` and no request link. Only
+   * an explicit user retry does this; the planner never refunds attempts.
+   */
+  resetAttempts?: boolean;
+};
+
+/** Hold a not-in-flight entry as `waiting`. No-op for a dispatched/running entry. */
+export async function holdRunQueueEntry(
+  db: DatabaseClient,
+  entryId: string,
+  now: string,
+  hold: RunQueueEntryHold
+): Promise<void> {
+  const blockedReason = hold.keepFailureDetail ? 'blocked_reason' : 'NULL';
+  const attempts = hold.resetAttempts ? ', execution_request_id = NULL, attempt_count = 0' : '';
+  await db.run(
+    `UPDATE run_queue_entries SET state = 'waiting', waiting_reason = ?, waiting_on_objective_id = ?, blocked_reason = ${blockedReason}${attempts}, updated_at = ?, revision = revision + 1 WHERE id = ? AND state IN ('waiting','blocked')`,
+    [hold.reason, hold.waitingOnObjectiveId ?? null, now, entryId]
+  );
+}
+
+/**
+ * Block a not-in-flight entry until a human acts. With `keepFailureDetail` an
+ * existing `blocked_reason` (e.g. `dispatch_failed: <cause>`) survives and
+ * `reason` is only the fallback. No-op for a dispatched/running entry.
+ */
+export async function blockRunQueueEntry(
+  db: DatabaseClient,
+  entryId: string,
+  now: string,
+  block: { reason: string; keepFailureDetail?: boolean }
+): Promise<void> {
+  const blockedReason = block.keepFailureDetail ? 'COALESCE(blocked_reason, ?)' : '?';
+  await db.run(
+    `UPDATE run_queue_entries SET state = 'blocked', blocked_reason = ${blockedReason}, waiting_reason = NULL, waiting_on_objective_id = NULL, updated_at = ?, revision = revision + 1 WHERE id = ? AND state IN ('waiting','blocked')`,
+    [block.reason, now, entryId]
+  );
+}
+
+/** Mark an entry whose objective is already running (started outside the queue). */
+export async function markRunQueueEntryRunning(
+  db: DatabaseClient,
+  entryId: string,
+  now: string
+): Promise<void> {
+  await db.run(
+    "UPDATE run_queue_entries SET state = 'running', blocked_reason = NULL, waiting_reason = NULL, waiting_on_objective_id = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?",
+    [now, entryId]
+  );
+}
+
+/** Link a not-in-flight entry to the execution request just created for it, spending one attempt. */
+export async function markRunQueueEntryDispatched(
+  db: DatabaseClient,
+  entryId: string,
+  now: string,
+  dispatch: { executionRequestId: string }
+): Promise<void> {
+  await db.run(
+    "UPDATE run_queue_entries SET state = 'dispatched', blocked_reason = NULL, waiting_reason = NULL, waiting_on_objective_id = NULL, dispatched_at = ?, execution_request_id = ?, attempt_count = attempt_count + 1, updated_at = ?, revision = revision + 1 WHERE id = ? AND state IN ('waiting','blocked')",
+    [now, dispatch.executionRequestId, now, entryId]
+  );
+}
+
+/** Upper bound on the failure detail kept after the `dispatch_failed: ` prefix. */
+const DISPATCH_FAILURE_DETAIL_LIMIT = 400;
+
+/**
+ * Record a dispatch attempt that threw before a request existed. The entry
+ * waits as `retry_pending` — retryable until the planner's attempt ceiling
+ * turns it into `block('dispatch_failed')` — and keeps the machine-readable
+ * `dispatch_failed` prefix plus a bounded, already-sanitized detail.
+ */
+export async function recordRunQueueDispatchFailure(
+  db: DatabaseClient,
+  entryId: string,
+  now: string,
+  failure: { detail: string | null }
+): Promise<void> {
+  await db.run(
+    "UPDATE run_queue_entries SET state = 'waiting', waiting_reason = 'retry_pending', waiting_on_objective_id = NULL, blocked_reason = ?, attempt_count = attempt_count + 1, updated_at = ?, revision = revision + 1 WHERE id = ?",
+    [
+      failure.detail
+        ? `dispatch_failed: ${failure.detail.slice(0, DISPATCH_FAILURE_DETAIL_LIMIT)}`
+        : 'dispatch_failed',
+      now,
+      entryId
+    ]
+  );
+}
+
+/**
+ * Return an objective wedged in `launching` — its launch died before a runner
+ * attached — to `draft` so it can be launched again. An objective that still
+ * holds an active execution request is not wedged, just slow, and is left
+ * alone. Returns whether the objective was reset.
+ */
+export async function resetWedgedLaunchingObjective(
+  db: DatabaseClient,
+  objectiveId: string,
+  now: string
+): Promise<boolean> {
+  const result = await db.run(
+    `UPDATE objectives SET state = 'draft', updated_at = ?, revision = revision + 1
+       WHERE id = ? AND state = 'launching'
+         AND NOT EXISTS (
+           SELECT 1 FROM execution_requests er
+            WHERE er.objective_id = ? AND er.deleted_at IS NULL
+              AND er.status IN (${ACTIVE_REQUEST_STATUSES.map(() => '?').join(',')})
+         )`,
+    [now, objectiveId, objectiveId, ...ACTIVE_REQUEST_STATUSES]
+  );
+  return result.changes > 0;
+}
+
 export type RunQueueEntryRemoval = {
   removed: true;
   projectId: string;
@@ -918,6 +1065,8 @@ export type RunQueueEntryRemoval = {
   executionRequestId: string | null;
   /** True when a forced removal reset a stuck `launching` objective to `draft`. */
   objectiveReset: boolean;
+  /** Active execution requests `clearActiveRequests` released (0 when not supplied). */
+  clearedExecutionRequests: number;
   /** Non-default queue soft-deleted because this removal emptied it. */
   removedEmptyQueueId: string | null;
 };
@@ -926,6 +1075,17 @@ type RunQueueEntryRemovalOptions = {
   force?: boolean;
   /** Pause the containing queue as part of a recovery/disconnect mutation. */
   pauseQueue?: boolean;
+  /**
+   * Forced removal only: release the objective's active execution requests in
+   * the removal transaction, before the wedged-objective reset. Clearing needs a
+   * service context core cannot build, so the caller supplies the step; it runs
+   * after the entry has dropped its request link, so request reconciliation no
+   * longer finds the entry. Returns how many requests were cleared.
+   */
+  clearActiveRequests?: (
+    tx: DatabaseClient,
+    entry: { objectiveId: string; workspaceId: string }
+  ) => Promise<number>;
 };
 
 /**
@@ -933,9 +1093,12 @@ type RunQueueEntryRemovalOptions = {
  *
  * `force` is the escape hatch for entries wedged in `dispatched`/`running`:
  * besides dropping the entry it clears the dispatch link and resets an objective
- * still parked in `launching` back to `draft`, so it can be launched again.
- * Callers that can build a service context should also clear the objective's
- * active execution requests — see the backend route.
+ * still parked in `launching` back to `draft`, so it can be launched again. The
+ * reset is `resetWedgedLaunchingObjective`, the same one the dispatcher uses: an
+ * objective that still holds an active execution request is not wedged and is
+ * left alone. Callers that can build a service context pass
+ * `clearActiveRequests` so those requests are released first, in the same
+ * transaction — see the backend route.
  */
 export async function removeRunQueueEntry(
   db: DatabaseClient,
@@ -974,12 +1137,18 @@ export async function removeRunQueueEntry(
       'SELECT state FROM objectives WHERE id = ? AND deleted_at IS NULL',
       [row.objective_id]
     );
-    const objectiveReset = options.force === true && inFlight && objective?.state === 'launching';
-    if (objectiveReset)
-      await tx.run(
-        "UPDATE objectives SET state = 'draft', updated_at = ?, revision = revision + 1 WHERE id = ?",
-        [now, row.objective_id]
-      );
+    const clearedExecutionRequests =
+      options.force === true && options.clearActiveRequests
+        ? await options.clearActiveRequests(tx, {
+            objectiveId: row.objective_id,
+            workspaceId: row.workspace_id
+          })
+        : 0;
+    const objectiveReset =
+      options.force === true &&
+      inFlight &&
+      objective?.state === 'launching' &&
+      (await resetWedgedLaunchingObjective(tx, row.objective_id, now));
     // A queue exists only to hold work. Retire it once the last entry leaves
     // so projects never silt up with empty queues.
     let removedEmptyQueueId: string | null = null;
@@ -1019,6 +1188,7 @@ export async function removeRunQueueEntry(
       previousState: row.state,
       executionRequestId: row.execution_request_id,
       objectiveReset,
+      clearedExecutionRequests,
       removedEmptyQueueId
     };
   });
@@ -1176,10 +1346,13 @@ export async function moveRunQueueEntry(
       );
       position = (max?.value ?? 0) + STEP;
     }
+    const now = nowIso();
     await tx.run(
-      "UPDATE run_queue_entries SET queue_id = ?, position = ?, state = 'waiting', blocked_reason = NULL, waiting_reason = NULL, waiting_on_objective_id = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?",
-      [queueId, position, nowIso(), entryId]
+      'UPDATE run_queue_entries SET queue_id = ?, position = ?, updated_at = ?, revision = revision + 1 WHERE id = ?',
+      [queueId, position, now, entryId]
     );
+    // A moved entry starts over as plain `waiting`; the next tick re-plans it.
+    await holdRunQueueEntry(tx, entryId, now, { reason: null });
     // Moving the last entry out leaves the source queue finished, not pristine.
     if (queueId !== current.queue_id) await retireRunQueueIfEmpty(tx, current.queue_id);
     await rewriteMissionPositions(tx, current.mission_id);
@@ -1223,20 +1396,10 @@ export async function retryRunQueueEntry(
         'run_queue_entry_running',
         409
       );
-    const now = nowIso();
-    await tx.run(
-      `UPDATE run_queue_entries
-          SET state = 'waiting',
-              waiting_reason = 'retry_pending',
-              waiting_on_objective_id = NULL,
-              blocked_reason = NULL,
-              execution_request_id = NULL,
-              attempt_count = 0,
-              updated_at = ?,
-              revision = revision + 1
-        WHERE id = ?`,
-      [now, entryId]
-    );
+    await holdRunQueueEntry(tx, entryId, nowIso(), {
+      reason: 'retry_pending',
+      resetAttempts: true
+    });
     await enqueueRunQueueDispatch(tx, current.project_id, current.workspace_id);
     return (await listProjectRunQueues(tx, current.project_id)).queues
       .flatMap(q => q.entries)

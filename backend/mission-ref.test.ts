@@ -9,8 +9,10 @@ describe('mission reference resolution', () => {
     const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
     await bootstrapIntegrationTestDb({ sqlitePath: path.join(dir, 'Overlord.sqlite') });
 
-    const { WORKSPACE, db, newId, nowIso, setActiveWorkspaceUser } = await import('./db.ts');
-    const { seedAuthenticatedOperator } = await import('./test-helpers.ts');
+    const { db, newId, nowIso, setActiveWorkspaceUser } = await import('./db.ts');
+    const { createTestWorkspaceContext } = await import('./test-helpers.ts');
+    const { WORKSPACE } = createTestWorkspaceContext(await import('./db.ts'));
+    const { seedAuthenticatedOperator, seedDelivery } = await import('./test-helpers.ts');
     const workspaceUserId = seedAuthenticatedOperator({ db, workspaceId: WORKSPACE.id });
     setActiveWorkspaceUser(workspaceUserId);
     const {
@@ -69,24 +71,16 @@ describe('mission reference resolution', () => {
 
     const deliveryId = newId();
     const deliveredAt = nowIso();
-    db.prepare(
-      `INSERT INTO deliveries
-         (id, workspace_id, project_id, mission_id, objective_id, session_id,
-          summary, payload_json, verification_summary, follow_up_notes,
-          delivered_at, delivered_by_workspace_user_id, created_at, updated_at, revision)
-       VALUES (?, ?, ?, ?, ?, NULL, ?, '{}', NULL, NULL, ?, ?, ?, ?, 1)`
-    ).run(
-      deliveryId,
-      WORKSPACE.id,
-      project.id,
-      created.id,
-      created.objectives[0]?.id,
-      'Legacy delivery summary',
+    seedDelivery(db, {
+      id: deliveryId,
+      workspaceId: WORKSPACE.id,
+      projectId: project.id,
+      missionId: created.id,
+      objectiveId: created.objectives[0]!.id,
+      summary: 'Legacy delivery summary',
       deliveredAt,
-      workspaceUserId,
-      deliveredAt,
-      deliveredAt
-    );
+      deliveredByWorkspaceUserId: workspaceUserId
+    });
     db.prepare(
       `INSERT INTO mission_events
          (id, workspace_id, project_id, mission_id, objective_id, session_id,
@@ -122,14 +116,15 @@ describe('mission reference resolution', () => {
     await bootstrapIntegrationTestDb({ sqlitePath: path.join(dir, 'Overlord.sqlite') });
 
     const { createProject, createMission } = await import('./repository.ts');
-    const { ACTOR_WORKSPACE_USER_ID } = await import('./db.ts');
+    const { createTestWorkspaceContext } = await import('./test-helpers.ts');
+    const { getDefaultActorWorkspaceUserId } = createTestWorkspaceContext(await import('./db.ts'));
 
     const project = await createProject({ name: 'Mission Assignee Test' });
     const created = await createMission({
       projectId: project.id,
       firstObjective: 'Default assignee to creator'
     });
-    assert.equal(created.assignedWorkspaceUserId, ACTOR_WORKSPACE_USER_ID);
+    assert.equal(created.assignedWorkspaceUserId, getDefaultActorWorkspaceUserId());
 
     const explicitlyUnassigned = await createMission({
       projectId: project.id,

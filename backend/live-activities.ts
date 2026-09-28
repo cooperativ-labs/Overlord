@@ -3,7 +3,7 @@ import { formatObjectiveDisplayId } from '@overlord/database';
 import { createHash } from 'node:crypto';
 
 import { enqueueLiveActivityDispatchJob } from '../packages/core/service/live-activity-jobs.ts';
-import { newId, nowIso } from '../packages/core/service/util.ts';
+import { jsonTextFieldSql, newId, nowIso } from '../packages/core/service/util.ts';
 
 import { requireDatabaseClient, resolveActiveProfileId } from './db.ts';
 import { ApiError } from './errors.ts';
@@ -119,16 +119,6 @@ type PendingAskRow = {
   created_at: string;
   agent_request_id: string | null;
 };
-
-function jsonTextFieldSql(
-  column: string,
-  field: string,
-  dialect: DatabaseClient['dialect']
-): string {
-  return dialect === 'postgres'
-    ? `${column}->>'${field}'`
-    : `json_extract(${column}, '$.${field}')`;
-}
 
 function projectColor(settingsJson: string): string {
   try {

@@ -1,17 +1,11 @@
 import { createIsolatedCheckout } from '@overlord/core/service/test-checkout';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { rmSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 
-const tempDir = mkdtempSync(path.join(tmpdir(), 'overlord-webapp-project-resources-'));
-process.env.OVERLORD_SQLITE_PATH = path.join(tempDir, 'webapp.sqlite');
-
-const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
-const { db } = await bootstrapIntegrationTestDb({
-  sqlitePath: path.join(tempDir, 'webapp.sqlite')
-});
+const { createIntegrationTestDb } = await import('./test-helpers.ts');
+const { db, tempDir } = await createIntegrationTestDb('overlord-webapp-project-resources-');
 const {
   createProject,
   createProjectResource,

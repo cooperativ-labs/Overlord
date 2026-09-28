@@ -14,11 +14,8 @@ import { isExplicitRuntimeEnv, resolveLayeredEnv } from '../cli/src/env.ts';
 import { handleMcpPost, mcpServerInfo } from '../mcp/server.ts';
 import { ServiceError } from '../packages/core/service/errors.ts';
 import type { LocalTargetBridgeCall } from '../packages/core/service/local-target/desktop-bridge.ts';
-import type {
-  MissionSearchDateField,
-  ProjectListLifecycle,
-  StoredImageDto
-} from '../webapp/shared/contract.ts';
+import { parseMissionSearchOptions } from '../packages/core/service/mission-search.ts';
+import type { ProjectListLifecycle, StoredImageDto } from '../webapp/shared/contract.ts';
 
 import { postMissionBranchObservations } from './branching/mission-branch-observations.ts';
 import { postExecutionTargetObservations } from './branching/target-resource-observations.ts';
@@ -1701,158 +1698,33 @@ app.post(
 app.get(
   '/api/missions/search',
   handle(async req => {
-    const query = typeof req.query.q === 'string' ? req.query.q : null;
-    const projectId =
-      typeof req.query.projectId === 'string' && req.query.projectId.trim()
-        ? req.query.projectId.trim()
-        : null;
-    const parsedLimit = Number.parseInt(
-      typeof req.query.limit === 'string' ? req.query.limit : '',
-      10
-    );
-    const limit = Number.isFinite(parsedLimit) ? parsedLimit : undefined;
     // Status *types* only (coo:752). Project-defined status names are not
     // accepted here: they vary per project, so a name CSV would silently mean
-    // different things across the workspaces this search spans.
-    const statusTypes =
-      typeof req.query.statusTypes === 'string'
-        ? req.query.statusTypes
-            .split(',')
-            .map(value => value.trim())
-            .filter(value => value !== '')
-        : null;
-    return { missions: await searchMissions({ query, projectId, statusTypes, limit }) };
+    // different things across the workspaces this search spans. The frozen v1
+    // route reads only these four parameters.
+    const { q, projectId, statusTypes, limit } = req.query;
+    const options = parseMissionSearchOptions({ q, projectId, statusTypes, limit }, { version: 1 });
+    return {
+      missions: await searchMissions({
+        query: options.query,
+        projectId: options.projectId,
+        statusTypes: options.statusTypes,
+        limit: options.limit
+      })
+    };
   })
 );
 app.get(
   '/api/missions/search/v2',
-  handle(async req => {
-    const query = typeof req.query.q === 'string' ? req.query.q : null;
-    const parsedLimit = Number.parseInt(
-      typeof req.query.limit === 'string' ? req.query.limit : '',
-      10
-    );
-    const limit = Number.isFinite(parsedLimit) ? parsedLimit : undefined;
-    const statusTypes =
-      typeof req.query.statusTypes === 'string'
-        ? req.query.statusTypes
-            .split(',')
-            .map(value => value.trim())
-            .filter(value => value !== '')
-        : null;
-    const projectIdsRaw =
-      typeof req.query.projectIds === 'string'
-        ? req.query.projectIds
-        : typeof req.query.projectId === 'string'
-          ? req.query.projectId
-          : '';
-    const projectIds = projectIdsRaw
-      .split(',')
-      .map(value => value.trim())
-      .filter(value => value !== '');
-    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (projectIds.some(id => !uuidRe.test(id))) {
-      throw new ApiError(400, 'V2 search accepts only stable project UUIDs in projectIds');
-    }
-    const resourceKeys =
-      typeof req.query.resourceKeys === 'string'
-        ? req.query.resourceKeys
-            .split(',')
-            .map(value => value.trim())
-            .filter(Boolean)
-        : typeof req.query.resourceKey === 'string' && req.query.resourceKey.trim()
-          ? [req.query.resourceKey.trim()]
-          : null;
-    const rawDateField = typeof req.query.dateField === 'string' ? req.query.dateField : null;
-    if (
-      rawDateField &&
-      rawDateField !== 'createdAt' &&
-      rawDateField !== 'updatedAt' &&
-      rawDateField !== 'dueDatetime'
-    ) {
-      throw new ApiError(400, 'dateField must be createdAt, updatedAt, or dueDatetime');
-    }
-    const dateField = rawDateField as MissionSearchDateField | null;
-    const from =
-      typeof req.query.from === 'string' && req.query.from.trim() ? req.query.from : null;
-    const to = typeof req.query.to === 'string' && req.query.to.trim() ? req.query.to : null;
-    return searchMissionsAcrossWorkspacesV2({
-      query,
-      projectIds: projectIds.length > 0 ? projectIds : null,
-      statusTypes,
-      resourceKeys,
-      dateField,
-      from,
-      to,
-      limit
-    });
-  })
+  handle(req =>
+    searchMissionsAcrossWorkspacesV2(parseMissionSearchOptions(req.query, { version: 2 }))
+  )
 );
 app.get(
   '/api/search/v3',
-  handle(async req => {
-    const csv = (value: unknown): string[] | null =>
-      typeof value === 'string'
-        ? value
-            .split(',')
-            .map(item => item.trim())
-            .filter(item => item !== '')
-        : null;
-    const query = typeof req.query.q === 'string' ? req.query.q : null;
-    const parsedLimit = Number.parseInt(
-      typeof req.query.limit === 'string' ? req.query.limit : '',
-      10
-    );
-    const limit = Number.isFinite(parsedLimit) ? parsedLimit : undefined;
-    const statusTypes = csv(req.query.statusTypes);
-    const projectIdsRaw =
-      typeof req.query.projectIds === 'string'
-        ? req.query.projectIds
-        : typeof req.query.projectId === 'string'
-          ? req.query.projectId
-          : '';
-    const projectIds = projectIdsRaw
-      .split(',')
-      .map(value => value.trim())
-      .filter(value => value !== '');
-    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (projectIds.some(id => !uuidRe.test(id))) {
-      throw new ApiError(400, 'V3 search accepts only stable project UUIDs in projectIds');
-    }
-    const resourceKeys =
-      csv(req.query.resourceKeys) ??
-      (typeof req.query.resourceKey === 'string' && req.query.resourceKey.trim()
-        ? [req.query.resourceKey.trim()]
-        : null);
-    const rawDateField = typeof req.query.dateField === 'string' ? req.query.dateField : null;
-    if (
-      rawDateField &&
-      rawDateField !== 'createdAt' &&
-      rawDateField !== 'updatedAt' &&
-      rawDateField !== 'dueDatetime'
-    ) {
-      throw new ApiError(400, 'dateField must be createdAt, updatedAt, or dueDatetime');
-    }
-    const dateField = rawDateField as MissionSearchDateField | null;
-    const from =
-      typeof req.query.from === 'string' && req.query.from.trim() ? req.query.from : null;
-    const to = typeof req.query.to === 'string' && req.query.to.trim() ? req.query.to : null;
-    const matchesPerResultRaw =
-      typeof req.query.matchesPerResult === 'string' ? req.query.matchesPerResult : null;
-    return searchMissionsAcrossWorkspacesV3({
-      query,
-      projectIds: projectIds.length > 0 ? projectIds : null,
-      statusTypes,
-      resourceKeys,
-      dateField,
-      from,
-      to,
-      limit,
-      entityTypes: csv(req.query.entityTypes),
-      objectiveStates: csv(req.query.objectiveStates),
-      matchesPerResult: matchesPerResultRaw
-    });
-  })
+  handle(req =>
+    searchMissionsAcrossWorkspacesV3(parseMissionSearchOptions(req.query, { version: 3 }))
+  )
 );
 // `createMission`/`getMissionDetail`/`updateMission`/`deleteMission` resolve and
 // authorize against the mission's (or target project's) own workspace

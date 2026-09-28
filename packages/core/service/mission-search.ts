@@ -14,6 +14,7 @@ import type {
 } from '@overlord/contract';
 import {
   DEFAULT_SEARCH_ENTITY_TYPES,
+  MISSION_SEARCH_DATE_FIELDS,
   parseMatchesPerResult,
   parseSearchEntityTypes,
   parseSearchObjectiveStates,
@@ -50,6 +51,7 @@ const SNIPPET_MAX_LENGTH = 160;
 const EXACT_DISPLAY_ID_BOOST = 2;
 const EXACT_TITLE_BOOST = 1;
 const TITLE_MATCH_BOOST = 0.5;
+const PROJECT_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ISO_DATE_BOUND_RE =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/;
 
@@ -981,6 +983,104 @@ export function normalizeSearchV3Options({
     objectiveStates: states.value,
     matchesPerResult: matches.value,
     candidateLimit: cap
+  };
+}
+
+/**
+ * Raw mission-search parameters keyed by their REST query names (`q`,
+ * `projectIds`, `statusTypes`, …). REST passes `req.query`; Protocol maps its
+ * flags onto the same names.
+ */
+export type MissionSearchRawParams = Readonly<Record<string, unknown>>;
+
+export type MissionSearchOptions = {
+  query: string | null;
+  /** V1 only: the single trimmed `projectId`. */
+  projectId: string | null;
+  /** V2/V3 only: stable project UUIDs from `projectIds` (or `projectId`). */
+  projectIds: string[] | null;
+  statusTypes: string[] | null;
+  resourceKeys: string[] | null;
+  dateField: MissionSearchDateField | null;
+  from: string | null;
+  to: string | null;
+  limit: number | undefined;
+  /** V3 only; validated downstream by `normalizeSearchV3Options`. */
+  entityTypes: string[] | null;
+  objectiveStates: string[] | null;
+  matchesPerResult: string | null;
+};
+
+function rawString(raw: MissionSearchRawParams, key: string): string | null {
+  const value = raw[key];
+  return typeof value === 'string' ? value : null;
+}
+
+function rawCsv(raw: MissionSearchRawParams, key: string): string[] | null {
+  const value = rawString(raw, key);
+  return value === null
+    ? null
+    : value
+        .split(',')
+        .map(item => item.trim())
+        .filter(item => item !== '');
+}
+
+function rawNonBlank(raw: MissionSearchRawParams, key: string): string | null {
+  const value = rawString(raw, key);
+  return value !== null && value.trim() !== '' ? value : null;
+}
+
+/**
+ * Parse mission-search parameters once for every surface. Throws the same
+ * 400 validation errors REST has always returned: a closed `dateField` set and,
+ * for v2/v3, UUID-only `projectIds`. Protocol resolves its human
+ * `--project-id` reference separately and does not pass project keys here.
+ */
+export function parseMissionSearchOptions(
+  raw: MissionSearchRawParams,
+  { version }: { version: 1 | 2 | 3 }
+): MissionSearchOptions {
+  const parsedLimit = Number.parseInt(rawString(raw, 'limit') ?? '', 10);
+
+  let projectIds: string[] | null = null;
+  if (version !== 1) {
+    const ids = rawCsv(raw, 'projectIds') ?? rawCsv(raw, 'projectId') ?? [];
+    if (ids.some(id => !PROJECT_UUID_RE.test(id))) {
+      throw new ServiceError(
+        `V${version} search accepts only stable project UUIDs in projectIds`,
+        'validation_error'
+      );
+    }
+    projectIds = ids.length > 0 ? ids : null;
+  }
+
+  const dateField = rawString(raw, 'dateField');
+  // An empty `dateField=` is rejected too, as the workspace search always has.
+  if (
+    dateField !== null &&
+    !(MISSION_SEARCH_DATE_FIELDS as readonly string[]).includes(dateField)
+  ) {
+    throw new ServiceError(
+      'dateField must be createdAt, updatedAt, or dueDatetime',
+      'validation_error'
+    );
+  }
+
+  const resourceKey = rawNonBlank(raw, 'resourceKey');
+  return {
+    query: rawString(raw, 'q'),
+    projectId: version === 1 ? (rawNonBlank(raw, 'projectId')?.trim() ?? null) : null,
+    projectIds,
+    statusTypes: rawCsv(raw, 'statusTypes'),
+    resourceKeys: rawCsv(raw, 'resourceKeys') ?? (resourceKey ? [resourceKey.trim()] : null),
+    dateField: dateField as MissionSearchDateField | null,
+    from: rawNonBlank(raw, 'from'),
+    to: rawNonBlank(raw, 'to'),
+    limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
+    entityTypes: version === 3 ? rawCsv(raw, 'entityTypes') : null,
+    objectiveStates: version === 3 ? rawCsv(raw, 'objectiveStates') : null,
+    matchesPerResult: version === 3 ? rawString(raw, 'matchesPerResult') : null
   };
 }
 

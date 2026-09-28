@@ -1,29 +1,27 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
+import { rmSync } from 'node:fs';
 import test from 'node:test';
 
-const tempDir = mkdtempSync(path.join(tmpdir(), 'overlord-webapp-workspace-invitations-'));
-process.env.OVERLORD_SQLITE_PATH = path.join(tempDir, 'webapp.sqlite');
+const { createIntegrationTestDb } = await import('./test-helpers.ts');
+const { db, tempDir, operatorWorkspaceUserId } = await createIntegrationTestDb(
+  'overlord-workspace-invitations-'
+);
 delete process.env.RESEND_API_KEY;
 
 const dbModule = await import('./db.ts');
+const { createTestWorkspaceContext } = await import('./test-helpers.ts');
+const testWorkspaceContext = createTestWorkspaceContext(dbModule);
 const {
-  db,
-  getActiveWorkspaceId,
   getActorWorkspaceUserId,
-  initDatabase,
   setActiveProfileId,
   setActiveWorkspaceContext,
   setActiveWorkspaceUser,
   withRequestContextAsync
 } = dbModule;
-await initDatabase();
+const { getActiveWorkspaceId } = createTestWorkspaceContext(dbModule);
 const { loadActorRoles, actorCan } = await import('./rbac.ts');
 const { PERMISSIONS } = await import('@overlord/auth');
-const { DEFAULT_TEST_ORGANIZATION_ID, seedAuthenticatedOperator } =
-  await import('./test-helpers.ts');
+const { DEFAULT_TEST_ORGANIZATION_ID } = await import('./test-helpers.ts');
 const {
   acceptWorkspaceInvitation,
   createOrganizationOnboarding,
@@ -36,9 +34,6 @@ const {
   revokeWorkspaceInvitation,
   updateWorkspaceMemberRole
 } = await import('./workspaces.ts');
-
-const operatorWorkspaceUserId = seedAuthenticatedOperator({ db });
-setActiveWorkspaceUser(operatorWorkspaceUserId);
 
 function insertProfile(profileId: string, email: string): void {
   const now = new Date().toISOString();
@@ -189,8 +184,8 @@ test('accepting an invitation never leaks into the process-wide default workspac
     organizationId: DEFAULT_TEST_ORGANIZATION_ID,
     name: 'Leak Check Workspace'
   });
-  const defaultWorkspaceIdBefore = dbModule.WORKSPACE.id;
-  const defaultActorBefore = dbModule.ACTOR_WORKSPACE_USER_ID;
+  const defaultWorkspaceIdBefore = testWorkspaceContext.WORKSPACE.id;
+  const defaultActorBefore = testWorkspaceContext.getDefaultActorWorkspaceUserId();
 
   const invite = await inviteWorkspaceMember(otherWorkspace.id, {
     email: 'no-leak-invitee@cooperativ.io',
@@ -215,12 +210,12 @@ test('accepting an invitation never leaks into the process-wide default workspac
   // Outside the request, the process-wide fallback must be exactly what it
   // was before — the request-scoped switch must never have mutated it.
   assert.equal(
-    dbModule.WORKSPACE.id,
+    testWorkspaceContext.WORKSPACE.id,
     defaultWorkspaceIdBefore,
     'a request-scoped workspace switch must not leak into the process-wide default workspace'
   );
   assert.equal(
-    dbModule.ACTOR_WORKSPACE_USER_ID,
+    testWorkspaceContext.getDefaultActorWorkspaceUserId(),
     defaultActorBefore,
     'a request-scoped workspace switch must not leak into the process-wide default actor'
   );

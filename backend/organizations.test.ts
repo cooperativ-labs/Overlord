@@ -1,26 +1,19 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
 import test from 'node:test';
 
-const tempDir = mkdtempSync(path.join(tmpdir(), 'overlord-webapp-organizations-'));
-process.env.OVERLORD_SQLITE_PATH = path.join(tempDir, 'webapp.sqlite');
+const { createIntegrationTestDb } = await import('./test-helpers.ts');
+const { db } = await createIntegrationTestDb('overlord-organizations-');
 delete process.env.RESEND_API_KEY;
 
 const dbModule = await import('./db.ts');
 const {
-  db,
-  initDatabase,
   setActiveProfileId,
   setActiveWorkspaceContext,
   setActiveWorkspaceUser,
   withRequestContextAsync
 } = dbModule;
-await initDatabase();
 
-const { DEFAULT_TEST_ORGANIZATION_ID, seedAuthenticatedOperator } =
-  await import('./test-helpers.ts');
+const { DEFAULT_TEST_ORGANIZATION_ID } = await import('./test-helpers.ts');
 const {
   acceptWorkspaceInvitation,
   createOrganizationOnboarding,
@@ -37,9 +30,6 @@ const {
   updateOrganization
 } = await import('./organizations.ts');
 const { buildMeta } = await import('./http/meta.ts');
-
-const operatorWorkspaceUserId = seedAuthenticatedOperator({ db });
-setActiveWorkspaceUser(operatorWorkspaceUserId);
 
 let profileCounter = 0;
 function insertProfile(): { profileId: string; email: string } {

@@ -4,22 +4,16 @@ import ts from 'typescript';
 
 const roots = ['backend', 'packages'];
 const ignored =
-  /(?:^|\/)(?:dist-server|test|tests)(?:\/|$)|\.test\.[cm]?[jt]sx?$|secondary-workspace-fixture\.ts$/;
+  /(?:^|\/)(?:dist-server|test|tests)(?:\/|$)|\.test\.[cm]?[jt]sx?$|secondary-workspace-fixture\.ts|test-helpers\.ts$/;
 
-const allowedFiles = new Set([
-  // Accessor definitions, request-context binding and explicit active-edge helpers.
-  'backend/db.ts'
-]);
-
-// Contract v95 retires every production ambient read. The only surviving
-// compatibility definitions live in backend/db.ts and are process-local for
-// bootstrap/direct-service tests; new call sites must never be allowlisted.
+// Contract v95 retires production ambient reads. db.ts owns its private
+// request-context implementation; callers cannot import those private accessors.
 const allowed = [];
 
 function sourceFiles(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
     const file = path.join(directory, entry.name);
-    if (ignored.test(file)) return [];
+    if (ignored.test(file) || file === 'backend/db.ts') return [];
     if (entry.isDirectory()) return sourceFiles(file);
     return /\.[cm]?[jt]sx?$/.test(file) ? [file] : [];
   });
@@ -83,7 +77,7 @@ for (const file of roots.flatMap(sourceFiles)) {
     const expression = ambientExpression(node);
     if (expression) {
       const scope = functionName(node);
-      const approved = allowedFiles.has(file) || allowed.some(
+      const approved = allowed.some(
         entry => entry.file === file && entry.scope === scope && entry.expression === expression
       );
       if (!approved) {

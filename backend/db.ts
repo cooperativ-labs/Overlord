@@ -264,7 +264,7 @@ export interface AuthorizedWorkspace {
 let defaultWorkspace: ActiveWorkspace | null = null;
 
 /** The workspace user changes are attributed to, once a local account exists. */
-export let ACTOR_WORKSPACE_USER_ID: string | null = null;
+let ACTOR_WORKSPACE_USER_ID: string | null = null;
 
 export interface RequestContext {
   activeProfileId: string | null;
@@ -446,7 +446,7 @@ export async function resolveActiveProfileId(
  * any handler runs, so this only throws for routes that (incorrectly) skip
  * that gate; failing loudly beats leaking cross-tenant.
  */
-export function getActiveWorkspace(): ActiveWorkspace {
+function getActiveWorkspace(): ActiveWorkspace {
   const workspace = requestContext().activeWorkspace;
   if (workspace === null) {
     throw new Error(
@@ -456,7 +456,7 @@ export function getActiveWorkspace(): ActiveWorkspace {
   return workspace;
 }
 
-export function getActiveWorkspaceId(): string {
+function getActiveWorkspaceId(): string {
   return getActiveWorkspace().id;
 }
 
@@ -469,7 +469,7 @@ export function getActiveWorkspaceId(): string {
  * using `workspaceId` when the actor is null — so that default must not throw,
  * or a no-membership request would 500 instead of the intended clean 403.
  */
-export function getActiveWorkspaceIdOrNull(): string | null {
+function getActiveWorkspaceIdOrNull(): string | null {
   return requestContext().activeWorkspace?.id ?? null;
 }
 
@@ -519,28 +519,6 @@ export function getImplicitWorkspaceIdOrNull(): string | null {
 export function setActiveWorkspaceContext(workspace: ActiveWorkspace | null): void {
   mutateRequestContext({ ...requestContext(), activeWorkspace: workspace });
 }
-
-/**
- * Back-compat read-only view of the active workspace for call sites not yet
- * migrated to `getActiveWorkspaceId()`/`getActiveWorkspace()`. Each accessor
- * re-reads the current request's tenant scoping live (never a snapshot from
- * import time), so it is safe for any per-request code path to keep reading
- * `WORKSPACE.id`/`.slug`/`.name`/`.kind`.
- */
-export const WORKSPACE: ActiveWorkspace = {
-  get id() {
-    return getActiveWorkspaceId();
-  },
-  get slug() {
-    return getActiveWorkspace().slug;
-  },
-  get name() {
-    return getActiveWorkspace().name;
-  },
-  get kind() {
-    return getActiveWorkspace().kind;
-  }
-};
 
 export function getActiveTokenId(): string | null {
   return requestContext().activeTokenId;
@@ -720,8 +698,8 @@ async function refreshActiveWorkspaceFromClient(client: DatabaseClient): Promise
  * requests sequentially with synchronous better-sqlite3 handlers, so a per-request
  * global is safe and mirrors the existing `ACTOR_WORKSPACE_USER_ID` pattern.
  */
-export let ACTIVE_TOKEN_SCOPES: string[] | null = null;
-export let ACTIVE_TOKEN_ID: string | null = null;
+let ACTIVE_TOKEN_SCOPES: string[] | null = null;
+let ACTIVE_TOKEN_ID: string | null = null;
 
 /**
  * Point request attribution at the workspace user resolved from an authenticated

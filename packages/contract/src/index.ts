@@ -34,6 +34,7 @@ export {
   type LaunchVariableDefinition
 } from './launch-variables.js';
 export {
+  MISSION_SEARCH_DATE_FIELDS,
   type MissionSearchAppliedFilters,
   type MissionSearchDateField,
   type MissionSearchMatchKind,

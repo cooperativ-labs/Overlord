@@ -4,7 +4,6 @@ import test from 'node:test';
 import {
   currentMaxSeq,
   db,
-  getActiveWorkspaceId,
   getActorWorkspaceUserId,
   initDatabase,
   recordChange,
@@ -13,6 +12,8 @@ import {
   setActiveWorkspace,
   setActiveWorkspaceUser
 } from './db.ts';
+import { createTestWorkspaceContext } from './test-helpers.ts';
+const { getActiveWorkspaceId } = createTestWorkspaceContext(await import('./db.ts'));
 import { ApiError } from './errors.ts';
 import { actorCan, requirePermission, requireProjectPermission } from './rbac.ts';
 import { readChangesAfter } from './realtime.ts';

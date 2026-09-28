@@ -1,8 +1,6 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
+import { rmSync } from 'node:fs';
 import { after, describe, it } from 'node:test';
 
 /**
@@ -12,14 +10,12 @@ import { after, describe, it } from 'node:test';
  * "Authentication required" while CLI USER_TOKEN auth continues to work.
  */
 
-const tempDir = mkdtempSync(path.join(tmpdir(), 'overlord-runner-session-auth-'));
-process.env.OVERLORD_SQLITE_PATH = path.join(tempDir, 'runner-session-auth.sqlite');
 process.env.BETTER_AUTH_SECRET = 'test-better-auth-secret-32-chars-min';
 process.env.BETTER_AUTH_URL = 'http://127.0.0.1:4311';
 
-const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
-await bootstrapIntegrationTestDb({
-  sqlitePath: process.env.OVERLORD_SQLITE_PATH
+const { createIntegrationTestDb } = await import('./test-helpers.ts');
+const { tempDir } = await createIntegrationTestDb('overlord-runner-session-auth-', {
+  filename: 'runner-session-auth.sqlite'
 });
 
 const { getActiveProfileId } = await import('./db.ts');

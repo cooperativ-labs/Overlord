@@ -170,12 +170,15 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
       resourceKey: stringProperty(
         'Optional logical resource key. Keys are matched by name within every selected project.'
       ),
-      dateField: stringProperty(
-        'Date column for an explicit range: createdAt, updatedAt, or dueDatetime. Defaults to ' +
+      dateField: {
+        type: 'string',
+        enum: ['createdAt', 'updatedAt', 'dueDatetime'],
+        description:
+          'Date column for an explicit range: createdAt, updatedAt, or dueDatetime. Defaults to ' +
           'updatedAt only when from or to is supplied. Use dueDatetime for questions about what is ' +
           'scheduled or due — a mission is scheduled by its due date, not by an execution timer. ' +
           'Missions with no due date are excluded from a dueDatetime range.'
-      ),
+      },
       from: stringProperty('Optional inclusive ISO-8601 date/time lower bound.'),
       to: stringProperty('Optional exclusive ISO-8601 date/time upper bound.'),
       limit: {

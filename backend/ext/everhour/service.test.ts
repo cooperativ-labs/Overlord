@@ -9,7 +9,9 @@ process.env.EVERHOUR_API_KEY_ENCRYPTION_KEY ??= Buffer.alloc(32, 9).toString('ba
 const { bootstrapIntegrationTestDb } = await import('../../test-helpers.ts');
 await bootstrapIntegrationTestDb({ sqlitePath: path.join(tempDir, 'everhour.sqlite') });
 
-const { db, getActorWorkspaceUserId, newId, nowIso, WORKSPACE } = await import('../../db.ts');
+const { db, getActorWorkspaceUserId, newId, nowIso } = await import('../../db.ts');
+const { createTestWorkspaceContext } = await import('../../test-helpers.ts');
+const { WORKSPACE } = createTestWorkspaceContext(await import('../../db.ts'));
 const { createMission, createProject } = await import('../../repository.ts');
 const { ApiError } = await import('../../errors.ts');
 const { decryptEverhourApiKey, requireEverhourEncryptionKey } = await import('./crypto.ts');

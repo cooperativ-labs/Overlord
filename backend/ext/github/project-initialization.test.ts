@@ -9,7 +9,9 @@ const { bootstrapIntegrationTestDb } = await import('../../test-helpers.ts');
 const { db } = await bootstrapIntegrationTestDb({
   sqlitePath: path.join(tempDir, 'github-project-initialization.sqlite')
 });
-const { getActiveWorkspaceId, newId, nowIso, requireDatabaseClient } = await import('../../db.ts');
+const { newId, nowIso, requireDatabaseClient } = await import('../../db.ts');
+const { createTestWorkspaceContext } = await import('../../test-helpers.ts');
+const { getActiveWorkspaceId } = createTestWorkspaceContext(await import('../../db.ts'));
 const {
   createProjectInitialization,
   readProjectInitialization,

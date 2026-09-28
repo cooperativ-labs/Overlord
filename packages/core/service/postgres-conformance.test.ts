@@ -22,6 +22,13 @@ import {
 } from './project-execution-target.js';
 import { findPrimaryProjectResource } from './projects.js';
 import { claimNextQueuedRequest } from './queue-runtime.js';
+import {
+  blockRunQueueEntry,
+  enqueueRunQueueEntry,
+  holdRunQueueEntry,
+  recordRunQueueDispatchFailure,
+  resetWedgedLaunchingObjective
+} from './run-queue.js';
 import { seedServiceOperator } from './test-helpers.js';
 
 /**
@@ -881,6 +888,78 @@ for (const adapter of adapters) {
 
         assert.equal(filtered.length, 1);
         assert.equal(filtered[0]!.filePath, 'src/shared.ts');
+      } finally {
+        await teardown();
+      }
+    });
+
+    it('writes Run Queue retry-pending holds and the wedged-launch guard identically (run queue)', async () => {
+      const { client, teardown } = await adapter.create();
+      try {
+        const graph = await seedGraph(client);
+        const entry = await enqueueRunQueueEntry(client, graph.projectId, graph.objectiveId);
+        const row = async () =>
+          (await client.get<{
+            state: string;
+            waiting_reason: string | null;
+            blocked_reason: string | null;
+            attempt_count: number;
+            execution_request_id: string | null;
+          }>(
+            `SELECT state, waiting_reason, blocked_reason, attempt_count, execution_request_id
+               FROM run_queue_entries WHERE id = ?`,
+            [entry.id]
+          ))!;
+
+        // A failed dispatch attempt: retryable, counted, cause kept.
+        await recordRunQueueDispatchFailure(client, entry.id, ISO(), { detail: 'no target' });
+        assert.deepEqual(await row(), {
+          state: 'waiting',
+          waiting_reason: 'retry_pending',
+          blocked_reason: 'dispatch_failed: no target',
+          attempt_count: 1,
+          execution_request_id: null
+        });
+        // Re-holding as retry_pending keeps that cause; the ceiling block keeps it too.
+        await holdRunQueueEntry(client, entry.id, ISO(), {
+          reason: 'retry_pending',
+          keepFailureDetail: true
+        });
+        assert.equal((await row()).blocked_reason, 'dispatch_failed: no target');
+        await blockRunQueueEntry(client, entry.id, ISO(), {
+          reason: 'dispatch_failed',
+          keepFailureDetail: true
+        });
+        assert.equal((await row()).state, 'blocked');
+        assert.equal((await row()).blocked_reason, 'dispatch_failed: no target');
+        // An explicit retry refunds the budget and clears the cause.
+        await holdRunQueueEntry(client, entry.id, ISO(), {
+          reason: 'retry_pending',
+          resetAttempts: true
+        });
+        assert.deepEqual(await row(), {
+          state: 'waiting',
+          waiting_reason: 'retry_pending',
+          blocked_reason: null,
+          attempt_count: 0,
+          execution_request_id: null
+        });
+
+        // The wedged-launch reset honors an active request on both dialects.
+        await client.run("UPDATE objectives SET state = 'launching' WHERE id = ?", [
+          graph.objectiveId
+        ]);
+        const requestId = await insertQueuedRequest(client, graph);
+        assert.equal(await resetWedgedLaunchingObjective(client, graph.objectiveId, ISO()), false);
+        await client.run("UPDATE execution_requests SET status = 'expired' WHERE id = ?", [
+          requestId
+        ]);
+        assert.equal(await resetWedgedLaunchingObjective(client, graph.objectiveId, ISO()), true);
+        const objective = await client.get<{ state: string }>(
+          'SELECT state FROM objectives WHERE id = ?',
+          [graph.objectiveId]
+        );
+        assert.equal(objective!.state, 'draft');
       } finally {
         await teardown();
       }

@@ -9,7 +9,8 @@ const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
 const { db } = await bootstrapIntegrationTestDb({
   sqlitePath: path.join(tempDir, 'project-initialization.sqlite')
 });
-const { getActiveWorkspaceId } = await import('./db.ts');
+const { createTestWorkspaceContext } = await import('./test-helpers.ts');
+const { getActiveWorkspaceId } = createTestWorkspaceContext(await import('./db.ts'));
 const { initializeProject } = await import('./repository.ts');
 const { beginGitHubUserAuthorization, completeGitHubUserAuthorization } =
   await import('./ext/github/user-oauth.ts');

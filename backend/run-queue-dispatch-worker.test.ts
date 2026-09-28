@@ -8,11 +8,13 @@ const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
 const bootstrap = await bootstrapIntegrationTestDb({
   sqlitePath: path.join(tempDir, 'webapp.sqlite')
 });
-const { createProject } = await import('./repository.ts');
+const { createProject, createProjectResource } = await import('./repository.ts');
+const { createIsolatedCheckout } = await import('@overlord/core/service/test-checkout');
 const { runProtocolSubcommand } = await import('./protocol.ts');
 const { patchRunQueue, postRunQueueEntry } = await import('./run-queue.ts');
 const { dispatchProjectRunQueues } = await import('./run-queue-dispatch-worker.ts');
-const { requireDatabaseClient } = await import('./db.ts');
+const { buildWebappServiceContextForWorkspace, requireDatabaseClient } = await import('./db.ts');
+const { createExecutionRequest } = await import('../packages/core/service/execution-requests.ts');
 
 type EntryState = {
   state: string;
@@ -200,4 +202,190 @@ test('an entry for a completed objective is dropped even after it was blocked', 
   bootstrap.db.prepare("UPDATE objectives SET state = 'complete' WHERE id = ?").run(mission.first);
   await dispatchProjectRunQueues(requireDatabaseClient(), project.id);
   assert.equal(entryFor(mission.first), undefined);
+});
+
+// ---- Row-state characterization -------------------------------------------
+//
+// Every transition the dispatcher writes, asserted on the full column set it
+// owns. These pin the behavior the core transition functions must keep.
+
+type FullEntry = EntryState & {
+  id: string;
+  attempt_count: number;
+  execution_request_id: string | null;
+  dispatched_at: string | null;
+  deleted_at: string | null;
+};
+
+function fullEntryFor(objectiveId: string): FullEntry {
+  return bootstrap.db
+    .prepare(
+      `SELECT id, state, blocked_reason, waiting_reason, waiting_on_objective_id, revision,
+              attempt_count, execution_request_id, dispatched_at, deleted_at
+         FROM run_queue_entries WHERE objective_id = ?
+        ORDER BY created_at DESC LIMIT 1`
+    )
+    .get(objectiveId) as FullEntry;
+}
+
+function objectiveState(objectiveId: string): string {
+  return (
+    bootstrap.db.prepare('SELECT state FROM objectives WHERE id = ?').get(objectiveId) as {
+      state: string;
+    }
+  ).state;
+}
+
+test('drop soft-deletes the entry of a completed objective', async () => {
+  const project = await createProject({ name: `Drop row ${Date.now()}` });
+  const mission = await twoObjectiveMission(project.id, 'Drop row');
+  await postRunQueueEntry(project.id, { objectiveId: mission.first });
+  await startObjectiveQueue(mission.first);
+  bootstrap.db.prepare("UPDATE objectives SET state = 'complete' WHERE id = ?").run(mission.first);
+
+  await dispatchProjectRunQueues(requireDatabaseClient(), project.id);
+  const row = fullEntryFor(mission.first);
+  assert.ok(row.deleted_at, 'the entry is soft-deleted');
+  assert.equal(row.state, 'waiting', 'drop does not rewrite state');
+});
+
+test('mark_running reflects an objective started outside the queue and clears every hold', async () => {
+  const project = await createProject({ name: `Mark running ${Date.now()}` });
+  const mission = await twoObjectiveMission(project.id, 'Mark running');
+  await postRunQueueEntry(project.id, { objectiveId: mission.first });
+  await startObjectiveQueue(mission.first);
+  bootstrap.db
+    .prepare(
+      "UPDATE run_queue_entries SET state = 'blocked', blocked_reason = 'no_agent', waiting_reason = 'mission_busy', waiting_on_objective_id = ? WHERE objective_id = ?"
+    )
+    .run(mission.second, mission.first);
+  bootstrap.db.prepare("UPDATE objectives SET state = 'executing' WHERE id = ?").run(mission.first);
+
+  await dispatchProjectRunQueues(requireDatabaseClient(), project.id);
+  const row = fullEntryFor(mission.first);
+  assert.equal(row.state, 'running');
+  assert.equal(row.blocked_reason, null);
+  assert.equal(row.waiting_reason, null);
+  assert.equal(row.waiting_on_objective_id, null);
+  assert.equal(row.attempt_count, 0, 'marking running spends no attempt');
+  assert.equal(row.execution_request_id, null);
+});
+
+test('a waiting hold after a failed attempt clears the failure detail', async () => {
+  const project = await createProject({ name: `Hold clears ${Date.now()}` });
+  const mission = await twoObjectiveMission(project.id, 'Hold clears');
+  await postRunQueueEntry(project.id, { objectiveId: mission.second });
+  await startObjectiveQueue(mission.second);
+  bootstrap.db
+    .prepare(
+      "UPDATE run_queue_entries SET waiting_reason = 'retry_pending', blocked_reason = 'dispatch_failed: boom', attempt_count = 1 WHERE objective_id = ?"
+    )
+    .run(mission.second);
+  bootstrap.db.prepare("UPDATE objectives SET state = 'executing' WHERE id = ?").run(mission.first);
+
+  await dispatchProjectRunQueues(requireDatabaseClient(), project.id);
+  const row = fullEntryFor(mission.second);
+  assert.equal(row.state, 'waiting');
+  assert.equal(row.waiting_reason, 'mission_busy');
+  assert.equal(row.waiting_on_objective_id, mission.first);
+  assert.equal(row.blocked_reason, null, 'the entry is not failing, it is not its turn');
+  assert.equal(row.attempt_count, 1, 'a hold never refunds attempts');
+});
+
+test('a failed dispatch waits as retry_pending with the cause and no request link', async () => {
+  const project = await createProject({ name: `Dispatch failure row ${Date.now()}` });
+  const mission = await twoObjectiveMission(project.id, 'Dispatch failure row');
+  await postRunQueueEntry(project.id, { objectiveId: mission.first });
+  await startObjectiveQueue(mission.first);
+  // No resource is linked, so the launch inside the dispatch transaction throws.
+  await dispatchProjectRunQueues(requireDatabaseClient(), project.id);
+
+  const row = fullEntryFor(mission.first);
+  assert.equal(row.state, 'waiting');
+  assert.equal(row.waiting_reason, 'retry_pending');
+  assert.equal(row.waiting_on_objective_id, null);
+  assert.match(row.blocked_reason ?? '', /^dispatch_failed(: .+)?$/);
+  assert.ok((row.blocked_reason ?? '').length <= 'dispatch_failed: '.length + 400);
+  assert.equal(row.attempt_count, 1);
+  assert.equal(row.execution_request_id, null);
+  assert.equal(row.dispatched_at, null);
+  // The dispatch transaction rolled back, including the objective's launch.
+  assert.equal(objectiveState(mission.first), 'draft');
+
+  // At the ceiling the block keeps that cause instead of the bare reason.
+  exhaustAttempts(mission.first);
+  const cause = row.blocked_reason;
+  await dispatchProjectRunQueues(requireDatabaseClient(), project.id);
+  const blocked = fullEntryFor(mission.first);
+  assert.equal(blocked.state, 'blocked');
+  assert.equal(blocked.blocked_reason, cause);
+  assert.equal(blocked.waiting_reason, null);
+});
+
+test('a successful dispatch links the request, spends one attempt, and clears every hold', async () => {
+  const project = await createProject({ name: `Dispatched row ${Date.now()}` });
+  await createProjectResource(project.id, {
+    directoryPath: createIsolatedCheckout('overlord-run-queue-dispatched-'),
+    executionTargetId: null,
+    isPrimary: true
+  });
+  const mission = await twoObjectiveMission(project.id, 'Dispatched row');
+  await postRunQueueEntry(project.id, { objectiveId: mission.first });
+  await startObjectiveQueue(mission.first);
+  bootstrap.db
+    .prepare(
+      "UPDATE run_queue_entries SET waiting_reason = 'retry_pending', blocked_reason = 'dispatch_failed: earlier', attempt_count = 1 WHERE objective_id = ?"
+    )
+    .run(mission.first);
+
+  await dispatchProjectRunQueues(requireDatabaseClient(), project.id);
+  const row = fullEntryFor(mission.first);
+  assert.equal(row.state, 'dispatched');
+  assert.equal(row.blocked_reason, null);
+  assert.equal(row.waiting_reason, null);
+  assert.equal(row.waiting_on_objective_id, null);
+  assert.equal(row.attempt_count, 2);
+  assert.ok(row.dispatched_at);
+  const request = bootstrap.db
+    .prepare(
+      'SELECT objective_id, requested_source, idempotency_key FROM execution_requests WHERE id = ?'
+    )
+    .get(row.execution_request_id) as {
+    objective_id: string;
+    requested_source: string;
+    idempotency_key: string;
+  };
+  assert.equal(request.objective_id, mission.first);
+  assert.equal(request.requested_source, 'run_queue');
+  assert.equal(request.idempotency_key, `run_queue:${row.id}:attempt:2`);
+  assert.equal(objectiveState(mission.first), 'launching');
+});
+
+test('a retry of a launching objective still holding an active request does not reset it', async () => {
+  const project = await createProject({ name: `Wedge guard ${Date.now()}` });
+  await createProjectResource(project.id, {
+    directoryPath: createIsolatedCheckout('overlord-run-queue-wedge-'),
+    executionTargetId: null,
+    isPrimary: true
+  });
+  const mission = await twoObjectiveMission(project.id, 'Wedge guard');
+  await postRunQueueEntry(project.id, { objectiveId: mission.first });
+  await startObjectiveQueue(mission.first);
+  const ctx = await buildWebappServiceContextForWorkspace(
+    'local-workspace',
+    requireDatabaseClient(),
+    null
+  );
+  await createExecutionRequest({
+    ctx,
+    missionId: mission.missionId,
+    objectiveId: mission.first,
+    requestedAgent: 'codex',
+    requestedSource: 'webapp',
+    idempotencyKey: `wedge-guard-${Date.now()}`
+  });
+  bootstrap.db.prepare("UPDATE objectives SET state = 'launching' WHERE id = ?").run(mission.first);
+
+  await dispatchProjectRunQueues(requireDatabaseClient(), project.id);
+  assert.equal(objectiveState(mission.first), 'launching', 'an active request means not wedged');
 });

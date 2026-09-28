@@ -3,19 +3,23 @@ import { OBJECTIVE_LAUNCHED_AT_ASSIGNMENT } from '@overlord/core/service/objecti
 import type { DatabaseClient } from '@overlord/database';
 
 import { sanitizeDispatchFailure } from '../packages/core/service/dispatch-diagnostics.ts';
-import {
-  ACTIVE_EXECUTION_REQUEST_STATUSES,
-  createExecutionRequest
-} from '../packages/core/service/execution-requests.ts';
+import { createExecutionRequest } from '../packages/core/service/execution-requests.ts';
 import { findSiblingLockHolders } from '../packages/core/service/objective-parallelism.ts';
 import {
   resolveLaunchConfig,
   resolveLaunchExecutionTarget
 } from '../packages/core/service/project-execution-target.ts';
-import { RUN_QUEUE_DISPATCH_JOB_TYPE } from '../packages/core/service/run-queue.ts';
 import {
+  blockRunQueueEntry,
+  dropRunQueueEntry,
   enqueueRunQueueDispatch,
-  retireEmptyRunQueues
+  holdRunQueueEntry,
+  markRunQueueEntryDispatched,
+  markRunQueueEntryRunning,
+  recordRunQueueDispatchFailure,
+  resetWedgedLaunchingObjective,
+  retireEmptyRunQueues,
+  RUN_QUEUE_DISPATCH_JOB_TYPE
 } from '../packages/core/service/run-queue.ts';
 import { nowIso } from '../packages/core/service/util.ts';
 import type { ClaimedWorkerJob } from '../packages/core/service/worker-jobs.ts';
@@ -189,51 +193,43 @@ export async function dispatchProjectRunQueues(
     if (!entry) continue;
     const now = nowIso();
     if (action.action === 'drop') {
-      await db.run(
-        'UPDATE run_queue_entries SET deleted_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND deleted_at IS NULL',
-        [now, now, entry.id]
-      );
+      await dropRunQueueEntry(db, entry.id, now);
       continue;
     }
     if (action.action === 'wait') {
       // A `retry_pending` hold keeps the detail explaining the attempt that
       // failed; every other wait clears it — the entry is not failing, it is
       // simply not its turn.
+      const keepFailureDetail = action.reason === 'retry_pending' && !!entryFailureKind(entry);
       const next = {
         state: 'waiting' as const,
         waitingReason: action.reason,
         waitingOnObjectiveId: action.waitingOnObjectiveId ?? null,
-        blockedReason:
-          action.reason === 'retry_pending' && entryFailureKind(entry) ? entry.blocked_reason : null
+        blockedReason: keepFailureDetail ? entry.blocked_reason : null
       };
       if (entryHoldIsUnchanged(entry, next)) continue;
-      await db.run(
-        "UPDATE run_queue_entries SET state = 'waiting', waiting_reason = ?, waiting_on_objective_id = ?, blocked_reason = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND state IN ('waiting','blocked')",
-        [next.waitingReason, next.waitingOnObjectiveId, next.blockedReason, now, entry.id]
-      );
+      await holdRunQueueEntry(db, entry.id, now, {
+        reason: next.waitingReason,
+        waitingOnObjectiveId: next.waitingOnObjectiveId,
+        keepFailureDetail
+      });
       continue;
     }
     if (action.action === 'block') {
+      const keepFailureDetail = entryFailureKind(entry) === action.reason;
       const next = {
         state: 'blocked' as const,
         waitingReason: null,
         waitingOnObjectiveId: null,
-        blockedReason:
-          entryFailureKind(entry) === action.reason ? entry.blocked_reason : action.reason
+        blockedReason: keepFailureDetail ? entry.blocked_reason : action.reason
       };
       if (entryHoldIsUnchanged(entry, next)) continue;
-      await db.run(
-        "UPDATE run_queue_entries SET state = 'blocked', blocked_reason = ?, waiting_reason = NULL, waiting_on_objective_id = NULL, updated_at = ?, revision = revision + 1 WHERE id = ? AND state IN ('waiting','blocked')",
-        [next.blockedReason, now, entry.id]
-      );
+      await blockRunQueueEntry(db, entry.id, now, { reason: action.reason, keepFailureDetail });
       continue;
     }
     if (action.action === 'mark_running') {
       if (entry.state === 'running') continue;
-      await db.run(
-        "UPDATE run_queue_entries SET state = 'running', blocked_reason = NULL, waiting_reason = NULL, waiting_on_objective_id = NULL, updated_at = ?, revision = revision + 1 WHERE id = ?",
-        [now, entry.id]
-      );
+      await markRunQueueEntryRunning(db, entry.id, now);
       continue;
     }
     const objective = objectiveRows.find(o => o.id === action.objectiveId);
@@ -256,16 +252,7 @@ export async function dispatchProjectRunQueues(
         // guard below silently no-ops and the retry can never actually launch,
         // which is why removing the entry with `force` was the only way out.
         if (objective.state === 'launching')
-          await tx.run(
-            `UPDATE objectives SET state = 'draft', updated_at = ?, revision = revision + 1
-               WHERE id = ? AND state = 'launching'
-                 AND NOT EXISTS (
-                   SELECT 1 FROM execution_requests er
-                    WHERE er.objective_id = ? AND er.deleted_at IS NULL
-                      AND er.status IN (${ACTIVE_EXECUTION_REQUEST_STATUSES.map(() => '?').join(',')})
-                 )`,
-            [now, objective.id, objective.id, ...ACTIVE_EXECUTION_REQUEST_STATUSES]
-          );
+          await resetWedgedLaunchingObjective(tx, objective.id, now);
         await tx.run(
           `UPDATE objectives SET state = 'launching', ${OBJECTIVE_LAUNCHED_AT_ASSIGNMENT}, updated_at = ?, revision = revision + 1 WHERE id = ? AND state IN ('draft','submitted')`,
           [now, now, objective.id]
@@ -295,10 +282,7 @@ export async function dispatchProjectRunQueues(
           eventSummary: `Queued ${objective.assigned_agent} execution from Run Queue.`,
           eventPayload: { runQueueEntryId: entry.id }
         });
-        await tx.run(
-          "UPDATE run_queue_entries SET state = 'dispatched', blocked_reason = NULL, waiting_reason = NULL, waiting_on_objective_id = NULL, dispatched_at = ?, execution_request_id = ?, attempt_count = attempt_count + 1, updated_at = ?, revision = revision + 1 WHERE id = ? AND state IN ('waiting','blocked')",
-          [now, request.id, now, entry.id]
-        );
+        await markRunQueueEntryDispatched(tx, entry.id, now, { executionRequestId: request.id });
       });
     } catch (error) {
       // Keep the real cause. `dispatch_failed` alone told the user nothing about
@@ -314,10 +298,7 @@ export async function dispatchProjectRunQueues(
       // attempt of a designed three and needed a human to release it.
       const detail = sanitizeDispatchFailure(error);
       console.error('[run-queue-dispatcher] dispatch failed', { entryId: entry.id, error });
-      await db.run(
-        "UPDATE run_queue_entries SET state = 'waiting', waiting_reason = 'retry_pending', waiting_on_objective_id = NULL, blocked_reason = ?, attempt_count = attempt_count + 1, updated_at = ?, revision = revision + 1 WHERE id = ?",
-        [detail ? `dispatch_failed: ${detail.slice(0, 400)}` : 'dispatch_failed', now, entry.id]
-      );
+      await recordRunQueueDispatchFailure(db, entry.id, now, { detail });
     }
   }
   if (actions.some(action => action.action === 'drop')) await retireEmptyRunQueues(db, projectId);
