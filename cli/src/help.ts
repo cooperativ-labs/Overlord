@@ -8,7 +8,8 @@ Primary command: ${primaryCommand}
 General:
   ${primaryCommand} auth login [--token <out_...>]   Configure backend and log in
   ${primaryCommand} auth status [--json]           Show backend URL and login status
-  ${primaryCommand} user-token create --label <l> [--expires-in 90d] [--no-expiry] [--scope full|mission-lifecycle]
+  ${primaryCommand} user-token create --label <l> [--expires-in 90d] [--no-expiry] [--scope full|mission-lifecycle|project-automation]
+                                                 [--project <id|name>]  (required for project-automation)
                                                  Mint a USER_TOKEN (prints the secret once)
   ${primaryCommand} user-token list [--json]       List your tokens (never shows secrets)
   ${primaryCommand} user-token revoke <id>         Revoke a token immediately
