@@ -66,9 +66,8 @@ ovld user-token create --label "ci runner" --scope mission-lifecycle --expires-i
 
 | Action | Command | Notes |
 | --- | --- | --- |
-| Create | `ovld user-token create --label "<label>" [--scope full\|mission-lifecycle] [--expires-in 90d\|--no-expiry]` | Secret shown once. Defaults to a 90-day expiry. |
+| Create | `ovld user-token create --label "<label>" [--scope full\|mission-lifecycle\|project-automation] [--project <id-or-name>] [--expires-in 90d\|--no-expiry]` | Secret shown once. Defaults to a 90-day expiry. |
 | List | `ovld user-token list [--json]` | Never reveals secrets; shows prefix, label, created/last-used, expiry, revoked state. |
-| Rotate | `ovld user-token rotate <id-or-prefix> [--label "<new>"]` | New secret shown once; old secret invalidated immediately. |
 | Rename | `ovld user-token rename <id-or-prefix> "<label>"` | Changes the label without rotating the secret. |
 | Revoke | `ovld user-token revoke <id-or-prefix>` | Fails authentication immediately; safe and idempotent. |
 
@@ -140,13 +139,13 @@ proceeding without Overlord updates.
 
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
-| `401` / "unauthorized" from a protocol or REST call | No token in the environment, or an expired/revoked/malformed one | `ovld auth status`; `ovld auth repair`; if a runner/CI token, rotate or recreate it. |
+| `401` / "unauthorized" from a protocol or REST call | No token in the environment, or an expired/revoked/malformed one | `ovld auth status`; `ovld auth repair`; if a runner/CI token, revoke and recreate it. |
 | Authenticated but "forbidden" / `403` on a project | Identity is fine; the owner lacks access in that workspace, or a scoped token excludes the action | Confirm the owner's membership and role; if using `mission_lifecycle`, an admin action needs a `full` token. |
 | `ovld auth status` shows not signed in | Wrong backend selected, or login never completed | `ovld config get backend_url`; `ovld config set cloud <url>`; `ovld auth login`. |
 | Session key not resolving; every `ovld protocol` call needs it | The persisted session file for this working directory was lost or overwritten | Re-`attach`, or pass `--session-key <key>` explicitly on each call. |
 | MCP client gets a `Bearer` challenge and can't proceed | Not authenticated to the MCP endpoint | Complete the OAuth approval at `/oauth/approve`; ensure the client uses the canonical `/mcp` resource URL. |
 | MCP `invalid_target` | The OAuth `resource` parameter doesn't match the hosted `/mcp` URL | Point the client at the canonical `/mcp` resource; if the SPA is deployed separately, set `OVERLORD_BACKEND_URL` and `OVERLORD_WEBAPP_PUBLIC_URL` on the web deployment. |
-| Token worked yesterday, fails today | Expired (default 90-day), revoked, or the owner lost workspace access | `ovld user-token list` to check expiry/revoked; rotate or recreate; confirm the owner's membership. |
+| Token worked yesterday, fails today | Expired (default 90-day), revoked, or the owner lost workspace access | `ovld user-token list` to check expiry/revoked; revoke and recreate; confirm the owner's membership. |
 | Cloud `attach` fails right after `ovld config set cloud` | Backend set but not yet signed in on that backend | `ovld auth login` against the cloud URL before attaching. |
 
 ### When a session key is the problem
