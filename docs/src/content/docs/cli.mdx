@@ -39,7 +39,7 @@ return JSON by default.
 | `ovld auth login [--token <out_...>] [--json]`                                                              | Configure the backend if necessary and sign in. |
 | `ovld auth status [--json]`                                                                                 | Show the current backend URL and login state.   |
 | `ovld auth repair [--json]`                                                                                 | Reconcile stored credentials with the backend after an auth failure: a no-op on a healthy session, otherwise clears a stale stored credential and re-runs login. |
-| `ovld user-token create --label <label> [--expires-in 90d] [--no-expiry] [--scope full\|mission-lifecycle]` | Create a token; its secret is shown only once.  |
+| `ovld user-token create --label <label> [--expires-in 90d] [--no-expiry] [--scope full\|mission-lifecycle\|project-automation] [--project <id-or-name>]` | Create a token; its secret is shown only once. `--project` (repeatable) is required for, and only valid with, `project-automation`. |
 | `ovld user-token list [--json]`                                                                             | List tokens without showing their secrets.      |
 | `ovld user-token revoke <id> [--json]`                                                                      | Revoke a token immediately.                     |
 | `ovld user-token rename <id> <label> [--json]`                                                              | Rename a token without rotating it.             |
