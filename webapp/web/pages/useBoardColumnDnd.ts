@@ -2,13 +2,9 @@ import {
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
-  KeyboardSensor,
-  PointerSensor,
-  type UniqueIdentifier,
-  useSensor,
-  useSensors
+  type UniqueIdentifier
 } from '@dnd-kit/core';
-import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
+import { arrayMove } from '@dnd-kit/sortable';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ProjectStatusDto } from '../../shared/contract.ts';
@@ -18,7 +14,7 @@ import { type BoardDndResult, type ColumnMap, columnMapsEqual } from './board-sh
 import {
   createKanbanCollisionDetection,
   KANBAN_DROPPABLE_MEASURING,
-  KANBAN_POINTER_SENSOR_OPTIONS
+  useKanbanSensors
 } from './kanban-dnd.ts';
 
 /**
@@ -57,12 +53,7 @@ export function useBoardColumnDnd({
     }
   }, [activeId, override, columns]);
 
-  const dndSensors = useSensors(
-    useSensor(PointerSensor, KANBAN_POINTER_SENSOR_OPTIONS),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
-  const noSensors = useSensors();
-  const sensors = draggable ? dndSensors : noSensors;
+  const sensors = useKanbanSensors(draggable);
 
   const displayColumns = override ?? columns;
   const columnsRef = useRef(displayColumns);

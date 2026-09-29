@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 
 import type { MissionDto } from '../../shared/contract.ts';
 
+import { KANBAN_TOUCH_DRAGGABLE_CLASS } from './kanban-dnd.ts';
 import {
   MissionCompleteCheckbox,
   MissionOriginMark,
@@ -68,7 +69,7 @@ export function MissionCalendarCard({
       {...(isDragOverlay || !draggable ? {} : { ...attributes, ...listeners })}
       className={cn(
         'flex cursor-pointer items-center gap-1.5 rounded border px-1.5 py-1 text-left transition-colors hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        draggable && !isDragOverlay && 'touch-none',
+        draggable && !isDragOverlay && KANBAN_TOUCH_DRAGGABLE_CLASS,
         isDragging && 'opacity-40',
         isDragOverlay && 'shadow-lg',
         selected && 'bg-primary/10 ring-1 ring-inset ring-primary/30'

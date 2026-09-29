@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 
 import type { MissionDto, WorkspaceMemberDto } from '../../shared/contract.ts';
 
+import { KANBAN_TOUCH_DRAGGABLE_CLASS } from './kanban-dnd.ts';
 import { MissionCardBody } from './MissionCardBody.tsx';
 import { getMissionCardState } from './missionCardState.ts';
 import { MissionCardSurface } from './MissionCardSurface.tsx';
@@ -119,7 +120,9 @@ function SortableMissionCardActive({
       style={style}
       className={cn(
         'shrink-0',
-        disabled ? 'cursor-pointer' : 'cursor-grab touch-none active:cursor-grabbing',
+        disabled
+          ? 'cursor-pointer'
+          : cn('cursor-grab active:cursor-grabbing', KANBAN_TOUCH_DRAGGABLE_CLASS),
         isDragging && 'opacity-40'
       )}
       {...(disabled ? {} : listeners)}

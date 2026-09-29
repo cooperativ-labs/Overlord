@@ -2,17 +2,59 @@ import {
   closestCenter,
   type CollisionDetection,
   getFirstCollision,
+  KeyboardSensor,
   MeasuringStrategy,
+  MouseSensor,
   pointerWithin,
   rectIntersection,
-  type UniqueIdentifier
+  TouchSensor,
+  type UniqueIdentifier,
+  useSensor,
+  useSensors
 } from '@dnd-kit/core';
-import { arrayMove } from '@dnd-kit/sortable';
+import { arrayMove, sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 
 import type { ColumnMap } from './board-shared.ts';
 
-/** Stable PointerSensor options so DndContext does not tear down listeners every render. */
-export const KANBAN_POINTER_SENSOR_OPTIONS = { activationConstraint: { distance: 6 } } as const;
+/** Stable sensor options so DndContext does not tear down listeners every render. */
+export const KANBAN_MOUSE_SENSOR_OPTIONS = { activationConstraint: { distance: 6 } } as const;
+
+/**
+ * Touch drags require a press-and-hold so a swipe scrolls the column instead of
+ * picking up the card. Moving more than `tolerance` px before `delay` elapses
+ * cancels activation and the browser's native scroll takes over.
+ */
+export const KANBAN_TOUCH_SENSOR_OPTIONS = {
+  activationConstraint: { delay: 250, tolerance: 8 }
+} as const;
+
+const KANBAN_KEYBOARD_SENSOR_OPTIONS = { coordinateGetter: sortableKeyboardCoordinates } as const;
+
+/**
+ * Mission-card drag sensors. Mouse and touch use separate sensors (rather than
+ * one PointerSensor) so each input type gets its own activation rule: mouse
+ * drags start after a small movement, touch drags only after a long press. This
+ * is decided per gesture, so hybrid touch laptops get the right behaviour for
+ * whichever input the user actually uses. Returns no sensors when `draggable`
+ * is false.
+ */
+export function useKanbanSensors(draggable: boolean) {
+  const dndSensors = useSensors(
+    useSensor(MouseSensor, KANBAN_MOUSE_SENSOR_OPTIONS),
+    useSensor(TouchSensor, KANBAN_TOUCH_SENSOR_OPTIONS),
+    useSensor(KeyboardSensor, KANBAN_KEYBOARD_SENSOR_OPTIONS)
+  );
+  const noSensors = useSensors();
+  return draggable ? dndSensors : noSensors;
+}
+
+/**
+ * Classes for a touch-draggable card: keep native panning (`touch-manipulation`
+ * rather than `touch-none`) so the column still scrolls, and suppress the text
+ * selection / iOS callout a long press would otherwise trigger.
+ */
+export const KANBAN_TOUCH_DRAGGABLE_CLASS =
+  'touch-manipulation select-none [-webkit-touch-callout:none]';
 
 /** Re-measure droppables while dragging so a card entering another column is hittable. */
 export const KANBAN_DROPPABLE_MEASURING = {

@@ -2,13 +2,8 @@ import {
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
-  KeyboardSensor,
-  PointerSensor,
-  type UniqueIdentifier,
-  useSensor,
-  useSensors
+  type UniqueIdentifier
 } from '@dnd-kit/core';
-import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { type BoardDndResult, type ColumnMap, columnMapsEqual } from './board-shared.ts';
@@ -17,7 +12,7 @@ import {
   createKanbanCollisionDetection,
   findKanbanColumn,
   KANBAN_DROPPABLE_MEASURING,
-  KANBAN_POINTER_SENSOR_OPTIONS
+  useKanbanSensors
 } from './kanban-dnd.ts';
 
 /** Destination of a completed drop, handed to the page to persist. */
@@ -70,12 +65,7 @@ export function useMyMissionsDnd({
     }
   }, [activeId, override, columns, setOptimisticOverride]);
 
-  const dndSensors = useSensors(
-    useSensor(PointerSensor, KANBAN_POINTER_SENSOR_OPTIONS),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
-  const noSensors = useSensors();
-  const sensors = draggable ? dndSensors : noSensors;
+  const sensors = useKanbanSensors(draggable);
 
   const collisionDetection = useMemo(
     () =>

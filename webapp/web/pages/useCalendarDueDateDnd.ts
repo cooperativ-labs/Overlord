@@ -3,13 +3,8 @@ import {
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
-  KeyboardSensor,
-  PointerSensor,
-  pointerWithin,
-  useSensor,
-  useSensors
+  pointerWithin
 } from '@dnd-kit/core';
-import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -27,6 +22,7 @@ import { keys } from '../lib/queries.ts';
 import { invalidateNonEverhourQueries } from '../lib/query-invalidation.ts';
 
 import type { BoardDndResult } from './board-shared.ts';
+import { useKanbanSensors } from './kanban-dnd.ts';
 
 export type CalendarDndResult<TMission extends MissionDto = MissionDto> = {
   activeMissionId: string | null;
@@ -132,12 +128,7 @@ export function useCalendarDueDateDnd<TMission extends MissionDto>({
     return buildGroupedMissions({ missions, dayKeyByMissionId: optimisticDayByMissionId });
   }, [missions, optimisticDayByMissionId, settledMissionsByDay]);
 
-  const dndSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
-  const noSensors = useSensors();
-  const sensors = draggable ? dndSensors : noSensors;
+  const sensors = useKanbanSensors(draggable);
 
   const collisionDetection = useCallback((...args: Parameters<typeof pointerWithin>) => {
     const hits = pointerWithin(...args);
