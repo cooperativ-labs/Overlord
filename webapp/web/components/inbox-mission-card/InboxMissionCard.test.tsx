@@ -13,7 +13,13 @@ import {
 } from './inbox-card-actions.ts';
 import { InboxCardShell, type InboxCardShellProps } from './InboxCardShell.tsx';
 
-afterEach(cleanup);
+let queryClient: QueryClient | null = null;
+
+afterEach(() => {
+  cleanup();
+  queryClient?.clear();
+  queryClient = null;
+});
 
 const selection = { agent: 'claude', model: 'opus', reasoningEffort: 'high' };
 const readyGate = {
@@ -298,7 +304,11 @@ describe('InboxCardShell rendering', () => {
       ...overrides
     };
     // Queries stay idle so the mention textarea never reaches for the network.
-    const client = new QueryClient({ defaultOptions: { queries: { enabled: false } } });
+    // Infinite gcTime avoids cache timers keeping the test process alive after cleanup.
+    const client = new QueryClient({
+      defaultOptions: { queries: { enabled: false, gcTime: Infinity } }
+    });
+    queryClient = client;
     render(
       <QueryClientProvider client={client}>
         <InboxCardShell {...props} />
