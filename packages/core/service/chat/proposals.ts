@@ -9,6 +9,7 @@ import type {
 import { createHash, randomUUID } from 'node:crypto';
 
 import { createMissionWithObjectives, readProjectLaunchSelection } from '../missions.js';
+import { readStoredWorkspaceAgentCatalog } from '../workspace-agent-catalog.js';
 
 import { ChatAccess } from './access.js';
 import { assignmentCatalogProjection } from './assignments.js';
@@ -110,11 +111,7 @@ export class ChatProposals extends ChatStore {
   private async catalog(workspaceId: string) {
     if (this.options.assignmentCatalog)
       return assignmentCatalogProjection(await this.options.assignmentCatalog(workspaceId));
-    const row = await this.db.get<{ settings_json: string }>(
-      'SELECT settings_json FROM workspaces WHERE id = ?',
-      [workspaceId]
-    );
-    return assignmentCatalogProjection(JSON.parse(row?.settings_json ?? '{}').agentCatalog);
+    return assignmentCatalogProjection(await readStoredWorkspaceAgentCatalog(this.db, workspaceId));
   }
   private async validateAssignment(workspaceId: string, assignment: ChatAssignmentDto) {
     const catalog = await this.catalog(workspaceId);

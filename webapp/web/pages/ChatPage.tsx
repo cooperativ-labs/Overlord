@@ -1,8 +1,8 @@
-import type { ChatThreadDto } from '@overlord/contract';
+import type { ChatKnowledgebaseWriteDto, ChatThreadDto } from '@overlord/contract';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { MessageSquarePlus, MessagesSquare } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { ChatComposer } from '@/components/chat/ChatComposer.tsx';
 import { ChatConnectionsPanel } from '@/components/chat/ChatConnectionsPanel.tsx';
@@ -10,7 +10,8 @@ import { ChatThreadView } from '@/components/chat/ChatThreadView.tsx';
 import { Button, buttonVariants } from '@/components/ui/button.tsx';
 import { api } from '@/lib/api.ts';
 import { chatErrorMessage, isRetryableChatError } from '@/lib/chat/errors.ts';
-import { useChatAvailability, useChatThreads } from '@/lib/chat/use-chat.ts';
+import { grantKey, knowledgebaseWriteTargets } from '@/lib/chat/knowledgebase-writes.ts';
+import { useChatAvailability, useChatProviders, useChatThreads } from '@/lib/chat/use-chat.ts';
 import { cn } from '@/lib/utils.ts';
 
 const CONNECTION_STATUS_TEXT: Record<string, string> = {
@@ -169,23 +170,39 @@ function NewConversation({ scope }: { scope: string }) {
   const created = useRef<{
     threadId: string;
     text: string | null;
+    grant: string | null;
     requestId: string | null;
   } | null>(null);
+  const providers = useChatProviders(scope);
+  const writeTargets = useMemo(
+    () => knowledgebaseWriteTargets(providers.data?.connections),
+    [providers.data?.connections]
+  );
 
-  const submit = async (text: string): Promise<boolean> => {
+  const submit = async (
+    text: string,
+    knowledgebaseWrite: ChatKnowledgebaseWriteDto | null
+  ): Promise<boolean> => {
     setError(null);
     try {
       created.current ??= {
         threadId: (await api.createChatThread()).thread.id,
         text: null,
+        grant: null,
         requestId: null
       };
       const pending = created.current;
-      if (pending.text !== text) {
+      const grant = grantKey(knowledgebaseWrite);
+      if (pending.text !== text || pending.grant !== grant) {
         pending.text = text;
+        pending.grant = grant;
         pending.requestId = globalThis.crypto.randomUUID();
       }
-      await api.submitChatMessage(pending.threadId, { clientRequestId: pending.requestId!, text });
+      await api.submitChatMessage(pending.threadId, {
+        clientRequestId: pending.requestId!,
+        text,
+        ...(knowledgebaseWrite ? { knowledgebaseWrite } : {})
+      });
       created.current = null;
       void queryClient.invalidateQueries({ queryKey: ['chat', scope, 'threads'] });
       void navigate({ to: '/chat/$threadId', params: { threadId: pending.threadId } });
@@ -209,7 +226,13 @@ function NewConversation({ scope }: { scope: string }) {
             create.
           </p>
         </div>
-        <ChatComposer mode="send" error={error} onSubmit={submit} autoFocus />
+        <ChatComposer
+          mode="send"
+          error={error}
+          onSubmit={submit}
+          writeTargets={writeTargets}
+          autoFocus
+        />
       </div>
     </div>
   );

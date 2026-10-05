@@ -301,6 +301,55 @@ function toolErrorText(error: unknown): ToolCallResult {
   };
 }
 
+/**
+ * Ranked filters supplied alongside `reference` are forwarded so Protocol rejects the
+ * combination instead of the MCP layer silently dropping them.
+ */
+function rankedSearchFlagsForReference(args: Record<string, unknown>): Record<string, string> {
+  const flags: Record<string, string> = {};
+  for (const [key, flag] of [
+    ['query', '--query'],
+    ['status', '--status'],
+    ['resourceKey', '--resource-key'],
+    ['dateField', '--date-field'],
+    ['from', '--from'],
+    ['to', '--to'],
+    ['entityTypes', '--entity-types'],
+    ['objectiveStates', '--objective-states']
+  ] as const) {
+    const value = optionalString(args, key);
+    if (value) flags[flag] = value;
+  }
+  if (typeof args.matchesPerResult === 'number') {
+    flags['--matches-per-result'] = String(args.matchesPerResult);
+  }
+  return flags;
+}
+
+/**
+ * Protocol body for `overlord_search_missions` in exact-reference mode, or null when
+ * `reference` is absent (ranked search). Ranked filters are forwarded so Protocol
+ * rejects the combination.
+ */
+export function referenceSearchProtocolBody(
+  args: Record<string, unknown>
+): ProtocolRequestBody | null {
+  const reference = optionalString(args, 'reference');
+  if (!reference) return null;
+  return protocolBody({
+    '--reference': reference,
+    ...(optionalProjectRef(args) ? { '--project-id': optionalProjectRef(args)! } : {}),
+    ...(optionalString(args, 'workspaceId')
+      ? { '--workspace-id': requiredString(args, 'workspaceId') }
+      : {}),
+    ...(optionalString(args, 'cursor') ? { '--cursor': requiredString(args, 'cursor') } : {}),
+    ...(typeof args.limit === 'number' && Number.isFinite(args.limit)
+      ? { '--limit': String(Math.trunc(args.limit)) }
+      : {}),
+    ...rankedSearchFlagsForReference(args)
+  });
+}
+
 const toolHandlers: Record<string, ToolHandler> = {
   overlord_resolve_project: args =>
     runProtocolSubcommand(
@@ -342,6 +391,12 @@ const toolHandlers: Record<string, ToolHandler> = {
       })
     ),
   overlord_search_missions: async args => {
+    const referenceBody = referenceSearchProtocolBody(args);
+    // Exact-reference mode (v155): forwarded verbatim and never compacted.
+    if (referenceBody) return runProtocolSubcommand('search', referenceBody);
+    if (optionalString(args, 'cursor')) {
+      throw new Error('cursor applies only to an exact reference search');
+    }
     const detail = optionalString(args, 'detail') ?? 'compact';
     if (detail !== 'compact' && detail !== 'full') {
       throw new Error("detail must be 'compact' or 'full'");

@@ -6,6 +6,7 @@ import { hashSessionKey } from '../packages/core/service/util.ts';
 
 import { artifactSubcommands } from './protocol/artifacts.ts';
 import {
+  hasFlag,
   intFlag,
   objectiveRefFlag,
   type ProtocolRequestBody,
@@ -274,9 +275,12 @@ export async function runProtocolSubcommand(
   // V2 search authorizes mission:read per workspace inside the repository
   // fan-out. A single ambient workspace check would deny valid secondary
   // workspaces and reintroduce the pre-v95 scoping bug.
+  // An exact --reference lookup authorizes its one project the same way (v155).
   const isAggregateSearch =
     canonicalSubcommand === 'search-missions' &&
-    (intFlag(body, '--response-version') === 2 || intFlag(body, '--response-version') === 3);
+    (intFlag(body, '--response-version') === 2 ||
+      intFlag(body, '--response-version') === 3 ||
+      hasFlag(body, '--reference'));
   const requiredPermission = isAggregateSearch ? null : entry.permission;
   try {
     const ctx = await buildProtocolContext(body, requiredPermission);

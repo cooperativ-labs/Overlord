@@ -26,6 +26,7 @@ import {
   deleteObjectives,
   listMissionDeliveries,
   reorderFutureObjectives,
+  searchMissionReferences,
   searchMissionsAcrossWorkspacesV2,
   searchMissionsAcrossWorkspacesV3,
   updateObjective as updateObjectiveRecord
@@ -198,6 +199,44 @@ async function resolveV2SearchProjectId(
   if (choices.length === 0) throw new ApiError(404, `Project not found: ${projectRef}`);
   if (choices.length > 1) throw new ProjectSelectionRequiredError(projectRef, choices);
   return [choices[0]!.id];
+}
+
+/** Ranked-search flags that have no meaning for an exact reference lookup. */
+const RANKED_SEARCH_ONLY_FLAGS = [
+  '--query',
+  '--status',
+  '--resource-key',
+  '--date-field',
+  '--from',
+  '--to',
+  '--response-version',
+  '--entity-types',
+  '--objective-states',
+  '--matches-per-result'
+] as const;
+
+/**
+ * `search --reference`: exhaustive exact-token lookup in one project (contract v155).
+ * It is not ranked search, so ranked filters are rejected rather than silently ignored.
+ */
+async function searchExactReference(body: ProtocolRequestBody, reference: string) {
+  const conflicting = RANKED_SEARCH_ONLY_FLAGS.filter(flag => hasFlag(body, flag));
+  if (conflicting.length) {
+    throw new ApiError(400, `--reference cannot be combined with ${conflicting.join(', ')}`);
+  }
+  const projectRef = strFlag(body, '--project-id') ?? null;
+  if (!projectRef) throw new ApiError(400, '--reference requires --project-id');
+  const limitText = strFlag(body, '--limit');
+  const limit = limitText === undefined ? null : Number(limitText);
+  if (limit !== null && !Number.isInteger(limit)) {
+    throw new ApiError(400, '--limit must be an integer');
+  }
+  return searchMissionReferences({
+    projectIds: await resolveV2SearchProjectId(projectRef, strFlag(body, '--workspace-id')),
+    reference,
+    cursor: strFlag(body, '--cursor') ?? null,
+    limit
+  });
 }
 
 /** Objective text for create/prompt/record-work: `--objective`, else positional. */
@@ -479,6 +518,14 @@ export const missionSubcommands: SubcommandTable = {
   'search-missions': {
     permission: PERMISSIONS.MISSION_READ,
     handler: async (ctx, body) => {
+      if (hasFlag(body, '--reference')) {
+        const reference = strFlag(body, '--reference');
+        if (!reference) throw new ApiError(400, '--reference requires a value');
+        return searchExactReference(body, reference);
+      }
+      if (hasFlag(body, '--cursor')) {
+        throw new ApiError(400, '--cursor applies only to an exact --reference lookup');
+      }
       const responseVersion = intFlag(body, '--response-version');
       const version = responseVersion === 3 ? 3 : responseVersion === 2 ? 2 : 1;
       // Flags map onto the REST query names so every surface shares one parser

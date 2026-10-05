@@ -1,16 +1,16 @@
-import {
-  createPostgresSessionClient,
-  createSqliteClient,
-  migratePostgres
-} from '@overlord/database';
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, describe, it } from 'node:test';
 
-import { bindWebappDatabaseClient, bootstrapIntegrationTestDb } from './test-helpers.ts';
+import {
+  bindWebappDatabaseClient,
+  bootstrapIntegrationTestDb,
+  type ConformanceAdapter,
+  conformanceAdapters,
+  createConformanceDatabase
+} from './test-helpers.ts';
 
 /**
  * Adapter conformance for cross-project mission moves on the hosted-backend
@@ -22,58 +22,18 @@ import { bindWebappDatabaseClient, bootstrapIntegrationTestDb } from './test-hel
  * before the mission row in one transaction.
  */
 
-interface AdapterHandle {
-  teardown: () => Promise<void>;
-}
+const adapters = conformanceAdapters();
 
-interface AdapterFactory {
-  label: string;
-  create: () => Promise<AdapterHandle>;
-}
-
-const sqliteFactory: AdapterFactory = {
-  label: 'sqlite',
-  create: async () => {
+/** SQLite keeps the suite's file-backed integration bootstrap; Postgres binds a conformance schema. */
+async function open(adapter: ConformanceAdapter): Promise<{ cleanup: () => Promise<void> }> {
+  if (adapter === 'sqlite') {
     const dir = mkdtempSync(path.join(os.tmpdir(), 'ovld-project-move-'));
     await bootstrapIntegrationTestDb({ sqlitePath: path.join(dir, 'Overlord.sqlite') });
-    return { teardown: async () => {} };
+    return { cleanup: async () => {} };
   }
-};
-
-function postgresFactory(connectionString: string): AdapterFactory {
-  return {
-    label: 'postgres',
-    create: async () => {
-      const pg = await import('pg');
-      const Pool = (pg.default ?? pg).Pool;
-      const schema = `ovld_move_test_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
-
-      const admin = new Pool({ connectionString });
-      await admin.query(`CREATE SCHEMA ${schema}`);
-
-      const scoped = new Pool({ connectionString });
-      const session = await scoped.connect();
-      await session.query(`SET search_path TO ${schema}`);
-      const client = createPostgresSessionClient(session);
-      await migratePostgres(client);
-      await bindWebappDatabaseClient({ client });
-
-      return {
-        teardown: async () => {
-          await client.close();
-          session.release();
-          await scoped.end();
-          await admin.query(`DROP SCHEMA ${schema} CASCADE`);
-          await admin.end();
-        }
-      };
-    }
-  };
-}
-
-const adapters: AdapterFactory[] = [sqliteFactory];
-if (process.env.TEST_DATABASE_URL) {
-  adapters.push(postgresFactory(process.env.TEST_DATABASE_URL));
+  const handle = await createConformanceDatabase(adapter, 'ovld_move_test');
+  await bindWebappDatabaseClient({ client: handle.db });
+  return handle;
 }
 
 async function runMissionProjectMoveCase(): Promise<void> {
@@ -103,13 +63,13 @@ async function runMissionProjectMoveCase(): Promise<void> {
 }
 
 for (const adapter of adapters) {
-  describe(`mission project move [${adapter.label}]`, () => {
+  describe(`mission project move [${adapter}]`, () => {
     it('updates mission project_id via updateMission', async () => {
-      const { teardown } = await adapter.create();
+      const { cleanup } = await open(adapter);
       try {
         await runMissionProjectMoveCase();
       } finally {
-        await teardown();
+        await cleanup();
       }
     });
   });

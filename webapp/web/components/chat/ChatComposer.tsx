@@ -1,39 +1,54 @@
+import type { ChatKnowledgebaseWriteDto } from '@overlord/contract';
 import { ArrowUp } from 'lucide-react';
 import { type KeyboardEvent, useState } from 'react';
 
 import { Button } from '@/components/ui/button.tsx';
 import { Textarea } from '@/components/ui/textarea.tsx';
+import type { KnowledgebaseWriteTarget } from '@/lib/chat/knowledgebase-writes.ts';
 
 /**
  * Docked composer modelled on the mobile compose screen. `send` starts a run,
  * `answer` answers the open question (typing and tapping an option are the same
  * action), and `busy` blocks input while a run is queued or running. The parent
- * owns submission so request ids survive retries.
+ * owns submission so request ids survive retries. When the caller has a writable
+ * Knowledgebase workspace, a per-message control lets them allow note edits for
+ * that request only (contract v154); it resets to read only after each send.
  */
 export function ChatComposer({
   mode,
   disabled,
   error,
   onSubmit,
-  autoFocus
+  autoFocus,
+  writeTargets = []
 }: {
   mode: 'send' | 'answer' | 'busy';
   disabled?: boolean;
   error?: string | null;
   /** Resolves true when the server accepted the message, so the draft can clear. */
-  onSubmit: (text: string) => Promise<boolean>;
+  onSubmit: (
+    text: string,
+    knowledgebaseWrite: ChatKnowledgebaseWriteDto | null
+  ) => Promise<boolean>;
   autoFocus?: boolean;
+  /** Knowledgebase workspaces the user may allow the assistant to edit for one request. */
+  writeTargets?: readonly KnowledgebaseWriteTarget[];
 }) {
   const [text, setText] = useState('');
   const [pending, setPending] = useState(false);
+  const [writeKey, setWriteKey] = useState('');
   const blocked = disabled || pending || mode === 'busy';
+  const target = writeTargets.find(t => t.key === writeKey) ?? null;
 
   const submit = async () => {
     const value = text.trim();
     if (!value || blocked) return;
     setPending(true);
     try {
-      if (await onSubmit(value)) setText('');
+      if (await onSubmit(value, target?.grant ?? null)) {
+        setText('');
+        setWriteKey(''); // Edits are allowed per request, never sticky.
+      }
     } finally {
       setPending(false);
     }
@@ -75,6 +90,26 @@ export function ChatComposer({
           <ArrowUp />
         </Button>
       </div>
+      {writeTargets.length > 0 && mode !== 'busy' ? (
+        <label className="flex items-center gap-2 px-2 text-xs text-(--color-ink-dim)">
+          <span>Knowledgebase</span>
+          <select
+            value={writeKey}
+            onChange={event => setWriteKey(event.target.value)}
+            disabled={blocked}
+            aria-label="Knowledgebase access for this message"
+            className="rounded-md border bg-transparent px-1.5 py-0.5 text-xs"
+          >
+            <option value="">Read only</option>
+            {writeTargets.map(t => (
+              <option key={t.key} value={t.key}>
+                Allow edits in {t.label}
+              </option>
+            ))}
+          </select>
+          {target ? <span>for this request only</span> : null}
+        </label>
+      ) : null}
       {error ? (
         <p role="alert" className="px-2 text-xs text-destructive">
           {error}

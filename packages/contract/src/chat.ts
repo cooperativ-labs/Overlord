@@ -316,6 +316,17 @@ export interface ChatRunUsageDto {
   gatheredContentBytes: number;
 }
 
+/**
+ * An explicit, per-request authorization for the assistant to write to one Knowledgebase
+ * workspace through one of the caller's connections (contract v154). Without it a run is
+ * research only: no write tool is offered and every write is refused server-side.
+ */
+export interface ChatKnowledgebaseWriteDto {
+  connectionId: string;
+  /** Knowledgebase workspace slug; must be in the connection's `authorizedWorkspaces`. */
+  workspace: string;
+}
+
 export interface ChatRunDto {
   id: string;
   threadId: string;
@@ -326,6 +337,8 @@ export interface ChatRunDto {
   /** Only `allowance_exhausted` completions on the thread's latest run offer Continue. */
   continueAvailable: boolean;
   continuedFromRunId: string | null;
+  /** The Knowledgebase write scope the user granted this run (v154); null for research only. */
+  knowledgebaseWrite: ChatKnowledgebaseWriteDto | null;
   usage: ChatRunUsageDto;
   cancelRequestedAt: string | null;
   createdAt: string;
@@ -547,6 +560,14 @@ export interface SubmitChatMessageBody {
   text: string;
   /** When answering through a card option. Ignored unless it names an option of the open question. */
   optionId?: string;
+  /**
+   * Authorizes Knowledgebase writes for the run this message starts (v154). The
+   * connection must be the caller's, connected, and authorized for the workspace
+   * (`invalid_request` otherwise; `connection_reauthorization_required` when it needs
+   * sign-in). An answer may add a grant to a waiting run that has none; a different
+   * grant is `invalid_request`. A continued run inherits its source run's grant.
+   */
+  knowledgebaseWrite?: ChatKnowledgebaseWriteDto | null;
 }
 
 export interface SubmitChatMessageResponse {

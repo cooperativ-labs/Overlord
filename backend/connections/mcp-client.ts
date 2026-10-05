@@ -1,11 +1,10 @@
-import type { ChatSourceLocatorDto } from '@overlord/contract';
+import type { ChatKnowledgebaseWriteDto, ChatSourceLocatorDto } from '@overlord/contract';
 
 import type { ChatOwner } from '../../packages/core/service/chat/store.ts';
 
 import { EgressError, egressFetch, type FetchLike } from './egress.ts';
 import {
   exposable,
-  MAX_ARGUMENT_BYTES,
   namespacedToolId,
   parseToolId,
   reviewedTool,
@@ -21,10 +20,12 @@ import {
 
 /**
  * Backend outbound MCP client for the configured Knowledgebase (contract v152,
- * "Backend → Outbound MCP"). Streamable HTTP JSON-RPC to the configured origin
- * only; reviewed read tools only, namespaced per connection; argument, output,
- * and time bounds on every call; provenance on every result. Credentials come
- * only from the connections module and are never logged or returned.
+ * "Backend → Outbound MCP"; writes in v154). Streamable HTTP JSON-RPC to the
+ * configured origin only; reviewed tools only, namespaced per connection; reviewed
+ * writes only for the connection and workspace a run's user authorized; argument,
+ * output, and time bounds on every call; provenance on every result. A write is
+ * never retried once sent: a lost response is `uncertain`. Credentials come only
+ * from the connections module and are never logged or returned.
  */
 export interface KnowledgebaseToolDescriptor {
   /** Namespaced id the engine uses, e.g. `kb_0123456789ab_search`. */
@@ -33,6 +34,12 @@ export interface KnowledgebaseToolDescriptor {
   tool: string;
   description: string;
   inputSchema: unknown;
+  access: 'read' | 'write';
+}
+
+/** Per-call options: the run's write grant, the only scope a write may use. */
+export interface KnowledgebaseCallOptions {
+  write?: ChatKnowledgebaseWriteDto | null;
 }
 
 export interface KnowledgebaseSource {
@@ -49,7 +56,11 @@ export type KnowledgebaseToolOutcome =
   | 'invalid_arguments'
   | 'timeout'
   | 'unavailable'
-  | 'reauthorization_required';
+  | 'reauthorization_required'
+  /** A write refused by its revision guard (409/412, or a changed `expected_version`). */
+  | 'conflict'
+  /** A write sent without a usable response: it may or may not have been applied. */
+  | 'uncertain';
 
 export interface KnowledgebaseToolResult {
   toolId: string;
@@ -168,24 +179,33 @@ export class KnowledgebaseMcp {
     connectionKey: string,
     method: string,
     params: unknown,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    sent?: { value: boolean }
   ): Promise<RpcResponse> {
     let session = await this.session(token, connectionKey, signal);
     for (let attempt = 0; ; attempt++) {
       const id = ++this.rpcId;
-      const response = await this.post(
-        token,
-        session,
-        { jsonrpc: '2.0', id, method, params },
-        signal
-      );
+      if (sent) sent.value = true;
+      let response: Awaited<ReturnType<KnowledgebaseMcp['post']>>;
+      try {
+        response = await this.post(token, session, { jsonrpc: '2.0', id, method, params }, signal);
+      } catch (error) {
+        // A 401 is refused before the request is handled; a transport failure is not known.
+        if (sent && error instanceof UpstreamUnauthorized) sent.value = false;
+        throw error;
+      }
       if (response.status === 404 && session && attempt === 0) {
-        // The server dropped the session; start a new one once.
+        // The server dropped the session before handling the request; start a new one once.
         this.sessions.delete(connectionKey);
+        if (sent) sent.value = false;
         session = await this.session(token, connectionKey, signal);
         continue;
       }
-      if (response.status !== 200) throw new UpstreamUnavailable(false);
+      if (response.status !== 200) {
+        // A 4xx transport answer was refused unhandled; a 5xx may follow partial handling.
+        if (sent && response.status >= 400 && response.status < 500) sent.value = false;
+        throw new UpstreamUnavailable(false);
+      }
       const message = parseRpcMessage(response.text, id);
       return {
         result:
@@ -302,8 +322,15 @@ export class KnowledgebaseMcp {
     return tools;
   }
 
-  /** The reviewed, server-confirmed read tools for every connected Knowledgebase grant. */
-  async tools(owner: ChatOwner, signal?: AbortSignal): Promise<KnowledgebaseToolDescriptor[]> {
+  /**
+   * The reviewed, server-confirmed read tools for every connected Knowledgebase grant,
+   * plus the reviewed write tools of the one connection a run's grant names.
+   */
+  async tools(
+    owner: ChatOwner,
+    signal?: AbortSignal,
+    options: KnowledgebaseCallOptions = {}
+  ): Promise<KnowledgebaseToolDescriptor[]> {
     const out: KnowledgebaseToolDescriptor[] = [];
     for (const row of await this.options.connections.liveRows(owner, 'knowledgebase')) {
       if (row.state !== 'connected' || row.server_url !== this.options.mcpUrl) continue;
@@ -313,19 +340,44 @@ export class KnowledgebaseMcp {
       } catch {
         continue; // An unavailable connection contributes no tools; readiness reports why.
       }
+      const writable = options.write?.connectionId === row.id;
       for (const server of tools) {
         const reviewed = exposable(server);
-        if (!reviewed) continue;
+        if (!reviewed || (reviewed.access === 'write' && !writable)) continue;
         out.push({
           id: namespacedToolId(row.id!, reviewed.name),
           connectionId: row.id!,
           tool: reviewed.name,
           description: reviewed.description,
-          inputSchema: reviewed.inputSchema
+          inputSchema: reviewed.inputSchema,
+          access: reviewed.access
         });
       }
     }
     return out;
+  }
+
+  /**
+   * Submission-time check of a write grant against the owner's stored connection: the
+   * connection is the owner's live Knowledgebase connection on this server and the
+   * workspace is one it is authorized for. Every write re-checks this live.
+   */
+  async authorizeWrite(
+    owner: ChatOwner,
+    grant: ChatKnowledgebaseWriteDto
+  ): Promise<'authorized' | 'invalid' | 'reauthorization_required'> {
+    const row = await this.options.connections.row(owner, grant.connectionId);
+    if (
+      !row ||
+      row.provider !== 'knowledgebase' ||
+      row.state === 'disconnected' ||
+      row.server_url !== this.options.mcpUrl
+    )
+      return 'invalid';
+    if (row.state !== 'connected') return 'reauthorization_required';
+    return connectionDto(row).authorizedWorkspaces.includes(grant.workspace)
+      ? 'authorized'
+      : 'invalid';
   }
 
   private async resolve(owner: ChatOwner, toolId: string) {
@@ -341,7 +393,8 @@ export class KnowledgebaseMcp {
     owner: ChatOwner,
     toolId: string,
     args: unknown,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    options: KnowledgebaseCallOptions = {}
   ): Promise<KnowledgebaseToolResult> {
     const observedAt = new Date(this.now()).toISOString();
     const base: KnowledgebaseToolResult = {
@@ -363,18 +416,28 @@ export class KnowledgebaseMcp {
     const { row, tool } = resolved;
     base.connectionId = row.id!;
     base.tool = tool;
-    // Writes and unreviewed tools are rejected by name, whatever the server annotates.
+    // Unreviewed tools are rejected by name, whatever the server annotates.
     const reviewed = reviewedTool(tool);
-    if (!reviewed) return { ...base, detail: 'not_in_read_allowlist' };
+    if (!reviewed) return { ...base, detail: 'not_in_allowlist' };
     if (row.state !== 'connected')
       return { ...base, outcome: 'reauthorization_required', detail: 'connection_not_ready' };
-    if (JSON.stringify(args ?? null).length > MAX_ARGUMENT_BYTES)
+    if (JSON.stringify(args ?? null).length > reviewed.maxArgumentBytes)
       return { ...base, outcome: 'invalid_arguments', detail: 'arguments_too_large' };
     const invalid = validateArguments(reviewed.inputSchema, args);
     if (invalid) return { ...base, outcome: 'invalid_arguments', detail: invalid };
     const input = args as Record<string, unknown>;
     const workspace = typeof input.workspace === 'string' ? input.workspace : null;
     base.workspace = workspace;
+    const write = reviewed.access === 'write';
+    // A write needs the run's grant for exactly this connection and workspace.
+    if (
+      write &&
+      (options.write?.connectionId !== row.id ||
+        !workspace ||
+        options.write.workspace !== workspace)
+    )
+      return { ...base, detail: 'write_not_authorized' };
+    const sent = { value: false };
     try {
       if (workspace && !(await this.workspaceAuthorized(owner, row, workspace, signal)))
         return { ...base, detail: 'workspace_not_authorized' };
@@ -385,32 +448,61 @@ export class KnowledgebaseMcp {
         owner,
         row.id!,
         (token, key) =>
-          this.rpc(token, key, 'tools/call', { name: tool, arguments: input }, signal),
+          this.rpc(
+            token,
+            key,
+            'tools/call',
+            { name: tool, arguments: input },
+            signal,
+            write ? sent : undefined
+          ),
         signal
       );
       if (response.truncated)
-        return { ...base, outcome: 'tool_error', truncated: true, detail: 'response_too_large' };
-      if (!response.result) return { ...base, outcome: 'unavailable', detail: 'protocol_error' };
+        return write
+          ? { ...base, outcome: 'uncertain', truncated: true, detail: 'response_too_large' }
+          : { ...base, outcome: 'tool_error', truncated: true, detail: 'response_too_large' };
+      if (!response.result)
+        return write
+          ? { ...base, outcome: 'uncertain', detail: 'protocol_error' }
+          : { ...base, outcome: 'unavailable', detail: 'protocol_error' };
       const fullText = toolText(response.result);
       const isError = response.result.isError === true;
       const limit = this.bounds.outputBytes;
       const fullBytes = Buffer.byteLength(fullText, 'utf8');
+      // Metadata used for guarded writes or complete listings is never cut short.
+      if (!isError && reviewed.complete && fullBytes > limit)
+        return { ...base, outcome: 'tool_error', truncated: true, detail: 'response_too_large' };
       const text = fullBytes > limit ? truncateUtf8(fullText, limit) : fullText;
       if (tool === 'list_workspaces' && !isError) {
         const workspaces = workspacesFrom(fullText);
         if (workspaces) await this.options.connections.setAuthorizedWorkspaces(row.id!, workspaces);
       }
+      const status = isError ? upstreamStatus(fullText) : null;
       return {
         ...base,
-        outcome: isError ? 'tool_error' : 'ok',
+        outcome: !isError
+          ? 'ok'
+          : write && isConflict(status, fullText)
+            ? 'conflict'
+            : write && status !== null && status >= 500
+              ? 'uncertain'
+              : 'tool_error',
         text,
         bytes: Buffer.byteLength(text, 'utf8'),
         truncated: fullBytes > limit,
-        upstreamStatus: isError ? upstreamStatus(fullText) : null,
+        upstreamStatus: status,
         sources: isError ? [] : provenance(fullText, row.id!, workspace, this.bounds.maxSources),
         detail: null
       };
     } catch (error) {
+      if (write && sent.value && error instanceof UpstreamUnavailable)
+        // Sent, then lost: the write may have been applied. Never retried here.
+        return {
+          ...base,
+          outcome: 'uncertain',
+          detail: error.timeout ? 'upstream_timeout' : 'upstream_unavailable'
+        };
       if (error instanceof ConnectionAccessError)
         return {
           ...base,
@@ -530,6 +622,11 @@ function truncateUtf8(text: string, maxBytes: number): string {
   const buffer = Buffer.from(text, 'utf8').subarray(0, maxBytes);
   // Drop a trailing partial code point.
   return buffer.toString('utf8').replace(/�$/, '');
+}
+
+/** A revision guard refused the write: HTTP 409/412, or edit_file's version check. */
+function isConflict(status: number | null, text: string): boolean {
+  return status === 409 || status === 412 || /^Version changed\b/.test(text.trim());
 }
 
 function upstreamStatus(text: string): number | null {

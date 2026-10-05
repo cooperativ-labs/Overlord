@@ -12,7 +12,7 @@
 # entry) are intentionally not listed here: `capture-change` and `changes`. See
 # CONTRACT.md's contract-version-2 changelog entry for the precedent.
 
-contractVersion: '151'
+contractVersion: '155'
 referenceSpec: 'cli/docs/03-agent-protocol.md'
 
 # Transport-level shape shared by every protocol command, independent of subcommand.
@@ -537,7 +537,11 @@ missionDiscovery:
       - --entity-types
       - --objective-states
       - --matches-per-result
+      - --reference
+      - --cursor
+      - --workspace-id
     rules:
+      - '--reference <token> (contract v155) is exhaustive exact-reference mode, not ranked search: it requires --project-id resolving to exactly one readable project, accepts only --workspace-id, --limit (1-100, default 50) and --cursor, and rejects every ranked flag. It returns MissionReferenceSearchResponse { kind: mission_reference_search, version: 1, reference, projectId, workspaceId, results, nextCursor, complete }: every live mission in the project whose live objective instruction text contains the token case-sensitively as a whole token, in mission-id order, each with statusType and its matching objectives. Absence is established only after following nextCursor to a page with complete true; a cursor is bound to its reference and project. Ranked search (any version) never proves absence.'
       - '--status is a CSV of status TYPES (draft, next, execute, review, complete, blocked, cancelled), which are invariant across projects and workspaces; project-defined status names are not accepted'
       - '--response-version 1 preserves the legacy array response; --response-version 2 returns SearchMissionsResponseV2; --response-version 3 returns SearchResponseV3 with v3 defaults (entityTypes all three, matchesPerResult 3). --entity-types, --objective-states, and --matches-per-result apply only to v3.'
       - 'V2 date bounds are inclusive from and exclusive to; dateField is createdAt or updatedAt and defaults to updatedAt only when a bound is supplied'

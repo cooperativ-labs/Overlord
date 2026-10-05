@@ -3,6 +3,7 @@ import {
   type ChatBlockDto,
   type ChatErrorCode,
   type ChatEventDto,
+  type ChatKnowledgebaseWriteDto,
   type ChatMessageDto,
   type ChatQuestionDto,
   type ChatRunDto,
@@ -23,6 +24,8 @@ import type {
   ChatThreads
 } from '../../types/db.js';
 import { ServiceError } from '../errors.js';
+
+import { storedKnowledgebaseWrite } from './knowledgebase-writes.js';
 
 export type ThreadRow = Selectable<ChatThreads>;
 export type RunRow = Selectable<ChatRuns>;
@@ -56,6 +59,14 @@ export interface ChatAssignmentCatalog {
 }
 export interface ChatOptions {
   assignmentCatalog?: (workspaceId: string) => Promise<ChatAssignmentCatalog>;
+  /**
+   * Checks a submitted Knowledgebase write grant against the owner's stored connection
+   * (v154). Without it every grant is refused; execution re-checks the live connection.
+   */
+  authorizeKnowledgebaseWrite?: (
+    owner: ChatOwner,
+    grant: ChatKnowledgebaseWriteDto
+  ) => Promise<'authorized' | 'invalid' | 'reauthorization_required'>;
   now?: () => number;
   checkSource?: SourceChecker;
   limits?: Partial<{ [K in keyof typeof CHAT_DEFAULT_LIMITS]: number }>;
@@ -136,6 +147,7 @@ export function runDto(r: RunRow, continueAvailable = false): ChatRunDto {
     failureCode: r.failure_code as ChatRunDto['failureCode'],
     continuedFromRunId: r.continued_from_run_id,
     continueAvailable,
+    knowledgebaseWrite: storedKnowledgebaseWrite(r.knowledgebase_write_json),
     usage: {
       toolCalls: r.tool_call_count,
       activeProcessingMs: r.active_processing_ms,

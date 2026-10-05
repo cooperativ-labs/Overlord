@@ -1,71 +1,19 @@
-import {
-  createPostgresSessionClient,
-  createSqliteClient,
-  type DatabaseClient,
-  migratePostgres,
-  openInMemoryDatabase
-} from '@overlord/database';
+import { type DatabaseClient } from '@overlord/database';
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
 import { describe, it } from 'node:test';
 
 import { generateUserTokenSecret, getActorForToken, verifyUserToken } from '../auth/src/index.ts';
 
-import { seedAuthenticatedOperatorClient } from './test-helpers.ts';
+import {
+  type ConformanceAdapter,
+  conformanceAdapters,
+  createConformanceDatabase,
+  seedAuthenticatedOperatorClient
+} from './test-helpers.ts';
 
-interface AdapterHandle {
-  client: DatabaseClient;
-  teardown: () => Promise<void>;
-}
-
-interface AdapterFactory {
-  label: string;
-  create: () => Promise<AdapterHandle>;
-}
-
-const sqliteFactory: AdapterFactory = {
-  label: 'sqlite',
-  create: async () => {
-    const sqlite = openInMemoryDatabase();
-    return {
-      client: createSqliteClient(sqlite),
-      teardown: async () => {
-        sqlite.close();
-      }
-    };
-  }
-};
-
-function postgresFactory(connectionString: string): AdapterFactory {
-  return {
-    label: 'postgres',
-    create: async () => {
-      const pg = await import('pg');
-      const Pool = (pg.default ?? pg).Pool;
-      const schema = `ovld_token_consent_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
-      const admin = new Pool({ connectionString });
-      await admin.query(`CREATE SCHEMA ${schema}`);
-      const pool = new Pool({ connectionString });
-      const session = await pool.connect();
-      await session.query(`SET search_path TO ${schema}`);
-      const client = createPostgresSessionClient(session);
-      await migratePostgres(client);
-      return {
-        client,
-        teardown: async () => {
-          await client.close();
-          session.release();
-          await pool.end();
-          await admin.query(`DROP SCHEMA ${schema} CASCADE`);
-          await admin.end();
-        }
-      };
-    }
-  };
-}
-
-const adapters: AdapterFactory[] = [sqliteFactory];
-if (process.env.TEST_DATABASE_URL) adapters.push(postgresFactory(process.env.TEST_DATABASE_URL));
+const adapters = conformanceAdapters();
+const open = (adapter: ConformanceAdapter) =>
+  createConformanceDatabase(adapter, 'ovld_token_consent');
 
 async function insertToken(
   client: DatabaseClient,
@@ -108,9 +56,9 @@ async function grantConsent(
 }
 
 for (const adapter of adapters) {
-  describe(`organization-bound USER_TOKEN consent [${adapter.label}]`, () => {
+  describe(`organization-bound USER_TOKEN consent [${adapter}]`, () => {
     it('allows only explicit consent intersected with a live membership', async () => {
-      const { client, teardown } = await adapter.create();
+      const { db: client, cleanup } = await open(adapter);
       try {
         await seedAuthenticatedOperatorClient({
           client,
@@ -137,12 +85,12 @@ for (const adapter of adapters) {
         ]);
         assert.equal(await getActorForToken(client, secret, 'ws-a'), null);
       } finally {
-        await teardown();
+        await cleanup();
       }
     });
 
     it('all-workspaces consent is organization-bounded and explicit empty consent fails closed', async () => {
-      const { client, teardown } = await adapter.create();
+      const { db: client, cleanup } = await open(adapter);
       try {
         for (const [organizationId, workspaceId, workspaceUserId] of [
           ['org-a', 'ws-a', 'member-a'],
@@ -173,12 +121,12 @@ for (const adapter of adapters) {
         assert.equal(await getActorForToken(client, allSecret, 'ws-other'), null);
         assert.equal(await getActorForToken(client, emptySecret, 'ws-a'), null);
       } finally {
-        await teardown();
+        await cleanup();
       }
     });
 
     it('rejects cross-organization consent and revoked credentials', async () => {
-      const { client, teardown } = await adapter.create();
+      const { db: client, cleanup } = await open(adapter);
       try {
         await seedAuthenticatedOperatorClient({
           client,
@@ -202,7 +150,7 @@ for (const adapter of adapters) {
         assert.equal(await verifyUserToken(client, secret), null);
         assert.equal(await getActorForToken(client, secret, 'ws-a'), null);
       } finally {
-        await teardown();
+        await cleanup();
       }
     });
   });

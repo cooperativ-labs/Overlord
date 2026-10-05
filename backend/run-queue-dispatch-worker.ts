@@ -323,6 +323,11 @@ class RunQueueDispatchWorker extends WorkerJobPoller {
     sweep();
     this.sweepTimer = setInterval(sweep, 60_000);
   }
+  override stop(): Promise<void> {
+    if (this.sweepTimer) clearInterval(this.sweepTimer);
+    this.sweepTimer = null;
+    return super.stop();
+  }
   private async enqueueSweep(): Promise<void> {
     const db = this.databaseClient();
     const projects = await db.all<{ project_id: string; workspace_id: string }>(

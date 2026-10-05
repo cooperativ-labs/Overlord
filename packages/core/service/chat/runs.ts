@@ -9,6 +9,11 @@ import { bindBool } from '@overlord/database';
 import { randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 
+import {
+  knowledgebaseWriteTool,
+  storedKnowledgebaseWrite,
+  UNCERTAIN_WRITE_RESULT
+} from './knowledgebase-writes.js';
 import { proposalDto } from './proposals.js';
 import {
   ChatError,
@@ -96,6 +101,8 @@ export function toolProgressLabel(toolId: string): string {
       return 'Searching missions';
     case 'overlord_get_mission':
       return 'Reading a mission';
+    case 'overlord_find_feature_missions':
+      return 'Checking Feature missions';
     case 'repository_read':
       return 'Inspecting a repository';
     case 'prepare_proposal':
@@ -103,8 +110,9 @@ export function toolProgressLabel(toolId: string): string {
     case 'ask_user':
       return 'Asking a question';
   }
+  if (knowledgebaseWriteTool(toolId)) return 'Updating notes';
   const note = /^kb_[0-9a-f]{12}_([a-z_]{1,48})$/.exec(toolId)?.[1];
-  if (note === 'search') return 'Searching notes';
+  if (note === 'search' || note === 'query') return 'Searching notes';
   if (note === 'read_file' || note === 'read_resource') return 'Reading a note';
   if (note) return 'Browsing notes';
   return 'Unavailable tool';
@@ -229,9 +237,11 @@ export class ChatRuns extends ChatStore {
             : 'initial';
         if (!compatible && Number(previous?.n)) {
           await tx.run('DELETE FROM chat_provider_checkpoints WHERE run_id = ?', [r.id]);
+          // An executing write may already have been applied: it is resolved below, never cancelled.
+          const inFlight = await s.inFlightWrites(r.id!);
           await tx.run(
-            "UPDATE chat_tool_calls SET state = 'cancelled', completed_at = ?, updated_at = ? WHERE run_id = ? AND state IN ('requested','executing')",
-            [s.timestamp(), s.timestamp(), r.id]
+            `UPDATE chat_tool_calls SET state = 'cancelled', completed_at = ?, updated_at = ? WHERE run_id = ? AND state IN ('requested','executing')${inFlight.length ? ` AND id NOT IN (${inFlight.map(() => '?').join(', ')})` : ''}`,
+            [s.timestamp(), s.timestamp(), r.id, ...inFlight]
           );
           const partials = await tx.all<MessageRow>(
             "SELECT * FROM chat_messages WHERE run_id = ? AND state = 'streaming'",
@@ -275,6 +285,15 @@ export class ChatRuns extends ChatStore {
             now
           ]
         );
+        // A write interrupted while executing has an unknown outcome: it is never re-sent.
+        // Its receipt records that, so the model rereads by stable id before any retry.
+        const uncertain = JSON.stringify(UNCERTAIN_WRITE_RESULT);
+        const resolvedWrites = await s.inFlightWrites(r.id!);
+        for (const callId of resolvedWrites)
+          await tx.run(
+            "UPDATE chat_tool_calls SET state = 'failed', result_json = ?, result_bytes = ?, writer_fence = ?, error_code = 'uncertain_write', completed_at = ?, updated_at = ? WHERE id = ? AND state = 'executing'",
+            [uncertain, Buffer.byteLength(uncertain), fence, now, now, callId]
+          );
         // Reads interrupted while executing may be retried with the original operation id.
         await tx.run(
           "UPDATE chat_tool_calls SET state = 'requested', writer_fence = ?, updated_at = ? WHERE run_id = ? AND state = 'executing'",
@@ -294,11 +313,22 @@ export class ChatRuns extends ChatStore {
           null,
           attempt
         );
+        for (const receipt of await s.receiptsLocked(attempt))
+          if (resolvedWrites.includes(receipt.id))
+            await s.toolEvent(attempt, receipt, 'failed', null);
         return attempt;
       });
       if (a) return a;
     }
     return null;
+  }
+  /** Ids of this run's Knowledgebase writes that were executing when their attempt ended. */
+  private async inFlightWrites(runId: string): Promise<string[]> {
+    const rows = await this.db.all<{ id: string; tool_id: string }>(
+      "SELECT id, tool_id FROM chat_tool_calls WHERE run_id = ? AND state = 'executing'",
+      [runId]
+    );
+    return rows.filter(c => knowledgebaseWriteTool(c.tool_id)).map(c => c.id);
   }
   async heartbeat(a: ChatAttempt): Promise<boolean> {
     return this.mutate(a, async (s, r) => {
@@ -371,13 +401,41 @@ export class ChatRuns extends ChatStore {
             )
           ).map(p => proposalDto(s, p))
         ),
+        // Missions already created from this thread's cards (v155): the model keeps their
+        // identities across turns, so a follow-up such as a Feature link write recovers
+        // the created mission instead of proposing it again.
+        createdReceipts: (
+          await Promise.all(
+            (
+              await s.db.all<Parameters<typeof proposalDto>[1]>(
+                "SELECT * FROM chat_work_proposals WHERE thread_id = ? AND state <> 'open' ORDER BY updated_at DESC, id DESC LIMIT 5",
+                [a.threadId]
+              )
+            ).map(p => proposalDto(s, p))
+          )
+        ).flatMap(p =>
+          p.receipt && !p.current.invalidated
+            ? [
+                {
+                  proposalId: p.id,
+                  createdAt: p.receipt.createdAt,
+                  missions: p.receipt.missions.map(m => ({
+                    missionId: m.missionId,
+                    missionDisplayId: m.missionDisplayId,
+                    projectId: m.projectId
+                  }))
+                }
+              ]
+            : []
+        ),
         run: {
           triggerMessageId: run.trigger_message_id!,
           continuedFromRunId: run.continued_from_run_id,
           toolCalls: run.tool_call_count,
           activeProcessingMs: run.active_processing_ms,
           gatheredContentBytes: run.gathered_content_bytes,
-          limits: JSON.parse(run.limits_json) as Record<string, number>
+          limits: JSON.parse(run.limits_json) as Record<string, number>,
+          knowledgebaseWrite: storedKnowledgebaseWrite(run.knowledgebase_write_json)
         },
         nextTurn: turn?.n === null || turn?.n === undefined ? 0 : Number(turn.n) + 1
       };
@@ -645,6 +703,11 @@ export class ChatRuns extends ChatStore {
     try {
       result = await read(receipt);
     } catch {
+      // A failed write may still have reached the Knowledgebase: never call it a clean failure.
+      if (knowledgebaseWriteTool(receipt.toolId)) {
+        await this.toolResult(a, operationId, UNCERTAIN_WRITE_RESULT, 'uncertain_write');
+        return UNCERTAIN_WRITE_RESULT;
+      }
       await this.toolResult(a, operationId, { error: 'Read failed' }, 'read_failed');
       return null;
     }

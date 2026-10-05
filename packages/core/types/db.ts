@@ -473,6 +473,7 @@ export interface ChatRuns {
   failure_code: string | null;
   gathered_content_bytes: Generated<number>;
   id: string | null;
+  knowledgebase_write_json: string | null;
   limits_json: Generated<string>;
   outcome: string | null;
   revision: Generated<number>;

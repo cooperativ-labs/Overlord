@@ -20,7 +20,8 @@ export const PROVIDER_COPY: Record<
 > = {
   knowledgebase: {
     label: 'Knowledgebase',
-    description: 'Lets the assistant read your notes in this organization.'
+    description:
+      'Lets the assistant read your notes in this organization, and edit them only in a workspace you allow for a single message.'
   },
   github: {
     label: 'GitHub',

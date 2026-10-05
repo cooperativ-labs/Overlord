@@ -2527,6 +2527,7 @@ thread. Index `(thread_id, created_at, id)`.
 | `active_attempt_id`      | Id           | no       | Soft pointer to the leased attempt; null unless `running`.                                                   |
 | `tool_call_count`, `active_processing_ms`, `gathered_content_bytes` | integer | yes | Usage against the run allowance (`active_processing_ms` excludes `waiting_user`).        |
 | `limits_json`            | Json         | yes      | Effective limits snapshot.                                                                                   |
+| `knowledgebase_write_json` | Json       | no       | v154: `{connectionId, workspace}` the user authorized this run to write to; null for a research-only run. Copied to a Continue run. |
 | `cancel_requested_at`    | TimestampUTC | no       |                                                                                                              |
 | `completed_at`           | TimestampUTC | no       | Present exactly for `completed`, `failed`, `cancelled`.                                                      |
 | `created_at` / `updated_at` | TimestampUTC | yes   |                                                                                                              |

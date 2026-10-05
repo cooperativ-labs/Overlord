@@ -498,8 +498,16 @@ search:
     --entity-types <csv>        V3 only: mission,objective,delivery (default all)
     --objective-states <csv>    V3 only: restrict matching objective states
     --matches-per-result <n>    V3 only: child matches per mission (default 3, max 10)
+    --reference <token>         Exact-reference mode instead of ranked search: every
+                                mission in --project-id (required) whose live objective
+                                text contains this case-sensitive whole token, e.g. a
+                                kb-feature: Knowledgebase Feature reference. Accepts only
+                                --workspace-id, --limit (1-100, default 50) and --cursor.
+    --cursor <cursor>           Exact-reference mode: nextCursor from the previous page
   Returns:
     JSON with matching missions (v1) or the versioned search envelope (v2/v3).
+    With --reference: { results, nextCursor, complete }. Only a page with
+    complete: true ends the scan; ranked search never proves absence.
 
 statuses:
   Purpose:

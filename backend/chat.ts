@@ -1,5 +1,5 @@
 import type { ChatProvidersResponse } from '@overlord/contract';
-import { type Request, type Response, Router } from 'express';
+import { type Request, Router } from 'express';
 import { setTimeout as delay } from 'node:timers/promises';
 
 import {
@@ -8,6 +8,8 @@ import {
   Conversations
 } from '../packages/core/service/chat/conversations.ts';
 import { ChatNotifications } from '../packages/core/service/chat/notifications.ts';
+
+import { chatOwnerGate, chatRoute } from './chat/router-support.ts';
 
 export interface ChatRouterOptions {
   cloud: () => boolean;
@@ -19,35 +21,23 @@ export interface ChatRouterOptions {
 }
 export function createChatRouter(options: ChatRouterOptions): Router {
   const router = Router();
-  function owner(): ChatOwner {
-    if (!options.cloud()) throw new ChatError('chat_unavailable');
-    const value = options.owner();
-    if (!value) throw new ChatError('not_found');
-    return value;
-  }
-  const route = (fn: (req: Request) => Promise<unknown>) => (req: Request, res: Response) => {
-    void fn(req)
-      .then(value => res.json(value))
-      .catch(error => {
-        if (error instanceof ChatError)
-          res.status(error.status).json({ error: error.message, code: error.code });
-        else res.status(500).json({ error: 'Chat request failed' });
-      });
-  };
+  const owner = chatOwnerGate(options);
+  const route = (fn: (req: Request) => Promise<unknown>) =>
+    chatRoute(fn, { failure: 'Chat request failed' });
   const body = (req: Request) => {
     if (req.body === undefined) return {};
     if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body))
       throw new ChatError('invalid_request');
     return req.body;
   };
-  router.use((_req, res, next) => {
+  router.use((_req, _res, next) => {
     try {
       owner();
-      next();
     } catch (error) {
-      const e = error as ChatError;
-      res.status(e.status).json({ error: e.message, code: e.code });
+      next(error);
+      return;
     }
+    next();
   });
   router.get(
     '/providers',

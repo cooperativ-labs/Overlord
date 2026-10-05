@@ -14,7 +14,6 @@ import { isExplicitRuntimeEnv, resolveLayeredEnv } from '../cli/src/env.ts';
 import { handleMcpPost, mcpServerInfo } from '../mcp/server.ts';
 import { Conversations } from '../packages/core/service/chat/conversations.ts';
 import { ChatRuns } from '../packages/core/service/chat/runs.ts';
-import { ServiceError } from '../packages/core/service/errors.ts';
 import type { LocalTargetBridgeCall } from '../packages/core/service/local-target/desktop-bridge.ts';
 import { parseMissionSearchOptions } from '../packages/core/service/mission-search.ts';
 import type { ProjectListLifecycle, StoredImageDto } from '../webapp/shared/contract.ts';
@@ -97,7 +96,7 @@ import {
 } from './auth.ts';
 import { createChatRouter } from './chat.ts';
 import { ChatNotificationDispatcher } from './chat-notification-dispatcher.ts';
-import { ChatWorker, stopOnTermination } from './chat-worker.ts';
+import { ChatWorker } from './chat-worker.ts';
 import {
   DATABASE_DIALECT,
   DATABASE_PATH,
@@ -122,7 +121,7 @@ import {
   desktopOAuthCallbackUrl
 } from './desktop-oauth-handoff.ts';
 import { ENV_PROFILE } from './env-profile.ts';
-import { apiErrorFromBodyParser, apiErrorFromDatabaseError } from './errors.ts';
+import { apiErrorHandler } from './errors.ts';
 import {
   registerLiveActivityPushToken,
   registerLiveActivityStartToken,
@@ -149,6 +148,7 @@ import {
   removeOrganizationAdmin,
   updateOrganization
 } from './organizations.ts';
+import { type PollLoop, stopOnTermination } from './poll-loop.ts';
 import { projectAutomationRouteGuard } from './project-automation-routes.ts';
 import { runProtocolSubcommand } from './protocol.ts';
 import { pushNotificationDispatcher } from './push-notification-dispatcher.ts';
@@ -534,6 +534,21 @@ app.get('/api/auth-providers', (_req, res) => {
   res.json({ email: true, github: githubOAuthConfigFromEnv() !== null });
 });
 
+// Loops nudged right after a mutation so its echo, webhooks, and notifications
+// go out without waiting for the next interval. The Run Queue dispatcher is
+// driven by its own enqueue and sweep instead.
+const mutationPollLoops: readonly PollLoop<unknown>[] = [
+  realtime,
+  webhookDispatcher,
+  deliveryComposeWorker,
+  liveActivityDispatcher,
+  pushNotificationDispatcher,
+  notificationDispatcher
+];
+function pollAfterMutation(): void {
+  for (const loop of mutationPollLoops) void loop.pollNow();
+}
+
 // Small wrapper so handlers can throw ApiError / Error and get a clean response.
 // Also triggers an immediate realtime poll after mutations for snappy echoes.
 // `requires` declares the RBAC permission the route needs; it is enforced (role
@@ -549,12 +564,7 @@ function handle(
         if (options.requires) await requireAnyWorkspacePermission(options.requires);
         const result = await Promise.resolve(fn(req, res));
         if (options.mutates) {
-          realtime.pollNow();
-          webhookDispatcher.pollNow();
-          deliveryComposeWorker.pollNow();
-          liveActivityDispatcher.pollNow();
-          pushNotificationDispatcher.pollNow();
-          notificationDispatcher.pollNow();
+          pollAfterMutation();
         }
         if (!res.headersSent) res.json(result ?? { ok: true });
       } catch (err) {
@@ -604,12 +614,7 @@ if (mcpEnabled) {
   app.post('/mcp', requireAuthenticatedSession, projectAutomationRouteGuard, (req, res, next) => {
     void (async () => {
       await handleMcpPost(req, res, next);
-      realtime.pollNow();
-      webhookDispatcher.pollNow();
-      deliveryComposeWorker.pollNow();
-      liveActivityDispatcher.pollNow();
-      pushNotificationDispatcher.pollNow();
-      notificationDispatcher.pollNow();
+      pollAfterMutation();
     })().catch(next);
   });
 }
@@ -686,7 +691,9 @@ app.use(
       new Conversations(requireDatabaseClient(), {
         limits: chatLimits,
         checkSource: connectionsModule().checkSource,
-        assignmentCatalog: workspaceId => chatEngine().assignmentCatalog(workspaceId)
+        assignmentCatalog: workspaceId => chatEngine().assignmentCatalog(workspaceId),
+        authorizeKnowledgebaseWrite: async (owner, grant) =>
+          (await connectionsModule().knowledgebase?.authorizeWrite(owner, grant)) ?? 'invalid'
       }),
     owner: chatOwner,
     providers: owner => chatEngine().providers(owner)
@@ -2336,44 +2343,7 @@ if (resolveServeSpa({ dialect: DATABASE_DIALECT }) && existsSync(distDir)) {
 
 // ---- Error handler -------------------------------------------------------
 
-app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-  if (err instanceof ApiError) {
-    res.status(err.status).json({ error: err.message, detail: err.detail, code: err.code });
-    return;
-  }
-  // Service-layer validation (invalid session, no active objective, missing
-  // rationale, …) carries its own HTTP status and machine-readable code.
-  if (err instanceof ServiceError) {
-    res.status(err.status).json({
-      error: err.message,
-      code: err.code,
-      ...(err.details !== undefined ? { details: err.details } : {})
-    });
-    return;
-  }
-  const bodyParserError = apiErrorFromBodyParser(err);
-  if (bodyParserError) {
-    res.status(bodyParserError.status).json({
-      error: bodyParserError.message,
-      code: bodyParserError.code
-    });
-    return;
-  }
-  const databaseError = apiErrorFromDatabaseError(err);
-  if (databaseError) {
-    res.status(databaseError.status).json({
-      error: databaseError.message,
-      detail: databaseError.detail
-    });
-    return;
-  }
-
-  // Unexpected failures — include the underlying message so CLI/UI surfaces can
-  // show something actionable instead of a bare "Internal error".
-  const message = err instanceof Error ? err.message : 'Internal error';
-  console.error('[webapp] request failed:', message);
-  res.status(500).json({ error: message, detail: message });
-});
+app.use(apiErrorHandler);
 
 // Boot the server. Wrapped in an async function (rather than a top-level await)
 // so the server bundle can be emitted as CommonJS — top-level await is ESM-only,
@@ -2401,13 +2371,9 @@ async function start(): Promise<void> {
     console.log(`[webapp] loaded external automations: ${externalAutomations.join(', ')}`);
   }
 
-  realtime.start();
-  webhookDispatcher.start();
-  deliveryComposeWorker.start();
-  runQueueDispatchWorker.start();
-  liveActivityDispatcher.start();
-  pushNotificationDispatcher.start();
-  notificationDispatcher.start();
+  // Every background loop starts here and stops on SIGTERM/SIGINT before the
+  // process terminates with that signal.
+  const backgroundLoops: PollLoop<unknown>[] = [...mutationPollLoops, runQueueDispatchWorker];
   if (chatCloud()) {
     const chatWorker = new ChatWorker(
       () =>
@@ -2418,16 +2384,13 @@ async function start(): Promise<void> {
         }),
       chatEngine().runtime
     );
-    chatWorker.start();
     const chatNotificationDispatcher = new ChatNotificationDispatcher(requireDatabaseClient, {
       limits: chatLimits
     });
-    chatNotificationDispatcher.start();
-    stopOnTermination(() => {
-      void chatWorker.stop();
-      chatNotificationDispatcher.stop();
-    });
+    backgroundLoops.push(chatWorker, chatNotificationDispatcher);
   }
+  for (const loop of backgroundLoops) loop.start();
+  stopOnTermination(backgroundLoops);
 
   // Re-seal personal-integration credentials still under a legacy format or fallback key
   // (contract v153). Best-effort and bounded; it logs counts only.

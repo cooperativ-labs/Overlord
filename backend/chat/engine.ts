@@ -1,8 +1,6 @@
 import type { ChatProvidersResponse } from '@overlord/contract';
 import type { DatabaseClient } from '@overlord/database';
 
-import { resolveInstanceAgentCatalog } from '../../cli/src/agent-catalog.ts';
-import { loadConfig } from '../../cli/src/config.ts';
 import {
   overlordSourceChecker,
   repositorySourceChecker
@@ -15,6 +13,7 @@ import {
   ChatToolGateway
 } from '../../packages/core/service/chat/tools.ts';
 import { performRepositoryRead } from '../../packages/core/service/repository-reads.ts';
+import { resolveWorkspaceAgentCatalog } from '../agent-catalog.ts';
 import type { ConnectionsRuntime } from '../connections/index.ts';
 import { createCompletionListenerFactory } from '../execution/local-target-completion-notify.ts';
 
@@ -64,26 +63,17 @@ export function createChatEngine(options: {
   const model = (options.env.CHAT_GEMINI_MODEL ?? '').trim() || DEFAULT_CHAT_MODEL;
   const budget = Number(options.env.CHAT_MAX_GATHERED_BYTES_PER_RUN);
   const assignmentCatalog = async (workspaceId: string): Promise<ChatAssignmentCatalog> => {
-    const row = await options.db.get<{ settings_json: string }>(
-      'SELECT settings_json FROM workspaces WHERE id = ? AND deleted_at IS NULL',
-      [workspaceId]
-    );
-    if (!row) return { agents: {} };
-    const stored = JSON.parse(row.settings_json).agentCatalog;
-    return assignmentCatalogProjection(
-      stored?.agents
-        ? stored
-        : { agents: resolveInstanceAgentCatalog({ configCatalog: loadConfig().agentCatalog }) }
-    );
+    return assignmentCatalogProjection(await resolveWorkspaceAgentCatalog(options.db, workspaceId));
   };
   const gateway = new ChatToolGateway({
     assignmentCatalog,
     db: options.db,
     // Resolved lazily so a Knowledgebase configured or disabled at startup is respected.
     knowledgebase: {
-      tools: (owner, signal) =>
-        options.connections().knowledgebase?.tools(owner, signal) ?? Promise.resolve([]),
-      call: (owner, toolId, args, signal) => {
+      tools: (owner, signal, callOptions) =>
+        options.connections().knowledgebase?.tools(owner, signal, callOptions) ??
+        Promise.resolve([]),
+      call: (owner, toolId, args, signal, callOptions) => {
         const kb = options.connections().knowledgebase;
         if (!kb)
           return Promise.resolve({
@@ -91,11 +81,12 @@ export function createChatEngine(options: {
             text: '',
             truncated: false,
             workspace: null,
+            upstreamStatus: null,
             sources: [],
             observedAt: new Date().toISOString(),
             detail: 'not_configured'
           });
-        return kb.call(owner, toolId, args, signal);
+        return kb.call(owner, toolId, args, signal, callOptions);
       }
     },
     readRepository: queuedRepositoryReader

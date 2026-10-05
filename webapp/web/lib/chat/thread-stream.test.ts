@@ -286,6 +286,7 @@ function snapshotRun() {
     failureCode: null,
     continueAvailable: false,
     continuedFromRunId: null,
+    knowledgebaseWrite: null,
     usage: { toolCalls: 0, activeProcessingMs: 0, gatheredContentBytes: 0 },
     cancelRequestedAt: null,
     createdAt: '',

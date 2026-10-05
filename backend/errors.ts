@@ -1,3 +1,7 @@
+import type { NextFunction, Request, Response } from 'express';
+
+import { ServiceError } from '../packages/core/service/errors.ts';
+
 /** A user-facing validation / not-found error that maps to a 4xx response. */
 export class ApiError extends Error {
   constructor(
@@ -60,4 +64,53 @@ export function apiErrorFromDatabaseError(error: unknown): ApiError | null {
   }
 
   return new ApiError(409, 'Database constraint violation.', message);
+}
+
+/**
+ * The app's error envelope, mounted last on the Express app. Every route that
+ * forwards an error with `next(error)` (`handle()`, the chat and connections
+ * routers) gets the same body for the same error.
+ */
+export function apiErrorHandler(
+  err: unknown,
+  _req: Request,
+  res: Response,
+  _next: NextFunction
+): void {
+  if (err instanceof ApiError) {
+    res.status(err.status).json({ error: err.message, detail: err.detail, code: err.code });
+    return;
+  }
+  // Service-layer validation (invalid session, no active objective, missing
+  // rationale, …) carries its own HTTP status and machine-readable code.
+  if (err instanceof ServiceError) {
+    res.status(err.status).json({
+      error: err.message,
+      code: err.code,
+      ...(err.details !== undefined ? { details: err.details } : {})
+    });
+    return;
+  }
+  const bodyParserError = apiErrorFromBodyParser(err);
+  if (bodyParserError) {
+    res.status(bodyParserError.status).json({
+      error: bodyParserError.message,
+      code: bodyParserError.code
+    });
+    return;
+  }
+  const databaseError = apiErrorFromDatabaseError(err);
+  if (databaseError) {
+    res.status(databaseError.status).json({
+      error: databaseError.message,
+      detail: databaseError.detail
+    });
+    return;
+  }
+
+  // Unexpected failures — include the underlying message so CLI/UI surfaces can
+  // show something actionable instead of a bare "Internal error".
+  const message = err instanceof Error ? err.message : 'Internal error';
+  console.error('[webapp] request failed:', message);
+  res.status(500).json({ error: message, detail: message });
 }

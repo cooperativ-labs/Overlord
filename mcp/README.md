@@ -164,6 +164,15 @@ navigation. Artifacts are not indexed. Read `workspaceCounts`, `entityCounts`,
 and `truncatedCandidates` before asserting completeness; `fallback` mode is a
 recency listing rather than a text-match result.
 
+Ranked search never proves that no mission mentions something. Pass `reference`
+with `projectId` for the exhaustive exact-reference mode (contract v155): it
+returns `MissionReferenceSearchResponse` — every live mission in that project
+whose live objective text contains the case-sensitive whole token, with
+`statusType` and matching objectives — and pages with `cursor` until
+`complete` is true. Only `workspaceId`, `limit` (1-100, default 50), and
+`cursor` may accompany it. Knowledgebase Feature handoff uses the canonical
+token `kb-feature:<origin>/<workspace>/<node uuid>`.
+
 `overlord_deliver_session` accepts the same optional `artifacts` shape as the
 Protocol delivery operation — still valid when finishing a turn. Agents can also
 publish artifacts mid-turn with `overlord_add_artifact` (Protocol `add-artifact` /

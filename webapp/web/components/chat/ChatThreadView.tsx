@@ -1,4 +1,9 @@
-import type { ChatMessageDto, ChatRunDto, ChatRunFailureCode } from '@overlord/contract';
+import type {
+  ChatKnowledgebaseWriteDto,
+  ChatMessageDto,
+  ChatRunDto,
+  ChatRunFailureCode
+} from '@overlord/contract';
 import { Archive, ArchiveRestore, Loader2, Pencil, Square, Wifi } from 'lucide-react';
 import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
@@ -6,10 +11,11 @@ import { Button } from '@/components/ui/button.tsx';
 import { Input } from '@/components/ui/input.tsx';
 import { api } from '@/lib/api.ts';
 import { chatErrorCode, chatErrorMessage, isRetryableChatError } from '@/lib/chat/errors.ts';
+import { grantKey, knowledgebaseWriteTargets } from '@/lib/chat/knowledgebase-writes.ts';
 import { clearRequestId, stableRequestId } from '@/lib/chat/request-ids.ts';
 import { type ChatThreadState, composerMode } from '@/lib/chat/thread-state.ts';
 import type { ChatStreamStatus, ChatThreadStream } from '@/lib/chat/thread-stream.ts';
-import { useChatPresence, useChatThreadStream } from '@/lib/chat/use-chat.ts';
+import { useChatPresence, useChatProviders, useChatThreadStream } from '@/lib/chat/use-chat.ts';
 import { cn } from '@/lib/utils.ts';
 
 import { type ChatBlockContext, ChatMessageBlocks } from './ChatBlocks.tsx';
@@ -71,7 +77,12 @@ function ThreadBody({
   scope: string;
 }) {
   const [composerError, setComposerError] = useState<string | null>(null);
-  const pendingSubmission = useRef<{ text: string; id: string } | null>(null);
+  const pendingSubmission = useRef<{ text: string; grant: string; id: string } | null>(null);
+  const providers = useChatProviders(scope);
+  const writeTargets = useMemo(
+    () => knowledgebaseWriteTargets(providers.data?.connections),
+    [providers.data?.connections]
+  );
   const scroller = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
   const mode = composerMode(state);
@@ -93,17 +104,25 @@ function ThreadBody({
     if (element && stickToBottom.current) element.scrollTop = element.scrollHeight;
   }, [state.messages, state.activeRun, state.tools]);
 
-  const submit = async (text: string): Promise<boolean> => {
-    // Reuse the id while retrying the same text; a changed draft is a new request.
+  const submit = async (
+    text: string,
+    knowledgebaseWrite: ChatKnowledgebaseWriteDto | null
+  ): Promise<boolean> => {
+    // Reuse the id while retrying the same text and grant; a changed draft is a new request.
+    const grant = grantKey(knowledgebaseWrite);
     const pending =
-      pendingSubmission.current?.text === text
+      pendingSubmission.current?.text === text && pendingSubmission.current.grant === grant
         ? pendingSubmission.current
-        : { text, id: globalThis.crypto.randomUUID() };
+        : { text, grant, id: globalThis.crypto.randomUUID() };
     pendingSubmission.current = pending;
     setComposerError(null);
     stickToBottom.current = true;
     try {
-      const result = await api.submitChatMessage(threadId, { clientRequestId: pending.id, text });
+      const result = await api.submitChatMessage(threadId, {
+        clientRequestId: pending.id,
+        text,
+        ...(knowledgebaseWrite ? { knowledgebaseWrite } : {})
+      });
       pendingSubmission.current = null;
       stream.merge({ message: result.message, run: result.run });
       return true;
@@ -144,7 +163,8 @@ function ThreadBody({
           {state.messages.length === 0 && !state.activeRun ? (
             <p className="py-10 text-center text-sm text-(--color-ink-dim)">
               Describe a feature or ask a question. The assistant reads your projects, Knowledgebase
-              notes, and current repository state, and drafts work only when you press Create.
+              notes, and current repository state. It drafts work only when you press Create, and
+              edits notes only in a workspace you allow for that message.
             </p>
           ) : null}
           {state.messages.map(message => (
@@ -162,7 +182,13 @@ function ThreadBody({
         </div>
       </div>
       <div className="mx-auto w-full max-w-3xl px-4 pb-4">
-        <ChatComposer mode={mode} error={composerError} onSubmit={submit} autoFocus />
+        <ChatComposer
+          mode={mode}
+          error={composerError}
+          onSubmit={submit}
+          writeTargets={writeTargets}
+          autoFocus
+        />
       </div>
     </div>
   );
@@ -243,6 +269,9 @@ function RunStatus({
                 ? 'Working…'
                 : 'Waiting for your answer'}
           </span>
+          {run.knowledgebaseWrite ? (
+            <span className="text-xs">· may edit notes in {run.knowledgebaseWrite.workspace}</span>
+          ) : null}
           <Button
             variant="ghost"
             size="xs"

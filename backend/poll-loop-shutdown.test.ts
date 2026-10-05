@@ -4,9 +4,9 @@ import { once } from 'node:events';
 import path from 'node:path';
 import { it } from 'node:test';
 
-const WORKER = path.join(import.meta.dirname, 'chat-worker.ts');
+const POLL_LOOP = path.join(import.meta.dirname, 'poll-loop.ts');
 
-/** A process that would otherwise run forever, with the chat shutdown hook installed. */
+/** A process that would otherwise run forever, with the background-loop shutdown hook installed. */
 const child = (signal: NodeJS.Signals) =>
   (async () => {
     const proc = spawn(
@@ -16,10 +16,10 @@ const child = (signal: NodeJS.Signals) =>
         'tsx',
         '--input-type=module',
         '-e',
-        `import { stopOnTermination } from ${JSON.stringify(WORKER)};
+        `import { stopOnTermination } from ${JSON.stringify(POLL_LOOP)};
          import { createServer } from 'node:http';
          createServer(() => {}).listen(0, '127.0.0.1', () => {
-           stopOnTermination(() => process.stdout.write('stopped\\n'));
+           stopOnTermination([{ stop: () => void process.stdout.write('stopped\\n') }]);
            process.stdout.write('ready\\n');
          });`
       ],
@@ -37,7 +37,7 @@ const child = (signal: NodeJS.Signals) =>
   })();
 
 for (const signal of ['SIGTERM', 'SIGINT'] as const)
-  it(`a single ${signal} stops chat work and still terminates the backend process`, async () => {
+  it(`a single ${signal} stops background loops and still terminates the backend process`, async () => {
     const result = await child(signal);
     assert.ok(result.output.includes('stopped'), 'the stop hook ran');
     // Terminated by the original signal, not by the test's SIGKILL fallback.

@@ -1,10 +1,4 @@
-import {
-  createPostgresClient,
-  createSqliteClient,
-  type DatabaseClient,
-  migratePostgres,
-  openInMemoryDatabase
-} from '@overlord/database';
+import { type DatabaseClient } from '@overlord/database';
 import express from 'express';
 import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -12,6 +6,9 @@ import { once } from 'node:events';
 import { readFileSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { describe, it } from 'node:test';
+
+import { apiErrorHandler } from '../errors.ts';
+import { conformanceAdapters, createConformanceDatabase } from '../test-helpers.ts';
 
 import { openSecret, sealSecret } from './crypto.ts';
 import { createConnectionsRuntime } from './index.ts';
@@ -31,7 +28,7 @@ import { ConnectionAccessError } from './service.ts';
  * and then runs the real `20261005120000_account_connections_profile_scope`
  * migration file.
  */
-const adapters = ['sqlite', ...(process.env.TEST_DATABASE_URL ? ['postgres'] : [])];
+const adapters = conformanceAdapters();
 const STAMP = '2026-10-04T12:00:00.000Z';
 const EVERHOUR_ENV_KEY = randomBytes(32).toString('base64url');
 const CURRENT_KEY = randomBytes(32).toString('base64url');
@@ -123,41 +120,6 @@ registerProfileConnectionProvider({
     }
   }
 });
-
-async function database(
-  adapter: string
-): Promise<{ db: DatabaseClient; cleanup: () => Promise<void> }> {
-  if (adapter === 'sqlite') {
-    const raw = openInMemoryDatabase();
-    return {
-      db: createSqliteClient(raw),
-      cleanup: async () => {
-        raw.close();
-      }
-    };
-  }
-  const { default: pg } = await import('pg');
-  const pool = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL });
-  const session = await pool.connect(),
-    schema = `profile_connections_${randomUUID().replaceAll('-', '')}`;
-  await session.query(`CREATE SCHEMA ${schema}`);
-  const scoped = new pg.Pool({
-    connectionString: process.env.TEST_DATABASE_URL,
-    options: `-c search_path=${schema}`,
-    max: 4
-  });
-  const db = createPostgresClient(scoped, { ownsPool: true });
-  await migratePostgres(db);
-  return {
-    db,
-    cleanup: async () => {
-      await db.close();
-      await session.query(`DROP SCHEMA ${schema} CASCADE`);
-      session.release();
-      await pool.end();
-    }
-  };
-}
 
 /** Put `account_connections` back to its v152 shape (the state the v153 migration meets). */
 async function rewindToV152(db: DatabaseClient) {
@@ -276,7 +238,7 @@ const everhourRow = (db: DatabaseClient, profileId = 'owner') =>
 for (const adapter of adapters) {
   describe(`v153 account-connections migration (${adapter})`, () => {
     it('rebuilds account_connections preserving Knowledgebase rows and links', async () => {
-      const { db, cleanup } = await database(adapter);
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'profile_connections');
       try {
         await migratedWithLegacy(db);
         const kb = await db.get<Row>("SELECT * FROM account_connections WHERE id = 'kb1'");
@@ -320,7 +282,7 @@ for (const adapter of adapters) {
     });
 
     it('copies live Everhour envelopes verbatim and scrubs deleted secrets', async () => {
-      const { db, cleanup } = await database(adapter);
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'profile_connections');
       try {
         await migratedWithLegacy(db);
         const legacy = await db.get<Row>(
@@ -361,7 +323,7 @@ for (const adapter of adapters) {
     });
 
     it('keeps the existing environment key working, including the GitHub fallback', async () => {
-      const { db, cleanup } = await database(adapter);
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'profile_connections');
       try {
         await migratedWithLegacy(db);
         for (const env of [
@@ -381,7 +343,7 @@ for (const adapter of adapters) {
     });
 
     it('re-seals lazily under the current key with the same plaintext', async () => {
-      const { db, cleanup } = await database(adapter);
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'profile_connections');
       try {
         await migratedWithLegacy(db);
         const env = {
@@ -416,7 +378,7 @@ for (const adapter of adapters) {
     });
 
     it('the startup sweep re-seals remaining legacy rows and reports counts', async () => {
-      const { db, cleanup } = await database(adapter);
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'profile_connections');
       try {
         await migratedWithLegacy(db);
         const store = profiles(db, {
@@ -432,7 +394,7 @@ for (const adapter of adapters) {
     });
 
     it('a missing key answers unavailable without erasing; a wrong key requires reconnecting', async () => {
-      const { db, cleanup } = await database(adapter);
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'profile_connections');
       try {
         await migratedWithLegacy(db);
         await assert.rejects(
@@ -459,7 +421,7 @@ for (const adapter of adapters) {
     });
 
     it('disconnect tombstones the legacy row and nothing resurrects it', async () => {
-      const { db, cleanup } = await database(adapter);
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'profile_connections');
       try {
         await migratedWithLegacy(db);
         const store = profiles(db, { EVERHOUR_API_KEY_ENCRYPTION_KEY: EVERHOUR_ENV_KEY });
@@ -483,7 +445,7 @@ for (const adapter of adapters) {
     });
 
     it('adopts a legacy row written after the migration and honours a later legacy disconnect', async () => {
-      const { db, cleanup } = await database(adapter);
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'profile_connections');
       try {
         await migratedWithLegacy(db);
         const store = profiles(db, { EVERHOUR_API_KEY_ENCRYPTION_KEY: EVERHOUR_ENV_KEY });
@@ -514,7 +476,7 @@ for (const adapter of adapters) {
     });
 
     it('an envelope copied to another owner fails authentication', async () => {
-      const { db, cleanup } = await database(adapter);
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'profile_connections');
       try {
         await migratedWithLegacy(db);
         const stolen = await everhourRow(db);
@@ -540,7 +502,7 @@ for (const adapter of adapters) {
     });
 
     it('serves profile-scoped routes on Local and never echoes or records the key', async () => {
-      const { db, cleanup } = await database(adapter);
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'profile_connections');
       const logged: string[] = [];
       const originals = {
         log: console.log,
@@ -571,6 +533,7 @@ for (const adapter of adapters) {
             profile: () => 'other'
           })
         );
+        app.use(apiErrorHandler);
         const server = app.listen(0, '127.0.0.1');
         await once(server, 'listening');
         const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/connections`;
@@ -660,7 +623,7 @@ for (const adapter of adapters) {
     });
 
     it('without any key the provider is unavailable and connecting answers 503', async () => {
-      const { db, cleanup } = await database(adapter);
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'profile_connections');
       try {
         await migratedWithLegacy(db);
         const store = profiles(db, {});

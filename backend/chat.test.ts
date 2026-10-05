@@ -11,6 +11,7 @@ import { ChatRuns } from '../packages/core/service/chat/runs.ts';
 
 import { createChatRouter } from './chat.ts';
 import { type ChatRuntime, ChatRuntimeFailure, ChatWorker } from './chat-worker.ts';
+import { apiErrorHandler } from './errors.ts';
 
 async function setup() {
   const raw = openInMemoryDatabase(),
@@ -62,6 +63,7 @@ it('authenticated chat JSON/poll/SSE replay, live append, conflicts and Local gu
       streamPollMs: 10
     })
   );
+  app.use(apiErrorHandler);
   const server = app.listen(0, '127.0.0.1');
   await once(server, 'listening');
   const address = server.address();
@@ -193,6 +195,7 @@ it('GET /api/chat/providers reports engine readiness and the caller connections,
       }
     })
   );
+  app.use(apiErrorHandler);
   const server = app.listen(0);
   await once(server, 'listening');
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}/api/chat`;
@@ -270,6 +273,7 @@ it('Create HTTP endpoint enforces caller, revision, Local guard, and receipt rep
         owner: () => context.getStore() ?? null
       })
     );
+    app.use(apiErrorHandler);
     const server = app.listen(0, '127.0.0.1');
     await once(server, 'listening');
     const address = server.address();
@@ -333,6 +337,7 @@ it('presence, acknowledgement and notification history routes are owner-scoped a
       owner: () => context.getStore() ?? null
     })
   );
+  app.use(apiErrorHandler);
   const server = app.listen(0, '127.0.0.1');
   await once(server, 'listening');
   const address = server.address();

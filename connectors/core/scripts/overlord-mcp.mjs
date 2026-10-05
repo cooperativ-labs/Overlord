@@ -210,9 +210,15 @@ const tools = [
     name: 'overlord_search_missions',
     title: 'Search Overlord missions',
     description:
-      "Search mission anchors with their matching objectives and deliveries across authorized workspaces. An objective displayId can be passed directly to overlord_load_mission_context; matches are matched-only, not the full objective list. Artifacts are not indexed. Use absolute ISO from/to bounds (no relative dates or implicit window), inspect workspaceCounts, entityCounts, and truncatedCandidates before claiming completeness, and treat appliedFilters.mode 'fallback' as a recency listing. Compact detail is default; request full for child snippets and metadata.",
+      "Search mission anchors with their matching objectives and deliveries across authorized workspaces. An objective displayId can be passed directly to overlord_load_mission_context; matches are matched-only, not the full objective list. Artifacts are not indexed. Use absolute ISO from/to bounds (no relative dates or implicit window), inspect workspaceCounts, entityCounts, and truncatedCandidates before claiming completeness, and treat appliedFilters.mode 'fallback' as a recency listing. Compact detail is default; request full for child snippets and metadata. Ranked results never prove absence: to check an exact token such as a canonical kb-feature: Knowledgebase Feature reference, pass reference with projectId (only workspaceId, limit 1-100 and cursor may accompany it) and follow nextCursor until complete is true.",
     inputSchema: objectSchema({
       query: stringProperty('Search query text.'),
+      reference: stringProperty(
+        'Exact-reference mode: case-sensitive whole token (8-512 characters, no whitespace) in live objective text. Requires projectId; cannot be combined with ranked filters. Returns { results (with statusType and matching objectives), nextCursor, complete }.'
+      ),
+      cursor: stringProperty(
+        'Exact-reference mode only: nextCursor from the previous page for the same reference and projectId.'
+      ),
       status: stringProperty(
         'Comma-separated status TYPES, such as draft,next,execute,review. Types are workspace-invariant (draft, next, execute, review, complete, blocked, cancelled). Project-defined status names are not accepted here.'
       ),
@@ -829,6 +835,43 @@ async function callOverlordTool(name, args) {
     });
   }
   if (name === 'overlord_search_missions') {
+    const reference = optionalString(args, 'reference');
+    if (reference) {
+      // Exact-reference mode: ranked filters are forwarded so Protocol rejects them.
+      const ranked = {};
+      for (const [key, flag] of [
+        ['query', 'query'],
+        ['status', 'status'],
+        ['resourceKey', 'resource-key'],
+        ['dateField', 'date-field'],
+        ['from', 'from'],
+        ['to', 'to'],
+        ['entityTypes', 'entity-types'],
+        ['objectiveStates', 'objective-states']
+      ]) {
+        if (optionalString(args, key)) ranked[flag] = requiredString(args, key);
+      }
+      if (typeof args.matchesPerResult === 'number') {
+        ranked['matches-per-result'] = String(args.matchesPerResult);
+      }
+      return runProtocol('search', {
+        reference,
+        ...(optionalString(args, 'projectId')
+          ? { 'project-id': requiredString(args, 'projectId') }
+          : {}),
+        ...(optionalString(args, 'workspaceId')
+          ? { 'workspace-id': requiredString(args, 'workspaceId') }
+          : {}),
+        ...(optionalString(args, 'cursor') ? { cursor: requiredString(args, 'cursor') } : {}),
+        ...(typeof args.limit === 'number' && Number.isFinite(args.limit)
+          ? { limit: String(Math.trunc(args.limit)) }
+          : {}),
+        ...ranked
+      });
+    }
+    if (optionalString(args, 'cursor')) {
+      throw new Error('cursor applies only to an exact reference search');
+    }
     const detail = optionalString(args, 'detail') || 'compact';
     if (detail !== 'compact' && detail !== 'full') {
       throw new Error("detail must be 'compact' or 'full'");
@@ -1228,7 +1271,7 @@ process.stdin.on('data', async chunk => {
         result: {
           protocolVersion: PROTOCOL_VERSION,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.49' }
+          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.50' }
         }
       });
       continue;

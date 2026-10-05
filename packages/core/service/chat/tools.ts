@@ -1,38 +1,53 @@
 import { PERMISSIONS } from '@overlord/auth';
-import type {
-  ChatSourceLocatorDto,
-  RepositoryReadRequest,
-  RepositoryReadResult
+import {
+  type ChatKnowledgebaseWriteDto,
+  type ChatSourceLocatorDto,
+  knowledgebaseFeatureReference,
+  knowledgebaseFeatureUrl,
+  parseKnowledgebaseFeatureReference,
+  type RepositoryReadRequest,
+  type RepositoryReadResult
 } from '@overlord/contract';
 import type { DatabaseClient } from '@overlord/database';
 
 import type { ServiceContext } from '../context.js';
+import { ServiceError } from '../errors.js';
+import { searchMissionReferencesInProject } from '../mission-reference-search.js';
 import { readProjectLaunchSelection, searchMissionsV3 } from '../missions.js';
 import { getProjectExecutionTargetSelection } from '../project-execution-target.js';
 import { listProjectResources } from '../projects.js';
 import { parseRepositoryReadRequest } from '../repository-reads.js';
+import { readStoredWorkspaceAgentCatalog } from '../workspace-agent-catalog.js';
 
 import { ChatAccess, type ChatWorkspaceGrant } from './access.js';
 import { assignmentCatalogProjection } from './assignments.js';
+import { knowledgebaseWriteTool } from './knowledgebase-writes.js';
 import type { ChatAssignmentCatalog, ChatOwner } from './store.js';
 
 /**
  * Authorized tool gateway for the assistant (contract v152 §Tools, coo:1108.vx29).
  *
  * The tool list is fixed by Overlord: Overlord reads, repository reads, reviewed
- * Knowledgebase reads, and `ask_user`. No tool creates, changes, or launches work.
+ * Knowledgebase reads, and `ask_user`. No tool creates, changes, or launches Overlord
+ * work. Reviewed Knowledgebase writes (v154) are added only for a run whose user
+ * explicitly authorized one connection and workspace, and only that scope is accepted.
  * Every call is validated against Overlord-authored schemas and resolved against the
  * thread owner's live permissions at call time; model arguments and tool content are
  * untrusted and can never add a tool or widen a scope.
  */
 
-/** JSON Schema subset used for provider function declarations. */
+/**
+ * JSON Schema subset used for provider function declarations. A schema without `type`
+ * accepts any JSON value (including null); `additionalProperties` as a schema
+ * describes the values of an open map.
+ */
 export interface ChatToolSchema {
-  type: 'object' | 'string' | 'integer' | 'array' | 'boolean';
+  type?: 'object' | 'string' | 'integer' | 'number' | 'array' | 'boolean';
   description?: string;
   properties?: Record<string, ChatToolSchema>;
   required?: string[];
-  additionalProperties?: false;
+  additionalProperties?: false | ChatToolSchema;
+  maxProperties?: number;
   enum?: string[];
   minLength?: number;
   maxLength?: number;
@@ -47,6 +62,8 @@ export interface ChatToolDeclaration {
   name: string;
   description: string;
   parameters: ChatToolSchema;
+  /** Writes run one at a time, after the turn's reads; never sent to the provider. */
+  effect?: 'read' | 'write';
 }
 
 /** One source a tool result drew on; becomes a `chat_source_refs` row and an evidence row. */
@@ -69,7 +86,11 @@ export type ChatToolOutcome =
   | 'unavailable'
   | 'timeout'
   | 'reauthorization_required'
-  | 'tool_error';
+  | 'tool_error'
+  /** A guarded write lost to a newer revision (409/412): reread, then re-evaluate. */
+  | 'conflict'
+  /** A write whose outcome is unknown: reread by stable id before any retry. */
+  | 'uncertain';
 
 export interface ChatToolOutput {
   outcome: ChatToolOutcome;
@@ -82,18 +103,30 @@ export interface ChatToolOutput {
 export interface ChatKnowledgebaseAdapter {
   tools(
     owner: ChatOwner,
-    signal?: AbortSignal
-  ): Promise<{ id: string; connectionId: string; description: string; inputSchema: unknown }[]>;
+    signal?: AbortSignal,
+    options?: { write?: ChatKnowledgebaseWriteDto | null }
+  ): Promise<
+    {
+      id: string;
+      connectionId: string;
+      description: string;
+      inputSchema: unknown;
+      /** Absent means read. */
+      access?: 'read' | 'write';
+    }[]
+  >;
   call(
     owner: ChatOwner,
     toolId: string,
     args: unknown,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    options?: { write?: ChatKnowledgebaseWriteDto | null }
   ): Promise<{
     outcome: string;
     text: string;
     truncated: boolean;
     workspace: string | null;
+    upstreamStatus?: number | null;
     sources: {
       locator: Extract<ChatSourceLocatorDto, { kind: 'knowledgebase' }>;
       revision: string | null;
@@ -112,6 +145,8 @@ export type ChatRepositoryReader = (args: {
 }) => Promise<RepositoryReadResult>;
 
 export const ASK_USER_TOOL = 'ask_user';
+/** Exhaustive Feature-reference mission lookup (v155); declared with a Knowledgebase. */
+export const FIND_FEATURE_MISSIONS_TOOL = 'overlord_find_feature_missions';
 export const PREPARE_PROPOSAL_TOOL = 'prepare_proposal';
 
 /** Provider-input bound per tool result; the stored receipt limit is 128 KiB. */
@@ -299,6 +334,50 @@ export const OVERLORD_TOOL_DECLARATIONS: readonly ChatToolDeclaration[] = [
   }
 ];
 
+/**
+ * Feature handoff lookup (contract v155, connector objective C2). Declared only when a
+ * Knowledgebase is configured, because the Feature identity names its server.
+ */
+export const FIND_FEATURE_MISSIONS_DECLARATION: ChatToolDeclaration = {
+  name: FIND_FEATURE_MISSIONS_TOOL,
+  description:
+    "Exhaustively list the missions in one Overlord project whose live objective text carries a Knowledgebase Feature's canonical reference (kb-feature:<origin>/<workspace>/<node id>), each with its mission statusType and matching objectives. Use it before handing off a Feature and to recover an earlier handoff. Ranked overlord_search_missions can never prove absence; only this tool with complete: true (after following nextCursor) does. It also returns referenceLines to copy verbatim into a handoff objective. Read only.",
+  parameters: obj(
+    {
+      projectId: id('Overlord project id that the Feature routes to.'),
+      workspace: {
+        type: 'string',
+        description: 'Knowledgebase workspace slug that holds the Feature.',
+        pattern: '^[a-z0-9][a-z0-9-]{0,62}$',
+        minLength: 1,
+        maxLength: 63
+      },
+      featureNodeId: {
+        type: 'string',
+        description: 'The Feature node UUID (never its title or path).',
+        pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+        minLength: 36,
+        maxLength: 36
+      },
+      knowledgebaseOrigin: {
+        type: 'string',
+        description:
+          'Only when the user has more than one Knowledgebase connection: the server origin, e.g. https://kb.example.com.',
+        minLength: 8,
+        maxLength: 300
+      },
+      cursor: {
+        type: 'string',
+        description: 'nextCursor from the previous page of this same lookup.',
+        minLength: 1,
+        maxLength: 2000
+      },
+      limit: { type: 'integer', minimum: 1, maximum: 100 }
+    },
+    ['projectId', 'workspace', 'featureNodeId']
+  )
+};
+
 /** Validates `value` against an Overlord schema. Returns an error label, or null when valid. */
 export function validateToolArguments(
   schema: ChatToolSchema,
@@ -306,23 +385,36 @@ export function validateToolArguments(
   path = 'arguments'
 ): string | null {
   switch (schema.type) {
+    case undefined:
+      return null; // Any JSON value; the reviewed tool's own validator bounds its size.
     case 'object': {
       if (!value || typeof value !== 'object' || Array.isArray(value)) return `${path}_not_object`;
       const record = value as Record<string, unknown>;
       for (const key of schema.required ?? [])
         if (record[key] === undefined || record[key] === null) return `${path}.${key}_required`;
+      if (schema.maxProperties !== undefined && Object.keys(record).length > schema.maxProperties)
+        return `${path}_too_many_properties`;
       for (const [key, item] of Object.entries(record)) {
-        const child = schema.properties?.[key];
+        const declared = schema.properties?.[key];
+        const child =
+          declared ??
+          (typeof schema.additionalProperties === 'object' ? schema.additionalProperties : null);
         if (!child) {
           if (schema.additionalProperties === false) return `${path}.${key}_not_allowed`;
           continue;
         }
-        if (item === undefined || item === null) continue;
+        // An open map's values are validated as given: null there means "remove".
+        if (declared && (item === undefined || item === null)) continue;
         const error = validateToolArguments(child, item, `${path}.${key}`);
         if (error) return error;
       }
       return null;
     }
+    case 'number':
+      if (typeof value !== 'number' || !Number.isFinite(value)) return `${path}_not_number`;
+      if (schema.minimum !== undefined && value < schema.minimum) return `${path}_too_small`;
+      if (schema.maximum !== undefined && value > schema.maximum) return `${path}_too_large`;
+      return null;
     case 'string':
       if (typeof value !== 'string') return `${path}_not_string`;
       if (schema.minLength !== undefined && value.length < schema.minLength)
@@ -391,24 +483,35 @@ export class ChatToolGateway {
 
   /**
    * Declarations for one provider request. Knowledgebase tools are the reviewed,
-   * server-confirmed read tools of the owner's live connections; nothing else is added.
+   * server-confirmed read tools of the owner's live connections, plus the reviewed write
+   * tools of the one connection and workspace the run's user authorized; nothing else.
    */
-  async declarations(owner: ChatOwner, signal?: AbortSignal): Promise<ChatToolDeclaration[]> {
+  async declarations(
+    owner: ChatOwner,
+    signal?: AbortSignal,
+    options: { knowledgebaseWrite?: ChatKnowledgebaseWriteDto | null } = {}
+  ): Promise<ChatToolDeclaration[]> {
     const out = OVERLORD_TOOL_DECLARATIONS.filter(
       d => d.name !== 'repository_read' || this.options.readRepository
     ).map(d => ({ ...d }));
     if (this.options.knowledgebase) {
+      out.push({ ...FIND_FEATURE_MISSIONS_DECLARATION });
+      const write = options.knowledgebaseWrite ?? null;
       let tools: Awaited<ReturnType<ChatKnowledgebaseAdapter['tools']>> = [];
       try {
-        tools = await this.options.knowledgebase.tools(owner, signal);
+        tools = await this.options.knowledgebase.tools(owner, signal, { write });
       } catch {
         tools = []; // An unavailable connection contributes no tools; readiness explains why.
       }
       for (const tool of tools)
         out.push({
           name: tool.id,
-          description: `Knowledgebase (read only): ${tool.description}`,
-          parameters: tool.inputSchema as ChatToolSchema
+          description:
+            tool.access === 'write' && write
+              ? `Knowledgebase write (the user authorized edits to workspace "${write.workspace}" for this request only): ${tool.description}`
+              : `Knowledgebase (read only): ${tool.description}`,
+          parameters: tool.inputSchema as ChatToolSchema,
+          effect: tool.access === 'write' ? 'write' : 'read'
         });
     }
     return out;
@@ -425,6 +528,8 @@ export class ChatToolGateway {
     name: string;
     arguments: unknown;
     declared: readonly ChatToolDeclaration[];
+    /** The run's stored write grant; the only scope a Knowledgebase write may use. */
+    knowledgebaseWrite?: ChatKnowledgebaseWriteDto | null;
     signal?: AbortSignal;
   }): Promise<ChatToolOutput> {
     const declaration = args.declared.find(d => d.name === args.name);
@@ -442,10 +547,18 @@ export class ChatToolGateway {
         return this.searchMissions(args.owner, input);
       case 'overlord_get_mission':
         return this.getMission(args.owner, String(input.missionId));
+      case FIND_FEATURE_MISSIONS_TOOL:
+        return this.findFeatureMissions(args.owner, input);
       case 'repository_read':
         return this.readRepository(args.owner, args.runId, args.operationId, input, args.signal);
       default:
-        return this.knowledgebase(args.owner, args.name, input, args.signal);
+        return this.knowledgebase(
+          args.owner,
+          args.name,
+          input,
+          args.knowledgebaseWrite ?? null,
+          args.signal
+        );
     }
   }
 
@@ -506,14 +619,7 @@ export class ChatToolGateway {
             ...assignmentCatalogProjection(
               this.options.assignmentCatalog
                 ? await this.options.assignmentCatalog(grant.workspaceId)
-                : JSON.parse(
-                    (
-                      await this.options.db.get<{ settings_json: string }>(
-                        'SELECT settings_json FROM workspaces WHERE id = ?',
-                        [grant.workspaceId]
-                      )
-                    )?.settings_json ?? '{}'
-                  ).agentCatalog
+                : await readStoredWorkspaceAgentCatalog(this.options.db, grant.workspaceId)
             )
           });
         }
@@ -751,6 +857,170 @@ export class ChatToolGateway {
     };
   }
 
+  /** The owner's live Knowledgebase server origins (one per connected server). */
+  private async knowledgebaseOrigins(owner: ChatOwner): Promise<string[]> {
+    const rows = await this.options.db.all<{ server_url: string }>(
+      "SELECT server_url FROM account_connections WHERE owner_profile_id = ? AND organization_id = ? AND provider = 'knowledgebase' AND state <> 'disconnected'",
+      [owner.profileId, owner.organizationId]
+    );
+    const origins = new Set<string>();
+    for (const row of rows) {
+      try {
+        origins.add(new URL(row.server_url).origin);
+      } catch {
+        // A malformed stored URL names no server.
+      }
+    }
+    return [...origins].sort();
+  }
+
+  private async findFeatureMissions(
+    owner: ChatOwner,
+    input: Record<string, unknown>
+  ): Promise<ChatToolOutput> {
+    const observedAt = this.now();
+    const projectId = String(input.projectId);
+    const scope = await this.access.projectGrant(owner, projectId, PERMISSIONS.MISSION_READ);
+    if (!scope) return failure('not_found', 'Project not found.');
+    const origins = await this.knowledgebaseOrigins(owner);
+    let origin: string;
+    if (typeof input.knowledgebaseOrigin === 'string') {
+      let requested: string | null = null;
+      try {
+        requested = new URL(input.knowledgebaseOrigin).origin;
+      } catch {
+        requested = null;
+      }
+      if (!requested || !origins.includes(requested))
+        return failure(
+          'invalid_arguments',
+          'knowledgebaseOrigin is not one of your connected Knowledgebase servers.'
+        );
+      origin = requested;
+    } else if (origins.length === 1) origin = origins[0]!;
+    else if (!origins.length)
+      return failure('unavailable', 'No Knowledgebase connection is available.');
+    else
+      return failure(
+        'invalid_arguments',
+        `More than one Knowledgebase server is connected; pass knowledgebaseOrigin (one of ${origins.join(', ')}).`
+      );
+    const identity = {
+      origin,
+      workspace: String(input.workspace),
+      nodeId: String(input.featureNodeId)
+    };
+    const reference = knowledgebaseFeatureReference(identity);
+    const featureUrl = knowledgebaseFeatureUrl(identity);
+    let response;
+    try {
+      response = await searchMissionReferencesInProject({
+        db: this.options.db,
+        workspaceId: scope.grant.workspaceId,
+        projectId,
+        reference,
+        cursor: typeof input.cursor === 'string' ? input.cursor : null,
+        limit: typeof input.limit === 'number' ? input.limit : null
+      });
+    } catch (error) {
+      if (error instanceof ServiceError && error.code === 'validation_error')
+        return failure('invalid_arguments', error.message);
+      throw error;
+    }
+    return {
+      outcome: 'ok',
+      content: {
+        reference,
+        featureUrl,
+        referenceLines: `Knowledgebase Feature: ${reference}\nFeature link: ${featureUrl}`,
+        projectId,
+        project: scope.project.name,
+        results: response.results.map(m => ({
+          missionId: m.id,
+          displayId: m.displayId,
+          title: m.title,
+          statusType: m.statusType,
+          updatedAt: m.updatedAt,
+          objectives: m.objectives.map(o => ({
+            objectiveId: o.id,
+            displayId: o.displayId,
+            state: o.state
+          }))
+        })),
+        nextCursor: response.nextCursor,
+        complete: response.complete,
+        guidance: response.complete
+          ? 'This page ends the lookup: missions not listed on any page do not carry the reference.'
+          : 'More pages remain: pass nextCursor before concluding that no mission exists.'
+      },
+      sources: response.results.map(m => ({
+        scopeKey: `overlord:mission:${m.id}`,
+        locator: {
+          kind: 'overlord' as const,
+          entityType: 'mission' as const,
+          entityId: m.id,
+          projectId: m.projectId
+        },
+        label: `Mission ${m.displayId} ${clip(m.title, 120) ?? ''}`.trim(),
+        excerpt: clip(m.title, EXCERPT_CHARS),
+        truncated: false,
+        revision: m.updatedAt,
+        observedAt
+      }))
+    };
+  }
+
+  /**
+   * A Feature's `overlord` link may name only a live mission the owner can read, and
+   * never one that carries a different Feature's canonical reference. This is checked
+   * server-side before the write is sent, so a link is written only after the mission
+   * exists (v155). `null` (Remove link) is always allowed.
+   */
+  private async refuseMissionLink(
+    owner: ChatOwner,
+    input: Record<string, unknown>
+  ): Promise<ChatToolOutput | null> {
+    const properties = input.properties;
+    if (!properties || typeof properties !== 'object' || Array.isArray(properties)) return null;
+    if (!Object.hasOwn(properties, 'overlord')) return null;
+    const value = (properties as Record<string, unknown>).overlord;
+    if (value === null) return null;
+    const refuse = (message: string) => failure('invalid_arguments', message);
+    if (typeof value !== 'string' || !value.trim() || value.length > 200)
+      return refuse('overlord must be the linked mission display id (for example coo:123).');
+    const ref = value.trim();
+    const candidates = await this.options.db.all<{ id: string; project_id: string }>(
+      'SELECT id, project_id FROM missions WHERE (id = ? OR display_id = ?) AND deleted_at IS NULL LIMIT 10',
+      [ref, ref]
+    );
+    const visible: { id: string }[] = [];
+    for (const m of candidates)
+      if (await this.access.projectGrant(owner, m.project_id, PERMISSIONS.MISSION_READ))
+        visible.push(m);
+    if (visible.length !== 1)
+      return refuse(
+        `overlord must name exactly one existing mission you can read; "${ref}" does not. Create or recover the mission first, then link it.`
+      );
+    const workspace = typeof input.workspace === 'string' ? input.workspace : '';
+    const nodeId = typeof input.node_id === 'string' ? input.node_id.toLowerCase() : '';
+    const texts = await this.options.db.all<{ instruction_text: string | null }>(
+      'SELECT instruction_text FROM objectives WHERE mission_id = ? AND deleted_at IS NULL',
+      [visible[0]!.id]
+    );
+    const carried = texts
+      .flatMap(t => (t.instruction_text ?? '').match(/kb-feature:[^\s)\]>,;`'"]+/g) ?? [])
+      .map(token => parseKnowledgebaseFeatureReference(token.replace(/\.+$/, '')))
+      .filter(identity => identity !== null);
+    if (
+      carried.length &&
+      !carried.some(identity => identity.workspace === workspace && identity.nodeId === nodeId)
+    )
+      return refuse(
+        `Mission ${ref} carries a different Knowledgebase Feature reference; it is not this Feature's mission.`
+      );
+    return null;
+  }
+
   private async readRepository(
     owner: ChatOwner,
     runId: string,
@@ -859,11 +1129,21 @@ export class ChatToolGateway {
     owner: ChatOwner,
     name: string,
     input: Record<string, unknown>,
+    write: ChatKnowledgebaseWriteDto | null,
     signal?: AbortSignal
   ): Promise<ChatToolOutput> {
     if (!this.options.knowledgebase) return failure('unknown_tool', 'No such read tool.');
-    const result = await this.options.knowledgebase.call(owner, name, input, signal);
-    if (result.outcome !== 'ok' && result.outcome !== 'tool_error') {
+    if (knowledgebaseWriteTool(name) === 'set_properties') {
+      const refused = await this.refuseMissionLink(owner, input);
+      if (refused) return refused;
+    }
+    const result = await this.options.knowledgebase.call(owner, name, input, signal, { write });
+    if (result.outcome === 'uncertain')
+      return failure(
+        'uncertain',
+        'The write may or may not have been applied. Reread the node, relation, or path by its stable id before deciding whether to try again; never repeat a create blindly.'
+      );
+    if (!['ok', 'tool_error', 'conflict'].includes(result.outcome)) {
       const outcome: ChatToolOutcome =
         result.outcome === 'reauthorization_required' ||
         result.outcome === 'timeout' ||
@@ -872,15 +1152,30 @@ export class ChatToolGateway {
           : result.outcome === 'invalid_arguments'
             ? 'invalid_arguments'
             : 'unavailable';
-      return failure(outcome, result.detail ?? outcome);
+      return failure(
+        outcome,
+        result.detail === 'write_not_authorized'
+          ? 'Knowledgebase edits are not authorized for this request or workspace. Ask the user to allow edits for the workspace and send the request again.'
+          : result.detail === 'response_too_large'
+            ? 'The result was too large to return completely. Request a smaller page (a lower limit) and follow next_cursor.'
+            : (result.detail ?? outcome)
+      );
     }
     const content = cutUtf8(result.text, CHAT_TOOL_CONTENT_BYTES - 4096);
     return {
-      outcome: result.outcome === 'ok' ? 'ok' : 'tool_error',
+      outcome:
+        result.outcome === 'ok' ? 'ok' : result.outcome === 'conflict' ? 'conflict' : 'tool_error',
       content: {
         workspace: result.workspace,
         text: content.text,
-        truncated: result.truncated || content.cut
+        truncated: result.truncated || content.cut,
+        ...(result.upstreamStatus ? { upstreamStatus: result.upstreamStatus } : {}),
+        ...(result.outcome === 'conflict'
+          ? {
+              guidance:
+                'Another writer changed this first. Reread it for the current revision, re-evaluate whether the change still applies, and only then write again.'
+            }
+          : {})
       },
       sources:
         result.outcome === 'ok'

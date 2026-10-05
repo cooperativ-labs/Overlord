@@ -12,6 +12,11 @@ import type {
 } from '@overlord/contract';
 import { randomUUID } from 'node:crypto';
 
+import {
+  parseKnowledgebaseWrite,
+  sameKnowledgebaseWrite,
+  storedKnowledgebaseWrite
+} from './knowledgebase-writes.js';
 import { ChatProposals, proposalDto } from './proposals.js';
 import {
   ChatError,
@@ -152,6 +157,16 @@ export class Conversations extends ChatStore {
         replayed: true
       };
     requiredText(body.text, this.limits.messageMaxChars);
+    const grant = parseKnowledgebaseWrite(body.knowledgebaseWrite);
+    if (grant === 'invalid') throw new ChatError('invalid_request');
+    if (grant) {
+      const checked = this.options.authorizeKnowledgebaseWrite
+        ? await this.options.authorizeKnowledgebaseWrite(owner, grant)
+        : 'invalid';
+      if (checked === 'reauthorization_required')
+        throw new ChatError('connection_reauthorization_required');
+      if (checked !== 'authorized') throw new ChatError('invalid_request');
+    }
     const active = await this.db.get<RunRow>(
       "SELECT * FROM chat_runs WHERE thread_id = ? AND state IN ('queued','running','waiting_user')",
       [id]
@@ -171,6 +186,10 @@ export class Conversations extends ChatStore {
       const chosen = body.optionId && options.find(o => o.id === body.optionId);
       if (body.optionId && !chosen) throw new ChatError('invalid_request');
       if (!q.allow_free_text && !chosen) throw new ChatError('invalid_request');
+      // An answer may authorize writes for a research-only run, never change a granted scope.
+      const current = storedKnowledgebaseWrite(active.knowledgebase_write_json);
+      if (grant && current && !sameKnowledgebaseWrite(grant, current))
+        throw new ChatError('invalid_request');
     } else {
       // Serialize the owner limit across different threads and different backend instances.
       await this.db.run('UPDATE profiles SET id = id WHERE id = ?', [owner.profileId]);
@@ -206,8 +225,8 @@ export class Conversations extends ChatStore {
         [messageId, now, now, question!.id]
       );
       await this.db.run(
-        "UPDATE chat_runs SET state = 'queued', updated_at = ?, revision = revision + 1 WHERE id = ?",
-        [now, runId]
+        "UPDATE chat_runs SET state = 'queued', knowledgebase_write_json = COALESCE(knowledgebase_write_json, ?), updated_at = ?, revision = revision + 1 WHERE id = ?",
+        [grant ? JSON.stringify(grant) : null, now, runId]
       );
       const q = await this.db.get<QuestionRow>('SELECT * FROM chat_questions WHERE id = ?', [
         question!.id
@@ -219,12 +238,13 @@ export class Conversations extends ChatStore {
       );
     } else {
       await this.db.run(
-        `INSERT INTO chat_runs (id, thread_id, trigger_message_id, state, limits_json, created_at, updated_at) VALUES (?, ?, ?, 'queued', ?, ?, ?)`,
+        `INSERT INTO chat_runs (id, thread_id, trigger_message_id, state, limits_json, knowledgebase_write_json, created_at, updated_at) VALUES (?, ?, ?, 'queued', ?, ?, ?, ?)`,
         [
           runId,
           id,
           messageId,
           JSON.stringify(this.limits),
+          grant ? JSON.stringify(grant) : null,
           await this.createdAt('chat_runs', id),
           now
         ]
@@ -316,14 +336,17 @@ export class Conversations extends ChatStore {
       if (Number(count?.n) >= s.limits.concurrentRunsPerOwner)
         throw new ChatError('limit_exceeded');
       const newId = randomUUID();
+      // Continue finishes the same request, so it keeps exactly the scope granted for it.
+      const inheritedGrant = storedKnowledgebaseWrite(r.knowledgebase_write_json);
       await s.db.run(
-        `INSERT INTO chat_runs (id, thread_id, trigger_message_id, continued_from_run_id, state, limits_json, created_at, updated_at) VALUES (?, ?, ?, ?, 'queued', ?, ?, ?)`,
+        `INSERT INTO chat_runs (id, thread_id, trigger_message_id, continued_from_run_id, state, limits_json, knowledgebase_write_json, created_at, updated_at) VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?)`,
         [
           newId,
           r.thread_id,
           r.trigger_message_id,
           id,
           JSON.stringify(s.limits),
+          inheritedGrant ? JSON.stringify(inheritedGrant) : null,
           await s.createdAt('chat_runs', r.thread_id),
           s.timestamp()
         ]

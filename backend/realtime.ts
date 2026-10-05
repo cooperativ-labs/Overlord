@@ -9,6 +9,7 @@ import {
   getAuthorizedWorkspacesContext,
   requireDatabaseClient
 } from './db.ts';
+import { PollLoop } from './poll-loop.ts';
 import { actorCan } from './rbac.ts';
 
 const CHANGE_BATCH_LIMIT = 500;
@@ -160,18 +161,27 @@ export interface AddRealtimeClientOptions {
  *     moves without new feed rows (a tool wrote a table directly), we emit a
  *     coarse `refresh` so clients refetch rather than miss the change.
  */
-export class RealtimeHub {
+export class RealtimeHub extends PollLoop {
   private readonly clients = new Map<Response, RealtimeClient>();
   private cursor = 0;
   private lastDataVersion: number | null = null;
-  private pollTimer: NodeJS.Timeout | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
 
-  start(): void {
-    if (this.pollTimer) return;
-    void this.initializeCursor();
-    this.pollTimer = setInterval(() => void this.poll(), 500);
+  constructor() {
+    super({ intervalMs: 500, logPrefix: 'realtime' });
+  }
+
+  override start(): void {
+    if (this.heartbeatTimer) return;
+    void this.initializeCursor().catch(error => this.onPollError(error));
+    super.start();
     this.heartbeatTimer = setInterval(() => this.heartbeat(), 25_000);
+  }
+
+  override stop(): Promise<void> {
+    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+    this.heartbeatTimer = null;
+    return super.stop();
   }
 
   addClient(res: Response, options: AddRealtimeClientOptions): void {
@@ -201,11 +211,6 @@ export class RealtimeHub {
     this.clients.delete(res);
   }
 
-  /** Run a poll immediately — used right after a local mutation for snappy echoes. */
-  pollNow(): Promise<void> {
-    return this.poll();
-  }
-
   /**
    * Force every subscriber to refetch. Used for server-state changes that do not
    * write to `entity_changes` — notably switching the active workspace, which
@@ -223,7 +228,8 @@ export class RealtimeHub {
     this.lastDataVersion = (await client.sqliteDataVersion?.()) ?? null;
   }
 
-  private async poll(): Promise<void> {
+  /** One feed pass; `pollNow()` runs it right after a local mutation for snappy echoes. */
+  protected async runOnce(): Promise<void> {
     const client = requireDatabaseClient();
     if (this.clients.size === 0) {
       // Keep the cursor moving even with no subscribers so a later client does

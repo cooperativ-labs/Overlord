@@ -1,10 +1,4 @@
-import {
-  createPostgresClient,
-  createSqliteClient,
-  type DatabaseClient,
-  migratePostgres,
-  openInMemoryDatabase
-} from '@overlord/database';
+import { type DatabaseClient } from '@overlord/database';
 import express from 'express';
 import assert from 'node:assert/strict';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
@@ -13,7 +7,9 @@ import { readFileSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { after, before, describe, it } from 'node:test';
 
+import { apiErrorHandler } from '../errors.ts';
 import { registerGitHubConnectionProvider } from '../ext/github/connection-provider.ts';
+import { conformanceAdapters, createConformanceDatabase } from '../test-helpers.ts';
 
 import { openSecret, sealSecret } from './crypto.ts';
 import { createConnectionsRuntime } from './index.ts';
@@ -30,7 +26,7 @@ import { ConnectionAccessError } from './service.ts';
  * properties (explicit `repo read:org` grant, profile- and provider-bound hashed
  * single-use state, one GitHub account per profile, the callback before Better Auth).
  */
-const adapters = ['sqlite', ...(process.env.TEST_DATABASE_URL ? ['postgres'] : [])];
+const adapters = conformanceAdapters();
 const STAMP = '2026-10-04T12:00:00.000Z';
 const FUTURE = '2099-01-01T00:00:00.000Z';
 const PAST = '2026-01-01T00:00:00.000Z';
@@ -108,41 +104,6 @@ function fakeGitHub(): FakeGitHub {
     throw new Error(`Unexpected request: ${url}`);
   };
   return fake;
-}
-
-async function database(
-  adapter: string
-): Promise<{ db: DatabaseClient; cleanup: () => Promise<void> }> {
-  if (adapter === 'sqlite') {
-    const raw = openInMemoryDatabase();
-    return {
-      db: createSqliteClient(raw),
-      cleanup: async () => {
-        raw.close();
-      }
-    };
-  }
-  const { default: pg } = await import('pg');
-  const pool = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL });
-  const session = await pool.connect(),
-    schema = `github_connections_${randomUUID().replaceAll('-', '')}`;
-  await session.query(`CREATE SCHEMA ${schema}`);
-  const scoped = new pg.Pool({
-    connectionString: process.env.TEST_DATABASE_URL,
-    options: `-c search_path=${schema}`,
-    max: 4
-  });
-  const db = createPostgresClient(scoped, { ownsPool: true });
-  await migratePostgres(db);
-  return {
-    db,
-    cleanup: async () => {
-      await db.close();
-      await session.query(`DROP SCHEMA ${schema} CASCADE`);
-      session.release();
-      await pool.end();
-    }
-  };
 }
 
 async function seedIdentities(db: DatabaseClient) {
@@ -234,7 +195,7 @@ const grant = (scope = 'repo,read:org') => ({
 for (const adapter of adapters) {
   describe(`GitHub personal authorization on the connections module (${adapter})`, () => {
     it('adopts a legacy row verbatim, keeps the environment key working, and scrubs deleted rows', async () => {
-      const { db, cleanup } = await database(adapter);
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'github_connections');
       try {
         await migratedWithLegacy(db);
         const row = await githubRow(db);
@@ -286,7 +247,7 @@ for (const adapter of adapters) {
     });
 
     it('re-seals lazily under the current key with the same tokens', async () => {
-      const { db, cleanup } = await database(adapter);
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'github_connections');
       try {
         await migratedWithLegacy(db);
         fakeGitHub();
@@ -313,7 +274,7 @@ for (const adapter of adapters) {
     });
 
     it('a missing key answers unavailable without erasing; a wrong key requires reconnecting', async () => {
-      const { db, cleanup } = await database(adapter);
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'github_connections');
       try {
         await migratedWithLegacy(db);
         await assert.rejects(
@@ -339,7 +300,7 @@ for (const adapter of adapters) {
     });
 
     it('an expired adopted token is refreshed once for concurrent callers and re-sealed', async () => {
-      const { db, cleanup } = await database(adapter);
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'github_connections');
       try {
         await migratedWithLegacy(db, { accessExpiresAt: PAST });
         const fake = fakeGitHub();
@@ -389,7 +350,7 @@ for (const adapter of adapters) {
     });
 
     it('a refused refresh, or an expired token without one, requires reconnecting', async () => {
-      const { db, cleanup } = await database(adapter);
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'github_connections');
       try {
         await migratedWithLegacy(db, { accessExpiresAt: PAST });
         const fake = fakeGitHub();
@@ -425,7 +386,7 @@ for (const adapter of adapters) {
     });
 
     it('state is hashed, single-use, bound to its profile and provider', async () => {
-      const { db, cleanup } = await database(adapter);
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'github_connections');
       try {
         await seedIdentities(db);
         const fake = fakeGitHub();
@@ -495,7 +456,7 @@ for (const adapter of adapters) {
     });
 
     it('a grant without read:org stores nothing; one GitHub account cannot serve two profiles', async () => {
-      const { db, cleanup } = await database(adapter);
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'github_connections');
       try {
         await migratedWithLegacy(db);
         const fake = fakeGitHub();
@@ -528,7 +489,7 @@ for (const adapter of adapters) {
     });
 
     it('disconnect erases, revokes, and tombstones; nothing resurrects it', async () => {
-      const { db, cleanup } = await database(adapter);
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'github_connections');
       try {
         await migratedWithLegacy(db);
         const fake = fakeGitHub();
@@ -559,7 +520,7 @@ for (const adapter of adapters) {
     });
 
     it('adopts a row an older instance wrote after the migration, honouring its later disconnect', async () => {
-      const { db, cleanup } = await database(adapter);
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'github_connections');
       try {
         await migratedWithLegacy(db);
         fakeGitHub();
@@ -581,7 +542,7 @@ for (const adapter of adapters) {
     });
 
     it('serves the GitHub start route and callback on Local and never exposes a token', async () => {
-      const { db, cleanup } = await database(adapter);
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'github_connections');
       const logged: string[] = [];
       const originals = {
         log: console.log,
@@ -621,6 +582,7 @@ for (const adapter of adapters) {
             profile: () => 'other'
           })
         );
+        app.use(apiErrorHandler);
         const server = app.listen(0, '127.0.0.1');
         await once(server, 'listening');
         const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -733,7 +695,7 @@ for (const adapter of adapters) {
     });
 
     it('without any key or OAuth client GitHub is unavailable and starting answers 503', async () => {
-      const { db, cleanup } = await database(adapter);
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'github_connections');
       try {
         await migratedWithLegacy(db);
         const store = profiles(db, {});

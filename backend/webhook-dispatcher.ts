@@ -13,6 +13,7 @@ import {
 } from '../packages/core/service/webhook-events.ts';
 
 import { requireDatabaseClient } from './db.ts';
+import { PollLoop } from './poll-loop.ts';
 import { actorCan } from './rbac.ts';
 import {
   assertPublicWebhookTarget,
@@ -61,37 +62,27 @@ interface SubscriptionRow {
  * separate broker (Cloud and Local both work off the same `outbox_messages`
  * table — see database schema contract -> `outbox_messages`).
  */
-class WebhookDispatcher {
-  private pollTimer: NodeJS.Timeout | null = null;
-  private polling = false;
-
-  start(): void {
-    if (this.pollTimer) return;
-    this.pollTimer = setInterval(() => void this.poll(), POLL_INTERVAL_MS);
+class WebhookDispatcher extends PollLoop {
+  constructor() {
+    super({ intervalMs: POLL_INTERVAL_MS, logPrefix: 'webhook-dispatcher' });
   }
 
-  /** Nudge an immediate poll — mirrors `realtime.pollNow()`, called from the same `handle()` mutation hook. */
-  pollNow(): void {
-    void this.poll();
+  protected override shouldPoll(): boolean {
+    return process.env.OVERLORD_WEBHOOKS_DISABLED !== '1';
   }
 
-  private async poll(): Promise<void> {
-    if (this.polling) return;
-    if (process.env.OVERLORD_WEBHOOKS_DISABLED === '1') return;
-    this.polling = true;
-    try {
-      const client = requireDatabaseClient();
-      for (let i = 0; i < CLAIM_BATCH_SIZE; i++) {
-        const row = await claimNextOutboxMessage(client);
-        if (!row) break;
-        await this.deliver(client, row);
-      }
-    } catch (err) {
-      // The poller must never throw — a bad row or a transient DB error should
-      // not take down the interval; the row stays claimable/retryable.
-      console.error('[webhook-dispatcher] poll failed', err);
-    } finally {
-      this.polling = false;
+  /**
+   * One claim/deliver pass; `pollNow()` nudges it from the same `handle()`
+   * mutation hook as `realtime.pollNow()`. PollLoop logs a thrown error so a bad
+   * row or a transient DB error never takes down the interval; the row stays
+   * claimable/retryable.
+   */
+  protected async runOnce(): Promise<void> {
+    const client = requireDatabaseClient();
+    for (let i = 0; i < CLAIM_BATCH_SIZE && !this.isStopped; i++) {
+      const row = await claimNextOutboxMessage(client);
+      if (!row) break;
+      await this.deliver(client, row);
     }
   }
 

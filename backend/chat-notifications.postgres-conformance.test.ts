@@ -1,10 +1,4 @@
-import {
-  createPostgresClient,
-  createSqliteClient,
-  type DatabaseClient,
-  migratePostgres,
-  openInMemoryDatabase
-} from '@overlord/database';
+import { type DatabaseClient } from '@overlord/database';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
@@ -24,6 +18,11 @@ import type {
   ChatNotificationDispatcher as Dispatcher,
   ChatPushSender
 } from './chat-notification-dispatcher.ts';
+import {
+  type ConformanceAdapter,
+  conformanceAdapters,
+  createConformanceDatabase
+} from './test-helpers.ts';
 
 // The dispatcher reuses backend preference helpers whose module opens the process
 // database on import; point it at a scratch file instead of the developer database.
@@ -35,7 +34,7 @@ const { ChatNotificationDispatcher } = await import('./chat-notification-dispatc
 
 const identity = { provider: 'fake', model: 'fake-1', configDigest: 'c', checkpointVersion: 1 };
 const owner: ChatOwner = { profileId: 'owner', organizationId: 'org' };
-const adapters = ['sqlite', ...(process.env.TEST_DATABASE_URL ? ['postgres'] : [])];
+const adapters = conformanceAdapters();
 const PRIVATE_QUESTION = 'Should I read the secret billing repository?';
 
 type Sent = Parameters<ChatPushSender>[0];
@@ -51,34 +50,8 @@ interface Harness {
   options: ChatOptions;
 }
 
-async function fixture(adapter: string, fn: (h: Harness) => Promise<void>) {
-  let db: DatabaseClient, cleanup: () => Promise<void>;
-  if (adapter === 'sqlite') {
-    const raw = openInMemoryDatabase();
-    db = createSqliteClient(raw);
-    cleanup = async () => {
-      raw.close();
-    };
-  } else {
-    const { default: pg } = await import('pg');
-    const pool = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL });
-    const session = await pool.connect(),
-      schema = `chat_notify_${randomUUID().replaceAll('-', '')}`;
-    await session.query(`CREATE SCHEMA ${schema}`);
-    const scoped = new pg.Pool({
-      connectionString: process.env.TEST_DATABASE_URL,
-      options: `-c search_path=${schema}`,
-      max: 5
-    });
-    db = createPostgresClient(scoped, { ownsPool: true });
-    await migratePostgres(db);
-    cleanup = async () => {
-      await db.close();
-      await session.query(`DROP SCHEMA ${schema} CASCADE`);
-      session.release();
-      await pool.end();
-    };
-  }
+async function fixture(adapter: ConformanceAdapter, fn: (h: Harness) => Promise<void>) {
+  const { db, cleanup } = await createConformanceDatabase(adapter, 'chat_notify');
   try {
     let now = Date.parse('2026-10-04T12:00:00.000Z');
     const options: ChatOptions = { now: () => now };

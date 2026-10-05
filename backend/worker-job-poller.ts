@@ -8,6 +8,8 @@ import {
   retryWorkerJob
 } from '../packages/core/service/worker-jobs.ts';
 
+import { PollLoop } from './poll-loop.ts';
+
 const DEFAULT_POLL_INTERVAL_MS = 1_500;
 const DEFAULT_CLAIM_BATCH_SIZE = 1;
 
@@ -20,10 +22,9 @@ export type WorkerJobFailureOutcome = 'failed' | 'retrying';
  * common terminal failure or retry policy. Per-worker policy hooks:
  * `claimBatchSize` drains up to that many jobs per type per tick, and
  * `shouldPoll()` gates a tick entirely (for example on a kill-switch env var).
+ * The timer, re-entrancy guard, and stop() come from PollLoop.
  */
-export abstract class WorkerJobPoller {
-  private timer: NodeJS.Timeout | null = null;
-  private polling = false;
+export abstract class WorkerJobPoller extends PollLoop {
   private readonly workerId: string;
 
   protected constructor({
@@ -39,27 +40,14 @@ export abstract class WorkerJobPoller {
     pollIntervalMs?: number;
     claimBatchSize?: number;
   }) {
+    super({ intervalMs: pollIntervalMs, logPrefix });
     this.workerId = `${workerIdPrefix}:${process.pid}:${newId().slice(0, 8)}`;
     this.jobTypes = jobTypes;
-    this.logPrefix = logPrefix;
-    this.pollIntervalMs = pollIntervalMs;
     this.claimBatchSize = Math.max(1, Math.trunc(claimBatchSize));
   }
 
   private readonly jobTypes: readonly string[];
-  private readonly logPrefix: string;
-  private readonly pollIntervalMs: number;
   private readonly claimBatchSize: number;
-
-  start(): void {
-    if (this.timer) return;
-    this.timer = setInterval(() => void this.poll(), this.pollIntervalMs);
-  }
-
-  /** Drives one claim/deliver cycle without waiting for the next interval. */
-  pollNow(): void {
-    void this.poll();
-  }
 
   protected abstract processJob(
     db: DatabaseClient,
@@ -74,11 +62,6 @@ export abstract class WorkerJobPoller {
     lastError: string | null = null
   ): Promise<void> {
     await finishWorkerJob(db, job.id, status, lastError);
-  }
-
-  /** Per-tick gate; a false result skips the tick without claiming anything. */
-  protected shouldPoll(): boolean {
-    return true;
   }
 
   /**
@@ -100,24 +83,16 @@ export abstract class WorkerJobPoller {
     return 'retrying';
   }
 
-  /** One claim/process tick; protected so tests can await a tick directly. */
-  protected async poll(): Promise<void> {
-    if (this.polling) return;
-    if (!this.shouldPoll()) return;
-    this.polling = true;
-    try {
-      const db = this.databaseClient();
-      for (const jobType of this.jobTypes) {
-        for (let claimed = 0; claimed < this.claimBatchSize; claimed++) {
-          const job = await claimNextWorkerJob({ db, jobType, workerId: this.workerId });
-          if (!job) break;
-          await this.processClaimedJob(db, job, jobType);
-        }
+  /** One claim/process tick: drains up to claimBatchSize jobs per type. */
+  protected async runOnce(): Promise<void> {
+    const db = this.databaseClient();
+    for (const jobType of this.jobTypes) {
+      for (let claimed = 0; claimed < this.claimBatchSize; claimed++) {
+        if (this.isStopped) return;
+        const job = await claimNextWorkerJob({ db, jobType, workerId: this.workerId });
+        if (!job) break;
+        await this.processClaimedJob(db, job, jobType);
       }
-    } catch (error) {
-      console.error(`[${this.logPrefix}] poll failed`, error);
-    } finally {
-      this.polling = false;
     }
   }
 

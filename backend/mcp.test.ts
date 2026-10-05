@@ -5,7 +5,7 @@ import test from 'node:test';
 
 import { compactRunQueueResponse } from '../mcp/run-queue-detail.ts';
 import { compactSearchResponse } from '../mcp/search-detail.ts';
-import { runQueueMcpProtocolCall } from '../mcp/server.ts';
+import { referenceSearchProtocolBody, runQueueMcpProtocolCall } from '../mcp/server.ts';
 import { hostedMcpToolDefinitions } from '../mcp/tool-catalog.ts';
 import { hostedMcpWidgetResources, readHostedMcpWidget } from '../mcp/widgets.ts';
 
@@ -258,6 +258,7 @@ test('overlord_list_project_statuses is a read-only project-scoped discovery too
   assert.match(status.description, /status TYPES/);
   assert.match(status.description, /not accepted here/);
   assert.deepEqual(Object.keys(properties).sort(), [
+    'cursor',
     'dateField',
     'detail',
     'entityTypes',
@@ -267,11 +268,16 @@ test('overlord_list_project_statuses is a read-only project-scoped discovery too
     'objectiveStates',
     'projectId',
     'query',
+    'reference',
     'resourceKey',
     'status',
     'to',
     'workspaceId'
   ]);
+  // Exact-reference mode (v155) is the only search that can prove absence.
+  assert.match(properties.reference.description, /Requires projectId/);
+  assert.match(properties.reference.description, /complete: true/);
+  assert.match(search.description, /never prove that no mission/);
   // The project filter takes the reference the user actually said (coo:781);
   // an ambiguous name is a question for the user, not a rejected argument.
   assert.match(properties.projectId.description, /slug, or the project name/);
@@ -636,4 +642,42 @@ test('overlord_manage_run_queue is catalogued as an administrative write tool', 
     'queue'
   ]);
   assert.match(manage.description, /full-scope token/);
+});
+
+test('overlord_search_missions maps exact-reference mode to Protocol search --reference', () => {
+  assert.equal(referenceSearchProtocolBody({ query: 'offline sync' }), null);
+  assert.deepEqual(
+    referenceSearchProtocolBody({
+      reference: 'kb-feature:https://kb.test/main/0b9e7c1e-8f2a-4c4b-9a7e-2f1d3c4b5a69',
+      projectId: 'Clear Comply',
+      workspaceId: 'acme',
+      cursor: 'abc',
+      limit: 20.7,
+      detail: 'full'
+    })?.flags,
+    {
+      '--reference': 'kb-feature:https://kb.test/main/0b9e7c1e-8f2a-4c4b-9a7e-2f1d3c4b5a69',
+      '--project-id': 'Clear Comply',
+      '--workspace-id': 'acme',
+      '--cursor': 'abc',
+      '--limit': '20'
+    }
+  );
+  // Ranked filters are forwarded so Protocol rejects the combination, never dropped.
+  assert.deepEqual(
+    referenceSearchProtocolBody({
+      reference: 'kb-feature:x',
+      projectId: 'p',
+      query: 'q',
+      status: 'draft',
+      matchesPerResult: 2
+    })?.flags,
+    {
+      '--reference': 'kb-feature:x',
+      '--project-id': 'p',
+      '--query': 'q',
+      '--status': 'draft',
+      '--matches-per-result': '2'
+    }
+  );
 });

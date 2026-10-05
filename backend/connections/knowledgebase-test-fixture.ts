@@ -7,6 +7,14 @@ import { createHash, randomUUID } from 'node:crypto';
  * with a 30 s reuse grace after which the token family is wiped, consent
  * revocation that kills every token, node-level 403s from `get_related`, and
  * generated `readOnlyHint` annotations. Never used by production code.
+ *
+ * It also models the reviewed write surface (contract v154): an in-memory store of
+ * documents and explicit relations with the Knowledgebase's revision guards
+ * (`expected_version` on bodies, `expected_metadata_revision` on properties,
+ * relation `expected_revision`), `null` property removal, the server-maintained
+ * `content_updated_at`, and a paged Feature `query` with candidate filters, Project
+ * rank ordering and included properties/relations. Failure injection covers
+ * read-only users (403) and a write applied upstream whose response is lost.
  */
 export const KB_ORIGIN = 'https://kb.test';
 export const KB_MCP_URL = `${KB_ORIGIN}/mcp`;
@@ -32,9 +40,43 @@ const READ_TOOLS = [
   'get_links',
   'read_resource',
   'list_entities',
-  'list_trash'
+  'list_trash',
+  'query',
+  'get_registries'
 ];
-const WRITE_TOOLS = ['delete_file', 'edit_file', 'create_node', 'query'];
+const WRITE_TOOLS = [
+  'delete_file',
+  'edit_file',
+  'create_node',
+  'set_properties',
+  'add_relation',
+  'update_relation',
+  'remove_relation',
+  'grant_access'
+];
+const DESTRUCTIVE = new Set(['delete_file', 'remove_relation']);
+
+export interface FakeNode {
+  id: string;
+  workspace: string;
+  path: string;
+  type: string | null;
+  content: string;
+  version: number;
+  metadataRevision: number;
+  properties: Record<string, unknown>;
+  contentUpdatedAt: string;
+}
+export interface FakeRelation {
+  id: string;
+  workspace: string;
+  from: string;
+  to: string;
+  type: string;
+  attributes: Record<string, unknown>;
+  revision: number;
+}
+const RANKING_KEYS = ['rank', 'rank_rationale', 'ranked_at', 'ranked_content_updated_at'];
 
 export class FakeKnowledgebase {
   now = Date.parse('2026-10-04T12:00:00.000Z');
@@ -46,6 +88,13 @@ export class FakeKnowledgebase {
   workspaces = ['main', 'overlord'];
   /** `user:nodeId` pairs whose access was revoked. */
   revokedNodes = new Set<string>();
+  /** Users whose connection is restricted to read-only (writes answer 403). */
+  readOnlyUsers = new Set<string>();
+  /** Apply the next write of this tool, then fail the transport (an uncertain outcome). */
+  loseResponseAfter: string | null = null;
+  readonly nodes = new Map<string, FakeNode>();
+  readonly relations = new Map<string, FakeRelation>();
+  private clock = 0;
   readonly calls: { tool: string; user: string }[] = [];
   readonly tokenRequests: string[] = [];
   readonly revocations: string[] = [];
@@ -216,7 +265,7 @@ export class FakeKnowledgebase {
           inputSchema: { type: 'object' },
           annotations: {
             readOnlyHint: this.readOnly.has(name),
-            destructiveHint: name === 'delete_file'
+            destructiveHint: DESTRUCTIVE.has(name)
           }
         }))
       });
@@ -229,7 +278,26 @@ export class FakeKnowledgebase {
       content: [{ type: 'text', text: typeof value === 'string' ? value : JSON.stringify(value) }],
       isError
     });
+    if (WRITE_TOOLS.includes(name) && name !== 'delete_file' && name !== 'grant_access') {
+      if (this.readOnlyUsers.has(token.grant.user))
+        return reply(text('Forbidden: this connection is read-only here (HTTP 403)', true));
+      const outcome = this.write(name, args);
+      if (this.loseResponseAfter === name) {
+        this.loseResponseAfter = null;
+        throw new TypeError('fetch failed'); // applied upstream, response lost
+      }
+      return reply('error' in outcome ? text(outcome.error, true) : text(outcome.value as object));
+    }
     switch (name) {
+      case 'query':
+        return reply(text(this.query(args)));
+      case 'get_registries':
+        return reply(
+          text({
+            entity_types: [{ id: randomUUID(), name: 'feature' }],
+            relation_types: [{ id: randomUUID(), name: 'project' }]
+          })
+        );
       case 'list_workspaces':
         return reply(text({ workspaces: this.workspaces.map(slug => ({ slug, name: slug })) }));
       case 'search':
@@ -250,13 +318,30 @@ export class FakeKnowledgebase {
       case 'get_related':
         if (this.revokedNodes.has(`${token.grant.user}:${String(args.node_id)}`))
           return reply(text('Forbidden: no access to this node (HTTP 403)', true));
+        if (this.nodes.has(String(args.node_id)))
+          return reply(text(this.related(this.nodes.get(String(args.node_id))!)));
         return reply(
           text({
             node: { id: args.node_id, path: 'projects/offline.md', current_version_id: 'ver-7' },
             relations: []
           })
         );
-      case 'read_file':
+      case 'read_file': {
+        const stored = [...this.nodes.values()].find(
+          n => n.workspace === args.workspace && n.path === args.path
+        );
+        if (stored)
+          return reply(
+            text({
+              node: {
+                id: stored.id,
+                path: stored.path,
+                current_version_id: `ver-${stored.version}`
+              },
+              content: stored.content,
+              expectedVersion: `ver-${stored.version}`
+            })
+          );
         return reply(
           text({
             node_id: this.nodeId,
@@ -265,8 +350,250 @@ export class FakeKnowledgebase {
             body: 'x'.repeat(this.readFileBytes)
           })
         );
+      }
       default:
         return reply(text({ ok: true, tool: name }));
     }
+  }
+
+  /** Seeds a node directly (test setup); returns it. */
+  seedNode(input: Partial<FakeNode> & { workspace: string; path: string }): FakeNode {
+    const node: FakeNode = {
+      id: randomUUID(),
+      type: null,
+      content: '',
+      version: 1,
+      metadataRevision: 1,
+      properties: {},
+      contentUpdatedAt: this.stamp(),
+      ...input
+    };
+    this.nodes.set(node.id, node);
+    return node;
+  }
+
+  /** Seeds an explicit relation directly (test setup); returns it. */
+  seedRelation(input: Omit<FakeRelation, 'id' | 'revision'> & { revision?: number }): FakeRelation {
+    const relation: FakeRelation = { id: randomUUID(), revision: 1, ...input };
+    this.relations.set(relation.id, relation);
+    return relation;
+  }
+
+  private stamp() {
+    return new Date(this.now + ++this.clock).toISOString();
+  }
+
+  private touch(node: FakeNode, content = true) {
+    node.metadataRevision++;
+    if (content) node.contentUpdatedAt = this.stamp();
+  }
+
+  private relationDto(r: FakeRelation) {
+    return {
+      id: r.id,
+      revision: r.revision,
+      type: r.type,
+      from_node_id: r.from,
+      to_node_id: r.to,
+      target_title: this.nodes.get(r.to)?.path ?? null,
+      provenance: 'explicit',
+      attributes: r.attributes
+    };
+  }
+
+  private related(node: FakeNode) {
+    return {
+      node: {
+        id: node.id,
+        path: node.path,
+        current_version_id: `ver-${node.version}`,
+        metadata_revision: node.metadataRevision,
+        properties: { ...node.properties, content_updated_at: node.contentUpdatedAt }
+      },
+      relations: [...this.relations.values()]
+        .filter(r => r.from === node.id || r.to === node.id)
+        .map(r => this.relationDto(r))
+    };
+  }
+
+  /** The Knowledgebase write tools, with their revision guards. */
+  private write(
+    name: string,
+    args: Record<string, unknown>
+  ): { value: unknown } | { error: string } {
+    const conflict = (what: string) => ({ error: `${what} changed (HTTP 412)` });
+    switch (name) {
+      case 'create_node': {
+        if (
+          [...this.nodes.values()].some(n => n.workspace === args.workspace && n.path === args.path)
+        )
+          return { error: 'A node already exists at that path (HTTP 409)' };
+        const properties = (args.properties ?? {}) as Record<string, unknown>;
+        if ('content_updated_at' in properties)
+          return { error: 'content_updated_at is maintained by the server (HTTP 422)' };
+        const node = this.seedNode({
+          workspace: String(args.workspace),
+          path: String(args.path),
+          type: args.entity_type_id ? 'feature' : null,
+          content: String(args.content ?? ''),
+          properties
+        });
+        return {
+          value: {
+            node: { id: node.id, path: node.path, current_version_id: `ver-${node.version}` },
+            metadata: { metadata_revision: node.metadataRevision }
+          }
+        };
+      }
+      case 'edit_file': {
+        const node = [...this.nodes.values()].find(
+          n => n.workspace === args.workspace && n.path === args.path
+        );
+        if (!node) return { error: 'Not found (HTTP 404)' };
+        if (args.expected_version !== `ver-${node.version}`)
+          return { error: 'Version changed; call read_file and retry with its expected_version.' };
+        const old = String(args.old_text);
+        if (old && node.content.split(old).length !== 2)
+          return { error: 'old_text must match exactly once (HTTP 422)' };
+        node.content = old
+          ? node.content.replace(old, String(args.new_text))
+          : String(args.new_text);
+        node.version++;
+        this.touch(node);
+        return {
+          value: {
+            node: { id: node.id, path: node.path, current_version_id: `ver-${node.version}` }
+          }
+        };
+      }
+      case 'set_properties': {
+        const node = this.nodes.get(String(args.node_id));
+        if (!node) return { error: 'Not found (HTTP 404)' };
+        if (args.expected_metadata_revision !== node.metadataRevision) return conflict('Metadata');
+        const changes = args.properties as Record<string, unknown>;
+        if ('content_updated_at' in changes)
+          return { error: 'content_updated_at is maintained by the server (HTTP 422)' };
+        for (const [key, value] of Object.entries(changes))
+          if (value === null) delete node.properties[key];
+          else node.properties[key] = value;
+        this.touch(node);
+        return { value: this.related(node).node };
+      }
+      case 'add_relation': {
+        const from = this.nodes.get(String(args.from_node_id));
+        if (!from || !this.nodes.has(String(args.to_node_id)))
+          return { error: 'Not found (HTTP 404)' };
+        const type = String(args.relation_type ?? 'project');
+        if (
+          [...this.relations.values()].some(
+            r => r.from === from.id && r.to === args.to_node_id && r.type === type
+          )
+        )
+          return { error: 'Relation already exists (HTTP 409)' };
+        const relation = this.seedRelation({
+          workspace: String(args.workspace),
+          from: from.id,
+          to: String(args.to_node_id),
+          type,
+          attributes: (args.attributes ?? {}) as Record<string, unknown>
+        });
+        this.touch(from);
+        return { value: this.relationDto(relation) };
+      }
+      case 'update_relation': {
+        const relation = this.relations.get(String(args.relation_id));
+        if (!relation) return { error: 'Not found (HTTP 404)' };
+        if (args.expected_revision !== relation.revision) return conflict('Relation');
+        const next = args.attributes as Record<string, unknown>;
+        const substantive = (a: Record<string, unknown>) =>
+          JSON.stringify(
+            Object.fromEntries(Object.entries(a).filter(([k]) => !RANKING_KEYS.includes(k)))
+          );
+        const content = substantive(next) !== substantive(relation.attributes);
+        relation.attributes = next;
+        relation.revision++;
+        for (const id of [relation.from, relation.to]) {
+          const node = this.nodes.get(id);
+          if (node) this.touch(node, content); // ranking-only writes keep content freshness
+        }
+        return { value: this.relationDto(relation) };
+      }
+      case 'remove_relation': {
+        const relation = this.relations.get(String(args.relation_id));
+        if (!relation) return { error: 'Not found (HTTP 404)' };
+        if (args.expected_revision !== relation.revision) return conflict('Relation');
+        this.relations.delete(relation.id);
+        for (const id of [relation.from, relation.to]) {
+          const node = this.nodes.get(id);
+          if (node) this.touch(node);
+        }
+        return { value: { relation_id: relation.id, deleted: true } };
+      }
+    }
+    return { error: 'Unsupported (HTTP 400)' };
+  }
+
+  /** `query` over seeded nodes: type, where_in, where_empty, rel, order_by, include, paging. */
+  private query(args: Record<string, unknown>) {
+    const rel = (args.rel ?? []) as { type?: string; to_node_id?: string }[];
+    const whereIn = (args.where_in ?? {}) as Record<string, unknown[]>;
+    const whereEmpty = (args.where_empty ?? []) as string[];
+    const order = args.order_by as
+      | { relation: { type: string; to_node_id: string }; key: string; direction?: string }
+      | undefined;
+    const include = (args.include ?? []) as string[];
+    const empty = (v: unknown) => v === undefined || v === null || v === '';
+    const edge = (n: FakeNode, type?: string, to?: string) =>
+      [...this.relations.values()].find(
+        r => r.from === n.id && (!type || r.type === type) && (!to || r.to === to)
+      );
+    const rows = [...this.nodes.values()]
+      .filter(n => n.workspace === args.workspace)
+      .filter(n => !args.type || n.type === args.type)
+      .filter(n => Object.entries(whereIn).every(([k, vs]) => vs.includes(n.properties[k])))
+      .filter(n => whereEmpty.every(k => empty(n.properties[k])))
+      .filter(n => rel.every(r => edge(n, r.type, r.to_node_id)))
+      .map(n => ({
+        n,
+        rank: order
+          ? edge(n, order.relation.type, order.relation.to_node_id)?.attributes[order.key]
+          : undefined
+      }))
+      .sort((a, b) => {
+        const ra = typeof a.rank === 'number' ? a.rank : Infinity;
+        const rb = typeof b.rank === 'number' ? b.rank : Infinity;
+        const sign = order?.direction === 'desc' ? -1 : 1;
+        return ra !== rb
+          ? ra === Infinity
+            ? 1
+            : rb === Infinity
+              ? -1
+              : sign * (ra - rb)
+          : a.n.path.localeCompare(b.n.path);
+      });
+    const limit = Number(args.limit ?? 50);
+    const offset = Number(args.cursor ?? 0);
+    const page = rows.slice(offset, offset + limit);
+    return {
+      nodes: page.map(({ n }) => ({
+        id: n.id,
+        path: n.path,
+        title: n.path,
+        ...(include.includes('properties')
+          ? {
+              metadata_revision: n.metadataRevision,
+              properties: { ...n.properties, content_updated_at: n.contentUpdatedAt }
+            }
+          : {}),
+        ...(include.includes('relations')
+          ? {
+              relations: [...this.relations.values()]
+                .filter(r => r.from === n.id)
+                .map(r => this.relationDto(r))
+            }
+          : {})
+      })),
+      ...(offset + limit < rows.length ? { next_cursor: String(offset + limit) } : {})
+    };
   }
 }

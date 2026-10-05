@@ -54,6 +54,7 @@ import {
   loadMissionBranchObservationsForMissions,
   mergeMissionBranchObservation
 } from '../packages/core/service/mission-branch-observations.ts';
+import { searchMissionReferencesInProject } from '../packages/core/service/mission-reference-search.ts';
 import {
   allocateWorkspaceSearchLimits,
   mergeWorkspaceMissionSearches,
@@ -115,6 +116,7 @@ import type {
   MissionDto,
   MissionEventDto,
   MissionFileChangesDto,
+  MissionReferenceSearchResponse,
   MissionScheduleDto,
   MissionSearchDateField,
   MissionWorktreePreference,
@@ -4240,6 +4242,41 @@ export async function searchMissionsAcrossWorkspacesV3({
     )
   );
   return mergeWorkspaceSearchV3({ results, limit });
+}
+
+/**
+ * Exhaustive exact-reference lookup in exactly one project (contract v155). The project
+ * must be readable by the caller and, for a project-scoped token, selected by it.
+ */
+export async function searchMissionReferences({
+  projectIds,
+  reference,
+  cursor,
+  limit
+}: {
+  projectIds: string[] | null;
+  reference: string;
+  cursor?: string | null;
+  limit?: number | null;
+}): Promise<MissionReferenceSearchResponse> {
+  if (projectIds?.length !== 1) {
+    throw new ApiError(400, 'An exact reference lookup requires exactly one --project-id');
+  }
+  const client = requireDatabaseClient();
+  const [projectId] = authorizedSearchProjectIds(projectIds)!;
+  const { workspaceId } = await requireProjectPermission({
+    projectId: projectId!,
+    permission: PERMISSIONS.MISSION_READ,
+    db: client
+  });
+  return searchMissionReferencesInProject({
+    db: client,
+    workspaceId,
+    projectId: projectId!,
+    reference,
+    cursor,
+    limit
+  });
 }
 
 // New cards drop in at the top of their column. Gap-based: one step (100) above

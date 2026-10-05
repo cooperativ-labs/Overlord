@@ -1,16 +1,13 @@
-import {
-  createPostgresSessionClient,
-  createSqliteClient,
-  type DatabaseClient,
-  migrateDatabase,
-  migratePostgres,
-  openInMemoryDatabase
-} from '@overlord/database';
+import { type DatabaseClient } from '@overlord/database';
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
 import { after, describe, it } from 'node:test';
 
-import { seedAuthenticatedOperatorClient } from './test-helpers.ts';
+import {
+  type ConformanceAdapter,
+  conformanceAdapters,
+  createConformanceDatabase,
+  seedAuthenticatedOperatorClient
+} from './test-helpers.ts';
 
 /**
  * Conformance for Phase 1 of `planning/feature-plans/multitenancy-access-control.md`:
@@ -25,69 +22,14 @@ import { seedAuthenticatedOperatorClient } from './test-helpers.ts';
  * `TEST_DATABASE_URL` points at a reachable Postgres).
  */
 
-interface AdapterHandle {
-  client: DatabaseClient;
-  teardown: () => Promise<void>;
-}
+const adapters = conformanceAdapters();
 
-interface AdapterFactory {
-  label: string;
-  create: () => Promise<AdapterHandle>;
-}
-
-const sqliteFactory: AdapterFactory = {
-  label: 'sqlite',
-  create: async () => {
-    const sqlite = openInMemoryDatabase();
-    migrateDatabase(sqlite);
-    const client = createSqliteClient(sqlite);
-    const dbModule = await import('./db.ts');
-    await dbModule.bindDatabaseClient(client);
-    return {
-      client,
-      teardown: async () => {
-        await client.close();
-      }
-    };
-  }
-};
-
-function postgresFactory(connectionString: string): AdapterFactory {
-  return {
-    label: 'postgres',
-    create: async () => {
-      const pg = await import('pg');
-      const Pool = (pg.default ?? pg).Pool;
-      const schema = `ovld_wsiso_test_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
-
-      const admin = new Pool({ connectionString });
-      await admin.query(`CREATE SCHEMA ${schema}`);
-
-      const scoped = new Pool({ connectionString });
-      const session = await scoped.connect();
-      await session.query(`SET search_path TO ${schema}`);
-      const client = createPostgresSessionClient(session);
-      await migratePostgres(client);
-      const dbModule = await import('./db.ts');
-      await dbModule.bindDatabaseClient(client);
-
-      return {
-        client,
-        teardown: async () => {
-          await client.close();
-          session.release();
-          await scoped.end();
-          await admin.query(`DROP SCHEMA ${schema} CASCADE`);
-          await admin.end();
-        }
-      };
-    }
-  };
-}
-
-const adapters: AdapterFactory[] = [sqliteFactory];
-if (process.env.TEST_DATABASE_URL) {
-  adapters.push(postgresFactory(process.env.TEST_DATABASE_URL));
+/** A migrated conformance database bound as the backend's process database. */
+async function open(adapter: ConformanceAdapter) {
+  const handle = await createConformanceDatabase(adapter, 'ovld_wsiso_test');
+  const dbModule = await import('./db.ts');
+  await dbModule.bindDatabaseClient(handle.db);
+  return handle;
 }
 
 interface Tenant {
@@ -143,9 +85,9 @@ async function seedTenant(
 }
 
 for (const adapter of adapters) {
-  describe(`per-request workspace isolation conformance [${adapter.label}]`, () => {
+  describe(`per-request workspace isolation conformance [${adapter}]`, () => {
     it('two concurrent, interleaved requests from different users each read only their own workspace data', async () => {
-      const { client, teardown } = await adapter.create();
+      const { db: client, cleanup } = await open(adapter);
       try {
         const dbModule = await import('./db.ts');
         const { createProject, listProjects } = await import('./repository.ts');
@@ -222,12 +164,12 @@ for (const adapter of adapters) {
           ]
         );
       } finally {
-        await teardown();
+        await cleanup();
       }
     });
 
     it('resolving a workspace the caller is not a member of is rejected with 403, not folded into it', async () => {
-      const { client, teardown } = await adapter.create();
+      const { db: client, cleanup } = await open(adapter);
       try {
         const { ensureWorkspaceUser } = await import('./auth.ts');
         const dbModule = await import('./db.ts');
@@ -256,12 +198,12 @@ for (const adapter of adapters) {
           assert.equal(membership?.workspace.id, 'tenant-a-guard');
         });
       } finally {
-        await teardown();
+        await cleanup();
       }
     });
 
     it('a USER_TOKEN authenticates the user and stays within its explicit organization consent', async () => {
-      const { client, teardown } = await adapter.create();
+      const { db: client, cleanup } = await open(adapter);
       try {
         const { getActorForToken, resolveUserTokenProfileId, verifyUserToken } =
           await import('@overlord/auth');
@@ -323,12 +265,12 @@ for (const adapter of adapters) {
         assert.equal(await getActorForToken(client, tokenA.secret, tenantB.workspaceId), null);
         assert.equal(await getActorForToken(client, tokenA.secret, 'tenant-c-token'), null);
       } finally {
-        await teardown();
+        await cleanup();
       }
     });
 
     it('filters change-feed pages to readable memberships while advancing across global gaps', async () => {
-      const { client, teardown } = await adapter.create();
+      const { db: client, cleanup } = await open(adapter);
       try {
         const dbModule = await import('./db.ts');
         const { readableChangeFeedWorkspaceIds, readChangesAfter } = await import('./realtime.ts');
@@ -405,7 +347,7 @@ for (const adapter of adapters) {
           assert.equal(batch.hasMore, false);
         });
       } finally {
-        await teardown();
+        await cleanup();
       }
     });
   });

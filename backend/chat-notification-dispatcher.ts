@@ -12,6 +12,7 @@ import {
 } from '../packages/core/service/chat/notifications.ts';
 import type { ChatOptions } from '../packages/core/service/chat/store.ts';
 
+import { PollLoop } from './poll-loop.ts';
 import { sendToProfileDevices } from './push-notification-dispatcher.ts';
 import { resolveNotificationMode, unreadBadgeCount } from './push-notifications.ts';
 import { presentationTitle } from './text-presentation.ts';
@@ -77,43 +78,29 @@ export type ChatPushSender = (input: {
  * becomes `dispatched` afterwards, so a crash in between re-sends under the same
  * per-notification collapse id rather than losing the alert.
  */
-export class ChatNotificationDispatcher {
-  private timer: ReturnType<typeof setInterval> | null = null;
-  private running = false;
+export class ChatNotificationDispatcher extends PollLoop<number> {
   readonly workerId = `chat-notifications:${randomUUID()}`;
   constructor(
     private readonly db: () => DatabaseClient,
     private readonly options: ChatOptions = {},
     private readonly send: ChatPushSender = sendToProfileDevices,
-    private readonly intervalMs = 1000
-  ) {}
-  start() {
-    if (this.timer) return;
-    this.timer = setInterval(() => {
-      void this.tick();
-    }, this.intervalMs);
-    this.timer.unref();
-  }
-  stop() {
-    if (this.timer) clearInterval(this.timer);
-    this.timer = null;
+    intervalMs = 1000
+  ) {
+    super({ intervalMs, logPrefix: 'chat-notifications', unref: true });
   }
   /** One claim/deliver pass. Returns how many candidates it processed. */
   async tick(): Promise<number> {
-    if (this.running) return 0;
-    this.running = true;
-    try {
-      const db = this.db();
-      const store = new ChatNotifications(db, this.options);
-      const claimed = await store.claimDue(this.workerId);
-      for (const row of claimed) await this.process(db, store, row);
-      return claimed.length;
-    } catch (error) {
-      console.error('[chat-notifications] dispatch pass failed', (error as Error).message);
-      return 0;
-    } finally {
-      this.running = false;
-    }
+    return (await this.poll()) ?? 0;
+  }
+  protected override onPollError(error: unknown) {
+    console.error(`[${this.logPrefix}] dispatch pass failed`, (error as Error).message);
+  }
+  protected async runOnce(): Promise<number> {
+    const db = this.db();
+    const store = new ChatNotifications(db, this.options);
+    const claimed = await store.claimDue(this.workerId);
+    for (const row of claimed) await this.process(db, store, row);
+    return claimed.length;
   }
   private async process(db: DatabaseClient, store: ChatNotifications, row: ChatNotificationRow) {
     try {

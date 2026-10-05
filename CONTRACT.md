@@ -34,13 +34,147 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `153`
+Current version: `155`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
 `contract/components.yaml`) — never a header duplicate. The contract version is
 incremented when any stable interface changes. All conformance manifests must
 declare the contract version they were validated against.
+
+### Version 155 Change Summary
+
+Feature handoff and mission-read interoperability for the unified Knowledgebase
+connection (per:202.5h64, connector objective C2 in the Knowledgebase plan
+`docs/features/KNOWLEDGEBASE_OVERLORD_CONNECTOR.md`). Still one Knowledgebase account
+connection and one outbound MCP client; no Feature backend, reverse credential store,
+scheduler, or token export. Feature plan:
+`planning/feature-plans/chat-agent-request-routing-phase-c-connections.md` → "C2 Feature
+handoff (contract v155)".
+
+**Exact-reference lookup.** Protocol `search --reference <token> --project-id <ref>
+[--workspace-id] [--limit 1-100, default 50] [--cursor]` returns
+`MissionReferenceSearchResponse` (`packages/contract/src/mission-reference.ts`):
+`{ kind: 'mission_reference_search', version: 1, reference, projectId, workspaceId,
+results, nextCursor, complete }`. It is exhaustive, not ranked: every live mission in the
+one readable project whose live objective instruction text contains the token
+case-sensitively as a whole token (not adjacent to a letter, digit, or underscore), in
+mission-id order, each with `statusType`, `statusId`, and its matching objectives
+(`id`, `displayId`, `title`, `state`, `position`). Pages are over candidate missions, so
+a page may hold fewer than `limit` results; `complete` is true only on the last page and
+the cursor is bound to its reference and project. Tokens are 8–512 characters without
+whitespace; `%` and `_` are literal. Ranked filters (`--query`, `--status`,
+`--resource-key`, date flags, `--response-version`, v3 flags) are rejected with it, and
+`--cursor` without `--reference` is rejected. Authorization matches v2/v3 search: the
+project resolves across the caller's organization memberships, `mission:read` is
+checked on that project, and a project_automation token must have selected it. Ranked
+search (any version) remains candidate discovery and never proves absence. Hosted MCP
+`overlord_search_missions` and the local shim add `reference` and `cursor` and forward
+this mode unchanged (never compacted).
+
+**Canonical Feature reference.** `kb-feature:<origin>/<workspace slug>/<node uuid>`
+(`knowledgebaseFeatureReference`, `parseKnowledgebaseFeatureReference`), with the stable
+link `<origin>/n/<node uuid>`. A handoff mission carries it in objective text; identity
+is never a title or path. Mission completion is mission `statusType` `complete`; an
+objective delivery or `review` is not completion.
+
+**Assistant.** With a Knowledgebase configured the assistant gets the read tool
+`overlord_find_feature_missions` (`projectId`, `workspace`, `featureNodeId`, optional
+`knowledgebaseOrigin` when several servers are connected, `cursor`, `limit`), which
+derives the origin from the owner's live connection, runs the same lookup with the
+owner's live `mission:read` grant, and returns the reference, Feature link,
+`referenceLines` for a handoff objective, results, `nextCursor`, and `complete`. Handoff
+reuses `prepare_proposal` and the user's Create: drafts only, never launched. Run input
+adds `createdReceipts` (up to five created cards in the thread with their mission ids
+and display ids), so a later turn recovers the created mission instead of proposing it
+again. A `set_properties` write that sets a Feature's `overlord` to a non-null value is
+refused before any request unless it names exactly one live mission the owner can
+read, and refused when that mission carries a different Feature's canonical reference;
+`null` (Remove link) is always allowed and never changes the mission. System prompt
+`overlord-assistant-v5` adds the handoff procedure; `tool.updated.label` adds
+`Checking Feature missions`.
+
+**Impact.**
+- Protocol/CLI: additive `--reference`/`--cursor` on `search`; help and
+  `contract/protocol-commands.yaml` updated. Existing ranked responses are unchanged.
+- hosted MCP Server and connectors: additive `reference`/`cursor` on
+  `overlord_search_missions`; connector version 0.3.50.
+- Core/backend: `packages/core/service/mission-reference-search.ts`, chat tool gateway,
+  run input, Gemini prompt. No schema change (no migration); the lookup uses existing
+  `missions`/`objectives` columns on both editions.
+- Webapp, Desktop Shell, Runner, Automations, extensions: no change. External
+  Knowledgebase agents use the authenticated Overlord MCP; Knowledgebase stores no
+  Overlord credential.
+
+### Version 154 Change Summary
+
+Authorized Knowledgebase writes for the assistant through the existing connection
+(per:202.62e3, connector objective C1 in the Knowledgebase plan
+`docs/features/KNOWLEDGEBASE_OVERLORD_CONNECTOR.md`). There is still one Knowledgebase
+account connection, one credential store, and one outbound MCP client; no Feature
+connector, REST metadata client, or token export to agent processes is added. Feature
+plan: `planning/feature-plans/chat-agent-request-routing-phase-c-connections.md` →
+"C1 extension (contract v154)".
+
+**Run-scoped write grant.** `SubmitChatMessageBody.knowledgebaseWrite?:
+ChatKnowledgebaseWriteDto` (`{ connectionId, workspace }`) is the only way to authorize
+writes. It is chosen per message in the composer and is refused with `invalid_request`
+unless the connection is the caller's live Knowledgebase connection on the configured
+server and the workspace is in its `authorizedWorkspaces`
+(`connection_reauthorization_required` when it needs sign-in). The grant is stored on
+the run (`chat_runs.knowledgebase_write_json`, migration
+`20261005160000_chat_runs_knowledgebase_write`, both editions) and returned as
+`ChatRunDto.knowledgebaseWrite` (null for research only). A resumed run keeps it; a
+Continue run inherits it; an answer may add a grant to a waiting run that has none and
+may never change one. OAuth consent, earlier runs, and model output never authorize a
+write. Without a grant no write tool is declared and any write call is refused
+server-side (`write_not_authorized`) before reaching the Knowledgebase.
+
+**Tool policy version 2.** Reads add `query` (the Knowledgebase marks this POST
+semantically read-only) and `get_registries`. Writes: `create_node`, `edit_file`,
+`set_properties`, `add_relation`, `update_relation`, `remove_relation`, exposed only for
+the granted connection and accepted only for the granted workspace. Overlord's schemas
+require each write's revision guard (`expected_version`, `expected_metadata_revision`,
+or `expected_revision`); `set_properties` values may be `null` (removal); nested JSON is
+bounded (depth 8, 4000 values, 16 KiB strings, finite numbers, 128-character keys) with
+per-tool argument limits (4 KiB reads, up to 56 KiB for document edits). A write the
+server annotates destructive is withheld unless reviewed destructive
+(`remove_relation`); a read must stay annotated read-only. Schema administration,
+sharing, credentials, moves, and deletion stay outside the policy. There is no
+Knowledgebase write OAuth scope: a connection acts with its user's grants minus their
+restrictions, so existing connections gain the tools without reauthorization and the
+Knowledgebase remains authoritative (403). `toolPolicyVersion` records the version at
+sign-in and does not gate tools.
+
+**Outcomes.** A write refused by its guard (HTTP 409/412, or `edit_file`'s version
+check) is `conflict`: the model is told to reread and re-evaluate. A write sent without
+a usable response (transport loss, 5xx, oversized or unparseable result) is
+`uncertain` and is never retried by Overlord; one refused before handling (401 refresh,
+4xx, dropped session) is safe. `query`, `get_related`, and `get_registries` are
+complete-metadata reads: a response over the 64 KiB text bound is refused
+(`response_too_large`, ask for a smaller page) rather than truncated.
+
+**Runtime.** Writes run one at a time in call order after the turn's reads.
+`chat_tool_calls` rows of a write still `executing` when its attempt ends are resolved
+at the next claim as `failed` with `error_code = 'uncertain_write'` and an `uncertain`
+result (never re-requested, never cancelled); a write that throws inside the worker is
+recorded the same way. Fresh-generation recovery shows uncertain writes to the model. The
+system prompt (`overlord-assistant-v4`) requires reading before writing, guarded
+retries, rereading after uncertainty, inline linking, and reporting changes.
+`tool.updated.label` adds `Updating notes`; `query` reports `Searching notes`.
+
+**Impact.**
+- REST/backend: connections module, outbound MCP client and policy, chat runtime, and
+  submission check (`ChatOptions.authorizeKnowledgebaseWrite`).
+- Core: conversations/runs/tool gateway as above; Overlord missions are still never
+  created, changed, or launched by a tool.
+- Database: one nullable column on both editions.
+- Webapp: per-message "Allow edits in <workspace>" control (resets after each send),
+  run indicator, and access wording. Mobile tolerates the additive DTO fields; until it
+  offers the control its runs stay research only.
+- Protocol, CLI, Connector, Runner, Automations, Desktop Shell, hosted MCP Server, and
+  extensions: no change. Local/CLI mission agents keep using their own Knowledgebase MCP
+  configuration; backend credentials are never exported to them.
 
 ### Version 153 Change Summary
 
@@ -2660,7 +2794,7 @@ answering a decision it is blocked on, and injecting an instruction into it.
 - **Account-owned inbox**: Inbox CRUD resolves the authenticated `profiles.id` rather than an ambient workspace. Reads and mutations are scoped to that profile; promotion derives authorization and tenancy solely from its destination project. Inbox CRUD writes do not append workspace `entity_changes`, because those records have no workspace; promotion appends the ordinary mission change in the destination workspace.
 - **Workspace resolution taxonomy**: Entity-addressed reads and writes derive a workspace from their operand and require it in the immutable request `authorizedWorkspaces` set. Single-workspace UI reads require an explicit `workspaceId` and return `400` when omitted. Aggregate parentless reads fan out only across the selected organization's authorized set; when a session holder belongs to multiple organizations, selection is explicit. Parentless writes use `resolveParentlessWorkspace` only for `create-project` and `register-target`; mission writes derive tenancy from their named project and inbox operations are profile-owned. No route may select the oldest membership.
 - **Authorized workspace shape**: Auth resolves once per request `{ organizationId, workspaces: [{ workspaceId, workspaceUserId, roleKeys }] }`, where workspaces are active live memberships intersected with token consent (when present). Services may retain one operation-local `resolvedWorkspaceId`, but must not reinterpret the set from request headers or persistence.
-- **Mission search versioning**: `GET /api/missions/search` is frozen as its v1 array-shaped response. `GET /api/missions/search/v2` returns `SearchMissionsResponseV2`: `{ version: 2, results, appliedFilters, totalMatchedBeforeLimit, workspaceCounts }`. Each result includes project/workspace labels, `dueDatetime`, `relevance` (deterministic fused score with exact display-id / exact-title precedence), `snippet`, `matchedTerms`, and `matchedIn`. Ranking is portable across adapters: display-id short-circuit, meaningful-term coverage floor `min(3, max(1, ceil(termCount / 2)))`, `max(documentScore)` plus bounded corroboration, and recency as rank fusion rather than an eligibility gate. Empty or stop-word-only queries use an explicit `fallback` mode. Complete and cancelled missions stay eligible by default. The REST route accepts only stable `projectIds`, plus `resourceKeys`, status types, `dateField` (`createdAt`, `updatedAt`, or `dueDatetime`), inclusive `from`, exclusive `to`, and global `limit`; it applies no implicit date window. The Protocol, CLI, and MCP v2 surfaces additionally resolve a human project reference and answer an ambiguous one with `project_selection_required` (Version 97). A `dueDatetime` range excludes missions with no due date, because the column is nullable and a due-date window asks about scheduled work. Fan-out is one organization only, with `floor(limit / workspaceCount)` per workspace and UUID-ordered remainder slots; unused quota is not redistributed. V1 and v2 search only the mission, objective, and event index corpus even after delivery indexing ships. Additive `GET /api/search/v3` returns `SearchResponseV3`: mission-anchored groups with `anchorOnly`, ranked `matches[]` (`objective` | `delivery`, each with id, display id, snippet, and score), `matchCounts` before `matchesPerResult` capping, envelope `entityCounts`, and `truncatedCandidates`. `event` is corroboration-only and never appears in `matches`. `matches` is matched-only. Child relevance is `docScore + 0.15 * missionScore`; the coverage floor stays at the group's concatenated haystack. Per-workspace candidate fetch is bounded at 500 documents — above that cap, counts are lower bounds. `entityTypes` defaults to mission, objective, and delivery (`event` is rejected); `objectiveStates` filters returnable children; `matchesPerResult` defaults to 3 and maxes at 10 and is not divided across workspaces. The mission row always anchors the group, including when `anchorOnly` is true. An objective display-id query returns that objective as the group's single match. REST v3 accepts only stable `projectIds`. Protocol `search-missions --response-version 3` returns the same envelope with v3 defaults. Artifacts are not indexed.
+- **Mission search versioning**: `GET /api/missions/search` is frozen as its v1 array-shaped response. `GET /api/missions/search/v2` returns `SearchMissionsResponseV2`: `{ version: 2, results, appliedFilters, totalMatchedBeforeLimit, workspaceCounts }`. Each result includes project/workspace labels, `dueDatetime`, `relevance` (deterministic fused score with exact display-id / exact-title precedence), `snippet`, `matchedTerms`, and `matchedIn`. Ranking is portable across adapters: display-id short-circuit, meaningful-term coverage floor `min(3, max(1, ceil(termCount / 2)))`, `max(documentScore)` plus bounded corroboration, and recency as rank fusion rather than an eligibility gate. Empty or stop-word-only queries use an explicit `fallback` mode. Complete and cancelled missions stay eligible by default. The REST route accepts only stable `projectIds`, plus `resourceKeys`, status types, `dateField` (`createdAt`, `updatedAt`, or `dueDatetime`), inclusive `from`, exclusive `to`, and global `limit`; it applies no implicit date window. The Protocol, CLI, and MCP v2 surfaces additionally resolve a human project reference and answer an ambiguous one with `project_selection_required` (Version 97). A `dueDatetime` range excludes missions with no due date, because the column is nullable and a due-date window asks about scheduled work. Fan-out is one organization only, with `floor(limit / workspaceCount)` per workspace and UUID-ordered remainder slots; unused quota is not redistributed. V1 and v2 search only the mission, objective, and event index corpus even after delivery indexing ships. Additive `GET /api/search/v3` returns `SearchResponseV3`: mission-anchored groups with `anchorOnly`, ranked `matches[]` (`objective` | `delivery`, each with id, display id, snippet, and score), `matchCounts` before `matchesPerResult` capping, envelope `entityCounts`, and `truncatedCandidates`. `event` is corroboration-only and never appears in `matches`. `matches` is matched-only. Child relevance is `docScore + 0.15 * missionScore`; the coverage floor stays at the group's concatenated haystack. Per-workspace candidate fetch is bounded at 500 documents — above that cap, counts are lower bounds. `entityTypes` defaults to mission, objective, and delivery (`event` is rejected); `objectiveStates` filters returnable children; `matchesPerResult` defaults to 3 and maxes at 10 and is not divided across workspaces. The mission row always anchors the group, including when `anchorOnly` is true. An objective display-id query returns that objective as the group's single match. REST v3 accepts only stable `projectIds`. Protocol `search-missions --response-version 3` returns the same envelope with v3 defaults. Artifacts are not indexed. Protocol `search --reference` (v155) is a separate exhaustive exact-token lookup in one project with continuation (`MissionReferenceSearchResponse`); see the Version 155 summary.
 
 ### Mobile → REST (Live Activity Push Surface)
 
@@ -2695,9 +2829,9 @@ answering a decision it is blocked on, and injecting an instruction into it.
 ### Backend → Outbound MCP (Account Connection Surface)
 
 - **Transport**: HTTPS JSON-RPC (MCP streamable HTTP) from the backend to the configured Knowledgebase origin only, with the connection's access token; egress is restricted server-side.
-- **Policy**: only a reviewed read-tool allowlist, namespaced per connection, is exposed to the assistant; write tools are rejected regardless of annotations; every call has output-size and time bounds; the per-source access check fails closed.
-- **Tool policy version 1**: `list_workspaces`, `search`, `read_file`, `get_related`, `list_children`, `get_links`, `read_resource`, `list_entities`, each with Overlord-reviewed descriptions and closed input schemas (server descriptions and schemas are never shown to the model). Server annotations can only withhold a reviewed tool (one not annotated `readOnlyHint: true`, or annotated destructive); `query` and every write are rejected by name before any request. Tool ids are `kb_<first 12 hex of the connection id>_<tool>` (≤ 64 characters; letters, digits, and underscores only, because the provider rewrote the earlier dotted form and the gateway then rejected the call as an unknown tool). Workspace-scoped calls must name a workspace in the connection's `authorizedWorkspaces` (refreshed from `list_workspaces` once when unknown).
-- **Bounds**: 4 KiB arguments, 1 MiB response read from the network (beyond that the call fails), 64 KiB text returned per call with a `truncated` flag, 15 s per call, redirects never followed. Results carry the namespaced tool, connection, workspace, observation time, and provenance (node id, path, provider revision, and update time for every node in the full response, at most 50).
+- **Policy**: only a reviewed tool allowlist, namespaced per connection, is exposed to the assistant. Reviewed reads are always available; reviewed writes only for the connection and workspace of the run's user-authorized `knowledgebaseWrite` grant (v154), and refused otherwise before any request; unreviewed tools are rejected regardless of annotations; every call has argument, output-size, and time bounds; the per-source access check fails closed.
+- **Tool policy version 2** (v154): reads `list_workspaces`, `search`, `read_file`, `get_related`, `list_children`, `get_links`, `read_resource`, `list_entities`, `query`, `get_registries`; writes `create_node`, `edit_file`, `set_properties`, `add_relation`, `update_relation`, `remove_relation` with required revision guards and bounded nested JSON (`null` removes a property). Each has Overlord-reviewed descriptions and closed input schemas (server descriptions and schemas are never shown to the model). Server annotations can only withhold a reviewed tool (a read not annotated `readOnlyHint: true` or annotated destructive; a write annotated destructive unless reviewed destructive, which only `remove_relation` is). A guard refusal (409/412) is `conflict`; a write sent without a usable response is `uncertain` and never retried. `query`, `get_related`, and `get_registries` are refused rather than truncated when over the text bound. Tool ids are `kb_<first 12 hex of the connection id>_<tool>` (≤ 64 characters; letters, digits, and underscores only, because the provider rewrote the earlier dotted form and the gateway then rejected the call as an unknown tool). Workspace-scoped calls must name a workspace in the connection's `authorizedWorkspaces` (refreshed from `list_workspaces` once when unknown).
+- **Bounds**: 4 KiB arguments for reads and per-tool limits for writes (up to 56 KiB), 1 MiB response read from the network (beyond that the call fails), 64 KiB text returned per call with a `truncated` flag, 15 s per call, redirects never followed. Results carry the namespaced tool, connection, workspace, observation time, and provenance (node id, path, provider revision, and update time for every node in the full response, at most 50).
 - **Access checks**: a source check consults the owner's connection row on every call (`disconnected` or foreign → `revoked`; not connected → `unknown`), then `get_related` (403/404 → `revoked`). Only positive answers are cached, per owner, for 15 s, so an upstream node revocation is observed within that window. Any other result is `unknown`; both fail closed.
 - **Token use**: a 401 triggers one refresh shared by concurrent callers through the refresh lease (15 s, shorter than the provider's 30 s reuse grace). A second 401 or `invalid_grant` marks the connection `reauthorization_required` and erases its credential.
 - **Credentials**: obtained and refreshed only by the connections module (serialized refresh, rotated token persisted before use) and never logged or returned.

@@ -1,4 +1,10 @@
-import { type DatabaseClient } from '@overlord/database';
+import {
+  createPostgresClient,
+  createSqliteClient,
+  type DatabaseClient,
+  migratePostgres,
+  openInMemoryDatabase
+} from '@overlord/database';
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
@@ -303,6 +309,61 @@ export async function createIntegrationTestDb(
     workspaceId: options.workspaceId
   });
   return { ...bootstrap, tempDir, sqlitePath };
+}
+
+export type ConformanceAdapter = 'sqlite' | 'postgres';
+
+/** The editions a conformance battery runs on: SQLite always, Postgres when `TEST_DATABASE_URL` is set. */
+export function conformanceAdapters(): ConformanceAdapter[] {
+  return process.env.TEST_DATABASE_URL ? ['sqlite', 'postgres'] : ['sqlite'];
+}
+
+/**
+ * A fully migrated, isolated database for one conformance test.
+ *
+ * SQLite is a fresh in-memory database. Postgres is a random schema on
+ * `TEST_DATABASE_URL`: one session connection owns the schema's lifetime, and a
+ * bounded pool pinned to it with `search_path` serves the client. `cleanup()`
+ * closes the client and drops the schema.
+ */
+export async function createConformanceDatabase(
+  adapter: ConformanceAdapter,
+  prefix: string
+): Promise<{ db: DatabaseClient; cleanup: () => Promise<void> }> {
+  if (adapter === 'sqlite') {
+    const raw = openInMemoryDatabase();
+    return {
+      db: createSqliteClient(raw),
+      cleanup: async () => {
+        raw.close();
+      }
+    };
+  }
+  const connectionString = process.env.TEST_DATABASE_URL;
+  if (!connectionString) throw new Error('TEST_DATABASE_URL is required for the postgres adapter');
+  if (!/^[a-z_][a-z0-9_]{0,29}$/.test(prefix)) {
+    throw new Error(`Conformance schema prefix must be a short lowercase identifier: ${prefix}`);
+  }
+  const { default: pg } = await import('pg');
+  const pool = new pg.Pool({ connectionString, max: 1 });
+  const session = await pool.connect();
+  const schema = `${prefix}_${randomUUID().replaceAll('-', '')}`;
+  await session.query(`CREATE SCHEMA ${schema}`);
+  const scoped = new pg.Pool({ connectionString, options: `-c search_path=${schema}`, max: 6 });
+  const db = createPostgresClient(scoped, { ownsPool: true });
+  const cleanup = async () => {
+    await db.close();
+    await session.query(`DROP SCHEMA ${schema} CASCADE`);
+    session.release();
+    await pool.end();
+  };
+  try {
+    await migratePostgres(db);
+  } catch (error) {
+    await cleanup();
+    throw error;
+  }
+  return { db, cleanup };
 }
 
 /** Insert a delivery with one consistent set of defaults across backend tests. */

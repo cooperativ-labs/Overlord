@@ -27,6 +27,7 @@ import {
   resolveLaunchSession
 } from './terminal-profile-types.js';
 import { newId, nowIso } from './util.js';
+import { readStoredWorkspaceAgentCatalog } from './workspace-agent-catalog.js';
 
 /** `project_user_preferences.preferences_json` key for WS-C target selection. */
 export const PROJECT_EXECUTION_TARGET_PREFERENCE_KEY = 'selectedExecutionTargetId';
@@ -609,20 +610,7 @@ async function readWorkspaceAgentLaunchDefault(
   ctx: ServiceContext,
   agentKey: string
 ): Promise<AgentLaunchConfig | null> {
-  const row = (await ctx.db.get(
-    `SELECT settings_json FROM workspaces WHERE id = ? AND deleted_at IS NULL`,
-    [ctx.workspace.id]
-  )) as { settings_json: string } | undefined;
-  if (!row) return null;
-  let settings: Record<string, unknown>;
-  try {
-    settings = JSON.parse(row.settings_json) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-  const catalog = settings.agentCatalog as
-    | { agents?: Record<string, { launchDefaults?: { preCommand?: unknown; flags?: unknown } }> }
-    | undefined;
+  const catalog = await readStoredWorkspaceAgentCatalog(ctx.db, ctx.workspace.id);
   const launchDefaults = catalog?.agents?.[agentKey]?.launchDefaults;
   if (!launchDefaults || typeof launchDefaults !== 'object') return null;
   return {

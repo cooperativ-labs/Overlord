@@ -3,9 +3,10 @@ import type {
   AccountConnectionListResponse,
   AccountConnectionProviderStatusDto
 } from '@overlord/contract';
-import { type Request, type RequestHandler, type Response, Router } from 'express';
+import { type Request, type RequestHandler, Router } from 'express';
 
 import { ChatError, type ChatOwner } from '../../packages/core/service/chat/store.ts';
+import { chatOwnerGate, chatRoute } from '../chat/router-support.ts';
 
 import {
   CALLBACK_PATH,
@@ -50,12 +51,6 @@ function knowledgebaseStatus(
   };
 }
 
-function sendError(res: Response, error: unknown) {
-  if (error instanceof ChatError)
-    res.status(error.status).json({ error: error.message, code: error.code });
-  else res.status(500).json({ error: 'Connection request failed' });
-}
-
 /**
  * Authenticated `/api/connections` (contracts v152, v153). Mount after session
  * authentication. Organization-scoped (Knowledgebase) routes are Cloud-only;
@@ -64,12 +59,7 @@ function sendError(res: Response, error: unknown) {
  */
 export function createConnectionsRouter(options: ConnectionsRouterOptions): Router {
   const router = Router();
-  const owner = (): ChatOwner => {
-    if (!options.cloud()) throw new ChatError('chat_unavailable');
-    const value = options.owner();
-    if (!value) throw new ChatError('not_found');
-    return value;
-  };
+  const owner = chatOwnerGate(options);
   const profile = async (): Promise<string> => {
     const value = options.profile ? await options.profile() : (options.owner()?.profileId ?? null);
     if (!value) throw new ChatError('not_found');
@@ -87,13 +77,8 @@ export function createConnectionsRouter(options: ConnectionsRouterOptions): Rout
       providers: [knowledgebaseStatus(cloud, runtime), ...runtime.profiles.providers()]
     };
   };
-  const route = (fn: (req: Request) => Promise<unknown>) => (req: Request, res: Response) => {
-    res.set('Cache-Control', 'no-store');
-    void Promise.resolve()
-      .then(() => fn(req))
-      .then(value => res.json(value))
-      .catch(error => sendError(res, error));
-  };
+  const route = (fn: (req: Request) => Promise<unknown>) =>
+    chatRoute(fn, { failure: 'Connection request failed', noStore: true });
   router.get(
     '/',
     route(req =>

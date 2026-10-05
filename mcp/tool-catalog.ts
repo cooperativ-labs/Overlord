@@ -148,9 +148,19 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
     name: 'overlord_search_missions',
     title: 'Search Overlord missions',
     description:
-      "Use this to find missions across the caller's authorized workspaces. Results are mission anchors with only the matching objectives and deliveries in matches; an objective displayId (for example coo:789.2nnh) can be passed directly to overlord_load_mission_context. matches is never the mission's complete objective list. Artifacts are not indexed; load mission context after locating the mission to read them. There is no relative-date parsing or implicit time window: compute absolute ISO bounds and pass from/to. Raise limit for broad questions and inspect workspaceCounts, entityCounts, and truncatedCandidates before claiming a list is complete. appliedFilters.mode 'fallback' means the query contributed nothing and results are a recency listing, not an answer. Compact detail is the default and retains navigation identity while reducing child payload; request full for snippets and child metadata.",
+      "Use this to find missions across the caller's authorized workspaces. Results are mission anchors with only the matching objectives and deliveries in matches; an objective displayId (for example coo:789.2nnh) can be passed directly to overlord_load_mission_context. matches is never the mission's complete objective list. Artifacts are not indexed; load mission context after locating the mission to read them. There is no relative-date parsing or implicit time window: compute absolute ISO bounds and pass from/to. Raise limit for broad questions and inspect workspaceCounts, entityCounts, and truncatedCandidates before claiming a list is complete. appliedFilters.mode 'fallback' means the query contributed nothing and results are a recency listing, not an answer. Compact detail is the default and retains navigation identity while reducing child payload; request full for snippets and child metadata. Ranked results can never prove that no mission mentions something. To prove absence or presence of an exact token (for example a canonical kb-feature: Knowledgebase Feature reference), pass reference with projectId instead: that mode is exhaustive, returns every mission in the project whose live objective text contains the exact token with its statusType, and pages with cursor until complete is true; it accepts only projectId, workspaceId, limit (1-100, default 50) and cursor.",
     inputSchema: objectSchema({
       query: stringProperty('Search query text.'),
+      reference: stringProperty(
+        'Exact-reference mode: a case-sensitive token of 8-512 characters with no whitespace, ' +
+          'matched as a whole token in live objective instruction text. Requires projectId; ' +
+          'cannot be combined with query or other ranked filters. Returns ' +
+          'MissionReferenceSearchResponse { results, nextCursor, complete }. Absence is proven ' +
+          'only after following nextCursor to a page with complete: true.'
+      ),
+      cursor: stringProperty(
+        'Exact-reference mode only: the nextCursor from the previous page for the same reference and projectId.'
+      ),
       status: stringProperty(
         'Comma-separated status TYPES, such as draft,execute,review. Types are workspace-invariant ' +
           '(draft, next, execute, review, complete, blocked, cancelled). Project-defined status names — the ' +
@@ -205,7 +215,9 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
     }),
     outputSchema: protocolOutputSchema(
       'SearchResponseV3: mission-anchored results with matched objective/delivery children, appliedFilters, entityCounts, ' +
-        "totalMatchedBeforeLimit, workspaceCounts, and truncatedCandidates. Or a 'project_selection_required' " +
+        'totalMatchedBeforeLimit, workspaceCounts, and truncatedCandidates. With reference: ' +
+        'MissionReferenceSearchResponse (kind mission_reference_search, results with statusType and matching ' +
+        "objectives, nextCursor, complete). Or a 'project_selection_required' " +
         'result when projectId names a project in more than one workspace.'
     ),
     annotations: readOnly,

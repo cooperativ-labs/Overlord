@@ -36,6 +36,22 @@ export {
   type LaunchVariableDefinition
 } from './launch-variables.js';
 export {
+  containsExactReference,
+  invalidMissionReference,
+  type KnowledgebaseFeatureIdentity,
+  knowledgebaseFeatureReference,
+  knowledgebaseFeatureUrl,
+  MISSION_REFERENCE_DEFAULT_LIMIT,
+  MISSION_REFERENCE_MAX_LENGTH,
+  MISSION_REFERENCE_MAX_LIMIT,
+  MISSION_REFERENCE_MIN_LENGTH,
+  type MissionReferenceMatch,
+  type MissionReferenceObjectiveMatch,
+  type MissionReferenceSearchResponse,
+  normalizeKnowledgebaseFeatureIdentity,
+  parseKnowledgebaseFeatureReference
+} from './mission-reference.js';
+export {
   MISSION_SEARCH_DATE_FIELDS,
   type MissionSearchAppliedFilters,
   type MissionSearchDateField,

@@ -1,12 +1,6 @@
 import { Role } from '@overlord/auth';
 import type { ChatSourceLocatorDto, RepositoryReadResult } from '@overlord/contract';
-import {
-  createPostgresClient,
-  createSqliteClient,
-  type DatabaseClient,
-  migratePostgres,
-  openInMemoryDatabase
-} from '@overlord/database';
+import { type DatabaseClient } from '@overlord/database';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { describe, it } from 'node:test';
@@ -33,7 +27,7 @@ import type { GeminiChunk, GeminiClient, GeminiPart, GeminiRequest } from './gem
 import { GeminiChatRuntime } from './gemini-runtime.ts';
 
 const owner: ChatOwner = { profileId: 'owner', organizationId: 'org' };
-const adapters = ['sqlite', ...(process.env.TEST_DATABASE_URL ? ['postgres'] : [])];
+const adapters = conformanceAdapters();
 const KB_CONNECTION = '0123456789ab4def8123456789abcdef';
 const KB_TOOL = 'kb_0123456789ab_search';
 const NODE = '11111111-2222-4333-8444-555555555555';
@@ -123,37 +117,11 @@ interface World {
 }
 
 async function world(
-  adapter: string,
+  adapter: ConformanceAdapter,
   fn: (w: World) => Promise<void>,
   limits: ChatOptions['limits'] = {}
 ) {
-  let db: DatabaseClient, cleanup: () => Promise<void>;
-  if (adapter === 'sqlite') {
-    const raw = openInMemoryDatabase();
-    db = createSqliteClient(raw);
-    cleanup = async () => {
-      raw.close();
-    };
-  } else {
-    const { default: pg } = await import('pg');
-    const pool = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL });
-    const session = await pool.connect(),
-      schema = `chat_runtime_${randomUUID().replaceAll('-', '')}`;
-    await session.query(`CREATE SCHEMA ${schema}`);
-    const scoped = new pg.Pool({
-      connectionString: process.env.TEST_DATABASE_URL,
-      options: `-c search_path=${schema}`,
-      max: 5
-    });
-    db = createPostgresClient(scoped, { ownsPool: true });
-    await migratePostgres(db);
-    cleanup = async () => {
-      await db.close();
-      await session.query(`DROP SCHEMA ${schema} CASCADE`);
-      session.release();
-      await pool.end();
-    };
-  }
+  const { db, cleanup } = await createConformanceDatabase(adapter, 'chat_runtime');
   try {
     let now = Date.parse('2026-10-04T12:00:00.000Z');
     const stamp = new Date(now).toISOString();
@@ -866,6 +834,11 @@ import {
   proposalOwner
 } from '../../packages/core/service/chat/proposal-test-fixture.ts';
 import { ChatProposals } from '../../packages/core/service/chat/proposals.ts';
+import {
+  type ConformanceAdapter,
+  conformanceAdapters,
+  createConformanceDatabase
+} from '../test-helpers.ts';
 for (const adapter of adapters)
   describe(`Gemini proposal preparation [${adapter}]`, () => {
     it('checkpointed preparation publishes a card, resumes after worker death without duplication, and never creates work', () =>

@@ -1,17 +1,15 @@
-import {
-  createPostgresSessionClient,
-  createSqliteClient,
-  type DatabaseClient,
-  migratePostgres,
-  openInMemoryDatabase
-} from '@overlord/database';
+import { type DatabaseClient } from '@overlord/database';
 import assert from 'node:assert/strict';
-import { randomUUID } from 'node:crypto';
 import { describe, it } from 'node:test';
 
 import { generateUserTokenSecret } from '../auth/src/index.ts';
 
-import { seedAuthenticatedOperatorClient } from './test-helpers.ts';
+import {
+  type ConformanceAdapter,
+  conformanceAdapters,
+  createConformanceDatabase,
+  seedAuthenticatedOperatorClient
+} from './test-helpers.ts';
 
 /**
  * Contract v151 `user_token_projects` allowlist constraints, on both editions.
@@ -23,59 +21,9 @@ import { seedAuthenticatedOperatorClient } from './test-helpers.ts';
  * the selection; and a token cannot leave the preset while selections exist.
  */
 
-interface AdapterHandle {
-  client: DatabaseClient;
-  teardown: () => Promise<void>;
-}
-
-interface AdapterFactory {
-  label: string;
-  create: () => Promise<AdapterHandle>;
-}
-
-const sqliteFactory: AdapterFactory = {
-  label: 'sqlite',
-  create: async () => {
-    const sqlite = openInMemoryDatabase();
-    return {
-      client: createSqliteClient(sqlite),
-      teardown: async () => {
-        sqlite.close();
-      }
-    };
-  }
-};
-
-function postgresFactory(connectionString: string): AdapterFactory {
-  return {
-    label: 'postgres',
-    create: async () => {
-      const pg = await import('pg');
-      const Pool = (pg.default ?? pg).Pool;
-      const schema = `ovld_token_projects_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
-      const admin = new Pool({ connectionString });
-      await admin.query(`CREATE SCHEMA ${schema}`);
-      const pool = new Pool({ connectionString });
-      const session = await pool.connect();
-      await session.query(`SET search_path TO ${schema}`);
-      const client = createPostgresSessionClient(session);
-      await migratePostgres(client);
-      return {
-        client,
-        teardown: async () => {
-          await client.close();
-          session.release();
-          await pool.end();
-          await admin.query(`DROP SCHEMA ${schema} CASCADE`);
-          await admin.end();
-        }
-      };
-    }
-  };
-}
-
-const adapters: AdapterFactory[] = [sqliteFactory];
-if (process.env.TEST_DATABASE_URL) adapters.push(postgresFactory(process.env.TEST_DATABASE_URL));
+const adapters = conformanceAdapters();
+const open = (adapter: ConformanceAdapter) =>
+  createConformanceDatabase(adapter, 'ovld_token_projects');
 
 const now = () => new Date().toISOString();
 
@@ -155,9 +103,9 @@ async function seedTwoOrganizations(client: DatabaseClient): Promise<void> {
 }
 
 for (const adapter of adapters) {
-  describe(`project_automation selection allowlist [${adapter.label}]`, () => {
+  describe(`project_automation selection allowlist [${adapter}]`, () => {
     it('accepts only projects in a consented workspace of the token organization', async () => {
-      const { client, teardown } = await adapter.create();
+      const { db: client, cleanup } = await open(adapter);
       try {
         await seedTwoOrganizations(client);
         await insertToken(client, { id: 'auto', organizationId: 'org-a' });
@@ -182,12 +130,12 @@ for (const adapter of adapters) {
         );
         assert.equal(scope?.scope, 'project_automation');
       } finally {
-        await teardown();
+        await cleanup();
       }
     });
 
     it('rejects selections for full, mission_lifecycle and all-workspaces tokens', async () => {
-      const { client, teardown } = await adapter.create();
+      const { db: client, cleanup } = await open(adapter);
       try {
         await seedTwoOrganizations(client);
         await insertToken(client, { id: 'full', organizationId: 'org-a', scope: 'full' });
@@ -210,12 +158,12 @@ for (const adapter of adapters) {
         await consent(client, 'broad', 'ws-a');
         await assert.rejects(select(client, 'broad', 'project-p'), /consented workspace/);
       } finally {
-        await teardown();
+        await cleanup();
       }
     });
 
     it('drops selections when consent is withdrawn and refuses to widen a selecting token', async () => {
-      const { client, teardown } = await adapter.create();
+      const { db: client, cleanup } = await open(adapter);
       try {
         await seedTwoOrganizations(client);
         await insertToken(client, { id: 'auto', organizationId: 'org-a' });
@@ -251,12 +199,12 @@ for (const adapter of adapters) {
         await client.run(`DELETE FROM user_tokens WHERE id = ?`, ['auto']);
         assert.deepEqual(await selections(client, 'auto'), []);
       } finally {
-        await teardown();
+        await cleanup();
       }
     });
 
     it('stores mission creator attribution as soft references that outlive the token', async () => {
-      const { client, teardown } = await adapter.create();
+      const { db: client, cleanup } = await open(adapter);
       try {
         await seedTwoOrganizations(client);
         const columns = await client.all<{ name: string }>(
@@ -296,7 +244,7 @@ for (const adapter of adapters) {
           created_by_token_label: 'Importer v1'
         });
       } finally {
-        await teardown();
+        await cleanup();
       }
     });
   });

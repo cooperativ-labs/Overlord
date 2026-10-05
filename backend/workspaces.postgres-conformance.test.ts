@@ -1,15 +1,14 @@
-import {
-  createPostgresSessionClient,
-  createSqliteClient,
-  migrateDatabase,
-  migratePostgres,
-  openInMemoryDatabase
-} from '@overlord/database';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, describe, it } from 'node:test';
 
-import { bindWebappDatabaseClient, DEFAULT_TEST_ORGANIZATION_ID } from './test-helpers.ts';
+import {
+  bindWebappDatabaseClient,
+  type ConformanceAdapter,
+  conformanceAdapters,
+  createConformanceDatabase,
+  DEFAULT_TEST_ORGANIZATION_ID
+} from './test-helpers.ts';
 
 /**
  * Adapter conformance for workspace/organization creation on the hosted-backend
@@ -22,73 +21,19 @@ import { bindWebappDatabaseClient, DEFAULT_TEST_ORGANIZATION_ID } from './test-h
  * across two different ones.
  */
 
-interface AdapterHandle {
-  client: ReturnType<typeof createSqliteClient>;
-  teardown: () => Promise<void>;
-}
+const adapters = conformanceAdapters();
 
-interface AdapterFactory {
-  label: string;
-  create: () => Promise<AdapterHandle>;
-}
-
-const sqliteFactory: AdapterFactory = {
-  label: 'sqlite',
-  create: async () => {
-    const sqlite = openInMemoryDatabase();
-    migrateDatabase(sqlite);
-    const client = createSqliteClient(sqlite);
-    await bindWebappDatabaseClient({ client });
-    return {
-      client,
-      teardown: async () => {
-        await client.close();
-      }
-    };
-  }
-};
-
-function postgresFactory(connectionString: string): AdapterFactory {
-  return {
-    label: 'postgres',
-    create: async () => {
-      const pg = await import('pg');
-      const Pool = (pg.default ?? pg).Pool;
-      const schema = `ovld_ws_test_${randomUUID().replace(/-/g, '').slice(0, 16)}`;
-
-      const admin = new Pool({ connectionString });
-      await admin.query(`CREATE SCHEMA ${schema}`);
-
-      const scoped = new Pool({ connectionString });
-      const session = await scoped.connect();
-      await session.query(`SET search_path TO ${schema}`);
-      const client = createPostgresSessionClient(session);
-      await migratePostgres(client);
-      await bindWebappDatabaseClient({ client });
-
-      return {
-        client,
-        teardown: async () => {
-          await client.close();
-          session.release();
-          await scoped.end();
-          await admin.query(`DROP SCHEMA ${schema} CASCADE`);
-          await admin.end();
-        }
-      };
-    }
-  };
-}
-
-const adapters: AdapterFactory[] = [sqliteFactory];
-if (process.env.TEST_DATABASE_URL) {
-  adapters.push(postgresFactory(process.env.TEST_DATABASE_URL));
+/** A migrated conformance database bound to the webapp modules with an ADMIN operator. */
+async function open(adapter: ConformanceAdapter) {
+  const handle = await createConformanceDatabase(adapter, 'ovld_ws_test');
+  await bindWebappDatabaseClient({ client: handle.db });
+  return handle;
 }
 
 for (const adapter of adapters) {
-  describe(`createWorkspace conformance [${adapter.label}]`, () => {
+  describe(`createWorkspace conformance [${adapter}]`, () => {
     it('creates a workspace with a server-generated UUID id and a derived slug', async () => {
-      const { teardown } = await adapter.create();
+      const { cleanup } = await open(adapter);
       try {
         const { createWorkspace } = await import('./workspaces.ts');
         const created = await createWorkspace({
@@ -102,12 +47,12 @@ for (const adapter of adapters) {
         assert.ok(created.slug.length > 0);
         assert.equal(created.isActive, true);
       } finally {
-        await teardown();
+        await cleanup();
       }
     });
 
     it('rejects a duplicate slug within the same organization but allows it across organizations', async () => {
-      const { client, teardown } = await adapter.create();
+      const { db: client, cleanup } = await open(adapter);
       try {
         const { createWorkspace } = await import('./workspaces.ts');
 
@@ -179,7 +124,7 @@ for (const adapter of adapters) {
           'a different organization may reuse a slug already taken in another organization'
         );
       } finally {
-        await teardown();
+        await cleanup();
       }
     });
   });

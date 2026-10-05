@@ -1,10 +1,4 @@
-import {
-  createPostgresClient,
-  createSqliteClient,
-  type DatabaseClient,
-  migratePostgres,
-  openInMemoryDatabase
-} from '@overlord/database';
+import { type DatabaseClient } from '@overlord/database';
 import express from 'express';
 import assert from 'node:assert/strict';
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -15,12 +9,19 @@ import { describe, it } from 'node:test';
 
 import { type ChatOwner, Conversations } from '../../packages/core/service/chat/conversations.ts';
 import { ChatRuns } from '../../packages/core/service/chat/runs.ts';
+import { apiErrorHandler } from '../errors.ts';
+import {
+  type ConformanceAdapter,
+  conformanceAdapters,
+  createConformanceDatabase
+} from '../test-helpers.ts';
 
 import { ConnectionsConfigError, connectionsConfigFromEnv } from './config.ts';
 import { openSecret, sealSecret } from './crypto.ts';
 import { EgressError, egressFetch } from './egress.ts';
-import { FakeKnowledgebase, KB_MCP_URL, KB_ORIGIN } from './fake-knowledgebase.ts';
 import { createConnectionsRuntime } from './index.ts';
+import { FakeKnowledgebase, KB_MCP_URL, KB_ORIGIN } from './knowledgebase-test-fixture.ts';
+import { KnowledgebaseMcp } from './mcp-client.ts';
 import { namespacedToolId } from './policy.ts';
 import { createConnectionsPublicRouter, createConnectionsRouter } from './routes.ts';
 import { ConnectionAccessError } from './service.ts';
@@ -28,44 +29,9 @@ import { ConnectionAccessError } from './service.ts';
 const owner: ChatOwner = { profileId: 'owner', organizationId: 'org' };
 const other: ChatOwner = { profileId: 'other', organizationId: 'org' };
 const ownerElsewhere: ChatOwner = { profileId: 'owner', organizationId: 'org2' };
-const adapters = ['sqlite', ...(process.env.TEST_DATABASE_URL ? ['postgres'] : [])];
+const adapters = conformanceAdapters();
 const KEY = randomBytes(32).toString('base64url');
 const identity = { provider: 'fake', model: 'fake-1', configDigest: 'c', checkpointVersion: 1 };
-
-async function database(
-  adapter: string
-): Promise<{ db: DatabaseClient; cleanup: () => Promise<void> }> {
-  if (adapter === 'sqlite') {
-    const raw = openInMemoryDatabase();
-    return {
-      db: createSqliteClient(raw),
-      cleanup: async () => {
-        raw.close();
-      }
-    };
-  }
-  const { default: pg } = await import('pg');
-  const pool = new pg.Pool({ connectionString: process.env.TEST_DATABASE_URL });
-  const session = await pool.connect(),
-    schema = `connections_${randomUUID().replaceAll('-', '')}`;
-  await session.query(`CREATE SCHEMA ${schema}`);
-  const scoped = new pg.Pool({
-    connectionString: process.env.TEST_DATABASE_URL,
-    options: `-c search_path=${schema}`,
-    max: 6
-  });
-  const db = createPostgresClient(scoped, { ownsPool: true });
-  await migratePostgres(db);
-  return {
-    db,
-    cleanup: async () => {
-      await db.close();
-      await session.query(`DROP SCHEMA ${schema} CASCADE`);
-      session.release();
-      await pool.end();
-    }
-  };
-}
 
 async function seed(db: DatabaseClient) {
   const stamp = '2026-10-04T12:00:00.000Z';
@@ -113,14 +79,14 @@ function runtime(
 }
 
 async function fixture(
-  adapter: string,
+  adapter: ConformanceAdapter,
   fn: (ctx: {
     db: DatabaseClient;
     kb: FakeKnowledgebase;
     rt: ReturnType<typeof runtime>;
   }) => Promise<void>
 ) {
-  const { db, cleanup } = await database(adapter);
+  const { db, cleanup } = await createConformanceDatabase(adapter, 'connections');
   try {
     await seed(db);
     const kb = new FakeKnowledgebase();
@@ -190,7 +156,7 @@ for (const adapter of adapters)
         const [dto] = (await rt.connections.list(owner)).items;
         assert.equal(dto!.state, 'connected');
         assert.deepEqual(dto!.authorizedWorkspaces, ['main', 'overlord']);
-        assert.equal(dto!.toolPolicyVersion, 1);
+        assert.equal(dto!.toolPolicyVersion, 2);
         const everything =
           JSON.stringify(await db.all('SELECT * FROM account_connections')) + JSON.stringify(dto);
         assert.ok(!kb.leaks(everything), 'no raw token or code in rows or DTOs');
@@ -246,21 +212,24 @@ for (const adapter of adapters)
         );
       }));
 
-    it('exposes only reviewed read tools, rejects writes regardless of annotations, and bounds arguments and output', () =>
+    it('exposes only reviewed read tools without a grant, rejects writes and unreviewed tools, and bounds arguments and output', () =>
       fixture(adapter, async ({ db, kb, rt }) => {
         const id = await connect(rt, kb);
         const mcp = rt.knowledgebase!;
         const tools = await mcp.tools(owner);
         assert.deepEqual(tools.map(t => t.tool).sort(), [
           'get_links',
+          'get_registries',
           'get_related',
           'list_children',
           'list_entities',
           'list_workspaces',
+          'query',
           'read_file',
           'read_resource',
           'search'
         ]);
+        assert.ok(tools.every(t => t.access === 'read'));
         assert.ok(tools.every(t => t.id === namespacedToolId(id, t.tool) && t.id.length <= 64));
         // Provider-safe: a dotted id was rewritten by Gemini and then rejected as unknown.
         assert.ok(tools.every(t => /^kb_[0-9a-f]{12}_[a-z_]+$/.test(t.id)));
@@ -289,11 +258,20 @@ for (const adapter of adapters)
         ]);
 
         const before = kb.calls.length;
-        for (const tool of ['delete_file', 'edit_file', 'query', 'list_trash']) {
+        for (const tool of ['delete_file', 'grant_access', 'list_trash']) {
           const result = await mcp.call(owner, namespacedToolId(id, tool), { path: 'x' });
           assert.equal(result.outcome, 'denied');
-          assert.equal(result.detail, 'not_in_read_allowlist');
+          assert.equal(result.detail, 'not_in_allowlist');
         }
+        // A reviewed write without the run's grant is refused before any request.
+        const ungranted = await mcp.call(owner, namespacedToolId(id, 'edit_file'), {
+          workspace: 'main',
+          path: 'x.md',
+          old_text: '',
+          new_text: 'y',
+          expected_version: 'ver-1'
+        });
+        assert.deepEqual([ungranted.outcome, ungranted.detail], ['denied', 'write_not_authorized']);
         assert.equal(kb.calls.length, before, 'rejected tools never reach the server');
 
         assert.equal(
@@ -356,6 +334,372 @@ for (const adapter of adapters)
           ).detail,
           'withheld_by_server_annotations'
         );
+      }));
+
+    it('offers reviewed writes only for the granted connection, and server annotations can only withhold them', () =>
+      fixture(adapter, async ({ db, kb, rt }) => {
+        const id = await connect(rt, kb);
+        const mcp = rt.knowledgebase!;
+        const grant = { connectionId: id, workspace: 'main' };
+        const writes = (await mcp.tools(owner, undefined, { write: grant }))
+          .filter(t => t.access === 'write')
+          .map(t => t.tool)
+          .sort();
+        assert.deepEqual(writes, [
+          'add_relation',
+          'create_node',
+          'edit_file',
+          'remove_relation',
+          'set_properties',
+          'update_relation'
+        ]);
+        // A grant naming another connection adds nothing; a foreign owner's connection is unknown.
+        const elsewhere = { connectionId: randomUUID(), workspace: 'main' };
+        assert.ok(
+          (await mcp.tools(owner, undefined, { write: elsewhere })).every(t => t.access === 'read')
+        );
+        assert.equal(await mcp.authorizeWrite(owner, grant), 'authorized');
+        assert.equal(await mcp.authorizeWrite(owner, { ...grant, workspace: 'secret' }), 'invalid');
+        assert.equal(await mcp.authorizeWrite(other, grant), 'invalid');
+        assert.equal(await mcp.authorizeWrite(ownerElsewhere, grant), 'invalid');
+        // Annotations only narrow: an unexpectedly destructive create is withheld, while the
+        // reviewed-destructive remove_relation stays available.
+        kb.readOnly.delete('get_registries');
+        const original = kb.fetch;
+        kb.fetch = async (input, init) => {
+          const response = await original(input, init);
+          if (!String(init?.body ?? '').includes('"tools/list"')) return response;
+          const body = (await response.json()) as {
+            result: { tools: { name: string; annotations: Record<string, unknown> }[] };
+          };
+          for (const tool of body.result.tools)
+            if (tool.name === 'create_node') tool.annotations.destructiveHint = true;
+          return new Response(JSON.stringify(body), {
+            status: 200,
+            headers: response.headers
+          });
+        };
+        const fresh = runtime(db, kb);
+        const offered = (await fresh.knowledgebase!.tools(owner, undefined, { write: grant })).map(
+          t => t.tool
+        );
+        assert.ok(!offered.includes('create_node'));
+        assert.ok(offered.includes('remove_relation'));
+        assert.ok(!offered.includes('get_registries'), 'a read no longer annotated read-only');
+        assert.equal(
+          (
+            await fresh.knowledgebase!.call(
+              owner,
+              namespacedToolId(id, 'create_node'),
+              { workspace: 'main', path: 'n.md', expected_version: 'new' },
+              undefined,
+              { write: grant }
+            )
+          ).detail,
+          'withheld_by_server_annotations'
+        );
+        kb.fetch = original;
+      }));
+
+    it('writes general notes with revision guards, conflicts, refusals, and uncertain outcomes', () =>
+      fixture(adapter, async ({ kb, rt }) => {
+        const id = await connect(rt, kb);
+        const mcp = rt.knowledgebase!;
+        const write = { write: { connectionId: id, workspace: 'main' } };
+        const call = (tool: string, args: Record<string, unknown>) =>
+          mcp.call(owner, namespacedToolId(id, tool), args, undefined, write);
+
+        const created = await call('create_node', {
+          workspace: 'main',
+          path: 'notes/standup.md',
+          expected_version: 'new',
+          content: 'Standup\nproject:: [[Overlord]]\n'
+        });
+        assert.equal(created.outcome, 'ok');
+        assert.equal(created.sources[0]!.locator.path, 'notes/standup.md', 'write provenance');
+        const read = JSON.parse(
+          (await call('read_file', { workspace: 'main', path: 'notes/standup.md' })).text
+        ) as { expectedVersion: string };
+        const stale = await call('edit_file', {
+          workspace: 'main',
+          path: 'notes/standup.md',
+          old_text: 'Standup',
+          new_text: 'Standup (edited)',
+          expected_version: 'ver-0'
+        });
+        assert.equal(stale.outcome, 'conflict', "edit_file's version check is a conflict");
+        const edited = await call('edit_file', {
+          workspace: 'main',
+          path: 'notes/standup.md',
+          old_text: 'Standup',
+          new_text: 'Standup (edited)',
+          expected_version: read.expectedVersion
+        });
+        assert.equal(edited.outcome, 'ok');
+        assert.ok([...kb.nodes.values()][0]!.content.startsWith('Standup (edited)'));
+
+        // A repeated create is refused by the server, never a second node.
+        const again = await call('create_node', {
+          workspace: 'main',
+          path: 'notes/standup.md',
+          expected_version: 'new'
+        });
+        assert.deepEqual([again.outcome, again.upstreamStatus], ['conflict', 409]);
+
+        // A write whose response is lost after it was applied is uncertain and not retried.
+        const before = kb.calls.filter(c => c.tool === 'create_node').length;
+        kb.loseResponseAfter = 'create_node';
+        const lost = await call('create_node', {
+          workspace: 'main',
+          path: 'notes/lost.md',
+          expected_version: 'new'
+        });
+        assert.equal(lost.outcome, 'uncertain');
+        assert.equal(kb.calls.filter(c => c.tool === 'create_node').length, before + 1);
+        assert.ok([...kb.nodes.values()].some(n => n.path === 'notes/lost.md'));
+
+        // The Knowledgebase stays authoritative: a read-only restriction is a 403 tool error.
+        kb.readOnlyUsers.add('kb-owner');
+        const denied = await call('create_node', {
+          workspace: 'main',
+          path: 'notes/denied.md',
+          expected_version: 'new'
+        });
+        assert.deepEqual([denied.outcome, denied.upstreamStatus], ['tool_error', 403]);
+        kb.readOnlyUsers.clear();
+
+        // The grant's workspace is the only one writable, even if the connection reads others.
+        const foreign = await call('create_node', {
+          workspace: 'overlord',
+          path: 'notes/x.md',
+          expected_version: 'new'
+        });
+        assert.deepEqual([foreign.outcome, foreign.detail], ['denied', 'write_not_authorized']);
+
+        // Bounded arguments: closed top level, required guards, nested depth and size.
+        const invalid = async (tool: string, args: Record<string, unknown>) =>
+          assert.equal(
+            (await call(tool, args)).outcome,
+            'invalid_arguments',
+            JSON.stringify(args).slice(0, 80)
+          );
+        await invalid('create_node', {
+          workspace: 'main',
+          path: 'a.md',
+          expected_version: 'new',
+          extra: 1
+        });
+        await invalid('create_node', { workspace: 'main', path: 'a.md', expected_version: 'v2' });
+        await invalid('update_relation', {
+          workspace: 'main',
+          relation_id: randomUUID(),
+          attributes: {}
+        });
+        let deep: unknown = 'x';
+        for (let i = 0; i < 12; i++) deep = { deep };
+        await invalid('add_relation', {
+          workspace: 'main',
+          from_node_id: randomUUID(),
+          to_node_id: randomUUID(),
+          attributes: { deep }
+        });
+        await invalid('set_properties', {
+          workspace: 'main',
+          node_id: randomUUID(),
+          properties: { score: Number.POSITIVE_INFINITY },
+          expected_metadata_revision: 1
+        });
+        await invalid('create_node', {
+          workspace: 'main',
+          path: 'big.md',
+          expected_version: 'new',
+          content: 'x'.repeat(60 * 1024)
+        });
+      }));
+
+    it('reads and updates Feature metadata: paged queries over 100 candidates, nested citations, null removal, ranking guards', () =>
+      fixture(adapter, async ({ kb, rt }) => {
+        const id = await connect(rt, kb);
+        const mcp = rt.knowledgebase!;
+        const write = { write: { connectionId: id, workspace: 'main' } };
+        const call = (tool: string, args: Record<string, unknown>) =>
+          mcp.call(owner, namespacedToolId(id, tool), args, undefined, write);
+        const project = kb.seedNode({ workspace: 'main', path: 'projects/a.md', type: 'project' });
+        const features = Array.from({ length: 120 }, (_, i) =>
+          kb.seedNode({
+            workspace: 'main',
+            path: `features/f${String(i).padStart(3, '0')}.md`,
+            type: 'feature',
+            properties: {
+              status: i === 7 ? 'in_development' : 'idea',
+              ...(i === 9 ? { overlord: 'coo:9' } : {})
+            }
+          })
+        );
+        for (const [i, f] of features.entries())
+          kb.seedRelation({
+            workspace: 'main',
+            from: f.id,
+            to: project.id,
+            type: 'project',
+            attributes: i < 5 ? { rank: 5 - i, keep: 'unrelated' } : {}
+          });
+        const query = {
+          workspace: 'main',
+          type: 'feature',
+          rel: [{ type: 'project', to_node_id: project.id }],
+          where_in: { status: ['idea', 'shaping', 'ready'] },
+          where_empty: ['overlord'],
+          order_by: { relation: { type: 'project', to_node_id: project.id }, key: 'rank' },
+          include: ['properties', 'relations'],
+          limit: 100
+        };
+        const seen: string[] = [];
+        let cursor: string | undefined;
+        type Page = {
+          nodes: {
+            id: string;
+            metadata_revision: number;
+            relations: { id: string; revision: number; attributes: Record<string, unknown> }[];
+          }[];
+          next_cursor?: string;
+        };
+        const pages: Page[] = [];
+        do {
+          const page = await call('query', { ...query, ...(cursor ? { cursor } : {}) });
+          assert.equal(page.outcome, 'ok');
+          assert.equal(page.truncated, false);
+          const body = JSON.parse(page.text) as Page;
+          pages.push(body);
+          seen.push(...body.nodes.map(n => n.id));
+          cursor = body.next_cursor;
+        } while (cursor);
+        assert.equal(
+          seen.length,
+          118,
+          'every candidate across pages; linked and in-development excluded'
+        );
+        assert.equal(seen[0], features[4]!.id, 'rank 1 first');
+
+        // Complete metadata is never truncated: a response that does not fit is refused.
+        const small = new KnowledgebaseMcp({
+          mcpUrl: KB_MCP_URL,
+          egressOrigins: [KB_ORIGIN],
+          connections: rt.connections,
+          fetch: kb.fetch,
+          now: () => kb.now,
+          bounds: { outputBytes: 2048 }
+        });
+        const cut = await small.call(owner, namespacedToolId(id, 'query'), query, undefined, write);
+        assert.deepEqual(
+          [cut.outcome, cut.detail, cut.text],
+          ['tool_error', 'response_too_large', '']
+        );
+
+        // Ranking write preserves unrelated attributes and uses the relation revision.
+        const top = pages[0]!.nodes[0]!;
+        const projectRel = top.relations.find(r => r.attributes.rank === 1)!;
+        const ranked = await call('update_relation', {
+          workspace: 'main',
+          relation_id: projectRel.id,
+          attributes: { ...projectRel.attributes, rank: 2, rank_rationale: 'Reassessed' },
+          expected_revision: projectRel.revision
+        });
+        assert.equal(ranked.outcome, 'ok');
+        const stale = await call('update_relation', {
+          workspace: 'main',
+          relation_id: projectRel.id,
+          attributes: { rank: 9 },
+          expected_revision: projectRel.revision
+        });
+        assert.deepEqual([stale.outcome, stale.upstreamStatus], ['conflict', 412]);
+        assert.deepEqual(kb.relations.get(projectRel.id)!.attributes, {
+          rank: 2,
+          keep: 'unrelated',
+          rank_rationale: 'Reassessed'
+        });
+
+        // Evidence with a nested citations list, votes as a nested map, then null removal.
+        const meeting = kb.seedNode({ workspace: 'main', path: 'meetings/m.md' });
+        const evidence = await call('add_relation', {
+          workspace: 'main',
+          from_node_id: top.id,
+          to_node_id: meeting.id,
+          relation_type: 'supported_by',
+          attributes: {
+            citations: [
+              { quote: 'Offline matters', locator: { start: 12.5, end: 14 }, resource_id: null },
+              { quote: 'Again', locator: { start: 30, end: 31 }, stance: 'for' }
+            ]
+          }
+        });
+        assert.equal(evidence.outcome, 'ok');
+        const node = kb.nodes.get(top.id)!;
+        const voted = await call('set_properties', {
+          workspace: 'main',
+          node_id: top.id,
+          properties: {
+            votes: { 'user-1': 1, 'user-2': -1 },
+            overlord: null,
+            decline_reason: null
+          },
+          expected_metadata_revision: node.metadataRevision
+        });
+        assert.equal(voted.outcome, 'ok');
+        assert.deepEqual(node.properties.votes, { 'user-1': 1, 'user-2': -1 });
+        const lostRace = await call('set_properties', {
+          workspace: 'main',
+          node_id: top.id,
+          properties: { status: 'ready' },
+          expected_metadata_revision: node.metadataRevision - 1
+        });
+        assert.deepEqual([lostRace.outcome, lostRace.upstreamStatus], ['conflict', 412]);
+        const serverOwned = await call('set_properties', {
+          workspace: 'main',
+          node_id: top.id,
+          properties: { content_updated_at: '2020-01-01T00:00:00Z' },
+          expected_metadata_revision: node.metadataRevision
+        });
+        assert.deepEqual([serverOwned.outcome, serverOwned.upstreamStatus], ['tool_error', 422]);
+        const unlinked = await call('remove_relation', {
+          workspace: 'main',
+          relation_id: projectRel.id,
+          expected_revision: kb.relations.get(projectRel.id)!.revision
+        });
+        assert.equal(unlinked.outcome, 'ok');
+        assert.ok(!kb.relations.has(projectRel.id));
+      }));
+
+    it('a write after token expiry refreshes once and applies exactly once; disconnect revokes writes', () =>
+      fixture(adapter, async ({ kb, rt }) => {
+        const id = await connect(rt, kb);
+        const mcp = rt.knowledgebase!;
+        const grant = { connectionId: id, workspace: 'main' };
+        kb.now += 2 * 3600 * 1000; // the access token has expired upstream
+        const created = await mcp.call(
+          owner,
+          namespacedToolId(id, 'create_node'),
+          { workspace: 'main', path: 'notes/after-refresh.md', expected_version: 'new' },
+          undefined,
+          { write: grant }
+        );
+        assert.equal(created.outcome, 'ok');
+        assert.equal(
+          [...kb.nodes.values()].filter(n => n.path === 'notes/after-refresh.md').length,
+          1
+        );
+        assert.equal(kb.calls.filter(c => c.tool === 'create_node').length, 1);
+        await rt.connections.disconnect(owner, id);
+        assert.equal(await mcp.authorizeWrite(owner, grant), 'invalid');
+        const after = await mcp.call(
+          owner,
+          namespacedToolId(id, 'create_node'),
+          { workspace: 'main', path: 'notes/after-disconnect.md', expected_version: 'new' },
+          undefined,
+          { write: grant }
+        );
+        assert.notEqual(after.outcome, 'ok');
+        assert.ok(![...kb.nodes.values()].some(n => n.path === 'notes/after-disconnect.md'));
       }));
 
     it('denies every cross-owner and cross-organization use, including a copied envelope', () =>
@@ -675,7 +1019,7 @@ describe('connections module boundaries', () => {
   });
 
   it('an authorization server on an unapproved origin is refused before any sign-in', async () => {
-    const { db, cleanup } = await database('sqlite');
+    const { db, cleanup } = await createConformanceDatabase('sqlite', 'connections');
     try {
       await seed(db);
       const kb = new FakeKnowledgebase();
@@ -717,7 +1061,7 @@ describe('connections module boundaries', () => {
   });
 
   it('HTTP: metadata document, status-only callback redirects, owner-scoped routes, and the Local guard', async () => {
-    const { db, cleanup } = await database('sqlite');
+    const { db, cleanup } = await createConformanceDatabase('sqlite', 'connections');
     const kb = new FakeKnowledgebase();
     const context = new AsyncLocalStorage<ChatOwner>();
     let cloud = true;
@@ -740,6 +1084,7 @@ describe('connections module boundaries', () => {
         owner: () => context.getStore() ?? null
       })
     );
+    app.use(apiErrorHandler);
     const server = app.listen(0);
     await once(server, 'listening');
     const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;

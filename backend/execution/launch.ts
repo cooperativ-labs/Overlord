@@ -28,9 +28,13 @@ import {
   resolveLaunchSession,
   type TerminalProfile
 } from '@overlord/core/service/terminal-profile-types';
+import {
+  readStoredWorkspaceAgentCatalog,
+  type StoredAgentCatalog as StoredCatalog,
+  type StoredCatalogAgent
+} from '@overlord/core/service/workspace-agent-catalog';
 import { type DatabaseClient, formatObjectiveDisplayId } from '@overlord/database';
 
-import { resolveInstanceAgentCatalog } from '../../cli/src/agent-catalog.ts';
 import { loadConfig } from '../../cli/src/config.ts';
 import {
   ACTIVE_EXECUTION_REQUEST_STATUSES,
@@ -88,6 +92,7 @@ import type {
   UpdateTerminalProfileBody,
   UpdateWorktreeBranchAutomationBody
 } from '../../webapp/shared/contract.ts';
+import { instanceAgentCatalog, resolveWorkspaceAgentCatalog } from '../agent-catalog.ts';
 import {
   buildWebappServiceContextForWorkspace,
   findActiveMembershipId,
@@ -102,41 +107,7 @@ import { ApiError } from '../errors.ts';
 import { resolveObjectiveIdForRest } from '../objective-ref.ts';
 import { actorCan, requireProjectPermission, requireWorkspacePermission } from '../rbac.ts';
 
-// ---- Instance default catalog ----------------------------------------------
-//
-// Seeded into `workspaces.settings_json.agentCatalog` from bundled defaults
-// plus optional `[agent_catalog]` in overlord.toml, and re-merged by the
-// "refresh" endpoint so new defaults appear without wiping workspace edits.
-// Keys match the connector registry (`cli/src/connectors.ts`).
-
-interface StoredCatalogAgent {
-  label: string;
-  availableByDefault: boolean;
-  models: Array<{
-    id: string;
-    displayName: string;
-    reasoningOptions: string[];
-    /** Absent means offered; `false` keeps the model stored but out of pickers. */
-    enabled?: boolean;
-  }>;
-  defaultModel: string | null;
-  defaultReasoningEffort: string | null;
-  reasoningLabel: string;
-  /** Optional workspace-wide launch default (lowest-priority config source). */
-  launchDefaults?: AgentLaunchConfigDto;
-}
-
-type StoredCatalog = {
-  agents: Record<string, StoredCatalogAgent>;
-  updatedAt?: string;
-};
-
 const AGENT_CATALOG_SETTINGS_KEY = 'agentCatalog';
-
-function instanceAgentCatalog(): Record<string, StoredCatalogAgent> {
-  const config = loadConfig();
-  return resolveInstanceAgentCatalog({ configCatalog: config.agentCatalog });
-}
 
 // ---- Workspace settings helpers --------------------------------------------
 
@@ -165,16 +136,6 @@ async function writeWorkspaceSettings(
     `UPDATE workspaces SET settings_json = ?, updated_at = ?, revision = revision + 1 WHERE id = ?`,
     [JSON.stringify(settings), nowIso(), workspaceId]
   );
-}
-
-async function readStoredCatalog(
-  client: DatabaseClient,
-  workspaceId: string
-): Promise<StoredCatalog | null> {
-  const settings = await readWorkspaceSettings(client, workspaceId);
-  const stored = settings[AGENT_CATALOG_SETTINGS_KEY] as StoredCatalog | undefined;
-  if (!stored || typeof stored !== 'object' || typeof stored.agents !== 'object') return null;
-  return stored;
 }
 
 async function persistCatalog(
@@ -309,9 +270,9 @@ export async function getAgentCatalog(workspaceId?: string): Promise<AgentCatalo
       PERMISSIONS.LAUNCH_READ,
       tx
     );
-    let stored = await readStoredCatalog(tx, targetWorkspaceId);
+    let stored = await readStoredWorkspaceAgentCatalog(tx, targetWorkspaceId);
     if (!stored) {
-      stored = { agents: instanceAgentCatalog() };
+      stored = await resolveWorkspaceAgentCatalog(tx, targetWorkspaceId);
       await persistCatalog(stored, tx, targetWorkspaceId);
     }
     return toCatalogDto(stored);
@@ -330,7 +291,7 @@ export async function refreshAgentCatalog(workspaceId?: string): Promise<AgentCa
       PERMISSIONS.LAUNCH_CONFIGURE,
       tx
     );
-    const stored = (await readStoredCatalog(tx, targetWorkspaceId)) ?? { agents: {} };
+    const stored = (await readStoredWorkspaceAgentCatalog(tx, targetWorkspaceId)) ?? { agents: {} };
     for (const [key, bundled] of Object.entries(instanceAgentCatalog())) {
       const existing = stored.agents[key];
       if (!existing) {
@@ -437,7 +398,9 @@ export async function updateAgentCatalog(
       tx
     );
     const stored = storedCatalogFromBody(body);
-    const existing = (await readStoredCatalog(tx, targetWorkspaceId)) ?? { agents: {} };
+    const existing = (await readStoredWorkspaceAgentCatalog(tx, targetWorkspaceId)) ?? {
+      agents: {}
+    };
 
     for (const [key, agent] of Object.entries(stored.agents)) {
       const previous = existing.agents[key];

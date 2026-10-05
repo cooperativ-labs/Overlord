@@ -96,7 +96,15 @@ Requirements:
   identifiable objective and delivery matches under each mission. The CLI may
   resolve a human project id/slug/name before it calls the service; REST never
   resolves project names. V2 and v3 operate only within one selected
-  organization and report applied filters and truncation.
+  organization and report applied filters and truncation. Ranked search never
+  proves absence. `--reference <token> --project-id <ref>` (contract v155) is a
+  separate exhaustive mode: every live mission in that one project whose live
+  objective text contains the case-sensitive whole token (for example a
+  `kb-feature:<origin>/<workspace>/<node uuid>` Knowledgebase Feature reference),
+  in mission-id order with `statusType` and matching objectives, paged by
+  `--limit` (1-100, default 50) and `--cursor` until `complete` is true. It accepts
+  only `--workspace-id`, `--limit`, and `--cursor` besides the project and rejects
+  ranked flags.
 - `discuss-objective`: mark a draft objective submitted. Optional
   `--objective-id` names which draft when a mission holds more than one; the
   objective must be in `draft` state.
