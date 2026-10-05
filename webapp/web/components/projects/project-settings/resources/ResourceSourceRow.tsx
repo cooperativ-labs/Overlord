@@ -137,11 +137,11 @@ export function ResourceSourceRow({
     <AccordionItem value={source.id}>
       <AccordionTrigger className="gap-3 hover:no-underline">
         <span className="flex min-w-0 flex-col gap-0.5">
-          <span className="flex min-w-0 items-center gap-2">
+          <span className="flex min-w-0 items-start gap-2">
             <Badge variant="outline" className="shrink-0 font-normal">
               {sourceKindLabel(source.sourceKind)}
             </Badge>
-            <span className="min-w-0 truncate font-mono text-sm">{value || 'No descriptor'}</span>
+            <span className="min-w-0 font-mono text-sm break-all">{value || 'No descriptor'}</span>
             <span className="shrink-0 text-xs text-muted-foreground">{targetLabel}</span>
           </span>
           <span className="text-xs font-normal text-muted-foreground">

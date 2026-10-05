@@ -26,6 +26,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '../ui/dropdown-menu.tsx';
 
@@ -121,28 +122,6 @@ export function ObjectiveMenuButton({
           <MoreVertical className="h-4 w-4" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="min-w-[160px]">
-          {onEditTitle ? (
-            <DropdownMenuItem className="gap-2 text-xs" onClick={onEditTitle}>
-              <Pencil className="h-3.5 w-3.5" />
-              Edit title
-            </DropdownMenuItem>
-          ) : null}
-          {canShowMarkComplete ? (
-            <DropdownMenuItem
-              className="gap-2 text-xs"
-              disabled={pending}
-              onClick={() => setState('complete')}
-            >
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              Mark complete
-            </DropdownMenuItem>
-          ) : null}
-          {canShowMarkDraft ? (
-            <DropdownMenuItem className="gap-2 text-xs" disabled={pending} onClick={markDraft}>
-              <RotateCcw className="h-3.5 w-3.5" />
-              Mark draft
-            </DropdownMenuItem>
-          ) : null}
           <DropdownMenuItem className="gap-2 text-xs" onClick={handleCopyId}>
             {copied ? (
               <Check className="h-3.5 w-3.5 text-green-600" />
@@ -161,6 +140,31 @@ export function ObjectiveMenuButton({
               Copy resume command
             </DropdownMenuItem>
           ) : null}
+          <DropdownMenuSeparator />
+          {onEditTitle ? (
+            <DropdownMenuItem className="gap-2 text-xs" onClick={onEditTitle}>
+              <Pencil className="h-3.5 w-3.5" />
+              Edit title
+            </DropdownMenuItem>
+          ) : null}
+          {onEditTitle ? <DropdownMenuSeparator /> : null}
+          {canShowMarkComplete ? (
+            <DropdownMenuItem
+              className="gap-2 text-xs"
+              disabled={pending}
+              onClick={() => setState('complete')}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Mark complete
+            </DropdownMenuItem>
+          ) : null}
+          {canShowMarkDraft ? (
+            <DropdownMenuItem className="gap-2 text-xs" disabled={pending} onClick={markDraft}>
+              <RotateCcw className="h-3.5 w-3.5" />
+              Mark draft
+            </DropdownMenuItem>
+          ) : null}
+          {canShowMarkComplete || canShowMarkDraft ? <DropdownMenuSeparator /> : null}
           <DropdownMenuItem
             className="gap-2 text-xs"
             variant="destructive"

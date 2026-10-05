@@ -373,7 +373,7 @@ export function NewMissionModal({
       }}
     >
       <DialogContent
-        className="gap-0 p-0 sm:max-w-3xl shadow-none ring-0 bg-transparent"
+        className="gap-0 p-0 sm:max-w-5xl shadow-none ring-0 bg-transparent"
         showCloseButton
       >
         <DialogTitle className="sr-only">New mission</DialogTitle>

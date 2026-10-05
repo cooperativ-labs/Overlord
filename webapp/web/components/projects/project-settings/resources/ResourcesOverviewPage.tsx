@@ -250,7 +250,9 @@ export function ResourcesOverviewPage({
                 onClick={() => onSelectResource(resource.id)}
               >
                 <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                  <span className="truncate font-mono text-sm">{resource.resourceKey}</span>
+                  <span className="min-w-0 font-mono text-sm break-all">
+                    {resource.resourceKey}
+                  </span>
                   {resource.isPrimary ? (
                     <Badge variant="secondary" className="shrink-0">
                       Primary

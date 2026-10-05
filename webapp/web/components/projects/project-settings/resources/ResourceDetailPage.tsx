@@ -157,7 +157,7 @@ export function ResourceDetailPage({
     <div className="space-y-6">
       <div>
         <div className="flex flex-wrap items-center gap-2">
-          <h2 className="text-base font-medium">{resource.resourceKey}</h2>
+          <h2 className="min-w-0 text-base font-medium break-all">{resource.resourceKey}</h2>
           {resource.isPrimary ? <Badge variant="secondary">Primary</Badge> : null}
           <Badge variant="outline" className="font-normal">
             {accessModeLabel(resource.accessMode)}
@@ -334,7 +334,7 @@ export function ResourceDetailPage({
       />
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/30 p-4">
-        <div>
+        <div className="min-w-0 flex-[1_1_16rem]">
           <h3 className="text-sm font-medium">Unlink resource</h3>
           <p className="text-sm text-muted-foreground">
             Removes this resource and all of its sources from the project. The files on disk are
@@ -369,7 +369,7 @@ export function ResourceDetailPage({
               Unlink resource &ldquo;{resource.resourceKey}&rdquo; and all of its sources from this
               project?
               {resource.sources.length ? (
-                <span className="mt-2 block font-mono text-xs text-muted-foreground">
+                <span className="mt-2 block font-mono text-xs break-all text-muted-foreground">
                   {resource.sources
                     .map(
                       source => sourceDescriptorValue(source) || sourceKindLabel(source.sourceKind)

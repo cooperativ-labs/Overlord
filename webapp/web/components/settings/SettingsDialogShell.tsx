@@ -77,7 +77,7 @@ export function SettingsDialogShell({
         <DialogTitle className="sr-only">{title}</DialogTitle>
         <DialogDescription className="sr-only">{description}</DialogDescription>
 
-        <div className="flex items-start">
+        <div className="flex min-w-0 items-start">
           <aside className="hidden h-full w-52 shrink-0 flex-col border-r border-border bg-muted/30 md:flex">
             <nav className="flex flex-1 flex-col gap-6 overflow-y-auto p-3">
               {navGroups.map((group, index) => (
@@ -105,7 +105,7 @@ export function SettingsDialogShell({
                             )}
                           >
                             <Icon className="size-4 shrink-0" />
-                            <span>{item.name}</span>
+                            <span className="min-w-0 break-words">{item.name}</span>
                           </button>
                         </li>
                       );
@@ -146,10 +146,12 @@ export function SettingsDialogShell({
                 </Select>
               </div>
 
-              <div className="hidden items-center gap-2 text-sm md:flex">
+              <div className="hidden min-w-0 items-center gap-2 text-sm md:flex">
                 <span className="text-muted-foreground">{breadcrumbRoot ?? title}</span>
                 <span className="text-muted-foreground">/</span>
-                <span className="font-medium">{activeNavItem?.name ?? activeNav}</span>
+                <span className="min-w-0 truncate font-medium">
+                  {activeNavItem?.name ?? activeNav}
+                </span>
               </div>
 
               {showClose ? (
@@ -168,7 +170,9 @@ export function SettingsDialogShell({
               ) : null}
             </header>
 
-            <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-6">{children}</div>
+            <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto p-6 [overflow-wrap:anywhere]">
+              {children}
+            </div>
           </main>
         </div>
       </DialogContent>
