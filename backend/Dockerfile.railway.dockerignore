@@ -89,6 +89,7 @@
 
 **/*.test.ts
 **/*.fixture.ts
+**/*-test-fixture.ts
 **/test-helpers.ts
 **/docs/**
 !docs/package.json

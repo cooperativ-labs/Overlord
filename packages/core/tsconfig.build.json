@@ -10,5 +10,5 @@
     "exactOptionalPropertyTypes": false
   },
   "include": ["types/**/*.ts", "repository/**/*.ts", "service/**/*.ts"],
-  "exclude": ["**/*.test.ts"]
+  "exclude": ["**/*.test.ts", "**/*.fixture.ts", "**/*-test-fixture.ts", "**/test-helpers.ts"]
 }
