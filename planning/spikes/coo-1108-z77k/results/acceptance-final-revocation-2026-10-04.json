@@ -1,0 +1,481 @@
+{
+  "harness": "acceptance-final-revocation",
+  "finishedAt": "2026-10-04T14:33:02.489Z",
+  "summary": {
+    "pass": 18,
+    "fail": 0,
+    "blocked": 0
+  },
+  "results": [
+    {
+      "id": "kb.start",
+      "title": "Sign-in start returns an authorize URL and expiry",
+      "status": "pass",
+      "detail": {
+        "status": 200,
+        "keys": [
+          "connectionId",
+          "authorizeUrl",
+          "expiresAt"
+        ]
+      }
+    },
+    {
+      "id": "kb.authorize-url",
+      "title": "Authorize URL carries PKCE S256, resource, offline_access and the metadata-document client id",
+      "status": "pass",
+      "detail": {
+        "params": [
+          "response_type",
+          "client_id",
+          "redirect_uri",
+          "code_challenge",
+          "code_challenge_method",
+          "scope",
+          "resource",
+          "state"
+        ]
+      }
+    },
+    {
+      "id": "kb.forged-callback",
+      "title": "Unknown state is rejected with a status-only page",
+      "status": "pass",
+      "detail": {
+        "status": 400
+      }
+    },
+    {
+      "id": "kb.callback",
+      "title": "Callback redirects to the mobile return URL carrying only provider and status",
+      "status": "pass",
+      "detail": {
+        "status": 302,
+        "location": "overlord://connections/callback?provider=knowledgebase&status=connected"
+      }
+    },
+    {
+      "id": "kb.replayed-callback",
+      "title": "A replayed callback cannot be reused",
+      "status": "pass",
+      "detail": {
+        "status": 302,
+        "location": "overlord://connections/callback?provider=knowledgebase&status=expired"
+      }
+    },
+    {
+      "id": "kb.connected",
+      "title": "Connection is listed as connected with its workspaces and no credential",
+      "status": "pass",
+      "detail": {
+        "connection": {
+          "state": "connected",
+          "provider": "knowledgebase",
+          "workspaces": [
+            "main",
+            "overlord"
+          ]
+        },
+        "credentialInDto": false
+      }
+    },
+    {
+      "id": "kb.owner-scoped",
+      "title": "Another person's connection list does not include it, and they cannot disconnect it",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "id": "kb.providers",
+      "title": "Provider readiness reports Gemini ready and the live connection",
+      "status": "pass",
+      "detail": {
+        "providers": [
+          {
+            "provider": "gemini",
+            "model": "gemini-3.8-flash",
+            "checkedAt": "2026-10-04T14:31:06.371Z",
+            "state": "ready"
+          }
+        ],
+        "connections": [
+          "connected"
+        ]
+      }
+    },
+    {
+      "id": "v.setup",
+      "title": "The thread cites the note and holds a creatable proposal derived from it",
+      "status": "pass",
+      "detail": {
+        "cited": true,
+        "proposal": true
+      }
+    },
+    {
+      "id": "v.snapshot",
+      "title": "After revocation the snapshot replaces derived answers with unavailable blocks and no note text remains",
+      "status": "pass",
+      "detail": {
+        "unavailableMessages": 3,
+        "lagMs": 17223
+      }
+    },
+    {
+      "id": "v.replay",
+      "title": "Replay from storage sends invalidation markers instead of the stored content",
+      "status": "pass",
+      "detail": {
+        "invalidations": 35
+      }
+    },
+    {
+      "id": "v.create-refused",
+      "title": "Create of the derived proposal is refused and creates nothing",
+      "status": "pass",
+      "detail": {
+        "status": 409,
+        "code": "proposal_not_creatable",
+        "cardInvalidated": true
+      }
+    },
+    {
+      "id": "v.provider-input",
+      "title": "No provider request after revocation contains the note text; the withheld marker is sent instead",
+      "status": "pass",
+      "detail": {
+        "requests": 17,
+        "containing": {
+          "token bucket in memory": 0,
+          "withheld: source access was lost": 17
+        }
+      }
+    },
+    {
+      "id": "v.reread-fails-closed",
+      "title": "Re-reading the revoked note is refused and the answer says the notes are unavailable",
+      "status": "pass",
+      "detail": {
+        "calls": [
+          {
+            "tool": "kb:list_workspaces",
+            "outcome": "ok"
+          },
+          {
+            "tool": "kb:search",
+            "outcome": "unavailable"
+          },
+          {
+            "tool": "kb:search",
+            "outcome": "unavailable"
+          },
+          {
+            "tool": "kb:list_entities",
+            "outcome": "ok"
+          },
+          {
+            "tool": "kb:list_entities",
+            "outcome": "ok"
+          },
+          {
+            "tool": "overlord_list_projects",
+            "outcome": "ok"
+          },
+          {
+            "tool": "kb:list_entities",
+            "outcome": "ok"
+          },
+          {
+            "tool": "kb:list_entities",
+            "outcome": "ok"
+          },
+          {
+            "tool": "overlord_search_missions",
+            "outcome": "ok"
+          },
+          {
+            "tool": "overlord_get_mission",
+            "outcome": "ok"
+          },
+          {
+            "tool": "kb:read_file",
+            "outcome": "ok"
+          },
+          {
+            "tool": "kb:read_file",
+            "outcome": "ok"
+          },
+          {
+            "tool": "kb:read_file",
+            "outcome": "ok"
+          },
+          {
+            "tool": "kb:search",
+            "outcome": "unavailable"
+          },
+          {
+            "tool": "kb:list_entities",
+            "outcome": "ok"
+          },
+          {
+            "tool": "kb:list_entities",
+            "outcome": "ok"
+          },
+          {
+            "tool": "kb:list_entities",
+            "outcome": "ok"
+          },
+          {
+            "tool": "kb:list_entities",
+            "outcome": "ok"
+          },
+          {
+            "tool": "kb:get_related",
+            "outcome": "ok"
+          },
+          {
+            "tool": "kb:get_related",
+            "outcome": "ok"
+          },
+          {
+            "tool": "kb:read_resource",
+            "outcome": "ok"
+          },
+          {
+            "tool": "kb:read_resource",
+            "outcome": "ok"
+          },
+          {
+            "tool": "kb:read_file",
+            "outcome": "ok"
+          },
+          {
+            "tool": "kb:get_links",
+            "outcome": "ok"
+          },
+          {
+            "tool": "overlord_list_execution_targets",
+            "outcome": "ok"
+          },
+          {
+            "tool": "repository_read",
+            "outcome": "ok"
+          },
+          {
+            "tool": "repository_read",
+            "outcome": "ok"
+          },
+          {
+            "tool": "repository_read",
+            "outcome": "ok"
+          },
+          {
+            "tool": "repository_read",
+            "outcome": "ok"
+          }
+        ]
+      }
+    },
+    {
+      "id": "v.live-attempt",
+      "title": "Revoking a source during a run stops the attempt with source_access_lost, or the run had already finished; either way the content is withheld afterwards",
+      "status": "pass",
+      "detail": {
+        "run": {
+          "state": "completed",
+          "failureCode": null
+        },
+        "attempts": [
+          {
+            "state": "succeeded",
+            "failure_code": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "v.overlord-source",
+      "title": "Losing the workspace of a cited project withholds the answer that described it",
+      "status": "pass",
+      "detail": {
+        "cited": true
+      }
+    },
+    {
+      "id": "v.disconnect",
+      "title": "Disconnect revokes upstream and immediately withholds earlier research that cited the connection",
+      "status": "pass",
+      "detail": {
+        "state": "disconnected",
+        "upstreamRevocations": 4,
+        "researchChecked": true
+      }
+    },
+    {
+      "id": "v.no-live-connection",
+      "title": "A disconnected connection is no longer listed and contributes no tools",
+      "status": "pass",
+      "detail": {}
+    }
+  ],
+  "model": "gemini-3.8-flash",
+  "base": "http://127.0.0.1:4411",
+  "revocation": {
+    "followUpAnswer": "Knowledgebase searches for the Sandbox Service rate limiting decision failed because the search source is currently unavailable (`source_unverified`), and reading the previously linked note path (`projects/offline.md` [E16, E17]) returned `not_found`. Therefore, the original Knowledgebase note cannot currently be read directly.\n\nHowever, the existing Overlord draft mission **eng:11** (*Implement rate limiting in Sandbox Service*) [E12, E15] records the decision specifications:\n\n- **Limit:** 60 requests per minute (matching the `/limits` endpoint configuration) [E15].\n- **Mechanism:** HTTP rate",
+    "followUpCalls": [
+      {
+        "tool": "kb:list_workspaces",
+        "outcome": "ok"
+      },
+      {
+        "tool": "kb:search",
+        "outcome": "unavailable"
+      },
+      {
+        "tool": "kb:search",
+        "outcome": "unavailable"
+      },
+      {
+        "tool": "kb:list_entities",
+        "outcome": "ok"
+      },
+      {
+        "tool": "kb:list_entities",
+        "outcome": "ok"
+      },
+      {
+        "tool": "overlord_list_projects",
+        "outcome": "ok"
+      },
+      {
+        "tool": "kb:list_entities",
+        "outcome": "ok"
+      },
+      {
+        "tool": "kb:list_entities",
+        "outcome": "ok"
+      },
+      {
+        "tool": "overlord_search_missions",
+        "outcome": "ok"
+      },
+      {
+        "tool": "overlord_get_mission",
+        "outcome": "ok"
+      },
+      {
+        "tool": "kb:read_file",
+        "outcome": "ok"
+      },
+      {
+        "tool": "kb:read_file",
+        "outcome": "ok"
+      },
+      {
+        "tool": "kb:read_file",
+        "outcome": "ok"
+      },
+      {
+        "tool": "kb:search",
+        "outcome": "unavailable"
+      },
+      {
+        "tool": "kb:list_entities",
+        "outcome": "ok"
+      },
+      {
+        "tool": "kb:list_entities",
+        "outcome": "ok"
+      },
+      {
+        "tool": "kb:list_entities",
+        "outcome": "ok"
+      },
+      {
+        "tool": "kb:list_entities",
+        "outcome": "ok"
+      },
+      {
+        "tool": "kb:get_related",
+        "outcome": "ok"
+      },
+      {
+        "tool": "kb:get_related",
+        "outcome": "ok"
+      },
+      {
+        "tool": "kb:read_resource",
+        "outcome": "ok"
+      },
+      {
+        "tool": "kb:read_resource",
+        "outcome": "ok"
+      },
+      {
+        "tool": "kb:read_file",
+        "outcome": "ok"
+      },
+      {
+        "tool": "kb:get_links",
+        "outcome": "ok"
+      },
+      {
+        "tool": "overlord_list_execution_targets",
+        "outcome": "ok"
+      },
+      {
+        "tool": "repository_read",
+        "outcome": "ok"
+      },
+      {
+        "tool": "repository_read",
+        "outcome": "ok"
+      },
+      {
+        "tool": "repository_read",
+        "outcome": "ok"
+      },
+      {
+        "tool": "repository_read",
+        "outcome": "ok"
+      }
+    ],
+    "providerRequests": {
+      "requests": 17,
+      "containing": {
+        "token bucket in memory": 0,
+        "withheld: source access was lost": 17
+      }
+    }
+  },
+  "liveRevocation": {
+    "revoked": true,
+    "run": {
+      "id": "bb6a6e83-c253-4a9b-9554-608685c9b3c1",
+      "threadId": "36baec12-ed16-4d2a-ab5b-2a4637be5b6d",
+      "triggerMessageId": "f664b545-449c-4f5d-b9ac-f3c25d05cecf",
+      "state": "completed",
+      "outcome": "answered",
+      "failureCode": null,
+      "continuedFromRunId": null,
+      "continueAvailable": false,
+      "usage": {
+        "toolCalls": 14,
+        "activeProcessingMs": 21900,
+        "gatheredContentBytes": 17897
+      },
+      "cancelRequestedAt": null,
+      "createdAt": "2026-10-04T14:32:31.981Z",
+      "updatedAt": "2026-10-04T14:32:54.413Z",
+      "completedAt": "2026-10-04T14:32:54.413Z",
+      "revision": 3
+    },
+    "attempts": [
+      {
+        "state": "succeeded",
+        "failure_code": null
+      }
+    ],
+    "lateProviderRequestsWithNote": 0
+  }
+}

@@ -74,6 +74,32 @@ Every Overlord installation needs these. They cover the fundamental workflow: cr
 | `notifications`              | Durable profile-addressed mission-notification history.                                  |
 | `schema_migrations`          | Tracks which migrations have been applied per adapter and component.                     |
 
+### Assistant Conversations and Account Connections (contract 152)
+
+Core on both editions (migrated everywhere and tested on SQLite and Postgres), but only
+used by Cloud: a Local backend reports chat as unavailable and leaves these tables empty.
+Every row is private to one owner profile in one organization and cascades with the
+account. See `09-database-schema-contract.md` → "Assistant Conversations".
+
+| Table                                | Purpose                                                                         |
+| ------------------------------------ | ------------------------------------------------------------------------------- |
+| `chat_threads`                       | Private threads, title/archive state, event sequence and retention boundary.    |
+| `chat_messages`                      | User and assistant messages as blocks; idempotent submission key.               |
+| `chat_runs`, `chat_run_attempts`     | Durable runs (one unfinished per thread) and leased, fenced worker attempts.    |
+| `chat_provider_checkpoints`          | Private provider continuation state while a tool turn is in flight.             |
+| `chat_tool_calls`                    | Tool receipts with operation ids, call order, and bounded private results.      |
+| `chat_source_refs`                   | Sources a thread used and their latest live access check.                       |
+| `chat_dependency_sets` (+ members)   | Immutable source-dependency unions for derived content.                         |
+| `chat_evidence`                      | Bounded cited excerpts with observation times.                                  |
+| `chat_thread_summaries`              | Revisioned compact thread summaries.                                            |
+| `chat_questions`                     | Clarifying questions (one open per run).                                        |
+| `chat_events`                        | Append-only, gap-free private event log for replay and live streaming.          |
+| `chat_work_proposals` (+ revisions)  | Versioned draft-work proposals with frozen assignments.                         |
+| `chat_work_receipts` (+ missions)    | Unique, idempotent Create receipts and the missions they created.               |
+| `chat_presence`, `chat_event_acks`   | Expiring foreground presence and monotonic rendered-event acknowledgements.     |
+| `chat_notifications`                 | Owner-addressed conversation notification candidates, dispatch state, history.  |
+| `account_connections` (+ authorizations) | External account connections with owner-bound encrypted credentials.        |
+
 ---
 
 ## A La Carte Groups

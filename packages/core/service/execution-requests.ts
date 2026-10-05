@@ -17,7 +17,10 @@ import {
 } from './execution-target-runners.js';
 import type { ClientDeviceIdentity } from './execution-targets.js';
 import { type ExecutionProviderSession, mergeProviderSessionIntoMetadata } from './latch-launch.js';
-import { LOCAL_TARGET_MUTATION_REQUESTED_SOURCE } from './local-target-mutations.ts';
+import {
+  LOCAL_TARGET_MUTATION_REQUESTED_SOURCE,
+  parseLocalTargetMutation
+} from './local-target-mutations.ts';
 import {
   findConflictingActiveSibling,
   missionAllowsParallelObjectives
@@ -767,7 +770,10 @@ export async function claimNextExecutionRequest({
       ({ workingDirectory, resourceId } = await resolveWorkingDirectory({
         ctx: txCtx,
         projectId: candidate.project_id,
-        objectiveResourceKey: candidate.resource_key,
+        // A mission-less capability call names its resource in the queued
+        // metadata (a repository read of `mobile` must not resolve `primary`).
+        objectiveResourceKey:
+          candidate.resource_key ?? parseLocalTargetMutation(candidate.metadata_json)?.resourceKey,
         explicitWorkingDirectory: candidate.resolved_working_directory,
         executionTargetId: candidate.execution_target_id ?? target.executionTargetId
       }));

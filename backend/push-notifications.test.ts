@@ -20,6 +20,7 @@ const {
   registerDevicePushToken,
   resolveNotificationMode,
   revokeDevicePushToken,
+  unreadBadgeCount,
   updateNotificationPreferences
 } = await import('./push-notifications.ts');
 const { __testables } = await import('./push-notification-dispatcher.ts');
@@ -183,7 +184,18 @@ test('uses catalog type and transport pairs as the canonical preference shape', 
     setActiveProfileId('operator-user');
     return getNotificationPreferences();
   });
-  assert.equal(defaults.preferences.length, 16);
+  // 16 mission type/transport pairs plus the two v152 conversation types on three transports.
+  assert.equal(defaults.preferences.length, 22);
+  assert.deepEqual(
+    defaults.preferences.find(
+      entry => entry.type === 'chat_needs_answer' && entry.transport === 'apns'
+    ),
+    { type: 'chat_needs_answer', transport: 'apns', mode: 'alert' }
+  );
+  assert.ok(
+    defaults.categories.every(entry => !entry.category.startsWith('chat_')),
+    'the legacy APNs categories alias stays mission-only'
+  );
   assert.deepEqual(
     defaults.preferences.find(
       entry => entry.type === 'agent_started' && entry.transport === 'realtime'
@@ -211,6 +223,27 @@ test('uses catalog type and transport pairs as the canonical preference shape', 
       ?.mode,
     'alert',
     'transport-specific updates must not overwrite another transport'
+  );
+
+  const chat = await withRequestContextAsync(async () => {
+    setActiveProfileId('operator-user');
+    return updateNotificationPreferences({
+      preferences: [{ type: 'chat_finished', transport: 'apns', mode: 'silent' }]
+    });
+  });
+  assert.equal(
+    chat.preferences.find(entry => entry.type === 'chat_finished' && entry.transport === 'apns')
+      ?.mode,
+    'silent'
+  );
+  assert.equal(
+    await resolveNotificationMode(
+      requireDatabaseClient(),
+      'operator-user',
+      'chat_finished',
+      'apns'
+    ),
+    'silent'
   );
 
   await withRequestContextAsync(async () => {
@@ -411,6 +444,41 @@ test('APNs badge counts unread notifications, not missions in review', async () 
     1,
     'badge must equal unread notification rows, ignoring the larger review queue'
   );
+});
+
+test('APNs badge adds unread dispatched conversation notifications to mission ones', async () => {
+  const client = requireDatabaseClient();
+  const { Conversations } = await import('../packages/core/service/chat/conversations.ts');
+  const { ChatRuns } = await import('../packages/core/service/chat/runs.ts');
+  const { organization_id: organizationId } = db
+    .prepare(`SELECT organization_id FROM workspaces WHERE id = 'local-workspace'`)
+    .get() as { organization_id: string };
+  const owner = { profileId: 'operator-user', organizationId };
+  const created = await new Conversations(client).create(owner, {
+    clientRequestId: 'badge-chat',
+    text: 'Badge chat'
+  });
+  const runs = new ChatRuns(client);
+  const attempt = await runs.claim('badge-worker', {
+    provider: 'fake',
+    model: 'fake-1',
+    configDigest: 'c',
+    checkpointVersion: 1
+  });
+  assert.equal(attempt?.runId, created.run!.id);
+  await runs.complete(attempt!);
+  const before = await unreadBadgeCount(client, 'operator-user');
+  const now = '2026-10-04T12:00:00.000Z';
+  db.prepare(
+    `UPDATE chat_notifications SET state = 'dispatched', dispatched_at = ?, thread_title = 'Badge chat'
+      WHERE thread_id = ?`
+  ).run(now, created.thread.id);
+  assert.equal(await unreadBadgeCount(client, 'operator-user'), before + 1);
+  db.prepare(`UPDATE chat_notifications SET read_at = ? WHERE thread_id = ?`).run(
+    now,
+    created.thread.id
+  );
+  assert.equal(await unreadBadgeCount(client, 'operator-user'), before);
 });
 
 test('alert and silent payloads carry only the allowlisted APNs fields', () => {

@@ -1,0 +1,518 @@
+{
+  "model": "gemini-3.8-flash",
+  "startedAt": "2026-10-04T07:53:08.216Z",
+  "restartCases": [
+    {
+      "run": "sequential-request_persisted-t1",
+      "firstExit": "SIGKILL",
+      "killedAt": "request_persisted",
+      "afterCrash": {
+        "phase": "tool_requested",
+        "receipts": [
+          {
+            "state": "requested",
+            "n": 1
+          }
+        ]
+      },
+      "secondExit": 0,
+      "restored": {
+        "event": "checkpoint.restored",
+        "run": "sequential-request_persisted-t1",
+        "attempt": "b21bc1ed",
+        "turns": 2,
+        "pending": 1
+      },
+      "finalState": "completed",
+      "attempts": 2,
+      "finalFence": 2,
+      "answer": "There are 6 missions currently in review for the Overlord project.",
+      "receipts": [
+        {
+          "call_order": 0,
+          "name": "find_project",
+          "has_provider_id": 1,
+          "state": "completed",
+          "executions": 1,
+          "requested_fence": 1,
+          "completed_fence": 2
+        },
+        {
+          "call_order": 0,
+          "name": "get_project_status",
+          "has_provider_id": 1,
+          "state": "completed",
+          "executions": 1,
+          "requested_fence": 2,
+          "completed_fence": 2
+        }
+      ],
+      "staleWriteRejected": true,
+      "leakedSecretsInLogs": false
+    },
+    {
+      "run": "sequential-tool_started-t1",
+      "firstExit": "SIGKILL",
+      "killedAt": "tool_started",
+      "afterCrash": {
+        "phase": "tool_requested",
+        "receipts": [
+          {
+            "state": "requested",
+            "n": 1
+          }
+        ]
+      },
+      "secondExit": 0,
+      "restored": {
+        "event": "checkpoint.restored",
+        "run": "sequential-tool_started-t1",
+        "attempt": "0acded0e",
+        "turns": 2,
+        "pending": 1
+      },
+      "finalState": "completed",
+      "attempts": 2,
+      "finalFence": 2,
+      "answer": "There are 6 missions currently in review for the Overlord project.",
+      "receipts": [
+        {
+          "call_order": 0,
+          "name": "find_project",
+          "has_provider_id": 1,
+          "state": "completed",
+          "executions": 2,
+          "requested_fence": 1,
+          "completed_fence": 2
+        },
+        {
+          "call_order": 0,
+          "name": "get_project_status",
+          "has_provider_id": 1,
+          "state": "completed",
+          "executions": 1,
+          "requested_fence": 2,
+          "completed_fence": 2
+        }
+      ],
+      "staleWriteRejected": true,
+      "leakedSecretsInLogs": false
+    },
+    {
+      "run": "sequential-result_persisted-t1",
+      "firstExit": "SIGKILL",
+      "killedAt": "result_persisted",
+      "afterCrash": {
+        "phase": "results_joined",
+        "receipts": [
+          {
+            "state": "completed",
+            "n": 1
+          }
+        ]
+      },
+      "secondExit": 0,
+      "restored": {
+        "event": "checkpoint.restored",
+        "run": "sequential-result_persisted-t1",
+        "attempt": "4affb1d4",
+        "turns": 3,
+        "pending": 0
+      },
+      "finalState": "completed",
+      "attempts": 2,
+      "finalFence": 2,
+      "answer": "There are 6 missions currently in review for the Overlord project.",
+      "receipts": [
+        {
+          "call_order": 0,
+          "name": "find_project",
+          "has_provider_id": 1,
+          "state": "completed",
+          "executions": 1,
+          "requested_fence": 1,
+          "completed_fence": 1
+        },
+        {
+          "call_order": 0,
+          "name": "get_project_status",
+          "has_provider_id": 1,
+          "state": "completed",
+          "executions": 1,
+          "requested_fence": 2,
+          "completed_fence": 2
+        }
+      ],
+      "staleWriteRejected": true,
+      "leakedSecretsInLogs": false
+    },
+    {
+      "run": "sequential-request_persisted-t2",
+      "firstExit": "SIGKILL",
+      "killedAt": "request_persisted",
+      "afterCrash": {
+        "phase": "tool_requested",
+        "receipts": [
+          {
+            "state": "completed",
+            "n": 1
+          },
+          {
+            "state": "requested",
+            "n": 1
+          }
+        ]
+      },
+      "secondExit": 0,
+      "restored": {
+        "event": "checkpoint.restored",
+        "run": "sequential-request_persisted-t2",
+        "attempt": "8e74c81b",
+        "turns": 4,
+        "pending": 1
+      },
+      "finalState": "completed",
+      "attempts": 2,
+      "finalFence": 2,
+      "answer": "There are 6 missions currently in review for the Overlord project.",
+      "receipts": [
+        {
+          "call_order": 0,
+          "name": "find_project",
+          "has_provider_id": 1,
+          "state": "completed",
+          "executions": 1,
+          "requested_fence": 1,
+          "completed_fence": 1
+        },
+        {
+          "call_order": 0,
+          "name": "get_project_status",
+          "has_provider_id": 1,
+          "state": "completed",
+          "executions": 1,
+          "requested_fence": 1,
+          "completed_fence": 2
+        }
+      ],
+      "staleWriteRejected": true,
+      "leakedSecretsInLogs": false
+    },
+    {
+      "run": "mixed-request_persisted-t1",
+      "firstExit": "SIGKILL",
+      "killedAt": "request_persisted",
+      "afterCrash": {
+        "phase": "tool_requested",
+        "receipts": [
+          {
+            "state": "requested",
+            "n": 2
+          }
+        ]
+      },
+      "secondExit": 0,
+      "restored": {
+        "event": "checkpoint.restored",
+        "run": "mixed-request_persisted-t1",
+        "attempt": "71055c0a",
+        "turns": 2,
+        "pending": 2
+      },
+      "finalState": "completed",
+      "attempts": 2,
+      "finalFence": 2,
+      "answer": "Overlord has 41 open missions and 6 missions in review. In comparison, OverlordMobile has 12 open missions and 2 missions in review.",
+      "receipts": [
+        {
+          "call_order": 0,
+          "name": "find_project",
+          "has_provider_id": 1,
+          "state": "completed",
+          "executions": 1,
+          "requested_fence": 1,
+          "completed_fence": 2
+        },
+        {
+          "call_order": 1,
+          "name": "find_project",
+          "has_provider_id": 1,
+          "state": "completed",
+          "executions": 1,
+          "requested_fence": 1,
+          "completed_fence": 2
+        },
+        {
+          "call_order": 0,
+          "name": "get_project_status",
+          "has_provider_id": 1,
+          "state": "completed",
+          "executions": 1,
+          "requested_fence": 2,
+          "completed_fence": 2
+        },
+        {
+          "call_order": 1,
+          "name": "get_project_status",
+          "has_provider_id": 1,
+          "state": "completed",
+          "executions": 1,
+          "requested_fence": 2,
+          "completed_fence": 2
+        }
+      ],
+      "staleWriteRejected": true,
+      "leakedSecretsInLogs": false
+    },
+    {
+      "run": "mixed-tool_started-t1",
+      "firstExit": "SIGKILL",
+      "killedAt": "tool_started",
+      "afterCrash": {
+        "phase": "tool_requested",
+        "receipts": [
+          {
+            "state": "requested",
+            "n": 2
+          }
+        ]
+      },
+      "secondExit": 0,
+      "restored": {
+        "event": "checkpoint.restored",
+        "run": "mixed-tool_started-t1",
+        "attempt": "7a921916",
+        "turns": 2,
+        "pending": 2
+      },
+      "finalState": "completed",
+      "attempts": 2,
+      "finalFence": 2,
+      "answer": "Overlord has 41 open missions and 6 missions currently in review. In comparison, OverlordMobile has 12 open missions and 2 missions in review.",
+      "receipts": [
+        {
+          "call_order": 0,
+          "name": "find_project",
+          "has_provider_id": 1,
+          "state": "completed",
+          "executions": 2,
+          "requested_fence": 1,
+          "completed_fence": 2
+        },
+        {
+          "call_order": 1,
+          "name": "find_project",
+          "has_provider_id": 1,
+          "state": "completed",
+          "executions": 1,
+          "requested_fence": 1,
+          "completed_fence": 2
+        },
+        {
+          "call_order": 0,
+          "name": "get_project_status",
+          "has_provider_id": 1,
+          "state": "completed",
+          "executions": 1,
+          "requested_fence": 2,
+          "completed_fence": 2
+        },
+        {
+          "call_order": 1,
+          "name": "get_project_status",
+          "has_provider_id": 1,
+          "state": "completed",
+          "executions": 1,
+          "requested_fence": 2,
+          "completed_fence": 2
+        }
+      ],
+      "staleWriteRejected": true,
+      "leakedSecretsInLogs": false
+    },
+    {
+      "run": "mixed-result_persisted-t1",
+      "firstExit": "SIGKILL",
+      "killedAt": "result_persisted",
+      "afterCrash": {
+        "phase": "results_joined",
+        "receipts": [
+          {
+            "state": "completed",
+            "n": 2
+          }
+        ]
+      },
+      "secondExit": 0,
+      "restored": {
+        "event": "checkpoint.restored",
+        "run": "mixed-result_persisted-t1",
+        "attempt": "d0f32eb8",
+        "turns": 3,
+        "pending": 0
+      },
+      "finalState": "completed",
+      "attempts": 2,
+      "finalFence": 2,
+      "answer": "Overlord has 41 open missions and 6 missions in review. In comparison, OverlordMobile has 12 open missions and 2 missions in review.",
+      "receipts": [
+        {
+          "call_order": 0,
+          "name": "find_project",
+          "has_provider_id": 1,
+          "state": "completed",
+          "executions": 1,
+          "requested_fence": 1,
+          "completed_fence": 1
+        },
+        {
+          "call_order": 1,
+          "name": "find_project",
+          "has_provider_id": 1,
+          "state": "completed",
+          "executions": 1,
+          "requested_fence": 1,
+          "completed_fence": 1
+        },
+        {
+          "call_order": 0,
+          "name": "get_project_status",
+          "has_provider_id": 1,
+          "state": "completed",
+          "executions": 1,
+          "requested_fence": 2,
+          "completed_fence": 2
+        },
+        {
+          "call_order": 1,
+          "name": "get_project_status",
+          "has_provider_id": 1,
+          "state": "completed",
+          "executions": 1,
+          "requested_fence": 2,
+          "completed_fence": 2
+        }
+      ],
+      "staleWriteRejected": true,
+      "leakedSecretsInLogs": false
+    },
+    {
+      "run": "mixed-result_persisted-t2",
+      "firstExit": "SIGKILL",
+      "killedAt": "result_persisted",
+      "afterCrash": {
+        "phase": "results_joined",
+        "receipts": [
+          {
+            "state": "completed",
+            "n": 4
+          }
+        ]
+      },
+      "secondExit": 0,
+      "restored": {
+        "event": "checkpoint.restored",
+        "run": "mixed-result_persisted-t2",
+        "attempt": "4538df67",
+        "turns": 5,
+        "pending": 0
+      },
+      "finalState": "completed",
+      "attempts": 2,
+      "finalFence": 2,
+      "answer": "The Overlord project has 41 open missions and 6 in review. In comparison, the OverlordMobile project has 12 open missions and 2 in review.",
+      "receipts": [
+        {
+          "call_order": 0,
+          "name": "find_project",
+          "has_provider_id": 1,
+          "state": "completed",
+          "executions": 1,
+          "requested_fence": 1,
+          "completed_fence": 1
+        },
+        {
+          "call_order": 1,
+          "name": "find_project",
+          "has_provider_id": 1,
+          "state": "completed",
+          "executions": 1,
+          "requested_fence": 1,
+          "completed_fence": 1
+        },
+        {
+          "call_order": 0,
+          "name": "get_project_status",
+          "has_provider_id": 1,
+          "state": "completed",
+          "executions": 1,
+          "requested_fence": 1,
+          "completed_fence": 1
+        },
+        {
+          "call_order": 1,
+          "name": "get_project_status",
+          "has_provider_id": 1,
+          "state": "completed",
+          "executions": 1,
+          "requested_fence": 1,
+          "completed_fence": 1
+        }
+      ],
+      "staleWriteRejected": true,
+      "leakedSecretsInLogs": false
+    }
+  ],
+  "probes": {
+    "baseRun": {
+      "exit": 0,
+      "turns": 6
+    },
+    "intactSignatures": {
+      "ok": true,
+      "functionCalls": [
+        "get_project_status",
+        "get_project_status"
+      ],
+      "textChars": 0
+    },
+    "strippedSignatures": {
+      "ok": false,
+      "status": 400,
+      "message": "{\"error\":{\"code\":400,\"message\":\"Function call is missing a thought_signature in functionCall parts. This is required for tools to work correctly, and missing thought_signature may lead to degraded model performance. Additional data, functio"
+    },
+    "reversedResultOrder": {
+      "ok": true,
+      "functionCalls": [
+        "get_project_status",
+        "get_project_status"
+      ],
+      "textChars": 0
+    },
+    "resultsWithoutIds": {
+      "ok": true,
+      "functionCalls": [
+        "get_project_status",
+        "get_project_status"
+      ],
+      "textChars": 0
+    },
+    "priorTurnsStripped": {
+      "ok": true,
+      "functionCalls": [],
+      "text": "Overlord"
+    },
+    "missingOneResult": {
+      "ok": true,
+      "functionCalls": [
+        "get_project_status"
+      ],
+      "textChars": 0
+    },
+    "freshGeneration": {
+      "ok": true,
+      "functionCalls": [],
+      "text": "Overlord has 41 open missions and 6 missions currently in review. In comparison, OverlordMobile has 12 open missions and 2 missions in review."
+    }
+  }
+}

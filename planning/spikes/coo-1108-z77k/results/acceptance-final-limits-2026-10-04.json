@@ -1,0 +1,178 @@
+{
+  "harness": "acceptance-final-limits",
+  "finishedAt": "2026-10-04T14:28:00.181Z",
+  "summary": {
+    "pass": 12,
+    "fail": 0,
+    "blocked": 0
+  },
+  "results": [
+    {
+      "id": "a.exhausted",
+      "title": "A run that reaches its tool-call allowance completes as allowance_exhausted with a partial summary",
+      "status": "pass",
+      "detail": {
+        "run": {
+          "id": "897b8435-915f-42a9-a27b-7157f3eccb28",
+          "threadId": "da20f28c-987a-47d9-864e-de079d6d3596",
+          "triggerMessageId": "7a096eb1-4a7d-45ba-b55c-df7d8c05815a",
+          "state": "completed",
+          "outcome": "allowance_exhausted",
+          "failureCode": null,
+          "continuedFromRunId": null,
+          "continueAvailable": true,
+          "usage": {
+            "toolCalls": 7,
+            "activeProcessingMs": 21525,
+            "gatheredContentBytes": 100845
+          },
+          "cancelRequestedAt": null,
+          "createdAt": "2026-10-04T14:26:57.218Z",
+          "updatedAt": "2026-10-04T14:27:19.136Z",
+          "completedAt": "2026-10-04T14:27:19.136Z",
+          "revision": 3
+        }
+      }
+    },
+    {
+      "id": "a.continue-offered",
+      "title": "Continue is offered on that run",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "id": "a.continue-once",
+      "title": "Concurrent and repeated Continue calls produce one new run that carries on from the first",
+      "status": "pass",
+      "detail": {
+        "replayed": [
+          false,
+          true,
+          true
+        ],
+        "userMessages": 1
+      }
+    },
+    {
+      "id": "a.continue-ran",
+      "title": "The continued run did more research under a fresh allowance",
+      "status": "pass",
+      "detail": {
+        "run": {
+          "id": "0a624c3c-1b38-4153-95eb-95dadcb498e0",
+          "threadId": "da20f28c-987a-47d9-864e-de079d6d3596",
+          "triggerMessageId": "7a096eb1-4a7d-45ba-b55c-df7d8c05815a",
+          "state": "completed",
+          "outcome": "allowance_exhausted",
+          "failureCode": null,
+          "continuedFromRunId": "897b8435-915f-42a9-a27b-7157f3eccb28",
+          "continueAvailable": true,
+          "usage": {
+            "toolCalls": 4,
+            "activeProcessingMs": 23706,
+            "gatheredContentBytes": 70988
+          },
+          "cancelRequestedAt": null,
+          "createdAt": "2026-10-04T14:27:19.933Z",
+          "updatedAt": "2026-10-04T14:27:43.960Z",
+          "completedAt": "2026-10-04T14:27:43.960Z",
+          "revision": 3
+        }
+      }
+    },
+    {
+      "id": "a.continue-not-available",
+      "title": "Continue on an ordinary completed run is refused",
+      "status": "pass",
+      "detail": {
+        "code": "continue_not_available"
+      }
+    },
+    {
+      "id": "a.rate-limited",
+      "title": "A provider 429 fails the run as rate_limited and readiness reports it",
+      "status": "pass",
+      "detail": {
+        "run": "rate_limited",
+        "readiness": "rate_limited"
+      }
+    },
+    {
+      "id": "a.no-provider-detail",
+      "title": "The failed run exposes a closed failure code and no provider error text",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "id": "a.unavailable",
+      "title": "A provider 503 fails the run as provider_unavailable",
+      "status": "pass",
+      "detail": {
+        "run": "provider_unavailable"
+      }
+    },
+    {
+      "id": "a.recovers",
+      "title": "Once the provider answers again the same thread works",
+      "status": "pass",
+      "detail": {
+        "run": "completed"
+      }
+    },
+    {
+      "id": "a.transient-retried",
+      "title": "Two transient provider failures before a turn are retried and the run completes",
+      "status": "pass",
+      "detail": {
+        "run": "completed"
+      }
+    },
+    {
+      "id": "a.failed-run-notifies",
+      "title": "A failed run still produces a finished notification candidate",
+      "status": "pass",
+      "detail": {
+        "rows": [
+          {
+            "type": "chat_finished",
+            "state": "dispatched"
+          }
+        ]
+      }
+    },
+    {
+      "id": "a.owner-concurrency",
+      "title": "A fourth concurrent run for one owner is refused with limit_exceeded",
+      "status": "pass",
+      "detail": {
+        "status": 429,
+        "code": "limit_exceeded"
+      }
+    }
+  ],
+  "model": "gemini-3.8-flash",
+  "base": "http://127.0.0.1:4411",
+  "allowance": {
+    "run": {
+      "id": "897b8435-915f-42a9-a27b-7157f3eccb28",
+      "threadId": "da20f28c-987a-47d9-864e-de079d6d3596",
+      "triggerMessageId": "7a096eb1-4a7d-45ba-b55c-df7d8c05815a",
+      "state": "completed",
+      "outcome": "allowance_exhausted",
+      "failureCode": null,
+      "continuedFromRunId": null,
+      "continueAvailable": true,
+      "usage": {
+        "toolCalls": 7,
+        "activeProcessingMs": 21525,
+        "gatheredContentBytes": 100845
+      },
+      "cancelRequestedAt": null,
+      "createdAt": "2026-10-04T14:26:57.218Z",
+      "updatedAt": "2026-10-04T14:27:19.136Z",
+      "completedAt": "2026-10-04T14:27:19.136Z",
+      "revision": 3
+    },
+    "answer": "### Observed State & Source Files Inspected\n\n*Observation Head:* `34e44ebe` (observed 2026-10-04T14:27:06Z on target `Jake Mac` [E6, E7, E8, E9, E10, E11])\n\nThe repository tree for the primary resource (`e519d24b-17f9-4f6c-b29f-f39c17d9b8f1`, `primary`) was indexed [E7], and reading began across the packages. The first 4 source files were read and analyzed:\n\n1. **`auth/src/auth/config.ts`** [E10]\n   - Configures the Better Auth engine for Overlord with SQLite or PostgreSQL dialect adapters.\n   - Manages optional GitHub OAuth integration, email verification via OTP, passwordless flows, and self-service account deletion callbacks (`onDeleteUser`).\n   - Disables session freshness checks (`fresh"
+  }
+}

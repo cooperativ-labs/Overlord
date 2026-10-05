@@ -58,8 +58,6 @@ function collectCallPaths(call: LocalTargetBridgeCall): string[] {
       return [call.input.repoPath];
     case 'observeResource':
       return [call.input.path];
-    case 'readCurrentDiff':
-      return call.input.filePath?.trim() ? [call.input.filePath] : [];
     case 'listWorktrees':
       return [
         call.input.worktreeRoot,
@@ -97,8 +95,6 @@ function collectCallRoots(call: LocalTargetBridgeCall): string[] {
       return [call.input.worktreePath];
     case 'writeProjectMetadata':
       return [call.input.directoryPath];
-    case 'readCurrentDiff':
-      return call.input.filePath?.trim() ? [call.input.filePath] : [];
     default:
       return [];
   }

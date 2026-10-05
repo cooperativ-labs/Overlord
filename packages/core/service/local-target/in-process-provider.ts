@@ -30,9 +30,17 @@ import { performBranchActionGit } from './branch-actions-git.ts';
 import { observeMissionBranchGit } from './branch-observe-git.ts';
 import { normalizeBranchRef } from './branch-status-git.ts';
 import { gatherCommitMessageDiff } from './commit-message-diff-git.ts';
+import { readCurrentDiffGit } from './current-diff-git.ts';
 import { runLocalTargetDoctorChecks } from './doctor-checks.ts';
 import { runGit } from './git-run.ts';
 import { writeProjectJson } from './project-metadata.ts';
+import { normalizeRepositoryRelativePath } from './repository-paths.ts';
+import {
+  readGitStatusGit,
+  readRepositoryFileGit,
+  type RepositoryReadFailure,
+  searchRepositoryTextGit
+} from './repository-read-git.ts';
 import { fail, ok } from './result.ts';
 import type {
   CapabilityFailure,
@@ -51,9 +59,12 @@ import type {
   PrepareBranchInput,
   PurgeMergedWorktreesInput,
   ReadCurrentDiffInput,
+  ReadGitStatusInput,
+  ReadRepositoryFileInput,
   ReadRepositoryTreeInput,
   RemoveWorktreeInput,
   ResourceObservation,
+  SearchRepositoryTextInput,
   SendLatchMessageInput,
   StopLatchSessionInput,
   TargetMetadata,
@@ -156,13 +167,27 @@ export class InProcessProvider implements LocalTargetCapabilities {
   async readRepositoryTree(input: ReadRepositoryTreeInput) {
     try {
       const tree = readGitRepositoryTree(input.repoPath);
+      // Scope and bound on the target so a large repository never ships its
+      // whole listing across the queue. `subPath` only filters names; it is
+      // never resolved against the filesystem.
+      const scope = normalizeRepositoryRelativePath(input.subPath ?? '');
+      const prefix = scope.ok && scope.relativePath ? `${scope.relativePath}/` : '';
+      const scoped = prefix
+        ? tree.entries.filter(
+            entry => entry.path.startsWith(prefix) || entry.path === prefix.slice(0, -1)
+          )
+        : tree.entries;
+      const limit =
+        typeof input.maxEntries === 'number' && input.maxEntries > 0
+          ? Math.floor(input.maxEntries)
+          : scoped.length;
       return ok(this.target, {
         rootPath: tree.rootPath,
         gitRoot: tree.gitRoot,
         branch: tree.branch,
         commit: tree.commit,
-        entries: tree.entries,
-        truncated: tree.truncated
+        entries: scoped.slice(0, limit),
+        truncated: tree.truncated || scoped.length > limit
       });
     } catch (error) {
       if (error instanceof RepositoryReadError && error.code === 'not_git_repository') {
@@ -279,6 +304,39 @@ export class InProcessProvider implements LocalTargetCapabilities {
     return ok(this.target, { diff: result.diff });
   }
 
+  // ---- agent-facing repository reads (coo:1108.zg8m) --------------------
+
+  /** Map a target-side read to the capability envelope; failures stay typed. */
+  #read<T>(promise: Promise<T | RepositoryReadFailure>): Promise<CapabilityResult<T>> {
+    return promise.then(
+      result => {
+        const failure = result as RepositoryReadFailure;
+        if (failure && failure.ok === false) {
+          return fail(this.target, failure.code, failure.message);
+        }
+        return ok(this.target, result as T);
+      },
+      () =>
+        fail(this.target, 'TARGET_OPERATION_FAILED', 'The repository read failed on the target.')
+    );
+  }
+
+  readCurrentDiff(input: ReadCurrentDiffInput) {
+    return this.#read(readCurrentDiffGit(input));
+  }
+
+  readGitStatus(input: ReadGitStatusInput) {
+    return this.#read(readGitStatusGit(input));
+  }
+
+  readRepositoryFile(input: ReadRepositoryFileInput) {
+    return this.#read(readRepositoryFileGit(input));
+  }
+
+  searchRepositoryText(input: SearchRepositoryTextInput) {
+    return this.#read(searchRepositoryTextGit(input));
+  }
+
   // ---- routed (WS-D 6) -------------------------------------------------
 
   async launchAgent(_input: LaunchAgentInput) {
@@ -381,9 +439,6 @@ export class InProcessProvider implements LocalTargetCapabilities {
   // ---- not yet routed (CLI-owned or future WS-D paths) -----------------
 
   prepareBranch(_input: PrepareBranchInput) {
-    return this.#notImplemented();
-  }
-  readCurrentDiff(_input: ReadCurrentDiffInput) {
     return this.#notImplemented();
   }
 

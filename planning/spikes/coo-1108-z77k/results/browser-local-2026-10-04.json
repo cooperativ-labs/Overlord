@@ -1,0 +1,47 @@
+{
+  "mode": "local",
+  "base": "http://127.0.0.1:4356",
+  "finishedAt": "2026-10-04T14:14:21.502Z",
+  "results": [
+    {
+      "id": "local.nav",
+      "title": "Chat entry sits directly above Inbox in the sidebar",
+      "status": "pass",
+      "detail": {
+        "chatY": 168,
+        "inboxY": 200
+      }
+    },
+    {
+      "id": "local.unavailable",
+      "title": "Local mode shows Chat as unavailable",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "id": "local.no-composer",
+      "title": "No composer or thread list is offered",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "id": "local.no-chat-calls",
+      "title": "The SPA makes no chat or connection request in Local mode",
+      "status": "pass",
+      "detail": {
+        "chatCalls": []
+      }
+    },
+    {
+      "id": "local.no-errors",
+      "title": "No page errors and no failing chat request in Local mode",
+      "status": "pass",
+      "detail": {
+        "otherFailingRequests": [
+          "400 /api/agent-catalog",
+          "400 /api/launch-settings"
+        ]
+      }
+    }
+  ]
+}

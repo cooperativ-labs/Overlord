@@ -104,5 +104,11 @@ export const keys = {
   missionEverhour: (id: string) => ['mission', id, 'everhour'] as const,
   githubIntegration: (workspaceId: string) => ['integrations', 'github', workspaceId] as const,
   projectGitHubLink: (projectId: string) => ['project', projectId, 'github-link'] as const,
-  missionGitHubPullRequest: (id: string) => ['mission', id, 'github-pull-request'] as const
+  missionGitHubPullRequest: (id: string) => ['mission', id, 'github-pull-request'] as const,
+  /**
+   * Private assistant conversations. Every key carries the chat scope (backend,
+   * profile, organization) so an account or backend switch never reuses data.
+   */
+  chatThreads: (scope: string, archived: boolean) => ['chat', scope, 'threads', archived] as const,
+  chatProviders: (scope: string) => ['chat', scope, 'providers'] as const
 };

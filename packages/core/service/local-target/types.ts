@@ -169,6 +169,8 @@ export interface ReadRepositoryTreeInput {
   repoPath: string;
   /** Repo-relative subdirectory to list; null/empty lists the root. */
   subPath?: string | null;
+  /** Upper bound on returned entries (the target default applies when absent). */
+  maxEntries?: number | null;
 }
 export interface RepositoryTreeEntry {
   name: string;
@@ -283,13 +285,116 @@ export interface PerformBranchActionResult {
   summary: string;
 }
 
-export interface ReadCurrentDiffInput {
-  missionId: string;
-  filePath?: string | null;
+// ---- Agent-facing repository reads (contract v152, coo:1108.zg8m) ---------
+//
+// Every input names the registered resource root the backend resolved for this
+// target (`repoPath`; the runner rebinds it to the claim's resolved directory)
+// plus repository-relative paths only. Content-level outcomes travel in the
+// success value; infrastructure problems (missing checkout, not a repository)
+// are capability failures.
+
+/** Content-level outcome of one repository read on the target. */
+export type RepositoryReadTargetOutcome =
+  | 'ok'
+  | 'binary'
+  | 'oversized'
+  | 'not_found'
+  | 'denied'
+  | 'unavailable'
+  | 'timeout';
+
+export interface RepositoryReadTargetInput {
+  resourceId: string;
+  /** Registered resource root on this target; never caller- or model-supplied. */
+  repoPath: string;
 }
-export interface CurrentDiffResult {
-  workingDirectory: string | null;
+
+/** Common envelope for the read capabilities added for coo:1108. */
+export interface RepositoryReadTargetValue<T> {
+  outcome: RepositoryReadTargetOutcome;
+  head: string | null;
+  branch: string | null;
+  /** ISO-8601 time the target made the observation. */
+  observedAt: string;
+  truncated: boolean;
+  /** Short reason for a non-`ok` outcome; never raw Git or filesystem text. */
+  message?: string;
+  data: T;
+}
+
+export interface ReadGitStatusInput extends RepositoryReadTargetInput {
+  maxEntriesPerClass?: number;
+}
+export interface GitStatusEntry {
+  path: string;
+  originalPath: string | null;
+  index: string;
+  worktree: string;
+}
+export interface GitStatusData {
+  branch: string | null;
+  head: string | null;
+  upstream: string | null;
+  ahead: number | null;
+  behind: number | null;
+  staged: GitStatusEntry[];
+  unstaged: GitStatusEntry[];
+  untracked: string[];
+  conflicted: GitStatusEntry[];
+}
+
+export type CurrentDiffScope = 'unstaged' | 'staged' | 'all';
+
+/**
+ * Resource-addressed current diff. Replaces the earlier mission-keyed
+ * declaration, which had no implementation or caller; the commit-message diff
+ * shares its argument builder (`current-diff-git.ts`).
+ */
+export interface ReadCurrentDiffInput extends RepositoryReadTargetInput {
+  scope: CurrentDiffScope;
+  relativePaths?: string[] | null;
+  maxBytes?: number;
+}
+export interface CurrentDiffData {
+  scope: CurrentDiffScope;
   diff: string;
+  files: string[];
+  excludedPaths: string[];
+}
+export type CurrentDiffResult = RepositoryReadTargetValue<CurrentDiffData | null>;
+
+export interface ReadRepositoryFileInput extends RepositoryReadTargetInput {
+  relativePath: string;
+  /** 1-based inclusive. */
+  startLine?: number | null;
+  endLine?: number | null;
+  maxBytes?: number;
+}
+export interface RepositoryFileData {
+  relativePath: string;
+  totalBytes: number;
+  totalLines: number | null;
+  startLine: number | null;
+  endLine: number | null;
+  content: string | null;
+}
+
+export interface SearchRepositoryTextInput extends RepositoryReadTargetInput {
+  query: string;
+  relativePath?: string | null;
+  caseSensitive?: boolean;
+  maxHits?: number;
+  maxBytes?: number;
+}
+export interface RepositorySearchHit {
+  path: string;
+  line: number;
+  text: string;
+}
+export interface RepositorySearchData {
+  query: string;
+  caseSensitive: boolean;
+  hits: RepositorySearchHit[];
 }
 
 export interface GenerateCommitMessageInput {
@@ -489,6 +594,15 @@ export interface LocalTargetCapabilities {
     input: PerformBranchActionInput
   ): Promise<CapabilityResult<PerformBranchActionResult>>;
   readCurrentDiff(input: ReadCurrentDiffInput): Promise<CapabilityResult<CurrentDiffResult>>;
+  readGitStatus(
+    input: ReadGitStatusInput
+  ): Promise<CapabilityResult<RepositoryReadTargetValue<GitStatusData | null>>>;
+  readRepositoryFile(
+    input: ReadRepositoryFileInput
+  ): Promise<CapabilityResult<RepositoryReadTargetValue<RepositoryFileData | null>>>;
+  searchRepositoryText(
+    input: SearchRepositoryTextInput
+  ): Promise<CapabilityResult<RepositoryReadTargetValue<RepositorySearchData | null>>>;
   generateCommitMessageFromLocalDiff(
     input: GenerateCommitMessageInput
   ): Promise<CapabilityResult<GenerateCommitMessageResult>>;
@@ -524,6 +638,9 @@ export const LOCAL_TARGET_CAPABILITY_NAMES = [
   'purgeMergedWorktrees',
   'performBranchAction',
   'readCurrentDiff',
+  'readGitStatus',
+  'readRepositoryFile',
+  'searchRepositoryText',
   'generateCommitMessageFromLocalDiff',
   'launchAgent',
   'discoverLatch',

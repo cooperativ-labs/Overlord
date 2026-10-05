@@ -15,6 +15,7 @@
  */
 
 import type { AgentLaunchFlagDto } from './agent-launch-flags.js';
+import type { ChatNotificationType } from './chat.js';
 
 export {
   type AgentLaunchFlagDto,
@@ -26,6 +27,7 @@ export {
   normalizeAgentLaunchFlags,
   parseAgentLaunchFlagText
 } from './agent-launch-flags.js';
+export * from './chat.js';
 export {
   ATTACH_CONTEXT_FIELDS,
   LAUNCH_VARIABLE_NAMES,
@@ -2276,7 +2278,8 @@ export interface NotificationDto {
 
 /** One transport-specific notification preference owned by the authenticated profile. */
 export interface NotificationPreferenceDto {
-  type: NotificationDto['type'];
+  /** A mission catalog type, or one of the owner-addressed conversation types (v152). */
+  type: NotificationDto['type'] | ChatNotificationType;
   transport: 'apns' | 'realtime' | 'in_app';
   mode: 'alert' | 'silent' | 'off';
 }

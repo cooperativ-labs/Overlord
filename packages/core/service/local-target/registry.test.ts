@@ -223,7 +223,10 @@ describe('UnavailableProvider', () => {
         worktreePath: '/wt/feat',
         primaryRepoPath: '/repo'
       }),
-      provider.readCurrentDiff({ missionId: 'm' }),
+      provider.readCurrentDiff({ resourceId: 'r', repoPath: '/p', scope: 'all' }),
+      provider.readGitStatus({ resourceId: 'r', repoPath: '/p' }),
+      provider.readRepositoryFile({ resourceId: 'r', repoPath: '/p', relativePath: 'a.ts' }),
+      provider.searchRepositoryText({ resourceId: 'r', repoPath: '/p', query: 'x' }),
       provider.purgeMergedWorktrees({ entries: [] }),
       provider.doctor()
     ]) {

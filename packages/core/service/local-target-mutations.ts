@@ -51,6 +51,11 @@ export type LocalTargetMutationPayload = {
   kind: LocalTargetMutationKind;
   capability: LocalTargetMutationCapability;
   input: Record<string, unknown>;
+  /**
+   * The project resource a mission-less call addresses. The claim resolves
+   * this resource on the target instead of falling back to the primary one.
+   */
+  resourceKey?: string;
   result?: LocalTargetMutationStoredResult;
 };
 
@@ -80,17 +85,21 @@ function parseMetadataObject(raw: string): Record<string, unknown> {
 export function buildLocalTargetMutationMetadata({
   kind,
   capability,
-  input
+  input,
+  resourceKey = null
 }: {
   kind: LocalTargetMutationKind;
   capability: LocalTargetMutationCapability;
   input: Record<string, unknown>;
+  resourceKey?: string | null;
 }): Record<string, unknown> {
+  const key = resourceKey?.trim();
   return {
     [LOCAL_TARGET_MUTATION_METADATA_KEY]: {
       kind,
       capability,
-      input
+      input,
+      ...(key ? { resourceKey: key } : {})
     } satisfies LocalTargetMutationPayload
   };
 }
@@ -115,6 +124,10 @@ export function parseLocalTargetMutation(
     payload.input && typeof payload.input === 'object' && !Array.isArray(payload.input)
       ? (payload.input as Record<string, unknown>)
       : {};
+  const resourceKey =
+    typeof payload.resourceKey === 'string' && payload.resourceKey.trim()
+      ? payload.resourceKey.trim()
+      : undefined;
   const result = payload.result;
   const parsedResult =
     result && typeof result === 'object' && !Array.isArray(result)
@@ -124,6 +137,7 @@ export function parseLocalTargetMutation(
     kind,
     capability,
     input,
+    ...(resourceKey ? { resourceKey } : {}),
     ...(parsedResult ? { result: parsedResult } : {})
   };
 }
@@ -179,6 +193,7 @@ export async function createLocalTargetMutationRequest({
   capability,
   input,
   operationId = null,
+  resourceKey = null,
   eventSummary
 }: {
   ctx: ServiceContext;
@@ -198,6 +213,8 @@ export async function createLocalTargetMutationRequest({
    * already-queued job rather than queueing a second one.
    */
   operationId?: string | null;
+  /** Project resource to resolve at claim (mission-less calls); null means primary. */
+  resourceKey?: string | null;
   eventSummary?: string;
 }): Promise<{ id: string; reused: boolean }> {
   const mission = missionId === null ? null : await resolveMissionId(ctx, missionId);
@@ -215,7 +232,7 @@ export async function createLocalTargetMutationRequest({
   }
   const now = nowIso();
   const id = newId();
-  const metadata = buildLocalTargetMutationMetadata({ kind, capability, input });
+  const metadata = buildLocalTargetMutationMetadata({ kind, capability, input, resourceKey });
 
   await ctx.db.transaction(async tx => {
     const txCtx = { ...ctx, db: tx };
@@ -295,8 +312,16 @@ export type LocalTargetMutationCompletionListenerFactory = (args: {
   timeoutMs: number;
 }) => Promise<LocalTargetMutationCompletionListener | null>;
 
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+function sleep(ms: number, signal: AbortSignal | null = null): Promise<void> {
+  return new Promise(resolve => {
+    const timer = setTimeout(done, ms);
+    function done() {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', done);
+      resolve();
+    }
+    signal?.addEventListener('abort', done, { once: true });
+  });
 }
 
 /**
@@ -351,7 +376,8 @@ export async function waitForLocalTargetMutationResult({
   target,
   timeoutMs = LOCAL_TARGET_MUTATION_READ_TIMEOUT_MS,
   pollIntervalMs = DEFAULT_RESULT_POLL_INTERVAL_MS,
-  createListener
+  createListener,
+  signal = null
 }: {
   ctx: ServiceContext;
   requestId: string;
@@ -359,12 +385,25 @@ export async function waitForLocalTargetMutationResult({
   timeoutMs?: number;
   pollIntervalMs?: number;
   createListener?: LocalTargetMutationCompletionListenerFactory | null;
+  /**
+   * Stop *waiting* when the caller is cancelled. The queued job is unaffected;
+   * the answer is the same `LOCAL_TARGET_TIMEOUT` ("still running there").
+   */
+  signal?: AbortSignal | null;
 }): Promise<LocalTargetMutationResult> {
   const deadline = Date.now() + Math.max(0, timeoutMs);
   for (;;) {
     const result = await readLocalTargetMutationResult({ ctx, requestId, target });
     if (result) return result;
     const remaining = deadline - Date.now();
+    if (signal?.aborted) {
+      return fail(
+        target,
+        'LOCAL_TARGET_TIMEOUT',
+        'The caller stopped waiting. The operation may still be running on the target.',
+        { executionRequestId: requestId, cancelled: true }
+      );
+    }
     if (remaining <= 0) {
       return fail(
         target,
@@ -379,12 +418,14 @@ export async function waitForLocalTargetMutationResult({
       : null;
     if (listener) {
       try {
-        await listener.wait();
+        await (signal
+          ? Promise.race([listener.wait(), sleep(remaining, signal)])
+          : listener.wait());
       } finally {
         await listener.close();
       }
     } else {
-      await sleep(waitMs);
+      await sleep(waitMs, signal);
     }
   }
 }

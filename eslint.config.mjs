@@ -17,6 +17,8 @@ export default [
       '**/build/**',
       'coverage/**',
       'packages/core/types/db.ts',
+      // Feasibility/live-proof harnesses (not in any TS project; run with tsx)
+      'planning/spikes/**/*.ts',
       // Generated harness capability catalog and compiled connector codecs
       // (see scripts/generate-harness-capabilities.mjs)
       'cli/src/agent-session/catalog.generated.ts',

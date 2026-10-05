@@ -14,6 +14,7 @@ import type {
   DoctorResult,
   GenerateCommitMessageInput,
   GenerateCommitMessageResult,
+  GitStatusData,
   InspectLatchSessionInput,
   InspectLatchSessionResult,
   LaunchAgentInput,
@@ -32,10 +33,16 @@ import type {
   PurgeMergedWorktreesInput,
   PurgeWorktreesResult,
   ReadCurrentDiffInput,
+  ReadGitStatusInput,
+  ReadRepositoryFileInput,
   ReadRepositoryTreeInput,
   RemoveWorktreeInput,
+  RepositoryFileData,
+  RepositoryReadTargetValue,
+  RepositorySearchData,
   RepositoryTreeResult,
   ResourceObservation,
+  SearchRepositoryTextInput,
   SendLatchMessageInput,
   SendLatchMessageResult,
   StopLatchSessionInput,
@@ -159,7 +166,69 @@ export class FakeLocalTargetProvider implements LocalTargetCapabilities {
   async readCurrentDiff(input: ReadCurrentDiffInput): Promise<CapabilityResult<CurrentDiffResult>> {
     this.#record('readCurrentDiff', [input]);
     if (this.#handlers.readCurrentDiff) return this.#handlers.readCurrentDiff(input);
-    return ok(this.target, { workingDirectory: '/fake/repo', diff: '' });
+    return ok(this.target, {
+      outcome: 'ok',
+      head: null,
+      branch: null,
+      observedAt: new Date(0).toISOString(),
+      truncated: false,
+      data: { scope: input.scope, diff: '', files: [], excludedPaths: [] }
+    });
+  }
+
+  async readGitStatus(
+    input: ReadGitStatusInput
+  ): Promise<CapabilityResult<RepositoryReadTargetValue<GitStatusData | null>>> {
+    this.#record('readGitStatus', [input]);
+    if (this.#handlers.readGitStatus) return this.#handlers.readGitStatus(input);
+    return ok(this.target, {
+      outcome: 'ok',
+      head: null,
+      branch: null,
+      observedAt: new Date(0).toISOString(),
+      truncated: false,
+      data: {
+        branch: null,
+        head: null,
+        upstream: null,
+        ahead: null,
+        behind: null,
+        staged: [],
+        unstaged: [],
+        untracked: [],
+        conflicted: []
+      }
+    });
+  }
+
+  async readRepositoryFile(
+    input: ReadRepositoryFileInput
+  ): Promise<CapabilityResult<RepositoryReadTargetValue<RepositoryFileData | null>>> {
+    this.#record('readRepositoryFile', [input]);
+    if (this.#handlers.readRepositoryFile) return this.#handlers.readRepositoryFile(input);
+    return ok(this.target, {
+      outcome: 'not_found',
+      head: null,
+      branch: null,
+      observedAt: new Date(0).toISOString(),
+      truncated: false,
+      data: null
+    });
+  }
+
+  async searchRepositoryText(
+    input: SearchRepositoryTextInput
+  ): Promise<CapabilityResult<RepositoryReadTargetValue<RepositorySearchData | null>>> {
+    this.#record('searchRepositoryText', [input]);
+    if (this.#handlers.searchRepositoryText) return this.#handlers.searchRepositoryText(input);
+    return ok(this.target, {
+      outcome: 'ok',
+      head: null,
+      branch: null,
+      observedAt: new Date(0).toISOString(),
+      truncated: false,
+      data: { query: input.query, caseSensitive: input.caseSensitive !== false, hits: [] }
+    });
   }
 
   async generateCommitMessageFromLocalDiff(

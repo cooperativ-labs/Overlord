@@ -1,16 +1,7 @@
-import {
-  closestCenter,
-  DndContext,
-  type DragEndEvent,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors
-} from '@dnd-kit/core';
+import { closestCenter, DndContext, type DragEndEvent } from '@dnd-kit/core';
 import {
   arrayMove,
   SortableContext,
-  sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy
 } from '@dnd-kit/sortable';
@@ -36,6 +27,7 @@ import {
 } from '../../lib/objective-evidence.ts';
 import { useReorderFutureObjectives } from '../../lib/queries.ts';
 import { cn } from '../../lib/utils.ts';
+import { KANBAN_TOUCH_DRAGGABLE_CLASS, useKanbanSensors } from '../../pages/kanban-dnd.ts';
 import { Button } from '../ui.tsx';
 
 import { DraftObjective } from './DraftObjective.tsx';
@@ -47,7 +39,9 @@ import type { ObjectiveEvidenceLoading } from './ObjectiveEvidenceSections.tsx';
 /**
  * A future objective wrapped for drag-and-drop reordering. Mirrors the kanban
  * board's `useSortable` setup: the grip handle owns the drag listeners so the
- * objective card's own inline editing stays fully interactive. The editable
+ * objective card's own inline editing stays fully interactive. On touch the
+ * handle needs a press-and-hold (same sensors as the board), so a swipe that
+ * starts on it scrolls the panel instead of reordering. The editable
  * card itself is the existing {@link DraftObjective}, which already renders the
  * collapsed future styling and the Promote action.
  */
@@ -83,7 +77,10 @@ function SortableFutureObjective({
       <button
         type="button"
         aria-label="Reorder future objective"
-        className="flex w-5 shrink-0 cursor-grab touch-none items-center justify-center self-stretch rounded text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing"
+        className={cn(
+          'flex w-5 shrink-0 cursor-grab items-center justify-center self-stretch rounded text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing',
+          KANBAN_TOUCH_DRAGGABLE_CLASS
+        )}
         {...attributes}
         {...listeners}
       >
@@ -285,10 +282,7 @@ export function MissionObjectivesSection({
     return futureOrder.map(id => byId.get(id)).filter((o): o is ObjectiveDto => Boolean(o));
   }, [futureObjectivesFromServer, futureOrder]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
+  const sensors = useKanbanSensors(true);
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;

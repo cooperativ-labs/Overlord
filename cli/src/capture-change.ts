@@ -1,5 +1,6 @@
 import { readPath } from '@overlord/core/service/agent-session/pure/codec';
 import { hasControlCharacters } from '@overlord/core/service/agent-session/pure/evidence-path';
+import { realpathSync } from 'node:fs';
 import path from 'node:path';
 
 import { findAgentSessionCodec } from './agent-session/codec-registry.generated.js';
@@ -9,6 +10,7 @@ import {
   withActiveObjectiveSession
 } from './active-objective-sessions.js';
 import { appendChangeEvidence, recordChangeLedgerHealth } from './change-ledger.js';
+import { canonicalDirectory } from './local-file-storage.js';
 
 const MAX_PATH_HINTS = 16;
 
@@ -82,6 +84,61 @@ function collectAbsolutePathHints(payload: unknown): string[] {
   return hints;
 }
 
+function isLexicallyInside({ parent, child }: { parent: string; child: string }): boolean {
+  const relative = path.relative(path.normalize(parent), child);
+  if (relative === '') return true;
+  if (path.isAbsolute(relative)) return false;
+  return relative !== '..' && !relative.startsWith(`..${path.sep}`);
+}
+
+/**
+ * Bindings store the realpath of the worktree. A hook can still name that same
+ * directory through a symlink (`/var` vs `/private/var` on macOS). Evidence
+ * reduction only accepts a lexical prefix, so seed the spelling that actually
+ * contains the absolute path hints and still realpaths to the recovered root.
+ */
+function lexicalProjectRoot({
+  workingDirectory,
+  pathHints
+}: {
+  workingDirectory: string;
+  pathHints: string[];
+}): string {
+  const canonicalRoot = canonicalDirectory(workingDirectory);
+  const candidates = new Set<string>([workingDirectory]);
+  for (const hint of pathHints) {
+    let current = hint;
+    const seen = new Set<string>();
+    while (!seen.has(current)) {
+      seen.add(current);
+      try {
+        if (realpathSync(current) === canonicalRoot) {
+          candidates.add(current);
+          break;
+        }
+      } catch {
+        // Missing components are not the worktree root.
+      }
+      const parent = path.dirname(current);
+      if (parent === current) break;
+      current = parent;
+    }
+  }
+
+  let best = workingDirectory;
+  let bestScore = -1;
+  for (const candidate of candidates) {
+    const score = pathHints.filter(hint =>
+      isLexicallyInside({ parent: candidate, child: hint })
+    ).length;
+    if (score > bestScore) {
+      best = candidate;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
 export type CaptureChangeResult =
   | { recorded: true; objectiveId: string; files: number }
   | { recorded: false; reason: string };
@@ -131,6 +188,7 @@ export function captureChangeFromPayload({
     }
   }
 
+  const pathHints = collectAbsolutePathHints(nativePayload);
   const candidateWorkingDirectory = resolveHookWorkingDirectory({
     payload: nativePayload,
     projectRootPaths: codec.projectRootPaths,
@@ -140,7 +198,7 @@ export function captureChangeFromPayload({
     resolveWorkingDirectoryForObjective({
       objectiveId,
       candidateWorkingDirectory,
-      pathHints: collectAbsolutePathHints(nativePayload)
+      pathHints
     }) ?? candidateWorkingDirectory;
   // Cursor postToolUse often omits cwd while still naming absolute edit paths.
   // After the objective binding recovers the worktree, seed the codec's project
@@ -148,7 +206,7 @@ export function captureChangeFromPayload({
   const payloadForNormalize = withProjectRootFallback({
     payload: nativePayload,
     projectRootPaths: codec.projectRootPaths,
-    workingDirectory
+    workingDirectory: lexicalProjectRoot({ workingDirectory, pathHints })
   });
   const normalized = payloadFailure
     ? null

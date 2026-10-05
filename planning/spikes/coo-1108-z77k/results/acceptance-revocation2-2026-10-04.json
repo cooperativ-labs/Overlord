@@ -1,0 +1,129 @@
+{
+  "harness": "acceptance-kb+revocation2",
+  "finishedAt": "2026-10-04T13:46:00.696Z",
+  "summary": {
+    "pass": 10,
+    "fail": 0,
+    "blocked": 0
+  },
+  "results": [
+    {
+      "id": "kb.start",
+      "title": "Sign-in start returns an authorize URL and expiry",
+      "status": "pass",
+      "detail": {
+        "status": 200,
+        "keys": [
+          "connectionId",
+          "authorizeUrl",
+          "expiresAt"
+        ]
+      }
+    },
+    {
+      "id": "kb.authorize-url",
+      "title": "Authorize URL carries PKCE S256, resource, offline_access and the metadata-document client id",
+      "status": "pass",
+      "detail": {
+        "params": [
+          "response_type",
+          "client_id",
+          "redirect_uri",
+          "code_challenge",
+          "code_challenge_method",
+          "scope",
+          "resource",
+          "state"
+        ]
+      }
+    },
+    {
+      "id": "kb.forged-callback",
+      "title": "Unknown state is rejected with a status-only page",
+      "status": "pass",
+      "detail": {
+        "status": 400
+      }
+    },
+    {
+      "id": "kb.callback",
+      "title": "Callback redirects to the mobile return URL carrying only provider and status",
+      "status": "pass",
+      "detail": {
+        "status": 302,
+        "location": "overlord://connections/callback?provider=knowledgebase&status=connected"
+      }
+    },
+    {
+      "id": "kb.replayed-callback",
+      "title": "A replayed callback cannot be reused",
+      "status": "pass",
+      "detail": {
+        "status": 302,
+        "location": "overlord://connections/callback?provider=knowledgebase&status=expired"
+      }
+    },
+    {
+      "id": "kb.connected",
+      "title": "Connection is listed as connected with its workspaces and no credential",
+      "status": "pass",
+      "detail": {
+        "connection": {
+          "state": "connected",
+          "provider": "knowledgebase",
+          "workspaces": [
+            "main",
+            "overlord"
+          ]
+        },
+        "credentialInDto": false
+      }
+    },
+    {
+      "id": "kb.owner-scoped",
+      "title": "Another person's connection list does not include it, and they cannot disconnect it",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "id": "kb.providers",
+      "title": "Provider readiness reports Gemini ready and the live connection",
+      "status": "pass",
+      "detail": {
+        "providers": [
+          {
+            "provider": "gemini",
+            "model": "gemini-3.8-flash",
+            "checkedAt": "2026-10-04T13:44:51.165Z",
+            "state": "ready"
+          }
+        ],
+        "connections": [
+          "connected"
+        ]
+      }
+    },
+    {
+      "id": "v.repository-source",
+      "title": "Losing access to the execution target withholds answers built on its repository reads, and new reads are refused",
+      "status": "pass",
+      "detail": {
+        "cited": true,
+        "disabledRows": 1,
+        "newRead": 404
+      }
+    },
+    {
+      "id": "v.fail-closed",
+      "title": "When the Knowledgebase cannot confirm access the content is withheld from the transcript and from the provider",
+      "status": "pass",
+      "detail": {
+        "cited": true,
+        "providerRequests": 12,
+        "followUp": "I cannot retrieve or repeat the four requirements right now because access to the Knowledgebase is currently unavailable (the search failed with `source_unverified`). \n\nThe earlier response was withheld because access to the underlying source was lost. Repository documents are not your notes, and a "
+      }
+    }
+  ],
+  "model": "gemini-3.8-flash",
+  "base": "http://127.0.0.1:4411"
+}

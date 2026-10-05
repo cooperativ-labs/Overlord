@@ -18,7 +18,7 @@ import {
   type PerformBranchActionInput,
   type QueueableCapabilityName
 } from './local-target/types.ts';
-import { worktreePathForBranch } from './local-target/worktree-git.ts';
+import { resolveManagedWorktreeRoot, worktreePathForBranch } from './local-target/worktree-git.ts';
 import {
   type LocalTargetMutationPayload,
   parseLocalTargetMutation
@@ -60,12 +60,44 @@ const INPUT_PRE_HOOKS: Partial<
   }
 };
 
+/**
+ * Resource-addressed calls (repository reads queued with a `resourceKey`) are
+ * rebound to the directory the claim resolved for that resource on *this*
+ * target, so the path a read touches is always the registered binding — never
+ * one carried in the queued input.
+ */
+const RESOURCE_BINDINGS: Partial<
+  Record<
+    QueueableCapabilityName,
+    (input: Record<string, unknown>, workingDirectory: string) => Record<string, unknown>
+  >
+> = {
+  observeResource: (input, dir) => ({ ...input, path: dir }),
+  readRepositoryTree: (input, dir) => ({ ...input, repoPath: dir }),
+  listBranches: (input, dir) => ({ ...input, repoPath: dir }),
+  listWorktrees: (input, dir) => ({
+    ...input,
+    worktreeRoot:
+      typeof input.worktreeRoot === 'string' && input.worktreeRoot.trim()
+        ? input.worktreeRoot
+        : resolveManagedWorktreeRoot(),
+    projects: [{ primaryRepoPath: dir }]
+  }),
+  readGitStatus: (input, dir) => ({ ...input, repoPath: dir }),
+  readCurrentDiff: (input, dir) => ({ ...input, repoPath: dir }),
+  readRepositoryFile: (input, dir) => ({ ...input, repoPath: dir }),
+  searchRepositoryText: (input, dir) => ({ ...input, repoPath: dir })
+};
+
 export async function executeLocalTargetMutation({
   mutation,
-  provider = inProcessProvider()
+  provider = inProcessProvider(),
+  workingDirectory = null
 }: {
   mutation: LocalTargetMutationPayload;
   provider?: LocalTargetCapabilities;
+  /** The claim's resolved working directory for this request, when it has one. */
+  workingDirectory?: string | null;
 }): Promise<CapabilityResult<unknown>> {
   const capability = mutation.capability;
   // `parseLocalTargetMutation` already rejects non-queueable names; re-checking
@@ -79,7 +111,25 @@ export async function executeLocalTargetMutation({
       `The runner does not execute the capability "${String(capability)}".`
     );
   }
-  const input = INPUT_PRE_HOOKS[capability]?.(mutation.input) ?? mutation.input;
+  let input = INPUT_PRE_HOOKS[capability]?.(mutation.input) ?? mutation.input;
+  if (mutation.resourceKey) {
+    const bind = RESOURCE_BINDINGS[capability];
+    if (!bind) {
+      return fail(
+        provider.target,
+        'LOCAL_TARGET_UNSUPPORTED',
+        `The capability "${capability}" cannot be addressed by resource.`
+      );
+    }
+    if (!workingDirectory?.trim()) {
+      return fail(
+        provider.target,
+        'RESOURCE_MISSING',
+        'The claim did not resolve a directory for this resource on this target.'
+      );
+    }
+    input = bind(input, workingDirectory);
+  }
   const method = provider[capability] as (
     args: Record<string, unknown>
   ) => Promise<CapabilityResult<unknown>>;

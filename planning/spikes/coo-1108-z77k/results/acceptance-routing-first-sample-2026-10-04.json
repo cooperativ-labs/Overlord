@@ -1,0 +1,352 @@
+{
+  "harness": "acceptance-routing",
+  "finishedAt": "2026-10-04T13:39:47.204Z",
+  "summary": {
+    "pass": 2,
+    "fail": 0,
+    "blocked": 0
+  },
+  "results": [
+    {
+      "id": "g.sample",
+      "title": "Routing sample recorded",
+      "status": "pass",
+      "detail": {
+        "requests": 12,
+        "correct": 12,
+        "clarified": 1,
+        "clarificationsAboutOwnership": 1,
+        "unnecessaryClarifications": 0,
+        "missedClarifications": 1,
+        "firstSettleMs": {
+          "median": 36774,
+          "p90": 77578,
+          "max": 96011
+        },
+        "toolCalls": {
+          "median": 21,
+          "max": 32
+        },
+        "gatheredBytes": {
+          "median": 55650,
+          "max": 249348
+        }
+      }
+    },
+    {
+      "id": "g.no-work",
+      "title": "The whole sample created no missions (no card was tapped)",
+      "status": "pass",
+      "detail": {
+        "before": {
+          "missions": 13,
+          "objectives": 13,
+          "launches": 0
+        },
+        "after": {
+          "missions": 13,
+          "objectives": 13,
+          "launches": 0
+        }
+      }
+    }
+  ],
+  "model": "gemini-3.8-flash",
+  "base": "http://127.0.0.1:4411",
+  "routing": {
+    "summary": {
+      "requests": 12,
+      "correct": 12,
+      "clarified": 1,
+      "clarificationsAboutOwnership": 1,
+      "unnecessaryClarifications": 0,
+      "missedClarifications": 1,
+      "firstSettleMs": {
+        "median": 36774,
+        "p90": 77578,
+        "max": 96011
+      },
+      "toolCalls": {
+        "median": 21,
+        "max": 32
+      },
+      "gatheredBytes": {
+        "median": 55650,
+        "max": 249348
+      }
+    },
+    "results": [
+      {
+        "id": "web-sidebar",
+        "ask": "Draft a mission to add keyboard shortcuts for switching projects in the web app sidebar.",
+        "expected": [
+          "overlord/primary"
+        ],
+        "routed": [
+          "overlord/primary"
+        ],
+        "clarified": false,
+        "questions": 0,
+        "firstQuestion": null,
+        "correct": true,
+        "clarificationAppropriate": true,
+        "firstSettleMs": 58660,
+        "totalMs": 58666,
+        "toolCalls": 20,
+        "bytes": 153959,
+        "activeMs": 58471,
+        "finalState": "completed",
+        "answer": "I have prepared a draft proposal card for adding keyboard shortcuts to switch projects in the web application sidebar [E1, E6].\n\n### Summary of Prepared Proposal\n\n- **Project:** Overlord (`e519d24b-17f9-4f6c-b29f-f39c17d9b8f1`) [E1]\n- **Resource:** `primary` [E1]\n- **Mission:** Add keyboard shortcuts for switching projects in web app sidebar\n- **Assigned Agent:** `codex` / `gpt-5.5` (medium reason"
+      },
+      {
+        "id": "ios-haptics",
+        "ask": "Draft a mission to add haptic feedback when a mission is sent from the iPhone compose screen.",
+        "expected": [
+          "overlord/mobile"
+        ],
+        "routed": [
+          "overlord/mobile"
+        ],
+        "clarified": false,
+        "questions": 0,
+        "firstQuestion": null,
+        "correct": true,
+        "clarificationAppropriate": true,
+        "firstSettleMs": 69848,
+        "totalMs": 69855,
+        "toolCalls": 21,
+        "bytes": 152926,
+        "activeMs": 68647,
+        "finalState": "completed",
+        "answer": "I have prepared a proposal card to add haptic feedback when sending missions from the iPhone compose screen.\n\n### Summary of Proposal\n* **Project**: Overlord (`e519d24b-17f9-4f6c-b29f-f39c17d9b8f1`) [E1]\n* **Resource**: `mobile` (`OverlordMobile`) [E1]\n* **Assignment**: `codex` / `gpt-5.5` with medium reasoning [E1]\n* **Target File**: `Overlord/Views/Compose/MissionComposer.swift` [E9, E22]\n\n### O"
+      },
+      {
+        "id": "cli-flag",
+        "ask": "Draft a mission: the ovld CLI should get a --quiet flag on the runner start command.",
+        "expected": [
+          "overlord/primary"
+        ],
+        "routed": [
+          "overlord/primary"
+        ],
+        "clarified": false,
+        "questions": 0,
+        "firstQuestion": null,
+        "correct": true,
+        "clarificationAppropriate": true,
+        "firstSettleMs": 77578,
+        "totalMs": 77587,
+        "toolCalls": 25,
+        "bytes": 205998,
+        "activeMs": 76900,
+        "finalState": "completed",
+        "answer": "I have prepared a proposal card to add the `--quiet` flag to `ovld runner start` in the **Overlord** project (`e519d24b-17f9-4f6c-b29f-f39c17d9b8f1`) on the `primary` repository resource [E1].\n\n### Observed State (observed 2026-10-04T13:35:29Z–13:36:11Z)\n- **Flag Registry**: `COMMAND_FLAGS.runner` in `cli/src/flag-registry.ts` currently permits flags such as `--project-id`, `--objective-id`, `--po"
+      },
+      {
+        "id": "push-both",
+        "ask": "Draft missions to add a \"mission overdue\" push notification: the backend has to send it and the iOS app has to show it. One mission per codebase.",
+        "expected": [
+          "overlord/primary",
+          "overlord/mobile"
+        ],
+        "routed": [
+          "overlord/primary",
+          "overlord/mobile"
+        ],
+        "clarified": false,
+        "questions": 0,
+        "firstQuestion": null,
+        "correct": true,
+        "clarificationAppropriate": true,
+        "firstSettleMs": 96011,
+        "totalMs": 96017,
+        "toolCalls": 32,
+        "bytes": 249348,
+        "activeMs": 94650,
+        "finalState": "completed",
+        "answer": "A proposal card has been prepared with two draft missions—one for the backend and shared contract in the `primary` repository resource, and one for the iOS mobile app in the `mobile` resource [E1, E6].\n\n### Summary of Prepared Work\n\n1. **Backend: Mission Overdue Push Notifications**\n   - **Project / Resource:** Overlord (`e519d24b-17f9-4f6c-b29f-f39c17d9b8f1`) / `primary` [E1]\n   - **Assignment:**"
+      },
+      {
+        "id": "sandbox-orders",
+        "ask": "Draft a mission to paginate the /orders endpoint.",
+        "expected": [
+          "sandbox/primary"
+        ],
+        "routed": [
+          "sandbox/primary"
+        ],
+        "clarified": false,
+        "questions": 0,
+        "firstQuestion": null,
+        "correct": true,
+        "clarificationAppropriate": true,
+        "firstSettleMs": 22523,
+        "totalMs": 22529,
+        "toolCalls": 11,
+        "bytes": 16531,
+        "activeMs": 21303,
+        "finalState": "completed",
+        "answer": "I have prepared a proposal card to paginate the `/orders` endpoint in **Sandbox Service** [E2].\n\n### Repository State\n- **File**: `src/server.ts` [E12] (observed at 2026-10-04T13:37:04.213Z on execution target `Build Box`).\n- Currently, `handler(path: string)` checks `if (path === '/orders')` and returns an empty JSON array `[]` without parsing query parameters [E12].\n\n### Proposal Details\n- **Pro"
+      },
+      {
+        "id": "dictation",
+        "ask": "Draft a mission to let people pick the microphone used for dictation from the menu bar.",
+        "expected": [
+          "scribe/primary"
+        ],
+        "routed": [
+          "scribe/primary"
+        ],
+        "clarified": false,
+        "questions": 0,
+        "firstQuestion": null,
+        "correct": true,
+        "clarificationAppropriate": true,
+        "firstSettleMs": 25712,
+        "totalMs": 25714,
+        "toolCalls": 12,
+        "bytes": 15614,
+        "activeMs": 24940,
+        "finalState": "completed",
+        "answer": "A proposal card has been prepared for the **Scribe** project (`4b3385ac-6dfb-49a6-9216-c2f96ce403c9`) [E3].\n\n### Proposed Mission: **Microphone selection from macOS menu bar**\n* **Project**: Scribe (`4b3385ac-6dfb-49a6-9216-c2f96ce403c9`) [E3]\n* **Resource**: `primary` (Scribe macOS app) [E3]\n* **Assignment**: `codex` / `gpt-5.5` with `medium` reasoning (supported in Engineering workspace catalog "
+      },
+      {
+        "id": "transcript-search",
+        "ask": "Draft a mission to make transcript search across devices return results faster.",
+        "expected": [
+          "scribeServer/primary"
+        ],
+        "routed": [
+          "scribeServer/primary"
+        ],
+        "clarified": false,
+        "questions": 0,
+        "firstQuestion": null,
+        "correct": true,
+        "clarificationAppropriate": true,
+        "firstSettleMs": 33504,
+        "totalMs": 33516,
+        "toolCalls": 22,
+        "bytes": 20480,
+        "activeMs": 32532,
+        "finalState": "completed",
+        "answer": "I have prepared a proposal card for the **Scribe Server** project (`ed6d6609-2265-4c60-a07a-e3f1cc26a064`), which hosts the Node API responsible for syncing and searching meeting transcripts across devices [E4].\n\n### Repository State Observation\n* **Execution Targets Checked**: \"Build Box\" (`befed3a2-7a89-48b0-b4af-e4a8226a220c`, observed 2026-10-04T13:37:27Z) and \"Jake Mac\" (`489dd3fa-1824-4af4-b"
+      },
+      {
+        "id": "refine",
+        "ask": "Draft a mission to add an \"explain this rewrite\" button to the objective refinement product.",
+        "expected": [
+          "refinery/primary"
+        ],
+        "routed": [
+          "refinery/primary"
+        ],
+        "clarified": false,
+        "questions": 0,
+        "firstQuestion": null,
+        "correct": true,
+        "clarificationAppropriate": true,
+        "firstSettleMs": 20020,
+        "totalMs": 20028,
+        "toolCalls": 10,
+        "bytes": 19380,
+        "activeMs": 19428,
+        "finalState": "completed",
+        "answer": "I have prepared a proposal card to draft this mission for **Refinery** (`abf52493-94e9-4d68-b2e6-64c0472813a2`) [E5]:\n\n### Proposed Mission: Add \"Explain this rewrite\" button to Refinery\n- **Project**: Refinery (`abf52493-94e9-4d68-b2e6-64c0472813a2`) [E5]\n- **Resource**: `primary` [E5]\n- **Assignment**: `codex` with `gpt-5.5` and `medium` reasoning [E5]\n- **Objective**: Add 'Explain this rewrite'"
+      },
+      {
+        "id": "ambiguous-scribe",
+        "ask": "Draft a mission to add export to PDF for Scribe.",
+        "expected": [
+          "scribe/primary",
+          "scribeServer/primary"
+        ],
+        "routed": [
+          "scribe/primary"
+        ],
+        "clarified": false,
+        "questions": 0,
+        "firstQuestion": null,
+        "correct": true,
+        "clarificationAppropriate": true,
+        "firstSettleMs": 36774,
+        "totalMs": 36780,
+        "toolCalls": 19,
+        "bytes": 19932,
+        "activeMs": 36152,
+        "finalState": "completed",
+        "answer": "I have prepared a proposal card for adding PDF export to **Scribe** [E3].\n\n### Repository & Target State\n- **Project**: Scribe (`4b3385ac-6dfb-49a6-9216-c2f96ce403c9`), resource `primary` (`Scribe (macOS app)`) [E3].\n- **Execution Targets**: Observed at 2026-10-04T13:38:01Z on *Build Box* and 2026-10-04T13:38:03Z on *Jake Mac* [E8]. Both reachable targets report that resource `primary` is not curr"
+      },
+      {
+        "id": "ambiguous-dark-mode",
+        "ask": "Draft a mission to add dark mode.",
+        "expected": [],
+        "routed": [
+          "overlord/primary"
+        ],
+        "clarified": true,
+        "questions": 1,
+        "firstQuestion": {
+          "prompt": "Which project or application should dark mode be added to?",
+          "options": [
+            "Overlord web / desktop app (Overlord: primary)",
+            "Overlord Mobile iOS app (Overlord: mobile)",
+            "Scribe macOS app (Scribe: primary)",
+            "Refinery (Refinery: primary)"
+          ]
+        },
+        "correct": true,
+        "clarificationAppropriate": true,
+        "firstSettleMs": 19453,
+        "totalMs": 49356,
+        "toolCalls": 23,
+        "bytes": 55650,
+        "activeMs": 48215,
+        "finalState": "completed",
+        "answer": "I have prepared a proposal card for adding and verifying dark mode support in the Overlord web application [E1, E14].\n\n### Current State\n* **Observed Repository State** (observed 2026-10-04 13:38 UTC on branch `main` at `34e44ebe`):\n  * The web app already has theme initialization script in `webapp/index.html` defaulting to dark mode and reading `localStorage['overlord-theme']` [E20].\n  * `ThemePr"
+      },
+      {
+        "id": "electron",
+        "ask": "Draft a mission so the desktop app remembers its window size between launches.",
+        "expected": [
+          "overlord/primary"
+        ],
+        "routed": [
+          "overlord/primary"
+        ],
+        "clarified": false,
+        "questions": 0,
+        "firstQuestion": null,
+        "correct": true,
+        "clarificationAppropriate": true,
+        "firstSettleMs": 63616,
+        "totalMs": 63625,
+        "toolCalls": 23,
+        "bytes": 166766,
+        "activeMs": 63270,
+        "finalState": "completed",
+        "answer": "I have prepared a draft proposal card for saving and restoring the desktop app window size across launches.\n\n### Proposal Summary\n\n- **Mission:** *Remember desktop app window size between launches*\n- **Target Project:** Overlord (`e519d24b-17f9-4f6c-b29f-f39c17d9b8f1`) [E1]\n- **Resource:** `primary` (`Overlord (control plane)`) [E1]\n- **Assignment:** `codex` using `gpt-5.5` with `medium` reasoning"
+      },
+      {
+        "id": "contract",
+        "ask": "Which project and resource would own a change to how conformance manifests are validated? Just tell me, do not draft anything.",
+        "expected": [
+          "overlord/primary"
+        ],
+        "routed": [],
+        "clarified": false,
+        "questions": 0,
+        "firstQuestion": null,
+        "correct": true,
+        "clarificationAppropriate": true,
+        "firstSettleMs": 19547,
+        "totalMs": 19553,
+        "toolCalls": 12,
+        "bytes": 50487,
+        "activeMs": 18904,
+        "finalState": "completed",
+        "answer": "A change to how conformance manifests are validated would be owned by:\n\n* **Project**: **Overlord** (`e519d24b-17f9-4f6c-b29f-f39c17d9b8f1`) [E1]\n* **Resource**: **`primary`** (`Overlord (control plane)`) [E1]\n\n### Context\nObserved on execution target `Jake Mac` at commit `34e44ebe` (as of 2026-10-04T13:38:59Z) [E12, E16]:\n* **Schema definition**: The JSON Schema governing all component conformanc"
+      }
+    ]
+  }
+}

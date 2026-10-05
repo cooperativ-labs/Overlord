@@ -34,13 +34,490 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `151`
+Current version: `152`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
 `contract/components.yaml`) — never a header duplicate. The contract version is
 incremented when any stable interface changes. All conformance manifests must
 declare the contract version they were validated against.
+
+### Version 152 Change Summary
+
+Overlord assistant conversations, account connections, and owner-addressed
+conversation notifications (coo:1108, Gemini-first milestone one). This version
+defines the interfaces; services, runtime, clients, and dispatch land in later
+objectives against them. Feature plan:
+`planning/feature-plans/chat-agent-request-routing.md`; DTOs:
+`packages/contract/src/chat.ts`; schema: `database/docs/09-database-schema-contract.md`
+→ "Assistant Conversations".
+
+**Scope and privacy.** A chat thread is private to one owner profile inside one
+organization; it may reference any workspace of that organization the owner can
+currently access. Every `/api/chat/*` route resolves the caller's profile and active
+organization and returns 404 `not_found` for another owner's or organization's
+thread, run, question, proposal, notification, or connection, without revealing
+existence. Chat is Cloud-only: a Local backend answers every `/api/chat/*` and
+`/api/connections/*` route with 404 `chat_unavailable`, and clients show chat as
+unavailable. The tables exist and are tested on both editions. A `project_automation`
+token reaches none of these routes (the v151 allowlist is unchanged).
+
+**REST.** `POST /api/chat/threads` (optional first message), `GET /api/chat/threads`
+(owner-only, newest activity first, archived excluded unless `archived=1`, cursor
+paging), `GET /api/chat/threads/:id` (atomic snapshot), `PATCH /api/chat/threads/:id`
+(`expectedRevision` plus `title` and/or `archived`), `POST /api/chat/threads/:id/messages`,
+`GET /api/chat/threads/:id/events?after=<seq>` (SSE replay then live; `?poll=1` returns one
+bounded `ChatEventPageDto` for polling), `PUT /api/chat/threads/:id/presence`,
+`POST /api/chat/threads/:id/ack`, `POST /api/chat/runs/:id/cancel`,
+`POST /api/chat/runs/:id/continue`, `POST /api/chat/questions/:id/answer`,
+`POST /api/chat/proposals/:id/create`, `GET /api/chat/providers`,
+`GET /api/chat/notifications`, `POST /api/chat/notifications/:id/read`, the
+account-connection routes below, and `POST /api/projects/:id/repository-reads`. Error
+bodies are `{ error, code }` with the closed `ChatErrorCode` set.
+
+**Submission and runs.** A message submission writes the user message and its run in
+one transaction and returns their ids; `(thread, clientRequestId)` is unique, so a
+repeated request returns the original message and run with `replayed: true`. Run
+states are closed: `queued`, `running`, `waiting_user`, `completed`, `failed`,
+`cancelled`; a thread has at most one unfinished (`queued`/`running`/`waiting_user`)
+run, enforced by a partial unique index. While a run is `queued` or `running` a new
+message returns 409 `run_in_progress`. While it is `waiting_user` any message is the
+answer to its single open question and resumes the same run; tapping an option and
+typing text are the same action. `POST /api/chat/questions/:id/answer` is the
+card form of the same action and requires `expectedRevision` (409 `stale_revision`
+once answered, superseded, or cancelled). A `completed` run carries outcome `answered`
+or `allowance_exhausted`; a `failed` run carries one closed failure code
+(`provider_unavailable`, `rate_limited`, `context_limit`, `unsupported_capability`,
+`interrupted`, `provider_error`, `source_access_lost`). Tool failures are recorded per
+tool call and never fail a run by themselves.
+
+**Leases and fences.** Backend workers claim a run by inserting a `chat_run_attempts`
+row whose `fence` equals the run's freshly incremented `current_fence`; at most one
+attempt per run is `leased`, with a renewable lease (default 30 s). Every event, tool
+call, and checkpoint write carries the attempt's fence, and both editions reject a
+write whose fence is not the run's current fence (SQLite triggers and Postgres
+trigger functions with identical semantics), so a worker that lost its lease cannot
+publish, invoke, or checkpoint. `waiting_user` releases the lease. Cancellation sets
+`cancel_requested_at`, is authoritative at the tool gateway, is idempotent, and ends
+the run `cancelled`; a cancelled tool call is the one fence-free transition.
+
+**Checkpoints and recovery.** `chat_provider_checkpoints` holds one private,
+versioned provider checkpoint per run (Gemini response parts verbatim with thought
+signatures, call ids, and call order; schema version, model, and config digest). It is
+never a DTO, realtime payload, change row, or log field. A provider tool request is
+checkpointed before its tool executes, and its results are recorded and joined in
+call order before the next provider request; Overlord, not the provider, enforces
+completeness, order, and call-id matching. A checkpoint is reused only when version,
+model, and digest match and its dependencies reauthorize; otherwise the attempt
+records `recovery_mode = fresh_generation`, rebuilds from authorized messages and
+recorded observations, and marks partial text `interrupted`. A read whose receipt is
+still `requested` is re-executed under its original `operation_id` (unique); writes
+are out of scope. A completed exchange needs no checkpoint and the row is deleted.
+
+**Snapshot and cursor handoff.** `GET /api/chat/threads/:id` reads the thread, the
+latest message page, the active and latest runs, the open question, open proposals,
+`referencedProposals` (every created or cancelled proposal named by a proposal block in
+the returned page, so receipts render after a reload), `eventCursor` (`chat_threads.last_event_seq`), and `retainedFromSeq` in one database
+transaction, so `events?after=eventCursor` neither misses nor double-applies an
+event. Event sequences are allocated by advancing `last_event_seq` and inserting
+exactly that value in the same transaction (storage is gap-free, `(thread, seq)` is
+unique, and events are append-only). Events are persisted before they are sent;
+replay always comes from storage and live delivery follows replay on one ordered
+stream. Text deltas are coalesced. Retention is bounded (defaults: 7 days or 5,000
+events per thread, whichever comes first) by deleting rows below
+`chat_threads.retained_from_seq`; `after < retainedFromSeq - 1` yields 409
+`snapshot_required` (or a `snapshot_required` frame on an open stream) and the
+client reloads the snapshot. Messages, runs, questions, proposals, and receipts are
+not subject to event retention. A closed stream never implies completion.
+
+**Private event channel (exception).** Chat events are owner-scoped and do not
+derive from `entity_changes`; they are private to one person and too frequent for the
+change log. This is the sole exception to the REST/backend rule that realtime events
+derive from `entity_changes`, and it is recorded in `backend/AGENTS.md`. Chat writes
+emit no `entity_changes`, webhooks, or search documents; missions created from chat
+emit their normal change, webhook, and search rows.
+
+**Source dependencies and invalidation.** Every source an answer, summary, proposal
+revision, checkpoint, question, tool call, or content-bearing event used is a
+`chat_source_refs` row (kind `knowledgebase` \| `overlord` \| `repository`, stable
+`scope_key`, last access check). Each derived row points at an immutable
+`chat_dependency_sets` row whose members are the conservative union of every source
+supplied to that generation, including those inherited from earlier summaries and
+messages. Snapshots, replay, live publication, provider input, checkpoint reuse, and
+Create recheck the dependency set; anything not currently `authorized` fails closed.
+Revocation increments `chat_threads.authorization_revision`, marks affected sets,
+messages, summaries, checkpoints, and proposal revisions invalidated, replaces whole
+affected blocks with an `unavailable` block, emits `content.invalidated`, and fences a
+live attempt using that context (restart from remaining authorized content or fail
+`source_access_lost`). Raw stored events never bypass this projection: replay of an
+event whose dependency set is invalidated sends `content.invalidated` instead.
+
+**Proposals, frozen assignments, and Create.** A proposal is versioned:
+`chat_work_proposal_revisions` rows are frozen once written (spec, responsible profile,
+revision number cannot change), each naming explicit project ids, titles, ordered
+objectives, resource keys, acceptance criteria, evidence, dependencies, and a concrete
+agent/model/reasoning selection with its source. Omitted or null agents never reach
+Create; a revision without a justified selection is not creatable.
+`POST /api/chat/proposals/:id/create` with `{ clientRequestId, expectedRevision }` is
+the only creation path; no tool can create, change, or launch work. It rechecks
+membership, `mission:create` on every destination project, source dependencies and
+the thread `authorization_revision`, the expected revision, and the frozen
+assignments, then in one transaction calls the existing mission-creation service once
+per mission with that mission's workspace context, verifies the saved assignments,
+stamps `created_by_kind = agent`, `created_by_agent = overlord-assistant`, the acting
+user as responsible person, and `missions.created_from_chat_thread_id` (soft reference,
+no foreign key), forces draft-only/no-queue, and writes one `chat_work_receipts` row
+(unique per proposal and per `(owner, clientRequestId)`) with its
+`chat_work_receipt_missions`. Any failure creates nothing. Duplicate, concurrent, or
+crash-after-commit calls return the identical receipt (`replayed: true`). A stale
+revision returns 409 `stale_revision`; an invalidated or non-open revision returns 409
+`proposal_not_creatable`. **Cancel/Create outcome:** cancelling a run never cancels or
+blocks Create of a revision that was already published (`proposal.revised` committed);
+a revision still being prepared by the cancelled attempt is never published. Create of
+a published revision therefore succeeds or fails on its own checks regardless of a
+concurrent Cancel, and a later Cancel never removes created drafts.
+
+*Proposal implementation (coo:1108.k0tc).* The internal `prepare_proposal` tool
+publishes or revises a card and cannot create domain work. Preparation validates
+registered resource keys and the destination workspace agent catalog, resolves the
+acting member's project launch preference, and freezes model/reasoning values.
+Missing or invalid preferences require `ask_user` or an explicit supported selection;
+Create never reapplies defaults. Shared mission creation accepts explicit reasoning
+effort and preserves it alongside agent/model. Create selects a concrete draft
+status even if the project default is Next, serializes owner receipt keys and
+workspace mission sequences, and commits domain rows, receipt and private event in
+one outer transaction. A request key already used by another proposal returns
+`invalid_request`; an existing receipt for the same proposal returns its original
+IDs. No new public DTO, schema, or route is introduced by this implementation.
+
+*Web and desktop client (coo:1108.r2b0).* The shared SPA consumes these routes only.
+It creates a thread empty and then submits the first message, so every content-bearing
+write is idempotent; each action's `clientRequestId` is minted once and reused by every
+retry (Create ids persist across reloads, scoped to backend, profile, and organization),
+so a lost Create response is recovered as the original receipt. It renders a proposal
+block whose revision is older than the proposal's current revision as superseded, and
+never offers Create for an invalidated, superseded, or non-open revision. Presence is
+held only while the tab is visible and focused (`platform` `web` or `desktop`, one
+client id per page load), and acknowledgements are sent only for events already
+committed to the rendered transcript. The Knowledgebase callback's web return path
+`/settings/connections` is an SPA route that reloads connection state and returns to
+Chat.
+
+**Continue.** When the latest run of a thread completed with
+`allowance_exhausted`, `POST /api/chat/runs/:id/continue` creates one new run with
+`continued_from_run_id` set and a fresh allowance, reusing recorded evidence and
+summaries; a run can be continued at most once (unique index), so a repeated request
+returns the same run. Any other run returns 409 `continue_not_available`. Defaults
+(configurable, see the verification notes below): 60 tool calls and ten minutes of
+active processing per run, excluding `waiting_user`; three concurrent runs per owner;
+four concurrent target reads per run.
+
+**Conversation notifications.** Two catalog types join `notification_preferences.type`:
+`chat_needs_answer` (a run entered `waiting_user`) and `chat_finished` (a run completed
+or failed). They are addressed by owner profile, organization, thread, run, and
+question, never by a fabricated mission or an arbitrary workspace, and they never appear
+in the mission-only `GET /api/notifications` list, whose `NotificationDto` is
+unchanged. Each qualifying transition writes one `chat_notifications` row in the same
+transaction as the transition: it is the durable candidate, its dispatch job state
+(`pending` → `dispatching` → `dispatched`/`failed`, or `suppressed`/`cancelled`), and
+once dispatched its history entry. The row is unique on `(owner, thread, run, type,
+transition_key)` where the key is `question:<ordinal>` or `terminal:<state>`, so a new
+question never collapses into an earlier one and dispatcher retries cannot duplicate.
+`due_at` is the transition time plus a grace period (default 5 s). **Presence and
+acknowledgement:** `PUT /api/chat/threads/:id/presence` renews (default 30 s TTL) or
+releases one client's foreground presence; `POST /api/chat/threads/:id/ack` records
+that a foreground client rendered events through `seq` (monotonic per client,
+idempotent, separate from any replay cursor). A pending candidate is suppressed only
+when a client that is foreground on that thread at acknowledgement time acknowledges a
+`seq` at or after the candidate's `event_seq`; a connection or open socket alone never
+suppresses. Otherwise it dispatches after `due_at`, including when a dead connection
+still appears open. Before dispatch the dispatcher rechecks ownership, organization
+access, preferences (including the master switch), and for `chat_needs_answer` that
+the question is still open; a failed recheck cancels the candidate. Dispatch reuses
+device registrations and APNs transport; the payload carries only the type, the
+bounded sanitized thread title (≤ 80 characters), thread/run ids, an unread badge
+count, and the deep link `overlord://chat/threads/:threadId`, never question,
+answer, transcript, Knowledgebase, or repository content. `GET /api/chat/notifications`
+returns the newest 100 dispatched, non-dismissed entries for the caller in the caller's
+organization plus `unreadCount`; `POST /api/chat/notifications/:id/read` is
+revision-checked (`stale_revision` on mismatch; repeating it at the current revision is a
+no-op). Delivery acknowledgement never changes mission notification read semantics.
+Acknowledgement details: a `seq` beyond the thread's last published event is
+`invalid_request`; a lower `seq` keeps the stored value; an acknowledgement from a client
+without live presence is recorded but suppresses nothing; `ChatAckDto` lists the ids it
+suppressed. Presence and acknowledgement recheck live membership but run no upstream
+source checks, since they publish no content. Dispatch details: the conversation types
+join `GET`/`PUT /api/profile/notification-preferences` `preferences[]` on `apns`,
+`realtime`, and `in_app` (the legacy `categories` alias stays mission-only); with the
+master switch off, or both `apns` and `in_app` off, the candidate is `cancelled`; with
+`apns` off but `in_app` on it is `dispatched` to history without a push; `silent` sends
+a background push with no alert. Delivery is at-least-once: a claim holds a 60-second
+lease, the APNs collapse id is `chat:<notificationId>` so a retried send replaces
+rather than duplicates, a transient failure returns the row to `pending` with backoff,
+and after `max_attempts` (5) it becomes `failed`. The home-screen badge on both mission
+and conversation pushes is unread mission notifications plus unread dispatched
+conversation notifications for the profile. The grace period and presence TTL are
+operator-configurable through `CHAT_NOTIFICATION_GRACE_MS` and `CHAT_PRESENCE_TTL_MS`.
+
+**Account connections.** `account_connections` is the single store for external
+account connections (first provider: `knowledgebase`), one live connection per
+`(owner, organization, provider, server_url)`, profile-owned within the organization,
+recording server, authorized provider workspaces, tool-policy version, state
+(`pending`, `connected`, `reauthorization_required`, `disconnected`), and an
+AES-256-GCM credential envelope bound to the owner with a key id from server
+configuration. Refresh is serialized per connection by a lease
+(`refresh_lock_owner`/`refresh_lock_until`) and the rotated credential is persisted
+before use. `GET /api/connections`, `POST /api/connections` (`{ provider, returnTo }` →
+`{ connectionId, authorizeUrl, expiresAt }`), `DELETE /api/connections/:id`
+(disconnect: revoke upstream best-effort, erase the envelope), and the public
+`GET /api/connections/knowledgebase/callback` implement authorization code with PKCE
+S256 and the RFC 8707 `resource` parameter; `account_connection_authorizations`
+stores a hashed single-use `state` and an encrypted PKCE verifier bound to the
+connection and an expiry. The client id is a Client ID Metadata Document served at
+public `GET /oauth/clients/knowledgebase.json` (≤ 5 KB, no redirects, redirect URI is
+the backend callback). The phone opens `authorizeUrl` in `ASWebAuthenticationSession`;
+the callback redirects to a universal link (or the web return URL) carrying only a
+status. Credentials, verifiers, codes, and state never appear in DTOs, logs, realtime,
+change rows, or errors; the only client-visible URL carrying `state` is `authorizeUrl`
+itself, where OAuth requires it (stored only as a hash, single use, 10-minute expiry).
+The Everhour and GitHub credential stores are unchanged (coo:1110); they share only
+the AES-256-GCM envelope primitive (`v1` format, their own AAD and keys).
+
+*Client integration (web and mobile, coo:1108.zb9x).* `POST /api/connections` reuses
+the caller's live connection for reauthorization (same `connectionId`) and allows at
+most five open sign-ins per connection (`limit_exceeded`). It answers 503
+`provider_not_ready` when the Knowledgebase or credential key is not configured, 400
+`invalid_request` for another provider or `returnTo`, and 404 `chat_unavailable` on
+Local. The callback finishes with a redirect carrying only `provider=knowledgebase`
+and `status` (`connected`, `denied`, `expired`, or `failed`): mobile goes to
+`overlord://connections/callback?…` (the `ASWebAuthenticationSession` callback
+scheme), web goes to `<OVERLORD_WEBAPP_PUBLIC_URL origin>/settings/connections?…`, and
+an unknown or replayed state gets a no-store status page. Clients treat the status as
+a hint and reload `GET /api/connections`, which lists live (non-disconnected)
+connections. `pending` means sign-in never completed. `reauthorization_required`
+carries `lastErrorCode` (`invalid_grant`, `upstream_unauthorized`, `grant_expired`, or
+`credential_unreadable`) and its credential is already erased; clients offer sign-in
+again with `POST /api/connections`. `DELETE /api/connections/:id` returns the
+`disconnected` DTO. Losing access by disconnect or reauthorization immediately
+rechecks every thread that cited the connection, so that content is replaced by
+`unavailable` blocks and live generations are fenced with `source_access_lost`.
+Reconnecting never restores invalidated content. Server configuration:
+`KNOWLEDGEBASE_MCP_URL`, `KNOWLEDGEBASE_EGRESS_ORIGINS`,
+`ACCOUNT_CONNECTIONS_ENCRYPTION_KEY`, `ACCOUNT_CONNECTIONS_ENCRYPTION_KEY_ID`.
+
+**Outbound MCP and repository-read seams.** The backend's outbound MCP client
+reaches only the configured Knowledgebase origin over HTTPS with server-side egress
+rules, exposes only a reviewed read-tool allowlist namespaced per connection,
+rejects writes regardless of annotations, and bounds output size and time; the
+per-source access check is `get_related(node_id)` and any failure is treated as
+revoked. Agent-facing repository reads (`observe`, `tree`, `branches`, `worktrees`,
+`git_status`, `diff`, `read_file`, `search_text`; `RepositoryReadRequest` /
+`RepositoryReadResult`) are local-target capabilities executed by the runner over the
+existing mission-less capability-call queue with `operation_id` as the idempotency key.
+`POST /api/projects/:id/repository-reads` is the authenticated mission-less route
+(requires `project:read` and the caller's access to the named execution target) and
+the in-process chat gateway calls the same service. Inputs are `executionTargetId`,
+`projectId`, `resourceKey`, and repository-relative paths only; the capability call
+carries the requested `resourceKey` to the claim, which resolves that resource instead
+of the primary one. The target enforces containment including symlinks, excludes
+credential and configured sensitive paths, disables external diff/textconv and hooks,
+and never fetches, checks out, builds, or takes write intent. Defaults: 64 KiB file
+reads, 128 KiB diff and search output, 100 search hits, 30 s timeout. The current diff
+is one implementation co-located with `readCurrentDiff`; the mission-keyed declaration
+shares or is replaced by it.
+
+**Repository-read implementation details (coo:1108.zg8m, refines v152).**
+
+- *Local-target interface.* `readCurrentDiff` is replaced in place by the
+  resource-addressed form `{ resourceId, repoPath, scope, relativePaths?, maxBytes? }`
+  (the mission-keyed form had no implementation and no caller). Three capabilities are
+  added: `readGitStatus`, `readRepositoryFile`, and `searchRepositoryText`. All four
+  are read capabilities on the runner queue (30 s deadline) and are not exposed through
+  the desktop bridge. The commit-message diff (`generateCommitMessageFromLocalDiff`)
+  builds its `git diff` from the same argument builder and hardened Git configuration,
+  so there is one diff definition.
+- *Target-side hardening.* Every inspection Git call runs without a shell, with
+  `GIT_OPTIONAL_LOCKS=0` (no index refresh write), `core.fsmonitor=false`,
+  `core.hooksPath` pointed at the null device, `diff.external` empty plus
+  `--no-ext-diff --no-textconv`, every configured `filter.<driver>` neutralized,
+  `protocol.allow=never` and `GIT_NO_LAZY_FETCH=1` (no fetch, including partial-clone
+  lazy fetch), submodules ignored, and repository-steering environment variables
+  (`GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`, `GIT_EXTERNAL_DIFF`, …) removed. Each
+  call has its own timeout (20 s on the target), is killed on timeout, cancellation,
+  or when captured output passes its byte bound, and never retries. Worktree dirtiness
+  checks used by `listWorktrees` use the same hardened configuration.
+- *Paths.* Inputs are repository-relative POSIX paths: absolute paths, drive or UNC
+  prefixes, NUL bytes, `..` escapes, and any `.git` segment are rejected by the
+  backend and again by the target. The target resolves the real path of both the
+  resource root and the candidate and requires containment, so a symlink that leaves
+  the resource is `denied`. Credential and sensitive paths (`.env` and `.env.*` except
+  `*.example`/`*.sample`/`*.template`, `.envrc`, `.npmrc`, `.pypirc`, `.netrc`,
+  `.pgpass`, `.git-credentials`, `.dockercfg`, private keys and key stores such as
+  `id_rsa*`/`id_ed25519*` (not `.pub`), `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.jks`,
+  `*.keystore`, `*.kdbx`, `*.ppk`, `credentials*.json`, `service-account*.json`,
+  `secrets.{json,yaml,yml,toml}`, `*.tfstate*`, anything under `.ssh/`, `.aws/`,
+  `.gnupg/`, `.kube/`, or `.overlord/tmp/`) plus the target's comma-separated
+  `OVERLORD_REPOSITORY_READ_EXCLUDE` globs are never returned as content: `read_file`
+  answers `denied`, `diff` withholds their sections and lists them in
+  `excludedPaths`, and `search_text` drops their hits. Their names may still appear in
+  status and tree listings.
+- *Results.* `RepositoryReadResult.data` is operation-specific and typed in
+  `packages/contract/src/chat.ts` (`RepositoryGitStatusData`, `RepositoryDiffData`,
+  `RepositoryFileData`, `RepositorySearchData`; existing reads keep their capability
+  payloads, with tree entries capped at `maxEntries`, default 500, maximum 2000, and
+  filtered to `relativePath`). Status lists at most 1000 entries per class; search lines
+  are cut at 400 characters. `read_file` returns `binary` (NUL byte or invalid UTF-8)
+  or `oversized` (more than 8 MiB) with size metadata only; within that ceiling it
+  returns the requested 1-based inclusive line range bounded to `maxBytes`, cut at a
+  line boundary, with `truncated`. Search is `git grep --fixed-strings` over tracked
+  and untracked, non-ignored text files (binary files skipped). `diff` covers tracked
+  files only (`unstaged`: worktree against index; `staged`: index against HEAD; `all`:
+  worktree against HEAD, or against the empty tree before the first commit).
+- *Route.* `POST /api/projects/:id/repository-reads` takes a `RepositoryReadRequest`
+  body (the path `:id` must equal `projectId`) and answers 200 with a
+  `RepositoryReadResult` for every target-side outcome, including `target_offline`,
+  `timeout`, `unavailable`, `denied`, `binary`, `oversized`, and `not_found`. It answers
+  400 `invalid_request` for a malformed body, 404 when the project is not readable or
+  the execution target is not one the caller may use for it, and 409
+  `operation_conflict` when an `operationId` is reused with a different request. The
+  operation id must match `^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$`; the queue key is
+  derived from the acting workspace user and the operation id, so a retry waits on the
+  original job and never re-queues it. A target whose runner is not live answers
+  `target_offline` without queueing. At most four reads per scope (a chat run, or a
+  caller for the route) are in flight; further reads wait for a slot within their
+  deadline. A runner that predates these capabilities fails the job, which is reported
+  as `unavailable`.
+- *Runner completion.* `POST /api/runner/requests/:id/completed` accepts a JSON body of
+  up to 1 MiB (every other JSON route keeps the 100 KB default), so a bounded read result
+  and its envelope always fit. Tree reads are scoped (`subPath`) and capped
+  (`maxEntries`) on the target before they cross the queue.
+
+**Gemini research runtime and tool gateway (coo:1108.vx29, refines v152).**
+
+- *Runtime adapter.* `backend/chat/` implements the worker's `ChatRuntime` with Gemini
+  through `@google/genai` `models.generateContentStream` (function declarations as
+  `parametersJsonSchema`). Configuration: `CHAT_GEMINI_API_KEY` (falls back to
+  `GEMINI_API_KEY`), `CHAT_GEMINI_MODEL` (default `gemini-3.8-flash`), and
+  `CHAT_MAX_GATHERED_BYTES_PER_RUN` (default 1 MiB of recorded tool results per run).
+  Without a key the runtime reports `not_configured` and runs fail
+  `provider_unavailable`; it never answers with fixed text. Provider errors map to the
+  closed failure codes (429 `rate_limited`; 400 naming tokens/context `context_limit`;
+  401/403/404/5xx and transport failures `provider_unavailable`; anything else
+  `provider_error`). `GET /api/chat/providers` returns `ChatProvidersResponse`: one
+  `gemini` readiness entry (`ready`, `not_configured`, `rate_limited` for 60 s after a
+  429, or `unavailable` after a transport failure) and the caller's live account
+  connections.
+- *Checkpoint payload (schema 1).* The private checkpoint holds only this run's provider
+  turns, verbatim and unmerged (thought signatures, call ids, empty parts), the pending
+  call batch (`turn`, per-call order, operation id `chat.<runId>.t<turn>.c<order>`,
+  provider call id or a synthetic `t<turn>.c<order>` when the provider omits one), and
+  the run's streaming message id. The conversation prefix (latest authorized summary
+  and messages, with withheld content rendered as a marker) is rebuilt from storage on
+  every provider request. The config digest covers the model and the versioned system
+  prompt. Fresh-generation recovery sends no function-call parts; it adds this run's
+  completed, still-authorized tool observations as untrusted text.
+- *Tool list (fixed).* `overlord_list_projects`, `overlord_list_execution_targets`,
+  `overlord_search_missions`, `overlord_get_mission`, `repository_read` (the eight
+  `RepositoryReadOperation`s through the same core service as the REST route, scope
+  `chat-run:<runId>`), the reviewed Knowledgebase reads of the owner's live connections,
+  and `ask_user`. Declarations and descriptions are Overlord's; no tool creates,
+  changes, launches, or queues work (proposal preparation arrives with Phase D). A call
+  to an undeclared name answers `unknown_tool`; arguments are validated against the
+  declared closed schema (`invalid_arguments`); every Overlord and repository read
+  resolves the thread owner's live organization memberships and role grants at call
+  time (`project:read` for projects, resources, targets and repository reads;
+  `mission:read` for missions, objectives and deliveries) and answers `not_found`
+  without revealing existence. Tool results reach the model wrapped as untrusted data.
+  Results are bounded to 96 KiB of provider input.
+- *Questions.* `ask_user` is a checkpointed call: reads in the same turn run first, the
+  question opens through the existing question path (run `waiting_user`, notification
+  candidate), and the answer becomes that call's recorded result when the run resumes
+  from its checkpoint. One question per turn; extra `ask_user` calls answer
+  `invalid_arguments`.
+- *Evidence and citations.* Each tool result's sources become `chat_source_refs`
+  (scope keys: `overlord:<entity>:<id>`, `repository:<target>:<project>:<resource>:<path>@<head>`,
+  `knowledgebase:<connection>:<workspace>:<node>`), are checked live, and get one
+  `chat_evidence` row each with a thread-local citation ref (`E<n>`) returned to the
+  model. A source that does not check `authorized` withholds that result's content
+  (`source_unverified`). The tool call's dependency set becomes the union of its
+  request context and its sources. The answer's `[E<n>]` or `[E<n>, E<m>]` citations
+  become the text block's `evidenceIds` and one `evidence` block (one entry per source,
+  `stale` when observed more than 15 minutes before attachment); the message's
+  dependency set includes the cited sources. Streamed text, questions, checkpoints and
+  summaries use the conservative union of every authorized dependency set in the
+  thread.
+- *Summaries.* Once at least eight messages are not covered by the latest summary, the
+  runtime writes a compact `chat_thread_summaries` row (goal text, decisions, open
+  questions, evidence refs) from a plain-text transcript of authorized content; a failed
+  summary never fails the run.
+- *Source checkers.* `overlord` sources are `authorized` while the entity exists and the
+  owner keeps the read permission on its project's workspace, else `revoked`;
+  `repository` sources while the owner keeps `project:read` and the execution target
+  stays eligible for that project (reachability is not access). Both are registered
+  with the Knowledgebase checker through the connections module's composed
+  `checkSource`.
+- *Limits.* Before each provider request the runtime stops at the per-run tool-call
+  limit, the gathered-content budget, or within one minute of the active-time limit; a
+  function-call turn that would exceed the tool-call limit is discarded unexecuted (never
+  checkpointed) and one tool-free request (`functionCallingConfig.mode = NONE`) writes the
+  closing summary before the run completes `allowance_exhausted`.
+
+**Verification and hardening (coo:1108.z77k, refines v152).** Found by the live
+acceptance run (`planning/feature-plans/chat-agent-request-routing-acceptance.md`).
+
+- *Operator limits.* Each is a whole number in its range; an unset, malformed, or
+  out-of-range value keeps the default. A run records the limits in force when it was
+  submitted, so a change applies to new runs only. `CHAT_MAX_TOOL_CALLS_PER_RUN`
+  (default 60, 1–500), `CHAT_MAX_ACTIVE_MS_PER_RUN` (600000, 120000–3600000; the last
+  minute is reserved for the closing summary), `CHAT_MAX_CONCURRENT_RUNS_PER_OWNER` (3,
+  1–50), `CHAT_MAX_TARGET_READS_PER_RUN` (4, 1–4; the repository-read service admits four
+  per run regardless), `CHAT_ATTEMPT_LEASE_MS` (30000, 5000–600000),
+  `CHAT_NOTIFICATION_GRACE_MS` (5000), `CHAT_PRESENCE_TTL_MS` (30000),
+  `CHAT_EVENT_RETENTION_MS` (604800000) and `CHAT_EVENT_RETENTION_COUNT` (5000), alongside
+  the existing `CHAT_MAX_GATHERED_BYTES_PER_RUN` (1048576).
+- *Knowledgebase tool ids* are `kb_<12 hex>_<tool>` (see Backend → Outbound MCP). The
+  dotted form was rewritten by the provider (`kb.<id>:<tool>`) and then refused as an
+  unknown tool.
+- *Progress labels.* `tool.updated.label` is one of a fixed set of display strings
+  (`Listing projects`, `Checking machines`, `Searching missions`, `Reading a mission`,
+  `Inspecting a repository`, `Preparing a proposal`, `Asking a question`,
+  `Searching notes`, `Reading a note`, `Browsing notes`, `Unavailable tool`). A tool name
+  chosen by the model is never echoed to clients. Clients treat the label as opaque text.
+- *Project list tool.* `overlord_list_projects` returns the agent catalog once per
+  workspace (`assignmentCatalogs`), not on every project. This is model-facing tool
+  content, not a DTO.
+- *Proposal preparation.* A refused `prepare_proposal` call carries a specific reason
+  for the model (for example an unregistered resource key, an unsupported model, or a
+  project with no registered resource). The reason is never part of an HTTP error body,
+  and it never names a project the owner cannot use. A project without a registered
+  resource cannot receive drafts from the assistant.
+- *Transient provider failures.* A 500, 502, 503, or 504, or a transport failure with no
+  status, is retried at most twice (after 0.4 s and 1.5 s) before any part of that turn
+  has arrived, so nothing is persisted twice. Rate limits, configuration errors
+  (401/403/404), and failures in the middle of a stream are not retried and fail the
+  run with its closed code.
+- *Termination.* On `SIGTERM` or `SIGINT` the backend stops its chat worker and
+  conversation-notification dispatcher and then terminates with that signal. An
+  interrupted attempt is reclaimed by another worker when its lease lapses.
+- *Archived projects.* Create follows the existing mission-creation rule, which accepts
+  an archived project; the assistant only lists active projects when preparing.
+
+**Account deletion.** Every chat, connection, presence, acknowledgement, receipt, and
+conversation-notification row cascades from `profiles` (and `organizations`), so the
+existing account-deletion cascade removes them with the identity and no new
+`RESTRICT` child is introduced. Missions created from chat survive; their
+`created_from_chat_thread_id` soft reference may dangle.
+
+**Impact.** Database adds the tables above, `missions.created_from_chat_thread_id`,
+and the widened preference type check on both editions. Core owns the conversation,
+dependency, proposal/receipt, and notification-candidate services. REST/backend owns
+the routes, private replay, run scheduling, Gemini runtime adapter, outbound MCP
+client, connections module, and conversation dispatch. Auth owns connection ownership
+and credential envelopes. Runner and the local-target interface add the read
+capabilities. Mobile and webapp add the client journey and must tolerate additive
+DTOs; existing mission notifications, `NotificationDto`, `worker_jobs`, and their
+dispatchers are unchanged. CLI, hosted MCP, connectors, extensions, and desktop
+(beyond the shared SPA) are unaffected.
 
 ### Version 151 Change Summary
 
@@ -1446,6 +1923,7 @@ Owns:
 - The **Agent Session Exchange** core tables — `agent_session_channels`, `agent_session_events`, `agent_requests`, and `agent_session_inputs` — declared by this contract and migrated with the channel bootstrap. They are core rather than `ext_` because they drive authorization, audit, presence, and UI gating. The scoped channel credential is stored hash-only and scoped to exactly one channel; `native_session_id` is a correlation alias and never an authorization key; raw native payloads are never persisted (no transcripts or transcript paths, no raw tool input or output, no file contents, no environment variables), and stored summaries are bounded, redacted, and carry a `formatter_version`. No derived capability tier is persisted — a connector's static tier is derived from fixtures at build time and a session's effective capabilities live in `capabilities_json` on its channel. The documented-but-never-migrated `hook_events` and `permission_requests` designs are **superseded** by them: sanitized hook events become normalized `agent_session_events`, and a permission becomes one kind of `agent_requests`. The closed `permission_requests.status` vocabulary and the `mission_events.type = permission_request` value remain valid; only the dedicated tables are retired, and no component may begin writing them
 - `human_action_resolutions`: operator decisions on the deferred-work items of a delivery (the reported-human-action resolutions it also held before v150 were deleted by migration). Primary key `(delivery_id, action_id)` where `action_id` is the stable delivery-local deferred-work id derived from the matching agent-report index plus the immutable agent-report text digest (an index-marked composed id for compose-added extras; legacy presentation-text ids remain readable); denormalized `workspace_id`, `mission_id`, `objective_id`; closed `status` (`done` \| `dismissed`); nullable closed `outcome` (`mission_created` \| `objective_added`) and `outcome_ref` recording a promotion (v147); `resolved_by_workspace_user_id`; `resolved_at`. Rows cascade with their delivery, are never soft-deleted (reopening deletes the row), and never duplicate the item text — the delivery report stays the sole source of what the item says.
 - Controlled vocabularies (closed and open sets)
+- The **assistant conversation** core tables (contract v152): `chat_threads`, `chat_messages`, `chat_runs`, `chat_run_attempts`, `chat_provider_checkpoints`, `chat_tool_calls`, `chat_source_refs`, `chat_dependency_sets`, `chat_dependency_set_members`, `chat_evidence`, `chat_thread_summaries`, `chat_questions`, `chat_events`, `chat_work_proposals`, `chat_work_proposal_revisions`, `chat_work_receipts`, `chat_work_receipt_missions`, `chat_presence`, `chat_event_acks`, and `chat_notifications`, plus `account_connections`, `account_connection_authorizations`, and `missions.created_from_chat_thread_id` (soft reference, no FK). Both editions enforce the same invariants: one unfinished run per thread, one leased attempt per run, attempt/checkpoint/tool-call/event writes only at the run's current fence, gap-free append-only per-thread event sequences, one open question per run, frozen proposal revisions, one creation receipt per proposal and per `(owner, client request id)`, monotonic acknowledgements, one conversation notification per `(owner, thread, run, type, transition)` addressed to the thread owner, and one live account connection per `(owner, organization, provider, server)`. Every row cascades from `profiles`/`organizations`. Checkpoint payloads, tool results, and credential envelopes are private server state
 - Soft-delete and revision semantics
 - Migration versioning via `schema_migrations`
 - Extension table naming rules (`ext_<name>_`)
@@ -1513,6 +1991,7 @@ Does NOT own:
 Owns:
 
 - `execution_requests` queue claiming and launch
+- Agent-facing repository read capabilities (contract v152): `git_status`, resource-addressed `diff`, bounded `read_file`, and literal `search_text`, alongside the existing `observe`/`tree`/`branches`/`worktrees`, executed for mission-less capability calls with the requested `resource_key` (never silently the primary resource), path containment including symlinks, credential/sensitive-path exclusion, disabled external diff/textconv/hooks, and explicit bounds and truncation
 - Working directory resolution, ordered as explicit `workingDirectory`, objective `resource_key` on the claiming execution target, primary project resource for the target, then matching cwd `.overlord/project.json` fallback (the link whose `projectId` matches the mission project, among any number of projects recorded in that file); a missing objective-bound resource fails with `objective_resource_not_connected`
 - Launch-config resolution for manual, auto-advance, and claim-time launches: an explicit objective override wins, then per-agent defaults on the selected `project_resource_sources` descriptor, then user execution-target and workspace defaults
 - Per-mission branch/worktree preparation before local agent spawn when enabled, including the deterministic branch/worktree **planning** algorithm (`cli/src/branch-planning.ts`) — co-owned with the service layer and pinned to `contract/branch-planning-vectors.json` (see "Shared Deterministic Algorithms")
@@ -1596,6 +2075,8 @@ Owns:
 - In-process Live Activity dispatcher (`backend/live-activity-dispatcher.ts`), which claims durable `overlord.live_activity.dispatch.v1` and `overlord.live_activity.start.v1` worker jobs, recomputes the bounded account presentation snapshot, and sends APNs `liveactivity` start/update/end events.
 - Standard push-notification routes: authenticated `PUT /api/mobile/push/device-token` and `POST /api/mobile/push/device-token/revoke` for opaque APNs device tokens (body-carried, private to the caller's profile, no read surface), plus authenticated `GET`/`PUT /api/profile/notification-preferences` for the caller's own per-category preferences.
 - In-process standard push dispatcher (`backend/push-notification-dispatcher.ts`), which claims durable `overlord.push_notification.dispatch.v1` worker jobs, recomputes the alert presentation snapshot, and sends APNs `alert`/`background` pushes on the plain bundle-id topic. It shares the APNs signing/transport helpers with the Live Activity dispatcher but never shares tokens, topics, or push types with it.
+- The private **assistant conversation** route family (contract v152; DTOs in `packages/contract/src/chat.ts`): `/api/chat/threads*`, `/api/chat/runs/:id/{cancel,continue}`, `/api/chat/questions/:id/answer`, `/api/chat/proposals/:id/create`, `/api/chat/providers`, and `/api/chat/notifications*`, all owner- and organization-scoped with existence-hiding 404s and Cloud-only (`chat_unavailable` on Local); idempotent submission/Create keyed by client request ids; atomic snapshot plus `eventCursor`; the owner-scoped SSE event channel with replay from storage, bounded retention, and `snapshot_required` — the one sanctioned realtime channel that does not derive from `entity_changes`; expiring foreground presence and monotonic rendered-event acknowledgements separate from replay cursors; backend run scheduling with leased, fenced attempts; the Gemini runtime adapter and private checkpoint persistence; the in-process conversation-notification dispatcher over `chat_notifications`
+- Account-connection routes (contract v152): `GET`/`POST /api/connections`, `DELETE /api/connections/:id`, public `GET /api/connections/knowledgebase/callback`, and public Client ID Metadata Document `GET /oauth/clients/knowledgebase.json`; the backend outbound MCP client for the configured Knowledgebase with a reviewed read-only allowlist; and the authenticated mission-less `POST /api/projects/:id/repository-reads` route over the runner capability queue
 
 Does NOT own:
 
@@ -1615,6 +2096,7 @@ Owns:
 - Audit log attribution fields
 - Better Auth implementation tables (`user`, `session`, `account`, `verification`, `apikey`) — these are auth-internal and must not be read directly by other components
 - Self-service account deletion trigger (`user.deleteUser`), delegating the cascade to a backend-supplied callback
+- Account-connection ownership and credential envelopes (contract v152): AES-256-GCM envelopes whose additional authenticated data binds the owner profile, organization, provider, and connection id, with the key and key id from server configuration; PKCE verifiers and OAuth `state` are stored encrypted and hashed respectively. Chat routes authorize by owner identity plus live workspace/project RBAC for every referenced project; no new role permission is added
 - Sign-up/sign-in email verification: an optional `sendVerificationEmail` callback (`CreateAuthOptions.sendVerificationEmail`) delegates delivery to a backend-supplied sender, mirroring the `onDeleteUser` delegation pattern. When provided, Better Auth also enables `emailAndPassword.requireEmailVerification` so unverified accounts cannot sign in. When omitted (the default, e.g. Local/offline editions with no configured email provider), verification stays fully disabled and behavior is unchanged. The backend's concrete sender (`backend/email-verification.ts`) uses Resend, configured via the `RESEND_API_KEY` env var and the `notifications.cooperativ.io` sending domain
 - Numeric one-time codes (OTP): an optional `sendEmailOTP` callback (`CreateAuthOptions.sendEmailOTP`) enables Better Auth's `emailOTP` plugin (6-digit codes, 1-hour expiry), the same caller-supplied-callback pattern as `sendVerificationEmail`. When enabled, the sign-up verification email carries **both** the existing magic link **and** a real 6-digit code minted via `auth.api.createVerificationOTP` and passed to `sendVerificationEmail` as `otp` — replacing the previous behavior of showing the raw (untypable) verification link token in the code block. The plugin also exposes `/api/auth/email-otp/*` server endpoints (notably `verify-email`, `check-verification-otp`, `send-verification-otp`, `sign-in/email-otp`, `forget-password`/`reset-password`) and the corresponding `authClient.emailOtp.*` client methods for typed-code sign-in and password reset. When `sendEmailOTP` is omitted, the plugin is left off and no OTP endpoints exist. The backend sender is `emailOTPSenderFromEnv()` in `backend/email-verification.ts` (Resend-backed)
 - Hosted MCP OAuth consent and token issuance: OAuth approval creates a scoped `USER_TOKEN` with the `mission_lifecycle` preset after an authenticated browser session approves the request. Authorization codes are short-lived, single-use, PKCE-protected, and exchanged for bearer access tokens; refresh tokens are not issued through contract version `2`. A code that expires unexchanged, or whose exchange fails its client/PKCE/resource checks, revokes the `USER_TOKEN` it would have delivered, so no orphaned active token outlives its authorization code.
@@ -1715,6 +2197,7 @@ Owns:
 - The account-level ActivityKit activity identifier and `pushTokenUpdates` lifecycle
 - Registration/rotation/revocation calls on the Mobile → REST surface
 - Ending local activities before sign-out and ensuring the corresponding registration is revoked
+- The assistant chat journey (contract v152): the shared `OverlordCore` stream client (incremental SSE parsing, ordered delivery, resume cursor, dedupe, reconnect/backoff, `snapshot_required` recovery, polling fallback, state scoped to backend/account/thread), foreground presence and rendered-event acknowledgements, conversation notification routing to `overlord://chat/threads/:threadId` including cold start, and Knowledgebase sign-in through `ASWebAuthenticationSession`
 - Presentation of the additive creation-provenance fields it decodes from `MissionDto` / `ObjectiveDto` (`createdByKind`, `createdByAgent`, `createdByWorkspaceUserId`). The mobile mirror in `OverlordCore/Contract.swift` decodes them as optionals defaulting to `human`, per the existing additive-decode convention, so an older server response still decodes. Where the mission chat feed reads objectives back as messages the operator sent, an `agent`-authored objective must be attributed rather than presented as the operator's own text, and the attribution must also lead the VoiceOver label — a client that renders provenance only as a fill or glyph misattributes it for assistive technology.
 
 Does NOT own:
@@ -1925,9 +2408,27 @@ answering a decision it is blocked on, and injecting an instruction into it.
 - **Separation from Live Activities**: standard APNs **device** tokens and ActivityKit tokens are distinct credentials with distinct lifetimes and are never interchangeable. They use separate tables (`device_push_tokens` vs `live_activity_push_tokens`), separate routes, separate APNs topics (`<bundleId>` vs `<bundleId>.push-type.liveactivity`), and separate `apns-push-type` values (`alert`/`background` vs `liveactivity`). Passing one where the other is expected is a contract violation.
 - **Registration**: `PUT /api/mobile/push/device-token` accepts `{ deviceToken, environment, bundleId, appVersion? }` and upserts the caller's registration, rotating an existing token in place. `environment` is `sandbox` or `production` and selects the APNs host per registration. A device token is unique globally and bound to exactly one profile; registering a token held by another profile reassigns it. Tokens are opaque, are carried in the request body rather than the URL, and are never returned or exposed through realtime, logs, entity changes, or read APIs.
 - **Revocation**: `POST /api/mobile/push/device-token/revoke` accepts `{ deviceToken }`, deletes only the caller's registration, returns `204`, and is safe to retry. Clients must revoke before clearing credentials on sign-out.
-- **Preferences**: `GET`/`PUT /api/profile/notification-preferences` read and merge the caller's own preferences as `{ enabled, preferences: { type, transport, mode }[] }`. `type` is exactly a shared notification-catalog id, `transport` is exactly a catalog-declared eligible transport, and `mode` is `alert`, `silent`, or `off`; absent rows default to the catalog's `defaultMode`. The reserved `(type: all, transport: all)` master row powers `enabled` and suppresses notification transports without affecting Live Activity delivery. Unknown types, transports, type/transport pairs, and modes are rejected `400`. For additive mobile compatibility, responses also project APNs-capable types as `{ categories: { category, mode }[] }`, and requests may use that legacy field as an APNs-only update alias; new clients use `preferences`.
+- **Preferences**: `GET`/`PUT /api/profile/notification-preferences` read and merge the caller's own preferences as `{ enabled, preferences: { type, transport, mode }[] }`. `type` is exactly a shared notification-catalog id (the mission catalog or, since v152, `chat_needs_answer`/`chat_finished`), `transport` is exactly a catalog-declared eligible transport, and `mode` is `alert`, `silent`, or `off`; absent rows default to the catalog's `defaultMode`. The reserved `(type: all, transport: all)` master row powers `enabled` and suppresses notification transports without affecting Live Activity delivery. Unknown types, transports, type/transport pairs, and modes are rejected `400`. For additive mobile compatibility, responses also project APNs-capable types as `{ categories: { category, mode }[] }`, and requests may use that legacy field as an APNs-only update alias; new clients use `preferences`.
 - **Delivery**: The same lifecycle mutations that refresh Live Activities enqueue deduplicated `overlord.push_notification.dispatch.v1` worker jobs addressed to the mission's assigned profile only — never broadcast to a workspace. Job payloads carry ids alone; the dispatcher recomputes presentation content at delivery time. Alerts are `apns-push-type: alert`, `apns-priority: 10`, expiring after one hour; `silent` categories are `apns-push-type: background`, `apns-priority: 5`, `content-available: 1`, with no alert body. Notifications collapse per `(objectiveId ?? missionId, category)`. Delivery is durable and retried with backoff; `410 Unregistered` and `400 BadDeviceToken` retire the registration. With no APNs credentials configured, enqueueing still succeeds and dispatch no-ops so local development is unaffected.
 - **Privacy**: Payloads contain only the bounded project name, the sanitized bounded title and display id of the objective when the row has an `objective_id` (otherwise the mission), a badge count, the mission id, optional objective id/display id, the category, and a deep link (`overlord://objectives/<displayId>` when an objective is known, else `overlord://missions/<missionId>`). They never contain bearer tokens, session keys, ActivityKit tokens, objective instructions, agent prompts, delivery summaries, change rationales, file paths, diffs, question text, or any `mission_events.payload_json` content. User-authored text reaches a payload only through the shared markdown-stripping bounded-title sanitizer.
+
+### Client → REST (Private Conversation Surface)
+
+- **Transport**: Authenticated HTTPS/JSON plus one owner-scoped SSE stream per thread (`GET /api/chat/threads/:id/events?after=<seq>`); web, desktop (shared SPA), and mobile clients use the same routes. Cloud only.
+- **Ordering and recovery**: events are persisted before they are sent and replayed from storage; clients resume after their last applied `seq`, deduplicate by `seq`, and reload the atomic snapshot on `snapshot_required`. A closed stream never implies completion; the snapshot route doubles as the polling fallback.
+- **Presence and acknowledgement**: a client renews foreground presence while a thread is visible and releases it when backgrounding or leaving; it acknowledges a `seq` only after rendering that event. Acknowledgement suppresses a pending conversation notification; transport receipt and an open connection never do.
+- **Writes**: message submission, answers, cancel, continue, and Create carry stable client request ids reused across retries; revision-checked actions carry `expectedRevision`. Create is the only path from a conversation to missions and objectives.
+- **Privacy**: no provider checkpoint, raw tool result, credential, or OAuth material is ever returned; content whose sources are no longer authorized is returned as `unavailable` blocks.
+
+### Backend → Outbound MCP (Account Connection Surface)
+
+- **Transport**: HTTPS JSON-RPC (MCP streamable HTTP) from the backend to the configured Knowledgebase origin only, with the connection's access token; egress is restricted server-side.
+- **Policy**: only a reviewed read-tool allowlist, namespaced per connection, is exposed to the assistant; write tools are rejected regardless of annotations; every call has output-size and time bounds; the per-source access check fails closed.
+- **Tool policy version 1**: `list_workspaces`, `search`, `read_file`, `get_related`, `list_children`, `get_links`, `read_resource`, `list_entities`, each with Overlord-reviewed descriptions and closed input schemas (server descriptions and schemas are never shown to the model). Server annotations can only withhold a reviewed tool (one not annotated `readOnlyHint: true`, or annotated destructive); `query` and every write are rejected by name before any request. Tool ids are `kb_<first 12 hex of the connection id>_<tool>` (≤ 64 characters; letters, digits, and underscores only, because the provider rewrote the earlier dotted form and the gateway then rejected the call as an unknown tool). Workspace-scoped calls must name a workspace in the connection's `authorizedWorkspaces` (refreshed from `list_workspaces` once when unknown).
+- **Bounds**: 4 KiB arguments, 1 MiB response read from the network (beyond that the call fails), 64 KiB text returned per call with a `truncated` flag, 15 s per call, redirects never followed. Results carry the namespaced tool, connection, workspace, observation time, and provenance (node id, path, provider revision, and update time for every node in the full response, at most 50).
+- **Access checks**: a source check consults the owner's connection row on every call (`disconnected` or foreign → `revoked`; not connected → `unknown`), then `get_related` (403/404 → `revoked`). Only positive answers are cached, per owner, for 15 s, so an upstream node revocation is observed within that window. Any other result is `unknown`; both fail closed.
+- **Token use**: a 401 triggers one refresh shared by concurrent callers through the refresh lease (15 s, shorter than the provider's 30 s reuse grace). A second 401 or `invalid_grant` marks the connection `reauthorization_required` and erases its credential.
+- **Credentials**: obtained and refreshed only by the connections module (serialized refresh, rotated token persisted before use) and never logged or returned.
 
 ### MCP Server → Auth (Hosted Agent Auth Surface)
 
@@ -2116,6 +2617,13 @@ extension declarations and the agent-session capability vocabulary.
 - `idempotency_keys.status`: `in_progress`, `completed`, `failed`
 - `audit_log.result`: `allowed`, `denied`, `failed`
 - `workspace_invitations.status`: `pending`, `accepted`, `revoked`, `expired`
+- `chat_runs.state`: `queued`, `running`, `waiting_user`, `completed`, `failed`, `cancelled`; `chat_runs.outcome`: `answered`, `allowance_exhausted`; `chat_runs.failure_code` / `chat_run_attempts.failure_code`: `provider_unavailable`, `rate_limited`, `context_limit`, `unsupported_capability`, `interrupted`, `provider_error`, `source_access_lost`
+- `chat_run_attempts.state`: `leased`, `released`, `succeeded`, `failed`, `fenced`, `cancelled`; `chat_run_attempts.recovery_mode`: `initial`, `checkpoint`, `fresh_generation`
+- `chat_messages.role`: `user`, `assistant`; `chat_messages.state`: `streaming`, `complete`, `interrupted`; `chat_questions.state`: `open`, `answered`, `superseded`, `cancelled`; `chat_work_proposals.state`: `open`, `created`, `cancelled`; `chat_tool_calls.state`: `requested`, `executing`, `completed`, `failed`, `cancelled`
+- `chat_events.kind`: `thread.updated`, `message.created`, `message.delta`, `message.completed`, `run.updated`, `tool.updated`, `question.opened`, `question.closed`, `proposal.revised`, `proposal.created`, `content.invalidated`
+- `chat_source_refs.source_kind`: `knowledgebase`, `overlord`, `repository`; `chat_source_refs.access_state`: `authorized`, `revoked`, `unknown`
+- `chat_notifications.type`: `chat_needs_answer`, `chat_finished` (also admitted by `notification_preferences.type`); `chat_notifications.state`: `pending`, `suppressed`, `dispatching`, `dispatched`, `cancelled`, `failed`
+- `account_connections.provider`: `knowledgebase`; `account_connections.state`: `pending`, `connected`, `reauthorization_required`, `disconnected`
 - RBAC role names (`role_assignments.role_key` core, non-extension values; enumerated in `auth/src/rbac/types.ts`'s `Role` enum and `overlord.rbac.toml`): `ADMIN`, `MANAGER`, `MEMBER`, `PUBLIC`
 
 ### Open (extensions may add namespaced values)

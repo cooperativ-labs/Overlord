@@ -22,8 +22,11 @@ import type {
   PrepareBranchInput,
   PurgeMergedWorktreesInput,
   ReadCurrentDiffInput,
+  ReadGitStatusInput,
+  ReadRepositoryFileInput,
   ReadRepositoryTreeInput,
   RemoveWorktreeInput,
+  SearchRepositoryTextInput,
   SendLatchMessageInput,
   StopLatchSessionInput,
   TargetMetadata,
@@ -145,6 +148,15 @@ export class UnavailableProvider implements LocalTargetCapabilities {
     return this.#fail();
   }
   readCurrentDiff(_input: ReadCurrentDiffInput) {
+    return this.#fail();
+  }
+  readGitStatus(_input: ReadGitStatusInput) {
+    return this.#fail();
+  }
+  readRepositoryFile(_input: ReadRepositoryFileInput) {
+    return this.#fail();
+  }
+  searchRepositoryText(_input: SearchRepositoryTextInput) {
     return this.#fail();
   }
   generateCommitMessageFromLocalDiff(_input: GenerateCommitMessageInput) {

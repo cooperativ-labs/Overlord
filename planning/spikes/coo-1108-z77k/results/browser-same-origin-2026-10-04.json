@@ -1,0 +1,72 @@
+{
+  "mode": "same-origin",
+  "base": "http://127.0.0.1:4355",
+  "finishedAt": "2026-10-04T14:35:40.654Z",
+  "results": [
+    {
+      "id": "same-origin.nav",
+      "title": "Chat entry sits directly above Inbox in the sidebar",
+      "status": "pass",
+      "detail": {
+        "chatY": 168,
+        "inboxY": 200
+      }
+    },
+    {
+      "id": "same-origin.readiness",
+      "title": "Provider readiness is shown",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "id": "same-origin.streamed-answer",
+      "title": "A new conversation streams an answer into the transcript",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "id": "same-origin.proposal-card",
+      "title": "The proposal card shows project, frozen agent and model, and a Create button",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "id": "same-origin.created",
+      "title": "Create shows the created draft with its mission id; Create is no longer offered",
+      "status": "pass",
+      "detail": {
+        "display": "eng:14"
+      }
+    },
+    {
+      "id": "same-origin.receipt-after-reload",
+      "title": "After a reload the receipt is still shown and Create is not offered again",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "id": "same-origin.revoked-content",
+      "title": "A thread whose sources were revoked shows a withheld-content placeholder, not the old answer",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "id": "same-origin.connections",
+      "title": "The connected-accounts page offers the Knowledgebase connection",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "id": "same-origin.no-errors",
+      "title": "No page errors and no failing chat or connection request",
+      "status": "pass",
+      "detail": {
+        "errors": [],
+        "otherFailingRequests": [
+          "400 /api/agent-catalog",
+          "400 /api/launch-settings"
+        ]
+      }
+    }
+  ]
+}

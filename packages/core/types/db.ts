@@ -25,6 +25,42 @@ export interface Account {
   userId: string;
 }
 
+export interface AccountConnectionAuthorizations {
+  connection_id: string;
+  consumed_at: string | null;
+  created_at: string;
+  expires_at: string;
+  id: string | null;
+  pkce_verifier_ciphertext: string;
+  return_to: string;
+  state_hash: string;
+}
+
+export interface AccountConnections {
+  access_expires_at: string | null;
+  authorized_workspaces_json: Generated<string>;
+  connected_at: string | null;
+  created_at: string;
+  credential_ciphertext: string | null;
+  credential_key_id: string | null;
+  credential_revision: Generated<number>;
+  disconnected_at: string | null;
+  id: string | null;
+  last_error_code: string | null;
+  last_refreshed_at: string | null;
+  organization_id: string;
+  owner_profile_id: string;
+  provider: string;
+  refresh_expires_at: string | null;
+  refresh_lock_owner: string | null;
+  refresh_lock_until: string | null;
+  revision: Generated<number>;
+  server_url: string;
+  state: string;
+  tool_policy_version: Generated<number>;
+  updated_at: string;
+}
+
 export interface AgentRequests {
   allows_free_text: Generated<number>;
   application_observed_at: string | null;
@@ -263,6 +299,293 @@ export interface ChangeRationales {
   updated_at: string;
   why: string;
   workspace_id: string;
+}
+
+export interface ChatDependencySetMembers {
+  dependency_set_id: string;
+  source_ref_id: string;
+}
+
+export interface ChatDependencySets {
+  created_at: string;
+  digest: string;
+  id: string | null;
+  invalidated_at: string | null;
+  thread_id: string;
+}
+
+export interface ChatEventAcks {
+  acked_at: string;
+  acked_seq: number;
+  client_id: string;
+  created_at: string;
+  thread_id: string;
+}
+
+export interface ChatEvents {
+  attempt_id: string | null;
+  created_at: string;
+  dependency_set_id: string | null;
+  fence: number | null;
+  id: string | null;
+  kind: string;
+  payload_json: string;
+  run_id: string | null;
+  seq: number;
+  thread_id: string;
+}
+
+export interface ChatEvidence {
+  created_at: string;
+  excerpt: string | null;
+  excerpt_truncated: Generated<number>;
+  id: string | null;
+  label: string;
+  observed_at: string;
+  run_id: string | null;
+  source_ref_id: string;
+  source_revision: string | null;
+  thread_id: string;
+  tool_call_id: string | null;
+}
+
+export interface ChatMessages {
+  answers_question_id: string | null;
+  blocks_json: Generated<string>;
+  client_request_id: string | null;
+  created_at: string;
+  dependency_set_id: string | null;
+  id: string | null;
+  invalidated_at: string | null;
+  revision: Generated<number>;
+  role: string;
+  run_id: string | null;
+  state: string;
+  thread_id: string;
+  updated_at: string;
+}
+
+export interface ChatNotifications {
+  attempt_count: Generated<number>;
+  created_at: string;
+  deleted_at: string | null;
+  dispatched_at: string | null;
+  due_at: string;
+  event_seq: number;
+  id: string | null;
+  last_error: string | null;
+  locked_by: string | null;
+  locked_until: string | null;
+  max_attempts: Generated<number>;
+  organization_id: string;
+  owner_profile_id: string;
+  question_id: string | null;
+  read_at: string | null;
+  revision: Generated<number>;
+  run_id: string;
+  state: string;
+  suppressed_at: string | null;
+  suppressed_by_client_id: string | null;
+  thread_id: string;
+  thread_title: string | null;
+  transition_key: string;
+  type: string;
+  updated_at: string;
+}
+
+export interface ChatPresence {
+  client_id: string;
+  created_at: string;
+  expires_at: string;
+  platform: string;
+  released_at: string | null;
+  thread_id: string;
+  updated_at: string;
+}
+
+export interface ChatProviderCheckpoints {
+  attempt_id: string;
+  config_digest: string;
+  created_at: string;
+  dependency_set_id: string | null;
+  fence: number;
+  invalidated_at: string | null;
+  model: string;
+  payload_json: string;
+  phase: string;
+  provider: string;
+  revision: Generated<number>;
+  run_id: string | null;
+  schema_version: number;
+  updated_at: string;
+}
+
+export interface ChatQuestions {
+  allow_free_text: Generated<number>;
+  answer_message_id: string | null;
+  answered_at: string | null;
+  created_at: string;
+  dependency_set_id: string | null;
+  id: string | null;
+  options_json: Generated<string>;
+  ordinal: number;
+  prompt: string;
+  revision: Generated<number>;
+  run_id: string;
+  state: string;
+  thread_id: string;
+  updated_at: string;
+}
+
+export interface ChatRunAttempts {
+  attempt_number: number;
+  config_digest: string | null;
+  ended_at: string | null;
+  failure_code: string | null;
+  fence: number;
+  id: string | null;
+  lease_expires_at: string | null;
+  lease_owner: string | null;
+  model: string;
+  provider: string;
+  recovery_mode: string;
+  run_id: string;
+  started_at: string;
+  state: string;
+}
+
+export interface ChatRuns {
+  active_attempt_id: string | null;
+  active_processing_ms: Generated<number>;
+  cancel_requested_at: string | null;
+  completed_at: string | null;
+  continued_from_run_id: string | null;
+  created_at: string;
+  current_fence: Generated<number>;
+  failure_code: string | null;
+  gathered_content_bytes: Generated<number>;
+  id: string | null;
+  limits_json: Generated<string>;
+  outcome: string | null;
+  revision: Generated<number>;
+  state: string;
+  thread_id: string;
+  tool_call_count: Generated<number>;
+  trigger_message_id: string | null;
+  updated_at: string;
+}
+
+export interface ChatSourceRefs {
+  access_checked_at: string;
+  access_state: string;
+  connection_id: string | null;
+  created_at: string;
+  execution_target_id: string | null;
+  id: string | null;
+  locator_json: string;
+  project_id: string | null;
+  resource_key: string | null;
+  revision: Generated<number>;
+  scope_key: string;
+  source_kind: string;
+  source_revision: string | null;
+  thread_id: string;
+  updated_at: string;
+  workspace_id: string | null;
+}
+
+export interface ChatThreads {
+  archived_at: string | null;
+  authorization_revision: Generated<number>;
+  created_at: string;
+  id: string | null;
+  last_activity_at: string;
+  last_event_seq: Generated<number>;
+  organization_id: string;
+  owner_profile_id: string;
+  retained_from_seq: Generated<number>;
+  revision: Generated<number>;
+  title: Generated<string>;
+  title_source: Generated<string>;
+  updated_at: string;
+}
+
+export interface ChatThreadSummaries {
+  covers_through_message_id: string | null;
+  created_at: string;
+  dependency_set_id: string | null;
+  id: string | null;
+  invalidated_at: string | null;
+  summary_json: string;
+  summary_revision: number;
+  thread_id: string;
+}
+
+export interface ChatToolCalls {
+  arguments_json: Generated<string>;
+  attempt_id: string;
+  call_order: number;
+  completed_at: string | null;
+  created_at: string;
+  dependency_set_id: string | null;
+  error_code: string | null;
+  executions: Generated<number>;
+  id: string | null;
+  operation_id: string;
+  policy_version: number;
+  provider_call_id: string | null;
+  requested_fence: number;
+  result_bytes: number | null;
+  result_json: string | null;
+  result_truncated: Generated<number>;
+  run_id: string;
+  state: string;
+  tool_id: string;
+  turn_index: number;
+  updated_at: string;
+  writer_fence: number;
+}
+
+export interface ChatWorkProposalRevisions {
+  created_at: string;
+  dependency_set_id: string | null;
+  invalidated_at: string | null;
+  proposal_id: string;
+  proposal_revision: number;
+  responsible_profile_id: string;
+  run_id: string | null;
+  spec_json: string;
+}
+
+export interface ChatWorkProposals {
+  created_at: string;
+  created_by_run_id: string | null;
+  current_revision: number;
+  id: string | null;
+  revision: Generated<number>;
+  state: string;
+  thread_id: string;
+  updated_at: string;
+}
+
+export interface ChatWorkReceiptMissions {
+  mission_id: string;
+  objective_ids_json: Generated<string>;
+  position: number;
+  project_id: string;
+  receipt_id: string;
+  workspace_id: string;
+}
+
+export interface ChatWorkReceipts {
+  authorization_revision: number;
+  client_request_id: string;
+  created_at: string;
+  id: string | null;
+  owner_profile_id: string;
+  proposal_id: string;
+  proposal_revision: number;
+  request_digest: string;
 }
 
 export interface Deliveries {
@@ -719,6 +1042,7 @@ export interface Missions {
   created_by_token_id: string | null;
   created_by_token_label: string | null;
   created_by_workspace_user_id: string | null;
+  created_from_chat_thread_id: string | null;
   deleted_at: string | null;
   display_id: string;
   due_datetime: string | null;
@@ -1432,6 +1756,8 @@ export interface WorkspaceUsers {
 
 export interface DB {
   account: Account;
+  account_connection_authorizations: AccountConnectionAuthorizations;
+  account_connections: AccountConnections;
   agent_requests: AgentRequests;
   agent_session_channels: AgentSessionChannels;
   agent_session_events: AgentSessionEvents;
@@ -1441,6 +1767,26 @@ export interface DB {
   attachments: Attachments;
   change_rationales: ChangeRationales;
   changed_files: ChangedFiles;
+  chat_dependency_set_members: ChatDependencySetMembers;
+  chat_dependency_sets: ChatDependencySets;
+  chat_event_acks: ChatEventAcks;
+  chat_events: ChatEvents;
+  chat_evidence: ChatEvidence;
+  chat_messages: ChatMessages;
+  chat_notifications: ChatNotifications;
+  chat_presence: ChatPresence;
+  chat_provider_checkpoints: ChatProviderCheckpoints;
+  chat_questions: ChatQuestions;
+  chat_run_attempts: ChatRunAttempts;
+  chat_runs: ChatRuns;
+  chat_source_refs: ChatSourceRefs;
+  chat_thread_summaries: ChatThreadSummaries;
+  chat_threads: ChatThreads;
+  chat_tool_calls: ChatToolCalls;
+  chat_work_proposal_revisions: ChatWorkProposalRevisions;
+  chat_work_proposals: ChatWorkProposals;
+  chat_work_receipt_missions: ChatWorkReceiptMissions;
+  chat_work_receipts: ChatWorkReceipts;
   deliveries: Deliveries;
   device_push_tokens: DevicePushTokens;
   devices: Devices;

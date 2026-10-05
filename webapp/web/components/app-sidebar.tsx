@@ -1,5 +1,5 @@
 import { Link, useRouterState } from '@tanstack/react-router';
-import { Activity, Inbox, KanbanIcon, Settings } from 'lucide-react';
+import { Activity, Inbox, KanbanIcon, MessagesSquare, Settings } from 'lucide-react';
 import { useState } from 'react';
 
 import { NavUser } from '@/components/nav-user';
@@ -42,6 +42,7 @@ export function AppSidebar() {
 
   const pathname = useRouterState({ select: state => state.location.pathname });
   const isFeedActive = pathname === '/feed' || pathname.startsWith('/feed/');
+  const isChatActive = pathname === '/chat' || pathname.startsWith('/chat/');
   const isInboxActive = pathname === '/inbox' || pathname.startsWith('/inbox/');
   const isMyMissionsActive = pathname === '/user' || pathname.startsWith('/user/');
   const { isMacDesktop } = getDesktopChrome();
@@ -80,6 +81,16 @@ export function AppSidebar() {
                   >
                     <KanbanIcon />
                     <span>My Missions</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    render={<Link to="/chat" />}
+                    isActive={isChatActive}
+                    tooltip="Chat"
+                  >
+                    <MessagesSquare />
+                    <span>Chat</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>

@@ -31,6 +31,7 @@ import type {
   DoctorResult,
   GenerateCommitMessageInput,
   GenerateCommitMessageResult,
+  GitStatusData,
   InspectLatchSessionInput,
   InspectLatchSessionResult,
   LaunchAgentInput,
@@ -50,10 +51,16 @@ import type {
   PurgeWorktreesResult,
   QueueableCapabilityName,
   ReadCurrentDiffInput,
+  ReadGitStatusInput,
+  ReadRepositoryFileInput,
   ReadRepositoryTreeInput,
   RemoveWorktreeInput,
+  RepositoryFileData,
+  RepositoryReadTargetValue,
+  RepositorySearchData,
   RepositoryTreeResult,
   ResourceObservation,
+  SearchRepositoryTextInput,
   SendLatchMessageInput,
   SendLatchMessageResult,
   StopLatchSessionInput,
@@ -78,6 +85,18 @@ export interface RunnerQueueContext {
   readTimeoutMs?: number;
   /** Deadline for mutating capabilities; defaults to 120s. */
   writeTimeoutMs?: number;
+  /**
+   * The project resource the call addresses. Carried to the claim so it
+   * resolves this resource on the target instead of the primary one.
+   */
+  resourceKey?: string | null;
+  /**
+   * Queue idempotency key for every call this provider makes, when the caller
+   * minted one per operation (repository reads build one provider per read).
+   */
+  operationId?: string | null;
+  /** Stops waiting (not the queued job) when the caller is cancelled. */
+  signal?: AbortSignal | null;
   /** Fallback poll cadence when no completion listener can be armed. */
   pollIntervalMs?: number;
   /**
@@ -94,6 +113,9 @@ const READ_CAPABILITIES = new Set<QueueableCapabilityName>([
   'listBranches',
   'listWorktrees',
   'readCurrentDiff',
+  'readGitStatus',
+  'readRepositoryFile',
+  'searchRepositoryText',
   'generateCommitMessageFromLocalDiff',
   'discoverLatch',
   'inspectLatchSession',
@@ -158,7 +180,8 @@ export class RunnerQueueProvider implements LocalTargetCapabilities {
         kind: mutationKindFor(capability),
         capability,
         input,
-        operationId: options.operationId ?? null
+        operationId: options.operationId ?? this.queue.operationId ?? null,
+        resourceKey: this.queue.resourceKey ?? null
       });
       requestId = queued.id;
     } catch (error) {
@@ -180,7 +203,8 @@ export class RunnerQueueProvider implements LocalTargetCapabilities {
       ...(this.queue.pollIntervalMs === undefined
         ? {}
         : { pollIntervalMs: this.queue.pollIntervalMs }),
-      createListener: this.queue.createCompletionListener ?? null
+      createListener: this.queue.createCompletionListener ?? null,
+      signal: this.queue.signal ?? null
     })) as CapabilityResult<T>;
   }
 
@@ -230,6 +254,24 @@ export class RunnerQueueProvider implements LocalTargetCapabilities {
 
   readCurrentDiff(input: ReadCurrentDiffInput): Promise<CapabilityResult<CurrentDiffResult>> {
     return this.#call('readCurrentDiff', { ...input });
+  }
+
+  readGitStatus(
+    input: ReadGitStatusInput
+  ): Promise<CapabilityResult<RepositoryReadTargetValue<GitStatusData | null>>> {
+    return this.#call('readGitStatus', { ...input });
+  }
+
+  readRepositoryFile(
+    input: ReadRepositoryFileInput
+  ): Promise<CapabilityResult<RepositoryReadTargetValue<RepositoryFileData | null>>> {
+    return this.#call('readRepositoryFile', { ...input });
+  }
+
+  searchRepositoryText(
+    input: SearchRepositoryTextInput
+  ): Promise<CapabilityResult<RepositoryReadTargetValue<RepositorySearchData | null>>> {
+    return this.#call('searchRepositoryText', { ...input });
   }
 
   generateCommitMessageFromLocalDiff(

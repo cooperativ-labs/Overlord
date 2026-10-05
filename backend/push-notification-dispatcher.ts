@@ -173,6 +173,48 @@ export async function deliverStandardPush({
   // mission-scoped events. Keying on the mission alone would let two runs of the
   // same mission replace each other's banners once they identify objectives.
   const collapseId = `${category}:${presentation.objectiveId ?? missionId}`.slice(0, 64);
+  await sendToDeviceTokens({ db, tokens, body, mode, collapseId });
+}
+
+/**
+ * Sends one prepared body to each of a profile's registered device tokens over
+ * the standard APNs transport, retiring dead registrations. Shared by mission
+ * pushes and owner-addressed conversation pushes so both use one device path.
+ */
+export async function sendToProfileDevices({
+  db,
+  profileId,
+  body,
+  mode,
+  collapseId
+}: {
+  db: DatabaseClient;
+  profileId: string;
+  body: string;
+  mode: 'alert' | 'silent';
+  collapseId: string;
+}): Promise<void> {
+  const tokens = await db.all<DeviceTokenRow>(
+    `SELECT id, device_token, environment, bundle_id
+         FROM device_push_tokens WHERE profile_id = ?`,
+    [profileId]
+  );
+  await sendToDeviceTokens({ db, tokens, body, mode, collapseId: collapseId.slice(0, 64) });
+}
+
+async function sendToDeviceTokens({
+  db,
+  tokens,
+  body,
+  mode,
+  collapseId
+}: {
+  db: DatabaseClient;
+  tokens: DeviceTokenRow[];
+  body: string;
+  mode: 'alert' | 'silent';
+  collapseId: string;
+}): Promise<void> {
   const config = apnsConfig();
   for (const token of tokens) {
     if (!config) continue; // Local development stays functional without APNs credentials.

@@ -7,8 +7,9 @@ import type {
   GitHubUserConnectionDto
 } from '@overlord/contract/ext/github';
 import type { DatabaseClient } from '@overlord/database';
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 
+import { decodeEncryptionKey, openSecret, sealSecret } from '../../connections/crypto.ts';
 import { newId, nowIso, requireDatabaseClient, resolveActiveProfileId } from '../../db.ts';
 import { ApiError } from '../../errors.ts';
 import { resolveAuthBaseUrl } from '../../http/public-backend-url.ts';
@@ -75,11 +76,7 @@ type GitHubOrganizationMembership = {
 };
 
 function encryptionKeyFromEnv(): Buffer | null {
-  const encoded = process.env.GITHUB_USER_TOKEN_ENCRYPTION_KEY?.trim();
-  if (!encoded) return null;
-  const key = Buffer.from(encoded, 'base64url');
-  if (key.length !== 32) return null;
-  return key;
+  return decodeEncryptionKey(process.env.GITHUB_USER_TOKEN_ENCRYPTION_KEY);
 }
 
 export function githubUserOAuthConfigured(): boolean {
@@ -104,8 +101,8 @@ function requireUserOAuthConfig(): UserOAuthConfig {
   return config;
 }
 
-function tokenAad(profileId: string, kind: 'access' | 'refresh'): Buffer {
-  return Buffer.from(`overlord:github-user-oauth:v1:${profileId}:${kind}`, 'utf8');
+function tokenAad(profileId: string, kind: 'access' | 'refresh'): string {
+  return `overlord:github-user-oauth:v1:${profileId}:${kind}`;
 }
 
 function encryptToken(
@@ -114,12 +111,7 @@ function encryptToken(
   kind: 'access' | 'refresh',
   key: Buffer
 ): string {
-  const nonce = randomBytes(12);
-  const cipher = createCipheriv('aes-256-gcm', key, nonce);
-  cipher.setAAD(tokenAad(profileId, kind));
-  const ciphertext = Buffer.concat([cipher.update(token, 'utf8'), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return `v1.${nonce.toString('base64url')}.${tag.toString('base64url')}.${ciphertext.toString('base64url')}`;
+  return sealSecret({ plaintext: token, key, aad: tokenAad(profileId, kind) });
 }
 
 function decryptToken(
@@ -128,18 +120,8 @@ function decryptToken(
   kind: 'access' | 'refresh',
   key: Buffer
 ): string {
-  const [version, nonceText, tagText, ciphertextText, ...extra] = envelope.split('.');
-  if (version !== 'v1' || !nonceText || !tagText || !ciphertextText || extra.length > 0) {
-    throw new ApiError(503, 'The stored GitHub connection cannot be decrypted.');
-  }
   try {
-    const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(nonceText, 'base64url'));
-    decipher.setAAD(tokenAad(profileId, kind));
-    decipher.setAuthTag(Buffer.from(tagText, 'base64url'));
-    return Buffer.concat([
-      decipher.update(Buffer.from(ciphertextText, 'base64url')),
-      decipher.final()
-    ]).toString('utf8');
+    return openSecret({ envelope, key, aad: tokenAad(profileId, kind) });
   } catch {
     throw new ApiError(503, 'The stored GitHub connection cannot be decrypted.');
   }

@@ -59,6 +59,17 @@ The SSE/WebSocket realtime endpoint is owned by the REST API Layer. New event ty
 3. **Implement via `backend/realtime.ts`** (and the `recordChange` helpers in `backend/db.ts`). Events must be derived from `entity_changes` rows written in the same transaction as the domain mutation — never computed separately. Canonical stream: `GET /realtime`; catch-up: `GET /sync/changes?after=<seq>`.
 4. **Document the event shape** (type, payload fields) in `CONTRACT.md` REST API Layer section.
 
+**Sanctioned exception — the private assistant event channel (contract v152).** Chat
+events (`GET /api/chat/threads/:id/events`) do **not** derive from `entity_changes`.
+They are private to one owner and too frequent for the change log, so they are
+persisted to `chat_events` (gap-free per-thread `seq`, append-only, bounded retention)
+in the same transaction as the chat state change, then sent; replay always reads
+storage and passes through the source-authorization projection, so a revoked source's
+content is never replayed. Chat writes must not append `entity_changes`,
+`outbox_messages`, or `search_documents`; missions created by chat Create emit their
+normal rows. Conversation notifications use `chat_notifications`, not `worker_jobs`.
+No other feature may reuse this exception without a contract change.
+
 ---
 
 ## Adding a REST Extension Module
@@ -92,6 +103,9 @@ backend/
   <domain>.test.ts      ← colocated tests
   http/                 ← request helpers (meta, origins, SPA serving, device hints)
   execution/            ← runner / launch / local-target helpers
+  connections/          ← account connections (sole credential store for external
+                          accounts), shared AES-256-GCM envelopes, outbound
+                          Knowledgebase MCP client, live chat source checks
   branching/            ← branch observations and related routes
   ext/
     <name>/             ← namespaced extension routes

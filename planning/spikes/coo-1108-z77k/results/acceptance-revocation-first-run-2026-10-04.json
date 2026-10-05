@@ -1,0 +1,300 @@
+{
+  "harness": "acceptance-revocation",
+  "finishedAt": "2026-10-04T13:43:34.007Z",
+  "summary": {
+    "pass": 10,
+    "fail": 2,
+    "blocked": 0
+  },
+  "results": [
+    {
+      "id": "v.setup",
+      "title": "The thread cites the note and holds a creatable proposal derived from it",
+      "status": "pass",
+      "detail": {
+        "cited": true,
+        "proposal": true
+      }
+    },
+    {
+      "id": "v.snapshot",
+      "title": "After revocation the snapshot replaces derived answers with unavailable blocks and no note text remains",
+      "status": "pass",
+      "detail": {
+        "unavailableMessages": 3,
+        "lagMs": 17265
+      }
+    },
+    {
+      "id": "v.replay",
+      "title": "Replay from storage sends invalidation markers instead of the stored content",
+      "status": "pass",
+      "detail": {
+        "invalidations": 32
+      }
+    },
+    {
+      "id": "v.create-refused",
+      "title": "Create of the derived proposal is refused and creates nothing",
+      "status": "pass",
+      "detail": {
+        "status": 409,
+        "code": "proposal_not_creatable",
+        "cardInvalidated": true
+      }
+    },
+    {
+      "id": "v.provider-input",
+      "title": "No provider request after revocation contains the note text; the withheld marker is sent instead",
+      "status": "pass",
+      "detail": {
+        "requests": 11,
+        "containing": {
+          "token bucket in memory": 0,
+          "withheld: source access was lost": 11
+        }
+      }
+    },
+    {
+      "id": "v.reread-fails-closed",
+      "title": "Re-reading the revoked note is refused and the answer says the notes are unavailable",
+      "status": "pass",
+      "detail": {
+        "calls": [
+          {
+            "tool": "kb:list_workspaces",
+            "outcome": "ok"
+          },
+          {
+            "tool": "kb:search",
+            "outcome": "unavailable"
+          },
+          {
+            "tool": "kb:search",
+            "outcome": "unavailable"
+          },
+          {
+            "tool": "kb:list_entities",
+            "outcome": "ok"
+          },
+          {
+            "tool": "kb:list_entities",
+            "outcome": "ok"
+          },
+          {
+            "tool": "overlord_list_projects",
+            "outcome": "ok"
+          },
+          {
+            "tool": "overlord_search_missions",
+            "outcome": "ok"
+          },
+          {
+            "tool": "kb:list_entities",
+            "outcome": "ok"
+          },
+          {
+            "tool": "kb:list_entities",
+            "outcome": "ok"
+          },
+          {
+            "tool": "overlord_list_execution_targets",
+            "outcome": "ok"
+          },
+          {
+            "tool": "repository_read",
+            "outcome": "ok"
+          },
+          {
+            "tool": "repository_read",
+            "outcome": "ok"
+          },
+          {
+            "tool": "repository_read",
+            "outcome": "ok"
+          },
+          {
+            "tool": "kb:read_file",
+            "outcome": "ok"
+          },
+          {
+            "tool": "kb:read_file",
+            "outcome": "ok"
+          },
+          {
+            "tool": "kb:read_file",
+            "outcome": "ok"
+          }
+        ]
+      }
+    },
+    {
+      "id": "v.live-attempt",
+      "title": "Revoking a source during a run stops the attempt with source_access_lost, or the run had already finished; either way the content is withheld afterwards",
+      "status": "pass",
+      "detail": {
+        "run": {
+          "state": "failed",
+          "failureCode": "source_access_lost"
+        },
+        "attempts": [
+          {
+            "state": "fenced",
+            "failure_code": null
+          }
+        ]
+      }
+    },
+    {
+      "id": "v.repository-source",
+      "title": "Losing access to the execution target withholds answers built on its repository reads",
+      "status": "fail",
+      "detail": {
+        "cited": true,
+        "revokedRows": 0
+      }
+    },
+    {
+      "id": "v.overlord-source",
+      "title": "Losing the workspace of a cited project withholds the answer that described it",
+      "status": "pass",
+      "detail": {
+        "cited": true
+      }
+    },
+    {
+      "id": "v.fail-closed",
+      "title": "When the Knowledgebase cannot confirm access the content is withheld rather than served",
+      "status": "fail",
+      "detail": {
+        "cited": false,
+        "note": "18b7a2cb"
+      }
+    },
+    {
+      "id": "v.disconnect",
+      "title": "Disconnect revokes upstream and immediately withholds earlier research that cited the connection",
+      "status": "pass",
+      "detail": {
+        "state": "disconnected",
+        "upstreamRevocations": 2,
+        "researchChecked": true
+      }
+    },
+    {
+      "id": "v.no-live-connection",
+      "title": "A disconnected connection is no longer listed and contributes no tools",
+      "status": "pass",
+      "detail": {}
+    }
+  ],
+  "model": "gemini-3.8-flash",
+  "base": "http://127.0.0.1:4411",
+  "revocation": {
+    "followUpAnswer": "I am unable to retrieve the rate limiting decision from your notes because access to the Knowledgebase is currently unavailable (the search failed with `source_unverified`). \n\nAs a reminder, repository documents are not notes, and a failed search does not prove absence. Once access to the Knowledgebase is restored, I can read the note and summarize the exact mechanism and limit.",
+    "followUpCalls": [
+      {
+        "tool": "kb:list_workspaces",
+        "outcome": "ok"
+      },
+      {
+        "tool": "kb:search",
+        "outcome": "unavailable"
+      },
+      {
+        "tool": "kb:search",
+        "outcome": "unavailable"
+      },
+      {
+        "tool": "kb:list_entities",
+        "outcome": "ok"
+      },
+      {
+        "tool": "kb:list_entities",
+        "outcome": "ok"
+      },
+      {
+        "tool": "overlord_list_projects",
+        "outcome": "ok"
+      },
+      {
+        "tool": "overlord_search_missions",
+        "outcome": "ok"
+      },
+      {
+        "tool": "kb:list_entities",
+        "outcome": "ok"
+      },
+      {
+        "tool": "kb:list_entities",
+        "outcome": "ok"
+      },
+      {
+        "tool": "overlord_list_execution_targets",
+        "outcome": "ok"
+      },
+      {
+        "tool": "repository_read",
+        "outcome": "ok"
+      },
+      {
+        "tool": "repository_read",
+        "outcome": "ok"
+      },
+      {
+        "tool": "repository_read",
+        "outcome": "ok"
+      },
+      {
+        "tool": "kb:read_file",
+        "outcome": "ok"
+      },
+      {
+        "tool": "kb:read_file",
+        "outcome": "ok"
+      },
+      {
+        "tool": "kb:read_file",
+        "outcome": "ok"
+      }
+    ],
+    "providerRequests": {
+      "requests": 11,
+      "containing": {
+        "token bucket in memory": 0,
+        "withheld: source access was lost": 11
+      }
+    }
+  },
+  "liveRevocation": {
+    "revoked": true,
+    "run": {
+      "id": "533d02a0-1a22-47bf-8539-c9e761061ea0",
+      "threadId": "081c4215-27b2-43e2-8fdf-e294b90f1714",
+      "triggerMessageId": "6225c35e-9838-472c-b25b-5fa8424b34b8",
+      "state": "failed",
+      "outcome": null,
+      "failureCode": "source_access_lost",
+      "continuedFromRunId": null,
+      "continueAvailable": false,
+      "usage": {
+        "toolCalls": 14,
+        "activeProcessingMs": 10086,
+        "gatheredContentBytes": 18577
+      },
+      "cancelRequestedAt": null,
+      "createdAt": "2026-10-04T13:41:57.065Z",
+      "updatedAt": "2026-10-04T13:42:16.634Z",
+      "completedAt": "2026-10-04T13:42:16.634Z",
+      "revision": 3
+    },
+    "attempts": [
+      {
+        "state": "fenced",
+        "failure_code": null
+      }
+    ],
+    "lateProviderRequestsWithNote": 0
+  },
+  "targetRevokeError": "new row for relation \"workspace_user_execution_targets\" violates check constraint \"workspace_user_execution_targets_access_status_check\""
+}

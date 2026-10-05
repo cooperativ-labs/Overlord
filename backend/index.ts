@@ -12,6 +12,8 @@ import { fileURLToPath } from 'node:url';
 import { loadConfig } from '../cli/src/config.ts';
 import { isExplicitRuntimeEnv, resolveLayeredEnv } from '../cli/src/env.ts';
 import { handleMcpPost, mcpServerInfo } from '../mcp/server.ts';
+import { Conversations } from '../packages/core/service/chat/conversations.ts';
+import { ChatRuns } from '../packages/core/service/chat/runs.ts';
 import { ServiceError } from '../packages/core/service/errors.ts';
 import type { LocalTargetBridgeCall } from '../packages/core/service/local-target/desktop-bridge.ts';
 import { parseMissionSearchOptions } from '../packages/core/service/mission-search.ts';
@@ -19,6 +21,11 @@ import type { ProjectListLifecycle, StoredImageDto } from '../webapp/shared/cont
 
 import { postMissionBranchObservations } from './branching/mission-branch-observations.ts';
 import { postExecutionTargetObservations } from './branching/target-resource-observations.ts';
+import { type ChatEngine, chatSourceCheckers, createChatEngine } from './chat/engine.ts';
+import { chatLimitsFromEnv } from './chat/limits.ts';
+import { ConnectionsConfigError } from './connections/config.ts';
+import { type ConnectionsRuntime, createConnectionsRuntime } from './connections/index.ts';
+import { createConnectionsPublicRouter, createConnectionsRouter } from './connections/routes.ts';
 import { getExecutionTargetMigrationDiagnostics } from './execution/execution-target-migration.ts';
 import { forgetMissionLatchSession } from './execution/latch-sessions.ts';
 import {
@@ -84,14 +91,19 @@ import {
   getAllowedBrowserOrigins,
   requireAuthenticatedSession
 } from './auth.ts';
+import { createChatRouter } from './chat.ts';
+import { ChatNotificationDispatcher } from './chat-notification-dispatcher.ts';
+import { ChatWorker, stopOnTermination } from './chat-worker.ts';
 import {
   DATABASE_DIALECT,
   DATABASE_PATH,
   getActiveProfileId,
   getActiveTokenProjectIds,
   getActorWorkspaceUserId,
+  getAuthorizedWorkspacesContext,
   getBootstrapWorkspaceIdOrNull,
-  initDatabase
+  initDatabase,
+  requireDatabaseClient
 } from './db.ts';
 import { reopenDeferredWork, resolveDeferredWork } from './deferred-work-resolutions.ts';
 import { deliveryComposeWorker } from './delivery-compose-worker.ts';
@@ -228,6 +240,7 @@ import {
   upsertMissionSchedule,
   upsertMissionSharedContext
 } from './repository.ts';
+import { postProjectRepositoryRead } from './repository-reads.ts';
 import {
   deleteRunQueueEntry,
   getProjectRunQueues,
@@ -509,8 +522,17 @@ function isRawUploadRequest(req: Request): boolean {
   return /^\/api\/objectives\/[^/]+\/attachments$/.test(req.path);
 }
 
+// A runner's completion report carries the capability result envelope; bounded
+// repository reads (128 KiB of diff or search text plus JSON escaping and the
+// envelope) exceed the 100 KB default, so this one route accepts up to 1 MiB.
+const runnerCompletionJsonBody = express.json({ limit: '1mb' });
+function isRunnerCompletionRequest(req: Request): boolean {
+  return req.method === 'POST' && /^\/api\/runner\/requests\/[^/]+\/completed$/.test(req.path);
+}
+
 app.use((req, res, next) => {
   if (isRawUploadRequest(req)) return next();
+  if (isRunnerCompletionRequest(req)) return runnerCompletionJsonBody(req, res, next);
   return jsonBody(req, res, next);
 });
 
@@ -617,8 +639,75 @@ if (mcpEnabled) {
 // of a shared handler.
 app.use(AGENT_SESSION_CHANNEL_ROUTE_PREFIX, createAgentSessionChannelRouter());
 
+// ---- Assistant chat and account connections (contract v152, Cloud only) ----
+const chatCloud = () => DATABASE_DIALECT === 'postgres' || config.backendMode === 'cloud';
+/**
+ * Operator-tunable conversation limits and notification timing; unset or invalid values
+ * keep the contracted defaults (see `backend/chat/limits.ts`).
+ */
+const chatLimits = chatLimitsFromEnv(process.env);
+let connectionsRuntime: ConnectionsRuntime | null = null;
+function connectionsModule(): ConnectionsRuntime {
+  if (connectionsRuntime) return connectionsRuntime;
+  const webPublic =
+    process.env.OVERLORD_WEBAPP_PUBLIC_URL?.trim() || process.env.OVERLORD_PUBLIC_URL?.trim();
+  const options = {
+    db: requireDatabaseClient(),
+    env: process.env,
+    publicBaseUrl: resolveAuthBaseUrl(),
+    webReturnOrigin: webPublic ? new URL(webPublic).origin : null,
+    checkers: chatSourceCheckers(requireDatabaseClient()),
+    chatLimits
+  };
+  try {
+    connectionsRuntime = createConnectionsRuntime(options);
+  } catch (error) {
+    if (!(error instanceof ConnectionsConfigError)) throw error;
+    // A malformed optional provider setting disables that provider rather than the backend.
+    console.error(`[connections] Knowledgebase disabled: ${error.message}`);
+    connectionsRuntime = createConnectionsRuntime({
+      ...options,
+      env: { ...process.env, KNOWLEDGEBASE_MCP_URL: '', KNOWLEDGEBASE_EGRESS_ORIGINS: '' }
+    });
+  }
+  return connectionsRuntime;
+}
+let chatEngineInstance: ChatEngine | null = null;
+const chatEngine = (): ChatEngine =>
+  (chatEngineInstance ??= createChatEngine({
+    db: requireDatabaseClient(),
+    env: process.env,
+    connections: connectionsModule
+  }));
+const chatOwner = () => {
+  const profileId = getActiveProfileId(),
+    organizationId = getAuthorizedWorkspacesContext()?.organizationId;
+  return profileId && organizationId ? { profileId, organizationId } : null;
+};
+
+// Public: the Knowledgebase OAuth callback and client metadata document carry no session.
+app.use(createConnectionsPublicRouter({ cloud: chatCloud, runtime: connectionsModule }));
+
 app.use('/api', requireAuthenticatedSession);
 app.use('/api', projectAutomationRouteGuard);
+app.use(
+  '/api/chat',
+  createChatRouter({
+    cloud: chatCloud,
+    service: () =>
+      new Conversations(requireDatabaseClient(), {
+        limits: chatLimits,
+        checkSource: connectionsModule().checkSource,
+        assignmentCatalog: workspaceId => chatEngine().assignmentCatalog(workspaceId)
+      }),
+    owner: chatOwner,
+    providers: owner => chatEngine().providers(owner)
+  })
+);
+app.use(
+  '/api/connections',
+  createConnectionsRouter({ cloud: chatCloud, runtime: connectionsModule, owner: chatOwner })
+);
 
 app.get(
   '/api/meta',
@@ -1593,6 +1682,21 @@ app.patch(
     { mutates: true }
   )
 );
+app.post(
+  '/api/projects/:id/repository-reads',
+  handle((req, res) => {
+    // Client disconnect stops the wait only; the queued read is never re-queued.
+    const controller = new AbortController();
+    res.on('close', () => {
+      if (!res.writableEnded) controller.abort();
+    });
+    return postProjectRepositoryRead({
+      projectId: req.params.id,
+      body: req.body,
+      signal: controller.signal
+    });
+  })
+);
 app.get(
   '/api/projects/:id/repository',
   handle(req => {
@@ -2311,6 +2415,26 @@ async function start(): Promise<void> {
   liveActivityDispatcher.start();
   pushNotificationDispatcher.start();
   notificationDispatcher.start();
+  if (chatCloud()) {
+    const chatWorker = new ChatWorker(
+      () =>
+        new ChatRuns(requireDatabaseClient(), {
+          limits: chatLimits,
+          checkSource: connectionsModule().checkSource,
+          assignmentCatalog: workspaceId => chatEngine().assignmentCatalog(workspaceId)
+        }),
+      chatEngine().runtime
+    );
+    chatWorker.start();
+    const chatNotificationDispatcher = new ChatNotificationDispatcher(requireDatabaseClient, {
+      limits: chatLimits
+    });
+    chatNotificationDispatcher.start();
+    stopOnTermination(() => {
+      void chatWorker.stop();
+      chatNotificationDispatcher.stop();
+    });
+  }
 
   const server = app.listen(bindPort, bindHost, () => {
     const databaseLabel =

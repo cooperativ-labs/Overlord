@@ -97,33 +97,22 @@ function isTruthyFlag(value: unknown): boolean {
 }
 
 async function nextMissionSequence(ctx: ServiceContext): Promise<number> {
-  const row = (await ctx.db.get(
-    `SELECT id, next_value FROM mission_sequences
-       WHERE workspace_id = ? AND scope_type = 'workspace' AND counter_name = 'mission'`,
-    [ctx.workspace.id]
-  )) as { id: string; next_value: number } | undefined;
-
-  // A workspace provisioned before the counter existed (or one seeded outside
-  // the normal bootstrap) has no row yet. Start it at 1 rather than failing the
-  // create — matching what the REST path has always done.
-  if (!row) {
-    const seq = 1;
-    await ctx.db.run(
-      `INSERT INTO mission_sequences
-         (id, workspace_id, scope_type, scope_id, counter_name, next_value, updated_at)
-       VALUES (?, ?, 'workspace', ?, 'mission', ?, ?)`,
-      [newId(), ctx.workspace.id, ctx.workspace.id, seq + 1, nowIso()]
-    );
-    return seq;
-  }
-
-  const seq = row.next_value;
-  await ctx.db.run(`UPDATE mission_sequences SET next_value = ?, updated_at = ? WHERE id = ?`, [
-    seq + 1,
-    nowIso(),
-    row.id
-  ]);
-  return seq;
+  // Seed old workspaces idempotently, then allocate with one atomic update. This
+  // also serializes ordinary mission creation against an outer chat transaction.
+  await ctx.db.run(
+    `INSERT INTO mission_sequences
+       (id, workspace_id, scope_type, scope_id, counter_name, next_value, updated_at)
+     VALUES (?, ?, 'workspace', ?, 'mission', 1, ?)
+     ON CONFLICT (workspace_id, scope_type, scope_id, counter_name) DO NOTHING`,
+    [newId(), ctx.workspace.id, ctx.workspace.id, nowIso()]
+  );
+  const row = await ctx.db.get<{ sequence: number }>(
+    `UPDATE mission_sequences SET next_value = next_value + 1, updated_at = ?
+       WHERE workspace_id = ? AND scope_type = 'workspace' AND scope_id = ? AND counter_name = 'mission'
+       RETURNING next_value - 1 AS sequence`,
+    [nowIso(), ctx.workspace.id, ctx.workspace.id]
+  );
+  return row!.sequence;
 }
 
 async function getDefaultStatusId(
@@ -333,7 +322,7 @@ function toObjectiveSummary(row: {
  * reads it) matches what the user last chose, rather than leaving the agent unset
  * and letting execution fall back to a hardcoded default.
  */
-async function readProjectLaunchSelection(
+export async function readProjectLaunchSelection(
   ctx: ServiceContext,
   projectId: string
 ): Promise<{ agent: string | null; model: string | null; reasoningEffort: string | null }> {
@@ -373,6 +362,7 @@ export async function insertObjective({
   autoAdvance = false,
   assignedAgent,
   model,
+  reasoningEffort,
   resourceKey = null
 }: {
   ctx: ServiceContext;
@@ -383,6 +373,7 @@ export async function insertObjective({
   autoAdvance?: boolean;
   assignedAgent?: string | null;
   model?: string | null;
+  reasoningEffort?: string | null;
   resourceKey?: string | null;
 }): Promise<ObjectiveSummary> {
   const instruction = instructionText.trim();
@@ -427,7 +418,7 @@ export async function insertObjective({
   // still wins. Executed/complete states are created with whatever the caller set.
   const explicitAgent = assignedAgent?.trim() || null;
   const explicitModel = model?.trim() || null;
-  if (explicitModel && !explicitAgent) {
+  if ((explicitModel || reasoningEffort?.trim()) && !explicitAgent) {
     throw new ServiceError('An objective model requires an assigned agent', 'validation_error');
   }
   const launchSelection =
@@ -436,7 +427,9 @@ export async function insertObjective({
       : { agent: null, model: null, reasoningEffort: null };
   const resolvedAssignedAgent = explicitAgent ?? launchSelection.agent;
   const resolvedModel = explicitAgent ? explicitModel : launchSelection.model;
-  const resolvedReasoningEffort = explicitAgent ? null : launchSelection.reasoningEffort;
+  const resolvedReasoningEffort = explicitAgent
+    ? reasoningEffort?.trim() || null
+    : launchSelection.reasoningEffort;
   const origin = resolveOrigin(ctx);
   const displayKey = await allocateObjectiveDisplayKey({ db: ctx.db, missionId: mission.id });
 
@@ -608,6 +601,7 @@ export async function createMissionWithObjectives({
   priority,
   dueDatetime,
   assignedWorkspaceUserId,
+  createdFromChatThreadId,
   tagIds
 }: {
   ctx: ServiceContext;
@@ -620,6 +614,7 @@ export async function createMissionWithObjectives({
     agent?: string | null;
     /** Model for `agent`; rejected without a non-empty agent. */
     model?: string | null;
+    reasoningEffort?: string | null;
     resourceKey?: string | null;
   }>;
   title?: string | null;
@@ -629,6 +624,7 @@ export async function createMissionWithObjectives({
   priority?: string | null;
   dueDatetime?: string | null;
   assignedWorkspaceUserId?: string | null;
+  createdFromChatThreadId?: string | null;
   tagIds?: string[];
 }): Promise<{ mission: MissionSummary; objectives: ObjectiveSummary[] }> {
   const explicitTitle = title?.trim() ?? '';
@@ -673,11 +669,11 @@ export async function createMissionWithObjectives({
            (id, workspace_id, project_id, display_id, sequence_number, title,
             status_id, status_type, board_position, priority,
             execution_target_intent_json, metadata_json, created_by_workspace_user_id,
-            assigned_workspace_user_id, due_datetime,
+            assigned_workspace_user_id, due_datetime, created_from_chat_thread_id,
             created_by_kind, created_by_agent, created_by_session_id,
             created_by_token_id, created_by_token_label,
             created_at, updated_at, revision)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', '{}', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', '{}', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
       [
         missionId,
         ctx.workspace.id,
@@ -692,6 +688,7 @@ export async function createMissionWithObjectives({
         ctx.actorWorkspaceUserId,
         assignedWorkspaceUserId ?? null,
         dueDatetime ?? null,
+        createdFromChatThreadId ?? null,
         origin.kind,
         origin.agent,
         origin.sessionId,
@@ -733,6 +730,7 @@ export async function createMissionWithObjectives({
           autoAdvance: item.autoAdvance ?? false,
           ...(item.agent !== undefined ? { assignedAgent: item.agent } : {}),
           ...(item.model !== undefined ? { model: item.model } : {}),
+          ...(item.reasoningEffort !== undefined ? { reasoningEffort: item.reasoningEffort } : {}),
           ...(item.resourceKey !== undefined ? { resourceKey: item.resourceKey } : {})
         })
       );

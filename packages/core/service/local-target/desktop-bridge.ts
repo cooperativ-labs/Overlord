@@ -17,7 +17,6 @@ import type {
   OpenLatchSessionInput,
   PerformBranchActionInput,
   PurgeMergedWorktreesInput,
-  ReadCurrentDiffInput,
   ReadRepositoryTreeInput,
   RemoveWorktreeInput,
   SendLatchMessageInput,
@@ -38,7 +37,6 @@ export type LocalTargetBridgeCall =
   | { capability: 'readRepositoryTree'; input: ReadRepositoryTreeInput }
   | { capability: 'listBranches'; input: ListBranchesInput }
   | { capability: 'observeResource'; input: ObserveResourceInput }
-  | { capability: 'readCurrentDiff'; input: ReadCurrentDiffInput }
   | { capability: 'listWorktrees'; input: ListWorktreesInput }
   | { capability: 'deriveBranchStatus'; input: BranchStatusInput }
   | { capability: 'performBranchAction'; input: PerformBranchActionInput }
@@ -73,8 +71,6 @@ export async function invokeLocalTargetCapability({
       return provider.listBranches(call.input);
     case 'observeResource':
       return provider.observeResource(call.input);
-    case 'readCurrentDiff':
-      return provider.readCurrentDiff(call.input);
     case 'listWorktrees':
       return provider.listWorktrees(call.input);
     case 'deriveBranchStatus':

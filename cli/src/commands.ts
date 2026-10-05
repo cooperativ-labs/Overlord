@@ -2215,7 +2215,11 @@ export async function runRunnerOnce({
     await runtime.backend.post({ path: `/api/runner/requests/${requestId}/launching` });
     const mutation = parseMutationFromMetadata(requestRecord.metadata);
     if (mutation) {
-      const mutationResult = await executeLocalTargetMutation({ mutation });
+      const mutationResult = await executeLocalTargetMutation({
+        mutation,
+        workingDirectory:
+          typeof requestRecord.workingDirectory === 'string' ? requestRecord.workingDirectory : null
+      });
       // Report *both* outcomes through `/completed`. A typed failure is an
       // answer — the caller waiting on this job needs the code and message, not
       // a bare `failed` status — and storing it is what releases that waiter.

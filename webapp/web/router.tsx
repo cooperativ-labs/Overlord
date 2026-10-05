@@ -14,6 +14,7 @@ import { NavHeader } from './components/nav-header.tsx';
 import { ProjectCreatorModal } from './components/projects/ProjectCreatorModal.tsx';
 import { OrganizationOnboardingScreen } from './components/setup/OrganizationOnboardingScreen.tsx';
 import { SidebarInset, SidebarProvider } from './components/ui/sidebar.tsx';
+import { parseChatSearch } from './lib/chat/chat-search.ts';
 import { parseMissionPanelSearch } from './lib/mission-panel-search.ts';
 import { useAllProjects, useMeta, useWorkspaceMyMissions } from './lib/queries.ts';
 import { shouldShowOnboarding, shouldShowOnboardingSetup } from './lib/router-gates.ts';
@@ -143,6 +144,34 @@ const feedMissionPanelRoute = createRoute({
   component: lazyRouteComponent(() => import('./pages/FeedPage.tsx'), 'FeedMissionPanelRoute')
 });
 
+/** Private assistant conversations (Cloud only; Local shows an unavailable state). */
+const chatRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/chat',
+  validateSearch: parseChatSearch,
+  component: lazyRouteComponent(() => import('./pages/ChatPage.tsx'), 'ChatPage')
+});
+
+const chatThreadRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/chat/$threadId',
+  validateSearch: parseChatSearch,
+  component: lazyRouteComponent(() => import('./pages/ChatPage.tsx'), 'ChatPage')
+});
+
+/**
+ * Web return path of the Knowledgebase sign-in callback (contract v152). It carries
+ * only `provider` and `status`; Chat reloads connection state and shows the result.
+ */
+const connectionsCallbackRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/settings/connections',
+  beforeLoad: ({ location }) => {
+    const status = new URLSearchParams(location.searchStr).get('status') ?? undefined;
+    throw redirect({ to: '/chat', search: parseChatSearch({ connection: status }) });
+  }
+});
+
 const inboxRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/inbox',
@@ -214,6 +243,9 @@ export const routeTree = rootRoute.addChildren([
   oauthApproveRoute,
   indexRoute,
   feedRoute.addChildren([feedMissionPanelRoute]),
+  chatRoute,
+  chatThreadRoute,
+  connectionsCallbackRoute,
   inboxRoute,
   inboxMissionLegacyRedirectRoute,
   projectsRoute,

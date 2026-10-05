@@ -1,0 +1,72 @@
+{
+  "mode": "remote",
+  "base": "http://127.0.0.1:4355",
+  "finishedAt": "2026-10-04T14:36:12.456Z",
+  "results": [
+    {
+      "id": "remote.nav",
+      "title": "Chat entry sits directly above Inbox in the sidebar",
+      "status": "pass",
+      "detail": {
+        "chatY": 168,
+        "inboxY": 200
+      }
+    },
+    {
+      "id": "remote.readiness",
+      "title": "Provider readiness is shown",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "id": "remote.streamed-answer",
+      "title": "A new conversation streams an answer into the transcript",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "id": "remote.proposal-card",
+      "title": "The proposal card shows project, frozen agent and model, and a Create button",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "id": "remote.created",
+      "title": "Create shows the created draft with its mission id; Create is no longer offered",
+      "status": "pass",
+      "detail": {
+        "display": "eng:15"
+      }
+    },
+    {
+      "id": "remote.receipt-after-reload",
+      "title": "After a reload the receipt is still shown and Create is not offered again",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "id": "remote.revoked-content",
+      "title": "A thread whose sources were revoked shows a withheld-content placeholder, not the old answer",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "id": "remote.connections",
+      "title": "The connected-accounts page offers the Knowledgebase connection",
+      "status": "pass",
+      "detail": {}
+    },
+    {
+      "id": "remote.no-errors",
+      "title": "No page errors and no failing chat or connection request",
+      "status": "pass",
+      "detail": {
+        "errors": [],
+        "otherFailingRequests": [
+          "400 /api/agent-catalog",
+          "400 /api/launch-settings"
+        ]
+      }
+    }
+  ]
+}

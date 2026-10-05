@@ -1,4 +1,10 @@
-import type { NotificationPreferenceDto, NotificationPreferencesDto } from '@overlord/contract';
+import {
+  CHAT_NOTIFICATION_CATALOG,
+  CHAT_NOTIFICATION_TYPES,
+  type ChatNotificationType,
+  type NotificationPreferenceDto,
+  type NotificationPreferencesDto
+} from '@overlord/contract';
 import type { DatabaseClient } from '@overlord/database';
 
 import {
@@ -34,6 +40,21 @@ const DEFAULT_MODE: PushNotificationMode = 'alert';
 export type DevicePushEnvironment = 'sandbox' | 'production';
 
 export type NotificationPreferences = NotificationPreferencesDto;
+
+/**
+ * Every type a preference row may name: the mission catalog plus the two
+ * owner-addressed conversation types (contract v152), which share the
+ * preference store but never the mission notification list.
+ */
+export type PreferenceType = NotificationType | ChatNotificationType;
+const PREFERENCE_TYPES: readonly PreferenceType[] = [
+  ...NOTIFICATION_TYPES,
+  ...CHAT_NOTIFICATION_TYPES
+];
+const PREFERENCE_CATALOG: Record<
+  PreferenceType,
+  { defaultMode: PushNotificationMode; transports: readonly NotificationTransport[] }
+> = { ...NOTIFICATION_CATALOG, ...CHAT_NOTIFICATION_CATALOG };
 
 /**
  * Fixed per-category verbs. Never derived from user text, so a notification body
@@ -143,7 +164,7 @@ export async function revokeDevicePushToken(body: { deviceToken?: unknown }): Pr
 type PreferenceRow = { type: string; transport: string; mode: string };
 
 type PreferenceUpdate = {
-  type: NotificationType | typeof PUSH_NOTIFICATION_MASTER_CATEGORY;
+  type: PreferenceType | typeof PUSH_NOTIFICATION_MASTER_CATEGORY;
   transport: NotificationTransport | 'all';
   mode: PushNotificationMode;
 };
@@ -159,8 +180,8 @@ function preferenceKey(type: string, transport: string): string {
   return `${type}:${transport}`;
 }
 
-function isNotificationType(value: unknown): value is NotificationType {
-  return typeof value === 'string' && (NOTIFICATION_TYPES as readonly string[]).includes(value);
+function isPreferenceType(value: unknown): value is PreferenceType {
+  return typeof value === 'string' && (PREFERENCE_TYPES as readonly string[]).includes(value);
 }
 
 function isNotificationTransport(value: unknown): value is NotificationTransport {
@@ -169,21 +190,19 @@ function isNotificationTransport(value: unknown): value is NotificationTransport
   );
 }
 
-function isEligibleTransport(type: NotificationType, transport: NotificationTransport): boolean {
-  return (NOTIFICATION_CATALOG[type].transports as readonly NotificationTransport[]).includes(
-    transport
-  );
+function isEligibleTransport(type: PreferenceType, transport: NotificationTransport): boolean {
+  return PREFERENCE_CATALOG[type].transports.includes(transport);
 }
 
 function toPreferences(rows: PreferenceRow[]): NotificationPreferences {
   const stored = new Map(rows.map(row => [preferenceKey(row.type, row.transport), row.mode]));
-  const preferences: NotificationPreferenceDto[] = NOTIFICATION_TYPES.flatMap(type =>
-    (NOTIFICATION_CATALOG[type].transports as readonly NotificationTransport[]).map(transport => {
+  const preferences: NotificationPreferenceDto[] = PREFERENCE_TYPES.flatMap(type =>
+    PREFERENCE_CATALOG[type].transports.map(transport => {
       const mode = stored.get(preferenceKey(type, transport));
       return {
         type,
         transport,
-        mode: isPushNotificationMode(mode) ? mode : NOTIFICATION_CATALOG[type].defaultMode
+        mode: isPushNotificationMode(mode) ? mode : PREFERENCE_CATALOG[type].defaultMode
       };
     })
   );
@@ -233,7 +252,7 @@ export async function updateNotificationPreferences(
     if (!Array.isArray(body.preferences)) throw new ApiError(400, 'preferences must be an array');
     for (const entry of body.preferences) {
       const record = (entry ?? {}) as { type?: unknown; transport?: unknown; mode?: unknown };
-      if (!isNotificationType(record.type)) throw new ApiError(400, 'Unknown notification type');
+      if (!isPreferenceType(record.type)) throw new ApiError(400, 'Unknown notification type');
       if (!isNotificationTransport(record.transport)) {
         throw new ApiError(400, 'Unknown notification transport');
       }
@@ -302,15 +321,33 @@ export async function updateNotificationPreferences(
 export async function resolveNotificationMode(
   db: DatabaseClient,
   profileId: string,
-  type: NotificationType,
+  type: PreferenceType,
   transport: NotificationTransport
 ): Promise<PushNotificationMode> {
   const preferences = toPreferences(await readPreferenceRows(db, profileId));
   if (!preferences.enabled) return 'off';
   return (
     preferences.preferences.find(entry => entry.type === type && entry.transport === transport)
-      ?.mode ?? NOTIFICATION_CATALOG[type].defaultMode
+      ?.mode ?? PREFERENCE_CATALOG[type].defaultMode
   );
+}
+
+/**
+ * The single home-screen badge definition: unread durable mission notifications
+ * plus unread dispatched conversation notifications for this profile. Both push
+ * surfaces use it so neither overwrites the other's count.
+ */
+export async function unreadBadgeCount(db: DatabaseClient, profileId: string): Promise<number> {
+  const row = await db.get<{ missions: number; chats: number }>(
+    `SELECT
+       (SELECT COUNT(*) FROM notifications
+         WHERE recipient_profile_id = ? AND deleted_at IS NULL AND read_at IS NULL) AS missions,
+       (SELECT COUNT(*) FROM chat_notifications
+         WHERE owner_profile_id = ? AND state = 'dispatched'
+           AND deleted_at IS NULL AND read_at IS NULL) AS chats`,
+    [profileId, profileId]
+  );
+  return Number(row?.missions ?? 0) + Number(row?.chats ?? 0);
 }
 
 // ---- Presentation --------------------------------------------------------
@@ -365,17 +402,10 @@ export async function buildPushNotificationPresentation({
   );
   if (!mission) return null;
 
-  // Icon badge = unread durable notifications for this profile (same definition
-  // the mobile drawer and web history use). Missions-in-review is a different
-  // queue metric and must not drive the home-screen badge.
-  const badgeRow = await db.get<{ count: number }>(
-    `SELECT COUNT(*) AS count
-       FROM notifications
-      WHERE recipient_profile_id = ?
-        AND deleted_at IS NULL
-        AND read_at IS NULL`,
-    [profileId]
-  );
+  // Icon badge = unread durable notifications for this profile, mission and
+  // conversation alike. Missions-in-review is a different queue metric and must
+  // not drive the home-screen badge.
+  const badge = await unreadBadgeCount(db, profileId);
 
   // Objective titles are code-adjacent labels, bounded and markdown-stripped by
   // the same helper as mission titles; objective instruction text is never read.
@@ -395,7 +425,7 @@ export async function buildPushNotificationPresentation({
   return {
     title: bounded(mission.project_name.trim() || 'Project', PROJECT_NAME_MAX_LENGTH),
     body: notificationBody(subject, CATEGORY_VERBS[category]),
-    badge: Number(badgeRow?.count ?? 0),
+    badge,
     missionId: mission.id,
     objectiveId: objective?.id ?? null,
     objectiveDisplayId: subject.objectiveDisplayId,

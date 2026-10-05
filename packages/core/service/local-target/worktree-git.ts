@@ -28,7 +28,7 @@ export function resolveRealPath(targetPath: string): string {
 }
 
 export function worktreeIsDirty(worktreePath: string): boolean {
-  const status = runGitResult(worktreePath, ['status', '--porcelain']);
+  const status = runGitResult(worktreePath, ['status', '--porcelain'], { inspection: true });
   return status.ok && status.stdout.length > 0;
 }
 

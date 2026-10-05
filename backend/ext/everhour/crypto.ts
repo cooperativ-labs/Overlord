@@ -1,14 +1,5 @@
-import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
-
+import { decodeEncryptionKey, openSecret, sealSecret } from '../../connections/crypto.ts';
 import { ApiError } from '../../errors.ts';
-
-function decodeEncryptionKey(encoded: string | undefined): Buffer | null {
-  const trimmed = encoded?.trim();
-  if (!trimmed) return null;
-  const key = Buffer.from(trimmed, 'base64url');
-  if (key.length !== 32) return null;
-  return key;
-}
 
 /**
  * 32-byte AES key. Prefer the Everhour-specific variable; fall back to the
@@ -33,8 +24,8 @@ export function requireEverhourEncryptionKey(): Buffer {
   return key;
 }
 
-function apiKeyAad(profileId: string): Buffer {
-  return Buffer.from(`overlord:everhour-user-key:v1:${profileId}:api-key`, 'utf8');
+function apiKeyAad(profileId: string): string {
+  return `overlord:everhour-user-key:v1:${profileId}:api-key`;
 }
 
 export function encryptEverhourApiKey({
@@ -46,12 +37,7 @@ export function encryptEverhourApiKey({
   profileId: string;
   key: Buffer;
 }): string {
-  const nonce = randomBytes(12);
-  const cipher = createCipheriv('aes-256-gcm', key, nonce);
-  cipher.setAAD(apiKeyAad(profileId));
-  const ciphertext = Buffer.concat([cipher.update(apiKey, 'utf8'), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return `v1.${nonce.toString('base64url')}.${tag.toString('base64url')}.${ciphertext.toString('base64url')}`;
+  return sealSecret({ plaintext: apiKey, key, aad: apiKeyAad(profileId) });
 }
 
 export function decryptEverhourApiKey({
@@ -63,18 +49,8 @@ export function decryptEverhourApiKey({
   profileId: string;
   key: Buffer;
 }): string {
-  const [version, nonceText, tagText, ciphertextText, ...extra] = envelope.split('.');
-  if (version !== 'v1' || !nonceText || !tagText || !ciphertextText || extra.length > 0) {
-    throw new ApiError(503, 'The stored Everhour connection cannot be decrypted.');
-  }
   try {
-    const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(nonceText, 'base64url'));
-    decipher.setAAD(apiKeyAad(profileId));
-    decipher.setAuthTag(Buffer.from(tagText, 'base64url'));
-    return Buffer.concat([
-      decipher.update(Buffer.from(ciphertextText, 'base64url')),
-      decipher.final()
-    ]).toString('utf8');
+    return openSecret({ envelope, key, aad: apiKeyAad(profileId) });
   } catch {
     throw new ApiError(503, 'The stored Everhour connection cannot be decrypted.');
   }

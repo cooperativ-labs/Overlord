@@ -59,7 +59,7 @@ This choice does not change the logical schema. It does affect implementation de
 - Stable IDs should be UUIDv7 or ULID strings. Integer primary keys are not part of the portable contract.
 - `revision` starts at `1` for inserted mutable rows and increments by exactly one for each service-layer mutation.
 - `metadata_json` and `settings_json` are extension space, but extension keys must be namespaced. Use reverse-DNS or package-style keys such as `com.example.plugin`, with a nested `schemaVersion` where the extension stores structured data.
-- Tables without `created_at`, `updated_at`, `deleted_at`, and `revision` are intentional operational or append-only tables. Current exemptions are `mission_sequences`, `mission_events`, `shared_context_tags`, `entity_changes`, `sync_cursors`, `outbox_messages`, `search_documents`, `audit_log`, `schema_migrations`, and `webhook_delivery_attempts`.
+- Tables without `created_at`, `updated_at`, `deleted_at`, and `revision` are intentional operational or append-only tables. Current exemptions are `mission_sequences`, `mission_events`, `shared_context_tags`, `entity_changes`, `sync_cursors`, `outbox_messages`, `search_documents`, `audit_log`, `schema_migrations`, `webhook_delivery_attempts`, and the v152 assistant operational and append-only tables `account_connection_authorizations`, `chat_run_attempts`, `chat_tool_calls`, `chat_dependency_sets`, `chat_dependency_set_members`, `chat_evidence`, `chat_thread_summaries`, `chat_events`, `chat_work_proposal_revisions`, `chat_work_receipts`, `chat_work_receipt_missions`, `chat_presence`, and `chat_event_acks`.
 - Columns named `position` (and the mission board ordering column `board_position`) must use a reorder strategy that does not violate active uniqueness mid-transaction. Services should use gap-based integer positions by default, for example `100`, `200`, `300`; compacting positions is a maintenance operation. `board_position` is not uniqueness-constrained, so services may renumber a whole board column densely on each reorder.
 
 ## Logical Types
@@ -912,6 +912,7 @@ Durable work unit and review record.
 | `created_by_session_id`        | Id           | no       | Agent session the creating call ran inside. This is a **deliberate soft reference** to `agent_sessions.id` with **no foreign key**: sessions are mission-scoped and restricted on delete elsewhere in the schema, and a dangling provenance pointer must never block a delete. Resolve it with a `LEFT JOIN` and tolerate a miss.                                                                                                                                                                                                               |
 | `created_by_token_id`          | Id           | no       | `USER_TOKEN` whose direct `out_` bearer request created the mission (REST, protocol `create`, hosted MCP). A **deliberate soft reference** to `user_tokens.id` with **no foreign key**, so revoking, soft-deleting, or hard-purging the token never blocks or erases mission history. Null for browser sessions, loopback, `sess_` session calls, scheduled duplicates, and every other system-generated row; never copied from a source mission and never accepted from a request body. Written only by `createMissionWithObjectives`.          |
 | `created_by_token_label`       | text         | no       | Snapshot of `user_tokens.label` at creation, the "Created via token" display. Stable after a later token rename, revoke, or soft-delete; set alongside `created_by_token_id` and null otherwise. Account deletion clears it under the same policy that erases the owner's other identifying text, so erasure leaves no label behind.                                                                                                                                                                                                             |
+| `created_from_chat_thread_id`  | Id           | no       | Assistant thread whose proposal Create produced this draft (contract v152). A **deliberate soft reference** to `chat_threads.id` with **no foreign key**: threads are private and cascade with their owner's account, and mission history must survive that. Written only by the chat Create service; never accepted from a request body and never exposed to anyone but the thread owner.                                                                                                                                                                 |
 | `assigned_workspace_user_id`   | Id           | no       | FK to `workspace_users`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `created_at`                   | TimestampUTC | yes      |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `updated_at`                   | TimestampUTC | yes      |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -2294,7 +2295,7 @@ catalog-eligible transport, preserving the user's chosen mode rather than narrow
 | ------------ | ------------ | -------- | ------------------------------------------------------------------------------------------------- |
 | `id`         | Id           | yes      |                                                                                                   |
 | `profile_id` | Id           | yes      | FK to `profiles`.                                                                                 |
-| `type`       | text         | yes      | `all`, or a shared notification-catalog id.                                                       |
+| `type`       | text         | yes      | `all`, or a shared notification-catalog id, including the conversation types `chat_needs_answer` and `chat_finished` (v152). |
 | `transport`  | text         | yes      | `all` for the master row, otherwise a catalog-eligible `apns`, `realtime`, or `in_app` transport. |
 | `mode`       | text         | yes      | Closed set: `alert`, `silent`, `off`. The `(all, all)` row uses only `alert`/`off`.               |
 | `created_at` | TimestampUTC | yes      |                                                                                                   |
@@ -2397,6 +2398,266 @@ Indexes:
 
 - `(subscription_id, attempted_at)`.
 - `(outbox_message_id)`.
+
+## Assistant Conversations (contract 152)
+
+Private Overlord assistant conversations (coo:1108). Migration pair:
+`20261004120000_chat_conversations.sql` (SQLite and Postgres). DTOs live in
+`packages/contract/src/chat.ts`; the behavioral contract is CONTRACT.md "Version 152
+Change Summary".
+
+Shared rules for every table in this section:
+
+- **Ownership.** A thread belongs to exactly one `owner_profile_id` inside one
+  `organization_id`. Child rows inherit that scope through `thread_id`; only rows that
+  are listed without a thread join (`chat_notifications`, `chat_work_receipts`,
+  `account_connections`) denormalize the owner, and `chat_notifications` enforces the
+  match with a trigger. Every row cascades from `profiles` and `organizations`, so the
+  account-deletion cascade removes all of it and no `RESTRICT` child is added.
+- **Change feed.** None of these tables writes `entity_changes`, `outbox_messages`, or
+  `search_documents`. Realtime delivery is the private `chat_events` channel. Missions
+  created by Create emit their ordinary rows.
+- **Private state.** `chat_provider_checkpoints.payload_json`, `chat_tool_calls.result_json`
+  and `arguments_json`, `account_connections.credential_*`, and
+  `account_connection_authorizations.*_ciphertext`/`state_hash` are never projected to a
+  DTO, realtime frame, log, or error.
+- **Fencing.** `chat_runs.current_fence` is the only valid writer fence. Inserting an
+  attempt requires `fence = current_fence` (the claim increments `current_fence` first in
+  the same transaction). Checkpoint inserts and content updates, tool-call inserts and
+  non-cancel updates (`writer_fence`), and fenced event inserts are rejected unless they
+  carry the current fence. SQLite triggers and Postgres trigger functions implement the
+  same rule.
+- **Soft scope ids.** `workspace_id`, `project_id`, `execution_target_id`, and
+  `mission_id` columns in this section are soft references (no FK): authorization is
+  always rechecked live, and a deleted workspace or project must not erase private
+  history.
+
+### `account_connections`
+
+One external account connection owned by a profile inside an organization; the
+connections module is the only writer and the only reader of credentials.
+
+| Column                       | Type         | Required | Notes                                                                                                   |
+| ---------------------------- | ------------ | -------- | ------------------------------------------------------------------------------------------------------- |
+| `id`                         | Id           | yes      |                                                                                                         |
+| `owner_profile_id`           | Id           | yes      | FK `profiles`, cascade.                                                                                 |
+| `organization_id`            | Id           | yes      | FK `organizations`, cascade.                                                                            |
+| `provider`                   | text         | yes      | Closed: `knowledgebase`.                                                                                |
+| `server_url`                 | text         | yes      | `https://` only; the configured MCP resource URL.                                                       |
+| `state`                      | text         | yes      | Closed: `pending`, `connected`, `reauthorization_required`, `disconnected`.                             |
+| `authorized_workspaces_json` | Json         | yes      | Provider workspace identifiers the grant can read. Default `[]`.                                        |
+| `tool_policy_version`        | integer      | yes      | Reviewed read-allowlist version the connection was checked against.                                     |
+| `credential_ciphertext`      | text         | no       | AES-256-GCM envelope (owner-bound AAD). Required when `connected`; null when `disconnected`.            |
+| `credential_key_id`          | text         | no       | Server key id for the envelope; null exactly when the ciphertext is null.                               |
+| `credential_revision`        | integer      | yes      | Increments on every stored rotation.                                                                    |
+| `access_expires_at`          | TimestampUTC | no       |                                                                                                         |
+| `refresh_expires_at`         | TimestampUTC | no       |                                                                                                         |
+| `refresh_lock_owner`         | text         | no       | Serialized refresh lease holder.                                                                        |
+| `refresh_lock_until`         | TimestampUTC | no       | Lease expiry; a rotated token is persisted before the lease is released.                                |
+| `last_refreshed_at`          | TimestampUTC | no       |                                                                                                         |
+| `last_error_code`            | text         | no       | Sanitized code only.                                                                                    |
+| `connected_at`               | TimestampUTC | no       |                                                                                                         |
+| `disconnected_at`            | TimestampUTC | no       | Required when `disconnected`.                                                                           |
+| `created_at` / `updated_at`  | TimestampUTC | yes      |                                                                                                         |
+| `revision`                   | integer      | yes      |                                                                                                         |
+
+Indexes: unique `(owner_profile_id, organization_id, provider, server_url) WHERE state <> 'disconnected'`; `(refresh_lock_until) WHERE refresh_lock_owner IS NOT NULL`.
+
+### `account_connection_authorizations`
+
+Pending OAuth authorization-code attempts. `state_hash` is unique and single-use
+(`consumed_at`); `pkce_verifier_ciphertext` is encrypted; `return_to` is closed
+(`mobile`, `web`); `expires_at` bounds the attempt. FK `connection_id` →
+`account_connections`, cascade. Expired rows may be purged.
+
+### `chat_threads`
+
+| Column                      | Type         | Required | Notes                                                                                               |
+| --------------------------- | ------------ | -------- | --------------------------------------------------------------------------------------------------- |
+| `id`                        | Id           | yes      |                                                                                                     |
+| `owner_profile_id`          | Id           | yes      | FK `profiles`, cascade.                                                                             |
+| `organization_id`           | Id           | yes      | FK `organizations`, cascade.                                                                        |
+| `title`                     | text         | yes      | ≤ 200 characters; default empty until generated.                                                    |
+| `title_source`              | text         | yes      | Closed: `pending`, `generated`, `user`.                                                             |
+| `archived_at`               | TimestampUTC | no       | Archive state; there is no thread deletion in milestone one.                                        |
+| `last_activity_at`          | TimestampUTC | yes      | List ordering.                                                                                      |
+| `last_event_seq`            | ChangeSeq    | yes      | Event sequence allocator; `chat_events.seq` must equal it on insert.                                |
+| `retained_from_seq`         | ChangeSeq    | yes      | Oldest replayable sequence; `≤ last_event_seq + 1`. Advanced by retention.                          |
+| `authorization_revision`    | integer      | yes      | Incremented on any source-access invalidation; Create validates it inside its transaction.          |
+| `created_at` / `updated_at` | TimestampUTC | yes      |                                                                                                     |
+| `revision`                  | integer      | yes      | Rename/archive CAS.                                                                                 |
+
+Index: `(owner_profile_id, organization_id, archived_at, last_activity_at DESC)`.
+
+### `chat_messages`
+
+`thread_id` (cascade), closed `role` (`user`, `assistant`), closed `state`
+(`streaming`, `complete`, `interrupted`; user messages are always `complete`),
+`blocks_json` (rendered blocks, each with a text fallback), `run_id` (FK `chat_runs`,
+set null), `answers_question_id` (FK `chat_questions`, set null), `client_request_id`
+(user messages only), `dependency_set_id`, `invalidated_at`, timestamps, `revision`.
+Unique `(thread_id, client_request_id)` makes submission idempotent per owner and
+thread. Index `(thread_id, created_at, id)`.
+
+### `chat_runs`
+
+| Column                   | Type         | Required | Notes                                                                                                        |
+| ------------------------ | ------------ | -------- | ------------------------------------------------------------------------------------------------------------ |
+| `id`                     | Id           | yes      |                                                                                                              |
+| `thread_id`              | Id           | yes      | FK `chat_threads`, cascade.                                                                                  |
+| `trigger_message_id`     | Id           | no       | FK `chat_messages`, cascade. Null only for a Continue run.                                                   |
+| `continued_from_run_id`  | Id           | no       | FK `chat_runs`, set null. Unique when present: a run is continued at most once.                              |
+| `state`                  | text         | yes      | Closed: `queued`, `running`, `waiting_user`, `completed`, `failed`, `cancelled`.                             |
+| `outcome`                | text         | no       | Closed `answered`, `allowance_exhausted`; present exactly when `completed`.                                  |
+| `failure_code`           | text         | no       | Closed run failure codes; present exactly when `failed`.                                                     |
+| `current_fence`          | integer      | yes      | Monotonic; incremented by every claim.                                                                       |
+| `active_attempt_id`      | Id           | no       | Soft pointer to the leased attempt; null unless `running`.                                                   |
+| `tool_call_count`, `active_processing_ms`, `gathered_content_bytes` | integer | yes | Usage against the run allowance (`active_processing_ms` excludes `waiting_user`).        |
+| `limits_json`            | Json         | yes      | Effective limits snapshot.                                                                                   |
+| `cancel_requested_at`    | TimestampUTC | no       |                                                                                                              |
+| `completed_at`           | TimestampUTC | no       | Present exactly for `completed`, `failed`, `cancelled`.                                                      |
+| `created_at` / `updated_at` | TimestampUTC | yes   |                                                                                                              |
+| `revision`               | integer      | yes      |                                                                                                              |
+
+Indexes: unique `(thread_id) WHERE state IN ('queued','running','waiting_user')` (one
+unfinished run per thread); unique `(continued_from_run_id)` where present;
+`(thread_id, created_at)`; `(state, updated_at) WHERE state IN ('queued','running')`.
+
+### `chat_run_attempts`
+
+`run_id` (cascade), `attempt_number` and `fence` (each unique per run), closed `state`
+(`leased`, `released`, `succeeded`, `failed`, `fenced`, `cancelled`), closed
+`recovery_mode` (`initial`, `checkpoint`, `fresh_generation`), `provider`, `model`,
+`config_digest`, `lease_owner` and `lease_expires_at` (required while `leased`),
+`failure_code`, `started_at`, `ended_at` (required unless `leased`). Unique
+`(run_id) WHERE state = 'leased'` allows one active attempt per run; index
+`(lease_expires_at) WHERE state = 'leased'` drives lease recovery.
+
+### `chat_provider_checkpoints`
+
+One private provider checkpoint per run (`run_id` primary key, cascade): `attempt_id`,
+`fence`, `schema_version`, `provider`, `model`, `config_digest`, closed `phase`
+(`tool_requested`, `tool_results_joined`), `payload_json` (provider response parts
+verbatim with signatures, pending calls in order), `dependency_set_id`,
+`invalidated_at`, timestamps, `revision`. Reuse requires matching version, model, and
+digest plus reauthorized dependencies. Deleted once the tool turn completes.
+
+### `chat_tool_calls`
+
+`run_id` and `attempt_id` (cascade), globally unique `operation_id` (the runner-queue
+idempotency key, reused on re-execution), `turn_index` and `call_order` (unique per
+run), `provider_call_id`, `tool_id`, `policy_version`, sanitized `arguments_json`,
+closed `state` (`requested`, `executing`, `completed`, `failed`, `cancelled`),
+`executions`, bounded private `result_json` with `result_bytes`/`result_truncated`,
+`error_code`, `requested_fence`, `writer_fence` (≥ requested; the fence of the last
+writer), `dependency_set_id`, timestamps, `completed_at` (exactly for terminal states).
+
+### `chat_source_refs`, `chat_dependency_sets`, `chat_dependency_set_members`
+
+`chat_source_refs` holds one row per distinct source a thread used: closed
+`source_kind` (`knowledgebase`, `overlord`, `repository`), `scope_key` (unique per
+thread; e.g. `kb:<connection>:<workspace>:<node>`, `overlord:mission:<id>`,
+`repo:<target>:<project>:<resource>:<path>`), optional soft scope ids, `connection_id`
+(FK, set null), `locator_json`, `source_revision`, closed `access_state`
+(`authorized`, `revoked`, `unknown`), and `access_checked_at`.
+
+`chat_dependency_sets` are immutable, per-thread, content-addressed (`digest` unique
+per thread) sets of source refs; members live in `chat_dependency_set_members`
+(primary key `(dependency_set_id, source_ref_id)`, index `(source_ref_id,
+dependency_set_id)` for revocation fan-out). A derived row (message, summary,
+question, tool call, checkpoint, event, proposal revision) points at the conservative
+union of every source supplied to its generation, including inherited ones.
+`invalidated_at` marks a set whose sources are no longer authorized.
+
+### `chat_evidence`, `chat_thread_summaries`
+
+`chat_evidence` records bounded excerpts with `source_ref_id` (cascade), optional
+`run_id`/`tool_call_id`, `label`, `excerpt`/`excerpt_truncated`, `source_revision`, and
+`observed_at`. `chat_thread_summaries` holds revisioned compact summaries
+(`summary_revision` unique per thread) with `covers_through_message_id`,
+`dependency_set_id`, and `invalidated_at`.
+
+### `chat_questions`
+
+`thread_id`, `run_id` (cascade), `ordinal` (unique per run; notifications dedupe on
+it), closed `state` (`open`, `answered`, `superseded`, `cancelled`), `prompt`,
+`options_json`, `allow_free_text`, `answer_message_id`, `dependency_set_id`,
+`answered_at` (exactly when answered), timestamps, `revision`. Unique
+`(run_id) WHERE state = 'open'`.
+
+### `chat_events`
+
+Append-only private event log. `thread_id` (cascade), `seq` (unique per thread; must
+equal `chat_threads.last_event_seq` at insert, so storage is gap-free), closed `kind`
+(the `ChatEventKind` set), `run_id` (set null), soft `attempt_id` and `fence`
+(both present or both null; a fenced insert must carry the current fence),
+`payload_json` (the DTO projection at write time), `dependency_set_id`, `created_at`.
+Updates are rejected. Retention deletes rows below `chat_threads.retained_from_seq`.
+
+### `chat_work_proposals`, `chat_work_proposal_revisions`
+
+A proposal (`thread_id` cascade, closed `state` `open`/`created`/`cancelled`,
+`current_revision`, `created_by_run_id`) has frozen revisions keyed
+`(proposal_id, proposal_revision)`: `spec_json` (mission groups with explicit project
+ids, titles, ordered objectives, resource keys, acceptance criteria, evidence ids,
+dependencies, and frozen agent/model/reasoning selections with their source),
+`responsible_profile_id`, `run_id`, `dependency_set_id`, `invalidated_at`,
+`created_at`. Updating `spec_json`, `responsible_profile_id`, or `proposal_revision`
+is rejected; only `invalidated_at` may change.
+
+### `chat_work_receipts`, `chat_work_receipt_missions`
+
+`chat_work_receipts` is the durable Create receipt: unique `proposal_id` (one creation
+per proposal), FK `(proposal_id, proposal_revision)` to the frozen revision, unique
+`(owner_profile_id, client_request_id)`, `request_digest`, the validated
+`authorization_revision`, `created_at`. `chat_work_receipt_missions` lists created
+missions in order (`(receipt_id, position)` primary key, globally unique `mission_id`,
+soft `project_id`/`workspace_id`, `objective_ids_json`). Written in the same
+transaction as the missions; replays return them unchanged.
+
+### `chat_presence`, `chat_event_acks`
+
+`chat_presence` (primary key `(thread_id, client_id)`): closed `platform` (`ios`,
+`web`, `desktop`), `expires_at` (renewed; default TTL 30 s), `released_at`. A client is
+foreground on a thread only while `released_at IS NULL AND expires_at > now`.
+`chat_event_acks` (primary key `(thread_id, client_id)`): `acked_seq` is monotonic
+(decreases are rejected), `acked_at`. Acknowledgements are rendered-event receipts, not
+replay cursors.
+
+### `chat_notifications`
+
+One row per qualifying run transition, serving as durable candidate, dispatch job,
+and history entry.
+
+| Column                      | Type         | Required | Notes                                                                                           |
+| --------------------------- | ------------ | -------- | ----------------------------------------------------------------------------------------------- |
+| `id`                        | Id           | yes      |                                                                                                 |
+| `owner_profile_id`          | Id           | yes      | FK `profiles`, cascade; must equal the thread owner (trigger).                                  |
+| `organization_id`           | Id           | yes      | FK `organizations`, cascade; must equal the thread organization.                                |
+| `thread_id`, `run_id`       | Id           | yes      | FKs, cascade; the run must belong to the thread.                                                |
+| `question_id`               | Id           | no       | FK `chat_questions`, cascade; present exactly for `chat_needs_answer` and on the same run.      |
+| `type`                      | text         | yes      | Closed: `chat_needs_answer`, `chat_finished`.                                                   |
+| `transition_key`            | text         | yes      | `question:<ordinal>` or `terminal:<state>`.                                                     |
+| `event_seq`                 | ChangeSeq    | yes      | The transition's event; a foreground acknowledgement at or after it suppresses.                 |
+| `state`                     | text         | yes      | Closed: `pending`, `suppressed`, `dispatching`, `dispatched`, `cancelled`, `failed`.            |
+| `due_at`                    | TimestampUTC | yes      | Transition time plus the grace period (default 5 s).                                            |
+| `attempt_count`, `max_attempts` | integer  | yes      | Dispatcher retries.                                                                             |
+| `locked_by`, `locked_until` | text / TimestampUTC | no | Required while `dispatching`.                                                                  |
+| `suppressed_by_client_id`, `suppressed_at` | text / TimestampUTC | no | `suppressed_at` exactly when `suppressed`.                                         |
+| `dispatched_at`             | TimestampUTC | no       | Exactly when `dispatched`.                                                                      |
+| `thread_title`              | text         | no       | Bounded (≤ 80) sanitized title captured at dispatch; never transcript content.                  |
+| `read_at`                   | TimestampUTC | no       | Only on dispatched rows.                                                                        |
+| `last_error`                | text         | no       | Sanitized.                                                                                      |
+| `created_at` / `updated_at` | TimestampUTC | yes      |                                                                                                 |
+| `deleted_at`                | TimestampUTC | no       | Soft dismissal from history.                                                                    |
+| `revision`                  | integer      | yes      | Read/dismiss CAS.                                                                               |
+
+Indexes: unique `(owner_profile_id, thread_id, run_id, type, transition_key)`;
+`(state, due_at) WHERE state IN ('pending','dispatching')`;
+`(owner_profile_id, organization_id, deleted_at, dispatched_at DESC) WHERE state = 'dispatched'`;
+`(thread_id, state, event_seq)`. Unread count is dispatched, non-deleted rows with
+`read_at IS NULL`. This table does not use `worker_jobs` (whose rows require a
+workspace) and is independent of the mission `notifications` table.
 
 ## Search
 
@@ -2527,6 +2788,7 @@ Closed values:
 - `idempotency_keys.status`: `in_progress`, `completed`, `failed`.
 - `audit_log.result`: `allowed`, `denied`, `failed`.
 - `workspace_invitations.status`: `pending`, `accepted`, `revoked`, `expired`.
+- Assistant conversation vocabularies (v152): `chat_runs.state`, `chat_runs.outcome`, `chat_runs.failure_code`, `chat_run_attempts.state`, `chat_run_attempts.recovery_mode`, `chat_messages.role`, `chat_messages.state`, `chat_questions.state`, `chat_tool_calls.state`, `chat_events.kind`, `chat_work_proposals.state`, `chat_source_refs.source_kind`, `chat_source_refs.access_state`, `chat_presence.platform`, `chat_notifications.type`, `chat_notifications.state`, `account_connections.provider`, and `account_connections.state`, with the values in the "Assistant Conversations" section and CONTRACT.md "Controlled Vocabularies".
 - `role_assignments.role_key` (core, non-extension values; see `auth/src/rbac/types.ts` `Role` enum and `overlord.rbac.toml`): `ADMIN`, `MANAGER`, `MEMBER`, `PUBLIC`. `MANAGER` grants everything `MEMBER` does plus `workspace:update` and project management, and may invite/remove/promote other members up to (but not including) `ADMIN`; only `ADMIN` may grant or revoke `ADMIN` itself.
 
 Open extension values:

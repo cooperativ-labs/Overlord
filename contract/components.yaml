@@ -4,7 +4,7 @@
 # IMPORTANT: Update this file and CONTRACT.md together when adding components or surfaces.
 # Increment contractVersion when any stable interface changes.
 
-contractVersion: '151'
+contractVersion: '152'
 
 components:
   protocol:
@@ -73,6 +73,7 @@ components:
       - 'soft-delete and revision semantics'
       - 'migration versioning via schema_migrations'
       - 'extension table naming: ext_<name>_'
+      - 'assistant conversation core tables (contract v152): chat_threads, chat_messages, chat_runs, chat_run_attempts, chat_provider_checkpoints, chat_tool_calls, chat_source_refs, chat_dependency_sets, chat_dependency_set_members, chat_evidence, chat_thread_summaries, chat_questions, chat_events, chat_work_proposals, chat_work_proposal_revisions, chat_work_receipts, chat_work_receipt_missions, chat_presence, chat_event_acks, chat_notifications, account_connections, account_connection_authorizations, and the soft missions.created_from_chat_thread_id reference. Both editions enforce one unfinished run per thread, one leased attempt per run, writes only at the run current fence (attempts, checkpoints, tool calls, events), gap-free append-only per-thread event sequences, one open question per run, frozen proposal revisions, one receipt per proposal and per (owner, client request id), monotonic acknowledgements, one notification per (owner, thread, run, type, transition) addressed to the thread owner, and one live connection per (owner, organization, provider, server). Every row cascades from profiles/organizations; notification_preferences.type additively admits chat_needs_answer and chat_finished'
       - 'logical types and adapter mappings'
     dependsOn: []
     interactionSurfaces:
@@ -171,6 +172,7 @@ components:
       - 'Latch launch path: when claim-time launchSession selects latch and the launch environment contains LATCH_SESSION_ID, run the same terminal command string S inline in that existing PTY via $SHELL -ilc, record the opaque id as providerSession, and never call latch create or open; the marker is correlation only and grants no authority. Otherwise, when discovery is found, replace only the final spawn with latch create --manifest-file - --json. For Claude/Codex when Latch advertises the agent-launch extension and no opaque pre-command wrapper is configured, send agent argv in launch.argv, launch.agent, and launch.login_shell with project pre-launch commands; otherwise use the legacy S via $SHELL -ilc. Record providerSession on execution_requests.metadata_json, then best-effort latch open; viewer failure must not fail the request; direct launch unchanged when provider is direct or Latch unavailable'
       - 'Latch terminal-session lifecycle capabilities on the execution target: inspectLatchSession, openLatchSession, and stopLatchSession invoke the public Latch CLI with argv on the mapped device; inspect state is running/exited/stopping/lost when the session exists; Latch no-session absence is LATCH_SESSION_ABSENT and is not a reachability failure; other lifecycle failures remain a separate capability-result/client reachability condition; stop is explicit and never coupled to objective delivery or completion'
       - 'Launch does not mint Agent Session Exchange channels. Protocol attach is the binding declaration and does not require a Latch session or a session channel'
+      - 'agent-facing repository read capabilities (contract v152): git_status, resource-addressed diff (one implementation co-located with readCurrentDiff), bounded read_file, and literal search_text alongside observe/tree/branches/worktrees, executed for mission-less capability calls with the requested resource_key, path containment including symlinks, credential/sensitive-path exclusion, disabled external diff/textconv/hooks, operation-id idempotency, and explicit bounds/truncation; never fetch, checkout, build, or write intent. Local-target methods: readGitStatus, readCurrentDiff (resource-addressed; replaces the unimplemented mission-keyed form and shares its diff arguments with the commit-message drafter), readRepositoryFile, searchRepositoryText; tree reads are scoped and capped on the target; the runner rebinds resource-addressed inputs to the claim-resolved directory'
     dependsOn:
       - database
       - connector
@@ -247,12 +249,19 @@ components:
       - "user-scoped Everhour identity under /ext/everhour: authenticated GET/PUT/DELETE /user-connection are account-wide with no workspace permission; the personal API key is stored only as AES-256-GCM ciphertext; GET/PUT/DELETE /integration remain a deprecated alias of that profile-scoped surface; timer and time-entry writes use the acting user's key; credentials never enter DTOs, logs, mobile/browser storage, realtime, or change projections, and workspace-scoped GitHub App installation plus Everhour/GitHub resource links remain separate"
       - 'user-scoped GitHub repository authorization under /ext/github: authenticated connection metadata/authorization/disconnect and eligible-owner reads are account-wide; it reuses the Better Auth GitHub OAuth App client registration while maintaining a distinct explicit repo read:org grant, profile-bound hashed single-use state, and separately AES-256-GCM-encrypted token; its /api/auth/callback/github/repository callback is handled before the Better Auth wildcard; credentials never enter DTOs, logs, mobile/browser storage, realtime, or change projections, and the one-installation-per-workspace GitHub App integration remains separate'
       - 'composite project initialization: POST /api/projects/initialize authorizes project:create against its explicit workspace, atomically creates the project plus first mission/objective under a caller idempotency key, and optionally performs retryable private GitHub repository provisioning through the separate user OAuth connection; provisioning failure preserves the internal creation, while success records exactly one GitHub project link and one non-primary read-only git resource without changing the workspace GitHub App installation'
+      - 'private assistant conversation routes (contract v152; packages/contract/src/chat.ts): /api/chat/threads*, /api/chat/runs/:id/cancel|continue, /api/chat/questions/:id/answer, /api/chat/proposals/:id/create (the only creation path; frozen catalog-validated agent/model/reasoning, explicit draft status, owner-key serialization, cross-workspace outer transaction and durable receipts), /api/chat/providers, /api/chat/notifications*; owner/organization scoped with existence-hiding 404s; Cloud only (chat_unavailable on Local); idempotent client request ids; atomic snapshot with eventCursor; owner-scoped SSE replay from storage with bounded retention and snapshot_required; expiring foreground presence and monotonic rendered-event acknowledgements separate from replay cursors; leased, fenced backend run attempts; Gemini runtime adapter with private checkpoint persistence; conversation-notification dispatch over chat_notifications'
+      - 'private chat event channel exception (contract v152): chat events are persisted per thread and do not derive from entity_changes; chat writes emit no entity_changes, webhooks, or search documents; missions created by Create emit their normal rows'
+      - 'account connections and outbound MCP (contract v152): GET/POST /api/connections, DELETE /api/connections/:id, public GET /api/connections/knowledgebase/callback and GET /oauth/clients/knowledgebase.json (Client ID Metadata Document); authorization code + PKCE S256 + RFC 8707 resource; serialized refresh; outbound MCP client limited to the configured Knowledgebase origin, a reviewed read-tool allowlist, and bounded outputs; credentials never in DTOs, logs, realtime, or URLs'
+      - 'assistant research runtime (coo:1108.vx29, refines v152): Gemini runtime adapter (CHAT_GEMINI_API_KEY falling back to GEMINI_API_KEY, CHAT_GEMINI_MODEL default gemini-3.8-flash, CHAT_MAX_GATHERED_BYTES_PER_RUN) with a run-local verbatim checkpoint; fixed Overlord-authored tool list (Overlord project/target/mission reads, repository_read, reviewed Knowledgebase reads, ask_user) and no write, launch, or queue tool; every read resolved against the thread owner live memberships and role grants; results wrapped as untrusted data; cited evidence rows and dependency unions; overlord and repository source checkers'
+      - 'mission-less repository reads (contract v152): authenticated POST /api/projects/:id/repository-reads (project:read plus execution-target access) over the runner capability queue, shared with the in-process chat gateway; model-supplied absolute paths never accepted; 200 RepositoryReadResult for every target outcome, 400 invalid_request, 404 for an unreadable project or unusable target, 409 operation_conflict; four reads in flight per scope; POST /api/runner/requests/:id/completed accepts JSON bodies up to 1 MiB'
     dependsOn:
       - database
       - auth
     interactionSurfaces:
       - restApiToDatabase
       - virtualGatewayToRest
+      - clientToConversation
+      - restToOutboundMcp
 
   auth:
     label: 'Auth Layer'
@@ -271,6 +280,7 @@ components:
       - 'hosted MCP OAuth consent and token issuance: browser approval creates scoped mission_lifecycle USER_TOKEN access tokens; authorization codes are short-lived, single-use, PKCE-protected, and resource-bound; refresh tokens are not issued through contract version 2'
       - "self-issued USER_TOKEN consent: a token an authenticated user creates for themselves (CLI login, settings) takes no workspace or organization selection and consents to all current and future workspaces in that caller's organization; its issuance workspace is audit attribution only, and runtime access remains consent intersected with live membership and per-workspace RBAC. Token ownership resolves from the authenticated profile, never from the instance's oldest account"
       - 'project_automation USER_TOKEN preset (contract v151): PROJECT_AUTOMATION_GRANTS are exactly project:read, mission:read, mission:create, objective:read, event:read, session:read, artifact:read, attachment:read, execution_request:read, intersected with the owner live role grants; issuance requires a non-empty de-duplicated projectIds list naming live projects the owner can project:read and mission:create in, rejects projectIds for full and mission_lifecycle, derives workspace consent from the selected projects, and leaves full, mission_lifecycle, and OAuth issuance unchanged. Token authentication loads the selected project ids into the request authorization snapshot (absent for other presets, empty means no project access) and clears them when switching away from token auth'
+      - 'account-connection credential envelopes (contract v152): AES-256-GCM with additional authenticated data binding owner profile, organization, provider, and connection id; key and key id from server configuration; encrypted PKCE verifiers and hashed single-use OAuth state'
     dependsOn:
       - database
     interactionSurfaces:
@@ -345,11 +355,13 @@ components:
       - 'authenticated registration, rotation, and revocation calls to the Mobile → REST surface'
       - "presentation of the additive creation-provenance fields decoded from MissionDto/ObjectiveDto (createdByKind, createdByAgent, createdByWorkspaceUserId) as optionals defaulting to human; an agent-authored objective read back in the mission chat feed is attributed rather than presented as the operator's own text, and the attribution leads the accessibility label"
       - 'on-device expansion of the bounded finished-mission history: the missions browser opens on the server default window and sends includeAllCompleted=1 only from its per-section "Show older missions" control, shown beneath the loaded rows of complete and cancelled sections, and from the calendar view, which scrolls into past months and always reads the full archive; the flag is part of the client mission cache key so both scopes cache separately under the one prefix mission mutations invalidate'
+      - 'assistant chat journey (contract v152): shared OverlordCore stream client (incremental SSE parsing, ordered delivery, resume cursor, dedupe, reconnect/backoff, snapshot_required recovery, polling fallback, backend/account/thread-scoped state), foreground presence and rendered-event acknowledgements, conversation push routing to overlord://chat/threads/:threadId including cold start, and Knowledgebase sign-in via ASWebAuthenticationSession'
     dependsOn:
       - rest
     interactionSurfaces:
       - mobileToRest
       - mobilePushToRest
+      - clientToConversation
 
   mcp:
     label: 'MCP Server'
@@ -620,6 +632,33 @@ interactionSurfaces:
       - 'Migration component must be ext:<name>'
       - 'JSON metadata keys must be namespaced (reverse-DNS or package-style)'
       - 'Reactions to core events via service APIs, entity_changes, or outbox_messages only'
+
+  clientToConversation:
+    description: 'Web, desktop (shared SPA), and mobile clients drive private assistant conversations over REST plus one owner-scoped SSE stream per thread (contract v152)'
+    from: mobile
+    to: rest
+    transport: https-json-and-sse
+    authMechanism: bearer-token-or-session
+    routeFamily: '/api/chat/*, /api/connections*'
+    rules:
+      - 'Every chat resource is private to one owner profile in one organization; other callers receive 404 without existence leaks; Local backends answer chat_unavailable'
+      - 'Events are persisted before they are sent and replayed from storage; clients resume after their last applied seq, dedupe by seq, and reload the atomic snapshot on snapshot_required; a closed stream never implies completion'
+      - 'Submissions, answers, cancel, continue, and Create carry stable client request ids reused across retries; revision-checked actions carry expectedRevision; Create is the only conversation-to-work path'
+      - 'Foreground presence expires unless renewed; a rendered-event acknowledgement from a foreground client suppresses a pending conversation notification, an open connection never does'
+      - 'No provider checkpoint, raw tool result, credential, or OAuth material is ever returned; content with unauthorized sources is returned as unavailable blocks'
+      - 'GET /api/chat/providers returns ChatProvidersResponse: gemini readiness (ready, not_configured, rate_limited, unavailable) plus the caller live account connections (coo:1108.vx29)'
+
+  restToOutboundMcp:
+    description: 'The backend calls the configured Knowledgebase MCP server on behalf of one account connection (contract v152)'
+    from: rest
+    to: external-mcp
+    transport: https-mcp-streamable-http
+    authMechanism: account-connection-oauth
+    rules:
+      - 'Only the configured HTTPS origin is reachable; egress is restricted server-side'
+      - 'Only a reviewed read-tool allowlist, namespaced per connection, is exposed; write tools are rejected regardless of annotations'
+      - 'Every call is bounded in output size and time; per-source access checks fail closed'
+      - 'Credentials are obtained and refreshed only by the connections module and never logged or returned'
 
   shellToRest:
     description: "The desktop shell's BrowserWindow loads the SPA and calls /api/* (incl. SSE realtime) over the loopback origin (Local) or the hosted backend's HTTPS/wss origin (Remote) via the SPA's runtime-injected API base URL — another HTTP client of the existing REST surface"
