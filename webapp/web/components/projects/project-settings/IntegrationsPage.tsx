@@ -1,3 +1,4 @@
+import { Link } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 
 import { Input } from '@/components/ui/input';
@@ -18,9 +19,11 @@ import type { ProjectDto } from '../../../../shared/contract.ts';
 type IntegrationsPageProps = {
   open: boolean;
   project: ProjectDto;
+  /** Close the project settings dialog (before navigating to Connected accounts). */
+  onClose?: () => void;
 };
 
-function EverhourProjectField({ open, project }: IntegrationsPageProps) {
+function EverhourProjectField({ open, project, onClose }: IntegrationsPageProps) {
   const integration = useEverhourIntegration();
   const projectLink = useProjectEverhourLink(project.id, { enabled: open });
   const link = useLinkProjectEverhour(project.id);
@@ -102,8 +105,16 @@ function EverhourProjectField({ open, project }: IntegrationsPageProps) {
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">
-          No Everhour account is connected for you. Connect Everhour in{' '}
-          <strong>Settings → Integrations</strong> to enable time tracking.
+          No Everhour account is connected for you.{' '}
+          <Link
+            to="/settings/connections"
+            search={{ provider: 'everhour' }}
+            className="font-medium text-foreground underline underline-offset-2"
+            onClick={onClose}
+          >
+            Connect Everhour in Connected accounts
+          </Link>{' '}
+          to enable time tracking.
         </p>
       )}
     </div>
@@ -170,7 +181,7 @@ function GitHubProjectField({ open, project }: IntegrationsPageProps) {
   );
 }
 
-export function IntegrationsPage({ open, project }: IntegrationsPageProps) {
+export function IntegrationsPage({ open, project, onClose }: IntegrationsPageProps) {
   return (
     <div className="space-y-6">
       <div>
@@ -178,7 +189,7 @@ export function IntegrationsPage({ open, project }: IntegrationsPageProps) {
         <p className="text-sm text-muted-foreground">Connect external services to this project.</p>
       </div>
 
-      <EverhourProjectField open={open} project={project} />
+      <EverhourProjectField open={open} project={project} onClose={onClose} />
       <GitHubProjectField open={open} project={project} />
     </div>
   );

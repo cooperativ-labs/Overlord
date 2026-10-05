@@ -12,35 +12,8 @@ import {
 } from '../query-invalidation.ts';
 import { keys } from '../query-keys.ts';
 
-// ---- Everhour integration ------------------------------------------------
-
-/** Caller's Everhour connection state. Used to gate all Everhour UI. */
-export const useEverhourIntegration = () =>
-  useQuery({ queryKey: keys.everhourIntegration, queryFn: () => api.getEverhourIntegration() });
-
-export function useSetEverhourApiKey() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (apiKey: string) => api.setEverhourApiKey(apiKey),
-    onSuccess: data => {
-      qc.setQueryData(keys.everhourIntegration, data);
-      invalidateMissionEverhourQueries(qc);
-      invalidateProjectEverhourQueries(qc);
-    }
-  });
-}
-
-export function useClearEverhourApiKey() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: () => api.clearEverhourApiKey(),
-    onSuccess: data => {
-      qc.setQueryData(keys.everhourIntegration, data);
-      invalidateMissionEverhourQueries(qc);
-      invalidateProjectEverhourQueries(qc);
-    }
-  });
-}
+// The caller's Everhour connection (`useEverhourIntegration`) lives in
+// `./connections.ts`, derived from Connected accounts.
 
 export function useLinkProjectEverhour(projectId: string) {
   const qc = useQueryClient();

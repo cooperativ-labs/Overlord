@@ -1,4 +1,3 @@
-import { githubOAuthConfigFromEnv } from '@overlord/auth';
 import type {
   BeginGitHubUserAuthorizationBody,
   CreatedGitHubRepositoryDto,
@@ -7,58 +6,26 @@ import type {
   GitHubUserConnectionDto
 } from '@overlord/contract/ext/github';
 import type { DatabaseClient } from '@overlord/database';
-import { createHash, randomBytes } from 'node:crypto';
 
-import { decodeEncryptionKey, openSecret, sealSecret } from '../../connections/crypto.ts';
-import { newId, nowIso, requireDatabaseClient, resolveActiveProfileId } from '../../db.ts';
+import { ChatError } from '../../../packages/core/service/chat/store.ts';
+import { profileConnections } from '../../connections/profile.ts';
+import { ConnectionAccessError, type ConnectionRow } from '../../connections/service.ts';
+import { requireDatabaseClient, resolveActiveProfileId } from '../../db.ts';
 import { ApiError } from '../../errors.ts';
-import { resolveAuthBaseUrl } from '../../http/public-backend-url.ts';
+
+import { parseGitHubScopes, registerGitHubConnectionProvider } from './connection-provider.ts';
+
+// The personal repository authorization lives in the shared account-connections
+// module (contract v153): it owns the OAuth state, PKCE verifier, token storage and
+// encryption, the refresh lease, and disconnect, and serves the callback at
+// `/api/auth/callback/github/repository`. These functions are the `/ext/github`
+// compatibility aliases over it plus the repository-owner and repository-creation
+// features, which obtain the token only through `oauthAccessToken()`.
+registerGitHubConnectionProvider();
 
 const GITHUB_API = 'https://api.github.com';
-const GITHUB_AUTHORIZE_URL = 'https://github.com/login/oauth/authorize';
-const GITHUB_ACCESS_TOKEN_URL = 'https://github.com/login/oauth/access_token';
-const USER_OAUTH_SCOPES = ['repo', 'read:org'] as const;
-const USER_OAUTH_CALLBACK_PATH = '/api/auth/callback/github/repository';
-const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
-const TOKEN_EXPIRY_SKEW_MS = 60 * 1000;
-
-type UserOAuthConfig = {
-  clientId: string;
-  clientSecret: string;
-  encryptionKey: Buffer;
-};
-
-type UserConnectionRow = {
-  id: string;
-  profile_id: string;
-  github_user_id: string;
-  github_login: string;
-  avatar_url: string | null;
-  scopes_json: unknown;
-  access_token_ciphertext: string;
-  refresh_token_ciphertext: string | null;
-  access_token_expires_at: string | null;
-  refresh_token_expires_at: string | null;
-  revision: number;
-};
-
-type OAuthStateRow = {
-  id: string;
-  profile_id: string;
-  return_url: string | null;
-  revision: number;
-};
-
-type GitHubTokenResponse = {
-  access_token?: unknown;
-  refresh_token?: unknown;
-  expires_in?: unknown;
-  refresh_token_expires_in?: unknown;
-  scope?: unknown;
-  token_type?: unknown;
-  error?: unknown;
-  error_description?: unknown;
-};
+const NOT_CONFIGURED = 'GitHub repository authorization is not configured on this Overlord server.';
+const RECONNECT = 'Reconnect GitHub to refresh repository access.';
 
 type GitHubUser = {
   id: number;
@@ -75,84 +42,12 @@ type GitHubOrganizationMembership = {
   };
 };
 
-function encryptionKeyFromEnv(): Buffer | null {
-  return decodeEncryptionKey(process.env.GITHUB_USER_TOKEN_ENCRYPTION_KEY);
+function connections(client: DatabaseClient = requireDatabaseClient()) {
+  return profileConnections(client);
 }
 
-export function githubUserOAuthConfigured(): boolean {
-  return userOAuthConfig() !== null;
-}
-
-function userOAuthConfig(): UserOAuthConfig | null {
-  const oauth = githubOAuthConfigFromEnv();
-  const encryptionKey = encryptionKeyFromEnv();
-  if (!oauth || !encryptionKey) return null;
-  return { ...oauth, encryptionKey };
-}
-
-function requireUserOAuthConfig(): UserOAuthConfig {
-  const config = userOAuthConfig();
-  if (!config) {
-    throw new ApiError(
-      503,
-      'GitHub repository authorization is not configured on this Overlord server.'
-    );
-  }
-  return config;
-}
-
-function tokenAad(profileId: string, kind: 'access' | 'refresh'): string {
-  return `overlord:github-user-oauth:v1:${profileId}:${kind}`;
-}
-
-function encryptToken(
-  token: string,
-  profileId: string,
-  kind: 'access' | 'refresh',
-  key: Buffer
-): string {
-  return sealSecret({ plaintext: token, key, aad: tokenAad(profileId, kind) });
-}
-
-function decryptToken(
-  envelope: string,
-  profileId: string,
-  kind: 'access' | 'refresh',
-  key: Buffer
-): string {
-  try {
-    return openSecret({ envelope, key, aad: tokenAad(profileId, kind) });
-  } catch {
-    throw new ApiError(503, 'The stored GitHub connection cannot be decrypted.');
-  }
-}
-
-function parseScopes(value: unknown): string[] {
-  let parsed = value;
-  if (typeof value === 'string') {
-    try {
-      parsed = JSON.parse(value);
-    } catch {
-      return [];
-    }
-  }
-  return Array.isArray(parsed)
-    ? parsed.filter((scope): scope is string => typeof scope === 'string')
-    : [];
-}
-
-function scopesFromTokenResponse(value: unknown): string[] {
-  if (typeof value !== 'string') return [];
-  return value
-    .split(/[,\s]+/)
-    .map(scope => scope.trim())
-    .filter(Boolean);
-}
-
-function expiryFromSeconds(value: unknown): string | null {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0
-    ? new Date(Date.now() + value * 1000).toISOString()
-    : null;
+export function githubUserOAuthConfigured(client?: DatabaseClient): boolean {
+  return connections(client).available('github');
 }
 
 async function activeProfileId(client: DatabaseClient = requireDatabaseClient()): Promise<string> {
@@ -161,45 +56,30 @@ async function activeProfileId(client: DatabaseClient = requireDatabaseClient())
   return profileId;
 }
 
-async function readConnection(
-  client: DatabaseClient,
-  profileId: string
-): Promise<UserConnectionRow | null> {
-  return (
-    (await client.get<UserConnectionRow>(
-      `SELECT id, profile_id, github_user_id, github_login, avatar_url, scopes_json,
-              access_token_ciphertext, refresh_token_ciphertext,
-              access_token_expires_at, refresh_token_expires_at, revision
-         FROM ext_github_user_connections
-        WHERE profile_id = ? AND deleted_at IS NULL`,
-      [profileId]
-    )) ?? null
-  );
-}
-
-function connectionDto(row: UserConnectionRow | null): GitHubUserConnectionDto {
+function connectionDto(
+  row: ConnectionRow | null,
+  client?: DatabaseClient
+): GitHubUserConnectionDto {
+  const connected = row?.state === 'connected';
   return {
-    configured: githubUserOAuthConfigured(),
-    connected: row !== null,
-    account: row
-      ? {
-          id: row.github_user_id,
-          login: row.github_login,
-          avatarUrl: row.avatar_url
-        }
-      : null,
-    scopes: row ? parseScopes(row.scopes_json) : []
+    configured: githubUserOAuthConfigured(client),
+    connected,
+    account:
+      connected && row.external_account_id && row.external_account_label
+        ? {
+            id: row.external_account_id,
+            login: row.external_account_label,
+            avatarUrl: row.external_account_avatar_url
+          }
+        : null,
+    scopes: connected ? parseGitHubScopes(row.granted_scopes_json) : []
   };
 }
 
 export async function getGitHubUserConnection(): Promise<GitHubUserConnectionDto> {
   const client = requireDatabaseClient();
   const profileId = await activeProfileId(client);
-  return connectionDto(await readConnection(client, profileId));
-}
-
-function stateHash(state: string): string {
-  return createHash('sha256').update(state).digest('hex');
+  return connectionDto(await connections(client).find(profileId, 'github'), client);
 }
 
 function validatedReturnUrl(
@@ -232,133 +112,80 @@ function validatedReturnUrl(
   throw new ApiError(400, 'GitHub return URL is not an allowed Overlord destination.');
 }
 
+/** `POST /ext/github/user-connection/authorize` (alias): legacy `returnTo` URL semantics. */
 export async function beginGitHubUserAuthorization(
   body: BeginGitHubUserAuthorizationBody,
   allowedBrowserOrigins: readonly string[]
 ): Promise<GitHubUserAuthorizationDto> {
-  const config = requireUserOAuthConfig();
   const client = requireDatabaseClient();
+  const store = connections(client);
+  if (!store.available('github')) throw new ApiError(503, NOT_CONFIGURED);
   const profileId = await activeProfileId(client);
-  const state = randomBytes(32).toString('base64url');
-  const now = nowIso();
-  const expiresAt = new Date(Date.now() + OAUTH_STATE_TTL_MS).toISOString();
   const returnUrl = validatedReturnUrl(body.returnTo, allowedBrowserOrigins);
-
-  await client.transaction(async tx => {
-    await tx.run(
-      `UPDATE ext_github_user_oauth_states
-          SET deleted_at = ?, updated_at = ?, revision = revision + 1
-        WHERE profile_id = ? AND deleted_at IS NULL
-          AND (consumed_at IS NOT NULL OR expires_at <= ?)`,
-      [now, now, profileId, now]
-    );
-    await tx.run(
-      `INSERT INTO ext_github_user_oauth_states
-        (id, profile_id, state_hash, return_url, expires_at, created_at, updated_at, revision)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
-      [newId(), profileId, stateHash(state), returnUrl, expiresAt, now, now]
-    );
-  });
-
-  const authorizationUrl = new URL(GITHUB_AUTHORIZE_URL);
-  authorizationUrl.searchParams.set('client_id', config.clientId);
-  authorizationUrl.searchParams.set(
-    'redirect_uri',
-    new URL(USER_OAUTH_CALLBACK_PATH, resolveAuthBaseUrl()).toString()
-  );
-  authorizationUrl.searchParams.set('scope', USER_OAUTH_SCOPES.join(' '));
-  authorizationUrl.searchParams.set('state', state);
-  authorizationUrl.searchParams.set('allow_signup', 'false');
-  return { authorizationUrl: authorizationUrl.toString() };
-}
-
-async function consumeOAuthState(state: string): Promise<OAuthStateRow> {
-  if (!/^[A-Za-z0-9_-]{40,80}$/.test(state)) {
-    throw new ApiError(400, 'GitHub authorization state is invalid.');
-  }
-  const client = requireDatabaseClient();
-  return client.transaction(async tx => {
-    const now = nowIso();
-    const row = await tx.get<OAuthStateRow & { expires_at: string; consumed_at: string | null }>(
-      `SELECT id, profile_id, return_url, expires_at, consumed_at, revision
-         FROM ext_github_user_oauth_states
-        WHERE state_hash = ? AND deleted_at IS NULL`,
-      [stateHash(state)]
-    );
-    if (!row || row.consumed_at || row.expires_at <= now) {
-      throw new ApiError(400, 'GitHub authorization state has expired or was already used.');
-    }
-    const updated = await tx.run(
-      `UPDATE ext_github_user_oauth_states
-          SET consumed_at = ?, updated_at = ?, revision = ?
-        WHERE id = ? AND revision = ? AND consumed_at IS NULL AND deleted_at IS NULL`,
-      [now, now, row.revision + 1, row.id, row.revision]
-    );
-    if (updated.changes !== 1) {
-      throw new ApiError(400, 'GitHub authorization state has expired or was already used.');
-    }
-    return row;
-  });
-}
-
-async function exchangeOAuthToken(input: { code?: string; refreshToken?: string }): Promise<{
-  accessToken: string;
-  refreshToken: string | null;
-  scopes: string[];
-  accessTokenExpiresAt: string | null;
-  refreshTokenExpiresAt: string | null;
-}> {
-  const config = requireUserOAuthConfig();
-  const body =
-    input.refreshToken === undefined
-      ? {
-          client_id: config.clientId,
-          client_secret: config.clientSecret,
-          code: input.code,
-          redirect_uri: new URL(USER_OAUTH_CALLBACK_PATH, resolveAuthBaseUrl()).toString()
-        }
-      : {
-          client_id: config.clientId,
-          client_secret: config.clientSecret,
-          grant_type: 'refresh_token',
-          refresh_token: input.refreshToken
-        };
-  let response: Response;
   try {
-    response = await fetch(GITHUB_ACCESS_TOKEN_URL, {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(body)
+    const started = await store.beginOAuth(profileId, 'github', {
+      returnTo: returnUrl?.startsWith('overlord:') ? 'mobile' : 'web',
+      returnUrl
     });
-  } catch {
-    throw new ApiError(502, 'Could not reach GitHub to complete authorization.');
+    return { authorizationUrl: started.authorizeUrl };
+  } catch (error) {
+    if (error instanceof ChatError && error.code === 'provider_not_ready')
+      throw new ApiError(503, NOT_CONFIGURED);
+    if (error instanceof ChatError && error.code === 'limit_exceeded')
+      throw new ApiError(429, 'Too many GitHub sign-ins are open; try again in a few minutes.');
+    throw error;
   }
-  let result: GitHubTokenResponse;
-  try {
-    result = (await response.json()) as GitHubTokenResponse;
-  } catch {
-    throw new ApiError(502, 'GitHub returned an invalid authorization response.');
-  }
-  if (!response.ok || typeof result.access_token !== 'string' || !result.access_token) {
+}
+
+/**
+ * Complete a sign-in through the module, as the callback does, with the pre-v153
+ * error text. The callback route itself is the module's handler; this remains for
+ * in-process callers.
+ */
+export async function completeGitHubUserAuthorization(input: {
+  code: string;
+  state: string;
+}): Promise<{ connection: GitHubUserConnectionDto; returnUrl: string | null }> {
+  const client = requireDatabaseClient();
+  const outcome = await connections(client).completeOAuth('github', input);
+  if (outcome.status === 'expired')
+    throw new ApiError(400, 'GitHub authorization state has expired or was already used.');
+  if (outcome.status !== 'connected') {
+    if (outcome.errorCode === 'insufficient_scope')
+      throw new ApiError(
+        403,
+        'GitHub authorization did not grant private-repository and organization access.'
+      );
+    if (outcome.errorCode === 'account_in_use')
+      throw new ApiError(409, 'This GitHub account is already connected to another user.');
     throw new ApiError(502, 'GitHub did not complete repository authorization.');
   }
-  const scopes = scopesFromTokenResponse(result.scope);
-  if (!USER_OAUTH_SCOPES.every(required => scopes.includes(required))) {
-    throw new ApiError(
-      403,
-      'GitHub authorization did not grant private-repository and organization access.'
-    );
+  const row = await client.get<ConnectionRow>('SELECT * FROM account_connections WHERE id = ?', [
+    outcome.connectionId
+  ]);
+  return { connection: connectionDto(row ?? null, client), returnUrl: outcome.returnUrl };
+}
+
+function accessError(error: unknown, notConnected: string, client: DatabaseClient): unknown {
+  if (!(error instanceof ConnectionAccessError)) return error;
+  if (error.code === 'not_found') return new ApiError(409, notConnected);
+  if (error.code === 'reauthorization_required') return new ApiError(401, RECONNECT);
+  return githubUserOAuthConfigured(client)
+    ? new ApiError(502, 'Could not reach GitHub.')
+    : new ApiError(503, NOT_CONFIGURED);
+}
+
+async function connectedToken(
+  client: DatabaseClient,
+  profileId: string,
+  notConnected: string,
+  staleRevision?: number
+) {
+  try {
+    return await connections(client).oauthAccessToken(profileId, 'github', { staleRevision });
+  } catch (error) {
+    throw accessError(error, notConnected, client);
   }
-  return {
-    accessToken: result.access_token,
-    refreshToken: typeof result.refresh_token === 'string' ? result.refresh_token : null,
-    scopes,
-    accessTokenExpiresAt: expiryFromSeconds(result.expires_in),
-    refreshTokenExpiresAt: expiryFromSeconds(result.refresh_token_expires_in)
-  };
 }
 
 async function githubUserFetchUrl<T>(
@@ -429,170 +256,32 @@ async function githubUserFetchAll<T>(path: string, token: string): Promise<T[]> 
   return rows;
 }
 
-async function upsertConnection(input: {
-  profileId: string;
-  user: GitHubUser;
-  token: Awaited<ReturnType<typeof exchangeOAuthToken>>;
-}): Promise<void> {
-  const config = requireUserOAuthConfig();
-  const client = requireDatabaseClient();
-  const now = nowIso();
-  const githubUserId = String(input.user.id);
-  const githubLogin = input.user.login.trim();
-  if (!githubUserId || !githubLogin) {
-    throw new ApiError(502, 'GitHub returned incomplete account metadata.');
-  }
-  const accessCiphertext = encryptToken(
-    input.token.accessToken,
-    input.profileId,
-    'access',
-    config.encryptionKey
-  );
-  const refreshCiphertext = input.token.refreshToken
-    ? encryptToken(input.token.refreshToken, input.profileId, 'refresh', config.encryptionKey)
-    : null;
-
-  await client.transaction(async tx => {
-    const claimed = await tx.get<{ profile_id: string }>(
-      `SELECT profile_id
-         FROM ext_github_user_connections
-        WHERE github_user_id = ? AND profile_id <> ? AND deleted_at IS NULL`,
-      [githubUserId, input.profileId]
-    );
-    if (claimed) {
-      throw new ApiError(409, 'This GitHub account is already connected to another user.');
-    }
-    const existing = await readConnection(tx, input.profileId);
-    if (existing) {
-      const updated = await tx.run(
-        `UPDATE ext_github_user_connections
-            SET github_user_id = ?, github_login = ?, avatar_url = ?, scopes_json = ?,
-                access_token_ciphertext = ?, refresh_token_ciphertext = ?,
-                access_token_expires_at = ?, refresh_token_expires_at = ?,
-                last_validated_at = ?, updated_at = ?, revision = ?
-          WHERE id = ? AND revision = ? AND deleted_at IS NULL`,
-        [
-          githubUserId,
-          githubLogin,
-          input.user.avatar_url ?? null,
-          JSON.stringify(input.token.scopes),
-          accessCiphertext,
-          refreshCiphertext,
-          input.token.accessTokenExpiresAt,
-          input.token.refreshTokenExpiresAt,
-          now,
-          now,
-          existing.revision + 1,
-          existing.id,
-          existing.revision
-        ]
-      );
-      if (updated.changes !== 1) throw new ApiError(409, 'GitHub connection changed; try again.');
-      return;
-    }
-    await tx.run(
-      `INSERT INTO ext_github_user_connections
-        (id, profile_id, github_user_id, github_login, avatar_url, scopes_json,
-         access_token_ciphertext, refresh_token_ciphertext, access_token_expires_at,
-         refresh_token_expires_at, last_validated_at, created_at, updated_at, revision)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-      [
-        newId(),
-        input.profileId,
-        githubUserId,
-        githubLogin,
-        input.user.avatar_url ?? null,
-        JSON.stringify(input.token.scopes),
-        accessCiphertext,
-        refreshCiphertext,
-        input.token.accessTokenExpiresAt,
-        input.token.refreshTokenExpiresAt,
-        now,
-        now,
-        now
-      ]
-    );
-  });
-}
-
-export async function completeGitHubUserAuthorization(input: {
-  code: string;
-  state: string;
-}): Promise<{ connection: GitHubUserConnectionDto; returnUrl: string | null }> {
-  const oauthState = await consumeOAuthState(input.state);
-  if (!input.code.trim()) throw new ApiError(400, 'GitHub authorization code is missing.');
-  const token = await exchangeOAuthToken({ code: input.code });
-  const user = await githubUserFetch<GitHubUser>('/user', token.accessToken);
-  await upsertConnection({ profileId: oauthState.profile_id, user, token });
-  const row = await readConnection(requireDatabaseClient(), oauthState.profile_id);
-  return { connection: connectionDto(row), returnUrl: oauthState.return_url };
-}
-
-async function refreshAccessToken(
-  row: UserConnectionRow,
-  config: UserOAuthConfig
-): Promise<string> {
-  if (!row.refresh_token_ciphertext) {
-    throw new ApiError(401, 'Reconnect GitHub to refresh repository access.');
-  }
-  const refreshToken = decryptToken(
-    row.refresh_token_ciphertext,
-    row.profile_id,
-    'refresh',
-    config.encryptionKey
-  );
-  const token = await exchangeOAuthToken({ refreshToken });
-  const now = nowIso();
-  const accessCiphertext = encryptToken(
-    token.accessToken,
-    row.profile_id,
-    'access',
-    config.encryptionKey
-  );
-  const refreshCiphertext = token.refreshToken
-    ? encryptToken(token.refreshToken, row.profile_id, 'refresh', config.encryptionKey)
-    : row.refresh_token_ciphertext;
-  const updated = await requireDatabaseClient().run(
-    `UPDATE ext_github_user_connections
-        SET scopes_json = ?, access_token_ciphertext = ?, refresh_token_ciphertext = ?,
-            access_token_expires_at = ?, refresh_token_expires_at = ?,
-            updated_at = ?, revision = ?
-      WHERE id = ? AND revision = ? AND deleted_at IS NULL`,
-    [
-      JSON.stringify(token.scopes),
-      accessCiphertext,
-      refreshCiphertext,
-      token.accessTokenExpiresAt,
-      token.refreshTokenExpiresAt ?? row.refresh_token_expires_at,
-      now,
-      row.revision + 1,
-      row.id,
-      row.revision
-    ]
-  );
-  if (updated.changes !== 1) throw new ApiError(409, 'GitHub connection changed; try again.');
-  return token.accessToken;
-}
-
-async function connectionAccessToken(row: UserConnectionRow): Promise<string> {
-  const config = requireUserOAuthConfig();
-  if (
-    row.access_token_expires_at &&
-    new Date(row.access_token_expires_at).getTime() <= Date.now() + TOKEN_EXPIRY_SKEW_MS
-  ) {
-    return refreshAccessToken(row, config);
-  }
-  return decryptToken(row.access_token_ciphertext, row.profile_id, 'access', config.encryptionKey);
-}
-
 export async function listGitHubRepositoryOwners(): Promise<GitHubRepositoryOwnerDto[]> {
   const client = requireDatabaseClient();
   const profileId = await activeProfileId(client);
-  const connection = await readConnection(client, profileId);
-  if (!connection) throw new ApiError(409, 'Connect GitHub before choosing a repository owner.');
-  const token = await connectionAccessToken(connection);
-  const user = await githubUserFetch<GitHubUser>('/user', token);
-  if (String(user.id) !== connection.github_user_id) {
+  const store = connections(client);
+  const notConnected = 'Connect GitHub before choosing a repository owner.';
+  let access = await connectedToken(client, profileId, notConnected);
+  let user: GitHubUser;
+  try {
+    user = await githubUserFetch<GitHubUser>('/user', access.accessToken);
+  } catch (error) {
+    if (!(error instanceof ApiError) || error.status !== 401) throw error;
+    // Rejected upstream: refresh once (shared with concurrent callers), then give up.
+    access = await connectedToken(client, profileId, notConnected, access.credentialRevision);
+    try {
+      user = await githubUserFetch<GitHubUser>('/user', access.accessToken);
+    } catch (retryError) {
+      if (retryError instanceof ApiError && retryError.status === 401) {
+        await store.requireReauthorizationFor(profileId, 'github', 'invalid_grant');
+        throw new ApiError(401, RECONNECT);
+      }
+      throw retryError;
+    }
+  }
+  const token = access.accessToken;
+  if (String(user.id) !== access.row.external_account_id) {
+    await store.requireReauthorizationFor(profileId, 'github', 'identity_changed');
     throw new ApiError(401, 'The connected GitHub identity changed; reconnect GitHub.');
   }
   const memberships = await githubUserFetchAll<GitHubOrganizationMembership>(
@@ -623,14 +312,11 @@ export async function listGitHubRepositoryOwners(): Promise<GitHubRepositoryOwne
           : null;
       })
   );
-  const now = nowIso();
-  await client.run(
-    `UPDATE ext_github_user_connections
-        SET github_login = ?, avatar_url = ?, last_validated_at = ?, updated_at = ?,
-            revision = revision + 1
-      WHERE id = ? AND deleted_at IS NULL`,
-    [user.login, user.avatar_url ?? null, now, now, connection.id]
-  );
+  await store.recordAccount(profileId, 'github', {
+    id: String(user.id),
+    label: user.login,
+    avatarUrl: user.avatar_url ?? null
+  });
   return [
     {
       login: user.login,
@@ -671,9 +357,11 @@ export async function createPrivateGitHubRepository({
 
   const client = requireDatabaseClient();
   const profileId = await activeProfileId(client);
-  const connection = await readConnection(client, profileId);
-  if (!connection) throw new ApiError(409, 'Connect GitHub before creating a repository.');
-  const token = await connectionAccessToken(connection);
+  const { accessToken: token } = await connectedToken(
+    client,
+    profileId,
+    'Connect GitHub before creating a repository.'
+  );
   const endpoint =
     owner.type === 'personal' ? '/user/repos' : `/orgs/${encodeURIComponent(owner.login)}/repos`;
   const response = await githubUserFetch<{
@@ -705,48 +393,10 @@ export async function createPrivateGitHubRepository({
   };
 }
 
-async function revokeUpstreamToken(token: string, config: UserOAuthConfig): Promise<void> {
-  try {
-    await fetch(`${GITHUB_API}/applications/${encodeURIComponent(config.clientId)}/token`, {
-      method: 'DELETE',
-      headers: {
-        Accept: 'application/vnd.github+json',
-        Authorization: `Basic ${Buffer.from(`${config.clientId}:${config.clientSecret}`).toString('base64')}`,
-        'Content-Type': 'application/json',
-        'X-GitHub-Api-Version': '2022-11-28'
-      },
-      body: JSON.stringify({ access_token: token })
-    });
-  } catch {
-    // Local revocation must still remove the stored credential when GitHub is unavailable.
-  }
-}
-
+/** `DELETE /ext/github/user-connection` (alias): erase, revoke upstream, tombstone legacy. */
 export async function disconnectGitHubUser(): Promise<GitHubUserConnectionDto> {
   const client = requireDatabaseClient();
   const profileId = await activeProfileId(client);
-  let connection = await readConnection(client, profileId);
-  if (!connection) return connectionDto(null);
-  const config = userOAuthConfig();
-  if (config) {
-    try {
-      const token = await connectionAccessToken(connection);
-      await revokeUpstreamToken(token, config);
-      connection = (await readConnection(client, profileId)) ?? connection;
-    } catch {
-      // A local disconnect must still erase the stored credential when the
-      // provider is unavailable or the server-held key has rotated.
-    }
-  }
-  const now = nowIso();
-  const updated = await client.run(
-    `UPDATE ext_github_user_connections
-        SET access_token_ciphertext = 'revoked:v1', refresh_token_ciphertext = NULL,
-            access_token_expires_at = NULL, refresh_token_expires_at = NULL,
-            deleted_at = ?, updated_at = ?, revision = ?
-      WHERE id = ? AND revision = ? AND deleted_at IS NULL`,
-    [now, now, connection.revision + 1, connection.id, connection.revision]
-  );
-  if (updated.changes !== 1) throw new ApiError(409, 'GitHub connection changed; try again.');
-  return connectionDto(null);
+  await connections(client).disconnectProvider(profileId, 'github');
+  return connectionDto(null, client);
 }

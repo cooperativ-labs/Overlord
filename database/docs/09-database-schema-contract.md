@@ -2434,21 +2434,31 @@ Shared rules for every table in this section:
 
 ### `account_connections`
 
-One external account connection owned by a profile inside an organization; the
-connections module is the only writer and the only reader of credentials.
+One external account connection. The connections module is the only writer and
+the only reader of credentials. Since v153 a connection is **organization-scoped**
+(`knowledgebase`: owned by a profile inside one organization) or **profile-scoped**
+(`everhour`, `github`: owned by the profile across organizations, `organization_id`
+NULL); `CHECK ((provider = 'knowledgebase') = (organization_id IS NOT NULL))`.
 
 | Column                       | Type         | Required | Notes                                                                                                   |
 | ---------------------------- | ------------ | -------- | ------------------------------------------------------------------------------------------------------- |
 | `id`                         | Id           | yes      |                                                                                                         |
 | `owner_profile_id`           | Id           | yes      | FK `profiles`, cascade.                                                                                 |
-| `organization_id`            | Id           | yes      | FK `organizations`, cascade.                                                                            |
-| `provider`                   | text         | yes      | Closed: `knowledgebase`.                                                                                |
-| `server_url`                 | text         | yes      | `https://` only; the configured MCP resource URL.                                                       |
+| `organization_id`            | Id           | no       | FK `organizations`, cascade. Null exactly for profile-scoped providers (v153).                          |
+| `provider`                   | text         | yes      | Closed: `knowledgebase`, `everhour`, `github` (v153).                                                   |
+| `server_url`                 | text         | yes      | `https://` only; the configured MCP resource URL, `https://api.everhour.com`, or `https://github.com`.  |
+| `credential_kind`            | text         | yes      | Closed: `oauth`, `api_key` (v153). Default `oauth`.                                                     |
+| `credential_format`          | text         | yes      | Closed: `connection-v1`, `everhour-user-key-v1`, `github-user-oauth-v1` (v153). Default `connection-v1`. |
+| `external_account_id`        | text         | no       | Upstream account identifier (Everhour user id, GitHub user id) (v153).                                  |
+| `external_account_label`     | text         | no       | Upstream display name or login (v153).                                                                  |
+| `external_account_avatar_url`| text         | no       | Upstream avatar URL (v153).                                                                             |
+| `granted_scopes_json`        | Json         | yes      | Granted OAuth scopes. Default `[]` (v153).                                                              |
+| `last_validated_at`          | TimestampUTC | no       | Last successful upstream validation of the credential (v153).                                           |
 | `state`                      | text         | yes      | Closed: `pending`, `connected`, `reauthorization_required`, `disconnected`.                             |
 | `authorized_workspaces_json` | Json         | yes      | Provider workspace identifiers the grant can read. Default `[]`.                                        |
 | `tool_policy_version`        | integer      | yes      | Reviewed read-allowlist version the connection was checked against.                                     |
-| `credential_ciphertext`      | text         | no       | AES-256-GCM envelope (owner-bound AAD). Required when `connected`; null when `disconnected`.            |
-| `credential_key_id`          | text         | no       | Server key id for the envelope; null exactly when the ciphertext is null.                               |
+| `credential_ciphertext`      | text         | no       | AES-256-GCM envelope; AAD and plaintext per `credential_format`. Required when `connected`; null when `disconnected`. |
+| `credential_key_id`          | text         | no       | Key-ring id (current key id, or reserved `everhour-env` / `github-user-env`); null exactly when the ciphertext is null. |
 | `credential_revision`        | integer      | yes      | Increments on every stored rotation.                                                                    |
 | `access_expires_at`          | TimestampUTC | no       |                                                                                                         |
 | `refresh_expires_at`         | TimestampUTC | no       |                                                                                                         |
@@ -2461,14 +2471,17 @@ connections module is the only writer and the only reader of credentials.
 | `created_at` / `updated_at`  | TimestampUTC | yes      |                                                                                                         |
 | `revision`                   | integer      | yes      |                                                                                                         |
 
-Indexes: unique `(owner_profile_id, organization_id, provider, server_url) WHERE state <> 'disconnected'`; `(refresh_lock_until) WHERE refresh_lock_owner IS NOT NULL`.
+Indexes: unique `(owner_profile_id, organization_id, provider, server_url) WHERE state <> 'disconnected'`; unique `(owner_profile_id, provider, server_url) WHERE state <> 'disconnected' AND organization_id IS NULL` (v153; NULLs are distinct in the first index); unique `(provider, external_account_id) WHERE provider = 'github' AND state <> 'disconnected' AND external_account_id IS NOT NULL` (v153); `(refresh_lock_until) WHERE refresh_lock_owner IS NOT NULL`.
+
+Credential formats (v153): `connection-v1` binds `overlord:account-connection:v1:<owner>:<organization or ->:<provider>:<id>` over `{accessToken, refreshToken}` (OAuth) or `{apiKey}` (API key) and is the only format written. `everhour-user-key-v1` is an envelope adopted verbatim from `ext_everhour_user_connections` (AAD `overlord:everhour-user-key:v1:<owner>:api-key`, plaintext the key). `github-user-oauth-v1` holds `{"access": <envelope>, "refresh": <envelope or null>}` adopted verbatim from `ext_github_user_connections` by migration `20261005130000_account_connections_github_adoption` (AAD `overlord:github-user-oauth:v1:<owner>:access|refresh`, plaintext each token). Legacy-format rows are re-sealed to `connection-v1` under the current key on first successful use and by a startup sweep.
 
 ### `account_connection_authorizations`
 
 Pending OAuth authorization-code attempts. `state_hash` is unique and single-use
 (`consumed_at`); `pkce_verifier_ciphertext` is encrypted; `return_to` is closed
 (`mobile`, `web`); `expires_at` bounds the attempt. FK `connection_id` →
-`account_connections`, cascade. Expired rows may be purged.
+`account_connections`, cascade. Expired rows may be purged. Nullable `return_url` (v153) holds a
+return target validated when the attempt started: an absolute URL set only by a legacy compatibility alias (GitHub: an allowed browser origin or `overlord://github/callback`), or a relative web `returnPath` (starts with `/`, not `//`). Profile-scoped attempts (GitHub) seal the PKCE verifier under the provider's write key with AAD `overlord:account-connection-authorization:v1:<owner>:-:<connection>:<attempt>`.
 
 ### `chat_threads`
 
@@ -2788,7 +2801,7 @@ Closed values:
 - `idempotency_keys.status`: `in_progress`, `completed`, `failed`.
 - `audit_log.result`: `allowed`, `denied`, `failed`.
 - `workspace_invitations.status`: `pending`, `accepted`, `revoked`, `expired`.
-- Assistant conversation vocabularies (v152): `chat_runs.state`, `chat_runs.outcome`, `chat_runs.failure_code`, `chat_run_attempts.state`, `chat_run_attempts.recovery_mode`, `chat_messages.role`, `chat_messages.state`, `chat_questions.state`, `chat_tool_calls.state`, `chat_events.kind`, `chat_work_proposals.state`, `chat_source_refs.source_kind`, `chat_source_refs.access_state`, `chat_presence.platform`, `chat_notifications.type`, `chat_notifications.state`, `account_connections.provider`, and `account_connections.state`, with the values in the "Assistant Conversations" section and CONTRACT.md "Controlled Vocabularies".
+- Assistant conversation vocabularies (v152): `chat_runs.state`, `chat_runs.outcome`, `chat_runs.failure_code`, `chat_run_attempts.state`, `chat_run_attempts.recovery_mode`, `chat_messages.role`, `chat_messages.state`, `chat_questions.state`, `chat_tool_calls.state`, `chat_events.kind`, `chat_work_proposals.state`, `chat_source_refs.source_kind`, `chat_source_refs.access_state`, `chat_presence.platform`, `chat_notifications.type`, `chat_notifications.state`, `account_connections.provider`, `account_connections.state`, and (v153) `account_connections.credential_kind` and `account_connections.credential_format`, with the values in the "Assistant Conversations" section and CONTRACT.md "Controlled Vocabularies".
 - `role_assignments.role_key` (core, non-extension values; see `auth/src/rbac/types.ts` `Role` enum and `overlord.rbac.toml`): `ADMIN`, `MANAGER`, `MEMBER`, `PUBLIC`. `MANAGER` grants everything `MEMBER` does plus `workspace:update` and project management, and may invite/remove/promote other members up to (but not including) `ADMIN`; only `ADMIN` may grant or revoke `ADMIN` itself.
 
 Open extension values:
@@ -2869,6 +2882,15 @@ text. Ciphertext is AES-256-GCM under the server-held
 `EVERHOUR_API_KEY_ENCRYPTION_KEY`, falling back to
 `GITHUB_USER_TOKEN_ENCRYPTION_KEY` when the dedicated variable is unset.
 
+**Since v153 this table is a read-only migration source.** Migration
+`20261005120000_account_connections_profile_scope` copies every live row verbatim into
+`account_connections` (same id, `provider = 'everhour'`, `credential_format =
+'everhour-user-key-v1'`, `credential_key_id = 'everhour-env'`), and overwrites the
+ciphertext of soft-deleted rows with `revoked:v1`. New connects never write here. A
+disconnect through the connections module tombstones the matching live row
+(`deleted_at`, `api_key_ciphertext = 'revoked:v1'`) so that a rollback cannot
+resurrect it.
+
 | Column                                                                    | Type     | Required | Notes                                                              |
 | ------------------------------------------------------------------------- | -------- | -------- | ------------------------------------------------------------------ |
 | `id`, `profile_id`                                                        | Id       | yes      | Extension row and owning profile FK (`ON DELETE CASCADE`).         |
@@ -2884,7 +2906,10 @@ Deprecated workspace-scoped Everhour connection retained only as a migration
 source. New writes go to `ext_everhour_user_connections`. A workspace row is
 adopted onto a profile only when `entity_changes` attribution uniquely
 identifies that profile as the connector; otherwise it stays readable until
-the connector reconnects personally. Services must never return
+the connector reconnects personally. Since v153 an adopted key is stored through the
+connections module, and the adopted workspace row's `api_key_secret` is overwritten
+with `revoked:v1` when it is soft-deleted. The v153 migration scrubs rows that were
+already soft-deleted. Services must never return
 `api_key_secret` to clients or include it in change-feed fields.
 
 | Column           | Type         | Required | Notes                                                  |
@@ -3017,6 +3042,18 @@ connection shares Better Auth GitHub sign-in's OAuth App client registration,
 but its grant, token, encrypted persistence, and revocation lifecycle are
 independent of the login session and `ext_github_installations`.
 
+**Since v153 this table is a read-only migration source.** Migration
+`20261005130000_account_connections_github_adoption` copies every live row verbatim into
+`account_connections` (same id, `provider = 'github'`, `credential_format =
+'github-user-oauth-v1'`, `credential_ciphertext = {"access": …, "refresh": …}`,
+`credential_key_id = 'github-user-env'`, account id/login/avatar, scopes, and expiries),
+unless the profile already has a GitHub row in any state or the GitHub account is live on
+another profile. It overwrites the access ciphertext of soft-deleted rows with
+`revoked:v1` and clears their refresh ciphertext. New connects never write here. A
+disconnect through the connections module tombstones the matching live row
+(`deleted_at`, `access_token_ciphertext = 'revoked:v1'`, refresh ciphertext and expiries
+cleared).
+
 | Column                                                                    | Type     | Required | Notes                                                                            |
 | ------------------------------------------------------------------------- | -------- | -------- | -------------------------------------------------------------------------------- |
 | `id`, `profile_id`                                                        | Id       | yes      | Extension row and owning profile FK.                                             |
@@ -3031,6 +3068,9 @@ independent of the login session and `ext_github_installations`.
 Indexes: unique active `(profile_id)` and unique active `(github_user_id)`.
 
 ### `ext_github_user_oauth_states`
+
+Retired from new writes in v153: GitHub sign-in state now lives in
+`account_connection_authorizations`. Rows left here are never read and expire.
 
 Durable OAuth initiation state so a callback may land on any service instance.
 The raw state is returned only in the provider authorization URL; persistence
@@ -3050,7 +3090,8 @@ Index: unique active `(state_hash)`.
 
 Idempotency and retry record for composite project initialization. It owns only
 non-secret request, ownership, state, and repository metadata; OAuth credentials
-remain exclusively in `ext_github_user_connections`.
+remain exclusively in `account_connections` (provider `github`, v153; previously
+`ext_github_user_connections`).
 
 | Column                                                         | Type     | Required | Notes                                                                 |
 | -------------------------------------------------------------- | -------- | -------- | --------------------------------------------------------------------- |

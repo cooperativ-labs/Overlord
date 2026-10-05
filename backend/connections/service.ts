@@ -1,5 +1,5 @@
 import {
-  ACCOUNT_CONNECTION_PROVIDERS,
+  type AccountConnectionCredentialKind,
   type AccountConnectionDto,
   type AccountConnectionListResponse,
   type AccountConnectionProvider,
@@ -18,14 +18,17 @@ import type {
 
 import type { ConnectionsConfig } from './config.ts';
 import { hashSecret, openSecret, sealSecret, SecretEnvelopeError } from './crypto.ts';
+import { connectionCredentialAad } from './keyring.ts';
 import { type KnowledgebaseOAuth, OAuthError, pkcePair, type TokenSet } from './oauth.ts';
 import { KNOWLEDGEBASE_TOOL_POLICY_VERSION } from './policy.ts';
 
 /**
  * The account-connections module (contract v152): the only writer of
- * `account_connections` and the only reader of credentials. Every public method
- * is scoped to the caller's profile and organization and answers `not_found`
- * for anything else. Credentials, PKCE verifiers, codes, and OAuth state never
+ * `account_connections` and the only reader of credentials. This class serves the
+ * organization-scoped providers (Knowledgebase); `ProfileConnections`
+ * (`profile.ts`, v153) serves profile-scoped ones over the same table. Every
+ * public method is scoped to the caller's profile and organization and answers
+ * `not_found` for anything else. Credentials, PKCE verifiers, codes, and OAuth state never
  * leave this module except sealed or hashed.
  */
 export type ConnectionRow = Selectable<AccountConnectionsTable>;
@@ -66,11 +69,7 @@ const MAX_OPEN_AUTHORIZATIONS = 5;
 export const REFRESH_LEASE_MS = 15_000;
 const ACCESS_EXPIRY_SKEW_MS = 60_000;
 
-function credentialAad(
-  row: Pick<ConnectionRow, 'owner_profile_id' | 'organization_id' | 'provider' | 'id'>
-) {
-  return `overlord:account-connection:v1:${row.owner_profile_id}:${row.organization_id}:${row.provider}:${row.id}`;
-}
+const credentialAad = connectionCredentialAad;
 function verifierAad(
   row: Pick<ConnectionRow, 'owner_profile_id' | 'organization_id' | 'id'>,
   authorizationId: string
@@ -78,22 +77,40 @@ function verifierAad(
   return `overlord:account-connection-authorization:v1:${row.owner_profile_id}:${row.organization_id}:${row.id}:${authorizationId}`;
 }
 
-export function connectionDto(row: ConnectionRow): AccountConnectionDto {
-  let workspaces: unknown = [];
+function stringArray(json: string): string[] {
+  let value: unknown = [];
   try {
-    workspaces = JSON.parse(row.authorized_workspaces_json);
+    value = JSON.parse(json);
   } catch {
-    workspaces = [];
+    value = [];
   }
+  return Array.isArray(value) ? value.filter((w): w is string => typeof w === 'string') : [];
+}
+
+/** Non-secret projection of any connection row; the credential columns are never read here. */
+export function connectionDto(row: ConnectionRow): AccountConnectionDto {
+  const hasAccount =
+    row.external_account_id !== null ||
+    row.external_account_label !== null ||
+    row.external_account_avatar_url !== null;
   return {
     id: row.id!,
     provider: row.provider as AccountConnectionProvider,
     organizationId: row.organization_id,
+    scope: row.organization_id === null ? 'profile' : 'organization',
+    credentialKind: row.credential_kind as AccountConnectionCredentialKind,
+    account: hasAccount
+      ? {
+          id: row.external_account_id,
+          label: row.external_account_label,
+          avatarUrl: row.external_account_avatar_url
+        }
+      : null,
+    scopes: stringArray(row.granted_scopes_json),
+    lastValidatedAt: row.last_validated_at,
     serverUrl: row.server_url,
     state: row.state as AccountConnectionState,
-    authorizedWorkspaces: Array.isArray(workspaces)
-      ? workspaces.filter((w): w is string => typeof w === 'string')
-      : [],
+    authorizedWorkspaces: stringArray(row.authorized_workspaces_json),
     toolPolicyVersion: row.tool_policy_version,
     lastErrorCode: row.last_error_code,
     connectedAt: row.connected_at,
@@ -171,9 +188,12 @@ export class AccountConnections {
 
   async start(owner: ChatOwner, body: unknown): Promise<StartAccountConnectionResponse> {
     const input = body as { provider?: unknown; returnTo?: unknown } | null;
+    // GitHub is profile-scoped (`ProfileConnections.startOAuth`, routed before this method);
+    // reaching here means its adapter is not registered. Everhour uses an API key.
+    if (input?.provider === 'github') throw new ChatError('provider_not_available');
     if (
       !input ||
-      !ACCOUNT_CONNECTION_PROVIDERS.includes(input.provider as AccountConnectionProvider) ||
+      input.provider !== 'knowledgebase' ||
       (input.returnTo !== 'mobile' && input.returnTo !== 'web')
     )
       throw new ChatError('invalid_request');
@@ -286,7 +306,7 @@ export class AccountConnections {
     const code = typeof query.code === 'string' && query.code.length <= 2048 ? query.code : '';
     if (!code) return { status: 'failed', returnTo };
     try {
-      await this.access({ profileId: row.owner_profile_id, organizationId: row.organization_id });
+      await this.access({ profileId: row.owner_profile_id, organizationId: row.organization_id! });
     } catch {
       return { status: 'failed', returnTo };
     }

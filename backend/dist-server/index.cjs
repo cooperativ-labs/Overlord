@@ -815,7 +815,7 @@ var init_agent_launch_flags = __esm({
 });
 
 // ../packages/contract/dist/chat.js
-var CHAT_DEFAULT_LIMITS, CHAT_NOTIFICATION_TYPES, CHAT_NOTIFICATION_CATALOG, CHAT_NOTIFICATION_DEEP_LINK, ACCOUNT_CONNECTION_PROVIDERS, REPOSITORY_READ_OPERATIONS, REPOSITORY_READ_DEFAULT_BOUNDS, REPOSITORY_READ_OPERATION_ID_PATTERN;
+var CHAT_DEFAULT_LIMITS, CHAT_NOTIFICATION_TYPES, CHAT_NOTIFICATION_CATALOG, CHAT_NOTIFICATION_DEEP_LINK, REPOSITORY_READ_OPERATIONS, REPOSITORY_READ_DEFAULT_BOUNDS, REPOSITORY_READ_OPERATION_ID_PATTERN;
 var init_chat = __esm({
   "../packages/contract/dist/chat.js"() {
     "use strict";
@@ -862,7 +862,6 @@ var init_chat = __esm({
       }
     };
     CHAT_NOTIFICATION_DEEP_LINK = "overlord://chat/threads/:threadId";
-    ACCOUNT_CONNECTION_PROVIDERS = ["knowledgebase"];
     REPOSITORY_READ_OPERATIONS = [
       "observe",
       "tree",
@@ -63180,8 +63179,8 @@ var require_escape_html = __commonJS({
   "../node_modules/escape-html/index.js"(exports2, module2) {
     "use strict";
     var matchHtmlRegExp = /["'&<>]/;
-    module2.exports = escapeHtml2;
-    function escapeHtml2(string4) {
+    module2.exports = escapeHtml3;
+    function escapeHtml3(string4) {
       var str = "" + string4;
       var match = matchHtmlRegExp.exec(str);
       if (!match) {
@@ -63312,7 +63311,7 @@ var require_finalhandler = __commonJS({
     "use strict";
     var debug = require_src2()("finalhandler");
     var encodeUrl = require_encodeurl();
-    var escapeHtml2 = require_escape_html();
+    var escapeHtml3 = require_escape_html();
     var onFinished = require_on_finished();
     var parseUrl2 = require_parseurl();
     var statuses = require_statuses();
@@ -63324,7 +63323,7 @@ var require_finalhandler = __commonJS({
     };
     var isFinished = onFinished.isFinished;
     function createHtmlDocument(message2) {
-      var body = escapeHtml2(message2).replace(NEWLINE_REGEXP, "<br>").replace(DOUBLE_SPACE_REGEXP, " &nbsp;");
+      var body = escapeHtml3(message2).replace(NEWLINE_REGEXP, "<br>").replace(DOUBLE_SPACE_REGEXP, " &nbsp;");
       return '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<title>Error</title>\n</head>\n<body>\n<pre>' + body + "</pre>\n</body>\n</html>\n";
     }
     module2.exports = finalhandler;
@@ -65828,7 +65827,7 @@ var require_send = __commonJS({
     var deprecate2 = require_depd()("send");
     var destroy = require_destroy();
     var encodeUrl = require_encodeurl();
-    var escapeHtml2 = require_escape_html();
+    var escapeHtml3 = require_escape_html();
     var etag = require_etag();
     var fresh = require_fresh();
     var fs2 = require("fs");
@@ -65928,7 +65927,7 @@ var require_send = __commonJS({
       }
       var res = this.res;
       var msg = statuses.message[status] || String(status);
-      var doc = createHtmlDocument("Error", escapeHtml2(msg));
+      var doc = createHtmlDocument("Error", escapeHtml3(msg));
       clearHeaders(res);
       if (err && err.headers) {
         setHeaders(res, err.headers);
@@ -66028,7 +66027,7 @@ var require_send = __commonJS({
         return;
       }
       var loc = encodeUrl(collapseLeadingSlashes(this.path + "/"));
-      var doc = createHtmlDocument("Redirecting", "Redirecting to " + escapeHtml2(loc));
+      var doc = createHtmlDocument("Redirecting", "Redirecting to " + escapeHtml3(loc));
       res.statusCode = 301;
       res.setHeader("Content-Type", "text/html; charset=UTF-8");
       res.setHeader("Content-Length", Buffer.byteLength(doc));
@@ -68634,7 +68633,7 @@ var require_response = __commonJS({
     var createError = require_http_errors();
     var deprecate2 = require_depd()("express");
     var encodeUrl = require_encodeurl();
-    var escapeHtml2 = require_escape_html();
+    var escapeHtml3 = require_escape_html();
     var http = require("http");
     var isAbsolute = require_utils4().isAbsolute;
     var onFinished = require_on_finished();
@@ -69040,7 +69039,7 @@ var require_response = __commonJS({
           body = statuses.message[status] + ". Redirecting to " + address;
         },
         html: function() {
-          var u = escapeHtml2(address);
+          var u = escapeHtml3(address);
           body = "<p>" + statuses.message[status] + ". Redirecting to " + u + "</p>";
         },
         default: function() {
@@ -69172,7 +69171,7 @@ var require_serve_static = __commonJS({
   "../node_modules/serve-static/index.js"(exports2, module2) {
     "use strict";
     var encodeUrl = require_encodeurl();
-    var escapeHtml2 = require_escape_html();
+    var escapeHtml3 = require_escape_html();
     var parseUrl2 = require_parseurl();
     var resolve = require("path").resolve;
     var send = require_send();
@@ -69259,7 +69258,7 @@ var require_serve_static = __commonJS({
         originalUrl.path = null;
         originalUrl.pathname = collapseLeadingSlashes(originalUrl.pathname + "/");
         var loc = encodeUrl(url2.format(originalUrl));
-        var doc = createHtmlDocument("Redirecting", "Redirecting to " + escapeHtml2(loc));
+        var doc = createHtmlDocument("Redirecting", "Redirecting to " + escapeHtml3(loc));
         res.statusCode = 301;
         res.setHeader("Content-Type", "text/html; charset=UTF-8");
         res.setHeader("Content-Length", Buffer.byteLength(doc));
@@ -75124,8 +75123,8 @@ var init_window = __esm({
 function hashSessionChannelToken(rawToken) {
   return (0, import_node_crypto9.createHash)(SESSION_CHANNEL_TOKEN_HASH_ALGORITHM).update(rawToken).digest("hex");
 }
-function addSeconds(iso, seconds) {
-  return new Date(new Date(iso).getTime() + seconds * 1e3).toISOString();
+function addSeconds(iso, seconds2) {
+  return new Date(new Date(iso).getTime() + seconds2 * 1e3).toISOString();
 }
 function renewedExpiry({
   now: now2,
@@ -81018,8 +81017,8 @@ var init_circularReplacer = __esm({
 var sleep2;
 var init_sleep = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/client/util-waiter/utils/sleep.js"() {
-    sleep2 = (seconds) => {
-      return new Promise((resolve) => setTimeout(resolve, seconds * 1e3));
+    sleep2 = (seconds2) => {
+      return new Promise((resolve) => setTimeout(resolve, seconds2 * 1e3));
     };
   }
 });
@@ -83247,11 +83246,11 @@ var init_date_utils = __esm({
       if (!match) {
         throw new TypeError("Invalid RFC-3339 date-time value");
       }
-      const [_, yearStr, monthStr, dayStr, hours, minutes, seconds, fractionalMilliseconds] = match;
+      const [_, yearStr, monthStr, dayStr, hours, minutes, seconds2, fractionalMilliseconds] = match;
       const year3 = strictParseShort(stripLeadingZeroes(yearStr));
       const month = parseDateValue(monthStr, "month", 1, 12);
       const day2 = parseDateValue(dayStr, "day", 1, 31);
-      return buildDate(year3, month, day2, { hours, minutes, seconds, fractionalMilliseconds });
+      return buildDate(year3, month, day2, { hours, minutes, seconds: seconds2, fractionalMilliseconds });
     };
     RFC3339_WITH_OFFSET = new RegExp(/^(\d{4})-(\d{2})-(\d{2})[tT](\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(([-+]\d{2}\:\d{2})|[zZ])$/);
     parseRfc3339DateTimeWithOffset = (value2) => {
@@ -83265,11 +83264,11 @@ var init_date_utils = __esm({
       if (!match) {
         throw new TypeError("Invalid RFC-3339 date-time value");
       }
-      const [_, yearStr, monthStr, dayStr, hours, minutes, seconds, fractionalMilliseconds, offsetStr] = match;
+      const [_, yearStr, monthStr, dayStr, hours, minutes, seconds2, fractionalMilliseconds, offsetStr] = match;
       const year3 = strictParseShort(stripLeadingZeroes(yearStr));
       const month = parseDateValue(monthStr, "month", 1, 12);
       const day2 = parseDateValue(dayStr, "day", 1, 31);
-      const date6 = buildDate(year3, month, day2, { hours, minutes, seconds, fractionalMilliseconds });
+      const date6 = buildDate(year3, month, day2, { hours, minutes, seconds: seconds2, fractionalMilliseconds });
       if (offsetStr.toUpperCase() != "Z") {
         date6.setTime(date6.getTime() - parseOffsetToMilliseconds(offsetStr));
       }
@@ -83287,23 +83286,23 @@ var init_date_utils = __esm({
       }
       let match = IMF_FIXDATE.exec(value2);
       if (match) {
-        const [_, dayStr, monthStr, yearStr, hours, minutes, seconds, fractionalMilliseconds] = match;
-        return buildDate(strictParseShort(stripLeadingZeroes(yearStr)), parseMonthByShortName(monthStr), parseDateValue(dayStr, "day", 1, 31), { hours, minutes, seconds, fractionalMilliseconds });
+        const [_, dayStr, monthStr, yearStr, hours, minutes, seconds2, fractionalMilliseconds] = match;
+        return buildDate(strictParseShort(stripLeadingZeroes(yearStr)), parseMonthByShortName(monthStr), parseDateValue(dayStr, "day", 1, 31), { hours, minutes, seconds: seconds2, fractionalMilliseconds });
       }
       match = RFC_850_DATE.exec(value2);
       if (match) {
-        const [_, dayStr, monthStr, yearStr, hours, minutes, seconds, fractionalMilliseconds] = match;
+        const [_, dayStr, monthStr, yearStr, hours, minutes, seconds2, fractionalMilliseconds] = match;
         return adjustRfc850Year(buildDate(parseTwoDigitYear(yearStr), parseMonthByShortName(monthStr), parseDateValue(dayStr, "day", 1, 31), {
           hours,
           minutes,
-          seconds,
+          seconds: seconds2,
           fractionalMilliseconds
         }));
       }
       match = ASC_TIME.exec(value2);
       if (match) {
-        const [_, monthStr, dayStr, hours, minutes, seconds, fractionalMilliseconds, yearStr] = match;
-        return buildDate(strictParseShort(stripLeadingZeroes(yearStr)), parseMonthByShortName(monthStr), parseDateValue(dayStr.trimLeft(), "day", 1, 31), { hours, minutes, seconds, fractionalMilliseconds });
+        const [_, monthStr, dayStr, hours, minutes, seconds2, fractionalMilliseconds, yearStr] = match;
+        return buildDate(strictParseShort(stripLeadingZeroes(yearStr)), parseMonthByShortName(monthStr), parseDateValue(dayStr.trimLeft(), "day", 1, 31), { hours, minutes, seconds: seconds2, fractionalMilliseconds });
       }
       throw new TypeError("Invalid RFC-7231 date-time value");
     };
@@ -83499,13 +83498,13 @@ var init_schema_date_utils = __esm({
       if (!matches) {
         throw new TypeError(`Invalid RFC3339 timestamp format ${value2}`);
       }
-      const [, yearStr, monthStr, dayStr, hours, minutes, seconds, , ms, offsetStr] = matches;
+      const [, yearStr, monthStr, dayStr, hours, minutes, seconds2, , ms, offsetStr] = matches;
       range(monthStr, 1, 12);
       range(dayStr, 1, 31);
       range(hours, 0, 23);
       range(minutes, 0, 59);
-      range(seconds, 0, 60);
-      const date6 = new Date(Date.UTC(Number(yearStr), Number(monthStr) - 1, Number(dayStr), Number(hours), Number(minutes), Number(seconds), Number(ms) ? Math.round(parseFloat(`0.${ms}`) * 1e3) : 0));
+      range(seconds2, 0, 60);
+      const date6 = new Date(Date.UTC(Number(yearStr), Number(monthStr) - 1, Number(dayStr), Number(hours), Number(minutes), Number(seconds2), Number(ms) ? Math.round(parseFloat(`0.${ms}`) * 1e3) : 0));
       date6.setUTCFullYear(Number(yearStr));
       if (offsetStr.toUpperCase() != "Z") {
         const [, sign3, offsetH, offsetM] = /([+-])(\d\d):(\d\d)/.exec(offsetStr) || [void 0, "+", 0, 0];
@@ -83894,12 +83893,12 @@ var chain;
 var init_chain = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/config/property-provider/chain.js"() {
     init_ProviderError();
-    chain = (...providers) => async () => {
-      if (providers.length === 0) {
+    chain = (...providers2) => async () => {
+      if (providers2.length === 0) {
         throw new ProviderError("No providers in chain");
       }
       let lastProviderError;
-      for (const provider of providers) {
+      for (const provider of providers2) {
         try {
           const credentials = await provider();
           return credentials;
@@ -84058,14 +84057,14 @@ var init_getProfileName = __esm({
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getSSOTokenFilepath.js
-var import_node_crypto17, import_node_path21, getSSOTokenFilepath;
+var import_node_crypto20, import_node_path21, getSSOTokenFilepath;
 var init_getSSOTokenFilepath = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getSSOTokenFilepath.js"() {
-    import_node_crypto17 = require("node:crypto");
+    import_node_crypto20 = require("node:crypto");
     import_node_path21 = require("node:path");
     init_getHomeDir();
     getSSOTokenFilepath = (id2) => {
-      const hasher = (0, import_node_crypto17.createHash)("sha1");
+      const hasher = (0, import_node_crypto20.createHash)("sha1");
       const cacheName = hasher.update(id2).digest("hex");
       return (0, import_node_path21.join)(getHomeDir(), ".aws", "sso", "cache", `${cacheName}.json`);
     };
@@ -86236,10 +86235,10 @@ function castSourceData(toCast, encoding) {
   }
   return fromArrayBuffer(toCast);
 }
-var import_node_crypto18, Hash;
+var import_node_crypto21, Hash;
 var init_hash_node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/serde/hash-node/hash-node.js"() {
-    import_node_crypto18 = require("node:crypto");
+    import_node_crypto21 = require("node:crypto");
     init_buffer_from();
     init_toUint8Array();
     Hash = class {
@@ -86258,7 +86257,7 @@ var init_hash_node = __esm({
         return Promise.resolve(this.hash.digest());
       }
       reset() {
-        this.hash = this.secret ? (0, import_node_crypto18.createHmac)(this.algorithmIdentifier, castSourceData(this.secret)) : (0, import_node_crypto18.createHash)(this.algorithmIdentifier);
+        this.hash = this.secret ? (0, import_node_crypto21.createHmac)(this.algorithmIdentifier, castSourceData(this.secret)) : (0, import_node_crypto21.createHash)(this.algorithmIdentifier);
       }
     };
   }
@@ -87152,10 +87151,10 @@ __export(serde_exports, {
   toUtf8: () => toUtf8,
   v4: () => v4
 });
-var import_node_crypto19, Uint8ArrayBlobAdapter, _getRandomValues, v4, generateIdempotencyToken;
+var import_node_crypto22, Uint8ArrayBlobAdapter, _getRandomValues, v4, generateIdempotencyToken;
 var init_serde = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/serde/index.js"() {
-    import_node_crypto19 = require("node:crypto");
+    import_node_crypto22 = require("node:crypto");
     init_fromBase64();
     init_toBase64();
     init_Uint8ArrayBlobAdapter();
@@ -87192,7 +87191,7 @@ var init_serde = __esm({
     init_stream_collector();
     Uint8ArrayBlobAdapter = class extends bindUint8ArrayBlobAdapter(toUtf8, fromUtf8, toBase64, fromBase64) {
     };
-    _getRandomValues = import_node_crypto19.getRandomValues;
+    _getRandomValues = import_node_crypto22.getRandomValues;
     v4 = bindV4(_getRandomValues);
     generateIdempotencyToken = v4;
   }
@@ -112089,7 +112088,7 @@ var require_dist_cjs16 = __commonJS({
     var { setCredentialFeature: setCredentialFeature2 } = (init_client4(), __toCommonJS(client_exports2));
     var { CredentialsProviderError: CredentialsProviderError2, readFile: readFile4, parseKnownFiles: parseKnownFiles2, getProfileName: getProfileName2 } = (init_config3(), __toCommonJS(config_exports));
     var { HttpRequest: HttpRequest2 } = (init_protocols(), __toCommonJS(protocols_exports));
-    var { createHash: createHash25, createPrivateKey, createPublicKey, sign: sign3 } = require("node:crypto");
+    var { createHash: createHash24, createPrivateKey, createPublicKey, sign: sign3 } = require("node:crypto");
     var { promises } = require("node:fs");
     var { homedir: homedir2 } = require("node:os");
     var { dirname, join: join6 } = require("node:path");
@@ -112250,7 +112249,7 @@ var require_dist_cjs16 = __commonJS({
       getTokenFilePath() {
         const directory = process.env.AWS_LOGIN_CACHE_DIRECTORY ?? join6(homedir2(), ".aws", "login", "cache");
         const loginSessionBytes = Buffer.from(this.loginSession, "utf8");
-        const loginSessionSha256 = createHash25("sha256").update(loginSessionBytes).digest("hex");
+        const loginSessionSha256 = createHash24("sha256").update(loginSessionBytes).digest("hex");
         return join6(directory, `${loginSessionSha256}.json`);
       }
       derToRawSignature(derSignature) {
@@ -113934,8 +113933,8 @@ var require_dist_cjs20 = __commonJS({
       init2.logger?.debug("@aws-sdk/credential-provider-node - remoteProvider::fromInstanceMetadata");
       return fromInstanceMetadata(init2);
     };
-    function memoizeChain(providers, treatAsExpired) {
-      const chain3 = internalCreateChain(providers);
+    function memoizeChain(providers2, treatAsExpired) {
+      const chain3 = internalCreateChain(providers2);
       let activeLock;
       let passiveLock;
       let credentials;
@@ -113981,9 +113980,9 @@ var require_dist_cjs20 = __commonJS({
       };
       return provider;
     }
-    var internalCreateChain = (providers) => async (awsIdentityProperties) => {
+    var internalCreateChain = (providers2) => async (awsIdentityProperties) => {
       let lastProviderError;
-      for (const provider of providers) {
+      for (const provider of providers2) {
         try {
           return await provider(awsIdentityProperties);
         } catch (err) {
@@ -114279,7 +114278,7 @@ var init_Md5Js = __esm({
 function buildNativeClass() {
   return class Md5Node {
     digestLength = 16;
-    hash = (0, import_node_crypto20.createHash)("md5");
+    hash = (0, import_node_crypto23.createHash)("md5");
     update(data) {
       this.hash.update(toUint8Array(data));
     }
@@ -114288,19 +114287,19 @@ function buildNativeClass() {
       return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
     }
     reset() {
-      this.hash = (0, import_node_crypto20.createHash)("md5");
+      this.hash = (0, import_node_crypto23.createHash)("md5");
     }
   };
 }
-var import_node_crypto20, hasNativeCrypto, Md5Node;
+var import_node_crypto23, hasNativeCrypto, Md5Node;
 var init_Md5Node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/checksum/md5/Md5Node.js"() {
-    import_node_crypto20 = require("node:crypto");
+    import_node_crypto23 = require("node:crypto");
     init_serde();
     init_Md5Js();
     hasNativeCrypto = (() => {
       try {
-        (0, import_node_crypto20.createHash)("md5");
+        (0, import_node_crypto23.createHash)("md5");
         return true;
       } catch {
         return false;
@@ -114644,7 +114643,7 @@ function buildNativeClass3() {
       this.finished = false;
     }
     createHash() {
-      return this.secret ? (0, import_node_crypto21.createHmac)("sha256", toBuffer(this.secret)) : (0, import_node_crypto21.createHash)("sha256");
+      return this.secret ? (0, import_node_crypto24.createHmac)("sha256", toBuffer(this.secret)) : (0, import_node_crypto24.createHash)("sha256");
     }
   };
 }
@@ -114657,14 +114656,14 @@ function toBuffer(data) {
   }
   return Buffer.from(data);
 }
-var import_node_crypto21, hasNativeCrypto2, Sha256Node;
+var import_node_crypto24, hasNativeCrypto2, Sha256Node;
 var init_Sha256Node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/checksum/sha256/Sha256Node.js"() {
-    import_node_crypto21 = require("node:crypto");
+    import_node_crypto24 = require("node:crypto");
     init_Sha256Js();
     hasNativeCrypto2 = (() => {
       try {
-        (0, import_node_crypto21.createHash)("sha256");
+        (0, import_node_crypto24.createHash)("sha256");
         return true;
       } catch {
         return false;
@@ -127921,9 +127920,9 @@ init_logger();
 
 // ../node_modules/@better-auth/core/dist/oauth2/utils.mjs
 function getOAuth2Tokens(data) {
-  const getDate2 = (seconds) => {
+  const getDate2 = (seconds2) => {
     const now2 = /* @__PURE__ */ new Date();
-    return new Date(now2.getTime() + seconds * 1e3);
+    return new Date(now2.getTime() + seconds2 * 1e3);
   };
   return {
     tokenType: data.token_type,
@@ -135190,7 +135189,7 @@ Most of the features of Better Auth will not work correctly.`);
   checkEndpointConflicts(options, logger3);
   const cookies = getCookies(options);
   const tables = getAuthTables(options);
-  const providers = (await Promise.all(Object.entries(options.socialProviders || {}).map(async ([key, originalConfig]) => {
+  const providers2 = (await Promise.all(Object.entries(options.socialProviders || {}).map(async ([key, originalConfig]) => {
     const config4 = typeof originalConfig === "function" ? await originalConfig() : originalConfig;
     if (config4 == null) return null;
     if (config4.enabled === false) return null;
@@ -135226,7 +135225,7 @@ Most of the features of Better Auth will not work correctly.`);
     appName: options.appName || "Better Auth",
     baseURL: baseURL || "",
     version: getBetterAuthVersion(),
-    socialProviders: providers,
+    socialProviders: providers2,
     options,
     oauthConfig: {
       storeStateStrategy: options.account?.storeStateStrategy || (isStateful ? "database" : "cookie"),
@@ -137403,11 +137402,11 @@ var MAX_DAILY_SEARCH_DAYS = 366 * 3;
 var MAX_WEEKLY_SEARCH_DAYS = 366 * 6;
 var MAX_MONTHLY_SEARCH_MONTHS = 12 * 10;
 function parseTimeString(value2) {
-  const [hours, minutes, seconds = "00"] = value2.split(":");
+  const [hours, minutes, seconds2 = "00"] = value2.split(":");
   return {
     hour: Number.parseInt(hours ?? "0", 10),
     minute: Number.parseInt(minutes ?? "0", 10),
-    second: Number.parseInt(seconds, 10)
+    second: Number.parseInt(seconds2, 10)
   };
 }
 function toUtcDayNumber(year3, month, day2) {
@@ -139030,12 +139029,12 @@ function emptyEntityCounts() {
   return { mission: 0, objective: 0, delivery: 0, event: 0 };
 }
 function addEntityCount({
-  counts,
+  counts: counts2,
   entityType,
   amount = 1
 }) {
   if (entityType === "mission" || entityType === "objective" || entityType === "delivery" || entityType === "event") {
-    counts[entityType] += amount;
+    counts2[entityType] += amount;
   }
 }
 function sqlPlaceholders(count) {
@@ -148480,11 +148479,522 @@ async function createMissionGitHubPullRequest(missionId, body) {
   };
 }
 
-// ext/github/user-oauth.ts
-var import_node_crypto15 = require("node:crypto");
+// ../packages/core/service/chat/store.ts
+init_dist();
+var import_node_crypto14 = require("node:crypto");
+var import_node_util = require("node:util");
+init_errors4();
+var ChatError = class extends ServiceError {
+  /**
+   * @param detail Optional specific reason for the assistant's own tool results (for example
+   * which resource key is not registered). It is never part of an HTTP error body.
+   */
+  constructor(code, detail) {
+    const status = code === "not_found" || code === "chat_unavailable" || code === "provider_not_available" ? 404 : code === "invalid_request" ? 400 : code === "limit_exceeded" ? 429 : code === "provider_not_ready" ? 503 : code === "credential_rejected" ? 422 : code === "provider_unavailable" ? 502 : 409;
+    super(code.replaceAll("_", " "), code, status);
+    this.detail = detail;
+  }
+  detail;
+};
+var requiredText = (value2, max) => {
+  if (typeof value2 !== "string" || !value2.trim() || value2.length > max)
+    throw new ChatError("invalid_request");
+  return value2;
+};
+function revision(value2) {
+  if (!Number.isSafeInteger(value2) || Number(value2) < 1) throw new ChatError("invalid_request");
+  return Number(value2);
+}
+function messageDto(r5) {
+  return {
+    id: r5.id,
+    threadId: r5.thread_id,
+    role: r5.role,
+    state: r5.state,
+    blocks: JSON.parse(r5.blocks_json),
+    runId: r5.run_id,
+    answersQuestionId: r5.answers_question_id,
+    clientRequestId: r5.client_request_id,
+    createdAt: r5.created_at,
+    updatedAt: r5.updated_at,
+    revision: r5.revision
+  };
+}
+function questionDto(r5) {
+  return {
+    id: r5.id,
+    threadId: r5.thread_id,
+    runId: r5.run_id,
+    ordinal: r5.ordinal,
+    state: r5.state,
+    prompt: r5.prompt,
+    options: JSON.parse(r5.options_json),
+    allowFreeText: Boolean(r5.allow_free_text),
+    answerMessageId: r5.answer_message_id,
+    createdAt: r5.created_at,
+    answeredAt: r5.answered_at,
+    revision: r5.revision
+  };
+}
+function runDto(r5, continueAvailable = false) {
+  return {
+    id: r5.id,
+    threadId: r5.thread_id,
+    triggerMessageId: r5.trigger_message_id,
+    state: r5.state,
+    outcome: r5.outcome,
+    failureCode: r5.failure_code,
+    continuedFromRunId: r5.continued_from_run_id,
+    continueAvailable,
+    usage: {
+      toolCalls: r5.tool_call_count,
+      activeProcessingMs: r5.active_processing_ms,
+      gatheredContentBytes: r5.gathered_content_bytes
+    },
+    cancelRequestedAt: r5.cancel_requested_at,
+    createdAt: r5.created_at,
+    updatedAt: r5.updated_at,
+    completedAt: r5.completed_at,
+    revision: r5.revision
+  };
+}
+var unavailableBlocks = () => [
+  {
+    id: "unavailable",
+    kind: "unavailable",
+    reason: "source_access_lost",
+    regenerable: true,
+    fallbackText: "Source access is no longer available."
+  }
+];
+var ChatStore = class _ChatStore {
+  constructor(db, options = {}) {
+    this.db = db;
+    this.options = options;
+    this.limits = { ...CHAT_DEFAULT_LIMITS, ...options.limits };
+  }
+  db;
+  options;
+  limits;
+  now() {
+    return this.options.now?.() ?? Date.now();
+  }
+  timestamp() {
+    return new Date(this.now()).toISOString();
+  }
+  async access(owner) {
+    const member2 = await this.db.get(
+      `SELECT wu.id FROM workspace_users wu JOIN workspaces w ON w.id = wu.workspace_id JOIN organizations o ON o.id = w.organization_id WHERE wu.profile_id = ? AND w.organization_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL AND w.deleted_at IS NULL AND o.deleted_at IS NULL LIMIT 1`,
+      [owner.profileId, owner.organizationId]
+    );
+    if (!member2) throw new ChatError("not_found");
+  }
+  async generationDependencies(threadId, setId) {
+    const sets = await this.db.all(
+      "SELECT id FROM chat_dependency_sets WHERE thread_id = ? AND invalidated_at IS NULL",
+      [threadId]
+    );
+    return sets.length || setId ? this.dependencySet(threadId, [], [...sets.map((s) => s.id), ...setId ? [setId] : []]) : null;
+  }
+  async createdAt(table, threadId) {
+    const last = await this.db.get(
+      `SELECT created_at FROM ${table} WHERE thread_id = ? ORDER BY created_at DESC LIMIT 1`,
+      [threadId]
+    );
+    return new Date(Math.max(this.now(), last ? Date.parse(last.created_at) + 1 : 0)).toISOString();
+  }
+  async thread(id2, owner) {
+    const row = await this.db.get(
+      `SELECT * FROM chat_threads WHERE id = ?${owner ? " AND owner_profile_id = ? AND organization_id = ?" : ""}`,
+      owner ? [id2, owner.profileId, owner.organizationId] : [id2]
+    );
+    if (!row) throw new ChatError("not_found");
+    return row;
+  }
+  async lock(id2, owner) {
+    if (owner) await this.access(owner);
+    const result2 = await this.db.run(
+      `UPDATE chat_threads SET id = id WHERE id = ?${owner ? " AND owner_profile_id = ? AND organization_id = ?" : ""}`,
+      owner ? [id2, owner.profileId, owner.organizationId] : [id2]
+    );
+    if (!result2.changes) throw new ChatError("not_found");
+    return this.thread(id2, owner);
+  }
+  async run(id2) {
+    const r5 = await this.db.get("SELECT * FROM chat_runs WHERE id = ?", [id2]);
+    if (!r5) throw new ChatError("not_found");
+    return r5;
+  }
+  async threadDto(r5) {
+    const active = await this.db.get(
+      "SELECT * FROM chat_runs WHERE thread_id = ? AND state IN ('queued','running','waiting_user')",
+      [r5.id]
+    );
+    return {
+      id: r5.id,
+      organizationId: r5.organization_id,
+      title: r5.title,
+      titleSource: r5.title_source,
+      archivedAt: r5.archived_at,
+      lastActivityAt: r5.last_activity_at,
+      activeRunState: active?.state ?? null,
+      createdAt: r5.created_at,
+      updatedAt: r5.updated_at,
+      revision: r5.revision
+    };
+  }
+  async append(threadId, payload, dependencySetId = null, attempt) {
+    await this.db.run(
+      "UPDATE chat_threads SET last_event_seq = last_event_seq + 1, last_activity_at = ? WHERE id = ?",
+      [this.timestamp(), threadId]
+    );
+    const t = await this.thread(threadId);
+    await this.db.run(
+      `INSERT INTO chat_events (id, thread_id, seq, kind, run_id, attempt_id, fence, payload_json, dependency_set_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        (0, import_node_crypto14.randomUUID)(),
+        threadId,
+        t.last_event_seq,
+        payload.kind,
+        attempt?.runId ?? null,
+        attempt?.id ?? null,
+        attempt?.fence ?? null,
+        JSON.stringify(payload),
+        dependencySetId,
+        this.timestamp()
+      ]
+    );
+    await this.retain(threadId);
+    return t.last_event_seq;
+  }
+  async retain(id2) {
+    const t = await this.thread(id2);
+    const oldest = await this.db.get(
+      "SELECT seq FROM chat_events WHERE thread_id = ? AND created_at >= ? ORDER BY seq LIMIT 1",
+      [id2, new Date(this.now() - this.limits.eventRetentionMs).toISOString()]
+    );
+    const boundary = Math.max(
+      t.retained_from_seq,
+      oldest?.seq ?? t.last_event_seq + 1,
+      t.last_event_seq - this.limits.eventRetentionCount + 1
+    );
+    await this.db.run("DELETE FROM chat_events WHERE thread_id = ? AND seq < ?", [id2, boundary]);
+    await this.db.run("UPDATE chat_threads SET retained_from_seq = ? WHERE id = ?", [boundary, id2]);
+  }
+  async authorized(setId) {
+    if (!setId) return true;
+    const set2 = await this.db.get(
+      "SELECT invalidated_at FROM chat_dependency_sets WHERE id = ?",
+      [setId]
+    );
+    return Boolean(set2 && !set2.invalidated_at);
+  }
+  async projectMessage(r5) {
+    const dto = messageDto(r5);
+    if (r5.invalidated_at || !await this.authorized(r5.dependency_set_id))
+      dto.blocks = unavailableBlocks();
+    return dto;
+  }
+  /**
+   * Registers source identities for a thread (upsert by stable scope key) and returns their ids.
+   * A Knowledgebase locator's display path may differ between results for the same node, so
+   * identity is compared without it; every other locator must match exactly.
+   */
+  async registerSources(owner, threadId, sources) {
+    const ids = [];
+    const identity = (l3) => l3.kind === "knowledgebase" ? { ...l3, path: null } : l3;
+    for (const source of sources) {
+      requiredText(source.scopeKey, 1e3);
+      const now2 = this.timestamp();
+      const connection = source.locator.kind === "knowledgebase" ? await this.db.get(
+        "SELECT id FROM account_connections WHERE id = ? AND owner_profile_id = ? AND organization_id = ?",
+        [source.locator.connectionId, owner.profileId, owner.organizationId]
+      ) : void 0;
+      await this.db.run(
+        `INSERT INTO chat_source_refs (id, thread_id, source_kind, scope_key, connection_id, locator_json, access_state, access_checked_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'unknown', ?, ?, ?) ON CONFLICT (thread_id, scope_key) DO NOTHING`,
+        [
+          (0, import_node_crypto14.randomUUID)(),
+          threadId,
+          source.locator.kind,
+          source.scopeKey,
+          connection?.id ?? null,
+          JSON.stringify(source.locator),
+          now2,
+          now2,
+          now2
+        ]
+      );
+      const row = await this.db.get(
+        "SELECT id, locator_json FROM chat_source_refs WHERE thread_id = ? AND scope_key = ?",
+        [threadId, source.scopeKey]
+      );
+      if (!(0, import_node_util.isDeepStrictEqual)(identity(JSON.parse(row.locator_json)), identity(source.locator)))
+        throw new ChatError("invalid_request");
+      ids.push(row.id);
+    }
+    return ids;
+  }
+  async checkSources(threadId, onlyIds) {
+    const t = await this.thread(threadId);
+    const owner = { profileId: t.owner_profile_id, organizationId: t.organization_id };
+    try {
+      await this.access(owner);
+    } catch {
+      const runs = await this.db.all(
+        "SELECT * FROM chat_runs WHERE thread_id = ? AND state IN ('queued','running','waiting_user')",
+        [threadId]
+      );
+      for (const r5 of runs) await this.finish(r5, "failed", null, "source_access_lost");
+      return;
+    }
+    const sources = (await this.db.all("SELECT * FROM chat_source_refs WHERE thread_id = ?", [threadId])).filter((source) => !onlyIds || onlyIds.includes(source.id));
+    for (const source of sources) {
+      let state2 = "unknown";
+      if (this.options.checkSource) {
+        const signal = AbortSignal.timeout(3e3);
+        try {
+          state2 = await Promise.race([
+            this.options.checkSource(owner, JSON.parse(source.locator_json), signal),
+            new Promise(
+              (resolve) => signal.addEventListener("abort", () => resolve("unknown"), { once: true })
+            )
+          ]);
+        } catch {
+        }
+      }
+      await this.db.run(
+        "UPDATE chat_source_refs SET access_state = ?, access_checked_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
+        [state2, this.timestamp(), this.timestamp(), source.id]
+      );
+      if (state2 !== "authorized") await this.invalidate(threadId, source.id);
+    }
+  }
+  /** Rechecks one thread's sources under its row lock, e.g. after a connection loses access. */
+  async revalidate(threadId) {
+    await this.db.transaction(async (tx) => {
+      const s = new _ChatStore(tx, this.options);
+      await s.lock(threadId);
+      await s.checkSources(threadId);
+    });
+  }
+  /** Rechecks every thread that cites a source obtained through `connectionId`. */
+  async revalidateConnection(connectionId) {
+    const threads = await this.db.all(
+      "SELECT DISTINCT thread_id FROM chat_source_refs WHERE connection_id = ?",
+      [connectionId]
+    );
+    for (const { thread_id } of threads) await this.revalidate(thread_id);
+  }
+  async invalidate(threadId, sourceId) {
+    const sets = await this.db.all(
+      `SELECT s.id FROM chat_dependency_sets s JOIN chat_dependency_set_members m ON m.dependency_set_id = s.id WHERE s.thread_id = ? AND m.source_ref_id = ? AND s.invalidated_at IS NULL`,
+      [threadId, sourceId]
+    );
+    if (!sets.length) return;
+    const messageIds = [], proposalIds = [];
+    for (const { id: id2 } of sets) {
+      await this.db.run("UPDATE chat_dependency_sets SET invalidated_at = ? WHERE id = ?", [
+        this.timestamp(),
+        id2
+      ]);
+      messageIds.push(
+        ...(await this.db.all(
+          "SELECT id FROM chat_messages WHERE dependency_set_id = ?",
+          [id2]
+        )).map((r5) => r5.id)
+      );
+      proposalIds.push(
+        ...(await this.db.all(
+          "SELECT proposal_id FROM chat_work_proposal_revisions WHERE dependency_set_id = ?",
+          [id2]
+        )).map((r5) => r5.proposal_id)
+      );
+      for (const table of [
+        "chat_messages",
+        "chat_thread_summaries",
+        "chat_provider_checkpoints",
+        "chat_work_proposal_revisions"
+      ])
+        await this.db.run(`UPDATE ${table} SET invalidated_at = ? WHERE dependency_set_id = ?`, [
+          this.timestamp(),
+          id2
+        ]);
+      const questions = await this.db.all(
+        "SELECT * FROM chat_questions WHERE dependency_set_id = ? AND state = 'open'",
+        [id2]
+      );
+      for (const q2 of questions) {
+        await this.db.run(
+          "UPDATE chat_questions SET state = 'superseded', revision = revision + 1, updated_at = ? WHERE id = ?",
+          [this.timestamp(), q2.id]
+        );
+        await this.append(
+          threadId,
+          {
+            kind: "question.closed",
+            question: questionDto({ ...q2, state: "superseded", revision: q2.revision + 1 })
+          },
+          id2
+        );
+      }
+    }
+    await this.db.run(
+      "UPDATE chat_threads SET authorization_revision = authorization_revision + 1 WHERE id = ?",
+      [threadId]
+    );
+    await this.append(threadId, {
+      kind: "content.invalidated",
+      messageIds: [...new Set(messageIds)],
+      proposalIds: [...new Set(proposalIds)]
+    });
+    const runs = await this.db.all(
+      "SELECT * FROM chat_runs WHERE thread_id = ? AND state IN ('running','waiting_user')",
+      [threadId]
+    );
+    for (const r5 of runs) await this.finish(r5, "failed", null, "source_access_lost");
+  }
+  async dependencySet(threadId, sourceIds, inherited = []) {
+    const union2 = new Set(sourceIds);
+    for (const setId of inherited) {
+      const set2 = await this.db.get(
+        "SELECT thread_id FROM chat_dependency_sets WHERE id = ?",
+        [setId]
+      );
+      if (set2?.thread_id !== threadId || !await this.authorized(setId))
+        throw new ChatError("source_access_lost");
+      for (const row of await this.db.all(
+        "SELECT source_ref_id FROM chat_dependency_set_members WHERE dependency_set_id = ?",
+        [setId]
+      ))
+        union2.add(row.source_ref_id);
+    }
+    const ids = [...union2].sort();
+    for (const id3 of ids) {
+      const source = await this.db.get(
+        "SELECT * FROM chat_source_refs WHERE id = ? AND thread_id = ?",
+        [id3, threadId]
+      );
+      if (!source || source.access_state !== "authorized")
+        throw new ChatError("source_access_lost");
+    }
+    const authorizationRevision = (await this.thread(threadId)).authorization_revision;
+    const digest3 = (0, import_node_crypto14.createHash)("sha256").update(JSON.stringify({ ids, authorizationRevision })).digest("hex");
+    const old = await this.db.get(
+      "SELECT id, invalidated_at FROM chat_dependency_sets WHERE thread_id = ? AND digest = ?",
+      [threadId, digest3]
+    );
+    if (old?.invalidated_at) throw new ChatError("source_access_lost");
+    if (old) return old.id;
+    const id2 = (0, import_node_crypto14.randomUUID)();
+    await this.db.run(
+      "INSERT INTO chat_dependency_sets (id, thread_id, digest, created_at) VALUES (?, ?, ?, ?)",
+      [id2, threadId, digest3, this.timestamp()]
+    );
+    for (const sourceId of ids)
+      await this.db.run(
+        "INSERT INTO chat_dependency_set_members (dependency_set_id, source_ref_id) VALUES (?, ?)",
+        [id2, sourceId]
+      );
+    return id2;
+  }
+  async finish(r5, state2, outcome = null, failure3 = null) {
+    const now2 = this.timestamp();
+    await this.db.run(
+      `UPDATE chat_run_attempts SET state = ?, ended_at = ? WHERE run_id = ? AND state = 'leased'`,
+      [
+        state2 === "completed" ? "succeeded" : state2 === "cancelled" ? "cancelled" : "fenced",
+        now2,
+        r5.id
+      ]
+    );
+    await this.db.run(
+      `UPDATE chat_runs SET state = ?, outcome = ?, failure_code = ?, completed_at = ?, active_attempt_id = NULL, current_fence = current_fence + 1, updated_at = ?, revision = revision + 1 WHERE id = ?`,
+      [state2, outcome, failure3, now2, now2, r5.id]
+    );
+    const questions = await this.db.all(
+      "SELECT * FROM chat_questions WHERE run_id = ? AND state = 'open'",
+      [r5.id]
+    );
+    await this.db.run(
+      "UPDATE chat_questions SET state = 'cancelled', updated_at = ?, revision = revision + 1 WHERE run_id = ? AND state = 'open'",
+      [now2, r5.id]
+    );
+    await this.db.run(
+      "UPDATE chat_tool_calls SET state = 'cancelled', completed_at = ?, updated_at = ? WHERE run_id = ? AND state IN ('requested','executing')",
+      [now2, now2, r5.id]
+    );
+    const partials = await this.db.all(
+      "SELECT * FROM chat_messages WHERE run_id = ? AND state = 'streaming'",
+      [r5.id]
+    );
+    await this.db.run(
+      "UPDATE chat_messages SET state = 'interrupted', updated_at = ?, revision = revision + 1 WHERE run_id = ? AND state = 'streaming'",
+      [now2, r5.id]
+    );
+    for (const message2 of partials)
+      await this.append(
+        r5.thread_id,
+        {
+          kind: "message.completed",
+          message: messageDto({
+            ...message2,
+            state: "interrupted",
+            updated_at: now2,
+            revision: message2.revision + 1
+          })
+        },
+        message2.dependency_set_id
+      );
+    for (const q2 of questions)
+      await this.append(
+        r5.thread_id,
+        {
+          kind: "question.closed",
+          question: questionDto({
+            ...q2,
+            state: "cancelled",
+            revision: q2.revision + 1,
+            updated_at: now2
+          })
+        },
+        q2.dependency_set_id
+      );
+    await this.db.run("DELETE FROM chat_provider_checkpoints WHERE run_id = ?", [r5.id]);
+    const updated = await this.run(r5.id);
+    const seq = await this.append(r5.thread_id, {
+      kind: "run.updated",
+      run: runDto(updated, outcome === "allowance_exhausted")
+    });
+    if (state2 !== "cancelled") await this.notification(updated, seq);
+    return runDto(updated, outcome === "allowance_exhausted");
+  }
+  async notification(r5, seq, question) {
+    const t = await this.thread(r5.thread_id);
+    await this.db.run(
+      `INSERT INTO chat_notifications (id, owner_profile_id, organization_id, thread_id, run_id, question_id, type, transition_key, event_seq, state, due_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?) ON CONFLICT (owner_profile_id, thread_id, run_id, type, transition_key) DO NOTHING`,
+      [
+        (0, import_node_crypto14.randomUUID)(),
+        t.owner_profile_id,
+        t.organization_id,
+        t.id,
+        r5.id,
+        question?.id ?? null,
+        question ? "chat_needs_answer" : "chat_finished",
+        question ? `question:${question.ordinal}` : `terminal:${r5.state}`,
+        seq,
+        new Date(this.now() + this.limits.notificationGraceMs).toISOString(),
+        this.timestamp(),
+        this.timestamp()
+      ]
+    );
+  }
+};
+
+// connections/profile.ts
+var import_node_crypto18 = require("node:crypto");
 
 // connections/crypto.ts
-var import_node_crypto14 = require("node:crypto");
+var import_node_crypto15 = require("node:crypto");
 var SecretEnvelopeError = class extends Error {
   constructor() {
     super("The stored secret cannot be decrypted.");
@@ -148501,8 +149011,8 @@ function sealSecret({
   key,
   aad
 }) {
-  const nonce = (0, import_node_crypto14.randomBytes)(12);
-  const cipher = (0, import_node_crypto14.createCipheriv)("aes-256-gcm", key, nonce);
+  const nonce = (0, import_node_crypto15.randomBytes)(12);
+  const cipher = (0, import_node_crypto15.createCipheriv)("aes-256-gcm", key, nonce);
   cipher.setAAD(Buffer.from(aad, "utf8"));
   const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
   const tag2 = cipher.getAuthTag();
@@ -148518,7 +149028,7 @@ function openSecret({
     throw new SecretEnvelopeError();
   }
   try {
-    const decipher = (0, import_node_crypto14.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
+    const decipher = (0, import_node_crypto15.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
     decipher.setAAD(Buffer.from(aad, "utf8"));
     decipher.setAuthTag(Buffer.from(tagText, "base64url"));
     return Buffer.concat([
@@ -148530,8 +149040,1599 @@ function openSecret({
   }
 }
 function hashSecret(value2) {
-  return (0, import_node_crypto14.createHash)("sha256").update(value2).digest("hex");
+  return (0, import_node_crypto15.createHash)("sha256").update(value2).digest("hex");
 }
+
+// connections/keyring.ts
+var EVERHOUR_ENV_KEY_ID = "everhour-env";
+var GITHUB_USER_ENV_KEY_ID = "github-user-env";
+var RESERVED_KEY_IDS = /* @__PURE__ */ new Set([EVERHOUR_ENV_KEY_ID, GITHUB_USER_ENV_KEY_ID]);
+function keyRingFromEnv(env3) {
+  const currentKey = decodeEncryptionKey(env3.ACCOUNT_CONNECTIONS_ENCRYPTION_KEY);
+  const requestedId = env3.ACCOUNT_CONNECTIONS_ENCRYPTION_KEY_ID?.trim() || "k1";
+  if (currentKey && RESERVED_KEY_IDS.has(requestedId))
+    console.error(
+      `[connections] ACCOUNT_CONNECTIONS_ENCRYPTION_KEY_ID "${requestedId}" is reserved; using "k1"`
+    );
+  const currentId = RESERVED_KEY_IDS.has(requestedId) ? "k1" : requestedId;
+  const everhour = decodeEncryptionKey(env3.EVERHOUR_API_KEY_ENCRYPTION_KEY) ?? decodeEncryptionKey(env3.GITHUB_USER_TOKEN_ENCRYPTION_KEY);
+  const github2 = decodeEncryptionKey(env3.GITHUB_USER_TOKEN_ENCRYPTION_KEY);
+  return {
+    current: currentKey ? { id: currentId, key: currentKey } : null,
+    fallback: {
+      ...everhour ? { everhour: { id: EVERHOUR_ENV_KEY_ID, key: everhour } } : {},
+      ...github2 ? { github: { id: GITHUB_USER_ENV_KEY_ID, key: github2 } } : {}
+    }
+  };
+}
+function writeKey(ring, provider) {
+  return ring.current ?? ring.fallback[provider] ?? null;
+}
+function keyById(ring, id2) {
+  if (ring.current?.id === id2) return ring.current;
+  for (const entry of Object.values(ring.fallback)) if (entry?.id === id2) return entry;
+  return null;
+}
+function missingKeyIsConfiguration(ring, keyId, format2) {
+  return RESERVED_KEY_IDS.has(keyId) || format2 !== "connection-v1" || ring.current === null;
+}
+function connectionCredentialAad(row) {
+  return `overlord:account-connection:v1:${row.owner_profile_id}:${row.organization_id ?? "-"}:${row.provider}:${row.id}`;
+}
+function openCredential(row, key) {
+  const format2 = row.credential_format;
+  if (format2 === "everhour-user-key-v1") {
+    const apiKey = openSecret({
+      envelope: row.credential_ciphertext,
+      key,
+      aad: `overlord:everhour-user-key:v1:${row.owner_profile_id}:api-key`
+    });
+    return { kind: "api_key", apiKey };
+  }
+  if (format2 === "github-user-oauth-v1") {
+    const parsed = parseJson(row.credential_ciphertext);
+    if (!parsed || typeof parsed.access !== "string") throw new SecretEnvelopeError();
+    const aad = (purpose) => `overlord:github-user-oauth:v1:${row.owner_profile_id}:${purpose}`;
+    return {
+      kind: "oauth",
+      accessToken: openSecret({ envelope: parsed.access, key, aad: aad("access") }),
+      refreshToken: typeof parsed.refresh === "string" ? openSecret({ envelope: parsed.refresh, key, aad: aad("refresh") }) : null
+    };
+  }
+  if (format2 !== "connection-v1") throw new SecretEnvelopeError();
+  const value2 = parseJson(
+    openSecret({ envelope: row.credential_ciphertext, key, aad: connectionCredentialAad(row) })
+  );
+  if (value2 && typeof value2.apiKey === "string") return { kind: "api_key", apiKey: value2.apiKey };
+  if (value2 && typeof value2.accessToken === "string")
+    return {
+      kind: "oauth",
+      accessToken: value2.accessToken,
+      refreshToken: typeof value2.refreshToken === "string" ? value2.refreshToken : null
+    };
+  throw new SecretEnvelopeError();
+}
+function credentialPlaintext(credential) {
+  return JSON.stringify(
+    credential.kind === "api_key" ? { apiKey: credential.apiKey } : { accessToken: credential.accessToken, refreshToken: credential.refreshToken }
+  );
+}
+function parseJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new SecretEnvelopeError();
+  }
+}
+
+// connections/oauth.ts
+var import_node_crypto16 = require("node:crypto");
+
+// connections/egress.ts
+var EgressError = class extends Error {
+  constructor(code, message2 = code) {
+    super(message2);
+    this.code = code;
+  }
+  code;
+};
+function assertEgress(url2, allowedOrigins) {
+  let parsed;
+  try {
+    parsed = new URL(url2);
+  } catch {
+    throw new EgressError("egress_denied");
+  }
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password || !allowedOrigins.includes(parsed.origin))
+    throw new EgressError("egress_denied");
+  return parsed;
+}
+async function egressFetch(fetchImpl, allowedOrigins, url2, init2, bounds) {
+  assertEgress(url2, allowedOrigins);
+  const timeout = AbortSignal.timeout(bounds.timeoutMs);
+  const signal = bounds.signal ? AbortSignal.any([timeout, bounds.signal]) : timeout;
+  let response;
+  try {
+    response = await fetchImpl(url2, { ...init2, redirect: "manual", signal });
+  } catch {
+    throw new EgressError(timeout.aborted ? "timeout" : "network");
+  }
+  if (response.status >= 300 && response.status < 400) {
+    await response.body?.cancel().catch(() => void 0);
+    throw new EgressError("redirect");
+  }
+  const chunks = [];
+  let bytes = 0, truncated = false;
+  try {
+    const reader = response.body?.getReader();
+    while (reader) {
+      const { done, value: value2 } = await reader.read();
+      if (done) break;
+      if (bytes + value2.byteLength > bounds.maxBytes) {
+        chunks.push(value2.subarray(0, bounds.maxBytes - bytes));
+        bytes = bounds.maxBytes;
+        truncated = true;
+        await reader.cancel().catch(() => void 0);
+        break;
+      }
+      chunks.push(value2);
+      bytes += value2.byteLength;
+    }
+  } catch {
+    throw new EgressError(timeout.aborted ? "timeout" : "network");
+  }
+  return {
+    status: response.status,
+    headers: response.headers,
+    text: Buffer.concat(chunks).toString("utf8"),
+    truncated,
+    bytes
+  };
+}
+
+// connections/oauth.ts
+var OAuthError = class extends Error {
+  constructor(code) {
+    super(code);
+    this.code = code;
+  }
+  code;
+};
+var OAUTH_SCOPE = "openid offline_access";
+var METADATA_TTL_MS = 10 * 60 * 1e3;
+var METADATA_BYTES = 64 * 1024;
+var TOKEN_BYTES = 64 * 1024;
+var TIMEOUT_MS = 1e4;
+function pkcePair() {
+  const verifier = (0, import_node_crypto16.randomBytes)(32).toString("base64url");
+  return { verifier, challenge: (0, import_node_crypto16.createHash)("sha256").update(verifier).digest("base64url") };
+}
+function sameResource(a5, b5) {
+  return a5.replace(/\/+$/, "") === b5.replace(/\/+$/, "");
+}
+var KnowledgebaseOAuth = class {
+  constructor(options) {
+    this.options = options;
+  }
+  options;
+  metadata = null;
+  now() {
+    return this.options.now?.() ?? Date.now();
+  }
+  async json(url2, init2 = {}) {
+    const response = await egressFetch(this.options.fetch, this.options.egressOrigins, url2, init2, {
+      timeoutMs: TIMEOUT_MS,
+      maxBytes: init2.method === "POST" ? TOKEN_BYTES : METADATA_BYTES
+    });
+    let body = null;
+    if (!response.truncated) {
+      try {
+        const parsed = JSON.parse(response.text);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed))
+          body = parsed;
+      } catch {
+        body = null;
+      }
+    }
+    return { status: response.status, body };
+  }
+  /** RFC 9728 protected-resource metadata, then RFC 8414 authorization-server metadata. */
+  async discover() {
+    if (this.metadata && this.now() - this.metadata.at < METADATA_TTL_MS)
+      return this.metadata.value;
+    try {
+      const resource = new URL(this.options.mcpUrl);
+      const prm = await this.json(
+        `${resource.origin}/.well-known/oauth-protected-resource${resource.pathname.replace(/\/+$/, "")}`
+      );
+      const servers = prm.body?.authorization_servers;
+      if (prm.status !== 200 || typeof prm.body?.resource !== "string" || !sameResource(prm.body.resource, this.options.mcpUrl) || !Array.isArray(servers) || typeof servers[0] !== "string")
+        throw new OAuthError("misconfigured");
+      const issuer = new URL(servers[0]);
+      const as = await this.json(
+        `${issuer.origin}/.well-known/oauth-authorization-server${issuer.pathname.replace(/\/+$/, "")}`
+      );
+      const body = as.body;
+      const methods2 = body?.code_challenge_methods_supported;
+      if (as.status !== 200 || !body || typeof body.authorization_endpoint !== "string" || typeof body.token_endpoint !== "string" || !Array.isArray(methods2) || !methods2.includes("S256"))
+        throw new OAuthError("misconfigured");
+      const value2 = {
+        issuer: String(body.issuer ?? issuer.toString()),
+        authorizationEndpoint: body.authorization_endpoint,
+        tokenEndpoint: body.token_endpoint,
+        revocationEndpoint: typeof body.revocation_endpoint === "string" ? body.revocation_endpoint : null
+      };
+      for (const endpoint of [
+        value2.authorizationEndpoint,
+        value2.tokenEndpoint,
+        ...value2.revocationEndpoint ? [value2.revocationEndpoint] : []
+      ]) {
+        const url2 = new URL(endpoint);
+        if (url2.protocol !== "https:" || !this.options.egressOrigins.includes(url2.origin))
+          throw new OAuthError("misconfigured");
+      }
+      this.metadata = { value: value2, at: this.now() };
+      return value2;
+    } catch (error53) {
+      if (error53 instanceof OAuthError) throw error53;
+      throw new OAuthError(error53 instanceof EgressError ? "unavailable" : "misconfigured");
+    }
+  }
+  async authorizeUrl(state2, challenge) {
+    const { authorizationEndpoint: authorizationEndpoint2 } = await this.discover();
+    const url2 = new URL(authorizationEndpoint2);
+    url2.search = new URLSearchParams({
+      response_type: "code",
+      client_id: this.options.clientId,
+      redirect_uri: this.options.redirectUri,
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+      scope: OAUTH_SCOPE,
+      resource: this.options.mcpUrl,
+      state: state2
+    }).toString();
+    return url2.toString();
+  }
+  async token(params) {
+    const { tokenEndpoint: tokenEndpoint2 } = await this.discover();
+    let response;
+    try {
+      response = await this.json(tokenEndpoint2, {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          accept: "application/json"
+        },
+        body: new URLSearchParams({
+          ...params,
+          client_id: this.options.clientId,
+          resource: this.options.mcpUrl
+        }).toString()
+      });
+    } catch {
+      throw new OAuthError("unavailable");
+    }
+    const body = response.body;
+    if (response.status === 200 && typeof body?.access_token === "string") {
+      const number4 = (value2) => typeof value2 === "number" && Number.isFinite(value2) && value2 > 0 ? value2 : null;
+      return {
+        accessToken: body.access_token,
+        refreshToken: typeof body.refresh_token === "string" ? body.refresh_token : null,
+        expiresIn: number4(body.expires_in),
+        refreshExpiresIn: number4(body.refresh_token_expires_in),
+        scope: typeof body.scope === "string" ? body.scope : null
+      };
+    }
+    if (response.status >= 400 && response.status < 500 && ["invalid_grant", "invalid_client", "unauthorized_client"].includes(String(body?.error)))
+      throw new OAuthError("invalid_grant");
+    throw new OAuthError("unavailable");
+  }
+  exchangeCode(code, verifier) {
+    return this.token({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: this.options.redirectUri,
+      code_verifier: verifier
+    });
+  }
+  refresh(refreshToken2) {
+    return this.token({ grant_type: "refresh_token", refresh_token: refreshToken2 });
+  }
+  /** Best-effort RFC 7009 revocation; never throws. */
+  async revoke(token, hint) {
+    try {
+      const { revocationEndpoint } = await this.discover();
+      if (!revocationEndpoint) return false;
+      const response = await this.json(revocationEndpoint, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          token,
+          token_type_hint: hint,
+          client_id: this.options.clientId
+        }).toString()
+      });
+      return response.status === 200;
+    } catch {
+      return false;
+    }
+  }
+};
+
+// connections/service.ts
+var import_node_crypto17 = require("node:crypto");
+
+// connections/policy.ts
+var KNOWLEDGEBASE_TOOL_POLICY_VERSION = 1;
+var UUID = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$";
+var workspace = {
+  type: "string",
+  description: "Knowledgebase workspace slug, from list_workspaces.",
+  pattern: "^[a-z0-9][a-z0-9-]{0,62}$"
+};
+var nodeId = { type: "string", description: "Node UUID.", pattern: UUID };
+var path19 = {
+  type: "string",
+  description: "Workspace-relative document path.",
+  minLength: 1,
+  maxLength: 512
+};
+var limit = (max) => ({ type: "integer", minimum: 1, maximum: max });
+var cursor = { type: "string", maxLength: 512 };
+var object2 = (properties, required2 = []) => ({
+  type: "object",
+  properties,
+  required: required2,
+  additionalProperties: false
+});
+var REVIEWED_KNOWLEDGEBASE_TOOLS = [
+  {
+    name: "list_workspaces",
+    description: "List the Knowledgebase workspaces this connection can read.",
+    inputSchema: object2({})
+  },
+  {
+    name: "search",
+    description: "Search notes, people, companies, projects, and meetings in one Knowledgebase workspace. Returns matching nodes with ids and paths.",
+    inputSchema: object2(
+      {
+        workspace,
+        q: { type: "string", minLength: 1, maxLength: 500 },
+        type: { type: "string", maxLength: 64 },
+        path_prefix: { type: "string", maxLength: 512 },
+        limit: limit(25),
+        cursor
+      },
+      ["workspace", "q"]
+    )
+  },
+  {
+    name: "read_file",
+    description: "Read one Knowledgebase document by path, with its metadata and version.",
+    inputSchema: object2({ workspace, path: path19 }, ["workspace", "path"])
+  },
+  {
+    name: "get_related",
+    description: "Get a node and its typed relations to other nodes.",
+    inputSchema: object2({ workspace, node_id: nodeId }, ["workspace", "node_id"])
+  },
+  {
+    name: "list_children",
+    description: "List the children of a node, such as the notes under a project.",
+    inputSchema: object2(
+      {
+        workspace,
+        node_id: nodeId,
+        type: { type: "string", maxLength: 64 },
+        relation: { type: "string", maxLength: 64 },
+        category: { type: "string", enum: ["markdown", "resource"] },
+        limit: limit(50),
+        cursor
+      },
+      ["workspace", "node_id"]
+    )
+  },
+  {
+    name: "get_links",
+    description: "List the Markdown links into or out of a document.",
+    inputSchema: object2(
+      {
+        workspace,
+        path: path19,
+        node_id: nodeId,
+        direction: { type: "string", enum: ["outgoing", "incoming", "both"] }
+      },
+      ["workspace"]
+    )
+  },
+  {
+    name: "read_resource",
+    description: "Read a semantic resource (an entity page) as text.",
+    inputSchema: object2(
+      {
+        workspace,
+        resource_id: { ...nodeId, description: "Resource UUID." },
+        format: { type: "string", enum: ["text", "markdown"] }
+      },
+      ["workspace", "resource_id"]
+    )
+  },
+  {
+    name: "list_entities",
+    description: "List entities of a type, such as projects or people.",
+    inputSchema: object2(
+      { workspace, type: { type: "string", maxLength: 64 }, limit: limit(50), cursor },
+      ["workspace"]
+    )
+  }
+];
+var REVIEWED = new Map(REVIEWED_KNOWLEDGEBASE_TOOLS.map((tool) => [tool.name, tool]));
+function reviewedTool(name) {
+  return REVIEWED.get(name) ?? null;
+}
+function exposable(serverTool) {
+  const reviewed = reviewedTool(serverTool.name);
+  if (!reviewed) return null;
+  if (serverTool.annotations?.readOnlyHint !== true) return null;
+  if (serverTool.annotations?.destructiveHint === true) return null;
+  return reviewed;
+}
+function namespacedToolId(connectionId, tool) {
+  return `kb_${connectionId.replaceAll("-", "").slice(0, 12)}_${tool}`;
+}
+function parseToolId(id2) {
+  const match = /^kb_([0-9a-f]{12})_([a-z_]{1,48})$/.exec(id2);
+  return match ? { connectionPrefix: match[1], tool: match[2] } : null;
+}
+var MAX_ARGUMENT_BYTES = 4 * 1024;
+function validateArguments(schema2, value2, at = "arguments") {
+  switch (schema2.type) {
+    case "object": {
+      if (!value2 || typeof value2 !== "object" || Array.isArray(value2))
+        return `${at} must be an object`;
+      const record2 = value2;
+      for (const key of schema2.required ?? [])
+        if (record2[key] === void 0) return `${at}.${key} is required`;
+      for (const [key, item] of Object.entries(record2)) {
+        const child = schema2.properties?.[key];
+        if (!child) return `${at}.${key} is not allowed`;
+        const error53 = validateArguments(child, item, `${at}.${key}`);
+        if (error53) return error53;
+      }
+      return null;
+    }
+    case "string":
+      if (typeof value2 !== "string") return `${at} must be a string`;
+      if (schema2.minLength !== void 0 && value2.length < schema2.minLength)
+        return `${at} is too short`;
+      if (schema2.maxLength !== void 0 && value2.length > schema2.maxLength)
+        return `${at} is too long`;
+      if (schema2.pattern && !new RegExp(schema2.pattern).test(value2)) return `${at} is malformed`;
+      if (schema2.enum && !schema2.enum.includes(value2)) return `${at} is not an allowed value`;
+      return null;
+    case "integer":
+      if (!Number.isSafeInteger(value2)) return `${at} must be an integer`;
+      if (schema2.minimum !== void 0 && value2 < schema2.minimum)
+        return `${at} is too small`;
+      if (schema2.maximum !== void 0 && value2 > schema2.maximum)
+        return `${at} is too large`;
+      return null;
+    case "boolean":
+      return typeof value2 === "boolean" ? null : `${at} must be a boolean`;
+    case "array":
+      if (!Array.isArray(value2)) return `${at} must be an array`;
+      if (schema2.maxItems !== void 0 && value2.length > schema2.maxItems)
+        return `${at} has too many items`;
+      for (const [index, item] of value2.entries()) {
+        const error53 = schema2.items ? validateArguments(schema2.items, item, `${at}[${index}]`) : null;
+        if (error53) return error53;
+      }
+      return null;
+  }
+}
+
+// connections/service.ts
+var ConnectionAccessError = class extends Error {
+  constructor(code) {
+    super(code);
+    this.code = code;
+  }
+  code;
+};
+var AUTHORIZATION_TTL_MS = 10 * 60 * 1e3;
+var MAX_OPEN_AUTHORIZATIONS = 5;
+var REFRESH_LEASE_MS = 15e3;
+var ACCESS_EXPIRY_SKEW_MS = 6e4;
+var credentialAad = connectionCredentialAad;
+function verifierAad(row, authorizationId) {
+  return `overlord:account-connection-authorization:v1:${row.owner_profile_id}:${row.organization_id}:${row.id}:${authorizationId}`;
+}
+function stringArray(json2) {
+  let value2 = [];
+  try {
+    value2 = JSON.parse(json2);
+  } catch {
+    value2 = [];
+  }
+  return Array.isArray(value2) ? value2.filter((w) => typeof w === "string") : [];
+}
+function connectionDto(row) {
+  const hasAccount = row.external_account_id !== null || row.external_account_label !== null || row.external_account_avatar_url !== null;
+  return {
+    id: row.id,
+    provider: row.provider,
+    organizationId: row.organization_id,
+    scope: row.organization_id === null ? "profile" : "organization",
+    credentialKind: row.credential_kind,
+    account: hasAccount ? {
+      id: row.external_account_id,
+      label: row.external_account_label,
+      avatarUrl: row.external_account_avatar_url
+    } : null,
+    scopes: stringArray(row.granted_scopes_json),
+    lastValidatedAt: row.last_validated_at,
+    serverUrl: row.server_url,
+    state: row.state,
+    authorizedWorkspaces: stringArray(row.authorized_workspaces_json),
+    toolPolicyVersion: row.tool_policy_version,
+    lastErrorCode: row.last_error_code,
+    connectedAt: row.connected_at,
+    updatedAt: row.updated_at,
+    revision: row.revision
+  };
+}
+var AccountConnections = class {
+  constructor(db, options) {
+    this.db = db;
+    this.options = options;
+  }
+  db;
+  options;
+  lockOwner = (0, import_node_crypto17.randomUUID)();
+  now() {
+    return this.options.now?.() ?? Date.now();
+  }
+  timestamp(offsetMs = 0) {
+    return new Date(this.now() + offsetMs).toISOString();
+  }
+  sleep(ms) {
+    return this.options.sleep?.(ms) ?? new Promise((resolve) => setTimeout(resolve, ms));
+  }
+  ready() {
+    const { knowledgebase, encryption } = this.options.config;
+    if (!knowledgebase || !encryption || !this.options.oauth)
+      throw new ChatError("provider_not_ready");
+    return { knowledgebase, encryption, oauth: this.options.oauth };
+  }
+  async access(owner) {
+    await new ChatStore(this.db).access(owner);
+  }
+  /** The caller's row, or null. Never returns another owner's or organization's row. */
+  async row(owner, id2) {
+    return await this.db.get(
+      "SELECT * FROM account_connections WHERE id = ? AND owner_profile_id = ? AND organization_id = ?",
+      [id2, owner.profileId, owner.organizationId]
+    ) ?? null;
+  }
+  /** Live (not disconnected) connections the caller owns in the organization. */
+  async liveRows(owner, provider) {
+    return this.db.all(
+      `SELECT * FROM account_connections WHERE owner_profile_id = ? AND organization_id = ? AND state <> 'disconnected'${provider ? " AND provider = ?" : ""} ORDER BY created_at, id`,
+      [owner.profileId, owner.organizationId, ...provider ? [provider] : []]
+    );
+  }
+  async list(owner) {
+    await this.access(owner);
+    const items = [];
+    for (const row of await this.liveRows(owner)) {
+      const now2 = this.timestamp();
+      if (row.state === "connected" && row.access_expires_at !== null && row.access_expires_at <= now2 && row.refresh_expires_at !== null && row.refresh_expires_at <= now2) {
+        await this.requireReauthorization(row.id, "grant_expired");
+        const fresh = await this.row(owner, row.id);
+        if (fresh) items.push(connectionDto(fresh));
+        continue;
+      }
+      items.push(connectionDto(row));
+    }
+    return { items };
+  }
+  async start(owner, body) {
+    const input = body;
+    if (input?.provider === "github") throw new ChatError("provider_not_available");
+    if (!input || input.provider !== "knowledgebase" || input.returnTo !== "mobile" && input.returnTo !== "web")
+      throw new ChatError("invalid_request");
+    const returnTo = input.returnTo;
+    const { knowledgebase, encryption, oauth } = this.ready();
+    await this.access(owner);
+    const state2 = (0, import_node_crypto17.randomBytes)(32).toString("base64url");
+    const { verifier, challenge } = pkcePair();
+    let authorizeUrl;
+    try {
+      authorizeUrl = await oauth.authorizeUrl(state2, challenge);
+    } catch {
+      throw new ChatError("provider_not_ready");
+    }
+    const authorizationId = (0, import_node_crypto17.randomUUID)();
+    const expiresAt = this.timestamp(AUTHORIZATION_TTL_MS);
+    const connectionId = await this.db.transaction(async (tx) => {
+      const now2 = this.timestamp();
+      let row = await tx.get(
+        `SELECT * FROM account_connections WHERE owner_profile_id = ? AND organization_id = ? AND provider = ? AND server_url = ? AND state <> 'disconnected'`,
+        [owner.profileId, owner.organizationId, "knowledgebase", knowledgebase.mcpUrl]
+      );
+      if (!row) {
+        const id2 = (0, import_node_crypto17.randomUUID)();
+        await tx.run(
+          `INSERT INTO account_connections (id, owner_profile_id, organization_id, provider, server_url, state, tool_policy_version, created_at, updated_at) VALUES (?, ?, ?, 'knowledgebase', ?, 'pending', ?, ?, ?)`,
+          [
+            id2,
+            owner.profileId,
+            owner.organizationId,
+            knowledgebase.mcpUrl,
+            KNOWLEDGEBASE_TOOL_POLICY_VERSION,
+            now2,
+            now2
+          ]
+        );
+        row = await tx.get("SELECT * FROM account_connections WHERE id = ?", [
+          id2
+        ]);
+      }
+      await tx.run(
+        "DELETE FROM account_connection_authorizations WHERE connection_id = ? AND (consumed_at IS NOT NULL OR expires_at <= ?)",
+        [row.id, now2]
+      );
+      const open = await tx.get(
+        "SELECT COUNT(*) AS n FROM account_connection_authorizations WHERE connection_id = ?",
+        [row.id]
+      );
+      if (Number(open?.n ?? 0) >= MAX_OPEN_AUTHORIZATIONS) throw new ChatError("limit_exceeded");
+      await tx.run(
+        "INSERT INTO account_connection_authorizations (id, connection_id, state_hash, pkce_verifier_ciphertext, return_to, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [
+          authorizationId,
+          row.id,
+          hashSecret(state2),
+          sealSecret({
+            plaintext: verifier,
+            key: encryption.key,
+            aad: verifierAad(row, authorizationId)
+          }),
+          returnTo,
+          expiresAt,
+          now2
+        ]
+      );
+      return row.id;
+    });
+    return { connectionId, authorizeUrl, expiresAt };
+  }
+  /** Public OAuth callback. Consumes the single-use state; never throws for user-facing input. */
+  async complete(query) {
+    const state2 = typeof query.state === "string" ? query.state : "";
+    if (!/^[A-Za-z0-9_-]{40,80}$/.test(state2)) return { status: "expired", returnTo: null };
+    let ready;
+    try {
+      ready = this.ready();
+    } catch {
+      return { status: "failed", returnTo: null };
+    }
+    const now2 = this.timestamp();
+    const consumed = await this.db.transaction(async (tx) => {
+      const auth3 = await tx.get(
+        "SELECT * FROM account_connection_authorizations WHERE state_hash = ?",
+        [hashSecret(state2)]
+      );
+      if (!auth3) return null;
+      const result2 = await tx.run(
+        "UPDATE account_connection_authorizations SET consumed_at = ? WHERE id = ? AND consumed_at IS NULL AND expires_at > ?",
+        [now2, auth3.id, now2]
+      );
+      const row2 = await tx.get(
+        "SELECT * FROM account_connections WHERE id = ? AND state <> 'disconnected'",
+        [auth3.connection_id]
+      );
+      return { auth: auth3, row: row2, fresh: result2.changes === 1 };
+    });
+    if (!consumed) return { status: "expired", returnTo: null };
+    const returnTo = consumed.auth.return_to;
+    const { row, auth: auth2 } = consumed;
+    if (!consumed.fresh || !row) return { status: "expired", returnTo };
+    if (query.error !== void 0) {
+      await this.recordError(row.id, "authorization_denied");
+      return { status: "denied", returnTo };
+    }
+    const code = typeof query.code === "string" && query.code.length <= 2048 ? query.code : "";
+    if (!code) return { status: "failed", returnTo };
+    try {
+      await this.access({ profileId: row.owner_profile_id, organizationId: row.organization_id });
+    } catch {
+      return { status: "failed", returnTo };
+    }
+    let tokens;
+    try {
+      const verifier = openSecret({
+        envelope: auth2.pkce_verifier_ciphertext,
+        key: ready.encryption.key,
+        aad: verifierAad(row, auth2.id)
+      });
+      tokens = await ready.oauth.exchangeCode(code, verifier);
+    } catch (error53) {
+      await this.recordError(
+        row.id,
+        error53 instanceof OAuthError ? `token_${error53.code}` : "token_exchange_failed"
+      );
+      return { status: "failed", returnTo };
+    }
+    let workspaces = null;
+    try {
+      workspaces = await this.options.listWorkspaces?.(tokens.accessToken) ?? null;
+    } catch {
+      workspaces = null;
+    }
+    const stored = await this.db.transaction(async (tx) => {
+      const at = this.timestamp();
+      const result2 = await tx.run(
+        `UPDATE account_connections SET state = 'connected', credential_ciphertext = ?, credential_key_id = ?, credential_revision = credential_revision + 1, access_expires_at = ?, refresh_expires_at = ?, authorized_workspaces_json = ?, tool_policy_version = ?, refresh_lock_owner = NULL, refresh_lock_until = NULL, last_refreshed_at = ?, last_error_code = NULL, connected_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND state <> 'disconnected'`,
+        [
+          this.seal(row, { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken }),
+          ready.encryption.keyId,
+          tokens.expiresIn ? this.timestamp(tokens.expiresIn * 1e3) : null,
+          tokens.refreshExpiresIn ? this.timestamp(tokens.refreshExpiresIn * 1e3) : null,
+          JSON.stringify(workspaces ?? []),
+          KNOWLEDGEBASE_TOOL_POLICY_VERSION,
+          at,
+          at,
+          at,
+          row.id
+        ]
+      );
+      return result2.changes === 1;
+    });
+    if (!stored) {
+      await this.revokeUpstream({
+        accessToken: tokens.accessToken,
+        refreshToken: tokens.refreshToken
+      });
+      return { status: "failed", returnTo };
+    }
+    return { status: "connected", returnTo };
+  }
+  async disconnect(owner, id2) {
+    await this.access(owner);
+    const row = await this.row(owner, id2);
+    if (!row || row.state === "disconnected") throw new ChatError("not_found");
+    let credentials = null;
+    try {
+      credentials = this.open(row);
+    } catch {
+      credentials = null;
+    }
+    await this.db.transaction(async (tx) => {
+      const now2 = this.timestamp();
+      await tx.run(
+        `UPDATE account_connections SET state = 'disconnected', credential_ciphertext = NULL, credential_key_id = NULL, access_expires_at = NULL, refresh_expires_at = NULL, refresh_lock_owner = NULL, refresh_lock_until = NULL, disconnected_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ?`,
+        [now2, now2, id2]
+      );
+      await tx.run("DELETE FROM account_connection_authorizations WHERE connection_id = ?", [id2]);
+    });
+    if (credentials) await this.revokeUpstream(credentials);
+    await this.options.onAccessLost?.(id2);
+    return connectionDto(await this.row(owner, id2));
+  }
+  /**
+   * A current access token for the caller's connection. Refresh is serialized
+   * per connection by a database lease; the rotated credential is persisted
+   * before it is returned. Pass `staleRevision` after the provider rejected a
+   * token so concurrent callers coalesce on one refresh.
+   */
+  async accessToken(owner, id2, options = {}) {
+    let ready;
+    try {
+      ready = this.ready();
+    } catch {
+      throw new ConnectionAccessError("unavailable");
+    }
+    const deadline = this.now() + REFRESH_LEASE_MS * 2;
+    for (; ; ) {
+      if (options.signal?.aborted) throw new ConnectionAccessError("unavailable");
+      const row = await this.row(owner, id2);
+      if (!row || row.state === "disconnected") throw new ConnectionAccessError("not_found");
+      if (row.state !== "connected") throw new ConnectionAccessError("reauthorization_required");
+      let credentials;
+      try {
+        if (row.credential_key_id !== ready.encryption.keyId) throw new SecretEnvelopeError();
+        credentials = this.open(row);
+      } catch {
+        await this.requireReauthorization(id2, "credential_unreadable");
+        throw new ConnectionAccessError("reauthorization_required");
+      }
+      const stale = options.staleRevision !== void 0 && row.credential_revision <= options.staleRevision;
+      const fresh = row.access_expires_at === null || Date.parse(row.access_expires_at) - ACCESS_EXPIRY_SKEW_MS > this.now();
+      if (!stale && fresh)
+        return {
+          accessToken: credentials.accessToken,
+          credentialRevision: row.credential_revision,
+          row
+        };
+      if (!credentials.refreshToken) {
+        await this.requireReauthorization(id2, "grant_expired");
+        throw new ConnectionAccessError("reauthorization_required");
+      }
+      const leased = await this.db.run(
+        `UPDATE account_connections SET refresh_lock_owner = ?, refresh_lock_until = ? WHERE id = ? AND state = 'connected' AND credential_revision = ? AND (refresh_lock_owner IS NULL OR refresh_lock_until <= ?)`,
+        [
+          this.lockOwner,
+          this.timestamp(REFRESH_LEASE_MS),
+          id2,
+          row.credential_revision,
+          this.timestamp()
+        ]
+      );
+      if (leased.changes === 1) {
+        await this.refreshLeased(row, credentials.refreshToken, ready);
+        continue;
+      }
+      if (this.now() > deadline) throw new ConnectionAccessError("unavailable");
+      await this.sleep(100);
+    }
+  }
+  async refreshLeased(row, refreshToken2, ready) {
+    let tokens;
+    try {
+      tokens = await ready.oauth.refresh(refreshToken2);
+    } catch (error53) {
+      if (error53 instanceof OAuthError && error53.code === "invalid_grant") {
+        await this.requireReauthorization(row.id, "invalid_grant", this.lockOwner);
+        throw new ConnectionAccessError("reauthorization_required");
+      }
+      await this.db.run(
+        "UPDATE account_connections SET refresh_lock_owner = NULL, refresh_lock_until = NULL, last_error_code = ? WHERE id = ? AND refresh_lock_owner = ?",
+        ["refresh_unavailable", row.id, this.lockOwner]
+      );
+      throw new ConnectionAccessError("unavailable");
+    }
+    const now2 = this.timestamp();
+    await this.db.run(
+      `UPDATE account_connections SET credential_ciphertext = ?, credential_key_id = ?, credential_revision = credential_revision + 1, access_expires_at = ?, refresh_expires_at = COALESCE(?, refresh_expires_at), last_refreshed_at = ?, last_error_code = NULL, refresh_lock_owner = NULL, refresh_lock_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'connected' AND refresh_lock_owner = ? AND credential_revision = ?`,
+      [
+        this.seal(row, {
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken ?? refreshToken2
+        }),
+        ready.encryption.keyId,
+        tokens.expiresIn ? this.timestamp(tokens.expiresIn * 1e3) : null,
+        tokens.refreshExpiresIn ? this.timestamp(tokens.refreshExpiresIn * 1e3) : null,
+        now2,
+        now2,
+        row.id,
+        this.lockOwner,
+        row.credential_revision
+      ]
+    );
+  }
+  /** Marks the connection unusable until the owner signs in again and erases its credential. */
+  async requireReauthorization(id2, code, lockOwner) {
+    const result2 = await this.db.run(
+      `UPDATE account_connections SET state = 'reauthorization_required', credential_ciphertext = NULL, credential_key_id = NULL, access_expires_at = NULL, refresh_lock_owner = NULL, refresh_lock_until = NULL, last_error_code = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'connected'${lockOwner ? " AND refresh_lock_owner = ?" : ""}`,
+      [code, this.timestamp(), id2, ...lockOwner ? [lockOwner] : []]
+    );
+    if (result2.changes === 1) await this.options.onAccessLost?.(id2);
+  }
+  async setAuthorizedWorkspaces(id2, workspaces) {
+    await this.db.run(
+      `UPDATE account_connections SET authorized_workspaces_json = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'connected' AND authorized_workspaces_json <> ?`,
+      [JSON.stringify(workspaces), this.timestamp(), id2, JSON.stringify(workspaces)]
+    );
+  }
+  async recordError(id2, code) {
+    await this.db.run(
+      "UPDATE account_connections SET last_error_code = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
+      [code, this.timestamp(), id2]
+    );
+  }
+  seal(row, credentials) {
+    const { encryption } = this.ready();
+    return sealSecret({
+      plaintext: JSON.stringify(credentials),
+      key: encryption.key,
+      aad: credentialAad(row)
+    });
+  }
+  open(row) {
+    const { encryption } = this.ready();
+    if (!row.credential_ciphertext) throw new SecretEnvelopeError();
+    const value2 = JSON.parse(
+      openSecret({
+        envelope: row.credential_ciphertext,
+        key: encryption.key,
+        aad: credentialAad(row)
+      })
+    );
+    if (typeof value2.accessToken !== "string") throw new SecretEnvelopeError();
+    return {
+      accessToken: value2.accessToken,
+      refreshToken: typeof value2.refreshToken === "string" ? value2.refreshToken : null
+    };
+  }
+  async revokeUpstream(credentials) {
+    const oauth = this.options.oauth;
+    if (!oauth) return;
+    if (credentials.refreshToken) await oauth.revoke(credentials.refreshToken, "refresh_token");
+    await oauth.revoke(credentials.accessToken, "access_token");
+  }
+};
+
+// connections/profile.ts
+var ProviderOAuthError = class extends Error {
+  constructor(code) {
+    super(code);
+    this.code = code;
+  }
+  code;
+};
+var ProviderCredentialError = class extends Error {
+  constructor(code, upstreamStatus2, upstreamMessage) {
+    super(code);
+    this.code = code;
+    this.upstreamStatus = upstreamStatus2;
+    this.upstreamMessage = upstreamMessage;
+  }
+  code;
+  upstreamStatus;
+  upstreamMessage;
+};
+var providers = /* @__PURE__ */ new Map();
+function registerProfileConnectionProvider(adapter2) {
+  providers.set(adapter2.provider, adapter2);
+}
+function profileConnectionProvider(provider) {
+  return providers.get(provider) ?? null;
+}
+var MAX_API_KEY_LENGTH = 512;
+var AUTHORIZATION_TTL_MS2 = 10 * 60 * 1e3;
+var MAX_OPEN_AUTHORIZATIONS2 = 5;
+var ACCESS_EXPIRY_SKEW_MS2 = 6e4;
+var MAX_RETURN_PATH_LENGTH = 512;
+function isSafeReturnPath(value2) {
+  return typeof value2 === "string" && value2.length <= MAX_RETURN_PATH_LENGTH && value2.startsWith("/") && !value2.startsWith("//") && !value2.includes("\\") && ![...value2].some((ch) => ch.charCodeAt(0) < 32 || ch.charCodeAt(0) === 127);
+}
+function verifierAad2(row, authorizationId) {
+  return `overlord:account-connection-authorization:v1:${row.owner_profile_id}:-:${row.id}:${authorizationId}`;
+}
+function profileConnections(db, env3 = process.env) {
+  return new ProfileConnections(db, keyRingFromEnv(env3));
+}
+var ProfileConnections = class {
+  constructor(db, ring, options = {}) {
+    this.db = db;
+    this.ring = ring;
+    this.options = options;
+  }
+  db;
+  ring;
+  options;
+  lockOwner = (0, import_node_crypto18.randomUUID)();
+  now() {
+    return this.options.now?.() ?? Date.now();
+  }
+  timestamp(offsetMs = 0) {
+    return new Date(this.now() + offsetMs).toISOString();
+  }
+  sleep(ms) {
+    return this.options.sleep?.(ms) ?? new Promise((resolve) => setTimeout(resolve, ms));
+  }
+  /** Every registered provider, with whether a connection can be stored on this server. */
+  providers() {
+    return [...providers.values()].map((adapter2) => {
+      const reason = adapter2.oauth && !adapter2.oauth.configured() ? "not_configured" : writeKey(this.ring, adapter2.provider) === null ? "encryption_not_configured" : null;
+      return {
+        provider: adapter2.provider,
+        scope: "profile",
+        credentialKind: adapter2.credentialKind,
+        available: reason === null,
+        reason
+      };
+    });
+  }
+  /** Whether a connection for `provider` can be made on this server right now. */
+  available(provider) {
+    return this.providers().find((entry) => entry.provider === provider)?.available === true;
+  }
+  /** The caller's live profile-scoped connections, adopting legacy rows first. */
+  async list(profileId) {
+    const items = [];
+    for (const adapter2 of providers.values()) {
+      const row = await this.find(profileId, adapter2.provider);
+      if (row) items.push(connectionDto(row));
+    }
+    return items;
+  }
+  /** The caller's row by id, in any state, or null. Never another profile's row. */
+  async row(profileId, id2) {
+    return await this.db.get(
+      "SELECT * FROM account_connections WHERE id = ? AND owner_profile_id = ? AND organization_id IS NULL",
+      [id2, profileId]
+    ) ?? null;
+  }
+  /**
+   * The caller's live connection for a provider, or null. When the profile has no
+   * row for the provider in any state, a live legacy row is adopted verbatim first
+   * (lazy adoption for one release, for rows an older instance wrote after the
+   * migration ran). A disconnected profile is never resurrected.
+   */
+  async find(profileId, provider) {
+    const live = await this.liveRow(profileId, provider);
+    if (live) return live;
+    const adapter2 = providers.get(provider);
+    if (!adapter2?.legacy) return null;
+    const legacy = await adapter2.legacy.find(this.db, profileId);
+    if (!legacy) return null;
+    await this.db.transaction(async (tx) => {
+      const any2 = await tx.get(
+        "SELECT 1 AS present FROM account_connections WHERE owner_profile_id = ? AND provider = ?",
+        [profileId, provider]
+      );
+      if (any2) return;
+      if (adapter2.uniqueExternalAccount && legacy.account.id !== null && await tx.get(
+        `SELECT 1 AS present FROM account_connections WHERE provider = ? AND external_account_id = ? AND state <> 'disconnected'`,
+        [provider, legacy.account.id]
+      ))
+        return;
+      await tx.run(
+        `INSERT INTO account_connections (id, owner_profile_id, organization_id, provider, server_url, state, credential_kind, credential_format, credential_ciphertext, credential_key_id, credential_revision, access_expires_at, refresh_expires_at, external_account_id, external_account_label, external_account_avatar_url, granted_scopes_json, last_validated_at, connected_at, created_at, updated_at, revision) VALUES (?, ?, NULL, ?, ?, 'connected', ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1) ON CONFLICT (id) DO NOTHING`,
+        [
+          legacy.id,
+          profileId,
+          provider,
+          adapter2.serverUrl,
+          adapter2.credentialKind,
+          legacy.format,
+          legacy.ciphertext,
+          legacy.keyId,
+          legacy.accessExpiresAt ?? null,
+          legacy.refreshExpiresAt ?? null,
+          legacy.account.id,
+          legacy.account.label,
+          legacy.account.avatarUrl ?? null,
+          JSON.stringify(legacy.scopes ?? []),
+          legacy.lastValidatedAt,
+          legacy.createdAt,
+          legacy.createdAt,
+          legacy.updatedAt
+        ]
+      );
+    });
+    return this.liveRow(profileId, provider);
+  }
+  async liveRow(profileId, provider) {
+    return await this.db.get(
+      `SELECT * FROM account_connections WHERE owner_profile_id = ? AND organization_id IS NULL AND provider = ? AND state <> 'disconnected'`,
+      [profileId, provider]
+    ) ?? null;
+  }
+  /**
+   * Store (or rotate) an API key the caller already validated upstream. Answers
+   * `provider_not_ready` when no key can seal it; nothing is stored in plaintext.
+   */
+  async storeApiKey(profileId, provider, apiKey, account) {
+    const adapter2 = providers.get(provider);
+    if (!adapter2 || adapter2.credentialKind !== "api_key")
+      throw new ChatError("provider_not_available");
+    const key = writeKey(this.ring, provider);
+    if (!key) throw new ChatError("provider_not_ready");
+    const existing = await this.find(profileId, provider);
+    const now2 = this.timestamp();
+    const credential = { kind: "api_key", apiKey };
+    if (existing) {
+      await this.db.run(
+        `UPDATE account_connections SET state = 'connected', credential_kind = 'api_key', credential_format = 'connection-v1', credential_ciphertext = ?, credential_key_id = ?, credential_revision = credential_revision + 1, external_account_id = ?, external_account_label = ?, external_account_avatar_url = ?, last_validated_at = ?, last_error_code = NULL, connected_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND owner_profile_id = ? AND state <> 'disconnected'`,
+        [
+          this.seal(existing, credential, key),
+          key.id,
+          account.id,
+          account.label,
+          account.avatarUrl ?? null,
+          now2,
+          now2,
+          now2,
+          existing.id,
+          profileId
+        ]
+      );
+      return connectionDto(await this.row(profileId, existing.id));
+    }
+    const id2 = (0, import_node_crypto18.randomUUID)();
+    const draft = { id: id2, owner_profile_id: profileId, organization_id: null, provider };
+    await this.db.run(
+      `INSERT INTO account_connections (id, owner_profile_id, organization_id, provider, server_url, state, credential_kind, credential_format, credential_ciphertext, credential_key_id, credential_revision, external_account_id, external_account_label, external_account_avatar_url, last_validated_at, connected_at, created_at, updated_at, revision) VALUES (?, ?, NULL, ?, ?, 'connected', 'api_key', 'connection-v1', ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [
+        id2,
+        profileId,
+        provider,
+        adapter2.serverUrl,
+        this.seal(draft, credential, key),
+        key.id,
+        account.id,
+        account.label,
+        account.avatarUrl ?? null,
+        now2,
+        now2,
+        now2,
+        now2
+      ]
+    );
+    return connectionDto(await this.row(profileId, id2));
+  }
+  /** `POST /api/connections/api-keys`: validate upstream through the adapter, then store. */
+  async setApiKey(profileId, body) {
+    const input = body;
+    const adapter2 = profileConnectionProvider(input?.provider);
+    if (!adapter2 || adapter2.credentialKind !== "api_key" || !adapter2.validateApiKey)
+      throw new ChatError("provider_not_available");
+    const apiKey = typeof input?.apiKey === "string" ? input.apiKey.trim() : "";
+    if (!apiKey || apiKey.length > MAX_API_KEY_LENGTH) throw new ChatError("invalid_request");
+    if (!writeKey(this.ring, adapter2.provider)) throw new ChatError("provider_not_ready");
+    let account;
+    try {
+      account = await adapter2.validateApiKey(apiKey);
+    } catch (error53) {
+      if (error53 instanceof ProviderCredentialError && error53.code === "rejected")
+        throw new ChatError("credential_rejected");
+      throw new ChatError("provider_unavailable");
+    }
+    return this.storeApiKey(profileId, adapter2.provider, apiKey, account);
+  }
+  /**
+   * The caller's plaintext credential for a provider, or null when there is no
+   * connected row. Throws `ConnectionAccessError('unavailable')` when the key it
+   * was sealed with is not configured (nothing is erased), and
+   * `ConnectionAccessError('reauthorization_required')` when the envelope is
+   * unreadable (it is erased). Re-seals legacy and fallback-key envelopes under
+   * the current key after a successful read.
+   */
+  async credential(profileId, provider) {
+    const row = await this.find(profileId, provider);
+    if (!row || row.state !== "connected" || !row.credential_ciphertext || !row.credential_key_id)
+      return null;
+    if (row.credential_format !== "connection-v1") {
+      const legacy = providers.get(provider)?.legacy;
+      if (legacy && !await legacy.isLive(this.db, row.id)) {
+        await this.erase(row, "disconnected");
+        return null;
+      }
+    }
+    const key = keyById(this.ring, row.credential_key_id);
+    if (!key) {
+      if (missingKeyIsConfiguration(
+        this.ring,
+        row.credential_key_id,
+        row.credential_format
+      ))
+        throw new ConnectionAccessError("unavailable");
+      await this.requireReauthorization(row, "credential_unreadable");
+      throw new ConnectionAccessError("reauthorization_required");
+    }
+    let credential;
+    try {
+      credential = openCredential(
+        { ...row, credential_ciphertext: row.credential_ciphertext },
+        key.key
+      );
+    } catch (error53) {
+      if (!(error53 instanceof SecretEnvelopeError)) throw error53;
+      await this.requireReauthorization(row, "credential_unreadable");
+      throw new ConnectionAccessError("reauthorization_required");
+    }
+    const current = this.ring.current;
+    if (current && (row.credential_key_id !== current.id || row.credential_format !== "connection-v1")) {
+      await this.reseal(row, credential, current);
+      const resealed = await this.row(profileId, row.id);
+      if (resealed?.state === "connected") return { credential, row: resealed };
+    }
+    return { credential, row };
+  }
+  /**
+   * `DELETE /api/connections/:id` for a profile-scoped row: erase first, then revoke
+   * an OAuth token upstream (best-effort), then tombstone the legacy row.
+   */
+  async disconnect(profileId, id2) {
+    const row = await this.row(profileId, id2);
+    if (!row || row.state === "disconnected") throw new ChatError("not_found");
+    await this.disconnectRow(profileId, row.provider, row);
+    return connectionDto(await this.row(profileId, id2));
+  }
+  /** Disconnect the caller's connection for a provider, if any (legacy alias routes). */
+  async disconnectProvider(profileId, provider) {
+    await this.disconnectRow(profileId, provider, await this.find(profileId, provider));
+  }
+  async disconnectRow(profileId, provider, row) {
+    const adapter2 = providers.get(provider);
+    const credential = row ? this.peek(row) : null;
+    if (row) await this.erase(row, "disconnected");
+    if (credential?.kind === "oauth" && adapter2?.oauth)
+      await adapter2.oauth.revoke(credential.accessToken).catch(() => void 0);
+    await adapter2?.legacy?.tombstone(this.db, profileId, this.timestamp());
+  }
+  // ---- OAuth (profile-scoped, confidential client) --------------------------
+  /** `POST /api/connections` for a profile-scoped OAuth provider. */
+  async startOAuth(profileId, body) {
+    const input = body;
+    const adapter2 = profileConnectionProvider(input?.provider);
+    if (!adapter2?.oauth) throw new ChatError("provider_not_available");
+    if (input?.returnTo !== "mobile" && input?.returnTo !== "web")
+      throw new ChatError("invalid_request");
+    let returnUrl = null;
+    if (input.returnPath !== void 0 && input.returnPath !== null) {
+      if (input.returnTo !== "web" || !isSafeReturnPath(input.returnPath))
+        throw new ChatError("invalid_request");
+      returnUrl = input.returnPath;
+    }
+    return this.beginOAuth(profileId, adapter2.provider, { returnTo: input.returnTo, returnUrl });
+  }
+  /**
+   * Begin a sign-in: hashed single-use state bound to the caller's connection (a live
+   * one is reused for a reconnect; otherwise a `pending` row is created), and a PKCE
+   * verifier sealed under the provider's write key. `returnUrl` is either a relative
+   * web path or an absolute target a legacy alias already validated.
+   */
+  async beginOAuth(profileId, provider, target) {
+    const adapter2 = providers.get(provider);
+    const oauth = adapter2?.oauth;
+    if (!adapter2 || !oauth) throw new ChatError("provider_not_available");
+    const key = writeKey(this.ring, provider);
+    if (!key || !oauth.configured()) throw new ChatError("provider_not_ready");
+    const state2 = (0, import_node_crypto18.randomBytes)(32).toString("base64url");
+    const { verifier, challenge } = pkcePair();
+    const authorizeUrl = oauth.authorizeUrl({ state: state2, codeChallenge: challenge });
+    const authorizationId = (0, import_node_crypto18.randomUUID)();
+    const expiresAt = this.timestamp(AUTHORIZATION_TTL_MS2);
+    await this.find(profileId, provider);
+    const connectionId = await this.db.transaction(async (tx) => {
+      const now2 = this.timestamp();
+      let row = await tx.get(
+        `SELECT * FROM account_connections WHERE owner_profile_id = ? AND organization_id IS NULL AND provider = ? AND state <> 'disconnected'`,
+        [profileId, provider]
+      );
+      if (!row) {
+        const id2 = (0, import_node_crypto18.randomUUID)();
+        await tx.run(
+          `INSERT INTO account_connections (id, owner_profile_id, organization_id, provider, server_url, state, credential_kind, created_at, updated_at) VALUES (?, ?, NULL, ?, ?, 'pending', ?, ?, ?)`,
+          [id2, profileId, provider, adapter2.serverUrl, adapter2.credentialKind, now2, now2]
+        );
+        row = await tx.get("SELECT * FROM account_connections WHERE id = ?", [
+          id2
+        ]);
+      }
+      await tx.run(
+        "DELETE FROM account_connection_authorizations WHERE connection_id = ? AND (consumed_at IS NOT NULL OR expires_at <= ?)",
+        [row.id, now2]
+      );
+      const open = await tx.get(
+        "SELECT COUNT(*) AS n FROM account_connection_authorizations WHERE connection_id = ?",
+        [row.id]
+      );
+      if (Number(open?.n ?? 0) >= MAX_OPEN_AUTHORIZATIONS2) throw new ChatError("limit_exceeded");
+      await tx.run(
+        "INSERT INTO account_connection_authorizations (id, connection_id, state_hash, pkce_verifier_ciphertext, return_to, return_url, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+          authorizationId,
+          row.id,
+          hashSecret(state2),
+          sealSecret({ plaintext: verifier, key: key.key, aad: verifierAad2(row, authorizationId) }),
+          target.returnTo,
+          target.returnUrl,
+          expiresAt,
+          now2
+        ]
+      );
+      return row.id;
+    });
+    return { connectionId, authorizeUrl, expiresAt };
+  }
+  /**
+   * The provider's public callback. Consumes the single-use state (bound to this
+   * provider), exchanges the code, checks the required scopes and the account, then
+   * seals the grant. Never throws for user-facing input; stores nothing on failure.
+   */
+  async completeOAuth(provider, query) {
+    const adapter2 = providers.get(provider);
+    const oauth = adapter2?.oauth;
+    const state2 = typeof query.state === "string" ? query.state : "";
+    const outcome = (status, rest = {}) => ({
+      status,
+      returnTo: null,
+      returnUrl: null,
+      connectionId: null,
+      errorCode: null,
+      ...rest
+    });
+    if (!adapter2 || !oauth || !/^[A-Za-z0-9_-]{40,80}$/.test(state2)) return outcome("expired");
+    const now2 = this.timestamp();
+    const consumed = await this.db.transaction(async (tx) => {
+      const auth3 = await tx.get(
+        `SELECT a.* FROM account_connection_authorizations a JOIN account_connections c ON c.id = a.connection_id WHERE a.state_hash = ? AND c.provider = ? AND c.organization_id IS NULL`,
+        [hashSecret(state2), provider]
+      );
+      if (!auth3) return null;
+      const result2 = await tx.run(
+        "UPDATE account_connection_authorizations SET consumed_at = ? WHERE id = ? AND consumed_at IS NULL AND expires_at > ?",
+        [now2, auth3.id, now2]
+      );
+      const row2 = await tx.get(
+        "SELECT * FROM account_connections WHERE id = ? AND state <> 'disconnected'",
+        [auth3.connection_id]
+      );
+      return { auth: auth3, row: row2, fresh: result2.changes === 1 };
+    });
+    if (!consumed) return outcome("expired");
+    const { auth: auth2, row } = consumed;
+    const target = {
+      returnTo: auth2.return_to,
+      returnUrl: auth2.return_url ?? null,
+      connectionId: auth2.connection_id
+    };
+    if (!consumed.fresh || !row) return outcome("expired", target);
+    const fail2 = async (status, code2) => {
+      await this.recordError(row.id, code2);
+      return outcome(status, { ...target, errorCode: code2 });
+    };
+    if (query.error !== void 0) return fail2("denied", "authorization_denied");
+    const code = typeof query.code === "string" && query.code.length <= 2048 ? query.code : "";
+    if (!code) return outcome("failed", target);
+    const key = writeKey(this.ring, provider);
+    let grant;
+    try {
+      if (!key || !oauth.configured()) throw new ProviderOAuthError("unavailable");
+      const verifier = openSecret({
+        envelope: auth2.pkce_verifier_ciphertext,
+        key: key.key,
+        aad: verifierAad2(row, auth2.id)
+      });
+      grant = await oauth.exchangeCode({ code, codeVerifier: verifier });
+    } catch (error53) {
+      return fail2(
+        "failed",
+        error53 instanceof ProviderOAuthError ? `token_${error53.code}` : "token_exchange_failed"
+      );
+    }
+    if (!oauth.requiredScopes.every((scope) => grant.scopes.includes(scope)))
+      return fail2("failed", "insufficient_scope");
+    let account;
+    try {
+      account = await oauth.describeAccount(grant.accessToken);
+    } catch {
+      return fail2("failed", "account_lookup_failed");
+    }
+    if (adapter2.uniqueExternalAccount && await this.db.get(
+      `SELECT 1 AS present FROM account_connections WHERE provider = ? AND external_account_id = ? AND owner_profile_id <> ? AND state <> 'disconnected'`,
+      [provider, account.id, row.owner_profile_id]
+    ))
+      return fail2("failed", "account_in_use");
+    const at = this.timestamp();
+    let stored;
+    try {
+      const result2 = await this.db.run(
+        `UPDATE account_connections SET state = 'connected', credential_kind = 'oauth', credential_format = 'connection-v1', credential_ciphertext = ?, credential_key_id = ?, credential_revision = credential_revision + 1, access_expires_at = ?, refresh_expires_at = ?, external_account_id = ?, external_account_label = ?, external_account_avatar_url = ?, granted_scopes_json = ?, last_validated_at = ?, refresh_lock_owner = NULL, refresh_lock_until = NULL, last_refreshed_at = ?, last_error_code = NULL, connected_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND state <> 'disconnected'`,
+        [
+          this.seal(
+            row,
+            { kind: "oauth", accessToken: grant.accessToken, refreshToken: grant.refreshToken },
+            key
+          ),
+          key.id,
+          grant.expiresIn ? this.timestamp(grant.expiresIn * 1e3) : null,
+          grant.refreshExpiresIn ? this.timestamp(grant.refreshExpiresIn * 1e3) : null,
+          account.id,
+          account.label,
+          account.avatarUrl ?? null,
+          JSON.stringify(grant.scopes),
+          at,
+          at,
+          at,
+          at,
+          row.id
+        ]
+      );
+      stored = result2.changes === 1;
+    } catch {
+      return fail2("failed", "account_in_use");
+    }
+    if (!stored) {
+      await oauth.revoke(grant.accessToken).catch(() => void 0);
+      return outcome("failed", target);
+    }
+    return outcome("connected", target);
+  }
+  /**
+   * A current OAuth access token for the caller's connection. An expiring token is
+   * refreshed under a per-connection database lease, so concurrent callers share one
+   * upstream refresh, and the rotated credential is persisted before it is returned.
+   * Pass `staleRevision` after the provider rejected a token to force that refresh.
+   */
+  async oauthAccessToken(profileId, provider, options = {}) {
+    const oauth = providers.get(provider)?.oauth;
+    if (!oauth) throw new ConnectionAccessError("not_found");
+    const deadline = this.now() + REFRESH_LEASE_MS * 2;
+    for (; ; ) {
+      const found = await this.credential(profileId, provider);
+      if (!found || found.credential.kind !== "oauth") {
+        const live = await this.liveRow(profileId, provider);
+        throw new ConnectionAccessError(
+          live?.state === "reauthorization_required" ? "reauthorization_required" : "not_found"
+        );
+      }
+      const { row } = found;
+      const credential = found.credential;
+      const stale = options.staleRevision !== void 0 && row.credential_revision <= options.staleRevision;
+      const fresh = row.access_expires_at === null || Date.parse(row.access_expires_at) - ACCESS_EXPIRY_SKEW_MS2 > this.now();
+      if (!stale && fresh)
+        return {
+          accessToken: credential.accessToken,
+          credentialRevision: row.credential_revision,
+          row
+        };
+      if (!credential.refreshToken) {
+        await this.requireReauthorization(row, "grant_expired");
+        throw new ConnectionAccessError("reauthorization_required");
+      }
+      const leased = await this.db.run(
+        `UPDATE account_connections SET refresh_lock_owner = ?, refresh_lock_until = ? WHERE id = ? AND state = 'connected' AND credential_revision = ? AND (refresh_lock_owner IS NULL OR refresh_lock_until <= ?)`,
+        [
+          this.lockOwner,
+          this.timestamp(REFRESH_LEASE_MS),
+          row.id,
+          row.credential_revision,
+          this.timestamp()
+        ]
+      );
+      if (leased.changes === 1) {
+        await this.refreshLeased(row, provider, oauth, credential.refreshToken);
+        continue;
+      }
+      if (this.now() > deadline) throw new ConnectionAccessError("unavailable");
+      await this.sleep(100);
+    }
+  }
+  async refreshLeased(row, provider, oauth, refreshToken2) {
+    const release2 = async (code) => {
+      await this.db.run(
+        "UPDATE account_connections SET refresh_lock_owner = NULL, refresh_lock_until = NULL, last_error_code = ? WHERE id = ? AND refresh_lock_owner = ?",
+        [code, row.id, this.lockOwner]
+      );
+      throw new ConnectionAccessError("unavailable");
+    };
+    const key = writeKey(this.ring, provider);
+    if (!key || !oauth.configured()) return release2("refresh_unavailable");
+    let grant;
+    try {
+      grant = await oauth.refresh(refreshToken2);
+    } catch (error53) {
+      if (error53 instanceof ProviderOAuthError && error53.code === "invalid_grant") {
+        await this.requireReauthorization(row, "invalid_grant", this.lockOwner);
+        throw new ConnectionAccessError("reauthorization_required");
+      }
+      return release2("refresh_unavailable");
+    }
+    if (!oauth.requiredScopes.every((scope) => grant.scopes.includes(scope))) {
+      await this.requireReauthorization(row, "insufficient_scope", this.lockOwner);
+      throw new ConnectionAccessError("reauthorization_required");
+    }
+    const now2 = this.timestamp();
+    await this.db.run(
+      `UPDATE account_connections SET credential_ciphertext = ?, credential_key_id = ?, credential_format = 'connection-v1', credential_revision = credential_revision + 1, access_expires_at = ?, refresh_expires_at = COALESCE(?, refresh_expires_at), granted_scopes_json = ?, last_refreshed_at = ?, last_error_code = NULL, refresh_lock_owner = NULL, refresh_lock_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'connected' AND refresh_lock_owner = ? AND credential_revision = ?`,
+      [
+        this.seal(
+          row,
+          {
+            kind: "oauth",
+            accessToken: grant.accessToken,
+            refreshToken: grant.refreshToken ?? refreshToken2
+          },
+          key
+        ),
+        key.id,
+        grant.expiresIn ? this.timestamp(grant.expiresIn * 1e3) : null,
+        grant.refreshExpiresIn ? this.timestamp(grant.refreshExpiresIn * 1e3) : null,
+        JSON.stringify(grant.scopes),
+        now2,
+        now2,
+        row.id,
+        this.lockOwner,
+        row.credential_revision
+      ]
+    );
+  }
+  /** Record a re-validated upstream account for the caller's connected row. */
+  async recordAccount(profileId, provider, account) {
+    const now2 = this.timestamp();
+    await this.db.run(
+      `UPDATE account_connections SET external_account_label = ?, external_account_avatar_url = ?, last_validated_at = ?, updated_at = ?, revision = revision + 1 WHERE owner_profile_id = ? AND organization_id IS NULL AND provider = ? AND state = 'connected'`,
+      [account.label, account.avatarUrl ?? null, now2, now2, profileId, provider]
+    );
+  }
+  /** Mark the caller's connection unusable until they sign in again (erases the credential). */
+  async requireReauthorizationFor(profileId, provider, code) {
+    const row = await this.liveRow(profileId, provider);
+    if (row) await this.requireReauthorization(row, code);
+  }
+  /**
+   * Re-seal connected profile-scoped rows still under a legacy format or a
+   * fallback key. Bounded and idempotent; logs counts only.
+   */
+  async resealSweep(limit2 = 500) {
+    const current = this.ring.current;
+    if (!current) return { resealed: 0, remaining: await this.legacyKeyedCount() };
+    const rows = await this.db.all(
+      `SELECT * FROM account_connections WHERE organization_id IS NULL AND state = 'connected' AND (credential_format <> 'connection-v1' OR credential_key_id <> ?) ORDER BY created_at, id LIMIT ?`,
+      [current.id, limit2]
+    );
+    let resealed = 0;
+    for (const row of rows) {
+      try {
+        if (await this.credential(row.owner_profile_id, row.provider))
+          resealed += 1;
+      } catch {
+      }
+    }
+    return { resealed, remaining: await this.legacyKeyedCount() };
+  }
+  async legacyKeyedCount() {
+    const row = await this.db.get(
+      `SELECT COUNT(*) AS n FROM account_connections WHERE organization_id IS NULL AND credential_ciphertext IS NOT NULL AND (credential_format <> 'connection-v1' OR credential_key_id <> ?)`,
+      [this.ring.current?.id ?? ""]
+    );
+    return Number(row?.n ?? 0);
+  }
+  seal(row, credential, key) {
+    return sealSecret({
+      plaintext: credentialPlaintext(credential),
+      key: key.key,
+      aad: connectionCredentialAad(row)
+    });
+  }
+  async reseal(row, credential, key) {
+    await this.db.run(
+      `UPDATE account_connections SET credential_ciphertext = ?, credential_key_id = ?, credential_format = 'connection-v1', credential_revision = credential_revision + 1, updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'connected' AND credential_revision = ?`,
+      [this.seal(row, credential, key), key.id, this.timestamp(), row.id, row.credential_revision]
+    );
+  }
+  /** Open a row's credential without side effects (disconnect's upstream revocation). */
+  peek(row) {
+    if (!row.credential_ciphertext || !row.credential_key_id) return null;
+    const key = keyById(this.ring, row.credential_key_id);
+    if (!key) return null;
+    try {
+      return openCredential({ ...row, credential_ciphertext: row.credential_ciphertext }, key.key);
+    } catch {
+      return null;
+    }
+  }
+  async erase(row, state2) {
+    const now2 = this.timestamp();
+    await this.db.transaction(async (tx) => {
+      await tx.run(
+        `UPDATE account_connections SET state = ?, credential_ciphertext = NULL, credential_key_id = NULL, access_expires_at = NULL, refresh_expires_at = NULL, refresh_lock_owner = NULL, refresh_lock_until = NULL, disconnected_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND state <> 'disconnected'`,
+        [state2, now2, now2, row.id]
+      );
+      await tx.run("DELETE FROM account_connection_authorizations WHERE connection_id = ?", [
+        row.id
+      ]);
+    });
+  }
+  async requireReauthorization(row, code, lockOwner) {
+    await this.db.run(
+      `UPDATE account_connections SET state = 'reauthorization_required', credential_ciphertext = NULL, credential_key_id = NULL, access_expires_at = NULL, refresh_lock_owner = NULL, refresh_lock_until = NULL, last_error_code = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'connected'${lockOwner ? " AND refresh_lock_owner = ?" : ""}`,
+      [code, this.timestamp(), row.id, ...lockOwner ? [lockOwner] : []]
+    );
+  }
+  async recordError(id2, code) {
+    await this.db.run(
+      "UPDATE account_connections SET last_error_code = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
+      [code, this.timestamp(), id2]
+    );
+  }
+};
 
 // ext/github/user-oauth.ts
 init_db();
@@ -148571,50 +150672,25 @@ function resolveAuthBaseUrl() {
   return resolveLoopbackAuthBaseUrl();
 }
 
-// ext/github/user-oauth.ts
+// ext/github/connection-provider.ts
+var GITHUB_SERVER_URL = "https://github.com";
+var GITHUB_REPOSITORY_CALLBACK_PATH = "/api/auth/callback/github/repository";
+var GITHUB_REPOSITORY_SCOPES = ["repo", "read:org"];
 var GITHUB_API2 = "https://api.github.com";
 var GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize";
 var GITHUB_ACCESS_TOKEN_URL = "https://github.com/login/oauth/access_token";
-var USER_OAUTH_SCOPES = ["repo", "read:org"];
-var USER_OAUTH_CALLBACK_PATH = "/api/auth/callback/github/repository";
-var OAUTH_STATE_TTL_MS = 10 * 60 * 1e3;
-var TOKEN_EXPIRY_SKEW_MS = 60 * 1e3;
-function encryptionKeyFromEnv() {
-  return decodeEncryptionKey(process.env.GITHUB_USER_TOKEN_ENCRYPTION_KEY);
+function redirectUri() {
+  return new URL(GITHUB_REPOSITORY_CALLBACK_PATH, resolveAuthBaseUrl()).toString();
 }
-function githubUserOAuthConfigured() {
-  return userOAuthConfig() !== null;
+function requireClient() {
+  const client = githubOAuthConfigFromEnv();
+  if (!client) throw new ProviderOAuthError("unavailable");
+  return client;
 }
-function userOAuthConfig() {
-  const oauth = githubOAuthConfigFromEnv();
-  const encryptionKey = encryptionKeyFromEnv();
-  if (!oauth || !encryptionKey) return null;
-  return { ...oauth, encryptionKey };
+function seconds(value2) {
+  return typeof value2 === "number" && Number.isFinite(value2) && value2 > 0 ? value2 : null;
 }
-function requireUserOAuthConfig() {
-  const config4 = userOAuthConfig();
-  if (!config4) {
-    throw new ApiError(
-      503,
-      "GitHub repository authorization is not configured on this Overlord server."
-    );
-  }
-  return config4;
-}
-function tokenAad(profileId, kind) {
-  return `overlord:github-user-oauth:v1:${profileId}:${kind}`;
-}
-function encryptToken(token, profileId, kind, key) {
-  return sealSecret({ plaintext: token, key, aad: tokenAad(profileId, kind) });
-}
-function decryptToken(envelope2, profileId, kind, key) {
-  try {
-    return openSecret({ envelope: envelope2, key, aad: tokenAad(profileId, kind) });
-  } catch {
-    throw new ApiError(503, "The stored GitHub connection cannot be decrypted.");
-  }
-}
-function parseScopes(value2) {
+function parseGitHubScopes(value2) {
   let parsed = value2;
   if (typeof value2 === "string") {
     try {
@@ -148625,47 +150701,199 @@ function parseScopes(value2) {
   }
   return Array.isArray(parsed) ? parsed.filter((scope) => typeof scope === "string") : [];
 }
-function scopesFromTokenResponse(value2) {
-  if (typeof value2 !== "string") return [];
-  return value2.split(/[,\s]+/).map((scope) => scope.trim()).filter(Boolean);
+async function tokenRequest(body) {
+  let response;
+  try {
+    response = await fetch(GITHUB_ACCESS_TOKEN_URL, {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+  } catch {
+    throw new ProviderOAuthError("unavailable");
+  }
+  let result2;
+  try {
+    result2 = await response.json();
+  } catch {
+    throw new ProviderOAuthError("unavailable");
+  }
+  if (result2.error === "bad_verification_code" || result2.error === "bad_refresh_token")
+    throw new ProviderOAuthError("invalid_grant");
+  if (!response.ok || typeof result2.access_token !== "string" || !result2.access_token)
+    throw new ProviderOAuthError("unavailable");
+  return {
+    accessToken: result2.access_token,
+    refreshToken: typeof result2.refresh_token === "string" && result2.refresh_token ? result2.refresh_token : null,
+    expiresIn: seconds(result2.expires_in),
+    refreshExpiresIn: seconds(result2.refresh_token_expires_in),
+    scopes: typeof result2.scope === "string" ? result2.scope.split(/[,\s]+/).map((scope) => scope.trim()).filter(Boolean) : []
+  };
 }
-function expiryFromSeconds(value2) {
-  return typeof value2 === "number" && Number.isFinite(value2) && value2 > 0 ? new Date(Date.now() + value2 * 1e3).toISOString() : null;
+async function describeAccount(accessToken) {
+  const response = await fetch(`${GITHUB_API2}/user`, {
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${accessToken}`,
+      "X-GitHub-Api-Version": "2022-11-28"
+    }
+  });
+  if (!response.ok) throw new Error("GitHub account lookup failed");
+  const user = await response.json();
+  const id2 = typeof user.id === "number" || typeof user.id === "string" ? String(user.id) : "";
+  const login = typeof user.login === "string" ? user.login.trim() : "";
+  if (!id2 || !login) throw new Error("GitHub returned incomplete account metadata");
+  return {
+    id: id2,
+    label: login,
+    avatarUrl: typeof user.avatar_url === "string" ? user.avatar_url : null
+  };
+}
+async function revoke(accessToken) {
+  const client = githubOAuthConfigFromEnv();
+  if (!client) return;
+  try {
+    await fetch(`${GITHUB_API2}/applications/${encodeURIComponent(client.clientId)}/token`, {
+      method: "DELETE",
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Basic ${Buffer.from(`${client.clientId}:${client.clientSecret}`).toString("base64")}`,
+        "Content-Type": "application/json",
+        "X-GitHub-Api-Version": "2022-11-28"
+      },
+      body: JSON.stringify({ access_token: accessToken })
+    });
+  } catch {
+  }
+}
+function registerGitHubConnectionProvider() {
+  registerProfileConnectionProvider({
+    provider: "github",
+    label: "GitHub",
+    serverUrl: GITHUB_SERVER_URL,
+    credentialKind: "oauth",
+    uniqueExternalAccount: true,
+    oauth: {
+      callbackPath: GITHUB_REPOSITORY_CALLBACK_PATH,
+      requiredScopes: GITHUB_REPOSITORY_SCOPES,
+      configured: () => githubOAuthConfigFromEnv() !== null,
+      authorizeUrl({ state: state2, codeChallenge }) {
+        const url2 = new URL(GITHUB_AUTHORIZE_URL);
+        url2.searchParams.set("client_id", requireClient().clientId);
+        url2.searchParams.set("redirect_uri", redirectUri());
+        url2.searchParams.set("scope", GITHUB_REPOSITORY_SCOPES.join(" "));
+        url2.searchParams.set("state", state2);
+        url2.searchParams.set("allow_signup", "false");
+        url2.searchParams.set("code_challenge", codeChallenge);
+        url2.searchParams.set("code_challenge_method", "S256");
+        return url2.toString();
+      },
+      exchangeCode({ code, codeVerifier }) {
+        const client = requireClient();
+        return tokenRequest({
+          client_id: client.clientId,
+          client_secret: client.clientSecret,
+          code,
+          redirect_uri: redirectUri(),
+          code_verifier: codeVerifier
+        });
+      },
+      refresh(refreshToken2) {
+        const client = requireClient();
+        return tokenRequest({
+          client_id: client.clientId,
+          client_secret: client.clientSecret,
+          grant_type: "refresh_token",
+          refresh_token: refreshToken2
+        });
+      },
+      revoke,
+      describeAccount
+    },
+    legacy: {
+      async find(db, profileId) {
+        const row = await db.get(
+          `SELECT id, github_user_id, github_login, avatar_url, scopes_json,
+                  access_token_ciphertext, refresh_token_ciphertext,
+                  access_token_expires_at, refresh_token_expires_at,
+                  last_validated_at, created_at, updated_at
+             FROM ext_github_user_connections
+            WHERE profile_id = ? AND deleted_at IS NULL AND access_token_ciphertext <> 'revoked:v1'`,
+          [profileId]
+        );
+        if (!row) return null;
+        return {
+          id: row.id,
+          ciphertext: JSON.stringify({
+            access: row.access_token_ciphertext,
+            refresh: row.refresh_token_ciphertext
+          }),
+          format: "github-user-oauth-v1",
+          keyId: GITHUB_USER_ENV_KEY_ID,
+          account: { id: row.github_user_id, label: row.github_login, avatarUrl: row.avatar_url },
+          scopes: parseGitHubScopes(row.scopes_json),
+          accessExpiresAt: row.access_token_expires_at,
+          refreshExpiresAt: row.refresh_token_expires_at,
+          lastValidatedAt: row.last_validated_at,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at
+        };
+      },
+      async isLive(db, legacyId) {
+        return Boolean(
+          await db.get(
+            "SELECT 1 AS present FROM ext_github_user_connections WHERE id = ? AND deleted_at IS NULL",
+            [legacyId]
+          )
+        );
+      },
+      async tombstone(db, profileId, at) {
+        await db.run(
+          `UPDATE ext_github_user_connections
+              SET deleted_at = ?, updated_at = ?, access_token_ciphertext = 'revoked:v1',
+                  refresh_token_ciphertext = NULL, access_token_expires_at = NULL,
+                  refresh_token_expires_at = NULL, revision = revision + 1
+            WHERE profile_id = ? AND deleted_at IS NULL`,
+          [at, at, profileId]
+        );
+      }
+    }
+  });
+}
+
+// ext/github/user-oauth.ts
+registerGitHubConnectionProvider();
+var GITHUB_API3 = "https://api.github.com";
+var NOT_CONFIGURED = "GitHub repository authorization is not configured on this Overlord server.";
+var RECONNECT = "Reconnect GitHub to refresh repository access.";
+function connections(client = requireDatabaseClient()) {
+  return profileConnections(client);
+}
+function githubUserOAuthConfigured(client) {
+  return connections(client).available("github");
 }
 async function activeProfileId(client = requireDatabaseClient()) {
   const profileId = await resolveActiveProfileId(client);
   if (!profileId) throw new ApiError(401, "Authentication required.");
   return profileId;
 }
-async function readConnection(client, profileId) {
-  return await client.get(
-    `SELECT id, profile_id, github_user_id, github_login, avatar_url, scopes_json,
-              access_token_ciphertext, refresh_token_ciphertext,
-              access_token_expires_at, refresh_token_expires_at, revision
-         FROM ext_github_user_connections
-        WHERE profile_id = ? AND deleted_at IS NULL`,
-    [profileId]
-  ) ?? null;
-}
-function connectionDto(row) {
+function connectionDto2(row, client) {
+  const connected = row?.state === "connected";
   return {
-    configured: githubUserOAuthConfigured(),
-    connected: row !== null,
-    account: row ? {
-      id: row.github_user_id,
-      login: row.github_login,
-      avatarUrl: row.avatar_url
+    configured: githubUserOAuthConfigured(client),
+    connected,
+    account: connected && row.external_account_id && row.external_account_label ? {
+      id: row.external_account_id,
+      login: row.external_account_label,
+      avatarUrl: row.external_account_avatar_url
     } : null,
-    scopes: row ? parseScopes(row.scopes_json) : []
+    scopes: connected ? parseGitHubScopes(row.granted_scopes_json) : []
   };
 }
 async function getGitHubUserConnection() {
   const client = requireDatabaseClient();
   const profileId = await activeProfileId(client);
-  return connectionDto(await readConnection(client, profileId));
-}
-function stateHash(state2) {
-  return (0, import_node_crypto15.createHash)("sha256").update(state2).digest("hex");
+  return connectionDto2(await connections(client).find(profileId, "github"), client);
 }
 function validatedReturnUrl(value2, allowedBrowserOrigins2) {
   if (value2 === void 0 || value2 === null || value2 === "") return null;
@@ -148685,120 +150913,41 @@ function validatedReturnUrl(value2, allowedBrowserOrigins2) {
   throw new ApiError(400, "GitHub return URL is not an allowed Overlord destination.");
 }
 async function beginGitHubUserAuthorization(body, allowedBrowserOrigins2) {
-  const config4 = requireUserOAuthConfig();
   const client = requireDatabaseClient();
+  const store = connections(client);
+  if (!store.available("github")) throw new ApiError(503, NOT_CONFIGURED);
   const profileId = await activeProfileId(client);
-  const state2 = (0, import_node_crypto15.randomBytes)(32).toString("base64url");
-  const now2 = nowIso2();
-  const expiresAt = new Date(Date.now() + OAUTH_STATE_TTL_MS).toISOString();
   const returnUrl = validatedReturnUrl(body.returnTo, allowedBrowserOrigins2);
-  await client.transaction(async (tx) => {
-    await tx.run(
-      `UPDATE ext_github_user_oauth_states
-          SET deleted_at = ?, updated_at = ?, revision = revision + 1
-        WHERE profile_id = ? AND deleted_at IS NULL
-          AND (consumed_at IS NOT NULL OR expires_at <= ?)`,
-      [now2, now2, profileId, now2]
-    );
-    await tx.run(
-      `INSERT INTO ext_github_user_oauth_states
-        (id, profile_id, state_hash, return_url, expires_at, created_at, updated_at, revision)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
-      [newId2(), profileId, stateHash(state2), returnUrl, expiresAt, now2, now2]
-    );
-  });
-  const authorizationUrl = new URL(GITHUB_AUTHORIZE_URL);
-  authorizationUrl.searchParams.set("client_id", config4.clientId);
-  authorizationUrl.searchParams.set(
-    "redirect_uri",
-    new URL(USER_OAUTH_CALLBACK_PATH, resolveAuthBaseUrl()).toString()
-  );
-  authorizationUrl.searchParams.set("scope", USER_OAUTH_SCOPES.join(" "));
-  authorizationUrl.searchParams.set("state", state2);
-  authorizationUrl.searchParams.set("allow_signup", "false");
-  return { authorizationUrl: authorizationUrl.toString() };
-}
-async function consumeOAuthState(state2) {
-  if (!/^[A-Za-z0-9_-]{40,80}$/.test(state2)) {
-    throw new ApiError(400, "GitHub authorization state is invalid.");
-  }
-  const client = requireDatabaseClient();
-  return client.transaction(async (tx) => {
-    const now2 = nowIso2();
-    const row = await tx.get(
-      `SELECT id, profile_id, return_url, expires_at, consumed_at, revision
-         FROM ext_github_user_oauth_states
-        WHERE state_hash = ? AND deleted_at IS NULL`,
-      [stateHash(state2)]
-    );
-    if (!row || row.consumed_at || row.expires_at <= now2) {
-      throw new ApiError(400, "GitHub authorization state has expired or was already used.");
-    }
-    const updated = await tx.run(
-      `UPDATE ext_github_user_oauth_states
-          SET consumed_at = ?, updated_at = ?, revision = ?
-        WHERE id = ? AND revision = ? AND consumed_at IS NULL AND deleted_at IS NULL`,
-      [now2, now2, row.revision + 1, row.id, row.revision]
-    );
-    if (updated.changes !== 1) {
-      throw new ApiError(400, "GitHub authorization state has expired or was already used.");
-    }
-    return row;
-  });
-}
-async function exchangeOAuthToken(input) {
-  const config4 = requireUserOAuthConfig();
-  const body = input.refreshToken === void 0 ? {
-    client_id: config4.clientId,
-    client_secret: config4.clientSecret,
-    code: input.code,
-    redirect_uri: new URL(USER_OAUTH_CALLBACK_PATH, resolveAuthBaseUrl()).toString()
-  } : {
-    client_id: config4.clientId,
-    client_secret: config4.clientSecret,
-    grant_type: "refresh_token",
-    refresh_token: input.refreshToken
-  };
-  let response;
   try {
-    response = await fetch(GITHUB_ACCESS_TOKEN_URL, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(body)
+    const started = await store.beginOAuth(profileId, "github", {
+      returnTo: returnUrl?.startsWith("overlord:") ? "mobile" : "web",
+      returnUrl
     });
-  } catch {
-    throw new ApiError(502, "Could not reach GitHub to complete authorization.");
+    return { authorizationUrl: started.authorizeUrl };
+  } catch (error53) {
+    if (error53 instanceof ChatError && error53.code === "provider_not_ready")
+      throw new ApiError(503, NOT_CONFIGURED);
+    if (error53 instanceof ChatError && error53.code === "limit_exceeded")
+      throw new ApiError(429, "Too many GitHub sign-ins are open; try again in a few minutes.");
+    throw error53;
   }
-  let result2;
+}
+function accessError(error53, notConnected, client) {
+  if (!(error53 instanceof ConnectionAccessError)) return error53;
+  if (error53.code === "not_found") return new ApiError(409, notConnected);
+  if (error53.code === "reauthorization_required") return new ApiError(401, RECONNECT);
+  return githubUserOAuthConfigured(client) ? new ApiError(502, "Could not reach GitHub.") : new ApiError(503, NOT_CONFIGURED);
+}
+async function connectedToken(client, profileId, notConnected, staleRevision) {
   try {
-    result2 = await response.json();
-  } catch {
-    throw new ApiError(502, "GitHub returned an invalid authorization response.");
+    return await connections(client).oauthAccessToken(profileId, "github", { staleRevision });
+  } catch (error53) {
+    throw accessError(error53, notConnected, client);
   }
-  if (!response.ok || typeof result2.access_token !== "string" || !result2.access_token) {
-    throw new ApiError(502, "GitHub did not complete repository authorization.");
-  }
-  const scopes = scopesFromTokenResponse(result2.scope);
-  if (!USER_OAUTH_SCOPES.every((required2) => scopes.includes(required2))) {
-    throw new ApiError(
-      403,
-      "GitHub authorization did not grant private-repository and organization access."
-    );
-  }
-  return {
-    accessToken: result2.access_token,
-    refreshToken: typeof result2.refresh_token === "string" ? result2.refresh_token : null,
-    scopes,
-    accessTokenExpiresAt: expiryFromSeconds(result2.expires_in),
-    refreshTokenExpiresAt: expiryFromSeconds(result2.refresh_token_expires_in)
-  };
 }
 async function githubUserFetchUrl(url2, token, init2 = {}) {
-  const target = new URL(url2, GITHUB_API2);
-  if (target.origin !== GITHUB_API2)
+  const target = new URL(url2, GITHUB_API3);
+  if (target.origin !== GITHUB_API3)
     throw new ApiError(502, "GitHub returned an invalid page link.");
   let response;
   try {
@@ -148836,7 +150985,7 @@ async function githubUserFetchAll(path29, token) {
   let nextUrl = path29;
   const visited = /* @__PURE__ */ new Set();
   while (nextUrl) {
-    const canonical = new URL(nextUrl, GITHUB_API2).toString();
+    const canonical = new URL(nextUrl, GITHUB_API3).toString();
     if (visited.has(canonical)) throw new ApiError(502, "GitHub returned a repeated page link.");
     visited.add(canonical);
     const page = await githubUserFetchUrl(
@@ -148848,148 +150997,31 @@ async function githubUserFetchAll(path29, token) {
   }
   return rows;
 }
-async function upsertConnection(input) {
-  const config4 = requireUserOAuthConfig();
-  const client = requireDatabaseClient();
-  const now2 = nowIso2();
-  const githubUserId = String(input.user.id);
-  const githubLogin = input.user.login.trim();
-  if (!githubUserId || !githubLogin) {
-    throw new ApiError(502, "GitHub returned incomplete account metadata.");
-  }
-  const accessCiphertext = encryptToken(
-    input.token.accessToken,
-    input.profileId,
-    "access",
-    config4.encryptionKey
-  );
-  const refreshCiphertext = input.token.refreshToken ? encryptToken(input.token.refreshToken, input.profileId, "refresh", config4.encryptionKey) : null;
-  await client.transaction(async (tx) => {
-    const claimed = await tx.get(
-      `SELECT profile_id
-         FROM ext_github_user_connections
-        WHERE github_user_id = ? AND profile_id <> ? AND deleted_at IS NULL`,
-      [githubUserId, input.profileId]
-    );
-    if (claimed) {
-      throw new ApiError(409, "This GitHub account is already connected to another user.");
-    }
-    const existing = await readConnection(tx, input.profileId);
-    if (existing) {
-      const updated = await tx.run(
-        `UPDATE ext_github_user_connections
-            SET github_user_id = ?, github_login = ?, avatar_url = ?, scopes_json = ?,
-                access_token_ciphertext = ?, refresh_token_ciphertext = ?,
-                access_token_expires_at = ?, refresh_token_expires_at = ?,
-                last_validated_at = ?, updated_at = ?, revision = ?
-          WHERE id = ? AND revision = ? AND deleted_at IS NULL`,
-        [
-          githubUserId,
-          githubLogin,
-          input.user.avatar_url ?? null,
-          JSON.stringify(input.token.scopes),
-          accessCiphertext,
-          refreshCiphertext,
-          input.token.accessTokenExpiresAt,
-          input.token.refreshTokenExpiresAt,
-          now2,
-          now2,
-          existing.revision + 1,
-          existing.id,
-          existing.revision
-        ]
-      );
-      if (updated.changes !== 1) throw new ApiError(409, "GitHub connection changed; try again.");
-      return;
-    }
-    await tx.run(
-      `INSERT INTO ext_github_user_connections
-        (id, profile_id, github_user_id, github_login, avatar_url, scopes_json,
-         access_token_ciphertext, refresh_token_ciphertext, access_token_expires_at,
-         refresh_token_expires_at, last_validated_at, created_at, updated_at, revision)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-      [
-        newId2(),
-        input.profileId,
-        githubUserId,
-        githubLogin,
-        input.user.avatar_url ?? null,
-        JSON.stringify(input.token.scopes),
-        accessCiphertext,
-        refreshCiphertext,
-        input.token.accessTokenExpiresAt,
-        input.token.refreshTokenExpiresAt,
-        now2,
-        now2,
-        now2
-      ]
-    );
-  });
-}
-async function completeGitHubUserAuthorization(input) {
-  const oauthState = await consumeOAuthState(input.state);
-  if (!input.code.trim()) throw new ApiError(400, "GitHub authorization code is missing.");
-  const token = await exchangeOAuthToken({ code: input.code });
-  const user = await githubUserFetch("/user", token.accessToken);
-  await upsertConnection({ profileId: oauthState.profile_id, user, token });
-  const row = await readConnection(requireDatabaseClient(), oauthState.profile_id);
-  return { connection: connectionDto(row), returnUrl: oauthState.return_url };
-}
-async function refreshAccessToken2(row, config4) {
-  if (!row.refresh_token_ciphertext) {
-    throw new ApiError(401, "Reconnect GitHub to refresh repository access.");
-  }
-  const refreshToken2 = decryptToken(
-    row.refresh_token_ciphertext,
-    row.profile_id,
-    "refresh",
-    config4.encryptionKey
-  );
-  const token = await exchangeOAuthToken({ refreshToken: refreshToken2 });
-  const now2 = nowIso2();
-  const accessCiphertext = encryptToken(
-    token.accessToken,
-    row.profile_id,
-    "access",
-    config4.encryptionKey
-  );
-  const refreshCiphertext = token.refreshToken ? encryptToken(token.refreshToken, row.profile_id, "refresh", config4.encryptionKey) : row.refresh_token_ciphertext;
-  const updated = await requireDatabaseClient().run(
-    `UPDATE ext_github_user_connections
-        SET scopes_json = ?, access_token_ciphertext = ?, refresh_token_ciphertext = ?,
-            access_token_expires_at = ?, refresh_token_expires_at = ?,
-            updated_at = ?, revision = ?
-      WHERE id = ? AND revision = ? AND deleted_at IS NULL`,
-    [
-      JSON.stringify(token.scopes),
-      accessCiphertext,
-      refreshCiphertext,
-      token.accessTokenExpiresAt,
-      token.refreshTokenExpiresAt ?? row.refresh_token_expires_at,
-      now2,
-      row.revision + 1,
-      row.id,
-      row.revision
-    ]
-  );
-  if (updated.changes !== 1) throw new ApiError(409, "GitHub connection changed; try again.");
-  return token.accessToken;
-}
-async function connectionAccessToken(row) {
-  const config4 = requireUserOAuthConfig();
-  if (row.access_token_expires_at && new Date(row.access_token_expires_at).getTime() <= Date.now() + TOKEN_EXPIRY_SKEW_MS) {
-    return refreshAccessToken2(row, config4);
-  }
-  return decryptToken(row.access_token_ciphertext, row.profile_id, "access", config4.encryptionKey);
-}
 async function listGitHubRepositoryOwners() {
   const client = requireDatabaseClient();
   const profileId = await activeProfileId(client);
-  const connection = await readConnection(client, profileId);
-  if (!connection) throw new ApiError(409, "Connect GitHub before choosing a repository owner.");
-  const token = await connectionAccessToken(connection);
-  const user = await githubUserFetch("/user", token);
-  if (String(user.id) !== connection.github_user_id) {
+  const store = connections(client);
+  const notConnected = "Connect GitHub before choosing a repository owner.";
+  let access = await connectedToken(client, profileId, notConnected);
+  let user;
+  try {
+    user = await githubUserFetch("/user", access.accessToken);
+  } catch (error53) {
+    if (!(error53 instanceof ApiError) || error53.status !== 401) throw error53;
+    access = await connectedToken(client, profileId, notConnected, access.credentialRevision);
+    try {
+      user = await githubUserFetch("/user", access.accessToken);
+    } catch (retryError) {
+      if (retryError instanceof ApiError && retryError.status === 401) {
+        await store.requireReauthorizationFor(profileId, "github", "invalid_grant");
+        throw new ApiError(401, RECONNECT);
+      }
+      throw retryError;
+    }
+  }
+  const token = access.accessToken;
+  if (String(user.id) !== access.row.external_account_id) {
+    await store.requireReauthorizationFor(profileId, "github", "identity_changed");
     throw new ApiError(401, "The connected GitHub identity changed; reconnect GitHub.");
   }
   const memberships = await githubUserFetchAll(
@@ -149011,14 +151043,11 @@ async function listGitHubRepositoryOwners() {
       } : null;
     })
   );
-  const now2 = nowIso2();
-  await client.run(
-    `UPDATE ext_github_user_connections
-        SET github_login = ?, avatar_url = ?, last_validated_at = ?, updated_at = ?,
-            revision = revision + 1
-      WHERE id = ? AND deleted_at IS NULL`,
-    [user.login, user.avatar_url ?? null, now2, now2, connection.id]
-  );
+  await store.recordAccount(profileId, "github", {
+    id: String(user.id),
+    label: user.login,
+    avatarUrl: user.avatar_url ?? null
+  });
   return [
     {
       login: user.login,
@@ -149046,9 +151075,11 @@ async function createPrivateGitHubRepository({
     throw new ApiError(403, "The selected GitHub owner cannot create private repositories.");
   const client = requireDatabaseClient();
   const profileId = await activeProfileId(client);
-  const connection = await readConnection(client, profileId);
-  if (!connection) throw new ApiError(409, "Connect GitHub before creating a repository.");
-  const token = await connectionAccessToken(connection);
+  const { accessToken: token } = await connectedToken(
+    client,
+    profileId,
+    "Connect GitHub before creating a repository."
+  );
   const endpoint = owner.type === "personal" ? "/user/repos" : `/orgs/${encodeURIComponent(owner.login)}/repos`;
   const response = await githubUserFetch(endpoint, token, {
     method: "POST",
@@ -149065,46 +151096,11 @@ async function createPrivateGitHubRepository({
     cloneUrl: response.clone_url
   };
 }
-async function revokeUpstreamToken(token, config4) {
-  try {
-    await fetch(`${GITHUB_API2}/applications/${encodeURIComponent(config4.clientId)}/token`, {
-      method: "DELETE",
-      headers: {
-        Accept: "application/vnd.github+json",
-        Authorization: `Basic ${Buffer.from(`${config4.clientId}:${config4.clientSecret}`).toString("base64")}`,
-        "Content-Type": "application/json",
-        "X-GitHub-Api-Version": "2022-11-28"
-      },
-      body: JSON.stringify({ access_token: token })
-    });
-  } catch {
-  }
-}
 async function disconnectGitHubUser() {
   const client = requireDatabaseClient();
   const profileId = await activeProfileId(client);
-  let connection = await readConnection(client, profileId);
-  if (!connection) return connectionDto(null);
-  const config4 = userOAuthConfig();
-  if (config4) {
-    try {
-      const token = await connectionAccessToken(connection);
-      await revokeUpstreamToken(token, config4);
-      connection = await readConnection(client, profileId) ?? connection;
-    } catch {
-    }
-  }
-  const now2 = nowIso2();
-  const updated = await client.run(
-    `UPDATE ext_github_user_connections
-        SET access_token_ciphertext = 'revoked:v1', refresh_token_ciphertext = NULL,
-            access_token_expires_at = NULL, refresh_token_expires_at = NULL,
-            deleted_at = ?, updated_at = ?, revision = ?
-      WHERE id = ? AND revision = ? AND deleted_at IS NULL`,
-    [now2, now2, connection.revision + 1, connection.id, connection.revision]
-  );
-  if (updated.changes !== 1) throw new ApiError(409, "GitHub connection changed; try again.");
-  return connectionDto(null);
+  await connections(client).disconnectProvider(profileId, "github");
+  return connectionDto2(null, client);
 }
 
 // branch-planning.ts
@@ -149259,7 +151255,7 @@ function previewMissionBranch(input) {
 init_db();
 
 // deferred-work.ts
-var import_node_crypto16 = require("node:crypto");
+var import_node_crypto19 = require("node:crypto");
 init_db();
 var RESOLUTION_STATUSES = /* @__PURE__ */ new Set(["done", "dismissed"]);
 var RESOLUTION_OUTCOMES = /* @__PURE__ */ new Set([
@@ -149267,12 +151263,12 @@ var RESOLUTION_OUTCOMES = /* @__PURE__ */ new Set([
   "objective_added"
 ]);
 function legacyDeferredWorkId(text, occurrence) {
-  const digest3 = (0, import_node_crypto16.createHash)("sha256").update(text).digest("hex").slice(0, 16);
+  const digest3 = (0, import_node_crypto19.createHash)("sha256").update(text).digest("hex").slice(0, 16);
   return `deferred-work-${digest3}-${occurrence}`;
 }
 function agentDeferredWorkId(index, agentText) {
   if (!agentText) return `deferred-work-${index}-composed`;
-  const digest3 = (0, import_node_crypto16.createHash)("sha256").update(agentText).digest("hex").slice(0, 16);
+  const digest3 = (0, import_node_crypto19.createHash)("sha256").update(agentText).digest("hex").slice(0, 16);
   return `deferred-work-${index}-${digest3}`;
 }
 function deferredWorkEntries(report) {
@@ -157188,7 +159184,7 @@ init_projects();
 init_db();
 
 // workspaces.ts
-var import_node_crypto22 = require("node:crypto");
+var import_node_crypto25 = require("node:crypto");
 
 // sql-studio/sql-studio.ts
 var import_node_child_process7 = require("node:child_process");
@@ -163570,9 +165566,9 @@ var INVITATION_HASH_ALGORITHM = "sha256";
 var INVITATION_TTL_DAYS = 14;
 var WORKSPACE_ROLE_KEYS = /* @__PURE__ */ new Set(["ADMIN", "MANAGER", "MEMBER"]);
 function generateInvitationSecret() {
-  const prefix = `${INVITATION_TOKEN_SCHEME}_${(0, import_node_crypto22.randomBytes)(4).toString("hex")}`;
-  const secret = `${prefix}${(0, import_node_crypto22.randomBytes)(24).toString("hex")}`;
-  const hash2 = (0, import_node_crypto22.createHash)(INVITATION_HASH_ALGORITHM).update(secret).digest("hex");
+  const prefix = `${INVITATION_TOKEN_SCHEME}_${(0, import_node_crypto25.randomBytes)(4).toString("hex")}`;
+  const secret = `${prefix}${(0, import_node_crypto25.randomBytes)(24).toString("hex")}`;
+  const hash2 = (0, import_node_crypto25.createHash)(INVITATION_HASH_ALGORITHM).update(secret).digest("hex");
   return { secret, prefix, hash: hash2 };
 }
 var INVITATION_COLUMNS = "id, workspace_id, email, role_key, token_prefix, status, invited_by_workspace_user_id, expires_at, created_at, revision";
@@ -163736,7 +165732,7 @@ async function acceptWorkspaceInvitation(body) {
   if (!rawToken) throw new ApiError(400, "Invitation token is required");
   const profileId = getActiveProfileId();
   if (!profileId) throw new ApiError(401, "Authentication required");
-  const tokenHash = (0, import_node_crypto22.createHash)(INVITATION_HASH_ALGORITHM).update(rawToken).digest("hex");
+  const tokenHash = (0, import_node_crypto25.createHash)(INVITATION_HASH_ALGORITHM).update(rawToken).digest("hex");
   const client = requireDatabaseClient();
   const outcome = await client.transaction(async (tx) => {
     const invitation = await tx.get(
@@ -166245,10 +168241,10 @@ async function handleMcpPost(req, res, next) {
 }
 
 // ../packages/core/service/chat/conversations.ts
-var import_node_crypto26 = require("node:crypto");
+var import_node_crypto28 = require("node:crypto");
 
 // ../packages/core/service/chat/proposals.ts
-var import_node_crypto25 = require("node:crypto");
+var import_node_crypto27 = require("node:crypto");
 
 // ../packages/core/service/chat/access.ts
 init_project_execution_target();
@@ -166370,521 +168366,8 @@ function assignmentCatalogProjection(value2) {
 
 // ../packages/core/service/chat/runs.ts
 init_dist2();
-var import_node_crypto24 = require("node:crypto");
+var import_node_crypto26 = require("node:crypto");
 var import_node_util2 = require("node:util");
-
-// ../packages/core/service/chat/store.ts
-init_dist();
-var import_node_crypto23 = require("node:crypto");
-var import_node_util = require("node:util");
-init_errors4();
-var ChatError = class extends ServiceError {
-  /**
-   * @param detail Optional specific reason for the assistant's own tool results (for example
-   * which resource key is not registered). It is never part of an HTTP error body.
-   */
-  constructor(code, detail) {
-    const status = code === "not_found" || code === "chat_unavailable" ? 404 : code === "invalid_request" ? 400 : code === "limit_exceeded" ? 429 : code === "provider_not_ready" ? 503 : 409;
-    super(code.replaceAll("_", " "), code, status);
-    this.detail = detail;
-  }
-  detail;
-};
-var requiredText = (value2, max) => {
-  if (typeof value2 !== "string" || !value2.trim() || value2.length > max)
-    throw new ChatError("invalid_request");
-  return value2;
-};
-function revision(value2) {
-  if (!Number.isSafeInteger(value2) || Number(value2) < 1) throw new ChatError("invalid_request");
-  return Number(value2);
-}
-function messageDto(r5) {
-  return {
-    id: r5.id,
-    threadId: r5.thread_id,
-    role: r5.role,
-    state: r5.state,
-    blocks: JSON.parse(r5.blocks_json),
-    runId: r5.run_id,
-    answersQuestionId: r5.answers_question_id,
-    clientRequestId: r5.client_request_id,
-    createdAt: r5.created_at,
-    updatedAt: r5.updated_at,
-    revision: r5.revision
-  };
-}
-function questionDto(r5) {
-  return {
-    id: r5.id,
-    threadId: r5.thread_id,
-    runId: r5.run_id,
-    ordinal: r5.ordinal,
-    state: r5.state,
-    prompt: r5.prompt,
-    options: JSON.parse(r5.options_json),
-    allowFreeText: Boolean(r5.allow_free_text),
-    answerMessageId: r5.answer_message_id,
-    createdAt: r5.created_at,
-    answeredAt: r5.answered_at,
-    revision: r5.revision
-  };
-}
-function runDto(r5, continueAvailable = false) {
-  return {
-    id: r5.id,
-    threadId: r5.thread_id,
-    triggerMessageId: r5.trigger_message_id,
-    state: r5.state,
-    outcome: r5.outcome,
-    failureCode: r5.failure_code,
-    continuedFromRunId: r5.continued_from_run_id,
-    continueAvailable,
-    usage: {
-      toolCalls: r5.tool_call_count,
-      activeProcessingMs: r5.active_processing_ms,
-      gatheredContentBytes: r5.gathered_content_bytes
-    },
-    cancelRequestedAt: r5.cancel_requested_at,
-    createdAt: r5.created_at,
-    updatedAt: r5.updated_at,
-    completedAt: r5.completed_at,
-    revision: r5.revision
-  };
-}
-var unavailableBlocks = () => [
-  {
-    id: "unavailable",
-    kind: "unavailable",
-    reason: "source_access_lost",
-    regenerable: true,
-    fallbackText: "Source access is no longer available."
-  }
-];
-var ChatStore = class _ChatStore {
-  constructor(db, options = {}) {
-    this.db = db;
-    this.options = options;
-    this.limits = { ...CHAT_DEFAULT_LIMITS, ...options.limits };
-  }
-  db;
-  options;
-  limits;
-  now() {
-    return this.options.now?.() ?? Date.now();
-  }
-  timestamp() {
-    return new Date(this.now()).toISOString();
-  }
-  async access(owner) {
-    const member2 = await this.db.get(
-      `SELECT wu.id FROM workspace_users wu JOIN workspaces w ON w.id = wu.workspace_id JOIN organizations o ON o.id = w.organization_id WHERE wu.profile_id = ? AND w.organization_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL AND w.deleted_at IS NULL AND o.deleted_at IS NULL LIMIT 1`,
-      [owner.profileId, owner.organizationId]
-    );
-    if (!member2) throw new ChatError("not_found");
-  }
-  async generationDependencies(threadId, setId) {
-    const sets = await this.db.all(
-      "SELECT id FROM chat_dependency_sets WHERE thread_id = ? AND invalidated_at IS NULL",
-      [threadId]
-    );
-    return sets.length || setId ? this.dependencySet(threadId, [], [...sets.map((s) => s.id), ...setId ? [setId] : []]) : null;
-  }
-  async createdAt(table, threadId) {
-    const last = await this.db.get(
-      `SELECT created_at FROM ${table} WHERE thread_id = ? ORDER BY created_at DESC LIMIT 1`,
-      [threadId]
-    );
-    return new Date(Math.max(this.now(), last ? Date.parse(last.created_at) + 1 : 0)).toISOString();
-  }
-  async thread(id2, owner) {
-    const row = await this.db.get(
-      `SELECT * FROM chat_threads WHERE id = ?${owner ? " AND owner_profile_id = ? AND organization_id = ?" : ""}`,
-      owner ? [id2, owner.profileId, owner.organizationId] : [id2]
-    );
-    if (!row) throw new ChatError("not_found");
-    return row;
-  }
-  async lock(id2, owner) {
-    if (owner) await this.access(owner);
-    const result2 = await this.db.run(
-      `UPDATE chat_threads SET id = id WHERE id = ?${owner ? " AND owner_profile_id = ? AND organization_id = ?" : ""}`,
-      owner ? [id2, owner.profileId, owner.organizationId] : [id2]
-    );
-    if (!result2.changes) throw new ChatError("not_found");
-    return this.thread(id2, owner);
-  }
-  async run(id2) {
-    const r5 = await this.db.get("SELECT * FROM chat_runs WHERE id = ?", [id2]);
-    if (!r5) throw new ChatError("not_found");
-    return r5;
-  }
-  async threadDto(r5) {
-    const active = await this.db.get(
-      "SELECT * FROM chat_runs WHERE thread_id = ? AND state IN ('queued','running','waiting_user')",
-      [r5.id]
-    );
-    return {
-      id: r5.id,
-      organizationId: r5.organization_id,
-      title: r5.title,
-      titleSource: r5.title_source,
-      archivedAt: r5.archived_at,
-      lastActivityAt: r5.last_activity_at,
-      activeRunState: active?.state ?? null,
-      createdAt: r5.created_at,
-      updatedAt: r5.updated_at,
-      revision: r5.revision
-    };
-  }
-  async append(threadId, payload, dependencySetId = null, attempt) {
-    await this.db.run(
-      "UPDATE chat_threads SET last_event_seq = last_event_seq + 1, last_activity_at = ? WHERE id = ?",
-      [this.timestamp(), threadId]
-    );
-    const t = await this.thread(threadId);
-    await this.db.run(
-      `INSERT INTO chat_events (id, thread_id, seq, kind, run_id, attempt_id, fence, payload_json, dependency_set_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        (0, import_node_crypto23.randomUUID)(),
-        threadId,
-        t.last_event_seq,
-        payload.kind,
-        attempt?.runId ?? null,
-        attempt?.id ?? null,
-        attempt?.fence ?? null,
-        JSON.stringify(payload),
-        dependencySetId,
-        this.timestamp()
-      ]
-    );
-    await this.retain(threadId);
-    return t.last_event_seq;
-  }
-  async retain(id2) {
-    const t = await this.thread(id2);
-    const oldest = await this.db.get(
-      "SELECT seq FROM chat_events WHERE thread_id = ? AND created_at >= ? ORDER BY seq LIMIT 1",
-      [id2, new Date(this.now() - this.limits.eventRetentionMs).toISOString()]
-    );
-    const boundary = Math.max(
-      t.retained_from_seq,
-      oldest?.seq ?? t.last_event_seq + 1,
-      t.last_event_seq - this.limits.eventRetentionCount + 1
-    );
-    await this.db.run("DELETE FROM chat_events WHERE thread_id = ? AND seq < ?", [id2, boundary]);
-    await this.db.run("UPDATE chat_threads SET retained_from_seq = ? WHERE id = ?", [boundary, id2]);
-  }
-  async authorized(setId) {
-    if (!setId) return true;
-    const set2 = await this.db.get(
-      "SELECT invalidated_at FROM chat_dependency_sets WHERE id = ?",
-      [setId]
-    );
-    return Boolean(set2 && !set2.invalidated_at);
-  }
-  async projectMessage(r5) {
-    const dto = messageDto(r5);
-    if (r5.invalidated_at || !await this.authorized(r5.dependency_set_id))
-      dto.blocks = unavailableBlocks();
-    return dto;
-  }
-  /**
-   * Registers source identities for a thread (upsert by stable scope key) and returns their ids.
-   * A Knowledgebase locator's display path may differ between results for the same node, so
-   * identity is compared without it; every other locator must match exactly.
-   */
-  async registerSources(owner, threadId, sources) {
-    const ids = [];
-    const identity = (l3) => l3.kind === "knowledgebase" ? { ...l3, path: null } : l3;
-    for (const source of sources) {
-      requiredText(source.scopeKey, 1e3);
-      const now2 = this.timestamp();
-      const connection = source.locator.kind === "knowledgebase" ? await this.db.get(
-        "SELECT id FROM account_connections WHERE id = ? AND owner_profile_id = ? AND organization_id = ?",
-        [source.locator.connectionId, owner.profileId, owner.organizationId]
-      ) : void 0;
-      await this.db.run(
-        `INSERT INTO chat_source_refs (id, thread_id, source_kind, scope_key, connection_id, locator_json, access_state, access_checked_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'unknown', ?, ?, ?) ON CONFLICT (thread_id, scope_key) DO NOTHING`,
-        [
-          (0, import_node_crypto23.randomUUID)(),
-          threadId,
-          source.locator.kind,
-          source.scopeKey,
-          connection?.id ?? null,
-          JSON.stringify(source.locator),
-          now2,
-          now2,
-          now2
-        ]
-      );
-      const row = await this.db.get(
-        "SELECT id, locator_json FROM chat_source_refs WHERE thread_id = ? AND scope_key = ?",
-        [threadId, source.scopeKey]
-      );
-      if (!(0, import_node_util.isDeepStrictEqual)(identity(JSON.parse(row.locator_json)), identity(source.locator)))
-        throw new ChatError("invalid_request");
-      ids.push(row.id);
-    }
-    return ids;
-  }
-  async checkSources(threadId, onlyIds) {
-    const t = await this.thread(threadId);
-    const owner = { profileId: t.owner_profile_id, organizationId: t.organization_id };
-    try {
-      await this.access(owner);
-    } catch {
-      const runs = await this.db.all(
-        "SELECT * FROM chat_runs WHERE thread_id = ? AND state IN ('queued','running','waiting_user')",
-        [threadId]
-      );
-      for (const r5 of runs) await this.finish(r5, "failed", null, "source_access_lost");
-      return;
-    }
-    const sources = (await this.db.all("SELECT * FROM chat_source_refs WHERE thread_id = ?", [threadId])).filter((source) => !onlyIds || onlyIds.includes(source.id));
-    for (const source of sources) {
-      let state2 = "unknown";
-      if (this.options.checkSource) {
-        const signal = AbortSignal.timeout(3e3);
-        try {
-          state2 = await Promise.race([
-            this.options.checkSource(owner, JSON.parse(source.locator_json), signal),
-            new Promise(
-              (resolve) => signal.addEventListener("abort", () => resolve("unknown"), { once: true })
-            )
-          ]);
-        } catch {
-        }
-      }
-      await this.db.run(
-        "UPDATE chat_source_refs SET access_state = ?, access_checked_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
-        [state2, this.timestamp(), this.timestamp(), source.id]
-      );
-      if (state2 !== "authorized") await this.invalidate(threadId, source.id);
-    }
-  }
-  /** Rechecks one thread's sources under its row lock, e.g. after a connection loses access. */
-  async revalidate(threadId) {
-    await this.db.transaction(async (tx) => {
-      const s = new _ChatStore(tx, this.options);
-      await s.lock(threadId);
-      await s.checkSources(threadId);
-    });
-  }
-  /** Rechecks every thread that cites a source obtained through `connectionId`. */
-  async revalidateConnection(connectionId) {
-    const threads = await this.db.all(
-      "SELECT DISTINCT thread_id FROM chat_source_refs WHERE connection_id = ?",
-      [connectionId]
-    );
-    for (const { thread_id } of threads) await this.revalidate(thread_id);
-  }
-  async invalidate(threadId, sourceId) {
-    const sets = await this.db.all(
-      `SELECT s.id FROM chat_dependency_sets s JOIN chat_dependency_set_members m ON m.dependency_set_id = s.id WHERE s.thread_id = ? AND m.source_ref_id = ? AND s.invalidated_at IS NULL`,
-      [threadId, sourceId]
-    );
-    if (!sets.length) return;
-    const messageIds = [], proposalIds = [];
-    for (const { id: id2 } of sets) {
-      await this.db.run("UPDATE chat_dependency_sets SET invalidated_at = ? WHERE id = ?", [
-        this.timestamp(),
-        id2
-      ]);
-      messageIds.push(
-        ...(await this.db.all(
-          "SELECT id FROM chat_messages WHERE dependency_set_id = ?",
-          [id2]
-        )).map((r5) => r5.id)
-      );
-      proposalIds.push(
-        ...(await this.db.all(
-          "SELECT proposal_id FROM chat_work_proposal_revisions WHERE dependency_set_id = ?",
-          [id2]
-        )).map((r5) => r5.proposal_id)
-      );
-      for (const table of [
-        "chat_messages",
-        "chat_thread_summaries",
-        "chat_provider_checkpoints",
-        "chat_work_proposal_revisions"
-      ])
-        await this.db.run(`UPDATE ${table} SET invalidated_at = ? WHERE dependency_set_id = ?`, [
-          this.timestamp(),
-          id2
-        ]);
-      const questions = await this.db.all(
-        "SELECT * FROM chat_questions WHERE dependency_set_id = ? AND state = 'open'",
-        [id2]
-      );
-      for (const q2 of questions) {
-        await this.db.run(
-          "UPDATE chat_questions SET state = 'superseded', revision = revision + 1, updated_at = ? WHERE id = ?",
-          [this.timestamp(), q2.id]
-        );
-        await this.append(
-          threadId,
-          {
-            kind: "question.closed",
-            question: questionDto({ ...q2, state: "superseded", revision: q2.revision + 1 })
-          },
-          id2
-        );
-      }
-    }
-    await this.db.run(
-      "UPDATE chat_threads SET authorization_revision = authorization_revision + 1 WHERE id = ?",
-      [threadId]
-    );
-    await this.append(threadId, {
-      kind: "content.invalidated",
-      messageIds: [...new Set(messageIds)],
-      proposalIds: [...new Set(proposalIds)]
-    });
-    const runs = await this.db.all(
-      "SELECT * FROM chat_runs WHERE thread_id = ? AND state IN ('running','waiting_user')",
-      [threadId]
-    );
-    for (const r5 of runs) await this.finish(r5, "failed", null, "source_access_lost");
-  }
-  async dependencySet(threadId, sourceIds, inherited = []) {
-    const union2 = new Set(sourceIds);
-    for (const setId of inherited) {
-      const set2 = await this.db.get(
-        "SELECT thread_id FROM chat_dependency_sets WHERE id = ?",
-        [setId]
-      );
-      if (set2?.thread_id !== threadId || !await this.authorized(setId))
-        throw new ChatError("source_access_lost");
-      for (const row of await this.db.all(
-        "SELECT source_ref_id FROM chat_dependency_set_members WHERE dependency_set_id = ?",
-        [setId]
-      ))
-        union2.add(row.source_ref_id);
-    }
-    const ids = [...union2].sort();
-    for (const id3 of ids) {
-      const source = await this.db.get(
-        "SELECT * FROM chat_source_refs WHERE id = ? AND thread_id = ?",
-        [id3, threadId]
-      );
-      if (!source || source.access_state !== "authorized")
-        throw new ChatError("source_access_lost");
-    }
-    const authorizationRevision = (await this.thread(threadId)).authorization_revision;
-    const digest3 = (0, import_node_crypto23.createHash)("sha256").update(JSON.stringify({ ids, authorizationRevision })).digest("hex");
-    const old = await this.db.get(
-      "SELECT id, invalidated_at FROM chat_dependency_sets WHERE thread_id = ? AND digest = ?",
-      [threadId, digest3]
-    );
-    if (old?.invalidated_at) throw new ChatError("source_access_lost");
-    if (old) return old.id;
-    const id2 = (0, import_node_crypto23.randomUUID)();
-    await this.db.run(
-      "INSERT INTO chat_dependency_sets (id, thread_id, digest, created_at) VALUES (?, ?, ?, ?)",
-      [id2, threadId, digest3, this.timestamp()]
-    );
-    for (const sourceId of ids)
-      await this.db.run(
-        "INSERT INTO chat_dependency_set_members (dependency_set_id, source_ref_id) VALUES (?, ?)",
-        [id2, sourceId]
-      );
-    return id2;
-  }
-  async finish(r5, state2, outcome = null, failure3 = null) {
-    const now2 = this.timestamp();
-    await this.db.run(
-      `UPDATE chat_run_attempts SET state = ?, ended_at = ? WHERE run_id = ? AND state = 'leased'`,
-      [
-        state2 === "completed" ? "succeeded" : state2 === "cancelled" ? "cancelled" : "fenced",
-        now2,
-        r5.id
-      ]
-    );
-    await this.db.run(
-      `UPDATE chat_runs SET state = ?, outcome = ?, failure_code = ?, completed_at = ?, active_attempt_id = NULL, current_fence = current_fence + 1, updated_at = ?, revision = revision + 1 WHERE id = ?`,
-      [state2, outcome, failure3, now2, now2, r5.id]
-    );
-    const questions = await this.db.all(
-      "SELECT * FROM chat_questions WHERE run_id = ? AND state = 'open'",
-      [r5.id]
-    );
-    await this.db.run(
-      "UPDATE chat_questions SET state = 'cancelled', updated_at = ?, revision = revision + 1 WHERE run_id = ? AND state = 'open'",
-      [now2, r5.id]
-    );
-    await this.db.run(
-      "UPDATE chat_tool_calls SET state = 'cancelled', completed_at = ?, updated_at = ? WHERE run_id = ? AND state IN ('requested','executing')",
-      [now2, now2, r5.id]
-    );
-    const partials = await this.db.all(
-      "SELECT * FROM chat_messages WHERE run_id = ? AND state = 'streaming'",
-      [r5.id]
-    );
-    await this.db.run(
-      "UPDATE chat_messages SET state = 'interrupted', updated_at = ?, revision = revision + 1 WHERE run_id = ? AND state = 'streaming'",
-      [now2, r5.id]
-    );
-    for (const message2 of partials)
-      await this.append(
-        r5.thread_id,
-        {
-          kind: "message.completed",
-          message: messageDto({
-            ...message2,
-            state: "interrupted",
-            updated_at: now2,
-            revision: message2.revision + 1
-          })
-        },
-        message2.dependency_set_id
-      );
-    for (const q2 of questions)
-      await this.append(
-        r5.thread_id,
-        {
-          kind: "question.closed",
-          question: questionDto({
-            ...q2,
-            state: "cancelled",
-            revision: q2.revision + 1,
-            updated_at: now2
-          })
-        },
-        q2.dependency_set_id
-      );
-    await this.db.run("DELETE FROM chat_provider_checkpoints WHERE run_id = ?", [r5.id]);
-    const updated = await this.run(r5.id);
-    const seq = await this.append(r5.thread_id, {
-      kind: "run.updated",
-      run: runDto(updated, outcome === "allowance_exhausted")
-    });
-    if (state2 !== "cancelled") await this.notification(updated, seq);
-    return runDto(updated, outcome === "allowance_exhausted");
-  }
-  async notification(r5, seq, question) {
-    const t = await this.thread(r5.thread_id);
-    await this.db.run(
-      `INSERT INTO chat_notifications (id, owner_profile_id, organization_id, thread_id, run_id, question_id, type, transition_key, event_seq, state, due_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?) ON CONFLICT (owner_profile_id, thread_id, run_id, type, transition_key) DO NOTHING`,
-      [
-        (0, import_node_crypto23.randomUUID)(),
-        t.owner_profile_id,
-        t.organization_id,
-        t.id,
-        r5.id,
-        question?.id ?? null,
-        question ? "chat_needs_answer" : "chat_finished",
-        question ? `question:${question.ordinal}` : `terminal:${r5.state}`,
-        seq,
-        new Date(this.now() + this.limits.notificationGraceMs).toISOString(),
-        this.timestamp(),
-        this.timestamp()
-      ]
-    );
-  }
-};
-
-// ../packages/core/service/chat/runs.ts
 function toolProgressLabel(toolId) {
   switch (toolId) {
     case "overlord_list_projects":
@@ -167016,7 +168499,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
             );
           }
         }
-        const id2 = (0, import_node_crypto24.randomUUID)(), fence = r5.current_fence + 1, now2 = s.timestamp();
+        const id2 = (0, import_node_crypto26.randomUUID)(), fence = r5.current_fence + 1, now2 = s.timestamp();
         await tx.run(
           "UPDATE chat_runs SET state = 'running', current_fence = ?, active_attempt_id = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
           [fence, id2, now2, r5.id]
@@ -167216,7 +168699,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
         requiredText(req.providerCallId, 200);
         const args = JSON.stringify(req.arguments);
         if (Buffer.byteLength(args) > 64 * 1024) throw new ChatError("limit_exceeded");
-        const callId = (0, import_node_crypto24.randomUUID)();
+        const callId = (0, import_node_crypto26.randomUUID)();
         await s.db.run(
           `INSERT INTO chat_tool_calls (id, run_id, attempt_id, operation_id, turn_index, call_order, provider_call_id, tool_id, policy_version, arguments_json, state, requested_fence, writer_fence, dependency_set_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 'requested', ?, ?, ?, ?, ?)`,
           [
@@ -167375,8 +168858,8 @@ var ChatRuns = class _ChatRuns extends ChatStore {
         [messageId, a5.runId]
       );
       if (messageId && !old) throw new ChatError("invalid_request");
-      const id2 = old ? old.id : (0, import_node_crypto24.randomUUID)();
-      const blocks = old ? JSON.parse(old.blocks_json) : [{ id: (0, import_node_crypto24.randomUUID)(), kind: "text", text: "", evidenceIds: [], fallbackText: "" }];
+      const id2 = old ? old.id : (0, import_node_crypto26.randomUUID)();
+      const blocks = old ? JSON.parse(old.blocks_json) : [{ id: (0, import_node_crypto26.randomUUID)(), kind: "text", text: "", evidenceIds: [], fallbackText: "" }];
       const block = blocks[0];
       if (!block || block.kind !== "text") throw new ChatError("invalid_request");
       if (block.text.length + text.length > s.limits.messageMaxChars)
@@ -167427,7 +168910,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
         "SELECT COUNT(*) AS n FROM chat_questions WHERE run_id = ?",
         [a5.runId]
       );
-      const id2 = (0, import_node_crypto24.randomUUID)(), now2 = s.timestamp();
+      const id2 = (0, import_node_crypto26.randomUUID)(), now2 = s.timestamp();
       await s.db.run(
         `INSERT INTO chat_questions (id, thread_id, run_id, ordinal, state, prompt, options_json, allow_free_text, dependency_set_id, created_at, updated_at) VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?)`,
         [
@@ -167510,7 +168993,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
       );
       const evidence = [];
       for (const [i5, source] of sources.entries()) {
-        const evidenceId = (0, import_node_crypto24.randomUUID)();
+        const evidenceId = (0, import_node_crypto26.randomUUID)();
         await s.db.run(
           `INSERT INTO chat_evidence (id, thread_id, run_id, tool_call_id, source_ref_id, label, excerpt, excerpt_truncated, source_revision, observed_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
@@ -167568,7 +169051,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
       }));
       const others = blocks.filter((b5) => b5.kind !== "evidence");
       others.push({
-        id: (0, import_node_crypto24.randomUUID)(),
+        id: (0, import_node_crypto26.randomUUID)(),
         kind: "evidence",
         evidence,
         fallbackText: `Sources: ${evidence.map((e5) => e5.label).join("; ")}`.slice(0, 4e3)
@@ -167602,7 +169085,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
       await s.db.run(
         "INSERT INTO chat_thread_summaries (id, thread_id, summary_revision, summary_json, covers_through_message_id, dependency_set_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
         [
-          (0, import_node_crypto24.randomUUID)(),
+          (0, import_node_crypto26.randomUUID)(),
           a5.threadId,
           Number(last?.n ?? 0) + 1,
           json2,
@@ -167922,7 +169405,7 @@ var ChatProposals = class _ChatProposals extends ChatStore {
       await runs.assertLease(a5);
       const destinationSet = await s.dependencySet(a5.threadId, sourceIds);
       const dependencySetId = await s.generationDependencies(a5.threadId, destinationSet);
-      const id2 = body.proposalId ?? (0, import_node_crypto25.randomUUID)();
+      const id2 = body.proposalId ?? (0, import_node_crypto27.randomUUID)();
       let next = 1;
       if (body.proposalId) {
         const old = await tx.get(
@@ -167965,10 +169448,10 @@ var ChatProposals = class _ChatProposals extends ChatStore {
         id: a5.id,
         fence: a5.fence
       });
-      const messageId = (0, import_node_crypto25.randomUUID)();
+      const messageId = (0, import_node_crypto27.randomUUID)();
       const blocks = [
         {
-          id: (0, import_node_crypto25.randomUUID)(),
+          id: (0, import_node_crypto27.randomUUID)(),
           kind: "proposal",
           proposalId: id2,
           revision: next,
@@ -168080,7 +169563,7 @@ var ChatProposals = class _ChatProposals extends ChatStore {
           [scope.project.id]
         );
       }
-      const receiptId = (0, import_node_crypto25.randomUUID)();
+      const receiptId = (0, import_node_crypto27.randomUUID)();
       for (const [i5, m3] of missions.entries()) {
         const scope = scopes[i5];
         await s.destination(owner, m3.projectId);
@@ -168144,7 +169627,7 @@ var ChatProposals = class _ChatProposals extends ChatStore {
               expected,
               owner.profileId,
               key,
-              (0, import_node_crypto25.createHash)("sha256").update(JSON.stringify({ id: id2, expected })).digest("hex"),
+              (0, import_node_crypto27.createHash)("sha256").update(JSON.stringify({ id: id2, expected })).digest("hex"),
               thread.authorization_revision,
               s.timestamp()
             ]
@@ -168194,7 +169677,7 @@ var Conversations = class _Conversations extends ChatStore {
     if (message2 !== void 0 && (!message2 || typeof message2 !== "object" || Array.isArray(message2)))
       throw new ChatError("invalid_request");
     return this.db.transaction(async (tx) => {
-      const s = new _Conversations(tx, this.options), id2 = (0, import_node_crypto26.randomUUID)(), now2 = s.timestamp();
+      const s = new _Conversations(tx, this.options), id2 = (0, import_node_crypto28.randomUUID)(), now2 = s.timestamp();
       await s.access(owner);
       await tx.run(
         "INSERT INTO chat_threads (id, owner_profile_id, organization_id, last_activity_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -168299,10 +169782,10 @@ var Conversations = class _Conversations extends ChatStore {
       if (Number(count?.n) >= this.limits.concurrentRunsPerOwner)
         throw new ChatError("limit_exceeded");
     }
-    const messageId = (0, import_node_crypto26.randomUUID)(), runId = active?.id ?? (0, import_node_crypto26.randomUUID)(), now2 = this.timestamp();
+    const messageId = (0, import_node_crypto28.randomUUID)(), runId = active?.id ?? (0, import_node_crypto28.randomUUID)(), now2 = this.timestamp();
     const messageCreatedAt = await this.createdAt("chat_messages", id2);
     const blocks = [
-      { id: (0, import_node_crypto26.randomUUID)(), kind: "text", text: body.text, fallbackText: body.text, evidenceIds: [] }
+      { id: (0, import_node_crypto28.randomUUID)(), kind: "text", text: body.text, fallbackText: body.text, evidenceIds: [] }
     ];
     await this.db.run(
       `INSERT INTO chat_messages (id, thread_id, role, state, blocks_json, answers_question_id, client_request_id, created_at, updated_at) VALUES (?, ?, 'user', 'complete', ?, ?, ?, ?, ?)`,
@@ -168426,7 +169909,7 @@ var Conversations = class _Conversations extends ChatStore {
       );
       if (Number(count?.n) >= s.limits.concurrentRunsPerOwner)
         throw new ChatError("limit_exceeded");
-      const newId3 = (0, import_node_crypto26.randomUUID)();
+      const newId3 = (0, import_node_crypto28.randomUUID)();
       await s.db.run(
         `INSERT INTO chat_runs (id, thread_id, trigger_message_id, continued_from_run_id, state, limits_json, created_at, updated_at) VALUES (?, ?, ?, ?, 'queued', ?, ?, ?)`,
         [
@@ -168625,7 +170108,7 @@ init_projects();
 
 // ../packages/core/service/repository-reads.ts
 init_dist();
-var import_node_crypto27 = require("node:crypto");
+var import_node_crypto29 = require("node:crypto");
 init_registry();
 init_repository_paths();
 init_runner_queue_provider();
@@ -168819,7 +170302,7 @@ var defaultProviderFactory = ({ target, queue }) => new RunnerQueueProvider(
   queue
 );
 function repositoryReadIdempotencyKey(actorWorkspaceUserId2, operationId) {
-  const digest3 = (0, import_node_crypto27.createHash)("sha256").update(`${actorWorkspaceUserId2}
+  const digest3 = (0, import_node_crypto29.createHash)("sha256").update(`${actorWorkspaceUserId2}
 ${operationId}`).digest("hex").slice(0, 48);
   return `repository-read:${digest3}`;
 }
@@ -169849,10 +171332,10 @@ function classifyGeminiError(error53) {
 }
 
 // chat/gemini-runtime.ts
-var import_node_crypto29 = require("node:crypto");
+var import_node_crypto31 = require("node:crypto");
 
 // chat-worker.ts
-var import_node_crypto28 = require("node:crypto");
+var import_node_crypto30 = require("node:crypto");
 var ChatRuntimeFailure = class extends Error {
   constructor(failureCode) {
     super(failureCode);
@@ -169895,7 +171378,7 @@ var ChatWorker = class {
   lastRetentionAt = 0;
   stopping = false;
   active = /* @__PURE__ */ new Map();
-  id = (0, import_node_crypto28.randomUUID)();
+  id = (0, import_node_crypto30.randomUUID)();
   start() {
     if (this.timer) return;
     this.stopping = false;
@@ -169999,7 +171482,7 @@ var GeminiChatRuntime = class {
       provider: "gemini",
       model,
       checkpointVersion: GEMINI_CHECKPOINT_VERSION,
-      configDigest: (0, import_node_crypto29.createHash)("sha256").update(JSON.stringify({ model, SYSTEM_PROMPT_VERSION, SYSTEM_PROMPT })).digest("hex").slice(0, 32)
+      configDigest: (0, import_node_crypto31.createHash)("sha256").update(JSON.stringify({ model, SYSTEM_PROMPT_VERSION, SYSTEM_PROMPT })).digest("hex").slice(0, 32)
     };
   }
   options;
@@ -170714,10 +172197,11 @@ function connectionsConfigFromEnv(env3, publicBaseUrl, webReturnOrigin) {
     url2.hash = "";
     knowledgebase = { mcpUrl: url2.toString(), egressOrigins: [.../* @__PURE__ */ new Set([mcpOrigin, ...extra])] };
   }
-  const key = decodeEncryptionKey(env3.ACCOUNT_CONNECTIONS_ENCRYPTION_KEY);
+  const keyRing = keyRingFromEnv(env3);
   return {
     knowledgebase,
-    encryption: key ? { key, keyId: env3.ACCOUNT_CONNECTIONS_ENCRYPTION_KEY_ID?.trim() || "k1" } : null,
+    encryption: keyRing.current ? { key: keyRing.current.key, keyId: keyRing.current.id } : null,
+    keyRing,
     publicBaseUrl: publicBaseUrl.replace(/\/+$/, ""),
     webReturnOrigin
   };
@@ -170726,831 +172210,6 @@ var CLIENT_METADATA_PATH = "/oauth/clients/knowledgebase.json";
 var CALLBACK_PATH = "/api/connections/knowledgebase/callback";
 var MOBILE_RETURN_URL = "overlord://connections/callback";
 var WEB_RETURN_PATH = "/settings/connections";
-
-// connections/egress.ts
-var EgressError = class extends Error {
-  constructor(code, message2 = code) {
-    super(message2);
-    this.code = code;
-  }
-  code;
-};
-function assertEgress(url2, allowedOrigins) {
-  let parsed;
-  try {
-    parsed = new URL(url2);
-  } catch {
-    throw new EgressError("egress_denied");
-  }
-  if (parsed.protocol !== "https:" || parsed.username || parsed.password || !allowedOrigins.includes(parsed.origin))
-    throw new EgressError("egress_denied");
-  return parsed;
-}
-async function egressFetch(fetchImpl, allowedOrigins, url2, init2, bounds) {
-  assertEgress(url2, allowedOrigins);
-  const timeout = AbortSignal.timeout(bounds.timeoutMs);
-  const signal = bounds.signal ? AbortSignal.any([timeout, bounds.signal]) : timeout;
-  let response;
-  try {
-    response = await fetchImpl(url2, { ...init2, redirect: "manual", signal });
-  } catch {
-    throw new EgressError(timeout.aborted ? "timeout" : "network");
-  }
-  if (response.status >= 300 && response.status < 400) {
-    await response.body?.cancel().catch(() => void 0);
-    throw new EgressError("redirect");
-  }
-  const chunks = [];
-  let bytes = 0, truncated = false;
-  try {
-    const reader = response.body?.getReader();
-    while (reader) {
-      const { done, value: value2 } = await reader.read();
-      if (done) break;
-      if (bytes + value2.byteLength > bounds.maxBytes) {
-        chunks.push(value2.subarray(0, bounds.maxBytes - bytes));
-        bytes = bounds.maxBytes;
-        truncated = true;
-        await reader.cancel().catch(() => void 0);
-        break;
-      }
-      chunks.push(value2);
-      bytes += value2.byteLength;
-    }
-  } catch {
-    throw new EgressError(timeout.aborted ? "timeout" : "network");
-  }
-  return {
-    status: response.status,
-    headers: response.headers,
-    text: Buffer.concat(chunks).toString("utf8"),
-    truncated,
-    bytes
-  };
-}
-
-// connections/policy.ts
-var KNOWLEDGEBASE_TOOL_POLICY_VERSION = 1;
-var UUID = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$";
-var workspace = {
-  type: "string",
-  description: "Knowledgebase workspace slug, from list_workspaces.",
-  pattern: "^[a-z0-9][a-z0-9-]{0,62}$"
-};
-var nodeId = { type: "string", description: "Node UUID.", pattern: UUID };
-var path24 = {
-  type: "string",
-  description: "Workspace-relative document path.",
-  minLength: 1,
-  maxLength: 512
-};
-var limit = (max) => ({ type: "integer", minimum: 1, maximum: max });
-var cursor = { type: "string", maxLength: 512 };
-var object2 = (properties, required2 = []) => ({
-  type: "object",
-  properties,
-  required: required2,
-  additionalProperties: false
-});
-var REVIEWED_KNOWLEDGEBASE_TOOLS = [
-  {
-    name: "list_workspaces",
-    description: "List the Knowledgebase workspaces this connection can read.",
-    inputSchema: object2({})
-  },
-  {
-    name: "search",
-    description: "Search notes, people, companies, projects, and meetings in one Knowledgebase workspace. Returns matching nodes with ids and paths.",
-    inputSchema: object2(
-      {
-        workspace,
-        q: { type: "string", minLength: 1, maxLength: 500 },
-        type: { type: "string", maxLength: 64 },
-        path_prefix: { type: "string", maxLength: 512 },
-        limit: limit(25),
-        cursor
-      },
-      ["workspace", "q"]
-    )
-  },
-  {
-    name: "read_file",
-    description: "Read one Knowledgebase document by path, with its metadata and version.",
-    inputSchema: object2({ workspace, path: path24 }, ["workspace", "path"])
-  },
-  {
-    name: "get_related",
-    description: "Get a node and its typed relations to other nodes.",
-    inputSchema: object2({ workspace, node_id: nodeId }, ["workspace", "node_id"])
-  },
-  {
-    name: "list_children",
-    description: "List the children of a node, such as the notes under a project.",
-    inputSchema: object2(
-      {
-        workspace,
-        node_id: nodeId,
-        type: { type: "string", maxLength: 64 },
-        relation: { type: "string", maxLength: 64 },
-        category: { type: "string", enum: ["markdown", "resource"] },
-        limit: limit(50),
-        cursor
-      },
-      ["workspace", "node_id"]
-    )
-  },
-  {
-    name: "get_links",
-    description: "List the Markdown links into or out of a document.",
-    inputSchema: object2(
-      {
-        workspace,
-        path: path24,
-        node_id: nodeId,
-        direction: { type: "string", enum: ["outgoing", "incoming", "both"] }
-      },
-      ["workspace"]
-    )
-  },
-  {
-    name: "read_resource",
-    description: "Read a semantic resource (an entity page) as text.",
-    inputSchema: object2(
-      {
-        workspace,
-        resource_id: { ...nodeId, description: "Resource UUID." },
-        format: { type: "string", enum: ["text", "markdown"] }
-      },
-      ["workspace", "resource_id"]
-    )
-  },
-  {
-    name: "list_entities",
-    description: "List entities of a type, such as projects or people.",
-    inputSchema: object2(
-      { workspace, type: { type: "string", maxLength: 64 }, limit: limit(50), cursor },
-      ["workspace"]
-    )
-  }
-];
-var REVIEWED = new Map(REVIEWED_KNOWLEDGEBASE_TOOLS.map((tool) => [tool.name, tool]));
-function reviewedTool(name) {
-  return REVIEWED.get(name) ?? null;
-}
-function exposable(serverTool) {
-  const reviewed = reviewedTool(serverTool.name);
-  if (!reviewed) return null;
-  if (serverTool.annotations?.readOnlyHint !== true) return null;
-  if (serverTool.annotations?.destructiveHint === true) return null;
-  return reviewed;
-}
-function namespacedToolId(connectionId, tool) {
-  return `kb_${connectionId.replaceAll("-", "").slice(0, 12)}_${tool}`;
-}
-function parseToolId(id2) {
-  const match = /^kb_([0-9a-f]{12})_([a-z_]{1,48})$/.exec(id2);
-  return match ? { connectionPrefix: match[1], tool: match[2] } : null;
-}
-var MAX_ARGUMENT_BYTES = 4 * 1024;
-function validateArguments(schema2, value2, at = "arguments") {
-  switch (schema2.type) {
-    case "object": {
-      if (!value2 || typeof value2 !== "object" || Array.isArray(value2))
-        return `${at} must be an object`;
-      const record2 = value2;
-      for (const key of schema2.required ?? [])
-        if (record2[key] === void 0) return `${at}.${key} is required`;
-      for (const [key, item] of Object.entries(record2)) {
-        const child = schema2.properties?.[key];
-        if (!child) return `${at}.${key} is not allowed`;
-        const error53 = validateArguments(child, item, `${at}.${key}`);
-        if (error53) return error53;
-      }
-      return null;
-    }
-    case "string":
-      if (typeof value2 !== "string") return `${at} must be a string`;
-      if (schema2.minLength !== void 0 && value2.length < schema2.minLength)
-        return `${at} is too short`;
-      if (schema2.maxLength !== void 0 && value2.length > schema2.maxLength)
-        return `${at} is too long`;
-      if (schema2.pattern && !new RegExp(schema2.pattern).test(value2)) return `${at} is malformed`;
-      if (schema2.enum && !schema2.enum.includes(value2)) return `${at} is not an allowed value`;
-      return null;
-    case "integer":
-      if (!Number.isSafeInteger(value2)) return `${at} must be an integer`;
-      if (schema2.minimum !== void 0 && value2 < schema2.minimum)
-        return `${at} is too small`;
-      if (schema2.maximum !== void 0 && value2 > schema2.maximum)
-        return `${at} is too large`;
-      return null;
-    case "boolean":
-      return typeof value2 === "boolean" ? null : `${at} must be a boolean`;
-    case "array":
-      if (!Array.isArray(value2)) return `${at} must be an array`;
-      if (schema2.maxItems !== void 0 && value2.length > schema2.maxItems)
-        return `${at} has too many items`;
-      for (const [index, item] of value2.entries()) {
-        const error53 = schema2.items ? validateArguments(schema2.items, item, `${at}[${index}]`) : null;
-        if (error53) return error53;
-      }
-      return null;
-  }
-}
-
-// connections/service.ts
-init_dist();
-var import_node_crypto31 = require("node:crypto");
-
-// connections/oauth.ts
-var import_node_crypto30 = require("node:crypto");
-var OAuthError = class extends Error {
-  constructor(code) {
-    super(code);
-    this.code = code;
-  }
-  code;
-};
-var OAUTH_SCOPE = "openid offline_access";
-var METADATA_TTL_MS = 10 * 60 * 1e3;
-var METADATA_BYTES = 64 * 1024;
-var TOKEN_BYTES = 64 * 1024;
-var TIMEOUT_MS = 1e4;
-function pkcePair() {
-  const verifier = (0, import_node_crypto30.randomBytes)(32).toString("base64url");
-  return { verifier, challenge: (0, import_node_crypto30.createHash)("sha256").update(verifier).digest("base64url") };
-}
-function sameResource(a5, b5) {
-  return a5.replace(/\/+$/, "") === b5.replace(/\/+$/, "");
-}
-var KnowledgebaseOAuth = class {
-  constructor(options) {
-    this.options = options;
-  }
-  options;
-  metadata = null;
-  now() {
-    return this.options.now?.() ?? Date.now();
-  }
-  async json(url2, init2 = {}) {
-    const response = await egressFetch(this.options.fetch, this.options.egressOrigins, url2, init2, {
-      timeoutMs: TIMEOUT_MS,
-      maxBytes: init2.method === "POST" ? TOKEN_BYTES : METADATA_BYTES
-    });
-    let body = null;
-    if (!response.truncated) {
-      try {
-        const parsed = JSON.parse(response.text);
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed))
-          body = parsed;
-      } catch {
-        body = null;
-      }
-    }
-    return { status: response.status, body };
-  }
-  /** RFC 9728 protected-resource metadata, then RFC 8414 authorization-server metadata. */
-  async discover() {
-    if (this.metadata && this.now() - this.metadata.at < METADATA_TTL_MS)
-      return this.metadata.value;
-    try {
-      const resource = new URL(this.options.mcpUrl);
-      const prm = await this.json(
-        `${resource.origin}/.well-known/oauth-protected-resource${resource.pathname.replace(/\/+$/, "")}`
-      );
-      const servers = prm.body?.authorization_servers;
-      if (prm.status !== 200 || typeof prm.body?.resource !== "string" || !sameResource(prm.body.resource, this.options.mcpUrl) || !Array.isArray(servers) || typeof servers[0] !== "string")
-        throw new OAuthError("misconfigured");
-      const issuer = new URL(servers[0]);
-      const as = await this.json(
-        `${issuer.origin}/.well-known/oauth-authorization-server${issuer.pathname.replace(/\/+$/, "")}`
-      );
-      const body = as.body;
-      const methods2 = body?.code_challenge_methods_supported;
-      if (as.status !== 200 || !body || typeof body.authorization_endpoint !== "string" || typeof body.token_endpoint !== "string" || !Array.isArray(methods2) || !methods2.includes("S256"))
-        throw new OAuthError("misconfigured");
-      const value2 = {
-        issuer: String(body.issuer ?? issuer.toString()),
-        authorizationEndpoint: body.authorization_endpoint,
-        tokenEndpoint: body.token_endpoint,
-        revocationEndpoint: typeof body.revocation_endpoint === "string" ? body.revocation_endpoint : null
-      };
-      for (const endpoint of [
-        value2.authorizationEndpoint,
-        value2.tokenEndpoint,
-        ...value2.revocationEndpoint ? [value2.revocationEndpoint] : []
-      ]) {
-        const url2 = new URL(endpoint);
-        if (url2.protocol !== "https:" || !this.options.egressOrigins.includes(url2.origin))
-          throw new OAuthError("misconfigured");
-      }
-      this.metadata = { value: value2, at: this.now() };
-      return value2;
-    } catch (error53) {
-      if (error53 instanceof OAuthError) throw error53;
-      throw new OAuthError(error53 instanceof EgressError ? "unavailable" : "misconfigured");
-    }
-  }
-  async authorizeUrl(state2, challenge) {
-    const { authorizationEndpoint: authorizationEndpoint2 } = await this.discover();
-    const url2 = new URL(authorizationEndpoint2);
-    url2.search = new URLSearchParams({
-      response_type: "code",
-      client_id: this.options.clientId,
-      redirect_uri: this.options.redirectUri,
-      code_challenge: challenge,
-      code_challenge_method: "S256",
-      scope: OAUTH_SCOPE,
-      resource: this.options.mcpUrl,
-      state: state2
-    }).toString();
-    return url2.toString();
-  }
-  async token(params) {
-    const { tokenEndpoint: tokenEndpoint2 } = await this.discover();
-    let response;
-    try {
-      response = await this.json(tokenEndpoint2, {
-        method: "POST",
-        headers: {
-          "content-type": "application/x-www-form-urlencoded",
-          accept: "application/json"
-        },
-        body: new URLSearchParams({
-          ...params,
-          client_id: this.options.clientId,
-          resource: this.options.mcpUrl
-        }).toString()
-      });
-    } catch {
-      throw new OAuthError("unavailable");
-    }
-    const body = response.body;
-    if (response.status === 200 && typeof body?.access_token === "string") {
-      const number4 = (value2) => typeof value2 === "number" && Number.isFinite(value2) && value2 > 0 ? value2 : null;
-      return {
-        accessToken: body.access_token,
-        refreshToken: typeof body.refresh_token === "string" ? body.refresh_token : null,
-        expiresIn: number4(body.expires_in),
-        refreshExpiresIn: number4(body.refresh_token_expires_in),
-        scope: typeof body.scope === "string" ? body.scope : null
-      };
-    }
-    if (response.status >= 400 && response.status < 500 && ["invalid_grant", "invalid_client", "unauthorized_client"].includes(String(body?.error)))
-      throw new OAuthError("invalid_grant");
-    throw new OAuthError("unavailable");
-  }
-  exchangeCode(code, verifier) {
-    return this.token({
-      grant_type: "authorization_code",
-      code,
-      redirect_uri: this.options.redirectUri,
-      code_verifier: verifier
-    });
-  }
-  refresh(refreshToken2) {
-    return this.token({ grant_type: "refresh_token", refresh_token: refreshToken2 });
-  }
-  /** Best-effort RFC 7009 revocation; never throws. */
-  async revoke(token, hint) {
-    try {
-      const { revocationEndpoint } = await this.discover();
-      if (!revocationEndpoint) return false;
-      const response = await this.json(revocationEndpoint, {
-        method: "POST",
-        headers: { "content-type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          token,
-          token_type_hint: hint,
-          client_id: this.options.clientId
-        }).toString()
-      });
-      return response.status === 200;
-    } catch {
-      return false;
-    }
-  }
-};
-
-// connections/service.ts
-var ConnectionAccessError = class extends Error {
-  constructor(code) {
-    super(code);
-    this.code = code;
-  }
-  code;
-};
-var AUTHORIZATION_TTL_MS = 10 * 60 * 1e3;
-var MAX_OPEN_AUTHORIZATIONS = 5;
-var REFRESH_LEASE_MS = 15e3;
-var ACCESS_EXPIRY_SKEW_MS = 6e4;
-function credentialAad(row) {
-  return `overlord:account-connection:v1:${row.owner_profile_id}:${row.organization_id}:${row.provider}:${row.id}`;
-}
-function verifierAad(row, authorizationId) {
-  return `overlord:account-connection-authorization:v1:${row.owner_profile_id}:${row.organization_id}:${row.id}:${authorizationId}`;
-}
-function connectionDto2(row) {
-  let workspaces = [];
-  try {
-    workspaces = JSON.parse(row.authorized_workspaces_json);
-  } catch {
-    workspaces = [];
-  }
-  return {
-    id: row.id,
-    provider: row.provider,
-    organizationId: row.organization_id,
-    serverUrl: row.server_url,
-    state: row.state,
-    authorizedWorkspaces: Array.isArray(workspaces) ? workspaces.filter((w) => typeof w === "string") : [],
-    toolPolicyVersion: row.tool_policy_version,
-    lastErrorCode: row.last_error_code,
-    connectedAt: row.connected_at,
-    updatedAt: row.updated_at,
-    revision: row.revision
-  };
-}
-var AccountConnections = class {
-  constructor(db, options) {
-    this.db = db;
-    this.options = options;
-  }
-  db;
-  options;
-  lockOwner = (0, import_node_crypto31.randomUUID)();
-  now() {
-    return this.options.now?.() ?? Date.now();
-  }
-  timestamp(offsetMs = 0) {
-    return new Date(this.now() + offsetMs).toISOString();
-  }
-  sleep(ms) {
-    return this.options.sleep?.(ms) ?? new Promise((resolve) => setTimeout(resolve, ms));
-  }
-  ready() {
-    const { knowledgebase, encryption } = this.options.config;
-    if (!knowledgebase || !encryption || !this.options.oauth)
-      throw new ChatError("provider_not_ready");
-    return { knowledgebase, encryption, oauth: this.options.oauth };
-  }
-  async access(owner) {
-    await new ChatStore(this.db).access(owner);
-  }
-  /** The caller's row, or null. Never returns another owner's or organization's row. */
-  async row(owner, id2) {
-    return await this.db.get(
-      "SELECT * FROM account_connections WHERE id = ? AND owner_profile_id = ? AND organization_id = ?",
-      [id2, owner.profileId, owner.organizationId]
-    ) ?? null;
-  }
-  /** Live (not disconnected) connections the caller owns in the organization. */
-  async liveRows(owner, provider) {
-    return this.db.all(
-      `SELECT * FROM account_connections WHERE owner_profile_id = ? AND organization_id = ? AND state <> 'disconnected'${provider ? " AND provider = ?" : ""} ORDER BY created_at, id`,
-      [owner.profileId, owner.organizationId, ...provider ? [provider] : []]
-    );
-  }
-  async list(owner) {
-    await this.access(owner);
-    const items = [];
-    for (const row of await this.liveRows(owner)) {
-      const now2 = this.timestamp();
-      if (row.state === "connected" && row.access_expires_at !== null && row.access_expires_at <= now2 && row.refresh_expires_at !== null && row.refresh_expires_at <= now2) {
-        await this.requireReauthorization(row.id, "grant_expired");
-        const fresh = await this.row(owner, row.id);
-        if (fresh) items.push(connectionDto2(fresh));
-        continue;
-      }
-      items.push(connectionDto2(row));
-    }
-    return { items };
-  }
-  async start(owner, body) {
-    const input = body;
-    if (!input || !ACCOUNT_CONNECTION_PROVIDERS.includes(input.provider) || input.returnTo !== "mobile" && input.returnTo !== "web")
-      throw new ChatError("invalid_request");
-    const returnTo = input.returnTo;
-    const { knowledgebase, encryption, oauth } = this.ready();
-    await this.access(owner);
-    const state2 = (0, import_node_crypto31.randomBytes)(32).toString("base64url");
-    const { verifier, challenge } = pkcePair();
-    let authorizeUrl;
-    try {
-      authorizeUrl = await oauth.authorizeUrl(state2, challenge);
-    } catch {
-      throw new ChatError("provider_not_ready");
-    }
-    const authorizationId = (0, import_node_crypto31.randomUUID)();
-    const expiresAt = this.timestamp(AUTHORIZATION_TTL_MS);
-    const connectionId = await this.db.transaction(async (tx) => {
-      const now2 = this.timestamp();
-      let row = await tx.get(
-        `SELECT * FROM account_connections WHERE owner_profile_id = ? AND organization_id = ? AND provider = ? AND server_url = ? AND state <> 'disconnected'`,
-        [owner.profileId, owner.organizationId, "knowledgebase", knowledgebase.mcpUrl]
-      );
-      if (!row) {
-        const id2 = (0, import_node_crypto31.randomUUID)();
-        await tx.run(
-          `INSERT INTO account_connections (id, owner_profile_id, organization_id, provider, server_url, state, tool_policy_version, created_at, updated_at) VALUES (?, ?, ?, 'knowledgebase', ?, 'pending', ?, ?, ?)`,
-          [
-            id2,
-            owner.profileId,
-            owner.organizationId,
-            knowledgebase.mcpUrl,
-            KNOWLEDGEBASE_TOOL_POLICY_VERSION,
-            now2,
-            now2
-          ]
-        );
-        row = await tx.get("SELECT * FROM account_connections WHERE id = ?", [
-          id2
-        ]);
-      }
-      await tx.run(
-        "DELETE FROM account_connection_authorizations WHERE connection_id = ? AND (consumed_at IS NOT NULL OR expires_at <= ?)",
-        [row.id, now2]
-      );
-      const open = await tx.get(
-        "SELECT COUNT(*) AS n FROM account_connection_authorizations WHERE connection_id = ?",
-        [row.id]
-      );
-      if (Number(open?.n ?? 0) >= MAX_OPEN_AUTHORIZATIONS) throw new ChatError("limit_exceeded");
-      await tx.run(
-        "INSERT INTO account_connection_authorizations (id, connection_id, state_hash, pkce_verifier_ciphertext, return_to, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        [
-          authorizationId,
-          row.id,
-          hashSecret(state2),
-          sealSecret({
-            plaintext: verifier,
-            key: encryption.key,
-            aad: verifierAad(row, authorizationId)
-          }),
-          returnTo,
-          expiresAt,
-          now2
-        ]
-      );
-      return row.id;
-    });
-    return { connectionId, authorizeUrl, expiresAt };
-  }
-  /** Public OAuth callback. Consumes the single-use state; never throws for user-facing input. */
-  async complete(query) {
-    const state2 = typeof query.state === "string" ? query.state : "";
-    if (!/^[A-Za-z0-9_-]{40,80}$/.test(state2)) return { status: "expired", returnTo: null };
-    let ready;
-    try {
-      ready = this.ready();
-    } catch {
-      return { status: "failed", returnTo: null };
-    }
-    const now2 = this.timestamp();
-    const consumed = await this.db.transaction(async (tx) => {
-      const auth3 = await tx.get(
-        "SELECT * FROM account_connection_authorizations WHERE state_hash = ?",
-        [hashSecret(state2)]
-      );
-      if (!auth3) return null;
-      const result2 = await tx.run(
-        "UPDATE account_connection_authorizations SET consumed_at = ? WHERE id = ? AND consumed_at IS NULL AND expires_at > ?",
-        [now2, auth3.id, now2]
-      );
-      const row2 = await tx.get(
-        "SELECT * FROM account_connections WHERE id = ? AND state <> 'disconnected'",
-        [auth3.connection_id]
-      );
-      return { auth: auth3, row: row2, fresh: result2.changes === 1 };
-    });
-    if (!consumed) return { status: "expired", returnTo: null };
-    const returnTo = consumed.auth.return_to;
-    const { row, auth: auth2 } = consumed;
-    if (!consumed.fresh || !row) return { status: "expired", returnTo };
-    if (query.error !== void 0) {
-      await this.recordError(row.id, "authorization_denied");
-      return { status: "denied", returnTo };
-    }
-    const code = typeof query.code === "string" && query.code.length <= 2048 ? query.code : "";
-    if (!code) return { status: "failed", returnTo };
-    try {
-      await this.access({ profileId: row.owner_profile_id, organizationId: row.organization_id });
-    } catch {
-      return { status: "failed", returnTo };
-    }
-    let tokens;
-    try {
-      const verifier = openSecret({
-        envelope: auth2.pkce_verifier_ciphertext,
-        key: ready.encryption.key,
-        aad: verifierAad(row, auth2.id)
-      });
-      tokens = await ready.oauth.exchangeCode(code, verifier);
-    } catch (error53) {
-      await this.recordError(
-        row.id,
-        error53 instanceof OAuthError ? `token_${error53.code}` : "token_exchange_failed"
-      );
-      return { status: "failed", returnTo };
-    }
-    let workspaces = null;
-    try {
-      workspaces = await this.options.listWorkspaces?.(tokens.accessToken) ?? null;
-    } catch {
-      workspaces = null;
-    }
-    const stored = await this.db.transaction(async (tx) => {
-      const at = this.timestamp();
-      const result2 = await tx.run(
-        `UPDATE account_connections SET state = 'connected', credential_ciphertext = ?, credential_key_id = ?, credential_revision = credential_revision + 1, access_expires_at = ?, refresh_expires_at = ?, authorized_workspaces_json = ?, tool_policy_version = ?, refresh_lock_owner = NULL, refresh_lock_until = NULL, last_refreshed_at = ?, last_error_code = NULL, connected_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND state <> 'disconnected'`,
-        [
-          this.seal(row, { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken }),
-          ready.encryption.keyId,
-          tokens.expiresIn ? this.timestamp(tokens.expiresIn * 1e3) : null,
-          tokens.refreshExpiresIn ? this.timestamp(tokens.refreshExpiresIn * 1e3) : null,
-          JSON.stringify(workspaces ?? []),
-          KNOWLEDGEBASE_TOOL_POLICY_VERSION,
-          at,
-          at,
-          at,
-          row.id
-        ]
-      );
-      return result2.changes === 1;
-    });
-    if (!stored) {
-      await this.revokeUpstream({
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken
-      });
-      return { status: "failed", returnTo };
-    }
-    return { status: "connected", returnTo };
-  }
-  async disconnect(owner, id2) {
-    await this.access(owner);
-    const row = await this.row(owner, id2);
-    if (!row || row.state === "disconnected") throw new ChatError("not_found");
-    let credentials = null;
-    try {
-      credentials = this.open(row);
-    } catch {
-      credentials = null;
-    }
-    await this.db.transaction(async (tx) => {
-      const now2 = this.timestamp();
-      await tx.run(
-        `UPDATE account_connections SET state = 'disconnected', credential_ciphertext = NULL, credential_key_id = NULL, access_expires_at = NULL, refresh_expires_at = NULL, refresh_lock_owner = NULL, refresh_lock_until = NULL, disconnected_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ?`,
-        [now2, now2, id2]
-      );
-      await tx.run("DELETE FROM account_connection_authorizations WHERE connection_id = ?", [id2]);
-    });
-    if (credentials) await this.revokeUpstream(credentials);
-    await this.options.onAccessLost?.(id2);
-    return connectionDto2(await this.row(owner, id2));
-  }
-  /**
-   * A current access token for the caller's connection. Refresh is serialized
-   * per connection by a database lease; the rotated credential is persisted
-   * before it is returned. Pass `staleRevision` after the provider rejected a
-   * token so concurrent callers coalesce on one refresh.
-   */
-  async accessToken(owner, id2, options = {}) {
-    let ready;
-    try {
-      ready = this.ready();
-    } catch {
-      throw new ConnectionAccessError("unavailable");
-    }
-    const deadline = this.now() + REFRESH_LEASE_MS * 2;
-    for (; ; ) {
-      if (options.signal?.aborted) throw new ConnectionAccessError("unavailable");
-      const row = await this.row(owner, id2);
-      if (!row || row.state === "disconnected") throw new ConnectionAccessError("not_found");
-      if (row.state !== "connected") throw new ConnectionAccessError("reauthorization_required");
-      let credentials;
-      try {
-        if (row.credential_key_id !== ready.encryption.keyId) throw new SecretEnvelopeError();
-        credentials = this.open(row);
-      } catch {
-        await this.requireReauthorization(id2, "credential_unreadable");
-        throw new ConnectionAccessError("reauthorization_required");
-      }
-      const stale = options.staleRevision !== void 0 && row.credential_revision <= options.staleRevision;
-      const fresh = row.access_expires_at === null || Date.parse(row.access_expires_at) - ACCESS_EXPIRY_SKEW_MS > this.now();
-      if (!stale && fresh)
-        return {
-          accessToken: credentials.accessToken,
-          credentialRevision: row.credential_revision,
-          row
-        };
-      if (!credentials.refreshToken) {
-        await this.requireReauthorization(id2, "grant_expired");
-        throw new ConnectionAccessError("reauthorization_required");
-      }
-      const leased = await this.db.run(
-        `UPDATE account_connections SET refresh_lock_owner = ?, refresh_lock_until = ? WHERE id = ? AND state = 'connected' AND credential_revision = ? AND (refresh_lock_owner IS NULL OR refresh_lock_until <= ?)`,
-        [
-          this.lockOwner,
-          this.timestamp(REFRESH_LEASE_MS),
-          id2,
-          row.credential_revision,
-          this.timestamp()
-        ]
-      );
-      if (leased.changes === 1) {
-        await this.refreshLeased(row, credentials.refreshToken, ready);
-        continue;
-      }
-      if (this.now() > deadline) throw new ConnectionAccessError("unavailable");
-      await this.sleep(100);
-    }
-  }
-  async refreshLeased(row, refreshToken2, ready) {
-    let tokens;
-    try {
-      tokens = await ready.oauth.refresh(refreshToken2);
-    } catch (error53) {
-      if (error53 instanceof OAuthError && error53.code === "invalid_grant") {
-        await this.requireReauthorization(row.id, "invalid_grant", this.lockOwner);
-        throw new ConnectionAccessError("reauthorization_required");
-      }
-      await this.db.run(
-        "UPDATE account_connections SET refresh_lock_owner = NULL, refresh_lock_until = NULL, last_error_code = ? WHERE id = ? AND refresh_lock_owner = ?",
-        ["refresh_unavailable", row.id, this.lockOwner]
-      );
-      throw new ConnectionAccessError("unavailable");
-    }
-    const now2 = this.timestamp();
-    await this.db.run(
-      `UPDATE account_connections SET credential_ciphertext = ?, credential_key_id = ?, credential_revision = credential_revision + 1, access_expires_at = ?, refresh_expires_at = COALESCE(?, refresh_expires_at), last_refreshed_at = ?, last_error_code = NULL, refresh_lock_owner = NULL, refresh_lock_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'connected' AND refresh_lock_owner = ? AND credential_revision = ?`,
-      [
-        this.seal(row, {
-          accessToken: tokens.accessToken,
-          refreshToken: tokens.refreshToken ?? refreshToken2
-        }),
-        ready.encryption.keyId,
-        tokens.expiresIn ? this.timestamp(tokens.expiresIn * 1e3) : null,
-        tokens.refreshExpiresIn ? this.timestamp(tokens.refreshExpiresIn * 1e3) : null,
-        now2,
-        now2,
-        row.id,
-        this.lockOwner,
-        row.credential_revision
-      ]
-    );
-  }
-  /** Marks the connection unusable until the owner signs in again and erases its credential. */
-  async requireReauthorization(id2, code, lockOwner) {
-    const result2 = await this.db.run(
-      `UPDATE account_connections SET state = 'reauthorization_required', credential_ciphertext = NULL, credential_key_id = NULL, access_expires_at = NULL, refresh_lock_owner = NULL, refresh_lock_until = NULL, last_error_code = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'connected'${lockOwner ? " AND refresh_lock_owner = ?" : ""}`,
-      [code, this.timestamp(), id2, ...lockOwner ? [lockOwner] : []]
-    );
-    if (result2.changes === 1) await this.options.onAccessLost?.(id2);
-  }
-  async setAuthorizedWorkspaces(id2, workspaces) {
-    await this.db.run(
-      `UPDATE account_connections SET authorized_workspaces_json = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'connected' AND authorized_workspaces_json <> ?`,
-      [JSON.stringify(workspaces), this.timestamp(), id2, JSON.stringify(workspaces)]
-    );
-  }
-  async recordError(id2, code) {
-    await this.db.run(
-      "UPDATE account_connections SET last_error_code = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
-      [code, this.timestamp(), id2]
-    );
-  }
-  seal(row, credentials) {
-    const { encryption } = this.ready();
-    return sealSecret({
-      plaintext: JSON.stringify(credentials),
-      key: encryption.key,
-      aad: credentialAad(row)
-    });
-  }
-  open(row) {
-    const { encryption } = this.ready();
-    if (!row.credential_ciphertext) throw new SecretEnvelopeError();
-    const value2 = JSON.parse(
-      openSecret({
-        envelope: row.credential_ciphertext,
-        key: encryption.key,
-        aad: credentialAad(row)
-      })
-    );
-    if (typeof value2.accessToken !== "string") throw new SecretEnvelopeError();
-    return {
-      accessToken: value2.accessToken,
-      refreshToken: typeof value2.refreshToken === "string" ? value2.refreshToken : null
-    };
-  }
-  async revokeUpstream(credentials) {
-    const oauth = this.options.oauth;
-    if (!oauth) return;
-    if (credentials.refreshToken) await oauth.revoke(credentials.refreshToken, "refresh_token");
-    await oauth.revoke(credentials.accessToken, "access_token");
-  }
-};
 
 // connections/mcp-client.ts
 var KNOWLEDGEBASE_BOUNDS = {
@@ -171852,7 +172511,7 @@ var KnowledgebaseMcp = class {
     }
   }
   async workspaceAuthorized(owner, row, workspace2, signal) {
-    if (connectionDto2(row).authorizedWorkspaces.includes(workspace2)) return true;
+    if (connectionDto(row).authorizedWorkspaces.includes(workspace2)) return true;
     const refreshed = await this.authorized(
       owner,
       row.id,
@@ -172040,17 +172699,17 @@ function createConnectionsRuntime(options) {
   );
   const fetchImpl = options.fetch ?? ((url2, init2) => fetch(url2, init2));
   const clientId = `${config4.publicBaseUrl}${CLIENT_METADATA_PATH}`;
-  const redirectUri = `${config4.publicBaseUrl}${CALLBACK_PATH}`;
+  const redirectUri2 = `${config4.publicBaseUrl}${CALLBACK_PATH}`;
   const oauth = config4.knowledgebase ? new KnowledgebaseOAuth({
     ...config4.knowledgebase,
     clientId,
-    redirectUri,
+    redirectUri: redirectUri2,
     fetch: fetchImpl,
     now: options.now
   }) : null;
   let knowledgebase = null;
   let checkSource = composeSourceCheckers({ ...options.checkers });
-  const connections = new AccountConnections(options.db, {
+  const connections3 = new AccountConnections(options.db, {
     config: config4,
     oauth,
     now: options.now,
@@ -172066,7 +172725,7 @@ function createConnectionsRuntime(options) {
   if (config4.knowledgebase)
     knowledgebase = new KnowledgebaseMcp({
       ...config4.knowledgebase,
-      connections,
+      connections: connections3,
       fetch: fetchImpl,
       now: options.now
     });
@@ -172076,7 +172735,7 @@ function createConnectionsRuntime(options) {
       knowledgebase: knowledgebaseSourceChecker(
         knowledgebase,
         async (owner, id2) => {
-          const row = await connections.row(owner, id2);
+          const row = await connections3.row(owner, id2);
           return row ? { state: row.state } : null;
         },
         { ttlMs: options.sourceCheckTtlMs, now: options.now }
@@ -172085,7 +172744,11 @@ function createConnectionsRuntime(options) {
   });
   return {
     config: config4,
-    connections,
+    connections: connections3,
+    profiles: new ProfileConnections(options.db, config4.keyRing, {
+      now: options.now,
+      sleep: options.sleep
+    }),
     knowledgebase,
     get checkSource() {
       return checkSource;
@@ -172094,7 +172757,7 @@ function createConnectionsRuntime(options) {
       client_id: clientId,
       client_name: "Overlord",
       client_uri: config4.publicBaseUrl,
-      redirect_uris: [redirectUri],
+      redirect_uris: [redirectUri2],
       grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],
       token_endpoint_auth_method: "none",
@@ -172105,6 +172768,16 @@ function createConnectionsRuntime(options) {
 
 // connections/routes.ts
 var import_express = __toESM(require_express2(), 1);
+function knowledgebaseStatus(cloud, runtime) {
+  const reason = !cloud ? "not_offered_on_edition" : !runtime.config.knowledgebase ? "not_configured" : !runtime.config.encryption ? "encryption_not_configured" : null;
+  return {
+    provider: "knowledgebase",
+    scope: "organization",
+    credentialKind: "oauth",
+    available: reason === null,
+    reason
+  };
+}
 function sendError(res, error53) {
   if (error53 instanceof ChatError)
     res.status(error53.status).json({ error: error53.message, code: error53.code });
@@ -172118,21 +172791,58 @@ function createConnectionsRouter(options) {
     if (!value2) throw new ChatError("not_found");
     return value2;
   };
+  const profile = async () => {
+    const value2 = options.profile ? await options.profile() : options.owner()?.profileId ?? null;
+    if (!value2) throw new ChatError("not_found");
+    return value2;
+  };
+  const listAll = async () => {
+    const runtime = options.runtime();
+    const cloud = options.cloud();
+    const items = [];
+    const organizationOwner = cloud ? options.owner() : null;
+    if (organizationOwner) items.push(...(await runtime.connections.list(organizationOwner)).items);
+    items.push(...await runtime.profiles.list(await profile()));
+    return {
+      items,
+      providers: [knowledgebaseStatus(cloud, runtime), ...runtime.profiles.providers()]
+    };
+  };
   const route = (fn) => (req, res) => {
     res.set("Cache-Control", "no-store");
     void Promise.resolve().then(() => fn(req)).then((value2) => res.json(value2)).catch((error53) => sendError(res, error53));
   };
   router2.get(
     "/",
-    route(() => options.runtime().connections.list(owner()))
+    route(
+      (req) => (
+        // The default listing stays exactly v152 (organization-scoped, Cloud-only) for older clients.
+        req.query.scope === "all" ? listAll() : options.runtime().connections.list(owner())
+      )
+    )
+  );
+  router2.post(
+    "/api-keys",
+    route(async (req) => options.runtime().profiles.setApiKey(await profile(), req.body ?? null))
   );
   router2.post(
     "/",
-    route((req) => options.runtime().connections.start(owner(), req.body ?? null))
+    route(async (req) => {
+      if (profileConnectionProvider(req.body?.provider)?.oauth)
+        return options.runtime().profiles.startOAuth(await profile(), req.body);
+      return options.runtime().connections.start(owner(), req.body ?? null);
+    })
   );
   router2.delete(
     "/:id",
-    route((req) => options.runtime().connections.disconnect(owner(), String(req.params.id)))
+    route(async (req) => {
+      const id2 = String(req.params.id);
+      const runtime = options.runtime();
+      const profileId = await profile();
+      if (await runtime.profiles.row(profileId, id2))
+        return runtime.profiles.disconnect(profileId, id2);
+      return runtime.connections.disconnect(owner(), id2);
+    })
   );
   return router2;
 }
@@ -172172,6 +172882,64 @@ function createConnectionsPublicRouter(options) {
     });
   });
   return router2;
+}
+function escapeHtml2(value2) {
+  return value2.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
+}
+function profileCompletionPage(label, status) {
+  const name = escapeHtml2(label);
+  const text = status === "connected" ? `${name} is connected. You can return to Overlord.` : status === "denied" ? `${name} access was not granted. You can return to Overlord.` : status === "expired" ? "This sign-in link has expired or was already used. Start again from Overlord." : `${name} could not be connected. Start again from Overlord.`;
+  return `<!doctype html><meta name="viewport" content="width=device-width"><title>${name} connection</title><p>${text}</p>`;
+}
+function profileCallbackTarget(provider, outcome, webReturnOrigin) {
+  const returnUrl = outcome.returnUrl;
+  if (returnUrl && !returnUrl.startsWith("/")) {
+    try {
+      const target2 = new URL(returnUrl);
+      target2.searchParams.set(`${provider}Connection`, outcome.status);
+      return target2;
+    } catch {
+      return null;
+    }
+  }
+  const target = outcome.returnTo === "mobile" ? new URL(MOBILE_RETURN_URL) : outcome.returnTo === "web" && webReturnOrigin ? new URL(returnUrl ?? WEB_RETURN_PATH, webReturnOrigin) : null;
+  if (!target) return null;
+  target.searchParams.set("provider", provider);
+  target.searchParams.set("status", outcome.status);
+  return target;
+}
+function createProfileConnectionCallbackHandler(options) {
+  return (req, res) => {
+    res.set({ "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
+    const failed = {
+      status: "failed",
+      returnTo: null,
+      returnUrl: null,
+      connectionId: null,
+      errorCode: null
+    };
+    void Promise.resolve().then(
+      () => options.runtime().profiles.completeOAuth(options.provider, {
+        code: req.query.code,
+        state: req.query.state,
+        error: req.query.error
+      })
+    ).catch(() => failed).then((outcome) => {
+      let webOrigin = null;
+      try {
+        webOrigin = options.runtime().config.webReturnOrigin;
+      } catch {
+        webOrigin = null;
+      }
+      const target = profileCallbackTarget(options.provider, outcome, webOrigin);
+      if (target) {
+        res.redirect(302, target.toString());
+        return;
+      }
+      const label = profileConnectionProvider(options.provider)?.label ?? options.provider;
+      res.status(outcome.status === "connected" ? 200 : 400).type("html").send(profileCompletionPage(label, outcome.status));
+    });
+  };
 }
 
 // ../packages/core/service/execution-target-migration.ts
@@ -173083,6 +173851,29 @@ async function sendRunnerClaimResponse({
 // ext/everhour/routes.ts
 var import_express2 = __toESM(require_express2(), 1);
 
+// connections/alias-telemetry.ts
+var counts = /* @__PURE__ */ new Map();
+var LOG_INTERVAL_MS = 60 * 60 * 1e3;
+var lastLoggedAt = Date.now();
+function clientFamily(req) {
+  const declared = req.get("x-overlord-client")?.trim().toLowerCase();
+  if (declared && /^[a-z0-9_-]{1,32}$/.test(declared)) return declared;
+  const agent = req.get("user-agent") ?? "";
+  if (/OverlordMobile|CFNetwork|Darwin/i.test(agent)) return "mobile";
+  if (/Electron/i.test(agent)) return "desktop";
+  if (/Mozilla/i.test(agent)) return "web";
+  return "other";
+}
+function recordConnectionAliasHit(route, req, now2 = Date.now()) {
+  const key = `${req.method} ${route} ${clientFamily(req)}`;
+  counts.set(key, (counts.get(key) ?? 0) + 1);
+  if (now2 - lastLoggedAt < LOG_INTERVAL_MS) return;
+  lastLoggedAt = now2;
+  const summary = [...counts.entries()].map(([k5, n3]) => `${k5}=${n3}`).join(", ");
+  counts.clear();
+  console.warn(`[connections] legacy alias hits in the last hour: ${summary}`);
+}
+
 // ext/resource-routes.ts
 function projectRoute(permission, fn) {
   return async (req) => {
@@ -173100,40 +173891,52 @@ function missionRoute(permission, fn) {
 // ext/everhour/service.ts
 init_db();
 
-// ext/everhour/crypto.ts
-function everhourEncryptionKeyFromEnv() {
-  return decodeEncryptionKey(process.env.EVERHOUR_API_KEY_ENCRYPTION_KEY) ?? decodeEncryptionKey(process.env.GITHUB_USER_TOKEN_ENCRYPTION_KEY);
-}
-function requireEverhourEncryptionKey() {
-  const key = everhourEncryptionKeyFromEnv();
-  if (!key) {
-    throw new ApiError(
-      503,
-      "Everhour API-key encryption is not configured on this Overlord server."
-    );
-  }
-  return key;
-}
-function apiKeyAad(profileId) {
-  return `overlord:everhour-user-key:v1:${profileId}:api-key`;
-}
-function encryptEverhourApiKey({
-  apiKey,
-  profileId,
-  key
-}) {
-  return sealSecret({ plaintext: apiKey, key, aad: apiKeyAad(profileId) });
-}
-function decryptEverhourApiKey({
-  envelope: envelope2,
-  profileId,
-  key
-}) {
-  try {
-    return openSecret({ envelope: envelope2, key, aad: apiKeyAad(profileId) });
-  } catch {
-    throw new ApiError(503, "The stored Everhour connection cannot be decrypted.");
-  }
+// ext/everhour/connection-provider.ts
+var EVERHOUR_SERVER_URL = "https://api.everhour.com";
+function registerEverhourConnectionProvider(validateApiKey) {
+  registerProfileConnectionProvider({
+    provider: "everhour",
+    serverUrl: EVERHOUR_SERVER_URL,
+    credentialKind: "api_key",
+    validateApiKey,
+    legacy: {
+      async find(db, profileId) {
+        const row = await db.get(
+          `SELECT id, api_key_ciphertext, account_id, account_name, last_validated_at, created_at, updated_at
+             FROM ext_everhour_user_connections
+            WHERE profile_id = ? AND deleted_at IS NULL`,
+          [profileId]
+        );
+        if (!row) return null;
+        return {
+          id: row.id,
+          ciphertext: row.api_key_ciphertext,
+          format: "everhour-user-key-v1",
+          keyId: EVERHOUR_ENV_KEY_ID,
+          account: { id: row.account_id, label: row.account_name },
+          lastValidatedAt: row.last_validated_at,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at
+        };
+      },
+      async isLive(db, legacyId) {
+        return Boolean(
+          await db.get(
+            "SELECT 1 AS present FROM ext_everhour_user_connections WHERE id = ? AND deleted_at IS NULL",
+            [legacyId]
+          )
+        );
+      },
+      async tombstone(db, profileId, at) {
+        await db.run(
+          `UPDATE ext_everhour_user_connections
+              SET deleted_at = ?, updated_at = ?, api_key_ciphertext = 'revoked:v1', revision = revision + 1
+            WHERE profile_id = ? AND deleted_at IS NULL`,
+          [at, at, profileId]
+        );
+      }
+    }
+  });
 }
 
 // ext/everhour/service.ts
@@ -173208,10 +174011,10 @@ async function requireActorProfileId(client = requireDatabaseClient()) {
   return profileId;
 }
 function normalizeRecord(raw) {
-  const seconds = typeof raw.time === "number" ? raw.time : raw.duration ?? 0;
+  const seconds2 = typeof raw.time === "number" ? raw.time : raw.duration ?? 0;
   return {
     id: String(raw.id ?? ""),
-    timeSeconds: seconds,
+    timeSeconds: seconds2,
     date: raw.date ?? "",
     comment: raw.comment ?? null
   };
@@ -173227,23 +174030,25 @@ function unwrapArray(payload) {
   return [];
 }
 var PROJECT_GENERAL_TASK_NAME = "general";
-async function readUserConnection(profileId, client = requireDatabaseClient()) {
-  const row = await client.get(
-    `SELECT id, profile_id, api_key_ciphertext, account_id, account_name, revision
-       FROM ext_everhour_user_connections
-      WHERE profile_id = ? AND deleted_at IS NULL`,
-    [profileId]
-  );
-  return row ?? null;
+var ENCRYPTION_NOT_CONFIGURED = "Everhour API-key encryption is not configured on this Overlord server.";
+function connections2(client = requireDatabaseClient()) {
+  return profileConnections(client);
 }
-async function decryptUserConnectionApiKey(row) {
-  const key = requireEverhourEncryptionKey();
-  return decryptEverhourApiKey({
-    envelope: row.api_key_ciphertext,
-    profileId: row.profile_id,
-    key
-  });
+function everhourAccount(user) {
+  return {
+    id: user?.id !== void 0 && user.id !== null ? String(user.id) : null,
+    label: user?.name ?? null
+  };
 }
+registerEverhourConnectionProvider(async (apiKey) => {
+  try {
+    return everhourAccount(await everhourFetch(apiKey, "/users/me"));
+  } catch (err) {
+    if (err instanceof ApiError && err.status >= 400 && err.status < 500)
+      throw new ProviderCredentialError("rejected", err.status, err.message);
+    throw new ProviderCredentialError("unavailable");
+  }
+});
 async function connectionActorsAreUnambiguously({
   client,
   connectionId,
@@ -173269,8 +174074,8 @@ async function connectionActorsAreUnambiguously({
   return true;
 }
 async function adoptUnambiguousWorkspaceConnection(profileId, client) {
-  const encryptionKey = everhourEncryptionKeyFromEnv();
-  if (!encryptionKey) return null;
+  const store = connections2(client);
+  if (!store.providers().some((p3) => p3.provider === "everhour" && p3.available)) return null;
   const candidates = await client.all(
     `SELECT c.id, c.workspace_id, c.api_key_secret, c.account_id, c.account_name, c.revision
        FROM ext_everhour_workspace_connections c
@@ -173288,24 +174093,16 @@ async function adoptUnambiguousWorkspaceConnection(profileId, client) {
   const secrets = new Set(adoptable.map((row) => row.api_key_secret));
   if (secrets.size !== 1) return null;
   const source = adoptable[0];
-  const now2 = nowIso2();
-  const ciphertext = encryptEverhourApiKey({
-    apiKey: source.api_key_secret,
-    profileId,
-    key: encryptionKey
+  await store.storeApiKey(profileId, "everhour", source.api_key_secret, {
+    id: source.account_id,
+    label: source.account_name
   });
-  await client.run(
-    `INSERT INTO ext_everhour_user_connections
-       (id, profile_id, api_key_ciphertext, account_id, account_name,
-        last_validated_at, created_at, updated_at, revision)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-    [newId2(), profileId, ciphertext, source.account_id, source.account_name, now2, now2, now2]
-  );
+  const now2 = nowIso2();
   for (const row of adoptable) {
     const revision2 = row.revision + 1;
     await client.run(
       `UPDATE ext_everhour_workspace_connections
-          SET deleted_at = ?, updated_at = ?, revision = ?
+          SET deleted_at = ?, updated_at = ?, api_key_secret = 'revoked:v1', revision = ?
         WHERE id = ? AND revision = ?`,
       [now2, now2, revision2, row.id, row.revision]
     );
@@ -173321,93 +174118,67 @@ async function adoptUnambiguousWorkspaceConnection(profileId, client) {
       client
     );
   }
-  return readUserConnection(profileId, client);
+  return store.find(profileId, "everhour");
 }
 async function readActorUserConnection(client = requireDatabaseClient()) {
   const profileId = await requireActorProfileId(client);
-  return await readUserConnection(profileId, client) ?? await adoptUnambiguousWorkspaceConnection(profileId, client);
+  return await connections2(client).find(profileId, "everhour") ?? await adoptUnambiguousWorkspaceConnection(profileId, client);
+}
+function accessErrorToApiError(err) {
+  if (err instanceof ConnectionAccessError) {
+    return err.code === "unavailable" ? new ApiError(503, ENCRYPTION_NOT_CONFIGURED) : new ApiError(503, "The stored Everhour connection cannot be decrypted.");
+  }
+  return err;
 }
 async function readEverhourApiKey(client = requireDatabaseClient()) {
   const connection = await readActorUserConnection(client);
   if (!connection) return null;
-  return decryptUserConnectionApiKey(connection);
-}
-async function writeEverhourConnection(apiKey, accountName, accountId) {
-  const encryptionKey = requireEverhourEncryptionKey();
-  await requireDatabaseClient().transaction(async (tx) => {
-    const profileId = await requireActorProfileId(tx);
-    const existing = await readUserConnection(profileId, tx);
-    const now2 = nowIso2();
-    const ciphertext = encryptEverhourApiKey({ apiKey, profileId, key: encryptionKey });
-    if (existing) {
-      const revision2 = existing.revision + 1;
-      await tx.run(
-        `UPDATE ext_everhour_user_connections
-            SET api_key_ciphertext = ?, account_id = ?, account_name = ?,
-                last_validated_at = ?, updated_at = ?, revision = ?
-          WHERE id = ? AND profile_id = ? AND revision = ?`,
-        [
-          ciphertext,
-          accountId,
-          accountName,
-          now2,
-          now2,
-          revision2,
-          existing.id,
-          profileId,
-          existing.revision
-        ]
-      );
-      return;
-    }
-    await tx.run(
-      `INSERT INTO ext_everhour_user_connections
-         (id, profile_id, api_key_ciphertext, account_id, account_name,
-          last_validated_at, created_at, updated_at, revision)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-      [newId2(), profileId, ciphertext, accountId, accountName, now2, now2, now2]
-    );
-  });
-}
-async function clearEverhourConnection() {
-  await requireDatabaseClient().transaction(async (tx) => {
-    const profileId = await requireActorProfileId(tx);
-    const existing = await readUserConnection(profileId, tx);
-    if (!existing) return;
-    const now2 = nowIso2();
-    const revision2 = existing.revision + 1;
-    await tx.run(
-      `UPDATE ext_everhour_user_connections
-          SET deleted_at = ?, updated_at = ?, revision = ?
-        WHERE id = ? AND profile_id = ? AND revision = ?`,
-      [now2, now2, revision2, existing.id, profileId, existing.revision]
-    );
-  });
+  try {
+    const found = await connections2(client).credential(connection.owner_profile_id, "everhour");
+    return found?.credential.kind === "api_key" ? found.credential.apiKey : null;
+  } catch (err) {
+    throw accessErrorToApiError(err);
+  }
 }
 async function getEverhourIntegration() {
   const connection = await readActorUserConnection();
-  if (!connection) return { connected: false, accountName: null };
+  if (!connection || connection.state !== "connected")
+    return { connected: false, accountName: null };
+  let apiKey;
   try {
-    const apiKey = await decryptUserConnectionApiKey(connection);
+    const found = await connections2().credential(connection.owner_profile_id, "everhour");
+    apiKey = found?.credential.kind === "api_key" ? found.credential.apiKey : null;
+  } catch (err) {
+    if (!(err instanceof ConnectionAccessError)) throw err;
+    if (err.code === "unavailable")
+      return { connected: true, accountName: connection.external_account_label };
+    return { connected: false, accountName: null };
+  }
+  if (!apiKey) return { connected: false, accountName: null };
+  try {
     const user = await everhourFetch(apiKey, "/users/me");
-    return { connected: true, accountName: user?.name ?? connection.account_name };
+    return { connected: true, accountName: user?.name ?? connection.external_account_label };
   } catch {
-    return { connected: true, accountName: connection.account_name };
+    return { connected: true, accountName: connection.external_account_label };
   }
 }
 async function setEverhourApiKey(rawKey) {
   const apiKey = rawKey.trim();
   if (!apiKey) throw new ApiError(400, "Enter an Everhour API key.");
   const user = await everhourFetch(apiKey, "/users/me");
-  await writeEverhourConnection(
-    apiKey,
-    user?.name ?? null,
-    user?.id !== void 0 && user.id !== null ? String(user.id) : null
-  );
+  const profileId = await requireActorProfileId();
+  try {
+    await connections2().storeApiKey(profileId, "everhour", apiKey, everhourAccount(user));
+  } catch (err) {
+    if (err instanceof ChatError && err.code === "provider_not_ready")
+      throw new ApiError(503, ENCRYPTION_NOT_CONFIGURED);
+    throw err;
+  }
   return { connected: true, accountName: user?.name ?? null };
 }
 async function clearEverhourApiKey() {
-  await clearEverhourConnection();
+  const profileId = await requireActorProfileId();
+  await connections2().disconnectProvider(profileId, "everhour");
   return { connected: false, accountName: null };
 }
 async function readProjectLink2(projectId, workspaceId2, client = requireDatabaseClient()) {
@@ -174039,30 +174810,36 @@ async function deleteMissionTime(missionId, recordId) {
 // ext/everhour/routes.ts
 function createEverhourExtensionRouter(handle4) {
   const router2 = (0, import_express2.Router)();
-  router2.get(
-    "/user-connection",
-    handle4(() => getEverhourIntegration())
-  );
-  router2.put(
-    "/user-connection",
-    handle4((req) => setEverhourApiKey(String(req.body?.apiKey ?? "")), { mutates: true })
-  );
-  router2.delete(
-    "/user-connection",
-    handle4(() => clearEverhourApiKey(), { mutates: true })
-  );
-  router2.get(
-    "/integration",
-    handle4(() => getEverhourIntegration())
-  );
-  router2.put(
-    "/integration",
-    handle4((req) => setEverhourApiKey(String(req.body?.apiKey ?? "")), { mutates: true })
-  );
-  router2.delete(
-    "/integration",
-    handle4(() => clearEverhourApiKey(), { mutates: true })
-  );
+  for (const path29 of ["/user-connection", "/integration"]) {
+    const alias = (req) => recordConnectionAliasHit(`/ext/everhour${path29}`, req);
+    router2.get(
+      path29,
+      handle4((req) => {
+        alias(req);
+        return getEverhourIntegration();
+      })
+    );
+    router2.put(
+      path29,
+      handle4(
+        (req) => {
+          alias(req);
+          return setEverhourApiKey(String(req.body?.apiKey ?? ""));
+        },
+        { mutates: true }
+      )
+    );
+    router2.delete(
+      path29,
+      handle4(
+        (req) => {
+          alias(req);
+          return clearEverhourApiKey();
+        },
+        { mutates: true }
+      )
+    );
+  }
   router2.put(
     "/projects/:projectId/link",
     handle4(
@@ -174203,25 +174980,38 @@ function workspaceId(req) {
 }
 function createGitHubExtensionRouter(handle4, options = {}) {
   const router2 = (0, import_express3.Router)();
+  const alias = (path29, req) => recordConnectionAliasHit(`/ext/github${path29}`, req);
   router2.get(
     "/user-connection",
-    handle4(() => getGitHubUserConnection())
+    handle4((req) => {
+      alias("/user-connection", req);
+      return getGitHubUserConnection();
+    })
   );
   router2.post(
     "/user-connection/authorize",
     handle4(
-      (req) => beginGitHubUserAuthorization(
-        {
-          returnTo: typeof req.body?.returnTo === "string" ? req.body.returnTo : void 0
-        },
-        options.allowedBrowserOrigins ?? []
-      ),
+      (req) => {
+        alias("/user-connection/authorize", req);
+        return beginGitHubUserAuthorization(
+          {
+            returnTo: typeof req.body?.returnTo === "string" ? req.body.returnTo : void 0
+          },
+          options.allowedBrowserOrigins ?? []
+        );
+      },
       { mutates: true }
     )
   );
   router2.delete(
     "/user-connection",
-    handle4(() => disconnectGitHubUser(), { mutates: true })
+    handle4(
+      (req) => {
+        alias("/user-connection", req);
+        return disconnectGitHubUser();
+      },
+      { mutates: true }
+    )
   );
   router2.get(
     "/repository-owners",
@@ -179152,8 +179942,8 @@ function validateAuthorizationRequest(req) {
   const client = decodeClient(clientId);
   if (!client)
     throw new ApiError(400, "Unknown or invalid OAuth client", void 0, "invalid_client");
-  const redirectUri = requestParam(req, "redirect_uri");
-  if (!redirectUri || !client.redirectUris.includes(redirectUri)) {
+  const redirectUri2 = requestParam(req, "redirect_uri");
+  if (!redirectUri2 || !client.redirectUris.includes(redirectUri2)) {
     throw new ApiError(
       400,
       "redirect_uri is not registered for this client",
@@ -179179,7 +179969,7 @@ function validateAuthorizationRequest(req) {
   return {
     client,
     clientId,
-    redirectUri,
+    redirectUri: redirectUri2,
     resource,
     scope: requestedScopes(requestParam(req, "scope")),
     state: requestParam(req, "state"),
@@ -179420,7 +180210,7 @@ async function handleOAuthToken(req, res) {
   }
   const code = bodyString(req, "code");
   const clientId = bodyString(req, "client_id");
-  const redirectUri = bodyString(req, "redirect_uri");
+  const redirectUri2 = bodyString(req, "redirect_uri");
   const codeVerifier = bodyString(req, "code_verifier");
   const resource = bodyString(req, "resource");
   const entry = await consumeAuthorizationCode(code);
@@ -179428,7 +180218,7 @@ async function handleOAuthToken(req, res) {
     jsonError(res, 400, "invalid_grant", "Authorization code is invalid or expired.");
     return;
   }
-  if (entry.clientId !== clientId || entry.redirectUri !== redirectUri) {
+  if (entry.clientId !== clientId || entry.redirectUri !== redirectUri2) {
     await revokeOrphanedAccessToken(entry.accessToken);
     jsonError(res, 400, "invalid_grant", "Authorization code request does not match.");
     return;
@@ -181379,25 +182169,10 @@ app.post("/api/auth/browser/exchange", import_express6.default.json(), (req, res
   }
   res.json({ token });
 });
-app.get("/api/auth/callback/github/repository", async (req, res, next) => {
-  try {
-    const result2 = await completeGitHubUserAuthorization({
-      code: typeof req.query.code === "string" ? req.query.code : "",
-      state: typeof req.query.state === "string" ? req.query.state : ""
-    });
-    if (result2.returnUrl) {
-      const destination = new URL(result2.returnUrl);
-      destination.searchParams.set("githubConnection", "connected");
-      res.redirect(302, destination.toString());
-      return;
-    }
-    res.status(200).type("html").send(
-      '<!doctype html><meta name="viewport" content="width=device-width"><title>GitHub connected</title><p>GitHub is connected. You can return to Overlord.</p>'
-    );
-  } catch (error53) {
-    next(error53);
-  }
-});
+app.get(
+  GITHUB_REPOSITORY_CALLBACK_PATH,
+  createProfileConnectionCallbackHandler({ provider: "github", runtime: connectionsModule })
+);
 app.all("/api/auth/*", authNodeHandler);
 var jsonBody = import_express6.default.json();
 var urlEncodedBody = import_express6.default.urlencoded({ extended: false });
@@ -181539,7 +182314,12 @@ app.use(
 );
 app.use(
   "/api/connections",
-  createConnectionsRouter({ cloud: chatCloud, runtime: connectionsModule, owner: chatOwner })
+  createConnectionsRouter({
+    cloud: chatCloud,
+    runtime: connectionsModule,
+    owner: chatOwner,
+    profile: () => resolveActiveProfileId()
+  })
 );
 app.get(
   "/api/meta",
@@ -182979,6 +183759,12 @@ async function start() {
       chatNotificationDispatcher.stop();
     });
   }
+  void connectionsModule().profiles.resealSweep().then(({ resealed, remaining }) => {
+    if (resealed > 0 || remaining > 0)
+      console.log(
+        `[connections] re-sealed ${resealed} profile credential(s); ${remaining} remain under a legacy format or fallback key`
+      );
+  }).catch(() => console.error("[connections] credential re-seal sweep failed"));
   const server = app.listen(bindPort, bindHost, () => {
     const databaseLabel = DATABASE_DIALECT === "postgres" ? "postgres (DATABASE_URL)" : DATABASE_PATH;
     console.log(`[webapp] Overlord web server listening on ${bindHost}:${bindPort}`);

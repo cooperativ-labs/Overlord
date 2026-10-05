@@ -1,10 +1,12 @@
-contractVersion: "0"
+contractVersion: "153"
 componentType: extension
 componentKey: everhour
 label: "Everhour Time Tracking"
 description: >
-  Reference database extension for Everhour time tracking. Owns profile-scoped
-  user connections, project links, and mission task links in ext_everhour_* tables.
+  Reference database extension for Everhour time tracking. Owns project links and
+  mission task links in ext_everhour_* tables. Since contract v153 the personal API
+  key lives in the shared account_connections store; ext_everhour_user_connections
+  and ext_everhour_workspace_connections are read-only migration sources.
 
 extension:
   tablePrefix: "ext_everhour_"
@@ -12,6 +14,7 @@ extension:
   usesExtensionPoints:
     - database-extension
     - open-vocabulary-value
+    - account-connection-provider
 
 vocabularyExtensions:
   - vocabulary: entity_changes.entity_type

@@ -25,7 +25,11 @@ import { type ChatEngine, chatSourceCheckers, createChatEngine } from './chat/en
 import { chatLimitsFromEnv } from './chat/limits.ts';
 import { ConnectionsConfigError } from './connections/config.ts';
 import { type ConnectionsRuntime, createConnectionsRuntime } from './connections/index.ts';
-import { createConnectionsPublicRouter, createConnectionsRouter } from './connections/routes.ts';
+import {
+  createConnectionsPublicRouter,
+  createConnectionsRouter,
+  createProfileConnectionCallbackHandler
+} from './connections/routes.ts';
 import { getExecutionTargetMigrationDiagnostics } from './execution/execution-target-migration.ts';
 import { forgetMissionLatchSession } from './execution/latch-sessions.ts';
 import {
@@ -65,8 +69,8 @@ import {
 } from './execution/runner.ts';
 import { sendRunnerClaimResponse } from './execution/runner-claim-http.ts';
 import { createEverhourExtensionRouter } from './ext/everhour/routes.ts';
+import { GITHUB_REPOSITORY_CALLBACK_PATH } from './ext/github/connection-provider.ts';
 import { createGitHubExtensionRouter } from './ext/github/routes.ts';
-import { completeGitHubUserAuthorization } from './ext/github/user-oauth.ts';
 import { isAllowedBrowserOrigin } from './http/browser-origins.ts';
 import { runnerRegistrationFromBody } from './http/client-device.ts';
 import { buildMeta } from './http/meta.ts';
@@ -103,7 +107,8 @@ import {
   getAuthorizedWorkspacesContext,
   getBootstrapWorkspaceIdOrNull,
   initDatabase,
-  requireDatabaseClient
+  requireDatabaseClient,
+  resolveActiveProfileId
 } from './db.ts';
 import { reopenDeferredWork, resolveDeferredWork } from './deferred-work-resolutions.ts';
 import { deliveryComposeWorker } from './delivery-compose-worker.ts';
@@ -488,29 +493,12 @@ app.post('/api/auth/browser/exchange', express.json(), (req, res) => {
 
 // GitHub OAuth Apps accept one registered callback plus subpaths. The login
 // callback remains `/api/auth/callback/github`; this exact repository-consent
-// callback must run before Better Auth's `/api/auth/*` wildcard.
-app.get('/api/auth/callback/github/repository', async (req, res, next) => {
-  try {
-    const result = await completeGitHubUserAuthorization({
-      code: typeof req.query.code === 'string' ? req.query.code : '',
-      state: typeof req.query.state === 'string' ? req.query.state : ''
-    });
-    if (result.returnUrl) {
-      const destination = new URL(result.returnUrl);
-      destination.searchParams.set('githubConnection', 'connected');
-      res.redirect(302, destination.toString());
-      return;
-    }
-    res
-      .status(200)
-      .type('html')
-      .send(
-        '<!doctype html><meta name="viewport" content="width=device-width"><title>GitHub connected</title><p>GitHub is connected. You can return to Overlord.</p>'
-      );
-  } catch (error) {
-    next(error);
-  }
-});
+// callback must run before Better Auth's `/api/auth/*` wildcard. Since contract
+// v153 the shared account-connections module serves it (profile-scoped `github`).
+app.get(
+  GITHUB_REPOSITORY_CALLBACK_PATH,
+  createProfileConnectionCallbackHandler({ provider: 'github', runtime: connectionsModule })
+);
 
 app.all('/api/auth/*', authNodeHandler);
 
@@ -639,7 +627,7 @@ if (mcpEnabled) {
 // of a shared handler.
 app.use(AGENT_SESSION_CHANNEL_ROUTE_PREFIX, createAgentSessionChannelRouter());
 
-// ---- Assistant chat and account connections (contract v152, Cloud only) ----
+// ---- Assistant chat and account connections (contract v152; profile-scoped v153 on both editions) ----
 const chatCloud = () => DATABASE_DIALECT === 'postgres' || config.backendMode === 'cloud';
 /**
  * Operator-tunable conversation limits and notification timing; unset or invalid values
@@ -706,7 +694,12 @@ app.use(
 );
 app.use(
   '/api/connections',
-  createConnectionsRouter({ cloud: chatCloud, runtime: connectionsModule, owner: chatOwner })
+  createConnectionsRouter({
+    cloud: chatCloud,
+    runtime: connectionsModule,
+    owner: chatOwner,
+    profile: () => resolveActiveProfileId()
+  })
 );
 
 app.get(
@@ -2435,6 +2428,18 @@ async function start(): Promise<void> {
       chatNotificationDispatcher.stop();
     });
   }
+
+  // Re-seal personal-integration credentials still under a legacy format or fallback key
+  // (contract v153). Best-effort and bounded; it logs counts only.
+  void connectionsModule()
+    .profiles.resealSweep()
+    .then(({ resealed, remaining }) => {
+      if (resealed > 0 || remaining > 0)
+        console.log(
+          `[connections] re-sealed ${resealed} profile credential(s); ${remaining} remain under a legacy format or fallback key`
+        );
+    })
+    .catch(() => console.error('[connections] credential re-seal sweep failed'));
 
   const server = app.listen(bindPort, bindHost, () => {
     const databaseLabel =

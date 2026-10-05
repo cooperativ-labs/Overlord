@@ -148,7 +148,9 @@ export function ProjectSettingsModal({
       ) : null}
       {activeNav === 'Tags' && <TagsPage projectId={project.id} />}
       {activeNav === 'Card statuses' && <StatusesPage projectId={project.id} />}
-      {activeNav === 'Integrations' && <IntegrationsPage open={open} project={project} />}
+      {activeNav === 'Integrations' && (
+        <IntegrationsPage open={open} project={project} onClose={() => onOpenChange(false)} />
+      )}
       {activeNav === 'Danger zone' && (
         <DangerZonePage
           projectId={project.id}

@@ -71,7 +71,7 @@ Everhour tables:
 
 | Table | Purpose |
 | --- | --- |
-| `ext_everhour_user_connections` | Profile-scoped personal API key (AES-256-GCM ciphertext) |
+| `ext_everhour_user_connections` | Pre-v153 personal API key; read-only migration source since contract v153 |
 | `ext_everhour_workspace_connections` | Deprecated workspace key; migration source only |
 | `ext_everhour_project_links` | Overlord project ↔ Everhour project |
 | `ext_everhour_mission_links` | Overlord mission ↔ Everhour task |
@@ -85,12 +85,12 @@ All endpoints live under `/ext/everhour/` (registered in `backend/index.ts`).
 
 | Method | Route | Permission |
 | --- | --- | --- |
-| `GET` | `/ext/everhour/user-connection` | authenticated (no workspace permission) |
-| `PUT` | `/ext/everhour/user-connection` | authenticated (no workspace permission) |
-| `DELETE` | `/ext/everhour/user-connection` | authenticated (no workspace permission) |
-| `GET` | `/ext/everhour/integration` | deprecated alias of `user-connection` |
-| `PUT` | `/ext/everhour/integration` | deprecated alias of `user-connection` |
-| `DELETE` | `/ext/everhour/integration` | deprecated alias of `user-connection` |
+| `GET` | `/ext/everhour/user-connection` | authenticated (no workspace permission); alias of the account-connections module |
+| `PUT` | `/ext/everhour/user-connection` | authenticated (no workspace permission); alias of the account-connections module |
+| `DELETE` | `/ext/everhour/user-connection` | authenticated (no workspace permission); alias of the account-connections module |
+| `GET` | `/ext/everhour/integration` | deprecated alias of `user-connection` (retired first) |
+| `PUT` | `/ext/everhour/integration` | deprecated alias of `user-connection` (retired first) |
+| `DELETE` | `/ext/everhour/integration` | deprecated alias of `user-connection` (retired first) |
 | `GET` | `/ext/everhour/projects/:projectId/link` | `project:read` |
 | `PUT` | `/ext/everhour/projects/:projectId/link` | `project:update` |
 | `GET` | `/ext/everhour/missions/:missionId` | `mission:read` |
@@ -111,8 +111,16 @@ All endpoints live under `/ext/everhour/` (registered in `backend/index.ts`).
 - Project link operations require `project:read` or `project:update`.
 - Mission timer and time-record operations require `mission:read` or
   `mission:update`.
-- API keys are stored in `ext_everhour_user_connections.api_key_ciphertext`
-  (AES-256-GCM) and are never returned to clients.
+- Since contract v153 the personal API key is owned by the shared
+  account-connections module (`backend/connections/profile.ts`, provider
+  `everhour`, profile scope). The extension registers a provider adapter
+  (`backend/ext/everhour/connection-provider.ts`: upstream validation, legacy
+  adoption, legacy tombstone) and reads the key only through
+  `ProfileConnections.credential`. It holds no encryption key. New clients use
+  `GET /api/connections?scope=all`, `POST /api/connections/api-keys`, and
+  `DELETE /api/connections/:id`. The `/ext/everhour` connection routes are
+  compatibility aliases with unchanged shapes, and their hits are counted for
+  retirement. Keys are never returned to clients.
 
 ## Realtime invalidation
 

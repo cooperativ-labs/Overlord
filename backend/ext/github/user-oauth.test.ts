@@ -75,17 +75,24 @@ test('stores encrypted user OAuth credentials and returns only eligible reposito
     authorizationUrl.searchParams.get('redirect_uri'),
     'https://overlord.example/api/auth/callback/github/repository'
   );
+  assert.equal(authorizationUrl.searchParams.get('allow_signup'), 'false');
+  assert.equal(authorizationUrl.searchParams.get('code_challenge_method'), 'S256');
+  assert.ok(authorizationUrl.searchParams.get('code_challenge'));
   const state = authorizationUrl.searchParams.get('state');
   assert.ok(state);
-  const stateRow = await db.get<{ state_hash: string }>(
-    `SELECT state_hash FROM ext_github_user_oauth_states WHERE deleted_at IS NULL`
+  // Since v153 the shared account-connections module holds the hashed, single-use state.
+  const stateRow = await db.get<{ state_hash: string; return_url: string | null }>(
+    `SELECT state_hash, return_url FROM account_connection_authorizations`
   );
   assert.equal(stateRow?.state_hash, createHash('sha256').update(state).digest('hex'));
   assert.notEqual(stateRow?.state_hash, state);
+  assert.equal(stateRow?.return_url, 'overlord://github/callback');
 
-  globalThis.fetch = async input => {
+  let exchangeBody: Record<string, string> = {};
+  globalThis.fetch = async (input, init) => {
     const url = String(input);
     if (url === 'https://github.com/login/oauth/access_token') {
+      exchangeBody = JSON.parse(String(init?.body)) as Record<string, string>;
       return Response.json({
         access_token: 'github-access-secret',
         refresh_token: 'github-refresh-secret',
@@ -121,17 +128,24 @@ test('stores encrypted user OAuth credentials and returns only eligible reposito
     scopes: ['repo', 'read:org']
   });
   assert.doesNotMatch(JSON.stringify(completed), /github-(access|refresh)-secret/);
+  assert.equal(exchangeBody.client_secret, 'shared-oauth-secret');
+  assert.ok(exchangeBody.code_verifier);
 
   const stored = await db.get<{
-    access_token_ciphertext: string;
-    refresh_token_ciphertext: string;
+    credential_ciphertext: string;
+    credential_format: string;
+    credential_key_id: string;
+    organization_id: string | null;
   }>(
-    `SELECT access_token_ciphertext, refresh_token_ciphertext
-       FROM ext_github_user_connections
-      WHERE profile_id = 'operator-user' AND deleted_at IS NULL`
+    `SELECT credential_ciphertext, credential_format, credential_key_id, organization_id
+       FROM account_connections
+      WHERE owner_profile_id = 'operator-user' AND provider = 'github'`
   );
-  assert.match(stored?.access_token_ciphertext ?? '', /^v1\./);
-  assert.match(stored?.refresh_token_ciphertext ?? '', /^v1\./);
+  assert.match(stored?.credential_ciphertext ?? '', /^v1\./);
+  assert.equal(stored?.credential_format, 'connection-v1');
+  // Only the existing environment key is configured: it is GitHub's write key.
+  assert.equal(stored?.credential_key_id, 'github-user-env');
+  assert.equal(stored?.organization_id, null);
   assert.doesNotMatch(JSON.stringify(stored), /github-(access|refresh)-secret/);
 
   await assert.rejects(
@@ -224,15 +238,105 @@ test('stores encrypted user OAuth credentials and returns only eligible reposito
   assert.equal(disconnected.connected, false);
   assert.equal(revocationUrl, 'https://api.github.com/applications/shared-oauth-client/token');
   const revoked = await db.get<{
-    access_token_ciphertext: string;
-    refresh_token_ciphertext: string | null;
-    deleted_at: string | null;
+    state: string;
+    credential_ciphertext: string | null;
+    disconnected_at: string | null;
   }>(
-    `SELECT access_token_ciphertext, refresh_token_ciphertext, deleted_at
-       FROM ext_github_user_connections
-      WHERE profile_id = 'operator-user'`
+    `SELECT state, credential_ciphertext, disconnected_at
+       FROM account_connections
+      WHERE owner_profile_id = 'operator-user' AND provider = 'github'`
   );
-  assert.equal(revoked?.access_token_ciphertext, 'revoked:v1');
-  assert.equal(revoked?.refresh_token_ciphertext, null);
-  assert.ok(revoked?.deleted_at);
+  assert.equal(revoked?.state, 'disconnected');
+  assert.equal(revoked?.credential_ciphertext, null);
+  assert.ok(revoked?.disconnected_at);
+});
+
+async function connectAs(profileId: string, user: { id: number; login: string }) {
+  const authorization = await withRequestContextAsync(async () => {
+    setActiveProfileId(profileId);
+    return beginGitHubUserAuthorization({}, []);
+  });
+  const state = new URL(authorization.authorizationUrl).searchParams.get('state')!;
+  globalThis.fetch = async input => {
+    const url = String(input);
+    if (url === 'https://github.com/login/oauth/access_token')
+      return Response.json({ access_token: `access-${profileId}`, scope: 'repo read:org' });
+    if (url === 'https://api.github.com/user') return Response.json({ ...user, avatar_url: null });
+    throw new Error(`Unexpected GitHub request: ${url}`);
+  };
+  await completeGitHubUserAuthorization({ code: 'code', state });
+}
+
+test('a token GitHub rejects twice, or a changed identity, requires reconnecting', async () => {
+  const db = requireDatabaseClient();
+  await connectAs('operator-user', { id: 501, login: 'first' });
+  // No refresh token: a 401 forces a refresh that cannot happen, so reconnect is required.
+  globalThis.fetch = async () => new Response('{}', { status: 401 });
+  await assert.rejects(
+    withRequestContextAsync(async () => {
+      setActiveProfileId('operator-user');
+      return listGitHubRepositoryOwners();
+    }),
+    /Reconnect GitHub to refresh repository access/
+  );
+  const rejected = await db.get<{ state: string; credential_ciphertext: string | null }>(
+    `SELECT state, credential_ciphertext FROM account_connections
+      WHERE owner_profile_id = 'operator-user' AND provider = 'github' AND state <> 'disconnected'`
+  );
+  assert.deepEqual(
+    { ...rejected },
+    { state: 'reauthorization_required', credential_ciphertext: null }
+  );
+  const status = await withRequestContextAsync(async () => {
+    setActiveProfileId('operator-user');
+    return getGitHubUserConnection();
+  });
+  // The legacy alias shows the existing reconnect flow.
+  assert.deepEqual(status, { configured: true, connected: false, account: null, scopes: [] });
+
+  // Reconnecting reuses the row; then GitHub reports another account for the token.
+  await connectAs('operator-user', { id: 501, login: 'first' });
+  globalThis.fetch = async input =>
+    String(input) === 'https://api.github.com/user'
+      ? Response.json({ id: 999, login: 'someone-else' })
+      : new Response('{}', { status: 500 });
+  await assert.rejects(
+    withRequestContextAsync(async () => {
+      setActiveProfileId('operator-user');
+      return listGitHubRepositoryOwners();
+    }),
+    /identity changed/
+  );
+  const changed = await db.get<{ state: string; last_error_code: string }>(
+    `SELECT state, last_error_code FROM account_connections
+      WHERE owner_profile_id = 'operator-user' AND provider = 'github' AND state <> 'disconnected'`
+  );
+  assert.deepEqual(
+    { ...changed },
+    { state: 'reauthorization_required', last_error_code: 'identity_changed' }
+  );
+});
+
+test('legacy alias sign-in errors keep their messages', async () => {
+  await assert.rejects(
+    completeGitHubUserAuthorization({ code: 'c', state: 'x'.repeat(43) }),
+    /expired or was already used/
+  );
+  const authorization = await withRequestContextAsync(async () => {
+    setActiveProfileId('operator-user');
+    return beginGitHubUserAuthorization({ returnTo: 'overlord://github/callback' }, []);
+  });
+  const state = new URL(authorization.authorizationUrl).searchParams.get('state')!;
+  globalThis.fetch = async () => Response.json({ access_token: 'scopeless', scope: 'repo' });
+  await assert.rejects(
+    completeGitHubUserAuthorization({ code: 'c', state }),
+    /did not grant private-repository and organization access/
+  );
+  await assert.rejects(
+    withRequestContextAsync(async () => {
+      setActiveProfileId('operator-user');
+      return beginGitHubUserAuthorization({ returnTo: 'https://evil.test/' }, []);
+    }),
+    /not an allowed Overlord destination/
+  );
 });

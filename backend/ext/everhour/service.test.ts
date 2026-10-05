@@ -14,7 +14,8 @@ const { createTestWorkspaceContext } = await import('../../test-helpers.ts');
 const { WORKSPACE } = createTestWorkspaceContext(await import('../../db.ts'));
 const { createMission, createProject } = await import('../../repository.ts');
 const { ApiError } = await import('../../errors.ts');
-const { decryptEverhourApiKey, requireEverhourEncryptionKey } = await import('./crypto.ts');
+const { profileConnections } = await import('../../connections/profile.ts');
+const { requireDatabaseClient } = await import('../../db.ts');
 const {
   addMissionTime,
   clearEverhourApiKey,
@@ -76,30 +77,42 @@ test('setEverhourApiKey validates against Everhour and persists the encrypted us
   const integration = await setEverhourApiKey('  test-api-key  ');
   assert.deepEqual(integration, { connected: true, accountName: 'Everhour Operator' });
 
+  // Stored by the shared account-connections module (contract v153), never in the legacy table.
   const row = db
     .prepare(
-      `SELECT profile_id, api_key_ciphertext, account_id, account_name
-         FROM ext_everhour_user_connections
-        WHERE deleted_at IS NULL`
+      `SELECT owner_profile_id, organization_id, credential_ciphertext, credential_key_id,
+              credential_format, credential_kind, external_account_id, external_account_label
+         FROM account_connections
+        WHERE provider = 'everhour' AND state = 'connected'`
     )
     .get() as {
-    profile_id: string;
-    api_key_ciphertext: string;
-    account_id: string;
-    account_name: string;
+    owner_profile_id: string;
+    organization_id: string | null;
+    credential_ciphertext: string;
+    credential_key_id: string;
+    credential_format: string;
+    credential_kind: string;
+    external_account_id: string;
+    external_account_label: string;
   };
-  assert.ok(row.profile_id);
-  assert.notEqual(row.api_key_ciphertext, 'test-api-key');
-  assert.equal(
-    decryptEverhourApiKey({
-      envelope: row.api_key_ciphertext,
-      profileId: row.profile_id,
-      key: requireEverhourEncryptionKey()
-    }),
-    'test-api-key'
+  assert.ok(row.owner_profile_id);
+  assert.equal(row.organization_id, null);
+  assert.ok(!row.credential_ciphertext.includes('test-api-key'));
+  assert.equal(row.credential_format, 'connection-v1');
+  assert.equal(row.credential_kind, 'api_key');
+  // No ACCOUNT_CONNECTIONS_ENCRYPTION_KEY here: the existing Everhour variable seals it.
+  assert.equal(row.credential_key_id, 'everhour-env');
+  const opened = await profileConnections(requireDatabaseClient()).credential(
+    row.owner_profile_id,
+    'everhour'
   );
-  assert.equal(row.account_id, '7');
-  assert.equal(row.account_name, 'Everhour Operator');
+  assert.deepEqual(opened?.credential, { kind: 'api_key', apiKey: 'test-api-key' });
+  assert.equal(row.external_account_id, '7');
+  assert.equal(row.external_account_label, 'Everhour Operator');
+  const legacy = db
+    .prepare(`SELECT COUNT(*) AS count FROM ext_everhour_user_connections`)
+    .get() as { count: number };
+  assert.equal(legacy.count, 0);
 });
 
 test('setEverhourApiKey rejects blank keys before calling Everhour', async () => {
@@ -109,7 +122,7 @@ test('setEverhourApiKey rejects blank keys before calling Everhour', async () =>
   );
 });
 
-test('clearEverhourApiKey soft-deletes the user connection', async () => {
+test('clearEverhourApiKey disconnects and erases the user connection', async () => {
   installEverhourFetchMock([
     {
       match: url => url.endsWith('/users/me'),
@@ -124,8 +137,8 @@ test('clearEverhourApiKey soft-deletes the user connection', async () => {
   const active = db
     .prepare(
       `SELECT COUNT(*) AS count
-         FROM ext_everhour_user_connections
-        WHERE deleted_at IS NULL`
+         FROM account_connections
+        WHERE provider = 'everhour' AND (state <> 'disconnected' OR credential_ciphertext IS NOT NULL)`
     )
     .get() as { count: number };
   assert.equal(active.count, 0);
@@ -163,10 +176,15 @@ test('getEverhourIntegration adopts an unambiguously attributed workspace key on
 
   const userRow = db
     .prepare(
-      `SELECT api_key_ciphertext FROM ext_everhour_user_connections WHERE deleted_at IS NULL`
+      `SELECT credential_ciphertext FROM account_connections WHERE provider = 'everhour' AND state = 'connected'`
     )
-    .get() as { api_key_ciphertext: string };
-  assert.notEqual(userRow.api_key_ciphertext, 'legacy-workspace-key');
+    .get() as { credential_ciphertext: string };
+  assert.ok(!userRow.credential_ciphertext.includes('legacy-workspace-key'));
+  // The adopted workspace row's plaintext is scrubbed as it is soft-deleted.
+  const scrubbed = db
+    .prepare(`SELECT api_key_secret FROM ext_everhour_workspace_connections WHERE id = ?`)
+    .get(connectionId) as { api_key_secret: string };
+  assert.equal(scrubbed.api_key_secret, 'revoked:v1');
 
   const leftover = db
     .prepare(
@@ -495,4 +513,96 @@ test('getProjectEverhourState reports mission timers as running within the proje
   const state = await getProjectEverhourState(project.id);
   assert.equal(state.runningTimer, null);
   assert.equal(state.hasRunningTimerInProject, true);
+});
+
+test('a key stored by the pre-v153 code stays connected and drives the timer unchanged', async () => {
+  // Simulates an upgrade: no module row yet, only the legacy envelope the old
+  // `encryptEverhourApiKey` wrote under EVERHOUR_API_KEY_ENCRYPTION_KEY.
+  const { sealSecret } = await import('../../connections/crypto.ts');
+  const { resolveActiveProfileId } = await import('../../db.ts');
+  const profileId = (await resolveActiveProfileId())!;
+  db.prepare(`DELETE FROM account_connections WHERE provider = 'everhour'`).run();
+  const legacyKey = 'pre-v153-key';
+  const now = nowIso();
+  db.prepare(
+    `INSERT INTO ext_everhour_user_connections
+       (id, profile_id, api_key_ciphertext, account_id, account_name, last_validated_at, created_at, updated_at, revision)
+     VALUES (?, ?, ?, '12', 'Legacy User', ?, ?, ?, 1)`
+  ).run(
+    newId(),
+    profileId,
+    sealSecret({
+      plaintext: legacyKey,
+      key: Buffer.from(process.env.EVERHOUR_API_KEY_ENCRYPTION_KEY!, 'base64url'),
+      aad: `overlord:everhour-user-key:v1:${profileId}:api-key`
+    }),
+    now,
+    now,
+    now
+  );
+
+  const project = await createProject({ name: 'Legacy Timer Project' });
+  const mission = await createMission({ projectId: project.id, firstObjective: 'Legacy timer' });
+  const seenKeys = new Set<string>();
+  const recordKey = (init?: RequestInit) =>
+    seenKeys.add(String((init?.headers as Record<string, string>)?.['X-Api-Key']));
+  installEverhourFetchMock([
+    {
+      match: url => url.endsWith('/users/me'),
+      respond: (_url, init) => {
+        recordKey(init);
+        return Response.json({ id: 12, name: 'Legacy User' }, { status: 200 });
+      }
+    },
+    {
+      match: url => url.includes('/projects?'),
+      respond: () =>
+        Response.json([{ id: 'ev:legacy', name: 'Legacy Board', type: 'board', users: [12] }])
+    },
+    {
+      match: url => url.includes('/projects/ev%3Alegacy/sections'),
+      respond: () => Response.json([{ id: 9, name: 'Main' }])
+    },
+    {
+      match: (url, init) => url.includes('/projects/ev%3Alegacy/tasks') && init?.method === 'POST',
+      respond: () => Response.json({ id: 'ev:task-legacy', name: mission.title }, { status: 201 })
+    },
+    {
+      match: (url, init) => url.endsWith('/timers') && init?.method === 'POST',
+      respond: (_url, init) => {
+        recordKey(init);
+        return new Response(null, { status: 204 });
+      }
+    },
+    {
+      match: url => url.includes('/tasks/ev%3Atask-legacy/time?'),
+      respond: () => Response.json([])
+    },
+    {
+      match: url => url.endsWith('/timers/current'),
+      respond: () => Response.json({ status: 'inactive' })
+    }
+  ]);
+
+  assert.deepEqual(await getEverhourIntegration(), { connected: true, accountName: 'Legacy User' });
+  await linkProjectEverhour(project.id, 'Legacy Board');
+  const state = await startMissionTimer(mission.id);
+  assert.equal(state.connected, true);
+  assert.equal(state.taskId, 'ev:task-legacy');
+  assert.deepEqual([...seenKeys], [legacyKey]);
+
+  // Credentials never reach change projections.
+  const changes = JSON.stringify(db.prepare(`SELECT * FROM entity_changes`).all());
+  assert.ok(!changes.includes(legacyKey));
+
+  // Disconnecting through the alias erases the module row and tombstones the legacy one.
+  assert.deepEqual(await clearEverhourApiKey(), { connected: false, accountName: null });
+  const legacy = db
+    .prepare(
+      `SELECT api_key_ciphertext, deleted_at FROM ext_everhour_user_connections WHERE profile_id = ?`
+    )
+    .get(profileId) as { api_key_ciphertext: string; deleted_at: string | null };
+  assert.equal(legacy.api_key_ciphertext, 'revoked:v1');
+  assert.ok(legacy.deleted_at);
+  assert.deepEqual(await getEverhourIntegration(), { connected: false, accountName: null });
 });

@@ -1,4 +1,5 @@
 export * from './queries/agent-launch-config.ts';
+export * from './queries/connections.ts';
 export * from './queries/deferred-work.ts';
 export * from './queries/everhour.ts';
 export * from './queries/github.ts';

@@ -10,6 +10,13 @@ import type {
 } from '@overlord/contract/ext/everhour';
 import type { DatabaseClient } from '@overlord/database';
 
+import { ChatError } from '../../../packages/core/service/chat/store.ts';
+import {
+  type ExternalAccount,
+  profileConnections,
+  ProviderCredentialError
+} from '../../connections/profile.ts';
+import { ConnectionAccessError, type ConnectionRow } from '../../connections/service.ts';
 import {
   newId,
   nowIso,
@@ -19,12 +26,7 @@ import {
 } from '../../db.ts';
 import { ApiError } from '../../errors.ts';
 
-import {
-  decryptEverhourApiKey,
-  encryptEverhourApiKey,
-  everhourEncryptionKeyFromEnv,
-  requireEverhourEncryptionKey
-} from './crypto.ts';
+import { registerEverhourConnectionProvider } from './connection-provider.ts';
 
 const EVERHOUR_BASE_URL = 'https://api.everhour.com';
 
@@ -207,15 +209,6 @@ function unwrapArray<T>(payload: unknown): T[] {
 
 // ---- integration (API key) -----------------------------------------------
 
-interface UserConnectionRow {
-  id: string;
-  profile_id: string;
-  api_key_ciphertext: string;
-  account_id: string | null;
-  account_name: string | null;
-  revision: number;
-}
-
 interface WorkspaceConnectionRow {
   id: string;
   workspace_id: string;
@@ -245,27 +238,33 @@ interface MissionLinkRow {
   revision: number;
 }
 
-async function readUserConnection(
-  profileId: string,
-  client: DatabaseClient = requireDatabaseClient()
-): Promise<UserConnectionRow | null> {
-  const row = await client.get<UserConnectionRow>(
-    `SELECT id, profile_id, api_key_ciphertext, account_id, account_name, revision
-       FROM ext_everhour_user_connections
-      WHERE profile_id = ? AND deleted_at IS NULL`,
-    [profileId]
-  );
-  return row ?? null;
+// The personal API key lives in the shared account-connections module (contract
+// v153): it seals, stores, re-seals, and erases the key. This extension reads the
+// plaintext only through `credential()` and never holds an encryption key.
+
+const ENCRYPTION_NOT_CONFIGURED =
+  'Everhour API-key encryption is not configured on this Overlord server.';
+
+function connections(client: DatabaseClient = requireDatabaseClient()) {
+  return profileConnections(client);
 }
 
-async function decryptUserConnectionApiKey(row: UserConnectionRow): Promise<string> {
-  const key = requireEverhourEncryptionKey();
-  return decryptEverhourApiKey({
-    envelope: row.api_key_ciphertext,
-    profileId: row.profile_id,
-    key
-  });
+function everhourAccount(user: EverhourUser | null): ExternalAccount {
+  return {
+    id: user?.id !== undefined && user.id !== null ? String(user.id) : null,
+    label: user?.name ?? null
+  };
 }
+
+registerEverhourConnectionProvider(async apiKey => {
+  try {
+    return everhourAccount(await everhourFetch<EverhourUser>(apiKey, '/users/me'));
+  } catch (err) {
+    if (err instanceof ApiError && err.status >= 400 && err.status < 500)
+      throw new ProviderCredentialError('rejected', err.status, err.message);
+    throw new ProviderCredentialError('unavailable');
+  }
+});
 
 async function connectionActorsAreUnambiguously({
   client,
@@ -296,12 +295,17 @@ async function connectionActorsAreUnambiguously({
   return true;
 }
 
+/**
+ * Adopt a pre-v90 workspace key onto the profile when `entity_changes` attribution
+ * uniquely identifies it as the connector. The key is stored through the module,
+ * and the workspace row's plaintext is scrubbed as it is soft-deleted.
+ */
 async function adoptUnambiguousWorkspaceConnection(
   profileId: string,
   client: DatabaseClient
-): Promise<UserConnectionRow | null> {
-  const encryptionKey = everhourEncryptionKeyFromEnv();
-  if (!encryptionKey) return null;
+): Promise<ConnectionRow | null> {
+  const store = connections(client);
+  if (!store.providers().some(p => p.provider === 'everhour' && p.available)) return null;
 
   const candidates = await client.all<WorkspaceConnectionRow>(
     `SELECT c.id, c.workspace_id, c.api_key_secret, c.account_id, c.account_name, c.revision
@@ -322,24 +326,16 @@ async function adoptUnambiguousWorkspaceConnection(
   if (secrets.size !== 1) return null;
 
   const source = adoptable[0];
-  const now = nowIso();
-  const ciphertext = encryptEverhourApiKey({
-    apiKey: source.api_key_secret,
-    profileId,
-    key: encryptionKey
+  await store.storeApiKey(profileId, 'everhour', source.api_key_secret, {
+    id: source.account_id,
+    label: source.account_name
   });
-  await client.run(
-    `INSERT INTO ext_everhour_user_connections
-       (id, profile_id, api_key_ciphertext, account_id, account_name,
-        last_validated_at, created_at, updated_at, revision)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-    [newId(), profileId, ciphertext, source.account_id, source.account_name, now, now, now]
-  );
+  const now = nowIso();
   for (const row of adoptable) {
     const revision = row.revision + 1;
     await client.run(
       `UPDATE ext_everhour_workspace_connections
-          SET deleted_at = ?, updated_at = ?, revision = ?
+          SET deleted_at = ?, updated_at = ?, api_key_secret = 'revoked:v1', revision = ?
         WHERE id = ? AND revision = ?`,
       [now, now, revision, row.id, row.revision]
     );
@@ -355,17 +351,27 @@ async function adoptUnambiguousWorkspaceConnection(
       client
     );
   }
-  return readUserConnection(profileId, client);
+  return store.find(profileId, 'everhour');
 }
 
+/** The acting profile's live Everhour connection row (metadata only), adopting legacy keys. */
 async function readActorUserConnection(
   client: DatabaseClient = requireDatabaseClient()
-): Promise<UserConnectionRow | null> {
+): Promise<ConnectionRow | null> {
   const profileId = await requireActorProfileId(client);
   return (
-    (await readUserConnection(profileId, client)) ??
+    (await connections(client).find(profileId, 'everhour')) ??
     (await adoptUnambiguousWorkspaceConnection(profileId, client))
   );
+}
+
+function accessErrorToApiError(err: unknown): unknown {
+  if (err instanceof ConnectionAccessError) {
+    return err.code === 'unavailable'
+      ? new ApiError(503, ENCRYPTION_NOT_CONFIGURED)
+      : new ApiError(503, 'The stored Everhour connection cannot be decrypted.');
+  }
+  return err;
 }
 
 async function readEverhourApiKey(
@@ -373,79 +379,38 @@ async function readEverhourApiKey(
 ): Promise<string | null> {
   const connection = await readActorUserConnection(client);
   if (!connection) return null;
-  return decryptUserConnectionApiKey(connection);
-}
-
-async function writeEverhourConnection(
-  apiKey: string,
-  accountName: string | null,
-  accountId: string | null
-): Promise<void> {
-  const encryptionKey = requireEverhourEncryptionKey();
-  await requireDatabaseClient().transaction(async tx => {
-    const profileId = await requireActorProfileId(tx);
-    const existing = await readUserConnection(profileId, tx);
-    const now = nowIso();
-    const ciphertext = encryptEverhourApiKey({ apiKey, profileId, key: encryptionKey });
-    if (existing) {
-      const revision = existing.revision + 1;
-      await tx.run(
-        `UPDATE ext_everhour_user_connections
-            SET api_key_ciphertext = ?, account_id = ?, account_name = ?,
-                last_validated_at = ?, updated_at = ?, revision = ?
-          WHERE id = ? AND profile_id = ? AND revision = ?`,
-        [
-          ciphertext,
-          accountId,
-          accountName,
-          now,
-          now,
-          revision,
-          existing.id,
-          profileId,
-          existing.revision
-        ]
-      );
-      return;
-    }
-
-    await tx.run(
-      `INSERT INTO ext_everhour_user_connections
-         (id, profile_id, api_key_ciphertext, account_id, account_name,
-          last_validated_at, created_at, updated_at, revision)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-      [newId(), profileId, ciphertext, accountId, accountName, now, now, now]
-    );
-  });
-}
-
-async function clearEverhourConnection(): Promise<void> {
-  await requireDatabaseClient().transaction(async tx => {
-    const profileId = await requireActorProfileId(tx);
-    const existing = await readUserConnection(profileId, tx);
-    if (!existing) return;
-    const now = nowIso();
-    const revision = existing.revision + 1;
-    await tx.run(
-      `UPDATE ext_everhour_user_connections
-          SET deleted_at = ?, updated_at = ?, revision = ?
-        WHERE id = ? AND profile_id = ? AND revision = ?`,
-      [now, now, revision, existing.id, profileId, existing.revision]
-    );
-  });
+  try {
+    const found = await connections(client).credential(connection.owner_profile_id, 'everhour');
+    return found?.credential.kind === 'api_key' ? found.credential.apiKey : null;
+  } catch (err) {
+    throw accessErrorToApiError(err);
+  }
 }
 
 export async function getEverhourIntegration(): Promise<EverhourIntegrationDto> {
   const connection = await readActorUserConnection();
-  if (!connection) return { connected: false, accountName: null };
+  if (!connection || connection.state !== 'connected')
+    return { connected: false, accountName: null };
   // Validate lazily: a stored-but-now-invalid key still reports connected so the
   // UI shows the disconnect affordance; the name is best-effort.
+  let apiKey: string | null;
   try {
-    const apiKey = await decryptUserConnectionApiKey(connection);
+    const found = await connections().credential(connection.owner_profile_id, 'everhour');
+    apiKey = found?.credential.kind === 'api_key' ? found.credential.apiKey : null;
+  } catch (err) {
+    if (!(err instanceof ConnectionAccessError)) throw err;
+    // The key it was sealed with is not configured: still connected, nothing erased.
+    if (err.code === 'unavailable')
+      return { connected: true, accountName: connection.external_account_label };
+    // Unreadable: the module erased it, so the user must reconnect.
+    return { connected: false, accountName: null };
+  }
+  if (!apiKey) return { connected: false, accountName: null };
+  try {
     const user = await everhourFetch<EverhourUser>(apiKey, '/users/me');
-    return { connected: true, accountName: user?.name ?? connection.account_name };
+    return { connected: true, accountName: user?.name ?? connection.external_account_label };
   } catch {
-    return { connected: true, accountName: connection.account_name };
+    return { connected: true, accountName: connection.external_account_label };
   }
 }
 
@@ -455,16 +420,20 @@ export async function setEverhourApiKey(rawKey: string): Promise<EverhourIntegra
   if (!apiKey) throw new ApiError(400, 'Enter an Everhour API key.');
   // Validate before persisting so we never store a key that cannot authenticate.
   const user = await everhourFetch<EverhourUser>(apiKey, '/users/me');
-  await writeEverhourConnection(
-    apiKey,
-    user?.name ?? null,
-    user?.id !== undefined && user.id !== null ? String(user.id) : null
-  );
+  const profileId = await requireActorProfileId();
+  try {
+    await connections().storeApiKey(profileId, 'everhour', apiKey, everhourAccount(user));
+  } catch (err) {
+    if (err instanceof ChatError && err.code === 'provider_not_ready')
+      throw new ApiError(503, ENCRYPTION_NOT_CONFIGURED);
+    throw err;
+  }
   return { connected: true, accountName: user?.name ?? null };
 }
 
 export async function clearEverhourApiKey(): Promise<EverhourIntegrationDto> {
-  await clearEverhourConnection();
+  const profileId = await requireActorProfileId();
+  await connections().disconnectProvider(profileId, 'everhour');
   return { connected: false, accountName: null };
 }
 

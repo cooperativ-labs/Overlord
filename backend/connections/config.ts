@@ -1,4 +1,4 @@
-import { decodeEncryptionKey } from './crypto.ts';
+import { type KeyRing, keyRingFromEnv } from './keyring.ts';
 
 /**
  * Server configuration for the account-connections module (contract v152).
@@ -11,6 +11,10 @@ import { decodeEncryptionKey } from './crypto.ts';
  *   credential envelopes; `ACCOUNT_CONNECTIONS_ENCRYPTION_KEY_ID` names it
  *   (default `k1`). An envelope written under another key id is unreadable and
  *   the connection requires reauthorization.
+ * - Since v153 these form the current entry of a key ring that also carries the
+ *   reserved fallback ids `everhour-env` (`EVERHOUR_API_KEY_ENCRYPTION_KEY`,
+ *   falling back to `GITHUB_USER_TOKEN_ENCRYPTION_KEY`) and `github-user-env`
+ *   (`GITHUB_USER_TOKEN_ENCRYPTION_KEY`) for profile-scoped providers.
  */
 export interface ConnectionsConfig {
   knowledgebase: {
@@ -19,6 +23,7 @@ export interface ConnectionsConfig {
     egressOrigins: string[];
   } | null;
   encryption: { key: Buffer; keyId: string } | null;
+  keyRing: KeyRing;
   /** Public backend origin that serves the client metadata document and callback. */
   publicBaseUrl: string;
   /** Web origin the callback returns to for `returnTo: 'web'`, or null for a status page. */
@@ -57,12 +62,11 @@ export function connectionsConfigFromEnv(
     url.hash = '';
     knowledgebase = { mcpUrl: url.toString(), egressOrigins: [...new Set([mcpOrigin, ...extra])] };
   }
-  const key = decodeEncryptionKey(env.ACCOUNT_CONNECTIONS_ENCRYPTION_KEY);
+  const keyRing = keyRingFromEnv(env);
   return {
     knowledgebase,
-    encryption: key
-      ? { key, keyId: env.ACCOUNT_CONNECTIONS_ENCRYPTION_KEY_ID?.trim() || 'k1' }
-      : null,
+    encryption: keyRing.current ? { key: keyRing.current.key, keyId: keyRing.current.id } : null,
+    keyRing,
     publicBaseUrl: publicBaseUrl.replace(/\/+$/, ''),
     webReturnOrigin
   };

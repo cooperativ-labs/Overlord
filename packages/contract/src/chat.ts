@@ -117,6 +117,9 @@ export type ChatEventKind = (typeof CHAT_EVENT_KINDS)[number];
  * 409 (or a `snapshot_required` frame on an open stream); `proposal_not_creatable` 409;
  * `continue_not_available` 409; `source_access_lost` 409; `provider_not_ready` 503;
  * `connection_reauthorization_required` 409; `limit_exceeded` 429; `invalid_request` 400.
+ * Account connections (v153) add `credential_rejected` 422 (the upstream refused an API
+ * key), `provider_not_available` 404 (this provider is not offered here), and
+ * `provider_unavailable` 502 (the upstream could not be reached).
  */
 export const CHAT_ERROR_CODES = [
   'chat_unavailable',
@@ -130,7 +133,10 @@ export const CHAT_ERROR_CODES = [
   'source_access_lost',
   'provider_not_ready',
   'connection_reauthorization_required',
-  'limit_exceeded'
+  'limit_exceeded',
+  'credential_rejected',
+  'provider_not_available',
+  'provider_unavailable'
 ] as const;
 export type ChatErrorCode = (typeof CHAT_ERROR_CODES)[number];
 
@@ -697,8 +703,27 @@ export const CHAT_NOTIFICATION_DEEP_LINK = 'overlord://chat/threads/:threadId' a
 // Account connections
 // ---------------------------------------------------------------------------
 
-export const ACCOUNT_CONNECTION_PROVIDERS = ['knowledgebase'] as const;
+export const ACCOUNT_CONNECTION_PROVIDERS = ['knowledgebase', 'everhour', 'github'] as const;
 export type AccountConnectionProvider = (typeof ACCOUNT_CONNECTION_PROVIDERS)[number];
+
+/**
+ * `organization`: owned by a profile inside one organization (Knowledgebase).
+ * `profile`: owned by the profile across every organization (Everhour, GitHub).
+ */
+export const ACCOUNT_CONNECTION_SCOPES = ['organization', 'profile'] as const;
+export type AccountConnectionScope = (typeof ACCOUNT_CONNECTION_SCOPES)[number];
+
+export const ACCOUNT_CONNECTION_CREDENTIAL_KINDS = ['oauth', 'api_key'] as const;
+export type AccountConnectionCredentialKind = (typeof ACCOUNT_CONNECTION_CREDENTIAL_KINDS)[number];
+
+/** Server-side envelope formats (never projected); listed for the closed vocabulary. */
+export const ACCOUNT_CONNECTION_CREDENTIAL_FORMATS = [
+  'connection-v1',
+  'everhour-user-key-v1',
+  'github-user-oauth-v1'
+] as const;
+export type AccountConnectionCredentialFormat =
+  (typeof ACCOUNT_CONNECTION_CREDENTIAL_FORMATS)[number];
 
 export const ACCOUNT_CONNECTION_STATES = [
   'pending',
@@ -712,7 +737,15 @@ export type AccountConnectionState = (typeof ACCOUNT_CONNECTION_STATES)[number];
 export interface AccountConnectionDto {
   id: string;
   provider: AccountConnectionProvider;
-  organizationId: string;
+  /** Always a string in the default (organization-scoped) listing; null when `scope` is `profile`. */
+  organizationId: string | null;
+  scope: AccountConnectionScope;
+  credentialKind: AccountConnectionCredentialKind;
+  /** The upstream account this credential authenticates as, when known. */
+  account: { id: string | null; label: string | null; avatarUrl: string | null } | null;
+  /** Granted OAuth scopes; empty for API keys. */
+  scopes: string[];
+  lastValidatedAt: string | null;
   serverUrl: string;
   state: AccountConnectionState;
   /** Provider workspaces this grant can read, e.g. Knowledgebase workspace slugs. */
@@ -724,15 +757,48 @@ export interface AccountConnectionDto {
   revision: number;
 }
 
-/** `GET /api/connections`: the caller's connections in the active organization. */
+export const ACCOUNT_CONNECTION_UNAVAILABLE_REASONS = [
+  'not_offered_on_edition',
+  'not_configured',
+  'encryption_not_configured'
+] as const;
+export type AccountConnectionUnavailableReason =
+  (typeof ACCOUNT_CONNECTION_UNAVAILABLE_REASONS)[number];
+
+/** One provider this server offers through `/api/connections` (`?scope=all` only). */
+export interface AccountConnectionProviderStatusDto {
+  provider: AccountConnectionProvider;
+  scope: AccountConnectionScope;
+  credentialKind: AccountConnectionCredentialKind;
+  available: boolean;
+  reason: AccountConnectionUnavailableReason | null;
+}
+
+/**
+ * `GET /api/connections`: the caller's connections in the active organization.
+ * `GET /api/connections?scope=all` (v153) adds profile-scoped connections and `providers`.
+ */
 export interface AccountConnectionListResponse {
   items: AccountConnectionDto[];
+  providers?: AccountConnectionProviderStatusDto[];
+}
+
+/** `POST /api/connections/api-keys` (v153): validated upstream, then sealed. Never echoed. */
+export interface SetAccountConnectionApiKeyBody {
+  provider: AccountConnectionProvider;
+  apiKey: string;
 }
 
 export interface StartAccountConnectionBody {
   provider: AccountConnectionProvider;
   /** Where the backend sends the browser after the callback; validated against an allowlist. */
   returnTo: 'mobile' | 'web';
+  /**
+   * Profile-scoped OAuth providers (`github`, v153), `returnTo: 'web'` only: a relative
+   * path on the web origin to return to (starts with `/`, not `//`; at most 512
+   * characters). Defaults to `/settings/connections`.
+   */
+  returnPath?: string;
 }
 
 /** The client opens `authorizeUrl` (ASWebAuthenticationSession on iOS, a tab on web). */

@@ -1,6 +1,7 @@
 import { type Permission, PERMISSIONS } from '@overlord/auth';
 import { type NextFunction, type Request, type Response, Router } from 'express';
 
+import { recordConnectionAliasHit } from '../../connections/alias-telemetry.ts';
 import { ApiError } from '../../errors.ts';
 import { missionRoute, projectRoute } from '../resource-routes.ts';
 
@@ -38,26 +39,40 @@ export function createGitHubExtensionRouter(
   options: { allowedBrowserOrigins?: readonly string[] } = {}
 ): Router {
   const router = Router();
+  // Compatibility aliases over the shared account-connections module (contract v153);
+  // `POST /api/connections` with `provider: 'github'` is the canonical start route.
+  const alias = (path: string, req: Request) => recordConnectionAliasHit(`/ext/github${path}`, req);
   router.get(
     '/user-connection',
-    handle(() => getGitHubUserConnection())
+    handle(req => {
+      alias('/user-connection', req);
+      return getGitHubUserConnection();
+    })
   );
   router.post(
     '/user-connection/authorize',
     handle(
-      req =>
-        beginGitHubUserAuthorization(
+      req => {
+        alias('/user-connection/authorize', req);
+        return beginGitHubUserAuthorization(
           {
             returnTo: typeof req.body?.returnTo === 'string' ? req.body.returnTo : undefined
           },
           options.allowedBrowserOrigins ?? []
-        ),
+        );
+      },
       { mutates: true }
     )
   );
   router.delete(
     '/user-connection',
-    handle(() => disconnectGitHubUser(), { mutates: true })
+    handle(
+      req => {
+        alias('/user-connection', req);
+        return disconnectGitHubUser();
+      },
+      { mutates: true }
+    )
   );
   router.get(
     '/repository-owners',

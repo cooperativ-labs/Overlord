@@ -2,66 +2,34 @@ import { CheckCircle2 } from 'lucide-react';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import type { ButtonLoadingState } from '@/components/ui/loading-button';
-import { LoadingButton } from '@/components/ui/loading-button';
 import {
   useBeginGitHubInstall,
-  useClearEverhourApiKey,
   useDisconnectGitHub,
-  useEverhourIntegration,
   useGitHubIntegration,
-  useSetEverhourApiKey,
   useWorkspaces
 } from '@/lib/queries';
 
-export function IntegrationsPage() {
+/**
+ * Workspace integrations. Personal accounts (Everhour, your GitHub account,
+ * Knowledgebase) are managed on Connected accounts; this page holds only grants
+ * that belong to one Overlord workspace.
+ */
+export function IntegrationsPage({
+  onOpenConnectedAccounts
+}: {
+  onOpenConnectedAccounts?: () => void;
+}) {
   const workspaces = useWorkspaces();
   const [githubWorkspaceId, setGitHubWorkspaceId] = useState('');
   const selectedWorkspaceId =
     githubWorkspaceId || (workspaces.data?.length === 1 ? workspaces.data[0]!.id : '');
-  const integration = useEverhourIntegration();
-  const setKey = useSetEverhourApiKey();
-  const clearKey = useClearEverhourApiKey();
-  const [apiKey, setApiKey] = useState('');
-  const [saveState, setSaveState] = useState<ButtonLoadingState>('default');
-  const [error, setError] = useState<string | null>(null);
   const github = useGitHubIntegration(selectedWorkspaceId);
   const beginGitHubInstall = useBeginGitHubInstall(selectedWorkspaceId);
   const disconnectGitHub = useDisconnectGitHub(selectedWorkspaceId);
   const [githubError, setGithubError] = useState<string | null>(null);
 
-  const connected = integration.data?.connected ?? false;
-  const accountName = integration.data?.accountName ?? null;
   const githubWorkspaceName = github.data?.workspaceName;
-
-  async function handleConnect() {
-    const trimmed = apiKey.trim();
-    if (!trimmed) {
-      setError('Enter an Everhour API key.');
-      return;
-    }
-    setSaveState('loading');
-    setError(null);
-    try {
-      await setKey.mutateAsync(trimmed);
-      setApiKey('');
-      setSaveState('success');
-    } catch (err) {
-      setSaveState('error');
-      setError(err instanceof Error ? err.message : 'Failed to validate the API key.');
-    }
-  }
-
-  async function handleDisconnect() {
-    setError(null);
-    try {
-      await clearKey.mutateAsync();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to disconnect.');
-    }
-  }
 
   async function handleGitHubInstall() {
     setGithubError(null);
@@ -80,17 +48,28 @@ export function IntegrationsPage() {
       <div>
         <h2 className="text-base font-medium">Integrations</h2>
         <p className="text-sm text-muted-foreground">
-          Connect the accounts you sign in with, then grant workspace access where the provider
-          needs an organization install. Secrets stay on the server and are never sent to the
-          browser.
+          Your own accounts, including Everhour and your personal GitHub account, are managed on{' '}
+          {onOpenConnectedAccounts ? (
+            <button
+              type="button"
+              className="font-medium text-foreground underline underline-offset-2"
+              onClick={onOpenConnectedAccounts}
+            >
+              Connected accounts
+            </button>
+          ) : (
+            <strong className="text-foreground">Connected accounts</strong>
+          )}
+          .
         </p>
       </div>
 
       <section className="space-y-3">
         <div>
-          <h3 className="text-sm font-medium">Your accounts</h3>
+          <h3 className="text-sm font-medium">Workspace</h3>
           <p className="text-xs text-muted-foreground">
-            These credentials belong to you and apply in every workspace you belong to.
+            Organization-level grants that apply to one Overlord workspace, not to your personal
+            login.
           </p>
         </div>
 
@@ -115,95 +94,10 @@ export function IntegrationsPage() {
           ) : null}
           <div className="flex items-center justify-between gap-2">
             <div>
-              <h4 className="text-sm font-medium">Everhour</h4>
-              <p className="text-xs text-muted-foreground">
-                Track time on missions with your own Everhour user. Each project still links to an
-                Everhour project and each mission to a task.
-              </p>
-            </div>
-            {connected ? (
-              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-600">
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                Connected
-              </span>
-            ) : null}
-          </div>
-
-          {connected ? (
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                {accountName ? (
-                  <>
-                    Connected as <strong className="text-foreground">{accountName}</strong>.
-                  </>
-                ) : (
-                  'Your Everhour API key is configured for this account.'
-                )}
-              </p>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={clearKey.isPending}
-                onClick={handleDisconnect}
-              >
-                Disconnect
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <Label htmlFor="everhour-api-key">API key</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="everhour-api-key"
-                  type="password"
-                  autoComplete="off"
-                  value={apiKey}
-                  onChange={e => setApiKey(e.target.value)}
-                  placeholder="abcd-efgh-1234567-7890ab-cdefgh12"
-                  className="h-8 font-mono text-xs"
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') void handleConnect();
-                  }}
-                />
-                <LoadingButton
-                  buttonState={saveState}
-                  setButtonState={setSaveState}
-                  text="Connect"
-                  loadingText="Validating…"
-                  successText="Connected"
-                  errorText="Retry"
-                  reset
-                  size="sm"
-                  className="h-8 shrink-0"
-                  onClick={handleConnect}
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Find your key in your Everhour profile (Account → Profile, at the bottom).
-              </p>
-            </div>
-          )}
-          {error ? <p className="text-xs text-destructive">{error}</p> : null}
-        </div>
-      </section>
-
-      <section className="space-y-3">
-        <div>
-          <h3 className="text-sm font-medium">Workspace</h3>
-          <p className="text-xs text-muted-foreground">
-            Organization-level grants that apply to one Overlord workspace, not to your personal
-            login.
-          </p>
-        </div>
-
-        <div className="max-w-lg space-y-3 rounded-lg border border-border p-4">
-          <div className="flex items-center justify-between gap-2">
-            <div>
               <h4 className="text-sm font-medium">GitHub App</h4>
               <p className="text-xs text-muted-foreground">
-                Link repositories to projects and create pull requests from published mission
-                branches.
+                Workspace installation: link repositories to projects and create pull requests from
+                published mission branches.
                 {githubWorkspaceName ? (
                   <>
                     {' '}

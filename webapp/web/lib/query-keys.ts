@@ -98,7 +98,8 @@ export const keys = {
   launchPreference: (projectId: string) => ['project', projectId, 'launch-preference'] as const,
   projectExecutionTarget: (projectId: string) =>
     ['project', projectId, 'execution-target'] as const,
-  everhourIntegration: ['integrations', 'everhour'] as const,
+  /** `GET /api/connections?scope=all`: every connected account and provider availability. */
+  accountConnections: ['connections', 'all'] as const,
   projectEverhourLink: (projectId: string) => ['project', projectId, 'everhour-link'] as const,
   projectEverhour: (projectId: string) => ['project', projectId, 'everhour'] as const,
   missionEverhour: (id: string) => ['mission', id, 'everhour'] as const,

@@ -1,5 +1,6 @@
 import { agentLaunchConfigApi } from './api/agent-launch-config.ts';
 import { chatApi } from './api/chat.ts';
+import { connectionsApi } from './api/connections.ts';
 import { deferredWorkApi } from './api/deferred-work.ts';
 import { everhourApi } from './api/everhour.ts';
 import { githubApi } from './api/github.ts';
@@ -38,5 +39,6 @@ export const api = {
   ...everhourApi,
   ...githubApi,
   ...localTargetApi,
-  ...chatApi
+  ...chatApi,
+  ...connectionsApi
 };

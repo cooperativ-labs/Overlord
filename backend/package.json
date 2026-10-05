@@ -19,7 +19,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1075.0",
     "@aws-sdk/s3-request-presigner": "^3.1075.0",
-    "@google/genai": "^2.8.0",
+    "@google/genai": "^2.24.0",
     "@overlord/auth": "workspace:*",
     "@overlord/automations": "workspace:*",
     "@overlord/contract": "workspace:*",

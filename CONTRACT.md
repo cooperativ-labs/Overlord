@@ -34,13 +34,281 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `152`
+Current version: `153`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
 `contract/components.yaml`) — never a header duplicate. The contract version is
 incremented when any stable interface changes. All conformance manifests must
 declare the contract version they were validated against.
+
+### Version 153 Change Summary
+
+Personal integrations move onto the shared account-connections module (coo:1110).
+Feature plan: `planning/feature-plans/everhour-github-account-connections-migration.md`;
+DTOs: `packages/contract/src/chat.ts` → "Account connections"; schema:
+`database/docs/09-database-schema-contract.md` → `account_connections`. This version
+defines the interfaces for both personal providers. Both move onto the module in this
+version: the Everhour personal API key (coo:1110.j8ny) and the personal GitHub
+repository authorization (coo:1110.ykk0).
+
+**Two connection scopes.** `account_connections` holds every external account
+connection. A connection is either **organization-scoped** (`knowledgebase`: owned by
+a profile inside one organization, exactly as in v152) or **profile-scoped**
+(`everhour`, `github`: owned by the profile across every organization, with
+`organization_id` NULL). The database enforces `(provider = 'knowledgebase') =
+(organization_id IS NOT NULL)`. There is one live connection per `(owner,
+organization, provider, server_url)` for organization-scoped rows, and per `(owner,
+provider, server_url)` for profile-scoped rows. A profile-scoped GitHub account may be
+live on at most one profile. New columns: `credential_kind` (`oauth`, `api_key`),
+`credential_format` (see below), `external_account_id`, `external_account_label`,
+`external_account_avatar_url`, `granted_scopes_json`, `last_validated_at`, and
+`account_connection_authorizations.return_url` (legacy return target, set only by a
+compatibility alias).
+
+**Credential envelopes and keys.** The module is the only reader and writer of
+`account_connections.credential_*`. Extensions obtain a credential only through the
+module (`ProfileConnections.credential(profileId, provider)`). They never read
+`credential_*` and never hold an encryption key. Envelopes keep the AES-256-GCM `v1`
+format. `credential_format` names the plaintext shape and the additional
+authenticated data:
+
+- `connection-v1`: binds owner profile, organization (`-` when profile-scoped),
+  provider and connection id. The plaintext is `{accessToken, refreshToken}` for OAuth
+  or `{apiKey}` for an API key. Every new write uses this format.
+- `everhour-user-key-v1`: an Everhour envelope adopted verbatim from
+  `ext_everhour_user_connections`. It binds the owner profile only.
+- `github-user-oauth-v1`: GitHub access and refresh envelopes adopted verbatim from
+  `ext_github_user_connections` (coo:1110.ykk0). They bind the owner profile only.
+
+Keys form a key ring addressed by `credential_key_id`:
+
+- The current key: `ACCOUNT_CONNECTIONS_ENCRYPTION_KEY`, id
+  `ACCOUNT_CONNECTIONS_ENCRYPTION_KEY_ID`, default `k1`.
+- Two reserved fallback ids:
+  - `everhour-env`: `EVERHOUR_API_KEY_ENCRYPTION_KEY`, falling back to
+    `GITHUB_USER_TOKEN_ENCRYPTION_KEY`.
+  - `github-user-env`: `GITHUB_USER_TOKEN_ENCRYPTION_KEY`.
+
+Writes use the current key when configured. Otherwise a profile-scoped provider
+writes under its fallback key, so a deployment with only the existing variables keeps
+working without a new secret. Knowledgebase has no fallback (`provider_not_ready`).
+
+When a row's key id is not in the ring, the outcome depends on the row:
+
+- A fallback key id or a legacy format, or a deployment with no current key at all:
+  the credential is `unavailable` (503) and is **not erased**. Restoring the variable
+  restores access.
+- Any other key id while a current key is configured (a rotated key): the row becomes
+  `reauthorization_required` with `credential_unreadable`, and the credential is
+  erased, exactly as in v152.
+
+An authentication failure with the key present has the same outcome as a rotated key.
+
+After every successful read of a row in a legacy format, or under a key id that is
+not current, the module re-seals that row under the current key (`connection-v1`,
+`credential_revision + 1`, guarded by revision). A bounded re-seal sweep runs at
+backend start when a current key is configured, and logs counts only.
+
+**Migration and adoption.** Migration `20261005120000_account_connections_profile_scope`
+(both editions) widens the schema. SQLite rebuilds `account_connections`, preserving
+rows, foreign keys and `chat_source_refs` links. The migration copies every live
+`ext_everhour_user_connections` row verbatim, with the same id, format
+`everhour-user-key-v1` and key id `everhour-env`, unless the profile already has an
+Everhour connection in any state. No key is needed at migration time and no plaintext
+is in flight. The migration also overwrites the ciphertext of soft-deleted Everhour
+user rows with `revoked:v1`, and the plaintext of soft-deleted (already adopted)
+workspace rows. The legacy tables stay as read-only migration sources.
+
+For one release the module also performs lazy adoption: when a profile has no
+Everhour row in any state, the module copies a legacy row written by an older
+instance. A row still in a legacy format is honoured only while its legacy source row
+is live. A disconnect in the module tombstones the legacy row (`deleted_at`,
+ciphertext `revoked:v1`), so neither a rollback nor a later re-run can resurrect a
+credential the user removed. Workspace-key adoption (v90 rule: unambiguous
+`entity_changes` actor) now stores the adopted key through the module and scrubs the
+workspace row's plaintext.
+
+A second migration, `20261005130000_account_connections_github_adoption` (both
+editions, no rebuild), copies every live `ext_github_user_connections` row verbatim in
+the same way: same id, format `github-user-oauth-v1` (the ciphertext column holds
+`{"access": <envelope>, "refresh": <envelope or null>}`), key id `github-user-env`,
+with the account id, login, avatar, granted scopes and expiries. It skips a profile
+that already has a GitHub row in any state, and a GitHub account already live on
+another profile. It overwrites the access ciphertext of soft-deleted GitHub rows with
+`revoked:v1` and clears their refresh ciphertext. From this version the GitHub legacy
+routes no longer write `ext_github_user_connections` or `ext_github_user_oauth_states`;
+pending legacy sign-in states are not migrated (a sign-in in flight across the deploy
+lands on the expired status and is retried). Lazy adoption and the legacy-source
+liveness check apply to GitHub exactly as to Everhour.
+
+**GitHub repository authorization (profile-scoped OAuth).** The module runs the
+authorization-code flow for `github` with a confidential client, using the provider
+adapter for the provider HTTP calls. The security properties of v31/v33 are unchanged:
+
+- A distinct, explicit grant requesting exactly `repo read:org` with
+  `allow_signup=false`, separate from Better Auth GitHub sign-in, through the same
+  `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` registration.
+- Profile-bound, hashed, single-use state with a 10-minute expiry, stored in
+  `account_connection_authorizations` (at most five open per connection). A state is
+  bound to its provider: a state issued for one provider is never consumed by
+  another provider's callback. A PKCE S256 challenge is always sent; the verifier is
+  sealed under the provider's write key.
+- The callback stays `GET /api/auth/callback/github/repository`, served by the
+  module's callback handler and mounted before the Better Auth `/api/auth/*`
+  wildcard.
+- A grant without both `repo` and `read:org` stores nothing and finishes `failed`
+  with `lastErrorCode` `insufficient_scope`. A GitHub account already live on another
+  profile finishes `failed` with `account_in_use`.
+- The token is sealed by the module (`connection-v1`, the key ring), never by the
+  extension.
+- Use refreshes an expiring token under the module's refresh lease, so concurrent
+  callers share one upstream refresh, and persists the rotated credential before use.
+  A refresh rejected with `bad_refresh_token` (or a missing refresh token) marks the
+  connection `reauthorization_required`. An upstream 401 is retried once after a
+  forced refresh; a second 401 marks it `reauthorization_required` (`invalid_grant`).
+  A `/user` identity that no longer matches the stored account marks it
+  `reauthorization_required` (`identity_changed`).
+- Disconnect erases the credential first, then revokes the token upstream
+  (best-effort), then tombstones the legacy row.
+
+The workspace-scoped GitHub App installation (`/ext/github/integration`, `/install`,
+`/callback`, `/repos`, project links, pull requests) and composite project
+initialization are unchanged.
+
+**REST.**
+
+- `GET /api/connections` with no `scope` is unchanged from v152: it lists
+  organization-scoped connections and is Cloud-only (`chat_unavailable` on Local).
+- `GET /api/connections?scope=all` lists the caller's organization-scoped connections
+  (Cloud, active organization) plus every profile-scoped connection, and adds
+  `providers`. Each entry is `{ provider, scope, credentialKind, available, reason }`,
+  where `reason` is one of `not_offered_on_edition`, `not_configured` or
+  `encryption_not_configured`. This form is served on both editions.
+- `POST /api/connections/api-keys` takes `{ provider, apiKey }` and returns
+  `AccountConnectionDto` (`connected`). It validates the key upstream first, then
+  seals it. A reconnect or key rotation is the same call. It is served on both
+  editions. Errors:
+  - 400 `invalid_request`: blank or oversized key.
+  - 404 `provider_not_available`: not an API-key provider offered here.
+  - 422 `credential_rejected`: the upstream rejected the key.
+  - 503 `provider_not_ready`: no write key.
+  - 502 `provider_unavailable`: the upstream is unreachable.
+- `DELETE /api/connections/:id` also disconnects the caller's profile-scoped
+  connections on both editions. It erases the credential first, then tombstones the
+  legacy row.
+- `POST /api/connections` stays OAuth-only. It accepts `provider: 'github'` on both
+  editions, with `returnTo` (`mobile` or `web`) and an optional `returnPath` (web
+  only: a relative path that starts with `/`, not `//`, at most 512 characters). It
+  returns `StartAccountConnectionResponse`, reusing the caller's live GitHub
+  connection for a reconnect. It answers 503 `provider_not_ready` when the OAuth
+  client or every write key is missing. `everhour` answers 400 `invalid_request`.
+  Knowledgebase is unchanged (Cloud-only).
+- The GitHub callback redirects with only `provider=github` and `status`
+  (`connected`, `denied`, `expired`, `failed`): to `overlord://connections/callback`
+  for `mobile`, and to the web origin plus `returnPath` (default
+  `/settings/connections`) for `web`. Without a return target it renders a status
+  page. A sign-in started by the legacy alias returns to its validated legacy URL
+  with `githubConnection=<status>`.
+- New `ChatErrorCode` values: `credential_rejected` (422), `provider_not_available`
+  (404), `provider_unavailable` (502).
+
+**Compatibility aliases.** `GET`/`PUT`/`DELETE /ext/everhour/user-connection` and the
+deprecated `/ext/everhour/integration` keep their exact request and response shape
+(`EverhourIntegrationDto`) and error text. They are thin aliases over the module.
+`connected` means a live `connected` row. A `reauthorization_required` row reports
+`connected: false`, so the existing connect form appears. Each alias records an
+in-process hit counter that is logged hourly, with route and client family only.
+Retirement is a later contract change: `/ext/everhour/integration` goes first, after
+the web app moves to `/api/connections` (coo:1110.ywx9) and the counter reads zero.
+`GET`/`DELETE /ext/github/user-connection` and `POST
+/ext/github/user-connection/authorize` are aliases with the same shapes
+(`GitHubUserConnectionDto`, `GitHubUserAuthorizationDto`) and the same `returnTo`
+validation: an allowed browser origin URL or `overlord://github/callback`, stored in
+`account_connection_authorizations.return_url`. A body without `returnTo` returns to
+the web connected-accounts page when a web origin is configured, otherwise to the
+status page. `connected` means a live `connected` row; `reauthorization_required`
+reports `connected: false`, so the existing reconnect flow appears. `configured`
+means the OAuth client and a write key are both present. These aliases stay until an
+OverlordMobile release on `/api/connections` has shipped and they record 90 days
+without hits. `GET /ext/github/repository-owners` is a feature route, not an alias; it
+reads its token through the module. `/api/auth/callback/github/repository` stays the
+canonical GitHub callback, before the Better Auth wildcard.
+
+**DTOs.** `AccountConnectionDto` gains:
+
+- `scope` (`organization` or `profile`)
+- `credentialKind`
+- `account` (`{ id, label, avatarUrl }` or null)
+- `scopes`
+- `lastValidatedAt`
+
+`organizationId` becomes `string | null`. It is always a string in the default
+listing. `ACCOUNT_CONNECTION_PROVIDERS` gains `everhour` and `github`.
+`StartAccountConnectionBody` gains optional `returnPath`.
+`AccountConnectionListResponse` gains optional `providers`. New types:
+`SetAccountConnectionApiKeyBody`, `AccountConnectionProviderStatusDto`,
+`ACCOUNT_CONNECTION_SCOPES`, `ACCOUNT_CONNECTION_CREDENTIAL_KINDS` and
+`ACCOUNT_CONNECTION_CREDENTIAL_FORMATS`.
+
+**Closed vocabularies.**
+
+- `account_connections.provider`: + `everhour`, `github`
+- New `account_connections.credential_kind`: `oauth`, `api_key`
+- New `account_connections.credential_format`: `connection-v1`,
+  `everhour-user-key-v1`, `github-user-oauth-v1`
+- `lastErrorCode` additionally admits `insufficient_scope`, `account_in_use`,
+  `identity_changed` and `account_lookup_failed` (GitHub)
+
+**Local edition.** `/api/connections` with `?scope=all`, `/api-keys` and `DELETE` is
+served on Local for profile-scoped providers. Knowledgebase and `/api/chat/*` stay
+Cloud-only. When no key is configured (neither the current key nor the provider's
+fallback), the provider reports `available: false` with `encryption_not_configured`
+and connecting answers 503. Credentials stored earlier stay listed and answer
+`unavailable` without being erased. There is never a plaintext fallback. The legacy
+routes keep their existing 503 text.
+
+**Impact by module.**
+
+- Database: one migration per edition, the SQLite rebuild, and schema documentation.
+- REST: the connections router serves profile-scoped routes on both editions,
+  including `POST /api/connections` for `github`; the Everhour and GitHub personal
+  connection routes become aliases.
+- Extension System: the Everhour extension drops its own encryption
+  (`backend/ext/everhour/crypto.ts` removed). It registers an account-connection
+  provider adapter (validate, legacy adoption, tombstone) and reads keys through the
+  module. Its manifest moves from the stale `contractVersion: "0"` to 153. The GitHub
+  extension drops its token encryption, OAuth state, and token storage from
+  `user-oauth.ts`. It registers an OAuth provider adapter
+  (`backend/ext/github/connection-provider.ts`: authorize URL, code exchange,
+  refresh, revoke, `/user`, legacy adoption and tombstone) and obtains tokens through
+  the module. Its REST and database manifests move from 33 to 153.
+- Web and mobile (coo:1110.ywx9): one **Connected accounts** place on each client,
+  built only on `GET /api/connections?scope=all`, `POST /api/connections`,
+  `POST /api/connections/api-keys` and `DELETE /api/connections/:id`, with DTOs from
+  `@overlord/contract`. Every provider row shows the same status (Connected, Needs
+  reconnecting, Not connected, Not available / Not configured on this server) and
+  the same Connect or Reconnect and Disconnect (confirmed) actions. Web:
+  `/settings/connections` is now a page (and a Settings section), and the return
+  path of every callback; a Knowledgebase sign-in started from Chat goes back to Chat
+  with its status. Chat keeps a Knowledgebase shortcut that renders the same row.
+  Settings → Integrations holds only the workspace GitHub App. The Everhour feature
+  gate (timers, project links) reads the shared listing, so the web app no longer
+  calls `/ext/everhour/user-connection`; the project-settings prompt deep-links to
+  `/settings/connections?provider=everhour`. Mobile: Settings → Connected accounts
+  (OAuth via `ASWebAuthenticationSession` returning to
+  `overlord://connections/callback`, Everhour via a secure field); project creation's
+  Connect GitHub step and Chat's Knowledgebase sheet use the same module; mobile no
+  longer calls `/ext/github/user-connection` and keeps recognising
+  `overlord://github/callback` for sign-ins started by older builds. Default
+  listings stay byte-compatible, so older clients keep working through the aliases.
+- Auth: no functional change. The GitHub repository callback keeps its path and its
+  place before the Better Auth wildcard; the module now serves it.
+- Protocol, CLI, Connector, Runner, Automations (no `/api/connections` access for
+  `project_automation` tokens, unchanged), Desktop Shell and MCP Server: no change.
+  Connector manifests are revalidated at 153.
+- Chat: `ChatOwner` is used only for organization-scoped providers, and
+  `onAccessLost` runs only for them.
 
 ### Version 152 Change Summary
 
@@ -201,7 +469,8 @@ held only while the tab is visible and focused (`platform` `web` or `desktop`, o
 client id per page load), and acknowledgements are sent only for events already
 committed to the rendered transcript. The Knowledgebase callback's web return path
 `/settings/connections` is an SPA route that reloads connection state and returns to
-Chat.
+Chat. *(Since v153 it is the Connected accounts page; a sign-in started from Chat still
+returns to Chat.)*
 
 **Continue.** When the latest run of a thread completed with
 `allowance_exhausted`, `POST /api/chat/runs/:id/continue` creates one new run with
@@ -281,7 +550,8 @@ status. Credentials, verifiers, codes, and state never appear in DTOs, logs, rea
 change rows, or errors; the only client-visible URL carrying `state` is `authorizeUrl`
 itself, where OAuth requires it (stored only as a hash, single use, 10-minute expiry).
 The Everhour and GitHub credential stores are unchanged (coo:1110); they share only
-the AES-256-GCM envelope primitive (`v1` format, their own AAD and keys).
+the AES-256-GCM envelope primitive (`v1` format, their own AAD and keys). *(Superseded
+by v153: both personal integrations move onto this module.)*
 
 *Client integration (web and mobile, coo:1108.zb9x).* `POST /api/connections` reuses
 the caller's live connection for reauthorization (same `connectionId`) and allows at
@@ -2039,8 +2309,8 @@ Owns:
 - Editable mission artifacts: authenticated `PATCH /api/missions/:id/artifacts/:artifactId` accepts `expectedRevision` plus a non-empty subset of `{ label, contentText, externalUrl }`, requires `mission:update` on the named mission, retains delivery/session/objective provenance and `contentJson`, rejects stale edits with `409` and non-HTTP(S) external URLs, and emits an `artifact` entity-change row in the write transaction. The client renders `contentText` as safe Markdown and edits these human-facing fields in place. The same mutation is also reachable through Protocol `update-artifact` and MCP `overlord_update_artifact` (see Protocol / MCP ownership).
 - Mid-turn mission artifact creation: authenticated `POST /api/missions/:id/artifacts` accepts `{ type, label }` plus at least one of `{ contentText, externalUrl }`, requires `artifact:create` on the named mission, optionally stamps `objectiveId` / `sessionId` provenance, leaves `delivery_id` null, rejects non-HTTP(S) external URLs, and emits an `artifact` entity-change insert in the same transaction. The same mutation is reachable through Protocol `add-artifact` and MCP `overlord_add_artifact`.
 - Mission shared context: authenticated `GET /api/missions/:id/context` returns `SharedContextEntryDto` records (`key`, `value`, `valueKind`, `tags`, `updatedAt`, `revision`) authorized with `mission:read`; authenticated `PUT /api/missions/:id/context` upserts one entry by `{ key, value }` with `mission:update`, mirrors Protocol `write-context`/`read-context`, and emits a `shared_context_entry` entity-change in the same transaction. The web client renders these entries in a collapsed Shared State mission footer and supports in-place edits.
-- User-scoped Everhour identity: authenticated `GET /ext/everhour/user-connection` reports non-secret connection metadata for the caller's profile; authenticated `PUT /ext/everhour/user-connection` validates the personal API key against Everhour then stores it only as AES-256-GCM ciphertext under a server-held key; authenticated `DELETE /ext/everhour/user-connection` revokes/soft-deletes only the caller's credential. These account-wide routes do not use an ambient workspace or a `workspace:*` permission. Existing `GET`/`PUT`/`DELETE /ext/everhour/integration` are a deprecated alias of the same profile-scoped surface. Timer, time-entry, and project-link writes use the acting user's key. DTOs, logs, browser/mobile storage, realtime, entity changes, and errors never contain an Everhour API key or server encryption key. Workspace-scoped GitHub App installation and Everhour/GitHub resource links are unchanged.
-- User-scoped GitHub repository authorization: authenticated `GET /ext/github/user-connection` reports configuration and non-secret connected-account metadata; `POST /ext/github/user-connection/authorize` creates a profile-bound, hashed, short-lived OAuth state and returns the GitHub authorization URL; public `GET /api/auth/callback/github/repository` consumes that state once, exchanges the code server-to-server, encrypts the access and optional refresh credentials with AES-256-GCM, and stores one active connection for the profile; authenticated `DELETE /ext/github/user-connection` revokes/soft-deletes only the caller's credential; authenticated `GET /ext/github/repository-owners` returns the personal owner plus only active organizations whose policy permits the caller to create private repositories. Repository authorization reuses the Better Auth GitHub OAuth App client registration (`GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`) but remains a distinct, explicit grant and token lifecycle requesting `repo read:org`; the callback is a subpath of the registered `/api/auth/callback/github` login callback and runs before the Better Auth wildcard. These account-wide routes do not use an ambient workspace or alter the existing workspace GitHub App installation. DTOs, logs, browser/mobile storage, realtime, entity changes, redirects, and errors never contain a GitHub credential, raw OAuth state, or server encryption key.
+- User-scoped Everhour identity: authenticated `GET /ext/everhour/user-connection` reports non-secret connection metadata for the caller's profile; authenticated `PUT /ext/everhour/user-connection` validates the personal API key against Everhour then stores it only as AES-256-GCM ciphertext under a server-held key; authenticated `DELETE /ext/everhour/user-connection` revokes/soft-deletes only the caller's credential. These account-wide routes do not use an ambient workspace or a `workspace:*` permission. Existing `GET`/`PUT`/`DELETE /ext/everhour/integration` are a deprecated alias of the same profile-scoped surface. Timer, time-entry, and project-link writes use the acting user's key. DTOs, logs, browser/mobile storage, realtime, entity changes, and errors never contain an Everhour API key or server encryption key. Workspace-scoped GitHub App installation and Everhour/GitHub resource links are unchanged. Since v153 these routes are compatibility aliases over the shared account-connections module (`ProfileConnections`, provider `everhour`, profile scope): the key is stored in `account_connections` under the module's key ring, never in an extension-held key, and the response shapes and error text are unchanged.
+- User-scoped GitHub repository authorization: authenticated `GET /ext/github/user-connection` reports configuration and non-secret connected-account metadata; `POST /ext/github/user-connection/authorize` creates a profile-bound, hashed, short-lived OAuth state and returns the GitHub authorization URL; public `GET /api/auth/callback/github/repository` consumes that state once, exchanges the code server-to-server, encrypts the access and optional refresh credentials with AES-256-GCM, and stores one active connection for the profile; authenticated `DELETE /ext/github/user-connection` revokes/soft-deletes only the caller's credential; authenticated `GET /ext/github/repository-owners` returns the personal owner plus only active organizations whose policy permits the caller to create private repositories. Repository authorization reuses the Better Auth GitHub OAuth App client registration (`GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`) but remains a distinct, explicit grant and token lifecycle requesting `repo read:org`; the callback is a subpath of the registered `/api/auth/callback/github` login callback and runs before the Better Auth wildcard. These account-wide routes do not use an ambient workspace or alter the existing workspace GitHub App installation. DTOs, logs, browser/mobile storage, realtime, entity changes, redirects, and errors never contain a GitHub credential, raw OAuth state, or server encryption key. Since v153 `GET`/`DELETE /user-connection` and `POST /user-connection/authorize` are compatibility aliases over the shared account-connections module (`ProfileConnections`, provider `github`, profile scope), with unchanged shapes; the module serves the callback at the same path, stores the token in `account_connections` under its key ring, and serialises refresh; `POST /api/connections` with `provider: 'github'` is the canonical start route.
 - Composite project initialization: authenticated `POST /api/projects/initialize` names its target workspace and requires `project:create` there. The caller-provided idempotency key creates the project, first mission, and initial draft objective atomically; optional private GitHub provisioning runs outside that transaction through the already connected user OAuth credential and is retryable with the same key. A failure never rolls back the created idea. On success the extension records one GitHub project link and the core service records one non-primary read-only `git` resource for the HTTPS clone URL. The selected owner must be eligible for the connected account, and this flow never reads, changes, or depends on the workspace GitHub App installation.
 - Realtime `EntityChangeDto` projections from `entity_changes`, including `changedFields` parsed from `changed_fields_json` and additive `workspaceId`; streams and catch-up scans aggregate only the caller's current readable memberships, filter before projection, and advance the global cursor past filtered rows
 - Read-only derived mission branch metadata (`MissionBranchDto`) from `missions.active_branch`, predicted via the service layer's copy of the shared branch/worktree planning algorithm (`backend/branch-planning.ts`) — co-owned with the Runner Layer and pinned to `contract/branch-planning-vectors.json` (see "Shared Deterministic Algorithms")
@@ -2077,6 +2347,7 @@ Owns:
 - In-process standard push dispatcher (`backend/push-notification-dispatcher.ts`), which claims durable `overlord.push_notification.dispatch.v1` worker jobs, recomputes the alert presentation snapshot, and sends APNs `alert`/`background` pushes on the plain bundle-id topic. It shares the APNs signing/transport helpers with the Live Activity dispatcher but never shares tokens, topics, or push types with it.
 - The private **assistant conversation** route family (contract v152; DTOs in `packages/contract/src/chat.ts`): `/api/chat/threads*`, `/api/chat/runs/:id/{cancel,continue}`, `/api/chat/questions/:id/answer`, `/api/chat/proposals/:id/create`, `/api/chat/providers`, and `/api/chat/notifications*`, all owner- and organization-scoped with existence-hiding 404s and Cloud-only (`chat_unavailable` on Local); idempotent submission/Create keyed by client request ids; atomic snapshot plus `eventCursor`; the owner-scoped SSE event channel with replay from storage, bounded retention, and `snapshot_required` — the one sanctioned realtime channel that does not derive from `entity_changes`; expiring foreground presence and monotonic rendered-event acknowledgements separate from replay cursors; backend run scheduling with leased, fenced attempts; the Gemini runtime adapter and private checkpoint persistence; the in-process conversation-notification dispatcher over `chat_notifications`
 - Account-connection routes (contract v152): `GET`/`POST /api/connections`, `DELETE /api/connections/:id`, public `GET /api/connections/knowledgebase/callback`, and public Client ID Metadata Document `GET /oauth/clients/knowledgebase.json`; the backend outbound MCP client for the configured Knowledgebase with a reviewed read-only allowlist; and the authenticated mission-less `POST /api/projects/:id/repository-reads` route over the runner capability queue
+- Profile-scoped account connections (contract v153): `GET /api/connections?scope=all` (organization-scoped plus profile-scoped connections and per-provider `providers` availability), `POST /api/connections/api-keys` (`{ provider, apiKey }`, validated upstream, then sealed), and `DELETE /api/connections/:id` for profile-scoped rows, and `POST /api/connections` for `github` (profile-scoped OAuth, callback `/api/auth/callback/github/repository`), served on both editions; the default `GET /api/connections` listing and Knowledgebase stay Cloud-only and unchanged
 
 Does NOT own:
 
@@ -2097,6 +2368,7 @@ Owns:
 - Better Auth implementation tables (`user`, `session`, `account`, `verification`, `apikey`) — these are auth-internal and must not be read directly by other components
 - Self-service account deletion trigger (`user.deleteUser`), delegating the cascade to a backend-supplied callback
 - Account-connection ownership and credential envelopes (contract v152): AES-256-GCM envelopes whose additional authenticated data binds the owner profile, organization, provider, and connection id, with the key and key id from server configuration; PKCE verifiers and OAuth `state` are stored encrypted and hashed respectively. Chat routes authorize by owner identity plus live workspace/project RBAC for every referenced project; no new role permission is added
+- Account-connection key ring and credential formats (contract v153): current key `ACCOUNT_CONNECTIONS_ENCRYPTION_KEY` plus reserved per-provider fallback ids `everhour-env` and `github-user-env` over the existing environment keys; `credential_format` `connection-v1`, `everhour-user-key-v1`, `github-user-oauth-v1`; legacy envelopes adopted verbatim and re-sealed lazily under the current key; a missing fallback key answers `unavailable` without erasing
 - Sign-up/sign-in email verification: an optional `sendVerificationEmail` callback (`CreateAuthOptions.sendVerificationEmail`) delegates delivery to a backend-supplied sender, mirroring the `onDeleteUser` delegation pattern. When provided, Better Auth also enables `emailAndPassword.requireEmailVerification` so unverified accounts cannot sign in. When omitted (the default, e.g. Local/offline editions with no configured email provider), verification stays fully disabled and behavior is unchanged. The backend's concrete sender (`backend/email-verification.ts`) uses Resend, configured via the `RESEND_API_KEY` env var and the `notifications.cooperativ.io` sending domain
 - Numeric one-time codes (OTP): an optional `sendEmailOTP` callback (`CreateAuthOptions.sendEmailOTP`) enables Better Auth's `emailOTP` plugin (6-digit codes, 1-hour expiry), the same caller-supplied-callback pattern as `sendVerificationEmail`. When enabled, the sign-up verification email carries **both** the existing magic link **and** a real 6-digit code minted via `auth.api.createVerificationOTP` and passed to `sendVerificationEmail` as `otp` — replacing the previous behavior of showing the raw (untypable) verification link token in the code block. The plugin also exposes `/api/auth/email-otp/*` server endpoints (notably `verify-email`, `check-verification-otp`, `send-verification-otp`, `sign-in/email-otp`, `forget-password`/`reset-password`) and the corresponding `authClient.emailOtp.*` client methods for typed-code sign-in and password reset. When `sendEmailOTP` is omitted, the plugin is left off and no OTP endpoints exist. The backend sender is `emailOTPSenderFromEnv()` in `backend/email-verification.ts` (Resend-backed)
 - Hosted MCP OAuth consent and token issuance: OAuth approval creates a scoped `USER_TOKEN` with the `mission_lifecycle` preset after an authenticated browser session approves the request. Authorization codes are short-lived, single-use, PKCE-protected, and exchanged for bearer access tokens; refresh tokens are not issued through contract version `2`. A code that expires unexchanged, or whose exchange fails its client/PKCE/resource checks, revokes the `USER_TOKEN` it would have delivered, so no orphaned active token outlives its authorization code.
@@ -2430,6 +2702,13 @@ answering a decision it is blocked on, and injecting an instruction into it.
 - **Token use**: a 401 triggers one refresh shared by concurrent callers through the refresh lease (15 s, shorter than the provider's 30 s reuse grace). A second 401 or `invalid_grant` marks the connection `reauthorization_required` and erases its credential.
 - **Credentials**: obtained and refreshed only by the connections module (serialized refresh, rotated token persisted before use) and never logged or returned.
 
+### Extension → Account Connections (Credential Surface)
+
+- **Transport**: in-process. A REST extension registers an account-connection provider adapter (`registerProfileConnectionProvider`) that supplies provider-specific behaviour only: upstream credential validation (API keys), or for OAuth the authorize URL, code exchange, refresh, revoke, and account description; plus legacy-store adoption and the legacy tombstone on disconnect.
+- **Ownership**: the connections module owns storage, encryption, the key ring, re-sealing, OAuth state, the refresh lease, state, and DTOs. An extension obtains a credential only through `ProfileConnections.credential(profileId, provider)` (API keys) or `ProfileConnections.oauthAccessToken(profileId, provider, { staleRevision? })` (OAuth: refreshed under the lease, rotated credential persisted first), and never reads `account_connections.credential_*` or holds an encryption key. An extension may record a re-validated account (`recordAccount`) or require reauthorization with a provider error code (`requireReauthorization`).
+- **Errors**: `ConnectionAccessError` with `not_found` (no connected row), `unavailable` (key or OAuth client not configured, or the upstream is unreachable; nothing erased) or `reauthorization_required` (unreadable, refresh rejected, or identity changed; erased). The extension maps them to its own legacy error text.
+- **Providers (v153)**: `everhour` (API key) and `github` (OAuth, confidential client, callback `/api/auth/callback/github/repository`).
+
 ### MCP Server → Auth (Hosted Agent Auth Surface)
 
 - **Transport**: HTTP bearer credentials on `GET/POST /mcp`
@@ -2593,6 +2872,7 @@ The only sanctioned ways to extend Overlord:
 | Database extension     | `ext_<name>_` tables + `schema_migrations.component`                     | Database Layer          |
 | Auth/RBAC provider     | Auth Layer service boundary                                              | Auth Layer              |
 | REST extension         | Namespaced endpoint prefix (`/ext/<name>/`)                              | REST API Layer          |
+| Account-connection provider | Provider adapter registered with the connections module (v153)      | Extension System        |
 | Open vocabulary values | Namespaced values declared in manifest                                   | Database/Protocol Layer |
 
 Attempting to extend Overlord through any other path — patching core tables directly, adding undeclared hook types, using closed vocabulary values — is a contract violation that must be resolved before the component ships.
@@ -2623,7 +2903,7 @@ extension declarations and the agent-session capability vocabulary.
 - `chat_events.kind`: `thread.updated`, `message.created`, `message.delta`, `message.completed`, `run.updated`, `tool.updated`, `question.opened`, `question.closed`, `proposal.revised`, `proposal.created`, `content.invalidated`
 - `chat_source_refs.source_kind`: `knowledgebase`, `overlord`, `repository`; `chat_source_refs.access_state`: `authorized`, `revoked`, `unknown`
 - `chat_notifications.type`: `chat_needs_answer`, `chat_finished` (also admitted by `notification_preferences.type`); `chat_notifications.state`: `pending`, `suppressed`, `dispatching`, `dispatched`, `cancelled`, `failed`
-- `account_connections.provider`: `knowledgebase`; `account_connections.state`: `pending`, `connected`, `reauthorization_required`, `disconnected`
+- `account_connections.provider`: `knowledgebase`, `everhour`, `github` (v153); `account_connections.state`: `pending`, `connected`, `reauthorization_required`, `disconnected`; `account_connections.credential_kind`: `oauth`, `api_key` (v153); `account_connections.credential_format`: `connection-v1`, `everhour-user-key-v1`, `github-user-oauth-v1` (v153)
 - RBAC role names (`role_assignments.role_key` core, non-extension values; enumerated in `auth/src/rbac/types.ts`'s `Role` enum and `overlord.rbac.toml`): `ADMIN`, `MANAGER`, `MEMBER`, `PUBLIC`
 
 ### Open (extensions may add namespaced values)

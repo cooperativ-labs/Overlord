@@ -1,8 +1,8 @@
-contractVersion: '33'
+contractVersion: '153'
 componentType: extension
 componentKey: github
 label: 'GitHub Database Extension'
-description: 'GitHub App persistence plus encrypted user-scoped OAuth connections, hashed callback state, and retryable project initialization records.'
+description: 'GitHub App persistence and retryable project initialization records; the pre-v153 user OAuth connection and state tables remain read-only migration sources for account_connections.'
 extension:
   tablePrefix: ext_github_
   migrationComponent: ext:github

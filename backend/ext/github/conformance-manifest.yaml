@@ -1,8 +1,8 @@
-contractVersion: '33'
+contractVersion: '153'
 componentType: rest-module
 componentKey: github
 label: 'GitHub REST Extension'
-description: 'Workspace GitHub App repository linking and mission pull requests, plus user-scoped encrypted GitHub OAuth repository-owner access.'
+description: 'Workspace GitHub App repository linking and mission pull requests, plus user-scoped GitHub OAuth repository-owner access through the shared account-connections module (provider adapter; /user-connection routes are compatibility aliases since v153).'
 restModule:
   endpointPrefix: /ext/github
   usesServiceLayer: true

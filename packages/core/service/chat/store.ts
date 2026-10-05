@@ -70,7 +70,7 @@ export class ChatError extends ServiceError {
     readonly detail?: string
   ) {
     const status =
-      code === 'not_found' || code === 'chat_unavailable'
+      code === 'not_found' || code === 'chat_unavailable' || code === 'provider_not_available'
         ? 404
         : code === 'invalid_request'
           ? 400
@@ -78,7 +78,11 @@ export class ChatError extends ServiceError {
             ? 429
             : code === 'provider_not_ready'
               ? 503
-              : 409;
+              : code === 'credential_rejected'
+                ? 422
+                : code === 'provider_unavailable'
+                  ? 502
+                  : 409;
     super(code.replaceAll('_', ' '), code, status);
   }
 }

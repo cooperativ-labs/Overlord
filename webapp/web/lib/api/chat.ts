@@ -1,6 +1,4 @@
 import type {
-  AccountConnectionDto,
-  AccountConnectionListResponse,
   AnswerChatQuestionBody,
   ChatAckDto,
   ChatEventPageDto,
@@ -12,7 +10,6 @@ import type {
   ChatThreadSnapshotDto,
   CreateChatThreadResponse,
   CreateFromChatProposalResponse,
-  StartAccountConnectionResponse,
   SubmitChatMessageBody,
   SubmitChatMessageResponse,
   UpdateChatPresenceBody,
@@ -24,8 +21,8 @@ import { request } from './request.ts';
 const thread = (id: string) => `/api/chat/threads/${encodeURIComponent(id)}`;
 
 /**
- * Private assistant conversations and account connections (contract v152). Every
- * route is owner-scoped and Cloud-only; a Local backend answers 404
+ * Private assistant conversations (contract v152); account connections are in
+ * `./connections.ts`. Every route is owner-scoped and Cloud-only; a Local backend answers 404
  * `chat_unavailable`, surfaced as an {@link ApiRequestError} with that `code`.
  */
 export const chatApi = {
@@ -81,13 +78,5 @@ export const chatApi = {
       'POST',
       `/api/chat/proposals/${encodeURIComponent(id)}/create`,
       body
-    ),
-  listAccountConnections: () => request<AccountConnectionListResponse>('GET', '/api/connections'),
-  startAccountConnection: () =>
-    request<StartAccountConnectionResponse>('POST', '/api/connections', {
-      provider: 'knowledgebase',
-      returnTo: 'web'
-    }),
-  disconnectAccountConnection: (id: string) =>
-    request<AccountConnectionDto>('DELETE', `/api/connections/${encodeURIComponent(id)}`)
+    )
 };

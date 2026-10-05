@@ -155,6 +155,7 @@ properties:
           enum:
             - database-extension
             - custom-harness
+            - account-connection-provider
             - open-vocabulary-value
         uniqueItems: true
 

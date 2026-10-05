@@ -1,6 +1,5 @@
 import type {
   CreateEverhourTimeBody,
-  EverhourIntegrationDto,
   LinkProjectEverhourBody,
   MissionEverhourStateDto,
   ProjectEverhourLinkDto,
@@ -10,13 +9,12 @@ import type {
 
 import { request } from './request.ts';
 
+/**
+ * Everhour feature routes. The personal API key is managed through Connected
+ * accounts (`./connections.ts`); `/ext/everhour/user-connection` remains a server
+ * alias for older clients only.
+ */
 export const everhourApi = {
-  getEverhourIntegration: () =>
-    request<EverhourIntegrationDto>('GET', '/ext/everhour/user-connection'),
-  setEverhourApiKey: (apiKey: string) =>
-    request<EverhourIntegrationDto>('PUT', '/ext/everhour/user-connection', { apiKey }),
-  clearEverhourApiKey: () =>
-    request<EverhourIntegrationDto>('DELETE', '/ext/everhour/user-connection'),
   getProjectEverhourLink: (projectId: string) =>
     request<ProjectEverhourLinkDto>('GET', `/ext/everhour/projects/${projectId}/link`),
   linkProjectEverhour: (projectId: string, body: LinkProjectEverhourBody) =>

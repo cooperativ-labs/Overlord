@@ -33,6 +33,7 @@ export interface AccountConnectionAuthorizations {
   id: string | null;
   pkce_verifier_ciphertext: string;
   return_to: string;
+  return_url: string | null;
   state_hash: string;
 }
 
@@ -42,13 +43,20 @@ export interface AccountConnections {
   connected_at: string | null;
   created_at: string;
   credential_ciphertext: string | null;
+  credential_format: Generated<string>;
   credential_key_id: string | null;
+  credential_kind: Generated<string>;
   credential_revision: Generated<number>;
   disconnected_at: string | null;
+  external_account_avatar_url: string | null;
+  external_account_id: string | null;
+  external_account_label: string | null;
+  granted_scopes_json: Generated<string>;
   id: string | null;
   last_error_code: string | null;
   last_refreshed_at: string | null;
-  organization_id: string;
+  last_validated_at: string | null;
+  organization_id: string | null;
   owner_profile_id: string;
   provider: string;
   refresh_expires_at: string | null;

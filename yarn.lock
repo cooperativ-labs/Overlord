@@ -2279,9 +2279,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@google/genai@npm:2.8.0":
-  version: 2.8.0
-  resolution: "@google/genai@npm:2.8.0"
+"@google/genai@npm:2.24.0":
+  version: 2.24.0
+  resolution: "@google/genai@npm:2.24.0"
   dependencies:
     google-auth-library: "npm:^10.3.0"
     p-retry: "npm:^4.6.2"
@@ -2292,7 +2292,7 @@ __metadata:
   peerDependenciesMeta:
     "@modelcontextprotocol/sdk":
       optional: true
-  checksum: 10c0/d9c47de5799d91e81dde0c3c2a91b1eaed6ecbc797028185aefdd58ae95a36711d94a2701f1cdeb4e6e337f61d79383336d221aa837ce7cce5e598cb5fe96734
+  checksum: 10c0/8a1eee79b535171b1b7329e034e66bef62fbf2b964f6263760c02aedf7e2aca1e65fcf159b2ef996b4a2f3cd6f5f163b0cfd1dc0e38676bdc719bf447e7eb464
   languageName: node
   linkType: hard
 
@@ -2865,7 +2865,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@overlord/automations@workspace:automations"
   dependencies:
-    "@google/genai": "npm:^2.8.0"
+    "@google/genai": "npm:^2.24.0"
     zod: "npm:^4.4.1"
   languageName: unknown
   linkType: soft
@@ -2876,7 +2876,7 @@ __metadata:
   dependencies:
     "@aws-sdk/client-s3": "npm:^3.1075.0"
     "@aws-sdk/s3-request-presigner": "npm:^3.1075.0"
-    "@google/genai": "npm:^2.8.0"
+    "@google/genai": "npm:^2.24.0"
     "@overlord/auth": "workspace:*"
     "@overlord/automations": "workspace:*"
     "@overlord/contract": "workspace:*"
@@ -4633,7 +4633,7 @@ __metadata:
   resolution: "Overlord@workspace:desktop"
   dependencies:
     "@electron/notarize": "npm:^3.1.1"
-    "@google/genai": "npm:^2.8.0"
+    "@google/genai": "npm:^2.24.0"
     better-sqlite3: "npm:^12.11.1"
     electron: "npm:^42.4.0"
     electron-builder: "npm:^26.15.3"

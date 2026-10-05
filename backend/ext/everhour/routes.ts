@@ -1,6 +1,7 @@
 import { type Permission, PERMISSIONS } from '@overlord/auth';
 import { type NextFunction, type Request, type Response, Router } from 'express';
 
+import { recordConnectionAliasHit } from '../../connections/alias-telemetry.ts';
 import { missionRoute, projectRoute } from '../resource-routes.ts';
 
 import {
@@ -31,31 +32,38 @@ type RouteHandler = (
 export function createEverhourExtensionRouter(handle: RouteHandler): Router {
   const router = Router();
 
-  router.get(
-    '/user-connection',
-    handle(() => getEverhourIntegration())
-  );
-  router.put(
-    '/user-connection',
-    handle(req => setEverhourApiKey(String(req.body?.apiKey ?? '')), { mutates: true })
-  );
-  router.delete(
-    '/user-connection',
-    handle(() => clearEverhourApiKey(), { mutates: true })
-  );
-  // Deprecated aliases of the profile-scoped user-connection surface.
-  router.get(
-    '/integration',
-    handle(() => getEverhourIntegration())
-  );
-  router.put(
-    '/integration',
-    handle(req => setEverhourApiKey(String(req.body?.apiKey ?? '')), { mutates: true })
-  );
-  router.delete(
-    '/integration',
-    handle(() => clearEverhourApiKey(), { mutates: true })
-  );
+  // Compatibility aliases (contract v153) over the shared account-connections module;
+  // `/integration` is the older deprecated alias of the same profile-scoped surface.
+  for (const path of ['/user-connection', '/integration']) {
+    const alias = (req: Request) => recordConnectionAliasHit(`/ext/everhour${path}`, req);
+    router.get(
+      path,
+      handle(req => {
+        alias(req);
+        return getEverhourIntegration();
+      })
+    );
+    router.put(
+      path,
+      handle(
+        req => {
+          alias(req);
+          return setEverhourApiKey(String(req.body?.apiKey ?? ''));
+        },
+        { mutates: true }
+      )
+    );
+    router.delete(
+      path,
+      handle(
+        req => {
+          alias(req);
+          return clearEverhourApiKey();
+        },
+        { mutates: true }
+      )
+    );
+  }
   router.put(
     '/projects/:projectId/link',
     handle(

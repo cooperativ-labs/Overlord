@@ -16,6 +16,7 @@ import {
 import type { FetchLike } from './egress.ts';
 import { KnowledgebaseMcp } from './mcp-client.ts';
 import { KnowledgebaseOAuth, OAUTH_SCOPE } from './oauth.ts';
+import { ProfileConnections } from './profile.ts';
 import { AccountConnections } from './service.ts';
 import { composeSourceCheckers, knowledgebaseSourceChecker } from './source-check.ts';
 
@@ -23,6 +24,8 @@ import { composeSourceCheckers, knowledgebaseSourceChecker } from './source-chec
 export interface ConnectionsRuntime {
   config: ConnectionsConfig;
   connections: AccountConnections;
+  /** Profile-scoped providers (Everhour, GitHub), contract v153. */
+  profiles: ProfileConnections;
   knowledgebase: KnowledgebaseMcp | null;
   /** Inject into `Conversations` / `ChatRuns` as `checkSource`. */
   checkSource: SourceChecker;
@@ -103,6 +106,10 @@ export function createConnectionsRuntime(options: {
   return {
     config,
     connections,
+    profiles: new ProfileConnections(options.db, config.keyRing, {
+      now: options.now,
+      sleep: options.sleep
+    }),
     knowledgebase,
     get checkSource() {
       return checkSource;

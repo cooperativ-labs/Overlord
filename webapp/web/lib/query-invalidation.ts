@@ -20,9 +20,15 @@ export function isEverhourQueryKey(queryKey: QueryKey): boolean {
   );
 }
 
+/** Connected accounts never appear in change projections, so realtime never refreshes them. */
+export function isAccountConnectionsQueryKey(queryKey: QueryKey): boolean {
+  return queryKey[0] === 'connections';
+}
+
 export function invalidateNonEverhourQueries(queryClient: QueryInvalidator): void {
   void queryClient.invalidateQueries({
-    predicate: query => !isEverhourQueryKey(query.queryKey)
+    predicate: query =>
+      !isEverhourQueryKey(query.queryKey) && !isAccountConnectionsQueryKey(query.queryKey)
   });
 }
 

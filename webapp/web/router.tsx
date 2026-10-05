@@ -15,6 +15,7 @@ import { ProjectCreatorModal } from './components/projects/ProjectCreatorModal.t
 import { OrganizationOnboardingScreen } from './components/setup/OrganizationOnboardingScreen.tsx';
 import { SidebarInset, SidebarProvider } from './components/ui/sidebar.tsx';
 import { parseChatSearch } from './lib/chat/chat-search.ts';
+import { parseConnectedAccountsSearch } from './lib/connections.ts';
 import { parseMissionPanelSearch } from './lib/mission-panel-search.ts';
 import { useAllProjects, useMeta, useWorkspaceMyMissions } from './lib/queries.ts';
 import { shouldShowOnboarding, shouldShowOnboardingSetup } from './lib/router-gates.ts';
@@ -160,16 +161,17 @@ const chatThreadRoute = createRoute({
 });
 
 /**
- * Web return path of the Knowledgebase sign-in callback (contract v152). It carries
- * only `provider` and `status`; Chat reloads connection state and shows the result.
+ * Connected accounts (contract v153), also the web return path of every
+ * account-connection callback (`?provider=&status=` only).
  */
-const connectionsCallbackRoute = createRoute({
+const connectedAccountsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/settings/connections',
-  beforeLoad: ({ location }) => {
-    const status = new URLSearchParams(location.searchStr).get('status') ?? undefined;
-    throw redirect({ to: '/chat', search: parseChatSearch({ connection: status }) });
-  }
+  validateSearch: parseConnectedAccountsSearch,
+  component: lazyRouteComponent(
+    () => import('./pages/ConnectedAccountsPage.tsx'),
+    'ConnectedAccountsPage'
+  )
 });
 
 const inboxRoute = createRoute({
@@ -245,7 +247,7 @@ export const routeTree = rootRoute.addChildren([
   feedRoute.addChildren([feedMissionPanelRoute]),
   chatRoute,
   chatThreadRoute,
-  connectionsCallbackRoute,
+  connectedAccountsRoute,
   inboxRoute,
   inboxMissionLegacyRedirectRoute,
   projectsRoute,

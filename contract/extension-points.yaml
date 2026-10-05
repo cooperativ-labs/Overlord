@@ -100,6 +100,18 @@ extensionPoints:
       - 'Must use the service layer for database access — no direct table writes'
       - 'Must use Auth Layer for authentication and authorization'
 
+  accountConnectionProvider:
+    id: account-connection-provider
+    description: 'Provider adapter for the shared account-connections module (contract v153)'
+    mechanism: 'registerProfileConnectionProvider({ provider, serverUrl, credentialKind, validateApiKey | oauth, legacy }) from a REST extension'
+    ownedBy: extension
+    constraints:
+      - 'The adapter supplies provider HTTP behaviour only (validate, exchange, refresh, revoke, describe, legacy adoption and tombstone)'
+      - 'The connections module owns storage, encryption, the key ring, re-sealing, state, refresh serialisation, and DTOs'
+      - 'Extensions obtain credentials only through ProfileConnections.credential (API keys) or ProfileConnections.oauthAccessToken (OAuth, lease-serialised refresh) and never read account_connections.credential_* or hold an encryption key'
+      - 'An OAuth provider keeps its registered callback path; the module serves it through createProfileConnectionCallbackHandler(provider), mounted by the REST layer'
+      - 'Adding a provider is a closed-vocabulary change (account_connections.provider) and requires a contract version bump'
+
   restConsumer:
     id: rest-consumer
     description: 'Integrate an external service as a documented client of the Overlord REST surface, with no database access. The sanctioned integration mechanism for a Virtual Target Gateway (e.g. Racecar)'

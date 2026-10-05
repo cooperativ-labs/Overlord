@@ -6,6 +6,7 @@ import {
   GitBranch,
   Keyboard,
   KeyRound,
+  Link2,
   MonitorDown,
   Palette,
   Plug,
@@ -15,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
+import { ConnectedAccounts } from '@/components/connections/ConnectedAccounts';
 import { RealtimeStatus } from '@/components/RealtimeStatus';
 import { AccountPage } from '@/components/settings/AccountPage';
 import { ApplicationPage } from '@/components/settings/ApplicationPage';
@@ -69,6 +71,7 @@ const desktopNavItems: SettingsNavItem[] = [
 const userNavItems: SettingsNavItem[] = [
   { name: 'Profile', icon: User },
   { name: 'Account', icon: ShieldCheck },
+  { name: 'Connected accounts', icon: Link2 },
   { name: 'Tokens', icon: KeyRound }
 ];
 
@@ -148,7 +151,10 @@ export function SettingsModal({ open, onOpenChange, initialNav }: SettingsModalP
       }
     >
       {activeNav === 'Application' && <ApplicationPage />}
-      {activeNav === 'Integrations' && <IntegrationsPage />}
+      {activeNav === 'Connected accounts' && <ConnectedAccounts />}
+      {activeNav === 'Integrations' && (
+        <IntegrationsPage onOpenConnectedAccounts={() => setActiveNav('Connected accounts')} />
+      )}
       {activeNav === 'Webhooks' && <WebhooksPage open={open} />}
       {activeNav === 'Notifications' && <NotificationsPage />}
       {activeNav === 'Worktrees' && <WorktreesPage />}
