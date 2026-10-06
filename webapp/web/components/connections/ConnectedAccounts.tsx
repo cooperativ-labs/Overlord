@@ -1,4 +1,4 @@
-import type { AccountConnectionProvider } from '@overlord/contract';
+import type { AccountConnectionDto, AccountConnectionProvider } from '@overlord/contract';
 import { useQueryClient } from '@tanstack/react-query';
 import { BookOpen, Clock3, FolderGit2, type LucideIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -13,6 +13,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { ApiRequestError } from '@/lib/api.ts';
 import {
   type ConnectionRowModel,
@@ -27,7 +28,8 @@ import {
   useAccountConnections,
   useDisconnectAccountConnection,
   useSetAccountConnectionApiKey,
-  useStartAccountConnection
+  useStartAccountConnection,
+  useUpdateAccountConnection
 } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 
@@ -64,6 +66,64 @@ function connectionErrorMessage(provider: AccountConnectionProvider, error: unkn
     default:
       return error.message;
   }
+}
+
+/**
+ * Knowledgebase write scope (contract v158). Off: the assistant edits only the workspace
+ * allowed on a single message. On: it reads and writes every workspace this connection is
+ * authorized for, in every conversation, until turned off (which takes effect at once).
+ */
+function KnowledgebaseWriteScope({ connection }: { connection: AccountConnectionDto }) {
+  const update = useUpdateAccountConnection();
+  const [error, setError] = useState<string | null>(null);
+  const checked = connection.assistantWriteScope === 'all_workspaces';
+  const id = `knowledgebase-write-scope-${connection.id}`;
+  const workspaces = connection.authorizedWorkspaces;
+
+  async function onChange(next: boolean) {
+    setError(null);
+    try {
+      await update.mutateAsync({
+        id: connection.id,
+        body: {
+          expectedRevision: connection.revision,
+          assistantWriteScope: next ? 'all_workspaces' : 'per_request'
+        }
+      });
+    } catch (cause) {
+      setError(
+        cause instanceof ApiRequestError && cause.code === 'stale_revision'
+          ? 'This connection changed elsewhere. Review the setting and try again.'
+          : connectionErrorMessage('knowledgebase', cause)
+      );
+    }
+  }
+
+  return (
+    <div className="grid gap-1">
+      <div className="flex items-center gap-2">
+        <Switch
+          id={id}
+          checked={checked}
+          disabled={update.isPending}
+          onCheckedChange={next => void onChange(next)}
+        />
+        <label htmlFor={id} className="text-xs font-medium">
+          Let the assistant edit notes in all authorized workspaces
+        </label>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {checked
+          ? `The assistant can read and write ${workspaces.length ? workspaces.join(', ') : 'every workspace this account can access'} in any conversation, without asking per message.`
+          : 'Off: the assistant only edits the workspace you allow on a single message.'}
+      </p>
+      {error ? (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
 }
 
 /**
@@ -220,6 +280,9 @@ export function ConnectionRow({
       </div>
       {!compact ? <p className="text-xs text-muted-foreground">{copy.description}</p> : null}
       {row.detail ? <p className="text-xs text-muted-foreground">{row.detail}</p> : null}
+      {!compact && provider === 'knowledgebase' && row.connection?.state === 'connected' ? (
+        <KnowledgebaseWriteScope connection={row.connection} />
+      ) : null}
 
       {keyFormOpen ? (
         <form

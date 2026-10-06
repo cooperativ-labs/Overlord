@@ -815,7 +815,7 @@ var init_agent_launch_flags = __esm({
 });
 
 // ../packages/contract/dist/chat.js
-var CHAT_DEFAULT_LIMITS, CHAT_NOTIFICATION_TYPES, CHAT_NOTIFICATION_CATALOG, CHAT_NOTIFICATION_DEEP_LINK, REPOSITORY_READ_OPERATIONS, REPOSITORY_READ_DEFAULT_BOUNDS, REPOSITORY_READ_OPERATION_ID_PATTERN;
+var CHAT_DEFAULT_LIMITS, CHAT_NOTIFICATION_TYPES, CHAT_NOTIFICATION_CATALOG, CHAT_NOTIFICATION_DEEP_LINK, ACCOUNT_CONNECTION_ASSISTANT_WRITE_SCOPES, REPOSITORY_READ_OPERATIONS, REPOSITORY_READ_DEFAULT_BOUNDS, REPOSITORY_READ_OPERATION_ID_PATTERN;
 var init_chat = __esm({
   "../packages/contract/dist/chat.js"() {
     "use strict";
@@ -862,6 +862,7 @@ var init_chat = __esm({
       }
     };
     CHAT_NOTIFICATION_DEEP_LINK = "overlord://chat/threads/:threadId";
+    ACCOUNT_CONNECTION_ASSISTANT_WRITE_SCOPES = ["per_request", "all_workspaces"];
     REPOSITORY_READ_OPERATIONS = [
       "observe",
       "tree",
@@ -84151,14 +84152,14 @@ var init_getProfileName = __esm({
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getSSOTokenFilepath.js
-var import_node_crypto21, import_node_path21, getSSOTokenFilepath;
+var import_node_crypto22, import_node_path21, getSSOTokenFilepath;
 var init_getSSOTokenFilepath = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getSSOTokenFilepath.js"() {
-    import_node_crypto21 = require("node:crypto");
+    import_node_crypto22 = require("node:crypto");
     import_node_path21 = require("node:path");
     init_getHomeDir();
     getSSOTokenFilepath = (id2) => {
-      const hasher = (0, import_node_crypto21.createHash)("sha1");
+      const hasher = (0, import_node_crypto22.createHash)("sha1");
       const cacheName = hasher.update(id2).digest("hex");
       return (0, import_node_path21.join)(getHomeDir(), ".aws", "sso", "cache", `${cacheName}.json`);
     };
@@ -86329,10 +86330,10 @@ function castSourceData(toCast, encoding) {
   }
   return fromArrayBuffer(toCast);
 }
-var import_node_crypto22, Hash;
+var import_node_crypto23, Hash;
 var init_hash_node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/serde/hash-node/hash-node.js"() {
-    import_node_crypto22 = require("node:crypto");
+    import_node_crypto23 = require("node:crypto");
     init_buffer_from();
     init_toUint8Array();
     Hash = class {
@@ -86351,7 +86352,7 @@ var init_hash_node = __esm({
         return Promise.resolve(this.hash.digest());
       }
       reset() {
-        this.hash = this.secret ? (0, import_node_crypto22.createHmac)(this.algorithmIdentifier, castSourceData(this.secret)) : (0, import_node_crypto22.createHash)(this.algorithmIdentifier);
+        this.hash = this.secret ? (0, import_node_crypto23.createHmac)(this.algorithmIdentifier, castSourceData(this.secret)) : (0, import_node_crypto23.createHash)(this.algorithmIdentifier);
       }
     };
   }
@@ -87245,10 +87246,10 @@ __export(serde_exports, {
   toUtf8: () => toUtf8,
   v4: () => v4
 });
-var import_node_crypto23, Uint8ArrayBlobAdapter, _getRandomValues, v4, generateIdempotencyToken;
+var import_node_crypto24, Uint8ArrayBlobAdapter, _getRandomValues, v4, generateIdempotencyToken;
 var init_serde = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/serde/index.js"() {
-    import_node_crypto23 = require("node:crypto");
+    import_node_crypto24 = require("node:crypto");
     init_fromBase64();
     init_toBase64();
     init_Uint8ArrayBlobAdapter();
@@ -87285,7 +87286,7 @@ var init_serde = __esm({
     init_stream_collector();
     Uint8ArrayBlobAdapter = class extends bindUint8ArrayBlobAdapter(toUtf8, fromUtf8, toBase64, fromBase64) {
     };
-    _getRandomValues = import_node_crypto23.getRandomValues;
+    _getRandomValues = import_node_crypto24.getRandomValues;
     v4 = bindV4(_getRandomValues);
     generateIdempotencyToken = v4;
   }
@@ -112182,7 +112183,7 @@ var require_dist_cjs16 = __commonJS({
     var { setCredentialFeature: setCredentialFeature2 } = (init_client4(), __toCommonJS(client_exports2));
     var { CredentialsProviderError: CredentialsProviderError2, readFile: readFile4, parseKnownFiles: parseKnownFiles2, getProfileName: getProfileName2 } = (init_config3(), __toCommonJS(config_exports));
     var { HttpRequest: HttpRequest2 } = (init_protocols(), __toCommonJS(protocols_exports));
-    var { createHash: createHash25, createPrivateKey, createPublicKey, sign: sign3 } = require("node:crypto");
+    var { createHash: createHash26, createPrivateKey, createPublicKey, sign: sign3 } = require("node:crypto");
     var { promises } = require("node:fs");
     var { homedir: homedir2 } = require("node:os");
     var { dirname, join: join6 } = require("node:path");
@@ -112343,7 +112344,7 @@ var require_dist_cjs16 = __commonJS({
       getTokenFilePath() {
         const directory = process.env.AWS_LOGIN_CACHE_DIRECTORY ?? join6(homedir2(), ".aws", "login", "cache");
         const loginSessionBytes = Buffer.from(this.loginSession, "utf8");
-        const loginSessionSha256 = createHash25("sha256").update(loginSessionBytes).digest("hex");
+        const loginSessionSha256 = createHash26("sha256").update(loginSessionBytes).digest("hex");
         return join6(directory, `${loginSessionSha256}.json`);
       }
       derToRawSignature(derSignature) {
@@ -114372,7 +114373,7 @@ var init_Md5Js = __esm({
 function buildNativeClass() {
   return class Md5Node {
     digestLength = 16;
-    hash = (0, import_node_crypto24.createHash)("md5");
+    hash = (0, import_node_crypto25.createHash)("md5");
     update(data) {
       this.hash.update(toUint8Array(data));
     }
@@ -114381,19 +114382,19 @@ function buildNativeClass() {
       return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
     }
     reset() {
-      this.hash = (0, import_node_crypto24.createHash)("md5");
+      this.hash = (0, import_node_crypto25.createHash)("md5");
     }
   };
 }
-var import_node_crypto24, hasNativeCrypto, Md5Node;
+var import_node_crypto25, hasNativeCrypto, Md5Node;
 var init_Md5Node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/checksum/md5/Md5Node.js"() {
-    import_node_crypto24 = require("node:crypto");
+    import_node_crypto25 = require("node:crypto");
     init_serde();
     init_Md5Js();
     hasNativeCrypto = (() => {
       try {
-        (0, import_node_crypto24.createHash)("md5");
+        (0, import_node_crypto25.createHash)("md5");
         return true;
       } catch {
         return false;
@@ -114737,7 +114738,7 @@ function buildNativeClass3() {
       this.finished = false;
     }
     createHash() {
-      return this.secret ? (0, import_node_crypto25.createHmac)("sha256", toBuffer(this.secret)) : (0, import_node_crypto25.createHash)("sha256");
+      return this.secret ? (0, import_node_crypto26.createHmac)("sha256", toBuffer(this.secret)) : (0, import_node_crypto26.createHash)("sha256");
     }
   };
 }
@@ -114750,14 +114751,14 @@ function toBuffer(data) {
   }
   return Buffer.from(data);
 }
-var import_node_crypto25, hasNativeCrypto2, Sha256Node;
+var import_node_crypto26, hasNativeCrypto2, Sha256Node;
 var init_Sha256Node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/checksum/sha256/Sha256Node.js"() {
-    import_node_crypto25 = require("node:crypto");
+    import_node_crypto26 = require("node:crypto");
     init_Sha256Js();
     hasNativeCrypto2 = (() => {
       try {
-        (0, import_node_crypto25.createHash)("sha256");
+        (0, import_node_crypto26.createHash)("sha256");
         return true;
       } catch {
         return false;
@@ -149422,7 +149423,7 @@ var ChatStore = class _ChatStore {
 };
 
 // connections/profile.ts
-var import_node_crypto19 = require("node:crypto");
+var import_node_crypto20 = require("node:crypto");
 
 // connections/crypto.ts
 var import_node_crypto16 = require("node:crypto");
@@ -149475,17 +149476,41 @@ function hashSecret(value2) {
 }
 
 // connections/keyring.ts
+var import_node_crypto17 = require("node:crypto");
 var EVERHOUR_ENV_KEY_ID = "everhour-env";
 var GITHUB_USER_ENV_KEY_ID = "github-user-env";
+var PLATFORM_KEY_ID_PREFIX = "platform-";
 var RESERVED_KEY_IDS = /* @__PURE__ */ new Set([EVERHOUR_ENV_KEY_ID, GITHUB_USER_ENV_KEY_ID]);
+var MIN_PLATFORM_SECRET_LENGTH = 32;
+function isPlatformKeyId(id2) {
+  return id2.startsWith(PLATFORM_KEY_ID_PREFIX);
+}
+function isReservedKeyId(id2) {
+  return RESERVED_KEY_IDS.has(id2) || isPlatformKeyId(id2);
+}
+function platformKeyFromSecret(secret) {
+  const trimmed9 = secret?.trim();
+  if (!trimmed9 || trimmed9.length < MIN_PLATFORM_SECRET_LENGTH) return null;
+  const key = Buffer.from(
+    (0, import_node_crypto17.hkdfSync)(
+      "sha256",
+      Buffer.from(trimmed9, "utf8"),
+      Buffer.from("overlord:account-connections", "utf8"),
+      Buffer.from("overlord:account-connections:platform-key:v1", "utf8"),
+      32
+    )
+  );
+  const fingerprint = (0, import_node_crypto17.createHash)("sha256").update("overlord:account-connections:platform-key-id:v1:").update(key).digest("hex").slice(0, 16);
+  return { id: `${PLATFORM_KEY_ID_PREFIX}${fingerprint}`, key };
+}
 function keyRingFromEnv(env3) {
   const currentKey = decodeEncryptionKey(env3.ACCOUNT_CONNECTIONS_ENCRYPTION_KEY);
   const requestedId = env3.ACCOUNT_CONNECTIONS_ENCRYPTION_KEY_ID?.trim() || "k1";
-  if (currentKey && RESERVED_KEY_IDS.has(requestedId))
+  if (currentKey && isReservedKeyId(requestedId))
     console.error(
       `[connections] ACCOUNT_CONNECTIONS_ENCRYPTION_KEY_ID "${requestedId}" is reserved; using "k1"`
     );
-  const currentId = RESERVED_KEY_IDS.has(requestedId) ? "k1" : requestedId;
+  const currentId = isReservedKeyId(requestedId) ? "k1" : requestedId;
   const everhour = decodeEncryptionKey(env3.EVERHOUR_API_KEY_ENCRYPTION_KEY) ?? decodeEncryptionKey(env3.GITHUB_USER_TOKEN_ENCRYPTION_KEY);
   const github2 = decodeEncryptionKey(env3.GITHUB_USER_TOKEN_ENCRYPTION_KEY);
   return {
@@ -149493,18 +149518,21 @@ function keyRingFromEnv(env3) {
     fallback: {
       ...everhour ? { everhour: { id: EVERHOUR_ENV_KEY_ID, key: everhour } } : {},
       ...github2 ? { github: { id: GITHUB_USER_ENV_KEY_ID, key: github2 } } : {}
-    }
+    },
+    platform: platformKeyFromSecret(env3.BETTER_AUTH_SECRET)
   };
 }
 function writeKey(ring, provider) {
-  return ring.current ?? ring.fallback[provider] ?? null;
+  return ring.current ?? ring.fallback[provider] ?? ring.platform ?? null;
 }
 function keyById(ring, id2) {
   if (ring.current?.id === id2) return ring.current;
   for (const entry of Object.values(ring.fallback)) if (entry?.id === id2) return entry;
+  if (ring.platform?.id === id2) return ring.platform;
   return null;
 }
 function missingKeyIsConfiguration(ring, keyId, format2) {
+  if (isPlatformKeyId(keyId)) return ring.platform === null;
   return RESERVED_KEY_IDS.has(keyId) || format2 !== "connection-v1" || ring.current === null;
 }
 function connectionCredentialAad(row) {
@@ -149557,7 +149585,7 @@ function parseJson(text) {
 }
 
 // connections/oauth.ts
-var import_node_crypto17 = require("node:crypto");
+var import_node_crypto18 = require("node:crypto");
 
 // connections/egress.ts
 var EgressError = class extends Error {
@@ -149635,8 +149663,8 @@ var METADATA_BYTES = 64 * 1024;
 var TOKEN_BYTES = 64 * 1024;
 var TIMEOUT_MS = 1e4;
 function pkcePair() {
-  const verifier = (0, import_node_crypto17.randomBytes)(32).toString("base64url");
-  return { verifier, challenge: (0, import_node_crypto17.createHash)("sha256").update(verifier).digest("base64url") };
+  const verifier = (0, import_node_crypto18.randomBytes)(32).toString("base64url");
+  return { verifier, challenge: (0, import_node_crypto18.createHash)("sha256").update(verifier).digest("base64url") };
 }
 function sameResource(a5, b5) {
   return a5.replace(/\/+$/, "") === b5.replace(/\/+$/, "");
@@ -149791,7 +149819,8 @@ var KnowledgebaseOAuth = class {
 };
 
 // connections/service.ts
-var import_node_crypto18 = require("node:crypto");
+init_dist();
+var import_node_crypto19 = require("node:crypto");
 
 // connections/policy.ts
 var KNOWLEDGEBASE_TOOL_POLICY_VERSION = 2;
@@ -150206,6 +150235,9 @@ function stringArray(json2) {
   }
   return Array.isArray(value2) ? value2.filter((w) => typeof w === "string") : [];
 }
+function assistantWriteScope(row) {
+  return row.provider === "knowledgebase" && row.assistant_write_scope === "all_workspaces" ? "all_workspaces" : "per_request";
+}
 function connectionDto(row) {
   const hasAccount = row.external_account_id !== null || row.external_account_label !== null || row.external_account_avatar_url !== null;
   return {
@@ -150224,6 +150256,7 @@ function connectionDto(row) {
     serverUrl: row.server_url,
     state: row.state,
     authorizedWorkspaces: stringArray(row.authorized_workspaces_json),
+    assistantWriteScope: assistantWriteScope(row),
     toolPolicyVersion: row.tool_policy_version,
     lastErrorCode: row.last_error_code,
     connectedAt: row.connected_at,
@@ -150238,7 +150271,7 @@ var AccountConnections = class {
   }
   db;
   options;
-  lockOwner = (0, import_node_crypto18.randomUUID)();
+  lockOwner = (0, import_node_crypto19.randomUUID)();
   now() {
     return this.options.now?.() ?? Date.now();
   }
@@ -150294,7 +150327,7 @@ var AccountConnections = class {
     const returnTo = input.returnTo;
     const { knowledgebase, encryption, oauth } = this.ready();
     await this.access(owner);
-    const state2 = (0, import_node_crypto18.randomBytes)(32).toString("base64url");
+    const state2 = (0, import_node_crypto19.randomBytes)(32).toString("base64url");
     const { verifier, challenge } = pkcePair();
     let authorizeUrl;
     try {
@@ -150302,7 +150335,7 @@ var AccountConnections = class {
     } catch {
       throw new ChatError("provider_not_ready");
     }
-    const authorizationId = (0, import_node_crypto18.randomUUID)();
+    const authorizationId = (0, import_node_crypto19.randomUUID)();
     const expiresAt = this.timestamp(AUTHORIZATION_TTL_MS);
     const connectionId = await this.db.transaction(async (tx) => {
       const now2 = this.timestamp();
@@ -150311,7 +150344,7 @@ var AccountConnections = class {
         [owner.profileId, owner.organizationId, "knowledgebase", knowledgebase.mcpUrl]
       );
       if (!row) {
-        const id2 = (0, import_node_crypto18.randomUUID)();
+        const id2 = (0, import_node_crypto19.randomUUID)();
         await tx.run(
           `INSERT INTO account_connections (id, owner_profile_id, organization_id, provider, server_url, state, tool_policy_version, created_at, updated_at) VALUES (?, ?, ?, 'knowledgebase', ?, 'pending', ?, ?, ?)`,
           [
@@ -150448,13 +150481,41 @@ var AccountConnections = class {
     }
     return { status: "connected", returnTo };
   }
+  /**
+   * `PATCH /api/connections/:id` (v158): the owner's Knowledgebase settings. Only a
+   * live Knowledgebase row can change; the write is revision-checked. The MCP client
+   * re-reads the row on every call, so narrowing the scope takes effect at once.
+   */
+  async update(owner, id2, body) {
+    await this.access(owner);
+    const input = body;
+    if (!input || typeof input !== "object" || Array.isArray(input))
+      throw new ChatError("invalid_request");
+    const { expectedRevision: expected, assistantWriteScope: scope, ...rest } = input;
+    if (Object.keys(rest).length || !ACCOUNT_CONNECTION_ASSISTANT_WRITE_SCOPES.includes(scope))
+      throw new ChatError("invalid_request");
+    const revision3 = revision(expected);
+    const row = await this.row(owner, id2);
+    if (!row || row.state === "disconnected") throw new ChatError("not_found");
+    if (row.provider !== "knowledgebase") throw new ChatError("invalid_request");
+    if (row.revision !== revision3) throw new ChatError("stale_revision");
+    if (row.assistant_write_scope !== scope) {
+      const result2 = await this.db.run(
+        "UPDATE account_connections SET assistant_write_scope = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND revision = ?",
+        [scope, this.timestamp(), id2, revision3]
+      );
+      if (!result2.changes) throw new ChatError("stale_revision");
+    }
+    return connectionDto(await this.row(owner, id2));
+  }
   async disconnect(owner, id2) {
     await this.access(owner);
     const row = await this.row(owner, id2);
     if (!row || row.state === "disconnected") throw new ChatError("not_found");
     let credentials = null;
     try {
-      credentials = this.open(row);
+      const key = row.credential_key_id ? this.readKey(row.credential_key_id) : null;
+      credentials = key ? this.open(row, key) : null;
     } catch {
       credentials = null;
     }
@@ -150489,13 +150550,20 @@ var AccountConnections = class {
       const row = await this.row(owner, id2);
       if (!row || row.state === "disconnected") throw new ConnectionAccessError("not_found");
       if (row.state !== "connected") throw new ConnectionAccessError("reauthorization_required");
+      const key = row.credential_key_id ? this.readKey(row.credential_key_id) : null;
+      if (!key && row.credential_key_id && this.missingKeyIsConfiguration(row.credential_key_id))
+        throw new ConnectionAccessError("unavailable");
       let credentials;
       try {
-        if (row.credential_key_id !== ready.encryption.keyId) throw new SecretEnvelopeError();
-        credentials = this.open(row);
+        if (!key) throw new SecretEnvelopeError();
+        credentials = this.open(row, key);
       } catch {
         await this.requireReauthorization(id2, "credential_unreadable");
         throw new ConnectionAccessError("reauthorization_required");
+      }
+      if (key.id !== ready.encryption.keyId) {
+        await this.reseal(row, credentials, ready.encryption);
+        continue;
       }
       const stale = options.staleRevision !== void 0 && row.credential_revision <= options.staleRevision;
       const fresh = row.access_expires_at === null || Date.parse(row.access_expires_at) - ACCESS_EXPIRY_SKEW_MS > this.now();
@@ -150589,13 +150657,49 @@ var AccountConnections = class {
       aad: credentialAad(row)
     });
   }
-  open(row) {
-    const { encryption } = this.ready();
+  /**
+   * The ring key a Knowledgebase envelope may be opened with: the explicit current
+   * key or the platform key (v156). Profile-scoped fallback keys never apply here.
+   */
+  readKey(keyId) {
+    const { current, platform: platform4 } = this.options.config.keyRing;
+    if (current?.id === keyId) return current;
+    if (platform4?.id === keyId) return platform4;
+    return null;
+  }
+  /**
+   * Whether an envelope whose key is absent is a configuration gap rather than a
+   * rotation: a platform key id while no platform key is derived, or an explicit
+   * key id while no explicit key is configured.
+   */
+  missingKeyIsConfiguration(keyId) {
+    const { current, platform: platform4 } = this.options.config.keyRing;
+    return isPlatformKeyId(keyId) ? platform4 === null : current === null;
+  }
+  /** Re-seal the same credential under the write key; the token itself is unchanged. */
+  async reseal(row, credentials, key) {
+    await this.db.run(
+      `UPDATE account_connections SET credential_ciphertext = ?, credential_key_id = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'connected' AND credential_key_id = ? AND credential_revision = ?`,
+      [
+        sealSecret({
+          plaintext: JSON.stringify(credentials),
+          key: key.key,
+          aad: credentialAad(row)
+        }),
+        key.keyId,
+        this.timestamp(),
+        row.id,
+        row.credential_key_id,
+        row.credential_revision
+      ]
+    );
+  }
+  open(row, key) {
     if (!row.credential_ciphertext) throw new SecretEnvelopeError();
     const value2 = JSON.parse(
       openSecret({
         envelope: row.credential_ciphertext,
-        key: encryption.key,
+        key: key.key,
         aad: credentialAad(row)
       })
     );
@@ -150662,7 +150766,7 @@ var ProfileConnections = class {
   db;
   ring;
   options;
-  lockOwner = (0, import_node_crypto19.randomUUID)();
+  lockOwner = (0, import_node_crypto20.randomUUID)();
   now() {
     return this.options.now?.() ?? Date.now();
   }
@@ -150792,7 +150896,7 @@ var ProfileConnections = class {
       );
       return connectionDto(await this.row(profileId, existing.id));
     }
-    const id2 = (0, import_node_crypto19.randomUUID)();
+    const id2 = (0, import_node_crypto20.randomUUID)();
     const draft = { id: id2, owner_profile_id: profileId, organization_id: null, provider };
     await this.db.run(
       `INSERT INTO account_connections (id, owner_profile_id, organization_id, provider, server_url, state, credential_kind, credential_format, credential_ciphertext, credential_key_id, credential_revision, external_account_id, external_account_label, external_account_avatar_url, last_validated_at, connected_at, created_at, updated_at, revision) VALUES (?, ?, NULL, ?, ?, 'connected', 'api_key', 'connection-v1', ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, 1)`,
@@ -150932,10 +151036,10 @@ var ProfileConnections = class {
     if (!adapter2 || !oauth) throw new ChatError("provider_not_available");
     const key = writeKey(this.ring, provider);
     if (!key || !oauth.configured()) throw new ChatError("provider_not_ready");
-    const state2 = (0, import_node_crypto19.randomBytes)(32).toString("base64url");
+    const state2 = (0, import_node_crypto20.randomBytes)(32).toString("base64url");
     const { verifier, challenge } = pkcePair();
     const authorizeUrl = oauth.authorizeUrl({ state: state2, codeChallenge: challenge });
-    const authorizationId = (0, import_node_crypto19.randomUUID)();
+    const authorizationId = (0, import_node_crypto20.randomUUID)();
     const expiresAt = this.timestamp(AUTHORIZATION_TTL_MS2);
     await this.find(profileId, provider);
     const connectionId = await this.db.transaction(async (tx) => {
@@ -150945,7 +151049,7 @@ var ProfileConnections = class {
         [profileId, provider]
       );
       if (!row) {
-        const id2 = (0, import_node_crypto19.randomUUID)();
+        const id2 = (0, import_node_crypto20.randomUUID)();
         await tx.run(
           `INSERT INTO account_connections (id, owner_profile_id, organization_id, provider, server_url, state, credential_kind, created_at, updated_at) VALUES (?, ?, NULL, ?, ?, 'pending', ?, ?, ?)`,
           [id2, profileId, provider, adapter2.serverUrl, adapter2.credentialKind, now2, now2]
@@ -151905,7 +152009,7 @@ function previewMissionBranch(input) {
 init_db();
 
 // deferred-work.ts
-var import_node_crypto20 = require("node:crypto");
+var import_node_crypto21 = require("node:crypto");
 init_db();
 var RESOLUTION_STATUSES = /* @__PURE__ */ new Set(["done", "dismissed"]);
 var RESOLUTION_OUTCOMES = /* @__PURE__ */ new Set([
@@ -151913,12 +152017,12 @@ var RESOLUTION_OUTCOMES = /* @__PURE__ */ new Set([
   "objective_added"
 ]);
 function legacyDeferredWorkId(text, occurrence) {
-  const digest3 = (0, import_node_crypto20.createHash)("sha256").update(text).digest("hex").slice(0, 16);
+  const digest3 = (0, import_node_crypto21.createHash)("sha256").update(text).digest("hex").slice(0, 16);
   return `deferred-work-${digest3}-${occurrence}`;
 }
 function agentDeferredWorkId(index, agentText) {
   if (!agentText) return `deferred-work-${index}-composed`;
-  const digest3 = (0, import_node_crypto20.createHash)("sha256").update(agentText).digest("hex").slice(0, 16);
+  const digest3 = (0, import_node_crypto21.createHash)("sha256").update(agentText).digest("hex").slice(0, 16);
   return `deferred-work-${index}-${digest3}`;
 }
 function deferredWorkEntries(report) {
@@ -159898,7 +160002,7 @@ init_projects();
 init_db();
 
 // workspaces.ts
-var import_node_crypto26 = require("node:crypto");
+var import_node_crypto27 = require("node:crypto");
 
 // sql-studio/sql-studio.ts
 var import_node_child_process7 = require("node:child_process");
@@ -166280,9 +166384,9 @@ var INVITATION_HASH_ALGORITHM = "sha256";
 var INVITATION_TTL_DAYS = 14;
 var WORKSPACE_ROLE_KEYS = /* @__PURE__ */ new Set(["ADMIN", "MANAGER", "MEMBER"]);
 function generateInvitationSecret() {
-  const prefix = `${INVITATION_TOKEN_SCHEME}_${(0, import_node_crypto26.randomBytes)(4).toString("hex")}`;
-  const secret = `${prefix}${(0, import_node_crypto26.randomBytes)(24).toString("hex")}`;
-  const hash2 = (0, import_node_crypto26.createHash)(INVITATION_HASH_ALGORITHM).update(secret).digest("hex");
+  const prefix = `${INVITATION_TOKEN_SCHEME}_${(0, import_node_crypto27.randomBytes)(4).toString("hex")}`;
+  const secret = `${prefix}${(0, import_node_crypto27.randomBytes)(24).toString("hex")}`;
+  const hash2 = (0, import_node_crypto27.createHash)(INVITATION_HASH_ALGORITHM).update(secret).digest("hex");
   return { secret, prefix, hash: hash2 };
 }
 var INVITATION_COLUMNS = "id, workspace_id, email, role_key, token_prefix, status, invited_by_workspace_user_id, expires_at, created_at, revision";
@@ -166446,7 +166550,7 @@ async function acceptWorkspaceInvitation(body) {
   if (!rawToken) throw new ApiError(400, "Invitation token is required");
   const profileId = getActiveProfileId();
   if (!profileId) throw new ApiError(401, "Authentication required");
-  const tokenHash = (0, import_node_crypto26.createHash)(INVITATION_HASH_ALGORITHM).update(rawToken).digest("hex");
+  const tokenHash = (0, import_node_crypto27.createHash)(INVITATION_HASH_ALGORITHM).update(rawToken).digest("hex");
   const client = requireDatabaseClient();
   const outcome = await client.transaction(async (tx) => {
     const invitation = await tx.get(
@@ -168998,10 +169102,10 @@ async function handleMcpPost(req, res, next) {
 }
 
 // ../packages/core/service/chat/conversations.ts
-var import_node_crypto29 = require("node:crypto");
+var import_node_crypto30 = require("node:crypto");
 
 // ../packages/core/service/chat/proposals.ts
-var import_node_crypto28 = require("node:crypto");
+var import_node_crypto29 = require("node:crypto");
 init_workspace_agent_catalog();
 
 // ../packages/core/service/chat/access.ts
@@ -169124,7 +169228,7 @@ function assignmentCatalogProjection(value2) {
 
 // ../packages/core/service/chat/runs.ts
 init_dist2();
-var import_node_crypto27 = require("node:crypto");
+var import_node_crypto28 = require("node:crypto");
 var import_node_util2 = require("node:util");
 function toolProgressLabel(toolId) {
   switch (toolId) {
@@ -169261,7 +169365,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
             );
           }
         }
-        const id2 = (0, import_node_crypto27.randomUUID)(), fence = r5.current_fence + 1, now2 = s.timestamp();
+        const id2 = (0, import_node_crypto28.randomUUID)(), fence = r5.current_fence + 1, now2 = s.timestamp();
         await tx.run(
           "UPDATE chat_runs SET state = 'running', current_fence = ?, active_attempt_id = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
           [fence, id2, now2, r5.id]
@@ -169501,7 +169605,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
         requiredText(req.providerCallId, 200);
         const args = JSON.stringify(req.arguments);
         if (Buffer.byteLength(args) > 64 * 1024) throw new ChatError("limit_exceeded");
-        const callId = (0, import_node_crypto27.randomUUID)();
+        const callId = (0, import_node_crypto28.randomUUID)();
         await s.db.run(
           `INSERT INTO chat_tool_calls (id, run_id, attempt_id, operation_id, turn_index, call_order, provider_call_id, tool_id, policy_version, arguments_json, state, requested_fence, writer_fence, dependency_set_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 'requested', ?, ?, ?, ?, ?)`,
           [
@@ -169664,8 +169768,8 @@ var ChatRuns = class _ChatRuns extends ChatStore {
         [messageId, a5.runId]
       );
       if (messageId && !old) throw new ChatError("invalid_request");
-      const id2 = old ? old.id : (0, import_node_crypto27.randomUUID)();
-      const blocks = old ? JSON.parse(old.blocks_json) : [{ id: (0, import_node_crypto27.randomUUID)(), kind: "text", text: "", evidenceIds: [], fallbackText: "" }];
+      const id2 = old ? old.id : (0, import_node_crypto28.randomUUID)();
+      const blocks = old ? JSON.parse(old.blocks_json) : [{ id: (0, import_node_crypto28.randomUUID)(), kind: "text", text: "", evidenceIds: [], fallbackText: "" }];
       const block = blocks[0];
       if (!block || block.kind !== "text") throw new ChatError("invalid_request");
       if (block.text.length + text.length > s.limits.messageMaxChars)
@@ -169716,7 +169820,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
         "SELECT COUNT(*) AS n FROM chat_questions WHERE run_id = ?",
         [a5.runId]
       );
-      const id2 = (0, import_node_crypto27.randomUUID)(), now2 = s.timestamp();
+      const id2 = (0, import_node_crypto28.randomUUID)(), now2 = s.timestamp();
       await s.db.run(
         `INSERT INTO chat_questions (id, thread_id, run_id, ordinal, state, prompt, options_json, allow_free_text, dependency_set_id, created_at, updated_at) VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?)`,
         [
@@ -169799,7 +169903,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
       );
       const evidence = [];
       for (const [i5, source] of sources.entries()) {
-        const evidenceId = (0, import_node_crypto27.randomUUID)();
+        const evidenceId = (0, import_node_crypto28.randomUUID)();
         await s.db.run(
           `INSERT INTO chat_evidence (id, thread_id, run_id, tool_call_id, source_ref_id, label, excerpt, excerpt_truncated, source_revision, observed_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
@@ -169857,7 +169961,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
       }));
       const others = blocks.filter((b5) => b5.kind !== "evidence");
       others.push({
-        id: (0, import_node_crypto27.randomUUID)(),
+        id: (0, import_node_crypto28.randomUUID)(),
         kind: "evidence",
         evidence,
         fallbackText: `Sources: ${evidence.map((e5) => e5.label).join("; ")}`.slice(0, 4e3)
@@ -169891,7 +169995,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
       await s.db.run(
         "INSERT INTO chat_thread_summaries (id, thread_id, summary_revision, summary_json, covers_through_message_id, dependency_set_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
         [
-          (0, import_node_crypto27.randomUUID)(),
+          (0, import_node_crypto28.randomUUID)(),
           a5.threadId,
           Number(last?.n ?? 0) + 1,
           json2,
@@ -170207,7 +170311,7 @@ var ChatProposals = class _ChatProposals extends ChatStore {
       await runs.assertLease(a5);
       const destinationSet = await s.dependencySet(a5.threadId, sourceIds);
       const dependencySetId = await s.generationDependencies(a5.threadId, destinationSet);
-      const id2 = body.proposalId ?? (0, import_node_crypto28.randomUUID)();
+      const id2 = body.proposalId ?? (0, import_node_crypto29.randomUUID)();
       let next = 1;
       if (body.proposalId) {
         const old = await tx.get(
@@ -170250,10 +170354,10 @@ var ChatProposals = class _ChatProposals extends ChatStore {
         id: a5.id,
         fence: a5.fence
       });
-      const messageId = (0, import_node_crypto28.randomUUID)();
+      const messageId = (0, import_node_crypto29.randomUUID)();
       const blocks = [
         {
-          id: (0, import_node_crypto28.randomUUID)(),
+          id: (0, import_node_crypto29.randomUUID)(),
           kind: "proposal",
           proposalId: id2,
           revision: next,
@@ -170365,7 +170469,7 @@ var ChatProposals = class _ChatProposals extends ChatStore {
           [scope.project.id]
         );
       }
-      const receiptId = (0, import_node_crypto28.randomUUID)();
+      const receiptId = (0, import_node_crypto29.randomUUID)();
       for (const [i5, m3] of missions.entries()) {
         const scope = scopes[i5];
         await s.destination(owner, m3.projectId);
@@ -170429,7 +170533,7 @@ var ChatProposals = class _ChatProposals extends ChatStore {
               expected,
               owner.profileId,
               key,
-              (0, import_node_crypto28.createHash)("sha256").update(JSON.stringify({ id: id2, expected })).digest("hex"),
+              (0, import_node_crypto29.createHash)("sha256").update(JSON.stringify({ id: id2, expected })).digest("hex"),
               thread.authorization_revision,
               s.timestamp()
             ]
@@ -170479,7 +170583,7 @@ var Conversations = class _Conversations extends ChatStore {
     if (message2 !== void 0 && (!message2 || typeof message2 !== "object" || Array.isArray(message2)))
       throw new ChatError("invalid_request");
     return this.db.transaction(async (tx) => {
-      const s = new _Conversations(tx, this.options), id2 = (0, import_node_crypto29.randomUUID)(), now2 = s.timestamp();
+      const s = new _Conversations(tx, this.options), id2 = (0, import_node_crypto30.randomUUID)(), now2 = s.timestamp();
       await s.access(owner);
       await tx.run(
         "INSERT INTO chat_threads (id, owner_profile_id, organization_id, last_activity_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -170595,10 +170699,10 @@ var Conversations = class _Conversations extends ChatStore {
       if (Number(count?.n) >= this.limits.concurrentRunsPerOwner)
         throw new ChatError("limit_exceeded");
     }
-    const messageId = (0, import_node_crypto29.randomUUID)(), runId = active?.id ?? (0, import_node_crypto29.randomUUID)(), now2 = this.timestamp();
+    const messageId = (0, import_node_crypto30.randomUUID)(), runId = active?.id ?? (0, import_node_crypto30.randomUUID)(), now2 = this.timestamp();
     const messageCreatedAt = await this.createdAt("chat_messages", id2);
     const blocks = [
-      { id: (0, import_node_crypto29.randomUUID)(), kind: "text", text: body.text, fallbackText: body.text, evidenceIds: [] }
+      { id: (0, import_node_crypto30.randomUUID)(), kind: "text", text: body.text, fallbackText: body.text, evidenceIds: [] }
     ];
     await this.db.run(
       `INSERT INTO chat_messages (id, thread_id, role, state, blocks_json, answers_question_id, client_request_id, created_at, updated_at) VALUES (?, ?, 'user', 'complete', ?, ?, ?, ?, ?)`,
@@ -170723,7 +170827,7 @@ var Conversations = class _Conversations extends ChatStore {
       );
       if (Number(count?.n) >= s.limits.concurrentRunsPerOwner)
         throw new ChatError("limit_exceeded");
-      const newId3 = (0, import_node_crypto29.randomUUID)();
+      const newId3 = (0, import_node_crypto30.randomUUID)();
       const inheritedGrant = storedKnowledgebaseWrite(r5.knowledgebase_write_json);
       await s.db.run(
         `INSERT INTO chat_runs (id, thread_id, trigger_message_id, continued_from_run_id, state, limits_json, knowledgebase_write_json, created_at, updated_at) VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?)`,
@@ -170919,7 +171023,7 @@ init_projects();
 
 // ../packages/core/service/repository-reads.ts
 init_dist();
-var import_node_crypto30 = require("node:crypto");
+var import_node_crypto31 = require("node:crypto");
 init_registry();
 init_repository_paths();
 init_runner_queue_provider();
@@ -171113,7 +171217,7 @@ var defaultProviderFactory = ({ target, queue }) => new RunnerQueueProvider(
   queue
 );
 function repositoryReadIdempotencyKey(actorWorkspaceUserId2, operationId) {
-  const digest3 = (0, import_node_crypto30.createHash)("sha256").update(`${actorWorkspaceUserId2}
+  const digest3 = (0, import_node_crypto31.createHash)("sha256").update(`${actorWorkspaceUserId2}
 ${operationId}`).digest("hex").slice(0, 48);
   return `repository-read:${digest3}`;
 }
@@ -171736,6 +171840,14 @@ function cutUtf82(text, maxBytes) {
 function failure2(outcome, message2) {
   return { outcome, content: { error: outcome, message: message2 }, sources: [] };
 }
+function knowledgebaseToolDescription(tool, write) {
+  const scope = tool.writeScope ?? (write ? { kind: "request", workspace: write.workspace } : null);
+  if (tool.access !== "write" || !scope) return `Knowledgebase (read only): ${tool.description}`;
+  if (scope.kind === "request")
+    return `Knowledgebase write (the user authorized edits to workspace "${scope.workspace}" for this request only): ${tool.description}`;
+  const workspaces = scope.workspaces.map((w) => `"${w}"`).join(", ");
+  return `Knowledgebase write (the user allows edits in every workspace this connection is authorized for${workspaces ? `: ${workspaces}` : ""}; always name the workspace): ${tool.description}`;
+}
 var ChatToolGateway = class {
   constructor(options) {
     this.options = options;
@@ -171749,7 +171861,8 @@ var ChatToolGateway = class {
   /**
    * Declarations for one provider request. Knowledgebase tools are the reviewed,
    * server-confirmed read tools of the owner's live connections, plus the reviewed write
-   * tools of the one connection and workspace the run's user authorized; nothing else.
+   * tools of the one connection and workspace the run's user authorized and of every
+   * connection whose owner allowed writes in all its workspaces (v158); nothing else.
    */
   async declarations(owner, signal, options = {}) {
     const out = OVERLORD_TOOL_DECLARATIONS.filter(
@@ -171767,7 +171880,7 @@ var ChatToolGateway = class {
       for (const tool of tools2)
         out.push({
           name: tool.id,
-          description: tool.access === "write" && write ? `Knowledgebase write (the user authorized edits to workspace "${write.workspace}" for this request only): ${tool.description}` : `Knowledgebase (read only): ${tool.description}`,
+          description: knowledgebaseToolDescription(tool, write),
           parameters: tool.inputSchema,
           effect: tool.access === "write" ? "write" : "read"
         });
@@ -172297,7 +172410,7 @@ Feature link: ${featureUrl}`,
       const outcome = result2.outcome === "reauthorization_required" || result2.outcome === "timeout" || result2.outcome === "denied" ? result2.outcome : result2.outcome === "invalid_arguments" ? "invalid_arguments" : "unavailable";
       return failure2(
         outcome,
-        result2.detail === "write_not_authorized" ? "Knowledgebase edits are not authorized for this request or workspace. Ask the user to allow edits for the workspace and send the request again." : result2.detail === "response_too_large" ? "The result was too large to return completely. Request a smaller page (a lower limit) and follow next_cursor." : result2.detail ?? outcome
+        result2.detail === "write_not_authorized" ? "Knowledgebase edits are not authorized for this request or workspace. Ask the user to allow edits for the workspace (on the message, or for every workspace in Connected accounts) and send the request again." : result2.detail === "response_too_large" ? "The result was too large to return completely. Request a smaller page (a lower limit) and follow next_cursor." : result2.detail ?? outcome
       );
     }
     const content = cutUtf82(result2.text, CHAT_TOOL_CONTENT_BYTES - 4096);
@@ -172363,10 +172476,10 @@ function classifyGeminiError(error53) {
 }
 
 // chat/gemini-runtime.ts
-var import_node_crypto32 = require("node:crypto");
+var import_node_crypto33 = require("node:crypto");
 
 // chat-worker.ts
-var import_node_crypto31 = require("node:crypto");
+var import_node_crypto32 = require("node:crypto");
 var ChatRuntimeFailure = class extends Error {
   constructor(failureCode) {
     super(failureCode);
@@ -172397,7 +172510,7 @@ var ChatWorker = class extends PollLoop {
   concurrency;
   lastRetentionAt = 0;
   active = /* @__PURE__ */ new Map();
-  id = (0, import_node_crypto31.randomUUID)();
+  id = (0, import_node_crypto32.randomUUID)();
   async stop() {
     const pass2 = super.stop();
     for (const job of this.active.values()) job.controller.abort();
@@ -172492,7 +172605,7 @@ var GeminiChatRuntime = class {
       provider: "gemini",
       model,
       checkpointVersion: GEMINI_CHECKPOINT_VERSION,
-      configDigest: (0, import_node_crypto32.createHash)("sha256").update(JSON.stringify({ model, SYSTEM_PROMPT_VERSION, SYSTEM_PROMPT })).digest("hex").slice(0, 32)
+      configDigest: (0, import_node_crypto33.createHash)("sha256").update(JSON.stringify({ model, SYSTEM_PROMPT_VERSION, SYSTEM_PROMPT })).digest("hex").slice(0, 32)
     };
   }
   options;
@@ -173205,6 +173318,8 @@ function chatLimitsFromEnv(env3) {
 }
 
 // connections/config.ts
+var DEFAULT_KNOWLEDGEBASE_MCP_URL = "https://knowledge.chaselubitz.com/mcp";
+var DISABLED_VALUES = /* @__PURE__ */ new Set(["off", "none", "disabled", "false"]);
 var ConnectionsConfigError = class extends Error {
 };
 function httpsOrigin(value2, label) {
@@ -173219,19 +173334,26 @@ function httpsOrigin(value2, label) {
   return url2.origin;
 }
 function connectionsConfigFromEnv(env3, publicBaseUrl, webReturnOrigin) {
-  const mcpRaw = env3.KNOWLEDGEBASE_MCP_URL?.trim();
+  const override = env3.KNOWLEDGEBASE_MCP_URL?.trim();
+  const disabled = override !== void 0 && DISABLED_VALUES.has(override.toLowerCase());
+  const mcpRaw = disabled ? "" : override || DEFAULT_KNOWLEDGEBASE_MCP_URL;
   let knowledgebase = null;
   if (mcpRaw) {
     const mcpOrigin = httpsOrigin(mcpRaw, "KNOWLEDGEBASE_MCP_URL");
     const extra = (env3.KNOWLEDGEBASE_EGRESS_ORIGINS ?? "").split(",").map((value2) => value2.trim()).filter(Boolean).map((value2) => httpsOrigin(value2, "KNOWLEDGEBASE_EGRESS_ORIGINS"));
     const url2 = new URL(mcpRaw);
     url2.hash = "";
-    knowledgebase = { mcpUrl: url2.toString(), egressOrigins: [.../* @__PURE__ */ new Set([mcpOrigin, ...extra])] };
+    knowledgebase = {
+      mcpUrl: url2.toString(),
+      egressOrigins: [.../* @__PURE__ */ new Set([mcpOrigin, ...extra])],
+      source: override ? "configured" : "default"
+    };
   }
   const keyRing = keyRingFromEnv(env3);
+  const kbKey = keyRing.current ?? keyRing.platform;
   return {
     knowledgebase,
-    encryption: keyRing.current ? { key: keyRing.current.key, keyId: keyRing.current.id } : null,
+    encryption: kbKey ? { key: kbKey.key, keyId: kbKey.id } : null,
     keyRing,
     publicBaseUrl: publicBaseUrl.replace(/\/+$/, ""),
     webReturnOrigin
@@ -173434,7 +173556,8 @@ var KnowledgebaseMcp = class {
   }
   /**
    * The reviewed, server-confirmed read tools for every connected Knowledgebase grant,
-   * plus the reviewed write tools of the one connection a run's grant names.
+   * plus the reviewed write tools of the one connection a run's grant names and of
+   * every connection whose owner allowed writes in all its workspaces (v158).
    */
   async tools(owner, signal, options = {}) {
     const out = [];
@@ -173446,17 +173569,18 @@ var KnowledgebaseMcp = class {
       } catch {
         continue;
       }
-      const writable = options.write?.connectionId === row.id;
+      const writeScope = assistantWriteScope(row) === "all_workspaces" ? { kind: "all_workspaces", workspaces: connectionDto(row).authorizedWorkspaces } : options.write?.connectionId === row.id ? { kind: "request", workspace: options.write.workspace } : void 0;
       for (const server of tools2) {
         const reviewed = exposable(server);
-        if (!reviewed || reviewed.access === "write" && !writable) continue;
+        if (!reviewed || reviewed.access === "write" && !writeScope) continue;
         out.push({
           id: namespacedToolId(row.id, reviewed.name),
           connectionId: row.id,
           tool: reviewed.name,
           description: reviewed.description,
           inputSchema: reviewed.inputSchema,
-          access: reviewed.access
+          access: reviewed.access,
+          ...reviewed.access === "write" ? { writeScope } : {}
         });
       }
     }
@@ -173515,7 +173639,7 @@ var KnowledgebaseMcp = class {
     const workspace2 = typeof input.workspace === "string" ? input.workspace : null;
     base.workspace = workspace2;
     const write = reviewed.access === "write";
-    if (write && (options.write?.connectionId !== row.id || !workspace2 || options.write.workspace !== workspace2))
+    if (write && (!workspace2 || assistantWriteScope(row) !== "all_workspaces" && (options.write?.connectionId !== row.id || options.write.workspace !== workspace2)))
       return { ...base, detail: "write_not_authorized" };
     const sent = { value: false };
     try {
@@ -173737,7 +173861,7 @@ function composeSourceCheckers(checkers) {
   };
 }
 function knowledgebaseSourceChecker(mcp, connectionState, options = {}) {
-  const ttlMs = options.ttlMs ?? 15e3;
+  const ttlMs = options.ttlMs ?? 3e4;
   const now2 = () => options.now?.() ?? Date.now();
   const cache8 = /* @__PURE__ */ new Map();
   const inflight = /* @__PURE__ */ new Map();
@@ -173920,6 +174044,13 @@ function createConnectionsRouter(options) {
         return options.runtime().profiles.startOAuth(await profile(), req.body);
       return options.runtime().connections.start(owner(), req.body ?? null);
     })
+  );
+  router2.patch(
+    "/:id",
+    // Knowledgebase settings (v158); organization-scoped, so Cloud-only like the rest.
+    route(
+      async (req) => options.runtime().connections.update(owner(), String(req.params.id), req.body ?? null)
+    )
   );
   router2.delete(
     "/:id",
@@ -178794,7 +178925,7 @@ function createChatRouter(options) {
 
 // chat-notification-dispatcher.ts
 init_dist();
-var import_node_crypto35 = require("node:crypto");
+var import_node_crypto36 = require("node:crypto");
 
 // ../packages/core/service/notifications/catalog.ts
 init_dist();
@@ -178817,7 +178948,7 @@ function isPushNotificationMode(value2) {
 init_util3();
 
 // apns-client.ts
-var import_node_crypto33 = require("node:crypto");
+var import_node_crypto34 = require("node:crypto");
 var import_node_http2 = __toESM(require("node:http2"), 1);
 var SANDBOX_HOST = "https://api.sandbox.push.apple.com";
 var PRODUCTION_HOST = "https://api.push.apple.com";
@@ -178846,7 +178977,7 @@ function apnsJwt(config4) {
   const signingInput = `${b64url(JSON.stringify({ alg: "ES256", kid: config4.keyId }))}.${b64url(
     JSON.stringify({ iss: config4.teamId, iat: now2 })
   )}`;
-  const signer = (0, import_node_crypto33.createSign)("SHA256");
+  const signer = (0, import_node_crypto34.createSign)("SHA256");
   signer.update(signingInput);
   signer.end();
   const signature = signer.sign({ key: config4.privateKey, dsaEncoding: "ieee-p1363" });
@@ -178910,7 +179041,7 @@ init_db();
 
 // live-activities.ts
 init_dist2();
-var import_node_crypto34 = require("node:crypto");
+var import_node_crypto35 = require("node:crypto");
 init_live_activity_jobs();
 init_util3();
 init_db();
@@ -179252,7 +179383,7 @@ async function buildLiveActivityContentState(db, profileId, now2 = /* @__PURE__ 
   };
 }
 function liveActivityContentHash(state2) {
-  return (0, import_node_crypto34.createHash)("sha256").update(
+  return (0, import_node_crypto35.createHash)("sha256").update(
     JSON.stringify(
       state2 && {
         running: state2.running,
@@ -179791,7 +179922,7 @@ var ChatNotificationDispatcher = class extends PollLoop {
   db;
   options;
   send;
-  workerId = `chat-notifications:${(0, import_node_crypto35.randomUUID)()}`;
+  workerId = `chat-notifications:${(0, import_node_crypto36.randomUUID)()}`;
   /** One claim/deliver pass. Returns how many candidates it processed. */
   async tick() {
     return await this.poll() ?? 0;
@@ -180366,7 +180497,7 @@ function boundComposeText(value2, maxChars) {
 var deliveryComposeWorker = new DeliveryComposeWorker();
 
 // desktop-oauth-handoff.ts
-var import_node_crypto36 = require("node:crypto");
+var import_node_crypto37 = require("node:crypto");
 var HANDOFF_TTL_MS = 6e4;
 var TICKET_PATTERN = /^[A-Za-z0-9_-]{32,128}$/;
 var handoffs = /* @__PURE__ */ new Map();
@@ -180377,7 +180508,7 @@ function discardExpiredHandoffs(now2 = Date.now()) {
 }
 function createOAuthHandoff(sessionToken, audience) {
   discardExpiredHandoffs();
-  const ticket = (0, import_node_crypto36.randomBytes)(32).toString("base64url");
+  const ticket = (0, import_node_crypto37.randomBytes)(32).toString("base64url");
   handoffs.set(ticket, { audience, sessionToken, expiresAt: Date.now() + HANDOFF_TTL_MS });
   return ticket;
 }
@@ -180858,7 +180989,7 @@ async function dismissNotification(id2, body) {
 }
 
 // oauth.ts
-var import_node_crypto37 = require("node:crypto");
+var import_node_crypto38 = require("node:crypto");
 init_db();
 var CLIENT_ID_PREFIX = "ovlc_";
 var AUTH_CODE_PREFIX = "ovla_";
@@ -180893,12 +181024,12 @@ function oauthSigningSecret() {
   return process.env.OVERLORD_OAUTH_SIGNING_SECRET?.trim() || process.env.BETTER_AUTH_SECRET?.trim() || "overlord-local-oauth-development-secret";
 }
 function signPayload(payload) {
-  return (0, import_node_crypto37.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
+  return (0, import_node_crypto38.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
 }
 function fixedTimeEqual(a5, b5) {
   const left = Buffer.from(a5);
   const right = Buffer.from(b5);
-  return left.length === right.length && (0, import_node_crypto37.timingSafeEqual)(left, right);
+  return left.length === right.length && (0, import_node_crypto38.timingSafeEqual)(left, right);
 }
 function jsonError(res, status, error53, description) {
   res.status(status).json({ error: error53, error_description: description });
@@ -181219,7 +181350,7 @@ async function handleOAuthApprove(req, res) {
       issuanceWorkspaceUserId: consent.issuanceWorkspace.workspaceUserId
     }
   );
-  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto37.randomBytes)(32).toString("base64url")}`;
+  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto38.randomBytes)(32).toString("base64url")}`;
   authorizationCodes.set(code, {
     clientId: parsed.clientId,
     redirectUri: parsed.redirectUri,
@@ -181263,7 +181394,7 @@ async function handleOAuthToken(req, res) {
     jsonError(res, 400, "invalid_target", "OAuth resource does not match the authorization code.");
     return;
   }
-  const challenge = (0, import_node_crypto37.createHash)("sha256").update(codeVerifier).digest("base64url");
+  const challenge = (0, import_node_crypto38.createHash)("sha256").update(codeVerifier).digest("base64url");
   if (!codeVerifier || challenge !== entry.codeChallenge) {
     await revokeOrphanedAccessToken(entry.accessToken);
     jsonError(res, 400, "invalid_grant", "PKCE verification failed.");
@@ -181677,7 +181808,7 @@ var RunQueueDispatchWorker = class extends WorkerJobPoller {
 var runQueueDispatchWorker = new RunQueueDispatchWorker();
 
 // storage.ts
-var import_node_crypto38 = require("node:crypto");
+var import_node_crypto39 = require("node:crypto");
 var import_node_fs20 = require("node:fs");
 var import_node_path33 = __toESM(require("node:path"), 1);
 var import_node_url7 = require("node:url");
@@ -181760,7 +181891,7 @@ async function writeImageObject(bucket, input, storageKeyFor) {
     storageKey,
     sizeBytes: input.bytes.length,
     contentType,
-    checksum: (0, import_node_crypto38.createHash)("sha256").update(input.bytes).digest("hex"),
+    checksum: (0, import_node_crypto39.createHash)("sha256").update(input.bytes).digest("hex"),
     publicUrl: publicUrlFor(bucket.bucket_key, storageKey)
   };
 }
@@ -181999,7 +182130,7 @@ async function uploadObjectiveAttachment(input) {
     contentType: contentType ?? "application/octet-stream"
   });
   const filename = input.filename.trim() || `attachment${import_node_path33.default.extname(storageKey)}`;
-  const checksum3 = (0, import_node_crypto38.createHash)("sha256").update(input.bytes).digest("hex");
+  const checksum3 = (0, import_node_crypto39.createHash)("sha256").update(input.bytes).digest("hex");
   return requireDatabaseClient().transaction(async (tx) => {
     await tx.run(
       `INSERT INTO attachments (
@@ -182259,13 +182390,13 @@ init_webhook_events();
 init_db();
 
 // webhook-security.ts
-var import_node_crypto39 = require("node:crypto");
+var import_node_crypto40 = require("node:crypto");
 var import_promises6 = __toESM(require("node:dns/promises"), 1);
 var import_node_net = require("node:net");
 init_db();
 function signWebhookPayload(secret, rawBody) {
   const timestamp2 = Math.floor(Date.now() / 1e3);
-  const signature = (0, import_node_crypto39.createHmac)("sha256", secret).update(`${timestamp2}.${rawBody}`).digest("hex");
+  const signature = (0, import_node_crypto40.createHmac)("sha256", secret).update(`${timestamp2}.${rawBody}`).digest("hex");
   return { header: `t=${timestamp2},v1=${signature}`, timestamp: timestamp2 };
 }
 function internalHostPatterns() {
@@ -182585,7 +182716,7 @@ var webhookDispatcher = new WebhookDispatcher();
 
 // webhooks.ts
 init_dist2();
-var import_node_crypto40 = require("node:crypto");
+var import_node_crypto41 = require("node:crypto");
 init_webhook_events();
 init_db();
 var WEBHOOK_SECRET_SCHEME = "whsec";
@@ -182620,7 +182751,7 @@ function toSubscriptionDto(row) {
   };
 }
 function generateWebhookSecret() {
-  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto40.randomBytes)(24).toString("hex")}` };
+  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto41.randomBytes)(24).toString("hex")}` };
 }
 function normalizeEventTypes(input) {
   if (!Array.isArray(input) || input.length === 0) {
@@ -183315,7 +183446,7 @@ function connectionsModule() {
     console.error(`[connections] Knowledgebase disabled: ${error53.message}`);
     connectionsRuntime = createConnectionsRuntime({
       ...options,
-      env: { ...process.env, KNOWLEDGEBASE_MCP_URL: "", KNOWLEDGEBASE_EGRESS_ORIGINS: "" }
+      env: { ...process.env, KNOWLEDGEBASE_MCP_URL: "off", KNOWLEDGEBASE_EGRESS_ORIGINS: "" }
     });
   }
   return connectionsRuntime;
@@ -184753,6 +184884,20 @@ async function start() {
   }
   for (const loop of backgroundLoops) loop.start();
   stopOnTermination(backgroundLoops);
+  if (chatCloud()) {
+    const connections3 = connectionsModule().config;
+    const keySource = connections3.keyRing.current ? "ACCOUNT_CONNECTIONS_ENCRYPTION_KEY" : connections3.keyRing.platform ? "platform key derived from BETTER_AUTH_SECRET" : null;
+    if (!connections3.knowledgebase)
+      console.log("[connections] Knowledgebase turned off on this server");
+    else if (!keySource)
+      console.error(
+        "[connections] Knowledgebase unavailable: set BETTER_AUTH_SECRET (or ACCOUNT_CONNECTIONS_ENCRYPTION_KEY) so credentials can be encrypted"
+      );
+    else
+      console.log(
+        `[connections] Knowledgebase ${new URL(connections3.knowledgebase.mcpUrl).origin} (${connections3.knowledgebase.source}); credentials sealed with ${keySource}`
+      );
+  }
   void connectionsModule().profiles.resealSweep().then(({ resealed, remaining }) => {
     if (resealed > 0 || remaining > 0)
       console.log(

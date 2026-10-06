@@ -3,7 +3,8 @@ import type {
   AccountConnectionListResponse,
   SetAccountConnectionApiKeyBody,
   StartAccountConnectionBody,
-  StartAccountConnectionResponse
+  StartAccountConnectionResponse,
+  UpdateAccountConnectionBody
 } from '@overlord/contract';
 
 import { request } from './request.ts';
@@ -22,6 +23,8 @@ export const connectionsApi = {
     request<StartAccountConnectionResponse>('POST', '/api/connections', body),
   setAccountConnectionApiKey: (body: SetAccountConnectionApiKeyBody) =>
     request<AccountConnectionDto>('POST', '/api/connections/api-keys', body),
+  updateAccountConnection: (id: string, body: UpdateAccountConnectionBody) =>
+    request<AccountConnectionDto>('PATCH', `/api/connections/${encodeURIComponent(id)}`, body),
   disconnectAccountConnection: (id: string) =>
     request<AccountConnectionDto>('DELETE', `/api/connections/${encodeURIComponent(id)}`)
 };

@@ -39,6 +39,7 @@ export interface AccountConnectionAuthorizations {
 
 export interface AccountConnections {
   access_expires_at: string | null;
+  assistant_write_scope: Generated<string>;
   authorized_workspaces_json: Generated<string>;
   connected_at: string | null;
   created_at: string;

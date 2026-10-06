@@ -21,7 +21,7 @@ export const PROVIDER_COPY: Record<
   knowledgebase: {
     label: 'Knowledgebase',
     description:
-      'Lets the assistant read your notes in this organization, and edit them only in a workspace you allow for a single message.'
+      'Lets the assistant read your notes in this organization, and edit them in a workspace you allow for a single message, or in every authorized workspace if you turn that on.'
   },
   github: {
     label: 'GitHub',

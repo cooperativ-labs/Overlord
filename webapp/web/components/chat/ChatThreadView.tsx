@@ -11,7 +11,11 @@ import { Button } from '@/components/ui/button.tsx';
 import { Input } from '@/components/ui/input.tsx';
 import { api } from '@/lib/api.ts';
 import { chatErrorCode, chatErrorMessage, isRetryableChatError } from '@/lib/chat/errors.ts';
-import { grantKey, knowledgebaseWriteTargets } from '@/lib/chat/knowledgebase-writes.ts';
+import {
+  grantKey,
+  knowledgebaseEditsEverywhere,
+  knowledgebaseWriteTargets
+} from '@/lib/chat/knowledgebase-writes.ts';
 import { clearRequestId, stableRequestId } from '@/lib/chat/request-ids.ts';
 import { type ChatThreadState, composerMode } from '@/lib/chat/thread-state.ts';
 import type { ChatStreamStatus, ChatThreadStream } from '@/lib/chat/thread-stream.ts';
@@ -83,6 +87,7 @@ function ThreadBody({
     () => knowledgebaseWriteTargets(providers.data?.connections),
     [providers.data?.connections]
   );
+  const editsEverywhere = knowledgebaseEditsEverywhere(providers.data?.connections);
   const scroller = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
   const mode = composerMode(state);
@@ -187,6 +192,7 @@ function ThreadBody({
           error={composerError}
           onSubmit={submit}
           writeTargets={writeTargets}
+          editsEverywhere={editsEverywhere}
           autoFocus
         />
       </div>

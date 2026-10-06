@@ -1,7 +1,8 @@
 import type {
   AccountConnectionListResponse,
   SetAccountConnectionApiKeyBody,
-  StartAccountConnectionBody
+  StartAccountConnectionBody,
+  UpdateAccountConnectionBody
 } from '@overlord/contract';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -18,7 +19,8 @@ const original = {
   list: api.listAllAccountConnections,
   start: api.startAccountConnection,
   setKey: api.setAccountConnectionApiKey,
-  disconnect: api.disconnectAccountConnection
+  disconnect: api.disconnectAccountConnection,
+  update: api.updateAccountConnection
 };
 const originalAssign = window.location.assign;
 let client: QueryClient | null = null;
@@ -31,6 +33,7 @@ afterEach(() => {
   api.startAccountConnection = original.start;
   api.setAccountConnectionApiKey = original.setKey;
   api.disconnectAccountConnection = original.disconnect;
+  api.updateAccountConnection = original.update;
   window.location.assign = originalAssign;
 });
 
@@ -111,6 +114,36 @@ describe('ConnectedAccounts', () => {
       element.getAttribute('data-provider')
     );
     assert.deepEqual(order, ['knowledgebase', 'github', 'everhour']);
+  });
+
+  it('lets the owner allow Knowledgebase edits in all authorized workspaces, revision-checked', async () => {
+    const updates: { id: string; body: UpdateAccountConnectionBody }[] = [];
+    const page = renderPage();
+    const enabled = {
+      ...LIST.items[0]!,
+      assistantWriteScope: 'all_workspaces' as const,
+      revision: 2
+    };
+    api.updateAccountConnection = async (id, body) => {
+      updates.push({ id, body });
+      if (body.expectedRevision !== 1) throw new ApiRequestError('stale', 409, 'stale_revision');
+      page.setList({ ...LIST, items: [enabled, LIST.items[1]!] });
+      return enabled;
+    };
+    const kb = within(await row('knowledgebase'));
+    assert.ok(
+      kb.getByText('Off: the assistant only edits the workspace you allow on a single message.')
+    );
+    const toggle = kb.getByRole('switch');
+    assert.equal(toggle.getAttribute('aria-checked'), 'false');
+    fireEvent.click(toggle);
+    await waitFor(() => assert.ok(kb.getByText(/can read and write main in any conversation/)));
+    assert.deepEqual(updates, [
+      { id: 'kb-1', body: { expectedRevision: 1, assistantWriteScope: 'all_workspaces' } }
+    ]);
+    assert.equal(kb.getByRole('switch').getAttribute('aria-checked'), 'true');
+    // No toggle for other providers.
+    assert.equal(within(await row('everhour')).queryByRole('switch'), null);
   });
 
   it('saves an Everhour key once, shows a rejection inline, and never echoes the key', async () => {

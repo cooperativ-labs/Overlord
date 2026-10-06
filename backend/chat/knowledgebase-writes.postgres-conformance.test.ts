@@ -7,7 +7,7 @@ import { Conversations } from '../../packages/core/service/chat/conversations.ts
 import { ChatRuns } from '../../packages/core/service/chat/runs.ts';
 import type { ChatOptions, ChatOwner } from '../../packages/core/service/chat/store.ts';
 import { ChatToolGateway } from '../../packages/core/service/chat/tools.ts';
-import { createConnectionsRuntime } from '../connections/index.ts';
+import { type ConnectionsRuntime, createConnectionsRuntime } from '../connections/index.ts';
 import {
   FakeKnowledgebase,
   type FakeNode,
@@ -72,6 +72,8 @@ interface World {
   c: Conversations;
   runs: ChatRuns;
   gateway: ChatToolGateway;
+  connections: ConnectionsRuntime['connections'];
+  mcp: NonNullable<ConnectionsRuntime['knowledgebase']>;
   connectionId: string;
   advance(ms: number): void;
   tool(name: string): string;
@@ -130,6 +132,8 @@ async function world(adapter: ConformanceAdapter, fn: (w: World) => Promise<void
       c: new Conversations(db, options),
       runs: new ChatRuns(db, options),
       gateway: new ChatToolGateway({ db, knowledgebase: mcp, now: () => kb.now }),
+      connections: rt.connections,
+      mcp,
       connectionId,
       advance: ms => {
         kb.now += ms;
@@ -323,6 +327,101 @@ for (const adapter of adapters)
         );
         assert.equal(receipts.length, 6);
         assert.ok(receipts.every(r => r.state === 'completed'));
+      }));
+
+    it('a connection allowing all workspaces writes in every authorized workspace without a grant, and turning it off applies at once', () =>
+      world(adapter, async w => {
+        const before = (await w.connections.list(owner)).items[0]!;
+        assert.equal(before.assistantWriteScope, 'per_request');
+        const setScope = (body: unknown, as: ChatOwner = owner) =>
+          w.connections.update(as, w.connectionId, body);
+        await assert.rejects(
+          setScope({ expectedRevision: before.revision, assistantWriteScope: 'everything' }),
+          { code: 'invalid_request' }
+        );
+        await assert.rejects(
+          setScope({
+            expectedRevision: before.revision,
+            assistantWriteScope: 'all_workspaces',
+            extra: 1
+          }),
+          { code: 'invalid_request' }
+        );
+        await assert.rejects(
+          setScope({
+            expectedRevision: before.revision + 1,
+            assistantWriteScope: 'all_workspaces'
+          }),
+          { code: 'stale_revision' }
+        );
+        await assert.rejects(
+          setScope(
+            { expectedRevision: before.revision, assistantWriteScope: 'all_workspaces' },
+            other
+          ),
+          { code: 'not_found' }
+        );
+        const enabled = await setScope({
+          expectedRevision: before.revision,
+          assistantWriteScope: 'all_workspaces'
+        });
+        assert.equal(enabled.assistantWriteScope, 'all_workspaces');
+        assert.equal(enabled.revision, before.revision + 1);
+
+        const gemini = new ScriptedGemini([
+          () => [
+            call(w.tool('create_node'), {
+              workspace: 'main',
+              path: 'notes/main.md',
+              expected_version: 'new'
+            }),
+            call(w.tool('create_node'), {
+              workspace: 'overlord',
+              path: 'notes/overlord.md',
+              expected_version: 'new'
+            }),
+            // Not authorized for this account even after a refresh: refused before any write.
+            call(w.tool('create_node'), {
+              workspace: 'private',
+              path: 'notes/private.md',
+              expected_version: 'new'
+            })
+          ],
+          () => [text('Saved notes in main and overlord.')]
+        ]);
+        const created = await w.c.create(owner, {
+          clientRequestId: randomUUID(),
+          text: 'Record this in both workspaces'
+        });
+        assert.equal(created.run!.knowledgebaseWrite, null, 'no per-request grant is stored');
+        await execute(w, runtime(w, gemini));
+        const declaration = (
+          gemini.requests[0]!.config.tools?.[0]?.functionDeclarations ?? []
+        ).find(d => d.name === w.tool('create_node'));
+        assert.ok(declaration, 'write tools are offered without a grant');
+        assert.match(String(declaration.description), /every workspace.*"main", "overlord"/);
+        const [main, overlord, foreign] = responses(gemini.requests[1]!);
+        assert.equal(main!.outcome, 'ok');
+        assert.equal(overlord!.outcome, 'ok');
+        assert.equal(foreign!.outcome, 'denied');
+        assert.deepEqual([...w.kb.nodes.values()].map(n => `${n.workspace}/${n.path}`).sort(), [
+          'main/notes/main.md',
+          'overlord/notes/overlord.md'
+        ]);
+
+        // Turned off: the next write is refused even with tools declared earlier.
+        await setScope({ expectedRevision: enabled.revision, assistantWriteScope: 'per_request' });
+        const refused = await w.mcp.call(owner, w.tool('create_node'), {
+          workspace: 'main',
+          path: 'notes/after.md',
+          expected_version: 'new'
+        });
+        assert.equal(refused.detail, 'write_not_authorized');
+        assert.ok(
+          !(await w.mcp.tools(owner)).some(t => t.access === 'write'),
+          'per_request offers no write tool without a grant'
+        );
+        assert.equal(w.kb.calls.filter(c => c.tool === 'create_node').length, 2);
       }));
 
     it('a write interrupted after it was sent becomes uncertain and is never re-sent on recovery', () =>

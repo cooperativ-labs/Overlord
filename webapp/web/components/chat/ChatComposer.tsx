@@ -12,7 +12,9 @@ import type { KnowledgebaseWriteTarget } from '@/lib/chat/knowledgebase-writes.t
  * action), and `busy` blocks input while a run is queued or running. The parent
  * owns submission so request ids survive retries. When the caller has a writable
  * Knowledgebase workspace, a per-message control lets them allow note edits for
- * that request only (contract v154); it resets to read only after each send.
+ * that request only (contract v154); it resets to read only after each send. When a
+ * connection already allows edits in every authorized workspace (v158), the composer
+ * says so instead of asking per message.
  */
 export function ChatComposer({
   mode,
@@ -20,7 +22,8 @@ export function ChatComposer({
   error,
   onSubmit,
   autoFocus,
-  writeTargets = []
+  writeTargets = [],
+  editsEverywhere = false
 }: {
   mode: 'send' | 'answer' | 'busy';
   disabled?: boolean;
@@ -33,6 +36,8 @@ export function ChatComposer({
   autoFocus?: boolean;
   /** Knowledgebase workspaces the user may allow the assistant to edit for one request. */
   writeTargets?: readonly KnowledgebaseWriteTarget[];
+  /** A connection lets the assistant edit every authorized workspace (Connected accounts). */
+  editsEverywhere?: boolean;
 }) {
   const [text, setText] = useState('');
   const [pending, setPending] = useState(false);
@@ -109,6 +114,11 @@ export function ChatComposer({
           </select>
           {target ? <span>for this request only</span> : null}
         </label>
+      ) : null}
+      {editsEverywhere && mode !== 'busy' ? (
+        <p className="px-2 text-xs text-(--color-ink-dim)">
+          Knowledgebase: the assistant may edit notes in all authorized workspaces.
+        </p>
       ) : null}
       {error ? (
         <p role="alert" className="px-2 text-xs text-destructive">

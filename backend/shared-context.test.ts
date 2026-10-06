@@ -24,12 +24,15 @@ test('lists empty shared context for a new mission', async () => {
   assert.deepEqual(entries, []);
 });
 
-test('upserts string and json shared context entries and emits entity changes', async () => {
+test('upserts string and json shared context entries and emits entity changes', async t => {
   const project = await createProject({ name: `Shared ctx write ${Date.now()}` });
   const mission = await createMission({
     projectId: project.id,
     firstObjective: 'Write shared facts'
   });
+
+  // Exercise writes in the same millisecond; random change IDs do not encode their order.
+  t.mock.timers.enable({ apis: ['Date'], now: Date.now() });
 
   const created = await upsertMissionSharedContext(mission.id, {
     key: 'repo.testing',
@@ -58,15 +61,17 @@ test('upserts string and json shared context entries and emits entity changes', 
 
   const changes = db
     .prepare(
-      `SELECT entity_type, operation, entity_revision FROM entity_changes
-        WHERE entity_id = ? ORDER BY occurred_at ASC, id ASC`
+      `SELECT entity_type, operation, entity_revision, occurred_at FROM entity_changes
+        WHERE entity_id = ? ORDER BY entity_revision ASC`
     )
     .all(created.id) as Array<{
     entity_type: string;
     operation: string;
     entity_revision: number;
+    occurred_at: string;
   }>;
   assert.equal(changes.length, 2);
+  assert.equal(changes[0].occurred_at, changes[1].occurred_at);
   assert.equal(changes[0].entity_type, 'shared_context_entry');
   assert.equal(changes[0].operation, 'insert');
   assert.equal(changes[0].entity_revision, 1);

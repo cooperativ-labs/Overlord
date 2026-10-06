@@ -99,6 +99,13 @@ export function createConnectionsRouter(options: ConnectionsRouterOptions): Rout
       return options.runtime().connections.start(owner(), req.body ?? null);
     })
   );
+  router.patch(
+    '/:id',
+    // Knowledgebase settings (v158); organization-scoped, so Cloud-only like the rest.
+    route(async req =>
+      options.runtime().connections.update(owner(), String(req.params.id), req.body ?? null)
+    )
+  );
   router.delete(
     '/:id',
     route(async req => {

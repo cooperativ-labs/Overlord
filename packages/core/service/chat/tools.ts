@@ -113,6 +113,10 @@ export interface ChatKnowledgebaseAdapter {
       inputSchema: unknown;
       /** Absent means read. */
       access?: 'read' | 'write';
+      /** Why a write tool is offered (v158); absent on reads. */
+      writeScope?:
+        | { kind: 'request'; workspace: string }
+        | { kind: 'all_workspaces'; workspaces: string[] };
     }[]
   >;
   call(
@@ -472,6 +476,26 @@ export interface ChatToolGatewayOptions {
   now?: () => number;
 }
 
+/** Model-facing description prefix that states exactly what a Knowledgebase tool may touch. */
+function knowledgebaseToolDescription(
+  tool: {
+    description: string;
+    access?: 'read' | 'write';
+    writeScope?:
+      | { kind: 'request'; workspace: string }
+      | { kind: 'all_workspaces'; workspaces: string[] };
+  },
+  write: ChatKnowledgebaseWriteDto | null
+): string {
+  const scope =
+    tool.writeScope ?? (write ? { kind: 'request' as const, workspace: write.workspace } : null);
+  if (tool.access !== 'write' || !scope) return `Knowledgebase (read only): ${tool.description}`;
+  if (scope.kind === 'request')
+    return `Knowledgebase write (the user authorized edits to workspace "${scope.workspace}" for this request only): ${tool.description}`;
+  const workspaces = scope.workspaces.map(w => `"${w}"`).join(', ');
+  return `Knowledgebase write (the user allows edits in every workspace this connection is authorized for${workspaces ? `: ${workspaces}` : ''}; always name the workspace): ${tool.description}`;
+}
+
 export class ChatToolGateway {
   readonly access: ChatAccess;
   constructor(private readonly options: ChatToolGatewayOptions) {
@@ -484,7 +508,8 @@ export class ChatToolGateway {
   /**
    * Declarations for one provider request. Knowledgebase tools are the reviewed,
    * server-confirmed read tools of the owner's live connections, plus the reviewed write
-   * tools of the one connection and workspace the run's user authorized; nothing else.
+   * tools of the one connection and workspace the run's user authorized and of every
+   * connection whose owner allowed writes in all its workspaces (v158); nothing else.
    */
   async declarations(
     owner: ChatOwner,
@@ -506,10 +531,7 @@ export class ChatToolGateway {
       for (const tool of tools)
         out.push({
           name: tool.id,
-          description:
-            tool.access === 'write' && write
-              ? `Knowledgebase write (the user authorized edits to workspace "${write.workspace}" for this request only): ${tool.description}`
-              : `Knowledgebase (read only): ${tool.description}`,
+          description: knowledgebaseToolDescription(tool, write),
           parameters: tool.inputSchema as ChatToolSchema,
           effect: tool.access === 'write' ? 'write' : 'read'
         });
@@ -1155,7 +1177,7 @@ export class ChatToolGateway {
       return failure(
         outcome,
         result.detail === 'write_not_authorized'
-          ? 'Knowledgebase edits are not authorized for this request or workspace. Ask the user to allow edits for the workspace and send the request again.'
+          ? 'Knowledgebase edits are not authorized for this request or workspace. Ask the user to allow edits for the workspace (on the message, or for every workspace in Connected accounts) and send the request again.'
           : result.detail === 'response_too_large'
             ? 'The result was too large to return completely. Request a smaller page (a lower limit) and follow next_cursor.'
             : (result.detail ?? outcome)

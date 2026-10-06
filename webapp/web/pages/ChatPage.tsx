@@ -10,7 +10,11 @@ import { ChatThreadView } from '@/components/chat/ChatThreadView.tsx';
 import { Button, buttonVariants } from '@/components/ui/button.tsx';
 import { api } from '@/lib/api.ts';
 import { chatErrorMessage, isRetryableChatError } from '@/lib/chat/errors.ts';
-import { grantKey, knowledgebaseWriteTargets } from '@/lib/chat/knowledgebase-writes.ts';
+import {
+  grantKey,
+  knowledgebaseEditsEverywhere,
+  knowledgebaseWriteTargets
+} from '@/lib/chat/knowledgebase-writes.ts';
 import { useChatAvailability, useChatProviders, useChatThreads } from '@/lib/chat/use-chat.ts';
 import { cn } from '@/lib/utils.ts';
 
@@ -178,6 +182,7 @@ function NewConversation({ scope }: { scope: string }) {
     () => knowledgebaseWriteTargets(providers.data?.connections),
     [providers.data?.connections]
   );
+  const editsEverywhere = knowledgebaseEditsEverywhere(providers.data?.connections);
 
   const submit = async (
     text: string,
@@ -231,6 +236,7 @@ function NewConversation({ scope }: { scope: string }) {
           error={error}
           onSubmit={submit}
           writeTargets={writeTargets}
+          editsEverywhere={editsEverywhere}
           autoFocus
         />
       </div>

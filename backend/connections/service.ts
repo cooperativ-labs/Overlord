@@ -1,4 +1,6 @@
 import {
+  ACCOUNT_CONNECTION_ASSISTANT_WRITE_SCOPES,
+  type AccountConnectionAssistantWriteScope,
   type AccountConnectionCredentialKind,
   type AccountConnectionDto,
   type AccountConnectionListResponse,
@@ -10,7 +12,12 @@ import type { DatabaseClient } from '@overlord/database';
 import type { Selectable } from 'kysely';
 import { randomBytes, randomUUID } from 'node:crypto';
 
-import { ChatError, type ChatOwner, ChatStore } from '../../packages/core/service/chat/store.ts';
+import {
+  ChatError,
+  type ChatOwner,
+  ChatStore,
+  revision as expectedRevision
+} from '../../packages/core/service/chat/store.ts';
 import type {
   AccountConnectionAuthorizations,
   AccountConnections as AccountConnectionsTable
@@ -87,6 +94,18 @@ function stringArray(json: string): string[] {
   return Array.isArray(value) ? value.filter((w): w is string => typeof w === 'string') : [];
 }
 
+/**
+ * The Knowledgebase write scope the owner chose (v158). Anything but an exact
+ * `all_workspaces` on a Knowledgebase row is `per_request` (fail closed).
+ */
+export function assistantWriteScope(
+  row: Pick<ConnectionRow, 'provider' | 'assistant_write_scope'>
+): AccountConnectionAssistantWriteScope {
+  return row.provider === 'knowledgebase' && row.assistant_write_scope === 'all_workspaces'
+    ? 'all_workspaces'
+    : 'per_request';
+}
+
 /** Non-secret projection of any connection row; the credential columns are never read here. */
 export function connectionDto(row: ConnectionRow): AccountConnectionDto {
   const hasAccount =
@@ -111,6 +130,7 @@ export function connectionDto(row: ConnectionRow): AccountConnectionDto {
     serverUrl: row.server_url,
     state: row.state as AccountConnectionState,
     authorizedWorkspaces: stringArray(row.authorized_workspaces_json),
+    assistantWriteScope: assistantWriteScope(row),
     toolPolicyVersion: row.tool_policy_version,
     lastErrorCode: row.last_error_code,
     connectedAt: row.connected_at,
@@ -359,6 +379,37 @@ export class AccountConnections {
       return { status: 'failed', returnTo };
     }
     return { status: 'connected', returnTo };
+  }
+
+  /**
+   * `PATCH /api/connections/:id` (v158): the owner's Knowledgebase settings. Only a
+   * live Knowledgebase row can change; the write is revision-checked. The MCP client
+   * re-reads the row on every call, so narrowing the scope takes effect at once.
+   */
+  async update(owner: ChatOwner, id: string, body: unknown): Promise<AccountConnectionDto> {
+    await this.access(owner);
+    const input = body as Record<string, unknown> | null;
+    if (!input || typeof input !== 'object' || Array.isArray(input))
+      throw new ChatError('invalid_request');
+    const { expectedRevision: expected, assistantWriteScope: scope, ...rest } = input;
+    if (
+      Object.keys(rest).length ||
+      !(ACCOUNT_CONNECTION_ASSISTANT_WRITE_SCOPES as readonly unknown[]).includes(scope)
+    )
+      throw new ChatError('invalid_request');
+    const revision = expectedRevision(expected);
+    const row = await this.row(owner, id);
+    if (!row || row.state === 'disconnected') throw new ChatError('not_found');
+    if (row.provider !== 'knowledgebase') throw new ChatError('invalid_request');
+    if (row.revision !== revision) throw new ChatError('stale_revision');
+    if (row.assistant_write_scope !== scope) {
+      const result = await this.db.run(
+        'UPDATE account_connections SET assistant_write_scope = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND revision = ?',
+        [scope as string, this.timestamp(), id, revision]
+      );
+      if (!result.changes) throw new ChatError('stale_revision');
+    }
+    return connectionDto((await this.row(owner, id))!);
   }
 
   async disconnect(owner: ChatOwner, id: string): Promise<AccountConnectionDto> {

@@ -13,6 +13,7 @@ import {
 } from './policy.ts';
 import {
   type AccountConnections,
+  assistantWriteScope,
   ConnectionAccessError,
   connectionDto,
   type ConnectionRow
@@ -35,6 +36,13 @@ export interface KnowledgebaseToolDescriptor {
   description: string;
   inputSchema: unknown;
   access: 'read' | 'write';
+  /**
+   * Why a write tool is offered: the run's per-request grant (`request`), or the
+   * connection's `all_workspaces` setting (v158) with the workspaces it covers.
+   */
+  writeScope?:
+    | { kind: 'request'; workspace: string }
+    | { kind: 'all_workspaces'; workspaces: string[] };
 }
 
 /** Per-call options: the run's write grant, the only scope a write may use. */
@@ -324,7 +332,8 @@ export class KnowledgebaseMcp {
 
   /**
    * The reviewed, server-confirmed read tools for every connected Knowledgebase grant,
-   * plus the reviewed write tools of the one connection a run's grant names.
+   * plus the reviewed write tools of the one connection a run's grant names and of
+   * every connection whose owner allowed writes in all its workspaces (v158).
    */
   async tools(
     owner: ChatOwner,
@@ -340,17 +349,23 @@ export class KnowledgebaseMcp {
       } catch {
         continue; // An unavailable connection contributes no tools; readiness reports why.
       }
-      const writable = options.write?.connectionId === row.id;
+      const writeScope: KnowledgebaseToolDescriptor['writeScope'] =
+        assistantWriteScope(row) === 'all_workspaces'
+          ? { kind: 'all_workspaces', workspaces: connectionDto(row).authorizedWorkspaces }
+          : options.write?.connectionId === row.id
+            ? { kind: 'request', workspace: options.write.workspace }
+            : undefined;
       for (const server of tools) {
         const reviewed = exposable(server);
-        if (!reviewed || (reviewed.access === 'write' && !writable)) continue;
+        if (!reviewed || (reviewed.access === 'write' && !writeScope)) continue;
         out.push({
           id: namespacedToolId(row.id!, reviewed.name),
           connectionId: row.id!,
           tool: reviewed.name,
           description: reviewed.description,
           inputSchema: reviewed.inputSchema,
-          access: reviewed.access
+          access: reviewed.access,
+          ...(reviewed.access === 'write' ? { writeScope } : {})
         });
       }
     }
@@ -429,12 +444,14 @@ export class KnowledgebaseMcp {
     const workspace = typeof input.workspace === 'string' ? input.workspace : null;
     base.workspace = workspace;
     const write = reviewed.access === 'write';
-    // A write needs the run's grant for exactly this connection and workspace.
+    // A write needs a workspace and either the run's grant for exactly this connection
+    // and workspace, or the connection's live `all_workspaces` setting (v158); the
+    // workspace must still be one the connection is authorized for (checked below).
     if (
       write &&
-      (options.write?.connectionId !== row.id ||
-        !workspace ||
-        options.write.workspace !== workspace)
+      (!workspace ||
+        (assistantWriteScope(row) !== 'all_workspaces' &&
+          (options.write?.connectionId !== row.id || options.write.workspace !== workspace)))
     )
       return { ...base, detail: 'write_not_authorized' };
     const sent = { value: false };

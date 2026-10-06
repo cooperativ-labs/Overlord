@@ -34,13 +34,67 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `156`
+Current version: `158`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
 `contract/components.yaml`) — never a header duplicate. The contract version is
 incremented when any stable interface changes. All conformance manifests must
 declare the contract version they were validated against.
+
+### Version 158 Change Summary
+
+Knowledgebase all-workspaces access for the assistant (coo:1117.3p8q). A person can
+turn on, per Knowledgebase connection in Connected accounts, "Let the assistant edit
+notes in all authorized workspaces". With it on, every assistant run reads and writes
+any workspace in the connection's `authorizedWorkspaces` without a per-message
+`knowledgebaseWrite` grant; with it off (the default) v154 behavior is unchanged.
+
+- **Persistence.** `account_connections.assistant_write_scope` (text, not null,
+  default `per_request`, closed: `per_request`, `all_workspaces`), migration
+  `20261006120000_account_connections_assistant_write_scope` on both editions.
+  Existing rows become `per_request`, so nobody's access widens on upgrade.
+- **DTO.** `AccountConnectionDto.assistantWriteScope:
+  AccountConnectionAssistantWriteScope` (always `per_request` for providers other than
+  `knowledgebase`). New `ACCOUNT_CONNECTION_ASSISTANT_WRITE_SCOPES` and
+  `UpdateAccountConnectionBody` (`{ expectedRevision, assistantWriteScope }`).
+- **Route.** `PATCH /api/connections/:id` (Cloud-only, like the rest of the
+  organization-scoped routes) changes a live Knowledgebase connection the caller owns
+  and returns its DTO. `not_found` for a missing, foreign or disconnected row;
+  `invalid_request` for another provider, an unknown key or value; `stale_revision`
+  when `expectedRevision` is not the current `revision`. A change bumps `revision`.
+- **Enforcement.** The outbound MCP client reads the connection row on every call.
+  Under `all_workspaces` it declares the reviewed write tools for that connection
+  without a grant and admits a write naming any workspace the connection is authorized
+  for (refreshed from `list_workspaces` once when unknown, as for reads); anything else
+  is still `workspace_not_authorized`. Turning the setting off refuses the next write
+  (`write_not_authorized`) even for tools a running run already declared. Writes keep
+  every tool-policy v2 guard, bound, sequential ordering, and `uncertain` handling.
+  `ChatRunDto.knowledgebaseWrite` still reports only a per-message grant (null here).
+
+**Impact.** Database: one additive column on both editions. Backend: connections
+module (`update`, DTO projection), routes (`PATCH`), outbound MCP client, chat tool
+gateway (write-tool descriptions name the scope). Web: Connected accounts toggle; the
+composer drops the per-message picker for an all-workspaces connection and says edits
+are allowed. Mobile (OverlordMobile) can ignore the new DTO field; it gains the setting
+only if it adds the same toggle. REST otherwise, Auth, Protocol, CLI, MCP Server,
+Connector, Runner, Automations, and Desktop Shell have no interface change.
+
+### Version 157 Change Summary
+
+Knowledgebase source-check traffic (coo:1117.rf2w). The upstream MCP server limits
+each `(token subject, client)` pair to 120 tool calls per minute, and its
+`get_related` access check accepts one node at a time. Overlord therefore keeps
+the existing single-flight behavior and extends the per-owner positive source
+check cache from 15 to 30 seconds. The owner's connection row is still checked
+on every source check; upstream node revocation is observed within 30 seconds.
+There is no new route, tool, DTO, or persistence change.
+
+**Impact.** Backend account connections only: `source-check.ts` reduces repeated
+upstream `get_related` calls for the same source, with a maximum 30-second delay
+to observe upstream node revocation. REST, Database, Auth, Protocol, CLI, MCP
+Server, Connector, Runner, Automations, Desktop Shell, Web, and Mobile have no
+interface or implementation change.
 
 ### Version 156 Change Summary
 
@@ -221,7 +275,9 @@ the run (`chat_runs.knowledgebase_write_json`, migration
 Continue run inherits it; an answer may add a grant to a waiting run that has none and
 may never change one. OAuth consent, earlier runs, and model output never authorize a
 write. Without a grant no write tool is declared and any write call is refused
-server-side (`write_not_authorized`) before reaching the Knowledgebase.
+server-side (`write_not_authorized`) before reaching the Knowledgebase, unless the
+connection's `assistantWriteScope` is `all_workspaces` (v158), which authorizes writes
+in every authorized workspace of that connection for every run.
 
 **Tool policy version 2.** Reads add `query` (the Knowledgebase marks this POST
 semantically read-only) and `get_registries`. Writes: `create_node`, `edit_file`,
@@ -2576,6 +2632,7 @@ Owns:
 - In-process standard push dispatcher (`backend/push-notification-dispatcher.ts`), which claims durable `overlord.push_notification.dispatch.v1` worker jobs, recomputes the alert presentation snapshot, and sends APNs `alert`/`background` pushes on the plain bundle-id topic. It shares the APNs signing/transport helpers with the Live Activity dispatcher but never shares tokens, topics, or push types with it.
 - The private **assistant conversation** route family (contract v152; DTOs in `packages/contract/src/chat.ts`): `/api/chat/threads*`, `/api/chat/runs/:id/{cancel,continue}`, `/api/chat/questions/:id/answer`, `/api/chat/proposals/:id/create`, `/api/chat/providers`, and `/api/chat/notifications*`, all owner- and organization-scoped with existence-hiding 404s and Cloud-only (`chat_unavailable` on Local); idempotent submission/Create keyed by client request ids; atomic snapshot plus `eventCursor`; the owner-scoped SSE event channel with replay from storage, bounded retention, and `snapshot_required` — the one sanctioned realtime channel that does not derive from `entity_changes`; expiring foreground presence and monotonic rendered-event acknowledgements separate from replay cursors; backend run scheduling with leased, fenced attempts; the Gemini runtime adapter and private checkpoint persistence; the in-process conversation-notification dispatcher over `chat_notifications`
 - Account-connection routes (contract v152): `GET`/`POST /api/connections`, `DELETE /api/connections/:id`, public `GET /api/connections/knowledgebase/callback`, and public Client ID Metadata Document `GET /oauth/clients/knowledgebase.json`; the backend outbound MCP client for the configured Knowledgebase with a reviewed read-only allowlist; and the authenticated mission-less `POST /api/projects/:id/repository-reads` route over the runner capability queue
+- Knowledgebase connection settings (contract v158): `PATCH /api/connections/:id` with `{ expectedRevision, assistantWriteScope }` for the caller's live Knowledgebase connection (Cloud-only)
 - Profile-scoped account connections (contract v153): `GET /api/connections?scope=all` (organization-scoped plus profile-scoped connections and per-provider `providers` availability), `POST /api/connections/api-keys` (`{ provider, apiKey }`, validated upstream, then sealed), and `DELETE /api/connections/:id` for profile-scoped rows, and `POST /api/connections` for `github` (profile-scoped OAuth, callback `/api/auth/callback/github/repository`), served on both editions; the default `GET /api/connections` listing and Knowledgebase stay Cloud-only and unchanged
 
 Does NOT own:
@@ -2924,10 +2981,10 @@ answering a decision it is blocked on, and injecting an instruction into it.
 ### Backend → Outbound MCP (Account Connection Surface)
 
 - **Transport**: HTTPS JSON-RPC (MCP streamable HTTP) from the backend to the configured Knowledgebase origin only, with the connection's access token; egress is restricted server-side.
-- **Policy**: only a reviewed tool allowlist, namespaced per connection, is exposed to the assistant. Reviewed reads are always available; reviewed writes only for the connection and workspace of the run's user-authorized `knowledgebaseWrite` grant (v154), and refused otherwise before any request; unreviewed tools are rejected regardless of annotations; every call has argument, output-size, and time bounds; the per-source access check fails closed.
+- **Policy**: only a reviewed tool allowlist, namespaced per connection, is exposed to the assistant. Reviewed reads are always available; reviewed writes only for the connection and workspace of the run's user-authorized `knowledgebaseWrite` grant (v154), or for any authorized workspace of a connection whose live `assistant_write_scope` is `all_workspaces` (v158), and refused otherwise before any request; unreviewed tools are rejected regardless of annotations; every call has argument, output-size, and time bounds; the per-source access check fails closed.
 - **Tool policy version 2** (v154): reads `list_workspaces`, `search`, `read_file`, `get_related`, `list_children`, `get_links`, `read_resource`, `list_entities`, `query`, `get_registries`; writes `create_node`, `edit_file`, `set_properties`, `add_relation`, `update_relation`, `remove_relation` with required revision guards and bounded nested JSON (`null` removes a property). Each has Overlord-reviewed descriptions and closed input schemas (server descriptions and schemas are never shown to the model). Server annotations can only withhold a reviewed tool (a read not annotated `readOnlyHint: true` or annotated destructive; a write annotated destructive unless reviewed destructive, which only `remove_relation` is). A guard refusal (409/412) is `conflict`; a write sent without a usable response is `uncertain` and never retried. `query`, `get_related`, and `get_registries` are refused rather than truncated when over the text bound. Tool ids are `kb_<first 12 hex of the connection id>_<tool>` (≤ 64 characters; letters, digits, and underscores only, because the provider rewrote the earlier dotted form and the gateway then rejected the call as an unknown tool). Workspace-scoped calls must name a workspace in the connection's `authorizedWorkspaces` (refreshed from `list_workspaces` once when unknown).
 - **Bounds**: 4 KiB arguments for reads and per-tool limits for writes (up to 56 KiB), 1 MiB response read from the network (beyond that the call fails), 64 KiB text returned per call with a `truncated` flag, 15 s per call, redirects never followed. Results carry the namespaced tool, connection, workspace, observation time, and provenance (node id, path, provider revision, and update time for every node in the full response, at most 50).
-- **Access checks**: a source check consults the owner's connection row on every call (`disconnected` or foreign → `revoked`; not connected → `unknown`), then `get_related` (403/404 → `revoked`). Only positive answers are cached, per owner, for 15 s, so an upstream node revocation is observed within that window. Any other result is `unknown`; both fail closed.
+- **Access checks**: a source check consults the owner's connection row on every call (`disconnected` or foreign → `revoked`; not connected → `unknown`), then `get_related` (403/404 → `revoked`). Only positive answers are cached, per owner, for 30 s (v157), so an upstream node revocation is observed within that window. Any other result is `unknown`; both fail closed.
 - **Token use**: a 401 triggers one refresh shared by concurrent callers through the refresh lease (15 s, shorter than the provider's 30 s reuse grace). A second 401 or `invalid_grant` marks the connection `reauthorization_required` and erases its credential.
 - **Credentials**: obtained and refreshed only by the connections module (serialized refresh, rotated token persisted before use) and never logged or returned.
 
@@ -3132,7 +3189,7 @@ extension declarations and the agent-session capability vocabulary.
 - `chat_events.kind`: `thread.updated`, `message.created`, `message.delta`, `message.completed`, `run.updated`, `tool.updated`, `question.opened`, `question.closed`, `proposal.revised`, `proposal.created`, `content.invalidated`
 - `chat_source_refs.source_kind`: `knowledgebase`, `overlord`, `repository`; `chat_source_refs.access_state`: `authorized`, `revoked`, `unknown`
 - `chat_notifications.type`: `chat_needs_answer`, `chat_finished` (also admitted by `notification_preferences.type`); `chat_notifications.state`: `pending`, `suppressed`, `dispatching`, `dispatched`, `cancelled`, `failed`
-- `account_connections.provider`: `knowledgebase`, `everhour`, `github` (v153); `account_connections.state`: `pending`, `connected`, `reauthorization_required`, `disconnected`; `account_connections.credential_kind`: `oauth`, `api_key` (v153); `account_connections.credential_format`: `connection-v1`, `everhour-user-key-v1`, `github-user-oauth-v1` (v153)
+- `account_connections.provider`: `knowledgebase`, `everhour`, `github` (v153); `account_connections.state`: `pending`, `connected`, `reauthorization_required`, `disconnected`; `account_connections.credential_kind`: `oauth`, `api_key` (v153); `account_connections.credential_format`: `connection-v1`, `everhour-user-key-v1`, `github-user-oauth-v1` (v153); `account_connections.assistant_write_scope`: `per_request`, `all_workspaces` (v158)
 - RBAC role names (`role_assignments.role_key` core, non-extension values; enumerated in `auth/src/rbac/types.ts`'s `Role` enum and `overlord.rbac.toml`): `ADMIN`, `MANAGER`, `MEMBER`, `PUBLIC`
 
 ### Open (extensions may add namespaced values)

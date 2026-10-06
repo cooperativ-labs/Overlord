@@ -27,8 +27,8 @@ export function composeSourceCheckers(
  * Live Knowledgebase source check. The connection row (owner, organization,
  * state) is consulted on every call, so a disconnect or reauthorization takes
  * effect immediately. Only a positive upstream answer is cached, for `ttlMs`
- * (default 15 s), bounding how often snapshots and replay polls reach the
- * provider; a revocation upstream is therefore observed within `ttlMs`.
+ * (default 30 s, contract v157), bounding how often snapshots and replay polls
+ * reach the provider; a revocation upstream is therefore observed within `ttlMs`.
  * Concurrent checks of the same node share one upstream call.
  */
 export function knowledgebaseSourceChecker(
@@ -36,7 +36,7 @@ export function knowledgebaseSourceChecker(
   connectionState: (owner: ChatOwner, connectionId: string) => Promise<{ state: string } | null>,
   options: { ttlMs?: number; now?: () => number } = {}
 ): SourceChecker {
-  const ttlMs = options.ttlMs ?? 15_000;
+  const ttlMs = options.ttlMs ?? 30_000;
   const now = () => options.now?.() ?? Date.now();
   const cache = new Map<string, number>();
   const inflight = new Map<string, Promise<'authorized' | 'revoked' | 'unknown'>>();

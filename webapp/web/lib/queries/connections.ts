@@ -1,7 +1,8 @@
 import type {
   AccountConnectionListResponse,
   AccountConnectionProvider,
-  SetAccountConnectionApiKeyBody
+  SetAccountConnectionApiKeyBody,
+  UpdateAccountConnectionBody
 } from '@overlord/contract';
 import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -43,6 +44,16 @@ export function useSetAccountConnectionApiKey() {
   return useMutation({
     mutationFn: (body: SetAccountConnectionApiKeyBody) => api.setAccountConnectionApiKey(body),
     onSuccess: (_data, body) => invalidateAfterConnectionChange(qc, body.provider)
+  });
+}
+
+/** Change a Knowledgebase connection's settings (v158), revision-checked. */
+export function useUpdateAccountConnection() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { id: string; body: UpdateAccountConnectionBody }) =>
+      api.updateAccountConnection(input.id, input.body),
+    onSettled: () => invalidateAfterConnectionChange(qc, 'knowledgebase')
   });
 }
 

@@ -16,6 +16,7 @@ export function connectionFixture(
     serverUrl: 'https://api.everhour.com',
     state: 'connected',
     authorizedWorkspaces: [],
+    assistantWriteScope: 'per_request',
     toolPolicyVersion: 1,
     lastErrorCode: null,
     connectedAt: '2026-10-05T00:00:00.000Z',

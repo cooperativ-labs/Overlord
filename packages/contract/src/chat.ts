@@ -754,6 +754,17 @@ export const ACCOUNT_CONNECTION_STATES = [
 ] as const;
 export type AccountConnectionState = (typeof ACCOUNT_CONNECTION_STATES)[number];
 
+/**
+ * How far the assistant may write through a Knowledgebase connection (v158).
+ * `per_request` (default): only the one workspace a user allows on a single message
+ * (`knowledgebaseWrite`, v154). `all_workspaces`: reads and writes in every workspace
+ * in `authorizedWorkspaces`, for every run, without a per-message grant. Always
+ * `per_request` for other providers.
+ */
+export const ACCOUNT_CONNECTION_ASSISTANT_WRITE_SCOPES = ['per_request', 'all_workspaces'] as const;
+export type AccountConnectionAssistantWriteScope =
+  (typeof ACCOUNT_CONNECTION_ASSISTANT_WRITE_SCOPES)[number];
+
 /** Non-secret connection metadata. Credentials never leave the connections module. */
 export interface AccountConnectionDto {
   id: string;
@@ -771,6 +782,8 @@ export interface AccountConnectionDto {
   state: AccountConnectionState;
   /** Provider workspaces this grant can read, e.g. Knowledgebase workspace slugs. */
   authorizedWorkspaces: string[];
+  /** Knowledgebase write scope the owner chose for the assistant (v158). */
+  assistantWriteScope: AccountConnectionAssistantWriteScope;
   toolPolicyVersion: number;
   lastErrorCode: string | null;
   connectedAt: string | null;
@@ -808,6 +821,16 @@ export interface AccountConnectionListResponse {
 export interface SetAccountConnectionApiKeyBody {
   provider: AccountConnectionProvider;
   apiKey: string;
+}
+
+/**
+ * `PATCH /api/connections/:id` (v158): change a live Knowledgebase connection's
+ * settings. `expectedRevision` must match the connection's `revision`
+ * (`stale_revision` otherwise); any other provider is `invalid_request`.
+ */
+export interface UpdateAccountConnectionBody {
+  expectedRevision: number;
+  assistantWriteScope: AccountConnectionAssistantWriteScope;
 }
 
 export interface StartAccountConnectionBody {

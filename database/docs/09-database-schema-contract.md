@@ -2457,6 +2457,7 @@ NULL); `CHECK ((provider = 'knowledgebase') = (organization_id IS NOT NULL))`.
 | `state`                      | text         | yes      | Closed: `pending`, `connected`, `reauthorization_required`, `disconnected`.                             |
 | `authorized_workspaces_json` | Json         | yes      | Provider workspace identifiers the grant can read. Default `[]`.                                        |
 | `tool_policy_version`        | integer      | yes      | Reviewed read-allowlist version the connection was checked against.                                     |
+| `assistant_write_scope`      | text         | yes      | v158. Closed: `per_request` (default; writes only under a run's `knowledgebase_write_json` grant), `all_workspaces` (the assistant may write any authorized workspace of this Knowledgebase connection). Re-read on every write. |
 | `credential_ciphertext`      | text         | no       | AES-256-GCM envelope; AAD and plaintext per `credential_format`. Required when `connected`; null when `disconnected`. |
 | `credential_key_id`          | text         | no       | Key-ring id (current key id, reserved `everhour-env` / `github-user-env`, or since v156 a reserved `platform-<fingerprint>` id for the key derived from `BETTER_AUTH_SECRET`); null exactly when the ciphertext is null. |
 | `credential_revision`        | integer      | yes      | Increments on every stored rotation.                                                                    |
