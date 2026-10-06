@@ -34,13 +34,106 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `155`
+Current version: `156`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
 `contract/components.yaml`) — never a header duplicate. The contract version is
 incremented when any stable interface changes. All conformance manifests must
 declare the contract version they were validated against.
+
+### Version 156 Change Summary
+
+Zero-setup Knowledgebase connection (coo:1121.w16e). A person opens Connected accounts,
+clicks Connect, signs in to Knowledgebase, approves access and returns connected. No
+operator sets a Knowledgebase variable and no one generates a key. This version changes
+the configured-server policy and the key ring; there is no new route, DTO field,
+migration or column, and the OAuth flow, tool policy, `knowledgebaseWrite` grant
+(per-message Allow edits) and owner/organization scoping are unchanged.
+
+**Configured-server policy.** One deployment still talks to exactly one Knowledgebase
+MCP resource, chosen by the operator, never by a user:
+
+- `KNOWLEDGEBASE_MCP_URL` unset (or blank) means the standard server,
+  `https://knowledge.chaselubitz.com/mcp` (`DEFAULT_KNOWLEDGEBASE_MCP_URL` in
+  `backend/connections/config.ts`). Before v156 unset meant `not_configured`.
+- An HTTPS URL is an operator override, validated at startup as before (HTTPS, no
+  credentials). A malformed override turns the provider off rather than the backend.
+- `off`, `none`, `disabled` or `false` turns the provider off (`not_configured`, no
+  Client ID Metadata Document).
+- Egress is unchanged: the backend reaches only the server's origin plus
+  `KNOWLEDGEBASE_EGRESS_ORIGINS` over HTTPS, without following redirects. The standard
+  server's authorization server shares its origin, so the default needs no extra
+  origin.
+- There are no per-user custom servers. Existing rows keep their `server_url`; one live
+  connection per `(owner, organization, provider, server_url)` is unchanged.
+
+**Platform key.** The key ring (v153) gains a platform entry:
+
+- It is derived with HKDF-SHA256 from the deployment-provisioned `BETTER_AUTH_SECRET`
+  (at least 32 characters), under a label used only for account connections.
+- Its id is `platform-<16 hex>`, a one-way fingerprint of the derived key. The id changes
+  whenever the secret changes.
+- `platform-*` ids are reserved: `ACCOUNT_CONNECTIONS_ENCRYPTION_KEY_ID` cannot take one
+  (it falls back to `k1`, like the other reserved ids).
+
+The key used to seal new credentials is:
+
+- For Knowledgebase: the explicit current key (`ACCOUNT_CONNECTIONS_ENCRYPTION_KEY`),
+  else the platform key.
+- For a profile-scoped provider: the explicit current key, else its v153 fallback key,
+  else the platform key. Deployments that already set a key behave exactly as in v155.
+
+Knowledgebase reads an envelope under the current or the platform key. When a row is
+under the other one, the module re-seals it in place under the write key. A re-seal is
+guarded by key id and credential revision, and changes neither the token nor the
+credential revision. So adding a dedicated key later re-seals platform-sealed rows on
+next use, and no one reconnects.
+
+When a row's key is absent from the ring:
+
+- An explicit-key row while no explicit key is configured, or a platform row while no
+  platform key is derived: `unavailable` (503 from use), and the envelope is kept.
+  Restoring the variable restores access.
+- A platform row while a different platform key is derived (the secret was rotated), or
+  an explicit-key row under a replaced key: `reauthorization_required` with
+  `credential_unreadable`, and the credential is erased, exactly as in v152/v153.
+
+Profile-scoped rows follow the same rule for `platform-*` ids. Everything else in the
+v153 rule is unchanged. The platform key, the secret and every credential stay inside
+the backend; DTOs, logs, realtime, URLs and agent processes never see them. At startup
+the backend logs only the server origin, whether it is the default or an override, and
+the key source.
+
+**Availability.** `GET /api/connections?scope=all` reports Knowledgebase `available`
+on a Cloud deployment with `BETTER_AUTH_SECRET` and no Knowledgebase variables. The
+reasons and their wire values are unchanged:
+
+- `not_configured`: the operator turned the provider off.
+- `encryption_not_configured`: there is neither an explicit key nor a platform key.
+- `not_offered_on_edition`: Local.
+
+**Impact by module.**
+
+- Backend (account connections): `config.ts` gains the default and the off switch;
+  `keyring.ts` gains the platform key; `service.ts` gains reads under ring keys and the
+  in-place re-seal. Startup logs Knowledgebase readiness without secrets.
+- REST, Database, Auth, Protocol, CLI, MCP Server, Connector, Runner, Automations,
+  Desktop Shell: no interface change. There is no migration, and `credential_key_id`
+  additionally admits `platform-*` values. `BETTER_AUTH_SECRET` keeps its meaning;
+  rotating it without a dedicated key now also asks Knowledgebase owners (and
+  platform-sealed profile connections) to reconnect.
+- Web (Connected accounts): no API change. A row now shows:
+  - a busy "Opening Knowledgebase…" Connect button while the browser leaves;
+  - why an unfinished sign-in stopped (`authorization_denied` → cancelled);
+  - the server host and shared workspaces of a connected Knowledgebase account;
+  - actionable text for unavailable reasons, which never names a variable;
+  - a retry when the listing fails.
+
+  Callback notices say what happened and what to do next.
+- Mobile (OverlordMobile): no change required. Its rows read the same availability.
+- Operators: `.env.*.example` and the public Integrations guide document the
+  zero-setup default and the optional overrides.
 
 ### Version 155 Change Summary
 
@@ -707,7 +800,9 @@ rechecks every thread that cited the connection, so that content is replaced by
 `unavailable` blocks and live generations are fenced with `source_access_lost`.
 Reconnecting never restores invalidated content. Server configuration:
 `KNOWLEDGEBASE_MCP_URL`, `KNOWLEDGEBASE_EGRESS_ORIGINS`,
-`ACCOUNT_CONNECTIONS_ENCRYPTION_KEY`, `ACCOUNT_CONNECTIONS_ENCRYPTION_KEY_ID`.
+`ACCOUNT_CONNECTIONS_ENCRYPTION_KEY`, `ACCOUNT_CONNECTIONS_ENCRYPTION_KEY_ID`. *(Since v156 every one of these is optional: the
+standard server is the default and the platform key derived from `BETTER_AUTH_SECRET`
+seals credentials when no explicit key is set.)*
 
 **Outbound MCP and repository-read seams.** The backend's outbound MCP client
 reaches only the configured Knowledgebase origin over HTTPS with server-side egress

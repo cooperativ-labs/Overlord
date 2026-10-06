@@ -16,10 +16,15 @@ import {
   createConformanceDatabase
 } from '../test-helpers.ts';
 
-import { ConnectionsConfigError, connectionsConfigFromEnv } from './config.ts';
+import {
+  ConnectionsConfigError,
+  connectionsConfigFromEnv,
+  DEFAULT_KNOWLEDGEBASE_MCP_URL
+} from './config.ts';
 import { openSecret, sealSecret } from './crypto.ts';
 import { EgressError, egressFetch } from './egress.ts';
 import { createConnectionsRuntime } from './index.ts';
+import { isPlatformKeyId, platformKeyFromSecret } from './keyring.ts';
 import { FakeKnowledgebase, KB_MCP_URL, KB_ORIGIN } from './knowledgebase-test-fixture.ts';
 import { KnowledgebaseMcp } from './mcp-client.ts';
 import { namespacedToolId } from './policy.ts';
@@ -1043,7 +1048,21 @@ describe('connections module boundaries', () => {
         rt.connections.start(owner, { provider: 'knowledgebase', returnTo: 'mobile' }),
         rejectsCode('provider_not_ready')
       );
-      const unconfigured = createConnectionsRuntime({
+      // Turned off by the operator: nothing is served or started.
+      const off = createConnectionsRuntime({
+        db,
+        env: { KNOWLEDGEBASE_MCP_URL: 'off' },
+        publicBaseUrl: 'https://backend.test',
+        webReturnOrigin: null,
+        fetch: kb.fetch
+      });
+      await assert.rejects(
+        off.connections.start(owner, { provider: 'knowledgebase', returnTo: 'mobile' }),
+        rejectsCode('provider_not_ready')
+      );
+      assert.equal(off.clientMetadata(), null);
+      // No key source at all (no BETTER_AUTH_SECRET, no explicit key): never a plaintext fallback.
+      const keyless = createConnectionsRuntime({
         db,
         env: {},
         publicBaseUrl: 'https://backend.test',
@@ -1051,10 +1070,9 @@ describe('connections module boundaries', () => {
         fetch: kb.fetch
       });
       await assert.rejects(
-        unconfigured.connections.start(owner, { provider: 'knowledgebase', returnTo: 'mobile' }),
+        keyless.connections.start(owner, { provider: 'knowledgebase', returnTo: 'mobile' }),
         rejectsCode('provider_not_ready')
       );
-      assert.equal(unconfigured.clientMetadata(), null);
     } finally {
       await cleanup();
     }
@@ -1163,6 +1181,331 @@ describe('connections module boundaries', () => {
         [404, 'chat_unavailable']
       );
       assert.equal((await fetch(`${base}/oauth/clients/knowledgebase.json`)).status, 404);
+    } finally {
+      server.close();
+      await cleanup();
+    }
+  });
+});
+
+const AUTH_SECRET = 'deployment-better-auth-secret-0123456789abcdef';
+const STANDARD_ORIGIN = new URL(DEFAULT_KNOWLEDGEBASE_MCP_URL).origin;
+
+/** A backend booted with only what every Cloud deployment already has: no Knowledgebase variables. */
+function freshRuntime(
+  db: DatabaseClient,
+  kb: FakeKnowledgebase,
+  env: NodeJS.ProcessEnv = { BETTER_AUTH_SECRET: AUTH_SECRET }
+) {
+  return createConnectionsRuntime({
+    db,
+    env,
+    publicBaseUrl: 'https://backend.test',
+    webReturnOrigin: 'https://app.test',
+    fetch: kb.fetch,
+    now: () => kb.now
+  });
+}
+
+async function freshConnect(rt: ReturnType<typeof freshRuntime>, kb: FakeKnowledgebase) {
+  const started = await rt.connections.start(owner, { provider: 'knowledgebase', returnTo: 'web' });
+  assert.deepEqual(await rt.connections.complete(kb.consent(started.authorizeUrl, 'kb-owner')), {
+    status: 'connected',
+    returnTo: 'web'
+  });
+  return started.connectionId;
+}
+
+describe('zero-setup Knowledgebase configuration (contract v156)', () => {
+  it('defaults to the standard server, honours an HTTPS override, and can be turned off', () => {
+    const standard = connectionsConfigFromEnv({}, 'https://b', null);
+    assert.equal(standard.knowledgebase!.mcpUrl, DEFAULT_KNOWLEDGEBASE_MCP_URL);
+    assert.equal(standard.knowledgebase!.source, 'default');
+    assert.deepEqual(standard.knowledgebase!.egressOrigins, [STANDARD_ORIGIN]);
+    const blank = connectionsConfigFromEnv({ KNOWLEDGEBASE_MCP_URL: '  ' }, 'https://b', null);
+    assert.equal(blank.knowledgebase!.mcpUrl, DEFAULT_KNOWLEDGEBASE_MCP_URL);
+    const override = connectionsConfigFromEnv(
+      { KNOWLEDGEBASE_MCP_URL: KB_MCP_URL },
+      'https://b',
+      null
+    );
+    assert.equal(override.knowledgebase!.source, 'configured');
+    assert.deepEqual(override.knowledgebase!.egressOrigins, [KB_ORIGIN]);
+    for (const value of ['off', 'OFF', 'none', 'disabled', 'false'])
+      assert.equal(
+        connectionsConfigFromEnv({ KNOWLEDGEBASE_MCP_URL: value }, 'https://b', null).knowledgebase,
+        null
+      );
+    for (const value of ['http://kb.test/mcp', 'https://user:pw@kb.test/mcp', 'not a url'])
+      assert.throws(
+        () => connectionsConfigFromEnv({ KNOWLEDGEBASE_MCP_URL: value }, 'https://b', null),
+        ConnectionsConfigError
+      );
+  });
+
+  it('derives a stable platform key from the deployment secret; an explicit key still wins', () => {
+    const a = platformKeyFromSecret(AUTH_SECRET)!;
+    const b = platformKeyFromSecret(` ${AUTH_SECRET} `)!;
+    assert.equal(a.key.length, 32);
+    assert.ok(isPlatformKeyId(a.id));
+    assert.equal(a.id, b.id);
+    assert.ok(a.key.equals(b.key));
+    assert.ok(!a.key.equals(Buffer.from(AUTH_SECRET).subarray(0, 32)), 'never the raw secret');
+    assert.ok(!a.id.includes(AUTH_SECRET.slice(0, 8)));
+    assert.notEqual(platformKeyFromSecret(`${AUTH_SECRET}-rotated`)!.id, a.id);
+    assert.equal(platformKeyFromSecret('short'), null, 'a weak secret is not a key root');
+    assert.equal(platformKeyFromSecret(undefined), null);
+
+    const platformOnly = connectionsConfigFromEnv(
+      { BETTER_AUTH_SECRET: AUTH_SECRET },
+      'https://b',
+      null
+    );
+    assert.equal(platformOnly.encryption!.keyId, a.id);
+    const explicit = connectionsConfigFromEnv(
+      { BETTER_AUTH_SECRET: AUTH_SECRET, ACCOUNT_CONNECTIONS_ENCRYPTION_KEY: KEY },
+      'https://b',
+      null
+    );
+    assert.equal(explicit.encryption!.keyId, 'k1');
+    // A platform-looking explicit id is reserved, so it can never shadow the derived key.
+    const reserved = connectionsConfigFromEnv(
+      { ACCOUNT_CONNECTIONS_ENCRYPTION_KEY: KEY, ACCOUNT_CONNECTIONS_ENCRYPTION_KEY_ID: a.id },
+      'https://b',
+      null
+    );
+    assert.equal(reserved.encryption!.keyId, 'k1');
+  });
+});
+
+for (const adapter of adapters)
+  describe(`zero-setup Knowledgebase connection lifecycle [${adapter}]`, () => {
+    async function world(
+      fn: (ctx: { db: DatabaseClient; kb: FakeKnowledgebase }) => Promise<void>
+    ) {
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'connections');
+      try {
+        await seed(db);
+        await fn({ db, kb: new FakeKnowledgebase({ origin: STANDARD_ORIGIN }) });
+      } finally {
+        await cleanup();
+      }
+    }
+    const keyRow = (db: DatabaseClient, id: string) =>
+      db.get<{
+        credential_key_id: string | null;
+        credential_ciphertext: string | null;
+        state: string;
+      }>(
+        'SELECT credential_key_id, credential_ciphertext, state FROM account_connections WHERE id = ?',
+        [id]
+      );
+
+    it('a fresh deployment connects the standard server with no Knowledgebase variables', () =>
+      world(async ({ db, kb }) => {
+        const rt = freshRuntime(db, kb);
+        assert.equal(rt.config.knowledgebase!.mcpUrl, DEFAULT_KNOWLEDGEBASE_MCP_URL);
+        const started = await rt.connections.start(owner, {
+          provider: 'knowledgebase',
+          returnTo: 'web'
+        });
+        const url = new URL(started.authorizeUrl);
+        assert.equal(url.origin, STANDARD_ORIGIN);
+        assert.equal(url.searchParams.get('resource'), DEFAULT_KNOWLEDGEBASE_MCP_URL);
+        assert.equal(
+          (await rt.connections.complete(kb.consent(started.authorizeUrl, 'kb-owner'))).status,
+          'connected'
+        );
+        const [dto] = (await rt.connections.list(owner)).items;
+        assert.equal(dto!.state, 'connected');
+        assert.equal(dto!.serverUrl, DEFAULT_KNOWLEDGEBASE_MCP_URL);
+        assert.deepEqual(dto!.authorizedWorkspaces, ['main', 'overlord']);
+        const stored = await keyRow(db, started.connectionId);
+        assert.ok(isPlatformKeyId(stored!.credential_key_id!));
+        const everything =
+          JSON.stringify(await db.all('SELECT * FROM account_connections')) + JSON.stringify(dto);
+        assert.ok(!kb.leaks(everything), 'tokens are sealed, never stored or listed raw');
+        assert.ok(!everything.includes(AUTH_SECRET));
+        // The connection is usable for reads, and survives a restart of the same deployment.
+        const restarted = freshRuntime(db, kb);
+        const token = await restarted.connections.accessToken(owner, started.connectionId);
+        assert.ok(token.accessToken.startsWith('kb_at_'));
+        assert.ok(rt.clientMetadata());
+      }));
+
+    it('existing connections under an explicit key keep working and stay under it', () =>
+      world(async ({ db, kb }) => {
+        const explicitEnv = {
+          BETTER_AUTH_SECRET: AUTH_SECRET,
+          ACCOUNT_CONNECTIONS_ENCRYPTION_KEY: KEY
+        };
+        const before = freshRuntime(db, kb, { ACCOUNT_CONNECTIONS_ENCRYPTION_KEY: KEY });
+        const id = await freshConnect(before, kb);
+        assert.equal((await keyRow(db, id))!.credential_key_id, 'k1');
+        const after = freshRuntime(db, kb, explicitEnv);
+        assert.ok((await after.connections.accessToken(owner, id)).accessToken);
+        assert.equal((await keyRow(db, id))!.credential_key_id, 'k1');
+      }));
+
+    it('adding an explicit key later re-seals platform-sealed credentials without reconnecting', () =>
+      world(async ({ db, kb }) => {
+        const id = await freshConnect(freshRuntime(db, kb), kb);
+        const platformCipher = (await keyRow(db, id))!.credential_ciphertext;
+        const rt = freshRuntime(db, kb, {
+          BETTER_AUTH_SECRET: AUTH_SECRET,
+          ACCOUNT_CONNECTIONS_ENCRYPTION_KEY: KEY
+        });
+        const first = await rt.connections.accessToken(owner, id);
+        const row = await keyRow(db, id);
+        assert.equal(row!.credential_key_id, 'k1');
+        assert.notEqual(row!.credential_ciphertext, platformCipher);
+        assert.equal(row!.state, 'connected');
+        // Same grant: re-sealing never refreshes or rotates the upstream token.
+        assert.equal((await rt.connections.accessToken(owner, id)).accessToken, first.accessToken);
+      }));
+
+    it('a removed explicit key keeps the credential (unavailable); restoring it restores access', () =>
+      world(async ({ db, kb }) => {
+        const explicitEnv = {
+          BETTER_AUTH_SECRET: AUTH_SECRET,
+          ACCOUNT_CONNECTIONS_ENCRYPTION_KEY: KEY
+        };
+        const id = await freshConnect(freshRuntime(db, kb, explicitEnv), kb);
+        await assert.rejects(
+          freshRuntime(db, kb).connections.accessToken(owner, id),
+          (e: unknown) => e instanceof ConnectionAccessError && e.code === 'unavailable'
+        );
+        assert.equal((await keyRow(db, id))!.state, 'connected');
+        assert.ok((await keyRow(db, id))!.credential_ciphertext);
+        assert.ok(
+          (await freshRuntime(db, kb, explicitEnv).connections.accessToken(owner, id)).accessToken
+        );
+      }));
+
+    it('a rotated deployment secret is a rotated key: erase and ask to reconnect, then reconnect', () =>
+      world(async ({ db, kb }) => {
+        const id = await freshConnect(freshRuntime(db, kb), kb);
+        const rotated = freshRuntime(db, kb, { BETTER_AUTH_SECRET: `${AUTH_SECRET}-rotated` });
+        await assert.rejects(
+          rotated.connections.accessToken(owner, id),
+          (e: unknown) =>
+            e instanceof ConnectionAccessError && e.code === 'reauthorization_required'
+        );
+        const [dto] = (await rotated.connections.list(owner)).items;
+        assert.equal(dto!.state, 'reauthorization_required');
+        assert.equal(dto!.lastErrorCode, 'credential_unreadable');
+        assert.equal((await keyRow(db, id))!.credential_ciphertext, null);
+        // Reconnect reuses the same connection and works under the new key.
+        assert.equal(await freshConnect(rotated, kb), id);
+        assert.ok((await rotated.connections.accessToken(owner, id)).accessToken);
+      }));
+
+    it('a cancelled sign-in stores nothing and the next Connect completes cleanly', () =>
+      world(async ({ db, kb }) => {
+        const rt = freshRuntime(db, kb);
+        const started = await rt.connections.start(owner, {
+          provider: 'knowledgebase',
+          returnTo: 'web'
+        });
+        const { state } = kb.consent(started.authorizeUrl, 'kb-owner');
+        assert.deepEqual(await rt.connections.complete({ state, error: 'access_denied' }), {
+          status: 'denied',
+          returnTo: 'web'
+        });
+        const [pending] = (await rt.connections.list(owner)).items;
+        assert.equal(pending!.state, 'pending');
+        assert.equal(pending!.lastErrorCode, 'authorization_denied');
+        assert.equal((await keyRow(db, started.connectionId))!.credential_ciphertext, null);
+        // A failed exchange (bad code) also stores nothing.
+        const second = await rt.connections.start(owner, {
+          provider: 'knowledgebase',
+          returnTo: 'web'
+        });
+        const consent = kb.consent(second.authorizeUrl, 'kb-owner');
+        assert.equal(
+          (await rt.connections.complete({ state: consent.state, code: 'not-the-code' })).status,
+          'failed'
+        );
+        assert.equal((await keyRow(db, started.connectionId))!.credential_ciphertext, null);
+        assert.equal(await freshConnect(rt, kb), started.connectionId);
+        const [connected] = (await rt.connections.list(owner)).items;
+        assert.equal(connected!.state, 'connected');
+        assert.equal(connected!.lastErrorCode, null);
+        // Scoped to its owner and organization.
+        assert.deepEqual((await rt.connections.list(other)).items, []);
+        assert.deepEqual((await rt.connections.list(ownerElsewhere)).items, []);
+      }));
+  });
+
+describe('zero-setup Knowledgebase over HTTP (contract v156)', () => {
+  it('reports Knowledgebase available with no Knowledgebase variables and completes the web flow', async () => {
+    const { db, cleanup } = await createConformanceDatabase('sqlite', 'connections');
+    const kb = new FakeKnowledgebase({ origin: STANDARD_ORIGIN });
+    const rt = freshRuntime(db, kb);
+    const app = express();
+    app.use(express.json());
+    app.use(createConnectionsPublicRouter({ cloud: () => true, runtime: () => rt }));
+    app.use(
+      '/api/connections',
+      createConnectionsRouter({ cloud: () => true, runtime: () => rt, owner: () => owner })
+    );
+    app.use(apiErrorHandler);
+    const server = app.listen(0);
+    await once(server, 'listening');
+    const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    try {
+      await seed(db);
+      const before = (await (await fetch(`${base}/api/connections?scope=all`)).json()) as {
+        providers: { provider: string; available: boolean; reason: string | null }[];
+      };
+      assert.deepEqual(
+        before.providers.find(p => p.provider === 'knowledgebase'),
+        {
+          provider: 'knowledgebase',
+          scope: 'organization',
+          credentialKind: 'oauth',
+          available: true,
+          reason: null
+        }
+      );
+      const start = await fetch(`${base}/api/connections`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ provider: 'knowledgebase', returnTo: 'web' })
+      });
+      assert.equal(start.status, 200);
+      const { authorizeUrl } = (await start.json()) as { authorizeUrl: string };
+      const denied = await fetch(
+        `${base}/api/connections/knowledgebase/callback?${new URLSearchParams({
+          state: kb.consent(authorizeUrl, 'kb-owner').state,
+          error: 'access_denied'
+        })}`,
+        { redirect: 'manual' }
+      );
+      assert.equal(
+        denied.headers.get('location'),
+        'https://app.test/settings/connections?provider=knowledgebase&status=denied'
+      );
+      const retry = (await (
+        await fetch(`${base}/api/connections`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ provider: 'knowledgebase', returnTo: 'web' })
+        })
+      ).json()) as { authorizeUrl: string };
+      const done = await fetch(
+        `${base}/api/connections/knowledgebase/callback?${new URLSearchParams(
+          kb.consent(retry.authorizeUrl, 'kb-owner')
+        )}`,
+        { redirect: 'manual' }
+      );
+      assert.equal(
+        done.headers.get('location'),
+        'https://app.test/settings/connections?provider=knowledgebase&status=connected'
+      );
+      const listing = await (await fetch(`${base}/api/connections?scope=all`)).text();
+      assert.equal(JSON.parse(listing).items[0].state, 'connected');
+      assert.ok(!kb.leaks(listing));
     } finally {
       server.close();
       await cleanup();

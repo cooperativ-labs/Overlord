@@ -2458,7 +2458,7 @@ NULL); `CHECK ((provider = 'knowledgebase') = (organization_id IS NOT NULL))`.
 | `authorized_workspaces_json` | Json         | yes      | Provider workspace identifiers the grant can read. Default `[]`.                                        |
 | `tool_policy_version`        | integer      | yes      | Reviewed read-allowlist version the connection was checked against.                                     |
 | `credential_ciphertext`      | text         | no       | AES-256-GCM envelope; AAD and plaintext per `credential_format`. Required when `connected`; null when `disconnected`. |
-| `credential_key_id`          | text         | no       | Key-ring id (current key id, or reserved `everhour-env` / `github-user-env`); null exactly when the ciphertext is null. |
+| `credential_key_id`          | text         | no       | Key-ring id (current key id, reserved `everhour-env` / `github-user-env`, or since v156 a reserved `platform-<fingerprint>` id for the key derived from `BETTER_AUTH_SECRET`); null exactly when the ciphertext is null. |
 | `credential_revision`        | integer      | yes      | Increments on every stored rotation.                                                                    |
 | `access_expires_at`          | TimestampUTC | no       |                                                                                                         |
 | `refresh_expires_at`         | TimestampUTC | no       |                                                                                                         |

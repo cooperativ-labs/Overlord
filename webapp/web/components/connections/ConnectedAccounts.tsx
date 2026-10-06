@@ -51,7 +51,7 @@ function connectionErrorMessage(provider: AccountConnectionProvider, error: unkn
     case 'credential_rejected':
       return `${label} rejected this API key. Check it and try again.`;
     case 'provider_not_ready':
-      return `${label} is not configured on this server.`;
+      return `${label} can't be connected on this server yet. Ask an administrator to finish the account-connection setup.`;
     case 'provider_not_available':
     case 'chat_unavailable':
       return `${label} is not available on this server.`;
@@ -100,8 +100,19 @@ export function ConnectionRow({
   const [apiKey, setApiKey] = useState('');
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [awaitingBrowser, setAwaitingBrowser] = useState(false);
+  // The browser is leaving for the provider's sign-in page; keep the button busy.
+  const [redirecting, setRedirecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const busy = start.isPending || setKey.isPending || disconnect.isPending;
+  const busy = start.isPending || redirecting || setKey.isPending || disconnect.isPending;
+
+  useEffect(() => {
+    // Returning with the Back button restores this page from the cache mid-redirect.
+    const reset = (event: PageTransitionEvent) => {
+      if (event.persisted) setRedirecting(false);
+    };
+    window.addEventListener('pageshow', reset);
+    return () => window.removeEventListener('pageshow', reset);
+  }, []);
 
   async function beginOAuth() {
     setError(null);
@@ -116,6 +127,7 @@ export function ConnectionRow({
       // Knowledgebase has no server-side return path; remember where to come back to.
       if (provider === 'knowledgebase' && returnPath)
         rememberConnectionReturn(provider, returnPath);
+      setRedirecting(true);
       window.location.assign(authorizeUrl);
     } catch (cause) {
       setError(connectionErrorMessage(provider, cause));
@@ -186,7 +198,11 @@ export function ConnectionRow({
               disabled={busy}
               onClick={onConnect}
             >
-              {row.connectAction === 'connect' ? 'Connect' : 'Reconnect'}
+              {start.isPending || redirecting
+                ? `Opening ${copy.label}…`
+                : row.connectAction === 'connect'
+                  ? 'Connect'
+                  : 'Reconnect'}
             </Button>
           ) : null}
           {row.canDisconnect ? (
@@ -242,6 +258,9 @@ export function ConnectionRow({
       {awaitingBrowser ? (
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span>Finish signing in to {copy.label} in your browser.</span>
+          <Button type="button" variant="ghost" size="xs" onClick={() => setAwaitingBrowser(false)}>
+            Cancel
+          </Button>
           <Button
             type="button"
             variant="ghost"
@@ -321,13 +340,26 @@ export function ConnectedAccounts({
         </p>
       </div>
       {connections.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      ) : connections.isError ? (
-        <p role="alert" className="text-sm text-destructive">
-          {connections.error instanceof Error
-            ? connections.error.message
-            : 'Connected accounts could not be loaded.'}
+        <p role="status" className="text-sm text-muted-foreground">
+          Loading connected accounts…
         </p>
+      ) : connections.isError ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <p role="alert" className="text-sm text-destructive">
+            {connections.error instanceof Error
+              ? connections.error.message
+              : 'Connected accounts could not be loaded.'}
+          </p>
+          <Button
+            type="button"
+            size="xs"
+            variant="outline"
+            disabled={connections.isFetching}
+            onClick={() => void connections.refetch()}
+          >
+            Try again
+          </Button>
+        </div>
       ) : (
         <div ref={containerRef} className="grid max-w-xl gap-3">
           {rows.map(row => (

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import {
+  callbackMessage,
   connectionRow,
   connectionRows,
   isSafeReturnPath,
@@ -65,6 +66,9 @@ describe('connectionRows', () => {
     const status = statusFixture({ available: false, reason: 'encryption_not_configured' });
     const stored = connectionRow(status, connectionFixture({ state: 'pending' }));
     assert.equal(stored.statusLabel, 'Not configured on this server');
+    // Actionable for the person, who never handles a key themselves.
+    assert.match(stored.detail ?? '', /Ask an administrator/);
+    assert.doesNotMatch(stored.detail ?? '', /ENCRYPTION_KEY|KNOWLEDGEBASE_MCP_URL/);
     assert.equal(stored.connectAction, null);
     assert.equal(stored.canDisconnect, true);
     const none = connectionRow(status, null);
@@ -81,6 +85,66 @@ describe('connectionRows', () => {
       })
     );
     assert.equal(row.detail, 'Workspaces: main, notes');
+  });
+
+  it('shows the Knowledgebase server and shared workspaces for an organization connection', () => {
+    const status = statusFixture({
+      provider: 'knowledgebase',
+      scope: 'organization',
+      credentialKind: 'oauth'
+    });
+    const kb = (overrides: Parameters<typeof connectionFixture>[0]) =>
+      connectionFixture({
+        provider: 'knowledgebase',
+        scope: 'organization',
+        organizationId: 'org-1',
+        credentialKind: 'oauth',
+        account: null,
+        serverUrl: 'https://knowledge.chaselubitz.com/mcp',
+        ...overrides
+      });
+    assert.equal(
+      connectionRow(status, kb({ authorizedWorkspaces: ['main', 'overlord'] })).detail,
+      'Workspaces: main, overlord · knowledge.chaselubitz.com'
+    );
+    assert.equal(
+      connectionRow(status, kb({ authorizedWorkspaces: [] })).detail,
+      'No workspaces shared yet · knowledge.chaselubitz.com'
+    );
+  });
+
+  it('explains a cancelled or unfinished sign-in and offers Connect again', () => {
+    const status = statusFixture({
+      provider: 'knowledgebase',
+      scope: 'organization',
+      credentialKind: 'oauth'
+    });
+    const pending = (lastErrorCode: string | null) =>
+      connectionRow(
+        status,
+        connectionFixture({
+          provider: 'knowledgebase',
+          scope: 'organization',
+          state: 'pending',
+          lastErrorCode
+        })
+      );
+    const cancelled = pending('authorization_denied');
+    assert.equal(cancelled.statusLabel, 'Sign-in not finished');
+    assert.equal(cancelled.connectAction, 'connect');
+    assert.equal(cancelled.canDisconnect, false);
+    assert.equal(cancelled.detail, 'The last sign-in was cancelled, so nothing was connected.');
+    assert.equal(pending('token_invalid_grant').detail, 'The last sign-in could not be completed.');
+    assert.equal(pending(null).detail, 'Connect to finish signing in.');
+  });
+});
+
+describe('callbackMessage', () => {
+  it('tells the person what happened and what to do next', () => {
+    assert.equal(callbackMessage('knowledgebase', 'connected'), 'Knowledgebase connected.');
+    assert.match(callbackMessage('knowledgebase', 'denied'), /cancelled, so nothing was connected/);
+    assert.match(callbackMessage('knowledgebase', 'expired'), /Try again/);
+    assert.match(callbackMessage('knowledgebase', 'failed'), /Try again/);
   });
 });
 

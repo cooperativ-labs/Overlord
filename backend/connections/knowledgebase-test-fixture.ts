@@ -18,7 +18,6 @@ import { createHash, randomUUID } from 'node:crypto';
  */
 export const KB_ORIGIN = 'https://kb.test';
 export const KB_MCP_URL = `${KB_ORIGIN}/mcp`;
-const ISSUER = `${KB_ORIGIN}/v1/auth`;
 
 interface Grant {
   user: string;
@@ -79,6 +78,15 @@ export interface FakeRelation {
 const RANKING_KEYS = ['rank', 'rank_rationale', 'ranked_at', 'ranked_content_updated_at'];
 
 export class FakeKnowledgebase {
+  readonly origin: string;
+  readonly mcpUrl: string;
+  private readonly issuer: string;
+  /** `origin` lets a test stand in for another server, e.g. the standard default (v156). */
+  constructor(options: { origin?: string } = {}) {
+    this.origin = options.origin ?? KB_ORIGIN;
+    this.mcpUrl = `${this.origin}/mcp`;
+    this.issuer = `${this.origin}/v1/auth`;
+  }
   now = Date.parse('2026-10-04T12:00:00.000Z');
   accessTtlSeconds = 3600;
   refreshDelayMs = 0;
@@ -111,10 +119,10 @@ export class FakeKnowledgebase {
     const url = new URL(authorizeUrl);
     const p = url.searchParams;
     if (
-      `${url.origin}${url.pathname}` !== `${ISSUER}/oauth2/authorize` ||
+      `${url.origin}${url.pathname}` !== `${this.issuer}/oauth2/authorize` ||
       p.get('response_type') !== 'code' ||
       p.get('code_challenge_method') !== 'S256' ||
-      p.get('resource') !== KB_MCP_URL ||
+      p.get('resource') !== this.mcpUrl ||
       !p.get('scope')?.includes('offline_access') ||
       !p.get('client_id')?.startsWith('https://')
     )
@@ -164,15 +172,15 @@ export class FakeKnowledgebase {
         status,
         headers: { 'content-type': 'application/json', ...headers }
       });
-    if (url.origin !== KB_ORIGIN) throw new TypeError('fetch failed');
+    if (url.origin !== this.origin) throw new TypeError('fetch failed');
     if (url.pathname === '/.well-known/oauth-protected-resource/mcp')
-      return json(200, { resource: KB_MCP_URL, authorization_servers: [ISSUER] });
+      return json(200, { resource: this.mcpUrl, authorization_servers: [this.issuer] });
     if (url.pathname === '/.well-known/oauth-authorization-server/v1/auth')
       return json(200, {
-        issuer: ISSUER,
-        authorization_endpoint: `${ISSUER}/oauth2/authorize`,
-        token_endpoint: `${ISSUER}/oauth2/token`,
-        revocation_endpoint: `${ISSUER}/oauth2/revoke`,
+        issuer: this.issuer,
+        authorization_endpoint: `${this.issuer}/oauth2/authorize`,
+        token_endpoint: `${this.issuer}/oauth2/token`,
+        revocation_endpoint: `${this.issuer}/oauth2/revoke`,
         code_challenge_methods_supported: ['S256'],
         grant_types_supported: ['authorization_code', 'refresh_token', 'client_credentials']
       });
@@ -180,7 +188,7 @@ export class FakeKnowledgebase {
     if (url.pathname === '/v1/auth/oauth2/token') {
       const p = form();
       this.tokenRequests.push(p.get('grant_type') ?? '');
-      if (p.get('resource') !== KB_MCP_URL) return json(400, { error: 'invalid_target' });
+      if (p.get('resource') !== this.mcpUrl) return json(400, { error: 'invalid_target' });
       if (p.get('grant_type') === 'authorization_code') {
         const code = this.codes.get(p.get('code') ?? '');
         this.codes.delete(p.get('code') ?? '');

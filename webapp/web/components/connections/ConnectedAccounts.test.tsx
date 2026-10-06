@@ -43,6 +43,7 @@ const LIST: AccountConnectionListResponse = {
       organizationId: 'org-1',
       credentialKind: 'oauth',
       account: null,
+      serverUrl: 'https://knowledge.chaselubitz.com/mcp',
       authorizedWorkspaces: ['main']
     }),
     connectionFixture({
@@ -92,7 +93,7 @@ describe('ConnectedAccounts', () => {
     renderPage();
     const kb = within(await row('knowledgebase'));
     assert.ok(kb.getByText('Connected'));
-    assert.ok(kb.getByText('Workspaces: main'));
+    assert.ok(kb.getByText('Workspaces: main · knowledge.chaselubitz.com'));
     assert.ok(kb.getByRole('button', { name: 'Reconnect' }));
     assert.ok(kb.getByRole('button', { name: 'Disconnect' }));
 
@@ -161,6 +162,101 @@ describe('ConnectedAccounts', () => {
     assert.deepEqual(starts, [{ provider: 'github', returnTo: 'web' }]);
   });
 
+  it('shows loading, then a retry that recovers from a failed load', async () => {
+    let fail = true;
+    renderPage();
+    api.listAllAccountConnections = async () => {
+      if (fail) throw new ApiRequestError('Connected accounts are unavailable.', 503, 'x');
+      return LIST;
+    };
+    // The first render already started with the default list; force the failing path.
+    await client!.resetQueries();
+    assert.ok(await screen.findByRole('alert'));
+    fail = false;
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    assert.ok(await row('knowledgebase'));
+    assert.equal(screen.queryByRole('alert'), null);
+  });
+
+  it('connects Knowledgebase: Connect opens the sign-in page with a busy button', async () => {
+    const starts: StartAccountConnectionBody[] = [];
+    const assigned: string[] = [];
+    let release: () => void = () => {};
+    api.startAccountConnection = async body => {
+      starts.push(body);
+      await new Promise<void>(resolve => (release = resolve));
+      return {
+        connectionId: 'kb-2',
+        authorizeUrl: 'https://knowledge.chaselubitz.com/v1/auth/oauth2/authorize?state=s',
+        expiresAt: ''
+      };
+    };
+    window.location.assign = ((url: string) =>
+      void assigned.push(url)) as typeof window.location.assign;
+    renderPage({ ...LIST, items: LIST.items.filter(item => item.provider !== 'knowledgebase') });
+    const kb = within(await row('knowledgebase'));
+    assert.ok(kb.getByText('Not connected'));
+    fireEvent.click(kb.getByRole('button', { name: 'Connect' }));
+    const busy = await kb.findByRole('button', { name: 'Opening Knowledgebase…' });
+    assert.equal((busy as HTMLButtonElement).disabled, true);
+    release();
+    await waitFor(() => assert.equal(assigned.length, 1));
+    assert.deepEqual(starts, [{ provider: 'knowledgebase', returnTo: 'web' }]);
+    // Still busy while the browser leaves for the provider.
+    assert.equal(
+      (kb.getByRole('button', { name: 'Opening Knowledgebase…' }) as HTMLButtonElement).disabled,
+      true
+    );
+  });
+
+  it('turns a server that cannot connect Knowledgebase into an actionable message', async () => {
+    api.startAccountConnection = async () => {
+      throw new ApiRequestError('not ready', 503, 'provider_not_ready');
+    };
+    renderPage({ ...LIST, items: LIST.items.filter(item => item.provider !== 'knowledgebase') });
+    const kb = within(await row('knowledgebase'));
+    fireEvent.click(kb.getByRole('button', { name: 'Connect' }));
+    const alert = await kb.findByRole('alert');
+    assert.match(alert.textContent ?? '', /Ask an administrator/);
+    // The row recovers: Connect is offered again.
+    assert.equal(
+      (kb.getByRole('button', { name: 'Connect' }) as HTMLButtonElement).disabled,
+      false
+    );
+  });
+
+  it('shows a cancelled sign-in as unfinished and offers Connect again', async () => {
+    renderPage({
+      ...LIST,
+      items: [
+        connectionFixture({
+          id: 'kb-1',
+          provider: 'knowledgebase',
+          scope: 'organization',
+          organizationId: 'org-1',
+          credentialKind: 'oauth',
+          account: null,
+          state: 'pending',
+          lastErrorCode: 'authorization_denied'
+        })
+      ]
+    });
+    const kb = within(await row('knowledgebase'));
+    assert.ok(kb.getByText('Sign-in not finished'));
+    assert.ok(kb.getByText('The last sign-in was cancelled, so nothing was connected.'));
+    assert.ok(kb.getByRole('button', { name: 'Connect' }));
+    assert.equal(kb.queryByRole('button', { name: 'Disconnect' }), null);
+  });
+
+  it('never shows a credential, even when the listing carries unexpected fields', async () => {
+    renderPage({
+      ...LIST,
+      items: LIST.items.map(item => ({ ...item, accessToken: 'kb_at_secret' }) as typeof item)
+    });
+    await row('knowledgebase');
+    assert.equal(document.body.textContent?.includes('kb_at_secret'), false);
+  });
+
   it('asks before disconnecting, then disconnects that connection', async () => {
     const removed: string[] = [];
     api.disconnectAccountConnection = async id => {
@@ -174,5 +270,20 @@ describe('ConnectedAccounts', () => {
     assert.deepEqual(removed, []);
     fireEvent.click(within(dialog).getByRole('button', { name: 'Disconnect' }));
     await waitFor(() => assert.deepEqual(removed, ['kb-1']));
+  });
+
+  it('after disconnecting, the reloaded row offers Connect again', async () => {
+    api.disconnectAccountConnection = async id => {
+      page.setList({ ...LIST, items: LIST.items.filter(item => item.id !== id) });
+      return connectionFixture({ id, state: 'disconnected' });
+    };
+    const page = renderPage();
+    fireEvent.click(within(await row('knowledgebase')).getByRole('button', { name: 'Disconnect' }));
+    fireEvent.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Disconnect' })
+    );
+    const kb = within(await row('knowledgebase'));
+    await waitFor(() => assert.ok(kb.getByText('Not connected')));
+    assert.ok(kb.getByRole('button', { name: 'Connect' }));
   });
 });

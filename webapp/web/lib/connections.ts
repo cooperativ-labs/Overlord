@@ -58,6 +58,17 @@ const UNAVAILABLE_LABEL: Record<
   encryption_not_configured: 'Not configured on this server'
 };
 
+/** What a person can do about an unavailable provider; they never handle keys themselves. */
+const UNAVAILABLE_HINT: Record<
+  NonNullable<AccountConnectionProviderStatusDto['reason']>,
+  string
+> = {
+  not_offered_on_edition: 'Available when you use Overlord Cloud.',
+  not_configured: 'An administrator has turned this off for this server.',
+  encryption_not_configured:
+    'This server cannot store credentials securely yet. Ask an administrator to finish the account-connection setup.'
+};
+
 const ERROR_DETAIL: Record<string, string> = {
   invalid_grant: 'The sign-in expired or was revoked.',
   upstream_unauthorized: 'The provider no longer accepts this sign-in.',
@@ -66,8 +77,24 @@ const ERROR_DETAIL: Record<string, string> = {
   insufficient_scope: 'Some requested permissions were not granted.',
   account_in_use: 'That account is already connected to another Overlord user.',
   identity_changed: 'The signed-in account changed.',
-  account_lookup_failed: 'The account could not be confirmed.'
+  account_lookup_failed: 'The account could not be confirmed.',
+  authorization_denied: 'The last sign-in was cancelled. Reconnect to restore access.'
 };
+
+/** Why the last sign-in of a not-yet-connected account did not finish. */
+const PENDING_DETAIL: Record<string, string> = {
+  authorization_denied: 'The last sign-in was cancelled, so nothing was connected.',
+  token_exchange_failed: 'The last sign-in could not be completed.'
+};
+
+/** The host of a connection's server, for display (e.g. `knowledge.example.com`). */
+export function serverLabel(serverUrl: string): string | null {
+  try {
+    return new URL(serverUrl).host || null;
+  } catch {
+    return null;
+  }
+}
 
 function liveConnection(
   items: AccountConnectionDto[],
@@ -102,7 +129,10 @@ export function connectionRow(
           account ? `Connected as ${account}` : null,
           connection.authorizedWorkspaces.length
             ? `Workspaces: ${connection.authorizedWorkspaces.join(', ')}`
-            : null
+            : connection.scope === 'organization'
+              ? 'No workspaces shared yet'
+              : null,
+          connection.scope === 'organization' ? serverLabel(connection.serverUrl) : null
         ]
           .filter(Boolean)
           .join(' · ') || null
@@ -128,16 +158,24 @@ export function connectionRow(
       connectAction: null,
       // A credential stored earlier stays listed (and removable) while the server lacks a key.
       canDisconnect: connection !== null,
-      detail: null
+      detail: status.reason ? UNAVAILABLE_HINT[status.reason] : null
     };
   }
+  const pending = connection?.state === 'pending';
   return {
     ...base,
-    statusLabel: connection?.state === 'pending' ? 'Sign-in not finished' : 'Not connected',
+    statusLabel: pending ? 'Sign-in not finished' : 'Not connected',
     tone: 'idle',
     connectAction: 'connect',
     canDisconnect: false,
-    detail: null
+    detail: pending
+      ? ((connection.lastErrorCode &&
+          (PENDING_DETAIL[connection.lastErrorCode] ??
+            (connection.lastErrorCode.startsWith('token_')
+              ? PENDING_DETAIL.token_exchange_failed
+              : null))) ??
+        'Connect to finish signing in.')
+      : null
   };
 }
 
@@ -160,11 +198,11 @@ export function callbackMessage(
     case 'connected':
       return `${label} connected.`;
     case 'denied':
-      return `${label} access was not granted.`;
+      return `${label} sign-in was cancelled, so nothing was connected. Connect again whenever you are ready.`;
     case 'expired':
       return `The ${label} sign-in expired or was already used. Try again.`;
     default:
-      return `${label} could not be connected. Try again.`;
+      return `${label} could not be connected. Try again, and if it keeps failing ask an administrator to check the server logs.`;
   }
 }
 

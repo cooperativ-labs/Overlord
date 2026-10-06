@@ -12,8 +12,57 @@ enable the providers your team needs.
 
 ## Available integrations
 
+- **[Knowledgebase](#knowledgebase)** — let the Overlord assistant read your notes, and
+  edit them when you allow it.
 - **[Everhour](#everhour)** — time tracking synced to your missions and projects.
 - **[Webhooks](/webhooks/)** — send mission events to your own external systems.
+
+## Knowledgebase
+
+Connect your personal Knowledgebase account so the Overlord assistant can read your
+notes in the organization you are working in. On Overlord Cloud nothing needs to be
+set up first.
+
+1. **Open Connected accounts.** In Overlord, open **Settings → Connected accounts**
+   (or the Knowledgebase shortcut in Chat).
+2. **Click Connect.** Overlord sends you to the Knowledgebase sign-in page.
+3. **Sign in and approve access.** Choose which Knowledgebase workspaces Overlord may
+   read, then approve.
+4. **Check the result.** You return to Connected accounts. The Knowledgebase row shows
+   **Connected**, the workspaces you shared, and the server it is connected to.
+
+Notes:
+
+- The connection belongs to you, in this organization only. Teammates connect their
+  own accounts.
+- Overlord stores the sign-in encrypted on the server. It never sends it to your
+  browser or to agents.
+- The assistant only reads your notes by default. It can edit a workspace only when
+  you allow edits for that one message.
+- If you cancel the sign-in, nothing is connected. Click **Connect** again whenever
+  you are ready.
+- **Needs reconnecting** means the sign-in expired or was revoked. Click
+  **Reconnect** to sign in again.
+- **Disconnect** erases the stored sign-in and revokes it in Knowledgebase.
+  Conversations that cited your notes then show those sources as unavailable.
+- **Not configured on this server** means an administrator turned Knowledgebase off,
+  or the server cannot store credentials securely yet. Ask your administrator.
+
+### For administrators
+
+Knowledgebase works without extra settings. The backend connects to the standard
+server, `https://knowledge.chaselubitz.com/mcp`. It encrypts credentials with a key
+derived from the deployment's `BETTER_AUTH_SECRET`. These settings are optional:
+
+- `KNOWLEDGEBASE_MCP_URL`: another HTTPS server, or `off` to turn Knowledgebase off.
+  The backend only contacts that server's origin and any
+  `KNOWLEDGEBASE_EGRESS_ORIGINS` you list.
+- `ACCOUNT_CONNECTIONS_ENCRYPTION_KEY`: a dedicated 32-byte credential key. When you
+  add one, existing connections are re-encrypted with it the next time they are used.
+  Nobody has to reconnect.
+
+Keep `BETTER_AUTH_SECRET` stable. If you change it while no dedicated key is set,
+everyone has to reconnect Knowledgebase.
 
 ## Everhour
 

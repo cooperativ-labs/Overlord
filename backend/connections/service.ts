@@ -18,7 +18,7 @@ import type {
 
 import type { ConnectionsConfig } from './config.ts';
 import { hashSecret, openSecret, sealSecret, SecretEnvelopeError } from './crypto.ts';
-import { connectionCredentialAad } from './keyring.ts';
+import { connectionCredentialAad, isPlatformKeyId, type RingKey } from './keyring.ts';
 import { type KnowledgebaseOAuth, OAuthError, pkcePair, type TokenSet } from './oauth.ts';
 import { KNOWLEDGEBASE_TOOL_POLICY_VERSION } from './policy.ts';
 
@@ -367,7 +367,8 @@ export class AccountConnections {
     if (!row || row.state === 'disconnected') throw new ChatError('not_found');
     let credentials: Credentials | null = null;
     try {
-      credentials = this.open(row);
+      const key = row.credential_key_id ? this.readKey(row.credential_key_id) : null;
+      credentials = key ? this.open(row, key) : null;
     } catch {
       credentials = null;
     }
@@ -408,13 +409,24 @@ export class AccountConnections {
       const row = await this.row(owner, id);
       if (!row || row.state === 'disconnected') throw new ConnectionAccessError('not_found');
       if (row.state !== 'connected') throw new ConnectionAccessError('reauthorization_required');
+      const key = row.credential_key_id ? this.readKey(row.credential_key_id) : null;
+      // A key that is merely not configured (yet, or any more) keeps the envelope:
+      // restoring the variable restores access. A rotated key cannot be recovered.
+      if (!key && row.credential_key_id && this.missingKeyIsConfiguration(row.credential_key_id))
+        throw new ConnectionAccessError('unavailable');
       let credentials: Credentials;
       try {
-        if (row.credential_key_id !== ready.encryption.keyId) throw new SecretEnvelopeError();
-        credentials = this.open(row);
+        if (!key) throw new SecretEnvelopeError();
+        credentials = this.open(row, key);
       } catch {
         await this.requireReauthorization(id, 'credential_unreadable');
         throw new ConnectionAccessError('reauthorization_required');
+      }
+      if (key.id !== ready.encryption.keyId) {
+        // Sealed under the platform key before an explicit key was added (or the
+        // reverse): re-seal under the write key, then reread the persisted row.
+        await this.reseal(row, credentials, ready.encryption);
+        continue;
       }
       const stale =
         options.staleRevision !== undefined && row.credential_revision <= options.staleRevision;
@@ -523,13 +535,56 @@ export class AccountConnections {
     });
   }
 
-  private open(row: ConnectionRow): Credentials {
-    const { encryption } = this.ready();
+  /**
+   * The ring key a Knowledgebase envelope may be opened with: the explicit current
+   * key or the platform key (v156). Profile-scoped fallback keys never apply here.
+   */
+  private readKey(keyId: string): RingKey | null {
+    const { current, platform } = this.options.config.keyRing;
+    if (current?.id === keyId) return current;
+    if (platform?.id === keyId) return platform;
+    return null;
+  }
+
+  /**
+   * Whether an envelope whose key is absent is a configuration gap rather than a
+   * rotation: a platform key id while no platform key is derived, or an explicit
+   * key id while no explicit key is configured.
+   */
+  private missingKeyIsConfiguration(keyId: string): boolean {
+    const { current, platform } = this.options.config.keyRing;
+    return isPlatformKeyId(keyId) ? platform === null : current === null;
+  }
+
+  /** Re-seal the same credential under the write key; the token itself is unchanged. */
+  private async reseal(
+    row: ConnectionRow,
+    credentials: Credentials,
+    key: { key: Buffer; keyId: string }
+  ) {
+    await this.db.run(
+      `UPDATE account_connections SET credential_ciphertext = ?, credential_key_id = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'connected' AND credential_key_id = ? AND credential_revision = ?`,
+      [
+        sealSecret({
+          plaintext: JSON.stringify(credentials),
+          key: key.key,
+          aad: credentialAad(row)
+        }),
+        key.keyId,
+        this.timestamp(),
+        row.id,
+        row.credential_key_id,
+        row.credential_revision
+      ]
+    );
+  }
+
+  private open(row: ConnectionRow, key: RingKey): Credentials {
     if (!row.credential_ciphertext) throw new SecretEnvelopeError();
     const value = JSON.parse(
       openSecret({
         envelope: row.credential_ciphertext,
-        key: encryption.key,
+        key: key.key,
         aad: credentialAad(row)
       })
     ) as Partial<Credentials>;
