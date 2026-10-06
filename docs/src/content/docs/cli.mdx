@@ -158,7 +158,7 @@ Every command below is available from `ovld protocol help`.
 | `update-run-queue`                 | Rename, pause, or resume a queue definition. Requires `project:update`.                                   |
 | `delete-run-queue`                 | Delete a queue, optionally moving its entries. Requires `project:update`.                                 |
 | `reorder-project-run-queues`       | Replace the project's complete queue-definition order. Requires `project:update`.                         |
-| `search` (`search-missions` alias) | Find grouped mission, objective, and delivery matches by text, state, or project.                          |
+| `search` (`search-missions` alias) | Find grouped mission, objective, and delivery matches by text, state, or project. `--reference <token>` with `--project-id` runs an exhaustive exact-token lookup (`--limit`, `--cursor`; follow `nextCursor` until `complete` is true).                          |
 | `statuses`                         | List one project's board columns.                                                                         |
 | `discuss-objective`                | Submit the latest draft objective for discussion without execution.                                       |
 | `add-objectives`                   | Append ordered objectives to a mission.                                                                   |
