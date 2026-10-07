@@ -363,6 +363,12 @@ for (const adapter of adapters)
         assert.ok(
           (await mcp.tools(owner, undefined, { write: elsewhere })).every(t => t.access === 'read')
         );
+        assert.ok(
+          (await mcp.tools(owner, undefined, { write: { ...grant, workspace: 'secret' } })).every(
+            t => t.access === 'read'
+          ),
+          'an unauthorized workspace contributes no write declarations'
+        );
         assert.equal(await mcp.authorizeWrite(owner, grant), 'authorized');
         assert.equal(await mcp.authorizeWrite(owner, { ...grant, workspace: 'secret' }), 'invalid');
         assert.equal(await mcp.authorizeWrite(other, grant), 'invalid');
@@ -404,6 +410,22 @@ for (const adapter of adapters)
           'withheld_by_server_annotations'
         );
         kb.fetch = original;
+        await db.run('UPDATE account_connections SET authorized_workspaces_json = ? WHERE id = ?', [
+          '[]',
+          id
+        ]);
+        assert.ok(
+          (await mcp.tools(owner, undefined, { write: grant })).every(t => t.access === 'read'),
+          'a lost per-message workspace removes write declarations'
+        );
+        await db.run(
+          "UPDATE account_connections SET assistant_write_scope = 'all_workspaces' WHERE id = ?",
+          [id]
+        );
+        assert.ok(
+          (await mcp.tools(owner)).every(t => t.access === 'read'),
+          'an empty all-workspaces scope contributes no writes'
+        );
       }));
 
     it('writes general notes with revision guards, conflicts, refusals, and uncertain outcomes', () =>

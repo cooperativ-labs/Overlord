@@ -55,7 +55,8 @@ export default [
         global: 'readonly',
         module: 'readonly',
         process: 'readonly',
-        require: 'readonly'
+        require: 'readonly',
+        WebSocket: 'readonly'
       }
     },
     rules: {

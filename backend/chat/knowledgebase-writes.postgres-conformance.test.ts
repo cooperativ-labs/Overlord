@@ -20,8 +20,8 @@ import {
   createConformanceDatabase
 } from '../test-helpers.ts';
 
+import { EvaluationGeminiRuntime as GeminiChatRuntime } from './evaluation-runtime.ts';
 import type { GeminiChunk, GeminiClient, GeminiPart, GeminiRequest } from './gemini-client.ts';
-import { GeminiChatRuntime } from './gemini-runtime.ts';
 
 /**
  * Assistant Knowledgebase writes end to end (per:202.62e3, contract v154): the real
@@ -293,6 +293,14 @@ for (const adapter of adapters)
           'remove_relation'
         ])
           assert.ok(names.includes(w.tool(tool)), `${tool} is offered under the grant`);
+        const grantedWrite = gemini.requests[0]!.config.tools![0]!.functionDeclarations.find(
+          d => d.name === w.tool('create_node')
+        )!;
+        assert.match(
+          String(grantedWrite.description),
+          /request is authorized for workspace "main" only/
+        );
+        assert.doesNotMatch(String(grantedWrite.description), /all workspaces/);
         const [query, note, props, evidence, stale, foreign] = responses(gemini.requests[1]!);
         assert.equal(query!.outcome, 'ok');
         assert.equal(note!.outcome, 'ok');
@@ -399,7 +407,11 @@ for (const adapter of adapters)
           gemini.requests[0]!.config.tools?.[0]?.functionDeclarations ?? []
         ).find(d => d.name === w.tool('create_node'));
         assert.ok(declaration, 'write tools are offered without a grant');
-        assert.match(String(declaration.description), /every workspace.*"main", "overlord"/);
+        assert.match(
+          String(declaration.description),
+          /connection allows any currently authorized workspace/
+        );
+        assert.doesNotMatch(String(declaration.description), /"main"|"overlord"/);
         const [main, overlord, foreign] = responses(gemini.requests[1]!);
         assert.equal(main!.outcome, 'ok');
         assert.equal(overlord!.outcome, 'ok');
@@ -422,6 +434,57 @@ for (const adapter of adapters)
           'per_request offers no write tool without a grant'
         );
         assert.equal(w.kb.calls.filter(c => c.tool === 'create_node').length, 2);
+      }));
+
+    it('a historical write manifest survives recovery but a removed all-workspaces grant denies the pending call', () =>
+      world(adapter, async w => {
+        const before = (await w.connections.list(owner)).items[0]!;
+        const enabled = await w.connections.update(owner, w.connectionId, {
+          expectedRevision: before.revision,
+          assistantWriteScope: 'all_workspaces'
+        });
+        await w.c.create(owner, {
+          clientRequestId: randomUUID(),
+          text: 'Save this decision to my notes'
+        });
+        const first = new ScriptedGemini([
+          () => [
+            call(w.tool('create_node'), {
+              workspace: 'main',
+              path: 'notes/revoked.md',
+              expected_version: 'new',
+              content: 'Decision'
+            })
+          ]
+        ]);
+        const rt1 = runtime(w, first);
+        const dying = new Proxy(w.runs, {
+          get(target, prop, receiver) {
+            const value = Reflect.get(target, prop, receiver);
+            if (prop !== 'requestTools' || typeof value !== 'function') return value;
+            return async (...args: unknown[]) => {
+              await value.apply(target, args);
+              throw new Crash();
+            };
+          }
+        });
+        const a1 = await w.runs.claim('worker-1', rt1.identity);
+        await assert.rejects(rt1.execute(a1!, dying, new AbortController().signal), Crash);
+        await w.connections.update(owner, w.connectionId, {
+          expectedRevision: enabled.revision,
+          assistantWriteScope: 'per_request'
+        });
+        w.advance(10 * 60 * 1000);
+        const second = new ScriptedGemini([
+          req => {
+            assert.equal(responses(req)[0]!.outcome, 'denied');
+            assert.ok(!declaredNames(req).includes(w.tool('create_node')));
+            return [text('Edits are no longer authorized.')];
+          }
+        ]);
+        await execute(w, runtime(w, second));
+        assert.equal(w.kb.calls.filter(c => c.tool === 'create_node').length, 0);
+        assert.equal(w.kb.nodes.size, 0);
       }));
 
     it('a write interrupted after it was sent becomes uncertain and is never re-sent on recovery', () =>

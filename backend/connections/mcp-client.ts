@@ -349,10 +349,13 @@ export class KnowledgebaseMcp {
       } catch {
         continue; // An unavailable connection contributes no tools; readiness reports why.
       }
+      const workspaces = connectionDto(row).authorizedWorkspaces;
       const writeScope: KnowledgebaseToolDescriptor['writeScope'] =
         assistantWriteScope(row) === 'all_workspaces'
-          ? { kind: 'all_workspaces', workspaces: connectionDto(row).authorizedWorkspaces }
-          : options.write?.connectionId === row.id
+          ? workspaces.length
+            ? { kind: 'all_workspaces', workspaces }
+            : undefined
+          : options.write?.connectionId === row.id && workspaces.includes(options.write.workspace)
             ? { kind: 'request', workspace: options.write.workspace }
             : undefined;
       for (const server of tools) {

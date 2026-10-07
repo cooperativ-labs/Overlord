@@ -1,0 +1,1893 @@
+{
+  "mission": "coo:1127",
+  "objective": "coo:1127.54xc",
+  "date": "2026-10-07",
+  "model": "gemini-3.8-flash",
+  "method": "Live Gemini, production GeminiChatRuntime/ChatToolGateway/ChatRuns on in-memory SQLite, synthetic repository and Knowledgebase fixtures; arms interleaved with alternating order; 5 repetitions x 4 tasks x 2 arms per experiment. Aggregates only; raw runs retained privately.",
+  "experiments": {
+    "v7_initial": {
+      "repository-research/baseline": {
+        "runs": 5,
+        "completed": 5,
+        "asked": 0,
+        "errors": 0,
+        "providerRequests": {
+          "n": 5,
+          "min": 7,
+          "median": 11,
+          "max": 12,
+          "mean": 9.8,
+          "sd": 1.9
+        },
+        "toolTurns": {
+          "n": 5,
+          "min": 6,
+          "median": 10,
+          "max": 11,
+          "mean": 8.8,
+          "sd": 1.9
+        },
+        "toolCalls": {
+          "n": 5,
+          "min": 9,
+          "median": 11,
+          "max": 12,
+          "mean": 10.6,
+          "sd": 1
+        },
+        "multiCallTurnShare": 0.159,
+        "maxCallsPerTurn": 3,
+        "promptTokens": {
+          "n": 5,
+          "min": 39258,
+          "median": 85441,
+          "max": 102889,
+          "mean": 75106.6,
+          "sd": 22185.1
+        },
+        "cachedTokens": {
+          "n": 5,
+          "min": 0,
+          "median": 0,
+          "max": 4040,
+          "mean": 808,
+          "sd": 1616
+        },
+        "uncachedPromptTokens": {
+          "n": 5,
+          "min": 39258,
+          "median": 85441,
+          "max": 98849,
+          "mean": 74298.6,
+          "sd": 21210.7
+        },
+        "outputTokens": {
+          "n": 5,
+          "min": 961,
+          "median": 1277,
+          "max": 1306,
+          "mean": 1183.8,
+          "sd": 142.1
+        },
+        "thoughtTokens": {
+          "n": 5,
+          "min": 1343,
+          "median": 2097,
+          "max": 2500,
+          "mean": 2009,
+          "sd": 383.7
+        },
+        "wallMs": {
+          "n": 5,
+          "min": 37555,
+          "median": 48151,
+          "max": 59020,
+          "mean": 48496.2,
+          "sd": 6865.8
+        },
+        "gatheredBytes": {
+          "n": 5,
+          "min": 29211,
+          "median": 30458,
+          "max": 37001,
+          "mean": 32159.8,
+          "sd": 3204.1
+        },
+        "fileReads": 19,
+        "rangedFileReadShare": 0.053,
+        "factsMatched": "19/20",
+        "allFactsRuns": 4,
+        "citedRuns": 5,
+        "citationsResolveRuns": 5
+      },
+      "repository-research/current": {
+        "runs": 5,
+        "completed": 5,
+        "asked": 0,
+        "errors": 0,
+        "providerRequests": {
+          "n": 5,
+          "min": 7,
+          "median": 8,
+          "max": 10,
+          "mean": 8.2,
+          "sd": 1
+        },
+        "toolTurns": {
+          "n": 5,
+          "min": 6,
+          "median": 7,
+          "max": 9,
+          "mean": 7.2,
+          "sd": 1
+        },
+        "toolCalls": {
+          "n": 5,
+          "min": 10,
+          "median": 11,
+          "max": 14,
+          "mean": 11.4,
+          "sd": 1.4
+        },
+        "multiCallTurnShare": 0.361,
+        "maxCallsPerTurn": 4,
+        "promptTokens": {
+          "n": 5,
+          "min": 45305,
+          "median": 51466,
+          "max": 64351,
+          "mean": 53910.4,
+          "sd": 6524.3
+        },
+        "cachedTokens": {
+          "n": 5,
+          "min": 0,
+          "median": 0,
+          "max": 0,
+          "mean": 0,
+          "sd": 0
+        },
+        "uncachedPromptTokens": {
+          "n": 5,
+          "min": 45305,
+          "median": 51466,
+          "max": 64351,
+          "mean": 53910.4,
+          "sd": 6524.3
+        },
+        "outputTokens": {
+          "n": 5,
+          "min": 1178,
+          "median": 1306,
+          "max": 1378,
+          "mean": 1285.8,
+          "sd": 75
+        },
+        "thoughtTokens": {
+          "n": 5,
+          "min": 1547,
+          "median": 1984,
+          "max": 2307,
+          "mean": 1927.2,
+          "sd": 258.7
+        },
+        "wallMs": {
+          "n": 5,
+          "min": 42018,
+          "median": 47661,
+          "max": 53302,
+          "mean": 47336,
+          "sd": 4168.4
+        },
+        "gatheredBytes": {
+          "n": 5,
+          "min": 15905,
+          "median": 16254,
+          "max": 20942,
+          "mean": 17132.2,
+          "sd": 1910.3
+        },
+        "fileReads": 20,
+        "rangedFileReadShare": 1,
+        "factsMatched": "20/20",
+        "allFactsRuns": 5,
+        "citedRuns": 5,
+        "citationsResolveRuns": 5
+      },
+      "notes-vs-code/baseline": {
+        "runs": 5,
+        "completed": 5,
+        "asked": 0,
+        "errors": 0,
+        "providerRequests": {
+          "n": 5,
+          "min": 7,
+          "median": 7,
+          "max": 7,
+          "mean": 7,
+          "sd": 0
+        },
+        "toolTurns": {
+          "n": 5,
+          "min": 6,
+          "median": 6,
+          "max": 6,
+          "mean": 6,
+          "sd": 0
+        },
+        "toolCalls": {
+          "n": 5,
+          "min": 13,
+          "median": 13,
+          "max": 13,
+          "mean": 13,
+          "sd": 0
+        },
+        "multiCallTurnShare": 0.9,
+        "maxCallsPerTurn": 4,
+        "promptTokens": {
+          "n": 5,
+          "min": 48880,
+          "median": 54135,
+          "max": 55044,
+          "mean": 52477.6,
+          "sd": 2500.2
+        },
+        "cachedTokens": {
+          "n": 5,
+          "min": 0,
+          "median": 0,
+          "max": 0,
+          "mean": 0,
+          "sd": 0
+        },
+        "uncachedPromptTokens": {
+          "n": 5,
+          "min": 48880,
+          "median": 54135,
+          "max": 55044,
+          "mean": 52477.6,
+          "sd": 2500.2
+        },
+        "outputTokens": {
+          "n": 5,
+          "min": 1045,
+          "median": 1072,
+          "max": 1175,
+          "mean": 1083.8,
+          "sd": 47.1
+        },
+        "thoughtTokens": {
+          "n": 5,
+          "min": 1585,
+          "median": 2006,
+          "max": 2253,
+          "mean": 2012,
+          "sd": 236.9
+        },
+        "wallMs": {
+          "n": 5,
+          "min": 37745,
+          "median": 39038,
+          "max": 43326,
+          "mean": 40214.8,
+          "sd": 2387
+        },
+        "gatheredBytes": {
+          "n": 5,
+          "min": 37802,
+          "median": 37802,
+          "max": 37802,
+          "mean": 37802,
+          "sd": 0
+        },
+        "fileReads": 20,
+        "rangedFileReadShare": 0,
+        "factsMatched": "25/25",
+        "allFactsRuns": 5,
+        "citedRuns": 5,
+        "citationsResolveRuns": 5
+      },
+      "notes-vs-code/current": {
+        "runs": 5,
+        "completed": 5,
+        "asked": 0,
+        "errors": 0,
+        "providerRequests": {
+          "n": 5,
+          "min": 6,
+          "median": 6,
+          "max": 7,
+          "mean": 6.4,
+          "sd": 0.5
+        },
+        "toolTurns": {
+          "n": 5,
+          "min": 5,
+          "median": 5,
+          "max": 6,
+          "mean": 5.4,
+          "sd": 0.5
+        },
+        "toolCalls": {
+          "n": 5,
+          "min": 12,
+          "median": 15,
+          "max": 15,
+          "mean": 14,
+          "sd": 1.3
+        },
+        "multiCallTurnShare": 0.815,
+        "maxCallsPerTurn": 5,
+        "promptTokens": {
+          "n": 5,
+          "min": 50770,
+          "median": 55910,
+          "max": 80794,
+          "mean": 60965,
+          "sd": 11019.4
+        },
+        "cachedTokens": {
+          "n": 5,
+          "min": 0,
+          "median": 0,
+          "max": 28346,
+          "mean": 5669.2,
+          "sd": 11338.4
+        },
+        "uncachedPromptTokens": {
+          "n": 5,
+          "min": 50770,
+          "median": 52594,
+          "max": 64757,
+          "mean": 55295.8,
+          "sd": 5015.7
+        },
+        "outputTokens": {
+          "n": 5,
+          "min": 1138,
+          "median": 1245,
+          "max": 1544,
+          "mean": 1268.6,
+          "sd": 146.3
+        },
+        "thoughtTokens": {
+          "n": 5,
+          "min": 2403,
+          "median": 2623,
+          "max": 3104,
+          "mean": 2696.4,
+          "sd": 244.7
+        },
+        "wallMs": {
+          "n": 5,
+          "min": 38013,
+          "median": 50356,
+          "max": 58741,
+          "mean": 49473.4,
+          "sd": 7433.3
+        },
+        "gatheredBytes": {
+          "n": 5,
+          "min": 28154,
+          "median": 33967,
+          "max": 40209,
+          "mean": 34072.4,
+          "sd": 5134.7
+        },
+        "fileReads": 23,
+        "rangedFileReadShare": 1,
+        "factsMatched": "25/25",
+        "allFactsRuns": 5,
+        "citedRuns": 5,
+        "citationsResolveRuns": 5
+      },
+      "knowledgebase-research/baseline": {
+        "runs": 5,
+        "completed": 5,
+        "asked": 0,
+        "errors": 0,
+        "providerRequests": {
+          "n": 5,
+          "min": 4,
+          "median": 4,
+          "max": 4,
+          "mean": 4,
+          "sd": 0
+        },
+        "toolTurns": {
+          "n": 5,
+          "min": 3,
+          "median": 3,
+          "max": 3,
+          "mean": 3,
+          "sd": 0
+        },
+        "toolCalls": {
+          "n": 5,
+          "min": 6,
+          "median": 6,
+          "max": 6,
+          "mean": 6,
+          "sd": 0
+        },
+        "multiCallTurnShare": 0.667,
+        "maxCallsPerTurn": 3,
+        "promptTokens": {
+          "n": 5,
+          "min": 18260,
+          "median": 18277,
+          "max": 18418,
+          "mean": 18324.2,
+          "sd": 68.5
+        },
+        "cachedTokens": {
+          "n": 5,
+          "min": 0,
+          "median": 0,
+          "max": 0,
+          "mean": 0,
+          "sd": 0
+        },
+        "uncachedPromptTokens": {
+          "n": 5,
+          "min": 18260,
+          "median": 18277,
+          "max": 18418,
+          "mean": 18324.2,
+          "sd": 68.5
+        },
+        "outputTokens": {
+          "n": 5,
+          "min": 387,
+          "median": 428,
+          "max": 538,
+          "mean": 458.6,
+          "sd": 61.1
+        },
+        "thoughtTokens": {
+          "n": 5,
+          "min": 527,
+          "median": 593,
+          "max": 711,
+          "mean": 609.4,
+          "sd": 63.4
+        },
+        "wallMs": {
+          "n": 5,
+          "min": 13649,
+          "median": 15295,
+          "max": 17983,
+          "mean": 15614.8,
+          "sd": 1547.8
+        },
+        "gatheredBytes": {
+          "n": 5,
+          "min": 10116,
+          "median": 10116,
+          "max": 10116,
+          "mean": 10116,
+          "sd": 0
+        },
+        "fileReads": 0,
+        "rangedFileReadShare": 0,
+        "factsMatched": "20/20",
+        "allFactsRuns": 5,
+        "citedRuns": 5,
+        "citationsResolveRuns": 5
+      },
+      "knowledgebase-research/current": {
+        "runs": 5,
+        "completed": 5,
+        "asked": 0,
+        "errors": 0,
+        "providerRequests": {
+          "n": 5,
+          "min": 4,
+          "median": 4,
+          "max": 5,
+          "mean": 4.2,
+          "sd": 0.4
+        },
+        "toolTurns": {
+          "n": 5,
+          "min": 3,
+          "median": 3,
+          "max": 4,
+          "mean": 3.2,
+          "sd": 0.4
+        },
+        "toolCalls": {
+          "n": 5,
+          "min": 6,
+          "median": 6,
+          "max": 7,
+          "mean": 6.2,
+          "sd": 0.4
+        },
+        "multiCallTurnShare": 0.625,
+        "maxCallsPerTurn": 3,
+        "promptTokens": {
+          "n": 5,
+          "min": 19241,
+          "median": 19561,
+          "max": 25715,
+          "mean": 20758.4,
+          "sd": 2494.1
+        },
+        "cachedTokens": {
+          "n": 5,
+          "min": 0,
+          "median": 0,
+          "max": 0,
+          "mean": 0,
+          "sd": 0
+        },
+        "uncachedPromptTokens": {
+          "n": 5,
+          "min": 19241,
+          "median": 19561,
+          "max": 25715,
+          "mean": 20758.4,
+          "sd": 2494.1
+        },
+        "outputTokens": {
+          "n": 5,
+          "min": 470,
+          "median": 521,
+          "max": 530,
+          "mean": 511.6,
+          "sd": 21.7
+        },
+        "thoughtTokens": {
+          "n": 5,
+          "min": 722,
+          "median": 808,
+          "max": 942,
+          "mean": 801.8,
+          "sd": 79.4
+        },
+        "wallMs": {
+          "n": 5,
+          "min": 15548,
+          "median": 17758,
+          "max": 25072,
+          "mean": 18959.4,
+          "sd": 3233.2
+        },
+        "gatheredBytes": {
+          "n": 5,
+          "min": 10116,
+          "median": 10116,
+          "max": 10656,
+          "mean": 10224,
+          "sd": 216
+        },
+        "fileReads": 0,
+        "rangedFileReadShare": 0,
+        "factsMatched": "20/20",
+        "allFactsRuns": 5,
+        "citedRuns": 5,
+        "citationsResolveRuns": 5
+      },
+      "status/baseline": {
+        "runs": 5,
+        "completed": 5,
+        "asked": 0,
+        "errors": 0,
+        "providerRequests": {
+          "n": 5,
+          "min": 3,
+          "median": 4,
+          "max": 5,
+          "mean": 3.8,
+          "sd": 0.7
+        },
+        "toolTurns": {
+          "n": 5,
+          "min": 2,
+          "median": 3,
+          "max": 4,
+          "mean": 2.8,
+          "sd": 0.7
+        },
+        "toolCalls": {
+          "n": 5,
+          "min": 5,
+          "median": 5,
+          "max": 6,
+          "mean": 5.2,
+          "sd": 0.4
+        },
+        "multiCallTurnShare": 0.5,
+        "maxCallsPerTurn": 3,
+        "promptTokens": {
+          "n": 5,
+          "min": 12790,
+          "median": 16314,
+          "max": 22153,
+          "mean": 16127.4,
+          "sd": 3395.5
+        },
+        "cachedTokens": {
+          "n": 5,
+          "min": 0,
+          "median": 0,
+          "max": 0,
+          "mean": 0,
+          "sd": 0
+        },
+        "uncachedPromptTokens": {
+          "n": 5,
+          "min": 12790,
+          "median": 16314,
+          "max": 22153,
+          "mean": 16127.4,
+          "sd": 3395.5
+        },
+        "outputTokens": {
+          "n": 5,
+          "min": 305,
+          "median": 315,
+          "max": 387,
+          "mean": 327.6,
+          "sd": 30.4
+        },
+        "thoughtTokens": {
+          "n": 5,
+          "min": 442,
+          "median": 450,
+          "max": 566,
+          "mean": 491.4,
+          "sd": 56.2
+        },
+        "wallMs": {
+          "n": 5,
+          "min": 11639,
+          "median": 12896,
+          "max": 15622,
+          "mean": 13390,
+          "sd": 1524.6
+        },
+        "gatheredBytes": {
+          "n": 5,
+          "min": 4285,
+          "median": 4285,
+          "max": 5442,
+          "mean": 4516.4,
+          "sd": 462.8
+        },
+        "fileReads": 0,
+        "rangedFileReadShare": 0,
+        "factsMatched": "15/15",
+        "allFactsRuns": 5,
+        "citedRuns": 5,
+        "citationsResolveRuns": 5
+      },
+      "status/current": {
+        "runs": 5,
+        "completed": 5,
+        "asked": 0,
+        "errors": 0,
+        "providerRequests": {
+          "n": 5,
+          "min": 2,
+          "median": 3,
+          "max": 3,
+          "mean": 2.8,
+          "sd": 0.4
+        },
+        "toolTurns": {
+          "n": 5,
+          "min": 1,
+          "median": 2,
+          "max": 2,
+          "mean": 1.8,
+          "sd": 0.4
+        },
+        "toolCalls": {
+          "n": 5,
+          "min": 2,
+          "median": 5,
+          "max": 5,
+          "mean": 4.4,
+          "sd": 1.2
+        },
+        "multiCallTurnShare": 1,
+        "maxCallsPerTurn": 3,
+        "promptTokens": {
+          "n": 5,
+          "min": 8077,
+          "median": 13737,
+          "max": 14039,
+          "mean": 12653.4,
+          "sd": 2299.1
+        },
+        "cachedTokens": {
+          "n": 5,
+          "min": 0,
+          "median": 0,
+          "max": 0,
+          "mean": 0,
+          "sd": 0
+        },
+        "uncachedPromptTokens": {
+          "n": 5,
+          "min": 8077,
+          "median": 13737,
+          "max": 14039,
+          "mean": 12653.4,
+          "sd": 2299.1
+        },
+        "outputTokens": {
+          "n": 5,
+          "min": 227,
+          "median": 295,
+          "max": 307,
+          "mean": 284.6,
+          "sd": 29.2
+        },
+        "thoughtTokens": {
+          "n": 5,
+          "min": 505,
+          "median": 953,
+          "max": 1475,
+          "mean": 945,
+          "sd": 324.2
+        },
+        "wallMs": {
+          "n": 5,
+          "min": 11401,
+          "median": 15746,
+          "max": 16609,
+          "mean": 14374.4,
+          "sd": 2162.1
+        },
+        "gatheredBytes": {
+          "n": 5,
+          "min": 2651,
+          "median": 4285,
+          "max": 4285,
+          "mean": 3958.2,
+          "sd": 653.6
+        },
+        "fileReads": 0,
+        "rangedFileReadShare": 0,
+        "factsMatched": "15/15",
+        "allFactsRuns": 5,
+        "citedRuns": 5,
+        "citationsResolveRuns": 5
+      },
+      "all/baseline": {
+        "runs": 20,
+        "completed": 20,
+        "asked": 0,
+        "errors": 0,
+        "providerRequests": {
+          "n": 20,
+          "min": 3,
+          "median": 6,
+          "max": 12,
+          "mean": 6.2,
+          "sd": 2.7
+        },
+        "toolTurns": {
+          "n": 20,
+          "min": 2,
+          "median": 5,
+          "max": 11,
+          "mean": 5.2,
+          "sd": 2.7
+        },
+        "toolCalls": {
+          "n": 20,
+          "min": 5,
+          "median": 7.5,
+          "max": 13,
+          "mean": 8.7,
+          "sd": 3.3
+        },
+        "multiCallTurnShare": 0.495,
+        "maxCallsPerTurn": 4,
+        "promptTokens": {
+          "n": 20,
+          "min": 12790,
+          "median": 30705.5,
+          "max": 102889,
+          "mean": 40509,
+          "sd": 27096.3
+        },
+        "cachedTokens": {
+          "n": 20,
+          "min": 0,
+          "median": 0,
+          "max": 4040,
+          "mean": 202,
+          "sd": 880.5
+        },
+        "uncachedPromptTokens": {
+          "n": 20,
+          "min": 12790,
+          "median": 30705.5,
+          "max": 98849,
+          "mean": 40307,
+          "sd": 26641.7
+        },
+        "outputTokens": {
+          "n": 20,
+          "min": 305,
+          "median": 749.5,
+          "max": 1306,
+          "mean": 763.5,
+          "sd": 383.8
+        },
+        "thoughtTokens": {
+          "n": 20,
+          "min": 442,
+          "median": 1027,
+          "max": 2500,
+          "mean": 1280.5,
+          "sd": 766.4
+        },
+        "wallMs": {
+          "n": 20,
+          "min": 11639,
+          "median": 27769,
+          "max": 59020,
+          "mean": 29429,
+          "sd": 15696.6
+        },
+        "gatheredBytes": {
+          "n": 20,
+          "min": 4285,
+          "median": 19663.5,
+          "max": 37802,
+          "mean": 21148.6,
+          "sd": 14207.5
+        },
+        "fileReads": 39,
+        "rangedFileReadShare": 0.026,
+        "factsMatched": "79/80",
+        "allFactsRuns": 19,
+        "citedRuns": 20,
+        "citationsResolveRuns": 20
+      },
+      "all/current": {
+        "runs": 20,
+        "completed": 20,
+        "asked": 0,
+        "errors": 0,
+        "providerRequests": {
+          "n": 20,
+          "min": 2,
+          "median": 5.5,
+          "max": 10,
+          "mean": 5.4,
+          "sd": 2.2
+        },
+        "toolTurns": {
+          "n": 20,
+          "min": 1,
+          "median": 4.5,
+          "max": 9,
+          "mean": 4.4,
+          "sd": 2.2
+        },
+        "toolCalls": {
+          "n": 20,
+          "min": 2,
+          "median": 8.5,
+          "max": 15,
+          "mean": 9,
+          "sd": 4
+        },
+        "multiCallTurnShare": 0.614,
+        "maxCallsPerTurn": 5,
+        "promptTokens": {
+          "n": 20,
+          "min": 8077,
+          "median": 35510,
+          "max": 80794,
+          "mean": 37071.8,
+          "sd": 21750.3
+        },
+        "cachedTokens": {
+          "n": 20,
+          "min": 0,
+          "median": 0,
+          "max": 28346,
+          "mean": 1417.3,
+          "sd": 6177.9
+        },
+        "uncachedPromptTokens": {
+          "n": 20,
+          "min": 8077,
+          "median": 35510,
+          "max": 64757,
+          "mean": 35654.5,
+          "sd": 19680.1
+        },
+        "outputTokens": {
+          "n": 20,
+          "min": 227,
+          "median": 834,
+          "max": 1544,
+          "mean": 837.7,
+          "sd": 454.7
+        },
+        "thoughtTokens": {
+          "n": 20,
+          "min": 505,
+          "median": 1511,
+          "max": 3104,
+          "mean": 1592.6,
+          "sd": 808.3
+        },
+        "wallMs": {
+          "n": 20,
+          "min": 11401,
+          "median": 31542.5,
+          "max": 58741,
+          "mean": 32535.8,
+          "sd": 16642.1
+        },
+        "gatheredBytes": {
+          "n": 20,
+          "min": 2651,
+          "median": 13280.5,
+          "max": 40209,
+          "mean": 16346.7,
+          "sd": 11578.7
+        },
+        "fileReads": 43,
+        "rangedFileReadShare": 1,
+        "factsMatched": "80/80",
+        "allFactsRuns": 20,
+        "citedRuns": 20,
+        "citationsResolveRuns": 20
+      }
+    },
+    "v7_final": {
+      "repository-research/baseline": {
+        "runs": 5,
+        "completed": 5,
+        "asked": 0,
+        "errors": 0,
+        "providerRequests": {
+          "n": 5,
+          "min": 6,
+          "median": 10,
+          "max": 17,
+          "mean": 10.2,
+          "sd": 3.9
+        },
+        "toolTurns": {
+          "n": 5,
+          "min": 5,
+          "median": 9,
+          "max": 16,
+          "mean": 9.2,
+          "sd": 3.9
+        },
+        "toolCalls": {
+          "n": 5,
+          "min": 9,
+          "median": 10,
+          "max": 18,
+          "mean": 11.6,
+          "sd": 3.4
+        },
+        "multiCallTurnShare": 0.196,
+        "maxCallsPerTurn": 3,
+        "promptTokens": {
+          "n": 5,
+          "min": 39413,
+          "median": 90075,
+          "max": 209771,
+          "mean": 97624.8,
+          "sd": 60647.4
+        },
+        "cachedTokens": {
+          "n": 5,
+          "min": 0,
+          "median": 0,
+          "max": 80955,
+          "mean": 16191,
+          "sd": 32382
+        },
+        "uncachedPromptTokens": {
+          "n": 5,
+          "min": 39413,
+          "median": 90075,
+          "max": 128816,
+          "mean": 81433.8,
+          "sd": 33093.6
+        },
+        "outputTokens": {
+          "n": 5,
+          "min": 952,
+          "median": 1096,
+          "max": 1781,
+          "mean": 1244.2,
+          "sd": 293.1
+        },
+        "thoughtTokens": {
+          "n": 5,
+          "min": 1072,
+          "median": 1747,
+          "max": 2490,
+          "mean": 1815.4,
+          "sd": 464.4
+        },
+        "wallMs": {
+          "n": 5,
+          "min": 32929,
+          "median": 40490,
+          "max": 75473,
+          "mean": 47307.4,
+          "sd": 14976.4
+        },
+        "gatheredBytes": {
+          "n": 5,
+          "min": 30458,
+          "median": 34159,
+          "max": 50774,
+          "mean": 36982.6,
+          "sd": 7097.8
+        },
+        "fileReads": 26,
+        "rangedFileReadShare": 0.308,
+        "factsMatched": "19/20",
+        "allFactsRuns": 4,
+        "citedRuns": 5,
+        "citationsResolveRuns": 5
+      },
+      "repository-research/current": {
+        "runs": 5,
+        "completed": 5,
+        "asked": 0,
+        "errors": 0,
+        "providerRequests": {
+          "n": 5,
+          "min": 6,
+          "median": 8,
+          "max": 10,
+          "mean": 8.4,
+          "sd": 1.5
+        },
+        "toolTurns": {
+          "n": 5,
+          "min": 5,
+          "median": 7,
+          "max": 9,
+          "mean": 7.4,
+          "sd": 1.5
+        },
+        "toolCalls": {
+          "n": 5,
+          "min": 10,
+          "median": 10,
+          "max": 12,
+          "mean": 10.6,
+          "sd": 0.8
+        },
+        "multiCallTurnShare": 0.297,
+        "maxCallsPerTurn": 4,
+        "promptTokens": {
+          "n": 5,
+          "min": 42310,
+          "median": 61069,
+          "max": 79891,
+          "mean": 60658.2,
+          "sd": 13173.9
+        },
+        "cachedTokens": {
+          "n": 5,
+          "min": 0,
+          "median": 0,
+          "max": 0,
+          "mean": 0,
+          "sd": 0
+        },
+        "uncachedPromptTokens": {
+          "n": 5,
+          "min": 42310,
+          "median": 61069,
+          "max": 79891,
+          "mean": 60658.2,
+          "sd": 13173.9
+        },
+        "outputTokens": {
+          "n": 5,
+          "min": 1044,
+          "median": 1184,
+          "max": 1482,
+          "mean": 1228,
+          "sd": 155.6
+        },
+        "thoughtTokens": {
+          "n": 5,
+          "min": 1768,
+          "median": 2111,
+          "max": 2313,
+          "mean": 2059.6,
+          "sd": 233.7
+        },
+        "wallMs": {
+          "n": 5,
+          "min": 47618,
+          "median": 51312,
+          "max": 56160,
+          "mean": 51984.8,
+          "sd": 3269.5
+        },
+        "gatheredBytes": {
+          "n": 5,
+          "min": 16218,
+          "median": 23495,
+          "max": 25898,
+          "mean": 22500.4,
+          "sd": 3464.9
+        },
+        "fileReads": 24,
+        "rangedFileReadShare": 0.833,
+        "factsMatched": "19/20",
+        "allFactsRuns": 4,
+        "citedRuns": 5,
+        "citationsResolveRuns": 5
+      },
+      "notes-vs-code/baseline": {
+        "runs": 5,
+        "completed": 5,
+        "asked": 0,
+        "errors": 0,
+        "providerRequests": {
+          "n": 5,
+          "min": 7,
+          "median": 8,
+          "max": 9,
+          "mean": 7.8,
+          "sd": 0.7
+        },
+        "toolTurns": {
+          "n": 5,
+          "min": 6,
+          "median": 7,
+          "max": 8,
+          "mean": 6.8,
+          "sd": 0.7
+        },
+        "toolCalls": {
+          "n": 5,
+          "min": 13,
+          "median": 13,
+          "max": 15,
+          "mean": 13.6,
+          "sd": 0.8
+        },
+        "multiCallTurnShare": 0.853,
+        "maxCallsPerTurn": 4,
+        "promptTokens": {
+          "n": 5,
+          "min": 50831,
+          "median": 61346,
+          "max": 95250,
+          "mean": 65696,
+          "sd": 16274.9
+        },
+        "cachedTokens": {
+          "n": 5,
+          "min": 0,
+          "median": 0,
+          "max": 16211,
+          "mean": 6470.6,
+          "sd": 7924.9
+        },
+        "uncachedPromptTokens": {
+          "n": 5,
+          "min": 50831,
+          "median": 53192,
+          "max": 79108,
+          "mean": 59225.4,
+          "sd": 10621.4
+        },
+        "outputTokens": {
+          "n": 5,
+          "min": 962,
+          "median": 1138,
+          "max": 1356,
+          "mean": 1152.2,
+          "sd": 130.7
+        },
+        "thoughtTokens": {
+          "n": 5,
+          "min": 2232,
+          "median": 2328,
+          "max": 2474,
+          "mean": 2338.2,
+          "sd": 92.4
+        },
+        "wallMs": {
+          "n": 5,
+          "min": 41484,
+          "median": 44990,
+          "max": 54018,
+          "mean": 45793.8,
+          "sd": 4435.3
+        },
+        "gatheredBytes": {
+          "n": 5,
+          "min": 37802,
+          "median": 37802,
+          "max": 51742,
+          "mean": 42171.8,
+          "sd": 5681.6
+        },
+        "fileReads": 23,
+        "rangedFileReadShare": 0,
+        "factsMatched": "25/25",
+        "allFactsRuns": 5,
+        "citedRuns": 5,
+        "citationsResolveRuns": 5
+      },
+      "notes-vs-code/current": {
+        "runs": 5,
+        "completed": 5,
+        "asked": 0,
+        "errors": 0,
+        "providerRequests": {
+          "n": 5,
+          "min": 6,
+          "median": 6,
+          "max": 8,
+          "mean": 6.4,
+          "sd": 0.8
+        },
+        "toolTurns": {
+          "n": 5,
+          "min": 5,
+          "median": 5,
+          "max": 7,
+          "mean": 5.4,
+          "sd": 0.8
+        },
+        "toolCalls": {
+          "n": 5,
+          "min": 12,
+          "median": 13,
+          "max": 16,
+          "mean": 13.6,
+          "sd": 1.6
+        },
+        "multiCallTurnShare": 0.889,
+        "maxCallsPerTurn": 5,
+        "promptTokens": {
+          "n": 5,
+          "min": 49462,
+          "median": 51964,
+          "max": 78561,
+          "mean": 57127.2,
+          "sd": 10930.3
+        },
+        "cachedTokens": {
+          "n": 5,
+          "min": 0,
+          "median": 0,
+          "max": 0,
+          "mean": 0,
+          "sd": 0
+        },
+        "uncachedPromptTokens": {
+          "n": 5,
+          "min": 49462,
+          "median": 51964,
+          "max": 78561,
+          "mean": 57127.2,
+          "sd": 10930.3
+        },
+        "outputTokens": {
+          "n": 5,
+          "min": 1087,
+          "median": 1153,
+          "max": 1409,
+          "mean": 1207.6,
+          "sd": 112
+        },
+        "thoughtTokens": {
+          "n": 5,
+          "min": 1930,
+          "median": 2496,
+          "max": 3212,
+          "mean": 2484.8,
+          "sd": 449.8
+        },
+        "wallMs": {
+          "n": 5,
+          "min": 39647,
+          "median": 51292,
+          "max": 61000,
+          "mean": 51034.8,
+          "sd": 7644.2
+        },
+        "gatheredBytes": {
+          "n": 5,
+          "min": 27006,
+          "median": 29069,
+          "max": 38707,
+          "mean": 31859.2,
+          "sd": 4637.9
+        },
+        "fileReads": 23,
+        "rangedFileReadShare": 0.957,
+        "factsMatched": "25/25",
+        "allFactsRuns": 5,
+        "citedRuns": 5,
+        "citationsResolveRuns": 5
+      },
+      "knowledgebase-research/baseline": {
+        "runs": 5,
+        "completed": 5,
+        "asked": 0,
+        "errors": 0,
+        "providerRequests": {
+          "n": 5,
+          "min": 4,
+          "median": 4,
+          "max": 4,
+          "mean": 4,
+          "sd": 0
+        },
+        "toolTurns": {
+          "n": 5,
+          "min": 3,
+          "median": 3,
+          "max": 3,
+          "mean": 3,
+          "sd": 0
+        },
+        "toolCalls": {
+          "n": 5,
+          "min": 6,
+          "median": 6,
+          "max": 6,
+          "mean": 6,
+          "sd": 0
+        },
+        "multiCallTurnShare": 0.667,
+        "maxCallsPerTurn": 3,
+        "promptTokens": {
+          "n": 5,
+          "min": 17753,
+          "median": 18138,
+          "max": 18336,
+          "mean": 18038.8,
+          "sd": 226.7
+        },
+        "cachedTokens": {
+          "n": 5,
+          "min": 0,
+          "median": 0,
+          "max": 0,
+          "mean": 0,
+          "sd": 0
+        },
+        "uncachedPromptTokens": {
+          "n": 5,
+          "min": 17753,
+          "median": 18138,
+          "max": 18336,
+          "mean": 18038.8,
+          "sd": 226.7
+        },
+        "outputTokens": {
+          "n": 5,
+          "min": 393,
+          "median": 460,
+          "max": 487,
+          "mean": 450.6,
+          "sd": 34.6
+        },
+        "thoughtTokens": {
+          "n": 5,
+          "min": 489,
+          "median": 666,
+          "max": 717,
+          "mean": 624.2,
+          "sd": 80.3
+        },
+        "wallMs": {
+          "n": 5,
+          "min": 12142,
+          "median": 15156,
+          "max": 18151,
+          "mean": 14971,
+          "sd": 1937.6
+        },
+        "gatheredBytes": {
+          "n": 5,
+          "min": 9272,
+          "median": 10116,
+          "max": 10116,
+          "mean": 9778.4,
+          "sd": 413.5
+        },
+        "fileReads": 0,
+        "rangedFileReadShare": 0,
+        "factsMatched": "20/20",
+        "allFactsRuns": 5,
+        "citedRuns": 5,
+        "citationsResolveRuns": 5
+      },
+      "knowledgebase-research/current": {
+        "runs": 5,
+        "completed": 5,
+        "asked": 0,
+        "errors": 0,
+        "providerRequests": {
+          "n": 5,
+          "min": 4,
+          "median": 4,
+          "max": 4,
+          "mean": 4,
+          "sd": 0
+        },
+        "toolTurns": {
+          "n": 5,
+          "min": 3,
+          "median": 3,
+          "max": 3,
+          "mean": 3,
+          "sd": 0
+        },
+        "toolCalls": {
+          "n": 5,
+          "min": 6,
+          "median": 6,
+          "max": 7,
+          "mean": 6.2,
+          "sd": 0.4
+        },
+        "multiCallTurnShare": 0.667,
+        "maxCallsPerTurn": 3,
+        "promptTokens": {
+          "n": 5,
+          "min": 18851,
+          "median": 19214,
+          "max": 20314,
+          "mean": 19375,
+          "sd": 496
+        },
+        "cachedTokens": {
+          "n": 5,
+          "min": 0,
+          "median": 0,
+          "max": 0,
+          "mean": 0,
+          "sd": 0
+        },
+        "uncachedPromptTokens": {
+          "n": 5,
+          "min": 18851,
+          "median": 19214,
+          "max": 20314,
+          "mean": 19375,
+          "sd": 496
+        },
+        "outputTokens": {
+          "n": 5,
+          "min": 481,
+          "median": 549,
+          "max": 588,
+          "mean": 532,
+          "sd": 41.4
+        },
+        "thoughtTokens": {
+          "n": 5,
+          "min": 764,
+          "median": 803,
+          "max": 864,
+          "mean": 813.2,
+          "sd": 35.1
+        },
+        "wallMs": {
+          "n": 5,
+          "min": 16962,
+          "median": 17907,
+          "max": 20822,
+          "mean": 18344.4,
+          "sd": 1310.9
+        },
+        "gatheredBytes": {
+          "n": 5,
+          "min": 9272,
+          "median": 10116,
+          "max": 11065,
+          "mean": 10137,
+          "sd": 567.6
+        },
+        "fileReads": 0,
+        "rangedFileReadShare": 0,
+        "factsMatched": "20/20",
+        "allFactsRuns": 5,
+        "citedRuns": 5,
+        "citationsResolveRuns": 5
+      },
+      "status/baseline": {
+        "runs": 5,
+        "completed": 5,
+        "asked": 0,
+        "errors": 0,
+        "providerRequests": {
+          "n": 5,
+          "min": 3,
+          "median": 4,
+          "max": 5,
+          "mean": 4,
+          "sd": 0.6
+        },
+        "toolTurns": {
+          "n": 5,
+          "min": 2,
+          "median": 3,
+          "max": 4,
+          "mean": 3,
+          "sd": 0.6
+        },
+        "toolCalls": {
+          "n": 5,
+          "min": 5,
+          "median": 5,
+          "max": 7,
+          "mean": 5.6,
+          "sd": 0.8
+        },
+        "multiCallTurnShare": 0.467,
+        "maxCallsPerTurn": 4,
+        "promptTokens": {
+          "n": 5,
+          "min": 12720,
+          "median": 16478,
+          "max": 24445,
+          "mean": 17668.6,
+          "sd": 3850.1
+        },
+        "cachedTokens": {
+          "n": 5,
+          "min": 0,
+          "median": 0,
+          "max": 0,
+          "mean": 0,
+          "sd": 0
+        },
+        "uncachedPromptTokens": {
+          "n": 5,
+          "min": 12720,
+          "median": 16478,
+          "max": 24445,
+          "mean": 17668.6,
+          "sd": 3850.1
+        },
+        "outputTokens": {
+          "n": 5,
+          "min": 294,
+          "median": 312,
+          "max": 360,
+          "mean": 323.6,
+          "sd": 23.9
+        },
+        "thoughtTokens": {
+          "n": 5,
+          "min": 415,
+          "median": 512,
+          "max": 593,
+          "mean": 505.6,
+          "sd": 58.9
+        },
+        "wallMs": {
+          "n": 5,
+          "min": 10120,
+          "median": 13890,
+          "max": 16338,
+          "mean": 13884.8,
+          "sd": 2158.6
+        },
+        "gatheredBytes": {
+          "n": 5,
+          "min": 4285,
+          "median": 4285,
+          "max": 8655,
+          "mean": 5660.6,
+          "sd": 1784.7
+        },
+        "fileReads": 0,
+        "rangedFileReadShare": 0,
+        "factsMatched": "15/15",
+        "allFactsRuns": 5,
+        "citedRuns": 5,
+        "citationsResolveRuns": 5
+      },
+      "status/current": {
+        "runs": 5,
+        "completed": 5,
+        "asked": 0,
+        "errors": 0,
+        "providerRequests": {
+          "n": 5,
+          "min": 2,
+          "median": 3,
+          "max": 3,
+          "mean": 2.8,
+          "sd": 0.4
+        },
+        "toolTurns": {
+          "n": 5,
+          "min": 1,
+          "median": 2,
+          "max": 2,
+          "mean": 1.8,
+          "sd": 0.4
+        },
+        "toolCalls": {
+          "n": 5,
+          "min": 2,
+          "median": 5,
+          "max": 5,
+          "mean": 4,
+          "sd": 1.3
+        },
+        "multiCallTurnShare": 0.889,
+        "maxCallsPerTurn": 3,
+        "promptTokens": {
+          "n": 5,
+          "min": 8031,
+          "median": 13879,
+          "max": 14468,
+          "mean": 12840.6,
+          "sd": 2421.2
+        },
+        "cachedTokens": {
+          "n": 5,
+          "min": 0,
+          "median": 0,
+          "max": 0,
+          "mean": 0,
+          "sd": 0
+        },
+        "uncachedPromptTokens": {
+          "n": 5,
+          "min": 8031,
+          "median": 13879,
+          "max": 14468,
+          "mean": 12840.6,
+          "sd": 2421.2
+        },
+        "outputTokens": {
+          "n": 5,
+          "min": 249,
+          "median": 283,
+          "max": 308,
+          "mean": 279.2,
+          "sd": 23.7
+        },
+        "thoughtTokens": {
+          "n": 5,
+          "min": 703,
+          "median": 918,
+          "max": 1507,
+          "mean": 1077.8,
+          "sd": 312.9
+        },
+        "wallMs": {
+          "n": 5,
+          "min": 14203,
+          "median": 15559,
+          "max": 17730,
+          "mean": 15736,
+          "sd": 1133
+        },
+        "gatheredBytes": {
+          "n": 5,
+          "min": 2651,
+          "median": 4285,
+          "max": 4834,
+          "mean": 4132.6,
+          "sd": 769.4
+        },
+        "fileReads": 0,
+        "rangedFileReadShare": 0,
+        "factsMatched": "15/15",
+        "allFactsRuns": 5,
+        "citedRuns": 5,
+        "citationsResolveRuns": 5
+      },
+      "all/baseline": {
+        "runs": 20,
+        "completed": 20,
+        "asked": 0,
+        "errors": 0,
+        "providerRequests": {
+          "n": 20,
+          "min": 3,
+          "median": 5.5,
+          "max": 17,
+          "mean": 6.5,
+          "sd": 3.3
+        },
+        "toolTurns": {
+          "n": 20,
+          "min": 2,
+          "median": 4.5,
+          "max": 16,
+          "mean": 5.5,
+          "sd": 3.3
+        },
+        "toolCalls": {
+          "n": 20,
+          "min": 5,
+          "median": 8,
+          "max": 18,
+          "mean": 9.2,
+          "sd": 3.9
+        },
+        "multiCallTurnShare": 0.5,
+        "maxCallsPerTurn": 4,
+        "promptTokens": {
+          "n": 20,
+          "min": 12720,
+          "median": 31929,
+          "max": 209771,
+          "mean": 49757.1,
+          "sd": 46203.2
+        },
+        "cachedTokens": {
+          "n": 20,
+          "min": 0,
+          "median": 0,
+          "max": 80955,
+          "mean": 5665.4,
+          "sd": 17937.6
+        },
+        "uncachedPromptTokens": {
+          "n": 20,
+          "min": 12720,
+          "median": 31929,
+          "max": 128816,
+          "mean": 44091.7,
+          "sd": 32493.3
+        },
+        "outputTokens": {
+          "n": 20,
+          "min": 294,
+          "median": 719.5,
+          "max": 1781,
+          "mean": 792.7,
+          "sd": 440.2
+        },
+        "thoughtTokens": {
+          "n": 20,
+          "min": 415,
+          "median": 894.5,
+          "max": 2490,
+          "mean": 1320.9,
+          "sd": 816
+        },
+        "wallMs": {
+          "n": 20,
+          "min": 10120,
+          "median": 25540,
+          "max": 75473,
+          "mean": 30489.3,
+          "sd": 17930.3
+        },
+        "gatheredBytes": {
+          "n": 20,
+          "min": 4285,
+          "median": 20287,
+          "max": 51742,
+          "mean": 23648.4,
+          "sd": 16754.6
+        },
+        "fileReads": 49,
+        "rangedFileReadShare": 0.163,
+        "factsMatched": "79/80",
+        "allFactsRuns": 19,
+        "citedRuns": 20,
+        "citationsResolveRuns": 20
+      },
+      "all/current": {
+        "runs": 20,
+        "completed": 20,
+        "asked": 0,
+        "errors": 0,
+        "providerRequests": {
+          "n": 20,
+          "min": 2,
+          "median": 5,
+          "max": 10,
+          "mean": 5.4,
+          "sd": 2.3
+        },
+        "toolTurns": {
+          "n": 20,
+          "min": 1,
+          "median": 4,
+          "max": 9,
+          "mean": 4.4,
+          "sd": 2.3
+        },
+        "toolCalls": {
+          "n": 20,
+          "min": 2,
+          "median": 8.5,
+          "max": 16,
+          "mean": 8.6,
+          "sd": 3.9
+        },
+        "multiCallTurnShare": 0.602,
+        "maxCallsPerTurn": 5,
+        "promptTokens": {
+          "n": 20,
+          "min": 8031,
+          "median": 31312,
+          "max": 79891,
+          "mean": 37500.3,
+          "sd": 23223.2
+        },
+        "cachedTokens": {
+          "n": 20,
+          "min": 0,
+          "median": 0,
+          "max": 0,
+          "mean": 0,
+          "sd": 0
+        },
+        "uncachedPromptTokens": {
+          "n": 20,
+          "min": 8031,
+          "median": 31312,
+          "max": 79891,
+          "mean": 37500.3,
+          "sd": 23223.2
+        },
+        "outputTokens": {
+          "n": 20,
+          "min": 249,
+          "median": 816,
+          "max": 1482,
+          "mean": 811.7,
+          "sd": 427.5
+        },
+        "thoughtTokens": {
+          "n": 20,
+          "min": 703,
+          "median": 1637.5,
+          "max": 3212,
+          "mean": 1608.9,
+          "sd": 748.6
+        },
+        "wallMs": {
+          "n": 20,
+          "min": 14203,
+          "median": 30234.5,
+          "max": 61000,
+          "mean": 34275,
+          "sd": 17777.3
+        },
+        "gatheredBytes": {
+          "n": 20,
+          "min": 2651,
+          "median": 13641.5,
+          "max": 38707,
+          "mean": 17157.3,
+          "sd": 11158.5
+        },
+        "fileReads": 47,
+        "rangedFileReadShare": 0.894,
+        "factsMatched": "79/80",
+        "allFactsRuns": 19,
+        "citedRuns": 20,
+        "citationsResolveRuns": 20
+      }
+    }
+  }
+}

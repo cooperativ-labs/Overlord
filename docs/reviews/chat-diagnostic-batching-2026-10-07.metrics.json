@@ -1,0 +1,707 @@
+{
+  "objective": "coo:1127.0bj3",
+  "workload": {
+    "source": "audit thread A kind counts, per-exchange chunk counts and request sizes",
+    "rows": 372,
+    "standaloneRows": 256,
+    "domainEventRows": 116,
+    "payloadBytesApprox": 4027073
+  },
+  "repeats": 7,
+  "node": "v24.13.0",
+  "platform": "darwin-arm64",
+  "results": [
+    {
+      "adapter": "sqlite",
+      "injectedRttMs": 0,
+      "recovery": {
+        "rows": 40,
+        "duplicatesIgnored": 10,
+        "recoverMs": 0.9134579999999914
+      },
+      "strategies": {
+        "current": {
+          "criticalPathMs": {
+            "n": 7,
+            "min": 63.252,
+            "p50": 66.022,
+            "p95": 117.597,
+            "max": 117.597,
+            "mean": 73.835,
+            "sd": 18.057
+          },
+          "backgroundMaterializeMs": {
+            "n": 7,
+            "min": 0,
+            "p50": 0,
+            "p95": 0,
+            "max": 0,
+            "mean": 0,
+            "sd": 0
+          },
+          "endToEndMs": {
+            "n": 7,
+            "min": 63.363,
+            "p50": 66.128,
+            "p95": 117.702,
+            "max": 117.702,
+            "mean": 73.971,
+            "sd": 18.045
+          },
+          "statementsPerRun": null,
+          "standalonePerRowMs": {
+            "n": 1792,
+            "min": 0.077,
+            "p50": 0.107,
+            "p95": 0.534,
+            "max": 54.895,
+            "mean": 0.224,
+            "sd": 1.373
+          },
+          "domainPerEventMs": {
+            "n": 812,
+            "min": 0.087,
+            "p50": 0.11,
+            "p95": 0.166,
+            "max": 4.619,
+            "mean": 0.142,
+            "sd": 0.32
+          }
+        },
+        "journal-ordered": {
+          "criticalPathMs": {
+            "n": 7,
+            "min": 63.879,
+            "p50": 70.061,
+            "p95": 73.309,
+            "max": 73.309,
+            "mean": 69.704,
+            "sd": 3.19
+          },
+          "backgroundMaterializeMs": {
+            "n": 7,
+            "min": 0.15,
+            "p50": 0.169,
+            "p95": 0.192,
+            "max": 0.192,
+            "mean": 0.171,
+            "sd": 0.013
+          },
+          "endToEndMs": {
+            "n": 7,
+            "min": 64.119,
+            "p50": 70.353,
+            "p95": 73.604,
+            "max": 73.604,
+            "mean": 69.991,
+            "sd": 3.205
+          },
+          "statementsPerRun": null,
+          "standalonePerRowMs": {
+            "n": 1792,
+            "min": 0.031,
+            "p50": 0.043,
+            "p95": 0.469,
+            "max": 8.058,
+            "mean": 0.127,
+            "sd": 0.462
+          },
+          "domainPerEventMs": {
+            "n": 812,
+            "min": 0.103,
+            "p50": 0.183,
+            "p95": 0.595,
+            "max": 5.245,
+            "mean": 0.321,
+            "sd": 0.559
+          }
+        },
+        "journal-bulk32": {
+          "criticalPathMs": {
+            "n": 7,
+            "min": 40.461,
+            "p50": 45.924,
+            "p95": 55.28,
+            "max": 55.28,
+            "mean": 46.266,
+            "sd": 4.401
+          },
+          "backgroundMaterializeMs": {
+            "n": 7,
+            "min": 16.798,
+            "p50": 18.871,
+            "p95": 26.791,
+            "max": 26.791,
+            "mean": 20.649,
+            "sd": 3.63
+          },
+          "endToEndMs": {
+            "n": 7,
+            "min": 59.765,
+            "p50": 66.298,
+            "p95": 74.272,
+            "max": 74.272,
+            "mean": 67.02,
+            "sd": 5.054
+          },
+          "statementsPerRun": null,
+          "standalonePerRowMs": {
+            "n": 1792,
+            "min": 0.032,
+            "p50": 0.051,
+            "p95": 0.466,
+            "max": 5.681,
+            "mean": 0.112,
+            "sd": 0.317
+          },
+          "domainPerEventMs": {
+            "n": 812,
+            "min": 0.082,
+            "p50": 0.108,
+            "p95": 0.166,
+            "max": 6.849,
+            "mean": 0.151,
+            "sd": 0.415
+          }
+        }
+      }
+    },
+    {
+      "adapter": "postgres",
+      "injectedRttMs": 0,
+      "recovery": {
+        "rows": 40,
+        "duplicatesIgnored": 10,
+        "recoverMs": 6.271208000000115
+      },
+      "strategies": {
+        "current": {
+          "criticalPathMs": {
+            "n": 7,
+            "min": 470.341,
+            "p50": 504.488,
+            "p95": 694.773,
+            "max": 694.773,
+            "mean": 537.967,
+            "sd": 75.489
+          },
+          "backgroundMaterializeMs": {
+            "n": 7,
+            "min": 0,
+            "p50": 0,
+            "p95": 0,
+            "max": 0,
+            "mean": 0,
+            "sd": 0
+          },
+          "endToEndMs": {
+            "n": 7,
+            "min": 470.783,
+            "p50": 505.091,
+            "p95": 695.521,
+            "max": 695.521,
+            "mean": 538.599,
+            "sd": 75.603
+          },
+          "statementsPerRun": {
+            "n": 7,
+            "min": 1488,
+            "p50": 1488,
+            "p95": 1488,
+            "max": 1488,
+            "mean": 1488,
+            "sd": 0
+          },
+          "standalonePerRowMs": {
+            "n": 1792,
+            "min": 0.69,
+            "p50": 1.271,
+            "p95": 2.361,
+            "max": 98.297,
+            "mean": 1.487,
+            "sd": 2.424
+          },
+          "domainPerEventMs": {
+            "n": 812,
+            "min": 0.746,
+            "p50": 1.253,
+            "p95": 1.862,
+            "max": 12.857,
+            "mean": 1.356,
+            "sd": 0.669
+          }
+        },
+        "journal-ordered": {
+          "criticalPathMs": {
+            "n": 7,
+            "min": 386.993,
+            "p50": 446.905,
+            "p95": 548.825,
+            "max": 548.825,
+            "mean": 456.76,
+            "sd": 45.844
+          },
+          "backgroundMaterializeMs": {
+            "n": 7,
+            "min": 2.113,
+            "p50": 2.688,
+            "p95": 3.051,
+            "max": 3.051,
+            "mean": 2.583,
+            "sd": 0.286
+          },
+          "endToEndMs": {
+            "n": 7,
+            "min": 389.491,
+            "p50": 450.117,
+            "p95": 551.904,
+            "max": 551.904,
+            "mean": 459.935,
+            "sd": 46.079
+          },
+          "statementsPerRun": {
+            "n": 7,
+            "min": 990,
+            "p50": 990,
+            "p95": 990,
+            "max": 990,
+            "mean": 990,
+            "sd": 0
+          },
+          "standalonePerRowMs": {
+            "n": 1792,
+            "min": 0.224,
+            "p50": 0.392,
+            "p95": 1.101,
+            "max": 5.846,
+            "mean": 0.484,
+            "sd": 0.319
+          },
+          "domainPerEventMs": {
+            "n": 812,
+            "min": 0.944,
+            "p50": 2.916,
+            "p95": 4.513,
+            "max": 16.514,
+            "mean": 2.87,
+            "sd": 1.257
+          }
+        },
+        "journal-bulk32": {
+          "criticalPathMs": {
+            "n": 7,
+            "min": 250.339,
+            "p50": 280.946,
+            "p95": 686.679,
+            "max": 686.679,
+            "mean": 332.009,
+            "sd": 146.194
+          },
+          "backgroundMaterializeMs": {
+            "n": 7,
+            "min": 48.015,
+            "p50": 55.59,
+            "p95": 137.476,
+            "max": 137.476,
+            "mean": 67.676,
+            "sd": 28.981
+          },
+          "endToEndMs": {
+            "n": 7,
+            "min": 299.047,
+            "p50": 336.03,
+            "p95": 826.658,
+            "max": 826.658,
+            "mean": 400.467,
+            "sd": 175.278
+          },
+          "statementsPerRun": {
+            "n": 7,
+            "min": 792,
+            "p50": 792,
+            "p95": 792,
+            "max": 792,
+            "mean": 792,
+            "sd": 0
+          },
+          "standalonePerRowMs": {
+            "n": 1792,
+            "min": 0.216,
+            "p50": 0.394,
+            "p95": 1.329,
+            "max": 15.854,
+            "mean": 0.574,
+            "sd": 0.772
+          },
+          "domainPerEventMs": {
+            "n": 812,
+            "min": 0.781,
+            "p50": 1.226,
+            "p95": 3.21,
+            "max": 26.633,
+            "mean": 1.596,
+            "sd": 1.72
+          }
+        }
+      }
+    },
+    {
+      "adapter": "postgres",
+      "injectedRttMs": 2,
+      "recovery": {
+        "rows": 40,
+        "duplicatesIgnored": 10,
+        "recoverMs": 34.929375000006985
+      },
+      "strategies": {
+        "current": {
+          "criticalPathMs": {
+            "n": 7,
+            "min": 7642.826,
+            "p50": 7916.97,
+            "p95": 8733.635,
+            "max": 8733.635,
+            "mean": 8110.465,
+            "sd": 394.743
+          },
+          "backgroundMaterializeMs": {
+            "n": 7,
+            "min": 0,
+            "p50": 0,
+            "p95": 0,
+            "max": 0,
+            "mean": 0,
+            "sd": 0
+          },
+          "endToEndMs": {
+            "n": 7,
+            "min": 7646.174,
+            "p50": 7920.172,
+            "p95": 8738.1,
+            "max": 8738.1,
+            "mean": 8114.224,
+            "sd": 395.086
+          },
+          "statementsPerRun": {
+            "n": 7,
+            "min": 1488,
+            "p50": 1488,
+            "p95": 1488,
+            "max": 1488,
+            "mean": 1488,
+            "sd": 0
+          },
+          "standalonePerRowMs": {
+            "n": 1792,
+            "min": 11.575,
+            "p50": 20.807,
+            "p95": 32.375,
+            "max": 114.886,
+            "mean": 21.776,
+            "sd": 6.457
+          },
+          "domainPerEventMs": {
+            "n": 812,
+            "min": 10.409,
+            "p50": 20.696,
+            "p95": 32.833,
+            "max": 180.491,
+            "mean": 21.861,
+            "sd": 9.024
+          }
+        },
+        "journal-ordered": {
+          "criticalPathMs": {
+            "n": 7,
+            "min": 4519.829,
+            "p50": 5295.609,
+            "p95": 5728.026,
+            "max": 5728.026,
+            "mean": 5286.483,
+            "sd": 366.661
+          },
+          "backgroundMaterializeMs": {
+            "n": 7,
+            "min": 22.906,
+            "p50": 31.626,
+            "p95": 40.698,
+            "max": 40.698,
+            "mean": 32.478,
+            "sd": 6.741
+          },
+          "endToEndMs": {
+            "n": 7,
+            "min": 4546.496,
+            "p50": 5321.367,
+            "p95": 5770.682,
+            "max": 5770.682,
+            "mean": 5321.319,
+            "sd": 370.084
+          },
+          "statementsPerRun": {
+            "n": 7,
+            "min": 990,
+            "p50": 990,
+            "p95": 990,
+            "max": 990,
+            "mean": 990,
+            "sd": 0
+          },
+          "standalonePerRowMs": {
+            "n": 1792,
+            "min": 1.233,
+            "p50": 4.895,
+            "p95": 9.649,
+            "max": 36.614,
+            "mean": 5.502,
+            "sd": 2.421
+          },
+          "domainPerEventMs": {
+            "n": 812,
+            "min": 12.348,
+            "p50": 33.26,
+            "p95": 51.632,
+            "max": 91.682,
+            "mean": 33.432,
+            "sd": 11.099
+          }
+        },
+        "journal-bulk32": {
+          "criticalPathMs": {
+            "n": 7,
+            "min": 3422.65,
+            "p50": 3693.529,
+            "p95": 3990.18,
+            "max": 3990.18,
+            "mean": 3710.791,
+            "sd": 179.696
+          },
+          "backgroundMaterializeMs": {
+            "n": 7,
+            "min": 385.157,
+            "p50": 428.495,
+            "p95": 502.001,
+            "max": 502.001,
+            "mean": 429.083,
+            "sd": 36.378
+          },
+          "endToEndMs": {
+            "n": 7,
+            "min": 3817.779,
+            "p50": 4128.503,
+            "p95": 4443.269,
+            "max": 4443.269,
+            "mean": 4142.406,
+            "sd": 205.724
+          },
+          "statementsPerRun": {
+            "n": 7,
+            "min": 792,
+            "p50": 792,
+            "p95": 792,
+            "max": 792,
+            "mean": 792,
+            "sd": 0
+          },
+          "standalonePerRowMs": {
+            "n": 1792,
+            "min": 1.948,
+            "p50": 4.869,
+            "p95": 10.08,
+            "max": 52.737,
+            "mean": 5.664,
+            "sd": 2.996
+          },
+          "domainPerEventMs": {
+            "n": 812,
+            "min": 12.053,
+            "p50": 18.328,
+            "p95": 29.156,
+            "max": 67.161,
+            "mean": 19.491,
+            "sd": 5.557
+          }
+        }
+      }
+    },
+    {
+      "adapter": "postgres",
+      "injectedRttMs": 5,
+      "recovery": {
+        "rows": 40,
+        "duplicatesIgnored": 10,
+        "recoverMs": 62.29450000001816
+      },
+      "strategies": {
+        "current": {
+          "criticalPathMs": {
+            "n": 7,
+            "min": 10812.694,
+            "p50": 12439.32,
+            "p95": 13201.131,
+            "max": 13201.131,
+            "mean": 12440.277,
+            "sd": 731.451
+          },
+          "backgroundMaterializeMs": {
+            "n": 7,
+            "min": 0,
+            "p50": 0,
+            "p95": 0,
+            "max": 0,
+            "mean": 0,
+            "sd": 0
+          },
+          "endToEndMs": {
+            "n": 7,
+            "min": 10815.293,
+            "p50": 12444.175,
+            "p95": 13209.548,
+            "max": 13209.548,
+            "mean": 12446.233,
+            "sd": 733.521
+          },
+          "statementsPerRun": {
+            "n": 7,
+            "min": 1488,
+            "p50": 1488,
+            "p95": 1488,
+            "max": 1488,
+            "mean": 1488,
+            "sd": 0
+          },
+          "standalonePerRowMs": {
+            "n": 1792,
+            "min": 19.361,
+            "p50": 32.612,
+            "p95": 46.97,
+            "max": 90.534,
+            "mean": 33.587,
+            "sd": 7.504
+          },
+          "domainPerEventMs": {
+            "n": 812,
+            "min": 20.249,
+            "p50": 32.262,
+            "p95": 45.136,
+            "max": 126.332,
+            "mean": 33.122,
+            "sd": 7.276
+          }
+        },
+        "journal-ordered": {
+          "criticalPathMs": {
+            "n": 7,
+            "min": 7345.683,
+            "p50": 8812.576,
+            "p95": 9047.742,
+            "max": 9047.742,
+            "mean": 8518.163,
+            "sd": 574.542
+          },
+          "backgroundMaterializeMs": {
+            "n": 7,
+            "min": 39.323,
+            "p50": 56.84,
+            "p95": 71.56,
+            "max": 71.56,
+            "mean": 54.751,
+            "sd": 10.402
+          },
+          "endToEndMs": {
+            "n": 7,
+            "min": 7393.747,
+            "p50": 8871.568,
+            "p95": 9113.395,
+            "max": 9113.395,
+            "mean": 8576.536,
+            "sd": 582.038
+          },
+          "statementsPerRun": {
+            "n": 7,
+            "min": 990,
+            "p50": 990,
+            "p95": 990,
+            "max": 990,
+            "mean": 990,
+            "sd": 0
+          },
+          "standalonePerRowMs": {
+            "n": 1792,
+            "min": 4.742,
+            "p50": 8.162,
+            "p95": 14.362,
+            "max": 29.001,
+            "mean": 8.889,
+            "sd": 2.778
+          },
+          "domainPerEventMs": {
+            "n": 812,
+            "min": 23.452,
+            "p50": 53.96,
+            "p95": 76.042,
+            "max": 106.06,
+            "mean": 53.815,
+            "sd": 15.308
+          }
+        },
+        "journal-bulk32": {
+          "criticalPathMs": {
+            "n": 7,
+            "min": 5039.652,
+            "p50": 6137.692,
+            "p95": 6365.399,
+            "max": 6365.399,
+            "mean": 5876.331,
+            "sd": 511.665
+          },
+          "backgroundMaterializeMs": {
+            "n": 7,
+            "min": 592.446,
+            "p50": 677.483,
+            "p95": 707.902,
+            "max": 707.902,
+            "mean": 660.742,
+            "sd": 43.072
+          },
+          "endToEndMs": {
+            "n": 7,
+            "min": 5633.464,
+            "p50": 6820.333,
+            "p95": 7077.545,
+            "max": 7077.545,
+            "mean": 6540.473,
+            "sd": 554.034
+          },
+          "statementsPerRun": {
+            "n": 7,
+            "min": 792,
+            "p50": 792,
+            "p95": 792,
+            "max": 792,
+            "mean": 792,
+            "sd": 0
+          },
+          "standalonePerRowMs": {
+            "n": 1792,
+            "min": 4.164,
+            "p50": 8.001,
+            "p95": 13.523,
+            "max": 76.75,
+            "mean": 8.746,
+            "sd": 3.507
+          },
+          "domainPerEventMs": {
+            "n": 812,
+            "min": 19.091,
+            "p50": 30.496,
+            "p95": 42.334,
+            "max": 122.188,
+            "mean": 31.356,
+            "sd": 6.941
+          }
+        }
+      }
+    }
+  ]
+}

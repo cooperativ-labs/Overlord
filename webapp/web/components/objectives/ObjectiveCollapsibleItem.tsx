@@ -67,10 +67,10 @@ function stopRowToggle(event: MouseEvent) {
  * (executing, pending delivery, or complete), redesigned around the objective
  * as the container for its own evidence (coo:879).
  *
- * The header is three lines: the title and chevron; then the informational
- * icons (state, agent, display id, provenance, attachments) with the evidence
- * badges and header actions right-aligned; then the resource folder and queue
- * status. Expanding the row reveals the flat evidence stack
+ * The header is two lines: the muted objective key and title with the chevron;
+ * then the informational icons (state, agent, resource folder, provenance,
+ * attachments, queue status) with the evidence badges and header actions
+ * right-aligned. Expanding the row reveals the flat evidence stack
  * ({@link ObjectiveEvidenceSections}) — the instruction, flat and unlabeled,
  * then deliveries, file changes, and any terminal session (coo:1041).
  *
@@ -128,6 +128,8 @@ export function ObjectiveCollapsibleItem({
     resources,
     draftObjectiveResourceKey: objective.resourceKey
   });
+  // The objective portion of a display id (`coo:1107.v8qc` → `v8qc`).
+  const objectiveKey = objective.displayId?.split('.').pop() ?? null;
   const resourceLabel = resourceKey ? projectResourceLabel({ resources, resourceKey }) : null;
 
   const isExecuting = objective.state === 'executing';
@@ -250,6 +252,11 @@ export function ObjectiveCollapsibleItem({
               className="min-w-0 flex-1 truncate text-sm font-medium"
               title={`${timestampLabel} ${objectiveTimestamp}`}
             >
+              {objectiveKey ? (
+                <span className="mr-1.5 font-mono text-[11px] font-normal text-muted-foreground">
+                  {objectiveKey}
+                </span>
+              ) : null}
               {objective.title ?? `Objective ${index + 1}`}
             </p>
             <ChevronDown
@@ -290,12 +297,15 @@ export function ObjectiveCollapsibleItem({
                   <TooltipContent side="top">{agentTooltip}</TooltipContent>
                 </Tooltip>
               ) : null}
-              {objective.displayId ? (
-                // The one shrinkable thing on line two: when the blocking badge
-                // joins the right-hand group in a narrow panel, the display id
-                // gives up width before an action button gets clipped.
-                <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
-                  {objective.displayId}
+              {resourceLabel ? (
+                // The shrinkable item on line two: in a narrow panel the
+                // resource label gives up width before an action gets clipped.
+                <span
+                  className="inline-flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground"
+                  title={`Resource: ${resourceLabel}`}
+                >
+                  <FolderOpen className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{resourceLabel}</span>
                 </span>
               ) : null}
               {originLabel ? (
@@ -328,6 +338,15 @@ export function ObjectiveCollapsibleItem({
                       : `${attachments.length} attachments`}
                   </TooltipContent>
                 </Tooltip>
+              ) : null}
+              {objective.queueEntry ? (
+                <span
+                  className="inline-flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground"
+                  title={`Queued in ${objective.queueEntry.queueName}`}
+                >
+                  <ListOrdered className="h-3 w-3" />
+                  <span>Queued</span>
+                </span>
               ) : null}
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
@@ -382,24 +401,22 @@ export function ObjectiveCollapsibleItem({
                 startedAt={objective.startedAt}
                 completedAt={objective.completedAt}
               />
-              {objective.externalSessionId ? (
-                <button
-                  type="button"
-                  aria-label="Copy agent session"
-                  title="Copy agent session ID"
-                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-                  onClick={async event => {
-                    stopRowToggle(event);
-                    await copy(objective.externalSessionId ?? '');
-                  }}
-                >
-                  {copied ? (
-                    <Check className="h-3.5 w-3.5 text-green-600" />
-                  ) : (
-                    <Copy className="h-3.5 w-3.5" />
-                  )}
-                </button>
-              ) : null}
+              <button
+                type="button"
+                aria-label="Copy objective ID"
+                title="Copy objective ID"
+                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                onClick={async event => {
+                  stopRowToggle(event);
+                  await copy(objective.displayId || objective.id);
+                }}
+              >
+                {copied ? (
+                  <Check className="h-3.5 w-3.5 text-green-600" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
+              </button>
               {isExecuting ? (
                 <Dialog open={forceDisconnectOpen} onOpenChange={setForceDisconnectOpen}>
                   <DialogTrigger
@@ -445,38 +462,10 @@ export function ObjectiveCollapsibleItem({
                 displayId={objective.displayId}
                 state={objective.state}
                 resumeCommand={resumeCommand}
+                sessionId={objective.externalSessionId}
               />
             </div>
           </div>
-
-          {/* Line 3 — resource folder and queue status. */}
-          {resourceLabel || objective.queueEntry ? (
-            <div className="relative flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-              {resourceLabel ? (
-                <span
-                  className="inline-flex min-w-0 items-center gap-1"
-                  title={`Resource: ${resourceLabel}`}
-                >
-                  <FolderOpen className="h-3 w-3 shrink-0" />
-                  <span className="truncate">{resourceLabel}</span>
-                </span>
-              ) : null}
-              {resourceLabel && objective.queueEntry ? (
-                <span aria-hidden="true" className="text-muted-foreground/60">
-                  ·
-                </span>
-              ) : null}
-              {objective.queueEntry ? (
-                <span
-                  className="inline-flex shrink-0 items-center gap-1"
-                  title={`Queued in ${objective.queueEntry.queueName}`}
-                >
-                  <ListOrdered className="h-3 w-3" />
-                  <span>Queued</span>
-                </span>
-              ) : null}
-            </div>
-          ) : null}
         </div>
         {/*
           `min-w-0` + `wrap-anywhere` are the row's wrapping floor. Both are

@@ -1,0 +1,2218 @@
+{
+  "version": 1,
+  "measuredAt": "2026-10-07T07:47:55.631Z",
+  "node": "v24.13.0",
+  "platform": "darwin/arm64",
+  "repeats": 5,
+  "warmupPairs": 1,
+  "provider": "scripted (no provider network, billing or model-quality measurement)",
+  "adapters": ["sqlite"],
+  "rawDiagnosticsDisplay": false,
+  "instrumentation": "off retains all raw diagnostic capture",
+  "summaries": [
+    {
+      "scenario": "status",
+      "executionMs": {
+        "on": {
+          "n": 5,
+          "min": 16.17391699999996,
+          "median": 16.860250000000065,
+          "p95": 38.18175000000008,
+          "max": 38.18175000000008,
+          "mean": 20.99139180000002,
+          "standardDeviation": 8.610127764814171
+        },
+        "off": {
+          "n": 5,
+          "min": 15.152749999999969,
+          "median": 15.254542000000015,
+          "p95": 132.61987500000032,
+          "max": 132.61987500000032,
+          "mean": 39.022083600000066,
+          "standardDeviation": 46.803648835455014
+        },
+        "pairedAddedMs": {
+          "n": 5,
+          "min": -94.43812500000024,
+          "median": 0.9193749999999454,
+          "p95": 2.398042000000032,
+          "max": 2.398042000000032,
+          "mean": -18.030691800000046,
+          "standardDeviation": 38.217803528011814
+        }
+      },
+      "attemptsPerRepetition": 1,
+      "providerRoundsPerAttempt": {
+        "n": 5,
+        "min": 2,
+        "median": 2,
+        "p95": 2,
+        "max": 2,
+        "mean": 2,
+        "standardDeviation": 0
+      },
+      "summaryRoundsPerAttempt": {
+        "n": 5,
+        "min": 0,
+        "median": 0,
+        "p95": 0,
+        "max": 0,
+        "mean": 0,
+        "standardDeviation": 0
+      },
+      "firstMs": {
+        "sdkChunk": {
+          "n": 5,
+          "min": 2.4144589999999653,
+          "median": 2.4968750000000455,
+          "p95": 3.5500409999999647,
+          "max": 3.5500409999999647,
+          "mean": 2.7219084000000064,
+          "standardDeviation": 0.4225192468806917
+        },
+        "nonThoughtText": {
+          "n": 5,
+          "min": 11.701165999999944,
+          "median": 12.486458999999968,
+          "p95": 18.438332999999943,
+          "max": 18.438332999999943,
+          "mean": 13.394574999999964,
+          "standardDeviation": 2.544597268545488
+        },
+        "durableText": {
+          "n": 5,
+          "min": 13.15604099999996,
+          "median": 14.03891699999997,
+          "p95": 20.893249999999966,
+          "max": 20.893249999999966,
+          "mean": 15.186666799999966,
+          "standardDeviation": 2.895968705727977
+        }
+      },
+      "spans": {
+        "thread.lock": {
+          "n": 5,
+          "min": 1.9512889999998606,
+          "median": 2.1072070000003578,
+          "p95": 4.13425200000006,
+          "max": 4.13425200000006,
+          "mean": 2.474941799999965,
+          "standardDeviation": 0.8325509638501698
+        },
+        "source.authorization": {
+          "n": 5,
+          "min": 2.380333000000064,
+          "median": 2.4773289999999406,
+          "p95": 6.119501000000014,
+          "max": 6.119501000000014,
+          "mean": 3.2329904000000624,
+          "standardDeviation": 1.4477731852531992
+        },
+        "diagnostic.admission": {
+          "n": 5,
+          "min": 0.1867080000002943,
+          "median": 0.1992089999998825,
+          "p95": 0.8639160000000174,
+          "max": 0.8639160000000174,
+          "mean": 0.330283600000098,
+          "standardDeviation": 0.2669314586485048
+        },
+        "diagnostic.serialization": {
+          "n": 5,
+          "min": 0.36450200000001587,
+          "median": 0.39908300000001873,
+          "p95": 0.6190030000000206,
+          "max": 0.6190030000000206,
+          "mean": 0.4293832000000748,
+          "standardDeviation": 0.09606037528635544
+        },
+        "diagnostic.insert": {
+          "n": 5,
+          "min": 0.6215000000000828,
+          "median": 0.6372910000000047,
+          "p95": 1.4524610000000848,
+          "max": 1.4524610000000848,
+          "mean": 0.8169590000000199,
+          "standardDeviation": 0.32127358112554333
+        },
+        "diagnostic.transaction": {
+          "n": 5,
+          "min": 1.8590850000002774,
+          "median": 2.0716230000002724,
+          "p95": 5.3152079999998705,
+          "max": 5.3152079999998705,
+          "mean": 2.663465400000041,
+          "standardDeviation": 1.3311401433511165
+        },
+        "source.checker": {
+          "n": 5,
+          "min": 0.9945840000001454,
+          "median": 1.0481230000000323,
+          "p95": 1.598540000000071,
+          "max": 1.598540000000071,
+          "mean": 1.1629914000000554,
+          "standardDeviation": 0.22353898366825742
+        },
+        "tool.dispatch_receipt": {
+          "n": 5,
+          "min": 3.4120000000000346,
+          "median": 3.5160419999999704,
+          "p95": 3.8203750000000127,
+          "max": 3.8203750000000127,
+          "mean": 3.5880416000000195,
+          "standardDeviation": 0.15557544563148792
+        },
+        "tool.join": {
+          "n": 5,
+          "min": 0.9904589999999871,
+          "median": 1.0260419999999613,
+          "p95": 1.2254580000000033,
+          "max": 1.2254580000000033,
+          "mean": 1.0648083999999698,
+          "standardDeviation": 0.08830108271726347
+        },
+        "text.commit": {
+          "n": 5,
+          "min": 0.8978329999999914,
+          "median": 0.9479169999999613,
+          "p95": 1.616624999999999,
+          "max": 1.616624999999999,
+          "mean": 1.1326750000000174,
+          "standardDeviation": 0.2779847580454753
+        }
+      },
+      "requestBytes": {
+        "n": 5,
+        "min": 28125,
+        "median": 28125,
+        "p95": 28125,
+        "max": 28125,
+        "mean": 28125,
+        "standardDeviation": 0
+      },
+      "systemBytes": {
+        "n": 5,
+        "min": 4664,
+        "median": 4664,
+        "p95": 4664,
+        "max": 4664,
+        "mean": 4664,
+        "standardDeviation": 0
+      },
+      "toolsBytes": {
+        "n": 5,
+        "min": 8744,
+        "median": 8744,
+        "p95": 8744,
+        "max": 8744,
+        "mean": 8744,
+        "standardDeviation": 0
+      },
+      "tokenCoverage": {
+        "reportedExchanges": 10,
+        "providerExchanges": 10
+      },
+      "tokens": {
+        "promptTokenCount": {
+          "n": 5,
+          "min": 200,
+          "median": 200,
+          "p95": 200,
+          "max": 200,
+          "mean": 200,
+          "standardDeviation": 0
+        },
+        "cachedContentTokenCount": {
+          "n": 5,
+          "min": 80,
+          "median": 80,
+          "p95": 80,
+          "max": 80,
+          "mean": 80,
+          "standardDeviation": 0
+        },
+        "candidatesTokenCount": {
+          "n": 5,
+          "min": 20,
+          "median": 20,
+          "p95": 20,
+          "max": 20,
+          "mean": 20,
+          "standardDeviation": 0
+        },
+        "thoughtsTokenCount": {
+          "n": 5,
+          "min": 6,
+          "median": 6,
+          "p95": 6,
+          "max": 6,
+          "mean": 6,
+          "standardDeviation": 0
+        }
+      }
+    },
+    {
+      "scenario": "repository-and-kb-read",
+      "executionMs": {
+        "on": {
+          "n": 5,
+          "min": 23.52283299999999,
+          "median": 26.03054199999997,
+          "p95": 31.912874999999985,
+          "max": 31.912874999999985,
+          "mean": 26.774691599999983,
+          "standardDeviation": 2.9753328663609744
+        },
+        "off": {
+          "n": 5,
+          "min": 24.18791699999997,
+          "median": 25.654790999999932,
+          "p95": 28.659541999999988,
+          "max": 28.659541999999988,
+          "mean": 26.011191599999982,
+          "standardDeviation": 1.4774568088641469
+        },
+        "pairedAddedMs": {
+          "n": 5,
+          "min": -4.199708999999984,
+          "median": 0.3757510000000366,
+          "p95": 7.724958000000015,
+          "max": 7.724958000000015,
+          "mean": 0.7634999999999991,
+          "standardDeviation": 4.025534698545639
+        }
+      },
+      "attemptsPerRepetition": 1,
+      "providerRoundsPerAttempt": {
+        "n": 5,
+        "min": 2,
+        "median": 2,
+        "p95": 2,
+        "max": 2,
+        "mean": 2,
+        "standardDeviation": 0
+      },
+      "summaryRoundsPerAttempt": {
+        "n": 5,
+        "min": 1,
+        "median": 1,
+        "p95": 1,
+        "max": 1,
+        "mean": 1,
+        "standardDeviation": 0
+      },
+      "firstMs": {
+        "sdkChunk": {
+          "n": 5,
+          "min": 2.868541999999934,
+          "median": 3.4388340000000426,
+          "p95": 3.7710420000000795,
+          "max": 3.7710420000000795,
+          "mean": 3.3298002000000224,
+          "standardDeviation": 0.3418295592464112
+        },
+        "nonThoughtText": {
+          "n": 5,
+          "min": 2.876916999999935,
+          "median": 3.4470000000001164,
+          "p95": 3.785792000000015,
+          "max": 3.785792000000015,
+          "mean": 3.340858400000002,
+          "standardDeviation": 0.3447751682732837
+        },
+        "durableText": {
+          "n": 5,
+          "min": 4.159082999999896,
+          "median": 4.880292000000054,
+          "p95": 5.568291000000045,
+          "max": 5.568291000000045,
+          "mean": 4.821958199999995,
+          "standardDeviation": 0.5576215418584701
+        }
+      },
+      "spans": {
+        "thread.lock": {
+          "n": 5,
+          "min": 3.5423319999993055,
+          "median": 3.9151269999998703,
+          "p95": 5.893627999999353,
+          "max": 5.893627999999353,
+          "mean": 4.197899799999618,
+          "standardDeviation": 0.8679841574206362
+        },
+        "source.authorization": {
+          "n": 5,
+          "min": 3.580956999999671,
+          "median": 3.9269579999995585,
+          "p95": 5.368829000000005,
+          "max": 5.368829000000005,
+          "mean": 4.234989399999859,
+          "standardDeviation": 0.6754778002625488
+        },
+        "diagnostic.admission": {
+          "n": 5,
+          "min": 0.67646000000002,
+          "median": 0.8134150000000773,
+          "p95": 1.2298350000000937,
+          "max": 1.2298350000000937,
+          "mean": 0.9122922000000926,
+          "standardDeviation": 0.20620743856162568
+        },
+        "diagnostic.serialization": {
+          "n": 5,
+          "min": 0.5258300000000418,
+          "median": 0.5542920000002596,
+          "p95": 0.5891699999995126,
+          "max": 0.5891699999995126,
+          "mean": 0.5540579999997363,
+          "standardDeviation": 0.02131687762296807
+        },
+        "diagnostic.insert": {
+          "n": 5,
+          "min": 0.9058349999999109,
+          "median": 1.0562090000000808,
+          "p95": 1.223376000000144,
+          "max": 1.223376000000144,
+          "mean": 1.0714839999999868,
+          "standardDeviation": 0.11585508594801071
+        },
+        "diagnostic.transaction": {
+          "n": 5,
+          "min": 2.812998000000107,
+          "median": 3.491416999999956,
+          "p95": 3.8255420000002687,
+          "max": 3.8255420000002687,
+          "mean": 3.3313414000000874,
+          "standardDeviation": 0.365959078017012
+        },
+        "text.commit": {
+          "n": 5,
+          "min": 1.4919999999999618,
+          "median": 1.8239999999999554,
+          "p95": 2.0552070000001095,
+          "max": 2.0552070000001095,
+          "mean": 1.7482415999999603,
+          "standardDeviation": 0.22028684776774837
+        },
+        "source.checker": {
+          "n": 5,
+          "min": 1.1967079999998305,
+          "median": 1.3022919999999658,
+          "p95": 1.7923759999994218,
+          "max": 1.7923759999994218,
+          "mean": 1.433392799999865,
+          "standardDeviation": 0.2435942350896845
+        },
+        "tool.dispatch_receipt": {
+          "n": 5,
+          "min": 11.945666000000074,
+          "median": 12.57083399999999,
+          "p95": 17.042459000000008,
+          "max": 17.042459000000008,
+          "mean": 13.245641799999998,
+          "standardDeviation": 1.9191841609135287
+        },
+        "tool.join": {
+          "n": 5,
+          "min": 1.2969579999999041,
+          "median": 1.518041999999923,
+          "p95": 2.380333999999948,
+          "max": 2.380333999999948,
+          "mean": 1.6381501999999728,
+          "standardDeviation": 0.387304221297103
+        }
+      },
+      "requestBytes": {
+        "n": 5,
+        "min": 34458,
+        "median": 34458,
+        "p95": 34458,
+        "max": 34458,
+        "mean": 34458,
+        "standardDeviation": 0
+      },
+      "systemBytes": {
+        "n": 5,
+        "min": 4664,
+        "median": 4664,
+        "p95": 4664,
+        "max": 4664,
+        "mean": 4664,
+        "standardDeviation": 0
+      },
+      "toolsBytes": {
+        "n": 5,
+        "min": 8744,
+        "median": 8744,
+        "p95": 8744,
+        "max": 8744,
+        "mean": 8744,
+        "standardDeviation": 0
+      },
+      "tokenCoverage": {
+        "reportedExchanges": 5,
+        "providerExchanges": 15
+      },
+      "tokens": {
+        "promptTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        },
+        "cachedContentTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        },
+        "candidatesTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        },
+        "thoughtsTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        }
+      }
+    },
+    {
+      "scenario": "repository-search-and-range",
+      "executionMs": {
+        "on": {
+          "n": 5,
+          "min": 28.88529200000005,
+          "median": 31.324958000000038,
+          "p95": 40.134791000000064,
+          "max": 40.134791000000064,
+          "mean": 32.21109160000003,
+          "standardDeviation": 4.101677774841558
+        },
+        "off": {
+          "n": 5,
+          "min": 28.59349999999995,
+          "median": 30.67433399999993,
+          "p95": 35.566958,
+          "max": 35.566958,
+          "mean": 31.110842,
+          "standardDeviation": 2.420701193946162
+        },
+        "pairedAddedMs": {
+          "n": 5,
+          "min": -2.0894590000000335,
+          "median": 0.820833000000107,
+          "p95": 4.567833000000064,
+          "max": 4.567833000000064,
+          "mean": 1.1002496000000292,
+          "standardDeviation": 2.171918596274892
+        }
+      },
+      "attemptsPerRepetition": 1,
+      "providerRoundsPerAttempt": {
+        "n": 5,
+        "min": 3,
+        "median": 3,
+        "p95": 3,
+        "max": 3,
+        "mean": 3,
+        "standardDeviation": 0
+      },
+      "summaryRoundsPerAttempt": {
+        "n": 5,
+        "min": 0,
+        "median": 0,
+        "p95": 0,
+        "max": 0,
+        "mean": 0,
+        "standardDeviation": 0
+      },
+      "firstMs": {
+        "sdkChunk": {
+          "n": 5,
+          "min": 2.5124170000000277,
+          "median": 3.0609590000000253,
+          "p95": 4.431042000000048,
+          "max": 4.431042000000048,
+          "mean": 3.3336336000000073,
+          "standardDeviation": 0.7753552745292066
+        },
+        "nonThoughtText": {
+          "n": 5,
+          "min": 22.505916999999954,
+          "median": 23.469541999999933,
+          "p95": 35.001750000000015,
+          "max": 35.001750000000015,
+          "mean": 26.090558599999987,
+          "standardDeviation": 4.607458476530462
+        },
+        "durableText": {
+          "n": 5,
+          "min": 24.122250000000008,
+          "median": 26.088416999999936,
+          "p95": 36.699791000000005,
+          "max": 36.699791000000005,
+          "mean": 27.953416800000014,
+          "standardDeviation": 4.546044260723359
+        }
+      },
+      "spans": {
+        "thread.lock": {
+          "n": 5,
+          "min": 3.17241499999966,
+          "median": 3.2985359999997854,
+          "p95": 4.912914999999998,
+          "max": 4.912914999999998,
+          "mean": 3.638397199999827,
+          "standardDeviation": 0.6507027810122482
+        },
+        "source.authorization": {
+          "n": 5,
+          "min": 5.670208000000116,
+          "median": 5.994211000000178,
+          "p95": 7.795082000000548,
+          "max": 7.795082000000548,
+          "mean": 6.261058000000117,
+          "standardDeviation": 0.7805849743462323
+        },
+        "diagnostic.admission": {
+          "n": 5,
+          "min": 0.16995799999995143,
+          "median": 0.20108500000014828,
+          "p95": 0.2517080000002352,
+          "max": 0.2517080000002352,
+          "mean": 0.20457520000004478,
+          "standardDeviation": 0.026878579958149296
+        },
+        "diagnostic.serialization": {
+          "n": 5,
+          "min": 0.53845900000033,
+          "median": 0.5967940000000453,
+          "p95": 0.8427480000000287,
+          "max": 0.8427480000000287,
+          "mean": 0.6417330000000675,
+          "standardDeviation": 0.11466131747367164
+        },
+        "diagnostic.insert": {
+          "n": 5,
+          "min": 0.8740419999998039,
+          "median": 0.9425400000001218,
+          "p95": 1.3461650000000418,
+          "max": 1.3461650000000418,
+          "mean": 1.0517089999999143,
+          "standardDeviation": 0.17463456958346077
+        },
+        "diagnostic.transaction": {
+          "n": 5,
+          "min": 2.134041999999681,
+          "median": 2.267001000000164,
+          "p95": 3.227749999999901,
+          "max": 3.227749999999901,
+          "mean": 2.5370660000000043,
+          "standardDeviation": 0.4154658875262577
+        },
+        "source.checker": {
+          "n": 5,
+          "min": 2.480917999999974,
+          "median": 2.6791269999997667,
+          "p95": 3.590959999999768,
+          "max": 3.590959999999768,
+          "mean": 2.8306174000000284,
+          "standardDeviation": 0.39197640213432355
+        },
+        "tool.dispatch_receipt": {
+          "n": 5,
+          "min": 6.31933400000014,
+          "median": 7.670415999999932,
+          "p95": 11.62224900000001,
+          "max": 11.62224900000001,
+          "mean": 8.185099600000035,
+          "standardDeviation": 1.8004343526747477
+        },
+        "tool.join": {
+          "n": 5,
+          "min": 2.2213329999999587,
+          "median": 2.336749999999938,
+          "p95": 3.500415999999973,
+          "max": 3.500415999999973,
+          "mean": 2.560808199999974,
+          "standardDeviation": 0.48048405884541256
+        },
+        "text.commit": {
+          "n": 5,
+          "min": 0.9028339999999844,
+          "median": 0.9585419999999658,
+          "p95": 1.668916999999965,
+          "max": 1.668916999999965,
+          "mean": 1.115566799999965,
+          "standardDeviation": 0.284216503761063
+        }
+      },
+      "requestBytes": {
+        "n": 5,
+        "min": 38341,
+        "median": 38341,
+        "p95": 38341,
+        "max": 38341,
+        "mean": 38341,
+        "standardDeviation": 0
+      },
+      "systemBytes": {
+        "n": 5,
+        "min": 4664,
+        "median": 4664,
+        "p95": 4664,
+        "max": 4664,
+        "mean": 4664,
+        "standardDeviation": 0
+      },
+      "toolsBytes": {
+        "n": 5,
+        "min": 6882,
+        "median": 6882,
+        "p95": 6882,
+        "max": 6882,
+        "mean": 6882,
+        "standardDeviation": 0
+      },
+      "tokenCoverage": {
+        "reportedExchanges": 0,
+        "providerExchanges": 15
+      },
+      "tokens": {
+        "promptTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        },
+        "cachedContentTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        },
+        "candidatesTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        },
+        "thoughtsTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        }
+      }
+    },
+    {
+      "scenario": "kb-per-message-write",
+      "executionMs": {
+        "on": {
+          "n": 5,
+          "min": 45.44524999999999,
+          "median": 46.59004100000004,
+          "p95": 58.278542000000016,
+          "max": 58.278542000000016,
+          "mean": 48.6477914,
+          "standardDeviation": 4.839494120622432
+        },
+        "off": {
+          "n": 5,
+          "min": 39.47954200000004,
+          "median": 42.97412499999996,
+          "p95": 50.05533300000002,
+          "max": 50.05533300000002,
+          "mean": 43.7531334,
+          "standardDeviation": 3.4592169319730512
+        },
+        "pairedAddedMs": {
+          "n": 5,
+          "min": 2.459206999999992,
+          "median": 3.882833000000005,
+          "p95": 8.223208999999997,
+          "max": 8.223208999999997,
+          "mean": 4.894658000000004,
+          "standardDeviation": 2.338474289718146
+        }
+      },
+      "attemptsPerRepetition": 1,
+      "providerRoundsPerAttempt": {
+        "n": 5,
+        "min": 2,
+        "median": 2,
+        "p95": 2,
+        "max": 2,
+        "mean": 2,
+        "standardDeviation": 0
+      },
+      "summaryRoundsPerAttempt": {
+        "n": 5,
+        "min": 0,
+        "median": 0,
+        "p95": 0,
+        "max": 0,
+        "mean": 0,
+        "standardDeviation": 0
+      },
+      "firstMs": {
+        "sdkChunk": {
+          "n": 5,
+          "min": 3.7484159999999065,
+          "median": 4.135084000000006,
+          "p95": 4.55216699999994,
+          "max": 4.55216699999994,
+          "mean": 4.104250199999979,
+          "standardDeviation": 0.28781718123029176
+        },
+        "nonThoughtText": {
+          "n": 5,
+          "min": 39.896792000000005,
+          "median": 42.504458,
+          "p95": 52.72445899999991,
+          "max": 52.72445899999991,
+          "mean": 44.010599999999975,
+          "standardDeviation": 4.471259521429919
+        },
+        "durableText": {
+          "n": 5,
+          "min": 41.98720900000001,
+          "median": 44.20229199999994,
+          "p95": 54.348292000000015,
+          "max": 54.348292000000015,
+          "mean": 45.8460836,
+          "standardDeviation": 4.34660529936615
+        }
+      },
+      "spans": {
+        "thread.lock": {
+          "n": 5,
+          "min": 4.0061280000004444,
+          "median": 4.132665000000088,
+          "p95": 4.249287999999751,
+          "max": 4.249287999999751,
+          "mean": 4.130191400000035,
+          "standardDeviation": 0.0772915752317935
+        },
+        "source.authorization": {
+          "n": 5,
+          "min": 7.302128999999809,
+          "median": 7.641709000000105,
+          "p95": 17.655749000000128,
+          "max": 17.655749000000128,
+          "mean": 9.69433419999998,
+          "standardDeviation": 3.995359471872528
+        },
+        "diagnostic.admission": {
+          "n": 5,
+          "min": 0.18508299999973588,
+          "median": 0.21316699999988487,
+          "p95": 0.23020499999984168,
+          "max": 0.23020499999984168,
+          "mean": 0.2098493999999846,
+          "standardDeviation": 0.014729798594737189
+        },
+        "diagnostic.serialization": {
+          "n": 5,
+          "min": 0.8069969999997966,
+          "median": 0.9151629999995521,
+          "p95": 0.9795410000006086,
+          "max": 0.9795410000006086,
+          "mean": 0.9021072000000231,
+          "standardDeviation": 0.05589666969847937
+        },
+        "diagnostic.insert": {
+          "n": 5,
+          "min": 1.382833000000801,
+          "median": 1.5097949999997127,
+          "p95": 1.5994620000002442,
+          "max": 1.5994620000002442,
+          "mean": 1.4835008000001835,
+          "standardDeviation": 0.08573467064213049
+        },
+        "diagnostic.transaction": {
+          "n": 5,
+          "min": 2.3395830000000615,
+          "median": 2.5877039999996896,
+          "p95": 2.8552499999999554,
+          "max": 2.8552499999999554,
+          "mean": 2.611081199999944,
+          "standardDeviation": 0.17074953208878563
+        },
+        "source.checker": {
+          "n": 5,
+          "min": 3.3024149999998826,
+          "median": 3.6718769999998813,
+          "p95": 12.615121999999133,
+          "max": 12.615121999999133,
+          "mean": 5.451058399999624,
+          "standardDeviation": 3.589565894039285
+        },
+        "tool.dispatch_receipt": {
+          "n": 5,
+          "min": 18.711958999999865,
+          "median": 22.878750000000196,
+          "p95": 23.892416000000026,
+          "max": 23.892416000000026,
+          "mean": 21.764533200000006,
+          "standardDeviation": 2.0170971304516083
+        },
+        "tool.join": {
+          "n": 5,
+          "min": 1.35125000000005,
+          "median": 1.7014169999999922,
+          "p95": 10.548541999999998,
+          "max": 10.548541999999998,
+          "mean": 4.457083400000011,
+          "standardDeviation": 3.792242598664772
+        },
+        "text.commit": {
+          "n": 5,
+          "min": 0.8598749999999882,
+          "median": 1.1864170000000058,
+          "p95": 1.363917000000015,
+          "max": 1.363917000000015,
+          "mean": 1.104275000000007,
+          "standardDeviation": 0.19605139086783613
+        }
+      },
+      "requestBytes": {
+        "n": 5,
+        "min": 58321,
+        "median": 58321,
+        "p95": 58321,
+        "max": 58321,
+        "mean": 58321,
+        "standardDeviation": 0
+      },
+      "systemBytes": {
+        "n": 5,
+        "min": 4664,
+        "median": 4664,
+        "p95": 4664,
+        "max": 4664,
+        "mean": 4664,
+        "standardDeviation": 0
+      },
+      "toolsBytes": {
+        "n": 5,
+        "min": 21496,
+        "median": 21496,
+        "p95": 21496,
+        "max": 21496,
+        "mean": 21496,
+        "standardDeviation": 0
+      },
+      "tokenCoverage": {
+        "reportedExchanges": 0,
+        "providerExchanges": 10
+      },
+      "tokens": {
+        "promptTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        },
+        "cachedContentTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        },
+        "candidatesTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        },
+        "thoughtsTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        }
+      }
+    },
+    {
+      "scenario": "kb-all-workspaces-write",
+      "executionMs": {
+        "on": {
+          "n": 5,
+          "min": 31.760332999999946,
+          "median": 37.53054199999997,
+          "p95": 46.54291599999988,
+          "max": 46.54291599999988,
+          "mean": 38.06840819999998,
+          "standardDeviation": 5.090146933460211
+        },
+        "off": {
+          "n": 5,
+          "min": 30.316374999999994,
+          "median": 43.36083299999996,
+          "p95": 53.455875000000106,
+          "max": 53.455875000000106,
+          "mean": 42.645724799999996,
+          "standardDeviation": 7.957544104623232
+        },
+        "pairedAddedMs": {
+          "n": 5,
+          "min": -11.600500000000011,
+          "median": -6.912959000000228,
+          "p95": 9.79462500000011,
+          "max": 9.79462500000011,
+          "mean": -4.577316600000017,
+          "standardDeviation": 7.685899228172042
+        }
+      },
+      "attemptsPerRepetition": 1,
+      "providerRoundsPerAttempt": {
+        "n": 5,
+        "min": 2,
+        "median": 2,
+        "p95": 2,
+        "max": 2,
+        "mean": 2,
+        "standardDeviation": 0
+      },
+      "summaryRoundsPerAttempt": {
+        "n": 5,
+        "min": 0,
+        "median": 0,
+        "p95": 0,
+        "max": 0,
+        "mean": 0,
+        "standardDeviation": 0
+      },
+      "firstMs": {
+        "sdkChunk": {
+          "n": 5,
+          "min": 3.7835419999998976,
+          "median": 4.6955840000000535,
+          "p95": 5.350332999999978,
+          "max": 5.350332999999978,
+          "mean": 4.707799999999975,
+          "standardDeviation": 0.5498005820095403
+        },
+        "nonThoughtText": {
+          "n": 5,
+          "min": 27.905958000000055,
+          "median": 32.21758299999999,
+          "p95": 41.61550000000011,
+          "max": 41.61550000000011,
+          "mean": 33.359458400000015,
+          "standardDeviation": 4.6140312581504395
+        },
+        "durableText": {
+          "n": 5,
+          "min": 29.77841699999999,
+          "median": 34.63987499999996,
+          "p95": 43.639000000000124,
+          "max": 43.639000000000124,
+          "mean": 35.56117499999998,
+          "standardDeviation": 4.732533535597632
+        }
+      },
+      "spans": {
+        "thread.lock": {
+          "n": 5,
+          "min": 2.8122929999983626,
+          "median": 3.4935049999999137,
+          "p95": 3.6188779999995404,
+          "max": 3.6188779999995404,
+          "mean": 3.2684261999997033,
+          "standardDeviation": 0.34136386374646804
+        },
+        "source.authorization": {
+          "n": 5,
+          "min": 5.304293999999686,
+          "median": 6.241084999999657,
+          "p95": 8.644125000000031,
+          "max": 8.644125000000031,
+          "mean": 6.829383799999914,
+          "standardDeviation": 1.3387090352274826
+        },
+        "diagnostic.admission": {
+          "n": 5,
+          "min": 0.18687699999941287,
+          "median": 0.24195799999995415,
+          "p95": 0.2830429999996795,
+          "max": 0.2830429999996795,
+          "mean": 0.24231799999981832,
+          "standardDeviation": 0.03153833057106821
+        },
+        "diagnostic.serialization": {
+          "n": 5,
+          "min": 0.7593729999998686,
+          "median": 0.9226240000004964,
+          "p95": 1.2210850000003575,
+          "max": 1.2210850000003575,
+          "mean": 0.9459002000002101,
+          "standardDeviation": 0.15991330508190782
+        },
+        "diagnostic.insert": {
+          "n": 5,
+          "min": 0.926834999999528,
+          "median": 1.2553330000009737,
+          "p95": 2.0935810000000856,
+          "max": 2.0935810000000856,
+          "mean": 1.3884746000001997,
+          "standardDeviation": 0.3997809955651769
+        },
+        "diagnostic.transaction": {
+          "n": 5,
+          "min": 2.056708000000299,
+          "median": 2.9338319999999385,
+          "p95": 4.398751000000175,
+          "max": 4.398751000000175,
+          "mean": 3.0901584000000186,
+          "standardDeviation": 0.777653220848624
+        },
+        "source.checker": {
+          "n": 5,
+          "min": 2.518836000000306,
+          "median": 2.92162800000051,
+          "p95": 4.781169000000091,
+          "max": 4.781169000000091,
+          "mean": 3.345085600000266,
+          "standardDeviation": 0.8098110164897362
+        },
+        "tool.dispatch_receipt": {
+          "n": 5,
+          "min": 11.432833999999957,
+          "median": 15.013790000000085,
+          "p95": 23.49741700000004,
+          "max": 23.49741700000004,
+          "mean": 15.98224180000002,
+          "standardDeviation": 4.227258329670641
+        },
+        "tool.join": {
+          "n": 5,
+          "min": 1.1596250000000055,
+          "median": 1.321042000000034,
+          "p95": 1.88737500000002,
+          "max": 1.88737500000002,
+          "mean": 1.408833400000026,
+          "standardDeviation": 0.251804888312045
+        },
+        "text.commit": {
+          "n": 5,
+          "min": 0.8969170000000304,
+          "median": 1.2252090000001772,
+          "p95": 1.8322920000000522,
+          "max": 1.8322920000000522,
+          "mean": 1.2225586000000703,
+          "standardDeviation": 0.3353615318694888
+        }
+      },
+      "requestBytes": {
+        "n": 5,
+        "min": 55241,
+        "median": 55241,
+        "p95": 55241,
+        "max": 55241,
+        "mean": 55241,
+        "standardDeviation": 0
+      },
+      "systemBytes": {
+        "n": 5,
+        "min": 4664,
+        "median": 4664,
+        "p95": 4664,
+        "max": 4664,
+        "mean": 4664,
+        "standardDeviation": 0
+      },
+      "toolsBytes": {
+        "n": 5,
+        "min": 21832,
+        "median": 21832,
+        "p95": 21832,
+        "max": 21832,
+        "mean": 21832,
+        "standardDeviation": 0
+      },
+      "tokenCoverage": {
+        "reportedExchanges": 0,
+        "providerExchanges": 10
+      },
+      "tokens": {
+        "promptTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        },
+        "cachedContentTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        },
+        "candidatesTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        },
+        "thoughtsTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        }
+      }
+    },
+    {
+      "scenario": "feature-handoff",
+      "executionMs": {
+        "on": {
+          "n": 5,
+          "min": 70.54708299999993,
+          "median": 77.46691599999997,
+          "p95": 86.90379200000007,
+          "max": 86.90379200000007,
+          "mean": 77.38331659999999,
+          "standardDeviation": 5.5110572256670185
+        },
+        "off": {
+          "n": 5,
+          "min": 65.26137500000004,
+          "median": 74.74137500000006,
+          "p95": 105.72112399999992,
+          "max": 105.72112399999992,
+          "mean": 79.4809082,
+          "standardDeviation": 13.727406877611145
+        },
+        "pairedAddedMs": {
+          "n": 5,
+          "min": -28.25420799999995,
+          "median": 3.565373999999906,
+          "p95": 9.946833000000083,
+          "max": 9.946833000000083,
+          "mean": -2.0975916000000097,
+          "standardDeviation": 13.542195075603967
+        }
+      },
+      "attemptsPerRepetition": 2,
+      "providerRoundsPerAttempt": {
+        "n": 10,
+        "min": 3,
+        "median": 4,
+        "p95": 4,
+        "max": 4,
+        "mean": 3.5,
+        "standardDeviation": 0.5
+      },
+      "summaryRoundsPerAttempt": {
+        "n": 10,
+        "min": 0,
+        "median": 0,
+        "p95": 0,
+        "max": 0,
+        "mean": 0,
+        "standardDeviation": 0
+      },
+      "firstMs": {
+        "sdkChunk": {
+          "n": 10,
+          "min": 2.0944580000000315,
+          "median": 3.8222919999999476,
+          "p95": 5.54420899999991,
+          "max": 5.54420899999991,
+          "mean": 3.4366499999999744,
+          "standardDeviation": 1.2147366979583478
+        },
+        "nonThoughtText": {
+          "n": 10,
+          "min": 24.189250000000015,
+          "median": 36.53120799999999,
+          "p95": 43.047041000000036,
+          "max": 43.047041000000036,
+          "mean": 33.680608299999996,
+          "standardDeviation": 7.2839625086164315
+        },
+        "durableText": {
+          "n": 10,
+          "min": 25.813292000000047,
+          "median": 38.050250000000005,
+          "p95": 45.16941699999984,
+          "max": 45.16941699999984,
+          "mean": 35.336775099999976,
+          "standardDeviation": 7.413130232583609
+        }
+      },
+      "spans": {
+        "thread.lock": {
+          "n": 10,
+          "min": 2.993039999999496,
+          "median": 4.56445599999995,
+          "p95": 6.299917999999025,
+          "max": 6.299917999999025,
+          "mean": 4.146609999999998,
+          "standardDeviation": 1.0818072078823084
+        },
+        "source.authorization": {
+          "n": 10,
+          "min": 3.0794179999995777,
+          "median": 10.33508499999948,
+          "p95": 12.27091600000017,
+          "max": 12.27091600000017,
+          "mean": 7.61920820000006,
+          "standardDeviation": 3.6441905239050514
+        },
+        "diagnostic.admission": {
+          "n": 10,
+          "min": 0.1447489999999334,
+          "median": 0.1835030000002007,
+          "p95": 0.2096249999997326,
+          "max": 0.2096249999997326,
+          "mean": 0.17873769999973774,
+          "standardDeviation": 0.020768963262682336
+        },
+        "diagnostic.serialization": {
+          "n": 10,
+          "min": 0.7692090000000462,
+          "median": 0.8516660000002503,
+          "p95": 0.9390819999994164,
+          "max": 0.9390819999994164,
+          "mean": 0.8424788999999351,
+          "standardDeviation": 0.049790552042262036
+        },
+        "diagnostic.insert": {
+          "n": 10,
+          "min": 0.967583999999988,
+          "median": 1.267748000000097,
+          "p95": 1.6969609999998738,
+          "max": 1.6969609999998738,
+          "mean": 1.2166167000000314,
+          "standardDeviation": 0.22478426051754233
+        },
+        "diagnostic.transaction": {
+          "n": 10,
+          "min": 2.345334000000321,
+          "median": 2.911751000000322,
+          "p95": 3.687707000000273,
+          "max": 3.687707000000273,
+          "mean": 2.8730752000000392,
+          "standardDeviation": 0.4528249408266902
+        },
+        "tool.dispatch_receipt": {
+          "n": 10,
+          "min": 6.119083000000046,
+          "median": 11.977251000000138,
+          "p95": 13.167084000000159,
+          "max": 13.167084000000159,
+          "mean": 10.185016800000028,
+          "standardDeviation": 2.6610738899187116
+        },
+        "tool.join": {
+          "n": 10,
+          "min": 1.6761679999999615,
+          "median": 4.163416999999981,
+          "p95": 6.191792000000078,
+          "max": 6.191792000000078,
+          "mean": 3.574762899999962,
+          "standardDeviation": 1.5093810713821925
+        },
+        "source.checker": {
+          "n": 10,
+          "min": 0.959918000000016,
+          "median": 5.691000000000713,
+          "p95": 7.077623000001267,
+          "max": 7.077623000001267,
+          "mean": 3.712841300000309,
+          "standardDeviation": 2.5874303961094904
+        },
+        "text.commit": {
+          "n": 10,
+          "min": 0.8027089999999362,
+          "median": 0.907457999999906,
+          "p95": 1.174874999999929,
+          "max": 1.174874999999929,
+          "mean": 0.9195708999999624,
+          "standardDeviation": 0.10095550803440818
+        }
+      },
+      "requestBytes": {
+        "n": 10,
+        "min": 84300,
+        "median": 114310,
+        "p95": 114310,
+        "max": 114310,
+        "mean": 99305,
+        "standardDeviation": 15005
+      },
+      "systemBytes": {
+        "n": 10,
+        "min": 4664,
+        "median": 4664,
+        "p95": 4664,
+        "max": 4664,
+        "mean": 4664,
+        "standardDeviation": 0
+      },
+      "toolsBytes": {
+        "n": 10,
+        "min": 21496,
+        "median": 21496,
+        "p95": 21496,
+        "max": 21496,
+        "mean": 21496,
+        "standardDeviation": 0
+      },
+      "tokenCoverage": {
+        "reportedExchanges": 0,
+        "providerExchanges": 35
+      },
+      "tokens": {
+        "promptTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        },
+        "cachedContentTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        },
+        "candidatesTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        },
+        "thoughtsTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        }
+      }
+    },
+    {
+      "scenario": "long-conversation",
+      "executionMs": {
+        "on": {
+          "n": 5,
+          "min": 11.576209000000063,
+          "median": 12.032999999999902,
+          "p95": 51.56720900000005,
+          "max": 51.56720900000005,
+          "mean": 24.86369179999999,
+          "standardDeviation": 16.65748737694303
+        },
+        "off": {
+          "n": 5,
+          "min": 9.730041000000028,
+          "median": 10.525750000000016,
+          "p95": 45.65929199999982,
+          "max": 45.65929199999982,
+          "mean": 23.76911660000003,
+          "standardDeviation": 16.759552122989383
+        },
+        "pairedAddedMs": {
+          "n": 5,
+          "min": -33.99033399999985,
+          "median": 1.8461680000000342,
+          "p95": 41.04145900000003,
+          "max": 41.04145900000003,
+          "mean": 1.0945751999999629,
+          "standardDeviation": 30.131373292195406
+        }
+      },
+      "attemptsPerRepetition": 1,
+      "providerRoundsPerAttempt": {
+        "n": 5,
+        "min": 1,
+        "median": 1,
+        "p95": 1,
+        "max": 1,
+        "mean": 1,
+        "standardDeviation": 0
+      },
+      "summaryRoundsPerAttempt": {
+        "n": 5,
+        "min": 1,
+        "median": 1,
+        "p95": 1,
+        "max": 1,
+        "mean": 1,
+        "standardDeviation": 0
+      },
+      "firstMs": {
+        "sdkChunk": {
+          "n": 5,
+          "min": 5.101750000000038,
+          "median": 6.015583000000106,
+          "p95": 6.5877080000000205,
+          "max": 6.5877080000000205,
+          "mean": 5.8420165999999885,
+          "standardDeviation": 0.5118170169189793
+        },
+        "nonThoughtText": {
+          "n": 5,
+          "min": 5.10895800000003,
+          "median": 6.02479100000005,
+          "p95": 6.598375000000033,
+          "max": 6.598375000000033,
+          "mean": 5.850916600000028,
+          "standardDeviation": 0.513002774061338
+        },
+        "durableText": {
+          "n": 5,
+          "min": 6.380792000000042,
+          "median": 7.4494170000000395,
+          "p95": 8.385708000000022,
+          "max": 8.385708000000022,
+          "mean": 7.439108400000009,
+          "standardDeviation": 0.6785629431846761
+        }
+      },
+      "spans": {
+        "thread.lock": {
+          "n": 5,
+          "min": 1.3491659999996273,
+          "median": 1.5050029999999879,
+          "p95": 1.7758330000001479,
+          "max": 1.7758330000001479,
+          "mean": 1.5158087999997634,
+          "standardDeviation": 0.1429726597507573
+        },
+        "source.authorization": {
+          "n": 5,
+          "min": 0.37358400000005076,
+          "median": 0.44270800000003874,
+          "p95": 0.5843329999997877,
+          "max": 0.5843329999997877,
+          "mean": 0.46252499999998237,
+          "standardDeviation": 0.07888120893083723
+        },
+        "diagnostic.admission": {
+          "n": 5,
+          "min": 0.09433400000011716,
+          "median": 0.1339179999999942,
+          "p95": 0.3621249999998781,
+          "max": 0.3621249999998781,
+          "mean": 0.16773340000013376,
+          "standardDeviation": 0.09848912885701834
+        },
+        "diagnostic.serialization": {
+          "n": 5,
+          "min": 0.4664989999998852,
+          "median": 0.5802910000002157,
+          "p95": 0.6564160000000356,
+          "max": 0.6564160000000356,
+          "mean": 0.5650993999999173,
+          "standardDeviation": 0.077833474825851
+        },
+        "diagnostic.insert": {
+          "n": 5,
+          "min": 0.9974989999998343,
+          "median": 1.2062100000000555,
+          "p95": 1.2723340000000007,
+          "max": 1.2723340000000007,
+          "mean": 1.169958200000019,
+          "standardDeviation": 0.09886023004709128
+        },
+        "diagnostic.transaction": {
+          "n": 5,
+          "min": 2.070875000000001,
+          "median": 2.557627000000366,
+          "p95": 2.898625000000038,
+          "max": 2.898625000000038,
+          "mean": 2.5227424000000838,
+          "standardDeviation": 0.27567461279676775
+        },
+        "text.commit": {
+          "n": 5,
+          "min": 0.6890419999999722,
+          "median": 1.0127090000000862,
+          "p95": 1.11324999999988,
+          "max": 1.11324999999988,
+          "mean": 0.9160667999999987,
+          "standardDeviation": 0.16886752057327598
+        }
+      },
+      "requestBytes": {
+        "n": 5,
+        "min": 285623,
+        "median": 285623,
+        "p95": 285623,
+        "max": 285623,
+        "mean": 285623,
+        "standardDeviation": 0
+      },
+      "systemBytes": {
+        "n": 5,
+        "min": 4664,
+        "median": 4664,
+        "p95": 4664,
+        "max": 4664,
+        "mean": 4664,
+        "standardDeviation": 0
+      },
+      "toolsBytes": {
+        "n": 5,
+        "min": 8744,
+        "median": 8744,
+        "p95": 8744,
+        "max": 8744,
+        "mean": 8744,
+        "standardDeviation": 0
+      },
+      "tokenCoverage": {
+        "reportedExchanges": 5,
+        "providerExchanges": 10
+      },
+      "tokens": {
+        "promptTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        },
+        "cachedContentTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        },
+        "candidatesTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        },
+        "thoughtsTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        }
+      }
+    },
+    {
+      "scenario": "cancellation",
+      "executionMs": {
+        "on": {
+          "n": 5,
+          "min": 6.894999999999982,
+          "median": 7.02470900000003,
+          "p95": 7.365582999999901,
+          "max": 7.365582999999901,
+          "mean": 7.091358400000013,
+          "standardDeviation": 0.1774997659531719
+        },
+        "off": {
+          "n": 5,
+          "min": 6.333124999999882,
+          "median": 7.597459000000072,
+          "p95": 7.98720800000001,
+          "max": 7.98720800000001,
+          "mean": 7.328883399999995,
+          "standardDeviation": 0.6111659196515238
+        },
+        "pairedAddedMs": {
+          "n": 5,
+          "min": -1.0922080000000278,
+          "median": -0.37158399999998437,
+          "p95": 0.6125000000001819,
+          "max": 0.6125000000001819,
+          "mean": -0.23752499999998236,
+          "standardDeviation": 0.6632371899464256
+        }
+      },
+      "attemptsPerRepetition": 1,
+      "providerRoundsPerAttempt": {
+        "n": 5,
+        "min": 1,
+        "median": 1,
+        "p95": 1,
+        "max": 1,
+        "mean": 1,
+        "standardDeviation": 0
+      },
+      "summaryRoundsPerAttempt": {
+        "n": 5,
+        "min": 0,
+        "median": 0,
+        "p95": 0,
+        "max": 0,
+        "mean": 0,
+        "standardDeviation": 0
+      },
+      "firstMs": {
+        "sdkChunk": {
+          "n": 5,
+          "min": 2.487792000000013,
+          "median": 2.5156670000000076,
+          "p95": 3.1966670000000477,
+          "max": 3.1966670000000477,
+          "mean": 2.690291800000023,
+          "standardDeviation": 0.2694035048958428
+        },
+        "nonThoughtText": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        },
+        "durableText": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        }
+      },
+      "spans": {
+        "thread.lock": {
+          "n": 5,
+          "min": 0.9294569999999567,
+          "median": 1.018294999999739,
+          "p95": 1.0540000000000873,
+          "max": 1.0540000000000873,
+          "mean": 1.0085669999999254,
+          "standardDeviation": 0.043310980995608137
+        },
+        "source.authorization": {
+          "n": 5,
+          "min": 0.42187399999988884,
+          "median": 0.45321000000012646,
+          "p95": 0.5056649999999081,
+          "max": 0.5056649999999081,
+          "mean": 0.45680820000002315,
+          "standardDeviation": 0.02820212610706332
+        },
+        "diagnostic.admission": {
+          "n": 5,
+          "min": 0.08354299999996329,
+          "median": 0.09212499999989632,
+          "p95": 0.10333399999990434,
+          "max": 0.10333399999990434,
+          "mean": 0.0925335999999561,
+          "standardDeviation": 0.006485403228766667
+        },
+        "diagnostic.serialization": {
+          "n": 5,
+          "min": 0.1755000000000564,
+          "median": 0.18729100000007293,
+          "p95": 0.19908200000008947,
+          "max": 0.19908200000008947,
+          "mean": 0.1865328000000545,
+          "standardDeviation": 0.0077540414081969265
+        },
+        "diagnostic.insert": {
+          "n": 5,
+          "min": 0.22595699999988028,
+          "median": 0.23374799999987772,
+          "p95": 0.2637099999999464,
+          "max": 0.2637099999999464,
+          "mean": 0.2409327999999505,
+          "standardDeviation": 0.013922035187440727
+        },
+        "diagnostic.transaction": {
+          "n": 5,
+          "min": 0.7260830000000169,
+          "median": 0.7726249999999482,
+          "p95": 0.8032499999999345,
+          "max": 0.8032499999999345,
+          "mean": 0.7625333999999839,
+          "standardDeviation": 0.029867062423974456
+        },
+        "tool.dispatch_receipt": {
+          "n": 5,
+          "min": 1.0096250000000282,
+          "median": 1.0325829999999314,
+          "p95": 1.3907919999999194,
+          "max": 1.3907919999999194,
+          "mean": 1.0991581999999653,
+          "standardDeviation": 0.14655166653625298
+        }
+      },
+      "requestBytes": {
+        "n": 5,
+        "min": 13650,
+        "median": 13650,
+        "p95": 13650,
+        "max": 13650,
+        "mean": 13650,
+        "standardDeviation": 0
+      },
+      "systemBytes": {
+        "n": 5,
+        "min": 4664,
+        "median": 4664,
+        "p95": 4664,
+        "max": 4664,
+        "mean": 4664,
+        "standardDeviation": 0
+      },
+      "toolsBytes": {
+        "n": 5,
+        "min": 8744,
+        "median": 8744,
+        "p95": 8744,
+        "max": 8744,
+        "mean": 8744,
+        "standardDeviation": 0
+      },
+      "tokenCoverage": {
+        "reportedExchanges": 0,
+        "providerExchanges": 5
+      },
+      "tokens": {
+        "promptTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        },
+        "cachedContentTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        },
+        "candidatesTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        },
+        "thoughtsTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        }
+      }
+    },
+    {
+      "scenario": "checkpoint-recovery",
+      "executionMs": {
+        "on": {
+          "n": 5,
+          "min": 31.33012599999995,
+          "median": 33.02362500000004,
+          "p95": 38.57737600000007,
+          "max": 38.57737600000007,
+          "mean": 34.3590502,
+          "standardDeviation": 2.6753047809834793
+        },
+        "off": {
+          "n": 5,
+          "min": 31.16954099999998,
+          "median": 31.510875000000055,
+          "p95": 34.47800000000018,
+          "max": 34.47800000000018,
+          "mean": 32.05892460000009,
+          "standardDeviation": 1.223681045137647
+        },
+        "pairedAddedMs": {
+          "n": 5,
+          "min": 0.1605849999999691,
+          "median": 1.6314169999999422,
+          "p95": 4.7951669999998785,
+          "max": 4.7951669999998785,
+          "mean": 2.30012559999991,
+          "standardDeviation": 1.8273292735241127
+        }
+      },
+      "attemptsPerRepetition": 3,
+      "providerRoundsPerAttempt": {
+        "n": 15,
+        "min": 1,
+        "median": 1,
+        "p95": 1,
+        "max": 1,
+        "mean": 1,
+        "standardDeviation": 0
+      },
+      "summaryRoundsPerAttempt": {
+        "n": 15,
+        "min": 0,
+        "median": 0,
+        "p95": 0,
+        "max": 0,
+        "mean": 0,
+        "standardDeviation": 0
+      },
+      "firstMs": {
+        "sdkChunk": {
+          "n": 15,
+          "min": 1.8232499999999163,
+          "median": 3.26883399999997,
+          "p95": 10.325500000000034,
+          "max": 10.325500000000034,
+          "mean": 4.791466733333331,
+          "standardDeviation": 3.169091368210146
+        },
+        "nonThoughtText": {
+          "n": 5,
+          "min": 1.8244169999999258,
+          "median": 1.9726670000000013,
+          "p95": 3.344416000000024,
+          "max": 3.344416000000024,
+          "mean": 2.2343249999999673,
+          "standardDeviation": 0.5651961343346529
+        },
+        "durableText": {
+          "n": 5,
+          "min": 3.6849169999999276,
+          "median": 3.834457999999927,
+          "p95": 5.415791000000013,
+          "max": 5.415791000000013,
+          "mean": 4.140466399999968,
+          "standardDeviation": 0.651149064265218
+        }
+      },
+      "spans": {
+        "thread.lock": {
+          "n": 15,
+          "min": 0.5309999999999491,
+          "median": 0.7572940000001154,
+          "p95": 3.534623000000238,
+          "max": 3.534623000000238,
+          "mean": 1.509939400000038,
+          "standardDeviation": 1.1638470909633614
+        },
+        "source.authorization": {
+          "n": 15,
+          "min": 0.2482909999999947,
+          "median": 1.383916000000113,
+          "p95": 5.185041999999953,
+          "max": 5.185041999999953,
+          "mean": 1.9683465333333212,
+          "standardDeviation": 1.6332919341992538
+        },
+        "diagnostic.admission": {
+          "n": 15,
+          "min": 0.030375000000049113,
+          "median": 0.09391700000003311,
+          "p95": 0.6469180000002552,
+          "max": 0.6469180000002552,
+          "mean": 0.24719726666663366,
+          "standardDeviation": 0.2510207927093615
+        },
+        "diagnostic.serialization": {
+          "n": 15,
+          "min": 0.14400000000000546,
+          "median": 0.17258399999991525,
+          "p95": 0.3178330000000642,
+          "max": 0.3178330000000642,
+          "mean": 0.20951399999998255,
+          "standardDeviation": 0.06812643197370774
+        },
+        "diagnostic.insert": {
+          "n": 15,
+          "min": 0.20345899999995254,
+          "median": 0.26262400000018715,
+          "p95": 0.6082089999998743,
+          "max": 0.6082089999998743,
+          "mean": 0.36896686666668,
+          "standardDeviation": 0.16445618730871175
+        },
+        "diagnostic.transaction": {
+          "n": 15,
+          "min": 0.5514590000000226,
+          "median": 0.8022080000000642,
+          "p95": 2.541332000000125,
+          "max": 2.541332000000125,
+          "mean": 1.185455600000023,
+          "standardDeviation": 0.6972039888221244
+        },
+        "source.checker": {
+          "n": 10,
+          "min": 0.501583000000096,
+          "median": 0.9283759999999575,
+          "p95": 1.1742510000003676,
+          "max": 1.1742510000003676,
+          "mean": 0.8246468000001073,
+          "standardDeviation": 0.26910269582142154
+        },
+        "tool.dispatch_receipt": {
+          "n": 5,
+          "min": 12.250957999999969,
+          "median": 13.128500000000031,
+          "p95": 13.617582999999854,
+          "max": 13.617582999999854,
+          "mean": 13.006207999999969,
+          "standardDeviation": 0.5156605290843511
+        },
+        "tool.join": {
+          "n": 5,
+          "min": 1.9256669999998621,
+          "median": 2.5547490000000153,
+          "p95": 3.9409580000000233,
+          "max": 3.9409580000000233,
+          "mean": 2.7441831999999975,
+          "standardDeviation": 0.673579451825407
+        },
+        "text.commit": {
+          "n": 5,
+          "min": 0.8861249999999927,
+          "median": 0.9473750000000791,
+          "p95": 1.0950000000000273,
+          "max": 1.0950000000000273,
+          "mean": 0.9855416000000105,
+          "standardDeviation": 0.08209592908445958
+        }
+      },
+      "requestBytes": {
+        "n": 15,
+        "min": 13650,
+        "median": 14268,
+        "p95": 15790,
+        "max": 15790,
+        "mean": 14569.333333333334,
+        "standardDeviation": 899.2594484104993
+      },
+      "systemBytes": {
+        "n": 15,
+        "min": 4664,
+        "median": 4664,
+        "p95": 4664,
+        "max": 4664,
+        "mean": 4664,
+        "standardDeviation": 0
+      },
+      "toolsBytes": {
+        "n": 15,
+        "min": 8744,
+        "median": 8744,
+        "p95": 8744,
+        "max": 8744,
+        "mean": 8744,
+        "standardDeviation": 0
+      },
+      "tokenCoverage": {
+        "reportedExchanges": 0,
+        "providerExchanges": 15
+      },
+      "tokens": {
+        "promptTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        },
+        "cachedContentTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        },
+        "candidatesTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        },
+        "thoughtsTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        }
+      }
+    },
+    {
+      "scenario": "uncertain-write-recovery",
+      "executionMs": {
+        "on": {
+          "n": 5,
+          "min": 31.255292000000168,
+          "median": 31.560166999999865,
+          "p95": 37.59545800000001,
+          "max": 37.59545800000001,
+          "mean": 32.71165820000003,
+          "standardDeviation": 2.4473239993654436
+        },
+        "off": {
+          "n": 5,
+          "min": 31.332916999999952,
+          "median": 33.126750000000015,
+          "p95": 37.158000000000015,
+          "max": 37.158000000000015,
+          "mean": 33.5308166,
+          "standardDeviation": 1.9579147472383656
+        },
+        "pairedAddedMs": {
+          "n": 5,
+          "min": -5.413167000000044,
+          "median": -1.5665830000001506,
+          "p95": 5.072791999999936,
+          "max": 5.072791999999936,
+          "mean": -0.8191583999999693,
+          "standardDeviation": 3.4420969062107716
+        }
+      },
+      "attemptsPerRepetition": 2,
+      "providerRoundsPerAttempt": {
+        "n": 10,
+        "min": 1,
+        "median": 2,
+        "p95": 2,
+        "max": 2,
+        "mean": 1.5,
+        "standardDeviation": 0.5
+      },
+      "summaryRoundsPerAttempt": {
+        "n": 10,
+        "min": 0,
+        "median": 0,
+        "p95": 0,
+        "max": 0,
+        "mean": 0,
+        "standardDeviation": 0
+      },
+      "firstMs": {
+        "sdkChunk": {
+          "n": 10,
+          "min": 3.7415829999999914,
+          "median": 5.325500000000034,
+          "p95": 6.001959000000056,
+          "max": 6.001959000000056,
+          "mean": 4.929899999999998,
+          "standardDeviation": 0.8191073460770657
+        },
+        "nonThoughtText": {
+          "n": 5,
+          "min": 14.12016600000004,
+          "median": 15.09679200000005,
+          "p95": 15.668124999999918,
+          "max": 15.668124999999918,
+          "mean": 15.024016600000005,
+          "standardDeviation": 0.5803896258664607
+        },
+        "durableText": {
+          "n": 5,
+          "min": 15.717957999999953,
+          "median": 16.972334000000046,
+          "p95": 17.11983299999997,
+          "max": 17.11983299999997,
+          "mean": 16.71479159999999,
+          "standardDeviation": 0.5134673444232374
+        }
+      },
+      "spans": {
+        "thread.lock": {
+          "n": 10,
+          "min": 1.0073789999999008,
+          "median": 2.371503000000075,
+          "p95": 3.0310430000005226,
+          "max": 3.0310430000005226,
+          "mean": 1.822029600000087,
+          "standardDeviation": 0.7586022115937001
+        },
+        "source.authorization": {
+          "n": 10,
+          "min": 1.3188329999999269,
+          "median": 3.1546260000000075,
+          "p95": 3.9275440000001254,
+          "max": 3.9275440000001254,
+          "mean": 2.456483600000047,
+          "standardDeviation": 1.0833330289234526
+        },
+        "diagnostic.admission": {
+          "n": 10,
+          "min": 0.08004100000016479,
+          "median": 0.10549900000000889,
+          "p95": 0.13829099999998107,
+          "max": 0.13829099999998107,
+          "mean": 0.10193719999999758,
+          "standardDeviation": 0.018914031626320885
+        },
+        "diagnostic.serialization": {
+          "n": 10,
+          "min": 0.2932090000000471,
+          "median": 0.4652899999998681,
+          "p95": 0.6240849999995817,
+          "max": 0.6240849999995817,
+          "mean": 0.42426670000000966,
+          "standardDeviation": 0.11568482297687002
+        },
+        "diagnostic.insert": {
+          "n": 10,
+          "min": 0.3264160000001084,
+          "median": 0.6266650000000027,
+          "p95": 0.8108320000001186,
+          "max": 0.8108320000001186,
+          "mean": 0.5735958999999639,
+          "standardDeviation": 0.19489756087885204
+        },
+        "diagnostic.transaction": {
+          "n": 10,
+          "min": 0.9726259999997637,
+          "median": 1.65137500000003,
+          "p95": 2.0656669999998485,
+          "max": 2.0656669999998485,
+          "mean": 1.522058300000026,
+          "standardDeviation": 0.3659132293837444
+        },
+        "source.checker": {
+          "n": 10,
+          "min": 0.6372080000001006,
+          "median": 1.1527509999996255,
+          "p95": 1.5543759999999338,
+          "max": 1.5543759999999338,
+          "mean": 0.9773866999998972,
+          "standardDeviation": 0.31414256672717644
+        },
+        "tool.dispatch_receipt": {
+          "n": 10,
+          "min": 2.775166000000013,
+          "median": 4.26887499999998,
+          "p95": 5.125,
+          "max": 5.125,
+          "mean": 3.8570457000000262,
+          "standardDeviation": 0.8256812092409888
+        },
+        "tool.join": {
+          "n": 5,
+          "min": 1.988083000000188,
+          "median": 2.0899590000000217,
+          "p95": 2.7598330000000715,
+          "max": 2.7598330000000715,
+          "mean": 2.2333586000000425,
+          "standardDeviation": 0.28663816725243985
+        },
+        "text.commit": {
+          "n": 5,
+          "min": 0.8219169999999849,
+          "median": 0.9435829999999896,
+          "p95": 1.109375,
+          "max": 1.109375,
+          "mean": 0.9682084000000032,
+          "standardDeviation": 0.11082131441124043
+        }
+      },
+      "requestBytes": {
+        "n": 10,
+        "min": 26397,
+        "median": 54900,
+        "p95": 54900,
+        "max": 54900,
+        "mean": 40648.5,
+        "standardDeviation": 14251.5
+      },
+      "systemBytes": {
+        "n": 10,
+        "min": 4664,
+        "median": 4664,
+        "p95": 4664,
+        "max": 4664,
+        "mean": 4664,
+        "standardDeviation": 0
+      },
+      "toolsBytes": {
+        "n": 10,
+        "min": 21496,
+        "median": 21496,
+        "p95": 21496,
+        "max": 21496,
+        "mean": 21496,
+        "standardDeviation": 0
+      },
+      "tokenCoverage": {
+        "reportedExchanges": 0,
+        "providerExchanges": 15
+      },
+      "tokens": {
+        "promptTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        },
+        "cachedContentTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        },
+        "candidatesTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        },
+        "thoughtsTokenCount": {
+          "n": 0,
+          "mean": null,
+          "standardDeviation": null
+        }
+      }
+    }
+  ]
+}

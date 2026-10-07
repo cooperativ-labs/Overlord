@@ -28,8 +28,8 @@ import {
   createConformanceDatabase
 } from '../test-helpers.ts';
 
+import { EvaluationGeminiRuntime as GeminiChatRuntime } from './evaluation-runtime.ts';
 import type { GeminiChunk, GeminiClient, GeminiPart, GeminiRequest } from './gemini-client.ts';
-import { GeminiChatRuntime } from './gemini-runtime.ts';
 
 /**
  * Feature handoff through the unified Knowledgebase connection (per:202.5h64, connector

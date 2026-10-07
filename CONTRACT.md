@@ -70,6 +70,59 @@ Diagnostics never enter ordinary snapshots, SSE, global logs, search, webhooks o
 provider history. No diagnostic read invokes tools or changes a run's authorization.
 History lasts for the thread lifetime and cascades on owner/thread deletion.
 
+Performance observations (coo:1127.w09e) use this same private diagnostic surface.
+Provider observations may add monotonic SDK-consumption timestamps and byte sizes;
+`performance.attempt` records bounded numeric aggregates for diagnostic transaction
+completion, thread-lock acquisition, source checks, tool dispatch/receipt joins,
+text commit, provider rounds and reported usage. Timings never contain content and
+never enter global logs. SDK arrival means consumption from the SDK iterator, not
+network arrival. Transaction completion is measured after the awaited transaction;
+transaction-return spans under ambient nesting do not prove an outer commit. The
+production worker invokes the runtime outside an enclosing transaction.
+Each resumed attempt is measured separately; complete-run wall time comes from the
+durable run timestamps. Missing usage stays missing rather than becoming zero.
+Browser first-text paint is a foreground rendering opportunity measured locally,
+scoped to account/backend/thread/run and cleared on scope change; it is not a server
+clock or a guarantee that pixels reached a display. No browser telemetry endpoint is
+added, and diagnostics capture remains independent of the display toggle.
+
+Module impacts: Core adds an internal numeric measurement scope; Backend uses it
+and retains the aggregates in existing owner-private diagnostics. Web and Desktop's
+shared SPA measure locally; Mobile needs no change. Database, REST DTOs/routes,
+Auth, Protocol, CLI, MCP Server, Connector, Runner, Automations and extensions have
+no interface/schema change. The open diagnostic kind/payload vocabulary is unchanged;
+no contract version bump or migration is required.
+
+Summary coverage and context budgets (coo:1127.158y) refine the Gemini runtime's
+*Summaries* and *Limits* below: summary-covered messages are replaced by the summary in
+new provider requests, summary generation uses its own bounded instruction/output,
+coverage names the last message actually summarized, and a token-counted input budget
+with model headroom ends gathering through the existing `allowance_exhausted` path.
+Module impacts: Core resolves summary coverage by storage order and accepts the
+explicit coverage boundary on its internal summary write (validated to belong to the
+thread and not precede the previous boundary). Backend selects the prefix, generates
+summaries and enforces the budget; `CHAT_GEMINI_INPUT_TOKEN_LIMIT` is additive operator
+configuration. Database schema, REST DTOs/routes, closed failure/outcome vocabularies,
+checkpoint schema, Web, Desktop, Mobile, Auth, Protocol, CLI, MCP Server, Connector,
+Runner, Automations and extensions are unchanged; the context-policy version enters the
+config digest, so checkpoints written before it recover through fresh generation. No
+contract version bump or migration is required.
+
+The Gemini static-prefix cache (coo:1127.0904) refines the runtime below: the exact
+system instruction and declarations of small tool-enabled requests may be referenced
+through an owner-keyed explicit cache, with inline requests for larger prompts, closing
+and summary requests. Cache operations are captured in the owner's private diagnostics;
+the config digest, checkpoints, authorization and public interfaces are unchanged and
+`CHAT_GEMINI_STATIC_CACHE=off` disables it. No contract version bump or migration is
+required.
+
+The Web diagnostics viewer (coo:1127.q59w) windows its rows: every retained entry stays
+reachable by scrolling, only rows near the viewport are in the DOM, expanded rows keep their
+state while scrolled out of view, and JSON is pretty-printed only while a row is expanded.
+Polling pauses while the document is hidden and resumes from the same ordered cursor when
+visible; a thread/account change restarts at cursor 0. Capture, paging, retention and the
+diagnostics route are unchanged; Web/Desktop SPA only, no contract version bump.
+
 **Module impacts.** Database: additive `chat_diagnostics` table and index on both
 editions, migration `20261007070000_chat_diagnostics`. Core: sequence allocation,
 owner-only paged reads and raw event observations; no run/lease semantics change.
@@ -1001,16 +1054,23 @@ shares or is replaced by it.
   `gemini` readiness entry (`ready`, `not_configured`, `rate_limited` for 60 s after a
   429, or `unavailable` after a transport failure) and the caller's live account
   connections.
-- *Checkpoint payload (schema 1).* The private checkpoint holds only this run's provider
+- *Checkpoint payload (schema 2).* The private checkpoint holds only this run's provider
   turns, verbatim and unmerged (thought signatures, call ids, empty parts), the pending
   call batch (`turn`, per-call order, operation id `chat.<runId>.t<turn>.c<order>`,
   provider call id or a synthetic `t<turn>.c<order>` when the provider omits one), and
   the run's streaming message id. The conversation prefix (latest authorized summary
-  and messages, with withheld content rendered as a marker) is rebuilt from storage on
-  every provider request. The config digest covers the model and the versioned system
-  prompt. Fresh-generation recovery sends no function-call parts; it adds this run's
+  and the messages it does not cover, with withheld content rendered as a marker; see
+  *Summaries*) is rebuilt from storage on every provider request. The config digest
+  covers the model, the versioned system prompt, context policy and relevance policy.
+  Schema 2 also stores the selected family set and a manifest of the exact declarations
+  offered for the pending signed turn (SHA-256 identity over canonical object keys and
+  ordered declaration/schema arrays, including names, descriptions and effects). Resume validates this manifest and uses it for historical call
+  validation and read/write scheduling, never as authority. Before each new request the
+  authorized catalog is rebuilt from live connections; removed grants are still refused
+  by the live gateway on the next call. Schema-1/digest-incompatible checkpoints take
+  existing fresh-generation recovery; no signed turn is rewritten. Fresh-generation recovery sends no function-call parts; it adds this run's
   completed, still-authorized tool observations as untrusted text.
-- *Tool list (fixed).* `overlord_list_projects`, `overlord_list_execution_targets`,
+- *Tool catalog (fixed), relevance manifests (expandable).* `overlord_list_projects`, `overlord_list_execution_targets`,
   `overlord_search_missions`, `overlord_get_mission`, `repository_read` (the eight
   `RepositoryReadOperation`s through the same core service as the REST route, scope
   `chat-run:<runId>`), the reviewed Knowledgebase reads of the owner's live connections,
@@ -1023,6 +1083,94 @@ shares or is replaced by it.
   `mission:read` for missions, objectives and deliveries) and answers `not_found`
   without revealing existence. Tool results reach the model wrapped as untrusted data.
   Results are bounded to 96 KiB of provider input.
+  Backend may initially declare a deterministic subset of this fixed authorized catalog:
+  stable families `status` (mission search/detail), `repository` (target discovery and
+  repository reads), `knowledgebase` (reviewed connection reads and live-authorized
+  writes), and `feature` (Knowledgebase plus exhaustive Feature lookup and mission detail).
+  Project discovery, question and proposal preparation remain available in every manifest;
+  connection workspace discovery remains available when authorized. No routing-model call
+  is added. Unrecognized, ambiguous or referential requests use the full authorized catalog;
+  cross-family requests take the union. A stored per-message write grant selects Knowledgebase.
+  Always-available reviewed reads means available through expansion, not necessarily declared
+  in every request. `expand_capabilities` accepts optional `families` from the four names
+  plus `all`; empty/omitted lists discover current authorized capabilities and tool names.
+  Expansion only widens relevance, never permission, and takes effect on the next request.
+  Its complete signed call and receipt use the normal checkpoint-before-execute path, tool
+  allowance, ordered join and raw diagnostics. Successful expansion receipts restore the
+  family union even after a crash between receipt and join; duplicate execution is harmless.
+  A call not in its historical manifest still returns `unknown_tool`, even when an expansion
+  appears earlier in the same turn. Failed live catalog discovery contributes no connection
+  tools. A per-message grant naming a workspace no longer in the connection's live
+  authorized-workspace list contributes no write declarations; an all-workspaces connection
+  with an empty authorized list contributes none either. Call-time checks remain unchanged.
+  Full fallback means all currently authorized tools, never all possible permissions.
+
+  **Module impacts (coo:1127.kaed).** Backend owns selection, expansion, manifest identity
+  and private schema-2 payload validation. Core continues to store opaque checkpoints and
+  execute ordered receipts with existing live authorization; no Core API change. Database
+  uses existing JSON/version columns on both editions, without migration. REST/DTOs, Web,
+  Desktop, Mobile, Auth, Protocol, CLI, MCP Server, Connector, Runner, Automations and
+  extensions have no interface change. The outbound MCP client's live allowlist/scope policy
+  is unchanged. This is an internal provider-policy refinement at contract v159; no stable
+  public interface or closed storage vocabulary changes and no contract version bump.
+- *Static-prefix cache (coo:1127.0904).* Backend may place a tool-enabled request's exact
+  static prefix in a Gemini explicit cache (`caches.create`, same Generate Content API
+  family) and reference it with `cachedContent`. The prefix is only the exact system
+  instruction, the request's exact function declarations and `functionCallingConfig.mode
+  = AUTO`; never conversation, summaries, tool results, source content, proposals,
+  credentials or connection secrets. A `cachedContent` request carries no system
+  instruction, tools or tool config (the provider rejects them), so tool-free closing
+  (`NONE`) requests and summary generation are always sent inline.
+  - *Hybrid use.* Only while the attempt's previous reported `promptTokenCount` (before
+    any report: request bytes / 4) is below 16,000 tokens; larger requests go inline so
+    implicit caching can cover the growing conversation. A cached request reports only
+    the cache's tokens as cached and gains no implicit hits, so caching every request
+    would raise cost on long runs. The cache never removes prompt tokens or context
+    occupancy: the context budget still counts the cached declarations.
+  - *Key and isolation.* SHA-256 over the owner's profile and organization, the model and
+    the canonical static config. Caches are never shared across owners, even for
+    identical manifests. A changed prompt, grant, connection, family or schema yields a
+    different key; a cache is never used for a different manifest, and a cache reference
+    never authorizes anything (every call still faces the live gateway checks; schema-2
+    checkpoint manifests are unchanged).
+  - *Lifecycle.* TTL 600 s; reuse only with at least 60 s remaining. A process-local,
+    in-memory registry (no database state) holds at most 64 entries and 4 per owner.
+    Creation is single-flight per key, never blocks a request (that request goes inline),
+    is bounded to 15 s and is awaited by the creating attempt before it finishes, so its
+    observation is durable. A failed creation suppresses that key for the TTL. When an
+    owner exceeds 4 entries, the oldest of that owner's caches is deleted from that
+    owner's attempt. A full registry skips creation. Caches left by a restart expire by
+    TTL; a restart starts cold.
+  - *Fallback.* A cached request refused at stream open with 400, 403 or 404, before any
+    chunk arrives, invalidates the entry and is sent once inline with identical contents.
+    Nothing is retried after a chunk arrives; transient-retry and rate-limit rules are
+    unchanged, so no turn or tool call is duplicated.
+  - *Digest, checkpoint and recovery.* The effective model input is identical with or
+    without the cache, so the config digest, checkpoint schema 2 and fresh-generation
+    rules are unchanged. The cache name is never stored in checkpoints, snapshots or
+    events; a resumed attempt recomputes the key and reuses or recreates the cache.
+  - *Diagnostics.* Owner-private and captured only in the triggering owner's thread:
+    `provider.cache_create` (complete create config including the instruction and
+    declarations, then the provider response metadata or original error),
+    `provider.cache_delete` and `provider.cache_fallback`. A cached `provider.request`
+    records the SDK request actually sent plus `staticCache` holding the cache name, key
+    and the effective system instruction, declarations and tool config, so the effective
+    input stays inspectable. `performance.attempt` adds cached-request and fallback
+    counts. These are open diagnostic kinds.
+  - *Configuration.* On by default with a configured key; `CHAT_GEMINI_STATIC_CACHE=off`
+    disables it (any other value keeps the default). Explicit caches incur provider
+    storage charges for their TTL.
+
+  **Module impacts (coo:1127.0904).** Backend owns the SDK cache seam, registry, hybrid
+  policy, fallback and capture. Core continues to store open diagnostic kinds and opaque
+  checkpoints; no Core API change. Database: no table, column or migration on either
+  edition. REST/DTOs, Web, Desktop and Mobile are unchanged; the existing owner-only
+  diagnostic paging shows the new observations and ordinary snapshots never contain a
+  cache name. Auth, Protocol, CLI, MCP Server, Connector, Runner, Automations and
+  extensions have no interface change. `CHAT_GEMINI_STATIC_CACHE` is additive operator
+  configuration. This is an internal provider-policy refinement at contract v159; no
+  contract version bump.
+
 - *Questions.* `ask_user` is a checkpointed call: reads in the same turn run first, the
   question opens through the existing question path (run `waiting_user`, notification
   candidate), and the answer becomes that call's recorded result when the run resumes
@@ -1043,7 +1191,29 @@ shares or is replaced by it.
 - *Summaries.* Once at least eight messages are not covered by the latest summary, the
   runtime writes a compact `chat_thread_summaries` row (goal text, decisions, open
   questions, evidence refs) from a plain-text transcript of authorized content; a failed
-  summary never fails the run.
+  summary never fails the run. Refined by coo:1127.158y:
+  - *Coverage.* `covers_through_message_id` names the last message the generation
+    actually read; the transcript is the previous usable summary plus the messages
+    after its boundary, oldest first, cut at a message boundary when it reaches its
+    size bound, so coverage never claims an unread message. Core resolves the boundary's
+    position by storage order `(created_at, id)` even when it lies outside the latest
+    100-message page; a boundary that cannot be resolved, or an absent, invalidated or
+    unauthorized summary, means no coverage and the full authorized page is sent.
+  - *Prefix selection.* With usable coverage, covered messages are replaced by the
+    summary, except the run's trigger message, every message of the current run, and
+    the four most recent messages, which stay verbatim. Proposal cards and creation
+    receipts are supplied separately and never compacted; the current run's signed
+    provider turns are never summarized or compacted. Omitting covered text never
+    narrows dependencies: summaries, checkpoints, messages and questions keep the
+    conservative thread union, and revocation invalidates the summary (falling back
+    to authorized messages with `unavailable` markers) and fences as before.
+  - *Generation.* A dedicated compact instruction (not the research prompt) treats
+    the transcript as untrusted data and returns only the four fields under a bounded
+    output (`maxOutputTokens` 2048, low thinking) with no tools. A response that is not
+    complete (`finishReason` other than `STOP`), not valid JSON, or outside the field
+    bounds (text 6,000 chars, 20 decisions, 20 open questions, 50 `E<n>` refs, items 500
+    chars) is a failed optional summary: it is recorded privately, never stored and
+    never replaces the last valid summary. The eight-message cadence is unchanged.
 - *Source checkers.* `overlord` sources are `authorized` while the entity exists and the
   owner keeps the read permission on its project's workspace, else `revoked`;
   `repository` sources while the owner keeps `project:read` and the execution target
@@ -1055,6 +1225,17 @@ shares or is replaced by it.
   function-call turn that would exceed the tool-call limit is discarded unexecuted (never
   checkpointed) and one tool-free request (`functionCallingConfig.mode = NONE`) writes the
   closing summary before the run completes `allowance_exhausted`.
+- *Context budget (coo:1127.158y).* Token budgets are counted in provider tokens, never
+  characters. Before each tool-enabled request after the first of an attempt, the
+  runtime projects its input as the previous exchange's reported `promptTokenCount`
+  plus one token per two bytes of request growth. If the projection exceeds the model
+  input limit minus a 65,536-token headroom, it stops gathering and ends through the
+  same tool-free closing request and `allowance_exhausted` outcome (Continue starts a
+  fresh run whose prefix uses the summary). The limit is `CHAT_GEMINI_INPUT_TOKEN_LIMIT`
+  (default 1,048,576, the verified `gemini-3.8-flash` input limit; whole number
+  131,072–2,097,152, otherwise the default). Without a reported usage the runtime sends
+  the request and a provider rejection keeps the existing `context_limit` code. Context
+  is never silently dropped to force a request through, and no new failure code exists.
 
 **Verification and hardening (coo:1108.z77k, refines v152).** Found by the live
 acceptance run (`planning/feature-plans/chat-agent-request-routing-acceptance.md`).
@@ -3020,7 +3201,7 @@ answering a decision it is blocked on, and injecting an instruction into it.
 ### Backend → Outbound MCP (Account Connection Surface)
 
 - **Transport**: HTTPS JSON-RPC (MCP streamable HTTP) from the backend to the configured Knowledgebase origin only, with the connection's access token; egress is restricted server-side.
-- **Policy**: only a reviewed tool allowlist, namespaced per connection, is exposed to the assistant. Reviewed reads are always available; reviewed writes only for the connection and workspace of the run's user-authorized `knowledgebaseWrite` grant (v154), or for any authorized workspace of a connection whose live `assistant_write_scope` is `all_workspaces` (v158), and refused otherwise before any request; unreviewed tools are rejected regardless of annotations; every call has argument, output-size, and time bounds; the per-source access check fails closed.
+- **Policy**: only a reviewed tool allowlist, namespaced per connection, is exposed to the assistant. Reviewed reads are always available through relevance expansion/full-catalog fallback; reviewed writes only for the connection and workspace of the run's user-authorized `knowledgebaseWrite` grant (v154), or for any authorized workspace of a connection whose live `assistant_write_scope` is `all_workspaces` (v158), and refused otherwise before any request; unreviewed tools are rejected regardless of annotations; every call has argument, output-size, and time bounds; the per-source access check fails closed.
 - **Tool policy version 2** (v154): reads `list_workspaces`, `search`, `read_file`, `get_related`, `list_children`, `get_links`, `read_resource`, `list_entities`, `query`, `get_registries`; writes `create_node`, `edit_file`, `set_properties`, `add_relation`, `update_relation`, `remove_relation` with required revision guards and bounded nested JSON (`null` removes a property). Each has Overlord-reviewed descriptions and closed input schemas (server descriptions and schemas are never shown to the model). Server annotations can only withhold a reviewed tool (a read not annotated `readOnlyHint: true` or annotated destructive; a write annotated destructive unless reviewed destructive, which only `remove_relation` is). A guard refusal (409/412) is `conflict`; a write sent without a usable response is `uncertain` and never retried. `query`, `get_related`, and `get_registries` are refused rather than truncated when over the text bound. Tool ids are `kb_<first 12 hex of the connection id>_<tool>` (≤ 64 characters; letters, digits, and underscores only, because the provider rewrote the earlier dotted form and the gateway then rejected the call as an unknown tool). Workspace-scoped calls must name a workspace in the connection's `authorizedWorkspaces` (refreshed from `list_workspaces` once when unknown).
 - **Bounds**: 4 KiB arguments for reads and per-tool limits for writes (up to 56 KiB), 1 MiB response read from the network (beyond that the call fails), 64 KiB text returned per call with a `truncated` flag, 15 s per call, redirects never followed. Results carry the namespaced tool, connection, workspace, observation time, and provenance (node id, path, provider revision, and update time for every node in the full response, at most 50).
 - **Access checks**: a source check consults the owner's connection row on every call (`disconnected` or foreign → `revoked`; not connected → `unknown`), then `get_related` (403/404 → `revoked`). Only positive answers are cached, per owner, for 30 s (v157), so an upstream node revocation is observed within that window. Any other result is `unknown`; both fail closed.

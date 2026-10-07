@@ -386,9 +386,29 @@ export class ChatRuns extends ChatStore {
         if (await s.authorized(q.dependency_set_id)) visibleQuestions.push(questionDto(q));
       const summaryUsable =
         summary && !summary.invalidated_at && (await s.authorized(summary.dependency_set_id));
+      // Coverage is resolved by storage order, so a boundary older than this page still
+      // counts every page message as uncovered; an unresolvable boundary covers nothing.
+      let summaryCoveredCount = 0;
+      let summaryCoversMessageId: string | null = null;
+      if (summaryUsable && summary.covers_through_message_id) {
+        const after = await s.db.get<{ n: number | string }>(
+          `SELECT COUNT(m.id) AS n FROM chat_messages b JOIN chat_messages m ON m.thread_id = b.thread_id AND (m.created_at > b.created_at OR (m.created_at = b.created_at AND m.id > b.id)) WHERE b.id = ? AND b.thread_id = ?`,
+          [summary.covers_through_message_id, a.threadId]
+        );
+        const boundary = await s.db.get<{ id: string }>(
+          'SELECT id FROM chat_messages WHERE id = ? AND thread_id = ?',
+          [summary.covers_through_message_id, a.threadId]
+        );
+        if (boundary) {
+          summaryCoversMessageId = boundary.id;
+          summaryCoveredCount = Math.max(0, messages.length - Number(after?.n ?? 0));
+        }
+      }
       return {
         summary: summaryUsable ? JSON.parse(summary.summary_json) : null,
-        summaryCoversMessageId: summaryUsable ? summary.covers_through_message_id : null,
+        summaryCoversMessageId,
+        /** How many of the oldest `messages` the summary covers (0 when none or unresolved). */
+        summaryCoveredCount,
         messages: await Promise.all(messages.map(m => s.projectMessage(m))),
         checkpoint,
         receipts,
@@ -1003,8 +1023,12 @@ export class ChatRuns extends ChatStore {
       return evidence.map(e => e.id);
     });
   }
-  /** Writes the next compact thread summary, dependent on everything the generation could see. */
-  async summarize(a: ChatAttempt, summary: ThreadSummary) {
+  /**
+   * Writes the next compact thread summary, dependent on everything the generation could see.
+   * `coversThroughMessageId` is the last message the generation read; it must belong to the
+   * thread and must not precede the previous summary's boundary.
+   */
+  async summarize(a: ChatAttempt, summary: ThreadSummary, coversThroughMessageId: string) {
     const json = JSON.stringify(summary);
     if (Buffer.byteLength(json) > 16 * 1024) throw new ChatError('limit_exceeded');
     return this.mutate(a, async s => {
@@ -1014,20 +1038,18 @@ export class ChatRuns extends ChatStore {
         [a.threadId]
       );
       const latest = await s.db.get<{ id: string }>(
-        'SELECT id FROM chat_messages WHERE thread_id = ? ORDER BY created_at DESC, id DESC LIMIT 1',
-        [a.threadId]
+        'SELECT id FROM chat_messages WHERE id = ? AND thread_id = ?',
+        [coversThroughMessageId, a.threadId]
       );
+      if (!latest) throw new ChatError('invalid_request');
+      const regressed = await s.db.get<{ id: string }>(
+        `SELECT p.id FROM chat_thread_summaries ts JOIN chat_messages p ON p.id = ts.covers_through_message_id JOIN chat_messages b ON b.id = ? WHERE ts.thread_id = ? AND ts.summary_revision = ? AND (b.created_at < p.created_at OR (b.created_at = p.created_at AND b.id < p.id))`,
+        [coversThroughMessageId, a.threadId, Number(last?.n ?? 0)]
+      );
+      if (regressed) throw new ChatError('invalid_request');
       await s.db.run(
         'INSERT INTO chat_thread_summaries (id, thread_id, summary_revision, summary_json, covers_through_message_id, dependency_set_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [
-          randomUUID(),
-          a.threadId,
-          Number(last?.n ?? 0) + 1,
-          json,
-          latest?.id ?? null,
-          deps,
-          s.timestamp()
-        ]
+        [randomUUID(), a.threadId, Number(last?.n ?? 0) + 1, json, latest.id, deps, s.timestamp()]
       );
     });
   }

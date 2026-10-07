@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "measuredAt": "2026-10-07T07:37:57.080Z",
+  "chrome": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+  "environment": "fresh headless Chrome; synthetic text DOM, 10ms delivery delay, 2 warmups",
+  "submittedToDomCommitMs": {
+    "n": 30,
+    "min": 10.299999982118607,
+    "median": 13.400000005960464,
+    "p95": 15.200000017881393,
+    "max": 15.400000005960464,
+    "mean": 13.016666665673256,
+    "standardDeviation": 1.5132929532984707
+  },
+  "submittedToPaintOpportunityMs": {
+    "n": 30,
+    "min": 25.599999994039536,
+    "median": 33.10000002384186,
+    "p95": 38.19999998807907,
+    "max": 497.09999999403954,
+    "mean": 48.730000001192096,
+    "standardDeviation": 83.29244523437445
+  },
+  "domCommitToPaintOpportunityMs": {
+    "n": 30,
+    "min": 13.900000005960464,
+    "median": 20.399999976158142,
+    "p95": 26.80000001192093,
+    "max": 485,
+    "mean": 35.71333333551884,
+    "standardDeviation": 83.47122351742028
+  }
+}

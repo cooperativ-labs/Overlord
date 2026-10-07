@@ -7,6 +7,7 @@ import { fetchApi } from '../api-transport.ts';
 import { useMeta, useProfile } from '../queries/profile.ts';
 import { keys } from '../query-keys.ts';
 
+import { setChatPerformanceScope } from './performance.ts';
 import { ChatPresence, chatTabClientId, isDocumentForeground } from './presence.ts';
 import { pruneRequestIds } from './request-ids.ts';
 import { type ChatStreamView, ChatThreadStream } from './thread-stream.ts';
@@ -37,6 +38,7 @@ export function useChatAvailability(): ChatAvailability {
   }, [meta.isPending, profile.isPending, meta.data?.backendMode, organizationId, userId, backend]);
   const scope = result.kind === 'ready' ? result.scope : null;
   useEffect(() => {
+    setChatPerformanceScope(scope);
     if (scope) pruneRequestIds(scope);
   }, [scope]);
   return result;

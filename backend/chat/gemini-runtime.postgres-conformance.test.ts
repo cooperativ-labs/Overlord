@@ -15,7 +15,11 @@ import {
   ChatRuns,
   StaleChatAttempt
 } from '../../packages/core/service/chat/runs.ts';
-import type { ChatOptions, SourceChecker } from '../../packages/core/service/chat/store.ts';
+import {
+  ChatError,
+  type ChatOptions,
+  type SourceChecker
+} from '../../packages/core/service/chat/store.ts';
 import {
   type ChatKnowledgebaseAdapter,
   type ChatRepositoryReader,
@@ -23,8 +27,16 @@ import {
 } from '../../packages/core/service/chat/tools.ts';
 import { ChatRuntimeFailure } from '../chat-worker.ts';
 
-import type { GeminiChunk, GeminiClient, GeminiPart, GeminiRequest } from './gemini-client.ts';
-import { GeminiChatRuntime } from './gemini-runtime.ts';
+import { EvaluationGeminiRuntime as GeminiChatRuntime } from './evaluation-runtime.ts';
+import type {
+  GeminiCacheCreate,
+  GeminiChunk,
+  GeminiClient,
+  GeminiPart,
+  GeminiRequest
+} from './gemini-client.ts';
+import { geminiRuntimeInternals } from './gemini-runtime.ts';
+import { GeminiStaticCache } from './static-cache.ts';
 
 const owner: ChatOwner = { profileId: 'owner', organizationId: 'org' };
 const adapters = conformanceAdapters();
@@ -39,7 +51,8 @@ class ScriptedGemini implements GeminiClient {
   readonly generated: GeminiRequest[] = [];
   constructor(
     private readonly script: ((req: GeminiRequest) => GeminiPart[] | Error)[],
-    private readonly summary: string | null = null
+    private readonly summary: string | null = null,
+    private readonly finishReason = 'STOP'
   ) {}
   async stream(request: GeminiRequest): Promise<AsyncIterable<GeminiChunk>> {
     this.requests.push(
@@ -61,7 +74,11 @@ class ScriptedGemini implements GeminiClient {
     if (!this.summary) throw new Error('no summary');
     return {
       text: this.summary,
-      rawResponse: { text: this.summary, usageMetadata: { totalTokenCount: 777 } }
+      rawResponse: {
+        text: this.summary,
+        candidates: [{ finishReason: this.finishReason }],
+        usageMetadata: { totalTokenCount: 777 }
+      }
     };
   }
 }
@@ -297,6 +314,30 @@ async function claim(w: World, rt: GeminiChatRuntime): Promise<ChatAttempt> {
   assert.ok(a, 'a run is claimable');
   return a;
 }
+/**
+ * Seeds `exchanges` completed user/assistant pairs without provider calls ("Seed 0", then
+ * "Turn i:"/"Answer i:"), writing `summaries[i]` while exchange i's answer is the latest.
+ */
+async function seedThread(
+  w: World,
+  exchanges: number,
+  summaries: Record<number, Parameters<ChatRuns['summarize']>[1]> = {}
+) {
+  const rt = runtime(w, new ScriptedGemini([]));
+  const created = await start(w, 'Seed 0');
+  for (let i = 0; i < exchanges; i++) {
+    if (i)
+      await w.c.submit(owner, created.thread.id, {
+        clientRequestId: randomUUID(),
+        text: `Turn ${i}: earlier context.`
+      });
+    const a = await claim(w, rt);
+    const answer = await w.runs.text(a, `Answer ${i}: known decision.`);
+    if (summaries[i]) await w.runs.summarize(a, summaries[i]!, answer);
+    await w.runs.complete(a, 'answered');
+  }
+  return created;
+}
 const kbArgs = { workspace: 'main', q: 'offline' };
 const repoArgs = {
   executionTargetId: 'target-1',
@@ -308,6 +349,126 @@ const json = (v: unknown) => JSON.stringify(v);
 
 for (const adapter of adapters)
   describe(`Gemini research runtime [${adapter}]`, () => {
+    for (const boundary of ['requestTools', 'executeTool', 'joinTools'] as const)
+      it(`recovers expansion after ${boundary}, rejects same-turn undeclared calls and retains signed history`, () =>
+        world(adapter, async w => {
+          await start(w, 'What is the mission status?');
+          const first = new ScriptedGemini([
+            req => {
+              const names = req.config.tools![0]!.functionDeclarations.map(d => d.name);
+              assert.ok(!names.includes('repository_read'));
+              assert.ok(names.includes('ask_user') && names.includes('expand_capabilities'));
+              return [
+                call(
+                  'expand_capabilities',
+                  { families: ['repository'] },
+                  'expand-1',
+                  'signed-expand'
+                ),
+                call('repository_read', repoArgs, 'premature')
+              ];
+            }
+          ]);
+          const rt1 = runtime(w, first);
+          await assert.rejects(
+            rt1.execute(
+              await claim(w, rt1),
+              crashAfter(w.runs, boundary),
+              new AbortController().signal
+            ),
+            Crash
+          );
+          w.advance(31_000);
+          const second = new ScriptedGemini([
+            req => {
+              assert.ok(
+                req.config.tools![0]!.functionDeclarations.some(d => d.name === 'repository_read')
+              );
+              const signed = req.contents
+                .flatMap(c => c.parts)
+                .find(p => p.functionCall?.id === 'expand-1');
+              assert.equal(signed?.thoughtSignature, 'signed-expand');
+              const premature = req.contents
+                .flatMap(c => c.parts)
+                .find(p => p.functionResponse?.id === 'premature');
+              assert.equal(premature?.functionResponse?.response.outcome, 'unknown_tool');
+              return [call('repository_read', repoArgs, 'after-expansion')];
+            },
+            () => [text('Done [E1].')]
+          ]);
+          const rt2 = runtime(w, second);
+          const resumed = await claim(w, rt2);
+          assert.equal(resumed.recoveryMode, 'checkpoint');
+          await rt2.execute(resumed, w.runs, new AbortController().signal);
+          assert.equal(w.repoCalls.length, 1);
+          const receipts = await w.db.all<{ executions: number }>(
+            'SELECT executions FROM chat_tool_calls ORDER BY turn_index, call_order'
+          );
+          assert.deepEqual(
+            receipts.map(r => r.executions),
+            [1, 1, 1]
+          );
+        }));
+
+    it('discovery does not expand; invalid families fail; all expands only the current authorized catalog', () =>
+      world(adapter, async w => {
+        await start(w, 'Mission status');
+        const client = new ScriptedGemini([
+          () => [
+            call('expand_capabilities', {}),
+            call('expand_capabilities', { families: ['invented'] })
+          ],
+          req => {
+            assert.ok(
+              !req.config.tools![0]!.functionDeclarations.some(d => d.name === 'repository_read')
+            );
+            const responses = req.contents.at(-1)!.parts.map(p => p.functionResponse!.response);
+            assert.equal(responses[0]!.outcome, 'ok');
+            assert.equal(responses[1]!.outcome, 'invalid_arguments');
+            return [call('expand_capabilities', { families: ['all'] })];
+          },
+          req => {
+            assert.ok(req.config.tools![0]!.functionDeclarations.some(d => d.name === KB_TOOL));
+            assert.ok(
+              !req.config.tools![0]!.functionDeclarations.some(d =>
+                /edit_file|create_node/.test(d.name)
+              )
+            );
+            return [text('Discovered.')];
+          }
+        ]);
+        const rt = runtime(w, client);
+        await rt.execute(await claim(w, rt), w.runs, new AbortController().signal);
+      }));
+
+    it('rejects corrupt historical manifest integrity before any resumed tool execution', () =>
+      world(adapter, async w => {
+        await start(w, 'Read notes');
+        const rt = runtime(w, new ScriptedGemini([() => [call(KB_TOOL, kbArgs)]]));
+        await assert.rejects(
+          rt.execute(
+            await claim(w, rt),
+            crashAfter(w.runs, 'requestTools'),
+            new AbortController().signal
+          ),
+          Crash
+        );
+        const row = await w.db.get<{ payload_json: string }>(
+          'SELECT payload_json FROM chat_provider_checkpoints'
+        );
+        const payload = JSON.parse(row!.payload_json);
+        payload.manifest.declarations[0].description = 'corrupt';
+        await w.db.run('UPDATE chat_provider_checkpoints SET payload_json = ?', [
+          JSON.stringify(payload)
+        ]);
+        w.advance(31_000);
+        await assert.rejects(
+          rt.execute(await claim(w, rt), w.runs, new AbortController().signal),
+          ChatRuntimeFailure
+        );
+        assert.equal(w.kbCalls.length, 0);
+      }));
+
     it('answers from Knowledgebase and repository evidence read in parallel, with citations and a summary', () =>
       world(adapter, async w => {
         const created = await start(w);
@@ -777,6 +938,803 @@ for (const adapter of adapters)
         assert.equal(client.requests.length, 1);
       }));
 
+    for (const flush of [1, 2]) {
+      it(`cancellation during text flush ${flush} fences publication and retains consumed raw chunks`, () =>
+        world(adapter, async w => {
+          const created = await start(w);
+          const client = new ScriptedGemini([() => [text('First.'), text(' Final.')]]);
+          const rt = runtime(w, client, {
+            coalesceMs: 60_000,
+            coalesceChars: 100_000,
+            summaryEveryMessages: 1000
+          });
+          const a = await claim(w, rt);
+          const controller = new AbortController();
+          let commits = 0;
+          const cancelling = new Proxy(w.runs, {
+            get(target, prop, receiver) {
+              if (prop !== 'text') return Reflect.get(target, prop, receiver);
+              return async (...args: Parameters<ChatRuns['text']>) => {
+                if (++commits === flush) {
+                  // The runtime has entered its awaited flush, but publication has
+                  // not acquired its fence yet. Let the cancellation commit first.
+                  await w.c.cancel(owner, a.runId, `cancel-flush-${flush}`);
+                  controller.abort();
+                }
+                return target.text(...args);
+              };
+            }
+          });
+          await assert.rejects(rt.execute(a, cancelling, controller.signal), StaleChatAttempt);
+          const snapshot = await w.c.snapshot(owner, created.thread.id);
+          assert.equal(snapshot.latestRun?.state, 'cancelled');
+          assert.equal(client.requests.length, 1);
+          const published = snapshot.messages
+            .filter(m => m.role === 'assistant')
+            .flatMap(m => m.blocks)
+            .filter(b => b.kind === 'text')
+            .map(b => b.text)
+            .join('');
+          assert.equal(published, flush === 1 ? '' : 'First.');
+          const rows = await w.db.all<{ seq: number; kind: string; payload_json: string }>(
+            'SELECT seq, kind, payload_json FROM chat_diagnostics WHERE thread_id = ? ORDER BY seq',
+            [created.thread.id]
+          );
+          rows.forEach((row, i) => assert.equal(Number(row.seq), i + 1));
+          const chunks = rows.filter(row => row.kind === 'provider.chunk');
+          assert.equal(chunks.length, flush);
+          assert.match(chunks[0]!.payload_json, /First\./);
+          if (flush === 2) assert.match(chunks[1]!.payload_json, /Final\./);
+        }));
+    }
+
+    it('evaluation status query keeps SDK thought, durable text and usage boundaries distinct', () =>
+      world(adapter, async w => {
+        const created = await start(w, 'What is the status of coo:7?');
+        const client = new ScriptedGemini([
+          () => [call('overlord_get_mission', { missionId: 'coo:7' }, 'status-call', 'signed')],
+          () => [text('The survey is complete [E1].')]
+        ]);
+        const chunksSent: GeminiChunk[] = [];
+        const capture = (chunk: GeminiChunk) => {
+          chunksSent.push(chunk);
+          return chunk;
+        };
+        const original = client.stream.bind(client);
+        client.stream = async request => {
+          const stream = await original(request);
+          return (async function* () {
+            yield capture({
+              candidates: [{ content: { parts: [{ text: 'private thought', thought: true }] } }]
+            });
+            for await (const chunk of stream) yield capture(chunk);
+            // Repeated cumulative usage must be counted once, never per chunk.
+            yield capture({
+              usageMetadata: {
+                promptTokenCount: 100,
+                cachedContentTokenCount: 40,
+                candidatesTokenCount: 8,
+                thoughtsTokenCount: 2
+              }
+            });
+            yield capture({
+              usageMetadata: {
+                promptTokenCount: 100,
+                cachedContentTokenCount: 40,
+                candidatesTokenCount: 10,
+                thoughtsTokenCount: 3
+              }
+            });
+          })();
+        };
+        const rt = runtime(w, client);
+        await rt.execute(await claim(w, rt), w.runs, new AbortController().signal);
+        const all = await w.db.all<{ seq: number; kind: string; payload_json: string }>(
+          'SELECT seq, kind, payload_json FROM chat_diagnostics WHERE thread_id = ? ORDER BY seq',
+          [created.thread.id]
+        );
+        all.forEach((row, i) => assert.equal(Number(row.seq), i + 1));
+        assert.equal(all.filter(r => r.kind === 'provider.chunk').length, 8);
+        assert.deepEqual(
+          all.filter(r => r.kind === 'provider.chunk').map(r => JSON.parse(r.payload_json).chunk),
+          chunksSent
+        );
+        const metricRow = all.find(r => r.kind === 'performance.attempt');
+        if (process.env.CHAT_EVAL_MODE !== 'off') {
+          assert.ok(metricRow);
+          const m = JSON.parse(metricRow.payload_json);
+          assert.equal(m.providerRounds, 2);
+          assert.equal(m.usageExchanges, 2);
+          assert.deepEqual(m.tokens, {
+            promptTokenCount: 200,
+            cachedContentTokenCount: 80,
+            candidatesTokenCount: 20,
+            thoughtsTokenCount: 6
+          });
+          assert.ok(m.first.sdkChunk < m.first.nonThoughtText);
+          assert.ok(m.first.nonThoughtText < m.first.durableText);
+          assert.ok(m.spans['diagnostic.transaction'].count > 0);
+          assert.equal(m.spans['tool.join'].count, 1);
+          assert.equal(m.spans['tool.dispatch_receipt'].count, 1);
+        }
+        const snapshot = await w.c.snapshot(owner, created.thread.id);
+        assert.equal(snapshot.latestRun!.state, 'completed');
+        assert.doesNotMatch(json(snapshot), /private thought|signed|performance.attempt/);
+      }));
+
+    it(
+      'measures coalescing threshold matrix with lossless per-chunk capture',
+      {
+        skip: process.env.CHAT_COALESCING_EVAL !== '1'
+      },
+      () =>
+        world(adapter, async w => {
+          const results: {
+            coalesceMs: number;
+            coalesceChars: number;
+            durationMs: number;
+            firstDurableTextMs: number;
+            textCommits: number;
+            rawChunks: number;
+            committedCharacters: number;
+          }[] = [];
+          const settings = [250, 500, 750].flatMap(coalesceMs =>
+            [400, 800, 1600].map(coalesceChars => ({ coalesceMs, coalesceChars }))
+          );
+          const orders = [
+            settings,
+            [...settings].reverse(),
+            [...settings.slice(3), ...settings.slice(0, 3)]
+          ];
+          for (const order of orders) {
+            for (const { coalesceMs, coalesceChars } of order) {
+              const created = await start(w, 'Stream a response.');
+              const client: GeminiClient = {
+                stream: async () =>
+                  (async function* () {
+                    for (let i = 0; i < 40; i++) {
+                      await new Promise(resolve => setTimeout(resolve, 20));
+                      yield { candidates: [{ content: { parts: [text('x'.repeat(60))] } }] };
+                    }
+                  })(),
+                generate: async () => {
+                  throw new Error('summary call is not part of this benchmark');
+                }
+              };
+              const rt = runtime(w, client, {
+                coalesceMs,
+                coalesceChars,
+                summaryEveryMessages: 1000
+              });
+              const attempt = await claim(w, rt);
+              const started = performance.now();
+              await rt.execute(attempt, w.runs, new AbortController().signal);
+              const durationMs = performance.now() - started;
+              const rows = await w.db.all<{ seq: number; kind: string; payload_json: string }>(
+                'SELECT seq, kind, payload_json FROM chat_diagnostics WHERE thread_id = ? ORDER BY seq',
+                [created.thread.id]
+              );
+              rows.forEach((row, i) => assert.equal(Number(row.seq), i + 1));
+              const chunks = rows.filter(row => row.kind === 'provider.chunk');
+              const metrics = JSON.parse(
+                rows.find(row => row.kind === 'performance.attempt')!.payload_json
+              );
+              const snapshot = await w.c.snapshot(owner, created.thread.id);
+              const answer = snapshot.messages.find(message => message.role === 'assistant');
+              const committedText = answer?.blocks
+                .filter(block => block.kind === 'text')
+                .map(block => block.text)
+                .join('');
+              assert.equal(committedText?.length, 40 * 60);
+              results.push({
+                coalesceMs,
+                coalesceChars,
+                durationMs,
+                firstDurableTextMs: metrics.first.durableText,
+                textCommits: metrics.spans['text.commit'].count,
+                rawChunks: chunks.length,
+                committedCharacters: committedText!.length
+              });
+            }
+          }
+          assert.ok(results.every(result => result.rawChunks === 40));
+          if (process.env.CHAT_COALESCING_EVAL === '1') {
+            const median = (values: number[]) =>
+              [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
+            const summary = settings.map(({ coalesceMs, coalesceChars }) => {
+              const selected = results.filter(
+                result => result.coalesceMs === coalesceMs && result.coalesceChars === coalesceChars
+              );
+              return {
+                coalesceMs,
+                coalesceChars,
+                durationMedianMs: median(selected.map(result => result.durationMs)),
+                firstDurableTextMedianMs: median(selected.map(result => result.firstDurableTextMs)),
+                textCommitMedian: median(selected.map(result => result.textCommits)),
+                allRawChunksRetained: selected.every(result => result.rawChunks === 40),
+                allTextCommitted: selected.every(result => result.committedCharacters === 2400)
+              };
+            });
+            process.stdout.write(
+              'CHAT_COALESCING_RESULTS ' + JSON.stringify({ adapter: w.db.dialect, summary }) + '\n'
+            );
+          }
+        })
+    );
+
+    it('evaluation repository search resolves a dependent focused file range', () =>
+      world(adapter, async w => {
+        const calls: string[] = [];
+        const gateway = new ChatToolGateway({
+          db: w.db,
+          readRepository: async ({ request }) => {
+            calls.push(request.operation);
+            assert.ok(['search_text', 'read_file'].includes(request.operation));
+            return {
+              operationId: request.operationId,
+              operation: request.operation,
+              binding: {
+                executionTargetId: request.executionTargetId,
+                projectId: request.projectId,
+                resourceKey: request.resourceKey
+              },
+              outcome: 'ok',
+              head: 'abc1234def',
+              branch: 'main',
+              observedAt: new Date().toISOString(),
+              bytes: 60,
+              truncated: false,
+              data:
+                request.operation === 'search_text'
+                  ? {
+                      query: 'queueWrite',
+                      caseSensitive: true,
+                      hits: [
+                        { path: 'src/sync.ts', line: 42, text: 'export function queueWrite() {}' }
+                      ]
+                    }
+                  : {
+                      relativePath: 'src/sync.ts',
+                      totalBytes: 120,
+                      totalLines: 100,
+                      startLine: 40,
+                      endLine: 45,
+                      content: 'export function queueWrite() {}'
+                    }
+            };
+          }
+        });
+        await start(w, 'Find queueWrite and explain its implementation with citations.');
+        const client = new ScriptedGemini([
+          () => [
+            call(
+              'repository_read',
+              { ...repoArgs, operation: 'search_text', query: 'queueWrite', relativePath: 'src' },
+              'find',
+              'sig-search'
+            )
+          ],
+          request => {
+            assert.match(JSON.stringify(request.contents), /src\/sync.ts/);
+            return [
+              call(
+                'repository_read',
+                {
+                  ...repoArgs,
+                  operation: 'read_file',
+                  relativePath: 'src/sync.ts',
+                  startLine: 40,
+                  endLine: 45
+                },
+                'read',
+                'sig-read'
+              )
+            ];
+          },
+          () => [text('queueWrite is defined in src/sync.ts at line 42 [E1, E2].')]
+        ]);
+        const rt = runtime(w, client, { gateway });
+        await rt.execute(await claim(w, rt), w.runs, new AbortController().signal);
+        assert.deepEqual(calls, ['search_text', 'read_file']);
+        assert.equal(client.requests.length, 3);
+        const last = JSON.stringify(client.requests.at(-1)!.contents);
+        assert.match(last, /sig-search/);
+        assert.match(last, /sig-read/);
+      }));
+
+    it('a batched research turn runs at most four reads at once and joins out-of-order completions in call order', () =>
+      world(adapter, async w => {
+        const ids = ['r0', 'r1', 'r2', 'r3', 'r4'];
+        const release = new Map<string, () => void>();
+        const started: string[] = [];
+        const finished: string[] = [];
+        let inFlight = 0;
+        let maxInFlight = 0;
+        const result = (
+          request: Parameters<ChatRepositoryReader>[0]['request'],
+          path: string
+        ): RepositoryReadResult => ({
+          operationId: request.operationId,
+          operation: request.operation,
+          binding: {
+            executionTargetId: request.executionTargetId,
+            projectId: request.projectId,
+            resourceKey: request.resourceKey
+          },
+          outcome: 'ok',
+          head: 'abc1234def',
+          branch: 'main',
+          observedAt: new Date().toISOString(),
+          bytes: 20,
+          truncated: false,
+          data: {
+            relativePath: path,
+            totalBytes: 20,
+            totalLines: 200,
+            startLine: 10,
+            endLine: 20,
+            content: `body of ${path}`
+          }
+        });
+        const gateway = new ChatToolGateway({
+          db: w.db,
+          readRepository: async ({ request }) => {
+            const path = (request as { relativePath: string }).relativePath;
+            started.push(path);
+            inFlight++;
+            maxInFlight = Math.max(maxInFlight, inFlight);
+            await new Promise<void>(resolve => release.set(path, resolve));
+            inFlight--;
+            finished.push(path);
+            return result(request, path);
+          }
+        });
+        // Completes reads newest-first whenever the pool is full or drained.
+        const pump = setInterval(() => {
+          const waiting = started.filter(p => !finished.includes(p) && release.has(p));
+          if (waiting.length && (waiting.length === 4 || started.length === ids.length))
+            release.get(waiting.at(-1)!)!();
+        }, 1);
+        await start(w, 'Read the five sync modules around their retry code.');
+        const client = new ScriptedGemini([
+          () =>
+            ids.map((id, i) =>
+              call(
+                'repository_read',
+                {
+                  ...repoArgs,
+                  operation: 'read_file',
+                  relativePath: `src/sync/m${i}.ts`,
+                  startLine: 10,
+                  endLine: 20
+                },
+                id,
+                i === 0 ? 'sig-batch' : undefined
+              )
+            ),
+          () => [text('All five modules retry [E1] [E5].')]
+        ]);
+        const rt = runtime(w, client, { gateway });
+        try {
+          await rt.execute(await claim(w, rt), w.runs, new AbortController().signal);
+        } finally {
+          clearInterval(pump);
+        }
+        assert.equal(maxInFlight, 4, 'the fifth read waits for a slot');
+        assert.notDeepEqual(finished, started, 'reads completed out of call order');
+        assert.equal(client.requests.length, 2, 'one provider round for the whole batch');
+        const joined = client.requests[1]!.contents;
+        assert.deepEqual(
+          joined.at(-1)!.parts.map(p => p.functionResponse!.id),
+          ids
+        );
+        joined
+          .at(-1)!
+          .parts.forEach((p, i) =>
+            assert.match(json(p.functionResponse!.response), new RegExp(`body of src/sync/m${i}`))
+          );
+        assert.equal(joined.at(-2)!.parts[0]!.thoughtSignature, 'sig-batch');
+        const rows = await w.db.all<{ call_order: number; executions: number; state: string }>(
+          'SELECT call_order, executions, state FROM chat_tool_calls ORDER BY turn_index, call_order'
+        );
+        assert.deepEqual(
+          rows.map(r => [Number(r.call_order), Number(r.executions), r.state]),
+          ids.map((_, i) => [i, 1, 'completed'])
+        );
+      }));
+
+    it('cancelling a batched turn while its reads are in flight joins nothing and sends no further request', () =>
+      world(adapter, async w => {
+        let started = 0;
+        const gateway = new ChatToolGateway({
+          db: w.db,
+          readRepository: ({ signal }) => {
+            started++;
+            return new Promise((_, reject) =>
+              signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+            );
+          }
+        });
+        const created = await start(w);
+        const client = new ScriptedGemini([
+          () =>
+            [0, 1, 2, 3, 4].map(i =>
+              call(
+                'repository_read',
+                { ...repoArgs, operation: 'read_file', relativePath: `src/f${i}.ts` },
+                `c${i}`
+              )
+            ),
+          () => [text('never')]
+        ]);
+        const rt = runtime(w, client, { gateway });
+        const a = await claim(w, rt);
+        const controller = new AbortController();
+        const cancelling = hook(w.runs, 'requestTools', () => {
+          const waitForReads = setInterval(() => {
+            if (started < 4) return;
+            clearInterval(waitForReads);
+            void w.c.cancel(owner, a.runId, 'cancel-batch').then(() => controller.abort());
+          }, 1);
+        });
+        await rt.execute(a, cancelling, controller.signal).catch(e => {
+          if (!(e instanceof StaleChatAttempt)) throw e;
+        });
+        const snap = await w.c.snapshot(owner, created.thread.id);
+        assert.equal(snap.latestRun?.state, 'cancelled');
+        assert.equal(client.requests.length, 1);
+        assert.equal(started, 4, 'the queued fifth read never starts');
+        const joins = await w.db.all(
+          "SELECT phase FROM chat_provider_checkpoints WHERE phase = 'tool_results_joined'"
+        );
+        assert.equal(joins.length, 0);
+        const executions = await w.db.all<{ executions: number }>(
+          'SELECT executions FROM chat_tool_calls'
+        );
+        assert.ok(executions.every(r => Number(r.executions) <= 1));
+      }));
+
+    it('evaluation long conversation exercises the latest message page and summary cost', () =>
+      world(adapter, async w => {
+        const client = new ScriptedGemini(
+          [() => [text('Continue from the conversation.')]],
+          json({ text: 'Prior conversation', decisions: [], openQuestions: [], evidenceRefs: [] })
+        );
+        const rt = runtime(w, client, { summaryEveryMessages: 8 });
+        const created = await start(w, 'Long conversation seed');
+        // Seed 108 durable messages without provider calls. Setup is excluded from runtime timing.
+        for (let i = 0; i < 54; i++) {
+          if (i)
+            await w.c.submit(owner, created.thread.id, {
+              clientRequestId: randomUUID(),
+              text: `Turn ${i}: ${'Earlier context. '.repeat(80)}`
+            });
+          const a = await claim(w, rt);
+          await w.runs.text(a, `Answer ${i}: ${'Known decision. '.repeat(80)}`);
+          await w.runs.complete(a, 'answered');
+        }
+        await w.c.submit(owner, created.thread.id, {
+          clientRequestId: randomUUID(),
+          text: 'Continue.'
+        });
+        await rt.execute(await claim(w, rt), w.runs, new AbortController().signal);
+        assert.ok(JSON.stringify(client.requests[0]!.contents).length > 100_000);
+        assert.equal(client.generated.length, 1);
+        assert.equal((await w.c.snapshot(owner, created.thread.id)).latestRun!.state, 'completed');
+      }));
+
+    it('replaces summary-covered messages with the summary, keeping the trigger and recent turns', () =>
+      world(adapter, async w => {
+        const summary = {
+          text: 'SUMMARY-OF-OLD',
+          decisions: [],
+          openQuestions: [],
+          evidenceRefs: []
+        };
+        const created = await seedThread(w, 6, { 4: summary });
+        await w.c.submit(owner, created.thread.id, { clientRequestId: 'next', text: 'Next step?' });
+        const client = new ScriptedGemini([() => [text('Here is the next step.')]]);
+        const rt = runtime(w, client);
+        const a = await claim(w, rt);
+        const input = await w.runs.input(a);
+        assert.equal(input.messages.length, 13);
+        assert.equal(input.summaryCoveredCount, 10, 'the boundary is the fifth answer');
+        await rt.execute(a, w.runs, new AbortController().signal);
+        const sent = json(client.requests[0]!.contents);
+        assert.match(sent, /Summary of the earlier conversation it replaces[\s\S]*SUMMARY-OF-OLD/);
+        // The four most recent messages stay verbatim even though one is covered.
+        for (const kept of ['Answer 4:', 'Turn 5:', 'Answer 5:', 'Next step?'])
+          assert.ok(sent.includes(kept), kept);
+        for (const dropped of ['Seed 0', 'Answer 0:', 'Turn 3:', 'Answer 3:'])
+          assert.ok(!sent.includes(dropped), dropped);
+        assert.equal((await w.c.snapshot(owner, created.thread.id)).latestRun!.state, 'completed');
+      }));
+
+    it('resolves summary coverage beyond the latest message page and validates the boundary', () =>
+      world(adapter, async w => {
+        const summary = {
+          text: 'EARLY-SUMMARY',
+          decisions: [],
+          openQuestions: [],
+          evidenceRefs: []
+        };
+        const created = await seedThread(w, 54, { 2: summary });
+        await w.c.submit(owner, created.thread.id, { clientRequestId: 'go', text: 'Go on.' });
+        const client = new ScriptedGemini([() => [text('Continuing.')]]);
+        const rt = runtime(w, client);
+        const a = await claim(w, rt);
+        // The boundary (the third answer) is older than the latest 100 messages: none covered.
+        let input = await w.runs.input(a);
+        assert.equal(input.messages.length, 100);
+        assert.ok(input.summaryCoversMessageId, 'the out-of-page boundary still resolves');
+        assert.equal(input.summaryCoveredCount, 0);
+        const all = await w.db.all<{ id: string }>(
+          'SELECT id FROM chat_messages WHERE thread_id = ? ORDER BY created_at, id',
+          [created.thread.id]
+        );
+        assert.equal(all.length, 109);
+        // A later boundary inside the page, which starts at thread message 9, covers 93.
+        await w.runs.summarize(a, { ...summary, text: 'LATER-SUMMARY' }, all[101]!.id);
+        input = await w.runs.input(a);
+        assert.equal(input.summary!.text, 'LATER-SUMMARY');
+        assert.equal(input.summaryCoveredCount, 93);
+        // Coverage never moves backwards and never names another thread's message.
+        await assert.rejects(
+          w.runs.summarize(a, summary, all[5]!.id),
+          (e: unknown) => e instanceof ChatError && e.code === 'invalid_request'
+        );
+        await assert.rejects(
+          w.runs.summarize(a, summary, 'not-a-message'),
+          (e: unknown) => e instanceof ChatError && e.code === 'invalid_request'
+        );
+        await rt.execute(a, w.runs, new AbortController().signal);
+        const sent = json(client.requests[0]!.contents);
+        assert.match(sent, /LATER-SUMMARY/);
+        assert.ok(sent.includes('Turn 51:') && sent.includes('Go on.'));
+        assert.ok(!sent.includes('Answer 50:') && !sent.includes('Turn 49:'));
+        // An invalidated summary covers nothing: the whole authorized page is sent again.
+        await w.db.run('UPDATE chat_thread_summaries SET invalidated_at = ?', [
+          new Date().toISOString()
+        ]);
+        await w.c.submit(owner, created.thread.id, { clientRequestId: 'again', text: 'Again.' });
+        const fallback = new ScriptedGemini([() => [text('Again.')]]);
+        const rt2 = runtime(w, fallback);
+        const b = await claim(w, rt2);
+        input = await w.runs.input(b);
+        assert.equal(input.summary, null);
+        assert.equal(input.summaryCoveredCount, 0);
+        await rt2.execute(b, w.runs, new AbortController().signal);
+        const resent = json(fallback.requests[0]!.contents);
+        assert.ok(resent.includes('Answer 50:') && !resent.includes('LATER-SUMMARY'));
+      }));
+
+    it('checkpoint recovery in a summarized thread keeps the compacted prefix and the signed turn', () =>
+      world(adapter, async w => {
+        const summary = { text: 'SUMMARY-X', decisions: [], openQuestions: [], evidenceRefs: [] };
+        const created = await seedThread(w, 6, { 5: summary });
+        await w.c.submit(owner, created.thread.id, {
+          clientRequestId: 'r',
+          text: 'Read the note.'
+        });
+        const first = new ScriptedGemini([() => [call(KB_TOOL, kbArgs, 'call-1', 'sig-A')]]);
+        const rt1 = runtime(w, first);
+        await assert.rejects(
+          rt1.execute(
+            await claim(w, rt1),
+            crashAfter(w.runs, 'requestTools'),
+            new AbortController().signal
+          ),
+          Crash
+        );
+        w.advance(31_000);
+        const second = new ScriptedGemini([() => [text('The note says to queue writes [E1].')]]);
+        const rt2 = runtime(w, second);
+        const a2 = await claim(w, rt2);
+        assert.equal(a2.recoveryMode, 'checkpoint');
+        await rt2.execute(a2, w.runs, new AbortController().signal);
+        assert.equal(w.kbCalls.length, 1);
+        const before = first.requests[0]!.contents;
+        const after = second.requests[0]!.contents;
+        // Same summary-compacted prefix, then this run's signed call turn verbatim and its join.
+        assert.deepEqual(after.slice(0, before.length), before);
+        assert.match(json(before), /SUMMARY-X/);
+        assert.ok(!json(before).includes('Turn 3:'));
+        const signed = after[before.length]!;
+        assert.equal(signed.role, 'model');
+        assert.equal(signed.parts[0]!.thoughtSignature, 'sig-A');
+        assert.equal(after[before.length + 1]!.parts[0]!.functionResponse?.id, 'call-1');
+        assert.equal((await w.c.snapshot(owner, created.thread.id)).latestRun!.state, 'completed');
+      }));
+
+    it('a revoked summary source falls back to authorized messages with withheld markers', () =>
+      world(adapter, async w => {
+        const created = await start(w);
+        const rt1 = runtime(
+          w,
+          new ScriptedGemini(
+            [
+              () => [call(KB_TOOL, kbArgs, 'c1', 'sig')],
+              () => [text(`The note says ${KB_SECRET} [E1].`)]
+            ],
+            json({
+              text: `Summary ${KB_SECRET}`,
+              decisions: [],
+              openQuestions: [],
+              evidenceRefs: ['E1']
+            })
+          ),
+          { summaryEveryMessages: 1 }
+        );
+        await rt1.execute(await claim(w, rt1), w.runs, new AbortController().signal);
+        assert.ok(await w.db.get('SELECT id FROM chat_thread_summaries'));
+        w.revoked.add(NODE);
+        await w.c.submit(owner, created.thread.id, { clientRequestId: 'q2', text: 'And now?' });
+        const client = new ScriptedGemini([() => [text('Without the note.')]]);
+        const rt = runtime(w, client);
+        const a = await claim(w, rt);
+        const input = await w.runs.input(a);
+        assert.equal(input.summary, null, 'a summary depending on a revoked source is unusable');
+        await rt.execute(a, w.runs, new AbortController().signal);
+        const sent = json(client.requests[0]!.contents);
+        assert.doesNotMatch(sent, new RegExp(KB_SECRET));
+        assert.match(sent, /What would offline support require\?/);
+        assert.match(sent, /withheld: source access was lost/);
+      }));
+
+    it('summary generation uses its own bounded instruction over uncovered messages only', () =>
+      world(adapter, async w => {
+        const summary = {
+          text: 'PRIOR-SUMMARY',
+          decisions: [],
+          openQuestions: [],
+          evidenceRefs: []
+        };
+        const created = await seedThread(w, 3, { 1: summary });
+        await w.c.submit(owner, created.thread.id, { clientRequestId: 'n', text: 'Wrap up.' });
+        const client = new ScriptedGemini(
+          [() => [text('FINAL-ANSWER')]],
+          json({ text: 'NEW-SUMMARY', decisions: ['d'], openQuestions: [], evidenceRefs: [] })
+        );
+        const rt = runtime(w, client, { summaryEveryMessages: 2 });
+        await rt.execute(await claim(w, rt), w.runs, new AbortController().signal);
+        assert.equal(client.generated.length, 1);
+        const request = client.generated[0]!;
+        assert.notEqual(request.config.systemInstruction, geminiRuntimeInternals.SYSTEM_PROMPT);
+        assert.match(String(request.config.systemInstruction), /untrusted data/);
+        assert.equal(request.config.maxOutputTokens, 2048);
+        assert.equal(request.config.tools, undefined);
+        const transcript = json(request.contents);
+        assert.match(transcript, /Previous summary[\s\S]*PRIOR-SUMMARY/);
+        for (const seen of ['Turn 2:', 'Answer 2:', 'Wrap up.', 'FINAL-ANSWER'])
+          assert.ok(transcript.includes(seen), seen);
+        for (const covered of ['Seed 0', 'Turn 1:', 'Answer 1:'])
+          assert.ok(!transcript.includes(covered), covered);
+        const rows = await w.db.all<{ summary_json: string; covers_through_message_id: string }>(
+          'SELECT summary_json, covers_through_message_id FROM chat_thread_summaries ORDER BY summary_revision'
+        );
+        assert.equal(rows.length, 2);
+        const last = await w.db.get<{ id: string }>(
+          'SELECT id FROM chat_messages ORDER BY created_at DESC, id DESC LIMIT 1'
+        );
+        assert.equal(
+          rows[1]!.covers_through_message_id,
+          last!.id,
+          'coverage ends at the answer read'
+        );
+        assert.match(rows[1]!.summary_json, /NEW-SUMMARY/);
+      }));
+
+    it('incomplete, invalid or oversized summaries never fail the run or replace the valid one', () =>
+      world(adapter, async w => {
+        const summary = {
+          text: 'VALID-SUMMARY',
+          decisions: [],
+          openQuestions: [],
+          evidenceRefs: []
+        };
+        const created = await seedThread(w, 2, { 0: summary });
+        const ok = json({ text: 'x', decisions: [], openQuestions: [], evidenceRefs: [] });
+        const cases: [string, string][] = [
+          [ok, 'MAX_TOKENS'],
+          ['{"text": "cut off', 'STOP'],
+          [
+            json({ text: 'y'.repeat(6001), decisions: [], openQuestions: [], evidenceRefs: [] }),
+            'STOP'
+          ],
+          [
+            json({ text: 'z', decisions: [], openQuestions: [], evidenceRefs: ['not-a-ref'] }),
+            'STOP'
+          ]
+        ];
+        for (const [i, [body, finish]] of cases.entries()) {
+          await w.c.submit(owner, created.thread.id, {
+            clientRequestId: `bad-${i}`,
+            text: `Q${i}`
+          });
+          const client = new ScriptedGemini([() => [text(`A${i}`)]], body, finish);
+          const rt = runtime(w, client, { summaryEveryMessages: 1 });
+          await rt.execute(await claim(w, rt), w.runs, new AbortController().signal);
+          assert.equal(client.generated.length, 1);
+          const snap = await w.c.snapshot(owner, created.thread.id);
+          assert.equal(snap.latestRun!.state, 'completed', `case ${i}`);
+        }
+        const rows = await w.db.all<{ summary_json: string }>(
+          'SELECT summary_json FROM chat_thread_summaries'
+        );
+        assert.equal(rows.length, 1);
+        assert.match(rows[0]!.summary_json, /VALID-SUMMARY/);
+        const errors = await w.db.all<{ payload_json: string }>(
+          "SELECT payload_json FROM chat_diagnostics WHERE kind = 'summary.error' ORDER BY seq"
+        );
+        assert.equal(errors.length, 4);
+        assert.match(errors[0]!.payload_json, /MAX_TOKENS/);
+      }));
+
+    it('a continued run keeps its summary-covered trigger message verbatim', () =>
+      world(
+        adapter,
+        async w => {
+          const created = await start(w, 'TRIGGER-QUESTION about offline sync');
+          const first = new ScriptedGemini(
+            [
+              () => [call(KB_TOOL, kbArgs, 'c1', 'sig')],
+              () => [text('PARTIAL-FINDINGS [E1]. Tap Continue.')]
+            ],
+            json({ text: 'Covered so far', decisions: [], openQuestions: [], evidenceRefs: [] })
+          );
+          const rt1 = runtime(w, first, { summaryEveryMessages: 1 });
+          await rt1.execute(await claim(w, rt1), w.runs, new AbortController().signal);
+          const snap = await w.c.snapshot(owner, created.thread.id);
+          assert.equal(snap.latestRun!.outcome, 'allowance_exhausted');
+          assert.ok(await w.db.get('SELECT id FROM chat_thread_summaries'));
+          await w.c.continue(owner, snap.latestRun!.id, 'continue-1');
+          const next = new ScriptedGemini([() => [text('Continued answer.')]]);
+          const rt2 = runtime(w, next, { recentVerbatimMessages: 0 });
+          const a = await claim(w, rt2);
+          assert.equal((await w.runs.input(a)).summaryCoveredCount, 2);
+          await rt2.execute(a, w.runs, new AbortController().signal);
+          const sent = json(next.requests[0]!.contents);
+          assert.match(sent, /Covered so far/);
+          assert.match(sent, /TRIGGER-QUESTION/);
+          assert.doesNotMatch(sent, /PARTIAL-FINDINGS/, 'the covered earlier answer is replaced');
+          assert.match(sent, /Continue the previous request/);
+        },
+        { toolCallsPerRun: 1 }
+      ));
+
+    it('stops gathering at the token budget with headroom and closes without tools', () =>
+      world(adapter, async w => {
+        const created = await start(w);
+        const limit = 131_072;
+        const client = new ScriptedGemini([
+          () => [call(KB_TOOL, kbArgs, 'c1', 'sig')],
+          () => [text('Closing with what I found [E1].')]
+        ]);
+        const reporting: GeminiClient = {
+          async stream(request) {
+            const inner = await client.stream(request);
+            return (async function* () {
+              yield* inner;
+              // The first exchange reports a prompt just under the budget.
+              yield { usageMetadata: { promptTokenCount: limit - 65_536 - 10 } };
+            })();
+          },
+          generate: request => client.generate(request)
+        };
+        const rt = runtime(w, reporting, { inputTokenLimit: limit });
+        await rt.execute(await claim(w, rt), w.runs, new AbortController().signal);
+        assert.equal(client.requests.length, 2);
+        assert.equal(client.requests[1]!.config.toolConfig?.functionCallingConfig.mode, 'NONE');
+        assert.match(json(client.requests[1]!.contents.at(-1)), /context limit/);
+        const snap = await w.c.snapshot(owner, created.thread.id);
+        assert.equal(snap.latestRun!.outcome, 'allowance_exhausted');
+        assert.equal(w.kbCalls.length, 1, 'the joined read is kept; no further tool turn ran');
+        const budget = await w.db.get<{ payload_json: string }>(
+          "SELECT payload_json FROM chat_diagnostics WHERE kind = 'context.budget'"
+        );
+        assert.equal(JSON.parse(budget!.payload_json).budgetTokens, 65_536);
+      }));
+
     it('Overlord reads are scoped to the owner and their sources revoke when access is lost', () =>
       world(adapter, async w => {
         const created = await start(w);
@@ -856,6 +1814,278 @@ import {
   conformanceAdapters,
   createConformanceDatabase
 } from '../test-helpers.ts';
+/**
+ * Scripted Gemini with explicit caches. A cached request must carry no prefix; one naming a
+ * cache that is not live is refused with 403 before any chunk, without consuming a turn.
+ */
+class CachingGemini extends ScriptedGemini {
+  readonly creates: GeminiCacheCreate[] = [];
+  readonly deletes: string[] = [];
+  readonly live = new Set<string>();
+  createGate: Promise<void> | null = null;
+  failCreate = false;
+  /** Reported promptTokenCount per streamed request, in order (absent: no usage). */
+  prompts: (number | undefined)[] = [];
+  async createCache(request: GeminiCacheCreate) {
+    this.creates.push(
+      structuredClone({ ...request, config: { ...request.config, abortSignal: undefined } })
+    );
+    if (this.createGate) await this.createGate;
+    if (this.failCreate) throw Object.assign(new Error('cache refused'), { status: 400 });
+    const name = `cachedContents/c${this.creates.length}`;
+    this.live.add(name);
+    return { name, usageMetadata: { totalTokenCount: 1234 } };
+  }
+  async deleteCache(name: string) {
+    this.deletes.push(name);
+    this.live.delete(name);
+  }
+  override async stream(request: GeminiRequest): Promise<AsyncIterable<GeminiChunk>> {
+    const name = request.config.cachedContent;
+    if (name) {
+      assert.equal(request.config.systemInstruction, undefined);
+      assert.equal(request.config.tools, undefined);
+      assert.equal(request.config.toolConfig, undefined);
+      if (!this.live.has(name)) {
+        this.requests.push(
+          structuredClone({ ...request, config: { ...request.config, abortSignal: undefined } })
+        );
+        throw Object.assign(new Error('CachedContent not found (or permission denied)'), {
+          status: 403
+        });
+      }
+    }
+    const prompt = this.prompts.shift();
+    const inner = await super.stream(request);
+    if (prompt === undefined) return inner;
+    return (async function* () {
+      for await (const chunk of inner) yield chunk;
+      yield { usageMetadata: { promptTokenCount: prompt } };
+    })();
+  }
+}
+const cachedName = (r: GeminiRequest) => r.config.cachedContent ?? null;
+
+for (const adapter of adapters)
+  describe(`Gemini static-prefix cache [${adapter}]`, () => {
+    const cachedRuntime = (
+      w: World,
+      client: CachingGemini,
+      cache = new GeminiStaticCache(client)
+    ) => runtime(w, client, { staticCache: cache });
+
+    it('cold: the first request goes inline while creation is captured; warm: later and next-run requests reference it', () =>
+      world(adapter, async w => {
+        const created = await start(w);
+        const client = new CachingGemini([
+          () => [call(KB_TOOL, kbArgs, 'c1', 'sig-1')],
+          () => [text('Queue writes locally [E1].')],
+          () => [text('Still queued [E1].')]
+        ]);
+        const cache = new GeminiStaticCache(client);
+        const rt = cachedRuntime(w, client, cache);
+        await rt.execute(await claim(w, rt), w.runs, new AbortController().signal);
+        assert.equal(client.creates.length, 1);
+        const create = client.creates[0]!;
+        // Exactly the inline prefix: instruction, declarations and AUTO; no conversation.
+        assert.equal(create.config.systemInstruction, client.requests[0]!.config.systemInstruction);
+        assert.deepEqual(create.config.tools, client.requests[0]!.config.tools);
+        assert.deepEqual(create.config.toolConfig, { functionCallingConfig: { mode: 'AUTO' } });
+        assert.equal(create.config.ttl, '600s');
+        assert.doesNotMatch(json(create), /What would offline|NOTE-SECRET|functionResponse/);
+        assert.deepEqual(client.requests.map(cachedName), [null, 'cachedContents/c1']);
+        // The cached request carries the same conversation as an inline one would.
+        assert.equal(client.requests[1]!.contents.at(-1)!.parts[0]!.functionResponse!.id, 'c1');
+        assert.equal(w.kbCalls.length, 1);
+        const page = await w.c.diagnostics(owner, created.thread.id, 0);
+        const kinds = page.entries.map(e => e.kind);
+        assert.ok(kinds.includes('provider.cache_create'));
+        const cachedRequest = page.entries.find(
+          e => e.kind === 'provider.request' && json(e.payload).includes('staticCache')
+        )!;
+        const effective = (cachedRequest.payload as { staticCache: Record<string, unknown> })
+          .staticCache;
+        assert.equal(effective.name, 'cachedContents/c1');
+        assert.equal(effective.systemInstruction, create.config.systemInstruction);
+        assert.deepEqual(effective.tools, create.config.tools);
+        const perf = page.entries.find(e => e.kind === 'performance.attempt')!.payload as {
+          staticCache: { requests: number; fallbacks: number };
+        };
+        assert.deepEqual(perf.staticCache, { requests: 1, fallbacks: 0 });
+        // Ordinary snapshots and events never carry the cache name.
+        const snap = await w.c.snapshot(owner, created.thread.id);
+        const events = await w.c.events(owner, created.thread.id, 0);
+        assert.doesNotMatch(json({ snap, events }), /cachedContents|staticCache/);
+        const checkpoints = await w.db.all<{ payload_json: string }>(
+          'SELECT payload_json FROM chat_provider_checkpoints'
+        );
+        assert.doesNotMatch(json(checkpoints), /cachedContents/);
+        // A later run of the same owner and manifest is warm from its first request.
+        await w.c.submit(owner, created.thread.id, { clientRequestId: 'again', text: 'And now?' });
+        const rt2 = cachedRuntime(w, client, cache);
+        await rt2.execute(await claim(w, rt2), w.runs, new AbortController().signal);
+        assert.equal(cachedName(client.requests[2]!), 'cachedContents/c1');
+        assert.equal(client.creates.length, 1);
+      }));
+
+    it('an expired cache is refused before any chunk and resent inline once, without repeating tools', () =>
+      world(adapter, async w => {
+        const created = await start(w);
+        const client = new CachingGemini([
+          () => [call(KB_TOOL, kbArgs, 'c1', 'sig-1')],
+          () => [call('repository_read', repoArgs, 'c2')],
+          () => [text('Done [E1] [E2].')]
+        ]);
+        const rt = cachedRuntime(w, client);
+        const expire = hook(w.runs, 'joinTools', () => client.live.clear());
+        await rt.execute(await claim(w, rt), expire, new AbortController().signal);
+        // inline (creates), cached refused 403, identical inline resend, then inline again
+        // (the refused entry is dropped and its replacement is created alongside).
+        assert.deepEqual(client.requests.map(cachedName), [null, 'cachedContents/c1', null, null]);
+        assert.deepEqual(client.requests[1]!.contents, client.requests[2]!.contents);
+        assert.equal(w.kbCalls.length, 1);
+        assert.equal(w.repoCalls.length, 1);
+        const snap = await w.c.snapshot(owner, created.thread.id);
+        assert.equal(snap.latestRun?.outcome, 'answered');
+        const page = await w.c.diagnostics(owner, created.thread.id, 0);
+        const fallback = page.entries.filter(e => e.kind === 'provider.cache_fallback');
+        assert.equal(fallback.length, 1);
+        assert.match(json(fallback[0]!.payload), /"status":403/);
+        assert.equal(page.entries.filter(e => e.kind === 'provider.error').length, 1);
+        assert.equal(client.creates.length, 2);
+      }));
+
+    it('large prompts, closing requests and changed manifests stay inline', () =>
+      world(
+        adapter,
+        async w => {
+          await start(w, 'Mission status');
+          const client = new CachingGemini([
+            () => [call('expand_capabilities', { families: ['all'] })],
+            () => [call(KB_TOOL, kbArgs, 'c1')],
+            () => [call(KB_TOOL, kbArgs, 'c2'), call(KB_TOOL, kbArgs, 'c3')],
+            () => [text('Summary [E1].')]
+          ]);
+          client.prompts = [5_000, 20_000, 30_000];
+          const rt = cachedRuntime(w, client);
+          await rt.execute(await claim(w, rt), w.runs, new AbortController().signal);
+          // Request 1 creates the status-manifest cache; expansion changes the declarations,
+          // so request 2 needs a different key (inline, creating it). Request 3 follows a
+          // 20,000-token prompt and stays inline; the closing NONE request is always inline.
+          assert.deepEqual(client.requests.map(cachedName), [null, null, null, null]);
+          assert.equal(client.creates.length, 2);
+          assert.notDeepEqual(client.creates[0]!.config.tools, client.creates[1]!.config.tools);
+          assert.equal(client.requests[3]!.config.toolConfig?.functionCallingConfig.mode, 'NONE');
+        },
+        { toolCallsPerRun: 3 }
+      ));
+
+    it('a failed creation is captured once and the key stays inline for its TTL', () =>
+      world(adapter, async w => {
+        const created = await start(w);
+        const client = new CachingGemini([
+          () => [call(KB_TOOL, kbArgs, 'c1')],
+          () => [text('Done [E1].')]
+        ]);
+        client.failCreate = true;
+        const rt = cachedRuntime(w, client);
+        await rt.execute(await claim(w, rt), w.runs, new AbortController().signal);
+        assert.deepEqual(client.requests.map(cachedName), [null, null]);
+        assert.equal(client.creates.length, 1);
+        const page = await w.c.diagnostics(owner, created.thread.id, 0);
+        const create = page.entries.filter(e => e.kind === 'provider.cache_create');
+        assert.equal(create.length, 1);
+        assert.match(json(create[0]!.payload), /cache refused/);
+        assert.equal((await w.c.snapshot(owner, created.thread.id)).latestRun?.outcome, 'answered');
+      }));
+
+    it('cancellation waits for in-flight creation capture; recovery reuses the cache without re-running tools', () =>
+      world(adapter, async w => {
+        const created = await start(w);
+        const client = new CachingGemini([() => [call(KB_TOOL, kbArgs, 'c1', 'sig-1')]]);
+        let release!: () => void;
+        client.createGate = new Promise<void>(r => (release = r));
+        const cache = new GeminiStaticCache(client);
+        const rt = cachedRuntime(w, client, cache);
+        const a = await claim(w, rt);
+        const controller = new AbortController();
+        const cancelling = hook(w.runs, 'requestTools', () => {
+          void w.c.cancel(owner, a.runId, 'cancel-1').then(() => {
+            controller.abort();
+            setTimeout(release, 20);
+          });
+        });
+        let settled = false;
+        await rt
+          .execute(a, cancelling, controller.signal)
+          .catch(e => {
+            if (!(e instanceof StaleChatAttempt)) throw e;
+          })
+          .finally(() => (settled = true));
+        assert.ok(settled);
+        assert.equal(client.requests.length, 1);
+        const page = await w.c.diagnostics(owner, created.thread.id, 0);
+        assert.match(
+          json(page.entries.filter(e => e.kind === 'provider.cache_create')),
+          /cachedContents\/c1/
+        );
+        assert.equal((await w.c.snapshot(owner, created.thread.id)).latestRun?.state, 'cancelled');
+
+        // Crash after the signed turn is checkpointed, then resume through the warm cache.
+        await w.c.submit(owner, created.thread.id, { clientRequestId: 'again', text: 'Retry.' });
+        const first = new CachingGemini([() => [call(KB_TOOL, kbArgs, 'c2', 'sig-2')]]);
+        first.live.add('cachedContents/c1');
+        const shared = cachedRuntime(w, first, cache);
+        await assert.rejects(
+          shared.execute(
+            await claim(w, shared),
+            crashAfter(w.runs, 'requestTools'),
+            new AbortController().signal
+          ),
+          Crash
+        );
+        assert.equal(cachedName(first.requests[0]!), 'cachedContents/c1');
+        w.advance(31_000);
+        const second = new CachingGemini([() => [text('Recovered [E1].')]]);
+        second.live.add('cachedContents/c1');
+        const resumed = cachedRuntime(w, second, cache);
+        const a2 = await claim(w, resumed);
+        assert.equal(a2.recoveryMode, 'checkpoint');
+        await resumed.execute(a2, w.runs, new AbortController().signal);
+        assert.equal(cachedName(second.requests[0]!), 'cachedContents/c1');
+        // The signed call kept its signature and ran exactly once.
+        const turn = second.requests[0]!.contents.at(-2)!;
+        assert.equal(turn.parts.find(p => p.functionCall)?.thoughtSignature, 'sig-2');
+        assert.equal(w.kbCalls.length, 1);
+      }));
+
+    it('owners never share a cache, even for identical manifests', () =>
+      world(adapter, async w => {
+        const client = new CachingGemini([]);
+        const cache = new GeminiStaticCache(client);
+        const prefix = {
+          systemInstruction: 'x',
+          tools: [{ functionDeclarations: [] }],
+          toolConfig: { functionCallingConfig: { mode: 'AUTO' as const } }
+        };
+        const noop = async () => undefined;
+        const mine = cache.use(owner, 'm', prefix, noop);
+        await mine.creation;
+        const theirs = cache.use(
+          { profileId: 'stranger', organizationId: 'org' },
+          'm',
+          prefix,
+          noop
+        );
+        assert.notEqual(mine.key, theirs.key);
+        assert.equal(theirs.name, null);
+        assert.ok(theirs.creation);
+        await theirs.creation;
+        assert.equal(cache.use(owner, 'm', prefix, noop).name, 'cachedContents/c1');
+        void w;
+      }));
+  });
+
 for (const adapter of adapters)
   describe(`Gemini proposal preparation [${adapter}]`, () => {
     it('checkpointed preparation publishes a card, resumes after worker death without duplication, and never creates work', () =>

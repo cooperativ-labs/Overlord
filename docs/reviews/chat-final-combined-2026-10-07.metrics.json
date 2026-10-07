@@ -1,0 +1,3702 @@
+{
+  "version": 1,
+  "ratesUsdPerMillionTokens": {
+    "input": 0.75,
+    "cached": 0.075,
+    "outputIncludingThought": 3.75,
+    "storagePerHour": 0.5
+  },
+  "ratesSource": "https://ai.google.dev/gemini-api/docs/pricing",
+  "ratesCheckedAt": "2026-10-07",
+  "costMethod": "Conditional rate model, not billed cost: absent cached field gets no discount; all other buckets must cover every completed exchange and attempts must equal completed exchanges. Full 600s storage for every creation, zero-to-full-input-rate creation sensitivity. allInputCachedFloor is a loose missing-cache sensitivity bound. No overlapping experiment percentages are added.",
+  "groups": {
+    "repository-research/baseline": {
+      "runs": 3,
+      "completed": 3,
+      "errors": 0,
+      "quality": {
+        "allFacts": 3,
+        "factsMatched": 12,
+        "factsTotal": 12,
+        "resolvingCitations": 3
+      },
+      "wallMs": {
+        "n": 3,
+        "min": 36123.72108300001,
+        "median": 36341.022458,
+        "p95": 38513.324333,
+        "max": 38513.324333,
+        "mean": 36992.689291333336,
+        "sd": 1078.9047438189798
+      },
+      "requests": {
+        "n": 3,
+        "min": 7,
+        "median": 7,
+        "p95": 8,
+        "max": 8,
+        "mean": 7.333333333333333,
+        "sd": 0.4714045207910317
+      },
+      "rounds": {
+        "n": 3,
+        "min": 7,
+        "median": 7,
+        "p95": 8,
+        "max": 8,
+        "mean": 7.333333333333333,
+        "sd": 0.4714045207910317
+      },
+      "firstMs": {
+        "sdkChunk": {
+          "n": 3,
+          "min": 3853.931125000003,
+          "median": 4938.028875000018,
+          "p95": 5038.743167,
+          "max": 5038.743167,
+          "mean": 4610.2343890000075,
+          "sd": 536.3654304707188
+        },
+        "nonThoughtText": {
+          "n": 3,
+          "min": 30560.751500000013,
+          "median": 32699.661959,
+          "p95": 34533.577583000006,
+          "max": 34533.577583000006,
+          "mean": 32597.997014000008,
+          "sd": 1623.4918318699472
+        },
+        "durableText": {
+          "n": 3,
+          "min": 30563.309874999977,
+          "median": 32712.220624999998,
+          "p95": 34544.02337499999,
+          "max": 34544.02337499999,
+          "mean": 32606.517958333323,
+          "sd": 1626.8373781821633
+        }
+      },
+      "tokens": {
+        "promptTokenCount": {
+          "n": 3,
+          "min": 45435,
+          "median": 46896,
+          "p95": 51885,
+          "max": 51885,
+          "mean": 48072,
+          "sd": 2761.3833489756544
+        },
+        "cachedContentTokenCount": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p95": null,
+          "max": null,
+          "mean": null,
+          "sd": null
+        },
+        "candidatesTokenCount": {
+          "n": 3,
+          "min": 829,
+          "median": 1029,
+          "p95": 1100,
+          "max": 1100,
+          "mean": 986,
+          "sd": 114.73738129601297
+        },
+        "thoughtsTokenCount": {
+          "n": 3,
+          "min": 1251,
+          "median": 1481,
+          "p95": 1487,
+          "max": 1487,
+          "mean": 1406.3333333333333,
+          "sd": 109.86456308665784
+        }
+      },
+      "observedTokenSums": {
+        "promptTokenCount": 144216,
+        "cachedContentTokenCount": 0,
+        "candidatesTokenCount": 2958,
+        "thoughtsTokenCount": 4219
+      },
+      "usageCoverage": {
+        "completedRounds": 22,
+        "reportedExchanges": 22,
+        "buckets": {
+          "promptTokenCount": 22,
+          "cachedContentTokenCount": 0,
+          "candidatesTokenCount": 22,
+          "thoughtsTokenCount": 22
+        }
+      },
+      "cache": {
+        "requests": 0,
+        "fallbacks": 0,
+        "created": 0,
+        "failures": 0
+      },
+      "modeledUsdPerRun": {
+        "reportedDiscountInput": {
+          "n": 3,
+          "min": 0.03407625,
+          "median": 0.035172,
+          "p95": 0.03891375,
+          "max": 0.03891375,
+          "mean": 0.036054,
+          "sd": 0.0020710375117317385
+        },
+        "output": {
+          "n": 3,
+          "min": 0.00855,
+          "median": 0.008685,
+          "p95": 0.00967875,
+          "max": 0.00967875,
+          "mean": 0.00897125,
+          "sd": 0.0005033047039319222
+        },
+        "storage": {
+          "n": 3,
+          "min": 0,
+          "median": 0,
+          "p95": 0,
+          "max": 0,
+          "mean": 0,
+          "sd": 0
+        },
+        "creationUpper": {
+          "n": 3,
+          "min": 0,
+          "median": 0,
+          "p95": 0,
+          "max": 0,
+          "mean": 0,
+          "sd": 0
+        },
+        "noCreation": {
+          "n": 3,
+          "min": 0.04276125,
+          "median": 0.04485075,
+          "p95": 0.04746375,
+          "max": 0.04746375,
+          "mean": 0.045025249999999996,
+          "sd": 0.001923748814164676
+        },
+        "fullRateCreation": {
+          "n": 3,
+          "min": 0.04276125,
+          "median": 0.04485075,
+          "p95": 0.04746375,
+          "max": 0.04746375,
+          "mean": 0.045025249999999996,
+          "sd": 0.001923748814164676
+        },
+        "allInputCachedFloor": {
+          "n": 3,
+          "min": 0.012092625,
+          "median": 0.012441375000000001,
+          "p95": 0.01319595,
+          "max": 0.01319595,
+          "mean": 0.01257665,
+          "sd": 0.00046047512283509963
+        }
+      }
+    },
+    "repository-research/current": {
+      "runs": 3,
+      "completed": 3,
+      "errors": 0,
+      "quality": {
+        "allFacts": 3,
+        "factsMatched": 12,
+        "factsTotal": 12,
+        "resolvingCitations": 3
+      },
+      "wallMs": {
+        "n": 3,
+        "min": 35369.490332999994,
+        "median": 42225.78591699997,
+        "p95": 43538.24045900002,
+        "max": 43538.24045900002,
+        "mean": 40377.838902999996,
+        "sd": 3581.740803963899
+      },
+      "requests": {
+        "n": 3,
+        "min": 6,
+        "median": 8,
+        "p95": 8,
+        "max": 8,
+        "mean": 7.333333333333333,
+        "sd": 0.9428090415820634
+      },
+      "rounds": {
+        "n": 3,
+        "min": 6,
+        "median": 8,
+        "p95": 8,
+        "max": 8,
+        "mean": 7.333333333333333,
+        "sd": 0.9428090415820634
+      },
+      "firstMs": {
+        "sdkChunk": {
+          "n": 3,
+          "min": 3484.128667000041,
+          "median": 3752.3201249999984,
+          "p95": 4899.2226660000015,
+          "max": 4899.2226660000015,
+          "mean": 4045.223819333347,
+          "sd": 613.7139328802509
+        },
+        "nonThoughtText": {
+          "n": 3,
+          "min": 31919.806624999997,
+          "median": 37663.07175,
+          "p95": 39039.79816599999,
+          "max": 39039.79816599999,
+          "mean": 36207.558847,
+          "sd": 3083.5540365058737
+        },
+        "durableText": {
+          "n": 3,
+          "min": 31922.532583000007,
+          "median": 37675.31920899998,
+          "p95": 39045.899875,
+          "max": 39045.899875,
+          "mean": 36214.583888999994,
+          "sd": 3086.087182880119
+        }
+      },
+      "tokens": {
+        "promptTokenCount": {
+          "n": 3,
+          "min": 30921,
+          "median": 40174,
+          "p95": 40196,
+          "max": 40196,
+          "mean": 37097,
+          "sd": 4367.100716341068
+        },
+        "cachedContentTokenCount": {
+          "n": 3,
+          "min": 12540,
+          "median": 17556,
+          "p95": 17556,
+          "max": 17556,
+          "mean": 15884,
+          "sd": 2364.565076287815
+        },
+        "candidatesTokenCount": {
+          "n": 3,
+          "min": 856,
+          "median": 1093,
+          "p95": 1177,
+          "max": 1177,
+          "mean": 1042,
+          "sd": 135.9190935814391
+        },
+        "thoughtsTokenCount": {
+          "n": 3,
+          "min": 1184,
+          "median": 2296,
+          "p95": 2567,
+          "max": 2567,
+          "mean": 2015.6666666666667,
+          "sd": 598.3935902805853
+        }
+      },
+      "observedTokenSums": {
+        "promptTokenCount": 111291,
+        "cachedContentTokenCount": 47652,
+        "candidatesTokenCount": 3126,
+        "thoughtsTokenCount": 6047
+      },
+      "usageCoverage": {
+        "completedRounds": 22,
+        "reportedExchanges": 22,
+        "buckets": {
+          "promptTokenCount": 22,
+          "cachedContentTokenCount": 19,
+          "candidatesTokenCount": 22,
+          "thoughtsTokenCount": 22
+        }
+      },
+      "cache": {
+        "requests": 19,
+        "fallbacks": 0,
+        "created": 3,
+        "failures": 0
+      },
+      "modeledUsdPerRun": {
+        "reportedDiscountInput": {
+          "n": 3,
+          "min": 0.01472625,
+          "median": 0.0182802,
+          "p95": 0.0182967,
+          "max": 0.0182967,
+          "mean": 0.01710105,
+          "sd": 0.0016792506945063322
+        },
+        "output": {
+          "n": 3,
+          "min": 0.00765,
+          "median": 0.01270875,
+          "p95": 0.01404,
+          "max": 0.01404,
+          "mean": 0.011466249999999999,
+          "sd": 0.002752681079420571
+        },
+        "storage": {
+          "n": 3,
+          "min": 0.000209,
+          "median": 0.000209,
+          "p95": 0.000209,
+          "max": 0.000209,
+          "mean": 0.000209,
+          "sd": 0
+        },
+        "creationUpper": {
+          "n": 3,
+          "min": 0.001881,
+          "median": 0.001881,
+          "p95": 0.001881,
+          "max": 0.001881,
+          "mean": 0.001881,
+          "sd": 0
+        },
+        "noCreation": {
+          "n": 3,
+          "min": 0.02258525,
+          "median": 0.031197950000000002,
+          "p95": 0.0325457,
+          "max": 0.0325457,
+          "mean": 0.0287763,
+          "sd": 0.004412175018627433
+        },
+        "fullRateCreation": {
+          "n": 3,
+          "min": 0.024466250000000002,
+          "median": 0.03307895,
+          "p95": 0.0344267,
+          "max": 0.0344267,
+          "mean": 0.0306573,
+          "sd": 0.004412175018627433
+        },
+        "allInputCachedFloor": {
+          "n": 3,
+          "min": 0.010178075,
+          "median": 0.015930800000000002,
+          "p95": 0.0172637,
+          "max": 0.0172637,
+          "mean": 0.014457525,
+          "sd": 0.0030745649913849604
+        }
+      }
+    },
+    "repository-research/pairedCurrentMinusBaseline": {
+      "comparableCost": {
+        "pairs": 3,
+        "baselineNoCreationUsd": {
+          "n": 3,
+          "min": 0.04276125,
+          "median": 0.04485075,
+          "p95": 0.04746375,
+          "max": 0.04746375,
+          "mean": 0.045025249999999996,
+          "sd": 0.001923748814164676
+        },
+        "currentNoCreationUsd": {
+          "n": 3,
+          "min": 0.02258525,
+          "median": 0.031197950000000002,
+          "p95": 0.0325457,
+          "max": 0.0325457,
+          "mean": 0.0287763,
+          "sd": 0.004412175018627433
+        },
+        "currentFullRateCreationUsd": {
+          "n": 3,
+          "min": 0.024466250000000002,
+          "median": 0.03307895,
+          "p95": 0.0344267,
+          "max": 0.0344267,
+          "mean": 0.0306573,
+          "sd": 0.004412175018627433
+        },
+        "noCreationDeltaUsd": {
+          "n": 3,
+          "min": -0.020176,
+          "median": -0.016265799999999997,
+          "p95": -0.012305050000000005,
+          "max": -0.012305050000000005,
+          "mean": -0.01624895,
+          "sd": 0.0032133239713729436
+        },
+        "fullRateCreationDeltaUsd": {
+          "n": 3,
+          "min": -0.018295,
+          "median": -0.014384799999999996,
+          "p95": -0.010424050000000004,
+          "max": -0.010424050000000004,
+          "mean": -0.014367949999999999,
+          "sd": 0.0032133239713729436
+        }
+      },
+      "wallMs": {
+        "n": 3,
+        "min": -971.5321250000052,
+        "median": 5024.9161260000255,
+        "p95": 6102.064833999961,
+        "max": 6102.064833999961,
+        "mean": 3385.1496116666603,
+        "sd": 3111.8664442999625
+      },
+      "promptTokens": {
+        "n": 3,
+        "min": -14514,
+        "median": -11711,
+        "p95": -6700,
+        "max": -6700,
+        "mean": -10975,
+        "sd": 3232.225342804345
+      },
+      "requests": {
+        "n": 3,
+        "min": -1,
+        "median": 0,
+        "p95": 1,
+        "max": 1,
+        "mean": 0,
+        "sd": 0.816496580927726
+      }
+    },
+    "notes-vs-code/baseline": {
+      "runs": 3,
+      "completed": 3,
+      "errors": 0,
+      "quality": {
+        "allFacts": 3,
+        "factsMatched": 15,
+        "factsTotal": 15,
+        "resolvingCitations": 3
+      },
+      "wallMs": {
+        "n": 3,
+        "min": 38666.627792000014,
+        "median": 41598.93754099999,
+        "p95": 46602.3443750001,
+        "max": 46602.3443750001,
+        "mean": 42289.303236000036,
+        "sd": 3276.3142926211376
+      },
+      "requests": {
+        "n": 3,
+        "min": 7,
+        "median": 7,
+        "p95": 8,
+        "max": 8,
+        "mean": 7.333333333333333,
+        "sd": 0.4714045207910317
+      },
+      "rounds": {
+        "n": 3,
+        "min": 7,
+        "median": 7,
+        "p95": 8,
+        "max": 8,
+        "mean": 7.333333333333333,
+        "sd": 0.4714045207910317
+      },
+      "firstMs": {
+        "sdkChunk": {
+          "n": 3,
+          "min": 3263.6075830000045,
+          "median": 3275.033250000037,
+          "p95": 3592.1943749999627,
+          "max": 3592.1943749999627,
+          "mean": 3376.9450693333347,
+          "sd": 152.27570206497822
+        },
+        "nonThoughtText": {
+          "n": 3,
+          "min": 34098.059750000015,
+          "median": 35635.860541999995,
+          "p95": 41909.37116699992,
+          "max": 41909.37116699992,
+          "mean": 37214.43048633331,
+          "sd": 3378.664313522196
+        },
+        "durableText": {
+          "n": 3,
+          "min": 34109.124625,
+          "median": 35640.664082999996,
+          "p95": 41919.228166999994,
+          "max": 41919.228166999994,
+          "mean": 37223.005625,
+          "sd": 3379.081029002257
+        }
+      },
+      "tokens": {
+        "promptTokenCount": {
+          "n": 3,
+          "min": 51511,
+          "median": 54786,
+          "p95": 64172,
+          "max": 64172,
+          "mean": 56823,
+          "sd": 5365.771581670866
+        },
+        "cachedContentTokenCount": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p95": null,
+          "max": null,
+          "mean": null,
+          "sd": null
+        },
+        "candidatesTokenCount": {
+          "n": 3,
+          "min": 1059,
+          "median": 1223,
+          "p95": 1324,
+          "max": 1324,
+          "mean": 1202,
+          "sd": 109.20012210005383
+        },
+        "thoughtsTokenCount": {
+          "n": 3,
+          "min": 1848,
+          "median": 1955,
+          "p95": 2660,
+          "max": 2660,
+          "mean": 2154.3333333333335,
+          "sd": 360.2187606934924
+        }
+      },
+      "observedTokenSums": {
+        "promptTokenCount": 170469,
+        "cachedContentTokenCount": 0,
+        "candidatesTokenCount": 3606,
+        "thoughtsTokenCount": 6463
+      },
+      "usageCoverage": {
+        "completedRounds": 22,
+        "reportedExchanges": 22,
+        "buckets": {
+          "promptTokenCount": 22,
+          "cachedContentTokenCount": 0,
+          "candidatesTokenCount": 22,
+          "thoughtsTokenCount": 22
+        }
+      },
+      "cache": {
+        "requests": 0,
+        "fallbacks": 0,
+        "created": 0,
+        "failures": 0
+      },
+      "modeledUsdPerRun": {
+        "reportedDiscountInput": {
+          "n": 3,
+          "min": 0.03863325,
+          "median": 0.0410895,
+          "p95": 0.048129,
+          "max": 0.048129,
+          "mean": 0.04261725,
+          "sd": 0.004024328686253148
+        },
+        "output": {
+          "n": 3,
+          "min": 0.0113025,
+          "median": 0.011895,
+          "p95": 0.01456125,
+          "max": 0.01456125,
+          "mean": 0.01258625,
+          "sd": 0.001417329134322723
+        },
+        "storage": {
+          "n": 3,
+          "min": 0,
+          "median": 0,
+          "p95": 0,
+          "max": 0,
+          "mean": 0,
+          "sd": 0
+        },
+        "creationUpper": {
+          "n": 3,
+          "min": 0,
+          "median": 0,
+          "p95": 0,
+          "max": 0,
+          "mean": 0,
+          "sd": 0
+        },
+        "noCreation": {
+          "n": 3,
+          "min": 0.04993575,
+          "median": 0.052984500000000004,
+          "p95": 0.06269025,
+          "max": 0.06269025,
+          "mean": 0.055203499999999996,
+          "sd": 0.005438277197330052
+        },
+        "fullRateCreation": {
+          "n": 3,
+          "min": 0.04993575,
+          "median": 0.052984500000000004,
+          "p95": 0.06269025,
+          "max": 0.06269025,
+          "mean": 0.055203499999999996,
+          "sd": 0.005438277197330052
+        },
+        "allInputCachedFloor": {
+          "n": 3,
+          "min": 0.015165825,
+          "median": 0.01600395,
+          "p95": 0.01937415,
+          "max": 0.01937415,
+          "mean": 0.016847975,
+          "sd": 0.001818751124054635
+        }
+      }
+    },
+    "notes-vs-code/current": {
+      "runs": 3,
+      "completed": 3,
+      "errors": 0,
+      "quality": {
+        "allFacts": 3,
+        "factsMatched": 15,
+        "factsTotal": 15,
+        "resolvingCitations": 3
+      },
+      "wallMs": {
+        "n": 3,
+        "min": 46490.5815,
+        "median": 50107.45991700003,
+        "p95": 62169.25233300001,
+        "max": 62169.25233300001,
+        "mean": 52922.431250000016,
+        "sd": 6703.144907509215
+      },
+      "requests": {
+        "n": 3,
+        "min": 6,
+        "median": 7,
+        "p95": 7,
+        "max": 7,
+        "mean": 6.666666666666667,
+        "sd": 0.4714045207910317
+      },
+      "rounds": {
+        "n": 3,
+        "min": 6,
+        "median": 7,
+        "p95": 7,
+        "max": 7,
+        "mean": 6.666666666666667,
+        "sd": 0.4714045207910317
+      },
+      "firstMs": {
+        "sdkChunk": {
+          "n": 3,
+          "min": 3053.7236669999984,
+          "median": 3888.656583999982,
+          "p95": 4631.129084000015,
+          "max": 4631.129084000015,
+          "mean": 3857.8364449999985,
+          "sd": 644.3417173732338
+        },
+        "nonThoughtText": {
+          "n": 3,
+          "min": 41379.98212500001,
+          "median": 46440.16862500005,
+          "p95": 57919.33624999999,
+          "max": 57919.33624999999,
+          "mean": 48579.82900000002,
+          "sd": 6919.593851679314
+        },
+        "durableText": {
+          "n": 3,
+          "min": 41385.75879200001,
+          "median": 46444.558834000025,
+          "p95": 57931.592084,
+          "max": 57931.592084,
+          "mean": 48587.30323666668,
+          "sd": 6922.651949122451
+        }
+      },
+      "tokens": {
+        "promptTokenCount": {
+          "n": 3,
+          "min": 52638,
+          "median": 61330,
+          "p95": 62338,
+          "max": 62338,
+          "mean": 58768.666666666664,
+          "sd": 4354.524186279012
+        },
+        "cachedContentTokenCount": {
+          "n": 3,
+          "min": 14135,
+          "median": 16962,
+          "p95": 26275,
+          "max": 26275,
+          "mean": 19124,
+          "sd": 5186.558460739324
+        },
+        "candidatesTokenCount": {
+          "n": 3,
+          "min": 1232,
+          "median": 1309,
+          "p95": 1330,
+          "max": 1330,
+          "mean": 1290.3333333333333,
+          "sd": 42.129430198958175
+        },
+        "thoughtsTokenCount": {
+          "n": 3,
+          "min": 2296,
+          "median": 3078,
+          "p95": 3309,
+          "max": 3309,
+          "mean": 2894.3333333333335,
+          "sd": 433.468440476223
+        }
+      },
+      "observedTokenSums": {
+        "promptTokenCount": 176306,
+        "cachedContentTokenCount": 57372,
+        "candidatesTokenCount": 3871,
+        "thoughtsTokenCount": 8683
+      },
+      "usageCoverage": {
+        "completedRounds": 20,
+        "reportedExchanges": 20,
+        "buckets": {
+          "promptTokenCount": 20,
+          "cachedContentTokenCount": 17,
+          "candidatesTokenCount": 20,
+          "thoughtsTokenCount": 20
+        }
+      },
+      "cache": {
+        "requests": 16,
+        "fallbacks": 0,
+        "created": 3,
+        "failures": 0
+      },
+      "modeledUsdPerRun": {
+        "reportedDiscountInput": {
+          "n": 3,
+          "min": 0.029017875,
+          "median": 0.029937375,
+          "p95": 0.03454815,
+          "max": 0.03454815,
+          "mean": 0.0311678,
+          "sd": 0.0024195653403555777
+        },
+        "output": {
+          "n": 3,
+          "min": 0.0135975,
+          "median": 0.0161625,
+          "p95": 0.0173175,
+          "max": 0.0173175,
+          "mean": 0.0156925,
+          "sd": 0.0015546221405859364
+        },
+        "storage": {
+          "n": 3,
+          "min": 0.0002355833333333333,
+          "median": 0.0002355833333333333,
+          "p95": 0.0002355833333333333,
+          "max": 0.0002355833333333333,
+          "mean": 0.0002355833333333333,
+          "sd": 0
+        },
+        "creationUpper": {
+          "n": 3,
+          "min": 0.00212025,
+          "median": 0.00212025,
+          "p95": 0.00212025,
+          "max": 0.00212025,
+          "mean": 0.00212025,
+          "sd": 0
+        },
+        "noCreation": {
+          "n": 3,
+          "min": 0.045415958333333326,
+          "median": 0.04749045833333333,
+          "p95": 0.04838123333333333,
+          "max": 0.04838123333333333,
+          "mean": 0.04709588333333333,
+          "sd": 0.0012423045867459416
+        },
+        "fullRateCreation": {
+          "n": 3,
+          "min": 0.04753620833333332,
+          "median": 0.04961070833333333,
+          "p95": 0.050501483333333326,
+          "max": 0.050501483333333326,
+          "mean": 0.04921613333333333,
+          "sd": 0.0012423045867459416
+        },
+        "allInputCachedFloor": {
+          "n": 3,
+          "min": 0.018432833333333332,
+          "median": 0.021073433333333332,
+          "p95": 0.021500933333333333,
+          "max": 0.021500933333333333,
+          "mean": 0.02033573333333333,
+          "sd": 0.00135682481551599
+        }
+      }
+    },
+    "notes-vs-code/pairedCurrentMinusBaseline": {
+      "comparableCost": {
+        "pairs": 3,
+        "baselineNoCreationUsd": {
+          "n": 3,
+          "min": 0.04993575,
+          "median": 0.052984500000000004,
+          "p95": 0.06269025,
+          "max": 0.06269025,
+          "mean": 0.055203499999999996,
+          "sd": 0.005438277197330052
+        },
+        "currentNoCreationUsd": {
+          "n": 3,
+          "min": 0.045415958333333326,
+          "median": 0.04749045833333333,
+          "p95": 0.04838123333333333,
+          "max": 0.04838123333333333,
+          "mean": 0.04709588333333333,
+          "sd": 0.0012423045867459416
+        },
+        "currentFullRateCreationUsd": {
+          "n": 3,
+          "min": 0.04753620833333332,
+          "median": 0.04961070833333333,
+          "p95": 0.050501483333333326,
+          "max": 0.050501483333333326,
+          "mean": 0.04921613333333333,
+          "sd": 0.0012423045867459416
+        },
+        "noCreationDeltaUsd": {
+          "n": 3,
+          "min": -0.01519979166666667,
+          "median": -0.004603266666666675,
+          "p95": -0.004519791666666675,
+          "max": -0.004519791666666675,
+          "mean": -0.008107616666666673,
+          "sd": 0.005015040823487879
+        },
+        "fullRateCreationDeltaUsd": {
+          "n": 3,
+          "min": -0.013079541666666673,
+          "median": -0.002483016666666678,
+          "p95": -0.0023995416666666783,
+          "max": -0.0023995416666666783,
+          "mean": -0.005987366666666677,
+          "sd": 0.005015040823487879
+        }
+      },
+      "wallMs": {
+        "n": 3,
+        "min": 3505.115541999927,
+        "median": 4891.643959000008,
+        "p95": 23502.624540999997,
+        "max": 23502.624540999997,
+        "mean": 10633.128013999978,
+        "sd": 9117.696014039086
+      },
+      "promptTokens": {
+        "n": 3,
+        "min": -11534,
+        "median": 6544,
+        "p95": 10827,
+        "max": 10827,
+        "mean": 1945.6666666666667,
+        "sd": 9690.61684769803
+      },
+      "requests": {
+        "n": 3,
+        "min": -2,
+        "median": 0,
+        "p95": 0,
+        "max": 0,
+        "mean": -0.6666666666666666,
+        "sd": 0.9428090415820634
+      }
+    },
+    "knowledgebase-research/baseline": {
+      "runs": 3,
+      "completed": 3,
+      "errors": 0,
+      "quality": {
+        "allFacts": 3,
+        "factsMatched": 12,
+        "factsTotal": 12,
+        "resolvingCitations": 3
+      },
+      "wallMs": {
+        "n": 3,
+        "min": 14564.759457999986,
+        "median": 15566.031875000102,
+        "p95": 19605.742750000034,
+        "max": 19605.742750000034,
+        "mean": 16578.844694333373,
+        "sd": 2179.024321848392
+      },
+      "requests": {
+        "n": 3,
+        "min": 4,
+        "median": 4,
+        "p95": 4,
+        "max": 4,
+        "mean": 4,
+        "sd": 0
+      },
+      "rounds": {
+        "n": 3,
+        "min": 4,
+        "median": 4,
+        "p95": 4,
+        "max": 4,
+        "mean": 4,
+        "sd": 0
+      },
+      "firstMs": {
+        "sdkChunk": {
+          "n": 3,
+          "min": 2745.743625000003,
+          "median": 2905.2045000000508,
+          "p95": 3232.198000000004,
+          "max": 3232.198000000004,
+          "mean": 2961.0487083333524,
+          "sd": 202.48192749385535
+        },
+        "nonThoughtText": {
+          "n": 3,
+          "min": 12995.800583000004,
+          "median": 13622.492500000051,
+          "p95": 18140.53937500005,
+          "max": 18140.53937500005,
+          "mean": 14919.61081933337,
+          "sd": 2291.8655080145363
+        },
+        "durableText": {
+          "n": 3,
+          "min": 12999.248625000007,
+          "median": 13623.765375000075,
+          "p95": 18144.458375000046,
+          "max": 18144.458375000046,
+          "mean": 14922.490791666709,
+          "sd": 2292.4966919344806
+        }
+      },
+      "tokens": {
+        "promptTokenCount": {
+          "n": 3,
+          "min": 17847,
+          "median": 18300,
+          "p95": 18962,
+          "max": 18962,
+          "mean": 18369.666666666668,
+          "sd": 457.85465913200983
+        },
+        "cachedContentTokenCount": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p95": null,
+          "max": null,
+          "mean": null,
+          "sd": null
+        },
+        "candidatesTokenCount": {
+          "n": 3,
+          "min": 406,
+          "median": 481,
+          "p95": 533,
+          "max": 533,
+          "mean": 473.3333333333333,
+          "sd": 52.13017893270227
+        },
+        "thoughtsTokenCount": {
+          "n": 3,
+          "min": 510,
+          "median": 598,
+          "p95": 653,
+          "max": 653,
+          "mean": 587,
+          "sd": 58.89538748209971
+        }
+      },
+      "observedTokenSums": {
+        "promptTokenCount": 55109,
+        "cachedContentTokenCount": 0,
+        "candidatesTokenCount": 1420,
+        "thoughtsTokenCount": 1761
+      },
+      "usageCoverage": {
+        "completedRounds": 12,
+        "reportedExchanges": 12,
+        "buckets": {
+          "promptTokenCount": 12,
+          "cachedContentTokenCount": 0,
+          "candidatesTokenCount": 12,
+          "thoughtsTokenCount": 12
+        }
+      },
+      "cache": {
+        "requests": 0,
+        "fallbacks": 0,
+        "created": 0,
+        "failures": 0
+      },
+      "modeledUsdPerRun": {
+        "reportedDiscountInput": {
+          "n": 3,
+          "min": 0.01338525,
+          "median": 0.013725,
+          "p95": 0.0142215,
+          "max": 0.0142215,
+          "mean": 0.01377725,
+          "sd": 0.00034339099434900743
+        },
+        "output": {
+          "n": 3,
+          "min": 0.003435,
+          "median": 0.00424125,
+          "p95": 0.0042525,
+          "max": 0.0042525,
+          "mean": 0.003976250000000001,
+          "sd": 0.0003827491018931332
+        },
+        "storage": {
+          "n": 3,
+          "min": 0,
+          "median": 0,
+          "p95": 0,
+          "max": 0,
+          "mean": 0,
+          "sd": 0
+        },
+        "creationUpper": {
+          "n": 3,
+          "min": 0,
+          "median": 0,
+          "p95": 0,
+          "max": 0,
+          "mean": 0,
+          "sd": 0
+        },
+        "noCreation": {
+          "n": 3,
+          "min": 0.01682025,
+          "median": 0.0179775,
+          "p95": 0.01846275,
+          "max": 0.01846275,
+          "mean": 0.017753500000000002,
+          "sd": 0.00068900099782221
+        },
+        "fullRateCreation": {
+          "n": 3,
+          "min": 0.01682025,
+          "median": 0.0179775,
+          "p95": 0.01846275,
+          "max": 0.01846275,
+          "mean": 0.017753500000000002,
+          "sd": 0.00068900099782221
+        },
+        "allInputCachedFloor": {
+          "n": 3,
+          "min": 0.004773525,
+          "median": 0.005625,
+          "p95": 0.0056634,
+          "max": 0.0056634,
+          "mean": 0.0053539749999999995,
+          "sd": 0.00041073940795837934
+        }
+      }
+    },
+    "knowledgebase-research/current": {
+      "runs": 3,
+      "completed": 3,
+      "errors": 0,
+      "quality": {
+        "allFacts": 3,
+        "factsMatched": 12,
+        "factsTotal": 12,
+        "resolvingCitations": 3
+      },
+      "wallMs": {
+        "n": 3,
+        "min": 15089.009458999994,
+        "median": 18784.17666700005,
+        "p95": 19470.02358400001,
+        "max": 19470.02358400001,
+        "mean": 17781.06990333335,
+        "sd": 1924.0562319135104
+      },
+      "requests": {
+        "n": 3,
+        "min": 4,
+        "median": 4,
+        "p95": 4,
+        "max": 4,
+        "mean": 4,
+        "sd": 0
+      },
+      "rounds": {
+        "n": 3,
+        "min": 4,
+        "median": 4,
+        "p95": 4,
+        "max": 4,
+        "mean": 4,
+        "sd": 0
+      },
+      "firstMs": {
+        "sdkChunk": {
+          "n": 3,
+          "min": 2882.8720829999656,
+          "median": 3123.640915999975,
+          "p95": 4751.836374999955,
+          "max": 4751.836374999955,
+          "mean": 3586.1164579999654,
+          "sd": 830.1283440544578
+        },
+        "nonThoughtText": {
+          "n": 3,
+          "min": 13373.051665999985,
+          "median": 17105.188665999915,
+          "p95": 17926.154708000016,
+          "max": 17926.154708000016,
+          "mean": 16134.79834666664,
+          "sd": 1981.4018365220265
+        },
+        "durableText": {
+          "n": 3,
+          "min": 13377.058665999997,
+          "median": 17106.442124999943,
+          "p95": 17933.04704199999,
+          "max": 17933.04704199999,
+          "mean": 16138.849277666644,
+          "sd": 1981.8231436768328
+        }
+      },
+      "tokens": {
+        "promptTokenCount": {
+          "n": 3,
+          "min": 14103,
+          "median": 14791,
+          "p95": 14996,
+          "max": 14996,
+          "mean": 14630,
+          "sd": 381.927567303889
+        },
+        "cachedContentTokenCount": {
+          "n": 3,
+          "min": 6723,
+          "median": 6723,
+          "p95": 6723,
+          "max": 6723,
+          "mean": 6723,
+          "sd": 0
+        },
+        "candidatesTokenCount": {
+          "n": 3,
+          "min": 414,
+          "median": 488,
+          "p95": 533,
+          "max": 533,
+          "mean": 478.3333333333333,
+          "sd": 49.060053902221604
+        },
+        "thoughtsTokenCount": {
+          "n": 3,
+          "min": 701,
+          "median": 884,
+          "p95": 968,
+          "max": 968,
+          "mean": 851,
+          "sd": 111.47196957082978
+        }
+      },
+      "observedTokenSums": {
+        "promptTokenCount": 43890,
+        "cachedContentTokenCount": 20169,
+        "candidatesTokenCount": 1435,
+        "thoughtsTokenCount": 2553
+      },
+      "usageCoverage": {
+        "completedRounds": 12,
+        "reportedExchanges": 12,
+        "buckets": {
+          "promptTokenCount": 12,
+          "cachedContentTokenCount": 9,
+          "candidatesTokenCount": 12,
+          "thoughtsTokenCount": 12
+        }
+      },
+      "cache": {
+        "requests": 9,
+        "fallbacks": 0,
+        "created": 3,
+        "failures": 0
+      },
+      "modeledUsdPerRun": {
+        "reportedDiscountInput": {
+          "n": 3,
+          "min": 0.0060392250000000005,
+          "median": 0.0065552250000000005,
+          "p95": 0.006708975000000001,
+          "max": 0.006708975000000001,
+          "mean": 0.006434474999999999,
+          "sd": 0.00028644567547791685
+        },
+        "output": {
+          "n": 3,
+          "min": 0.00418125,
+          "median": 0.00531375,
+          "p95": 0.00546,
+          "max": 0.00546,
+          "mean": 0.004985,
+          "sd": 0.0005714646751987387
+        },
+        "storage": {
+          "n": 3,
+          "min": 0.00018675,
+          "median": 0.00018675,
+          "p95": 0.00018675,
+          "max": 0.00018675,
+          "mean": 0.00018674999999999999,
+          "sd": 2.710505431213761e-20
+        },
+        "creationUpper": {
+          "n": 3,
+          "min": 0.00168075,
+          "median": 0.00168075,
+          "p95": 0.00168075,
+          "max": 0.00168075,
+          "mean": 0.00168075,
+          "sd": 0
+        },
+        "noCreation": {
+          "n": 3,
+          "min": 0.010923225,
+          "median": 0.011685975,
+          "p95": 0.012209475000000001,
+          "max": 0.012209475000000001,
+          "mean": 0.011606225,
+          "sd": 0.0005281286538335147
+        },
+        "fullRateCreation": {
+          "n": 3,
+          "min": 0.012603975,
+          "median": 0.013366725,
+          "p95": 0.013890225,
+          "max": 0.013890225,
+          "mean": 0.013286975,
+          "sd": 0.0005281286538335147
+        },
+        "allInputCachedFloor": {
+          "n": 3,
+          "min": 0.005477325000000001,
+          "median": 0.0066252,
+          "p95": 0.006704475,
+          "max": 0.006704475,
+          "mean": 0.006269,
+          "sd": 0.0005607335140242641
+        }
+      }
+    },
+    "knowledgebase-research/pairedCurrentMinusBaseline": {
+      "comparableCost": {
+        "pairs": 3,
+        "baselineNoCreationUsd": {
+          "n": 3,
+          "min": 0.01682025,
+          "median": 0.0179775,
+          "p95": 0.01846275,
+          "max": 0.01846275,
+          "mean": 0.017753500000000002,
+          "sd": 0.00068900099782221
+        },
+        "currentNoCreationUsd": {
+          "n": 3,
+          "min": 0.010923225,
+          "median": 0.011685975,
+          "p95": 0.012209475000000001,
+          "max": 0.012209475000000001,
+          "mean": 0.011606225,
+          "sd": 0.0005281286538335147
+        },
+        "currentFullRateCreationUsd": {
+          "n": 3,
+          "min": 0.012603975,
+          "median": 0.013366725,
+          "p95": 0.013890225,
+          "max": 0.013890225,
+          "mean": 0.013286975,
+          "sd": 0.0005281286538335147
+        },
+        "noCreationDeltaUsd": {
+          "n": 3,
+          "min": -0.006291525000000001,
+          "median": -0.006253274999999999,
+          "p95": -0.0058970249999999984,
+          "max": -0.0058970249999999984,
+          "mean": -0.006147275,
+          "sd": 0.00017764114106816667
+        },
+        "fullRateCreationDeltaUsd": {
+          "n": 3,
+          "min": -0.004610775000000001,
+          "median": -0.004572524999999999,
+          "p95": -0.0042162749999999985,
+          "max": -0.0042162749999999985,
+          "mean": -0.004466525,
+          "sd": 0.00017764114106816667
+        }
+      },
+      "wallMs": {
+        "n": 3,
+        "min": -135.71916600002442,
+        "median": 524.2500010000076,
+        "p95": 3218.144791999948,
+        "max": 3218.144791999948,
+        "mean": 1202.2252089999772,
+        "sd": 1450.7098605371928
+      },
+      "promptTokens": {
+        "n": 3,
+        "min": -4197,
+        "median": -3966,
+        "p95": -3056,
+        "max": -3056,
+        "mean": -3739.6666666666665,
+        "sd": 492.53787220431644
+      },
+      "requests": {
+        "n": 3,
+        "min": 0,
+        "median": 0,
+        "p95": 0,
+        "max": 0,
+        "mean": 0,
+        "sd": 0
+      }
+    },
+    "status/baseline": {
+      "runs": 3,
+      "completed": 3,
+      "errors": 0,
+      "quality": {
+        "allFacts": 3,
+        "factsMatched": 9,
+        "factsTotal": 9,
+        "resolvingCitations": 3
+      },
+      "wallMs": {
+        "n": 3,
+        "min": 13801.890082999947,
+        "median": 16304.674083000049,
+        "p95": 16401.076375000004,
+        "max": 16401.076375000004,
+        "mean": 15502.546847,
+        "sd": 1203.1897667395224
+      },
+      "requests": {
+        "n": 3,
+        "min": 4,
+        "median": 4,
+        "p95": 5,
+        "max": 5,
+        "mean": 4.333333333333333,
+        "sd": 0.4714045207910317
+      },
+      "rounds": {
+        "n": 3,
+        "min": 4,
+        "median": 4,
+        "p95": 5,
+        "max": 5,
+        "mean": 4.333333333333333,
+        "sd": 0.4714045207910317
+      },
+      "firstMs": {
+        "sdkChunk": {
+          "n": 3,
+          "min": 2558.1824170000036,
+          "median": 3265.0429579999764,
+          "p95": 3806.4160420000553,
+          "max": 3806.4160420000553,
+          "mean": 3209.880472333345,
+          "sd": 511.0798831975835
+        },
+        "nonThoughtText": {
+          "n": 3,
+          "min": 12710.810875000083,
+          "median": 15167.06899999996,
+          "p95": 15282.217708000011,
+          "max": 15282.217708000011,
+          "mean": 14386.69919433335,
+          "sd": 1185.964038352143
+        },
+        "durableText": {
+          "n": 3,
+          "min": 12718.439250000054,
+          "median": 15172.652000000002,
+          "p95": 15283.81925,
+          "max": 15283.81925,
+          "mean": 14391.636833333352,
+          "sd": 1183.999480298994
+        }
+      },
+      "tokens": {
+        "promptTokenCount": {
+          "n": 3,
+          "min": 16859,
+          "median": 17065,
+          "p95": 23684,
+          "max": 23684,
+          "mean": 19202.666666666668,
+          "sd": 3169.896983955297
+        },
+        "cachedContentTokenCount": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p95": null,
+          "max": null,
+          "mean": null,
+          "sd": null
+        },
+        "candidatesTokenCount": {
+          "n": 3,
+          "min": 300,
+          "median": 301,
+          "p95": 356,
+          "max": 356,
+          "mean": 319,
+          "sd": 26.166135875720485
+        },
+        "thoughtsTokenCount": {
+          "n": 3,
+          "min": 426,
+          "median": 503,
+          "p95": 604,
+          "max": 604,
+          "mean": 511,
+          "sd": 72.8880420005001
+        }
+      },
+      "observedTokenSums": {
+        "promptTokenCount": 57608,
+        "cachedContentTokenCount": 0,
+        "candidatesTokenCount": 957,
+        "thoughtsTokenCount": 1533
+      },
+      "usageCoverage": {
+        "completedRounds": 13,
+        "reportedExchanges": 13,
+        "buckets": {
+          "promptTokenCount": 13,
+          "cachedContentTokenCount": 0,
+          "candidatesTokenCount": 13,
+          "thoughtsTokenCount": 13
+        }
+      },
+      "cache": {
+        "requests": 0,
+        "fallbacks": 0,
+        "created": 0,
+        "failures": 0
+      },
+      "modeledUsdPerRun": {
+        "reportedDiscountInput": {
+          "n": 3,
+          "min": 0.01264425,
+          "median": 0.01279875,
+          "p95": 0.017763,
+          "max": 0.017763,
+          "mean": 0.014402,
+          "sd": 0.0023774227379664736
+        },
+        "output": {
+          "n": 3,
+          "min": 0.0027225,
+          "median": 0.003015,
+          "p95": 0.0036,
+          "max": 0.0036,
+          "mean": 0.0031124999999999994,
+          "sd": 0.0003648115952104592
+        },
+        "storage": {
+          "n": 3,
+          "min": 0,
+          "median": 0,
+          "p95": 0,
+          "max": 0,
+          "mean": 0,
+          "sd": 0
+        },
+        "creationUpper": {
+          "n": 3,
+          "min": 0,
+          "median": 0,
+          "p95": 0,
+          "max": 0,
+          "mean": 0,
+          "sd": 0
+        },
+        "noCreation": {
+          "n": 3,
+          "min": 0.015366749999999998,
+          "median": 0.015813749999999998,
+          "p95": 0.021363,
+          "max": 0.021363,
+          "mean": 0.0175145,
+          "sd": 0.0027274122579837475
+        },
+        "fullRateCreation": {
+          "n": 3,
+          "min": 0.015366749999999998,
+          "median": 0.015813749999999998,
+          "p95": 0.021363,
+          "max": 0.021363,
+          "mean": 0.0175145,
+          "sd": 0.0027274122579837475
+        },
+        "allInputCachedFloor": {
+          "n": 3,
+          "min": 0.0039869250000000005,
+          "median": 0.004294875,
+          "p95": 0.0053763,
+          "max": 0.0053763,
+          "mean": 0.0045527,
+          "sd": 0.0005957885646351393
+        }
+      }
+    },
+    "status/current": {
+      "runs": 3,
+      "completed": 3,
+      "errors": 0,
+      "quality": {
+        "allFacts": 3,
+        "factsMatched": 9,
+        "factsTotal": 9,
+        "resolvingCitations": 3
+      },
+      "wallMs": {
+        "n": 3,
+        "min": 12390.531125000096,
+        "median": 12565.918999999994,
+        "p95": 21119.804583999998,
+        "max": 21119.804583999998,
+        "mean": 15358.751569666696,
+        "sd": 4074.3088659013374
+      },
+      "requests": {
+        "n": 3,
+        "min": 2,
+        "median": 3,
+        "p95": 3,
+        "max": 3,
+        "mean": 2.6666666666666665,
+        "sd": 0.4714045207910317
+      },
+      "rounds": {
+        "n": 3,
+        "min": 2,
+        "median": 3,
+        "p95": 3,
+        "max": 3,
+        "mean": 2.6666666666666665,
+        "sd": 0.4714045207910317
+      },
+      "firstMs": {
+        "sdkChunk": {
+          "n": 3,
+          "min": 3409.798999999999,
+          "median": 5581.562458000029,
+          "p95": 10245.941458000016,
+          "max": 10245.941458000016,
+          "mean": 6412.434305333348,
+          "sd": 2852.0135514563435
+        },
+        "nonThoughtText": {
+          "n": 3,
+          "min": 11220.732208999922,
+          "median": 11365.898166000028,
+          "p95": 19847.141208000015,
+          "max": 19847.141208000015,
+          "mean": 14144.590527666654,
+          "sd": 4032.7477386265055
+        },
+        "durableText": {
+          "n": 3,
+          "min": 11236.844291999936,
+          "median": 11370.866541000025,
+          "p95": 19848.820540999994,
+          "max": 19848.820540999994,
+          "mean": 14152.177124666652,
+          "sd": 4028.5067664042526
+        }
+      },
+      "tokens": {
+        "promptTokenCount": {
+          "n": 3,
+          "min": 5825,
+          "median": 10035,
+          "p95": 10144,
+          "max": 10144,
+          "mean": 8668,
+          "sd": 2010.7970227416458
+        },
+        "cachedContentTokenCount": {
+          "n": 3,
+          "min": 2191,
+          "median": 4382,
+          "p95": 4382,
+          "max": 4382,
+          "mean": 3651.6666666666665,
+          "sd": 1032.8473050531504
+        },
+        "candidatesTokenCount": {
+          "n": 3,
+          "min": 224,
+          "median": 288,
+          "p95": 308,
+          "max": 308,
+          "mean": 273.3333333333333,
+          "sd": 35.82674358011841
+        },
+        "thoughtsTokenCount": {
+          "n": 3,
+          "min": 604,
+          "median": 693,
+          "p95": 806,
+          "max": 806,
+          "mean": 701,
+          "sd": 82.65994596336648
+        }
+      },
+      "observedTokenSums": {
+        "promptTokenCount": 26004,
+        "cachedContentTokenCount": 10955,
+        "candidatesTokenCount": 820,
+        "thoughtsTokenCount": 2103
+      },
+      "usageCoverage": {
+        "completedRounds": 8,
+        "reportedExchanges": 8,
+        "buckets": {
+          "promptTokenCount": 8,
+          "cachedContentTokenCount": 5,
+          "candidatesTokenCount": 8,
+          "thoughtsTokenCount": 8
+        }
+      },
+      "cache": {
+        "requests": 5,
+        "fallbacks": 0,
+        "created": 3,
+        "failures": 0
+      },
+      "modeledUsdPerRun": {
+        "reportedDiscountInput": {
+          "n": 3,
+          "min": 0.002889825,
+          "median": 0.004568399999999999,
+          "p95": 0.00465015,
+          "max": 0.00465015,
+          "mean": 0.004036124999999999,
+          "sd": 0.0008112432981233187
+        },
+        "output": {
+          "n": 3,
+          "min": 0.003345,
+          "median": 0.00375375,
+          "p95": 0.0038625,
+          "max": 0.0038625,
+          "mean": 0.0036537500000000003,
+          "sd": 0.00022278773529976924
+        },
+        "storage": {
+          "n": 3,
+          "min": 0.00018258333333333332,
+          "median": 0.00018258333333333332,
+          "p95": 0.00018258333333333332,
+          "max": 0.00018258333333333332,
+          "mean": 0.00018258333333333332,
+          "sd": 0
+        },
+        "creationUpper": {
+          "n": 3,
+          "min": 0.00164325,
+          "median": 0.00164325,
+          "p95": 0.00164325,
+          "max": 0.00164325,
+          "mean": 0.00164325,
+          "sd": 0
+        },
+        "noCreation": {
+          "n": 3,
+          "min": 0.006934908333333333,
+          "median": 0.008095983333333332,
+          "p95": 0.008586483333333332,
+          "max": 0.008586483333333332,
+          "mean": 0.007872458333333332,
+          "sd": 0.0006925304153970419
+        },
+        "fullRateCreation": {
+          "n": 3,
+          "min": 0.008578158333333334,
+          "median": 0.009739233333333333,
+          "p95": 0.010229733333333333,
+          "max": 0.010229733333333333,
+          "mean": 0.009515708333333333,
+          "sd": 0.0006925304153970419
+        },
+        "allInputCachedFloor": {
+          "n": 3,
+          "min": 0.004280208333333333,
+          "median": 0.0044819583333333335,
+          "p95": 0.004697133333333333,
+          "max": 0.004697133333333333,
+          "mean": 0.004486433333333334,
+          "sd": 0.00017023832926224352
+        }
+      }
+    },
+    "status/pairedCurrentMinusBaseline": {
+      "comparableCost": {
+        "pairs": 3,
+        "baselineNoCreationUsd": {
+          "n": 3,
+          "min": 0.015366749999999998,
+          "median": 0.015813749999999998,
+          "p95": 0.021363,
+          "max": 0.021363,
+          "mean": 0.0175145,
+          "sd": 0.0027274122579837475
+        },
+        "currentNoCreationUsd": {
+          "n": 3,
+          "min": 0.006934908333333333,
+          "median": 0.008095983333333332,
+          "p95": 0.008586483333333332,
+          "max": 0.008586483333333332,
+          "mean": 0.007872458333333332,
+          "sd": 0.0006925304153970419
+        },
+        "currentFullRateCreationUsd": {
+          "n": 3,
+          "min": 0.008578158333333334,
+          "median": 0.009739233333333333,
+          "p95": 0.010229733333333333,
+          "max": 0.010229733333333333,
+          "mean": 0.009515708333333333,
+          "sd": 0.0006925304153970419
+        },
+        "noCreationDeltaUsd": {
+          "n": 3,
+          "min": -0.014428091666666667,
+          "median": -0.007270766666666666,
+          "p95": -0.007227266666666666,
+          "max": -0.007227266666666666,
+          "mean": -0.009642041666666667,
+          "sd": 0.0033842950043177387
+        },
+        "fullRateCreationDeltaUsd": {
+          "n": 3,
+          "min": -0.012784841666666666,
+          "median": -0.005627516666666665,
+          "p95": -0.005584016666666665,
+          "max": -0.005584016666666665,
+          "mean": -0.007998791666666664,
+          "sd": 0.0033842950043177387
+        }
+      },
+      "wallMs": {
+        "n": 3,
+        "min": -3738.7550830000546,
+        "median": -1411.3589579998516,
+        "p95": 4718.7282089999935,
+        "max": 4718.7282089999935,
+        "mean": -143.7952773333042,
+        "sd": 3567.1925629756975
+      },
+      "promptTokens": {
+        "n": 3,
+        "min": -17859,
+        "median": -6921,
+        "p95": -6824,
+        "max": -6824,
+        "mean": -10534.666666666666,
+        "sd": 5179.237159616806
+      },
+      "requests": {
+        "n": 3,
+        "min": -3,
+        "median": -1,
+        "p95": -1,
+        "max": -1,
+        "mean": -1.6666666666666667,
+        "sd": 0.9428090415820634
+      }
+    },
+    "ambiguous/baseline": {
+      "runs": 3,
+      "completed": 3,
+      "errors": 0,
+      "quality": {
+        "allFacts": 3,
+        "factsMatched": 3,
+        "factsTotal": 3,
+        "resolvingCitations": 3
+      },
+      "wallMs": {
+        "n": 3,
+        "min": 44454.00033300003,
+        "median": 50279.48112499999,
+        "p95": 51870.523208,
+        "max": 51870.523208,
+        "mean": 48868.00155533334,
+        "sd": 3188.041072564698
+      },
+      "requests": {
+        "n": 3,
+        "min": 7,
+        "median": 7,
+        "p95": 9,
+        "max": 9,
+        "mean": 7.666666666666667,
+        "sd": 0.9428090415820634
+      },
+      "rounds": {
+        "n": 3,
+        "min": 7,
+        "median": 7,
+        "p95": 9,
+        "max": 9,
+        "mean": 7.666666666666667,
+        "sd": 0.9428090415820634
+      },
+      "firstMs": {
+        "sdkChunk": {
+          "n": 3,
+          "min": 2668.9027500000084,
+          "median": 3544.182417,
+          "p95": 6046.09145800001,
+          "max": 6046.09145800001,
+          "mean": 4086.3922083333396,
+          "sd": 1431.0472821734409
+        },
+        "nonThoughtText": {
+          "n": 3,
+          "min": 36826.72875000007,
+          "median": 43363.777667,
+          "p95": 44257.746291999996,
+          "max": 44257.746291999996,
+          "mean": 41482.75090300002,
+          "sd": 3312.4715538442333
+        },
+        "durableText": {
+          "n": 3,
+          "min": 36833.186125000066,
+          "median": 43370.883583,
+          "p95": 44269.35454199999,
+          "max": 44269.35454199999,
+          "mean": 41491.14141666669,
+          "sd": 3314.0331058913075
+        }
+      },
+      "tokens": {
+        "promptTokenCount": {
+          "n": 3,
+          "min": 74149,
+          "median": 76774,
+          "p95": 126473,
+          "max": 126473,
+          "mean": 92465.33333333333,
+          "sd": 24070.91883488363
+        },
+        "cachedContentTokenCount": {
+          "n": 2,
+          "min": 16186,
+          "median": 36389,
+          "p95": 56592,
+          "max": 56592,
+          "mean": 36389,
+          "sd": 20203
+        },
+        "candidatesTokenCount": {
+          "n": 3,
+          "min": 1664,
+          "median": 1919,
+          "p95": 2062,
+          "max": 2062,
+          "mean": 1881.6666666666667,
+          "sd": 164.61335169285496
+        },
+        "thoughtsTokenCount": {
+          "n": 3,
+          "min": 2125,
+          "median": 2286,
+          "p95": 2728,
+          "max": 2728,
+          "mean": 2379.6666666666665,
+          "sd": 254.92787651063628
+        }
+      },
+      "observedTokenSums": {
+        "promptTokenCount": 277396,
+        "cachedContentTokenCount": 72778,
+        "candidatesTokenCount": 5645,
+        "thoughtsTokenCount": 7139
+      },
+      "usageCoverage": {
+        "completedRounds": 23,
+        "reportedExchanges": 23,
+        "buckets": {
+          "promptTokenCount": 23,
+          "cachedContentTokenCount": 4,
+          "candidatesTokenCount": 23,
+          "thoughtsTokenCount": 23
+        }
+      },
+      "cache": {
+        "requests": 0,
+        "fallbacks": 0,
+        "created": 0,
+        "failures": 0
+      },
+      "modeledUsdPerRun": {
+        "reportedDiscountInput": {
+          "n": 3,
+          "min": 0.046654949999999994,
+          "median": 0.05561175,
+          "p95": 0.05665515,
+          "max": 0.05665515,
+          "mean": 0.05297394999999999,
+          "sd": 0.004488466080967977
+        },
+        "output": {
+          "n": 3,
+          "min": 0.01420875,
+          "median": 0.01576875,
+          "p95": 0.0179625,
+          "max": 0.0179625,
+          "mean": 0.015979999999999998,
+          "sd": 0.0015397250160337072
+        },
+        "storage": {
+          "n": 3,
+          "min": 0,
+          "median": 0,
+          "p95": 0,
+          "max": 0,
+          "mean": 0,
+          "sd": 0
+        },
+        "creationUpper": {
+          "n": 3,
+          "min": 0,
+          "median": 0,
+          "p95": 0,
+          "max": 0,
+          "mean": 0,
+          "sd": 0
+        },
+        "noCreation": {
+          "n": 3,
+          "min": 0.0624237,
+          "median": 0.06982050000000001,
+          "p95": 0.07461765000000001,
+          "max": 0.07461765000000001,
+          "mean": 0.06895395,
+          "sd": 0.005015727652594391
+        },
+        "fullRateCreation": {
+          "n": 3,
+          "min": 0.0624237,
+          "median": 0.06982050000000001,
+          "p95": 0.07461765000000001,
+          "max": 0.07461765000000001,
+          "mean": 0.06895395,
+          "sd": 0.005015727652594391
+        },
+        "allInputCachedFloor": {
+          "n": 3,
+          "min": 0.019769925,
+          "median": 0.021526800000000002,
+          "p95": 0.027447975,
+          "max": 0.027447975,
+          "mean": 0.022914900000000002,
+          "sd": 0.0032846338363278784
+        }
+      }
+    },
+    "ambiguous/current": {
+      "runs": 3,
+      "completed": 3,
+      "errors": 0,
+      "quality": {
+        "allFacts": 3,
+        "factsMatched": 3,
+        "factsTotal": 3,
+        "resolvingCitations": 3
+      },
+      "wallMs": {
+        "n": 3,
+        "min": 47654.93779200001,
+        "median": 89873.99341600001,
+        "p95": 118990.218375,
+        "max": 118990.218375,
+        "mean": 85506.38319433334,
+        "sd": 29285.8051878396
+      },
+      "requests": {
+        "n": 3,
+        "min": 6,
+        "median": 16,
+        "p95": 19,
+        "max": 19,
+        "mean": 13.666666666666666,
+        "sd": 5.557777333511022
+      },
+      "rounds": {
+        "n": 3,
+        "min": 6,
+        "median": 16,
+        "p95": 19,
+        "max": 19,
+        "mean": 13.666666666666666,
+        "sd": 5.557777333511022
+      },
+      "firstMs": {
+        "sdkChunk": {
+          "n": 3,
+          "min": 4028.50920900004,
+          "median": 5316.079166999996,
+          "p95": 5851.667708000023,
+          "max": 5851.667708000023,
+          "mean": 5065.418694666686,
+          "sd": 765.1142539567695
+        },
+        "nonThoughtText": {
+          "n": 3,
+          "min": 41641.558709000004,
+          "median": 80731.486042,
+          "p95": 110128.12362500001,
+          "max": 110128.12362500001,
+          "mean": 77500.38945866667,
+          "sd": 28052.716830359368
+        },
+        "durableText": {
+          "n": 3,
+          "min": 41661.40179200005,
+          "median": 80750.196042,
+          "p95": 110141.32604200003,
+          "max": 110141.32604200003,
+          "mean": 77517.64129200003,
+          "sd": 28050.098799353564
+        }
+      },
+      "tokens": {
+        "promptTokenCount": {
+          "n": 3,
+          "min": 56827,
+          "median": 237456,
+          "p95": 316779,
+          "max": 316779,
+          "mean": 203687.33333333334,
+          "sd": 108778.06982516692
+        },
+        "cachedContentTokenCount": {
+          "n": 3,
+          "min": 17730,
+          "median": 135564,
+          "p95": 198034,
+          "max": 198034,
+          "mean": 117109.33333333333,
+          "sd": 74756.55665930285
+        },
+        "candidatesTokenCount": {
+          "n": 3,
+          "min": 1678,
+          "median": 2629,
+          "p95": 2671,
+          "max": 2671,
+          "mean": 2326,
+          "sd": 458.5258989413793
+        },
+        "thoughtsTokenCount": {
+          "n": 3,
+          "min": 2940,
+          "median": 3464,
+          "p95": 3547,
+          "max": 3547,
+          "mean": 3317,
+          "sd": 268.72414604323643
+        }
+      },
+      "observedTokenSums": {
+        "promptTokenCount": 611062,
+        "cachedContentTokenCount": 351328,
+        "candidatesTokenCount": 6978,
+        "thoughtsTokenCount": 9951
+      },
+      "usageCoverage": {
+        "completedRounds": 41,
+        "reportedExchanges": 41,
+        "buckets": {
+          "promptTokenCount": 41,
+          "cachedContentTokenCount": 38,
+          "candidatesTokenCount": 41,
+          "thoughtsTokenCount": 41
+        }
+      },
+      "cache": {
+        "requests": 19,
+        "fallbacks": 0,
+        "created": 3,
+        "failures": 0
+      },
+      "modeledUsdPerRun": {
+        "reportedDiscountInput": {
+          "n": 3,
+          "min": 0.0306525,
+          "median": 0.0865863,
+          "p95": 0.1039113,
+          "max": 0.1039113,
+          "mean": 0.07371670000000001,
+          "sd": 0.03126161541443436
+        },
+        "output": {
+          "n": 3,
+          "min": 0.0173175,
+          "median": 0.02284875,
+          "p95": 0.0233175,
+          "max": 0.0233175,
+          "mean": 0.021161250000000003,
+          "sd": 0.0027246702782171652
+        },
+        "storage": {
+          "n": 3,
+          "min": 0.0002955,
+          "median": 0.0002955,
+          "p95": 0.0002955,
+          "max": 0.0002955,
+          "mean": 0.0002955,
+          "sd": 0
+        },
+        "creationUpper": {
+          "n": 3,
+          "min": 0.0026595,
+          "median": 0.0026595,
+          "p95": 0.0026595,
+          "max": 0.0026595,
+          "mean": 0.0026595,
+          "sd": 0
+        },
+        "noCreation": {
+          "n": 3,
+          "min": 0.048265499999999996,
+          "median": 0.10973055000000001,
+          "p95": 0.1275243,
+          "max": 0.1275243,
+          "mean": 0.09517344999999999,
+          "sd": 0.03395508027445967
+        },
+        "fullRateCreation": {
+          "n": 3,
+          "min": 0.050925,
+          "median": 0.11239005,
+          "p95": 0.13018380000000002,
+          "max": 0.13018380000000002,
+          "mean": 0.09783295000000002,
+          "sd": 0.033955080274459676
+        },
+        "allInputCachedFloor": {
+          "n": 3,
+          "min": 0.021875025,
+          "median": 0.040953449999999995,
+          "p95": 0.047371425,
+          "max": 0.047371425,
+          "mean": 0.036733299999999997,
+          "sd": 0.01082816859728597
+        }
+      }
+    },
+    "ambiguous/pairedCurrentMinusBaseline": {
+      "comparableCost": {
+        "pairs": 3,
+        "baselineNoCreationUsd": {
+          "n": 3,
+          "min": 0.0624237,
+          "median": 0.06982050000000001,
+          "p95": 0.07461765000000001,
+          "max": 0.07461765000000001,
+          "mean": 0.06895395,
+          "sd": 0.005015727652594391
+        },
+        "currentNoCreationUsd": {
+          "n": 3,
+          "min": 0.048265499999999996,
+          "median": 0.10973055000000001,
+          "p95": 0.1275243,
+          "max": 0.1275243,
+          "mean": 0.09517344999999999,
+          "sd": 0.03395508027445967
+        },
+        "currentFullRateCreationUsd": {
+          "n": 3,
+          "min": 0.050925,
+          "median": 0.11239005,
+          "p95": 0.13018380000000002,
+          "max": 0.13018380000000002,
+          "mean": 0.09783295000000002,
+          "sd": 0.033955080274459676
+        },
+        "noCreationDeltaUsd": {
+          "n": 3,
+          "min": -0.014158200000000003,
+          "median": 0.0351129,
+          "p95": 0.0577038,
+          "max": 0.0577038,
+          "mean": 0.026219499999999996,
+          "sd": 0.030003957335324953
+        },
+        "fullRateCreationDeltaUsd": {
+          "n": 3,
+          "min": -0.0114987,
+          "median": 0.0377724,
+          "p95": 0.06036330000000001,
+          "max": 0.06036330000000001,
+          "mean": 0.028879000000000002,
+          "sd": 0.030003957335324953
+        }
+      },
+      "wallMs": {
+        "n": 3,
+        "min": 3200.937458999979,
+        "median": 38003.47020800001,
+        "p95": 68710.73725,
+        "max": 68710.73725,
+        "mean": 36638.381639,
+        "sd": 26761.67741709698
+      },
+      "promptTokens": {
+        "n": 3,
+        "min": -19947,
+        "median": 110983,
+        "p95": 242630,
+        "max": 242630,
+        "mean": 111222,
+        "sd": 107196.74458054529
+      },
+      "requests": {
+        "n": 3,
+        "min": -1,
+        "median": 7,
+        "p95": 12,
+        "max": 12,
+        "mean": 6,
+        "sd": 5.354126134736337
+      }
+    },
+    "expansion/baseline": {
+      "runs": 3,
+      "completed": 3,
+      "errors": 0,
+      "quality": {
+        "allFacts": 3,
+        "factsMatched": 12,
+        "factsTotal": 12,
+        "resolvingCitations": 3
+      },
+      "wallMs": {
+        "n": 3,
+        "min": 44275.38858299999,
+        "median": 44640.27470800001,
+        "p95": 47943.227249999996,
+        "max": 47943.227249999996,
+        "mean": 45619.63018033333,
+        "sd": 1649.7702825296635
+      },
+      "requests": {
+        "n": 3,
+        "min": 7,
+        "median": 7,
+        "p95": 7,
+        "max": 7,
+        "mean": 7,
+        "sd": 0
+      },
+      "rounds": {
+        "n": 3,
+        "min": 7,
+        "median": 7,
+        "p95": 7,
+        "max": 7,
+        "mean": 7,
+        "sd": 0
+      },
+      "firstMs": {
+        "sdkChunk": {
+          "n": 3,
+          "min": 2507.6871249999385,
+          "median": 2853.4392920000246,
+          "p95": 3108.1048329999903,
+          "max": 3108.1048329999903,
+          "mean": 2823.0770833333177,
+          "sd": 246.057925167157
+        },
+        "nonThoughtText": {
+          "n": 3,
+          "min": 36047.98995800002,
+          "median": 37384.02816699998,
+          "p95": 40734.68616699998,
+          "max": 40734.68616699998,
+          "mean": 38055.56809733333,
+          "sd": 1971.3793390056837
+        },
+        "durableText": {
+          "n": 3,
+          "min": 36064.76970800001,
+          "median": 37387.27583299999,
+          "p95": 40738.99537499994,
+          "max": 40738.99537499994,
+          "mean": 38063.68030533331,
+          "sd": 1967.2719951165254
+        }
+      },
+      "tokens": {
+        "promptTokenCount": {
+          "n": 3,
+          "min": 59270,
+          "median": 60974,
+          "p95": 60981,
+          "max": 60981,
+          "mean": 60408.333333333336,
+          "sd": 804.9282921823257
+        },
+        "cachedContentTokenCount": {
+          "n": 1,
+          "min": 8057,
+          "median": 8057,
+          "p95": 8057,
+          "max": 8057,
+          "mean": 8057,
+          "sd": 0
+        },
+        "candidatesTokenCount": {
+          "n": 3,
+          "min": 1518,
+          "median": 1544,
+          "p95": 1792,
+          "max": 1792,
+          "mean": 1618,
+          "sd": 123.49358957721921
+        },
+        "thoughtsTokenCount": {
+          "n": 3,
+          "min": 1924,
+          "median": 1956,
+          "p95": 2265,
+          "max": 2265,
+          "mean": 2048.3333333333335,
+          "sd": 153.76244303759253
+        }
+      },
+      "observedTokenSums": {
+        "promptTokenCount": 181225,
+        "cachedContentTokenCount": 8057,
+        "candidatesTokenCount": 4854,
+        "thoughtsTokenCount": 6145
+      },
+      "usageCoverage": {
+        "completedRounds": 21,
+        "reportedExchanges": 21,
+        "buckets": {
+          "promptTokenCount": 21,
+          "cachedContentTokenCount": 1,
+          "candidatesTokenCount": 21,
+          "thoughtsTokenCount": 21
+        }
+      },
+      "cache": {
+        "requests": 0,
+        "fallbacks": 0,
+        "created": 0,
+        "failures": 0
+      },
+      "modeledUsdPerRun": {
+        "reportedDiscountInput": {
+          "n": 3,
+          "min": 0.040297275,
+          "median": 0.0444525,
+          "p95": 0.0457305,
+          "max": 0.0457305,
+          "mean": 0.043493425,
+          "sd": 0.002319461448537138
+        },
+        "output": {
+          "n": 3,
+          "min": 0.013005,
+          "median": 0.014055,
+          "p95": 0.01418625,
+          "max": 0.01418625,
+          "mean": 0.013748749999999999,
+          "sd": 0.0005286332613447626
+        },
+        "storage": {
+          "n": 3,
+          "min": 0,
+          "median": 0,
+          "p95": 0,
+          "max": 0,
+          "mean": 0,
+          "sd": 0
+        },
+        "creationUpper": {
+          "n": 3,
+          "min": 0,
+          "median": 0,
+          "p95": 0,
+          "max": 0,
+          "mean": 0,
+          "sd": 0
+        },
+        "noCreation": {
+          "n": 3,
+          "min": 0.053302274999999996,
+          "median": 0.0585075,
+          "p95": 0.05991675,
+          "max": 0.05991675,
+          "mean": 0.057242175,
+          "sd": 0.0028447150294449537
+        },
+        "fullRateCreation": {
+          "n": 3,
+          "min": 0.053302274999999996,
+          "median": 0.0585075,
+          "p95": 0.05991675,
+          "max": 0.05991675,
+          "mean": 0.057242175,
+          "sd": 0.0028447150294449537
+        },
+        "allInputCachedFloor": {
+          "n": 3,
+          "min": 0.017578575,
+          "median": 0.01850025,
+          "p95": 0.0187593,
+          "max": 0.0187593,
+          "mean": 0.018279374999999997,
+          "sd": 0.0005066999148904608
+        }
+      }
+    },
+    "expansion/current": {
+      "runs": 3,
+      "completed": 3,
+      "errors": 0,
+      "quality": {
+        "allFacts": 3,
+        "factsMatched": 12,
+        "factsTotal": 12,
+        "resolvingCitations": 3
+      },
+      "wallMs": {
+        "n": 3,
+        "min": 46701.47304099999,
+        "median": 52908.49250000005,
+        "p95": 69936.63954200002,
+        "max": 69936.63954200002,
+        "mean": 56515.53502766669,
+        "sd": 9822.63737257278
+      },
+      "requests": {
+        "n": 3,
+        "min": 6,
+        "median": 7,
+        "p95": 9,
+        "max": 9,
+        "mean": 7.333333333333333,
+        "sd": 1.247219128924647
+      },
+      "rounds": {
+        "n": 3,
+        "min": 6,
+        "median": 6,
+        "p95": 9,
+        "max": 9,
+        "mean": 7,
+        "sd": 1.4142135623730951
+      },
+      "firstMs": {
+        "sdkChunk": {
+          "n": 3,
+          "min": 5400.6567499999655,
+          "median": 5664.699208999984,
+          "p95": 5711.8817500000005,
+          "max": 5711.8817500000005,
+          "mean": 5592.41256966665,
+          "sd": 136.953200828692
+        },
+        "nonThoughtText": {
+          "n": 3,
+          "min": 39809.44379199998,
+          "median": 45177.041582999984,
+          "p95": 62225.62424999999,
+          "max": 62225.62424999999,
+          "mean": 49070.70320833332,
+          "sd": 9556.559256024124
+        },
+        "durableText": {
+          "n": 3,
+          "min": 39826.66066699999,
+          "median": 45180.525957999984,
+          "p95": 62237.42441699997,
+          "max": 62237.42441699997,
+          "mean": 49081.53701399998,
+          "sd": 9555.940505216427
+        }
+      },
+      "tokens": {
+        "promptTokenCount": {
+          "n": 3,
+          "min": 45287,
+          "median": 48777,
+          "p95": 99266,
+          "max": 99266,
+          "mean": 64443.333333333336,
+          "sd": 24664.530677788207
+        },
+        "cachedContentTokenCount": {
+          "n": 3,
+          "min": 11308,
+          "median": 14184,
+          "p95": 21276,
+          "max": 21276,
+          "mean": 15589.333333333334,
+          "sd": 4188.991711086996
+        },
+        "candidatesTokenCount": {
+          "n": 3,
+          "min": 1661,
+          "median": 1756,
+          "p95": 1945,
+          "max": 1945,
+          "mean": 1787.3333333333333,
+          "sd": 118.04048269790985
+        },
+        "thoughtsTokenCount": {
+          "n": 3,
+          "min": 2399,
+          "median": 3403,
+          "p95": 4095,
+          "max": 4095,
+          "mean": 3299,
+          "sd": 696.2834671788974
+        }
+      },
+      "observedTokenSums": {
+        "promptTokenCount": 193330,
+        "cachedContentTokenCount": 46768,
+        "candidatesTokenCount": 5362,
+        "thoughtsTokenCount": 9897
+      },
+      "usageCoverage": {
+        "completedRounds": 21,
+        "reportedExchanges": 21,
+        "buckets": {
+          "promptTokenCount": 21,
+          "cachedContentTokenCount": 14,
+          "candidatesTokenCount": 21,
+          "thoughtsTokenCount": 21
+        }
+      },
+      "cache": {
+        "requests": 14,
+        "fallbacks": 0,
+        "created": 6,
+        "failures": 0
+      },
+      "modeledUsdPerRun": {
+        "reportedDiscountInput": {
+          "n": 2,
+          "min": 0.02894985,
+          "median": 0.044519025,
+          "p95": 0.060088199999999994,
+          "max": 0.060088199999999994,
+          "mean": 0.044519025,
+          "sd": 0.015569174999999998
+        },
+        "output": {
+          "n": 2,
+          "min": 0.01934625,
+          "median": 0.020998125,
+          "p95": 0.02265,
+          "max": 0.02265,
+          "mean": 0.020998125,
+          "sd": 0.0016518750000000006
+        },
+        "storage": {
+          "n": 2,
+          "min": 0.0004445833333333333,
+          "median": 0.0004745416666666666,
+          "p95": 0.0005045,
+          "max": 0.0005045,
+          "mean": 0.0004745416666666666,
+          "sd": 0.000029958333333333334
+        },
+        "creationUpper": {
+          "n": 2,
+          "min": 0.00400125,
+          "median": 0.004270875,
+          "p95": 0.0045405,
+          "max": 0.0045405,
+          "mean": 0.004270875,
+          "sd": 0.00026962500000000033
+        },
+        "noCreation": {
+          "n": 2,
+          "min": 0.048740683333333326,
+          "median": 0.06599169166666666,
+          "p95": 0.0832427,
+          "max": 0.0832427,
+          "mean": 0.06599169166666666,
+          "sd": 0.01725100833333334
+        },
+        "fullRateCreation": {
+          "n": 2,
+          "min": 0.052741933333333324,
+          "median": 0.07026256666666666,
+          "p95": 0.0877832,
+          "max": 0.0877832,
+          "mean": 0.07026256666666666,
+          "sd": 0.01752063333333334
+        },
+        "allInputCachedFloor": {
+          "n": 2,
+          "min": 0.02344910833333333,
+          "median": 0.027024279166666665,
+          "p95": 0.03059945,
+          "max": 0.03059945,
+          "mean": 0.027024279166666665,
+          "sd": 0.0035751708333333354
+        }
+      }
+    },
+    "expansion/pairedCurrentMinusBaseline": {
+      "comparableCost": {
+        "pairs": 2,
+        "baselineNoCreationUsd": {
+          "n": 2,
+          "min": 0.053302274999999996,
+          "median": 0.0559048875,
+          "p95": 0.0585075,
+          "max": 0.0585075,
+          "mean": 0.0559048875,
+          "sd": 0.0026026125000000004
+        },
+        "currentNoCreationUsd": {
+          "n": 2,
+          "min": 0.048740683333333326,
+          "median": 0.06599169166666666,
+          "p95": 0.0832427,
+          "max": 0.0832427,
+          "mean": 0.06599169166666666,
+          "sd": 0.01725100833333334
+        },
+        "currentFullRateCreationUsd": {
+          "n": 2,
+          "min": 0.052741933333333324,
+          "median": 0.07026256666666666,
+          "p95": 0.0877832,
+          "max": 0.0877832,
+          "mean": 0.07026256666666666,
+          "sd": 0.01752063333333334
+        },
+        "noCreationDeltaUsd": {
+          "n": 2,
+          "min": -0.00456159166666667,
+          "median": 0.010086804166666668,
+          "p95": 0.024735200000000006,
+          "max": 0.024735200000000006,
+          "mean": 0.010086804166666668,
+          "sd": 0.014648395833333338
+        },
+        "fullRateCreationDeltaUsd": {
+          "n": 2,
+          "min": -0.0005603416666666722,
+          "median": 0.014357679166666668,
+          "p95": 0.02927570000000001,
+          "max": 0.02927570000000001,
+          "mean": 0.014357679166666668,
+          "sd": 0.01491802083333334
+        }
+      },
+      "wallMs": {
+        "n": 3,
+        "min": 2426.0844579999975,
+        "median": 4965.265250000055,
+        "p95": 25296.364834000007,
+        "max": 25296.364834000007,
+        "mean": 10895.904847333353,
+        "sd": 10235.291744557358
+      },
+      "promptTokens": {
+        "n": 3,
+        "min": -15687,
+        "median": -12204,
+        "p95": 39996,
+        "max": 39996,
+        "mean": 4035,
+        "sd": 25467.992500391545
+      },
+      "requests": {
+        "n": 3,
+        "min": -1,
+        "median": 0,
+        "p95": 2,
+        "max": 2,
+        "mean": 0.3333333333333333,
+        "sd": 1.247219128924647
+      }
+    },
+    "primary/baseline": {
+      "runs": 12,
+      "completed": 12,
+      "errors": 0,
+      "quality": {
+        "allFacts": 12,
+        "factsMatched": 48,
+        "factsTotal": 48,
+        "resolvingCitations": 12
+      },
+      "wallMs": {
+        "n": 12,
+        "min": 13801.890082999947,
+        "median": 27864.731916500023,
+        "p95": 46602.3443750001,
+        "max": 46602.3443750001,
+        "mean": 27840.846017166685,
+        "sd": 12141.607543151611
+      },
+      "requests": {
+        "n": 12,
+        "min": 4,
+        "median": 6,
+        "p95": 8,
+        "max": 8,
+        "mean": 5.75,
+        "sd": 1.6393596310755
+      },
+      "rounds": {
+        "n": 12,
+        "min": 4,
+        "median": 6,
+        "p95": 8,
+        "max": 8,
+        "mean": 5.75,
+        "sd": 1.6393596310755
+      },
+      "firstMs": {
+        "sdkChunk": {
+          "n": 12,
+          "min": 2558.1824170000036,
+          "median": 3270.0381040000066,
+          "p95": 5038.743167,
+          "max": 5038.743167,
+          "mean": 3539.52715975001,
+          "sd": 746.5300574298666
+        },
+        "nonThoughtText": {
+          "n": 12,
+          "min": 12710.810875000083,
+          "median": 24350.645437500032,
+          "p95": 41909.37116699992,
+          "max": 41909.37116699992,
+          "mean": 24779.68437850001,
+          "sd": 10508.263074146545
+        },
+        "durableText": {
+          "n": 12,
+          "min": 12718.439250000054,
+          "median": 24353.88412500001,
+          "p95": 41919.228166999994,
+          "max": 41919.228166999994,
+          "mean": 24785.912802083345,
+          "sd": 10510.630260281801
+        }
+      },
+      "tokens": {
+        "promptTokenCount": {
+          "n": 12,
+          "min": 16859,
+          "median": 34559.5,
+          "p95": 64172,
+          "max": 64172,
+          "mean": 35616.833333333336,
+          "sd": 17452.77146488647
+        },
+        "cachedContentTokenCount": {
+          "n": 0,
+          "min": null,
+          "median": null,
+          "p95": null,
+          "max": null,
+          "mean": null,
+          "sd": null
+        },
+        "candidatesTokenCount": {
+          "n": 12,
+          "min": 300,
+          "median": 681,
+          "p95": 1324,
+          "max": 1324,
+          "mean": 745.0833333333334,
+          "sd": 371.0459222102958
+        },
+        "thoughtsTokenCount": {
+          "n": 12,
+          "min": 426,
+          "median": 952,
+          "p95": 2660,
+          "max": 2660,
+          "mean": 1164.6666666666667,
+          "sd": 698.1101075204557
+        }
+      },
+      "observedTokenSums": {
+        "promptTokenCount": 427402,
+        "cachedContentTokenCount": 0,
+        "candidatesTokenCount": 8941,
+        "thoughtsTokenCount": 13976
+      },
+      "usageCoverage": {
+        "completedRounds": 69,
+        "reportedExchanges": 69,
+        "buckets": {
+          "promptTokenCount": 69,
+          "cachedContentTokenCount": 0,
+          "candidatesTokenCount": 69,
+          "thoughtsTokenCount": 69
+        }
+      },
+      "cache": {
+        "requests": 0,
+        "fallbacks": 0,
+        "created": 0,
+        "failures": 0
+      },
+      "modeledUsdPerRun": {
+        "reportedDiscountInput": {
+          "n": 12,
+          "min": 0.01264425,
+          "median": 0.025919625,
+          "p95": 0.048129,
+          "max": 0.048129,
+          "mean": 0.026712625,
+          "sd": 0.013089578598664857
+        },
+        "output": {
+          "n": 12,
+          "min": 0.0027225,
+          "median": 0.006401250000000001,
+          "p95": 0.01456125,
+          "max": 0.01456125,
+          "mean": 0.0071615624999999995,
+          "sd": 0.003930173280113582
+        },
+        "storage": {
+          "n": 12,
+          "min": 0,
+          "median": 0,
+          "p95": 0,
+          "max": 0,
+          "mean": 0,
+          "sd": 0
+        },
+        "creationUpper": {
+          "n": 12,
+          "min": 0,
+          "median": 0,
+          "p95": 0,
+          "max": 0,
+          "mean": 0,
+          "sd": 0
+        },
+        "noCreation": {
+          "n": 12,
+          "min": 0.015366749999999998,
+          "median": 0.032062125,
+          "p95": 0.06269025,
+          "max": 0.06269025,
+          "mean": 0.0338741875,
+          "sd": 0.01694100702103387
+        },
+        "fullRateCreation": {
+          "n": 12,
+          "min": 0.015366749999999998,
+          "median": 0.032062125,
+          "p95": 0.06269025,
+          "max": 0.06269025,
+          "mean": 0.0338741875,
+          "sd": 0.01694100702103387
+        },
+        "allInputCachedFloor": {
+          "n": 12,
+          "min": 0.0039869250000000005,
+          "median": 0.008878012499999999,
+          "p95": 0.01937415,
+          "max": 0.01937415,
+          "mean": 0.009832824999999998,
+          "sd": 0.005213546929784223
+        }
+      }
+    },
+    "primary/current": {
+      "runs": 12,
+      "completed": 12,
+      "errors": 0,
+      "quality": {
+        "allFacts": 12,
+        "factsMatched": 48,
+        "factsTotal": 48,
+        "resolvingCitations": 12
+      },
+      "wallMs": {
+        "n": 12,
+        "min": 12390.531125000096,
+        "median": 28244.647458499996,
+        "p95": 62169.25233300001,
+        "max": 62169.25233300001,
+        "mean": 31610.022906500017,
+        "sd": 16313.338958747194
+      },
+      "requests": {
+        "n": 12,
+        "min": 2,
+        "median": 5,
+        "p95": 8,
+        "max": 8,
+        "mean": 5.166666666666667,
+        "sd": 1.9930434571835662
+      },
+      "rounds": {
+        "n": 12,
+        "min": 2,
+        "median": 5,
+        "p95": 8,
+        "max": 8,
+        "mean": 5.166666666666667,
+        "sd": 1.9930434571835662
+      },
+      "firstMs": {
+        "sdkChunk": {
+          "n": 12,
+          "min": 2882.8720829999656,
+          "median": 3820.4883544999902,
+          "p95": 10245.941458000016,
+          "max": 10245.941458000016,
+          "mean": 4475.402756916665,
+          "sd": 1918.6113998416417
+        },
+        "nonThoughtText": {
+          "n": 12,
+          "min": 11220.732208999922,
+          "median": 25883.473916500006,
+          "p95": 57919.33624999999,
+          "max": 57919.33624999999,
+          "mean": 28766.69418033333,
+          "sd": 14990.626888836994
+        },
+        "durableText": {
+          "n": 12,
+          "min": 11236.844291999936,
+          "median": 25885.676562,
+          "p95": 57931.592084,
+          "max": 57931.592084,
+          "mean": 28773.22838199999,
+          "sd": 14991.477105327895
+        }
+      },
+      "tokens": {
+        "promptTokenCount": {
+          "n": 12,
+          "min": 5825,
+          "median": 22958.5,
+          "p95": 62338,
+          "max": 62338,
+          "mean": 29790.916666666668,
+          "sd": 20070.765271319102
+        },
+        "cachedContentTokenCount": {
+          "n": 12,
+          "min": 2191,
+          "median": 9631.5,
+          "p95": 26275,
+          "max": 26275,
+          "mean": 11345.666666666666,
+          "sd": 6986.128259311845
+        },
+        "candidatesTokenCount": {
+          "n": 12,
+          "min": 224,
+          "median": 694.5,
+          "p95": 1330,
+          "max": 1330,
+          "mean": 771,
+          "sd": 418.4535019967372
+        },
+        "thoughtsTokenCount": {
+          "n": 12,
+          "min": 604,
+          "median": 1076,
+          "p95": 3309,
+          "max": 3309,
+          "mean": 1615.5,
+          "sd": 972.3100071479261
+        }
+      },
+      "observedTokenSums": {
+        "promptTokenCount": 357491,
+        "cachedContentTokenCount": 136148,
+        "candidatesTokenCount": 9252,
+        "thoughtsTokenCount": 19386
+      },
+      "usageCoverage": {
+        "completedRounds": 62,
+        "reportedExchanges": 62,
+        "buckets": {
+          "promptTokenCount": 62,
+          "cachedContentTokenCount": 50,
+          "candidatesTokenCount": 62,
+          "thoughtsTokenCount": 62
+        }
+      },
+      "cache": {
+        "requests": 49,
+        "fallbacks": 0,
+        "created": 12,
+        "failures": 0
+      },
+      "modeledUsdPerRun": {
+        "reportedDiscountInput": {
+          "n": 12,
+          "min": 0.002889825,
+          "median": 0.010717612500000001,
+          "p95": 0.03454815,
+          "max": 0.03454815,
+          "mean": 0.0146848625,
+          "sd": 0.010821322020126804
+        },
+        "output": {
+          "n": 12,
+          "min": 0.003345,
+          "median": 0.006555,
+          "p95": 0.0173175,
+          "max": 0.0173175,
+          "mean": 0.008949374999999999,
+          "sd": 0.005146227190561547
+        },
+        "storage": {
+          "n": 12,
+          "min": 0.00018258333333333332,
+          "median": 0.00019787500000000003,
+          "p95": 0.0002355833333333333,
+          "max": 0.0002355833333333333,
+          "mean": 0.00020347916666666667,
+          "sd": 0.000021081140778614837
+        },
+        "creationUpper": {
+          "n": 12,
+          "min": 0.00164325,
+          "median": 0.001780875,
+          "p95": 0.00212025,
+          "max": 0.00212025,
+          "mean": 0.0018313125000000003,
+          "sd": 0.0001897302670075337
+        },
+        "noCreation": {
+          "n": 12,
+          "min": 0.006934908333333333,
+          "median": 0.0173973625,
+          "p95": 0.04838123333333333,
+          "max": 0.04838123333333333,
+          "mean": 0.023837716666666665,
+          "sd": 0.015744839721389892
+        },
+        "fullRateCreation": {
+          "n": 12,
+          "min": 0.008578158333333334,
+          "median": 0.0191782375,
+          "p95": 0.050501483333333326,
+          "max": 0.050501483333333326,
+          "mean": 0.025669029166666663,
+          "sd": 0.015932381548327153
+        },
+        "allInputCachedFloor": {
+          "n": 12,
+          "min": 0.004280208333333333,
+          "median": 0.008441275,
+          "p95": 0.021500933333333333,
+          "max": 0.021500933333333333,
+          "mean": 0.011387172916666667,
+          "sd": 0.006613566036507773
+        }
+      }
+    },
+    "primary/pairedCurrentMinusBaseline": {
+      "comparableCost": {
+        "pairs": 12,
+        "baselineNoCreationUsd": {
+          "n": 12,
+          "min": 0.015366749999999998,
+          "median": 0.032062125,
+          "p95": 0.06269025,
+          "max": 0.06269025,
+          "mean": 0.0338741875,
+          "sd": 0.01694100702103387
+        },
+        "currentNoCreationUsd": {
+          "n": 12,
+          "min": 0.006934908333333333,
+          "median": 0.0173973625,
+          "p95": 0.04838123333333333,
+          "max": 0.04838123333333333,
+          "mean": 0.023837716666666665,
+          "sd": 0.015744839721389892
+        },
+        "currentFullRateCreationUsd": {
+          "n": 12,
+          "min": 0.008578158333333334,
+          "median": 0.0191782375,
+          "p95": 0.050501483333333326,
+          "max": 0.050501483333333326,
+          "mean": 0.025669029166666663,
+          "sd": 0.015932381548327153
+        },
+        "noCreationDeltaUsd": {
+          "n": 12,
+          "min": -0.020176,
+          "median": -0.007249016666666666,
+          "p95": -0.004519791666666675,
+          "max": -0.004519791666666675,
+          "mean": -0.010036470833333335,
+          "sd": 0.0051126775971004025
+        },
+        "fullRateCreationDeltaUsd": {
+          "n": 12,
+          "min": -0.018295,
+          "median": -0.005605766666666665,
+          "p95": -0.0023995416666666783,
+          "max": -0.0023995416666666783,
+          "mean": -0.008205158333333332,
+          "sd": 0.005096068628442771
+        }
+      },
+      "wallMs": {
+        "n": 12,
+        "min": -3738.7550830000546,
+        "median": 3361.6301669999375,
+        "p95": 23502.624540999997,
+        "max": 23502.624540999997,
+        "mean": 3769.176889333328,
+        "sd": 6648.447362927527
+      },
+      "promptTokens": {
+        "n": 12,
+        "min": -17859,
+        "median": -6762,
+        "p95": 10827,
+        "max": 10827,
+        "mean": -5825.916666666667,
+        "sd": 7823.965729925941
+      },
+      "requests": {
+        "n": 12,
+        "min": -3,
+        "median": 0,
+        "p95": 1,
+        "max": 1,
+        "mean": -0.5833333333333334,
+        "sd": 1.0374916331657278
+      }
+    },
+    "all/baseline": {
+      "runs": 18,
+      "completed": 18,
+      "errors": 0,
+      "quality": {
+        "allFacts": 18,
+        "factsMatched": 63,
+        "factsTotal": 63,
+        "resolvingCitations": 18
+      },
+      "wallMs": {
+        "n": 18,
+        "min": 13801.890082999947,
+        "median": 38589.976062500005,
+        "p95": 51870.523208,
+        "max": 51870.523208,
+        "mean": 34308.50263405557,
+        "sd": 13600.262414477771
+      },
+      "requests": {
+        "n": 18,
+        "min": 4,
+        "median": 7,
+        "p95": 9,
+        "max": 9,
+        "mean": 6.277777777777778,
+        "sd": 1.5918387535438225
+      },
+      "rounds": {
+        "n": 18,
+        "min": 4,
+        "median": 7,
+        "p95": 9,
+        "max": 9,
+        "mean": 6.277777777777778,
+        "sd": 1.5918387535438225
+      },
+      "firstMs": {
+        "sdkChunk": {
+          "n": 18,
+          "min": 2507.6871249999385,
+          "median": 3264.3252704999904,
+          "p95": 6046.09145800001,
+          "max": 6046.09145800001,
+          "mean": 3511.2629884444495,
+          "sd": 926.0343987509776
+        },
+        "nonThoughtText": {
+          "n": 18,
+          "min": 12710.810875000083,
+          "median": 34315.81866650001,
+          "p95": 44257.746291999996,
+          "max": 44257.746291999996,
+          "mean": 29776.176085722233,
+          "sd": 11269.46552408311
+        },
+        "durableText": {
+          "n": 18,
+          "min": 12718.439250000054,
+          "median": 34326.57399999999,
+          "p95": 44269.35454199999,
+          "max": 44269.35454199999,
+          "mean": 29783.078821722225,
+          "sd": 11271.498953643899
+        }
+      },
+      "tokens": {
+        "promptTokenCount": {
+          "n": 18,
+          "min": 16859,
+          "median": 51698,
+          "p95": 126473,
+          "max": 126473,
+          "mean": 49223.5,
+          "sd": 27489.319526459323
+        },
+        "cachedContentTokenCount": {
+          "n": 3,
+          "min": 8057,
+          "median": 16186,
+          "p95": 56592,
+          "max": 56592,
+          "mean": 26945,
+          "sd": 21224.649459217617
+        },
+        "candidatesTokenCount": {
+          "n": 18,
+          "min": 300,
+          "median": 1079.5,
+          "p95": 2062,
+          "max": 2062,
+          "mean": 1080,
+          "sd": 573.5617761942572
+        },
+        "thoughtsTokenCount": {
+          "n": 18,
+          "min": 426,
+          "median": 1667.5,
+          "p95": 2728,
+          "max": 2728,
+          "mean": 1514.4444444444443,
+          "sd": 770.3989026055284
+        }
+      },
+      "observedTokenSums": {
+        "promptTokenCount": 886023,
+        "cachedContentTokenCount": 80835,
+        "candidatesTokenCount": 19440,
+        "thoughtsTokenCount": 27260
+      },
+      "usageCoverage": {
+        "completedRounds": 113,
+        "reportedExchanges": 113,
+        "buckets": {
+          "promptTokenCount": 113,
+          "cachedContentTokenCount": 5,
+          "candidatesTokenCount": 113,
+          "thoughtsTokenCount": 113
+        }
+      },
+      "cache": {
+        "requests": 0,
+        "fallbacks": 0,
+        "created": 0,
+        "failures": 0
+      },
+      "modeledUsdPerRun": {
+        "reportedDiscountInput": {
+          "n": 18,
+          "min": 0.01264425,
+          "median": 0.0387735,
+          "p95": 0.05665515,
+          "max": 0.05665515,
+          "mean": 0.033886312499999995,
+          "sd": 0.015129200166363927
+        },
+        "output": {
+          "n": 18,
+          "min": 0.0027225,
+          "median": 0.010490625,
+          "p95": 0.0179625,
+          "max": 0.0179625,
+          "mean": 0.009729166666666665,
+          "sd": 0.004933484003189046
+        },
+        "storage": {
+          "n": 18,
+          "min": 0,
+          "median": 0,
+          "p95": 0,
+          "max": 0,
+          "mean": 0,
+          "sd": 0
+        },
+        "creationUpper": {
+          "n": 18,
+          "min": 0,
+          "median": 0,
+          "p95": 0,
+          "max": 0,
+          "mean": 0,
+          "sd": 0
+        },
+        "noCreation": {
+          "n": 18,
+          "min": 0.015366749999999998,
+          "median": 0.04869975,
+          "p95": 0.07461765000000001,
+          "max": 0.07461765000000001,
+          "mean": 0.043615479166666665,
+          "sd": 0.019952179496138474
+        },
+        "fullRateCreation": {
+          "n": 18,
+          "min": 0.015366749999999998,
+          "median": 0.04869975,
+          "p95": 0.07461765000000001,
+          "max": 0.07461765000000001,
+          "mean": 0.043615479166666665,
+          "sd": 0.019952179496138474
+        },
+        "allInputCachedFloor": {
+          "n": 18,
+          "min": 0.0039869250000000005,
+          "median": 0.0141808875,
+          "p95": 0.027447975,
+          "max": 0.027447975,
+          "mean": 0.013420929166666666,
+          "sd": 0.006892118623734539
+        }
+      }
+    },
+    "all/current": {
+      "runs": 18,
+      "completed": 18,
+      "errors": 0,
+      "quality": {
+        "allFacts": 18,
+        "factsMatched": 63,
+        "factsTotal": 63,
+        "resolvingCitations": 18
+      },
+      "wallMs": {
+        "n": 18,
+        "min": 12390.531125000096,
+        "median": 45014.41097950001,
+        "p95": 118990.218375,
+        "max": 118990.218375,
+        "mean": 44743.668308000015,
+        "sd": 27412.859024809677
+      },
+      "requests": {
+        "n": 18,
+        "min": 2,
+        "median": 6,
+        "p95": 19,
+        "max": 19,
+        "mean": 6.944444444444445,
+        "sd": 4.209410386558804
+      },
+      "rounds": {
+        "n": 18,
+        "min": 2,
+        "median": 6,
+        "p95": 19,
+        "max": 19,
+        "mean": 6.888888888888889,
+        "sd": 4.214905941864591
+      },
+      "firstMs": {
+        "sdkChunk": {
+          "n": 18,
+          "min": 2882.8720829999656,
+          "median": 4691.482729499985,
+          "p95": 10245.941458000016,
+          "max": 10245.941458000016,
+          "mean": 4759.907048666665,
+          "sd": 1655.224475797167
+        },
+        "nonThoughtText": {
+          "n": 18,
+          "min": 11220.732208999922,
+          "median": 39424.620978999985,
+          "p95": 110128.12362500001,
+          "max": 110128.12362500001,
+          "mean": 40272.978231388886,
+          "sd": 25066.633621106168
+        },
+        "durableText": {
+          "n": 18,
+          "min": 11236.844291999936,
+          "median": 39436.280270999996,
+          "p95": 110141.32604200003,
+          "max": 110141.32604200003,
+          "mean": 40282.01530566667,
+          "sd": 25069.349531177148
+        }
+      },
+      "tokens": {
+        "promptTokenCount": {
+          "n": 18,
+          "min": 5825,
+          "median": 42741.5,
+          "p95": 316779,
+          "max": 316779,
+          "mean": 64549.055555555555,
+          "sd": 79837.68368694645
+        },
+        "cachedContentTokenCount": {
+          "n": 18,
+          "min": 2191,
+          "median": 14159.5,
+          "p95": 198034,
+          "max": 198034,
+          "mean": 29680.222222222223,
+          "sd": 49980.56404972232
+        },
+        "candidatesTokenCount": {
+          "n": 18,
+          "min": 224,
+          "median": 1204.5,
+          "p95": 2671,
+          "max": 2671,
+          "mean": 1199.5555555555557,
+          "sd": 738.6465266675426
+        },
+        "thoughtsTokenCount": {
+          "n": 18,
+          "min": 604,
+          "median": 2347.5,
+          "p95": 4095,
+          "max": 4095,
+          "mean": 2179.6666666666665,
+          "sd": 1166.057507634641
+        }
+      },
+      "observedTokenSums": {
+        "promptTokenCount": 1161883,
+        "cachedContentTokenCount": 534244,
+        "candidatesTokenCount": 21592,
+        "thoughtsTokenCount": 39234
+      },
+      "usageCoverage": {
+        "completedRounds": 124,
+        "reportedExchanges": 124,
+        "buckets": {
+          "promptTokenCount": 124,
+          "cachedContentTokenCount": 102,
+          "candidatesTokenCount": 124,
+          "thoughtsTokenCount": 124
+        }
+      },
+      "cache": {
+        "requests": 82,
+        "fallbacks": 0,
+        "created": 21,
+        "failures": 0
+      },
+      "modeledUsdPerRun": {
+        "reportedDiscountInput": {
+          "n": 17,
+          "min": 0.002889825,
+          "median": 0.0182967,
+          "p95": 0.1039113,
+          "max": 0.1039113,
+          "mean": 0.028612147058823527,
+          "sd": 0.028448950172309268
+        },
+        "output": {
+          "n": 17,
+          "min": 0.003345,
+          "median": 0.0135975,
+          "p95": 0.0233175,
+          "max": 0.0233175,
+          "mean": 0.012521911764705882,
+          "sd": 0.007138527703874184
+        },
+        "storage": {
+          "n": 17,
+          "min": 0.00018258333333333332,
+          "median": 0.000209,
+          "p95": 0.0005045,
+          "max": 0.0005045,
+          "mean": 0.00025160784313725494,
+          "sd": 0.00009078188309328201
+        },
+        "creationUpper": {
+          "n": 17,
+          "min": 0.00164325,
+          "median": 0.001881,
+          "p95": 0.0045405,
+          "max": 0.0045405,
+          "mean": 0.0022644705882352944,
+          "sd": 0.000817036947839538
+        },
+        "noCreation": {
+          "n": 17,
+          "min": 0.006934908333333333,
+          "median": 0.0325457,
+          "p95": 0.1275243,
+          "max": 0.1275243,
+          "mean": 0.04138566666666667,
+          "sd": 0.03482248527415418
+        },
+        "fullRateCreation": {
+          "n": 17,
+          "min": 0.008578158333333334,
+          "median": 0.0344267,
+          "p95": 0.13018380000000002,
+          "max": 0.13018380000000002,
+          "mean": 0.04365013725490196,
+          "sd": 0.035332449975847426
+        },
+        "allInputCachedFloor": {
+          "n": 17,
+          "min": 0.004280208333333333,
+          "median": 0.0172637,
+          "p95": 0.047371425,
+          "max": 0.047371425,
+          "mean": 0.01769967843137255,
+          "sd": 0.01246427314460517
+        }
+      }
+    },
+    "all/pairedCurrentMinusBaseline": {
+      "comparableCost": {
+        "pairs": 17,
+        "baselineNoCreationUsd": {
+          "n": 17,
+          "min": 0.015366749999999998,
+          "median": 0.04746375,
+          "p95": 0.07461765000000001,
+          "max": 0.07461765000000001,
+          "mean": 0.04265658088235294,
+          "sd": 0.020123512306305387
+        },
+        "currentNoCreationUsd": {
+          "n": 17,
+          "min": 0.006934908333333333,
+          "median": 0.0325457,
+          "p95": 0.1275243,
+          "max": 0.1275243,
+          "mean": 0.04138566666666667,
+          "sd": 0.03482248527415418
+        },
+        "currentFullRateCreationUsd": {
+          "n": 17,
+          "min": 0.008578158333333334,
+          "median": 0.0344267,
+          "p95": 0.13018380000000002,
+          "max": 0.13018380000000002,
+          "mean": 0.04365013725490196,
+          "sd": 0.035332449975847426
+        },
+        "noCreationDeltaUsd": {
+          "n": 17,
+          "min": -0.020176,
+          "median": -0.006291525000000001,
+          "p95": 0.0577038,
+          "max": 0.0577038,
+          "mean": -0.0012709142156862765,
+          "sd": 0.020132971177859046
+        },
+        "fullRateCreationDeltaUsd": {
+          "n": 17,
+          "min": -0.018295,
+          "median": -0.004610775000000001,
+          "p95": 0.06036330000000001,
+          "max": 0.06036330000000001,
+          "mean": 0.0009935563725490203,
+          "sd": 0.020526647997164513
+        }
+      },
+      "wallMs": {
+        "n": 18,
+        "min": -3738.7550830000546,
+        "median": 4111.92187549996,
+        "p95": 68710.73725,
+        "max": 68710.73725,
+        "mean": 10435.165673944444,
+        "sd": 17617.786552359128
+      },
+      "promptTokens": {
+        "n": 18,
+        "min": -19947,
+        "median": -6762,
+        "p95": 242630,
+        "max": 242630,
+        "mean": 15325.555555555555,
+        "sd": 62580.29809792129
+      },
+      "requests": {
+        "n": 18,
+        "min": -3,
+        "median": 0,
+        "p95": 12,
+        "max": 12,
+        "mean": 0.6666666666666666,
+        "sd": 3.39934634239519
+      }
+    }
+  }
+}

@@ -1,0 +1,3064 @@
+{
+  "mission": "coo:1127",
+  "objective": "coo:1127.502m",
+  "method": "Owner diagnostics API; UTF-8 JSON sizes; last usage-bearing chunk per exchange; observation timestamp differences",
+  "threads": [
+    {
+      "threadId": "25eaf8d8-8598-4f3e-9632-31139cf43757",
+      "rows": 377,
+      "payloadBytes": 4050332,
+      "gaps": 0,
+      "request": {
+        "seq": 16,
+        "exchangeId": "586dcbd3-d932-469f-b46c-709bb2cbfefe",
+        "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+        "method": "stream",
+        "model": "gemini-3.8-flash",
+        "requestBytes": 28693,
+        "systemBytes": 4664,
+        "toolBytes": 23632,
+        "toolCount": 24,
+        "contentsBytes": 229,
+        "turnCount": 1,
+        "functionResponses": 0,
+        "chunks": 2,
+        "firstChunkMs": 3697,
+        "firstTextMs": null,
+        "durationMs": 3720,
+        "usage": {
+          "serviceTier": "standard",
+          "totalTokenCount": 8219,
+          "promptTokenCount": 7925,
+          "thoughtsTokenCount": 281,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 7925
+            }
+          ],
+          "candidatesTokenCount": 13
+        },
+        "cachedContent": null
+      },
+      "lastRequest": {
+        "seq": 289,
+        "exchangeId": "c4b65076-3c09-4d32-9928-896f7ff463f7",
+        "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+        "method": "stream",
+        "model": "gemini-3.8-flash",
+        "requestBytes": 217204,
+        "systemBytes": 4664,
+        "toolBytes": 23632,
+        "toolCount": 24,
+        "contentsBytes": 188740,
+        "turnCount": 55,
+        "functionResponses": 27,
+        "chunks": 37,
+        "firstChunkMs": 5227,
+        "firstTextMs": 5227,
+        "durationMs": 42333,
+        "usage": {
+          "serviceTier": "standard",
+          "totalTokenCount": 64844,
+          "promptTokenCount": 63593,
+          "thoughtsTokenCount": 374,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 63593
+            }
+          ],
+          "candidatesTokenCount": 877
+        },
+        "cachedContent": null
+      },
+      "stats": {
+        "firstChunkMs": {
+          "n": 28,
+          "min": 2409,
+          "p50": 3440,
+          "p95": 26108,
+          "max": 33546,
+          "sum": 165644
+        },
+        "durationMs": {
+          "n": 28,
+          "min": 2442,
+          "p50": 3466,
+          "p95": 33822,
+          "max": 42333,
+          "sum": 204256
+        },
+        "dispatchMs": {
+          "n": 27,
+          "min": 23,
+          "p50": 238,
+          "p95": 705,
+          "max": 931,
+          "sum": 8300
+        },
+        "executionMs": {
+          "n": 27,
+          "min": 226,
+          "p50": 797,
+          "p95": 1205,
+          "max": 1477,
+          "sum": 21599
+        }
+      },
+      "usageTotals": {
+        "totalTokenCount": 989142,
+        "promptTokenCount": 978429,
+        "thoughtsTokenCount": 5907,
+        "candidatesTokenCount": 4806,
+        "cachedContentTokenCount": 699210
+      },
+      "tools": {
+        "overlord_list_projects": {
+          "n": 1,
+          "executionMs": {
+            "n": 1,
+            "min": 271,
+            "p50": 271,
+            "p95": 271,
+            "max": 271,
+            "sum": 271
+          }
+        },
+        "overlord_list_execution_targets": {
+          "n": 1,
+          "executionMs": {
+            "n": 1,
+            "min": 226,
+            "p50": 226,
+            "p95": 226,
+            "max": 226,
+            "sum": 226
+          }
+        },
+        "repository_read": {
+          "n": 21,
+          "executionMs": {
+            "n": 21,
+            "min": 543,
+            "p50": 813,
+            "p95": 1203,
+            "max": 1205,
+            "sum": 17635
+          }
+        },
+        "overlord_search_missions": {
+          "n": 1,
+          "executionMs": {
+            "n": 1,
+            "min": 621,
+            "p50": 621,
+            "p95": 621,
+            "max": 621,
+            "sum": 621
+          }
+        },
+        "overlord_get_mission": {
+          "n": 2,
+          "executionMs": {
+            "n": 2,
+            "min": 565,
+            "p50": 565,
+            "p95": 804,
+            "max": 804,
+            "sum": 1369
+          }
+        },
+        "prepare_proposal": {
+          "n": 1,
+          "executionMs": {
+            "n": 1,
+            "min": 1477,
+            "p50": 1477,
+            "p95": 1477,
+            "max": 1477,
+            "sum": 1477
+          }
+        }
+      },
+      "exchanges": [
+        {
+          "seq": 16,
+          "bytes": 28693,
+          "contents": 229,
+          "turns": 1,
+          "chunks": 2,
+          "firstChunkMs": 3697,
+          "firstTextMs": null,
+          "durationMs": 3720,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 8219,
+            "promptTokenCount": 7925,
+            "thoughtsTokenCount": 281,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 7925
+              }
+            ],
+            "candidatesTokenCount": 13
+          }
+        },
+        {
+          "seq": 27,
+          "bytes": 48239,
+          "contents": 19775,
+          "turns": 3,
+          "chunks": 2,
+          "firstChunkMs": 2976,
+          "firstTextMs": null,
+          "durationMs": 3004,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 15205,
+            "promptTokenCount": 14997,
+            "thoughtsTokenCount": 152,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 14997
+              }
+            ],
+            "candidatesTokenCount": 56
+          }
+        },
+        {
+          "seq": 38,
+          "bytes": 49796,
+          "contents": 21332,
+          "turns": 5,
+          "chunks": 2,
+          "firstChunkMs": 3440,
+          "firstTextMs": null,
+          "durationMs": 3466,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 15717,
+            "promptTokenCount": 15441,
+            "thoughtsTokenCount": 162,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 15441
+              }
+            ],
+            "candidatesTokenCount": 114
+          }
+        },
+        {
+          "seq": 50,
+          "bytes": 69569,
+          "contents": 41105,
+          "turns": 7,
+          "chunks": 2,
+          "firstChunkMs": 2680,
+          "firstTextMs": null,
+          "durationMs": 2717,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 21611,
+            "promptTokenCount": 21457,
+            "thoughtsTokenCount": 27,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 21457
+              }
+            ],
+            "candidatesTokenCount": 127
+          }
+        },
+        {
+          "seq": 62,
+          "bytes": 73846,
+          "contents": 45382,
+          "turns": 9,
+          "chunks": 2,
+          "firstChunkMs": 3038,
+          "firstTextMs": null,
+          "durationMs": 3079,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 22773,
+            "promptTokenCount": 22595,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 20325
+              }
+            ],
+            "thoughtsTokenCount": 49,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 22595
+              }
+            ],
+            "candidatesTokenCount": 129,
+            "cachedContentTokenCount": 20325
+          }
+        },
+        {
+          "seq": 73,
+          "bytes": 78225,
+          "contents": 49761,
+          "turns": 11,
+          "chunks": 2,
+          "firstChunkMs": 6178,
+          "firstTextMs": null,
+          "durationMs": 6208,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 23915,
+            "promptTokenCount": 23755,
+            "thoughtsTokenCount": 46,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 23755
+              }
+            ],
+            "candidatesTokenCount": 114
+          }
+        },
+        {
+          "seq": 84,
+          "bytes": 80275,
+          "contents": 51811,
+          "turns": 13,
+          "chunks": 2,
+          "firstChunkMs": 4955,
+          "firstTextMs": null,
+          "durationMs": 4969,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 24573,
+            "promptTokenCount": 24394,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 20320
+              }
+            ],
+            "thoughtsTokenCount": 57,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 24394
+              }
+            ],
+            "candidatesTokenCount": 122,
+            "cachedContentTokenCount": 20320
+          }
+        },
+        {
+          "seq": 95,
+          "bytes": 84099,
+          "contents": 55635,
+          "turns": 15,
+          "chunks": 2,
+          "firstChunkMs": 3591,
+          "firstTextMs": null,
+          "durationMs": 3620,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 25736,
+            "promptTokenCount": 25576,
+            "thoughtsTokenCount": 24,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 25576
+              }
+            ],
+            "candidatesTokenCount": 136
+          }
+        },
+        {
+          "seq": 108,
+          "bytes": 89076,
+          "contents": 60612,
+          "turns": 17,
+          "chunks": 2,
+          "firstChunkMs": 2875,
+          "firstTextMs": null,
+          "durationMs": 2907,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 27209,
+            "promptTokenCount": 27039,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 24384
+              }
+            ],
+            "thoughtsTokenCount": 48,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 27039
+              }
+            ],
+            "candidatesTokenCount": 122,
+            "cachedContentTokenCount": 24384
+          }
+        },
+        {
+          "seq": 119,
+          "bytes": 90722,
+          "contents": 62258,
+          "turns": 19,
+          "chunks": 2,
+          "firstChunkMs": 2409,
+          "firstTextMs": null,
+          "durationMs": 2442,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 27714,
+            "promptTokenCount": 27563,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 24379
+              }
+            ],
+            "thoughtsTokenCount": 36,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 27563
+              }
+            ],
+            "candidatesTokenCount": 115,
+            "cachedContentTokenCount": 24379
+          }
+        },
+        {
+          "seq": 130,
+          "bytes": 93870,
+          "contents": 65406,
+          "turns": 21,
+          "chunks": 2,
+          "firstChunkMs": 3830,
+          "firstTextMs": null,
+          "durationMs": 3888,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 28825,
+            "promptTokenCount": 28656,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 24378
+              }
+            ],
+            "thoughtsTokenCount": 32,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 28656
+              }
+            ],
+            "candidatesTokenCount": 137,
+            "cachedContentTokenCount": 24378
+          }
+        },
+        {
+          "seq": 143,
+          "bytes": 97055,
+          "contents": 68591,
+          "turns": 23,
+          "chunks": 2,
+          "firstChunkMs": 26108,
+          "firstTextMs": null,
+          "durationMs": 26144,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 29795,
+            "promptTokenCount": 29621,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 24376
+              }
+            ],
+            "thoughtsTokenCount": 49,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 29621
+              }
+            ],
+            "candidatesTokenCount": 125,
+            "cachedContentTokenCount": 24376
+          }
+        },
+        {
+          "seq": 153,
+          "bytes": 100512,
+          "contents": 72048,
+          "turns": 25,
+          "chunks": 2,
+          "firstChunkMs": 3025,
+          "firstTextMs": null,
+          "durationMs": 3071,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 30900,
+            "promptTokenCount": 30726,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 28438
+              }
+            ],
+            "thoughtsTokenCount": 37,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 30726
+              }
+            ],
+            "candidatesTokenCount": 137,
+            "cachedContentTokenCount": 28438
+          }
+        },
+        {
+          "seq": 162,
+          "bytes": 104751,
+          "contents": 76287,
+          "turns": 27,
+          "chunks": 2,
+          "firstChunkMs": 2712,
+          "firstTextMs": null,
+          "durationMs": 2809,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 32200,
+            "promptTokenCount": 32037,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 28439
+              }
+            ],
+            "thoughtsTokenCount": 48,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 32037
+              }
+            ],
+            "candidatesTokenCount": 115,
+            "cachedContentTokenCount": 28439
+          }
+        },
+        {
+          "seq": 171,
+          "bytes": 106703,
+          "contents": 78239,
+          "turns": 29,
+          "chunks": 2,
+          "firstChunkMs": 4442,
+          "firstTextMs": null,
+          "durationMs": 4486,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 32843,
+            "promptTokenCount": 32659,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 24373
+              }
+            ],
+            "thoughtsTokenCount": 50,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 32659
+              }
+            ],
+            "candidatesTokenCount": 134,
+            "cachedContentTokenCount": 24373
+          }
+        },
+        {
+          "seq": 180,
+          "bytes": 117269,
+          "contents": 88805,
+          "turns": 31,
+          "chunks": 2,
+          "firstChunkMs": 4618,
+          "firstTextMs": null,
+          "durationMs": 4656,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 35491,
+            "promptTokenCount": 35315,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 32508
+              }
+            ],
+            "thoughtsTokenCount": 40,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 35315
+              }
+            ],
+            "candidatesTokenCount": 136,
+            "cachedContentTokenCount": 32508
+          }
+        },
+        {
+          "seq": 189,
+          "bytes": 124542,
+          "contents": 96078,
+          "turns": 33,
+          "chunks": 2,
+          "firstChunkMs": 3789,
+          "firstTextMs": null,
+          "durationMs": 3895,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 37524,
+            "promptTokenCount": 37329,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 32513
+              }
+            ],
+            "thoughtsTokenCount": 59,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 37329
+              }
+            ],
+            "candidatesTokenCount": 136,
+            "cachedContentTokenCount": 32513
+          }
+        },
+        {
+          "seq": 198,
+          "bytes": 131126,
+          "contents": 102662,
+          "turns": 35,
+          "chunks": 2,
+          "firstChunkMs": 5706,
+          "firstTextMs": null,
+          "durationMs": 5750,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 39434,
+            "promptTokenCount": 39267,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 28453
+              }
+            ],
+            "thoughtsTokenCount": 31,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 39267
+              }
+            ],
+            "candidatesTokenCount": 136,
+            "cachedContentTokenCount": 28453
+          }
+        },
+        {
+          "seq": 207,
+          "bytes": 136906,
+          "contents": 108442,
+          "turns": 37,
+          "chunks": 2,
+          "firstChunkMs": 2696,
+          "firstTextMs": null,
+          "durationMs": 2812,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 41086,
+            "promptTokenCount": 40920,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 36585
+              }
+            ],
+            "thoughtsTokenCount": 30,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 40920
+              }
+            ],
+            "candidatesTokenCount": 136,
+            "cachedContentTokenCount": 36585
+          }
+        },
+        {
+          "seq": 216,
+          "bytes": 143825,
+          "contents": 115361,
+          "turns": 39,
+          "chunks": 2,
+          "firstChunkMs": 2568,
+          "firstTextMs": null,
+          "durationMs": 2636,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 43075,
+            "promptTokenCount": 42898,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 40654
+              }
+            ],
+            "thoughtsTokenCount": 41,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 42898
+              }
+            ],
+            "candidatesTokenCount": 136,
+            "cachedContentTokenCount": 40654
+          }
+        },
+        {
+          "seq": 225,
+          "bytes": 149423,
+          "contents": 120959,
+          "turns": 41,
+          "chunks": 2,
+          "firstChunkMs": 2593,
+          "firstTextMs": null,
+          "durationMs": 2612,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 44697,
+            "promptTokenCount": 44531,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 40656
+              }
+            ],
+            "thoughtsTokenCount": 30,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 44531
+              }
+            ],
+            "candidatesTokenCount": 136,
+            "cachedContentTokenCount": 40656
+          }
+        },
+        {
+          "seq": 234,
+          "bytes": 155489,
+          "contents": 127025,
+          "turns": 43,
+          "chunks": 2,
+          "firstChunkMs": 3237,
+          "firstTextMs": null,
+          "durationMs": 3282,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 46587,
+            "promptTokenCount": 46400,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 40660
+              }
+            ],
+            "thoughtsTokenCount": 52,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 46400
+              }
+            ],
+            "candidatesTokenCount": 135,
+            "cachedContentTokenCount": 40660
+          }
+        },
+        {
+          "seq": 243,
+          "bytes": 159802,
+          "contents": 131338,
+          "turns": 45,
+          "chunks": 2,
+          "firstChunkMs": 15987,
+          "firstTextMs": null,
+          "durationMs": 16021,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 48606,
+            "promptTokenCount": 47683,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 36593
+              }
+            ],
+            "thoughtsTokenCount": 816,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 47683
+              }
+            ],
+            "candidatesTokenCount": 107,
+            "cachedContentTokenCount": 36593
+          }
+        },
+        {
+          "seq": 252,
+          "bytes": 166115,
+          "contents": 137651,
+          "turns": 47,
+          "chunks": 2,
+          "firstChunkMs": 2604,
+          "firstTextMs": null,
+          "durationMs": 2671,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 49086,
+            "promptTokenCount": 48983,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 44725
+              }
+            ],
+            "thoughtsTokenCount": 42,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 48983
+              }
+            ],
+            "candidatesTokenCount": 61,
+            "cachedContentTokenCount": 44725
+          }
+        },
+        {
+          "seq": 261,
+          "bytes": 182730,
+          "contents": 154266,
+          "turns": 49,
+          "chunks": 2,
+          "firstChunkMs": 3300,
+          "firstTextMs": null,
+          "durationMs": 3362,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 54943,
+            "promptTokenCount": 54778,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 48820
+              }
+            ],
+            "thoughtsTokenCount": 139,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 54778
+              }
+            ],
+            "candidatesTokenCount": 26,
+            "cachedContentTokenCount": 48820
+          }
+        },
+        {
+          "seq": 270,
+          "bytes": 185940,
+          "contents": 157476,
+          "turns": 51,
+          "chunks": 2,
+          "firstChunkMs": 3817,
+          "firstTextMs": null,
+          "durationMs": 3874,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 55745,
+            "promptTokenCount": 55678,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 52885
+              }
+            ],
+            "thoughtsTokenCount": 41,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 55678
+              }
+            ],
+            "candidatesTokenCount": 26,
+            "cachedContentTokenCount": 52885
+          }
+        },
+        {
+          "seq": 279,
+          "bytes": 189271,
+          "contents": 160807,
+          "turns": 53,
+          "chunks": 2,
+          "firstChunkMs": 33546,
+          "firstTextMs": null,
+          "durationMs": 33822,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 60789,
+            "promptTokenCount": 56613,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 44746
+              }
+            ],
+            "thoughtsTokenCount": 3114,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 56613
+              }
+            ],
+            "candidatesTokenCount": 1062,
+            "cachedContentTokenCount": 44746
+          }
+        },
+        {
+          "seq": 289,
+          "bytes": 217204,
+          "contents": 188740,
+          "turns": 55,
+          "chunks": 37,
+          "firstChunkMs": 5227,
+          "firstTextMs": 5227,
+          "durationMs": 42333,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 64844,
+            "promptTokenCount": 63593,
+            "thoughtsTokenCount": 374,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 63593
+              }
+            ],
+            "candidatesTokenCount": 877
+          }
+        }
+      ],
+      "allRequests": [
+        {
+          "seq": 16,
+          "exchangeId": "586dcbd3-d932-469f-b46c-709bb2cbfefe",
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 28693,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 229,
+          "turnCount": 1,
+          "functionResponses": 0,
+          "chunks": 2,
+          "firstChunkMs": 3697,
+          "firstTextMs": null,
+          "durationMs": 3720,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 8219,
+            "promptTokenCount": 7925,
+            "thoughtsTokenCount": 281,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 7925
+              }
+            ],
+            "candidatesTokenCount": 13
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 27,
+          "exchangeId": "a4b3c2e4-cb0e-47f0-b144-82a763434833",
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 48239,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 19775,
+          "turnCount": 3,
+          "functionResponses": 1,
+          "chunks": 2,
+          "firstChunkMs": 2976,
+          "firstTextMs": null,
+          "durationMs": 3004,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 15205,
+            "promptTokenCount": 14997,
+            "thoughtsTokenCount": 152,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 14997
+              }
+            ],
+            "candidatesTokenCount": 56
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 38,
+          "exchangeId": "4d95e77a-ab1f-4707-b137-4f96b72e6033",
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 49796,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 21332,
+          "turnCount": 5,
+          "functionResponses": 2,
+          "chunks": 2,
+          "firstChunkMs": 3440,
+          "firstTextMs": null,
+          "durationMs": 3466,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 15717,
+            "promptTokenCount": 15441,
+            "thoughtsTokenCount": 162,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 15441
+              }
+            ],
+            "candidatesTokenCount": 114
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 50,
+          "exchangeId": "8fa940fa-7a66-4617-ae5c-7cd2452395a9",
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 69569,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 41105,
+          "turnCount": 7,
+          "functionResponses": 3,
+          "chunks": 2,
+          "firstChunkMs": 2680,
+          "firstTextMs": null,
+          "durationMs": 2717,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 21611,
+            "promptTokenCount": 21457,
+            "thoughtsTokenCount": 27,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 21457
+              }
+            ],
+            "candidatesTokenCount": 127
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 62,
+          "exchangeId": "b56d87ee-e83d-4d24-a744-257628ef5b9f",
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 73846,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 45382,
+          "turnCount": 9,
+          "functionResponses": 4,
+          "chunks": 2,
+          "firstChunkMs": 3038,
+          "firstTextMs": null,
+          "durationMs": 3079,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 22773,
+            "promptTokenCount": 22595,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 20325
+              }
+            ],
+            "thoughtsTokenCount": 49,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 22595
+              }
+            ],
+            "candidatesTokenCount": 129,
+            "cachedContentTokenCount": 20325
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 73,
+          "exchangeId": "08c28dce-1111-4e92-a16c-6a63ddc5394c",
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 78225,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 49761,
+          "turnCount": 11,
+          "functionResponses": 5,
+          "chunks": 2,
+          "firstChunkMs": 6178,
+          "firstTextMs": null,
+          "durationMs": 6208,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 23915,
+            "promptTokenCount": 23755,
+            "thoughtsTokenCount": 46,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 23755
+              }
+            ],
+            "candidatesTokenCount": 114
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 84,
+          "exchangeId": "64be97dd-b0c4-4b13-8f1b-df1269d00cc8",
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 80275,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 51811,
+          "turnCount": 13,
+          "functionResponses": 6,
+          "chunks": 2,
+          "firstChunkMs": 4955,
+          "firstTextMs": null,
+          "durationMs": 4969,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 24573,
+            "promptTokenCount": 24394,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 20320
+              }
+            ],
+            "thoughtsTokenCount": 57,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 24394
+              }
+            ],
+            "candidatesTokenCount": 122,
+            "cachedContentTokenCount": 20320
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 95,
+          "exchangeId": "12bf113f-9723-4c28-9ec0-a3551d44cc14",
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 84099,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 55635,
+          "turnCount": 15,
+          "functionResponses": 7,
+          "chunks": 2,
+          "firstChunkMs": 3591,
+          "firstTextMs": null,
+          "durationMs": 3620,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 25736,
+            "promptTokenCount": 25576,
+            "thoughtsTokenCount": 24,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 25576
+              }
+            ],
+            "candidatesTokenCount": 136
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 108,
+          "exchangeId": "5b146ca9-73cd-40ff-878d-fe84f4f2ddb1",
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 89076,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 60612,
+          "turnCount": 17,
+          "functionResponses": 8,
+          "chunks": 2,
+          "firstChunkMs": 2875,
+          "firstTextMs": null,
+          "durationMs": 2907,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 27209,
+            "promptTokenCount": 27039,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 24384
+              }
+            ],
+            "thoughtsTokenCount": 48,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 27039
+              }
+            ],
+            "candidatesTokenCount": 122,
+            "cachedContentTokenCount": 24384
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 119,
+          "exchangeId": "ba508997-c977-43f9-88e4-fe70aa601450",
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 90722,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 62258,
+          "turnCount": 19,
+          "functionResponses": 9,
+          "chunks": 2,
+          "firstChunkMs": 2409,
+          "firstTextMs": null,
+          "durationMs": 2442,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 27714,
+            "promptTokenCount": 27563,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 24379
+              }
+            ],
+            "thoughtsTokenCount": 36,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 27563
+              }
+            ],
+            "candidatesTokenCount": 115,
+            "cachedContentTokenCount": 24379
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 130,
+          "exchangeId": "53abcebb-cf17-4753-87dd-55930ad4cb2e",
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 93870,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 65406,
+          "turnCount": 21,
+          "functionResponses": 10,
+          "chunks": 2,
+          "firstChunkMs": 3830,
+          "firstTextMs": null,
+          "durationMs": 3888,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 28825,
+            "promptTokenCount": 28656,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 24378
+              }
+            ],
+            "thoughtsTokenCount": 32,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 28656
+              }
+            ],
+            "candidatesTokenCount": 137,
+            "cachedContentTokenCount": 24378
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 143,
+          "exchangeId": "9278452a-46dc-49ba-af59-ce6a6fd301f3",
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 97055,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 68591,
+          "turnCount": 23,
+          "functionResponses": 11,
+          "chunks": 2,
+          "firstChunkMs": 26108,
+          "firstTextMs": null,
+          "durationMs": 26144,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 29795,
+            "promptTokenCount": 29621,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 24376
+              }
+            ],
+            "thoughtsTokenCount": 49,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 29621
+              }
+            ],
+            "candidatesTokenCount": 125,
+            "cachedContentTokenCount": 24376
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 153,
+          "exchangeId": "ab34413e-fd91-4e13-b6f5-8e69e4a60edc",
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 100512,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 72048,
+          "turnCount": 25,
+          "functionResponses": 12,
+          "chunks": 2,
+          "firstChunkMs": 3025,
+          "firstTextMs": null,
+          "durationMs": 3071,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 30900,
+            "promptTokenCount": 30726,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 28438
+              }
+            ],
+            "thoughtsTokenCount": 37,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 30726
+              }
+            ],
+            "candidatesTokenCount": 137,
+            "cachedContentTokenCount": 28438
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 162,
+          "exchangeId": "028b26ea-6028-44f7-9690-d0b7b87c401e",
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 104751,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 76287,
+          "turnCount": 27,
+          "functionResponses": 13,
+          "chunks": 2,
+          "firstChunkMs": 2712,
+          "firstTextMs": null,
+          "durationMs": 2809,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 32200,
+            "promptTokenCount": 32037,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 28439
+              }
+            ],
+            "thoughtsTokenCount": 48,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 32037
+              }
+            ],
+            "candidatesTokenCount": 115,
+            "cachedContentTokenCount": 28439
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 171,
+          "exchangeId": "407fc541-522e-4dd2-b12e-b3b621b66083",
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 106703,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 78239,
+          "turnCount": 29,
+          "functionResponses": 14,
+          "chunks": 2,
+          "firstChunkMs": 4442,
+          "firstTextMs": null,
+          "durationMs": 4486,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 32843,
+            "promptTokenCount": 32659,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 24373
+              }
+            ],
+            "thoughtsTokenCount": 50,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 32659
+              }
+            ],
+            "candidatesTokenCount": 134,
+            "cachedContentTokenCount": 24373
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 180,
+          "exchangeId": "3c0987d4-a983-4171-b73a-f3cf0c767b8a",
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 117269,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 88805,
+          "turnCount": 31,
+          "functionResponses": 15,
+          "chunks": 2,
+          "firstChunkMs": 4618,
+          "firstTextMs": null,
+          "durationMs": 4656,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 35491,
+            "promptTokenCount": 35315,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 32508
+              }
+            ],
+            "thoughtsTokenCount": 40,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 35315
+              }
+            ],
+            "candidatesTokenCount": 136,
+            "cachedContentTokenCount": 32508
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 189,
+          "exchangeId": "c672de74-7e1d-4b16-8ade-f72eec828b78",
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 124542,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 96078,
+          "turnCount": 33,
+          "functionResponses": 16,
+          "chunks": 2,
+          "firstChunkMs": 3789,
+          "firstTextMs": null,
+          "durationMs": 3895,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 37524,
+            "promptTokenCount": 37329,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 32513
+              }
+            ],
+            "thoughtsTokenCount": 59,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 37329
+              }
+            ],
+            "candidatesTokenCount": 136,
+            "cachedContentTokenCount": 32513
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 198,
+          "exchangeId": "846bbe7b-9be6-4ff4-9113-2c16d11452bc",
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 131126,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 102662,
+          "turnCount": 35,
+          "functionResponses": 17,
+          "chunks": 2,
+          "firstChunkMs": 5706,
+          "firstTextMs": null,
+          "durationMs": 5750,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 39434,
+            "promptTokenCount": 39267,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 28453
+              }
+            ],
+            "thoughtsTokenCount": 31,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 39267
+              }
+            ],
+            "candidatesTokenCount": 136,
+            "cachedContentTokenCount": 28453
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 207,
+          "exchangeId": "73cec162-5c69-4f5d-af2f-391e15133a2f",
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 136906,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 108442,
+          "turnCount": 37,
+          "functionResponses": 18,
+          "chunks": 2,
+          "firstChunkMs": 2696,
+          "firstTextMs": null,
+          "durationMs": 2812,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 41086,
+            "promptTokenCount": 40920,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 36585
+              }
+            ],
+            "thoughtsTokenCount": 30,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 40920
+              }
+            ],
+            "candidatesTokenCount": 136,
+            "cachedContentTokenCount": 36585
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 216,
+          "exchangeId": "ca6abe59-cb73-4867-8454-e22dfe004c08",
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 143825,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 115361,
+          "turnCount": 39,
+          "functionResponses": 19,
+          "chunks": 2,
+          "firstChunkMs": 2568,
+          "firstTextMs": null,
+          "durationMs": 2636,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 43075,
+            "promptTokenCount": 42898,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 40654
+              }
+            ],
+            "thoughtsTokenCount": 41,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 42898
+              }
+            ],
+            "candidatesTokenCount": 136,
+            "cachedContentTokenCount": 40654
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 225,
+          "exchangeId": "cd990904-3145-49b1-9d86-50c1ce924be7",
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 149423,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 120959,
+          "turnCount": 41,
+          "functionResponses": 20,
+          "chunks": 2,
+          "firstChunkMs": 2593,
+          "firstTextMs": null,
+          "durationMs": 2612,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 44697,
+            "promptTokenCount": 44531,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 40656
+              }
+            ],
+            "thoughtsTokenCount": 30,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 44531
+              }
+            ],
+            "candidatesTokenCount": 136,
+            "cachedContentTokenCount": 40656
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 234,
+          "exchangeId": "f194d10a-7e2f-4bb1-b8b0-caf0d892de93",
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 155489,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 127025,
+          "turnCount": 43,
+          "functionResponses": 21,
+          "chunks": 2,
+          "firstChunkMs": 3237,
+          "firstTextMs": null,
+          "durationMs": 3282,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 46587,
+            "promptTokenCount": 46400,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 40660
+              }
+            ],
+            "thoughtsTokenCount": 52,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 46400
+              }
+            ],
+            "candidatesTokenCount": 135,
+            "cachedContentTokenCount": 40660
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 243,
+          "exchangeId": "a46f8c49-c8fc-4a24-91f9-12fc22e691a2",
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 159802,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 131338,
+          "turnCount": 45,
+          "functionResponses": 22,
+          "chunks": 2,
+          "firstChunkMs": 15987,
+          "firstTextMs": null,
+          "durationMs": 16021,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 48606,
+            "promptTokenCount": 47683,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 36593
+              }
+            ],
+            "thoughtsTokenCount": 816,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 47683
+              }
+            ],
+            "candidatesTokenCount": 107,
+            "cachedContentTokenCount": 36593
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 252,
+          "exchangeId": "9106cf68-792b-4c4a-b48d-0cac2c579b14",
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 166115,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 137651,
+          "turnCount": 47,
+          "functionResponses": 23,
+          "chunks": 2,
+          "firstChunkMs": 2604,
+          "firstTextMs": null,
+          "durationMs": 2671,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 49086,
+            "promptTokenCount": 48983,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 44725
+              }
+            ],
+            "thoughtsTokenCount": 42,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 48983
+              }
+            ],
+            "candidatesTokenCount": 61,
+            "cachedContentTokenCount": 44725
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 261,
+          "exchangeId": "b0d0f872-bf11-4abf-acc1-237e94ee265a",
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 182730,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 154266,
+          "turnCount": 49,
+          "functionResponses": 24,
+          "chunks": 2,
+          "firstChunkMs": 3300,
+          "firstTextMs": null,
+          "durationMs": 3362,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 54943,
+            "promptTokenCount": 54778,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 48820
+              }
+            ],
+            "thoughtsTokenCount": 139,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 54778
+              }
+            ],
+            "candidatesTokenCount": 26,
+            "cachedContentTokenCount": 48820
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 270,
+          "exchangeId": "ff6a4fe8-7685-4eb6-9b21-099b33680df4",
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 185940,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 157476,
+          "turnCount": 51,
+          "functionResponses": 25,
+          "chunks": 2,
+          "firstChunkMs": 3817,
+          "firstTextMs": null,
+          "durationMs": 3874,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 55745,
+            "promptTokenCount": 55678,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 52885
+              }
+            ],
+            "thoughtsTokenCount": 41,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 55678
+              }
+            ],
+            "candidatesTokenCount": 26,
+            "cachedContentTokenCount": 52885
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 279,
+          "exchangeId": "e5ff02d9-869c-4717-903f-508c2bf45aa2",
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 189271,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 160807,
+          "turnCount": 53,
+          "functionResponses": 26,
+          "chunks": 2,
+          "firstChunkMs": 33546,
+          "firstTextMs": null,
+          "durationMs": 33822,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 60789,
+            "promptTokenCount": 56613,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 44746
+              }
+            ],
+            "thoughtsTokenCount": 3114,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 56613
+              }
+            ],
+            "candidatesTokenCount": 1062,
+            "cachedContentTokenCount": 44746
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 289,
+          "exchangeId": "c4b65076-3c09-4d32-9928-896f7ff463f7",
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 217204,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 188740,
+          "turnCount": 55,
+          "functionResponses": 27,
+          "chunks": 37,
+          "firstChunkMs": 5227,
+          "firstTextMs": 5227,
+          "durationMs": 42333,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 64844,
+            "promptTokenCount": 63593,
+            "thoughtsTokenCount": 374,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 63593
+              }
+            ],
+            "candidatesTokenCount": 877
+          },
+          "cachedContent": null
+        }
+      ],
+      "allTools": [
+        {
+          "name": "overlord_list_projects",
+          "operationId": "chat.ee639ff7-d778-4c86-9607-eccd541b688f.t0.c0",
+          "turn": 0,
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "dispatchMs": 23,
+          "executionMs": 271,
+          "requestedAt": "2026-10-07T07:02:20.424Z",
+          "completedAt": "2026-10-07T07:02:20.718Z"
+        },
+        {
+          "name": "overlord_list_execution_targets",
+          "operationId": "chat.ee639ff7-d778-4c86-9607-eccd541b688f.t1.c0",
+          "turn": 1,
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "dispatchMs": 107,
+          "executionMs": 226,
+          "requestedAt": "2026-10-07T07:02:24.047Z",
+          "completedAt": "2026-10-07T07:02:24.380Z"
+        },
+        {
+          "name": "repository_read",
+          "operationId": "chat.ee639ff7-d778-4c86-9607-eccd541b688f.t2.c0",
+          "turn": 2,
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "dispatchMs": 119,
+          "executionMs": 1019,
+          "requestedAt": "2026-10-07T07:02:28.283Z",
+          "completedAt": "2026-10-07T07:02:29.421Z"
+        },
+        {
+          "name": "repository_read",
+          "operationId": "chat.ee639ff7-d778-4c86-9607-eccd541b688f.t3.c0",
+          "turn": 3,
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "dispatchMs": 130,
+          "executionMs": 543,
+          "requestedAt": "2026-10-07T07:02:32.734Z",
+          "completedAt": "2026-10-07T07:02:33.407Z"
+        },
+        {
+          "name": "repository_read",
+          "operationId": "chat.ee639ff7-d778-4c86-9607-eccd541b688f.t4.c0",
+          "turn": 4,
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "dispatchMs": 160,
+          "executionMs": 602,
+          "requestedAt": "2026-10-07T07:02:37.205Z",
+          "completedAt": "2026-10-07T07:02:37.967Z"
+        },
+        {
+          "name": "repository_read",
+          "operationId": "chat.ee639ff7-d778-4c86-9607-eccd541b688f.t5.c0",
+          "turn": 5,
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "dispatchMs": 228,
+          "executionMs": 998,
+          "requestedAt": "2026-10-07T07:02:45.079Z",
+          "completedAt": "2026-10-07T07:02:46.305Z"
+        },
+        {
+          "name": "repository_read",
+          "operationId": "chat.ee639ff7-d778-4c86-9607-eccd541b688f.t6.c0",
+          "turn": 6,
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "dispatchMs": 144,
+          "executionMs": 605,
+          "requestedAt": "2026-10-07T07:02:52.081Z",
+          "completedAt": "2026-10-07T07:02:52.830Z"
+        },
+        {
+          "name": "repository_read",
+          "operationId": "chat.ee639ff7-d778-4c86-9607-eccd541b688f.t7.c0",
+          "turn": 7,
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "dispatchMs": 152,
+          "executionMs": 727,
+          "requestedAt": "2026-10-07T07:02:57.316Z",
+          "completedAt": "2026-10-07T07:02:58.195Z"
+        },
+        {
+          "name": "repository_read",
+          "operationId": "chat.ee639ff7-d778-4c86-9607-eccd541b688f.t8.c0",
+          "turn": 8,
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "dispatchMs": 172,
+          "executionMs": 795,
+          "requestedAt": "2026-10-07T07:03:02.239Z",
+          "completedAt": "2026-10-07T07:03:03.206Z"
+        },
+        {
+          "name": "repository_read",
+          "operationId": "chat.ee639ff7-d778-4c86-9607-eccd541b688f.t9.c0",
+          "turn": 9,
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "dispatchMs": 310,
+          "executionMs": 854,
+          "requestedAt": "2026-10-07T07:03:06.483Z",
+          "completedAt": "2026-10-07T07:03:07.647Z"
+        },
+        {
+          "name": "repository_read",
+          "operationId": "chat.ee639ff7-d778-4c86-9607-eccd541b688f.t10.c0",
+          "turn": 10,
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "dispatchMs": 278,
+          "executionMs": 860,
+          "requestedAt": "2026-10-07T07:03:12.462Z",
+          "completedAt": "2026-10-07T07:03:13.600Z"
+        },
+        {
+          "name": "repository_read",
+          "operationId": "chat.ee639ff7-d778-4c86-9607-eccd541b688f.t11.c0",
+          "turn": 11,
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "dispatchMs": 202,
+          "executionMs": 602,
+          "requestedAt": "2026-10-07T07:03:41.055Z",
+          "completedAt": "2026-10-07T07:03:41.859Z"
+        },
+        {
+          "name": "repository_read",
+          "operationId": "chat.ee639ff7-d778-4c86-9607-eccd541b688f.t12.c0",
+          "turn": 12,
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "dispatchMs": 221,
+          "executionMs": 847,
+          "requestedAt": "2026-10-07T07:03:46.152Z",
+          "completedAt": "2026-10-07T07:03:47.220Z"
+        },
+        {
+          "name": "repository_read",
+          "operationId": "chat.ee639ff7-d778-4c86-9607-eccd541b688f.t13.c0",
+          "turn": 13,
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "dispatchMs": 383,
+          "executionMs": 1193,
+          "requestedAt": "2026-10-07T07:03:51.486Z",
+          "completedAt": "2026-10-07T07:03:53.062Z"
+        },
+        {
+          "name": "repository_read",
+          "operationId": "chat.ee639ff7-d778-4c86-9607-eccd541b688f.t14.c0",
+          "turn": 14,
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "dispatchMs": 533,
+          "executionMs": 1205,
+          "requestedAt": "2026-10-07T07:03:59.124Z",
+          "completedAt": "2026-10-07T07:04:00.862Z"
+        },
+        {
+          "name": "repository_read",
+          "operationId": "chat.ee639ff7-d778-4c86-9607-eccd541b688f.t15.c0",
+          "turn": 15,
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "dispatchMs": 238,
+          "executionMs": 813,
+          "requestedAt": "2026-10-07T07:04:07.192Z",
+          "completedAt": "2026-10-07T07:04:08.243Z"
+        },
+        {
+          "name": "repository_read",
+          "operationId": "chat.ee639ff7-d778-4c86-9607-eccd541b688f.t16.c0",
+          "turn": 16,
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "dispatchMs": 206,
+          "executionMs": 660,
+          "requestedAt": "2026-10-07T07:04:13.242Z",
+          "completedAt": "2026-10-07T07:04:14.108Z"
+        },
+        {
+          "name": "repository_read",
+          "operationId": "chat.ee639ff7-d778-4c86-9607-eccd541b688f.t17.c0",
+          "turn": 17,
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "dispatchMs": 234,
+          "executionMs": 778,
+          "requestedAt": "2026-10-07T07:04:21.359Z",
+          "completedAt": "2026-10-07T07:04:22.371Z"
+        },
+        {
+          "name": "repository_read",
+          "operationId": "chat.ee639ff7-d778-4c86-9607-eccd541b688f.t18.c0",
+          "turn": 18,
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "dispatchMs": 567,
+          "executionMs": 832,
+          "requestedAt": "2026-10-07T07:04:26.628Z",
+          "completedAt": "2026-10-07T07:04:28.027Z"
+        },
+        {
+          "name": "repository_read",
+          "operationId": "chat.ee639ff7-d778-4c86-9607-eccd541b688f.t19.c0",
+          "turn": 19,
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "dispatchMs": 238,
+          "executionMs": 751,
+          "requestedAt": "2026-10-07T07:04:32.117Z",
+          "completedAt": "2026-10-07T07:04:33.106Z"
+        },
+        {
+          "name": "repository_read",
+          "operationId": "chat.ee639ff7-d778-4c86-9607-eccd541b688f.t20.c0",
+          "turn": 20,
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "dispatchMs": 504,
+          "executionMs": 951,
+          "requestedAt": "2026-10-07T07:04:37.051Z",
+          "completedAt": "2026-10-07T07:04:38.506Z"
+        },
+        {
+          "name": "repository_read",
+          "operationId": "chat.ee639ff7-d778-4c86-9607-eccd541b688f.t21.c0",
+          "turn": 21,
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "dispatchMs": 485,
+          "executionMs": 1203,
+          "requestedAt": "2026-10-07T07:04:43.034Z",
+          "completedAt": "2026-10-07T07:04:44.722Z"
+        },
+        {
+          "name": "repository_read",
+          "operationId": "chat.ee639ff7-d778-4c86-9607-eccd541b688f.t22.c0",
+          "turn": 22,
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "dispatchMs": 281,
+          "executionMs": 797,
+          "requestedAt": "2026-10-07T07:05:02.585Z",
+          "completedAt": "2026-10-07T07:05:03.663Z"
+        },
+        {
+          "name": "overlord_search_missions",
+          "operationId": "chat.ee639ff7-d778-4c86-9607-eccd541b688f.t23.c0",
+          "turn": 23,
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "dispatchMs": 277,
+          "executionMs": 621,
+          "requestedAt": "2026-10-07T07:05:07.916Z",
+          "completedAt": "2026-10-07T07:05:08.814Z"
+        },
+        {
+          "name": "overlord_get_mission",
+          "operationId": "chat.ee639ff7-d778-4c86-9607-eccd541b688f.t24.c0",
+          "turn": 24,
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "dispatchMs": 472,
+          "executionMs": 804,
+          "requestedAt": "2026-10-07T07:05:14.222Z",
+          "completedAt": "2026-10-07T07:05:15.498Z"
+        },
+        {
+          "name": "overlord_get_mission",
+          "operationId": "chat.ee639ff7-d778-4c86-9607-eccd541b688f.t25.c0",
+          "turn": 25,
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "dispatchMs": 705,
+          "executionMs": 565,
+          "requestedAt": "2026-10-07T07:05:21.113Z",
+          "completedAt": "2026-10-07T07:05:22.383Z"
+        },
+        {
+          "name": "prepare_proposal",
+          "operationId": "chat.ee639ff7-d778-4c86-9607-eccd541b688f.t26.c0",
+          "turn": 26,
+          "runId": "ee639ff7-d778-4c86-9607-eccd541b688f",
+          "dispatchMs": 931,
+          "executionMs": 1477,
+          "requestedAt": "2026-10-07T07:05:58.228Z",
+          "completedAt": "2026-10-07T07:06:00.636Z"
+        }
+      ]
+    },
+    {
+      "threadId": "93c38614-4595-48d1-912a-6a64e5867112",
+      "rows": 156,
+      "payloadBytes": 733705,
+      "gaps": 0,
+      "request": {
+        "seq": 11,
+        "exchangeId": "b425346f-fb4c-48ec-8baa-02f78b65fba4",
+        "runId": "37990762-149a-4bac-864a-de77d9eae832",
+        "method": "stream",
+        "model": "gemini-3.8-flash",
+        "requestBytes": 28559,
+        "systemBytes": 4664,
+        "toolBytes": 23632,
+        "toolCount": 24,
+        "contentsBytes": 95,
+        "turnCount": 1,
+        "functionResponses": 0,
+        "chunks": 2,
+        "firstChunkMs": 4238,
+        "firstTextMs": null,
+        "durationMs": 4254,
+        "usage": {
+          "serviceTier": "standard",
+          "totalTokenCount": 8214,
+          "promptTokenCount": 7903,
+          "thoughtsTokenCount": 298,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 7903
+            }
+          ],
+          "candidatesTokenCount": 13
+        },
+        "cachedContent": null
+      },
+      "lastRequest": {
+        "seq": 91,
+        "exchangeId": "3ddf2820-30e0-4a57-a08f-5ef30a5c7dfc",
+        "runId": "37990762-149a-4bac-864a-de77d9eae832",
+        "method": "stream",
+        "model": "gemini-3.8-flash",
+        "requestBytes": 74528,
+        "systemBytes": 4664,
+        "toolBytes": 23632,
+        "toolCount": 24,
+        "contentsBytes": 46064,
+        "turnCount": 15,
+        "functionResponses": 7,
+        "chunks": 32,
+        "firstChunkMs": 11924,
+        "firstTextMs": 11924,
+        "durationMs": 18453,
+        "usage": {
+          "serviceTier": "standard",
+          "totalTokenCount": 25711,
+          "promptTokenCount": 24100,
+          "cacheTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 20309
+            }
+          ],
+          "thoughtsTokenCount": 880,
+          "promptTokensDetails": [
+            {
+              "modality": "TEXT",
+              "tokenCount": 24100
+            }
+          ],
+          "candidatesTokenCount": 731,
+          "cachedContentTokenCount": 20309
+        },
+        "cachedContent": null
+      },
+      "stats": {
+        "firstChunkMs": {
+          "n": 8,
+          "min": 2866,
+          "p50": 4238,
+          "p95": 17080,
+          "max": 17080,
+          "sum": 55937
+        },
+        "durationMs": {
+          "n": 8,
+          "min": 2912,
+          "p50": 4254,
+          "p95": 18453,
+          "max": 18453,
+          "sum": 62895
+        },
+        "dispatchMs": {
+          "n": 7,
+          "min": 36,
+          "p50": 296,
+          "p95": 354,
+          "max": 354,
+          "sum": 1729
+        },
+        "executionMs": {
+          "n": 7,
+          "min": 201,
+          "p50": 330,
+          "p95": 508,
+          "max": 508,
+          "sum": 2430
+        }
+      },
+      "usageTotals": {
+        "totalTokenCount": 157902,
+        "promptTokenCount": 153668,
+        "thoughtsTokenCount": 3178,
+        "candidatesTokenCount": 1056,
+        "cachedContentTokenCount": 89373
+      },
+      "tools": {
+        "overlord_list_projects": {
+          "n": 1,
+          "executionMs": {
+            "n": 1,
+            "min": 201,
+            "p50": 201,
+            "p95": 201,
+            "max": 201,
+            "sum": 201
+          }
+        },
+        "overlord_search_missions": {
+          "n": 5,
+          "executionMs": {
+            "n": 5,
+            "min": 267,
+            "p50": 335,
+            "p95": 508,
+            "max": 508,
+            "sum": 1914
+          }
+        },
+        "overlord_get_mission": {
+          "n": 1,
+          "executionMs": {
+            "n": 1,
+            "min": 315,
+            "p50": 315,
+            "p95": 315,
+            "max": 315,
+            "sum": 315
+          }
+        }
+      },
+      "exchanges": [
+        {
+          "seq": 11,
+          "bytes": 28559,
+          "contents": 95,
+          "turns": 1,
+          "chunks": 2,
+          "firstChunkMs": 4238,
+          "firstTextMs": null,
+          "durationMs": 4254,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 8214,
+            "promptTokenCount": 7903,
+            "thoughtsTokenCount": 298,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 7903
+              }
+            ],
+            "candidatesTokenCount": 13
+          }
+        },
+        {
+          "seq": 23,
+          "bytes": 47725,
+          "contents": 19261,
+          "turns": 3,
+          "chunks": 2,
+          "firstChunkMs": 6657,
+          "firstTextMs": null,
+          "durationMs": 6682,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 15521,
+            "promptTokenCount": 14974,
+            "thoughtsTokenCount": 516,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 14974
+              }
+            ],
+            "candidatesTokenCount": 31
+          }
+        },
+        {
+          "seq": 34,
+          "bytes": 60115,
+          "contents": 31651,
+          "turns": 5,
+          "chunks": 2,
+          "firstChunkMs": 3356,
+          "firstTextMs": null,
+          "durationMs": 3466,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 20379,
+            "promptTokenCount": 20149,
+            "thoughtsTokenCount": 154,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 20149
+              }
+            ],
+            "candidatesTokenCount": 76
+          }
+        },
+        {
+          "seq": 46,
+          "bytes": 62007,
+          "contents": 33543,
+          "turns": 7,
+          "chunks": 2,
+          "firstChunkMs": 2866,
+          "firstTextMs": null,
+          "durationMs": 2912,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 20797,
+            "promptTokenCount": 20664,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 16256
+              }
+            ],
+            "thoughtsTokenCount": 57,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 20664
+              }
+            ],
+            "candidatesTokenCount": 76,
+            "cachedContentTokenCount": 16256
+          }
+        },
+        {
+          "seq": 57,
+          "bytes": 63962,
+          "contents": 35498,
+          "turns": 9,
+          "chunks": 2,
+          "firstChunkMs": 4134,
+          "firstTextMs": null,
+          "durationMs": 4141,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 21292,
+            "promptTokenCount": 21241,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 16252
+              }
+            ],
+            "thoughtsTokenCount": 25,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 21241
+              }
+            ],
+            "candidatesTokenCount": 26,
+            "cachedContentTokenCount": 16252
+          }
+        },
+        {
+          "seq": 68,
+          "bytes": 65712,
+          "contents": 37248,
+          "turns": 11,
+          "chunks": 2,
+          "firstChunkMs": 5682,
+          "firstTextMs": null,
+          "durationMs": 5719,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 22171,
+            "promptTokenCount": 21717,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 16247
+              }
+            ],
+            "thoughtsTokenCount": 423,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 21717
+              }
+            ],
+            "candidatesTokenCount": 31,
+            "cachedContentTokenCount": 16247
+          }
+        },
+        {
+          "seq": 80,
+          "bytes": 70504,
+          "contents": 42040,
+          "turns": 13,
+          "chunks": 2,
+          "firstChunkMs": 17080,
+          "firstTextMs": null,
+          "durationMs": 17268,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 23817,
+            "promptTokenCount": 22920,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 20309
+              }
+            ],
+            "thoughtsTokenCount": 825,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 22920
+              }
+            ],
+            "candidatesTokenCount": 72,
+            "cachedContentTokenCount": 20309
+          }
+        },
+        {
+          "seq": 91,
+          "bytes": 74528,
+          "contents": 46064,
+          "turns": 15,
+          "chunks": 32,
+          "firstChunkMs": 11924,
+          "firstTextMs": 11924,
+          "durationMs": 18453,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 25711,
+            "promptTokenCount": 24100,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 20309
+              }
+            ],
+            "thoughtsTokenCount": 880,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 24100
+              }
+            ],
+            "candidatesTokenCount": 731,
+            "cachedContentTokenCount": 20309
+          }
+        }
+      ],
+      "allRequests": [
+        {
+          "seq": 11,
+          "exchangeId": "b425346f-fb4c-48ec-8baa-02f78b65fba4",
+          "runId": "37990762-149a-4bac-864a-de77d9eae832",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 28559,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 95,
+          "turnCount": 1,
+          "functionResponses": 0,
+          "chunks": 2,
+          "firstChunkMs": 4238,
+          "firstTextMs": null,
+          "durationMs": 4254,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 8214,
+            "promptTokenCount": 7903,
+            "thoughtsTokenCount": 298,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 7903
+              }
+            ],
+            "candidatesTokenCount": 13
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 23,
+          "exchangeId": "c2aaaf32-b013-4bdc-9d52-2b04e42a3d25",
+          "runId": "37990762-149a-4bac-864a-de77d9eae832",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 47725,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 19261,
+          "turnCount": 3,
+          "functionResponses": 1,
+          "chunks": 2,
+          "firstChunkMs": 6657,
+          "firstTextMs": null,
+          "durationMs": 6682,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 15521,
+            "promptTokenCount": 14974,
+            "thoughtsTokenCount": 516,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 14974
+              }
+            ],
+            "candidatesTokenCount": 31
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 34,
+          "exchangeId": "63748137-d814-49a7-b7cc-d754b0f050fc",
+          "runId": "37990762-149a-4bac-864a-de77d9eae832",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 60115,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 31651,
+          "turnCount": 5,
+          "functionResponses": 2,
+          "chunks": 2,
+          "firstChunkMs": 3356,
+          "firstTextMs": null,
+          "durationMs": 3466,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 20379,
+            "promptTokenCount": 20149,
+            "thoughtsTokenCount": 154,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 20149
+              }
+            ],
+            "candidatesTokenCount": 76
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 46,
+          "exchangeId": "62bed34b-9c0a-4c7a-a9f8-6976a3a5cf5f",
+          "runId": "37990762-149a-4bac-864a-de77d9eae832",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 62007,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 33543,
+          "turnCount": 7,
+          "functionResponses": 3,
+          "chunks": 2,
+          "firstChunkMs": 2866,
+          "firstTextMs": null,
+          "durationMs": 2912,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 20797,
+            "promptTokenCount": 20664,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 16256
+              }
+            ],
+            "thoughtsTokenCount": 57,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 20664
+              }
+            ],
+            "candidatesTokenCount": 76,
+            "cachedContentTokenCount": 16256
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 57,
+          "exchangeId": "89b87342-035a-41e7-8062-ebbb9d958d8d",
+          "runId": "37990762-149a-4bac-864a-de77d9eae832",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 63962,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 35498,
+          "turnCount": 9,
+          "functionResponses": 4,
+          "chunks": 2,
+          "firstChunkMs": 4134,
+          "firstTextMs": null,
+          "durationMs": 4141,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 21292,
+            "promptTokenCount": 21241,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 16252
+              }
+            ],
+            "thoughtsTokenCount": 25,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 21241
+              }
+            ],
+            "candidatesTokenCount": 26,
+            "cachedContentTokenCount": 16252
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 68,
+          "exchangeId": "82407331-cd19-4ad9-b4dd-c7b36465ce82",
+          "runId": "37990762-149a-4bac-864a-de77d9eae832",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 65712,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 37248,
+          "turnCount": 11,
+          "functionResponses": 5,
+          "chunks": 2,
+          "firstChunkMs": 5682,
+          "firstTextMs": null,
+          "durationMs": 5719,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 22171,
+            "promptTokenCount": 21717,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 16247
+              }
+            ],
+            "thoughtsTokenCount": 423,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 21717
+              }
+            ],
+            "candidatesTokenCount": 31,
+            "cachedContentTokenCount": 16247
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 80,
+          "exchangeId": "c581a0f9-4d58-4655-905c-9d230ad144f3",
+          "runId": "37990762-149a-4bac-864a-de77d9eae832",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 70504,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 42040,
+          "turnCount": 13,
+          "functionResponses": 6,
+          "chunks": 2,
+          "firstChunkMs": 17080,
+          "firstTextMs": null,
+          "durationMs": 17268,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 23817,
+            "promptTokenCount": 22920,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 20309
+              }
+            ],
+            "thoughtsTokenCount": 825,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 22920
+              }
+            ],
+            "candidatesTokenCount": 72,
+            "cachedContentTokenCount": 20309
+          },
+          "cachedContent": null
+        },
+        {
+          "seq": 91,
+          "exchangeId": "3ddf2820-30e0-4a57-a08f-5ef30a5c7dfc",
+          "runId": "37990762-149a-4bac-864a-de77d9eae832",
+          "method": "stream",
+          "model": "gemini-3.8-flash",
+          "requestBytes": 74528,
+          "systemBytes": 4664,
+          "toolBytes": 23632,
+          "toolCount": 24,
+          "contentsBytes": 46064,
+          "turnCount": 15,
+          "functionResponses": 7,
+          "chunks": 32,
+          "firstChunkMs": 11924,
+          "firstTextMs": 11924,
+          "durationMs": 18453,
+          "usage": {
+            "serviceTier": "standard",
+            "totalTokenCount": 25711,
+            "promptTokenCount": 24100,
+            "cacheTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 20309
+              }
+            ],
+            "thoughtsTokenCount": 880,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 24100
+              }
+            ],
+            "candidatesTokenCount": 731,
+            "cachedContentTokenCount": 20309
+          },
+          "cachedContent": null
+        }
+      ],
+      "allTools": [
+        {
+          "name": "overlord_list_projects",
+          "operationId": "chat.37990762-149a-4bac-864a-de77d9eae832.t0.c0",
+          "turn": 0,
+          "runId": "37990762-149a-4bac-864a-de77d9eae832",
+          "dispatchMs": 36,
+          "executionMs": 201,
+          "requestedAt": "2026-10-07T06:56:28.410Z",
+          "completedAt": "2026-10-07T06:56:28.647Z"
+        },
+        {
+          "name": "overlord_search_missions",
+          "operationId": "chat.37990762-149a-4bac-864a-de77d9eae832.t1.c0",
+          "turn": 1,
+          "runId": "37990762-149a-4bac-864a-de77d9eae832",
+          "dispatchMs": 136,
+          "executionMs": 508,
+          "requestedAt": "2026-10-07T06:56:35.909Z",
+          "completedAt": "2026-10-07T06:56:36.553Z"
+        },
+        {
+          "name": "overlord_search_missions",
+          "operationId": "chat.37990762-149a-4bac-864a-de77d9eae832.t2.c0",
+          "turn": 2,
+          "runId": "37990762-149a-4bac-864a-de77d9eae832",
+          "dispatchMs": 354,
+          "executionMs": 335,
+          "requestedAt": "2026-10-07T06:56:41.062Z",
+          "completedAt": "2026-10-07T06:56:41.751Z"
+        },
+        {
+          "name": "overlord_search_missions",
+          "operationId": "chat.37990762-149a-4bac-864a-de77d9eae832.t3.c0",
+          "turn": 3,
+          "runId": "37990762-149a-4bac-864a-de77d9eae832",
+          "dispatchMs": 330,
+          "executionMs": 267,
+          "requestedAt": "2026-10-07T06:56:45.772Z",
+          "completedAt": "2026-10-07T06:56:46.369Z"
+        },
+        {
+          "name": "overlord_get_mission",
+          "operationId": "chat.37990762-149a-4bac-864a-de77d9eae832.t4.c0",
+          "turn": 4,
+          "runId": "37990762-149a-4bac-864a-de77d9eae832",
+          "dispatchMs": 334,
+          "executionMs": 315,
+          "requestedAt": "2026-10-07T06:56:51.814Z",
+          "completedAt": "2026-10-07T06:56:52.463Z"
+        },
+        {
+          "name": "overlord_search_missions",
+          "operationId": "chat.37990762-149a-4bac-864a-de77d9eae832.t5.c0",
+          "turn": 5,
+          "runId": "37990762-149a-4bac-864a-de77d9eae832",
+          "dispatchMs": 296,
+          "executionMs": 330,
+          "requestedAt": "2026-10-07T06:56:59.130Z",
+          "completedAt": "2026-10-07T06:56:59.756Z"
+        },
+        {
+          "name": "overlord_search_missions",
+          "operationId": "chat.37990762-149a-4bac-864a-de77d9eae832.t6.c0",
+          "turn": 6,
+          "runId": "37990762-149a-4bac-864a-de77d9eae832",
+          "dispatchMs": 243,
+          "executionMs": 474,
+          "requestedAt": "2026-10-07T06:57:18.224Z",
+          "completedAt": "2026-10-07T06:57:18.941Z"
+        }
+      ]
+    },
+    {
+      "threadId": "1c91b21c-66b7-4dba-a3d5-96ed12b3bfd9",
+      "rows": 5,
+      "payloadBytes": 4157,
+      "gaps": 0,
+      "stats": {
+        "firstChunkMs": {
+          "n": 0,
+          "sum": 0
+        },
+        "durationMs": {
+          "n": 0,
+          "sum": 0
+        },
+        "dispatchMs": {
+          "n": 0,
+          "sum": 0
+        },
+        "executionMs": {
+          "n": 0,
+          "sum": 0
+        }
+      },
+      "usageTotals": {},
+      "tools": {},
+      "exchanges": [],
+      "allRequests": [],
+      "allTools": []
+    }
+  ]
+}

@@ -38,32 +38,27 @@ export const BUNDLED_AGENT_CATALOG: Record<string, CatalogAgent> = {
     availableByDefault: true,
     models: [
       {
-        id: 'gpt-5.4',
-        displayName: 'GPT-5.4',
-        reasoningOptions: ['low', 'medium', 'high', 'xhigh']
-      },
-      {
-        id: 'gpt-5.5',
-        displayName: 'GPT-5.5',
-        reasoningOptions: ['low', 'medium', 'high', 'xhigh']
-      },
-      {
-        id: 'gpt-5.6-sol',
-        displayName: 'GPT-5.6 Sol',
+        id: 'gpt-6.1-sol',
+        displayName: 'GPT-6.1-Sol',
         reasoningOptions: ['low', 'medium', 'high', 'xhigh', 'max']
       },
       {
-        id: 'gpt-5.6-terra',
-        displayName: 'GPT-5.6 Terra',
-        reasoningOptions: ['none', 'low', 'medium', 'high', 'xhigh', 'max']
+        id: 'gpt-6-astra',
+        displayName: 'GPT-6-Astra',
+        reasoningOptions: ['low', 'medium', 'high', 'xhigh', 'max']
       },
       {
-        id: 'gpt-5.6-luna',
-        displayName: 'GPT-5.6 Luna',
+        id: 'gpt-6-sol',
+        displayName: 'GPT-6-Sol',
+        reasoningOptions: ['low', 'medium', 'high', 'xhigh', 'max']
+      },
+      {
+        id: 'gpt-6-luna',
+        displayName: 'GPT-6-Luna',
         reasoningOptions: ['low', 'medium', 'high', 'xhigh', 'max']
       }
     ],
-    defaultModel: 'gpt-5.6-terra',
+    defaultModel: 'gpt-6.1-sol',
     defaultReasoningEffort: 'medium',
     reasoningLabel: 'Effort'
   },
@@ -72,33 +67,27 @@ export const BUNDLED_AGENT_CATALOG: Record<string, CatalogAgent> = {
     availableByDefault: true,
     models: [
       {
-        id: 'claude-fable-5',
-        displayName: 'Fable 5',
+        id: 'claude-opus-5-5',
+        displayName: 'Opus 5.5',
         reasoningOptions: ['low', 'medium', 'high', 'xhigh', 'max', 'ultracode']
       },
       {
-        id: 'claude-opus-5',
-        displayName: 'Opus 5',
+        id: 'claude-fable-5-1',
+        displayName: 'Fable 5.1',
         reasoningOptions: ['low', 'medium', 'high', 'xhigh', 'max', 'ultracode']
       },
       {
-        id: 'claude-opus-4-8',
-        displayName: 'Opus 4.8',
-        reasoningOptions: ['low', 'medium', 'high', 'xhigh', 'max', 'ultracode']
-      },
-      {
-        id: 'claude-sonnet-5',
-        displayName: 'Sonnet 5',
+        id: 'claude-sonnet-5-5',
+        displayName: 'Sonnet 5.5',
         reasoningOptions: ['low', 'medium', 'high', 'max']
       },
       {
-        id: 'claude-sonnet-4-6',
-        displayName: 'Sonnet 4.6',
-        reasoningOptions: ['low', 'medium', 'high', 'max']
-      },
-      { id: 'claude-haiku-4-5', displayName: 'Haiku 4.5', reasoningOptions: [] }
+        id: 'claude-haiku-4-5-20251001',
+        displayName: 'Haiku 4.5',
+        reasoningOptions: []
+      }
     ],
-    defaultModel: 'claude-opus-5',
+    defaultModel: 'claude-opus-5-5',
     defaultReasoningEffort: null,
     reasoningLabel: 'Thinking'
   },
@@ -149,18 +138,23 @@ export const BUNDLED_AGENT_CATALOG: Record<string, CatalogAgent> = {
         reasoningOptions: []
       },
       {
-        id: 'gpt-5.6-sol',
-        displayName: 'GPT-5.6 Sol',
+        id: 'gpt-6.1-sol',
+        displayName: 'GPT-6.1-Sol',
         reasoningOptions: []
       },
       {
-        id: 'gpt-5.6-terra',
-        displayName: 'GPT-5.6 Terra',
+        id: 'gpt-6-astra',
+        displayName: 'GPT-6-Astra',
         reasoningOptions: []
       },
       {
-        id: 'gpt-5.6-luna',
-        displayName: 'GPT-5.6 Luna',
+        id: 'gpt-6-sol',
+        displayName: 'GPT-6-Sol',
+        reasoningOptions: []
+      },
+      {
+        id: 'gpt-6-luna',
+        displayName: 'GPT-6-Luna',
         reasoningOptions: []
       },
       {

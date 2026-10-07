@@ -17,6 +17,7 @@ import {
   knowledgebaseEditsEverywhere,
   knowledgebaseWriteTargets
 } from '@/lib/chat/knowledgebase-writes.ts';
+import { beginChatPaint, bindChatPaint, observeChatTextPaint } from '@/lib/chat/performance.ts';
 import { clearRequestId, stableRequestId } from '@/lib/chat/request-ids.ts';
 import { type ChatThreadState, composerMode } from '@/lib/chat/thread-state.ts';
 import type { ChatStreamStatus, ChatThreadStream } from '@/lib/chat/thread-stream.ts';
@@ -126,12 +127,14 @@ function ThreadBody({
     setComposerError(null);
     stickToBottom.current = true;
     try {
+      beginChatPaint(threadId);
       const result = await api.submitChatMessage(threadId, {
         clientRequestId: pending.id,
         text,
         ...(knowledgebaseWrite ? { knowledgebaseWrite } : {})
       });
       pendingSubmission.current = null;
+      bindChatPaint(threadId, result.run.id);
       stream.merge({ message: result.message, run: result.run });
       return true;
     } catch (cause) {
@@ -215,6 +218,12 @@ function questionHasBlock(state: ChatThreadState): boolean {
 }
 
 function MessageRow({ message, context }: { message: ChatMessageDto; context: ChatBlockContext }) {
+  const hasText =
+    message.role === 'assistant' &&
+    message.blocks.some(b => b.kind === 'text' && b.text.length > 0);
+  useLayoutEffect(() => {
+    if (hasText && message.runId) return observeChatTextPaint(message.threadId, message.runId);
+  }, [hasText, message.threadId, message.runId]);
   if (message.role === 'user') {
     return (
       <div className="flex justify-end">
@@ -254,7 +263,9 @@ function RunStatus({
     setPending(true);
     setError(null);
     try {
+      if (action.startsWith('continue:')) beginChatPaint(state.thread.id);
       const result = await call(stableRequestId(scope, action));
+      if (action.startsWith('continue:')) bindChatPaint(state.thread.id, result.id);
       clearRequestId(scope, action);
       stream.merge({ run: result });
     } catch (cause) {

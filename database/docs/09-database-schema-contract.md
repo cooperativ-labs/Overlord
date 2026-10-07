@@ -2525,6 +2525,11 @@ redaction/truncation or event-retention deletion. Owner-only diagnostic reads ar
 an explicit exception to ordinary source projection; history cascades on thread
 or profile deletion and is never indexed or sent to shared channels.
 
+Open payloads also admit numeric `performance.attempt` observations and SDK timing/
+size metadata. These use the same ordering/privacy/cascade rules, add no columns,
+and do not replace or suppress any raw observation. Timing collection is bounded
+per attempt and independent of the browser display setting.
+
 ### `chat_runs`
 
 | Column                   | Type         | Required | Notes                                                                                                        |
@@ -2565,9 +2570,11 @@ unfinished run per thread); unique `(continued_from_run_id)` where present;
 One private provider checkpoint per run (`run_id` primary key, cascade): `attempt_id`,
 `fence`, `schema_version`, `provider`, `model`, `config_digest`, closed `phase`
 (`tool_requested`, `tool_results_joined`), `payload_json` (provider response parts
-verbatim with signatures, pending calls in order), `dependency_set_id`,
+verbatim with signatures, pending calls in order; Gemini schema 2 also holds selected
+relevance families and the exact ordered declaration manifest/digest for historical call
+validation, never authorization), `dependency_set_id`,
 `invalidated_at`, timestamps, `revision`. Reuse requires matching version, model, and
-digest plus reauthorized dependencies. Deleted once the tool turn completes.
+digest plus reauthorized dependencies. Deleted once the run completes.
 
 ### `chat_tool_calls`
 
@@ -2602,7 +2609,9 @@ union of every source supplied to its generation, including inherited ones.
 `run_id`/`tool_call_id`, `label`, `excerpt`/`excerpt_truncated`, `source_revision`, and
 `observed_at`. `chat_thread_summaries` holds revisioned compact summaries
 (`summary_revision` unique per thread) with `covers_through_message_id`,
-`dependency_set_id`, and `invalidated_at`.
+`dependency_set_id`, and `invalidated_at`. `covers_through_message_id` is the last
+message (by `(created_at, id)` order) the summary generation read; it never moves
+backwards across revisions (coo:1127.158y).
 
 ### `chat_questions`
 

@@ -79,11 +79,12 @@ export class Conversations extends ChatStore {
 
   async diagnostics(owner: ChatOwner, threadId: string, after: number) {
     if (!Number.isSafeInteger(after) || after < 0) throw new ChatError('invalid_request');
-    return this.db.transaction(async tx => {
-      const store = new Conversations(tx, this.options);
-      await store.lock(threadId, owner);
-      return diagnosticPage(tx, threadId, after);
-    });
+    // This is an owner-authorized observation read, not a thread mutation. Avoid
+    // the write lock used by the conversation mutation paths so diagnostic
+    // polling cannot queue behind (or serialize) a live response writer.
+    await this.access(owner);
+    await this.thread(threadId, owner);
+    return diagnosticPage(this.db, threadId, after);
   }
 
   private async transaction<T>(

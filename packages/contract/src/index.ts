@@ -2532,6 +2532,8 @@ export interface ActivityFeedMissionObjectiveDto {
   position: number;
   assignedAgent: string | null;
   autoAdvance: boolean;
+  /** True while an open question/choice request is waiting on a human for this objective. */
+  blocked: boolean;
 }
 
 /**

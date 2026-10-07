@@ -1,0 +1,421 @@
+{
+  "generatedAt": "2026-10-07T09:19:20.484Z",
+  "model": "gemini-3.8-flash",
+  "seededMessages": 80,
+  "turns": 6,
+  "repeats": 3,
+  "aggregate": {
+    "baseline": {
+      "conversations": 3,
+      "perConversation": {
+        "mainPromptTokens": {
+          "n": 3,
+          "mean": 59712,
+          "sd": 102,
+          "min": 59617,
+          "max": 59820
+        },
+        "mainCachedTokens": {
+          "n": 3,
+          "mean": 3937,
+          "sd": 0,
+          "min": 3937,
+          "max": 3937
+        },
+        "mainOutputThoughtTokens": {
+          "n": 3,
+          "mean": 826,
+          "sd": 184,
+          "min": 624,
+          "max": 983
+        },
+        "summaryCalls": {
+          "n": 3,
+          "mean": 2,
+          "sd": 0,
+          "min": 2,
+          "max": 2
+        },
+        "summaryPromptTokens": {
+          "n": 3,
+          "mean": 15782,
+          "sd": 17,
+          "min": 15766,
+          "max": 15799
+        },
+        "summaryOutputThoughtTokens": {
+          "n": 3,
+          "mean": 1326,
+          "sd": 316,
+          "min": 965,
+          "max": 1555
+        },
+        "summaryMs": {
+          "n": 3,
+          "mean": 17622,
+          "sd": 4497,
+          "min": 13093.746916000004,
+          "max": 22086.49825
+        },
+        "totalPromptTokens": {
+          "n": 3,
+          "mean": 75495,
+          "sd": 119,
+          "min": 75383,
+          "max": 75619
+        },
+        "totalOutputThoughtTokens": {
+          "n": 3,
+          "mean": 2152,
+          "sd": 191,
+          "min": 1948,
+          "max": 2328
+        },
+        "wallMs": {
+          "n": 3,
+          "mean": 40155,
+          "sd": 4739,
+          "min": 36631.96208200003,
+          "max": 45542.855416
+        },
+        "providerRequests": {
+          "n": 3,
+          "mean": 6,
+          "sd": 0,
+          "min": 6,
+          "max": 6
+        }
+      },
+      "perTurn": [
+        {
+          "turn": 0,
+          "mainPromptTokens": {
+            "n": 3,
+            "mean": 9663,
+            "sd": 0,
+            "min": 9663,
+            "max": 9663
+          },
+          "wallMs": {
+            "n": 3,
+            "mean": 15517,
+            "sd": 1158,
+            "min": 14826.673666999995,
+            "max": 16853.772207999995
+          },
+          "summaryCalls": 3,
+          "facts": "6/6"
+        },
+        {
+          "turn": 1,
+          "mainPromptTokens": {
+            "n": 3,
+            "mean": 9911,
+            "sd": 15,
+            "min": 9895,
+            "max": 9925
+          },
+          "wallMs": {
+            "n": 3,
+            "mean": 3188,
+            "sd": 1253,
+            "min": 2087.489667000016,
+            "max": 4552.006957999998
+          },
+          "summaryCalls": 0,
+          "facts": "6/6"
+        },
+        {
+          "turn": 2,
+          "mainPromptTokens": {
+            "n": 3,
+            "mean": 9955,
+            "sd": 15,
+            "min": 9941,
+            "max": 9970
+          },
+          "wallMs": {
+            "n": 3,
+            "mean": 2624,
+            "sd": 562,
+            "min": 2199.8522499999963,
+            "max": 3261.0260410000046
+          },
+          "summaryCalls": 0,
+          "facts": "6/6"
+        },
+        {
+          "turn": 3,
+          "mainPromptTokens": {
+            "n": 3,
+            "mean": 9997,
+            "sd": 15,
+            "min": 9983,
+            "max": 10012
+          },
+          "wallMs": {
+            "n": 3,
+            "mean": 4579,
+            "sd": 1983,
+            "min": 2298.0850000000064,
+            "max": 5896.061959000013
+          },
+          "summaryCalls": 0,
+          "facts": "6/6"
+        },
+        {
+          "turn": 4,
+          "mainPromptTokens": {
+            "n": 3,
+            "mean": 10058,
+            "sd": 17,
+            "min": 10041,
+            "max": 10074
+          },
+          "wallMs": {
+            "n": 3,
+            "mean": 9745,
+            "sd": 4182,
+            "min": 5903.166750000004,
+            "max": 14199.954167000004
+          },
+          "summaryCalls": 3,
+          "facts": "3/3"
+        },
+        {
+          "turn": 5,
+          "mainPromptTokens": {
+            "n": 3,
+            "mean": 10128,
+            "sd": 43,
+            "min": 10094,
+            "max": 10176
+          },
+          "wallMs": {
+            "n": 3,
+            "mean": 4502,
+            "sd": 775,
+            "min": 3967.597833,
+            "max": 5391.484458000021
+          },
+          "summaryCalls": 0,
+          "facts": "12/12"
+        }
+      ],
+      "facts": "39/39",
+      "summaryErrors": 0,
+      "summaryFinishReasons": {
+        "STOP": 6
+      },
+      "completed": 18,
+      "turns": 18,
+      "errors": 0
+    },
+    "current": {
+      "conversations": 3,
+      "perConversation": {
+        "mainPromptTokens": {
+          "n": 3,
+          "mean": 26941,
+          "sd": 161,
+          "min": 26798,
+          "max": 27115
+        },
+        "mainCachedTokens": {
+          "n": 3,
+          "mean": 3937,
+          "sd": 0,
+          "min": 3937,
+          "max": 3937
+        },
+        "mainOutputThoughtTokens": {
+          "n": 3,
+          "mean": 700,
+          "sd": 80,
+          "min": 609,
+          "max": 756
+        },
+        "summaryCalls": {
+          "n": 3,
+          "mean": 2,
+          "sd": 0,
+          "min": 2,
+          "max": 2
+        },
+        "summaryPromptTokens": {
+          "n": 3,
+          "mean": 7628,
+          "sd": 34,
+          "min": 7596,
+          "max": 7664
+        },
+        "summaryOutputThoughtTokens": {
+          "n": 3,
+          "mean": 655,
+          "sd": 57,
+          "min": 606,
+          "max": 717
+        },
+        "summaryMs": {
+          "n": 3,
+          "mean": 9335,
+          "sd": 788,
+          "min": 8773.792790999985,
+          "max": 10236.093083999993
+        },
+        "totalPromptTokens": {
+          "n": 3,
+          "mean": 34569,
+          "sd": 195,
+          "min": 34394,
+          "max": 34779
+        },
+        "totalOutputThoughtTokens": {
+          "n": 3,
+          "mean": 1355,
+          "sd": 124,
+          "min": 1215,
+          "max": 1452
+        },
+        "wallMs": {
+          "n": 3,
+          "mean": 28192,
+          "sd": 647,
+          "min": 27717.585332999995,
+          "max": 28928.830874000065
+        },
+        "providerRequests": {
+          "n": 3,
+          "mean": 6,
+          "sd": 0,
+          "min": 6,
+          "max": 6
+        }
+      },
+      "perTurn": [
+        {
+          "turn": 0,
+          "mainPromptTokens": {
+            "n": 3,
+            "mean": 9663,
+            "sd": 0,
+            "min": 9663,
+            "max": 9663
+          },
+          "wallMs": {
+            "n": 3,
+            "mean": 9509,
+            "sd": 1283,
+            "min": 8394.078833000007,
+            "max": 10911.889083000016
+          },
+          "summaryCalls": 3,
+          "facts": "6/6"
+        },
+        {
+          "turn": 1,
+          "mainPromptTokens": {
+            "n": 3,
+            "mean": 3528,
+            "sd": 34,
+            "min": 3499,
+            "max": 3565
+          },
+          "wallMs": {
+            "n": 3,
+            "mean": 2809,
+            "sd": 457,
+            "min": 2289.645875000002,
+            "max": 3148.014084000002
+          },
+          "summaryCalls": 0,
+          "facts": "6/6"
+        },
+        {
+          "turn": 2,
+          "mainPromptTokens": {
+            "n": 3,
+            "mean": 3430,
+            "sd": 34,
+            "min": 3402,
+            "max": 3468
+          },
+          "wallMs": {
+            "n": 3,
+            "mean": 2148,
+            "sd": 460,
+            "min": 1786.0346659999996,
+            "max": 2665.903875000018
+          },
+          "summaryCalls": 0,
+          "facts": "6/6"
+        },
+        {
+          "turn": 3,
+          "mainPromptTokens": {
+            "n": 3,
+            "mean": 3432,
+            "sd": 33,
+            "min": 3404,
+            "max": 3469
+          },
+          "wallMs": {
+            "n": 3,
+            "mean": 2545,
+            "sd": 450,
+            "min": 2142.736791000003,
+            "max": 3030.235499999995
+          },
+          "summaryCalls": 0,
+          "facts": "6/6"
+        },
+        {
+          "turn": 4,
+          "mainPromptTokens": {
+            "n": 3,
+            "mean": 3491,
+            "sd": 34,
+            "min": 3461,
+            "max": 3528
+          },
+          "wallMs": {
+            "n": 3,
+            "mean": 6258,
+            "sd": 529,
+            "min": 5790.092917000002,
+            "max": 6831.409749999999
+          },
+          "summaryCalls": 3,
+          "facts": "3/3"
+        },
+        {
+          "turn": 5,
+          "mainPromptTokens": {
+            "n": 3,
+            "mean": 3396,
+            "sd": 27,
+            "min": 3369,
+            "max": 3422
+          },
+          "wallMs": {
+            "n": 3,
+            "mean": 4922,
+            "sd": 996,
+            "min": 4269.352832999997,
+            "max": 6069.304665999996
+          },
+          "summaryCalls": 0,
+          "facts": "12/12"
+        }
+      ],
+      "facts": "39/39",
+      "summaryErrors": 0,
+      "summaryFinishReasons": {
+        "STOP": 6
+      },
+      "completed": 18,
+      "turns": 18,
+      "errors": 0
+    }
+  }
+}

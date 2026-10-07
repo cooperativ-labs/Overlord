@@ -43,6 +43,8 @@ type ObjectiveMenuButtonProps = {
    * request, session, or objective state change). Omitted/null hides the item.
    */
   resumeCommand?: string | null;
+  /** Agent's native session id; when present the menu offers a copy action. */
+  sessionId?: string | null;
 };
 
 /**
@@ -56,12 +58,14 @@ export function ObjectiveMenuButton({
   displayId,
   state,
   onEditTitle,
-  resumeCommand = null
+  resumeCommand = null,
+  sessionId = null
 }: ObjectiveMenuButtonProps) {
   const update = useUpdateObjective();
   const remove = useDeleteObjective();
   const { copied, copy } = useCopyToClipboard();
   const { copied: resumeCopied, copy: copyResume } = useCopyToClipboard();
+  const { copied: sessionCopied, copy: copySession } = useCopyToClipboard();
   const [confirmDisconnectOpen, setConfirmDisconnectOpen] = useState(false);
   const [confirmReopenOpen, setConfirmReopenOpen] = useState(false);
 
@@ -110,6 +114,10 @@ export function ObjectiveMenuButton({
     if (resumeCommand) await copyResume(resumeCommand);
   }
 
+  async function handleCopySession() {
+    if (sessionId) await copySession(sessionId);
+  }
+
   return (
     <>
       <DropdownMenu>
@@ -138,6 +146,16 @@ export function ObjectiveMenuButton({
                 <MessageSquare className="h-3.5 w-3.5" />
               )}
               Copy resume command
+            </DropdownMenuItem>
+          ) : null}
+          {sessionId ? (
+            <DropdownMenuItem className="gap-2 text-xs" onClick={handleCopySession}>
+              {sessionCopied ? (
+                <Check className="h-3.5 w-3.5 text-green-600" />
+              ) : (
+                <Copy className="h-3.5 w-3.5" />
+              )}
+              Copy session ID
             </DropdownMenuItem>
           ) : null}
           <DropdownMenuSeparator />

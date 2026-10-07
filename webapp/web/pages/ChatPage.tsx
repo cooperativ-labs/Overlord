@@ -15,6 +15,7 @@ import {
   knowledgebaseEditsEverywhere,
   knowledgebaseWriteTargets
 } from '@/lib/chat/knowledgebase-writes.ts';
+import { beginChatPaint, bindChatPaint } from '@/lib/chat/performance.ts';
 import { useChatAvailability, useChatProviders, useChatThreads } from '@/lib/chat/use-chat.ts';
 import { cn } from '@/lib/utils.ts';
 
@@ -203,11 +204,13 @@ function NewConversation({ scope }: { scope: string }) {
         pending.grant = grant;
         pending.requestId = globalThis.crypto.randomUUID();
       }
-      await api.submitChatMessage(pending.threadId, {
+      beginChatPaint(pending.threadId);
+      const submission = await api.submitChatMessage(pending.threadId, {
         clientRequestId: pending.requestId!,
         text,
         ...(knowledgebaseWrite ? { knowledgebaseWrite } : {})
       });
+      bindChatPaint(pending.threadId, submission.run.id);
       created.current = null;
       void queryClient.invalidateQueries({ queryKey: ['chat', scope, 'threads'] });
       void navigate({ to: '/chat/$threadId', params: { threadId: pending.threadId } });

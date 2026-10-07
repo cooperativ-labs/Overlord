@@ -53,14 +53,22 @@ function ObjectiveStateIcon({ state }: { state: ActivityFeedMissionObjectiveDto[
 /**
  * One objective under a mission card. Live work carries the same emerald
  * shimmer sweep the mission panel uses, so which step is running is visible
- * without reading a single word.
+ * without reading a single word. A blocked objective (open question or choice)
+ * swaps the shimmer for a solid yellow highlight.
  */
 function MissionObjectiveRow({ objective }: { objective: ActivityFeedMissionObjectiveDto }) {
+  const blocked = objective.blocked === true;
   const inFlight = isInFlightObjectiveState(objective.state);
 
   return (
-    <li className="relative overflow-hidden rounded-md">
-      {inFlight ? (
+    <li
+      className={cn(
+        'relative overflow-hidden rounded-md',
+        blocked && 'bg-yellow-300/60 dark:bg-yellow-400/25'
+      )}
+      aria-label={blocked ? 'Blocked: waiting on an answer' : undefined}
+    >
+      {inFlight && !blocked ? (
         <div className="pointer-events-none absolute inset-0 animate-[shimmer_3s_linear_infinite] bg-size-[200%_100%] bg-linear-to-r from-transparent via-emerald-500/20 to-transparent" />
       ) : null}
       <div className="relative flex min-w-0 items-center gap-2 px-2 py-1 text-xs">

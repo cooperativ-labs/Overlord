@@ -27,6 +27,7 @@ import { ServiceError } from '../errors.js';
 
 import { appendDiagnostic } from './diagnostics.js';
 import { storedKnowledgebaseWrite } from './knowledgebase-writes.js';
+import { chatSpan, chatSpanElapsed } from './performance.js';
 
 export type ThreadRow = Selectable<ChatThreads>;
 export type RunRow = Selectable<ChatRuns>;
@@ -194,11 +195,23 @@ export class ChatStore {
     runId: string | null = null,
     attemptId: string | null = null
   ): Promise<void> {
-    await this.db.transaction(async tx => {
-      const store = new ChatStore(tx, this.options);
-      await store.lock(threadId);
-      await appendDiagnostic(tx, threadId, kind, payload, store.timestamp(), runId, attemptId);
-    });
+    const started = performance.now();
+    await chatSpan('diagnostic.transaction', () =>
+      this.db.transaction(async tx => {
+        chatSpanElapsed('diagnostic.admission', started);
+        const store = new ChatStore(tx, this.options);
+        await store.lockForDiagnostic(threadId);
+        await appendDiagnostic(tx, threadId, kind, payload, store.timestamp(), runId, attemptId);
+      })
+    );
+  }
+  private async lockForDiagnostic(id: string): Promise<void> {
+    // Diagnostics need the same per-thread writer lock, but do not consume the
+    // thread DTO. The UPDATE both acquires the lock and confirms the FK owner row.
+    const result = await chatSpan('thread.lock', () =>
+      this.db.run('UPDATE chat_threads SET id = id WHERE id = ?', [id])
+    );
+    if (!result.changes) throw new ChatError('not_found');
   }
   async access(owner: ChatOwner): Promise<void> {
     const member = await this.db.get(
@@ -235,9 +248,11 @@ export class ChatStore {
   async lock(id: string, owner?: ChatOwner) {
     if (owner) await this.access(owner);
     // The owner predicate prevents an unauthorized request from locking another person's thread.
-    const result = await this.db.run(
-      `UPDATE chat_threads SET id = id WHERE id = ?${owner ? ' AND owner_profile_id = ? AND organization_id = ?' : ''}`,
-      owner ? [id, owner.profileId, owner.organizationId] : [id]
+    const result = await chatSpan('thread.lock', () =>
+      this.db.run(
+        `UPDATE chat_threads SET id = id WHERE id = ?${owner ? ' AND owner_profile_id = ? AND organization_id = ?' : ''}`,
+        owner ? [id, owner.profileId, owner.organizationId] : [id]
+      )
     );
     if (!result.changes) throw new ChatError('not_found');
     return this.thread(id, owner);
@@ -395,6 +410,9 @@ export class ChatStore {
     return ids;
   }
   async checkSources(threadId: string, onlyIds?: readonly string[]): Promise<void> {
+    return chatSpan('source.authorization', () => this.checkSourcesMeasured(threadId, onlyIds));
+  }
+  private async checkSourcesMeasured(threadId: string, onlyIds?: readonly string[]): Promise<void> {
     const t = await this.thread(threadId);
     const owner = { profileId: t.owner_profile_id, organizationId: t.organization_id };
     try {
@@ -412,15 +430,18 @@ export class ChatStore {
     ).filter(source => !onlyIds || onlyIds.includes(source.id!));
     for (const source of sources) {
       let state: 'authorized' | 'revoked' | 'unknown' = 'unknown';
-      if (this.options.checkSource) {
+      const checkSource = this.options.checkSource;
+      if (checkSource) {
         const signal = AbortSignal.timeout(3000);
         try {
-          state = await Promise.race([
-            this.options.checkSource(owner, JSON.parse(source.locator_json), signal),
-            new Promise<'unknown'>(resolve =>
-              signal.addEventListener('abort', () => resolve('unknown'), { once: true })
-            )
-          ]);
+          state = await chatSpan('source.checker', () =>
+            Promise.race([
+              checkSource(owner, JSON.parse(source.locator_json), signal),
+              new Promise<'unknown'>(resolve =>
+                signal.addEventListener('abort', () => resolve('unknown'), { once: true })
+              )
+            ])
+          );
         } catch {
           /* Fail closed, without leaking adapter errors. */
         }

@@ -222,7 +222,7 @@ export const OVERLORD_TOOL_DECLARATIONS: readonly ChatToolDeclaration[] = [
   {
     name: 'repository_read',
     description:
-      'Inspect a registered repository resource on an execution target, read only. Operations: observe, tree, branches, worktrees, git_status, diff (scope unstaged|staged|all), read_file (relativePath, optional startLine/endLine), search_text (literal query, optional relativePath). Inputs name the execution target, project and resource key; paths are repository-relative. Never fetches, checks out, builds or writes. Independent reads may be requested together.',
+      'Inspect a registered repository resource on an execution target, read only. Operations: observe, tree, branches, worktrees, git_status, diff (scope unstaged|staged|all), read_file (relativePath, optional startLine/endLine), search_text (literal query, optional relativePath). Inputs name the execution target, project and resource key; paths are repository-relative. Prefer search_text, then a startLine/endLine range around the hits. Never fetches, checks out, builds or writes.',
     parameters: obj(
       {
         executionTargetId: id('From overlord_list_execution_targets.'),
@@ -491,9 +491,8 @@ function knowledgebaseToolDescription(
     tool.writeScope ?? (write ? { kind: 'request' as const, workspace: write.workspace } : null);
   if (tool.access !== 'write' || !scope) return `Knowledgebase (read only): ${tool.description}`;
   if (scope.kind === 'request')
-    return `Knowledgebase write (the user authorized edits to workspace "${scope.workspace}" for this request only): ${tool.description}`;
-  const workspaces = scope.workspaces.map(w => `"${w}"`).join(', ');
-  return `Knowledgebase write (the user allows edits in every workspace this connection is authorized for${workspaces ? `: ${workspaces}` : ''}; always name the workspace): ${tool.description}`;
+    return `Knowledgebase write (this request is authorized for workspace "${scope.workspace}" only; name it): ${tool.description}`;
+  return `Knowledgebase write (this connection allows any currently authorized workspace; name it): ${tool.description}`;
 }
 
 export class ChatToolGateway {

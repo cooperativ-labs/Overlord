@@ -131,6 +131,60 @@ for (const adapter of adapters)
         const threads = await db.get<{ n: number }>('SELECT COUNT(*) AS n FROM chat_threads');
         assert.equal(Number(threads!.n), 1);
       }));
+    it('pages complete diagnostics through owner gates without changing thread state', () =>
+      fixture(adapter, async (db, c) => {
+        const t = await c.create(owner);
+        await c.diagnostic(t.thread.id, 'provider.chunk', { part: 1 });
+        await c.diagnostic(t.thread.id, 'provider.chunk', { part: 2 });
+        const threadBefore = await db.get<{ revision: number; updated_at: string }>(
+          'SELECT revision, updated_at FROM chat_threads WHERE id = ?',
+          [t.thread.id]
+        );
+        const first = await c.diagnostics(owner, t.thread.id, 0);
+        assert.deepEqual(
+          first.entries.map(e => e.seq),
+          [1, 2]
+        );
+        assert.deepEqual(
+          first.entries.map(e => e.payload),
+          [{ part: 1 }, { part: 2 }]
+        );
+        assert.equal(first.nextCursor, 2);
+        assert.equal(first.hasMore, false);
+        await assert.rejects(
+          c.diagnostics({ ...owner, profileId: 'other' }, t.thread.id, 0),
+          rejectsCode('not_found')
+        );
+        await assert.rejects(c.diagnostics(owner, t.thread.id, -1), rejectsCode('invalid_request'));
+        if (db.dialect === 'postgres') {
+          let rowLocked!: () => void;
+          let releaseWriter!: () => void;
+          const locked = new Promise<void>(resolve => (rowLocked = resolve));
+          const held = new Promise<void>(resolve => (releaseWriter = resolve));
+          const writer = db.transaction(async tx => {
+            await tx.run('UPDATE chat_threads SET id = id WHERE id = ?', [t.thread.id]);
+            rowLocked();
+            await held;
+          });
+          await locked;
+          const readCompleted = await Promise.race([
+            c.diagnostics(owner, t.thread.id, 0).then(() => true),
+            new Promise<boolean>(resolve => setTimeout(() => resolve(false), 500))
+          ]);
+          releaseWriter();
+          await writer;
+          assert.equal(
+            readCompleted,
+            true,
+            'owner paging should not wait for the thread writer lock'
+          );
+        }
+        const threadAfter = await db.get<{ revision: number; updated_at: string }>(
+          'SELECT revision, updated_at FROM chat_threads WHERE id = ?',
+          [t.thread.id]
+        );
+        assert.deepEqual(threadAfter, threadBefore);
+      }));
     it('rename/archive revision checks and newest-first owner list', () =>
       fixture(adapter, async (_db, c, _runs, advance) => {
         const t = await c.create(owner);

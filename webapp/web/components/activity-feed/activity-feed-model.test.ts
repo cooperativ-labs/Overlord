@@ -52,7 +52,8 @@ function missionItem(
         state: 'executing',
         position: 0,
         assignedAgent: 'claude',
-        autoAdvance: false
+        autoAdvance: false,
+        blocked: false
       }
     ],
     activeObjectiveIds: ['objective-1'],

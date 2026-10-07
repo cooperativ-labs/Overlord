@@ -1,0 +1,1656 @@
+{
+  "version": 1,
+  "model": "gemini-3.8-flash",
+  "static": {
+    "model": "gemini-3.8-flash",
+    "method": "provider prompt usage minus identical tool-free control",
+    "control": {
+      "promptTokens": 4,
+      "toolsBytes": 2
+    },
+    "results": [
+      {
+        "scope": "read",
+        "families": [
+          "status"
+        ],
+        "declarations": 7,
+        "promptTokens": 1353,
+        "toolsBytes": 5589,
+        "schemaTokens": 1349
+      },
+      {
+        "scope": "read",
+        "families": [
+          "repository"
+        ],
+        "declarations": 7,
+        "promptTokens": 1670,
+        "toolsBytes": 6683,
+        "schemaTokens": 1666
+      },
+      {
+        "scope": "read",
+        "families": [
+          "knowledgebase"
+        ],
+        "declarations": 14,
+        "promptTokens": 3450,
+        "toolsBytes": 12232,
+        "schemaTokens": 3446
+      },
+      {
+        "scope": "read",
+        "families": [
+          "feature"
+        ],
+        "declarations": 16,
+        "promptTokens": 3990,
+        "toolsBytes": 14208,
+        "schemaTokens": 3986
+      },
+      {
+        "scope": "read",
+        "families": [
+          "status",
+          "repository",
+          "knowledgebase",
+          "feature"
+        ],
+        "declarations": 19,
+        "promptTokens": 4755,
+        "toolsBytes": 17041,
+        "schemaTokens": 4751
+      },
+      {
+        "scope": "all_workspaces",
+        "families": [
+          "status"
+        ],
+        "declarations": 7,
+        "promptTokens": 1353,
+        "toolsBytes": 5589,
+        "schemaTokens": 1349
+      },
+      {
+        "scope": "all_workspaces",
+        "families": [
+          "repository"
+        ],
+        "declarations": 7,
+        "promptTokens": 1670,
+        "toolsBytes": 6683,
+        "schemaTokens": 1666
+      },
+      {
+        "scope": "all_workspaces",
+        "families": [
+          "knowledgebase"
+        ],
+        "declarations": 20,
+        "promptTokens": 5477,
+        "toolsBytes": 18983,
+        "schemaTokens": 5473
+      },
+      {
+        "scope": "all_workspaces",
+        "families": [
+          "feature"
+        ],
+        "declarations": 22,
+        "promptTokens": 6017,
+        "toolsBytes": 20959,
+        "schemaTokens": 6013
+      },
+      {
+        "scope": "all_workspaces",
+        "families": [
+          "status",
+          "repository",
+          "knowledgebase",
+          "feature"
+        ],
+        "declarations": 25,
+        "promptTokens": 6782,
+        "toolsBytes": 23792,
+        "schemaTokens": 6778
+      },
+      {
+        "scope": "request",
+        "families": [
+          "status"
+        ],
+        "declarations": 7,
+        "promptTokens": 1353,
+        "toolsBytes": 5589,
+        "schemaTokens": 1349
+      },
+      {
+        "scope": "request",
+        "families": [
+          "repository"
+        ],
+        "declarations": 7,
+        "promptTokens": 1670,
+        "toolsBytes": 6683,
+        "schemaTokens": 1666
+      },
+      {
+        "scope": "request",
+        "families": [
+          "knowledgebase"
+        ],
+        "declarations": 20,
+        "promptTokens": 5495,
+        "toolsBytes": 18965,
+        "schemaTokens": 5491
+      },
+      {
+        "scope": "request",
+        "families": [
+          "feature"
+        ],
+        "declarations": 22,
+        "promptTokens": 6035,
+        "toolsBytes": 20941,
+        "schemaTokens": 6031
+      },
+      {
+        "scope": "request",
+        "families": [
+          "status",
+          "repository",
+          "knowledgebase",
+          "feature"
+        ],
+        "declarations": 25,
+        "promptTokens": 6800,
+        "toolsBytes": 23774,
+        "schemaTokens": 6796
+      }
+    ]
+  },
+  "live": {
+    "method": "two alternating repetitions, identical prompt/policy, full catalog vs subsets, synthetic SQLite fixtures; missing fields retained as missing",
+    "groups": {
+      "repository-research/baseline": {
+        "runs": 2,
+        "completed": 2,
+        "factsMatched": 8,
+        "factsTotal": 8,
+        "citationsPresentAndLinkedRuns": 2,
+        "providerRequests": {
+          "n": 2,
+          "mean": 8,
+          "median": 8.0,
+          "min": 8,
+          "max": 8,
+          "sd": 0.0
+        },
+        "wallMs": {
+          "n": 2,
+          "mean": 52206.95474999999,
+          "median": 52206.95474999999,
+          "min": 38311.224832999986,
+          "max": 66102.684667,
+          "sd": 13895.729917000004
+        },
+        "reportedPromptTokens": {
+          "n": 2,
+          "mean": 52712,
+          "median": 52712.0,
+          "min": 48844,
+          "max": 56580,
+          "sd": 3868.0
+        },
+        "reportedCachedTokens": {
+          "n": 0,
+          "mean": null,
+          "median": null,
+          "min": null,
+          "max": null,
+          "sd": null
+        },
+        "cachedFieldExchanges": 0,
+        "promptFieldExchanges": 16,
+        "completedRounds": 16,
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0
+      },
+      "repository-research/current": {
+        "runs": 2,
+        "completed": 2,
+        "factsMatched": 8,
+        "factsTotal": 8,
+        "citationsPresentAndLinkedRuns": 2,
+        "providerRequests": {
+          "n": 2,
+          "mean": 7,
+          "median": 7.0,
+          "min": 6,
+          "max": 8,
+          "sd": 1.0
+        },
+        "wallMs": {
+          "n": 2,
+          "mean": 45957.29060400002,
+          "median": 45957.29060400002,
+          "min": 38676.68333300005,
+          "max": 53237.897874999995,
+          "sd": 7280.607270999972
+        },
+        "reportedPromptTokens": {
+          "n": 2,
+          "mean": 38036,
+          "median": 38036.0,
+          "min": 36647,
+          "max": 39425,
+          "sd": 1389.0
+        },
+        "reportedCachedTokens": {
+          "n": 0,
+          "mean": null,
+          "median": null,
+          "min": null,
+          "max": null,
+          "sd": null
+        },
+        "cachedFieldExchanges": 0,
+        "promptFieldExchanges": 13,
+        "completedRounds": 13,
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0
+      },
+      "notes-vs-code/baseline": {
+        "runs": 2,
+        "completed": 2,
+        "factsMatched": 10,
+        "factsTotal": 10,
+        "citationsPresentAndLinkedRuns": 2,
+        "providerRequests": {
+          "n": 2,
+          "mean": 7.5,
+          "median": 7.5,
+          "min": 6,
+          "max": 9,
+          "sd": 1.5
+        },
+        "wallMs": {
+          "n": 2,
+          "mean": 54164.497479,
+          "median": 54164.497479,
+          "min": 49531.075249999994,
+          "max": 58797.919708,
+          "sd": 4633.422229000003
+        },
+        "reportedPromptTokens": {
+          "n": 2,
+          "mean": 71738,
+          "median": 71738.0,
+          "min": 55532,
+          "max": 87944,
+          "sd": 16206.0
+        },
+        "reportedCachedTokens": {
+          "n": 1,
+          "mean": 16197,
+          "median": 16197,
+          "min": 16197,
+          "max": 16197,
+          "sd": 0.0
+        },
+        "cachedFieldExchanges": 1,
+        "promptFieldExchanges": 15,
+        "completedRounds": 15,
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0
+      },
+      "notes-vs-code/current": {
+        "runs": 2,
+        "completed": 2,
+        "factsMatched": 10,
+        "factsTotal": 10,
+        "citationsPresentAndLinkedRuns": 2,
+        "providerRequests": {
+          "n": 2,
+          "mean": 7,
+          "median": 7.0,
+          "min": 6,
+          "max": 8,
+          "sd": 1.0
+        },
+        "wallMs": {
+          "n": 2,
+          "mean": 47116.13606250002,
+          "median": 47116.13606250002,
+          "min": 45321.37537500006,
+          "max": 48910.896749999985,
+          "sd": 1794.760687499962
+        },
+        "reportedPromptTokens": {
+          "n": 2,
+          "mean": 55058,
+          "median": 55058.0,
+          "min": 46131,
+          "max": 63985,
+          "sd": 8927.0
+        },
+        "reportedCachedTokens": {
+          "n": 0,
+          "mean": null,
+          "median": null,
+          "min": null,
+          "max": null,
+          "sd": null
+        },
+        "cachedFieldExchanges": 0,
+        "promptFieldExchanges": 14,
+        "completedRounds": 14,
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0
+      },
+      "knowledgebase-research/baseline": {
+        "runs": 2,
+        "completed": 2,
+        "factsMatched": 8,
+        "factsTotal": 8,
+        "citationsPresentAndLinkedRuns": 2,
+        "providerRequests": {
+          "n": 2,
+          "mean": 4,
+          "median": 4.0,
+          "min": 4,
+          "max": 4,
+          "sd": 0.0
+        },
+        "wallMs": {
+          "n": 2,
+          "mean": 17990.761541500033,
+          "median": 17990.761541500033,
+          "min": 15543.575458000065,
+          "max": 20437.947625,
+          "sd": 2447.186083499968
+        },
+        "reportedPromptTokens": {
+          "n": 2,
+          "mean": 21055.5,
+          "median": 21055.5,
+          "min": 20171,
+          "max": 21940,
+          "sd": 884.5
+        },
+        "reportedCachedTokens": {
+          "n": 0,
+          "mean": null,
+          "median": null,
+          "min": null,
+          "max": null,
+          "sd": null
+        },
+        "cachedFieldExchanges": 0,
+        "promptFieldExchanges": 8,
+        "completedRounds": 8,
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0
+      },
+      "knowledgebase-research/current": {
+        "runs": 2,
+        "completed": 2,
+        "factsMatched": 8,
+        "factsTotal": 8,
+        "citationsPresentAndLinkedRuns": 2,
+        "providerRequests": {
+          "n": 2,
+          "mean": 4,
+          "median": 4.0,
+          "min": 4,
+          "max": 4,
+          "sd": 0.0
+        },
+        "wallMs": {
+          "n": 2,
+          "mean": 18718.788895499994,
+          "median": 18718.788895499994,
+          "min": 15539.410082999966,
+          "max": 21898.167708000023,
+          "sd": 3179.3788125000283
+        },
+        "reportedPromptTokens": {
+          "n": 2,
+          "mean": 15019.5,
+          "median": 15019.5,
+          "min": 14813,
+          "max": 15226,
+          "sd": 206.5
+        },
+        "reportedCachedTokens": {
+          "n": 0,
+          "mean": null,
+          "median": null,
+          "min": null,
+          "max": null,
+          "sd": null
+        },
+        "cachedFieldExchanges": 0,
+        "promptFieldExchanges": 8,
+        "completedRounds": 8,
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0
+      },
+      "status/baseline": {
+        "runs": 2,
+        "completed": 2,
+        "factsMatched": 6,
+        "factsTotal": 6,
+        "citationsPresentAndLinkedRuns": 2,
+        "providerRequests": {
+          "n": 2,
+          "mean": 3,
+          "median": 3.0,
+          "min": 3,
+          "max": 3,
+          "sd": 0.0
+        },
+        "wallMs": {
+          "n": 2,
+          "mean": 13155.768665999989,
+          "median": 13155.768665999989,
+          "min": 12985.091040999978,
+          "max": 13326.446291,
+          "sd": 170.67762500001118
+        },
+        "reportedPromptTokens": {
+          "n": 2,
+          "mean": 14388.5,
+          "median": 14388.5,
+          "min": 14357,
+          "max": 14420,
+          "sd": 31.5
+        },
+        "reportedCachedTokens": {
+          "n": 0,
+          "mean": null,
+          "median": null,
+          "min": null,
+          "max": null,
+          "sd": null
+        },
+        "cachedFieldExchanges": 0,
+        "promptFieldExchanges": 6,
+        "completedRounds": 6,
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0
+      },
+      "status/current": {
+        "runs": 2,
+        "completed": 2,
+        "factsMatched": 6,
+        "factsTotal": 6,
+        "citationsPresentAndLinkedRuns": 2,
+        "providerRequests": {
+          "n": 2,
+          "mean": 3,
+          "median": 3.0,
+          "min": 3,
+          "max": 3,
+          "sd": 0.0
+        },
+        "wallMs": {
+          "n": 2,
+          "mean": 14529.14685400002,
+          "median": 14529.14685400002,
+          "min": 13589.240417000023,
+          "max": 15469.053291000018,
+          "sd": 939.9064369999978
+        },
+        "reportedPromptTokens": {
+          "n": 2,
+          "mean": 10205,
+          "median": 10205.0,
+          "min": 10197,
+          "max": 10213,
+          "sd": 8.0
+        },
+        "reportedCachedTokens": {
+          "n": 0,
+          "mean": null,
+          "median": null,
+          "min": null,
+          "max": null,
+          "sd": null
+        },
+        "cachedFieldExchanges": 0,
+        "promptFieldExchanges": 6,
+        "completedRounds": 6,
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0
+      },
+      "ambiguous/baseline": {
+        "runs": 2,
+        "completed": 2,
+        "factsMatched": 2,
+        "factsTotal": 2,
+        "citationsPresentAndLinkedRuns": 2,
+        "providerRequests": {
+          "n": 2,
+          "mean": 11,
+          "median": 11.0,
+          "min": 6,
+          "max": 16,
+          "sd": 5.0
+        },
+        "wallMs": {
+          "n": 2,
+          "mean": 68759.2358125,
+          "median": 68759.2358125,
+          "min": 51920.75316700002,
+          "max": 85597.71845799999,
+          "sd": 16838.482645499986
+        },
+        "reportedPromptTokens": {
+          "n": 2,
+          "mean": 141698.5,
+          "median": 141698.5,
+          "min": 57936,
+          "max": 225461,
+          "sd": 83762.5
+        },
+        "reportedCachedTokens": {
+          "n": 2,
+          "mean": 57219,
+          "median": 57219.0,
+          "min": 7867,
+          "max": 106571,
+          "sd": 49352.0
+        },
+        "cachedFieldExchanges": 9,
+        "promptFieldExchanges": 21,
+        "completedRounds": 21,
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0
+      },
+      "ambiguous/current": {
+        "runs": 2,
+        "completed": 2,
+        "factsMatched": 2,
+        "factsTotal": 2,
+        "citationsPresentAndLinkedRuns": 2,
+        "providerRequests": {
+          "n": 2,
+          "mean": 12.5,
+          "median": 12.5,
+          "min": 11,
+          "max": 14,
+          "sd": 1.5
+        },
+        "wallMs": {
+          "n": 2,
+          "mean": 119531.10352150004,
+          "median": 119531.10352150004,
+          "min": 82911.17320900003,
+          "max": 156151.03383400006,
+          "sd": 36619.930312500015
+        },
+        "reportedPromptTokens": {
+          "n": 2,
+          "mean": 189911.5,
+          "median": 189911.5,
+          "min": 151153,
+          "max": 228670,
+          "sd": 38758.5
+        },
+        "reportedCachedTokens": {
+          "n": 2,
+          "mean": 97780.5,
+          "median": 97780.5,
+          "min": 70498,
+          "max": 125063,
+          "sd": 27282.5
+        },
+        "cachedFieldExchanges": 13,
+        "promptFieldExchanges": 25,
+        "completedRounds": 25,
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0
+      },
+      "expansion/baseline": {
+        "runs": 2,
+        "completed": 2,
+        "factsMatched": 8,
+        "factsTotal": 8,
+        "citationsPresentAndLinkedRuns": 2,
+        "providerRequests": {
+          "n": 2,
+          "mean": 7.5,
+          "median": 7.5,
+          "min": 7,
+          "max": 8,
+          "sd": 0.5
+        },
+        "wallMs": {
+          "n": 2,
+          "mean": 65213.3463129999,
+          "median": 65213.3463129999,
+          "min": 59907.88195900002,
+          "max": 70518.81066699978,
+          "sd": 5305.46435399988
+        },
+        "reportedPromptTokens": {
+          "n": 2,
+          "mean": 75511.5,
+          "median": 75511.5,
+          "min": 74784,
+          "max": 76239,
+          "sd": 727.5
+        },
+        "reportedCachedTokens": {
+          "n": 1,
+          "mean": 10081,
+          "median": 10081,
+          "min": 10081,
+          "max": 10081,
+          "sd": 0.0
+        },
+        "cachedFieldExchanges": 2,
+        "promptFieldExchanges": 15,
+        "completedRounds": 15,
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0
+      },
+      "expansion/current": {
+        "runs": 2,
+        "completed": 2,
+        "factsMatched": 8,
+        "factsTotal": 8,
+        "citationsPresentAndLinkedRuns": 2,
+        "providerRequests": {
+          "n": 2,
+          "mean": 7.5,
+          "median": 7.5,
+          "min": 7,
+          "max": 8,
+          "sd": 0.5
+        },
+        "wallMs": {
+          "n": 2,
+          "mean": 65177.174395499926,
+          "median": 65177.174395499926,
+          "min": 64273.314040999976,
+          "max": 66081.03474999988,
+          "sd": 903.8603544999496
+        },
+        "reportedPromptTokens": {
+          "n": 2,
+          "mean": 68459,
+          "median": 68459.0,
+          "min": 63886,
+          "max": 73032,
+          "sd": 4573.0
+        },
+        "reportedCachedTokens": {
+          "n": 1,
+          "mean": 16208,
+          "median": 16208,
+          "min": 16208,
+          "max": 16208,
+          "sd": 0.0
+        },
+        "cachedFieldExchanges": 1,
+        "promptFieldExchanges": 15,
+        "completedRounds": 15,
+        "expansionCalls": 2,
+        "dedicatedExpansionTurns": 0
+      },
+      "primary/baseline": {
+        "runs": 8,
+        "completed": 8,
+        "factsMatched": 32,
+        "factsTotal": 32,
+        "citationsPresentAndLinkedRuns": 8,
+        "providerRequests": {
+          "n": 8,
+          "mean": 5.625,
+          "median": 5.0,
+          "min": 3,
+          "max": 9,
+          "sd": 2.2878756522153907
+        },
+        "wallMs": {
+          "n": 8,
+          "mean": 34379.495609125006,
+          "median": 29374.586228999993,
+          "min": 12985.091040999978,
+          "max": 66102.684667,
+          "sd": 20303.19894846338
+        },
+        "reportedPromptTokens": {
+          "n": 8,
+          "mean": 39973.5,
+          "median": 35392.0,
+          "min": 14357,
+          "max": 87944,
+          "sd": 24809.85179318893
+        },
+        "reportedCachedTokens": {
+          "n": 1,
+          "mean": 16197,
+          "median": 16197,
+          "min": 16197,
+          "max": 16197,
+          "sd": 0.0
+        },
+        "cachedFieldExchanges": 1,
+        "promptFieldExchanges": 45,
+        "completedRounds": 45,
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0
+      },
+      "primary/current": {
+        "runs": 8,
+        "completed": 8,
+        "factsMatched": 32,
+        "factsTotal": 32,
+        "citationsPresentAndLinkedRuns": 8,
+        "providerRequests": {
+          "n": 8,
+          "mean": 5.25,
+          "median": 5.0,
+          "min": 3,
+          "max": 8,
+          "sd": 1.920286436967152
+        },
+        "wallMs": {
+          "n": 8,
+          "mean": 31580.340604000015,
+          "median": 30287.425520500037,
+          "min": 13589.240417000023,
+          "max": 53237.897874999995,
+          "sd": 15583.971207501392
+        },
+        "reportedPromptTokens": {
+          "n": 8,
+          "mean": 29579.625,
+          "median": 25936.5,
+          "min": 10197,
+          "max": 63985,
+          "sd": 18639.303641348168
+        },
+        "reportedCachedTokens": {
+          "n": 0,
+          "mean": null,
+          "median": null,
+          "min": null,
+          "max": null,
+          "sd": null
+        },
+        "cachedFieldExchanges": 0,
+        "promptFieldExchanges": 41,
+        "completedRounds": 41,
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0
+      },
+      "all/baseline": {
+        "runs": 12,
+        "completed": 12,
+        "factsMatched": 42,
+        "factsTotal": 42,
+        "citationsPresentAndLinkedRuns": 12,
+        "providerRequests": {
+          "n": 12,
+          "mean": 6.833333333333333,
+          "median": 6.5,
+          "min": 3,
+          "max": 16,
+          "sd": 3.41158158174312
+        },
+        "wallMs": {
+          "n": 12,
+          "mean": 45248.42742699999,
+          "median": 50725.914208500006,
+          "min": 12985.091040999978,
+          "max": 85597.71845799999,
+          "sd": 23750.273024706545
+        },
+        "reportedPromptTokens": {
+          "n": 12,
+          "mean": 62850.666666666664,
+          "median": 56056.0,
+          "min": 14357,
+          "max": 225461,
+          "sd": 54695.42513978863
+        },
+        "reportedCachedTokens": {
+          "n": 4,
+          "mean": 35179,
+          "median": 13139.0,
+          "min": 7867,
+          "max": 106571,
+          "sd": 41330.94765426992
+        },
+        "cachedFieldExchanges": 12,
+        "promptFieldExchanges": 81,
+        "completedRounds": 81,
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0
+      },
+      "all/current": {
+        "runs": 12,
+        "completed": 12,
+        "factsMatched": 42,
+        "factsTotal": 42,
+        "citationsPresentAndLinkedRuns": 12,
+        "providerRequests": {
+          "n": 12,
+          "mean": 6.833333333333333,
+          "median": 6.5,
+          "min": 3,
+          "max": 14,
+          "sd": 3.157882553582736
+        },
+        "wallMs": {
+          "n": 12,
+          "mean": 51838.27338883334,
+          "median": 47116.13606250002,
+          "min": 13589.240417000023,
+          "max": 156151.03383400006,
+          "sd": 38111.80435751445
+        },
+        "reportedPromptTokens": {
+          "n": 12,
+          "mean": 62781.5,
+          "median": 42778.0,
+          "min": 10197,
+          "max": 228670,
+          "sd": 62605.32077028278
+        },
+        "reportedCachedTokens": {
+          "n": 3,
+          "mean": 70589.66666666667,
+          "median": 70498,
+          "min": 16208,
+          "max": 125063,
+          "sd": 44439.91492891147
+        },
+        "cachedFieldExchanges": 14,
+        "promptFieldExchanges": 81,
+        "completedRounds": 81,
+        "expansionCalls": 2,
+        "dedicatedExpansionTurns": 0
+      }
+    },
+    "numericRuns": [
+      {
+        "scenario": "repository-research",
+        "arm": "baseline",
+        "repetition": 0,
+        "state": "completed",
+        "wallMs": 66102.684667,
+        "providerRequests": 8,
+        "completedRounds": 8,
+        "usageExchanges": 8,
+        "tokenTotals": {
+          "promptTokenCount": 56580,
+          "candidatesTokenCount": 1422,
+          "thoughtsTokenCount": 2294
+        },
+        "tokenReportedExchanges": {
+          "promptTokenCount": 8,
+          "candidatesTokenCount": 8,
+          "thoughtsTokenCount": 8
+        },
+        "schemaBytes": {
+          "systemMax": 4124,
+          "toolsMax": 10628,
+          "requestMax": 50607,
+          "requestTotal": 231134
+        },
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0,
+        "factsMatched": 4,
+        "factsTotal": 4,
+        "citationPresenceAndLinkedEvidence": true
+      },
+      {
+        "scenario": "repository-research",
+        "arm": "current",
+        "repetition": 0,
+        "state": "completed",
+        "wallMs": 53237.897874999995,
+        "providerRequests": 8,
+        "completedRounds": 7,
+        "usageExchanges": 7,
+        "tokenTotals": {
+          "promptTokenCount": 39425,
+          "candidatesTokenCount": 1375,
+          "thoughtsTokenCount": 1959
+        },
+        "tokenReportedExchanges": {
+          "promptTokenCount": 7,
+          "candidatesTokenCount": 7,
+          "thoughtsTokenCount": 7
+        },
+        "schemaBytes": {
+          "systemMax": 4124,
+          "toolsMax": 6657,
+          "requestMax": 37604,
+          "requestTotal": 170358
+        },
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0,
+        "factsMatched": 4,
+        "factsTotal": 4,
+        "citationPresenceAndLinkedEvidence": true
+      },
+      {
+        "scenario": "notes-vs-code",
+        "arm": "baseline",
+        "repetition": 0,
+        "state": "completed",
+        "wallMs": 58797.919708,
+        "providerRequests": 9,
+        "completedRounds": 9,
+        "usageExchanges": 9,
+        "tokenTotals": {
+          "promptTokenCount": 87944,
+          "candidatesTokenCount": 1604,
+          "thoughtsTokenCount": 3697,
+          "cachedContentTokenCount": 16197
+        },
+        "tokenReportedExchanges": {
+          "promptTokenCount": 9,
+          "candidatesTokenCount": 9,
+          "thoughtsTokenCount": 9,
+          "cachedContentTokenCount": 1
+        },
+        "schemaBytes": {
+          "systemMax": 4124,
+          "toolsMax": 10628,
+          "requestMax": 78973,
+          "requestTotal": 354175
+        },
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0,
+        "factsMatched": 5,
+        "factsTotal": 5,
+        "citationPresenceAndLinkedEvidence": true
+      },
+      {
+        "scenario": "notes-vs-code",
+        "arm": "current",
+        "repetition": 0,
+        "state": "completed",
+        "wallMs": 48910.896749999985,
+        "providerRequests": 8,
+        "completedRounds": 8,
+        "usageExchanges": 8,
+        "tokenTotals": {
+          "promptTokenCount": 63985,
+          "candidatesTokenCount": 1381,
+          "thoughtsTokenCount": 2561
+        },
+        "tokenReportedExchanges": {
+          "promptTokenCount": 8,
+          "candidatesTokenCount": 8,
+          "thoughtsTokenCount": 8
+        },
+        "schemaBytes": {
+          "systemMax": 4124,
+          "toolsMax": 7968,
+          "requestMax": 52919,
+          "requestTotal": 251452
+        },
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0,
+        "factsMatched": 5,
+        "factsTotal": 5,
+        "citationPresenceAndLinkedEvidence": true
+      },
+      {
+        "scenario": "knowledgebase-research",
+        "arm": "baseline",
+        "repetition": 0,
+        "state": "completed",
+        "wallMs": 20437.947625,
+        "providerRequests": 4,
+        "completedRounds": 4,
+        "usageExchanges": 4,
+        "tokenTotals": {
+          "promptTokenCount": 21940,
+          "candidatesTokenCount": 620,
+          "thoughtsTokenCount": 885
+        },
+        "tokenReportedExchanges": {
+          "promptTokenCount": 4,
+          "candidatesTokenCount": 4,
+          "thoughtsTokenCount": 4
+        },
+        "schemaBytes": {
+          "systemMax": 4124,
+          "toolsMax": 10628,
+          "requestMax": 33059,
+          "requestTotal": 89221
+        },
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0,
+        "factsMatched": 4,
+        "factsTotal": 4,
+        "citationPresenceAndLinkedEvidence": true
+      },
+      {
+        "scenario": "knowledgebase-research",
+        "arm": "current",
+        "repetition": 0,
+        "state": "completed",
+        "wallMs": 21898.167708000023,
+        "providerRequests": 4,
+        "completedRounds": 4,
+        "usageExchanges": 4,
+        "tokenTotals": {
+          "promptTokenCount": 15226,
+          "candidatesTokenCount": 551,
+          "thoughtsTokenCount": 986
+        },
+        "tokenReportedExchanges": {
+          "promptTokenCount": 4,
+          "candidatesTokenCount": 4,
+          "thoughtsTokenCount": 4
+        },
+        "schemaBytes": {
+          "systemMax": 4124,
+          "toolsMax": 5819,
+          "requestMax": 26087,
+          "requestTotal": 66013
+        },
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0,
+        "factsMatched": 4,
+        "factsTotal": 4,
+        "citationPresenceAndLinkedEvidence": true
+      },
+      {
+        "scenario": "status",
+        "arm": "baseline",
+        "repetition": 0,
+        "state": "completed",
+        "wallMs": 12985.091040999978,
+        "providerRequests": 3,
+        "completedRounds": 3,
+        "usageExchanges": 3,
+        "tokenTotals": {
+          "promptTokenCount": 14357,
+          "candidatesTokenCount": 314,
+          "thoughtsTokenCount": 783
+        },
+        "tokenReportedExchanges": {
+          "promptTokenCount": 3,
+          "candidatesTokenCount": 3,
+          "thoughtsTokenCount": 3
+        },
+        "schemaBytes": {
+          "systemMax": 4124,
+          "toolsMax": 10628,
+          "requestMax": 24466,
+          "requestTotal": 59965
+        },
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0,
+        "factsMatched": 3,
+        "factsTotal": 3,
+        "citationPresenceAndLinkedEvidence": true
+      },
+      {
+        "scenario": "status",
+        "arm": "current",
+        "repetition": 0,
+        "state": "completed",
+        "wallMs": 15469.053291000018,
+        "providerRequests": 3,
+        "completedRounds": 3,
+        "usageExchanges": 3,
+        "tokenTotals": {
+          "promptTokenCount": 10213,
+          "candidatesTokenCount": 299,
+          "thoughtsTokenCount": 773
+        },
+        "tokenReportedExchanges": {
+          "promptTokenCount": 3,
+          "candidatesTokenCount": 3,
+          "thoughtsTokenCount": 3
+        },
+        "schemaBytes": {
+          "systemMax": 4124,
+          "toolsMax": 5563,
+          "requestMax": 19125,
+          "requestTotal": 43934
+        },
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0,
+        "factsMatched": 3,
+        "factsTotal": 3,
+        "citationPresenceAndLinkedEvidence": true
+      },
+      {
+        "scenario": "ambiguous",
+        "arm": "baseline",
+        "repetition": 0,
+        "state": "completed",
+        "wallMs": 85597.71845799999,
+        "providerRequests": 16,
+        "completedRounds": 15,
+        "usageExchanges": 15,
+        "tokenTotals": {
+          "promptTokenCount": 225461,
+          "candidatesTokenCount": 2396,
+          "thoughtsTokenCount": 2467,
+          "cachedContentTokenCount": 106571
+        },
+        "tokenReportedExchanges": {
+          "promptTokenCount": 15,
+          "candidatesTokenCount": 15,
+          "thoughtsTokenCount": 15,
+          "cachedContentTokenCount": 8
+        },
+        "schemaBytes": {
+          "systemMax": 4124,
+          "toolsMax": 10628,
+          "requestMax": 78336,
+          "requestTotal": 888798
+        },
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0,
+        "factsMatched": 1,
+        "factsTotal": 1,
+        "citationPresenceAndLinkedEvidence": true
+      },
+      {
+        "scenario": "ambiguous",
+        "arm": "current",
+        "repetition": 0,
+        "state": "completed",
+        "wallMs": 156151.03383400006,
+        "providerRequests": 14,
+        "completedRounds": 14,
+        "usageExchanges": 14,
+        "tokenTotals": {
+          "promptTokenCount": 228670,
+          "candidatesTokenCount": 2395,
+          "thoughtsTokenCount": 4300,
+          "cachedContentTokenCount": 125063
+        },
+        "tokenReportedExchanges": {
+          "promptTokenCount": 14,
+          "candidatesTokenCount": 14,
+          "thoughtsTokenCount": 14,
+          "cachedContentTokenCount": 8
+        },
+        "schemaBytes": {
+          "systemMax": 4124,
+          "toolsMax": 10628,
+          "requestMax": 91650,
+          "requestTotal": 865269
+        },
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0,
+        "factsMatched": 1,
+        "factsTotal": 1,
+        "citationPresenceAndLinkedEvidence": true
+      },
+      {
+        "scenario": "expansion",
+        "arm": "baseline",
+        "repetition": 0,
+        "state": "completed",
+        "wallMs": 59907.88195900002,
+        "providerRequests": 7,
+        "completedRounds": 7,
+        "usageExchanges": 7,
+        "tokenTotals": {
+          "promptTokenCount": 76239,
+          "candidatesTokenCount": 1806,
+          "thoughtsTokenCount": 2731,
+          "cachedContentTokenCount": 10081
+        },
+        "tokenReportedExchanges": {
+          "promptTokenCount": 7,
+          "candidatesTokenCount": 7,
+          "thoughtsTokenCount": 7,
+          "cachedContentTokenCount": 2
+        },
+        "schemaBytes": {
+          "systemMax": 4124,
+          "toolsMax": 10628,
+          "requestMax": 72493,
+          "requestTotal": 287450
+        },
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0,
+        "factsMatched": 4,
+        "factsTotal": 4,
+        "citationPresenceAndLinkedEvidence": true
+      },
+      {
+        "scenario": "expansion",
+        "arm": "current",
+        "repetition": 0,
+        "state": "completed",
+        "wallMs": 64273.314040999976,
+        "providerRequests": 7,
+        "completedRounds": 7,
+        "usageExchanges": 7,
+        "tokenTotals": {
+          "promptTokenCount": 63886,
+          "candidatesTokenCount": 1924,
+          "thoughtsTokenCount": 3530,
+          "cachedContentTokenCount": 16208
+        },
+        "tokenReportedExchanges": {
+          "promptTokenCount": 7,
+          "candidatesTokenCount": 7,
+          "thoughtsTokenCount": 7,
+          "cachedContentTokenCount": 1
+        },
+        "schemaBytes": {
+          "systemMax": 4124,
+          "toolsMax": 7968,
+          "requestMax": 74499,
+          "requestTotal": 260085
+        },
+        "expansionCalls": 1,
+        "dedicatedExpansionTurns": 0,
+        "factsMatched": 4,
+        "factsTotal": 4,
+        "citationPresenceAndLinkedEvidence": true
+      },
+      {
+        "scenario": "repository-research",
+        "arm": "current",
+        "repetition": 1,
+        "state": "completed",
+        "wallMs": 38676.68333300005,
+        "providerRequests": 6,
+        "completedRounds": 6,
+        "usageExchanges": 6,
+        "tokenTotals": {
+          "promptTokenCount": 36647,
+          "candidatesTokenCount": 1197,
+          "thoughtsTokenCount": 1698
+        },
+        "tokenReportedExchanges": {
+          "promptTokenCount": 6,
+          "candidatesTokenCount": 6,
+          "thoughtsTokenCount": 6
+        },
+        "schemaBytes": {
+          "systemMax": 4124,
+          "toolsMax": 6657,
+          "requestMax": 42622,
+          "requestTotal": 142540
+        },
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0,
+        "factsMatched": 4,
+        "factsTotal": 4,
+        "citationPresenceAndLinkedEvidence": true
+      },
+      {
+        "scenario": "repository-research",
+        "arm": "baseline",
+        "repetition": 1,
+        "state": "completed",
+        "wallMs": 38311.224832999986,
+        "providerRequests": 8,
+        "completedRounds": 8,
+        "usageExchanges": 8,
+        "tokenTotals": {
+          "promptTokenCount": 48844,
+          "candidatesTokenCount": 1125,
+          "thoughtsTokenCount": 1979
+        },
+        "tokenReportedExchanges": {
+          "promptTokenCount": 8,
+          "candidatesTokenCount": 8,
+          "thoughtsTokenCount": 8
+        },
+        "schemaBytes": {
+          "systemMax": 4124,
+          "toolsMax": 10628,
+          "requestMax": 41173,
+          "requestTotal": 201772
+        },
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0,
+        "factsMatched": 4,
+        "factsTotal": 4,
+        "citationPresenceAndLinkedEvidence": true
+      },
+      {
+        "scenario": "notes-vs-code",
+        "arm": "current",
+        "repetition": 1,
+        "state": "completed",
+        "wallMs": 45321.37537500006,
+        "providerRequests": 6,
+        "completedRounds": 6,
+        "usageExchanges": 6,
+        "tokenTotals": {
+          "promptTokenCount": 46131,
+          "candidatesTokenCount": 1307,
+          "thoughtsTokenCount": 2127
+        },
+        "tokenReportedExchanges": {
+          "promptTokenCount": 6,
+          "candidatesTokenCount": 6,
+          "thoughtsTokenCount": 6
+        },
+        "schemaBytes": {
+          "systemMax": 4124,
+          "toolsMax": 7968,
+          "requestMax": 54066,
+          "requestTotal": 179744
+        },
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0,
+        "factsMatched": 5,
+        "factsTotal": 5,
+        "citationPresenceAndLinkedEvidence": true
+      },
+      {
+        "scenario": "notes-vs-code",
+        "arm": "baseline",
+        "repetition": 1,
+        "state": "completed",
+        "wallMs": 49531.075249999994,
+        "providerRequests": 6,
+        "completedRounds": 6,
+        "usageExchanges": 6,
+        "tokenTotals": {
+          "promptTokenCount": 55532,
+          "candidatesTokenCount": 1313,
+          "thoughtsTokenCount": 2864
+        },
+        "tokenReportedExchanges": {
+          "promptTokenCount": 6,
+          "candidatesTokenCount": 6,
+          "thoughtsTokenCount": 6
+        },
+        "schemaBytes": {
+          "systemMax": 4124,
+          "toolsMax": 10628,
+          "requestMax": 64045,
+          "requestTotal": 212679
+        },
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0,
+        "factsMatched": 5,
+        "factsTotal": 5,
+        "citationPresenceAndLinkedEvidence": true
+      },
+      {
+        "scenario": "knowledgebase-research",
+        "arm": "current",
+        "repetition": 1,
+        "state": "completed",
+        "wallMs": 15539.410082999966,
+        "providerRequests": 4,
+        "completedRounds": 4,
+        "usageExchanges": 4,
+        "tokenTotals": {
+          "promptTokenCount": 14813,
+          "candidatesTokenCount": 476,
+          "thoughtsTokenCount": 710
+        },
+        "tokenReportedExchanges": {
+          "promptTokenCount": 4,
+          "candidatesTokenCount": 4,
+          "thoughtsTokenCount": 4
+        },
+        "schemaBytes": {
+          "systemMax": 4124,
+          "toolsMax": 5819,
+          "requestMax": 25352,
+          "requestTotal": 64055
+        },
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0,
+        "factsMatched": 4,
+        "factsTotal": 4,
+        "citationPresenceAndLinkedEvidence": true
+      },
+      {
+        "scenario": "knowledgebase-research",
+        "arm": "baseline",
+        "repetition": 1,
+        "state": "completed",
+        "wallMs": 15543.575458000065,
+        "providerRequests": 4,
+        "completedRounds": 4,
+        "usageExchanges": 4,
+        "tokenTotals": {
+          "promptTokenCount": 20171,
+          "candidatesTokenCount": 552,
+          "thoughtsTokenCount": 794
+        },
+        "tokenReportedExchanges": {
+          "promptTokenCount": 4,
+          "candidatesTokenCount": 4,
+          "thoughtsTokenCount": 4
+        },
+        "schemaBytes": {
+          "systemMax": 4124,
+          "toolsMax": 10628,
+          "requestMax": 30346,
+          "requestTotal": 83669
+        },
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0,
+        "factsMatched": 4,
+        "factsTotal": 4,
+        "citationPresenceAndLinkedEvidence": true
+      },
+      {
+        "scenario": "status",
+        "arm": "current",
+        "repetition": 1,
+        "state": "completed",
+        "wallMs": 13589.240417000023,
+        "providerRequests": 3,
+        "completedRounds": 3,
+        "usageExchanges": 3,
+        "tokenTotals": {
+          "promptTokenCount": 10197,
+          "candidatesTokenCount": 303,
+          "thoughtsTokenCount": 756
+        },
+        "tokenReportedExchanges": {
+          "promptTokenCount": 3,
+          "candidatesTokenCount": 3,
+          "thoughtsTokenCount": 3
+        },
+        "schemaBytes": {
+          "systemMax": 4124,
+          "toolsMax": 5563,
+          "requestMax": 19217,
+          "requestTotal": 43774
+        },
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0,
+        "factsMatched": 3,
+        "factsTotal": 3,
+        "citationPresenceAndLinkedEvidence": true
+      },
+      {
+        "scenario": "status",
+        "arm": "baseline",
+        "repetition": 1,
+        "state": "completed",
+        "wallMs": 13326.446291,
+        "providerRequests": 3,
+        "completedRounds": 3,
+        "usageExchanges": 3,
+        "tokenTotals": {
+          "promptTokenCount": 14420,
+          "candidatesTokenCount": 301,
+          "thoughtsTokenCount": 870
+        },
+        "tokenReportedExchanges": {
+          "promptTokenCount": 3,
+          "candidatesTokenCount": 3,
+          "thoughtsTokenCount": 3
+        },
+        "schemaBytes": {
+          "systemMax": 4124,
+          "toolsMax": 10628,
+          "requestMax": 24242,
+          "requestTotal": 59533
+        },
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0,
+        "factsMatched": 3,
+        "factsTotal": 3,
+        "citationPresenceAndLinkedEvidence": true
+      },
+      {
+        "scenario": "ambiguous",
+        "arm": "current",
+        "repetition": 1,
+        "state": "completed",
+        "wallMs": 82911.17320900003,
+        "providerRequests": 11,
+        "completedRounds": 11,
+        "usageExchanges": 11,
+        "tokenTotals": {
+          "promptTokenCount": 151153,
+          "candidatesTokenCount": 2117,
+          "thoughtsTokenCount": 2806,
+          "cachedContentTokenCount": 70498
+        },
+        "tokenReportedExchanges": {
+          "promptTokenCount": 11,
+          "candidatesTokenCount": 11,
+          "thoughtsTokenCount": 11,
+          "cachedContentTokenCount": 5
+        },
+        "schemaBytes": {
+          "systemMax": 4124,
+          "toolsMax": 10628,
+          "requestMax": 73252,
+          "requestTotal": 568413
+        },
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0,
+        "factsMatched": 1,
+        "factsTotal": 1,
+        "citationPresenceAndLinkedEvidence": true
+      },
+      {
+        "scenario": "ambiguous",
+        "arm": "baseline",
+        "repetition": 1,
+        "state": "completed",
+        "wallMs": 51920.75316700002,
+        "providerRequests": 6,
+        "completedRounds": 6,
+        "usageExchanges": 6,
+        "tokenTotals": {
+          "promptTokenCount": 57936,
+          "candidatesTokenCount": 1726,
+          "thoughtsTokenCount": 2403,
+          "cachedContentTokenCount": 7867
+        },
+        "tokenReportedExchanges": {
+          "promptTokenCount": 6,
+          "candidatesTokenCount": 6,
+          "thoughtsTokenCount": 6,
+          "cachedContentTokenCount": 1
+        },
+        "schemaBytes": {
+          "systemMax": 4124,
+          "toolsMax": 10628,
+          "requestMax": 61094,
+          "requestTotal": 220567
+        },
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0,
+        "factsMatched": 1,
+        "factsTotal": 1,
+        "citationPresenceAndLinkedEvidence": true
+      },
+      {
+        "scenario": "expansion",
+        "arm": "current",
+        "repetition": 1,
+        "state": "completed",
+        "wallMs": 66081.03474999988,
+        "providerRequests": 8,
+        "completedRounds": 8,
+        "usageExchanges": 8,
+        "tokenTotals": {
+          "promptTokenCount": 73032,
+          "candidatesTokenCount": 1614,
+          "thoughtsTokenCount": 3309
+        },
+        "tokenReportedExchanges": {
+          "promptTokenCount": 8,
+          "candidatesTokenCount": 8,
+          "thoughtsTokenCount": 8
+        },
+        "schemaBytes": {
+          "systemMax": 4124,
+          "toolsMax": 7968,
+          "requestMax": 55408,
+          "requestTotal": 288331
+        },
+        "expansionCalls": 1,
+        "dedicatedExpansionTurns": 0,
+        "factsMatched": 4,
+        "factsTotal": 4,
+        "citationPresenceAndLinkedEvidence": true
+      },
+      {
+        "scenario": "expansion",
+        "arm": "baseline",
+        "repetition": 1,
+        "state": "completed",
+        "wallMs": 70518.81066699978,
+        "providerRequests": 8,
+        "completedRounds": 8,
+        "usageExchanges": 8,
+        "tokenTotals": {
+          "promptTokenCount": 74784,
+          "candidatesTokenCount": 1512,
+          "thoughtsTokenCount": 2524
+        },
+        "tokenReportedExchanges": {
+          "promptTokenCount": 8,
+          "candidatesTokenCount": 8,
+          "thoughtsTokenCount": 8
+        },
+        "schemaBytes": {
+          "systemMax": 4124,
+          "toolsMax": 10628,
+          "requestMax": 64532,
+          "requestTotal": 301308
+        },
+        "expansionCalls": 0,
+        "dedicatedExpansionTurns": 0,
+        "factsMatched": 4,
+        "factsTotal": 4,
+        "citationPresenceAndLinkedEvidence": true
+      }
+    ],
+    "finalCitationCheckerSmoke": [
+      {
+        "arm": "baseline",
+        "factsMatched": 3,
+        "factsTotal": 3,
+        "allCitedSourcesLinked": true
+      },
+      {
+        "arm": "current",
+        "factsMatched": 3,
+        "factsTotal": 3,
+        "allCitedSourcesLinked": true
+      }
+    ]
+  }
+}

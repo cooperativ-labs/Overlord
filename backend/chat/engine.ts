@@ -19,6 +19,7 @@ import { createCompletionListenerFactory } from '../execution/local-target-compl
 
 import { sdkGeminiClient } from './gemini-client.ts';
 import { GeminiChatRuntime } from './gemini-runtime.ts';
+import { GeminiStaticCache } from './static-cache.ts';
 
 /** Default chat model (milestone one); `CHAT_GEMINI_MODEL` overrides it. */
 export const DEFAULT_CHAT_MODEL = 'gemini-3.8-flash';
@@ -62,6 +63,8 @@ export function createChatEngine(options: {
   const key = options.env.CHAT_GEMINI_API_KEY?.trim() || options.env.GEMINI_API_KEY?.trim() || '';
   const model = (options.env.CHAT_GEMINI_MODEL ?? '').trim() || DEFAULT_CHAT_MODEL;
   const budget = Number(options.env.CHAT_MAX_GATHERED_BYTES_PER_RUN);
+  // Model input limit in tokens; whole number 131072–2097152, otherwise the verified default.
+  const inputTokenLimit = Number(options.env.CHAT_GEMINI_INPUT_TOKEN_LIMIT);
   const assignmentCatalog = async (workspaceId: string): Promise<ChatAssignmentCatalog> => {
     return assignmentCatalogProjection(await resolveWorkspaceAgentCatalog(options.db, workspaceId));
   };
@@ -91,11 +94,21 @@ export function createChatEngine(options: {
     },
     readRepository: queuedRepositoryReader
   });
+  const client = key ? sdkGeminiClient(key) : null;
+  // Static-prefix explicit caching is on with a key unless CHAT_GEMINI_STATIC_CACHE=off.
+  const staticCacheOff =
+    (options.env.CHAT_GEMINI_STATIC_CACHE ?? '').trim().toLowerCase() === 'off';
   const runtime = new GeminiChatRuntime({
-    client: key ? sdkGeminiClient(key) : null,
+    client,
     gateway,
     model,
-    ...(Number.isSafeInteger(budget) && budget > 0 ? { maxGatheredBytesPerRun: budget } : {})
+    staticCache: client && !staticCacheOff ? new GeminiStaticCache(client) : null,
+    ...(Number.isSafeInteger(budget) && budget > 0 ? { maxGatheredBytesPerRun: budget } : {}),
+    ...(Number.isSafeInteger(inputTokenLimit) &&
+    inputTokenLimit >= 131_072 &&
+    inputTokenLimit <= 2_097_152
+      ? { inputTokenLimit }
+      : {})
   });
   return {
     runtime,

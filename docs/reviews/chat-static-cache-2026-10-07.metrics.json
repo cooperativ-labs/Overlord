@@ -1,0 +1,2378 @@
+{
+  "version": 1,
+  "mission": "coo:1127",
+  "objective": "coo:1127.0904",
+  "model": {
+    "prices": {
+      "input": 0.75,
+      "cached": 0.075,
+      "storagePerHour": 0.5
+    },
+    "pricesNote": "Standard paid tier through 2026-12-31; all rates double on 2027-01-01, ratios unchanged.",
+    "tokensPerToolByte": 0.27109438917735484,
+    "corpus": [
+      {
+        "scenario": "repository-research",
+        "repetition": 0,
+        "requests": 7,
+        "prompt": 39425,
+        "reportedCached": 0,
+        "K": 2650,
+        "implicitUsd": 0.029568750000000005,
+        "variants": {
+          "ttl10m_cachedFirst_shared1": {
+            "netSavingsLowUsd": 0.010312916666666675,
+            "netSavingsHighUsd": 0.012300416666666675,
+            "hybridNetSavingsLowUsd": 0.010312916666666668,
+            "hybridNetSavingsHighUsd": 0.012300416666666668
+          },
+          "ttl10m_cachedFirst_shared5": {
+            "netSavingsLowUsd": 0.012079583333333341,
+            "netSavingsHighUsd": 0.01247708333333334,
+            "hybridNetSavingsLowUsd": 0.012079583333333335,
+            "hybridNetSavingsHighUsd": 0.012477083333333335
+          },
+          "ttl10m_inlineFirst_shared1": {
+            "netSavingsLowUsd": 0.008524166666666676,
+            "netSavingsHighUsd": 0.010511666666666676,
+            "hybridNetSavingsLowUsd": 0.008524166666666666,
+            "hybridNetSavingsHighUsd": 0.010511666666666666
+          },
+          "ttl10m_inlineFirst_shared5": {
+            "netSavingsLowUsd": 0.010290833333333343,
+            "netSavingsHighUsd": 0.010688333333333341,
+            "hybridNetSavingsLowUsd": 0.010290833333333332,
+            "hybridNetSavingsHighUsd": 0.010688333333333333
+          },
+          "ttl60m_cachedFirst_shared1": {
+            "netSavingsLowUsd": 0.009208750000000009,
+            "netSavingsHighUsd": 0.011196250000000008,
+            "hybridNetSavingsLowUsd": 0.009208750000000002,
+            "hybridNetSavingsHighUsd": 0.011196250000000001
+          },
+          "ttl60m_cachedFirst_shared5": {
+            "netSavingsLowUsd": 0.011858750000000008,
+            "netSavingsHighUsd": 0.012256250000000007,
+            "hybridNetSavingsLowUsd": 0.011858750000000001,
+            "hybridNetSavingsHighUsd": 0.012256250000000002
+          },
+          "ttl60m_inlineFirst_shared1": {
+            "netSavingsLowUsd": 0.00742000000000001,
+            "netSavingsHighUsd": 0.00940750000000001,
+            "hybridNetSavingsLowUsd": 0.007419999999999999,
+            "hybridNetSavingsHighUsd": 0.0094075
+          },
+          "ttl60m_inlineFirst_shared5": {
+            "netSavingsLowUsd": 0.01007000000000001,
+            "netSavingsHighUsd": 0.010467500000000008,
+            "hybridNetSavingsLowUsd": 0.010069999999999999,
+            "hybridNetSavingsHighUsd": 0.0104675
+          }
+        }
+      },
+      {
+        "scenario": "notes-vs-code",
+        "repetition": 0,
+        "requests": 8,
+        "prompt": 63985,
+        "reportedCached": 0,
+        "K": 3005,
+        "implicitUsd": 0.04798875,
+        "variants": {
+          "ttl10m_cachedFirst_shared1": {
+            "netSavingsLowUsd": 0.01372283333333333,
+            "netSavingsHighUsd": 0.01597658333333333,
+            "hybridNetSavingsLowUsd": 0.013722833333333339,
+            "hybridNetSavingsHighUsd": 0.01597658333333334
+          },
+          "ttl10m_cachedFirst_shared5": {
+            "netSavingsLowUsd": 0.015726166666666666,
+            "netSavingsHighUsd": 0.016176916666666666,
+            "hybridNetSavingsLowUsd": 0.015726166666666673,
+            "hybridNetSavingsHighUsd": 0.016176916666666673
+          },
+          "ttl10m_inlineFirst_shared1": {
+            "netSavingsLowUsd": 0.011694458333333324,
+            "netSavingsHighUsd": 0.013948208333333323,
+            "hybridNetSavingsLowUsd": 0.011694458333333333,
+            "hybridNetSavingsHighUsd": 0.013948208333333333
+          },
+          "ttl10m_inlineFirst_shared5": {
+            "netSavingsLowUsd": 0.01369779166666666,
+            "netSavingsHighUsd": 0.01414854166666666,
+            "hybridNetSavingsLowUsd": 0.013697791666666665,
+            "hybridNetSavingsHighUsd": 0.014148541666666667
+          },
+          "ttl60m_cachedFirst_shared1": {
+            "netSavingsLowUsd": 0.012470749999999996,
+            "netSavingsHighUsd": 0.014724500000000001,
+            "hybridNetSavingsLowUsd": 0.012470750000000006,
+            "hybridNetSavingsHighUsd": 0.014724500000000005
+          },
+          "ttl60m_cachedFirst_shared5": {
+            "netSavingsLowUsd": 0.015475749999999996,
+            "netSavingsHighUsd": 0.015926499999999996,
+            "hybridNetSavingsLowUsd": 0.015475750000000005,
+            "hybridNetSavingsHighUsd": 0.015926500000000007
+          },
+          "ttl60m_inlineFirst_shared1": {
+            "netSavingsLowUsd": 0.01044237499999999,
+            "netSavingsHighUsd": 0.012696124999999996,
+            "hybridNetSavingsLowUsd": 0.010442375,
+            "hybridNetSavingsHighUsd": 0.012696124999999999
+          },
+          "ttl60m_inlineFirst_shared5": {
+            "netSavingsLowUsd": 0.01344737499999999,
+            "netSavingsHighUsd": 0.01389812499999999,
+            "hybridNetSavingsLowUsd": 0.013447375,
+            "hybridNetSavingsHighUsd": 0.013898124999999999
+          }
+        }
+      },
+      {
+        "scenario": "knowledgebase-research",
+        "repetition": 0,
+        "requests": 4,
+        "prompt": 15226,
+        "reportedCached": 0,
+        "K": 2422,
+        "implicitUsd": 0.0114195,
+        "variants": {
+          "ttl10m_cachedFirst_shared1": {
+            "netSavingsLowUsd": 0.004521066666666667,
+            "netSavingsHighUsd": 0.006337566666666667,
+            "hybridNetSavingsLowUsd": 0.004521066666666667,
+            "hybridNetSavingsHighUsd": 0.006337566666666667
+          },
+          "ttl10m_cachedFirst_shared5": {
+            "netSavingsLowUsd": 0.006135733333333334,
+            "netSavingsHighUsd": 0.0064990333333333344,
+            "hybridNetSavingsLowUsd": 0.006135733333333334,
+            "hybridNetSavingsHighUsd": 0.0064990333333333344
+          },
+          "ttl10m_inlineFirst_shared1": {
+            "netSavingsLowUsd": 0.002886216666666667,
+            "netSavingsHighUsd": 0.004702716666666667,
+            "hybridNetSavingsLowUsd": 0.0028862166666666672,
+            "hybridNetSavingsHighUsd": 0.004702716666666667
+          },
+          "ttl10m_inlineFirst_shared5": {
+            "netSavingsLowUsd": 0.004500883333333334,
+            "netSavingsHighUsd": 0.004864183333333334,
+            "hybridNetSavingsLowUsd": 0.004500883333333334,
+            "hybridNetSavingsHighUsd": 0.004864183333333334
+          },
+          "ttl60m_cachedFirst_shared1": {
+            "netSavingsLowUsd": 0.0035119,
+            "netSavingsHighUsd": 0.0053284000000000005,
+            "hybridNetSavingsLowUsd": 0.003511900000000001,
+            "hybridNetSavingsHighUsd": 0.0053284000000000005
+          },
+          "ttl60m_cachedFirst_shared5": {
+            "netSavingsLowUsd": 0.005933900000000001,
+            "netSavingsHighUsd": 0.006297200000000001,
+            "hybridNetSavingsLowUsd": 0.005933900000000001,
+            "hybridNetSavingsHighUsd": 0.006297200000000001
+          },
+          "ttl60m_inlineFirst_shared1": {
+            "netSavingsLowUsd": 0.00187705,
+            "netSavingsHighUsd": 0.0036935500000000003,
+            "hybridNetSavingsLowUsd": 0.0018770500000000008,
+            "hybridNetSavingsHighUsd": 0.0036935500000000003
+          },
+          "ttl60m_inlineFirst_shared5": {
+            "netSavingsLowUsd": 0.0042990500000000004,
+            "netSavingsHighUsd": 0.004662350000000001,
+            "hybridNetSavingsLowUsd": 0.0042990500000000004,
+            "hybridNetSavingsHighUsd": 0.004662350000000001
+          }
+        }
+      },
+      {
+        "scenario": "status",
+        "repetition": 0,
+        "requests": 3,
+        "prompt": 10213,
+        "reportedCached": 0,
+        "K": 2353,
+        "implicitUsd": 0.00765975,
+        "variants": {
+          "ttl10m_cachedFirst_shared1": {
+            "netSavingsLowUsd": 0.002803991666666666,
+            "netSavingsHighUsd": 0.004568741666666666,
+            "hybridNetSavingsLowUsd": 0.002803991666666667,
+            "hybridNetSavingsHighUsd": 0.004568741666666667
+          },
+          "ttl10m_cachedFirst_shared5": {
+            "netSavingsLowUsd": 0.004372658333333333,
+            "netSavingsHighUsd": 0.004725608333333332,
+            "hybridNetSavingsLowUsd": 0.004372658333333334,
+            "hybridNetSavingsHighUsd": 0.004725608333333333
+          },
+          "ttl10m_inlineFirst_shared1": {
+            "netSavingsLowUsd": 0.0012157166666666667,
+            "netSavingsHighUsd": 0.0029804666666666665,
+            "hybridNetSavingsLowUsd": 0.0012157166666666667,
+            "hybridNetSavingsHighUsd": 0.002980466666666667
+          },
+          "ttl10m_inlineFirst_shared5": {
+            "netSavingsLowUsd": 0.0027843833333333337,
+            "netSavingsHighUsd": 0.003137333333333333,
+            "hybridNetSavingsLowUsd": 0.0027843833333333337,
+            "hybridNetSavingsHighUsd": 0.0031373333333333336
+          },
+          "ttl60m_cachedFirst_shared1": {
+            "netSavingsLowUsd": 0.0018235749999999992,
+            "netSavingsHighUsd": 0.003588325,
+            "hybridNetSavingsLowUsd": 0.001823575,
+            "hybridNetSavingsHighUsd": 0.0035883250000000003
+          },
+          "ttl60m_cachedFirst_shared5": {
+            "netSavingsLowUsd": 0.004176574999999999,
+            "netSavingsHighUsd": 0.0045295249999999995,
+            "hybridNetSavingsLowUsd": 0.004176575,
+            "hybridNetSavingsHighUsd": 0.004529525
+          },
+          "ttl60m_inlineFirst_shared1": {
+            "netSavingsLowUsd": 0.00023529999999999992,
+            "netSavingsHighUsd": 0.0020000499999999997,
+            "hybridNetSavingsLowUsd": 0.00023529999999999992,
+            "hybridNetSavingsHighUsd": 0.00200005
+          },
+          "ttl60m_inlineFirst_shared5": {
+            "netSavingsLowUsd": 0.0025883,
+            "netSavingsHighUsd": 0.0029412500000000003,
+            "hybridNetSavingsLowUsd": 0.0025883,
+            "hybridNetSavingsHighUsd": 0.0029412500000000003
+          }
+        }
+      },
+      {
+        "scenario": "ambiguous",
+        "repetition": 0,
+        "requests": 14,
+        "prompt": 228670,
+        "reportedCached": 125063,
+        "K": 3726,
+        "implicitUsd": 0.08708497499999998,
+        "variants": {
+          "ttl10m_cachedFirst_shared1": {
+            "netSavingsLowUsd": -0.05231182500000009,
+            "netSavingsHighUsd": -0.049517325000000084,
+            "hybridNetSavingsLowUsd": 0.0119853,
+            "hybridNetSavingsHighUsd": 0.014779800000000001
+          },
+          "ttl10m_cachedFirst_shared5": {
+            "netSavingsLowUsd": -0.0498278250000001,
+            "netSavingsHighUsd": -0.0492689250000001,
+            "hybridNetSavingsLowUsd": 0.014469300000000001,
+            "hybridNetSavingsHighUsd": 0.0150282
+          },
+          "ttl10m_inlineFirst_shared1": {
+            "netSavingsLowUsd": -0.04879705178571439,
+            "netSavingsHighUsd": -0.046002551785714385,
+            "hybridNetSavingsLowUsd": 0.009470249999999996,
+            "hybridNetSavingsHighUsd": 0.012264749999999996
+          },
+          "ttl10m_inlineFirst_shared5": {
+            "netSavingsLowUsd": -0.046313051785714404,
+            "netSavingsHighUsd": -0.0457541517857144,
+            "hybridNetSavingsLowUsd": 0.011954249999999996,
+            "hybridNetSavingsHighUsd": 0.012513149999999995
+          },
+          "ttl60m_cachedFirst_shared1": {
+            "netSavingsLowUsd": -0.0538643250000001,
+            "netSavingsHighUsd": -0.051069825000000096,
+            "hybridNetSavingsLowUsd": 0.0104328,
+            "hybridNetSavingsHighUsd": 0.0132273
+          },
+          "ttl60m_cachedFirst_shared5": {
+            "netSavingsLowUsd": -0.050138325000000095,
+            "netSavingsHighUsd": -0.049579425000000094,
+            "hybridNetSavingsLowUsd": 0.014158800000000001,
+            "hybridNetSavingsHighUsd": 0.0147177
+          },
+          "ttl60m_inlineFirst_shared1": {
+            "netSavingsLowUsd": -0.0503495517857144,
+            "netSavingsHighUsd": -0.0475550517857144,
+            "hybridNetSavingsLowUsd": 0.007917749999999996,
+            "hybridNetSavingsHighUsd": 0.010712249999999996
+          },
+          "ttl60m_inlineFirst_shared5": {
+            "netSavingsLowUsd": -0.046623551785714396,
+            "netSavingsHighUsd": -0.046064651785714394,
+            "hybridNetSavingsLowUsd": 0.011643749999999996,
+            "hybridNetSavingsHighUsd": 0.012202649999999995
+          }
+        }
+      },
+      {
+        "scenario": "expansion",
+        "repetition": 0,
+        "requests": 7,
+        "prompt": 63886,
+        "reportedCached": 16208,
+        "K": 3005,
+        "implicitUsd": 0.0369741,
+        "variants": {
+          "ttl10m_cachedFirst_shared1": {
+            "netSavingsLowUsd": 0.0007540583333333281,
+            "netSavingsHighUsd": 0.003007808333333327,
+            "hybridNetSavingsLowUsd": 0.009666083333333334,
+            "hybridNetSavingsHighUsd": 0.011919833333333334
+          },
+          "ttl10m_cachedFirst_shared5": {
+            "netSavingsLowUsd": 0.0027573916666666642,
+            "netSavingsHighUsd": 0.003208141666666664,
+            "hybridNetSavingsLowUsd": 0.011669416666666666,
+            "hybridNetSavingsHighUsd": 0.012120166666666668
+          },
+          "ttl10m_inlineFirst_shared1": {
+            "netSavingsLowUsd": 0.00028859761904761333,
+            "netSavingsHighUsd": 0.002542347619047612,
+            "hybridNetSavingsLowUsd": 0.007637708333333335,
+            "hybridNetSavingsHighUsd": 0.009891458333333335
+          },
+          "ttl10m_inlineFirst_shared5": {
+            "netSavingsLowUsd": 0.0022919309523809495,
+            "netSavingsHighUsd": 0.0027426809523809492,
+            "hybridNetSavingsLowUsd": 0.009641041666666668,
+            "hybridNetSavingsHighUsd": 0.010091791666666669
+          },
+          "ttl60m_cachedFirst_shared1": {
+            "netSavingsLowUsd": -0.0004980250000000061,
+            "netSavingsHighUsd": 0.0017557249999999996,
+            "hybridNetSavingsLowUsd": 0.008414000000000001,
+            "hybridNetSavingsHighUsd": 0.01066775
+          },
+          "ttl60m_cachedFirst_shared5": {
+            "netSavingsLowUsd": 0.0025069749999999946,
+            "netSavingsHighUsd": 0.0029577249999999944,
+            "hybridNetSavingsLowUsd": 0.011419,
+            "hybridNetSavingsHighUsd": 0.01186975
+          },
+          "ttl60m_inlineFirst_shared1": {
+            "netSavingsLowUsd": -0.0009634857142857209,
+            "netSavingsHighUsd": 0.0012902642857142849,
+            "hybridNetSavingsLowUsd": 0.0063856250000000015,
+            "hybridNetSavingsHighUsd": 0.008639375000000001
+          },
+          "ttl60m_inlineFirst_shared5": {
+            "netSavingsLowUsd": 0.00204151428571428,
+            "netSavingsHighUsd": 0.0024922642857142796,
+            "hybridNetSavingsLowUsd": 0.009390625000000001,
+            "hybridNetSavingsHighUsd": 0.009841375000000001
+          }
+        }
+      },
+      {
+        "scenario": "repository-research",
+        "repetition": 1,
+        "requests": 6,
+        "prompt": 36647,
+        "reportedCached": 0,
+        "K": 2650,
+        "implicitUsd": 0.027485249999999996,
+        "variants": {
+          "ttl10m_cachedFirst_shared1": {
+            "netSavingsLowUsd": 0.008524166666666663,
+            "netSavingsHighUsd": 0.010511666666666662,
+            "hybridNetSavingsLowUsd": 0.008524166666666666,
+            "hybridNetSavingsHighUsd": 0.010511666666666666
+          },
+          "ttl10m_cachedFirst_shared5": {
+            "netSavingsLowUsd": 0.010290833333333329,
+            "netSavingsHighUsd": 0.010688333333333327,
+            "hybridNetSavingsLowUsd": 0.010290833333333332,
+            "hybridNetSavingsHighUsd": 0.010688333333333333
+          },
+          "ttl10m_inlineFirst_shared1": {
+            "netSavingsLowUsd": 0.006735416666666664,
+            "netSavingsHighUsd": 0.008722916666666664,
+            "hybridNetSavingsLowUsd": 0.006735416666666667,
+            "hybridNetSavingsHighUsd": 0.008722916666666667
+          },
+          "ttl10m_inlineFirst_shared5": {
+            "netSavingsLowUsd": 0.00850208333333333,
+            "netSavingsHighUsd": 0.008899583333333329,
+            "hybridNetSavingsLowUsd": 0.008502083333333334,
+            "hybridNetSavingsHighUsd": 0.008899583333333334
+          },
+          "ttl60m_cachedFirst_shared1": {
+            "netSavingsLowUsd": 0.007419999999999996,
+            "netSavingsHighUsd": 0.009407499999999996,
+            "hybridNetSavingsLowUsd": 0.007419999999999999,
+            "hybridNetSavingsHighUsd": 0.0094075
+          },
+          "ttl60m_cachedFirst_shared5": {
+            "netSavingsLowUsd": 0.010069999999999996,
+            "netSavingsHighUsd": 0.010467499999999994,
+            "hybridNetSavingsLowUsd": 0.010069999999999999,
+            "hybridNetSavingsHighUsd": 0.0104675
+          },
+          "ttl60m_inlineFirst_shared1": {
+            "netSavingsLowUsd": 0.005631249999999997,
+            "netSavingsHighUsd": 0.007618749999999997,
+            "hybridNetSavingsLowUsd": 0.00563125,
+            "hybridNetSavingsHighUsd": 0.0076187500000000005
+          },
+          "ttl60m_inlineFirst_shared5": {
+            "netSavingsLowUsd": 0.008281249999999997,
+            "netSavingsHighUsd": 0.008678749999999995,
+            "hybridNetSavingsLowUsd": 0.00828125,
+            "hybridNetSavingsHighUsd": 0.00867875
+          }
+        }
+      },
+      {
+        "scenario": "notes-vs-code",
+        "repetition": 1,
+        "requests": 6,
+        "prompt": 46131,
+        "reportedCached": 0,
+        "K": 3005,
+        "implicitUsd": 0.03459825,
+        "variants": {
+          "ttl10m_cachedFirst_shared1": {
+            "netSavingsLowUsd": 0.009666083333333332,
+            "netSavingsHighUsd": 0.011919833333333334,
+            "hybridNetSavingsLowUsd": 0.009666083333333334,
+            "hybridNetSavingsHighUsd": 0.011919833333333334
+          },
+          "ttl10m_cachedFirst_shared5": {
+            "netSavingsLowUsd": 0.011669416666666668,
+            "netSavingsHighUsd": 0.012120166666666668,
+            "hybridNetSavingsLowUsd": 0.011669416666666666,
+            "hybridNetSavingsHighUsd": 0.012120166666666668
+          },
+          "ttl10m_inlineFirst_shared1": {
+            "netSavingsLowUsd": 0.007637708333333333,
+            "netSavingsHighUsd": 0.009891458333333335,
+            "hybridNetSavingsLowUsd": 0.007637708333333335,
+            "hybridNetSavingsHighUsd": 0.009891458333333335
+          },
+          "ttl10m_inlineFirst_shared5": {
+            "netSavingsLowUsd": 0.00964104166666667,
+            "netSavingsHighUsd": 0.010091791666666669,
+            "hybridNetSavingsLowUsd": 0.009641041666666668,
+            "hybridNetSavingsHighUsd": 0.010091791666666669
+          },
+          "ttl60m_cachedFirst_shared1": {
+            "netSavingsLowUsd": 0.008414000000000001,
+            "netSavingsHighUsd": 0.01066775,
+            "hybridNetSavingsLowUsd": 0.008414000000000001,
+            "hybridNetSavingsHighUsd": 0.01066775
+          },
+          "ttl60m_cachedFirst_shared5": {
+            "netSavingsLowUsd": 0.011419000000000002,
+            "netSavingsHighUsd": 0.011869750000000002,
+            "hybridNetSavingsLowUsd": 0.011419,
+            "hybridNetSavingsHighUsd": 0.01186975
+          },
+          "ttl60m_inlineFirst_shared1": {
+            "netSavingsLowUsd": 0.006385625000000002,
+            "netSavingsHighUsd": 0.008639375000000001,
+            "hybridNetSavingsLowUsd": 0.0063856250000000015,
+            "hybridNetSavingsHighUsd": 0.008639375000000001
+          },
+          "ttl60m_inlineFirst_shared5": {
+            "netSavingsLowUsd": 0.009390625000000003,
+            "netSavingsHighUsd": 0.009841375000000003,
+            "hybridNetSavingsLowUsd": 0.009390625000000001,
+            "hybridNetSavingsHighUsd": 0.009841375000000001
+          }
+        }
+      },
+      {
+        "scenario": "knowledgebase-research",
+        "repetition": 1,
+        "requests": 4,
+        "prompt": 14813,
+        "reportedCached": 0,
+        "K": 2422,
+        "implicitUsd": 0.01110975,
+        "variants": {
+          "ttl10m_cachedFirst_shared1": {
+            "netSavingsLowUsd": 0.004521066666666667,
+            "netSavingsHighUsd": 0.0063375666666666665,
+            "hybridNetSavingsLowUsd": 0.004521066666666667,
+            "hybridNetSavingsHighUsd": 0.006337566666666667
+          },
+          "ttl10m_cachedFirst_shared5": {
+            "netSavingsLowUsd": 0.006135733333333333,
+            "netSavingsHighUsd": 0.006499033333333334,
+            "hybridNetSavingsLowUsd": 0.006135733333333334,
+            "hybridNetSavingsHighUsd": 0.0064990333333333344
+          },
+          "ttl10m_inlineFirst_shared1": {
+            "netSavingsLowUsd": 0.002886216666666667,
+            "netSavingsHighUsd": 0.004702716666666666,
+            "hybridNetSavingsLowUsd": 0.0028862166666666672,
+            "hybridNetSavingsHighUsd": 0.004702716666666667
+          },
+          "ttl10m_inlineFirst_shared5": {
+            "netSavingsLowUsd": 0.004500883333333333,
+            "netSavingsHighUsd": 0.004864183333333333,
+            "hybridNetSavingsLowUsd": 0.004500883333333334,
+            "hybridNetSavingsHighUsd": 0.004864183333333334
+          },
+          "ttl60m_cachedFirst_shared1": {
+            "netSavingsLowUsd": 0.0035119,
+            "netSavingsHighUsd": 0.0053284,
+            "hybridNetSavingsLowUsd": 0.003511900000000001,
+            "hybridNetSavingsHighUsd": 0.0053284000000000005
+          },
+          "ttl60m_cachedFirst_shared5": {
+            "netSavingsLowUsd": 0.0059339,
+            "netSavingsHighUsd": 0.0062972,
+            "hybridNetSavingsLowUsd": 0.005933900000000001,
+            "hybridNetSavingsHighUsd": 0.006297200000000001
+          },
+          "ttl60m_inlineFirst_shared1": {
+            "netSavingsLowUsd": 0.00187705,
+            "netSavingsHighUsd": 0.0036935499999999994,
+            "hybridNetSavingsLowUsd": 0.0018770500000000008,
+            "hybridNetSavingsHighUsd": 0.0036935500000000003
+          },
+          "ttl60m_inlineFirst_shared5": {
+            "netSavingsLowUsd": 0.00429905,
+            "netSavingsHighUsd": 0.00466235,
+            "hybridNetSavingsLowUsd": 0.0042990500000000004,
+            "hybridNetSavingsHighUsd": 0.004662350000000001
+          }
+        }
+      },
+      {
+        "scenario": "status",
+        "repetition": 1,
+        "requests": 3,
+        "prompt": 10197,
+        "reportedCached": 0,
+        "K": 2353,
+        "implicitUsd": 0.00764775,
+        "variants": {
+          "ttl10m_cachedFirst_shared1": {
+            "netSavingsLowUsd": 0.002803991666666667,
+            "netSavingsHighUsd": 0.0045687416666666675,
+            "hybridNetSavingsLowUsd": 0.002803991666666667,
+            "hybridNetSavingsHighUsd": 0.004568741666666667
+          },
+          "ttl10m_cachedFirst_shared5": {
+            "netSavingsLowUsd": 0.004372658333333334,
+            "netSavingsHighUsd": 0.004725608333333334,
+            "hybridNetSavingsLowUsd": 0.004372658333333334,
+            "hybridNetSavingsHighUsd": 0.004725608333333333
+          },
+          "ttl10m_inlineFirst_shared1": {
+            "netSavingsLowUsd": 0.0012157166666666667,
+            "netSavingsHighUsd": 0.0029804666666666665,
+            "hybridNetSavingsLowUsd": 0.0012157166666666667,
+            "hybridNetSavingsHighUsd": 0.002980466666666667
+          },
+          "ttl10m_inlineFirst_shared5": {
+            "netSavingsLowUsd": 0.0027843833333333337,
+            "netSavingsHighUsd": 0.003137333333333333,
+            "hybridNetSavingsLowUsd": 0.0027843833333333337,
+            "hybridNetSavingsHighUsd": 0.0031373333333333336
+          },
+          "ttl60m_cachedFirst_shared1": {
+            "netSavingsLowUsd": 0.001823575,
+            "netSavingsHighUsd": 0.003588325,
+            "hybridNetSavingsLowUsd": 0.001823575,
+            "hybridNetSavingsHighUsd": 0.0035883250000000003
+          },
+          "ttl60m_cachedFirst_shared5": {
+            "netSavingsLowUsd": 0.004176575,
+            "netSavingsHighUsd": 0.004529525,
+            "hybridNetSavingsLowUsd": 0.004176575,
+            "hybridNetSavingsHighUsd": 0.004529525
+          },
+          "ttl60m_inlineFirst_shared1": {
+            "netSavingsLowUsd": 0.00023529999999999992,
+            "netSavingsHighUsd": 0.0020000499999999997,
+            "hybridNetSavingsLowUsd": 0.00023529999999999992,
+            "hybridNetSavingsHighUsd": 0.00200005
+          },
+          "ttl60m_inlineFirst_shared5": {
+            "netSavingsLowUsd": 0.0025883,
+            "netSavingsHighUsd": 0.0029412500000000003,
+            "hybridNetSavingsLowUsd": 0.0025883,
+            "hybridNetSavingsHighUsd": 0.0029412500000000003
+          }
+        }
+      },
+      {
+        "scenario": "ambiguous",
+        "repetition": 1,
+        "requests": 11,
+        "prompt": 151153,
+        "reportedCached": 70498,
+        "K": 3726,
+        "implicitUsd": 0.06577859999999998,
+        "variants": {
+          "ttl10m_cachedFirst_shared1": {
+            "netSavingsLowUsd": -0.023025600000000035,
+            "netSavingsHighUsd": -0.020231100000000043,
+            "hybridNetSavingsLowUsd": 0.0119853,
+            "hybridNetSavingsHighUsd": 0.014779800000000001
+          },
+          "ttl10m_cachedFirst_shared5": {
+            "netSavingsLowUsd": -0.020541600000000035,
+            "netSavingsHighUsd": -0.019982700000000034,
+            "hybridNetSavingsLowUsd": 0.014469300000000001,
+            "hybridNetSavingsHighUsd": 0.0150282
+          },
+          "ttl10m_inlineFirst_shared1": {
+            "netSavingsLowUsd": -0.021214636363636394,
+            "netSavingsHighUsd": -0.018420136363636402,
+            "hybridNetSavingsLowUsd": 0.009470249999999996,
+            "hybridNetSavingsHighUsd": 0.012264749999999996
+          },
+          "ttl10m_inlineFirst_shared5": {
+            "netSavingsLowUsd": -0.018730636363636394,
+            "netSavingsHighUsd": -0.018171736363636393,
+            "hybridNetSavingsLowUsd": 0.011954249999999996,
+            "hybridNetSavingsHighUsd": 0.012513149999999995
+          },
+          "ttl60m_cachedFirst_shared1": {
+            "netSavingsLowUsd": -0.024578100000000033,
+            "netSavingsHighUsd": -0.021783600000000042,
+            "hybridNetSavingsLowUsd": 0.0104328,
+            "hybridNetSavingsHighUsd": 0.0132273
+          },
+          "ttl60m_cachedFirst_shared5": {
+            "netSavingsLowUsd": -0.02085210000000004,
+            "netSavingsHighUsd": -0.02029320000000004,
+            "hybridNetSavingsLowUsd": 0.014158800000000001,
+            "hybridNetSavingsHighUsd": 0.0147177
+          },
+          "ttl60m_inlineFirst_shared1": {
+            "netSavingsLowUsd": -0.022767136363636392,
+            "netSavingsHighUsd": -0.0199726363636364,
+            "hybridNetSavingsLowUsd": 0.007917749999999996,
+            "hybridNetSavingsHighUsd": 0.010712249999999996
+          },
+          "ttl60m_inlineFirst_shared5": {
+            "netSavingsLowUsd": -0.0190411363636364,
+            "netSavingsHighUsd": -0.018482236363636398,
+            "hybridNetSavingsLowUsd": 0.011643749999999996,
+            "hybridNetSavingsHighUsd": 0.012202649999999995
+          }
+        }
+      },
+      {
+        "scenario": "expansion",
+        "repetition": 1,
+        "requests": 8,
+        "prompt": 73032,
+        "reportedCached": 0,
+        "K": 3005,
+        "implicitUsd": 0.054773999999999996,
+        "variants": {
+          "ttl10m_cachedFirst_shared1": {
+            "netSavingsLowUsd": 0.01372283333333333,
+            "netSavingsHighUsd": 0.01597658333333333,
+            "hybridNetSavingsLowUsd": 0.013722833333333332,
+            "hybridNetSavingsHighUsd": 0.015976583333333332
+          },
+          "ttl10m_cachedFirst_shared5": {
+            "netSavingsLowUsd": 0.015726166666666666,
+            "netSavingsHighUsd": 0.016176916666666666,
+            "hybridNetSavingsLowUsd": 0.015726166666666666,
+            "hybridNetSavingsHighUsd": 0.016176916666666666
+          },
+          "ttl10m_inlineFirst_shared1": {
+            "netSavingsLowUsd": 0.011694458333333331,
+            "netSavingsHighUsd": 0.01394820833333333,
+            "hybridNetSavingsLowUsd": 0.011694458333333333,
+            "hybridNetSavingsHighUsd": 0.013948208333333333
+          },
+          "ttl10m_inlineFirst_shared5": {
+            "netSavingsLowUsd": 0.013697791666666667,
+            "netSavingsHighUsd": 0.014148541666666667,
+            "hybridNetSavingsLowUsd": 0.013697791666666665,
+            "hybridNetSavingsHighUsd": 0.014148541666666667
+          },
+          "ttl60m_cachedFirst_shared1": {
+            "netSavingsLowUsd": 0.012470749999999996,
+            "netSavingsHighUsd": 0.014724500000000001,
+            "hybridNetSavingsLowUsd": 0.01247075,
+            "hybridNetSavingsHighUsd": 0.014724499999999998
+          },
+          "ttl60m_cachedFirst_shared5": {
+            "netSavingsLowUsd": 0.015475749999999996,
+            "netSavingsHighUsd": 0.015926499999999996,
+            "hybridNetSavingsLowUsd": 0.015475749999999998,
+            "hybridNetSavingsHighUsd": 0.0159265
+          },
+          "ttl60m_inlineFirst_shared1": {
+            "netSavingsLowUsd": 0.010442374999999997,
+            "netSavingsHighUsd": 0.012696125000000003,
+            "hybridNetSavingsLowUsd": 0.010442375,
+            "hybridNetSavingsHighUsd": 0.012696124999999999
+          },
+          "ttl60m_inlineFirst_shared5": {
+            "netSavingsLowUsd": 0.013447374999999998,
+            "netSavingsHighUsd": 0.013898124999999997,
+            "hybridNetSavingsLowUsd": 0.013447375,
+            "hybridNetSavingsHighUsd": 0.013898124999999999
+          }
+        }
+      }
+    ],
+    "corpusTotals": {
+      "ttl10m_cachedFirst_shared1": {
+        "implicitUsd": 0.4220894249999999,
+        "netSavingsLowUsd": -0.003984416666666803,
+        "netSavingsHighUsd": 0.021757083333333198,
+        "hybridNetSavingsLowUsd": 0.10423563333333336,
+        "hybridNetSavingsHighUsd": 0.12997713333333336
+      },
+      "ttl10m_cachedFirst_shared5": {
+        "implicitUsd": 0.4220894249999999,
+        "netSavingsLowUsd": 0.018896916666666534,
+        "netSavingsHighUsd": 0.02404521666666653,
+        "hybridNetSavingsLowUsd": 0.1271169666666667,
+        "hybridNetSavingsHighUsd": 0.13226526666666666
+      },
+      "ttl10m_inlineFirst_shared1": {
+        "implicitUsd": 0.4220894249999999,
+        "netSavingsLowUsd": -0.015233015530303179,
+        "netSavingsHighUsd": 0.010508484469696822,
+        "hybridNetSavingsLowUsd": 0.08106828333333332,
+        "hybridNetSavingsHighUsd": 0.10680978333333332
+      },
+      "ttl10m_inlineFirst_shared5": {
+        "implicitUsd": 0.4220894249999999,
+        "netSavingsLowUsd": 0.007648317803030158,
+        "netSavingsHighUsd": 0.012796617803030153,
+        "hybridNetSavingsLowUsd": 0.10394961666666666,
+        "hybridNetSavingsHighUsd": 0.10909791666666668
+      },
+      "ttl60m_cachedFirst_shared1": {
+        "implicitUsd": 0.4220894249999999,
+        "netSavingsLowUsd": -0.018285250000000145,
+        "netSavingsHighUsd": 0.007456249999999866,
+        "hybridNetSavingsLowUsd": 0.08993480000000001,
+        "hybridNetSavingsHighUsd": 0.11567630000000001
+      },
+      "ttl60m_cachedFirst_shared5": {
+        "implicitUsd": 0.4220894249999999,
+        "netSavingsLowUsd": 0.016036749999999857,
+        "netSavingsHighUsd": 0.021185049999999855,
+        "hybridNetSavingsLowUsd": 0.1242568,
+        "hybridNetSavingsHighUsd": 0.12940510000000002
+      },
+      "ttl60m_inlineFirst_shared1": {
+        "implicitUsd": 0.4220894249999999,
+        "netSavingsLowUsd": -0.029533848863636518,
+        "netSavingsHighUsd": -0.003792348863636507,
+        "hybridNetSavingsLowUsd": 0.06676744999999999,
+        "hybridNetSavingsHighUsd": 0.09250894999999999
+      },
+      "ttl60m_inlineFirst_shared5": {
+        "implicitUsd": 0.4220894249999999,
+        "netSavingsLowUsd": 0.004788151136363484,
+        "netSavingsHighUsd": 0.009936451136363478,
+        "hybridNetSavingsLowUsd": 0.10108944999999998,
+        "hybridNetSavingsHighUsd": 0.10623774999999999
+      }
+    },
+    "longAuditRun": {
+      "exchanges": 28,
+      "prompt": 978429,
+      "implicitCached": 699210,
+      "explicitCached": 220052,
+      "implicitUsd": 0.261855,
+      "explicitUsdLow": 0.5859415666666664,
+      "explicitUsdHigh": 0.5918358166666665,
+      "hybridCachedRequests": 4,
+      "hybridUsdLow": 0.2412906166666667,
+      "hybridUsdHigh": 0.2471848666666667
+    }
+  },
+  "sdk": "@google/genai 2.24.0",
+  "method": {
+    "probe": "backend/chat/explicit-cache.live-eval.ts: Overlord-authored prompt v8 and reviewed declarations for synthetic connection ids; synthetic text-only conversations; every created cache deleted; numbers and error classes only",
+    "economics": "scripts/analyze-explicit-cache.mjs over probe aggregates, the coo:1127.kaed live corpus and the coo:1127.502m long audit run",
+    "live": "CHAT_LIVE_EVAL_POLICY=cache backend/chat/research-planning.live-eval.ts, two alternating repetitions, both arms prompt v8 with relevance subsets, current arm with a cold per-run static cache"
+  },
+  "probe": {
+    "static": {
+      "controlPromptTokens": 4,
+      "systemInstructionTokens": 845
+    },
+    "eligibility": {
+      "status": {
+        "staticTokens": 2194,
+        "toolsBytes": 5589,
+        "cacheCreated": true,
+        "cacheTokens": 2194,
+        "createMs": 1144
+      },
+      "repository": {
+        "staticTokens": 2511,
+        "toolsBytes": 6683,
+        "cacheCreated": true,
+        "cacheTokens": 2511,
+        "createMs": 997
+      },
+      "knowledgebase_read": {
+        "staticTokens": 4291,
+        "toolsBytes": 12232,
+        "cacheCreated": true,
+        "cacheTokens": 4291,
+        "createMs": 1432
+      },
+      "knowledgebase_write": {
+        "staticTokens": 6336,
+        "toolsBytes": 18965,
+        "cacheCreated": true,
+        "cacheTokens": 6336,
+        "createMs": 1165
+      },
+      "full_read": {
+        "staticTokens": 5596,
+        "toolsBytes": 17041,
+        "cacheCreated": true,
+        "cacheTokens": 5596,
+        "createMs": 1111
+      },
+      "full_write": {
+        "staticTokens": 7641,
+        "toolsBytes": 23774,
+        "cacheCreated": true,
+        "cacheTokens": 7641,
+        "createMs": 1077
+      }
+    },
+    "compatibility": {
+      "cachedOnly": {
+        "ok": true,
+        "calls": 1,
+        "cached": 7641
+      },
+      "cachedPlusAutoToolConfig": {
+        "ok": false,
+        "error": {
+          "status": 400,
+          "kind": "cached_content_conflict"
+        }
+      },
+      "cachedPlusNoneToolConfig": {
+        "ok": false,
+        "error": {
+          "status": 400,
+          "kind": "cached_content_conflict"
+        }
+      },
+      "cachedPlusSystemInstruction": {
+        "ok": false,
+        "error": {
+          "status": 400,
+          "kind": "cached_content_conflict"
+        }
+      },
+      "cachedPlusTools": {
+        "ok": false,
+        "error": {
+          "status": 400,
+          "kind": "cached_content_conflict"
+        }
+      },
+      "noneModeCache": {
+        "ok": true,
+        "calls": 0,
+        "cached": 7641
+      }
+    },
+    "expired": {
+      "ok": false,
+      "error": {
+        "status": 403,
+        "kind": "cache_missing_or_expired"
+      }
+    },
+    "deleted": {
+      "ok": false,
+      "error": {
+        "status": 403,
+        "kind": "cache_missing_or_expired"
+      }
+    },
+    "explicitCache": {
+      "tokens": 7641,
+      "createMs": 1250
+    }
+  },
+  "synthetic": {
+    "summary": {
+      "implicit": {
+        "runs": 9,
+        "perRound": [
+          {
+            "round": 0,
+            "n": 9,
+            "medianPrompt": 10183,
+            "medianCached": 0,
+            "cachedReported": 0,
+            "medianFirstChunkMs": 2393,
+            "minFirstChunkMs": 1639,
+            "maxFirstChunkMs": 8592
+          },
+          {
+            "round": 1,
+            "n": 9,
+            "medianPrompt": 12731,
+            "medianCached": 0,
+            "cachedReported": 0,
+            "medianFirstChunkMs": 1699,
+            "minFirstChunkMs": 1558,
+            "maxFirstChunkMs": 3161
+          },
+          {
+            "round": 2,
+            "n": 9,
+            "medianPrompt": 15279,
+            "medianCached": 0,
+            "cachedReported": 0,
+            "medianFirstChunkMs": 1918,
+            "minFirstChunkMs": 1545,
+            "maxFirstChunkMs": 4090
+          },
+          {
+            "round": 3,
+            "n": 9,
+            "medianPrompt": 17828,
+            "medianCached": 0,
+            "cachedReported": 0,
+            "medianFirstChunkMs": 1970,
+            "minFirstChunkMs": 1640,
+            "maxFirstChunkMs": 3211
+          },
+          {
+            "round": 4,
+            "n": 9,
+            "medianPrompt": 20376,
+            "medianCached": 16250,
+            "cachedReported": 8,
+            "medianFirstChunkMs": 3002,
+            "minFirstChunkMs": 1452,
+            "maxFirstChunkMs": 8983
+          },
+          {
+            "round": 5,
+            "n": 9,
+            "medianPrompt": 22925,
+            "medianCached": 20323,
+            "cachedReported": 9,
+            "medianFirstChunkMs": 2159,
+            "minFirstChunkMs": 1569,
+            "maxFirstChunkMs": 5872
+          },
+          {
+            "round": 6,
+            "n": 5,
+            "medianPrompt": 25473,
+            "medianCached": 20333,
+            "cachedReported": 5,
+            "medianFirstChunkMs": 1971,
+            "minFirstChunkMs": 1532,
+            "maxFirstChunkMs": 3207
+          },
+          {
+            "round": 7,
+            "n": 5,
+            "medianPrompt": 28022,
+            "medianCached": 24408,
+            "cachedReported": 5,
+            "medianFirstChunkMs": 3514,
+            "minFirstChunkMs": 1714,
+            "maxFirstChunkMs": 12085
+          },
+          {
+            "round": 8,
+            "n": 5,
+            "medianPrompt": 30570,
+            "medianCached": 24416,
+            "cachedReported": 5,
+            "medianFirstChunkMs": 2875,
+            "minFirstChunkMs": 1735,
+            "maxFirstChunkMs": 5221
+          },
+          {
+            "round": 9,
+            "n": 5,
+            "medianPrompt": 33118,
+            "medianCached": 28493,
+            "cachedReported": 4,
+            "medianFirstChunkMs": 2005,
+            "minFirstChunkMs": 1904,
+            "maxFirstChunkMs": 4237
+          }
+        ],
+        "medianFirstChunkMsAll": 2170
+      },
+      "explicit": {
+        "runs": 9,
+        "perRound": [
+          {
+            "round": 0,
+            "n": 9,
+            "medianPrompt": 10243,
+            "medianCached": 7641,
+            "cachedReported": 9,
+            "medianFirstChunkMs": 1979,
+            "minFirstChunkMs": 1637,
+            "maxFirstChunkMs": 4699
+          },
+          {
+            "round": 1,
+            "n": 9,
+            "medianPrompt": 12851,
+            "medianCached": 7641,
+            "cachedReported": 9,
+            "medianFirstChunkMs": 2217,
+            "minFirstChunkMs": 1395,
+            "maxFirstChunkMs": 4136
+          },
+          {
+            "round": 2,
+            "n": 9,
+            "medianPrompt": 15459,
+            "medianCached": 7641,
+            "cachedReported": 9,
+            "medianFirstChunkMs": 1859,
+            "minFirstChunkMs": 1622,
+            "maxFirstChunkMs": 3496
+          },
+          {
+            "round": 3,
+            "n": 9,
+            "medianPrompt": 18068,
+            "medianCached": 7641,
+            "cachedReported": 9,
+            "medianFirstChunkMs": 1828,
+            "minFirstChunkMs": 1350,
+            "maxFirstChunkMs": 3992
+          },
+          {
+            "round": 4,
+            "n": 9,
+            "medianPrompt": 20676,
+            "medianCached": 7641,
+            "cachedReported": 9,
+            "medianFirstChunkMs": 1852,
+            "minFirstChunkMs": 1499,
+            "maxFirstChunkMs": 6310
+          },
+          {
+            "round": 5,
+            "n": 9,
+            "medianPrompt": 23285,
+            "medianCached": 7641,
+            "cachedReported": 9,
+            "medianFirstChunkMs": 2807,
+            "minFirstChunkMs": 1564,
+            "maxFirstChunkMs": 7370
+          },
+          {
+            "round": 6,
+            "n": 5,
+            "medianPrompt": 25893,
+            "medianCached": 7641,
+            "cachedReported": 5,
+            "medianFirstChunkMs": 2538,
+            "minFirstChunkMs": 1644,
+            "maxFirstChunkMs": 4544
+          },
+          {
+            "round": 7,
+            "n": 5,
+            "medianPrompt": 28502,
+            "medianCached": 7641,
+            "cachedReported": 5,
+            "medianFirstChunkMs": 1697,
+            "minFirstChunkMs": 1638,
+            "maxFirstChunkMs": 4144
+          },
+          {
+            "round": 8,
+            "n": 5,
+            "medianPrompt": 31110,
+            "medianCached": 7641,
+            "cachedReported": 5,
+            "medianFirstChunkMs": 2426,
+            "minFirstChunkMs": 1667,
+            "maxFirstChunkMs": 3282
+          },
+          {
+            "round": 9,
+            "n": 5,
+            "medianPrompt": 33718,
+            "medianCached": 7641,
+            "cachedReported": 5,
+            "medianFirstChunkMs": 1919,
+            "minFirstChunkMs": 1838,
+            "maxFirstChunkMs": 2918
+          }
+        ],
+        "medianFirstChunkMsAll": 1934
+      },
+      "hybrid": {
+        "runs": 3,
+        "perRound": [
+          {
+            "round": 0,
+            "n": 3,
+            "medianPrompt": 10183,
+            "medianCached": 7641,
+            "cachedReported": 3,
+            "medianFirstChunkMs": 1617,
+            "minFirstChunkMs": 1572,
+            "maxFirstChunkMs": 3526
+          },
+          {
+            "round": 1,
+            "n": 3,
+            "medianPrompt": 12731,
+            "medianCached": 7641,
+            "cachedReported": 3,
+            "medianFirstChunkMs": 1937,
+            "minFirstChunkMs": 1530,
+            "maxFirstChunkMs": 2094
+          },
+          {
+            "round": 2,
+            "n": 3,
+            "medianPrompt": 15279,
+            "medianCached": 7641,
+            "cachedReported": 3,
+            "medianFirstChunkMs": 1561,
+            "minFirstChunkMs": 1490,
+            "maxFirstChunkMs": 1686
+          },
+          {
+            "round": 3,
+            "n": 3,
+            "medianPrompt": 17828,
+            "medianCached": 7641,
+            "cachedReported": 3,
+            "medianFirstChunkMs": 1814,
+            "minFirstChunkMs": 1618,
+            "maxFirstChunkMs": 2178
+          },
+          {
+            "round": 4,
+            "n": 3,
+            "medianPrompt": 20376,
+            "medianCached": 16250,
+            "cachedReported": 3,
+            "medianFirstChunkMs": 1703,
+            "minFirstChunkMs": 1356,
+            "maxFirstChunkMs": 2068
+          },
+          {
+            "round": 5,
+            "n": 3,
+            "medianPrompt": 22925,
+            "medianCached": 16257,
+            "cachedReported": 2,
+            "medianFirstChunkMs": 2977,
+            "minFirstChunkMs": 1899,
+            "maxFirstChunkMs": 3871
+          },
+          {
+            "round": 6,
+            "n": 3,
+            "medianPrompt": 25473,
+            "medianCached": 20333,
+            "cachedReported": 3,
+            "medianFirstChunkMs": 2294,
+            "minFirstChunkMs": 1537,
+            "maxFirstChunkMs": 2516
+          },
+          {
+            "round": 7,
+            "n": 3,
+            "medianPrompt": 28022,
+            "medianCached": 24408,
+            "cachedReported": 3,
+            "medianFirstChunkMs": 1957,
+            "minFirstChunkMs": 1586,
+            "maxFirstChunkMs": 17800
+          },
+          {
+            "round": 8,
+            "n": 3,
+            "medianPrompt": 30570,
+            "medianCached": 20349,
+            "cachedReported": 2,
+            "medianFirstChunkMs": 1833,
+            "minFirstChunkMs": 1763,
+            "maxFirstChunkMs": 2647
+          },
+          {
+            "round": 9,
+            "n": 3,
+            "medianPrompt": 33118,
+            "medianCached": 28493,
+            "cachedReported": 3,
+            "medianFirstChunkMs": 1456,
+            "minFirstChunkMs": 1434,
+            "maxFirstChunkMs": 2735
+          }
+        ],
+        "medianFirstChunkMsAll": 1823
+      }
+    },
+    "cost": {
+      "sixRounds": {
+        "implicitUsd": [
+          0.050747025,
+          0.049804724999999994,
+          0.050747025,
+          0.049804724999999994,
+          0.049804724999999994,
+          0.050747025,
+          0.050747025,
+          0.060773474999999993,
+          0.049804724999999994
+        ],
+        "explicitBeforeStorageUsd": [
+          0.04543545,
+          0.04449045,
+          0.04543545,
+          0.04260045,
+          0.04543545,
+          0.04449045,
+          0.04449045,
+          0.04449045,
+          0.04354545
+        ]
+      },
+      "tenRounds": {
+        "implicitUsd": [
+          0.071778225,
+          0.07149652500000002,
+          0.090731325,
+          0.082746975,
+          0.071778225
+        ],
+        "explicitBeforeStorageUsd": [
+          0.11575200000000002,
+          0.11327700000000002,
+          0.11327700000000002,
+          0.11327700000000002,
+          0.11080200000000001
+        ],
+        "hybridBeforeStorageUsd": [
+          0.05114752499999999,
+          0.07007970000000001,
+          0.067905975
+        ],
+        "means": {
+          "implicitUsd": 0.07770625499999999,
+          "explicitBeforeStorageUsd": 0.11327700000000003,
+          "hybridBeforeStorageUsd": 0.0630444
+        }
+      }
+    }
+  },
+  "live": {
+    "prices": {
+      "input": 0.75,
+      "cached": 0.075,
+      "storagePerHour": 0.5,
+      "ttlHours": 0.16666666666666666
+    },
+    "byTask": {
+      "repository-research": {
+        "baseline": {
+          "runs": 2,
+          "requests": 19,
+          "prompt": 116818,
+          "cached": 0,
+          "cachedShare": 0,
+          "inputUsd": 0.0876135,
+          "costWithCacheUpperUsd": 0.0876135,
+          "costWithCacheLowerUsd": 0.0876135,
+          "effectiveUsdPerMPromptUpper": 0.75,
+          "effectiveUsdPerMPromptLower": 0.75,
+          "meanWallS": 70.575,
+          "facts": [
+            "4/4",
+            "4/4"
+          ],
+          "allCited": true,
+          "completed": 2,
+          "fallbacks": 0,
+          "cachedRequests": 0
+        },
+        "current": {
+          "runs": 2,
+          "requests": 15,
+          "prompt": 84479,
+          "cached": 32604,
+          "cachedShare": 0.385942068443045,
+          "inputUsd": 0.04135155,
+          "costWithCacheUpperUsd": 0.045531550000000004,
+          "costWithCacheLowerUsd": 0.04176955,
+          "effectiveUsdPerMPromptUpper": 0.5389688561654377,
+          "effectiveUsdPerMPromptLower": 0.494437079037394,
+          "meanWallS": 44.3445,
+          "facts": [
+            "4/4",
+            "4/4"
+          ],
+          "allCited": true,
+          "completed": 2,
+          "fallbacks": 0,
+          "cachedRequests": 13
+        }
+      },
+      "notes-vs-code": {
+        "baseline": {
+          "runs": 2,
+          "requests": 15,
+          "prompt": 126004,
+          "cached": 0,
+          "cachedShare": 0,
+          "inputUsd": 0.094503,
+          "costWithCacheUpperUsd": 0.094503,
+          "costWithCacheLowerUsd": 0.094503,
+          "effectiveUsdPerMPromptUpper": 0.75,
+          "effectiveUsdPerMPromptLower": 0.75,
+          "meanWallS": 55.07,
+          "facts": [
+            "5/5",
+            "5/5"
+          ],
+          "allCited": true,
+          "completed": 2,
+          "fallbacks": 0,
+          "cachedRequests": 0
+        },
+        "current": {
+          "runs": 2,
+          "requests": 18,
+          "prompt": 159683,
+          "cached": 45232,
+          "cachedShare": 0.2832612112748383,
+          "inputUsd": 0.08923065,
+          "costWithCacheUpperUsd": 0.09394231666666666,
+          "costWithCacheLowerUsd": 0.08970181666666666,
+          "effectiveUsdPerMPromptUpper": 0.5883050585639464,
+          "effectiveUsdPerMPromptLower": 0.5617493200069303,
+          "meanWallS": 60.845,
+          "facts": [
+            "5/5",
+            "5/5"
+          ],
+          "allCited": true,
+          "completed": 2,
+          "fallbacks": 0,
+          "cachedRequests": 16
+        }
+      },
+      "knowledgebase-research": {
+        "baseline": {
+          "runs": 2,
+          "requests": 8,
+          "prompt": 29586,
+          "cached": 0,
+          "cachedShare": 0,
+          "inputUsd": 0.0221895,
+          "costWithCacheUpperUsd": 0.0221895,
+          "costWithCacheLowerUsd": 0.0221895,
+          "effectiveUsdPerMPromptUpper": 0.75,
+          "effectiveUsdPerMPromptLower": 0.75,
+          "meanWallS": 17.8055,
+          "facts": [
+            "4/4",
+            "4/4"
+          ],
+          "allCited": true,
+          "completed": 2,
+          "fallbacks": 0,
+          "cachedRequests": 0
+        },
+        "current": {
+          "runs": 2,
+          "requests": 8,
+          "prompt": 30245,
+          "cached": 13446,
+          "cachedShare": 0.44456935030583566,
+          "inputUsd": 0.0136077,
+          "costWithCacheUpperUsd": 0.017342700000000003,
+          "costWithCacheLowerUsd": 0.013981200000000001,
+          "effectiveUsdPerMPromptUpper": 0.5734071747396264,
+          "effectiveUsdPerMPromptLower": 0.46226483716316746,
+          "meanWallS": 18.127,
+          "facts": [
+            "4/4",
+            "4/4"
+          ],
+          "allCited": true,
+          "completed": 2,
+          "fallbacks": 0,
+          "cachedRequests": 6
+        }
+      },
+      "status": {
+        "baseline": {
+          "runs": 2,
+          "requests": 6,
+          "prompt": 20651,
+          "cached": 0,
+          "cachedShare": 0,
+          "inputUsd": 0.015488249999999999,
+          "costWithCacheUpperUsd": 0.015488249999999999,
+          "costWithCacheLowerUsd": 0.015488249999999999,
+          "effectiveUsdPerMPromptUpper": 0.7499999999999999,
+          "effectiveUsdPerMPromptLower": 0.7499999999999999,
+          "meanWallS": 15.1465,
+          "facts": [
+            "3/3",
+            "3/3"
+          ],
+          "allCited": true,
+          "completed": 2,
+          "fallbacks": 0,
+          "cachedRequests": 0
+        },
+        "current": {
+          "runs": 2,
+          "requests": 4,
+          "prompt": 11478,
+          "cached": 4382,
+          "cachedShare": 0.381773828193065,
+          "inputUsd": 0.00565065,
+          "costWithCacheUpperUsd": 0.009302316666666666,
+          "costWithCacheLowerUsd": 0.0060158166666666665,
+          "effectiveUsdPerMPromptUpper": 0.8104475227972353,
+          "effectiveUsdPerMPromptLower": 0.5241171516524366,
+          "meanWallS": 14.615,
+          "facts": [
+            "3/3",
+            "3/3"
+          ],
+          "allCited": true,
+          "completed": 2,
+          "fallbacks": 0,
+          "cachedRequests": 2
+        }
+      },
+      "ambiguous": {
+        "baseline": {
+          "runs": 2,
+          "requests": 35,
+          "prompt": 620788,
+          "cached": 364875,
+          "cachedShare": 0.5877610391953453,
+          "inputUsd": 0.219300375,
+          "costWithCacheUpperUsd": 0.219300375,
+          "costWithCacheLowerUsd": 0.219300375,
+          "effectiveUsdPerMPromptUpper": 0.3532612985431419,
+          "effectiveUsdPerMPromptLower": 0.3532612985431419,
+          "meanWallS": 116.766,
+          "facts": [
+            "1/1",
+            "1/1"
+          ],
+          "allCited": true,
+          "completed": 2,
+          "fallbacks": 0,
+          "cachedRequests": 0
+        },
+        "current": {
+          "runs": 2,
+          "requests": 27,
+          "prompt": 389294,
+          "cached": 207220,
+          "cachedShare": 0.532296927258062,
+          "inputUsd": 0.15209699999999998,
+          "costWithCacheUpperUsd": 0.158007,
+          "costWithCacheLowerUsd": 0.152688,
+          "effectiveUsdPerMPromptUpper": 0.4058809023514362,
+          "effectiveUsdPerMPromptLower": 0.3922177069258709,
+          "meanWallS": 92.0935,
+          "facts": [
+            "1/1",
+            "1/1"
+          ],
+          "allCited": true,
+          "completed": 2,
+          "fallbacks": 0,
+          "cachedRequests": 13
+        }
+      },
+      "expansion": {
+        "baseline": {
+          "runs": 2,
+          "requests": 14,
+          "prompt": 142150,
+          "cached": 24241,
+          "cachedShare": 0.1705311290889905,
+          "inputUsd": 0.09024982499999999,
+          "costWithCacheUpperUsd": 0.09024982499999999,
+          "costWithCacheLowerUsd": 0.09024982499999999,
+          "effectiveUsdPerMPromptUpper": 0.6348914878649313,
+          "effectiveUsdPerMPromptLower": 0.6348914878649313,
+          "meanWallS": 69.7315,
+          "facts": [
+            "4/4",
+            "4/4"
+          ],
+          "allCited": true,
+          "completed": 2,
+          "fallbacks": 0,
+          "cachedRequests": 0
+        },
+        "current": {
+          "runs": 2,
+          "requests": 15,
+          "prompt": 150855,
+          "cached": 45997,
+          "cachedShare": 0.30490868714991215,
+          "inputUsd": 0.082093275,
+          "costWithCacheUpperUsd": 0.09218327500000001,
+          "costWithCacheLowerUsd": 0.083102275,
+          "effectiveUsdPerMPromptUpper": 0.6110720559477645,
+          "effectiveUsdPerMPromptLower": 0.5508751781512049,
+          "meanWallS": 62.1515,
+          "facts": [
+            "4/4",
+            "4/4"
+          ],
+          "allCited": true,
+          "completed": 2,
+          "fallbacks": 0,
+          "cachedRequests": 9
+        }
+      }
+    },
+    "primary": {
+      "baseline": {
+        "runs": 8,
+        "requests": 48,
+        "prompt": 293059,
+        "cached": 0,
+        "cachedShare": 0,
+        "inputUsd": 0.21979425,
+        "costWithCacheUpperUsd": 0.21979425,
+        "costWithCacheLowerUsd": 0.21979425,
+        "effectiveUsdPerMPromptUpper": 0.75,
+        "effectiveUsdPerMPromptLower": 0.75,
+        "meanWallS": 39.64925,
+        "facts": [
+          "4/4",
+          "5/5",
+          "4/4",
+          "3/3",
+          "4/4",
+          "5/5",
+          "4/4",
+          "3/3"
+        ],
+        "allCited": true,
+        "completed": 8,
+        "fallbacks": 0,
+        "cachedRequests": 0
+      },
+      "current": {
+        "runs": 8,
+        "requests": 45,
+        "prompt": 285885,
+        "cached": 95664,
+        "cachedShare": 0.3346240621228816,
+        "inputUsd": 0.14984055000000002,
+        "costWithCacheUpperUsd": 0.16611888333333336,
+        "costWithCacheLowerUsd": 0.15146838333333332,
+        "effectiveUsdPerMPromptUpper": 0.581068902997126,
+        "effectiveUsdPerMPromptLower": 0.529822772560062,
+        "meanWallS": 34.482875,
+        "facts": [
+          "4/4",
+          "5/5",
+          "4/4",
+          "3/3",
+          "4/4",
+          "5/5",
+          "4/4",
+          "3/3"
+        ],
+        "allCited": true,
+        "completed": 8,
+        "fallbacks": 0,
+        "cachedRequests": 37
+      }
+    },
+    "all": {
+      "baseline": {
+        "runs": 12,
+        "requests": 97,
+        "prompt": 1055997,
+        "cached": 389116,
+        "cachedShare": 0.36848210743022947,
+        "inputUsd": 0.5293444500000001,
+        "costWithCacheUpperUsd": 0.5293444500000001,
+        "costWithCacheLowerUsd": 0.5293444500000001,
+        "effectiveUsdPerMPromptUpper": 0.5012745774845953,
+        "effectiveUsdPerMPromptLower": 0.5012745774845953,
+        "meanWallS": 57.51575,
+        "facts": [
+          "4/4",
+          "5/5",
+          "4/4",
+          "3/3",
+          "1/1",
+          "4/4",
+          "4/4",
+          "5/5",
+          "4/4",
+          "3/3",
+          "1/1",
+          "4/4"
+        ],
+        "allCited": true,
+        "completed": 12,
+        "fallbacks": 0,
+        "cachedRequests": 0
+      },
+      "current": {
+        "runs": 12,
+        "requests": 87,
+        "prompt": 826034,
+        "cached": 348881,
+        "cachedShare": 0.42235670686678756,
+        "inputUsd": 0.38403082499999996,
+        "costWithCacheUpperUsd": 0.4163091583333333,
+        "costWithCacheLowerUsd": 0.38725865833333334,
+        "effectiveUsdPerMPromptUpper": 0.5039854997897585,
+        "effectiveUsdPerMPromptLower": 0.4688168505574024,
+        "meanWallS": 48.696083333333334,
+        "facts": [
+          "4/4",
+          "5/5",
+          "4/4",
+          "3/3",
+          "1/1",
+          "4/4",
+          "4/4",
+          "5/5",
+          "4/4",
+          "3/3",
+          "1/1",
+          "4/4"
+        ],
+        "allCited": true,
+        "completed": 12,
+        "fallbacks": 0,
+        "cachedRequests": 59
+      }
+    },
+    "rows": [
+      {
+        "task": "repository-research",
+        "arm": "baseline",
+        "repetition": 0,
+        "state": "completed",
+        "wallMs": 63341,
+        "requests": 9,
+        "prompt": 56872,
+        "cached": 0,
+        "cachedReportedExchanges": 0,
+        "output": 1331,
+        "thoughts": 2436,
+        "staticCache": {
+          "requests": 0,
+          "fallbacks": 0
+        },
+        "cacheCreates": 0,
+        "cacheCreateFailures": 0,
+        "cacheCreateMs": [],
+        "cacheTokens": [],
+        "facts": "4/4",
+        "citationsResolve": true,
+        "inputUsd": 0.042654,
+        "netLowUsd": 0.042654,
+        "netHighUsd": 0.042654,
+        "usdPerMPrompt": 0.7499999999999999
+      },
+      {
+        "task": "repository-research",
+        "arm": "current",
+        "repetition": 0,
+        "state": "completed",
+        "wallMs": 46973,
+        "requests": 8,
+        "prompt": 42884,
+        "cached": 17556,
+        "cachedReportedExchanges": 7,
+        "output": 1066,
+        "thoughts": 1693,
+        "staticCache": {
+          "requests": 7,
+          "fallbacks": 0
+        },
+        "cacheCreates": 1,
+        "cacheCreateFailures": 0,
+        "cacheCreateMs": [
+          1213
+        ],
+        "cacheTokens": [
+          2508
+        ],
+        "facts": "4/4",
+        "citationsResolve": true,
+        "inputUsd": 0.0203127,
+        "netLowUsd": 0.0224027,
+        "netHighUsd": 0.0205217,
+        "usdPerMPrompt": 0.47366616920063426
+      },
+      {
+        "task": "notes-vs-code",
+        "arm": "baseline",
+        "repetition": 0,
+        "state": "completed",
+        "wallMs": 61603,
+        "requests": 8,
+        "prompt": 67293,
+        "cached": 0,
+        "cachedReportedExchanges": 0,
+        "output": 1364,
+        "thoughts": 2774,
+        "staticCache": {
+          "requests": 0,
+          "fallbacks": 0
+        },
+        "cacheCreates": 0,
+        "cacheCreateFailures": 0,
+        "cacheCreateMs": [],
+        "cacheTokens": [],
+        "facts": "5/5",
+        "citationsResolve": true,
+        "inputUsd": 0.05046975,
+        "netLowUsd": 0.05046975,
+        "netHighUsd": 0.05046975,
+        "usdPerMPrompt": 0.75
+      },
+      {
+        "task": "notes-vs-code",
+        "arm": "current",
+        "repetition": 0,
+        "state": "completed",
+        "wallMs": 69827,
+        "requests": 8,
+        "prompt": 77331,
+        "cached": 19789,
+        "cachedReportedExchanges": 7,
+        "output": 1162,
+        "thoughts": 2629,
+        "staticCache": {
+          "requests": 7,
+          "fallbacks": 0
+        },
+        "cacheCreates": 1,
+        "cacheCreateFailures": 0,
+        "cacheCreateMs": [
+          1239
+        ],
+        "cacheTokens": [
+          2827
+        ],
+        "facts": "5/5",
+        "citationsResolve": true,
+        "inputUsd": 0.044640675000000005,
+        "netLowUsd": 0.04699650833333333,
+        "netHighUsd": 0.044876258333333335,
+        "usdPerMPrompt": 0.5772675253132639
+      },
+      {
+        "task": "knowledgebase-research",
+        "arm": "baseline",
+        "repetition": 0,
+        "state": "completed",
+        "wallMs": 19901,
+        "requests": 4,
+        "prompt": 14877,
+        "cached": 0,
+        "cachedReportedExchanges": 0,
+        "output": 531,
+        "thoughts": 749,
+        "staticCache": {
+          "requests": 0,
+          "fallbacks": 0
+        },
+        "cacheCreates": 0,
+        "cacheCreateFailures": 0,
+        "cacheCreateMs": [],
+        "cacheTokens": [],
+        "facts": "4/4",
+        "citationsResolve": true,
+        "inputUsd": 0.01115775,
+        "netLowUsd": 0.01115775,
+        "netHighUsd": 0.01115775,
+        "usdPerMPrompt": 0.7499999999999999
+      },
+      {
+        "task": "knowledgebase-research",
+        "arm": "current",
+        "repetition": 0,
+        "state": "completed",
+        "wallMs": 18350,
+        "requests": 4,
+        "prompt": 15154,
+        "cached": 6723,
+        "cachedReportedExchanges": 3,
+        "output": 472,
+        "thoughts": 951,
+        "staticCache": {
+          "requests": 3,
+          "fallbacks": 0
+        },
+        "cacheCreates": 1,
+        "cacheCreateFailures": 0,
+        "cacheCreateMs": [
+          1274
+        ],
+        "cacheTokens": [
+          2241
+        ],
+        "facts": "4/4",
+        "citationsResolve": true,
+        "inputUsd": 0.006827475,
+        "netLowUsd": 0.008694975,
+        "netHighUsd": 0.007014225000000001,
+        "usdPerMPrompt": 0.45053946152830937
+      },
+      {
+        "task": "status",
+        "arm": "baseline",
+        "repetition": 0,
+        "state": "completed",
+        "wallMs": 14965,
+        "requests": 3,
+        "prompt": 10393,
+        "cached": 0,
+        "cachedReportedExchanges": 0,
+        "output": 327,
+        "thoughts": 1021,
+        "staticCache": {
+          "requests": 0,
+          "fallbacks": 0
+        },
+        "cacheCreates": 0,
+        "cacheCreateFailures": 0,
+        "cacheCreateMs": [],
+        "cacheTokens": [],
+        "facts": "3/3",
+        "citationsResolve": true,
+        "inputUsd": 0.00779475,
+        "netLowUsd": 0.00779475,
+        "netHighUsd": 0.00779475,
+        "usdPerMPrompt": 0.7499999999999999
+      },
+      {
+        "task": "status",
+        "arm": "current",
+        "repetition": 0,
+        "state": "completed",
+        "wallMs": 15655,
+        "requests": 2,
+        "prompt": 5756,
+        "cached": 2191,
+        "cachedReportedExchanges": 1,
+        "output": 228,
+        "thoughts": 1233,
+        "staticCache": {
+          "requests": 1,
+          "fallbacks": 0
+        },
+        "cacheCreates": 1,
+        "cacheCreateFailures": 0,
+        "cacheCreateMs": [
+          1304
+        ],
+        "cacheTokens": [
+          2191
+        ],
+        "facts": "3/3",
+        "citationsResolve": true,
+        "inputUsd": 0.002838075,
+        "netLowUsd": 0.004663908333333333,
+        "netHighUsd": 0.003020658333333333,
+        "usdPerMPrompt": 0.4930637595552466
+      },
+      {
+        "task": "ambiguous",
+        "arm": "baseline",
+        "repetition": 0,
+        "state": "completed",
+        "wallMs": 175623,
+        "requests": 27,
+        "prompt": 527199,
+        "cached": 332620,
+        "cachedReportedExchanges": 18,
+        "output": 3072,
+        "thoughts": 3106,
+        "staticCache": {
+          "requests": 0,
+          "fallbacks": 0
+        },
+        "cacheCreates": 0,
+        "cacheCreateFailures": 0,
+        "cacheCreateMs": [],
+        "cacheTokens": [],
+        "facts": "1/1",
+        "citationsResolve": true,
+        "inputUsd": 0.17088075,
+        "netLowUsd": 0.17088075,
+        "netHighUsd": 0.17088075,
+        "usdPerMPrompt": 0.3241295032805449
+      },
+      {
+        "task": "ambiguous",
+        "arm": "current",
+        "repetition": 0,
+        "state": "completed",
+        "wallMs": 60359,
+        "requests": 10,
+        "prompt": 124979,
+        "cached": 62074,
+        "cachedReportedExchanges": 8,
+        "output": 1860,
+        "thoughts": 3265,
+        "staticCache": {
+          "requests": 5,
+          "fallbacks": 0
+        },
+        "cacheCreates": 1,
+        "cacheCreateFailures": 0,
+        "cacheCreateMs": [
+          1114
+        ],
+        "cacheTokens": [
+          3546
+        ],
+        "facts": "1/1",
+        "citationsResolve": true,
+        "inputUsd": 0.0518343,
+        "netLowUsd": 0.0547893,
+        "netHighUsd": 0.0521298,
+        "usdPerMPrompt": 0.4147440770049368
+      },
+      {
+        "task": "expansion",
+        "arm": "baseline",
+        "repetition": 0,
+        "state": "completed",
+        "wallMs": 70728,
+        "requests": 7,
+        "prompt": 65470,
+        "cached": 16181,
+        "cachedReportedExchanges": 1,
+        "output": 1972,
+        "thoughts": 3405,
+        "staticCache": {
+          "requests": 0,
+          "fallbacks": 0
+        },
+        "cacheCreates": 0,
+        "cacheCreateFailures": 0,
+        "cacheCreateMs": [],
+        "cacheTokens": [],
+        "facts": "4/4",
+        "citationsResolve": true,
+        "inputUsd": 0.038180324999999994,
+        "netLowUsd": 0.038180324999999994,
+        "netHighUsd": 0.038180324999999994,
+        "usdPerMPrompt": 0.5831728272491217
+      },
+      {
+        "task": "expansion",
+        "arm": "current",
+        "repetition": 0,
+        "state": "completed",
+        "wallMs": 68840,
+        "requests": 8,
+        "prompt": 82689,
+        "cached": 23754,
+        "cachedReportedExchanges": 6,
+        "output": 1873,
+        "thoughts": 3665,
+        "staticCache": {
+          "requests": 5,
+          "fallbacks": 0
+        },
+        "cacheCreates": 2,
+        "cacheCreateFailures": 0,
+        "cacheCreateMs": [
+          1189,
+          1178
+        ],
+        "cacheTokens": [
+          2508,
+          3546
+        ],
+        "facts": "4/4",
+        "citationsResolve": true,
+        "inputUsd": 0.045982800000000004,
+        "netLowUsd": 0.051027800000000005,
+        "netHighUsd": 0.0464873,
+        "usdPerMPrompt": 0.5560933134999819
+      },
+      {
+        "task": "repository-research",
+        "arm": "current",
+        "repetition": 1,
+        "state": "completed",
+        "wallMs": 41716,
+        "requests": 7,
+        "prompt": 41595,
+        "cached": 15048,
+        "cachedReportedExchanges": 6,
+        "output": 1048,
+        "thoughts": 1950,
+        "staticCache": {
+          "requests": 6,
+          "fallbacks": 0
+        },
+        "cacheCreates": 1,
+        "cacheCreateFailures": 0,
+        "cacheCreateMs": [
+          1310
+        ],
+        "cacheTokens": [
+          2508
+        ],
+        "facts": "4/4",
+        "citationsResolve": true,
+        "inputUsd": 0.021038849999999998,
+        "netLowUsd": 0.02312885,
+        "netHighUsd": 0.02124785,
+        "usdPerMPrompt": 0.5058023800937612
+      },
+      {
+        "task": "repository-research",
+        "arm": "baseline",
+        "repetition": 1,
+        "state": "completed",
+        "wallMs": 77809,
+        "requests": 10,
+        "prompt": 59946,
+        "cached": 0,
+        "cachedReportedExchanges": 0,
+        "output": 1303,
+        "thoughts": 1807,
+        "staticCache": {
+          "requests": 0,
+          "fallbacks": 0
+        },
+        "cacheCreates": 0,
+        "cacheCreateFailures": 0,
+        "cacheCreateMs": [],
+        "cacheTokens": [],
+        "facts": "4/4",
+        "citationsResolve": true,
+        "inputUsd": 0.0449595,
+        "netLowUsd": 0.0449595,
+        "netHighUsd": 0.0449595,
+        "usdPerMPrompt": 0.75
+      },
+      {
+        "task": "notes-vs-code",
+        "arm": "current",
+        "repetition": 1,
+        "state": "completed",
+        "wallMs": 51863,
+        "requests": 10,
+        "prompt": 82352,
+        "cached": 25443,
+        "cachedReportedExchanges": 9,
+        "output": 1439,
+        "thoughts": 2611,
+        "staticCache": {
+          "requests": 9,
+          "fallbacks": 0
+        },
+        "cacheCreates": 1,
+        "cacheCreateFailures": 0,
+        "cacheCreateMs": [
+          1361
+        ],
+        "cacheTokens": [
+          2827
+        ],
+        "facts": "5/5",
+        "citationsResolve": true,
+        "inputUsd": 0.044589975,
+        "netLowUsd": 0.046945808333333325,
+        "netHighUsd": 0.04482555833333333,
+        "usdPerMPrompt": 0.5414558844958228
+      },
+      {
+        "task": "notes-vs-code",
+        "arm": "baseline",
+        "repetition": 1,
+        "state": "completed",
+        "wallMs": 48537,
+        "requests": 7,
+        "prompt": 58711,
+        "cached": 0,
+        "cachedReportedExchanges": 0,
+        "output": 1206,
+        "thoughts": 2538,
+        "staticCache": {
+          "requests": 0,
+          "fallbacks": 0
+        },
+        "cacheCreates": 0,
+        "cacheCreateFailures": 0,
+        "cacheCreateMs": [],
+        "cacheTokens": [],
+        "facts": "5/5",
+        "citationsResolve": true,
+        "inputUsd": 0.04403325,
+        "netLowUsd": 0.04403325,
+        "netHighUsd": 0.04403325,
+        "usdPerMPrompt": 0.75
+      },
+      {
+        "task": "knowledgebase-research",
+        "arm": "current",
+        "repetition": 1,
+        "state": "completed",
+        "wallMs": 17904,
+        "requests": 4,
+        "prompt": 15091,
+        "cached": 6723,
+        "cachedReportedExchanges": 3,
+        "output": 493,
+        "thoughts": 861,
+        "staticCache": {
+          "requests": 3,
+          "fallbacks": 0
+        },
+        "cacheCreates": 1,
+        "cacheCreateFailures": 0,
+        "cacheCreateMs": [
+          1098
+        ],
+        "cacheTokens": [
+          2241
+        ],
+        "facts": "4/4",
+        "citationsResolve": true,
+        "inputUsd": 0.006780225,
+        "netLowUsd": 0.008647725,
+        "netHighUsd": 0.006966975,
+        "usdPerMPrompt": 0.4492893115101716
+      },
+      {
+        "task": "knowledgebase-research",
+        "arm": "baseline",
+        "repetition": 1,
+        "state": "completed",
+        "wallMs": 15710,
+        "requests": 4,
+        "prompt": 14709,
+        "cached": 0,
+        "cachedReportedExchanges": 0,
+        "output": 565,
+        "thoughts": 738,
+        "staticCache": {
+          "requests": 0,
+          "fallbacks": 0
+        },
+        "cacheCreates": 0,
+        "cacheCreateFailures": 0,
+        "cacheCreateMs": [],
+        "cacheTokens": [],
+        "facts": "4/4",
+        "citationsResolve": true,
+        "inputUsd": 0.01103175,
+        "netLowUsd": 0.01103175,
+        "netHighUsd": 0.01103175,
+        "usdPerMPrompt": 0.75
+      },
+      {
+        "task": "status",
+        "arm": "current",
+        "repetition": 1,
+        "state": "completed",
+        "wallMs": 13575,
+        "requests": 2,
+        "prompt": 5722,
+        "cached": 2191,
+        "cachedReportedExchanges": 1,
+        "output": 223,
+        "thoughts": 1189,
+        "staticCache": {
+          "requests": 1,
+          "fallbacks": 0
+        },
+        "cacheCreates": 1,
+        "cacheCreateFailures": 0,
+        "cacheCreateMs": [
+          1216
+        ],
+        "cacheTokens": [
+          2191
+        ],
+        "facts": "3/3",
+        "citationsResolve": true,
+        "inputUsd": 0.002812575,
+        "netLowUsd": 0.004638408333333333,
+        "netHighUsd": 0.002995158333333333,
+        "usdPerMPrompt": 0.4915370499825236
+      },
+      {
+        "task": "status",
+        "arm": "baseline",
+        "repetition": 1,
+        "state": "completed",
+        "wallMs": 15328,
+        "requests": 3,
+        "prompt": 10258,
+        "cached": 0,
+        "cachedReportedExchanges": 0,
+        "output": 348,
+        "thoughts": 861,
+        "staticCache": {
+          "requests": 0,
+          "fallbacks": 0
+        },
+        "cacheCreates": 0,
+        "cacheCreateFailures": 0,
+        "cacheCreateMs": [],
+        "cacheTokens": [],
+        "facts": "3/3",
+        "citationsResolve": true,
+        "inputUsd": 0.0076935,
+        "netLowUsd": 0.0076935,
+        "netHighUsd": 0.0076935,
+        "usdPerMPrompt": 0.75
+      },
+      {
+        "task": "ambiguous",
+        "arm": "current",
+        "repetition": 1,
+        "state": "completed",
+        "wallMs": 123828,
+        "requests": 17,
+        "prompt": 264315,
+        "cached": 145146,
+        "cachedReportedExchanges": 16,
+        "output": 2612,
+        "thoughts": 3404,
+        "staticCache": {
+          "requests": 8,
+          "fallbacks": 0
+        },
+        "cacheCreates": 1,
+        "cacheCreateFailures": 0,
+        "cacheCreateMs": [
+          1302
+        ],
+        "cacheTokens": [
+          3546
+        ],
+        "facts": "1/1",
+        "citationsResolve": true,
+        "inputUsd": 0.1002627,
+        "netLowUsd": 0.1032177,
+        "netHighUsd": 0.1005582,
+        "usdPerMPrompt": 0.3793303444753419
+      },
+      {
+        "task": "ambiguous",
+        "arm": "baseline",
+        "repetition": 1,
+        "state": "completed",
+        "wallMs": 57909,
+        "requests": 8,
+        "prompt": 93589,
+        "cached": 32255,
+        "cachedReportedExchanges": 2,
+        "output": 1975,
+        "thoughts": 3412,
+        "staticCache": {
+          "requests": 0,
+          "fallbacks": 0
+        },
+        "cacheCreates": 0,
+        "cacheCreateFailures": 0,
+        "cacheCreateMs": [],
+        "cacheTokens": [],
+        "facts": "1/1",
+        "citationsResolve": true,
+        "inputUsd": 0.048419625,
+        "netLowUsd": 0.048419625,
+        "netHighUsd": 0.048419625,
+        "usdPerMPrompt": 0.517364487279488
+      },
+      {
+        "task": "expansion",
+        "arm": "current",
+        "repetition": 1,
+        "state": "completed",
+        "wallMs": 55463,
+        "requests": 7,
+        "prompt": 68166,
+        "cached": 22243,
+        "cachedReportedExchanges": 5,
+        "output": 1930,
+        "thoughts": 2963,
+        "staticCache": {
+          "requests": 4,
+          "fallbacks": 0
+        },
+        "cacheCreates": 2,
+        "cacheCreateFailures": 0,
+        "cacheCreateMs": [
+          1216,
+          1203
+        ],
+        "cacheTokens": [
+          2508,
+          3546
+        ],
+        "facts": "4/4",
+        "citationsResolve": true,
+        "inputUsd": 0.036110474999999996,
+        "netLowUsd": 0.041155475,
+        "netHighUsd": 0.036614974999999994,
+        "usdPerMPrompt": 0.529743200422498
+      },
+      {
+        "task": "expansion",
+        "arm": "baseline",
+        "repetition": 1,
+        "state": "completed",
+        "wallMs": 68735,
+        "requests": 7,
+        "prompt": 76680,
+        "cached": 8060,
+        "cachedReportedExchanges": 1,
+        "output": 1865,
+        "thoughts": 4109,
+        "staticCache": {
+          "requests": 0,
+          "fallbacks": 0
+        },
+        "cacheCreates": 0,
+        "cacheCreateFailures": 0,
+        "cacheCreateMs": [],
+        "cacheTokens": [],
+        "facts": "4/4",
+        "citationsResolve": true,
+        "inputUsd": 0.0520695,
+        "netLowUsd": 0.0520695,
+        "netHighUsd": 0.0520695,
+        "usdPerMPrompt": 0.6790492957746478
+      }
+    ]
+  }
+}

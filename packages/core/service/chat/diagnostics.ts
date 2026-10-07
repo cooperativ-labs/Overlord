@@ -1,6 +1,8 @@
 import type { ChatDiagnosticPageDto } from '@overlord/contract';
 import type { DatabaseClient } from '@overlord/database';
 
+import { chatSpan, chatSyncSpan } from './performance.js';
+
 /** Preserve Error's non-enumerable details as well as provider-specific fields. */
 export function diagnosticJson(value: unknown): string {
   const ancestors: { source: object; serialized: object }[] = [];
@@ -37,10 +39,13 @@ export async function appendDiagnostic(
   runId: string | null = null,
   attemptId: string | null = null
 ): Promise<void> {
-  await db.run(
-    `INSERT INTO chat_diagnostics (thread_id, seq, kind, payload_json, created_at, run_id, attempt_id)
+  const serialized = chatSyncSpan('diagnostic.serialization', () => diagnosticJson(payload));
+  await chatSpan('diagnostic.insert', () =>
+    db.run(
+      `INSERT INTO chat_diagnostics (thread_id, seq, kind, payload_json, created_at, run_id, attempt_id)
      SELECT ?, COALESCE(MAX(seq), 0) + 1, ?, ?, ?, ?, ? FROM chat_diagnostics WHERE thread_id = ?`,
-    [threadId, kind, diagnosticJson(payload), createdAt, runId, attemptId, threadId]
+      [threadId, kind, serialized, createdAt, runId, attemptId, threadId]
+    )
   );
 }
 

@@ -113,6 +113,8 @@ interface MissionObjectiveRow {
   launched_at: string | null;
   started_at: string | null;
   completed_at: string | null;
+  /** 1 when an open question/choice request is waiting on a human for this objective. */
+  is_blocked: number;
 }
 
 interface LatestEventRow {
@@ -283,7 +285,14 @@ async function loadMissionObjectives(
     `SELECT o.mission_id, m.display_id AS mission_display_id, o.id AS objective_id,
             o.display_key, o.title, o.instruction_text, o.state, o.position,
             o.assigned_agent, o.auto_advance, o.created_at,
-            o.launched_at, o.started_at, o.completed_at
+            o.launched_at, o.started_at, o.completed_at,
+            CASE WHEN EXISTS (
+              SELECT 1 FROM agent_requests ar
+               WHERE ar.objective_id = o.id
+                 AND ar.deleted_at IS NULL
+                 AND ar.status = 'open'
+                 AND ar.kind IN ('question', 'choice')
+            ) THEN 1 ELSE 0 END AS is_blocked
        FROM objectives o
        JOIN missions m ON m.id = o.mission_id AND m.deleted_at IS NULL
       WHERE o.deleted_at IS NULL
@@ -541,7 +550,8 @@ function toMissionObjective(row: MissionObjectiveRow): ActivityFeedMissionObject
     state: row.state as ObjectiveState,
     position: row.position,
     assignedAgent: row.assigned_agent,
-    autoAdvance: row.auto_advance === 1
+    autoAdvance: row.auto_advance === 1,
+    blocked: Number(row.is_blocked) === 1
   };
 }
 
