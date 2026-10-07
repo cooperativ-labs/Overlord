@@ -22,8 +22,27 @@ export interface ChatRouterOptions {
 export function createChatRouter(options: ChatRouterOptions): Router {
   const router = Router();
   const owner = chatOwnerGate(options);
+  const observe = (req: Request, response: unknown) =>
+    options
+      .service()
+      .observeHttp(owner(), req.method, req.path, { query: req.query, body: req.body }, response);
   const route = (fn: (req: Request) => Promise<unknown>) =>
-    chatRoute(fn, { failure: 'Chat request failed' });
+    chatRoute(
+      async req => {
+        try {
+          const response = await fn(req);
+          await observe(req, { status: 200, body: response });
+          return response;
+        } catch (error) {
+          await observe(req, {
+            status: error instanceof ChatError ? error.status : 500,
+            error
+          }).catch(() => {});
+          throw error;
+        }
+      },
+      { failure: 'Chat request failed' }
+    );
   const body = (req: Request) => {
     if (req.body === undefined) return {};
     if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body))
@@ -74,6 +93,14 @@ export function createChatRouter(options: ChatRouterOptions): Router {
         )
     )
   );
+  router.get('/threads/:id/diagnostics', (req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    route(async () => {
+      const value = req.query.after ?? '0';
+      if (typeof value !== 'string' || !/^\d+$/.test(value)) throw new ChatError('invalid_request');
+      return options.service().diagnostics(owner(), req.params.id!, Number(value));
+    })(req, res, next);
+  });
   router.patch(
     '/threads/:id',
     route(req => options.service().update(owner(), req.params.id!, body(req)))
@@ -131,6 +158,7 @@ export function createChatRouter(options: ChatRouterOptions): Router {
       let after = Number(req.query.after);
       let page = await service.events(caller, id, after);
       if (req.query.poll === '1') {
+        await observe(req, { status: 200, body: page });
         res.json(page);
         return;
       }
@@ -174,6 +202,7 @@ export function createChatRouter(options: ChatRouterOptions): Router {
       }
     })().catch(async error => {
       if (controller.signal.aborted) return;
+      await observe(req, { error }).catch(() => {});
       if (!res.headersSent) {
         const e = error instanceof ChatError ? error : null;
         res

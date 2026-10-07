@@ -159,3 +159,8 @@ Config changes that affect other surfaces (default agent, statuses) propagate vi
 - With no local backend, file-backed settings degrade to read-only with the
   equivalent CLI command.
 </content>
+
+Chat diagnostics (Application): browser-local, off by default. Enables the chat
+screen's live expandable log of complete provider SDK exchanges, raw tool
+arguments/results, run/attempt events and failures. Payloads are unredacted.
+Capture runs independently of display and history begins at installation.

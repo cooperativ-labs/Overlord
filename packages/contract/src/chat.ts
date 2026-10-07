@@ -9,8 +9,9 @@
  * and clients render an unavailable state.
  *
  * Private provider state (Gemini response parts, thought signatures, call IDs),
- * raw tool results, credentials, and OAuth material never appear in any type in
- * this file, in realtime, or in logs.
+ * raw tool results stay out of ordinary DTOs, realtime and global logs. The
+ * owner-only diagnostic DTO below deliberately carries unredacted observations.
+ * Credential envelopes and OAuth material are not separately exported.
  */
 
 // ---------------------------------------------------------------------------
@@ -998,4 +999,20 @@ export interface RepositorySearchData {
   query: string;
   caseSensitive: boolean;
   hits: RepositorySearchHit[];
+}
+
+/** Unredacted observations; only the owner-only diagnostics route returns these. */
+export interface ChatDiagnosticDto {
+  seq: number;
+  threadId: string;
+  runId: string | null;
+  attemptId: string | null;
+  kind: string;
+  createdAt: string;
+  payload: unknown;
+}
+export interface ChatDiagnosticPageDto {
+  entries: ChatDiagnosticDto[];
+  nextCursor: number;
+  hasMore: boolean;
 }

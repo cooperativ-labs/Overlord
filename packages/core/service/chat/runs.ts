@@ -702,7 +702,14 @@ export class ChatRuns extends ChatStore {
     let result: unknown;
     try {
       result = await read(receipt);
-    } catch {
+    } catch (error) {
+      await this.diagnostic(
+        a.threadId,
+        'tool.error',
+        { operationId, toolId: receipt.toolId, error },
+        a.runId,
+        a.id
+      );
       // A failed write may still have reached the Knowledgebase: never call it a clean failure.
       if (knowledgebaseWriteTool(receipt.toolId)) {
         await this.toolResult(a, operationId, UNCERTAIN_WRITE_RESULT, 'uncertain_write');

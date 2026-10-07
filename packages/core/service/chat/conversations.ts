@@ -12,6 +12,7 @@ import type {
 } from '@overlord/contract';
 import { randomUUID } from 'node:crypto';
 
+import { diagnosticPage } from './diagnostics.js';
 import {
   parseKnowledgebaseWrite,
   sameKnowledgebaseWrite,
@@ -35,6 +36,56 @@ import {
 } from './store.js';
 
 export class Conversations extends ChatStore {
+  /** Resolve HTTP observations through the same private owner gate as domain reads. */
+  async observeHttp(
+    owner: ChatOwner,
+    method: string,
+    path: string,
+    request: unknown,
+    response: unknown
+  ) {
+    if (path.includes('/diagnostics')) return;
+    const [family, id] = path.split('/').filter(Boolean);
+    let threadId: string | undefined;
+    if (family === 'threads' && id) threadId = id;
+    else if (id) {
+      const table =
+        family === 'runs'
+          ? 'chat_runs'
+          : family === 'questions'
+            ? 'chat_questions'
+            : family === 'proposals'
+              ? 'chat_work_proposals'
+              : null;
+      if (table)
+        threadId = (
+          await this.db.get<{ thread_id: string }>(`SELECT thread_id FROM ${table} WHERE id = ?`, [
+            id
+          ])
+        )?.thread_id;
+    } else if (family === 'threads' && method === 'POST') {
+      threadId = (response as { body?: { thread?: { id?: string } } } | null)?.body?.thread?.id;
+    }
+    if (!threadId) return;
+    // Foreign/unauthorized requests must neither expose nor append to a private log.
+    try {
+      await this.access(owner);
+      await this.thread(threadId, owner);
+    } catch {
+      return;
+    }
+    await this.diagnostic(threadId, 'http.exchange', { method, path, request, response });
+  }
+
+  async diagnostics(owner: ChatOwner, threadId: string, after: number) {
+    if (!Number.isSafeInteger(after) || after < 0) throw new ChatError('invalid_request');
+    return this.db.transaction(async tx => {
+      const store = new Conversations(tx, this.options);
+      await store.lock(threadId, owner);
+      return diagnosticPage(tx, threadId, after);
+    });
+  }
+
   private async transaction<T>(
     owner: ChatOwner,
     threadId: string,

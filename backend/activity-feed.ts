@@ -42,6 +42,23 @@ function truncate(value: string | null | undefined, max: number): string {
   return `${text.slice(0, max - 1).trimEnd()}…`;
 }
 
+/**
+ * Harness `<task-notification>` blocks lead with ids and an output path, so a plain character cut
+ * lands before the human-readable `<summary>` and the UI cannot present them. Keep only the summary
+ * of each block ahead of truncating; the webapp's harness-text presenter still recognizes the tag.
+ */
+function compactHarnessMarkup(value: string | null | undefined): string {
+  return (value ?? '').replace(
+    /<task-notification>([\s\S]*?)<\/task-notification>/gi,
+    (block, inner: string) => {
+      const summary = /<summary>([\s\S]*?)<\/summary>/i.exec(inner)?.[1]?.trim();
+      return summary
+        ? `<task-notification><summary>${summary}</summary></task-notification>`
+        : block;
+    }
+  );
+}
+
 function placeholders(count: number): string {
   return new Array(count).fill('?').join(', ');
 }
@@ -577,7 +594,9 @@ function toMissionItem({
     branch: primary.branch,
     resourceKey: primary.resource_key?.trim() || null,
     startedAt: primary.session_started_at ?? primary.request_created_at,
-    latestEventSummary: latest ? truncate(latest.summary, EVENT_SUMMARY_CHARS) : null,
+    latestEventSummary: latest
+      ? truncate(compactHarnessMarkup(latest.summary), EVENT_SUMMARY_CHARS)
+      : null,
     latestEventAt: latest?.created_at ?? null
   };
 }
@@ -622,7 +641,7 @@ function toDeliveredMissionItem({
     branch: row.branch,
     resourceKey: row.resource_key?.trim() || null,
     startedAt: null,
-    latestEventSummary: truncate(row.delivery_summary, EVENT_SUMMARY_CHARS),
+    latestEventSummary: truncate(compactHarnessMarkup(row.delivery_summary), EVENT_SUMMARY_CHARS),
     latestEventAt: row.delivered_at
   };
 }

@@ -393,3 +393,6 @@ When an agent guides a new user through `ovld init` configuration, it should ask
 The agent should confirm the final group selection before running migrations, and should note that any group can be added later with additive-only migrations. The agent should never suggest removing core tables.
 
 A future setup flow should also offer to add Group 1 automatically when the user provides more than one email address during init, and should offer Group 6 + 7 automatically when a web server port is configured.
+
+Chat's core group also includes `chat_diagnostics` (v159): private owner-addressed
+unredacted exchange and transition observations, cascading from chat threads.

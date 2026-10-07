@@ -109,6 +109,15 @@ export class ChatWorker extends PollLoop {
         }
       }
     } catch (error) {
+      await runs
+        .diagnostic(
+          attempt.threadId,
+          'worker.error',
+          { error, aborted: controller.signal.aborted },
+          attempt.runId,
+          attempt.id
+        )
+        .catch(() => {});
       if (!controller.signal.aborted && !(error instanceof StaleChatAttempt))
         await runs
           .fail(attempt, error instanceof ChatRuntimeFailure ? error.failureCode : 'provider_error')

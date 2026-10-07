@@ -323,6 +323,16 @@ export interface ChatDependencySets {
   thread_id: string;
 }
 
+export interface ChatDiagnostics {
+  attempt_id: string | null;
+  created_at: string;
+  kind: string;
+  payload_json: string;
+  run_id: string | null;
+  seq: number;
+  thread_id: string;
+}
+
 export interface ChatEventAcks {
   acked_at: string;
   acked_seq: number;
@@ -1779,6 +1789,7 @@ export interface DB {
   changed_files: ChangedFiles;
   chat_dependency_set_members: ChatDependencySetMembers;
   chat_dependency_sets: ChatDependencySets;
+  chat_diagnostics: ChatDiagnostics;
   chat_event_acks: ChatEventAcks;
   chat_events: ChatEvents;
   chat_evidence: ChatEvidence;

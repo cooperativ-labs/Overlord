@@ -96,3 +96,13 @@ describe('resolveEventPresentation', () => {
     });
   });
 });
+
+describe('presentAgentHarnessText with a truncated preview', () => {
+  it('falls back to a readable line when the block is cut off before its summary', () => {
+    const cut =
+      '<task-notification> <task-id>b8qbnfmj5</task-id> <tool-use-id>toolu_014V9hT1kXJ8R8HG4cZgz4a5</tool-use-id> <output-…';
+    const result = presentAgentHarnessText(cut);
+    assert.equal(result.text, 'Background task updated');
+    assert.equal(result.notification?.label, 'Background task updated');
+  });
+});

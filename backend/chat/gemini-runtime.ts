@@ -3,7 +3,7 @@ import type {
   ChatMessageDto,
   ChatProviderReadinessDto
 } from '@overlord/contract';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import { ChatProposals } from '../../packages/core/service/chat/proposals.ts';
 import type { ChatAttempt, ChatRuns, ToolReceipt } from '../../packages/core/service/chat/runs.ts';
@@ -167,8 +167,57 @@ class GeminiRunSession {
     private readonly signal: AbortSignal
   ) {}
 
-  private get client() {
-    return this.options.client!;
+  private record(kind: string, payload: unknown) {
+    return this.runs.diagnostic(
+      this.attempt.threadId,
+      kind,
+      payload,
+      this.attempt.runId,
+      this.attempt.id
+    );
+  }
+
+  private get client(): GeminiClient {
+    const client = this.options.client!;
+    const record = (kind: string, payload: unknown) => this.record(kind, payload);
+    return {
+      async stream(request) {
+        const exchangeId = randomUUID();
+        await record('provider.request', { exchangeId, method: 'stream', request });
+        try {
+          const stream = await client.stream(request);
+          return (async function* () {
+            try {
+              for await (const chunk of stream) {
+                await record('provider.chunk', { exchangeId, chunk });
+                yield chunk;
+              }
+              await record('provider.completed', { exchangeId });
+            } catch (error) {
+              await record('provider.error', { exchangeId, error });
+              throw error;
+            } finally {
+              await record('provider.stream_closed', { exchangeId });
+            }
+          })();
+        } catch (error) {
+          await record('provider.error', { exchangeId, error });
+          throw error;
+        }
+      },
+      async generate(request) {
+        const exchangeId = randomUUID();
+        await record('provider.request', { exchangeId, method: 'generate', request });
+        try {
+          const result = await client.generate(request);
+          await record('provider.response', { exchangeId, response: result.rawResponse ?? result });
+          return result;
+        } catch (error) {
+          await record('provider.error', { exchangeId, error });
+          throw error;
+        }
+      }
+    };
   }
 
   async run() {
@@ -465,6 +514,11 @@ class GeminiRunSession {
       declared: this.declared,
       knowledgebaseWrite: this.knowledgebaseWrite,
       signal: this.signal
+    });
+    await this.record('tool.response', {
+      operationId: call.operationId,
+      toolId: call.name,
+      output
     });
     if (!output.sources.length) return this.stored(output, []);
     const recorded = await this.runs.recordEvidence(this.attempt, call.operationId, output.sources);
@@ -771,6 +825,7 @@ class GeminiRunSession {
       parsed = JSON.parse(result.text);
     } catch (error) {
       if (this.signal.aborted) throw error;
+      await this.record('summary.error', { error });
       return; // A summary is an optimization; its failure never fails the run.
     }
     const p = parsed as Record<string, unknown>;

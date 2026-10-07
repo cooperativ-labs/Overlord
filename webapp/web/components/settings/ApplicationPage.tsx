@@ -10,6 +10,11 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import {
+  setChatDiagnosticsEnabled,
+  useChatDiagnosticsEnabled
+} from '@/lib/chat/diagnostics-setting';
 
 const themeOptions = [
   { value: 'light', label: 'Light' },
@@ -19,6 +24,7 @@ const themeOptions = [
 
 export function ApplicationPage() {
   const { theme, setTheme } = useTheme();
+  const diagnostics = useChatDiagnosticsEnabled();
   const [projectWindowMinutes, setProjectWindowMinutes] = useState(
     () => window.localStorage.getItem('overlord.defaultProjectWindowMinutes') ?? '15'
   );
@@ -29,6 +35,22 @@ export function ApplicationPage() {
         <h2 className="text-base font-medium">Application</h2>
         <p className="text-sm text-muted-foreground">
           Appearance preferences for this browser session.
+        </p>
+      </div>
+
+      <div className="max-w-md space-y-2">
+        <div className="flex items-center justify-between gap-4">
+          <Label htmlFor="chat-diagnostics">Chat diagnostics</Label>
+          <Switch
+            id="chat-diagnostics"
+            checked={diagnostics}
+            onCheckedChange={setChatDiagnosticsEnabled}
+          />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Show a live log of provider exchanges, tool calls and results, run events, and failures on
+          the chat screen. Includes full, unredacted content. Off by default; stored in this
+          browser.
         </p>
       </div>
 

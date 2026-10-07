@@ -10,6 +10,7 @@ import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState }
 import { Button } from '@/components/ui/button.tsx';
 import { Input } from '@/components/ui/input.tsx';
 import { api } from '@/lib/api.ts';
+import { useChatDiagnosticsEnabled } from '@/lib/chat/diagnostics-setting.ts';
 import { chatErrorCode, chatErrorMessage, isRetryableChatError } from '@/lib/chat/errors.ts';
 import {
   grantKey,
@@ -24,6 +25,7 @@ import { cn } from '@/lib/utils.ts';
 
 import { type ChatBlockContext, ChatMessageBlocks } from './ChatBlocks.tsx';
 import { ChatComposer } from './ChatComposer.tsx';
+import { ChatDiagnostics } from './ChatDiagnostics.tsx';
 import { ChatQuestionCard } from './ChatQuestionCard.tsx';
 
 const FAILURE_TEXT: Record<ChatRunFailureCode, string> = {
@@ -80,6 +82,7 @@ function ThreadBody({
   status: ChatStreamStatus;
   scope: string;
 }) {
+  const diagnosticsEnabled = useChatDiagnosticsEnabled();
   const [composerError, setComposerError] = useState<string | null>(null);
   const pendingSubmission = useRef<{ text: string; grant: string; id: string } | null>(null);
   const providers = useChatProviders(scope);
@@ -186,6 +189,9 @@ function ThreadBody({
           <RunStatus state={state} stream={stream} scope={scope} />
         </div>
       </div>
+      {diagnosticsEnabled ? (
+        <ChatDiagnostics key={`${scope}:${threadId}`} threadId={threadId} />
+      ) : null}
       <div className="mx-auto w-full max-w-3xl px-4 pb-4">
         <ChatComposer
           mode={mode}

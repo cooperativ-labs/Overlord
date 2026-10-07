@@ -34,13 +34,51 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `158`
+Current version: `159`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
 `contract/components.yaml`) — never a header duplicate. The contract version is
 incremented when any stable interface changes. All conformance manifests must
 declare the contract version they were validated against.
+
+### Version 159 Change Summary
+
+Owner-only chat diagnostics (coo:1125.b0m5). Application settings adds a
+browser-local `overlord.chatDiagnostics` toggle, default false. When enabled the
+chat screen polls `GET /api/chat/threads/:id/diagnostics?after=<seq>` (default 0,
+nonnegative safe integer), returning `ChatDiagnosticPageDto` with `entries`,
+`nextCursor` and `hasMore`, at most 100 entries in ascending per-thread sequence.
+Each entry has `seq`, `threadId`, nullable `runId`/`attemptId`, `kind`, `createdAt`
+and arbitrary JSON `payload`. Kinds are open diagnostic labels, not chat event kinds.
+The route uses the same live membership, owner and organization gates as chat;
+foreign callers get 404 and Local gets `chat_unavailable`. Responses are no-store.
+
+`chat_diagnostics` stores append-only observations: provider SDK request bodies,
+every streamed SDK chunk, full generate responses, stream completion and original
+errors (including retry and summary failures), private chat events with raw tool,
+run and attempt state at the transition, worker failures, and thread-associated
+REST request/response/error bodies (excluding the diagnostics poll itself). Capture
+is independent of the display setting. It starts at upgrade; older exchanges cannot be recovered.
+Payloads are neither redacted nor truncated; content is rendered as escaped text.
+This endpoint is the explicit exception to the curated-chat privacy and source
+projection rules: the owner can inspect previously observed content, including
+thought signatures, tool output and subsequently revoked source content. Provider
+SDK inputs/outputs are captured; transport authorization headers and credential
+store envelopes are not SDK message content and are not separately copied.
+Diagnostics never enter ordinary snapshots, SSE, global logs, search, webhooks or
+provider history. No diagnostic read invokes tools or changes a run's authorization.
+History lasts for the thread lifetime and cascades on owner/thread deletion.
+
+**Module impacts.** Database: additive `chat_diagnostics` table and index on both
+editions, migration `20261007070000_chat_diagnostics`. Core: sequence allocation,
+owner-only paged reads and raw event observations; no run/lease semantics change.
+Backend/REST: additive diagnostics route, SDK exchange and worker-error capture.
+Contract package: additive diagnostic DTOs. Web: Application toggle and a live,
+paged log with complete expandable JSON. Desktop Shell consumes the same SPA.
+Mobile may consume the optional endpoint but needs no changes. Auth, Protocol,
+CLI, MCP Server, Connector, Runner, Automations and extensions have no interface
+change. Storage grows with observed exchanges; no content-size cap is imposed.
 
 ### Version 158 Change Summary
 
@@ -655,8 +693,9 @@ the run `cancelled`; a cancelled tool call is the one fence-free transition.
 **Checkpoints and recovery.** `chat_provider_checkpoints` holds one private,
 versioned provider checkpoint per run (Gemini response parts verbatim with thought
 signatures, call ids, and call order; schema version, model, and config digest). It is
-never a DTO, realtime payload, change row, or log field. A provider tool request is
-checkpointed before its tool executes, and its results are recorded and joined in
+never an ordinary DTO, realtime payload, change row, or global log field; the
+owner-only v159 diagnostics endpoint exposes exchange observations. A provider tool
+request is checkpointed before its tool executes, and its results are recorded and joined in
 call order before the next provider request; Overlord, not the provider, enforces
 completeness, order, and call-id matching. A checkpoint is reused only when version,
 model, and digest match and its dependencies reauthorize; otherwise the attempt

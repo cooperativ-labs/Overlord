@@ -117,11 +117,31 @@ it('authenticated chat JSON/poll/SSE replay, live append, conflicts and Local gu
     const page = await request(`/threads/${t.thread.id}/events?after=${snap.eventCursor}&poll=1`);
     const replay = (await page.json()) as Awaited<ReturnType<Conversations['events']>>;
     assert.ok(replay.events.some(e => e.kind === 'message.created'));
+    const diagnosticResponse = await request(`/threads/${t.thread.id}/diagnostics?after=0`);
+    assert.equal(diagnosticResponse.status, 200);
+    assert.equal(diagnosticResponse.headers.get('cache-control'), 'no-store');
+    const diagnostics = (await diagnosticResponse.json()) as {
+      entries: { kind: string; payload: unknown }[];
+    };
+    assert.ok(diagnostics.entries.some(e => e.kind === 'run.updated'));
+    const foreignDiagnostics = await request(
+      `/threads/${t.thread.id}/diagnostics`,
+      'GET',
+      undefined,
+      'other'
+    );
+    assert.equal(foreignDiagnostics.status, 404);
+    for (const after of ['-1', 'abc', '1.5', '9007199254740992'])
+      assert.equal(
+        (await request(`/threads/${t.thread.id}/diagnostics?after=${after}`)).status,
+        400
+      );
     cloud = false;
     for (const path of [
       '/threads',
       `/threads/${t.thread.id}`,
-      `/threads/${t.thread.id}/events?after=0`
+      `/threads/${t.thread.id}/events?after=0`,
+      `/threads/${t.thread.id}/diagnostics`
     ]) {
       const local = await request(path);
       assert.equal(local.status, 404);
@@ -401,6 +421,65 @@ it('presence, acknowledgement and notification history routes are owner-scoped a
   } finally {
     server.closeAllConnections();
     await new Promise<void>(resolve => server.close(() => resolve()));
+    f.close();
+  }
+});
+
+it('diagnostic pages preserve complete errors and payloads, isolate owners, and cascade on deletion', async () => {
+  const f = await setup();
+  try {
+    const created = await f.c.create(f.owner);
+    const id = created.thread.id;
+    const shared = { content: 'unredacted-token-and-note', long: 'x'.repeat(150_000) };
+    await f.runs.diagnostic(id, 'test.error', {
+      first: shared,
+      second: shared,
+      error: Object.assign(new Error('original failure'), { status: 503, detail: shared })
+    });
+    const first = await f.c.diagnostics(f.owner, id, 0);
+    const observation = first.entries.find(e => e.kind === 'test.error')!;
+    const payload = observation.payload as {
+      first: typeof shared;
+      second: typeof shared;
+      error: { message: string; stack: string; status: number; detail: typeof shared };
+    };
+    assert.deepEqual(payload.first, shared);
+    assert.deepEqual(payload.second, shared);
+    assert.deepEqual(payload.error.detail, shared);
+    assert.equal(payload.error.message, 'original failure');
+    assert.equal(payload.error.status, 503);
+    assert.ok(payload.error.stack.includes('original failure'));
+    for (let i = 0; i < 205; i++) await f.runs.diagnostic(id, 'test.page', { i });
+    const entries = [];
+    let after = 0;
+    for (;;) {
+      const page = await f.c.diagnostics(f.owner, id, after);
+      assert.ok(page.entries.length <= 100);
+      entries.push(...page.entries);
+      after = page.nextCursor;
+      if (!page.hasMore) break;
+    }
+    assert.equal(new Set(entries.map(e => e.seq)).size, entries.length);
+    assert.equal(entries.filter(e => e.kind === 'test.page').length, 205);
+    assert.equal((await f.c.diagnostics(f.owner, id, after)).entries.length, 0);
+    await assert.rejects(f.c.diagnostics({ ...f.owner, profileId: 'other' }, id, 0), /not found/);
+    await assert.rejects(
+      f.c.diagnostics({ ...f.owner, organizationId: 'other' }, id, 0),
+      /not found/
+    );
+    await f.db.run("UPDATE workspace_users SET status = 'disabled' WHERE id = 'member'");
+    await assert.rejects(f.c.diagnostics(f.owner, id, 0), /not found/);
+    await f.db.run('DELETE FROM chat_threads WHERE id = ?', [id]);
+    assert.equal(
+      Number(
+        (await f.db.get<{ n: number }>(
+          'SELECT COUNT(*) AS n FROM chat_diagnostics WHERE thread_id = ?',
+          [id]
+        ))!.n
+      ),
+      0
+    );
+  } finally {
     f.close();
   }
 });

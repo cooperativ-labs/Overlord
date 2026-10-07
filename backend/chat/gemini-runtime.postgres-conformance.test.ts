@@ -59,7 +59,10 @@ class ScriptedGemini implements GeminiClient {
   async generate(request: GeminiRequest) {
     this.generated.push(request);
     if (!this.summary) throw new Error('no summary');
-    return { text: this.summary };
+    return {
+      text: this.summary,
+      rawResponse: { text: this.summary, usageMetadata: { totalTokenCount: 777 } }
+    };
   }
 }
 const call = (
@@ -370,6 +373,15 @@ for (const adapter of adapters)
         // Private provider state never reaches the snapshot or events.
         const events = await w.c.events(owner, created.thread.id, 0);
         assert.doesNotMatch(json({ snap, events }), /sig-1|thoughtSignature|functionCall/);
+        const diagnostics = await w.c.diagnostics(owner, created.thread.id, 0);
+        assert.match(json(diagnostics), /sig-1|thoughtSignature|functionCall/);
+        assert.ok(diagnostics.entries.some(e => e.kind === 'provider.request'));
+        assert.ok(diagnostics.entries.some(e => e.kind === 'provider.chunk'));
+        assert.ok(diagnostics.entries.some(e => e.kind === 'provider.response'));
+        assert.match(json(diagnostics), /totalTokenCount.*777/);
+        const tools = diagnostics.entries.filter(e => e.kind === 'tool.updated');
+        assert.match(json(tools), /arguments_json|result_json/);
+        assert.match(json(diagnostics), /attempt_number|succeeded/);
       }));
 
     for (const boundary of ['requestTools', 'joinTools'] as const)
@@ -736,6 +748,11 @@ for (const adapter of adapters)
           );
           assert.equal(once.client.requests.length, 1);
           await w.runs.fail(attempt, failure);
+          const page = await w.c.diagnostics(owner, created.thread.id, 0);
+          assert.match(
+            json(page.entries.filter(e => e.kind === 'provider.error')),
+            /refused|status/
+          );
         }
       }));
 

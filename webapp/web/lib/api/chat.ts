@@ -1,6 +1,7 @@
 import type {
   AnswerChatQuestionBody,
   ChatAckDto,
+  ChatDiagnosticPageDto,
   ChatEventPageDto,
   ChatPresenceDto,
   ChatProvidersResponse,
@@ -26,6 +27,8 @@ const thread = (id: string) => `/api/chat/threads/${encodeURIComponent(id)}`;
  * `chat_unavailable`, surfaced as an {@link ApiRequestError} with that `code`.
  */
 export const chatApi = {
+  getChatDiagnostics: (id: string, after = 0) =>
+    request<ChatDiagnosticPageDto>('GET', `${thread(id)}/diagnostics?after=${after}`),
   getChatProviders: () => request<ChatProvidersResponse>('GET', '/api/chat/providers'),
   listChatThreads: (options: { archived?: boolean; cursor?: string } = {}) => {
     const params = new URLSearchParams();

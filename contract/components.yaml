@@ -4,7 +4,7 @@
 # IMPORTANT: Update this file and CONTRACT.md together when adding components or surfaces.
 # Increment contractVersion when any stable interface changes.
 
-contractVersion: '158'
+contractVersion: '159'
 
 components:
   protocol:
@@ -76,6 +76,7 @@ components:
       - 'extension table naming: ext_<name>_'
       - 'assistant conversation core tables (contract v152): chat_threads, chat_messages, chat_runs, chat_run_attempts, chat_provider_checkpoints, chat_tool_calls, chat_source_refs, chat_dependency_sets, chat_dependency_set_members, chat_evidence, chat_thread_summaries, chat_questions, chat_events, chat_work_proposals, chat_work_proposal_revisions, chat_work_receipts, chat_work_receipt_missions, chat_presence, chat_event_acks, chat_notifications, account_connections, account_connection_authorizations, and the soft missions.created_from_chat_thread_id reference. Both editions enforce one unfinished run per thread, one leased attempt per run, writes only at the run current fence (attempts, checkpoints, tool calls, events), gap-free append-only per-thread event sequences, one open question per run, frozen proposal revisions, one receipt per proposal and per (owner, client request id), monotonic acknowledgements, one notification per (owner, thread, run, type, transition) addressed to the thread owner, and one live connection per (owner, organization, provider, server). Every row cascades from profiles/organizations; notification_preferences.type additively admits chat_needs_answer and chat_finished'
       - 'account_connections.assistant_write_scope (contract v158): text not null default per_request, closed per_request | all_workspaces, on both editions (migration 20261006120000_account_connections_assistant_write_scope)'
+      - 'chat_diagnostics (v159): append-only unredacted SDK and event observations, per-thread seq, owner/thread cascade, thread-lifetime retention, separate from curated events'
       - 'chat_runs.knowledgebase_write_json (contract v154): nullable JSON object {connectionId, workspace} on both editions (migration 20261005160000_chat_runs_knowledgebase_write); null means a research-only run'
       - 'account_connections profile scope (contract v153): nullable organization_id with (provider = knowledgebase) = (organization_id IS NOT NULL); provider adds everhour and github; credential_kind, credential_format, external_account_id/label/avatar_url, granted_scopes_json, last_validated_at; account_connection_authorizations.return_url; one live profile-scoped connection per (owner, provider, server) and one live GitHub account per profile; SQLite table rebuild; verbatim copy of live ext_everhour_user_connections rows; migration 20261005130000_account_connections_github_adoption copies live ext_github_user_connections rows verbatim (github-user-oauth-v1, github-user-env) and scrubs soft-deleted GitHub ciphertext'
       - 'logical types and adapter mappings'
@@ -656,7 +657,8 @@ interactionSurfaces:
       - 'Events are persisted before they are sent and replayed from storage; clients resume after their last applied seq, dedupe by seq, and reload the atomic snapshot on snapshot_required; a closed stream never implies completion'
       - 'Submissions, answers, cancel, continue, and Create carry stable client request ids reused across retries; revision-checked actions carry expectedRevision; Create is the only conversation-to-work path'
       - 'Foreground presence expires unless renewed; a rendered-event acknowledgement from a foreground client suppresses a pending conversation notification, an open connection never does'
-      - 'No provider checkpoint, raw tool result, credential, or OAuth material is ever returned; content with unauthorized sources is returned as unavailable blocks'
+      - 'Ordinary chat responses exclude provider checkpoints, raw tool results, credentials and OAuth material; unauthorized sources project as unavailable. The v159 owner-only diagnostics endpoint is an explicit unredacted observation exception, including previously observed revoked content, separate from ordinary replay.'
+      - 'GET /api/chat/threads/:id/diagnostics?after=<seq> returns ChatDiagnosticPageDto (100 entries, nextCursor, hasMore); live owner/membership gates, no-store; durable SDK exchanges, errors and raw event/run/attempt/tool transitions in chat_diagnostics; browser-local display toggle defaults off'
       - 'GET /api/chat/providers returns ChatProvidersResponse: gemini readiness (ready, not_configured, rate_limited, unavailable) plus the caller live account connections (coo:1108.vx29)'
 
   restToOutboundMcp:

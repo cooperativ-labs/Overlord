@@ -48,7 +48,7 @@ export interface GeminiChunk {
 }
 export interface GeminiClient {
   stream(request: GeminiRequest): Promise<AsyncIterable<GeminiChunk>>;
-  generate(request: GeminiRequest): Promise<{ text: string }>;
+  generate(request: GeminiRequest): Promise<{ text: string; rawResponse?: unknown }>;
 }
 
 export function sdkGeminiClient(apiKey: string): GeminiClient {
@@ -63,7 +63,7 @@ export function sdkGeminiClient(apiKey: string): GeminiClient {
       const response = await ai.models.generateContent(
         request as unknown as Parameters<typeof ai.models.generateContent>[0]
       );
-      return { text: response.text ?? '' };
+      return { text: response.text ?? '', rawResponse: response };
     }
   };
 }

@@ -2513,6 +2513,18 @@ set null), `answers_question_id` (FK `chat_questions`, set null), `client_reques
 Unique `(thread_id, client_request_id)` makes submission idempotent per owner and
 thread. Index `(thread_id, created_at, id)`.
 
+### `chat_diagnostics`
+
+v159: `thread_id` (text, required, FK chat_threads cascade), `seq` (positive
+integer), composite primary key `(thread_id, seq)`; nullable soft `run_id` and
+`attempt_id`; required `kind` (open text), `payload_json` (JSON; SQLite text,
+Postgres jsonb), `created_at` (TimestampUTC). Index `(run_id, seq)`.
+Append-only observations allocated under the thread row lock; full SDK messages,
+chunks, responses, errors and raw event/run/attempt/tool transitions. No payload
+redaction/truncation or event-retention deletion. Owner-only diagnostic reads are
+an explicit exception to ordinary source projection; history cascades on thread
+or profile deletion and is never indexed or sent to shared channels.
+
 ### `chat_runs`
 
 | Column                   | Type         | Required | Notes                                                                                                        |

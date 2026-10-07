@@ -150,8 +150,16 @@ function formatCommandBlocks(text: string): string {
 }
 
 /** Rewrite harness markup in a summary into readable text, and flag harness-only messages. */
-export function presentAgentHarnessText(raw: string): HarnessTextPresentation {
-  if (!raw.includes('<')) return { text: raw, notification: null };
+export function presentAgentHarnessText(input: string): HarnessTextPresentation {
+  if (!input.includes('<')) return { text: input, notification: null };
+
+  // Previews are length-capped, which can cut a block off before its closing tag; close it so the
+  // parts that survive still read as a notification instead of tag soup.
+  const raw = input.replace(/<task-notification>(?:(?!<\/task-notification>)[\s\S])*$/i, open =>
+    open.includes('<summary>')
+      ? `${open}</task-notification>`
+      : '<task-notification></task-notification>'
+  );
 
   const notifications = parseTaskNotifications(raw);
   let text = raw;

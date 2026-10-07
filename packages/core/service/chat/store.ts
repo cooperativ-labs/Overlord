@@ -25,6 +25,7 @@ import type {
 } from '../../types/db.js';
 import { ServiceError } from '../errors.js';
 
+import { appendDiagnostic } from './diagnostics.js';
 import { storedKnowledgebaseWrite } from './knowledgebase-writes.js';
 
 export type ThreadRow = Selectable<ChatThreads>;
@@ -185,6 +186,20 @@ export class ChatStore {
   timestamp() {
     return new Date(this.now()).toISOString();
   }
+  /** Diagnostic observations may record late provider failures after a lease ends. */
+  async diagnostic(
+    threadId: string,
+    kind: string,
+    payload: unknown,
+    runId: string | null = null,
+    attemptId: string | null = null
+  ): Promise<void> {
+    await this.db.transaction(async tx => {
+      const store = new ChatStore(tx, this.options);
+      await store.lock(threadId);
+      await appendDiagnostic(tx, threadId, kind, payload, store.timestamp(), runId, attemptId);
+    });
+  }
   async access(owner: ChatOwner): Promise<void> {
     const member = await this.db.get(
       `SELECT wu.id FROM workspace_users wu JOIN workspaces w ON w.id = wu.workspace_id JOIN organizations o ON o.id = w.organization_id WHERE wu.profile_id = ? AND w.organization_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL AND w.deleted_at IS NULL AND o.deleted_at IS NULL LIMIT 1`,
@@ -275,6 +290,29 @@ export class ChatStore {
         dependencySetId,
         this.timestamp()
       ]
+    );
+    const runId =
+      attempt?.runId ??
+      ('run' in payload ? payload.run.id : 'runId' in payload ? payload.runId : null);
+    const run = runId ? await this.run(runId) : null;
+    const attempts = runId
+      ? await this.db.all(
+          'SELECT * FROM chat_run_attempts WHERE run_id = ? ORDER BY attempt_number',
+          [runId]
+        )
+      : [];
+    const tool =
+      'toolCallId' in payload
+        ? await this.db.get('SELECT * FROM chat_tool_calls WHERE id = ?', [payload.toolCallId])
+        : null;
+    await appendDiagnostic(
+      this.db,
+      threadId,
+      payload.kind,
+      { event: payload, eventSeq: t.last_event_seq, run, attempts, tool },
+      this.timestamp(),
+      runId,
+      attempt?.id ?? null
     );
     await this.retain(threadId);
     return t.last_event_seq;
