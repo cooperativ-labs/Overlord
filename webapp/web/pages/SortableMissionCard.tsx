@@ -45,8 +45,7 @@ export function SortableMissionCard({
   assignee,
   selected,
   isDragOverlay,
-  disabled,
-  onOpen
+  disabled
 }: {
   mission: MissionDto;
   projectId: string;
@@ -56,8 +55,6 @@ export function SortableMissionCard({
   selected?: boolean;
   isDragOverlay?: boolean;
   disabled?: boolean;
-  /** Override the default navigate-to-project-mission click (e.g. the My Missions board). */
-  onOpen?: () => void;
 }) {
   if (isDragOverlay) {
     return (
@@ -80,7 +77,6 @@ export function SortableMissionCard({
       assignee={assignee}
       selected={selected}
       disabled={disabled}
-      onOpen={onOpen}
     />
   );
 }
@@ -92,8 +88,7 @@ function SortableMissionCardActive({
   projectColor,
   assignee,
   selected,
-  disabled,
-  onOpen
+  disabled
 }: {
   mission: MissionDto;
   projectId: string;
@@ -102,7 +97,6 @@ function SortableMissionCardActive({
   assignee?: WorkspaceMemberDto | null;
   selected?: boolean;
   disabled?: boolean;
-  onOpen?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: mission.id,
@@ -135,7 +129,6 @@ function SortableMissionCardActive({
         projectColor={projectColor}
         assignee={assignee}
         selected={selected}
-        onOpen={onOpen}
       />
     </div>
   );

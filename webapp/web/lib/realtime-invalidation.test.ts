@@ -46,7 +46,6 @@ test('routes mission branch changes to mission, lists, my missions, branch, and 
   assert.deepEqual(calls, [
     ['mission', 'mission-1'],
     ['project', 'project-1', 'missions'],
-    ['workspace', 'my-missions'],
     ['activity-feed'],
     ['inbox-missions'],
     ['mission', 'mission-1', 'branches'],
@@ -82,7 +81,6 @@ test('deduplicates workflow invalidations across objective, request, and session
   assert.deepEqual(calls, [
     ['mission', 'mission-1'],
     ['project', 'project-1', 'missions'],
-    ['workspace', 'my-missions'],
     ['activity-feed'],
     ['inbox-missions']
   ]);
@@ -206,8 +204,7 @@ test('routes project status changes only to that project and My Missions', () =>
   assert.equal(mode, 'targeted');
   assert.deepEqual(calls, [
     ['project', 'project-1', 'statuses'],
-    ['project', 'project-1', 'missions'],
-    ['workspace', 'my-missions']
+    ['project', 'project-1', 'missions']
   ]);
 });
 

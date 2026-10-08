@@ -120,9 +120,6 @@ import type {
   MissionScheduleDto,
   MissionSearchDateField,
   MissionWorktreePreference,
-  MyMissionDto,
-  MyMissionReorderRequest,
-  MyMissionsResponse,
   ObjectiveDto,
   PreviewScheduleBody,
   ProfileDto,
@@ -162,9 +159,7 @@ import type {
   WorktreeDto
 } from '../webapp/shared/contract.ts';
 import {
-  isMyMissionsColumnType,
   MISSION_EVIDENCE_LIST_LIMIT,
-  MY_MISSIONS_COLUMN_TYPES,
   normalizeAgentLaunchFlags
 } from '../webapp/shared/contract.ts';
 
@@ -667,7 +662,7 @@ interface MissionRow {
   created_by_token_label?: string | null;
   /**
    * Only selected by `selectMissionsSql`, which the detail read goes through.
-   * The search and My Missions projections omit it: nothing renders
+   * The search projection omits it: nothing renders
    * `createdFrom` on a card, and resolving it would cost a join per row.
    */
   created_by_session_id?: string | null;
@@ -3865,7 +3860,7 @@ async function getObjectivesByMission(
 /**
  * Rolling window applied to terminal (`complete` / `cancelled`) missions on the
  * board surfaces (coo:941). Finished missions accumulate without bound, so the
- * project board and My Missions load only those touched inside this window by
+ * project board loads only those touched inside this window by
  * default; a client that needs the full archive opts out with
  * `includeAllCompleted`. Missions of every other status type are never windowed.
  */
@@ -4334,12 +4329,6 @@ async function cascadeMissionProjectId(
 ): Promise<void> {
   await db.run(
     `UPDATE objectives
-       SET project_id = ?, updated_at = ?, revision = revision + 1
-     WHERE mission_id = ? AND workspace_id = ?`,
-    [newProjectId, now, missionId, workspaceId]
-  );
-  await db.run(
-    `UPDATE my_mission_positions
        SET project_id = ?, updated_at = ?, revision = revision + 1
      WHERE mission_id = ? AND workspace_id = ?`,
     [newProjectId, now, missionId, workspaceId]
@@ -6731,30 +6720,6 @@ async function createScheduledDuplicateIfNeeded(
   });
 }
 
-// ---- My Missions (selected-workspace aggregate) ---------------------------
-
-/** Typed error code the client renders as a workspace-specific status alert. */
-const STATUS_UNAVAILABLE_FOR_WORKSPACE = 'STATUS_UNAVAILABLE_FOR_WORKSPACE';
-
-// Gap-based spacing for a personal column position; mirrors the board's
-// (index + 1) * 100 scheme so dense personal renumbers read naturally.
-const MY_POSITION_STEP = 100;
-
-interface MyMissionRow extends MissionRow {
-  project_name: string;
-  project_settings_json: string;
-  my_position: number | null;
-}
-
-function toMyMissionDto(r: MyMissionRow, tags: ProjectTagDto[]): MyMissionDto {
-  return {
-    ...toMissionDto(r, tags),
-    projectName: r.project_name,
-    projectColor: readProjectColor(r.project_settings_json),
-    myPosition: r.my_position
-  };
-}
-
 /** Every active workspace membership for the authenticated profile, across organizations. */
 export async function callerWorkspaceMemberships(
   client: DatabaseClient = requireDatabaseClient()
@@ -6777,9 +6742,7 @@ export async function callerWorkspaceMemberships(
 
 /**
  * The caller's active `(workspace_id, workspace_user_id)` memberships across
- * every live workspace of the active organization — My Missions aggregates
- * across all of them (Q5: v1 is a plain union of status columns per
- * workspace; merging like-named statuses across workspaces is deferred).
+ * every live workspace of the active organization.
  * Empty pre-onboarding (no active organization) or with no active profile.
  */
 export async function callerMembershipsInActiveOrganization(
@@ -6807,114 +6770,6 @@ export async function callerMembershipsInActiveOrganization(
     workspaceId: row.workspace_id,
     workspaceUserId: row.workspace_user_id
   }));
-}
-
-// Missions assigned to the caller across every workspace they belong to in the
-// active organization, joined to their (non-deleted) project for name/color and
-// to the caller's own personal column position in that mission's workspace. The
-// position only applies when its stored status_id still matches the mission's
-// current status, so a status change made on the project board self-corrects
-// (the mission falls back to the default order in its new column). Matched via
-// a `(workspace_id, assigned_workspace_user_id)` pair list rather than a single
-// workspace/actor pair, since the caller has a distinct `workspace_users.id` in
-// each workspace.
-function selectMyMissionsSql(pairPlaceholders: string, dialect: SqlDialect): string {
-  return `
-  SELECT t.id, t.workspace_id, t.project_id, t.display_id, t.sequence_number, t.title,
-         t.status_id, t.status_type, t.board_position, t.priority,
-         t.assigned_workspace_user_id,
-         t.notes_text,
-         t.schedule_id, t.due_datetime,
-         t.created_at, t.updated_at, t.revision,
-         t.created_by_kind, t.created_by_agent, t.created_by_workspace_user_id,
-         t.created_by_token_id, t.created_by_token_label,
-         p.name AS project_name, p.settings_json AS project_settings_json,
-         mtp.position AS my_position,
-         (SELECT COUNT(*) FROM objectives o
-            WHERE o.mission_id = t.id AND o.deleted_at IS NULL) AS objective_count,
-         (SELECT COUNT(*) FROM objectives o
-            WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'complete')
-            AS completed_objective_count,
-         -- pending_delivery counts as executing: the agent re-attached after
-         -- finishing a turn and is still on the objective, so the card should
-         -- keep reading as live work rather than going quiet until delivery.
-         (SELECT COUNT(*) > 0 FROM objectives o
-            WHERE o.mission_id = t.id AND o.deleted_at IS NULL
-              AND o.state IN ('executing', 'pending_delivery'))
-            AS has_executing_objective,
-         (SELECT COUNT(*) > 0 FROM objectives o
-            WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'complete')
-            AS has_completed_objective,
-         (SELECT COUNT(*) > 0 FROM objectives o
-            WHERE o.mission_id = t.id AND o.deleted_at IS NULL
-              AND o.state IN ('draft', 'future') AND TRIM(o.instruction_text) != '')
-            AS has_pending_objective_with_instructions,
-${missionHasUnseenBlockingQuestionSql(dialect)},
-${missionHasUnseenReturnedToExecuteSql},
-         (SELECT o.resource_key FROM objectives o
-            WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'draft'
-            LIMIT 1) AS draft_objective_resource_key
-    FROM missions t
-    JOIN projects p ON p.id = t.project_id AND p.workspace_id = t.workspace_id
-      AND p.deleted_at IS NULL
-    LEFT JOIN my_mission_positions mtp
-      ON mtp.workspace_id = t.workspace_id AND mtp.mission_id = t.id
-        AND mtp.workspace_user_id = t.assigned_workspace_user_id AND mtp.status_id = t.status_id
-   WHERE t.deleted_at IS NULL
-     AND (t.workspace_id, t.assigned_workspace_user_id) IN (${pairPlaceholders})
-`;
-}
-
-/**
- * GET /api/workspace/my-missions — missions assigned to the caller across every
- * workspace they belong to in the active organization (Q5). Read-time merge
- * order: positioned missions first by their personal position, then
- * unpositioned missions by the approximate default aggregate order
- * (board_position, then recency, then a stable tiebreaker). The client
- * regroups by statusId, preserving this within-column order. Returns an empty
- * list rather than broadening when there is no active organization or no
- * memberships in it.
- *
- * Terminal missions are restricted to the rolling completed-mission window
- * unless `includeAllCompleted` is set (coo:941); see
- * `completedMissionWindowSql`.
- */
-export async function listWorkspaceMyMissions(
-  options: { includeAllCompleted?: boolean } = {}
-): Promise<MyMissionsResponse> {
-  const memberships = await callerMembershipsInActiveOrganization();
-  const readableMemberships: Array<{ workspaceId: string; workspaceUserId: string }> = [];
-  for (const membership of memberships) {
-    if (
-      await actorCan(PERMISSIONS.MISSION_READ, {
-        workspaceId: membership.workspaceId,
-        workspaceUserId: membership.workspaceUserId
-      })
-    ) {
-      readableMemberships.push(membership);
-    }
-  }
-  if (readableMemberships.length === 0) return { missions: [] };
-  const allowedProjectIds = getActiveTokenProjectIds();
-  if (allowedProjectIds?.length === 0) return { missions: [] };
-  const projectFilter =
-    allowedProjectIds === null
-      ? ''
-      : ` AND t.project_id IN (${allowedProjectIds.map(() => '?').join(', ')})`;
-
-  const pairPlaceholders = readableMemberships.map(() => '(?, ?)').join(', ');
-  const pairParams = readableMemberships.flatMap(m => [m.workspaceId, m.workspaceUserId]);
-
-  const db = requireDatabaseClient();
-  const completedWindow = completedMissionWindowSql(options.includeAllCompleted === true);
-  const rows = (await db.all(
-    `${selectMyMissionsSql(pairPlaceholders, db.dialect)}${completedWindow.sql}${projectFilter}
-         ORDER BY (mtp.position IS NULL) ASC, mtp.position ASC,
-                  t.board_position ASC, t.updated_at DESC, t.sequence_number DESC, t.id ASC`,
-    [...pairParams, ...completedWindow.params, ...(allowedProjectIds ?? [])]
-  )) as MyMissionRow[];
-  const tagsByMission = await getTagsByMission(rows.map(row => row.id));
-  return { missions: rows.map(row => toMyMissionDto(row, tagsByMission.get(row.id) ?? [])) };
 }
 
 // ---- Inbox missions (overdue + due soon + agent Next) ---------------------
@@ -6951,8 +6806,7 @@ interface InboxMissionRow extends MissionRow {
 }
 
 /**
- * Shared SELECT for Inbox mission triage cards. Same MissionDto projection as
- * My Missions (without personal position), joined to project name/color.
+ * SELECT for Inbox mission triage cards, joined to project name/color.
  */
 function selectInboxMissionsSql(workspacePlaceholders: string, dialect: SqlDialect): string {
   return `
@@ -7112,214 +6966,6 @@ export async function listInboxMissions(): Promise<InboxMissionsResponse> {
       return toInboxMissionDto(row, tagsByMission.get(row.id) ?? [], reasons);
     })
   };
-}
-
-/** Insert or update one operator's personal position for a mission in a column. */
-async function upsertMyMissionPosition(
-  db: DatabaseClient,
-  {
-    workspaceId,
-    projectId,
-    missionId,
-    statusId,
-    position,
-    actor,
-    now
-  }: {
-    workspaceId: string;
-    projectId: string;
-    missionId: string;
-    statusId: string;
-    position: number;
-    actor: string;
-    now: string;
-  }
-): Promise<void> {
-  const existing = (await db.get(
-    `SELECT id, revision FROM my_mission_positions
-         WHERE workspace_id = ? AND workspace_user_id = ? AND mission_id = ?`,
-    [workspaceId, actor, missionId]
-  )) as { id: string; revision: number } | undefined;
-  if (existing) {
-    await db.run(
-      `UPDATE my_mission_positions
-          SET project_id = ?, status_id = ?, position = ?, updated_at = ?, revision = ?
-        WHERE id = ?`,
-      [projectId, statusId, position, now, existing.revision + 1, existing.id]
-    );
-    return;
-  }
-  await db.run(
-    `INSERT INTO my_mission_positions
-       (id, workspace_id, project_id, workspace_user_id, mission_id, status_id, position, created_at, updated_at, revision)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-    [newId(), workspaceId, projectId, actor, missionId, statusId, position, now, now]
-  );
-}
-
-/**
- * My Missions columns are `StatusType`s, not project statuses, so a reorder is
- * resolved per mission inside that mission's *own* project: the lowest-position
- * active status of the requested type. A mission already sitting in a status of
- * that type keeps its concrete status, so project-specific column naming
- * survives a drag. Returns `undefined` when the project defines no active status
- * of the type, which the caller reports as `STATUS_UNAVAILABLE_FOR_WORKSPACE`.
- */
-async function resolveMyMissionsColumnStatus(
-  tx: DatabaseClient,
-  { projectId, statusType }: { projectId: string; statusType: StatusType }
-): Promise<ProjectStatusRow | undefined> {
-  return (await tx.get(
-    `SELECT ps.* FROM project_statuses ps
-        WHERE ps.project_id = ? AND ps.type = ? AND ps.deleted_at IS NULL
-        ORDER BY ps.position ASC, ps.id ASC
-        LIMIT 1`,
-    [projectId, statusType]
-  )) as ProjectStatusRow | undefined;
-}
-
-/**
- * The caller's `workspace_users.id` per workspace they actively belong to in the
- * active organization — the same membership rule the My Missions read uses. A
- * reorder may span several workspaces at once, so membership is resolved once
- * up front rather than per status.
- */
-async function myMissionsActorByWorkspace(tx: DatabaseClient): Promise<Map<string, string>> {
-  const memberships = await callerMembershipsInActiveOrganization(tx);
-  return new Map(memberships.map(m => [m.workspaceId, m.workspaceUserId]));
-}
-
-async function reorderWorkspaceMyMissionsTx(body: MyMissionReorderRequest): Promise<void> {
-  const statusType = body.statusType;
-  const orderedIds = body.orderedMissionIds;
-  if (!statusType || !isMyMissionsColumnType(statusType)) {
-    throw new ApiError(400, `statusType must be one of ${MY_MISSIONS_COLUMN_TYPES.join(', ')}`);
-  }
-  if (!Array.isArray(orderedIds)) throw new ApiError(400, 'orderedMissionIds must be an array');
-  if (new Set(orderedIds).size !== orderedIds.length) {
-    throw new ApiError(400, 'orderedMissionIds contains duplicates');
-  }
-
-  await requireDatabaseClient().transaction(async tx => {
-    const actorByWorkspace = await myMissionsActorByWorkspace(tx);
-    const now = nowIso();
-
-    for (const [index, missionId] of orderedIds.entries()) {
-      const existing = (await tx.get(`SELECT * FROM missions WHERE id = ? AND deleted_at IS NULL`, [
-        missionId
-      ])) as MissionRow | undefined;
-      if (!existing) throw new ApiError(404, `Mission ${missionId} not found`);
-
-      const workspaceId = existing.workspace_id;
-      const actor = actorByWorkspace.get(workspaceId);
-      if (!actor) throw new ApiError(403, 'Not an active member of that mission’s workspace');
-      if (existing.assigned_workspace_user_id !== actor) {
-        throw new ApiError(403, `Mission ${missionId} is not assigned to you`);
-      }
-
-      // Already in a status of this type: keep the project's own status so a
-      // custom column name is not collapsed onto the seeded one. Otherwise this
-      // is a real cross-column status change, resolved within this mission's
-      // project.
-      let statusId = existing.status_id;
-      if (existing.status_type !== statusType) {
-        const targetStatus = await resolveMyMissionsColumnStatus(tx, {
-          projectId: existing.project_id,
-          statusType
-        });
-        if (!targetStatus) {
-          throw new ApiError(
-            409,
-            `That mission's project has no ${statusType} status`,
-            undefined,
-            STATUS_UNAVAILABLE_FOR_WORKSPACE
-          );
-        }
-        statusId = targetStatus.id;
-
-        // Apply the canonical status-change writes (status_id + denormalized
-        // status_type + reset board_position to top-of-new-column) so the project
-        // board and the My Missions unpositioned fallback both stay correct.
-        const revision = existing.revision + 1;
-        await tx.run(
-          `UPDATE missions
-              SET status_id = ?, status_type = ?,
-                  board_position = ?, updated_at = ?, revision = ?
-            WHERE id = ? AND workspace_id = ?`,
-          [
-            targetStatus.id,
-            targetStatus.type,
-            await topBoardPosition(tx, existing.project_id, targetStatus.id, missionId),
-            now,
-            revision,
-            missionId,
-            workspaceId
-          ]
-        );
-        await recordChange(
-          {
-            entityType: 'mission',
-            entityId: missionId,
-            operation: 'update',
-            entityRevision: revision,
-            projectId: existing.project_id,
-            missionId,
-            workspaceId,
-            changedFields: ['status_id', 'status_type', 'board_position']
-          },
-          tx
-        );
-      }
-
-      // Personal slot within the (operator, status-type) column. Positions are
-      // assigned across the whole aggregated column, so an interleaved order that
-      // spans several projects round-trips exactly. Writes only
-      // my_mission_positions — never missions.board_position for a same-type move.
-      await upsertMyMissionPosition(tx, {
-        workspaceId,
-        projectId: existing.project_id,
-        missionId,
-        statusId,
-        position: (index + 1) * MY_POSITION_STEP,
-        actor,
-        now
-      });
-    }
-  });
-}
-
-/**
- * PATCH /api/workspace/my-missions/order — persist a personal reorder of one My
- * Missions status-*type* column for the active operator. The column aggregates
- * every project and workspace in the active organization, so one call may move
- * and reorder missions across several of them. Translates a foreign-key
- * rejection (a status the mission's project lacks) into the typed
- * `STATUS_UNAVAILABLE_FOR_WORKSPACE` error so the client can alert and revert.
- */
-export async function reorderWorkspaceMyMissions(
-  body: MyMissionReorderRequest
-): Promise<MyMissionsResponse> {
-  try {
-    await reorderWorkspaceMyMissionsTx(body);
-    return listWorkspaceMyMissions();
-  } catch (err) {
-    if (
-      err &&
-      typeof err === 'object' &&
-      (err as { code?: string }).code === 'SQLITE_CONSTRAINT_FOREIGNKEY'
-    ) {
-      // The rejected status belongs to the moved mission's project, which —
-      // now that My Missions aggregates across the organization — need not be
-      // the caller's active one, so no workspace is named here.
-      throw new ApiError(
-        409,
-        `That status is not available in this mission's project`,
-        undefined,
-        STATUS_UNAVAILABLE_FOR_WORKSPACE
-      );
-    }
-    throw err;
-  }
 }
 
 // ---- Objectives ----------------------------------------------------------

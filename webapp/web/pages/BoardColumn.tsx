@@ -12,16 +12,7 @@ import { BlankMissionCard, type BlankMissionCreateOptions } from './BlankMission
 import { resolveAssignee } from './board-shared.ts';
 import { SortableMissionCard } from './SortableMissionCard.tsx';
 
-export type BoardColumnStatus =
-  | Pick<ProjectStatusDto, 'id' | 'name' | 'type'>
-  | { id: string; name: string; type: null };
-
-export type MissionCardContext = {
-  projectId: string;
-  projectName: string;
-  projectColor: string | null;
-  onOpen?: () => void;
-};
+export type BoardColumnStatus = Pick<ProjectStatusDto, 'id' | 'name' | 'type'>;
 
 type BoardColumnProps<TMission extends MissionDto> = {
   status: BoardColumnStatus;
@@ -30,8 +21,6 @@ type BoardColumnProps<TMission extends MissionDto> = {
   projectId: string;
   projectName: string;
   projectColor: string | null;
-  createProjectId?: string;
-  createStatusScope?: 'project' | 'aggregate';
   membersByWorkspaceUserId: Map<string, WorkspaceMemberDto>;
   selectedMissionId?: string;
   draggable?: boolean;
@@ -40,7 +29,6 @@ type BoardColumnProps<TMission extends MissionDto> = {
    * affordance. Used by terminal columns for the "show older missions" control.
    */
   footer?: ReactNode;
-  getMissionCardContext?: (mission: TMission) => MissionCardContext;
   onCreateMission: (
     statusId: string,
     objective: string,
@@ -62,13 +50,10 @@ export function BoardColumn<TMission extends MissionDto = MissionDto>({
   projectId,
   projectName,
   projectColor,
-  createProjectId = projectId,
-  createStatusScope = 'project',
   membersByWorkspaceUserId,
   selectedMissionId,
   draggable = true,
   footer,
-  getMissionCardContext,
   onCreateMission,
   onCreateAndOpenMission
 }: BoardColumnProps<TMission>) {
@@ -81,7 +66,7 @@ export function BoardColumn<TMission extends MissionDto = MissionDto>({
   const [topFocusEditorCount, setTopFocusEditorCount] = useState(0);
   const inputId = `board-column-input-${status.id}`;
   const topInputId = `board-column-input-top-${status.id}`;
-  const canCreateMission = Boolean(statusType && createProjectId);
+  const canCreateMission = Boolean(statusType && projectId);
 
   // The BlankMissionCard scrolls itself into view once it mounts (see its
   // scroll-into-view effect), so opening here only needs to reveal the card.
@@ -106,8 +91,7 @@ export function BoardColumn<TMission extends MissionDto = MissionDto>({
           inputId={topInputId}
           statusId={status.id}
           position="top"
-          projectId={createProjectId}
-          statusScope={createStatusScope}
+          projectId={projectId}
           onCreateMission={onCreateMission}
           onCreateAndOpenMission={onCreateAndOpenMission}
           onClose={handleCloseTopBlankCard}
@@ -118,19 +102,13 @@ export function BoardColumn<TMission extends MissionDto = MissionDto>({
       {missions.map(mission => {
         const assignee = resolveAssignee(mission, membersByWorkspaceUserId);
         const selected = mission.id === selectedMissionId;
-        const cardContext = getMissionCardContext?.(mission) ?? {
-          projectId,
-          projectName,
-          projectColor
-        };
         const cardProps = {
           mission,
-          projectId: cardContext.projectId,
-          projectName: cardContext.projectName,
-          projectColor: cardContext.projectColor,
+          projectId,
+          projectName,
+          projectColor,
           assignee,
-          selected,
-          onOpen: cardContext.onOpen
+          selected
         };
 
         return <SortableMissionCard key={mission.id} {...cardProps} disabled={!draggable} />;
@@ -142,8 +120,7 @@ export function BoardColumn<TMission extends MissionDto = MissionDto>({
             inputId={inputId}
             statusId={status.id}
             position="bottom"
-            projectId={createProjectId}
-            statusScope={createStatusScope}
+            projectId={projectId}
             onCreateMission={onCreateMission}
             onCreateAndOpenMission={onCreateAndOpenMission}
             onClose={handleCloseBlankCard}

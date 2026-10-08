@@ -79,7 +79,6 @@ function missionWorkflowKeys(change: EntityChangeDto): QueryKey[] | null {
   const queryKeys: QueryKey[] = [
     keys.mission(missionId),
     keys.missions(projectId),
-    keys.myMissions,
     // Objective state, session, and execution-request rows all flow through here,
     // and each of them can change what the Feed page activity feed shows.
     keys.activityFeed,
@@ -101,7 +100,7 @@ function routeChange(change: EntityChangeDto): QueryKey[] | null {
       if (change.changedFields.includes('project_id')) {
         return workflowKeys
           ? [...workflowKeys, allProjectScopedQueries()]
-          : [allProjectScopedQueries(), keys.myMissions];
+          : [allProjectScopedQueries()];
       }
       return workflowKeys;
     }
@@ -164,7 +163,7 @@ function routeChange(change: EntityChangeDto): QueryKey[] | null {
     case 'project': {
       const projectId = projectIdFor(change);
       if (!projectId) return null;
-      return [['workspace'], keys.project(projectId), keys.missions(projectId), keys.myMissions];
+      return [['workspace'], keys.project(projectId), keys.missions(projectId)];
     }
     case 'project_resource': {
       const projectId = projectIdFor(change);
@@ -194,7 +193,7 @@ function routeChange(change: EntityChangeDto): QueryKey[] | null {
     case 'project_status': {
       const projectId = projectIdFor(change);
       if (!projectId) return null;
-      return [keys.projectStatuses(projectId), keys.missions(projectId), keys.myMissions];
+      return [keys.projectStatuses(projectId), keys.missions(projectId)];
     }
     case 'workspace':
     case 'workspace_user': {

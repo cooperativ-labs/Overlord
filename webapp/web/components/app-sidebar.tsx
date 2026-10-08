@@ -1,5 +1,5 @@
 import { Link, useRouterState } from '@tanstack/react-router';
-import { Activity, Inbox, KanbanIcon, MessagesSquare, Settings } from 'lucide-react';
+import { Activity, Inbox, MessagesSquare, Settings } from 'lucide-react';
 import { useState } from 'react';
 
 import { NavUser } from '@/components/nav-user';
@@ -44,7 +44,6 @@ export function AppSidebar() {
   const isFeedActive = pathname === '/feed' || pathname.startsWith('/feed/');
   const isChatActive = pathname === '/chat' || pathname.startsWith('/chat/');
   const isInboxActive = pathname === '/inbox' || pathname.startsWith('/inbox/');
-  const isMyMissionsActive = pathname === '/user' || pathname.startsWith('/user/');
   const { isMacDesktop } = getDesktopChrome();
 
   return (
@@ -71,16 +70,6 @@ export function AppSidebar() {
                   >
                     <Activity />
                     <span>Feed</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    render={<Link to="/user" />}
-                    isActive={isMyMissionsActive}
-                    tooltip="My Missions"
-                  >
-                    <KanbanIcon />
-                    <span>My Missions</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>

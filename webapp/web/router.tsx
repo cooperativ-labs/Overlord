@@ -17,18 +17,16 @@ import { SidebarInset, SidebarProvider } from './components/ui/sidebar.tsx';
 import { parseChatSearch } from './lib/chat/chat-search.ts';
 import { parseConnectedAccountsSearch } from './lib/connections.ts';
 import { parseMissionPanelSearch } from './lib/mission-panel-search.ts';
-import { useAllProjects, useMeta, useWorkspaceMyMissions } from './lib/queries.ts';
+import { useAllProjects, useMeta } from './lib/queries.ts';
 import { shouldShowOnboarding, shouldShowOnboardingSetup } from './lib/router-gates.ts';
 import { parseSearchPageSearch } from './lib/search-page-search.ts';
 
 function EmptyWorkspaceModal() {
   const projects = useAllProjects();
-  const myMissions = useWorkspaceMyMissions();
   const [dismissed, setDismissed] = useState(false);
 
-  const loaded = !projects.isPending && !myMissions.isPending;
-  const isEmpty =
-    (projects.data?.length ?? 1) === 0 && (myMissions.data?.missions.length ?? 1) === 0;
+  const loaded = !projects.isPending;
+  const isEmpty = (projects.data?.length ?? 1) === 0;
   const open = loaded && isEmpty && !dismissed;
 
   return (
@@ -114,7 +112,7 @@ const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
   beforeLoad: () => {
-    throw redirect({ to: '/user' });
+    throw redirect({ to: '/feed' });
   }
 });
 
@@ -194,36 +192,38 @@ const inboxMissionLegacyRedirectRoute = createRoute({
   }
 });
 
-const myMissionsRoute = createRoute({
+const userLegacyRedirectRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/user',
-  component: lazyRouteComponent(() => import('./pages/MyMissionsShell.tsx'), 'MyMissionsShell')
+  beforeLoad: () => {
+    throw redirect({ to: '/feed' });
+  }
 });
 
 const workspaceLegacyRedirectRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/workspace',
   beforeLoad: () => {
-    throw redirect({ to: '/user' });
+    throw redirect({ to: '/feed' });
   }
 });
 
 const workspaceMissionLegacyRedirectRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/workspace/missions/$missionId',
-  beforeLoad: ({ params }) => {
-    throw redirect({ to: '/user/missions/$missionId', params });
+  validateSearch: parseMissionPanelSearch,
+  beforeLoad: ({ params, search }) => {
+    throw redirect({ to: '/feed/missions/$missionId', params, search });
   }
 });
 
-const myMissionsPanelRoute = createRoute({
-  getParentRoute: () => myMissionsRoute,
-  path: 'missions/$missionId',
+const userMissionLegacyRedirectRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/user/missions/$missionId',
   validateSearch: parseMissionPanelSearch,
-  component: lazyRouteComponent(
-    () => import('./pages/MyMissionsShell.tsx'),
-    'WorkspaceMissionPanelRoute'
-  )
+  beforeLoad: ({ params, search }) => {
+    throw redirect({ to: '/feed/missions/$missionId', params, search });
+  }
 });
 
 const boardRoute = createRoute({
@@ -254,7 +254,8 @@ export const routeTree = rootRoute.addChildren([
   searchRoute,
   workspaceLegacyRedirectRoute,
   workspaceMissionLegacyRedirectRoute,
-  myMissionsRoute.addChildren([myMissionsPanelRoute]),
+  userLegacyRedirectRoute,
+  userMissionLegacyRedirectRoute,
   boardRoute.addChildren([missionRoute])
 ]);
 

@@ -226,7 +226,7 @@ export function MissionPanel({
 }: {
   projectId: string;
   missionId: string;
-  /** Override the default close-to-project-board navigation (e.g. My Missions → /user). */
+  /** Override the default close-to-project-board navigation (e.g. the Feed drawer). */
   onClose?: () => void;
   /** Override the default navigation after a cross-project move. */
   onProjectChanged?: (nextProjectId: string) => void;

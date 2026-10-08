@@ -23,8 +23,7 @@ export function MissionCardSurface({
   assignee,
   selected,
   size,
-  className,
-  onOpen
+  className
 }: {
   mission: MissionDto;
   projectId: string;
@@ -34,8 +33,6 @@ export function MissionCardSurface({
   selected?: boolean;
   size?: 'default' | 'sm';
   className?: string;
-  /** Override the default navigate-to-project-mission click (e.g. the My Missions board). */
-  onOpen?: () => void;
 }) {
   const navigate = useNavigate();
   const cardState = getMissionCardState(mission);
@@ -50,12 +47,10 @@ export function MissionCardSurface({
         className
       )}
       onClick={() =>
-        onOpen
-          ? onOpen()
-          : navigate({
-              to: '/projects/$projectId/missions/$missionId',
-              params: { projectId, missionId: mission.id }
-            })
+        navigate({
+          to: '/projects/$projectId/missions/$missionId',
+          params: { projectId, missionId: mission.id }
+        })
       }
     >
       <MissionCardStateOverlay state={cardState} />

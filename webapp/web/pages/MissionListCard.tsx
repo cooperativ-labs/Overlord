@@ -23,8 +23,7 @@ export function MissionListCard({
   assignee,
   selected,
   isDragOverlay,
-  onComplete,
-  onOpen
+  onComplete
 }: {
   mission: MissionDto;
   projectId: string;
@@ -34,20 +33,16 @@ export function MissionListCard({
   selected?: boolean;
   isDragOverlay?: boolean;
   onComplete?: (missionId: string) => void;
-  /** Override the default navigate-to-project-mission click (e.g. the My Missions board). */
-  onOpen?: () => void;
 }) {
   const navigate = useNavigate();
   const { listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
     useSortable({ id: mission.id, disabled: isDragOverlay });
 
-  const openMission =
-    onOpen ??
-    (() =>
-      navigate({
-        to: '/projects/$projectId/missions/$missionId',
-        params: { projectId, missionId: mission.id }
-      }));
+  const openMission = () =>
+    navigate({
+      to: '/projects/$projectId/missions/$missionId',
+      params: { projectId, missionId: mission.id }
+    });
 
   return (
     <div

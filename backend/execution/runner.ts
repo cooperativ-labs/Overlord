@@ -115,7 +115,7 @@ async function directProjectWorkspaceId(projectId: string): Promise<string | nul
  * The caller's runner scope: every workspace the caller is an active member of
  * across organizations (every role grants `execution_request:claim`),
  * narrowed to a single workspace when `projectId` resolves to one by id. This
- * is the runner counterpart of My Missions' cross-workspace aggregation.
+ * resolves active memberships independently for runner queue access.
  */
 async function resolveRunnerScopes(
   projectId?: string | null

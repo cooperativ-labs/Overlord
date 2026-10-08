@@ -15,7 +15,6 @@ const {
   createMission,
   listMissions,
   listProjectStatuses,
-  listWorkspaceMyMissions,
   updateMission
 } = await import('./repository.ts');
 
@@ -75,34 +74,4 @@ test('the project board windows completed and cancelled missions by default', as
   assert.ok(expanded.includes(longCancelled.id));
   assert.ok(expanded.includes(recentlyDone.id));
   assert.ok(expanded.includes(staleExecuting.id));
-});
-
-test('My Missions applies the same window and honours includeAllCompleted', async () => {
-  const project = await createProject({ name: 'Window My Missions' });
-  const done = await statusFor(project.id, 'done');
-  const inReview = await statusFor(project.id, 'in_review');
-
-  const recentlyDone = await createMission({ projectId: project.id, firstObjective: 'mm recent' });
-  const longDone = await createMission({ projectId: project.id, firstObjective: 'mm archived' });
-  const staleReview = await createMission({ projectId: project.id, firstObjective: 'mm review' });
-
-  await updateMission(recentlyDone.id, { statusId: done.id });
-  await updateMission(longDone.id, { statusId: done.id });
-  await updateMission(staleReview.id, { statusId: inReview.id });
-
-  backdate(recentlyDone.id, wellInside);
-  backdate(longDone.id, wellOutside);
-  backdate(staleReview.id, wellOutside);
-
-  const windowed = (await listWorkspaceMyMissions()).missions.map(mission => mission.id);
-  assert.ok(windowed.includes(recentlyDone.id));
-  assert.ok(!windowed.includes(longDone.id), 'an old completed mission is dropped');
-  assert.ok(windowed.includes(staleReview.id), 'a review-type mission is never windowed');
-
-  const expanded = (await listWorkspaceMyMissions({ includeAllCompleted: true })).missions.map(
-    mission => mission.id
-  );
-  assert.ok(expanded.includes(longDone.id), 'includeAllCompleted restores the archive');
-  assert.ok(expanded.includes(recentlyDone.id));
-  assert.ok(expanded.includes(staleReview.id));
 });

@@ -14,7 +14,6 @@ import { cn } from '@/lib/utils';
 
 import type { MissionDto } from '../../shared/contract.ts';
 
-import type { MissionCardContext } from './BoardColumn.tsx';
 import { CalendarDayCell } from './CalendarDayCell.tsx';
 import { MissionCalendarCard } from './MissionCalendarCard.tsx';
 import { useCalendarDueDateDnd } from './useCalendarDueDateDnd.ts';
@@ -41,8 +40,7 @@ export function MissionCalendarView<TMission extends MissionDto>({
   projectColor,
   selectedMissionId,
   onCompleteMission,
-  onDayClick,
-  getMissionCardContext
+  onDayClick
 }: {
   missions: TMission[];
   projectId: string;
@@ -50,8 +48,6 @@ export function MissionCalendarView<TMission extends MissionDto>({
   selectedMissionId?: string;
   onCompleteMission?: (missionId: string) => void;
   onDayClick?: (day: Date) => void;
-  /** Per-mission project color / open override (My Missions multi-project). */
-  getMissionCardContext?: (mission: TMission) => MissionCardContext;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const topSentinelRef = useRef<HTMLDivElement | null>(null);
@@ -118,17 +114,6 @@ export function MissionCalendarView<TMission extends MissionDto>({
         : undefined,
     [calendarDnd.activeMissionId, missions]
   );
-
-  const activeMissionContext = useMemo(() => {
-    if (!activeMission) return null;
-    return (
-      getMissionCardContext?.(activeMission) ?? {
-        projectId,
-        projectName: '',
-        projectColor
-      }
-    );
-  }, [activeMission, getMissionCardContext, projectColor, projectId]);
 
   useEffect(() => {
     scrollParentRef.current = findScrollParent(rootRef.current);
@@ -224,7 +209,6 @@ export function MissionCalendarView<TMission extends MissionDto>({
                         activeMissionId={calendarDnd.activeMissionId}
                         draggable
                         onDayClick={onDayClick}
-                        getMissionCardContext={getMissionCardContext}
                       />
                     );
                   })}
@@ -242,14 +226,13 @@ export function MissionCalendarView<TMission extends MissionDto>({
       </div>
 
       <DragOverlay>
-        {activeMission && activeMissionContext ? (
+        {activeMission ? (
           <MissionCalendarCard
             mission={activeMission}
-            projectId={activeMissionContext.projectId}
-            projectColor={activeMissionContext.projectColor}
+            projectId={projectId}
+            projectColor={projectColor}
             selected={activeMission.id === selectedMissionId}
             onComplete={onCompleteMission}
-            onOpen={activeMissionContext.onOpen}
             isDragOverlay
           />
         ) : null}

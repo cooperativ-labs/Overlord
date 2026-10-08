@@ -1052,30 +1052,13 @@ Indexes:
 
 A mission and its tags must belong to the same project; the service layer validates `tag_id` against the mission's `project_id` before inserting.
 
-### `my_mission_positions`
+### Retired personal mission ordering
 
-Personal, per-status-column drag ordering for the **My Missions** selected-workspace view. A row records where one operator (`workspace_user`) has manually placed one mission within one status column on their My Missions board. Distinct from `missions.board_position`, which is the shared per-project board order: My Missions ordering must never reorder another user's view or the source project boards.
-
-| Column              | Type         | Required | Notes                                                                                                                                                                               |
-| ------------------- | ------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                | Id           | yes      | Stable row ID.                                                                                                                                                                      |
-| `workspace_id`      | Id           | yes      | FK to `workspaces`; `ON DELETE CASCADE`.                                                                                                                                            |
-| `workspace_user_id` | Id           | yes      | FK to `workspace_users`; the operator this ordering belongs to. `ON DELETE CASCADE`.                                                                                                |
-| `mission_id`        | Id           | yes      | FK to `missions`; `ON DELETE CASCADE`.                                                                                                                                              |
-| `status_id`         | Id           | yes      | The status column the position applies to. A position only applies at read time when it matches the mission's current `status_id`, so a status change made elsewhere self-corrects. |
-| `position`          | Float        | yes      | Numeric order within the column; lower sorts first. Gap-based so inserts need not renumber the whole column.                                                                        |
-| `created_at`        | TimestampUTC | yes      |                                                                                                                                                                                     |
-| `updated_at`        | TimestampUTC | yes      |                                                                                                                                                                                     |
-| `revision`          | integer      | yes      |                                                                                                                                                                                     |
-
-Indexes / constraints:
-
-- `UNIQUE (workspace_id, workspace_user_id, mission_id)` — one position per operator per mission.
-- Composite FK `(workspace_id, mission_id) → missions (workspace_id, id)` `ON DELETE CASCADE` — keeps the row in the mission's own workspace.
-- Composite FK `(project_id, status_id) → project_statuses (project_id, id)` `ON DELETE CASCADE` — the column must be a status of the same project.
-- `(workspace_id, workspace_user_id, status_id, position)` — ordered reads of one operator's column.
-
-Rows are sparse: one exists only for a mission the operator has dragged. Cascades fire only on **hard** delete; because missions and statuses are soft-deleted, the read path filters non-deleted missions and ignores positions whose `status_id` no longer matches the mission's current column. Keyed by `workspace_id`, the table is forward-compatible with a future cross-workspace My Missions board.
+Migration `20261008100000_remove_my_mission_positions` drops the former
+`my_mission_positions` table in both editions following removal of My Missions.
+Only personal aggregate-board order is discarded; project `board_position`,
+missions, assignments and status history are preserved. Historical migration
+runtime retains the old table handling for upgrades through earlier schemas.
 
 ### `agent_sessions`
 
@@ -3184,7 +3167,6 @@ Recommended boundary:
 - `/api/inbox` is the account-owned unassigned-capture surface: `GET` lists the caller's newest-first items, `POST` creates one, and `GET/PATCH/DELETE /api/inbox/:id` reads, edits, or removes only an owned item. `POST /api/inbox/:id/promote` accepts `{ projectId }`, authorizes `mission:create` on that project's workspace, creates an ordinary mission from the item fields, and consumes the item in the same transaction. `InboxItemDto` is `{ id, title, objectives, dueDatetime, priority, createdAt, updatedAt }`. Inbox changes do not enter workspace `entity_changes`; clients refetch their own list, while promotion uses normal mission realtime.
 - `PATCH /api/missions/:id/artifacts/:artifactId` edits an existing artifact's human-facing `label`, `contentText`, and/or `externalUrl` with `mission:update` permission on its mission. The caller supplies `expectedRevision`; stale writes return `409`, and external URLs must use HTTP(S). Its delivery/session/objective provenance and structured `contentJson` are immutable through this surface; the resulting artifact must retain at least one text, JSON, or URL content field. The transaction increments the artifact revision and appends an `artifact` entity change. The same mutation is also exposed as Protocol `POST /api/protocol/update-artifact` (`ovld protocol update-artifact`) and MCP `overlord_update_artifact`.
 - `POST /api/missions/:id/artifacts` creates a mission artifact without a delivery (`delivery_id` null) with `artifact:create` permission on its mission. The body supplies `{ type, label }` plus at least one of `{ contentText, externalUrl }`; optional `objectiveId` / `sessionId` stamp provenance, and Protocol/MCP may pass a live `sessionKey` instead. Non-HTTP(S) external URLs are rejected. The transaction appends an `artifact` entity-change create. The same mutation is exposed as Protocol `POST /api/protocol/add-artifact` (`ovld protocol add-artifact`) and MCP `overlord_add_artifact`. Delivery remains optional for artifacts and may still attach additional ones later.
-- `/workspace/my-missions` (read: missions assigned to the active actor across the active workspace, with personal `my_mission_positions` ordering) and `/workspace/my-missions/order` (persist a personal column reorder; a cross-column drag is a real mission status change validated by the `(workspace_id, status_id)` composite FK).
 - `/protocol/*` endpoints mirroring `ovld protocol`.
 - `/execution-requests` for runner queue operations.
 - `/api/virtual-targets/v1/*` — the versioned **Virtual Target Queue Surface** consumed by an external gateway (target-authenticated, never the database):

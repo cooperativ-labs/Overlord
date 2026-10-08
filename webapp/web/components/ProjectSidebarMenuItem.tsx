@@ -77,7 +77,7 @@ export function ProjectSidebarMenuItem({
     try {
       await updateProject.mutateAsync({ status: 'archived' });
       if (params.projectId === project.id) {
-        void navigate({ to: '/user' });
+        void navigate({ to: '/feed' });
       }
     } catch {
       // Error handled by mutation

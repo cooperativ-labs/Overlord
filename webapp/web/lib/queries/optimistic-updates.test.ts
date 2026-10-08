@@ -2,13 +2,12 @@ import type { QueryClient } from '@tanstack/react-query';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import type { MissionDetailDto, MissionDto, MyMissionsResponse } from '../../../shared/contract.ts';
+import type { MissionDetailDto, MissionDto } from '../../../shared/contract.ts';
 import { keys } from '../query-keys.ts';
 
 import {
   createReorderBoardColumnMutation,
-  createReorderFutureObjectivesMutation,
-  createReorderMyMissionsMutation
+  createReorderFutureObjectivesMutation
 } from './optimistic-updates.ts';
 
 /** Whether a cached key sits under a prefix, as React Query's matcher does. */
@@ -99,33 +98,6 @@ test('board reorder cancels, patches, rolls back, then invalidates the same key'
     'invalidate:["project","project-1","missions"]'
   ]);
   assert.equal(initial.get(JSON.stringify(key)), previous);
-});
-
-test('my-missions reorder preserves its optimistic lifecycle', async () => {
-  const previous = {
-    missions: [{ id: 'mission-1', myPosition: 100, statusId: 'old', statusType: 'draft' }]
-  } as unknown as MyMissionsResponse;
-  const { calls, client, initial } = fakeClient(
-    new Map([[JSON.stringify(keys.myMissionsScoped('recent')), previous]])
-  );
-  const mutation = createReorderMyMissionsMutation(client);
-  const vars = {
-    statusId: 'execute',
-    statusType: 'execute' as const,
-    orderedMissionIds: ['mission-1']
-  };
-
-  const context = await mutation.onMutate(vars);
-  mutation.onError(new Error('nope'), vars, context);
-  mutation.onSettled();
-
-  assert.deepEqual(calls, [
-    'cancel:["workspace","my-missions"]',
-    'set:["workspace","my-missions","recent"]',
-    'set:["workspace","my-missions","recent"]',
-    'invalidate:["workspace","my-missions"]'
-  ]);
-  assert.equal(initial.get(JSON.stringify(keys.myMissionsScoped('recent'))), previous);
 });
 
 test('future-objective reorder patches, rolls back, and invalidates its mission', async () => {

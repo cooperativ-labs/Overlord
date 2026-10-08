@@ -57,9 +57,6 @@ export const keys = {
    */
   missionsScoped: (projectId: string, scope: MissionBoardScope) =>
     ['project', projectId, 'missions', scope] as const,
-  myMissions: ['workspace', 'my-missions'] as const,
-  /** My Missions for one completed-mission scope; see `missionsScoped`. */
-  myMissionsScoped: (scope: MissionBoardScope) => ['workspace', 'my-missions', scope] as const,
   mission: (id: string) => ['mission', id] as const,
   missionSchedule: (id: string) => ['mission', id, 'schedule'] as const,
   missionBranches: (id: string) => ['mission', id, 'branches'] as const,

@@ -1348,10 +1348,7 @@ var init_search = __esm({
 });
 
 // ../packages/contract/dist/index.js
-function isMyMissionsColumnType(value2) {
-  return MY_MISSIONS_COLUMN_TYPES.includes(value2);
-}
-var MISSION_EVIDENCE_LIST_LIMIT, MY_MISSIONS_COLUMNS, MY_MISSIONS_COLUMN_TYPES;
+var MISSION_EVIDENCE_LIST_LIMIT;
 var init_dist = __esm({
   "../packages/contract/dist/index.js"() {
     "use strict";
@@ -1365,13 +1362,6 @@ var init_dist = __esm({
     init_resource_paths();
     init_search();
     MISSION_EVIDENCE_LIST_LIMIT = 200;
-    MY_MISSIONS_COLUMNS = [
-      { type: "next", label: "Next" },
-      { type: "execute", label: "Executing" },
-      { type: "review", label: "Review" },
-      { type: "complete", label: "Completed" }
-    ];
-    MY_MISSIONS_COLUMN_TYPES = MY_MISSIONS_COLUMNS.map((column) => column.type);
   }
 });
 
@@ -140888,46 +140878,6 @@ async function listAttachments({
     status: row.upload_status
   }));
 }
-var MY_POSITION_STEP = 100;
-async function topMyMissionPosition(ctx, workspaceUserId, statusId) {
-  const row = await ctx.db.get(
-    `SELECT MIN(position) AS min_pos FROM my_mission_positions
-       WHERE workspace_user_id = ? AND status_id = ?`,
-    [workspaceUserId, statusId]
-  );
-  const minPos = row.min_pos;
-  return minPos === null ? MY_POSITION_STEP : minPos - MY_POSITION_STEP;
-}
-async function upsertMyMissionPositionOnReview(ctx, {
-  workspaceId: workspaceId2,
-  projectId,
-  workspaceUserId,
-  missionId,
-  statusId,
-  position,
-  now: now2
-}) {
-  const existing = await ctx.db.get(
-    `SELECT id, revision FROM my_mission_positions
-       WHERE workspace_id = ? AND workspace_user_id = ? AND mission_id = ?`,
-    [workspaceId2, workspaceUserId, missionId]
-  );
-  if (existing) {
-    await ctx.db.run(
-      `UPDATE my_mission_positions
-          SET project_id = ?, status_id = ?, position = ?, updated_at = ?, revision = ?
-        WHERE id = ?`,
-      [projectId, statusId, position, now2, existing.revision + 1, existing.id]
-    );
-    return;
-  }
-  await ctx.db.run(
-    `INSERT INTO my_mission_positions
-       (id, workspace_id, project_id, workspace_user_id, mission_id, status_id, position, created_at, updated_at, revision)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-    [newId(), workspaceId2, projectId, workspaceUserId, missionId, statusId, position, now2, now2]
-  );
-}
 async function moveMissionToReview({
   ctx,
   missionId
@@ -140941,26 +140891,6 @@ async function moveMissionToReview({
        WHERE id = ?`,
     [reviewStatus.id, reviewStatus.type, boardPosition, now2, mission.id]
   );
-  const assignee = await ctx.db.get(
-    `SELECT assigned_workspace_user_id FROM missions WHERE id = ?`,
-    [mission.id]
-  );
-  if (assignee.assigned_workspace_user_id) {
-    const myPosition = await topMyMissionPosition(
-      ctx,
-      assignee.assigned_workspace_user_id,
-      reviewStatus.id
-    );
-    await upsertMyMissionPositionOnReview(ctx, {
-      workspaceId: ctx.workspace.id,
-      projectId: mission.projectId,
-      workspaceUserId: assignee.assigned_workspace_user_id,
-      missionId: mission.id,
-      statusId: reviewStatus.id,
-      position: myPosition,
-      now: now2
-    });
-  }
   await recordChange({
     ctx,
     entityType: "mission",
@@ -155741,12 +155671,6 @@ async function cascadeMissionProjectId(db, {
     [newProjectId, now2, missionId, workspaceId2]
   );
   await db.run(
-    `UPDATE my_mission_positions
-       SET project_id = ?, updated_at = ?, revision = revision + 1
-     WHERE mission_id = ? AND workspace_id = ?`,
-    [newProjectId, now2, missionId, workspaceId2]
-  );
-  await db.run(
     `UPDATE agent_sessions
        SET project_id = ?, updated_at = ?, revision = revision + 1
      WHERE mission_id = ? AND workspace_id = ?`,
@@ -157546,16 +157470,6 @@ async function createScheduledDuplicateIfNeeded(tx, mission, newStatusType) {
     instructionText: latestObjective?.instruction_text ?? ""
   });
 }
-var STATUS_UNAVAILABLE_FOR_WORKSPACE = "STATUS_UNAVAILABLE_FOR_WORKSPACE";
-var MY_POSITION_STEP2 = 100;
-function toMyMissionDto(r5, tags) {
-  return {
-    ...toMissionDto(r5, tags),
-    projectName: r5.project_name,
-    projectColor: readProjectColor(r5.project_settings_json),
-    myPosition: r5.my_position
-  };
-}
 async function callerWorkspaceMemberships(client = requireDatabaseClient()) {
   const profileId = await resolveActiveProfileId(client);
   if (!profileId) return [];
@@ -157595,80 +157509,6 @@ async function callerMembershipsInActiveOrganization(client = requireDatabaseCli
     workspaceId: row.workspace_id,
     workspaceUserId: row.workspace_user_id
   }));
-}
-function selectMyMissionsSql(pairPlaceholders, dialect) {
-  return `
-  SELECT t.id, t.workspace_id, t.project_id, t.display_id, t.sequence_number, t.title,
-         t.status_id, t.status_type, t.board_position, t.priority,
-         t.assigned_workspace_user_id,
-         t.notes_text,
-         t.schedule_id, t.due_datetime,
-         t.created_at, t.updated_at, t.revision,
-         t.created_by_kind, t.created_by_agent, t.created_by_workspace_user_id,
-         t.created_by_token_id, t.created_by_token_label,
-         p.name AS project_name, p.settings_json AS project_settings_json,
-         mtp.position AS my_position,
-         (SELECT COUNT(*) FROM objectives o
-            WHERE o.mission_id = t.id AND o.deleted_at IS NULL) AS objective_count,
-         (SELECT COUNT(*) FROM objectives o
-            WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'complete')
-            AS completed_objective_count,
-         -- pending_delivery counts as executing: the agent re-attached after
-         -- finishing a turn and is still on the objective, so the card should
-         -- keep reading as live work rather than going quiet until delivery.
-         (SELECT COUNT(*) > 0 FROM objectives o
-            WHERE o.mission_id = t.id AND o.deleted_at IS NULL
-              AND o.state IN ('executing', 'pending_delivery'))
-            AS has_executing_objective,
-         (SELECT COUNT(*) > 0 FROM objectives o
-            WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'complete')
-            AS has_completed_objective,
-         (SELECT COUNT(*) > 0 FROM objectives o
-            WHERE o.mission_id = t.id AND o.deleted_at IS NULL
-              AND o.state IN ('draft', 'future') AND TRIM(o.instruction_text) != '')
-            AS has_pending_objective_with_instructions,
-${missionHasUnseenBlockingQuestionSql(dialect)},
-${missionHasUnseenReturnedToExecuteSql},
-         (SELECT o.resource_key FROM objectives o
-            WHERE o.mission_id = t.id AND o.deleted_at IS NULL AND o.state = 'draft'
-            LIMIT 1) AS draft_objective_resource_key
-    FROM missions t
-    JOIN projects p ON p.id = t.project_id AND p.workspace_id = t.workspace_id
-      AND p.deleted_at IS NULL
-    LEFT JOIN my_mission_positions mtp
-      ON mtp.workspace_id = t.workspace_id AND mtp.mission_id = t.id
-        AND mtp.workspace_user_id = t.assigned_workspace_user_id AND mtp.status_id = t.status_id
-   WHERE t.deleted_at IS NULL
-     AND (t.workspace_id, t.assigned_workspace_user_id) IN (${pairPlaceholders})
-`;
-}
-async function listWorkspaceMyMissions(options = {}) {
-  const memberships = await callerMembershipsInActiveOrganization();
-  const readableMemberships = [];
-  for (const membership of memberships) {
-    if (await actorCan(PERMISSIONS.MISSION_READ, {
-      workspaceId: membership.workspaceId,
-      workspaceUserId: membership.workspaceUserId
-    })) {
-      readableMemberships.push(membership);
-    }
-  }
-  if (readableMemberships.length === 0) return { missions: [] };
-  const allowedProjectIds = getActiveTokenProjectIds();
-  if (allowedProjectIds?.length === 0) return { missions: [] };
-  const projectFilter = allowedProjectIds === null ? "" : ` AND t.project_id IN (${allowedProjectIds.map(() => "?").join(", ")})`;
-  const pairPlaceholders = readableMemberships.map(() => "(?, ?)").join(", ");
-  const pairParams = readableMemberships.flatMap((m3) => [m3.workspaceId, m3.workspaceUserId]);
-  const db = requireDatabaseClient();
-  const completedWindow = completedMissionWindowSql(options.includeAllCompleted === true);
-  const rows = await db.all(
-    `${selectMyMissionsSql(pairPlaceholders, db.dialect)}${completedWindow.sql}${projectFilter}
-         ORDER BY (mtp.position IS NULL) ASC, mtp.position ASC,
-                  t.board_position ASC, t.updated_at DESC, t.sequence_number DESC, t.id ASC`,
-    [...pairParams, ...completedWindow.params, ...allowedProjectIds ?? []]
-  );
-  const tagsByMission = await getTagsByMission(rows.map((row) => row.id));
-  return { missions: rows.map((row) => toMyMissionDto(row, tagsByMission.get(row.id) ?? [])) };
 }
 var INBOX_MISSION_RECENT_MS = 7 * 24 * 60 * 60 * 1e3;
 var INBOX_MISSION_AGENT_NEXT_LIMIT = 60;
@@ -157802,146 +157642,6 @@ async function listInboxMissions() {
       return toInboxMissionDto(row, tagsByMission.get(row.id) ?? [], reasons);
     })
   };
-}
-async function upsertMyMissionPosition(db, {
-  workspaceId: workspaceId2,
-  projectId,
-  missionId,
-  statusId,
-  position,
-  actor,
-  now: now2
-}) {
-  const existing = await db.get(
-    `SELECT id, revision FROM my_mission_positions
-         WHERE workspace_id = ? AND workspace_user_id = ? AND mission_id = ?`,
-    [workspaceId2, actor, missionId]
-  );
-  if (existing) {
-    await db.run(
-      `UPDATE my_mission_positions
-          SET project_id = ?, status_id = ?, position = ?, updated_at = ?, revision = ?
-        WHERE id = ?`,
-      [projectId, statusId, position, now2, existing.revision + 1, existing.id]
-    );
-    return;
-  }
-  await db.run(
-    `INSERT INTO my_mission_positions
-       (id, workspace_id, project_id, workspace_user_id, mission_id, status_id, position, created_at, updated_at, revision)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-    [newId2(), workspaceId2, projectId, actor, missionId, statusId, position, now2, now2]
-  );
-}
-async function resolveMyMissionsColumnStatus(tx, { projectId, statusType }) {
-  return await tx.get(
-    `SELECT ps.* FROM project_statuses ps
-        WHERE ps.project_id = ? AND ps.type = ? AND ps.deleted_at IS NULL
-        ORDER BY ps.position ASC, ps.id ASC
-        LIMIT 1`,
-    [projectId, statusType]
-  );
-}
-async function myMissionsActorByWorkspace(tx) {
-  const memberships = await callerMembershipsInActiveOrganization(tx);
-  return new Map(memberships.map((m3) => [m3.workspaceId, m3.workspaceUserId]));
-}
-async function reorderWorkspaceMyMissionsTx(body) {
-  const statusType = body.statusType;
-  const orderedIds = body.orderedMissionIds;
-  if (!statusType || !isMyMissionsColumnType(statusType)) {
-    throw new ApiError(400, `statusType must be one of ${MY_MISSIONS_COLUMN_TYPES.join(", ")}`);
-  }
-  if (!Array.isArray(orderedIds)) throw new ApiError(400, "orderedMissionIds must be an array");
-  if (new Set(orderedIds).size !== orderedIds.length) {
-    throw new ApiError(400, "orderedMissionIds contains duplicates");
-  }
-  await requireDatabaseClient().transaction(async (tx) => {
-    const actorByWorkspace = await myMissionsActorByWorkspace(tx);
-    const now2 = nowIso2();
-    for (const [index, missionId] of orderedIds.entries()) {
-      const existing = await tx.get(`SELECT * FROM missions WHERE id = ? AND deleted_at IS NULL`, [
-        missionId
-      ]);
-      if (!existing) throw new ApiError(404, `Mission ${missionId} not found`);
-      const workspaceId2 = existing.workspace_id;
-      const actor = actorByWorkspace.get(workspaceId2);
-      if (!actor) throw new ApiError(403, "Not an active member of that mission\u2019s workspace");
-      if (existing.assigned_workspace_user_id !== actor) {
-        throw new ApiError(403, `Mission ${missionId} is not assigned to you`);
-      }
-      let statusId = existing.status_id;
-      if (existing.status_type !== statusType) {
-        const targetStatus = await resolveMyMissionsColumnStatus(tx, {
-          projectId: existing.project_id,
-          statusType
-        });
-        if (!targetStatus) {
-          throw new ApiError(
-            409,
-            `That mission's project has no ${statusType} status`,
-            void 0,
-            STATUS_UNAVAILABLE_FOR_WORKSPACE
-          );
-        }
-        statusId = targetStatus.id;
-        const revision3 = existing.revision + 1;
-        await tx.run(
-          `UPDATE missions
-              SET status_id = ?, status_type = ?,
-                  board_position = ?, updated_at = ?, revision = ?
-            WHERE id = ? AND workspace_id = ?`,
-          [
-            targetStatus.id,
-            targetStatus.type,
-            await topBoardPosition2(tx, existing.project_id, targetStatus.id, missionId),
-            now2,
-            revision3,
-            missionId,
-            workspaceId2
-          ]
-        );
-        await recordChange2(
-          {
-            entityType: "mission",
-            entityId: missionId,
-            operation: "update",
-            entityRevision: revision3,
-            projectId: existing.project_id,
-            missionId,
-            workspaceId: workspaceId2,
-            changedFields: ["status_id", "status_type", "board_position"]
-          },
-          tx
-        );
-      }
-      await upsertMyMissionPosition(tx, {
-        workspaceId: workspaceId2,
-        projectId: existing.project_id,
-        missionId,
-        statusId,
-        position: (index + 1) * MY_POSITION_STEP2,
-        actor,
-        now: now2
-      });
-    }
-  });
-}
-async function reorderWorkspaceMyMissions(body) {
-  try {
-    await reorderWorkspaceMyMissionsTx(body);
-    return listWorkspaceMyMissions();
-  } catch (err) {
-    if (err && typeof err === "object" && err.code === "SQLITE_CONSTRAINT_FOREIGNKEY") {
-      throw new ApiError(
-        409,
-        `That status is not available in this mission's project`,
-        void 0,
-        STATUS_UNAVAILABLE_FOR_WORKSPACE
-      );
-    }
-    throw err;
-  }
 }
 async function listObjectives2(missionId, db = requireDatabaseClient()) {
   await requireMissionPermission({
@@ -185017,26 +184717,6 @@ app.delete(
   )
 );
 app.get(
-  "/api/workspace/my-missions",
-  // The service checks MISSION_READ independently for every immutable
-  // authorized-workspace entry. An ambient workspace gate would either select
-  // the old oldest membership or reject valid multi-workspace aggregate reads.
-  // `?includeAllCompleted=1` lifts the rolling completed-mission window so the
-  // board's "load older" control can reveal the whole terminal archive.
-  handle3(
-    (req) => listWorkspaceMyMissions({
-      includeAllCompleted: isTruthyQueryFlag(req.query.includeAllCompleted)
-    })
-  )
-);
-app.patch(
-  "/api/workspace/my-missions/order",
-  handle3((req) => reorderWorkspaceMyMissions(req.body), {
-    mutates: true,
-    requires: PERMISSIONS.MISSION_UPDATE
-  })
-);
-app.get(
   "/api/activity-feed",
   handle3(
     (req) => listActivityFeed({
@@ -185358,7 +185038,7 @@ app.get(
   // Opening a mission clears its status indicator dots: mark all unseen status
   // indicators seen (a no-op when none are unseen), then return detail. `mutates`
   // so the resulting change-feed entry is flushed to realtime clients and the
-  // board/My Missions cards drop the corner dots immediately.
+  // project board cards drop the corner dots immediately.
   handle3(
     async (req) => {
       if (getActiveTokenProjectIds() === null) await markMissionStatusesSeen(req.params.id);

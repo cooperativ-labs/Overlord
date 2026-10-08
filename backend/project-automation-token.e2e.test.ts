@@ -1081,7 +1081,6 @@ describe('denied surfaces', () => {
       ['POST', `/api/inbox`, { title: 'Denied', objectives: ['Denied'] }],
       ['GET', `/api/inbox`],
       ['GET', `/api/inbox/missions`],
-      ['GET', `/api/workspace/my-missions`],
       ['GET', `/api/activity-feed`],
       ['GET', `/api/missions/search?q=feedback`],
       ['GET', `/api/missions/search/v2?q=feedback`],
@@ -1139,8 +1138,6 @@ describe('denied surfaces', () => {
       'full token reads R'
     );
     assert.equal(rDetail.id, R.missionId);
-    const myMissions = await expectOk(full('GET', '/api/workspace/my-missions'), 'my missions');
-    assert.ok(JSON.stringify(myMissions).length > 2);
   });
 });
 

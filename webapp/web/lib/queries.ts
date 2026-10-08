@@ -7,8 +7,7 @@ export * from './queries/missions.ts';
 export * from './queries/objectives.ts';
 export type {
   ReorderBoardColumnVars,
-  ReorderFutureObjectivesVars,
-  ReorderMyMissionsVars
+  ReorderFutureObjectivesVars
 } from './queries/optimistic-updates.ts';
 export * from './queries/organizations.ts';
 export * from './queries/profile.ts';

@@ -31,11 +31,8 @@ export type BoardView = 'board' | 'list' | 'calendar';
 export type ColumnMap = Record<string, string[]>;
 
 /**
- * Shared shape returned by the board/column drag-and-drop hooks
- * (`useBoardColumnDnd`, `useMyMissionsDnd`). Both the project board and My
- * Missions own their hook instance at the page level — since each persists
- * reordering through a different mutation (project- vs workspace-scoped) —
- * and pass the resulting state down to the presentational `MissionListView`.
+ * The project board owns its drag-and-drop state and passes it to
+ * the presentational MissionListView.
  */
 export type BoardDndResult = {
   activeId: string | null;
@@ -89,42 +86,6 @@ export function getStatusFilterLabel(
     return statuses.find(status => status.id === selectedStatusIds[0])?.name ?? 'Status';
   }
   return `${selectedStatusIds.length} statuses`;
-}
-
-export type MissionProjectFilterOption = { id: string; name: string; color: string | null };
-
-/**
- * Project filter options derived from the missions on screen, restricted to
- * projects present in `activeProjectIds`. Mission rows carry project name/color
- * but no lifecycle, so archived projects would otherwise leak into the filter
- * (coo:234, coo:445); callers pass the ids from the active-only project list.
- */
-export function buildMissionProjectFilterOptions(
-  missions: { projectId: string; projectName: string; projectColor: string | null }[],
-  activeProjectIds: ReadonlySet<string>
-): MissionProjectFilterOption[] {
-  const byId = new Map<string, MissionProjectFilterOption>();
-  for (const mission of missions) {
-    if (!activeProjectIds.has(mission.projectId)) continue;
-    if (byId.has(mission.projectId)) continue;
-    byId.set(mission.projectId, {
-      id: mission.projectId,
-      name: mission.projectName,
-      color: mission.projectColor
-    });
-  }
-  return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
-}
-
-export function getProjectFilterLabel(
-  selectedProjectIds: string[],
-  projectOptions: MissionProjectFilterOption[]
-): string {
-  if (selectedProjectIds.length === 0) return 'All';
-  if (selectedProjectIds.length === 1) {
-    return projectOptions.find(project => project.id === selectedProjectIds[0])?.name ?? 'Project';
-  }
-  return `${selectedProjectIds.length} projects`;
 }
 
 const BOARD_VIEWS: BoardView[] = ['board', 'list', 'calendar'];

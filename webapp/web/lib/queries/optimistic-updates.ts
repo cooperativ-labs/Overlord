@@ -1,12 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 
-import type {
-  MissionDetailDto,
-  MissionDto,
-  MyMissionsColumnType,
-  MyMissionsResponse,
-  StatusType
-} from '../../../shared/contract.ts';
+import type { MissionDetailDto, MissionDto, StatusType } from '../../../shared/contract.ts';
 import { api } from '../api.ts';
 import { keys } from '../query-keys.ts';
 
@@ -78,52 +72,6 @@ export function createReorderBoardColumnMutation(qc: QueryClient) {
     onSettled: (_data: unknown, _err: unknown, vars: ReorderBoardColumnVars) => {
       void qc.invalidateQueries({ queryKey: keys.missions(vars.projectId) });
     }
-  };
-}
-
-export interface ReorderMyMissionsVars {
-  statusType: MyMissionsColumnType;
-  orderedMissionIds: string[];
-}
-
-export function createReorderMyMissionsMutation(qc: QueryClient) {
-  return {
-    mutationFn: ({ statusType, orderedMissionIds }: ReorderMyMissionsVars) =>
-      api.reorderWorkspaceMyMissions({ statusType, orderedMissionIds }),
-    onMutate: async (vars: ReorderMyMissionsVars) => {
-      await qc.cancelQueries({ queryKey: keys.myMissions });
-      const previous = qc.getQueriesData<MyMissionsResponse>({
-        queryKey: keys.myMissions
-      }) as CachedEntries<MyMissionsResponse>;
-      const positionById = new Map(
-        vars.orderedMissionIds.map((id, index) => [id, (index + 1) * 100])
-      );
-      // My Missions columns are status *types*: the concrete per-project
-      // `statusId` is resolved server-side, so only the type and the personal
-      // slot are predictable here. The refetch reconciles `statusId`.
-      qc.setQueriesData<MyMissionsResponse>({ queryKey: keys.myMissions }, current =>
-        current
-          ? {
-              ...current,
-              missions: current.missions.map(mission => {
-                const position = positionById.get(mission.id);
-                return position === undefined
-                  ? mission
-                  : { ...mission, statusType: vars.statusType, myPosition: position };
-              })
-            }
-          : current
-      );
-      return { previous };
-    },
-    onError: (
-      _err: unknown,
-      _vars: ReorderMyMissionsVars,
-      context?: { previous?: CachedEntries<MyMissionsResponse> }
-    ) => {
-      restoreCachedEntries(qc, context?.previous);
-    },
-    onSettled: () => void qc.invalidateQueries({ queryKey: keys.myMissions })
   };
 }
 

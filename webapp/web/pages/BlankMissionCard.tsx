@@ -88,7 +88,6 @@ type BlankMissionCardProps = {
   statusId: string;
   position: 'top' | 'bottom';
   projectId: string;
-  statusScope?: 'project' | 'aggregate';
   onCreateMission: (
     statusId: string,
     objective: string,
@@ -111,7 +110,6 @@ export function BlankMissionCard({
   statusId,
   position,
   projectId,
-  statusScope = 'project',
   onCreateMission,
   onCreateAndOpenMission,
   onClose,
@@ -168,11 +166,8 @@ export function BlankMissionCard({
     attachments: pending.files
   };
 
-  // Project boards can only keep their column status when the selected project
-  // matches the board. Aggregate boards resolve the selected project's concrete
-  // status from the merged column before creating the mission.
-  const statusForSelection =
-    statusScope === 'aggregate' || selectedProjectId === projectId ? statusId : '';
+  // Keep the column status only when creating in the board's project.
+  const statusForSelection = selectedProjectId === projectId ? statusId : '';
 
   // Tags and resources are project-scoped: clear both when the project changes.
   useEffect(() => {

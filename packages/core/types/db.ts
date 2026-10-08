@@ -1122,19 +1122,6 @@ export interface MissionTargetResources {
   workspace_id: string;
 }
 
-export interface MyMissionPositions {
-  created_at: string;
-  id: string | null;
-  mission_id: string;
-  position: number;
-  project_id: string;
-  revision: Generated<number>;
-  status_id: string;
-  updated_at: string;
-  workspace_id: string;
-  workspace_user_id: string;
-}
-
 export interface NotificationPreferences {
   created_at: string;
   id: string | null;
@@ -1841,7 +1828,6 @@ export interface DB {
   mission_tags: MissionTags;
   mission_target_resources: MissionTargetResources;
   missions: Missions;
-  my_mission_positions: MyMissionPositions;
   notification_preferences: NotificationPreferences;
   notifications: Notifications;
   objective_attachments: ObjectiveAttachments;

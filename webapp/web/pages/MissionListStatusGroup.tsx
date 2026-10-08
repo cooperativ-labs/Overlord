@@ -10,7 +10,7 @@ import type { MissionDto, WorkspaceMemberDto } from '../../shared/contract.ts';
 
 import { BlankMissionCard, type BlankMissionCreateOptions } from './BlankMissionCard.tsx';
 import { resolveAssignee } from './board-shared.ts';
-import type { BoardColumnStatus, MissionCardContext } from './BoardColumn.tsx';
+import type { BoardColumnStatus } from './BoardColumn.tsx';
 import { MissionListCard } from './MissionListCard.tsx';
 
 export function MissionListStatusGroup<TMission extends MissionDto = MissionDto>({
@@ -20,14 +20,11 @@ export function MissionListStatusGroup<TMission extends MissionDto = MissionDto>
   projectId,
   projectName,
   projectColor,
-  createProjectId = projectId,
-  createStatusScope = 'project',
   membersByWorkspaceUserId,
   selectedMissionId,
   isCollapsed,
   onToggleCollapse,
   footer,
-  getMissionCardContext,
   onCreateMission,
   onCreateAndOpenMission,
   onCompleteMission
@@ -38,8 +35,6 @@ export function MissionListStatusGroup<TMission extends MissionDto = MissionDto>
   projectId: string;
   projectName: string;
   projectColor: string | null;
-  createProjectId?: string;
-  createStatusScope?: 'project' | 'aggregate';
   membersByWorkspaceUserId: Map<string, WorkspaceMemberDto>;
   selectedMissionId?: string;
   isCollapsed: boolean;
@@ -49,7 +44,6 @@ export function MissionListStatusGroup<TMission extends MissionDto = MissionDto>
    * older missions" control; hidden while the group is collapsed.
    */
   footer?: ReactNode;
-  getMissionCardContext?: (mission: TMission) => MissionCardContext;
   onCompleteMission?: (missionId: string) => void;
   onCreateMission?: (
     statusId: string,
@@ -77,7 +71,7 @@ export function MissionListStatusGroup<TMission extends MissionDto = MissionDto>
 
   const handleCloseBlankCard = useCallback(() => setIsAdding(false), []);
 
-  const canAdd = Boolean(onCreateMission && status.type && createProjectId);
+  const canAdd = Boolean(onCreateMission && status.type && projectId);
 
   return (
     <section className={cn(' transition-colors', isOver && 'ring-1 ring-inset ring-primary/30')}>
@@ -140,8 +134,7 @@ export function MissionListStatusGroup<TMission extends MissionDto = MissionDto>
               inputId={inputId}
               statusId={status.id}
               position="top"
-              projectId={createProjectId}
-              statusScope={createStatusScope}
+              projectId={projectId}
               onCreateMission={onCreateMission}
               onCreateAndOpenMission={onCreateAndOpenMission}
               onClose={handleCloseBlankCard}
@@ -172,22 +165,16 @@ export function MissionListStatusGroup<TMission extends MissionDto = MissionDto>
               )
             ) : (
               missions.map(mission => {
-                const cardContext = getMissionCardContext?.(mission) ?? {
-                  projectId,
-                  projectName,
-                  projectColor
-                };
                 return (
                   <MissionListCard
                     key={mission.id}
                     mission={mission}
-                    projectId={cardContext.projectId}
-                    projectName={cardContext.projectName}
-                    projectColor={cardContext.projectColor}
+                    projectId={projectId}
+                    projectName={projectName}
+                    projectColor={projectColor}
                     assignee={resolveAssignee(mission, membersByWorkspaceUserId)}
                     selected={mission.id === selectedMissionId}
                     onComplete={onCompleteMission}
-                    onOpen={cardContext.onOpen}
                   />
                 );
               })

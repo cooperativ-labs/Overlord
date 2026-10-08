@@ -34,13 +34,39 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `159`
+Current version: `160`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
 `contract/components.yaml`) — never a header duplicate. The contract version is
 incremented when any stable interface changes. All conformance manifests must
 declare the contract version they were validated against.
+
+### Version 160 Change Summary
+
+Remove My Missions (coo:1134.s83a). The Web/Desktop aggregate board is retired;
+Feed is the default landing page. Legacy `/user` and `/workspace` links redirect
+to Feed, and their mission links redirect to the Feed mission drawer with search
+parameters preserved. `GET /api/workspace/my-missions` and
+`PATCH /api/workspace/my-missions/order` are removed, along with `MyMissionDto`,
+`MyMissionsResponse`, `MyMissionReorderRequest` and the `MY_MISSIONS_*` column
+vocabulary. Cross-project/workspace personal interleaving has no replacement.
+
+Migration `20261008100000_remove_my_mission_positions` drops the obsolete
+`my_mission_positions` table in SQLite and PostgreSQL. It discards personal board
+order only; missions, project board positions, assignments and status history
+are retained. Core delivery places review missions using their project board
+position and no longer maintains personal positions; REST project moves no
+longer cascade into the retired table. Historical migrations remain unchanged.
+
+Module impacts: Web and Desktop consume the simplified SPA; REST and the
+contract package remove the two endpoints and their dedicated DTOs; Database
+removes the table and Core removes its ordering writes. Inbox/Feed reads,
+workspace membership authorization, project mission/status APIs, mobile Live
+Activities and push snapshots retain their independent projections. Mobile,
+Auth, Protocol command shapes, CLI, MCP Server, Connector, Runner, Automations
+and extensions require no implementation changes. External clients of the
+retired endpoints must use project mission APIs or Inbox/Feed instead.
 
 ### Version 159 Change Summary
 

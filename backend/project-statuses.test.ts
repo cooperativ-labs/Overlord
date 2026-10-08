@@ -13,12 +13,10 @@ const {
   createProject,
   createProjectStatus,
   deleteProjectStatus,
-  listMissions,
   listProjectStatuses,
   listWorkspaceProjectStatuses,
   reorderBoardColumn,
   reorderProjectStatuses,
-  reorderWorkspaceMyMissions,
   updateMission,
   updateProjectStatus
 } = await import('./repository.ts');
@@ -91,15 +89,6 @@ test('status-id writes reject a sibling project status while the aggregate retai
     reorderBoardColumn(projectA.id, { statusId: foreign.id, orderedMissionIds: [mission.id] }),
     (error: unknown) => (error as { status?: number }).status === 409
   );
-  // My Missions reorders by status *type*, so it can never name a sibling
-  // project's status: it resolves the target inside the mission's own project.
-  await reorderWorkspaceMyMissions({ statusType: 'execute', orderedMissionIds: [mission.id] });
-  const own = (await listProjectStatuses(projectA.id)).find(status => status.type === 'execute')!;
-  assert.equal(
-    (await listMissions(projectA.id)).find(item => item.id === mission.id)!.statusId,
-    own.id
-  );
-
   const aggregate = await listWorkspaceProjectStatuses(projectA.workspaceId);
   assert.ok(aggregate.some(status => status.id === foreign.id && status.projectId === projectB.id));
 });

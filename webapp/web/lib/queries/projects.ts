@@ -194,7 +194,6 @@ export function useUpdateProjectStatus(projectId: string) {
       api.updateProjectStatus(projectId, statusId, body),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.projectStatuses(projectId) });
-      void qc.invalidateQueries({ queryKey: keys.myMissions });
     }
   });
 }
@@ -205,7 +204,6 @@ export function useDeleteProjectStatus(projectId: string) {
     mutationFn: (statusId: string) => api.deleteProjectStatus(projectId, statusId),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: keys.projectStatuses(projectId) });
-      void qc.invalidateQueries({ queryKey: keys.myMissions });
     }
   });
 }
@@ -217,7 +215,6 @@ export function useReorderProjectStatuses(projectId: string) {
     onSuccess: data => {
       qc.setQueryData(keys.projectStatuses(projectId), data);
       void qc.invalidateQueries({ queryKey: keys.projectStatuses(projectId) });
-      void qc.invalidateQueries({ queryKey: keys.myMissions });
     }
   });
 }

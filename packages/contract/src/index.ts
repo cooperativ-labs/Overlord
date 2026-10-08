@@ -2412,29 +2412,6 @@ export interface ReorderBoardColumnBody {
   orderedMissionIds: string[];
 }
 
-/**
- * A mission on the **My Missions** selected-workspace board. Extends `MissionDto`
- * with the cross-project context the aggregate board needs and the operator's
- * personal ordering slot.
- */
-export interface MyMissionDto extends MissionDto {
-  /** Name of the mission's project (My Missions aggregates across projects). */
-  projectName: string;
-  /** Optional hex color of the mission's project, for the card accent. */
-  projectColor: string | null;
-  /**
-   * Personal order within this mission's My Missions status-*type* column for the
-   * active operator (see `MY_MISSIONS_COLUMNS`). `null` when the operator has not
-   * dragged this mission; it then sorts after positioned missions by the default
-   * fallback order.
-   */
-  myPosition: number | null;
-}
-
-export interface MyMissionsResponse {
-  missions: MyMissionDto[];
-}
-
 // ---- Inbox missions triage (coo:826 / coo:844 / coo:858, contract v124) ---
 //
 // Bounded cross-workspace projection for the Inbox page: agent-authored
@@ -2474,7 +2451,7 @@ export interface InboxMissionsResponse {
 //
 // One bounded projection of live and recently delivered work across every
 // workspace the caller actively belongs to in the active organization — the
-// same membership rule the My Missions aggregate uses. The feed is
+// active membership and mission-read permission in each workspace. The feed is
 // mission-anchored: a mission is one card listing all of its objectives,
 // alongside the blocking questions waiting on a person. Open vocabulary: a
 // client that does not recognize a `kind` renders nothing for that item rather
@@ -2604,54 +2581,6 @@ export interface ActivityFeedDto {
    * missions. `null` when no delivered mission is older than this page's window.
    */
   nextBefore: string | null;
-}
-
-/**
- * The four columns of the **My Missions** board, in display order. My Missions
- * aggregates missions across every project of every workspace in the active
- * organization, and project status *names* are project-defined, so the board is
- * keyed on `StatusType` — the one status vocabulary that is identical in every
- * project. Missions whose status type is outside this list (`draft`, `blocked`,
- * `cancelled`) are not shown on My Missions; they remain on their project board.
- */
-export const MY_MISSIONS_COLUMNS = [
-  { type: 'next', label: 'Next' },
-  { type: 'execute', label: 'Executing' },
-  { type: 'review', label: 'Review' },
-  { type: 'complete', label: 'Completed' }
-] as const satisfies ReadonlyArray<{ type: StatusType; label: string }>;
-
-/** The `StatusType` subset My Missions renders as columns. */
-export type MyMissionsColumnType = (typeof MY_MISSIONS_COLUMNS)[number]['type'];
-
-export const MY_MISSIONS_COLUMN_TYPES: readonly MyMissionsColumnType[] = MY_MISSIONS_COLUMNS.map(
-  column => column.type
-);
-
-/** Type guard for the `StatusType` values My Missions renders as columns. */
-export function isMyMissionsColumnType(value: string): value is MyMissionsColumnType {
-  return (MY_MISSIONS_COLUMN_TYPES as readonly string[]).includes(value);
-}
-
-/**
- * Persist a personal reorder of one My Missions status-type column.
- * `orderedMissionIds` lists every mission assigned to the operator that should
- * occupy the `statusType` column, top-to-bottom, after the move — across every
- * project and workspace the column aggregates. A within-column reorder writes
- * only `my_mission_positions` and never touches `missions.board_position`.
- *
- * Any listed mission whose current status has a *different* type is a real
- * status change: the server resolves the target status **inside that mission's
- * own project** — the lowest-position active status of `statusType` — and
- * updates the mission's `status_id`, `status_type`, and project-board
- * `board_position`. A mission already in a status of `statusType` keeps its
- * concrete status, so a project's custom column naming survives the drag.
- * When a mission's project has no active status of `statusType`, the endpoint
- * returns a typed `STATUS_UNAVAILABLE_FOR_WORKSPACE` error and persists nothing.
- */
-export interface MyMissionReorderRequest {
-  statusType: MyMissionsColumnType;
-  orderedMissionIds: string[];
 }
 
 export interface CreateObjectiveBody {

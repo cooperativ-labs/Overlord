@@ -27,8 +27,6 @@ import type {
   MissionEventDto,
   MissionFileChangesDto,
   MissionScheduleDto,
-  MyMissionReorderRequest,
-  MyMissionsResponse,
   PreviewScheduleBody,
   PurgeMergedWorktreesBody,
   PurgeWorktreesResultDto,
@@ -61,14 +59,6 @@ export const missionsApi = {
   },
   reorderBoardColumn: (projectId: string, body: ReorderBoardColumnBody) =>
     request<MissionDto[]>('PATCH', `/api/projects/${projectId}/board/reorder`, body),
-  listWorkspaceMyMissions: (options: { includeAllCompleted?: boolean } = {}) =>
-    request<MyMissionsResponse>(
-      'GET',
-      `/api/workspace/my-missions${options.includeAllCompleted ? '?includeAllCompleted=1' : ''}`
-    ),
-  reorderWorkspaceMyMissions: (body: MyMissionReorderRequest) =>
-    request<MyMissionsResponse>('PATCH', `/api/workspace/my-missions/order`, body),
-
   searchMissions: (query: string, options: { projectId?: string; limit?: number } = {}) => {
     const params = new URLSearchParams({ q: query });
     if (options.projectId) params.set('projectId', options.projectId);

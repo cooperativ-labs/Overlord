@@ -23,7 +23,7 @@ export function PromotedInboxMissionCard({ initialMission }: { initialMission: M
             . Stays here until you leave Inbox.
           </span>
           <Link
-            to="/user/missions/$missionId"
+            to="/feed/missions/$missionId"
             params={{ missionId: mission.id }}
             className="font-mono text-primary hover:underline"
           >

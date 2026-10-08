@@ -14,7 +14,6 @@ import {
 import { keys } from '@/lib/query-keys.ts';
 
 import type { MissionDetailDto, ProjectStatusDto } from '../../../shared/contract.ts';
-import { resolveProjectStatusForColumn } from '../../pages/my-missions-columns.ts';
 
 import { INBOX_TASK_GROUP_STYLES } from './inbox-task-group-styles.ts';
 import {
@@ -29,6 +28,14 @@ import { InboxTaskRow } from './InboxTaskRow.tsx';
 
 /** How long a checked-off task lingers with Undo before it is deleted. */
 const COMPLETE_UNDO_MS = 5000;
+
+function completeStatusId(statuses: ProjectStatusDto[]): string | null {
+  return (
+    statuses
+      .filter(status => status.type === 'complete')
+      .sort((a, b) => a.position - b.position || a.id.localeCompare(b.id))[0]?.id ?? null
+  );
+}
 
 /**
  * The Inbox as a task list. Private captures and cross-workspace triage
@@ -195,12 +202,9 @@ export function InboxTaskList() {
     (missionId: string) => {
       const mission = missions.find(candidate => candidate.id === missionId);
       if (!mission) return;
-      const completeStatusId = resolveProjectStatusForColumn(
-        statusesByProject.get(mission.projectId) ?? [],
-        'complete'
-      );
-      if (!completeStatusId) return;
-      void setMissionStatus.mutateAsync({ missionId, statusId: completeStatusId });
+      const statusId = completeStatusId(statusesByProject.get(mission.projectId) ?? []);
+      if (!statusId) return;
+      void setMissionStatus.mutateAsync({ missionId, statusId });
     },
     [missions, statusesByProject, setMissionStatus]
   );
@@ -223,7 +227,7 @@ export function InboxTaskList() {
         <section className="flex flex-col gap-0.5">
           {promotedRows.map(([inboxId, mission]) => {
             const project = projectById.get(mission.projectId);
-            const completeStatusId = resolveProjectStatusForColumn(mission.statuses, 'complete');
+            const statusId = completeStatusId(mission.statuses);
             return (
               <InboxPromotedMissionRow
                 key={inboxId}
@@ -233,11 +237,11 @@ export function InboxTaskList() {
                 isExpanded={expandedId === mission.id}
                 onToggleExpanded={() => toggleExpanded(mission.id)}
                 onComplete={
-                  completeStatusId
+                  statusId
                     ? () =>
                         void setMissionStatus.mutateAsync({
                           missionId: mission.id,
-                          statusId: completeStatusId
+                          statusId
                         })
                     : undefined
                 }

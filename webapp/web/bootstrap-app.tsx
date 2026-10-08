@@ -43,7 +43,7 @@ function DesktopDeepLinkNavigation() {
       const target = parseDesktopMissionShellRoute(route);
       if (!target) return;
       void router.navigate({
-        to: '/user/missions/$missionId',
+        to: '/feed/missions/$missionId',
         params: { missionId: target.missionId },
         search: target.objectiveDisplayId ? { objective: target.objectiveDisplayId } : {}
       });

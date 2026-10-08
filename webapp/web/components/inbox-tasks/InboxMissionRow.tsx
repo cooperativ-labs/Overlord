@@ -134,7 +134,7 @@ export function InboxTriageMissionRow({
       projectColor={mission.projectColor}
       onComplete={onComplete ? () => onComplete(mission.id) : undefined}
       onActivate={() =>
-        void navigate({ to: '/user/missions/$missionId', params: { missionId: mission.id } })
+        void navigate({ to: '/feed/missions/$missionId', params: { missionId: mission.id } })
       }
       ariaLabel={`Open ${mission.displayId}: ${mission.title}`}
       subtitle={reason}

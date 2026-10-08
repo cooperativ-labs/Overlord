@@ -1,6 +1,5 @@
 const ACTIVE_ORGANIZATION_STORAGE_PREFIX = 'overlord:active-organization';
 const WORKSPACE_COLLAPSE_STORAGE_PREFIX = 'overlord:workspace-collapse';
-const MY_MISSIONS_PROJECT_FILTER_STORAGE_PREFIX = 'overlord:my-missions-project-filter';
 
 function storageKey(prefix: string, backendKey: string): string {
   return `${prefix}:${backendKey}`;
@@ -108,39 +107,4 @@ export function setWorkspaceSectionExpanded({
   const state = readCollapseState(organizationId);
   state[workspaceId] = expanded;
   writeCollapseState(organizationId, state);
-}
-
-function myMissionsProjectFilterStorageKey(organizationId: string): string {
-  const backendKey =
-    typeof window !== 'undefined'
-      ? (window.localStorage.getItem('overlord:active-backend-key') ?? 'default')
-      : 'default';
-  return `${MY_MISSIONS_PROJECT_FILTER_STORAGE_PREFIX}:${backendKey}:${organizationId}`;
-}
-
-/** Read the device-local My Missions project filter for one organization. */
-export function readMyMissionsProjectFilter(organizationId: string): string[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = window.localStorage.getItem(myMissionsProjectFilterStorageKey(organizationId));
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed) || !parsed.every(id => typeof id === 'string')) return [];
-    return [...new Set(parsed)];
-  } catch {
-    return [];
-  }
-}
-
-/** Persist the device-local My Missions project filter for one organization. */
-export function writeMyMissionsProjectFilter(organizationId: string, projectIds: string[]): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(
-      myMissionsProjectFilterStorageKey(organizationId),
-      JSON.stringify([...new Set(projectIds)])
-    );
-  } catch {
-    /* localStorage may be unavailable */
-  }
 }

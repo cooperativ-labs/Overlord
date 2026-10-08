@@ -212,7 +212,6 @@ import {
   listProjectStatuses,
   listProjectTags,
   listUserTokens,
-  listWorkspaceMyMissions,
   listWorkspaceProjectStatuses,
   listWorktrees,
   markMissionStatusesSeen,
@@ -226,7 +225,6 @@ import {
   reorderFutureObjectives,
   reorderProjects,
   reorderProjectStatuses,
-  reorderWorkspaceMyMissions,
   revokeUserToken,
   searchMissions,
   searchMissionsAcrossWorkspacesV2,
@@ -1440,28 +1438,6 @@ app.delete(
   )
 );
 
-// ---- My Missions (organization aggregate) ---------------------------------
-app.get(
-  '/api/workspace/my-missions',
-  // The service checks MISSION_READ independently for every immutable
-  // authorized-workspace entry. An ambient workspace gate would either select
-  // the old oldest membership or reject valid multi-workspace aggregate reads.
-  // `?includeAllCompleted=1` lifts the rolling completed-mission window so the
-  // board's "load older" control can reveal the whole terminal archive.
-  handle(req =>
-    listWorkspaceMyMissions({
-      includeAllCompleted: isTruthyQueryFlag(req.query.includeAllCompleted)
-    })
-  )
-);
-app.patch(
-  '/api/workspace/my-missions/order',
-  handle(req => reorderWorkspaceMyMissions(req.body), {
-    mutates: true,
-    requires: PERMISSIONS.MISSION_UPDATE
-  })
-);
-
 // ---- Inbox activity feed (cross-workspace) --------------------------------
 // One bounded read for the Inbox feed. Per-workspace authorization happens
 // inside `listActivityFeed`; aggregate reads must not depend on an ambient
@@ -1493,7 +1469,7 @@ app.delete(
 
 // ---- Inbox missions triage (cross-workspace) ------------------------------
 // Agent-authored Next missions for the Inbox page. Same membership /
-// mission:read fan-out as My Missions and the activity feed.
+// mission:read fan-out as the activity feed.
 app.get(
   '/api/inbox/missions',
   handle(() => listInboxMissions())
@@ -1845,7 +1821,7 @@ app.get(
   // Opening a mission clears its status indicator dots: mark all unseen status
   // indicators seen (a no-op when none are unseen), then return detail. `mutates`
   // so the resulting change-feed entry is flushed to realtime clients and the
-  // board/My Missions cards drop the corner dots immediately.
+  // project board cards drop the corner dots immediately.
   handle(
     async req => {
       if (getActiveTokenProjectIds() === null) await markMissionStatusesSeen(req.params.id);
