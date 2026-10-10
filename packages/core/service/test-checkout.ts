@@ -34,7 +34,7 @@ let cleanupRegistered = false;
  */
 export function createIsolatedCheckout(prefix = 'ovld-checkout-'): string {
   const directory = mkdtempSync(path.join(tmpdir(), prefix));
-  execFileSync('git', ['init', '--quiet', directory], { stdio: 'ignore' });
+  execFileSync('git', ['init', '--quiet', '--initial-branch=main', directory], { stdio: 'ignore' });
 
   isolatedCheckouts.push(directory);
   if (!cleanupRegistered) {

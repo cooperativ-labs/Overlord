@@ -1,5 +1,5 @@
 import { createServiceContext, type ServiceContext } from '@overlord/core/service/context';
-import { seedServiceOperator } from '@overlord/core/service/test-helpers';
+import { seedServiceOperator } from '../../../packages/core/service/test-helpers.ts';
 import { createSqliteClient, type DatabaseClient, openInMemoryDatabase } from '@overlord/database';
 
 /**
