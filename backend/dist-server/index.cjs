@@ -167692,7 +167692,7 @@ var hostedMcpToolDefinitions = [
       ["objective"]
     ),
     outputSchema: protocolOutputSchema(
-      "The newly created draft mission, or an intentional unassigned inbox item."
+      "The newly created draft mission, or an intentional unassigned inbox item. For each created objective, inspect the returned ObjectiveDto assignedAgent, model, resourceKey, and queueEntry/autoAdvance fields to verify the persisted launch settings."
     ),
     annotations: writeAction
   },
@@ -167816,7 +167816,9 @@ var hostedMcpToolDefinitions = [
       },
       ["objectives"]
     ),
-    outputSchema: protocolOutputSchema("The mission with the appended draft objectives."),
+    outputSchema: protocolOutputSchema(
+      "The mission with the appended draft objectives. Inspect each returned ObjectiveDto assignedAgent, model, resourceKey, and queueEntry/autoAdvance fields to verify the persisted launch settings."
+    ),
     annotations: writeAction
   },
   {

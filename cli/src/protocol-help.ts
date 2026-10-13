@@ -167,6 +167,8 @@ Environment fallback:
   --session-key  <- SESSION_KEY printed on stderr after attach/connect/prompt/resume-follow-up
   --mission-id    <- mission display id (e.g. coo:8) or UUID
   --objective-id  <- OVERLORD_OBJECTIVE_ID (objective display id, e.g. coo:8.k7xm)
+                     Read commands inherit it only with no explicit mission or a matching
+                     parent mission display id; explicit objective flags are always validated.
   backend URL    <- overlord.toml backend_url, OVERLORD_BACKEND_URL, or dev OVERLORD_BACKEND_URL_DEV
   auth token     <- OVERLORD_USER_TOKEN, OVLD_USER_TOKEN, or USER_TOKEN
 
@@ -261,6 +263,11 @@ connect:
 load-context:
   Purpose:
     Read mission details without creating a session.
+    An explicit mission (flag or positional) ignores an inherited objective unless
+    its parent mission display id matches. This also applies to read-context and
+    attachment reads, including bootstrap fallback. For UUID selectors, explicitly
+    pass the objective to pin the read. Explicit objective/mission pairs retain
+    validation. Reads never change the active execution binding or update/delivery target.
   Required:
     --mission-id <id>            Or --objective-id with a display id
   Optional:
@@ -838,6 +845,7 @@ hook-event:
 read-context:
   Purpose:
     Read persistent shared context written by earlier sessions.
+    Explicit mission selection ignores a different inherited objective (see load-context).
   Required:
     --mission-id <id>
   Optional:
@@ -896,6 +904,7 @@ attachment-list:
     with --objective-id).
     Each entry includes id, filename, mimeType, sizeBytes, status, storageKey, and url.
     The url field is a server-relative path; prepend the backend base URL to download.
+    Explicit mission selection ignores a different inherited objective (see load-context).
   Required:
     --mission-id <id>
   Optional:
@@ -905,6 +914,7 @@ attachment-download-url:
   Purpose:
     Return the authenticated download URL for a specific attachment, or save it
     to a new file using the CLI's existing authentication.
+    Explicit mission selection ignores a different inherited objective (see load-context).
   Required:
     --mission-id <id>
     --attachment-id <id>  (use the id from attachment-list output)

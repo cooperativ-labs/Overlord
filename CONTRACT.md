@@ -2674,6 +2674,19 @@ Owns:
 - `resolveObjectiveRef`: accepts an objective UUID or `{mission.display_id}.{display_key}` public id (e.g. `coo:756.k7xm`); rejects a bare mission id and a wrong separator (`:`, `|`, `-`). Protocol `attach` accepts optional `--objective-id` (same forms). When `--objective-id` or `--execution-request-id` is present, attach pins to that objective and must not rediscover via mission state. `--mission-id` may be omitted when `--objective-id` is a full display id; an objective UUID still requires it. Unpinned attach that would have to choose among two or more equally ranked active objectives (`executing`, else `launching`, else `pending_delivery`) returns 409 `ambiguous_active_objective` instead of guessing. Session-channel bind never falls back to a mission-wide unbound channel when an objective id is known.
 - Opt-in objective parallelism: `missions.allow_parallel_objectives` (default false). When true, two objectives on the same mission may execute concurrently on any resource, including the same one — the Runner Layer separates same-resource pairs with per-objective branch/worktree isolation, and a mission that runs without worktrees shares its single checkout by design. Deliver does not move the mission to `review` while any objective is still `launching` / `executing` / `pending_delivery`.
 - Context assembly format returned by `attach`, including additive `displayKey` / `displayId` on `ObjectiveSummary`
+- `create`, `prompt`, and `add-objectives` return the persisted mission/objective DTOs so callers can verify each objective's assigned agent, model, resource, and queue/auto-advance settings. CLI human-readable creation output echoes those settings; JSON and MCP responses retain their existing structured shapes.
+- CLI read selector precedence: `load-context`, `read-context`, `attachment-list`
+  and `attachment-download-url` inherit a launch objective only when no mission
+  is explicitly selected or its display id matches the objective's parent.
+  An explicit mission flag or positional mission otherwise suppresses environment
+  and recovered-bootstrap objective fallback; opaque UUIDs require an explicit
+  objective to pin a mission-selected read. Explicit objective/mission pairs
+  retain service-layer validation. `list-deliveries` remains mission-wide and
+  never inherits an objective. Reads never attach or change execution bindings;
+  lifecycle and mutation fallback rules are unchanged. This CLI fallback fix
+  changes no command signature, response, authorization, schema or contract
+  version; Protocol/Core, REST, Auth, Database, connectors, Runner, MCP, Desktop,
+  Web, Mobile, Automations and extensions require no implementation changes.
 - Delivery payload structure and validation rules
 - Versioned delivery-report evidence and deterministic/pending presentation in `deliveries.payload_json`, with optional asynchronous Gemini composition of `presentation` only
 - Objective/session-ledger changed-file synchronization plus optional update,
@@ -2755,6 +2768,7 @@ Owns:
 - The owner-only objective/session change ledger and local-only `ovld protocol capture-change` command. Ledger writes are cross-process safe, store normalized workspace-relative paths and bounded attribution metadata only, and require an explicit objective identity; cwd alone never resolves scope.
 - The **agent-session runtime**: the `ovld agent-session` command family and the compiled harness catalog (`cli/src/agent-session/catalog.generated.ts`). It is the only local module that carries agent-session traffic to the backend, and it does so with the channel-scoped `OVERLORD_SESSION_CHANNEL_TOKEN` — never the user's broad `USER_TOKEN`. The runtime reads the compiled catalog, never the descriptor YAML, because parsing YAML on a hook path would violate the latency invariant and the installed adapter may be older than the CLI. `ovld agent-session capabilities [<agent>] [--json]` is a human/agent-facing offline reader of that catalog: no network call, no write, no subprocess. `ovld doctor` additionally reports each connector's installed descriptor digest against the compiled catalog and which mission the current working directory's native session is bound to, and makes no network call to do either — an unbound session must be able to run it with nothing requested on its behalf. Adding a sixth harness must add zero agent-session subcommands
 - Human-readable CLI output format conventions
+- Human-readable `protocol create` / `prompt` output includes every created objective's persisted agent, model, resource, and queue/auto-advance settings, matching the structured mission response.
 
 Does NOT own:
 
@@ -3039,6 +3053,7 @@ Owns:
 - Additive `agent` and `model` inputs on `overlord_create_mission`, forwarded to Protocol `create` as `--objective-agent` / `--objective-model` so the created mission's initial objective carries a launch selection without a second `overlord_add_objectives` call. `model` requires `agent`; both omitted keeps project launch-preference defaulting.
 - Additive `assignedTo` input on `overlord_create_mission`, forwarded to the same service-layer member resolver as Protocol `--assigned-to` (accepting `workspace_users.id`, profile UUID, `orgid:username`, bare username, or email). An unresolvable member is an error, never a silent fallback to unassigned. The MCP surface never resolves members itself, and `assignedTo` is meaningless on the unassigned inbox fallback above.
 - Mission and objective results returned through MCP carry the same `createdByKind` / `createdByAgent` / `createdByWorkspaceUserId` provenance fields as the REST DTOs they project; rows an MCP caller creates are authored on the protocol surface and are therefore `agent`-kind.
+- `overlord_create_mission` and `overlord_add_objectives` return structured mission/objective DTOs with persisted launch assignments and objective settings; tool descriptions identify the fields callers should inspect (`assignedAgent`, `model`, `resourceKey`, and `queueEntry` / `autoAdvance`).
 
 Does NOT own:
 

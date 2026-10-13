@@ -160,6 +160,30 @@ never inherit it: on the first, the id names the row being mutated, and on the
 second, the environment points at the executing objective when the command wants
 a draft.
 
+For `load-context`, `read-context`, `attachment-list`, and
+`attachment-download-url`, an explicit `--mission-id` (or positional mission)
+selects the read independently of a different inherited objective. Environment
+and bootstrap objective fallback is retained only when no mission is explicitly
+selected or the objective's parent mission display id matches it. Opaque UUIDs
+cannot establish that match locally: pass `--objective-id` explicitly to pin a
+read selected by mission UUID, or when the inherited objective is a UUID.
+Explicit objective/mission pairs are still validated by the backend. Matching
+display-id pins and reads with no explicit selector retain their defaults.
+`read-context` reads mission-wide shared data; `list-deliveries` is mission-wide
+and never inherits an objective. `changes` can synchronize the attached ledger
+and keeps its execution-scoped rules, as do lifecycle and mutation commands.
+
+Cross-mission reads do not attach, change objective state, update the active
+mission pointer or session cache, or redirect subsequent updates and delivery.
+Permissions and unpinned active-objective discovery still apply: `load-context`
+can return `no_active_objective` or `ambiguous_active_objective`; explicitly name
+the target objective when needed.
+
+```bash
+# Keep the current execution binding while reading another authorized mission.
+ovld protocol load-context --mission-id coo:700
+```
+
 The reference grammar lives in `@overlord/contract`
 (`parseObjectiveRef`, `formatObjectiveDisplayId`,
 `missionDisplayIdFromObjectiveRef`) and is re-exported by `@overlord/database`;

@@ -108,7 +108,40 @@ export type AgentSessionFeedItem =
  */
 export type MissionFeedItem =
   | { kind: 'event'; id: string; createdAt: string; event: MissionEventDto }
+  | {
+      kind: 'agent_message';
+      id: string;
+      createdAt: string;
+      event: MissionEventDto;
+      from: string | null;
+      content: string;
+    }
   | { kind: 'agent_session'; id: string; createdAt: string; item: AgentSessionFeedItem };
+
+interface AgentMessageBlock {
+  from: string | null;
+  content: string;
+}
+
+/** Extract explicit agent-message blocks from event text without treating them as user speech. */
+function splitAgentMessageBlocks(text: string): Array<string | AgentMessageBlock> {
+  const blocks: Array<string | AgentMessageBlock> = [];
+  const pattern = /<agent-message\b([^>]*)>([\s\S]*?)<\/agent-message\s*>/gi;
+  let cursor = 0;
+  for (const match of text.matchAll(pattern)) {
+    const index = match.index ?? 0;
+    const before = text.slice(cursor, index).trim();
+    if (before) blocks.push(before);
+    const fromMatch = /\bfrom\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(match[1] ?? '');
+    const from = (fromMatch?.[1] ?? fromMatch?.[2] ?? fromMatch?.[3] ?? '').trim() || null;
+    const content = (match[2] ?? '').trim();
+    if (content) blocks.push({ from, content });
+    cursor = index + match[0].length;
+  }
+  const after = text.slice(cursor).trim();
+  if (after) blocks.push(after);
+  return blocks.length > 0 ? blocks : [text];
+}
 
 function timestampValue(iso: string): number {
   const value = new Date(iso).getTime();
@@ -135,7 +168,33 @@ export function groupMissionFeedItems(
       executionStatus.push(event);
       continue;
     }
-    midFeed.push({ kind: 'event', id: event.id, createdAt: event.createdAt, event });
+    const parts = splitAgentMessageBlocks(event.summary ?? '');
+    if (parts.length === 1 && typeof parts[0] === 'string' && parts[0] === (event.summary ?? '')) {
+      midFeed.push({ kind: 'event', id: event.id, createdAt: event.createdAt, event });
+      continue;
+    }
+
+    let ordinaryPart = 0;
+    let agentMessagePart = 0;
+    for (const part of parts) {
+      if (typeof part === 'string') {
+        midFeed.push({
+          kind: 'event',
+          id: `${event.id}:text:${ordinaryPart++}`,
+          createdAt: event.createdAt,
+          event: { ...event, summary: part }
+        });
+      } else {
+        midFeed.push({
+          kind: 'agent_message',
+          id: `${event.id}:agent-message:${agentMessagePart++}`,
+          createdAt: event.createdAt,
+          event,
+          from: part.from,
+          content: part.content
+        });
+      }
+    }
   }
 
   for (const item of agentSessionItems) {

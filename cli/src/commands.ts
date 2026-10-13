@@ -592,6 +592,31 @@ function missionDisplayId(mission: unknown): string {
       : 'unknown';
 }
 
+function createdObjectiveLines(mission: unknown): string[] {
+  const objectives = asRecord(mission).objectives;
+  if (!Array.isArray(objectives)) return [];
+  return objectives.map((entry, index) => {
+    const objective = asRecord(entry);
+    const identifier =
+      (typeof objective.displayId === 'string' && objective.displayId) ||
+      (typeof objective.id === 'string' && objective.id) ||
+      `#${index + 1}`;
+    const assignedAgent =
+      typeof objective.assignedAgent === 'string' ? objective.assignedAgent : 'project default';
+    const model = typeof objective.model === 'string' ? objective.model : 'project default';
+    const resource =
+      typeof objective.resourceKey === 'string' ? objective.resourceKey : 'project default';
+    const fields = [
+      `agent=${assignedAgent}`,
+      `model=${model}`,
+      `resource=${resource}`,
+      `autoAdvance=${objective.autoAdvance === true}`
+    ];
+    const title = typeof objective.title === 'string' && objective.title.trim();
+    return `  Objective ${identifier}${title ? ` (${title})` : ''}: ${fields.join(', ')}`;
+  });
+}
+
 /** One `objectives[]` entry in the REST `POST /api/missions` body. */
 type CreateObjectiveInput = {
   objective: string;
@@ -663,6 +688,16 @@ const OBJECTIVE_SCOPED_SUBCOMMANDS = new Set([
   'update',
   'update-artifact',
   'write-context'
+]);
+
+// These reads may inspect another mission while execution remains bound to the
+// launch objective. `changes` is intentionally excluded: it drains the attached
+// objective's ledger. `list-deliveries` never inherits an objective at all.
+const READ_ONLY_MISSION_SUBCOMMANDS = new Set([
+  'load-context',
+  'read-context',
+  'attachment-list',
+  'attachment-download-url'
 ]);
 
 const RETIRED_CHANGE_TRACKING_FLAGS: Record<string, readonly string[]> = {
@@ -826,6 +861,11 @@ export async function runProtocolCommand({
 
   const workingDirectory = process.cwd();
   const flags = Object.fromEntries(parsed.flags);
+  const explicitMissionId = flagValue(parsed.flags, '--mission-id') ?? parsed.positional[0];
+  const mayInheritObjective = (objectiveId: string): boolean =>
+    !READ_ONLY_MISSION_SUBCOMMANDS.has(subcommand) ||
+    explicitMissionId === undefined ||
+    missionDisplayIdFromObjectiveRef(objectiveId) === explicitMissionId.trim();
   const retiredFlags = RETIRED_CHANGE_TRACKING_FLAGS[subcommand] ?? [];
   const suppliedRetiredFlags = retiredFlags.filter(flag => flag in flags);
   if (suppliedRetiredFlags.length > 0) {
@@ -845,7 +885,8 @@ export async function runProtocolCommand({
   if (
     OBJECTIVE_SCOPED_SUBCOMMANDS.has(subcommand) &&
     typeof flags['--objective-id'] !== 'string' &&
-    process.env.OVERLORD_OBJECTIVE_ID
+    process.env.OVERLORD_OBJECTIVE_ID &&
+    mayInheritObjective(process.env.OVERLORD_OBJECTIVE_ID)
   ) {
     flags['--objective-id'] = process.env.OVERLORD_OBJECTIVE_ID;
   }
@@ -861,7 +902,6 @@ export async function runProtocolCommand({
   // Agent-pod / `agp` launches often strip the Overlord launch exports from the agent process
   // environment even though they remain in `.overlord/tmp/launch-*.sh`. Recover the non-secret
   // channel id (and execution request id) from that script so attach still binds.
-  const explicitMissionId = flagValue(parsed.flags, '--mission-id') ?? parsed.positional[0];
   if (subcommand === 'attach' || OBJECTIVE_SCOPED_SUBCOMMANDS.has(subcommand)) {
     const needsChannelId =
       subcommand === 'attach' && typeof flags['--session-channel-id'] !== 'string';
@@ -894,7 +934,11 @@ export async function runProtocolCommand({
         if (needsExecutionRequestId && recovered.executionRequestId) {
           flags['--execution-request-id'] = recovered.executionRequestId;
         }
-        if (needsObjectiveId && recovered.objectiveId) {
+        if (
+          needsObjectiveId &&
+          recovered.objectiveId &&
+          mayInheritObjective(recovered.objectiveId)
+        ) {
           flags['--objective-id'] = recovered.objectiveId;
         }
       }
@@ -1631,7 +1675,10 @@ export async function runManagementCommand({
         }
       }
       if (json) printJson(mission);
-      else console.log(`Created mission ${missionDisplayId(mission)}`);
+      else {
+        console.log(`Created mission ${missionDisplayId(mission)}`);
+        for (const line of createdObjectiveLines(mission)) console.log(line);
+      }
       return;
     }
     case 'attach':

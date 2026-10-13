@@ -19,6 +19,7 @@ import { AuthenticatedAvatarImage, Avatar, AvatarFallback } from '@/components/u
 import type { MissionEventDto, MissionEventType } from '../../shared/contract.ts';
 import { formatAgentHarnessText } from '../lib/agent-harness-text.ts';
 import { formatTimestamp } from '../lib/format-date.ts';
+import type { MissionFeedItem } from '../lib/mission-feed.ts';
 import { groupMissionFeedItems, resolveEventPresentation } from '../lib/mission-feed.ts';
 import { useMissionAgentRequests, useMissionEvents } from '../lib/queries.ts';
 
@@ -323,6 +324,31 @@ function ActivityEntry({
   );
 }
 
+function AgentMessageEntry({
+  item
+}: {
+  item: Extract<MissionFeedItem, { kind: 'agent_message' }>;
+}) {
+  return (
+    <article className="flex min-w-0 gap-3 rounded-md border border-violet-400/30 bg-violet-50/40 px-3 py-2 dark:border-violet-500/25 dark:bg-violet-500/5">
+      <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center">
+        <MessageSquare className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+      </div>
+      <div className="grid min-w-0 flex-1 gap-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-violet-700 dark:text-violet-300">
+            Agent message{item.from ? ` · ${item.from}` : ''}
+          </span>
+          <span className="text-[11px] text-(--color-ink-dim)">
+            {formatTimestamp(item.createdAt)}
+          </span>
+        </div>
+        <ExpandableSummary text={item.content} tone="text-violet-800 dark:text-violet-200" />
+      </div>
+    </article>
+  );
+}
+
 /**
  * Collapsed execution-status section: shows the most recent launch/status event
  * as the headline. Click expands to the full chronological history for that
@@ -435,6 +461,8 @@ export function LiveActivityFeed({ missionId }: { missionId: string }) {
       {midFeed.map(item =>
         item.kind === 'event' ? (
           <ActivityEntry key={item.id} event={item.event} missionId={missionId} />
+        ) : item.kind === 'agent_message' ? (
+          <AgentMessageEntry key={item.id} item={item} />
         ) : null
       )}
       {executionStatus.length > 0 ? (

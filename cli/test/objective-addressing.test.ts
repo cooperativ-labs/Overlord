@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -39,13 +39,16 @@ async function withIsolatedEnv(run: () => Promise<void>): Promise<void> {
     objective: process.env.OVERLORD_OBJECTIVE_ID,
     mission: process.env.MISSION_ID,
     overlordMission: process.env.OVERLORD_MISSION_ID,
-    executionRequest: process.env.OVERLORD_EXECUTION_REQUEST_ID
+    executionRequest: process.env.OVERLORD_EXECUTION_REQUEST_ID,
+    scratch: process.env.OVERLORD_TMPDIR
   };
   process.env.OVLD_HOME = mkdtempSync(path.join(tmpdir(), 'ovld-objective-addressing-'));
   delete process.env.OVERLORD_OBJECTIVE_ID;
   delete process.env.MISSION_ID;
   delete process.env.OVERLORD_MISSION_ID;
   delete process.env.OVERLORD_EXECUTION_REQUEST_ID;
+  // Mocked delivery must never clean up the real launching agent's scratch.
+  delete process.env.OVERLORD_TMPDIR;
   try {
     await run();
   } finally {
@@ -54,7 +57,8 @@ async function withIsolatedEnv(run: () => Promise<void>): Promise<void> {
       ['OVERLORD_OBJECTIVE_ID', saved.objective],
       ['MISSION_ID', saved.mission],
       ['OVERLORD_MISSION_ID', saved.overlordMission],
-      ['OVERLORD_EXECUTION_REQUEST_ID', saved.executionRequest]
+      ['OVERLORD_EXECUTION_REQUEST_ID', saved.executionRequest],
+      ['OVERLORD_TMPDIR', saved.scratch]
     ] as const) {
       if (value === undefined) delete process.env[key];
       else process.env[key] = value;
@@ -126,6 +130,109 @@ test('OVERLORD_OBJECTIVE_ID fills --objective-id beyond attach', async () => {
       assert.equal(body.flags['--objective-id'], 'coo:756.k7xm', `body ${index}`);
       assert.equal(body.flags['--mission-id'], 'coo:756', `body ${index}`);
     }
+  });
+});
+
+const missionReads = ['load-context', 'read-context', 'attachment-list', 'attachment-download-url'];
+
+test('explicit read missions suppress conflicting inherited objectives, including positional and UUID selectors', async () => {
+  await withIsolatedEnv(async () => {
+    const { runtime, posted } = capturingRuntime();
+    for (const objective of ['coo:756.k7xm', '550e8400-e29b-41d4-a716-446655440000']) {
+      process.env.OVERLORD_OBJECTIVE_ID = objective;
+      for (const subcommand of missionReads) {
+        for (const args of [
+          ['--mission-id', 'coo:757'],
+          ['coo:757'],
+          ['--mission-id', '550e8400-e29b-41d4-a716-446655440001']
+        ]) {
+          await runProtocolCommand({ runtime, subcommand, args });
+          assert.equal(posted.at(-1)!.flags['--objective-id'], undefined, subcommand);
+          assert.equal(posted.at(-1)!.flags['--mission-id'], args.at(-1));
+        }
+      }
+    }
+  });
+});
+
+test('matching inherited pins, explicit pins, and absent selectors retain read defaults', async () => {
+  await withIsolatedEnv(async () => {
+    const { runtime, posted } = capturingRuntime();
+    for (const subcommand of missionReads) {
+      process.env.OVERLORD_OBJECTIVE_ID = 'coo:756.k7xm';
+      for (const args of [[], ['--mission-id', 'coo:756'], ['coo:756']]) {
+        await runProtocolCommand({ runtime, subcommand, args });
+        assert.equal(posted.at(-1)!.flags['--objective-id'], 'coo:756.k7xm');
+        assert.equal(posted.at(-1)!.flags['--mission-id'], 'coo:756');
+      }
+      // The backend must see even mismatched explicit pairs and validate them.
+      for (const mission of ['coo:756', 'coo:757']) {
+        await runProtocolCommand({
+          runtime,
+          subcommand,
+          args: ['--mission-id', mission, '--objective-id', 'coo:756.k7xm']
+        });
+        assert.equal(posted.at(-1)!.flags['--objective-id'], 'coo:756.k7xm');
+        assert.equal(posted.at(-1)!.flags['--mission-id'], mission);
+      }
+      delete process.env.OVERLORD_OBJECTIVE_ID;
+      for (const args of [[], ['--mission-id', 'coo:757']]) {
+        await runProtocolCommand({ runtime, subcommand, args });
+        assert.equal(posted.at(-1)!.flags['--objective-id'], undefined);
+        assert.equal(posted.at(-1)!.flags['--mission-id'], args.at(-1));
+      }
+    }
+  });
+});
+
+test('read bootstrap recovery cannot restore a conflicting pin and still retains matching pins', async () => {
+  await withIsolatedEnv(async () => {
+    const originalCwd = process.cwd();
+    const checkout = mkdtempSync(path.join(tmpdir(), 'ovld-read-bootstrap-'));
+    const launchDir = path.join(checkout, '.overlord', 'tmp');
+    mkdirSync(launchDir, { recursive: true });
+    const script = path.join(launchDir, 'launch-coo-757-test.sh');
+    process.chdir(checkout);
+    try {
+      const { runtime, posted } = capturingRuntime();
+      for (const objective of ['coo:756.k7xm', 'coo:757.k7xm']) {
+        writeFileSync(script, `export OVERLORD_OBJECTIVE_ID='${objective}'`);
+        for (const subcommand of missionReads) {
+          await runProtocolCommand({ runtime, subcommand, args: ['--mission-id', 'coo:757'] });
+          assert.equal(
+            posted.at(-1)!.flags['--objective-id'],
+            objective.startsWith('coo:757.') ? objective : undefined
+          );
+        }
+      }
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+});
+
+test('execution and ledger commands keep inherited targeting while list-deliveries remains mission-wide', async () => {
+  await withIsolatedEnv(async () => {
+    process.env.OVERLORD_OBJECTIVE_ID = 'coo:756.k7xm';
+    const { runtime, posted } = capturingRuntime();
+    for (const subcommand of [
+      'attach',
+      'connect',
+      'update',
+      'deliver',
+      'write-context',
+      'add-artifact'
+    ]) {
+      await runProtocolCommand({ runtime, subcommand, args: ['--mission-id', 'coo:757'] });
+      assert.equal(posted.at(-1)!.flags['--objective-id'], 'coo:756.k7xm', subcommand);
+    }
+    await runProtocolCommand({
+      runtime,
+      subcommand: 'list-deliveries',
+      args: ['--mission-id', 'coo:757']
+    });
+    assert.equal(posted.at(-1)!.flags['--objective-id'], undefined);
+    assert.equal(posted.at(-1)!.flags['--mission-id'], 'coo:757');
   });
 });
 
