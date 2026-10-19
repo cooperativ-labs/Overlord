@@ -24,6 +24,7 @@ import { type ChatEngine, chatSourceCheckers, createChatEngine } from './chat/en
 import { chatLimitsFromEnv } from './chat/limits.ts';
 import { ConnectionsConfigError } from './connections/config.ts';
 import { type ConnectionsRuntime, createConnectionsRuntime } from './connections/index.ts';
+import { writeKeySource } from './connections/keyring.ts';
 import {
   createConnectionsPublicRouter,
   createConnectionsRouter,
@@ -2371,20 +2372,22 @@ async function start(): Promise<void> {
   // Knowledgebase readiness (contract v156): the server and key source, never the key itself.
   if (chatCloud()) {
     const connections = connectionsModule().config;
-    const keySource = connections.keyRing.current
-      ? 'ACCOUNT_CONNECTIONS_ENCRYPTION_KEY'
-      : connections.keyRing.platform
-        ? 'platform key derived from BETTER_AUTH_SECRET'
-        : null;
+    const keySource = writeKeySource(connections.keyRing, 'knowledgebase');
+    const keySourceLabel =
+      keySource === 'explicit'
+        ? 'ACCOUNT_CONNECTIONS_ENCRYPTION_KEY'
+        : keySource === 'platform'
+          ? 'platform key derived from BETTER_AUTH_SECRET'
+          : null;
     if (!connections.knowledgebase)
       console.log('[connections] Knowledgebase turned off on this server');
-    else if (!keySource)
+    else if (!keySourceLabel)
       console.error(
         '[connections] Knowledgebase unavailable: set BETTER_AUTH_SECRET (or ACCOUNT_CONNECTIONS_ENCRYPTION_KEY) so credentials can be encrypted'
       );
     else
       console.log(
-        `[connections] Knowledgebase ${new URL(connections.knowledgebase.mcpUrl).origin} (${connections.knowledgebase.source}); credentials sealed with ${keySource}`
+        `[connections] Knowledgebase ${new URL(connections.knowledgebase.mcpUrl).origin} (${connections.knowledgebase.source}); credentials sealed with ${keySourceLabel}`
       );
   }
 

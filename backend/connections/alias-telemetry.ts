@@ -29,8 +29,3 @@ export function recordConnectionAliasHit(route: string, req: Request, now = Date
   counts.clear();
   console.warn(`[connections] legacy alias hits in the last hour: ${summary}`);
 }
-
-/** Current counts (tests and diagnostics). */
-export function connectionAliasHitCounts(): Record<string, number> {
-  return Object.fromEntries(counts);
-}
