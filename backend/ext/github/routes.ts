@@ -2,6 +2,7 @@ import { type Permission, PERMISSIONS } from '@overlord/auth';
 import { type NextFunction, type Request, type Response, Router } from 'express';
 
 import { recordConnectionAliasHit } from '../../connections/alias-telemetry.ts';
+import type { ProfileConnections } from '../../connections/profile.ts';
 import { ApiError } from '../../errors.ts';
 import { missionRoute, projectRoute } from '../resource-routes.ts';
 
@@ -16,12 +17,7 @@ import {
   linkProjectGitHub,
   listGitHubRepos
 } from './service.ts';
-import {
-  beginGitHubUserAuthorization,
-  disconnectGitHubUser,
-  getGitHubUserConnection,
-  listGitHubRepositoryOwners
-} from './user-oauth.ts';
+import { createGitHubUserOAuth } from './user-oauth.ts';
 
 type RouteHandler = (
   fn: (req: Request, res: Response) => unknown,
@@ -36,8 +32,14 @@ function workspaceId(req: Request): string {
 
 export function createGitHubExtensionRouter(
   handle: RouteHandler,
-  options: { allowedBrowserOrigins?: readonly string[] } = {}
+  options: { allowedBrowserOrigins?: readonly string[]; connections: () => ProfileConnections }
 ): Router {
+  const {
+    beginGitHubUserAuthorization,
+    disconnectGitHubUser,
+    getGitHubUserConnection,
+    listGitHubRepositoryOwners
+  } = createGitHubUserOAuth(options.connections);
   const router = Router();
   // Compatibility aliases over the shared account-connections module (contract v153);
   // `POST /api/connections` with `provider: 'github'` is the canonical start route.

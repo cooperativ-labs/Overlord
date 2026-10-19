@@ -8,15 +8,19 @@ import type { AddressInfo } from 'node:net';
 import { describe, it } from 'node:test';
 
 import { apiErrorHandler } from '../errors.ts';
-import { conformanceAdapters, createConformanceDatabase } from '../test-helpers.ts';
+import {
+  conformanceAdapters,
+  createConformanceDatabase,
+  seedChatIdentities
+} from '../test-helpers.ts';
 
 import { openSecret, sealSecret } from './crypto.ts';
 import { createConnectionsRuntime } from './index.ts';
 import { keyRingFromEnv } from './keyring.ts';
 import {
+  type ProfileConnectionProvider,
   ProfileConnections,
-  ProviderCredentialError,
-  registerProfileConnectionProvider
+  ProviderCredentialError
 } from './profile.ts';
 import { createConnectionsRouter } from './routes.ts';
 import { ConnectionAccessError } from './service.ts';
@@ -69,7 +73,7 @@ function legacyEverhourEnvelope(apiKey: string, profileId: string, encodedKey: s
   });
 }
 
-registerProfileConnectionProvider({
+const everhourProvider: ProfileConnectionProvider = {
   provider: 'everhour',
   serverUrl: 'https://api.everhour.com',
   credentialKind: 'api_key',
@@ -119,7 +123,7 @@ registerProfileConnectionProvider({
       );
     }
   }
-});
+};
 
 /** Put `account_connections` back to its v152 shape (the state the v153 migration meets). */
 async function rewindToV152(db: DatabaseClient) {
@@ -150,26 +154,17 @@ async function rewindToV152(db: DatabaseClient) {
 }
 
 async function seedIdentities(db: DatabaseClient) {
-  const bool = db.dialect === 'sqlite' ? '0' : 'FALSE';
-  for (const id of ['owner', 'other', 'gone'])
-    await db.run(
-      `INSERT INTO "user" (id, name, email, "emailVerified", "createdAt", "updatedAt") VALUES (?, ?, ?, ${bool}, ?, ?)`,
-      [id, id, `${id}@test.invalid`, STAMP, STAMP]
-    );
-  await db.run('INSERT INTO organizations (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)', [
-    'org',
-    'org',
-    STAMP,
-    STAMP
-  ]);
-  await db.run(
-    "INSERT INTO workspaces (id, organization_id, slug, name, kind, created_at, updated_at) VALUES ('ws', 'org', 'ws', 'ws', 'hosted', ?, ?)",
-    [STAMP, STAMP]
-  );
-  await db.run(
-    "INSERT INTO workspace_users (id, workspace_id, profile_id, member_key, status, created_at, updated_at) VALUES ('m1', 'ws', 'owner', 'owner-ws', 'active', ?, ?)",
-    [STAMP, STAMP]
-  );
+  await seedChatIdentities(db, {
+    stamp: STAMP,
+    profiles: ['owner', 'other', 'gone'].map(id => ({ id })),
+    workspaces: [
+      {
+        id: 'ws',
+        organizationId: 'org',
+        members: [{ id: 'm1', profileId: 'owner', memberKey: 'owner-ws' }]
+      }
+    ]
+  });
 }
 
 async function insertLegacyEverhour(
@@ -226,7 +221,7 @@ async function migratedWithLegacy(db: DatabaseClient) {
 }
 
 const profiles = (db: DatabaseClient, env: NodeJS.ProcessEnv) =>
-  new ProfileConnections(db, keyRingFromEnv(env));
+  new ProfileConnections(db, keyRingFromEnv(env), [everhourProvider]);
 
 type Row = Record<string, unknown>;
 const everhourRow = (db: DatabaseClient, profileId = 'owner') =>
@@ -237,6 +232,30 @@ const everhourRow = (db: DatabaseClient, profileId = 'owner') =>
 
 for (const adapter of adapters) {
   describe(`v153 account-connections migration (${adapter})`, () => {
+    it('isolates explicitly supplied providers across runtime instances', async () => {
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'profile_providers');
+      try {
+        const options = {
+          db,
+          env: { KNOWLEDGEBASE_MCP_URL: 'off', ACCOUNT_CONNECTIONS_ENCRYPTION_KEY: CURRENT_KEY },
+          publicBaseUrl: 'https://overlord.test',
+          webReturnOrigin: null
+        };
+        const first = createConnectionsRuntime({ ...options, providers: [everhourProvider] });
+        const secondProvider = { ...everhourProvider, label: 'Second runtime' };
+        const second = createConnectionsRuntime({ ...options, providers: [secondProvider] });
+        const empty = createConnectionsRuntime(options);
+        assert.equal(first.profiles.provider('everhour'), everhourProvider);
+        assert.equal(second.profiles.provider('everhour'), secondProvider);
+        assert.equal(first.profiles.available('everhour'), true);
+        assert.equal(empty.profiles.provider('everhour'), null);
+        assert.deepEqual(empty.profiles.providers(), []);
+        assert.equal(first.profiles.provider('unknown'), null);
+      } finally {
+        await cleanup();
+      }
+    });
+
     it('rebuilds account_connections preserving Knowledgebase rows and links', async () => {
       const { db, cleanup } = await createConformanceDatabase(adapter, 'profile_connections');
       try {
@@ -486,7 +505,8 @@ for (const adapter of adapters) {
         );
         const store = new ProfileConnections(
           db,
-          keyRingFromEnv({ EVERHOUR_API_KEY_ENCRYPTION_KEY: EVERHOUR_ENV_KEY })
+          keyRingFromEnv({ EVERHOUR_API_KEY_ENCRYPTION_KEY: EVERHOUR_ENV_KEY }),
+          [everhourProvider]
         );
         // Only the legacy-source check would stop a copy whose source is gone; with a live
         // source id it must still fail on the binding.
@@ -517,6 +537,7 @@ for (const adapter of adapters) {
       try {
         await migratedWithLegacy(db);
         const runtime = createConnectionsRuntime({
+          providers: [everhourProvider],
           db,
           env: { EVERHOUR_API_KEY_ENCRYPTION_KEY: EVERHOUR_ENV_KEY },
           publicBaseUrl: 'https://backend.test',

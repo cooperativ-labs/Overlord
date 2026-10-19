@@ -1,27 +1,35 @@
 import { type DatabaseClient } from '@overlord/database';
 import assert from 'node:assert/strict';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { describe, it } from 'node:test';
 
 import { Conversations } from '../../packages/core/service/chat/conversations.ts';
 import { ChatRuns } from '../../packages/core/service/chat/runs.ts';
 import type { ChatOptions, ChatOwner } from '../../packages/core/service/chat/store.ts';
 import { ChatToolGateway } from '../../packages/core/service/chat/tools.ts';
-import { type ConnectionsRuntime, createConnectionsRuntime } from '../connections/index.ts';
+import { type ConnectionsRuntime } from '../connections/index.ts';
 import {
+  connectFakeKnowledgebase,
   FakeKnowledgebase,
-  type FakeNode,
-  KB_MCP_URL
+  type FakeNode
 } from '../connections/knowledgebase-test-fixture.ts';
 import { namespacedToolId } from '../connections/policy.ts';
 import {
   type ConformanceAdapter,
   conformanceAdapters,
-  createConformanceDatabase
+  createConformanceDatabase,
+  seedChatIdentities
 } from '../test-helpers.ts';
 
-import { EvaluationGeminiRuntime as GeminiChatRuntime } from './evaluation-runtime.ts';
-import type { GeminiChunk, GeminiClient, GeminiPart, GeminiRequest } from './gemini-client.ts';
+import {
+  call,
+  declaredNames,
+  executeNext,
+  responses,
+  ScriptedGemini,
+  scriptedRuntime,
+  text
+} from './chat-test-fixture.ts';
 
 /**
  * Assistant Knowledgebase writes end to end (per:202.62e3, contract v154): the real
@@ -32,37 +40,6 @@ import type { GeminiChunk, GeminiClient, GeminiPart, GeminiRequest } from './gem
 const owner: ChatOwner = { profileId: 'owner', organizationId: 'org' };
 const other: ChatOwner = { profileId: 'other', organizationId: 'org' };
 const adapters = conformanceAdapters();
-
-class ScriptedGemini implements GeminiClient {
-  readonly requests: GeminiRequest[] = [];
-  constructor(private readonly script: ((req: GeminiRequest) => GeminiPart[])[]) {}
-  async stream(request: GeminiRequest): Promise<AsyncIterable<GeminiChunk>> {
-    this.requests.push(
-      structuredClone({ ...request, config: { ...request.config, abortSignal: undefined } })
-    );
-    const step = this.script.shift();
-    if (!step) throw new Error('script exhausted');
-    const parts = step(request);
-    return (async function* () {
-      yield { candidates: [{ content: { parts } }] };
-    })();
-  }
-  async generate() {
-    return { text: 'summary' };
-  }
-}
-const call = (name: string, args: Record<string, unknown>): GeminiPart => ({
-  functionCall: { name, args }
-});
-const text = (t: string): GeminiPart => ({ text: t });
-const declaredNames = (req: GeminiRequest) =>
-  (req.config.tools?.[0]?.functionDeclarations ?? []).map(d => d.name);
-/** The function responses of the latest provider request, in call order. */
-const responses = (req: GeminiRequest) =>
-  req.contents
-    .flatMap(c => c.parts)
-    .filter(p => p.functionResponse)
-    .map(p => p.functionResponse!.response as Record<string, unknown>);
 
 class Crash extends Error {}
 
@@ -84,42 +61,19 @@ async function world(adapter: ConformanceAdapter, fn: (w: World) => Promise<void
   try {
     const kb = new FakeKnowledgebase();
     const stamp = new Date(kb.now).toISOString();
-    const f = db.dialect === 'sqlite' ? '0' : 'FALSE';
-    for (const id of ['owner', 'other'])
-      await db.run(
-        `INSERT INTO "user" (id, name, email, "emailVerified", "createdAt", "updatedAt") VALUES (?, ?, ?, ${f}, ?, ?)`,
-        [id, id, `${id}@test.invalid`, stamp, stamp]
-      );
-    await db.run(
-      "INSERT INTO organizations (id, name, created_at, updated_at) VALUES ('org', 'org', ?, ?)",
-      [stamp, stamp]
-    );
-    await db.run(
-      "INSERT INTO workspaces (id, organization_id, slug, name, kind, created_at, updated_at) VALUES ('ws-org', 'org', 'ws-org', 'org', 'hosted', ?, ?)",
-      [stamp, stamp]
-    );
-    for (const id of ['owner', 'other'])
-      await db.run(
-        "INSERT INTO workspace_users (id, workspace_id, profile_id, member_key, status, created_at, updated_at) VALUES (?, 'ws-org', ?, ?, 'active', ?, ?)",
-        [`m-${id}`, id, id, stamp, stamp]
-      );
-    const rt = createConnectionsRuntime({
-      db,
-      env: {
-        KNOWLEDGEBASE_MCP_URL: KB_MCP_URL,
-        ACCOUNT_CONNECTIONS_ENCRYPTION_KEY: randomBytes(32).toString('base64url')
-      },
-      publicBaseUrl: 'https://backend.test',
-      webReturnOrigin: 'https://app.test',
-      fetch: kb.fetch,
-      now: () => kb.now
+    await seedChatIdentities(db, {
+      stamp,
+      profiles: ['owner', 'other'].map(id => ({ id })),
+      workspaces: [
+        {
+          id: 'ws-org',
+          organizationId: 'org',
+          name: 'org',
+          members: ['owner', 'other'].map(id => ({ id: `m-${id}`, profileId: id }))
+        }
+      ]
     });
-    const started = await rt.connections.start(owner, {
-      provider: 'knowledgebase',
-      returnTo: 'web'
-    });
-    await rt.connections.complete(kb.consent(started.authorizeUrl, 'kb-owner'));
-    const connectionId = started.connectionId;
+    const { rt, connectionId } = await connectFakeKnowledgebase(db, kb, owner);
     const mcp = rt.knowledgebase!;
     const options: ChatOptions = {
       now: () => kb.now,
@@ -143,16 +97,6 @@ async function world(adapter: ConformanceAdapter, fn: (w: World) => Promise<void
   } finally {
     await cleanup();
   }
-}
-
-const runtime = (w: World, client: GeminiClient) =>
-  new GeminiChatRuntime({ client, gateway: w.gateway, coalesceMs: 0, summaryEveryMessages: 100 });
-
-async function execute(w: World, rt: GeminiChatRuntime) {
-  const a = await w.runs.claim('worker', rt.identity);
-  assert.ok(a, 'a run is claimable');
-  await rt.execute(a, w.runs, new AbortController().signal);
-  return a;
 }
 
 function seedFeatureProject(kb: FakeKnowledgebase) {
@@ -197,7 +141,7 @@ for (const adapter of adapters)
           text: 'Summarize my offline notes'
         });
         assert.equal(created.run!.knowledgebaseWrite, null);
-        await execute(w, runtime(w, gemini));
+        await executeNext(w.runs, scriptedRuntime(w.gateway, gemini));
         const names = declaredNames(gemini.requests[0]!);
         assert.ok(names.includes(w.tool('query')), 'reviewed query is a read');
         assert.ok(names.includes(w.tool('get_registries')));
@@ -281,7 +225,7 @@ for (const adapter of adapters)
         const preVotes = structuredClone(feature.properties);
         preVotes.stale_key = 'remove me';
         feature.properties = preVotes;
-        await execute(w, runtime(w, gemini));
+        await executeNext(w.runs, scriptedRuntime(w.gateway, gemini));
 
         const names = declaredNames(gemini.requests[0]!);
         for (const tool of [
@@ -402,7 +346,7 @@ for (const adapter of adapters)
           text: 'Record this in both workspaces'
         });
         assert.equal(created.run!.knowledgebaseWrite, null, 'no per-request grant is stored');
-        await execute(w, runtime(w, gemini));
+        await executeNext(w.runs, scriptedRuntime(w.gateway, gemini));
         const declaration = (
           gemini.requests[0]!.config.tools?.[0]?.functionDeclarations ?? []
         ).find(d => d.name === w.tool('create_node'));
@@ -457,7 +401,7 @@ for (const adapter of adapters)
             })
           ]
         ]);
-        const rt1 = runtime(w, first);
+        const rt1 = scriptedRuntime(w.gateway, first);
         const dying = new Proxy(w.runs, {
           get(target, prop, receiver) {
             const value = Reflect.get(target, prop, receiver);
@@ -482,7 +426,7 @@ for (const adapter of adapters)
             return [text('Edits are no longer authorized.')];
           }
         ]);
-        await execute(w, runtime(w, second));
+        await executeNext(w.runs, scriptedRuntime(w.gateway, second));
         assert.equal(w.kb.calls.filter(c => c.tool === 'create_node').length, 0);
         assert.equal(w.kb.nodes.size, 0);
       }));
@@ -504,7 +448,7 @@ for (const adapter of adapters)
         // First attempt: the write reaches the Knowledgebase, then the worker dies before
         // its result is recorded.
         const first = new ScriptedGemini([() => [call(w.tool('create_node'), createArgs)]]);
-        const rt1 = runtime(w, first);
+        const rt1 = scriptedRuntime(w.gateway, first);
         const dying = new Proxy(w.runs, {
           get(target, prop, receiver) {
             const value = Reflect.get(target, prop, receiver);
@@ -530,7 +474,7 @@ for (const adapter of adapters)
           },
           () => [text('The decision note was already saved.')]
         ]);
-        await execute(w, runtime(w, second));
+        await executeNext(w.runs, scriptedRuntime(w.gateway, second));
         assert.equal(
           w.kb.calls.filter(c => c.tool === 'create_node').length,
           1,
@@ -567,7 +511,7 @@ for (const adapter of adapters)
           text: 'Create a note',
           knowledgebaseWrite: grant
         });
-        await execute(w, runtime(w, gemini));
+        await executeNext(w.runs, scriptedRuntime(w.gateway, gemini));
         assert.equal([...w.kb.nodes.values()].filter(n => n.path === 'notes/once.md').length, 1);
       }));
 
@@ -626,7 +570,7 @@ for (const adapter of adapters)
           text: 'x',
           knowledgebaseWrite: grant
         });
-        await execute(w, runtime(w, gemini));
+        await executeNext(w.runs, scriptedRuntime(w.gateway, gemini));
         assert.equal(w.kb.nodes.size, 0);
       }));
   });

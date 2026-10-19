@@ -1,4 +1,10 @@
-import { createHash, randomUUID } from 'node:crypto';
+import type { DatabaseClient } from '@overlord/database';
+import assert from 'node:assert/strict';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
+
+import type { ChatOwner } from '../../packages/core/service/chat/store.ts';
+
+import { type ConnectionsRuntime, createConnectionsRuntime } from './index.ts';
 
 /**
  * Test support: an in-memory Knowledgebase (OAuth authorization server + MCP
@@ -604,4 +610,36 @@ export class FakeKnowledgebase {
       ...(offset + limit < rows.length ? { next_cursor: String(offset + limit) } : {})
     };
   }
+}
+
+/** Connect the fake upstream through the real OAuth runtime, optionally reusing one. */
+export async function connectFakeKnowledgebase(
+  db: DatabaseClient,
+  kb: FakeKnowledgebase,
+  owner: ChatOwner,
+  extra: Partial<Omit<Parameters<typeof createConnectionsRuntime>[0], 'db'>> & {
+    runtime?: ConnectionsRuntime;
+    returnTo?: 'web' | 'mobile';
+    user?: string;
+  } = {}
+) {
+  const { runtime, returnTo = 'web', user = 'kb-owner', ...options } = extra;
+  const rt =
+    runtime ??
+    createConnectionsRuntime({
+      db,
+      env: {
+        KNOWLEDGEBASE_MCP_URL: KB_MCP_URL,
+        ACCOUNT_CONNECTIONS_ENCRYPTION_KEY: randomBytes(32).toString('base64url')
+      },
+      publicBaseUrl: 'https://backend.test',
+      webReturnOrigin: 'https://app.test',
+      fetch: kb.fetch,
+      now: () => kb.now,
+      ...options
+    });
+  const started = await rt.connections.start(owner, { provider: 'knowledgebase', returnTo });
+  const outcome = await rt.connections.complete(kb.consent(started.authorizeUrl, user));
+  assert.deepEqual(outcome, { status: 'connected', returnTo });
+  return { rt, connectionId: started.connectionId };
 }

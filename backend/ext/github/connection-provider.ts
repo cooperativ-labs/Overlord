@@ -6,8 +6,8 @@ import {
   type ExternalAccount,
   type LegacyCredential,
   type OAuthGrant,
-  ProviderOAuthError,
-  registerProfileConnectionProvider
+  type ProfileConnectionProvider,
+  ProviderOAuthError
 } from '../../connections/profile.ts';
 import { resolveAuthBaseUrl } from '../../http/public-backend-url.ts';
 
@@ -167,8 +167,8 @@ async function revoke(accessToken: string): Promise<void> {
   }
 }
 
-export function registerGitHubConnectionProvider(): void {
-  registerProfileConnectionProvider({
+export function githubConnectionProvider(): ProfileConnectionProvider {
+  return {
     provider: 'github',
     label: 'GitHub',
     serverUrl: GITHUB_SERVER_URL,
@@ -259,5 +259,5 @@ export function registerGitHubConnectionProvider(): void {
         );
       }
     }
-  });
+  };
 }

@@ -46,9 +46,19 @@ function makeHandle() {
 }
 
 async function withEverhourServer(run: (baseUrl: string) => Promise<void>): Promise<void> {
+  const { profileConnections } = await import('../../connections/profile.ts');
+  const { requireDatabaseClient } = await import('../../db.ts');
+  const { everhourConnectionProvider } = await import('./connection-provider.ts');
+  const { validateEverhourApiKey } = await import('./service.ts');
+  const profiles = profileConnections(requireDatabaseClient(), [
+    everhourConnectionProvider(validateEverhourApiKey)
+  ]);
   const app = express();
   app.use(express.json());
-  app.use('/ext/everhour', createEverhourExtensionRouter(makeHandle()));
+  app.use(
+    '/ext/everhour',
+    createEverhourExtensionRouter(makeHandle(), () => profiles)
+  );
   app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
     if (err instanceof ApiError) {
       res.status(err.status).json({ message: err.message });

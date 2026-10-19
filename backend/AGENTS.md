@@ -112,8 +112,26 @@ backend/
       routes.ts
       service.ts
       conformance-manifest.yaml
+  <domain>.postgres-conformance.test.ts ← tests shared against SQLite and Postgres
+  <domain>.live-eval.ts ← manually run, credentialed model evaluations
+  <domain>-test-fixture.ts ← test-only helpers shared by colocated suites
   AGENTS.md             ← this file
 ```
+
+### Test and evaluation files
+
+`<domain>.test.ts` files are regular backend tests. `*.postgres-conformance.test.ts`
+files are included in `yarn test:backend` and run against SQLite; `yarn
+test:conformance` runs every backend file with that suffix against Postgres. Add
+new backend conformance suites with this suffix so both commands discover them.
+Other explicitly listed suites in `test:conformance` may use different names.
+
+`*-test-fixture.ts` files hold test-only helpers and are not test suites. Keep
+them beside the domain they support (or in `backend/test-helpers.ts` when shared
+across domains). `*.live-eval.ts` files are manual evaluations, are not part of
+either test suite, and may require `GEMINI_API_KEY`; document their run command
+with the evaluation. All these TypeScript files are included in
+`yarn typecheck:backend`.
 
 The REST layer shares the service layer with `cli/` — do not duplicate business logic here. (See the temporary-deviation note above while that layer is still being built.)
 

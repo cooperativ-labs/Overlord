@@ -103,7 +103,7 @@ extensionPoints:
   accountConnectionProvider:
     id: account-connection-provider
     description: 'Provider adapter for the shared account-connections module (contract v153)'
-    mechanism: 'registerProfileConnectionProvider({ provider, serverUrl, credentialKind, validateApiKey | oauth, legacy }) from a REST extension'
+    mechanism: 'Pass ProfileConnectionProvider adapters ({ provider, serverUrl, credentialKind, validateApiKey | oauth, legacy }) to createConnectionsRuntime({ providers }); share runtime.profiles with REST extensions'
     ownedBy: extension
     constraints:
       - 'The adapter supplies provider HTTP behaviour only (validate, exchange, refresh, revoke, describe, legacy adoption and tombstone)'

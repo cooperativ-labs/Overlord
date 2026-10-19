@@ -1,6 +1,7 @@
 import {
   ACCOUNT_CONNECTION_ASSISTANT_WRITE_SCOPES,
   type AccountConnectionAssistantWriteScope,
+  type AccountConnectionCredentialFormat,
   type AccountConnectionCredentialKind,
   type AccountConnectionDto,
   type AccountConnectionListResponse,
@@ -18,14 +19,32 @@ import {
   ChatStore,
   revision as expectedRevision
 } from '../../packages/core/service/chat/store.ts';
-import type {
-  AccountConnectionAuthorizations,
-  AccountConnections as AccountConnectionsTable
-} from '../../packages/core/types/db.ts';
+import type { AccountConnections as AccountConnectionsTable } from '../../packages/core/types/db.ts';
 
+import {
+  AUTHORIZATION_STATE_PATTERN,
+  AUTHORIZATION_TTL_MS,
+  beginAuthorization,
+  consumeAuthorization,
+  MAX_AUTHORIZATION_CODE_LENGTH,
+  verifierAad
+} from './authorizations.ts';
 import type { ConnectionsConfig } from './config.ts';
-import { hashSecret, openSecret, sealSecret, SecretEnvelopeError } from './crypto.ts';
-import { connectionCredentialAad, isPlatformKeyId, type RingKey } from './keyring.ts';
+import {
+  ConnectionAccessError,
+  eraseCredential,
+  recordError,
+  refreshLeased,
+  requireReauthorization,
+  withRefreshLease
+} from './credential-rows.ts';
+import { openSecret, sealSecret, SecretEnvelopeError } from './crypto.ts';
+import {
+  connectionCredentialAad,
+  knowledgebaseKeyById,
+  missingKeyIsConfiguration,
+  type RingKey
+} from './keyring.ts';
 import { type KnowledgebaseOAuth, OAuthError, pkcePair, type TokenSet } from './oauth.ts';
 import { KNOWLEDGEBASE_TOOL_POLICY_VERSION } from './policy.ts';
 
@@ -39,20 +58,13 @@ import { KNOWLEDGEBASE_TOOL_POLICY_VERSION } from './policy.ts';
  * leave this module except sealed or hashed.
  */
 export type ConnectionRow = Selectable<AccountConnectionsTable>;
-type AuthorizationRow = Selectable<AccountConnectionAuthorizations>;
 
 interface Credentials {
   accessToken: string;
   refreshToken: string | null;
 }
 
-/** Typed access failure for credential consumers (outbound MCP, source checks). */
-export class ConnectionAccessError extends Error {
-  constructor(readonly code: 'not_found' | 'reauthorization_required' | 'unavailable') {
-    super(code);
-  }
-}
-
+export { ConnectionAccessError, REFRESH_LEASE_MS } from './credential-rows.ts';
 export type CallbackStatus = 'connected' | 'denied' | 'expired' | 'failed';
 export interface CallbackOutcome {
   status: CallbackStatus;
@@ -70,19 +82,7 @@ export interface AccountConnectionsOptions {
   sleep?: (ms: number) => Promise<void>;
 }
 
-const AUTHORIZATION_TTL_MS = 10 * 60 * 1000;
-const MAX_OPEN_AUTHORIZATIONS = 5;
-/** Shorter than the provider's 30 s refresh-reuse grace, longer than the 10 s token timeout. */
-export const REFRESH_LEASE_MS = 15_000;
-const ACCESS_EXPIRY_SKEW_MS = 60_000;
-
 const credentialAad = connectionCredentialAad;
-function verifierAad(
-  row: Pick<ConnectionRow, 'owner_profile_id' | 'organization_id' | 'id'>,
-  authorizationId: string
-) {
-  return `overlord:account-connection-authorization:v1:${row.owner_profile_id}:${row.organization_id}:${row.id}:${authorizationId}`;
-}
 
 function stringArray(json: string): string[] {
   let value: unknown = [];
@@ -208,9 +208,6 @@ export class AccountConnections {
 
   async start(owner: ChatOwner, body: unknown): Promise<StartAccountConnectionResponse> {
     const input = body as { provider?: unknown; returnTo?: unknown } | null;
-    // GitHub is profile-scoped (`ProfileConnections.startOAuth`, routed before this method);
-    // reaching here means its adapter is not registered. Everhour uses an API key.
-    if (input?.provider === 'github') throw new ChatError('provider_not_available');
     if (
       !input ||
       input.provider !== 'knowledgebase' ||
@@ -254,31 +251,16 @@ export class AccountConnections {
           id
         ]))!;
       }
-      await tx.run(
-        'DELETE FROM account_connection_authorizations WHERE connection_id = ? AND (consumed_at IS NOT NULL OR expires_at <= ?)',
-        [row.id, now]
-      );
-      const open = await tx.get<{ n: number }>(
-        'SELECT COUNT(*) AS n FROM account_connection_authorizations WHERE connection_id = ?',
-        [row.id]
-      );
-      if (Number(open?.n ?? 0) >= MAX_OPEN_AUTHORIZATIONS) throw new ChatError('limit_exceeded');
-      await tx.run(
-        'INSERT INTO account_connection_authorizations (id, connection_id, state_hash, pkce_verifier_ciphertext, return_to, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [
-          authorizationId,
-          row.id,
-          hashSecret(state),
-          sealSecret({
-            plaintext: verifier,
-            key: encryption.key,
-            aad: verifierAad(row, authorizationId)
-          }),
-          returnTo,
-          expiresAt,
-          now
-        ]
-      );
+      await beginAuthorization(tx, {
+        row,
+        authorizationId,
+        state,
+        verifier,
+        key: encryption.key,
+        returnTo,
+        expiresAt,
+        now
+      });
       return row.id!;
     });
     return { connectionId, authorizeUrl, expiresAt };
@@ -291,7 +273,7 @@ export class AccountConnections {
     error?: unknown;
   }): Promise<CallbackOutcome> {
     const state = typeof query.state === 'string' ? query.state : '';
-    if (!/^[A-Za-z0-9_-]{40,80}$/.test(state)) return { status: 'expired', returnTo: null };
+    if (!AUTHORIZATION_STATE_PATTERN.test(state)) return { status: 'expired', returnTo: null };
     let ready;
     try {
       ready = this.ready();
@@ -299,22 +281,7 @@ export class AccountConnections {
       return { status: 'failed', returnTo: null };
     }
     const now = this.timestamp();
-    const consumed = await this.db.transaction(async tx => {
-      const auth = await tx.get<AuthorizationRow>(
-        'SELECT * FROM account_connection_authorizations WHERE state_hash = ?',
-        [hashSecret(state)]
-      );
-      if (!auth) return null;
-      const result = await tx.run(
-        'UPDATE account_connection_authorizations SET consumed_at = ? WHERE id = ? AND consumed_at IS NULL AND expires_at > ?',
-        [now, auth.id, now]
-      );
-      const row = await tx.get<ConnectionRow>(
-        "SELECT * FROM account_connections WHERE id = ? AND state <> 'disconnected'",
-        [auth.connection_id]
-      );
-      return { auth, row, fresh: result.changes === 1 };
-    });
+    const consumed = await this.db.transaction(tx => consumeAuthorization(tx, { state, now }));
     if (!consumed) return { status: 'expired', returnTo: null };
     const returnTo = consumed.auth.return_to as 'mobile' | 'web';
     const { row, auth } = consumed;
@@ -323,7 +290,10 @@ export class AccountConnections {
       await this.recordError(row.id!, 'authorization_denied');
       return { status: 'denied', returnTo };
     }
-    const code = typeof query.code === 'string' && query.code.length <= 2048 ? query.code : '';
+    const code =
+      typeof query.code === 'string' && query.code.length <= MAX_AUTHORIZATION_CODE_LENGTH
+        ? query.code
+        : '';
     if (!code) return { status: 'failed', returnTo };
     try {
       await this.access({ profileId: row.owner_profile_id, organizationId: row.organization_id! });
@@ -418,7 +388,9 @@ export class AccountConnections {
     if (!row || row.state === 'disconnected') throw new ChatError('not_found');
     let credentials: Credentials | null = null;
     try {
-      const key = row.credential_key_id ? this.readKey(row.credential_key_id) : null;
+      const key = row.credential_key_id
+        ? knowledgebaseKeyById(this.options.config.keyRing, row.credential_key_id)
+        : null;
       credentials = key ? this.open(row, key) : null;
     } catch {
       credentials = null;
@@ -426,11 +398,7 @@ export class AccountConnections {
     // Erase first, so a failed upstream revocation never leaves a stored secret.
     await this.db.transaction(async tx => {
       const now = this.timestamp();
-      await tx.run(
-        `UPDATE account_connections SET state = 'disconnected', credential_ciphertext = NULL, credential_key_id = NULL, access_expires_at = NULL, refresh_expires_at = NULL, refresh_lock_owner = NULL, refresh_lock_until = NULL, disconnected_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ?`,
-        [now, now, id]
-      );
-      await tx.run('DELETE FROM account_connection_authorizations WHERE connection_id = ?', [id]);
+      await eraseCredential(tx, id, now, { onlyIfLive: false });
     });
     if (credentials) await this.revokeUpstream(credentials);
     await this.options.onAccessLost?.(id);
@@ -454,63 +422,56 @@ export class AccountConnections {
     } catch {
       throw new ConnectionAccessError('unavailable');
     }
-    const deadline = this.now() + REFRESH_LEASE_MS * 2;
-    for (;;) {
-      if (options.signal?.aborted) throw new ConnectionAccessError('unavailable');
-      const row = await this.row(owner, id);
-      if (!row || row.state === 'disconnected') throw new ConnectionAccessError('not_found');
-      if (row.state !== 'connected') throw new ConnectionAccessError('reauthorization_required');
-      const key = row.credential_key_id ? this.readKey(row.credential_key_id) : null;
-      // A key that is merely not configured (yet, or any more) keeps the envelope:
-      // restoring the variable restores access. A rotated key cannot be recovered.
-      if (!key && row.credential_key_id && this.missingKeyIsConfiguration(row.credential_key_id))
-        throw new ConnectionAccessError('unavailable');
-      let credentials: Credentials;
-      try {
-        if (!key) throw new SecretEnvelopeError();
-        credentials = this.open(row, key);
-      } catch {
-        await this.requireReauthorization(id, 'credential_unreadable');
-        throw new ConnectionAccessError('reauthorization_required');
-      }
-      if (key.id !== ready.encryption.keyId) {
-        // Sealed under the platform key before an explicit key was added (or the
-        // reverse): re-seal under the write key, then reread the persisted row.
-        await this.reseal(row, credentials, ready.encryption);
-        continue;
-      }
-      const stale =
-        options.staleRevision !== undefined && row.credential_revision <= options.staleRevision;
-      const fresh =
-        row.access_expires_at === null ||
-        Date.parse(row.access_expires_at) - ACCESS_EXPIRY_SKEW_MS > this.now();
-      if (!stale && fresh)
-        return {
-          accessToken: credentials.accessToken,
-          credentialRevision: row.credential_revision,
-          row
-        };
-      if (!credentials.refreshToken) {
-        await this.requireReauthorization(id, 'grant_expired');
-        throw new ConnectionAccessError('reauthorization_required');
-      }
-      const leased = await this.db.run(
-        `UPDATE account_connections SET refresh_lock_owner = ?, refresh_lock_until = ? WHERE id = ? AND state = 'connected' AND credential_revision = ? AND (refresh_lock_owner IS NULL OR refresh_lock_until <= ?)`,
-        [
-          this.lockOwner,
-          this.timestamp(REFRESH_LEASE_MS),
-          id,
-          row.credential_revision,
-          this.timestamp()
-        ]
-      );
-      if (leased.changes === 1) {
-        await this.refreshLeased(row, credentials.refreshToken, ready);
-        continue; // Reread: only a persisted credential is ever used.
-      }
-      if (this.now() > deadline) throw new ConnectionAccessError('unavailable');
-      await this.sleep(100);
-    }
+    return withRefreshLease(
+      this.db,
+      this.lockOwner,
+      {
+        now: () => this.now(),
+        timestamp: offset => this.timestamp(offset),
+        sleep: ms => this.sleep(ms),
+        staleRevision: options.staleRevision,
+        signal: options.signal,
+        read: async () => {
+          const row = await this.row(owner, id);
+          if (!row || row.state === 'disconnected') throw new ConnectionAccessError('not_found');
+          if (row.state !== 'connected')
+            throw new ConnectionAccessError('reauthorization_required');
+          const key = row.credential_key_id
+            ? knowledgebaseKeyById(this.options.config.keyRing, row.credential_key_id)
+            : null;
+          // A key that is merely not configured (yet, or any more) keeps the envelope:
+          // restoring the variable restores access. A rotated key cannot be recovered.
+          if (
+            !key &&
+            row.credential_key_id &&
+            missingKeyIsConfiguration(
+              this.options.config.keyRing,
+              row.credential_key_id,
+              row.credential_format as AccountConnectionCredentialFormat,
+              'organization'
+            )
+          )
+            throw new ConnectionAccessError('unavailable');
+          let credentials: Credentials;
+          try {
+            if (!key) throw new SecretEnvelopeError();
+            credentials = this.open(row, key);
+          } catch {
+            await this.requireReauthorization(id, 'credential_unreadable');
+            throw new ConnectionAccessError('reauthorization_required');
+          }
+          if (key.id !== ready.encryption.keyId) {
+            // Sealed under the platform key before an explicit key was added (or the
+            // reverse): re-seal under the write key, then reread the persisted row.
+            await this.reseal(row, credentials, ready.encryption);
+            return null;
+          }
+          return { row, credential: credentials };
+        },
+        requireReauthorization: (row, code) => this.requireReauthorization(row.id!, code)
+      },
+      (row, token) => this.refreshLeased(row, token, ready)
+    );
   }
 
   private async refreshLeased(
@@ -518,48 +479,38 @@ export class AccountConnections {
     refreshToken: string,
     ready: ReturnType<AccountConnections['ready']>
   ): Promise<void> {
-    let tokens: TokenSet;
-    try {
-      tokens = await ready.oauth.refresh(refreshToken);
-    } catch (error) {
-      if (error instanceof OAuthError && error.code === 'invalid_grant') {
-        await this.requireReauthorization(row.id!, 'invalid_grant', this.lockOwner);
-        throw new ConnectionAccessError('reauthorization_required');
+    await refreshLeased(this.db, row, this.lockOwner, {
+      exchange: () => ready.oauth.refresh(refreshToken),
+      invalidGrant: error => error instanceof OAuthError && error.code === 'invalid_grant',
+      requireReauthorization: code => this.requireReauthorization(row.id!, code, this.lockOwner),
+      persist: async tokens => {
+        const now = this.timestamp();
+        // Persist the rotated credential before anyone uses it. A lost lease discards it unused;
+        // the provider's reuse grace lets the next holder refresh again from the stored token.
+        await this.db.run(
+          `UPDATE account_connections SET credential_ciphertext = ?, credential_key_id = ?, credential_revision = credential_revision + 1, access_expires_at = ?, refresh_expires_at = COALESCE(?, refresh_expires_at), last_refreshed_at = ?, last_error_code = NULL, refresh_lock_owner = NULL, refresh_lock_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'connected' AND refresh_lock_owner = ? AND credential_revision = ?`,
+          [
+            this.seal(row, {
+              accessToken: tokens.accessToken,
+              refreshToken: tokens.refreshToken ?? refreshToken
+            }),
+            ready.encryption.keyId,
+            tokens.expiresIn ? this.timestamp(tokens.expiresIn * 1000) : null,
+            tokens.refreshExpiresIn ? this.timestamp(tokens.refreshExpiresIn * 1000) : null,
+            now,
+            now,
+            row.id,
+            this.lockOwner,
+            row.credential_revision
+          ]
+        );
       }
-      await this.db.run(
-        'UPDATE account_connections SET refresh_lock_owner = NULL, refresh_lock_until = NULL, last_error_code = ? WHERE id = ? AND refresh_lock_owner = ?',
-        ['refresh_unavailable', row.id, this.lockOwner]
-      );
-      throw new ConnectionAccessError('unavailable');
-    }
-    const now = this.timestamp();
-    // Persist the rotated credential before anyone uses it. A lost lease discards it unused;
-    // the provider's reuse grace lets the next holder refresh again from the stored token.
-    await this.db.run(
-      `UPDATE account_connections SET credential_ciphertext = ?, credential_key_id = ?, credential_revision = credential_revision + 1, access_expires_at = ?, refresh_expires_at = COALESCE(?, refresh_expires_at), last_refreshed_at = ?, last_error_code = NULL, refresh_lock_owner = NULL, refresh_lock_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'connected' AND refresh_lock_owner = ? AND credential_revision = ?`,
-      [
-        this.seal(row, {
-          accessToken: tokens.accessToken,
-          refreshToken: tokens.refreshToken ?? refreshToken
-        }),
-        ready.encryption.keyId,
-        tokens.expiresIn ? this.timestamp(tokens.expiresIn * 1000) : null,
-        tokens.refreshExpiresIn ? this.timestamp(tokens.refreshExpiresIn * 1000) : null,
-        now,
-        now,
-        row.id,
-        this.lockOwner,
-        row.credential_revision
-      ]
-    );
+    });
   }
 
   /** Marks the connection unusable until the owner signs in again and erases its credential. */
   async requireReauthorization(id: string, code: string, lockOwner?: string): Promise<void> {
-    const result = await this.db.run(
-      `UPDATE account_connections SET state = 'reauthorization_required', credential_ciphertext = NULL, credential_key_id = NULL, access_expires_at = NULL, refresh_lock_owner = NULL, refresh_lock_until = NULL, last_error_code = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'connected'${lockOwner ? ' AND refresh_lock_owner = ?' : ''}`,
-      [code, this.timestamp(), id, ...(lockOwner ? [lockOwner] : [])]
-    );
+    const result = await requireReauthorization(this.db, id, code, this.timestamp(), lockOwner);
     if (result.changes === 1) await this.options.onAccessLost?.(id);
   }
 
@@ -571,10 +522,7 @@ export class AccountConnections {
   }
 
   private async recordError(id: string, code: string) {
-    await this.db.run(
-      'UPDATE account_connections SET last_error_code = ?, updated_at = ?, revision = revision + 1 WHERE id = ?',
-      [code, this.timestamp(), id]
-    );
+    await recordError(this.db, id, code, this.timestamp());
   }
 
   private seal(row: ConnectionRow, credentials: Credentials): string {
@@ -584,27 +532,6 @@ export class AccountConnections {
       key: encryption.key,
       aad: credentialAad(row)
     });
-  }
-
-  /**
-   * The ring key a Knowledgebase envelope may be opened with: the explicit current
-   * key or the platform key (v156). Profile-scoped fallback keys never apply here.
-   */
-  private readKey(keyId: string): RingKey | null {
-    const { current, platform } = this.options.config.keyRing;
-    if (current?.id === keyId) return current;
-    if (platform?.id === keyId) return platform;
-    return null;
-  }
-
-  /**
-   * Whether an envelope whose key is absent is a configuration gap rather than a
-   * rotation: a platform key id while no platform key is derived, or an explicit
-   * key id while no explicit key is configured.
-   */
-  private missingKeyIsConfiguration(keyId: string): boolean {
-    const { current, platform } = this.options.config.keyRing;
-    return isPlatformKeyId(keyId) ? platform === null : current === null;
   }
 
   /** Re-seal the same credential under the write key; the token itself is unchanged. */

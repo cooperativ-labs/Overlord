@@ -55,9 +55,16 @@ function makeHandle() {
 }
 
 async function withGitHubServer(run: (baseUrl: string) => Promise<void>): Promise<void> {
+  const { profileConnections } = await import('../../connections/profile.ts');
+  const { requireDatabaseClient } = await import('../../db.ts');
+  const { githubConnectionProvider } = await import('./connection-provider.ts');
+  const profiles = profileConnections(requireDatabaseClient(), [githubConnectionProvider()]);
   const app = express();
   app.use(express.json());
-  app.use('/ext/github', createGitHubExtensionRouter(makeHandle()));
+  app.use(
+    '/ext/github',
+    createGitHubExtensionRouter(makeHandle(), { connections: () => profiles })
+  );
   app.use((error: unknown, _req: Request, res: Response, next: NextFunction) => {
     if (error instanceof ApiError) {
       res.status(error.status).json({ message: error.message });

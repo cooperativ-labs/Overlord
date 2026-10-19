@@ -318,6 +318,74 @@ export function conformanceAdapters(): ConformanceAdapter[] {
   return process.env.TEST_DATABASE_URL ? ['sqlite', 'postgres'] : ['sqlite'];
 }
 
+/** Minimal adapter-neutral identities; callers keep domain-specific roles and projects. */
+export async function seedChatIdentities(
+  db: DatabaseClient,
+  input: {
+    stamp: string;
+    profiles: { id: string; name?: string; email?: string }[];
+    workspaces?: {
+      id: string;
+      name?: string;
+      organizationId: string;
+      organizationName?: string;
+      members: { id: string; profileId: string; memberKey?: string }[];
+    }[];
+  }
+) {
+  const { stamp, profiles, workspaces = [] } = input;
+  const bool = db.dialect === 'sqlite' ? '0' : 'FALSE';
+  for (const profile of profiles)
+    await db.run(
+      `INSERT INTO "user" (id, name, email, "emailVerified", "createdAt", "updatedAt") VALUES (?, ?, ?, ${bool}, ?, ?)`,
+      [
+        profile.id,
+        profile.name ?? profile.id,
+        profile.email ?? `${profile.id}@test.invalid`,
+        stamp,
+        stamp
+      ]
+    );
+  const organizations = new Set<string>();
+  for (const workspace of workspaces) {
+    if (!organizations.has(workspace.organizationId)) {
+      await db.run(
+        'INSERT INTO organizations (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)',
+        [
+          workspace.organizationId,
+          workspace.organizationName ?? workspace.organizationId,
+          stamp,
+          stamp
+        ]
+      );
+      organizations.add(workspace.organizationId);
+    }
+    await db.run(
+      "INSERT INTO workspaces (id, organization_id, slug, name, kind, created_at, updated_at) VALUES (?, ?, ?, ?, 'hosted', ?, ?)",
+      [
+        workspace.id,
+        workspace.organizationId,
+        workspace.id,
+        workspace.name ?? workspace.id,
+        stamp,
+        stamp
+      ]
+    );
+    for (const member of workspace.members)
+      await db.run(
+        "INSERT INTO workspace_users (id, workspace_id, profile_id, member_key, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', ?, ?)",
+        [
+          member.id,
+          workspace.id,
+          member.profileId,
+          member.memberKey ?? member.profileId,
+          stamp,
+          stamp
+        ]
+      );
+  }
+}
+
 /**
  * A fully migrated, isolated database for one conformance test.
  *

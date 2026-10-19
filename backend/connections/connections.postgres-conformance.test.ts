@@ -13,7 +13,8 @@ import { apiErrorHandler } from '../errors.ts';
 import {
   type ConformanceAdapter,
   conformanceAdapters,
-  createConformanceDatabase
+  createConformanceDatabase,
+  seedChatIdentities
 } from '../test-helpers.ts';
 
 import {
@@ -25,7 +26,12 @@ import { openSecret, sealSecret } from './crypto.ts';
 import { EgressError, egressFetch } from './egress.ts';
 import { createConnectionsRuntime } from './index.ts';
 import { isPlatformKeyId, platformKeyFromSecret } from './keyring.ts';
-import { FakeKnowledgebase, KB_MCP_URL, KB_ORIGIN } from './knowledgebase-test-fixture.ts';
+import {
+  connectFakeKnowledgebase,
+  FakeKnowledgebase,
+  KB_MCP_URL,
+  KB_ORIGIN
+} from './knowledgebase-test-fixture.ts';
 import { KnowledgebaseMcp } from './mcp-client.ts';
 import { namespacedToolId } from './policy.ts';
 import { createConnectionsPublicRouter, createConnectionsRouter } from './routes.ts';
@@ -40,31 +46,26 @@ const identity = { provider: 'fake', model: 'fake-1', configDigest: 'c', checkpo
 
 async function seed(db: DatabaseClient) {
   const stamp = '2026-10-04T12:00:00.000Z';
-  const bool = db.dialect === 'sqlite' ? '0' : 'FALSE';
-  for (const id of ['owner', 'other'])
-    await db.run(
-      `INSERT INTO "user" (id, name, email, "emailVerified", "createdAt", "updatedAt") VALUES (?, ?, ?, ${bool}, ?, ?)`,
-      [id, id, `${id}@test.invalid`, stamp, stamp]
-    );
-  for (const org of ['org', 'org2']) {
-    await db.run(
-      'INSERT INTO organizations (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)',
-      [org, org, stamp, stamp]
-    );
-    await db.run(
-      "INSERT INTO workspaces (id, organization_id, slug, name, kind, created_at, updated_at) VALUES (?, ?, ?, ?, 'hosted', ?, ?)",
-      [`ws-${org}`, org, `ws-${org}`, org, stamp, stamp]
-    );
-  }
-  for (const [id, profile, org] of [
-    ['m1', 'owner', 'org'],
-    ['m2', 'other', 'org'],
-    ['m3', 'owner', 'org2']
-  ])
-    await db.run(
-      "INSERT INTO workspace_users (id, workspace_id, profile_id, member_key, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'active', ?, ?)",
-      [id, `ws-${org}`, profile, `${profile}-${org}`, stamp, stamp]
-    );
+  await seedChatIdentities(db, {
+    stamp,
+    profiles: ['owner', 'other'].map(id => ({ id })),
+    workspaces: ['org', 'org2'].map(org => ({
+      id: `ws-${org}`,
+      organizationId: org,
+      name: org,
+      members: (org === 'org'
+        ? [
+            ['m1', 'owner'],
+            ['m2', 'other']
+          ]
+        : [['m3', 'owner']]
+      ).map(([id, profileId]) => ({
+        id: id!,
+        profileId: profileId!,
+        memberKey: `${profileId}-${org}`
+      }))
+    }))
+  });
 }
 
 function runtime(
@@ -107,13 +108,12 @@ async function connect(
   who = owner,
   user = 'kb-owner'
 ) {
-  const started = await rt.connections.start(who, {
-    provider: 'knowledgebase',
-    returnTo: 'mobile'
+  const { connectionId } = await connectFakeKnowledgebase(rt.connections.db, kb, who, {
+    runtime: rt,
+    returnTo: 'mobile',
+    user
   });
-  const outcome = await rt.connections.complete(kb.consent(started.authorizeUrl, user));
-  assert.deepEqual(outcome, { status: 'connected', returnTo: 'mobile' });
-  return started.connectionId;
+  return connectionId;
 }
 
 const rejectsCode = (code: string) => (e: unknown) =>

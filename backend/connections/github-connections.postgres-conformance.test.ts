@@ -8,8 +8,12 @@ import type { AddressInfo } from 'node:net';
 import { after, before, describe, it } from 'node:test';
 
 import { apiErrorHandler } from '../errors.ts';
-import { registerGitHubConnectionProvider } from '../ext/github/connection-provider.ts';
-import { conformanceAdapters, createConformanceDatabase } from '../test-helpers.ts';
+import { githubConnectionProvider } from '../ext/github/connection-provider.ts';
+import {
+  conformanceAdapters,
+  createConformanceDatabase,
+  seedChatIdentities
+} from '../test-helpers.ts';
 
 import { openSecret, sealSecret } from './crypto.ts';
 import { createConnectionsRuntime } from './index.ts';
@@ -54,7 +58,6 @@ before(() => {
   process.env.GITHUB_CLIENT_ID = 'repo-client';
   process.env.GITHUB_CLIENT_SECRET = 'repo-client-secret';
   process.env.BETTER_AUTH_URL = 'https://backend.test';
-  registerGitHubConnectionProvider();
 });
 after(() => {
   globalThis.fetch = originalFetch;
@@ -107,12 +110,10 @@ function fakeGitHub(): FakeGitHub {
 }
 
 async function seedIdentities(db: DatabaseClient) {
-  const bool = db.dialect === 'sqlite' ? '0' : 'FALSE';
-  for (const id of ['owner', 'other', 'third'])
-    await db.run(
-      `INSERT INTO "user" (id, name, email, "emailVerified", "createdAt", "updatedAt") VALUES (?, ?, ?, ${bool}, ?, ?)`,
-      [id, id, `${id}@test.invalid`, STAMP, STAMP]
-    );
+  await seedChatIdentities(db, {
+    stamp: STAMP,
+    profiles: ['owner', 'other', 'third'].map(id => ({ id }))
+  });
 }
 
 async function insertLegacyGitHub(
@@ -172,7 +173,7 @@ const githubRow = (db: DatabaseClient, profileId = 'owner') =>
     [profileId]
   );
 const profiles = (db: DatabaseClient, env: NodeJS.ProcessEnv) =>
-  new ProfileConnections(db, keyRingFromEnv(env), {
+  new ProfileConnections(db, keyRingFromEnv(env), [githubConnectionProvider()], {
     sleep: ms => new Promise(resolve => setTimeout(resolve, Math.min(ms, 20)))
   });
 
@@ -558,6 +559,7 @@ for (const adapter of adapters) {
         await migratedWithLegacy(db);
         const fake = fakeGitHub();
         const runtime = createConnectionsRuntime({
+          providers: [githubConnectionProvider()],
           db,
           env: { GITHUB_USER_TOKEN_ENCRYPTION_KEY: GITHUB_ENV_KEY },
           publicBaseUrl: 'https://backend.test',

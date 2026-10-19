@@ -6,13 +6,26 @@ import type {
   StartAccountConnectionResponse
 } from '@overlord/contract';
 import type { DatabaseClient } from '@overlord/database';
-import type { Selectable } from 'kysely';
 import { randomBytes, randomUUID } from 'node:crypto';
 
 import { ChatError } from '../../packages/core/service/chat/store.ts';
-import type { AccountConnectionAuthorizations } from '../../packages/core/types/db.ts';
 
-import { hashSecret, openSecret, sealSecret, SecretEnvelopeError } from './crypto.ts';
+import {
+  AUTHORIZATION_STATE_PATTERN,
+  AUTHORIZATION_TTL_MS,
+  beginAuthorization,
+  consumeAuthorization,
+  MAX_AUTHORIZATION_CODE_LENGTH,
+  verifierAad
+} from './authorizations.ts';
+import {
+  eraseCredential,
+  recordError,
+  refreshLeased,
+  requireReauthorization,
+  withRefreshLease
+} from './credential-rows.ts';
+import { openSecret, sealSecret, SecretEnvelopeError } from './crypto.ts';
 import {
   connectionCredentialAad,
   credentialPlaintext,
@@ -26,19 +39,14 @@ import {
   writeKey
 } from './keyring.ts';
 import { pkcePair } from './oauth.ts';
-import {
-  ConnectionAccessError,
-  connectionDto,
-  type ConnectionRow,
-  REFRESH_LEASE_MS
-} from './service.ts';
+import { ConnectionAccessError, connectionDto, type ConnectionRow } from './service.ts';
 
 /**
  * Profile-scoped account connections (contract v153): connections a profile owns
  * across every organization (`organization_id` NULL): the Everhour personal API
  * key and the GitHub repository authorization. Like `AccountConnections`, this is
  * the only writer of these rows and the only reader of their credentials. Extensions
- * supply provider behaviour through a registered adapter and obtain plaintext only
+ * supply provider behaviour through an explicitly supplied adapter and obtain plaintext only
  * from `credential()` or `oauthAccessToken()`; they never see an envelope, a key,
  * OAuth state, or a PKCE verifier.
  */
@@ -136,24 +144,8 @@ export class ProviderCredentialError extends Error {
   }
 }
 
-const providers = new Map<ProfileProvider, ProfileConnectionProvider>();
-
-/** Register a provider adapter (the v153 account-connection provider extension point). */
-export function registerProfileConnectionProvider(adapter: ProfileConnectionProvider): void {
-  providers.set(adapter.provider, adapter);
-}
-
-export function profileConnectionProvider(provider: unknown): ProfileConnectionProvider | null {
-  return providers.get(provider as ProfileProvider) ?? null;
-}
-
 const MAX_API_KEY_LENGTH = 512;
-const AUTHORIZATION_TTL_MS = 10 * 60 * 1000;
-const MAX_OPEN_AUTHORIZATIONS = 5;
-const ACCESS_EXPIRY_SKEW_MS = 60_000;
 const MAX_RETURN_PATH_LENGTH = 512;
-
-type AuthorizationRow = Selectable<AccountConnectionAuthorizations>;
 
 /** Where a profile-scoped OAuth callback sends the browser. */
 export interface ProfileCallbackOutcome {
@@ -177,32 +169,30 @@ export function isSafeReturnPath(value: unknown): value is string {
   );
 }
 
-function verifierAad(
-  row: { owner_profile_id: string; id: string | null },
-  authorizationId: string
-) {
-  return `overlord:account-connection-authorization:v1:${row.owner_profile_id}:-:${row.id}:${authorizationId}`;
-}
-
-/**
- * The profile-scoped connections for `db`, keyed from the server environment. This is
- * the credential surface extensions call (`Extension → Account Connections`); it is
- * stateless, so it matches the runtime's instance.
- */
+/** Standalone callers must supply adapters explicitly; no import-time registry. */
 export function profileConnections(
   db: DatabaseClient,
+  providers: readonly ProfileConnectionProvider[],
   env: NodeJS.ProcessEnv = process.env
 ): ProfileConnections {
-  return new ProfileConnections(db, keyRingFromEnv(env));
+  return new ProfileConnections(db, keyRingFromEnv(env), providers);
 }
 
 export class ProfileConnections {
   private readonly lockOwner = randomUUID();
+  private readonly adapters: Map<ProfileProvider, ProfileConnectionProvider>;
   constructor(
     readonly db: DatabaseClient,
     private readonly ring: KeyRing,
+    providers: readonly ProfileConnectionProvider[] = [],
     private readonly options: { now?: () => number; sleep?: (ms: number) => Promise<void> } = {}
-  ) {}
+  ) {
+    this.adapters = new Map(providers.map(adapter => [adapter.provider, adapter]));
+  }
+
+  provider(provider: unknown): ProfileConnectionProvider | null {
+    return this.adapters.get(provider as ProfileProvider) ?? null;
+  }
 
   private now() {
     return this.options.now?.() ?? Date.now();
@@ -214,9 +204,9 @@ export class ProfileConnections {
     return this.options.sleep?.(ms) ?? new Promise<void>(resolve => setTimeout(resolve, ms));
   }
 
-  /** Every registered provider, with whether a connection can be stored on this server. */
+  /** Every supplied provider, with whether a connection can be stored on this server. */
   providers(): AccountConnectionProviderStatusDto[] {
-    return [...providers.values()].map(adapter => {
+    return [...this.adapters.values()].map(adapter => {
       const reason =
         adapter.oauth && !adapter.oauth.configured()
           ? 'not_configured'
@@ -241,7 +231,7 @@ export class ProfileConnections {
   /** The caller's live profile-scoped connections, adopting legacy rows first. */
   async list(profileId: string): Promise<AccountConnectionDto[]> {
     const items: AccountConnectionDto[] = [];
-    for (const adapter of providers.values()) {
+    for (const adapter of this.adapters.values()) {
       const row = await this.find(profileId, adapter.provider);
       if (row) items.push(connectionDto(row));
     }
@@ -267,7 +257,7 @@ export class ProfileConnections {
   async find(profileId: string, provider: ProfileProvider): Promise<ConnectionRow | null> {
     const live = await this.liveRow(profileId, provider);
     if (live) return live;
-    const adapter = providers.get(provider);
+    const adapter = this.adapters.get(provider);
     if (!adapter?.legacy) return null;
     const legacy = await adapter.legacy.find(this.db, profileId);
     if (!legacy) return null;
@@ -332,7 +322,7 @@ export class ProfileConnections {
     apiKey: string,
     account: ExternalAccount
   ): Promise<AccountConnectionDto> {
-    const adapter = providers.get(provider);
+    const adapter = this.adapters.get(provider);
     if (!adapter || adapter.credentialKind !== 'api_key')
       throw new ChatError('provider_not_available');
     const key = writeKey(this.ring, provider);
@@ -384,7 +374,7 @@ export class ProfileConnections {
   /** `POST /api/connections/api-keys`: validate upstream through the adapter, then store. */
   async setApiKey(profileId: string, body: unknown): Promise<AccountConnectionDto> {
     const input = body as { provider?: unknown; apiKey?: unknown } | null;
-    const adapter = profileConnectionProvider(input?.provider);
+    const adapter = this.provider(input?.provider);
     if (!adapter || adapter.credentialKind !== 'api_key' || !adapter.validateApiKey)
       throw new ChatError('provider_not_available');
     const apiKey = typeof input?.apiKey === 'string' ? input.apiKey.trim() : '';
@@ -419,9 +409,9 @@ export class ProfileConnections {
     if (row.credential_format !== 'connection-v1') {
       // A verbatim copy is honoured only while its source is: an older instance
       // may have disconnected it in the legacy store after the copy was made.
-      const legacy = providers.get(provider)?.legacy;
+      const legacy = this.adapters.get(provider)?.legacy;
       if (legacy && !(await legacy.isLive(this.db, row.id!))) {
-        await this.erase(row, 'disconnected');
+        await this.erase(row);
         return null;
       }
     }
@@ -482,10 +472,10 @@ export class ProfileConnections {
     provider: ProfileProvider,
     row: ConnectionRow | null
   ): Promise<void> {
-    const adapter = providers.get(provider);
+    const adapter = this.adapters.get(provider);
     const credential = row ? this.peek(row) : null;
     // Erase first, so a failed upstream revocation never leaves a stored secret.
-    if (row) await this.erase(row, 'disconnected');
+    if (row) await this.erase(row);
     if (credential?.kind === 'oauth' && adapter?.oauth)
       await adapter.oauth.revoke(credential.accessToken).catch(() => undefined);
     await adapter?.legacy?.tombstone(this.db, profileId, this.timestamp());
@@ -496,7 +486,7 @@ export class ProfileConnections {
   /** `POST /api/connections` for a profile-scoped OAuth provider. */
   async startOAuth(profileId: string, body: unknown): Promise<StartAccountConnectionResponse> {
     const input = body as { provider?: unknown; returnTo?: unknown; returnPath?: unknown } | null;
-    const adapter = profileConnectionProvider(input?.provider);
+    const adapter = this.provider(input?.provider);
     if (!adapter?.oauth) throw new ChatError('provider_not_available');
     if (input?.returnTo !== 'mobile' && input?.returnTo !== 'web')
       throw new ChatError('invalid_request');
@@ -520,7 +510,7 @@ export class ProfileConnections {
     provider: ProfileProvider,
     target: { returnTo: 'mobile' | 'web'; returnUrl: string | null }
   ): Promise<StartAccountConnectionResponse> {
-    const adapter = providers.get(provider);
+    const adapter = this.adapters.get(provider);
     const oauth = adapter?.oauth;
     if (!adapter || !oauth) throw new ChatError('provider_not_available');
     const key = writeKey(this.ring, provider);
@@ -548,28 +538,17 @@ export class ProfileConnections {
           id
         ]))!;
       }
-      await tx.run(
-        'DELETE FROM account_connection_authorizations WHERE connection_id = ? AND (consumed_at IS NOT NULL OR expires_at <= ?)',
-        [row.id, now]
-      );
-      const open = await tx.get<{ n: number | string }>(
-        'SELECT COUNT(*) AS n FROM account_connection_authorizations WHERE connection_id = ?',
-        [row.id]
-      );
-      if (Number(open?.n ?? 0) >= MAX_OPEN_AUTHORIZATIONS) throw new ChatError('limit_exceeded');
-      await tx.run(
-        'INSERT INTO account_connection_authorizations (id, connection_id, state_hash, pkce_verifier_ciphertext, return_to, return_url, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-          authorizationId,
-          row.id,
-          hashSecret(state),
-          sealSecret({ plaintext: verifier, key: key.key, aad: verifierAad(row, authorizationId) }),
-          target.returnTo,
-          target.returnUrl,
-          expiresAt,
-          now
-        ]
-      );
+      await beginAuthorization(tx, {
+        row,
+        authorizationId,
+        state,
+        verifier,
+        key: key.key,
+        returnTo: target.returnTo,
+        returnUrl: target.returnUrl,
+        expiresAt,
+        now
+      });
       return row.id!;
     });
     return { connectionId, authorizeUrl, expiresAt };
@@ -584,7 +563,7 @@ export class ProfileConnections {
     provider: ProfileProvider,
     query: { code?: unknown; state?: unknown; error?: unknown }
   ): Promise<ProfileCallbackOutcome> {
-    const adapter = providers.get(provider);
+    const adapter = this.adapters.get(provider);
     const oauth = adapter?.oauth;
     const state = typeof query.state === 'string' ? query.state : '';
     const outcome = (
@@ -598,24 +577,11 @@ export class ProfileConnections {
       errorCode: null,
       ...rest
     });
-    if (!adapter || !oauth || !/^[A-Za-z0-9_-]{40,80}$/.test(state)) return outcome('expired');
+    if (!adapter || !oauth || !AUTHORIZATION_STATE_PATTERN.test(state)) return outcome('expired');
     const now = this.timestamp();
-    const consumed = await this.db.transaction(async tx => {
-      const auth = await tx.get<AuthorizationRow>(
-        `SELECT a.* FROM account_connection_authorizations a JOIN account_connections c ON c.id = a.connection_id WHERE a.state_hash = ? AND c.provider = ? AND c.organization_id IS NULL`,
-        [hashSecret(state), provider]
-      );
-      if (!auth) return null;
-      const result = await tx.run(
-        'UPDATE account_connection_authorizations SET consumed_at = ? WHERE id = ? AND consumed_at IS NULL AND expires_at > ?',
-        [now, auth.id, now]
-      );
-      const row = await tx.get<ConnectionRow>(
-        "SELECT * FROM account_connections WHERE id = ? AND state <> 'disconnected'",
-        [auth.connection_id]
-      );
-      return { auth, row, fresh: result.changes === 1 };
-    });
+    const consumed = await this.db.transaction(tx =>
+      consumeAuthorization(tx, { state, providerFilter: provider, now })
+    );
     if (!consumed) return outcome('expired');
     const { auth, row } = consumed;
     const target = {
@@ -629,7 +595,10 @@ export class ProfileConnections {
       return outcome(status, { ...target, errorCode: code });
     };
     if (query.error !== undefined) return fail('denied', 'authorization_denied');
-    const code = typeof query.code === 'string' && query.code.length <= 2048 ? query.code : '';
+    const code =
+      typeof query.code === 'string' && query.code.length <= MAX_AUTHORIZATION_CODE_LENGTH
+        ? query.code
+        : '';
     if (!code) return outcome('failed', target);
     const key = writeKey(this.ring, provider);
     let grant: OAuthGrant;
@@ -712,51 +681,32 @@ export class ProfileConnections {
     provider: ProfileProvider,
     options: { staleRevision?: number } = {}
   ): Promise<{ accessToken: string; credentialRevision: number; row: ConnectionRow }> {
-    const oauth = providers.get(provider)?.oauth;
+    const oauth = this.adapters.get(provider)?.oauth;
     if (!oauth) throw new ConnectionAccessError('not_found');
-    const deadline = this.now() + REFRESH_LEASE_MS * 2;
-    for (;;) {
-      const found = await this.credential(profileId, provider);
-      if (!found || found.credential.kind !== 'oauth') {
-        const live = await this.liveRow(profileId, provider);
-        throw new ConnectionAccessError(
-          live?.state === 'reauthorization_required' ? 'reauthorization_required' : 'not_found'
-        );
-      }
-      const { row } = found;
-      const credential = found.credential;
-      const stale =
-        options.staleRevision !== undefined && row.credential_revision <= options.staleRevision;
-      const fresh =
-        row.access_expires_at === null ||
-        Date.parse(row.access_expires_at) - ACCESS_EXPIRY_SKEW_MS > this.now();
-      if (!stale && fresh)
-        return {
-          accessToken: credential.accessToken,
-          credentialRevision: row.credential_revision,
-          row
-        };
-      if (!credential.refreshToken) {
-        await this.requireReauthorization(row, 'grant_expired');
-        throw new ConnectionAccessError('reauthorization_required');
-      }
-      const leased = await this.db.run(
-        `UPDATE account_connections SET refresh_lock_owner = ?, refresh_lock_until = ? WHERE id = ? AND state = 'connected' AND credential_revision = ? AND (refresh_lock_owner IS NULL OR refresh_lock_until <= ?)`,
-        [
-          this.lockOwner,
-          this.timestamp(REFRESH_LEASE_MS),
-          row.id,
-          row.credential_revision,
-          this.timestamp()
-        ]
-      );
-      if (leased.changes === 1) {
-        await this.refreshLeased(row, provider, oauth, credential.refreshToken);
-        continue; // Reread: only a persisted credential is ever used.
-      }
-      if (this.now() > deadline) throw new ConnectionAccessError('unavailable');
-      await this.sleep(100);
-    }
+    return withRefreshLease(
+      this.db,
+      this.lockOwner,
+      {
+        now: () => this.now(),
+        timestamp: offset => this.timestamp(offset),
+        sleep: ms => this.sleep(ms),
+        staleRevision: options.staleRevision,
+        read: async () => {
+          const found = await this.credential(profileId, provider);
+          if (!found || found.credential.kind !== 'oauth') {
+            const live = await this.liveRow(profileId, provider);
+            throw new ConnectionAccessError(
+              live?.state === 'reauthorization_required' ? 'reauthorization_required' : 'not_found'
+            );
+          }
+          const { row } = found;
+          const credential = found.credential;
+          return { row, credential };
+        },
+        requireReauthorization: (row, code) => this.requireReauthorization(row, code)
+      },
+      (row, token) => this.refreshLeased(row, provider, oauth, token)
+    );
   }
 
   private async refreshLeased(
@@ -765,53 +715,43 @@ export class ProfileConnections {
     oauth: ProfileOAuthAdapter,
     refreshToken: string
   ): Promise<void> {
-    const release = async (code: string) => {
-      await this.db.run(
-        'UPDATE account_connections SET refresh_lock_owner = NULL, refresh_lock_until = NULL, last_error_code = ? WHERE id = ? AND refresh_lock_owner = ?',
-        [code, row.id, this.lockOwner]
-      );
-      throw new ConnectionAccessError('unavailable');
-    };
     const key = writeKey(this.ring, provider);
-    if (!key || !oauth.configured()) return release('refresh_unavailable');
-    let grant: OAuthGrant;
-    try {
-      grant = await oauth.refresh(refreshToken);
-    } catch (error) {
-      if (error instanceof ProviderOAuthError && error.code === 'invalid_grant') {
-        await this.requireReauthorization(row, 'invalid_grant', this.lockOwner);
-        throw new ConnectionAccessError('reauthorization_required');
+    await refreshLeased(this.db, row, this.lockOwner, {
+      available: () => key !== null && oauth.configured(),
+      exchange: () => oauth.refresh(refreshToken),
+      invalidGrant: error => error instanceof ProviderOAuthError && error.code === 'invalid_grant',
+      requireReauthorization: code => this.requireReauthorization(row, code, this.lockOwner),
+      persist: async grant => {
+        if (!oauth.requiredScopes.every(scope => grant.scopes.includes(scope))) {
+          await this.requireReauthorization(row, 'insufficient_scope', this.lockOwner);
+          throw new ConnectionAccessError('reauthorization_required');
+        }
+        const now = this.timestamp();
+        await this.db.run(
+          `UPDATE account_connections SET credential_ciphertext = ?, credential_key_id = ?, credential_format = 'connection-v1', credential_revision = credential_revision + 1, access_expires_at = ?, refresh_expires_at = COALESCE(?, refresh_expires_at), granted_scopes_json = ?, last_refreshed_at = ?, last_error_code = NULL, refresh_lock_owner = NULL, refresh_lock_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'connected' AND refresh_lock_owner = ? AND credential_revision = ?`,
+          [
+            this.seal(
+              row,
+              {
+                kind: 'oauth',
+                accessToken: grant.accessToken,
+                refreshToken: grant.refreshToken ?? refreshToken
+              },
+              key!
+            ),
+            key!.id,
+            grant.expiresIn ? this.timestamp(grant.expiresIn * 1000) : null,
+            grant.refreshExpiresIn ? this.timestamp(grant.refreshExpiresIn * 1000) : null,
+            JSON.stringify(grant.scopes),
+            now,
+            now,
+            row.id,
+            this.lockOwner,
+            row.credential_revision
+          ]
+        );
       }
-      return release('refresh_unavailable');
-    }
-    if (!oauth.requiredScopes.every(scope => grant.scopes.includes(scope))) {
-      await this.requireReauthorization(row, 'insufficient_scope', this.lockOwner);
-      throw new ConnectionAccessError('reauthorization_required');
-    }
-    const now = this.timestamp();
-    await this.db.run(
-      `UPDATE account_connections SET credential_ciphertext = ?, credential_key_id = ?, credential_format = 'connection-v1', credential_revision = credential_revision + 1, access_expires_at = ?, refresh_expires_at = COALESCE(?, refresh_expires_at), granted_scopes_json = ?, last_refreshed_at = ?, last_error_code = NULL, refresh_lock_owner = NULL, refresh_lock_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'connected' AND refresh_lock_owner = ? AND credential_revision = ?`,
-      [
-        this.seal(
-          row,
-          {
-            kind: 'oauth',
-            accessToken: grant.accessToken,
-            refreshToken: grant.refreshToken ?? refreshToken
-          },
-          key
-        ),
-        key.id,
-        grant.expiresIn ? this.timestamp(grant.expiresIn * 1000) : null,
-        grant.refreshExpiresIn ? this.timestamp(grant.refreshExpiresIn * 1000) : null,
-        JSON.stringify(grant.scopes),
-        now,
-        now,
-        row.id,
-        this.lockOwner,
-        row.credential_revision
-      ]
-    );
+    });
   }
 
   /** Record a re-validated upstream account for the caller's connected row. */
@@ -904,30 +844,18 @@ export class ProfileConnections {
     }
   }
 
-  private async erase(row: ConnectionRow, state: 'disconnected') {
+  private async erase(row: ConnectionRow) {
     const now = this.timestamp();
     await this.db.transaction(async tx => {
-      await tx.run(
-        `UPDATE account_connections SET state = ?, credential_ciphertext = NULL, credential_key_id = NULL, access_expires_at = NULL, refresh_expires_at = NULL, refresh_lock_owner = NULL, refresh_lock_until = NULL, disconnected_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND state <> 'disconnected'`,
-        [state, now, now, row.id]
-      );
-      await tx.run('DELETE FROM account_connection_authorizations WHERE connection_id = ?', [
-        row.id
-      ]);
+      await eraseCredential(tx, row.id!, now, { onlyIfLive: true });
     });
   }
 
   private async requireReauthorization(row: ConnectionRow, code: string, lockOwner?: string) {
-    await this.db.run(
-      `UPDATE account_connections SET state = 'reauthorization_required', credential_ciphertext = NULL, credential_key_id = NULL, access_expires_at = NULL, refresh_lock_owner = NULL, refresh_lock_until = NULL, last_error_code = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'connected'${lockOwner ? ' AND refresh_lock_owner = ?' : ''}`,
-      [code, this.timestamp(), row.id, ...(lockOwner ? [lockOwner] : [])]
-    );
+    await requireReauthorization(this.db, row.id!, code, this.timestamp(), lockOwner);
   }
 
   private async recordError(id: string, code: string) {
-    await this.db.run(
-      'UPDATE account_connections SET last_error_code = ?, updated_at = ?, revision = revision + 1 WHERE id = ?',
-      [code, this.timestamp(), id]
-    );
+    await recordError(this.db, id, code, this.timestamp());
   }
 }

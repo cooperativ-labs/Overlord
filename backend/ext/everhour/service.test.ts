@@ -14,7 +14,10 @@ const { createTestWorkspaceContext } = await import('../../test-helpers.ts');
 const { WORKSPACE } = createTestWorkspaceContext(await import('../../db.ts'));
 const { createMission, createProject } = await import('../../repository.ts');
 const { ApiError } = await import('../../errors.ts');
-const { profileConnections } = await import('../../connections/profile.ts');
+const { ProfileConnections } = await import('../../connections/profile.ts');
+const { keyRingFromEnv } = await import('../../connections/keyring.ts');
+const { everhourConnectionProvider } = await import('./connection-provider.ts');
+const { validateEverhourApiKey } = await import('./service.ts');
 const { requireDatabaseClient } = await import('../../db.ts');
 const {
   addMissionTime,
@@ -102,10 +105,11 @@ test('setEverhourApiKey validates against Everhour and persists the encrypted us
   assert.equal(row.credential_kind, 'api_key');
   // No ACCOUNT_CONNECTIONS_ENCRYPTION_KEY here: the existing Everhour variable seals it.
   assert.equal(row.credential_key_id, 'everhour-env');
-  const opened = await profileConnections(requireDatabaseClient()).credential(
-    row.owner_profile_id,
-    'everhour'
-  );
+  const opened = await new ProfileConnections(
+    requireDatabaseClient(),
+    keyRingFromEnv(process.env),
+    [everhourConnectionProvider(validateEverhourApiKey)]
+  ).credential(row.owner_profile_id, 'everhour');
   assert.deepEqual(opened?.credential, { kind: 'api_key', apiKey: 'test-api-key' });
   assert.equal(row.external_account_id, '7');
   assert.equal(row.external_account_label, 'Everhour Operator');
@@ -605,4 +609,19 @@ test('a key stored by the pre-v153 code stays connected and drives the timer unc
   assert.equal(legacy.api_key_ciphertext, 'revoked:v1');
   assert.ok(legacy.deleted_at);
   assert.deepEqual(await getEverhourIntegration(), { connected: false, accountName: null });
+});
+
+test('service uses the injected profile store instead of environment-configured connections', async () => {
+  const { createEverhourService } = await import('./service.ts');
+  const store = new ProfileConnections(requireDatabaseClient(), keyRingFromEnv({}), [
+    everhourConnectionProvider(validateEverhourApiKey)
+  ]);
+  const service = createEverhourService(() => store);
+  installEverhourFetchMock([
+    { match: url => url.endsWith('/users/me'), respond: () => Response.json({ id: 7 }) }
+  ]);
+  await assert.rejects(
+    service.setEverhourApiKey('valid-key'),
+    (error: unknown) => error instanceof ApiError && error.status === 503
+  );
 });

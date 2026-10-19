@@ -68,8 +68,13 @@ import {
   updateRunnerRequestStatus
 } from './execution/runner.ts';
 import { sendRunnerClaimResponse } from './execution/runner-claim-http.ts';
+import { everhourConnectionProvider } from './ext/everhour/connection-provider.ts';
 import { createEverhourExtensionRouter } from './ext/everhour/routes.ts';
-import { GITHUB_REPOSITORY_CALLBACK_PATH } from './ext/github/connection-provider.ts';
+import { validateEverhourApiKey } from './ext/everhour/service.ts';
+import {
+  GITHUB_REPOSITORY_CALLBACK_PATH,
+  githubConnectionProvider
+} from './ext/github/connection-provider.ts';
 import { createGitHubExtensionRouter } from './ext/github/routes.ts';
 import { isAllowedBrowserOrigin } from './http/browser-origins.ts';
 import { runnerRegistrationFromBody } from './http/client-device.ts';
@@ -645,6 +650,7 @@ function connectionsModule(): ConnectionsRuntime {
     process.env.OVERLORD_WEBAPP_PUBLIC_URL?.trim() || process.env.OVERLORD_PUBLIC_URL?.trim();
   const options = {
     db: requireDatabaseClient(),
+    providers: [everhourConnectionProvider(validateEverhourApiKey), githubConnectionProvider()],
     env: process.env,
     publicBaseUrl: resolveAuthBaseUrl(),
     webReturnOrigin: webPublic ? new URL(webPublic).origin : null,
@@ -1726,13 +1732,16 @@ app.use(
   '/ext/everhour',
   requireAuthenticatedSession,
   projectAutomationRouteGuard,
-  createEverhourExtensionRouter(handle)
+  createEverhourExtensionRouter(handle, () => connectionsModule().profiles)
 );
 app.use(
   '/ext/github',
   requireAuthenticatedSession,
   projectAutomationRouteGuard,
-  createGitHubExtensionRouter(handle, { allowedBrowserOrigins: getAllowedBrowserOrigins() })
+  createGitHubExtensionRouter(handle, {
+    allowedBrowserOrigins: getAllowedBrowserOrigins(),
+    connections: () => connectionsModule().profiles
+  })
 );
 app.patch(
   '/api/projects/:id/board/reorder',

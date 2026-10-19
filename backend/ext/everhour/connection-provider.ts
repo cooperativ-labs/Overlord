@@ -4,7 +4,7 @@ import { EVERHOUR_ENV_KEY_ID } from '../../connections/keyring.ts';
 import {
   type ExternalAccount,
   type LegacyCredential,
-  registerProfileConnectionProvider
+  type ProfileConnectionProvider
 } from '../../connections/profile.ts';
 
 /**
@@ -26,10 +26,10 @@ interface LegacyUserConnectionRow {
   updated_at: string;
 }
 
-export function registerEverhourConnectionProvider(
+export function everhourConnectionProvider(
   validateApiKey: (apiKey: string) => Promise<ExternalAccount>
-): void {
-  registerProfileConnectionProvider({
+): ProfileConnectionProvider {
+  return {
     provider: 'everhour',
     serverUrl: EVERHOUR_SERVER_URL,
     credentialKind: 'api_key',
@@ -71,5 +71,5 @@ export function registerEverhourConnectionProvider(
         );
       }
     }
-  });
+  };
 }

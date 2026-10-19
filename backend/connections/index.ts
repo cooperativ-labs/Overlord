@@ -16,7 +16,7 @@ import {
 import type { FetchLike } from './egress.ts';
 import { KnowledgebaseMcp } from './mcp-client.ts';
 import { KnowledgebaseOAuth, OAUTH_SCOPE } from './oauth.ts';
-import { ProfileConnections } from './profile.ts';
+import { type ProfileConnectionProvider, ProfileConnections } from './profile.ts';
 import { AccountConnections } from './service.ts';
 import { composeSourceCheckers, knowledgebaseSourceChecker } from './source-check.ts';
 
@@ -35,6 +35,7 @@ export interface ConnectionsRuntime {
 
 export function createConnectionsRuntime(options: {
   db: DatabaseClient;
+  providers?: readonly ProfileConnectionProvider[];
   env: NodeJS.ProcessEnv;
   publicBaseUrl: string;
   webReturnOrigin: string | null;
@@ -106,7 +107,7 @@ export function createConnectionsRuntime(options: {
   return {
     config,
     connections,
-    profiles: new ProfileConnections(options.db, config.keyRing, {
+    profiles: new ProfileConnections(options.db, config.keyRing, options.providers, {
       now: options.now,
       sleep: options.sleep
     }),

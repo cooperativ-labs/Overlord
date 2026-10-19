@@ -15,11 +15,7 @@ import {
   WEB_RETURN_PATH
 } from './config.ts';
 import type { ConnectionsRuntime } from './index.ts';
-import {
-  type ProfileCallbackOutcome,
-  profileConnectionProvider,
-  type ProfileProvider
-} from './profile.ts';
+import { type ProfileCallbackOutcome, type ProfileProvider } from './profile.ts';
 import type { CallbackOutcome } from './service.ts';
 
 export interface ConnectionsRouterOptions {
@@ -94,7 +90,7 @@ export function createConnectionsRouter(options: ConnectionsRouterOptions): Rout
     '/',
     route(async req => {
       // Profile-scoped OAuth providers (GitHub, v153) are served on both editions.
-      if (profileConnectionProvider(req.body?.provider)?.oauth)
+      if (options.runtime().profiles.provider(req.body?.provider)?.oauth)
         return options.runtime().profiles.startOAuth(await profile(), req.body);
       return options.runtime().connections.start(owner(), req.body ?? null);
     })
@@ -273,7 +269,8 @@ export function createProfileConnectionCallbackHandler(options: {
           res.redirect(302, target.toString());
           return;
         }
-        const label = profileConnectionProvider(options.provider)?.label ?? options.provider;
+        const label =
+          options.runtime().profiles.provider(options.provider)?.label ?? options.provider;
         res
           .status(outcome.status === 'connected' ? 200 : 400)
           .type('html')

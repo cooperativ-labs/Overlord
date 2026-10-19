@@ -1,7 +1,7 @@
 import { knowledgebaseFeatureReference } from '@overlord/contract';
 import { type DatabaseClient } from '@overlord/database';
 import assert from 'node:assert/strict';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { describe, it } from 'node:test';
 
 import { ChatAccess, overlordSourceChecker } from '../../packages/core/service/chat/access.ts';
@@ -15,8 +15,8 @@ import {
 } from '../../packages/core/service/chat/tools.ts';
 import { createProject } from '../../packages/core/service/projects.ts';
 import { seedServiceOperator } from '../../packages/core/service/test-helpers.ts';
-import { createConnectionsRuntime } from '../connections/index.ts';
 import {
+  connectFakeKnowledgebase,
   FakeKnowledgebase,
   type FakeNode,
   KB_MCP_URL
@@ -28,8 +28,15 @@ import {
   createConformanceDatabase
 } from '../test-helpers.ts';
 
-import { EvaluationGeminiRuntime as GeminiChatRuntime } from './evaluation-runtime.ts';
-import type { GeminiChunk, GeminiClient, GeminiPart, GeminiRequest } from './gemini-client.ts';
+import {
+  call,
+  executeNext,
+  promptText,
+  responses,
+  ScriptedGemini,
+  scriptedRuntime,
+  text
+} from './chat-test-fixture.ts';
 
 /**
  * Feature handoff through the unified Knowledgebase connection (per:202.5h64, connector
@@ -41,45 +48,12 @@ const owner: ChatOwner = { profileId: 'owner', organizationId: 'ws-a-org' };
 const outsider: ChatOwner = { profileId: 'outsider', organizationId: 'ws-c-org' };
 const adapters = conformanceAdapters();
 
-class ScriptedGemini implements GeminiClient {
-  readonly requests: GeminiRequest[] = [];
-  constructor(private readonly script: ((req: GeminiRequest) => GeminiPart[])[]) {}
-  async stream(request: GeminiRequest): Promise<AsyncIterable<GeminiChunk>> {
-    this.requests.push(
-      structuredClone({ ...request, config: { ...request.config, abortSignal: undefined } })
-    );
-    const step = this.script.shift();
-    if (!step) throw new Error('script exhausted');
-    const parts = step(request);
-    return (async function* () {
-      yield { candidates: [{ content: { parts } }] };
-    })();
-  }
-  async generate() {
-    return { text: 'summary' };
-  }
-}
-const call = (name: string, args: Record<string, unknown>): GeminiPart => ({
-  functionCall: { name, args }
-});
-const text = (t: string): GeminiPart => ({ text: t });
-const responses = (req: GeminiRequest) =>
-  req.contents
-    .flatMap(c => c.parts)
-    .filter(p => p.functionResponse)
-    .map(p => p.functionResponse!.response as Record<string, unknown>);
 /** A provider function response's data, or a direct gateway output's content. */
 const data = (r: object) =>
   ('untrustedData' in r ? r.untrustedData : (r as { content: unknown }).content) as Record<
     string,
     unknown
   >;
-const promptText = (req: GeminiRequest) =>
-  req.contents
-    .flatMap(c => c.parts)
-    .map(p => p.text ?? '')
-    .join('\n');
-
 interface World {
   db: DatabaseClient;
   kb: FakeKnowledgebase;
@@ -137,23 +111,9 @@ async function world(adapter: ConformanceAdapter, fn: (w: World) => Promise<void
       projectIds.push(p.id);
     }
     const kb = new FakeKnowledgebase();
-    const rt = createConnectionsRuntime({
-      db,
-      env: {
-        KNOWLEDGEBASE_MCP_URL: KB_MCP_URL,
-        ACCOUNT_CONNECTIONS_ENCRYPTION_KEY: randomBytes(32).toString('base64url')
-      },
-      publicBaseUrl: 'https://backend.test',
-      webReturnOrigin: 'https://app.test',
-      fetch: kb.fetch,
-      now: () => kb.now,
+    const { rt, connectionId } = await connectFakeKnowledgebase(db, kb, owner, {
       checkers: { overlord: overlordSourceChecker(db) }
     });
-    const started = await rt.connections.start(owner, {
-      provider: 'knowledgebase',
-      returnTo: 'web'
-    });
-    await rt.connections.complete(kb.consent(started.authorizeUrl, 'kb-owner'));
     const mcp = rt.knowledgebase!;
     const options: ChatOptions = {
       now: () => kb.now,
@@ -167,23 +127,14 @@ async function world(adapter: ConformanceAdapter, fn: (w: World) => Promise<void
       runs: new ChatRuns(db, options),
       proposals: new ChatProposals(db, options),
       gateway: new ChatToolGateway({ db, knowledgebase: mcp, now: () => kb.now }),
-      connectionId: started.connectionId,
+      connectionId,
       project: projectIds[0]!,
       otherProject: projectIds[1]!,
-      tool: name => namespacedToolId(started.connectionId, name)
+      tool: name => namespacedToolId(connectionId, name)
     });
   } finally {
     await cleanup();
   }
-}
-
-const runtime = (w: World, client: GeminiClient) =>
-  new GeminiChatRuntime({ client, gateway: w.gateway, coalesceMs: 0, summaryEveryMessages: 100 });
-
-async function execute(w: World, rt: GeminiChatRuntime) {
-  const a = await w.runs.claim('worker', rt.identity);
-  assert.ok(a, 'a run is claimable');
-  await rt.execute(a, w.runs, new AbortController().signal);
 }
 
 function seedReadyFeature(kb: FakeKnowledgebase, workspace = 'main'): FakeNode {
@@ -316,7 +267,7 @@ for (const adapter of adapters)
           text: 'Hand off Offline sync to Overlord',
           knowledgebaseWrite: grant
         });
-        await execute(w, runtime(w, first));
+        await executeNext(w.runs, scriptedRuntime(w.gateway, first));
         assert.equal(
           Number((await w.db.get<{ n: number }>('SELECT COUNT(*) AS n FROM missions'))!.n),
           0,
@@ -407,7 +358,7 @@ for (const adapter of adapters)
           text: 'Link it now',
           knowledgebaseWrite: grant
         });
-        await execute(w, runtime(w, second));
+        await executeNext(w.runs, scriptedRuntime(w.gateway, second));
         assert.equal(feature.properties.overlord, displayId);
         assert.equal(feature.properties.status, 'in_development');
         assert.deepEqual(feature.properties.tags, ['sync'], 'the concurrent edit survives');

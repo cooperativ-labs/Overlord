@@ -119,6 +119,13 @@ export function writeKeySource(
   return ring.platform ? 'platform' : null;
 }
 
+/** Organization-scoped envelopes never use profile-provider fallback keys. */
+export function knowledgebaseKeyById(ring: KeyRing, id: string): RingKey | null {
+  if (ring.current?.id === id) return ring.current;
+  if (ring.platform?.id === id) return ring.platform;
+  return null;
+}
+
 export function keyById(ring: KeyRing, id: string): RingKey | null {
   if (ring.current?.id === id) return ring.current;
   for (const entry of Object.values(ring.fallback)) if (entry?.id === id) return entry;
@@ -134,14 +141,18 @@ export function keyById(ring: KeyRing, id: string): RingKey | null {
  * no current key at all: restoring the variable restores access. A platform key
  * id counts as missing configuration only while no platform key is derived at all
  * (`BETTER_AUTH_SECRET` unset); a different platform key means the secret was
- * rotated, which is a rotated key.
+ * rotated, which is a rotated key. Organization scope intentionally ignores
+ * profile fallback ids and legacy formats: only the missing current/platform
+ * configuration keeps its envelope.
  */
 export function missingKeyIsConfiguration(
   ring: KeyRing,
   keyId: string,
-  format: AccountConnectionCredentialFormat
+  format: AccountConnectionCredentialFormat,
+  scope: 'profile' | 'organization' = 'profile'
 ): boolean {
   if (isPlatformKeyId(keyId)) return ring.platform === null;
+  if (scope === 'organization') return ring.current === null;
   return RESERVED_KEY_IDS.has(keyId) || format !== 'connection-v1' || ring.current === null;
 }
 

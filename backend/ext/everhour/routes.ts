@@ -2,34 +2,39 @@ import { type Permission, PERMISSIONS } from '@overlord/auth';
 import { type NextFunction, type Request, type Response, Router } from 'express';
 
 import { recordConnectionAliasHit } from '../../connections/alias-telemetry.ts';
+import type { ProfileConnections } from '../../connections/profile.ts';
 import { missionRoute, projectRoute } from '../resource-routes.ts';
 
-import {
-  addMissionTime,
-  addProjectTime,
-  clearEverhourApiKey,
-  deleteMissionTime,
-  deleteProjectTime,
-  getEverhourIntegration,
-  getMissionEverhourState,
-  getProjectEverhourLink,
-  getProjectEverhourState,
-  linkProjectEverhour,
-  setEverhourApiKey,
-  startMissionTimer,
-  startProjectTimer,
-  stopMissionTimer,
-  stopProjectTimer,
-  updateMissionTime,
-  updateProjectTime
-} from './service.ts';
+import { createEverhourService } from './service.ts';
 
 type RouteHandler = (
   fn: (req: Request, res: Response) => unknown,
   options?: { mutates?: boolean; requires?: Permission }
 ) => (req: Request, res: Response, next: NextFunction) => void;
 
-export function createEverhourExtensionRouter(handle: RouteHandler): Router {
+export function createEverhourExtensionRouter(
+  handle: RouteHandler,
+  connections: () => ProfileConnections
+): Router {
+  const {
+    addMissionTime,
+    addProjectTime,
+    clearEverhourApiKey,
+    deleteMissionTime,
+    deleteProjectTime,
+    getEverhourIntegration,
+    getMissionEverhourState,
+    getProjectEverhourLink,
+    getProjectEverhourState,
+    linkProjectEverhour,
+    setEverhourApiKey,
+    startMissionTimer,
+    startProjectTimer,
+    stopMissionTimer,
+    stopProjectTimer,
+    updateMissionTime,
+    updateProjectTime
+  } = createEverhourService(connections);
   const router = Router();
 
   // Compatibility aliases (contract v153) over the shared account-connections module;

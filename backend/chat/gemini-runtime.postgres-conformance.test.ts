@@ -27,12 +27,12 @@ import {
 } from '../../packages/core/service/chat/tools.ts';
 import { ChatRuntimeFailure } from '../chat-worker.ts';
 
-import { EvaluationGeminiRuntime as GeminiChatRuntime } from './evaluation-runtime.ts';
+import { call, ScriptedGemini, scriptedRuntime, text } from './chat-test-fixture.ts';
+import { EvaluationGeminiRuntime as GeminiChatRuntime } from './evaluation-runtime-test-fixture.ts';
 import type {
   GeminiCacheCreate,
   GeminiChunk,
   GeminiClient,
-  GeminiPart,
   GeminiRequest
 } from './gemini-client.ts';
 import { geminiRuntimeInternals } from './gemini-runtime.ts';
@@ -44,54 +44,6 @@ const KB_CONNECTION = '0123456789ab4def8123456789abcdef';
 const KB_TOOL = 'kb_0123456789ab_search';
 const NODE = '11111111-2222-4333-8444-555555555555';
 const KB_SECRET = 'NOTE-SECRET-OFFLINE-QUEUE';
-
-/** Scripted Gemini: each provider request gets the next scripted turn (parts or an error). */
-class ScriptedGemini implements GeminiClient {
-  readonly requests: GeminiRequest[] = [];
-  readonly generated: GeminiRequest[] = [];
-  constructor(
-    private readonly script: ((req: GeminiRequest) => GeminiPart[] | Error)[],
-    private readonly summary: string | null = null,
-    private readonly finishReason = 'STOP'
-  ) {}
-  async stream(request: GeminiRequest): Promise<AsyncIterable<GeminiChunk>> {
-    this.requests.push(
-      structuredClone({ ...request, config: { ...request.config, abortSignal: undefined } })
-    );
-    const step = this.script.shift();
-    if (!step) throw new Error('script exhausted');
-    const out = step(request);
-    if (out instanceof Error) throw out;
-    return (async function* () {
-      // Two chunks, so text is coalesced across chunk boundaries.
-      const half = Math.ceil(out.length / 2);
-      yield { candidates: [{ content: { parts: out.slice(0, half) } }] };
-      if (out.length > half) yield { candidates: [{ content: { parts: out.slice(half) } }] };
-    })();
-  }
-  async generate(request: GeminiRequest) {
-    this.generated.push(request);
-    if (!this.summary) throw new Error('no summary');
-    return {
-      text: this.summary,
-      rawResponse: {
-        text: this.summary,
-        candidates: [{ finishReason: this.finishReason }],
-        usageMetadata: { totalTokenCount: 777 }
-      }
-    };
-  }
-}
-const call = (
-  name: string,
-  args: Record<string, unknown>,
-  id?: string,
-  sig?: string
-): GeminiPart => ({
-  functionCall: { name, args, ...(id ? { id } : {}) },
-  ...(sig ? { thoughtSignature: sig } : {})
-});
-const text = (t: string): GeminiPart => ({ text: t });
 
 class Crash extends Error {}
 /** Simulates the worker dying immediately after `method` has durably committed `n` times. */
@@ -145,23 +97,28 @@ async function world(
   try {
     let now = Date.parse('2026-10-04T12:00:00.000Z');
     const stamp = new Date(now).toISOString();
-    const f = db.dialect === 'sqlite' ? '0' : 'FALSE';
-    await db.run(
-      `INSERT INTO "user" (id, name, email, "emailVerified", "createdAt", "updatedAt") VALUES ('owner', 'Owner', 'owner@test.invalid', ${f}, ?, ?), ('stranger', 'S', 's@test.invalid', ${f}, ?, ?)`,
-      [stamp, stamp, stamp, stamp]
-    );
-    await db.run(
-      "INSERT INTO organizations (id, name, created_at, updated_at) VALUES ('org', 'Org', ?, ?)",
-      [stamp, stamp]
-    );
-    await db.run(
-      "INSERT INTO workspaces (id, organization_id, slug, name, kind, created_at, updated_at) VALUES ('ws', 'org', 'ws', 'Main', 'hosted', ?, ?), ('ws2', 'org', 'ws2', 'Private', 'hosted', ?, ?)",
-      [stamp, stamp, stamp, stamp]
-    );
-    await db.run(
-      "INSERT INTO workspace_users (id, workspace_id, profile_id, member_key, status, created_at, updated_at) VALUES ('member', 'ws', 'owner', 'owner', 'active', ?, ?), ('stranger-m', 'ws2', 'stranger', 'stranger', 'active', ?, ?)",
-      [stamp, stamp, stamp, stamp]
-    );
+    await seedChatIdentities(db, {
+      stamp,
+      profiles: [
+        { id: 'owner', name: 'Owner' },
+        { id: 'stranger', name: 'S', email: 's@test.invalid' }
+      ],
+      workspaces: [
+        {
+          id: 'ws',
+          organizationId: 'org',
+          organizationName: 'Org',
+          name: 'Main',
+          members: [{ id: 'member', profileId: 'owner' }]
+        },
+        {
+          id: 'ws2',
+          organizationId: 'org',
+          name: 'Private',
+          members: [{ id: 'stranger-m', profileId: 'stranger' }]
+        }
+      ]
+    });
     await db.run(
       'INSERT INTO role_assignments (id, workspace_id, workspace_user_id, role_key, resource_type, resource_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       ['ra-1', 'ws', 'member', Role.MEMBER, 'workspace', 'ws', stamp, stamp]
@@ -292,19 +249,6 @@ async function world(
   }
 }
 
-function runtime(
-  w: World,
-  client: GeminiClient,
-  extra: Partial<ConstructorParameters<typeof GeminiChatRuntime>[0]> = {}
-) {
-  return new GeminiChatRuntime({
-    client,
-    gateway: w.gateway,
-    coalesceMs: 0,
-    summaryEveryMessages: 100,
-    ...extra
-  });
-}
 async function start(w: World, prompt = 'What would offline support require?') {
   const created = await w.c.create(owner, { clientRequestId: randomUUID(), text: prompt });
   return created;
@@ -323,7 +267,7 @@ async function seedThread(
   exchanges: number,
   summaries: Record<number, Parameters<ChatRuns['summarize']>[1]> = {}
 ) {
-  const rt = runtime(w, new ScriptedGemini([]));
+  const rt = scriptedRuntime(w.gateway, new ScriptedGemini([]));
   const created = await start(w, 'Seed 0');
   for (let i = 0; i < exchanges; i++) {
     if (i)
@@ -369,7 +313,7 @@ for (const adapter of adapters)
               ];
             }
           ]);
-          const rt1 = runtime(w, first);
+          const rt1 = scriptedRuntime(w.gateway, first);
           await assert.rejects(
             rt1.execute(
               await claim(w, rt1),
@@ -396,7 +340,7 @@ for (const adapter of adapters)
             },
             () => [text('Done [E1].')]
           ]);
-          const rt2 = runtime(w, second);
+          const rt2 = scriptedRuntime(w.gateway, second);
           const resumed = await claim(w, rt2);
           assert.equal(resumed.recoveryMode, 'checkpoint');
           await rt2.execute(resumed, w.runs, new AbortController().signal);
@@ -437,14 +381,14 @@ for (const adapter of adapters)
             return [text('Discovered.')];
           }
         ]);
-        const rt = runtime(w, client);
+        const rt = scriptedRuntime(w.gateway, client);
         await rt.execute(await claim(w, rt), w.runs, new AbortController().signal);
       }));
 
     it('rejects corrupt historical manifest integrity before any resumed tool execution', () =>
       world(adapter, async w => {
         await start(w, 'Read notes');
-        const rt = runtime(w, new ScriptedGemini([() => [call(KB_TOOL, kbArgs)]]));
+        const rt = scriptedRuntime(w.gateway, new ScriptedGemini([() => [call(KB_TOOL, kbArgs)]]));
         await assert.rejects(
           rt.execute(
             await claim(w, rt),
@@ -483,7 +427,7 @@ for (const adapter of adapters)
           ],
           json({ text: 'Offline research', decisions: [], openQuestions: [], evidenceRefs: ['E1'] })
         );
-        const rt = runtime(w, client, { summaryEveryMessages: 1 });
+        const rt = scriptedRuntime(w.gateway, client, { summaryEveryMessages: 1 });
         await rt.execute(await claim(w, rt), w.runs, new AbortController().signal);
         const snap = await w.c.snapshot(owner, created.thread.id);
         assert.equal(snap.latestRun?.state, 'completed');
@@ -550,7 +494,7 @@ for (const adapter of adapters)
         world(adapter, async w => {
           const created = await start(w);
           const first = new ScriptedGemini([() => [call(KB_TOOL, kbArgs, 'call-1', 'sig-A')]]);
-          const rt1 = runtime(w, first);
+          const rt1 = scriptedRuntime(w.gateway, first);
           await assert.rejects(
             rt1.execute(
               await claim(w, rt1),
@@ -575,7 +519,7 @@ for (const adapter of adapters)
             ],
             () => [text('Done [E1] [E2] [E3].')]
           ]);
-          const rt2 = runtime(w, second);
+          const rt2 = scriptedRuntime(w.gateway, second);
           const a2 = await claim(w, rt2);
           assert.equal(a2.recoveryMode, 'checkpoint');
           // Crash the second attempt after the parallel batch is joined, then recover again.
@@ -590,7 +534,7 @@ for (const adapter of adapters)
           );
           w.advance(31_000);
           const third = new ScriptedGemini([() => [text('Final [E1] [E3].')]]);
-          const rt3 = runtime(w, third);
+          const rt3 = scriptedRuntime(w.gateway, third);
           const a3 = await claim(w, rt3);
           assert.equal(a3.recoveryMode, 'checkpoint');
           await rt3.execute(a3, w.runs, new AbortController().signal);
@@ -634,7 +578,7 @@ for (const adapter of adapters)
         const first = new ScriptedGemini([
           () => [text('Partial…'), call(KB_TOOL, kbArgs, 'c1', 'sig-1')]
         ]);
-        const rt1 = runtime(w, first);
+        const rt1 = scriptedRuntime(w.gateway, first);
         await assert.rejects(
           rt1.execute(
             await claim(w, rt1),
@@ -645,7 +589,7 @@ for (const adapter of adapters)
         );
         w.advance(31_000);
         const second = new ScriptedGemini([() => [text('Fresh answer [E1].')]]);
-        const rt2 = runtime(w, second, { model: 'gemini-3.8-flash-002' });
+        const rt2 = scriptedRuntime(w.gateway, second, { model: 'gemini-3.8-flash-002' });
         const a2 = await claim(w, rt2);
         assert.equal(a2.recoveryMode, 'fresh_generation');
         await rt2.execute(a2, w.runs, new AbortController().signal);
@@ -665,8 +609,8 @@ for (const adapter of adapters)
     it('revocation fences the live attempt and keeps revoked content out of provider input, replay and snapshots', () =>
       world(adapter, async w => {
         const created = await start(w);
-        const rt1 = runtime(
-          w,
+        const rt1 = scriptedRuntime(
+          w.gateway,
           new ScriptedGemini([
             () => [call(KB_TOOL, kbArgs, 'c1', 'sig')],
             () => [text(`The note says ${KB_SECRET} [E1].`)]
@@ -683,7 +627,7 @@ for (const adapter of adapters)
           () => [call(KB_TOOL, kbArgs, 'c2', 'sig')],
           () => [text('should never be requested')]
         ]);
-        const rt2 = runtime(w, live);
+        const rt2 = scriptedRuntime(w.gateway, live);
         await assert.rejects(
           rt2.execute(
             await claim(w, rt2),
@@ -708,7 +652,7 @@ for (const adapter of adapters)
         const regen = new ScriptedGemini([
           () => [text('Without the note, here is what the code shows.')]
         ]);
-        const rt3 = runtime(w, regen);
+        const rt3 = scriptedRuntime(w.gateway, regen);
         await rt3.execute(await claim(w, rt3), w.runs, new AbortController().signal);
         assert.doesNotMatch(json(regen.requests), new RegExp(KB_SECRET));
         assert.match(json(regen.requests), /withheld: source access was lost/);
@@ -734,7 +678,7 @@ for (const adapter of adapters)
           ],
           () => [text('I cannot do that; I can only read.')]
         ]);
-        const rt = runtime(w, client);
+        const rt = scriptedRuntime(w.gateway, client);
         await rt.execute(await claim(w, rt), w.runs, new AbortController().signal);
         const results = await w.db.all<{ tool_id: string; result_json: string }>(
           'SELECT tool_id, result_json FROM chat_tool_calls WHERE turn_index = 1 ORDER BY call_order'
@@ -765,8 +709,8 @@ for (const adapter of adapters)
     it('asks the user through a checkpointed question and resumes with the answer', () =>
       world(adapter, async w => {
         const created = await start(w, 'Plan offline work');
-        const rt1 = runtime(
-          w,
+        const rt1 = scriptedRuntime(
+          w.gateway,
           new ScriptedGemini([
             () => [
               text('Which project?'),
@@ -801,7 +745,7 @@ for (const adapter of adapters)
           optionId: 'proj-mobile'
         });
         const second = new ScriptedGemini([() => [text('OverlordMobile it is.')]]);
-        const rt2 = runtime(w, second);
+        const rt2 = scriptedRuntime(w.gateway, second);
         const a2 = await claim(w, rt2);
         assert.equal(a2.recoveryMode, 'checkpoint');
         await rt2.execute(a2, w.runs, new AbortController().signal);
@@ -830,7 +774,7 @@ for (const adapter of adapters)
             () => [call('repository_read', repoArgs, 'c2', 'sig'), call(KB_TOOL, kbArgs, 'c3')],
             () => [text('Found the note [E1]; did not inspect the repository. Tap Continue.')]
           ]);
-          const rt = runtime(w, client);
+          const rt = scriptedRuntime(w.gateway, client);
           await rt.execute(await claim(w, rt), w.runs, new AbortController().signal);
           assert.equal(client.requests[2]!.config.toolConfig?.functionCallingConfig.mode, 'NONE');
           assert.match(
@@ -848,8 +792,8 @@ for (const adapter of adapters)
     it('maps provider failures to typed run failures and readiness', () =>
       world(adapter, async w => {
         const created = await start(w);
-        const rt = runtime(
-          w,
+        const rt = scriptedRuntime(
+          w.gateway,
           new ScriptedGemini([() => Object.assign(new Error('quota'), { status: 429 })])
         );
         await assert.rejects(
@@ -869,7 +813,10 @@ for (const adapter of adapters)
         const overloaded = () => Object.assign(new Error('overloaded'), { status: 503 });
         const make = (script: ConstructorParameters<typeof ScriptedGemini>[0]) => {
           const client = new ScriptedGemini(script);
-          return { client, rt: runtime(w, client, { transientRetryDelaysMs: [0, 0] }) };
+          return {
+            client,
+            rt: scriptedRuntime(w.gateway, client, { transientRetryDelaysMs: [0, 0] })
+          };
         };
         const signal = () => new AbortController().signal;
         // Two transient failures (an overload, then a transport error), then the answer.
@@ -924,7 +871,7 @@ for (const adapter of adapters)
           () => [call(KB_TOOL, kbArgs, 'c1', 'sig')],
           () => [text('never')]
         ]);
-        const rt = runtime(w, client);
+        const rt = scriptedRuntime(w.gateway, client);
         const a = await claim(w, rt);
         const controller = new AbortController();
         const cancelling = hook(w.runs, 'requestTools', () => {
@@ -943,7 +890,7 @@ for (const adapter of adapters)
         world(adapter, async w => {
           const created = await start(w);
           const client = new ScriptedGemini([() => [text('First.'), text(' Final.')]]);
-          const rt = runtime(w, client, {
+          const rt = scriptedRuntime(w.gateway, client, {
             coalesceMs: 60_000,
             coalesceChars: 100_000,
             summaryEveryMessages: 1000
@@ -1027,7 +974,7 @@ for (const adapter of adapters)
             });
           })();
         };
-        const rt = runtime(w, client);
+        const rt = scriptedRuntime(w.gateway, client);
         await rt.execute(await claim(w, rt), w.runs, new AbortController().signal);
         const all = await w.db.all<{ seq: number; kind: string; payload_json: string }>(
           'SELECT seq, kind, payload_json FROM chat_diagnostics WHERE thread_id = ? ORDER BY seq',
@@ -1101,7 +1048,7 @@ for (const adapter of adapters)
                   throw new Error('summary call is not part of this benchmark');
                 }
               };
-              const rt = runtime(w, client, {
+              const rt = scriptedRuntime(w.gateway, client, {
                 coalesceMs,
                 coalesceChars,
                 summaryEveryMessages: 1000
@@ -1233,7 +1180,7 @@ for (const adapter of adapters)
           },
           () => [text('queueWrite is defined in src/sync.ts at line 42 [E1, E2].')]
         ]);
-        const rt = runtime(w, client, { gateway });
+        const rt = scriptedRuntime(w.gateway, client, { gateway });
         await rt.execute(await claim(w, rt), w.runs, new AbortController().signal);
         assert.deepEqual(calls, ['search_text', 'read_file']);
         assert.equal(client.requests.length, 3);
@@ -1314,7 +1261,7 @@ for (const adapter of adapters)
             ),
           () => [text('All five modules retry [E1] [E5].')]
         ]);
-        const rt = runtime(w, client, { gateway });
+        const rt = scriptedRuntime(w.gateway, client, { gateway });
         try {
           await rt.execute(await claim(w, rt), w.runs, new AbortController().signal);
         } finally {
@@ -1367,7 +1314,7 @@ for (const adapter of adapters)
             ),
           () => [text('never')]
         ]);
-        const rt = runtime(w, client, { gateway });
+        const rt = scriptedRuntime(w.gateway, client, { gateway });
         const a = await claim(w, rt);
         const controller = new AbortController();
         const cancelling = hook(w.runs, 'requestTools', () => {
@@ -1400,7 +1347,7 @@ for (const adapter of adapters)
           [() => [text('Continue from the conversation.')]],
           json({ text: 'Prior conversation', decisions: [], openQuestions: [], evidenceRefs: [] })
         );
-        const rt = runtime(w, client, { summaryEveryMessages: 8 });
+        const rt = scriptedRuntime(w.gateway, client, { summaryEveryMessages: 8 });
         const created = await start(w, 'Long conversation seed');
         // Seed 108 durable messages without provider calls. Setup is excluded from runtime timing.
         for (let i = 0; i < 54; i++) {
@@ -1434,7 +1381,7 @@ for (const adapter of adapters)
         const created = await seedThread(w, 6, { 4: summary });
         await w.c.submit(owner, created.thread.id, { clientRequestId: 'next', text: 'Next step?' });
         const client = new ScriptedGemini([() => [text('Here is the next step.')]]);
-        const rt = runtime(w, client);
+        const rt = scriptedRuntime(w.gateway, client);
         const a = await claim(w, rt);
         const input = await w.runs.input(a);
         assert.equal(input.messages.length, 13);
@@ -1461,7 +1408,7 @@ for (const adapter of adapters)
         const created = await seedThread(w, 54, { 2: summary });
         await w.c.submit(owner, created.thread.id, { clientRequestId: 'go', text: 'Go on.' });
         const client = new ScriptedGemini([() => [text('Continuing.')]]);
-        const rt = runtime(w, client);
+        const rt = scriptedRuntime(w.gateway, client);
         const a = await claim(w, rt);
         // The boundary (the third answer) is older than the latest 100 messages: none covered.
         let input = await w.runs.input(a);
@@ -1498,7 +1445,7 @@ for (const adapter of adapters)
         ]);
         await w.c.submit(owner, created.thread.id, { clientRequestId: 'again', text: 'Again.' });
         const fallback = new ScriptedGemini([() => [text('Again.')]]);
-        const rt2 = runtime(w, fallback);
+        const rt2 = scriptedRuntime(w.gateway, fallback);
         const b = await claim(w, rt2);
         input = await w.runs.input(b);
         assert.equal(input.summary, null);
@@ -1517,7 +1464,7 @@ for (const adapter of adapters)
           text: 'Read the note.'
         });
         const first = new ScriptedGemini([() => [call(KB_TOOL, kbArgs, 'call-1', 'sig-A')]]);
-        const rt1 = runtime(w, first);
+        const rt1 = scriptedRuntime(w.gateway, first);
         await assert.rejects(
           rt1.execute(
             await claim(w, rt1),
@@ -1528,7 +1475,7 @@ for (const adapter of adapters)
         );
         w.advance(31_000);
         const second = new ScriptedGemini([() => [text('The note says to queue writes [E1].')]]);
-        const rt2 = runtime(w, second);
+        const rt2 = scriptedRuntime(w.gateway, second);
         const a2 = await claim(w, rt2);
         assert.equal(a2.recoveryMode, 'checkpoint');
         await rt2.execute(a2, w.runs, new AbortController().signal);
@@ -1549,8 +1496,8 @@ for (const adapter of adapters)
     it('a revoked summary source falls back to authorized messages with withheld markers', () =>
       world(adapter, async w => {
         const created = await start(w);
-        const rt1 = runtime(
-          w,
+        const rt1 = scriptedRuntime(
+          w.gateway,
           new ScriptedGemini(
             [
               () => [call(KB_TOOL, kbArgs, 'c1', 'sig')],
@@ -1570,7 +1517,7 @@ for (const adapter of adapters)
         w.revoked.add(NODE);
         await w.c.submit(owner, created.thread.id, { clientRequestId: 'q2', text: 'And now?' });
         const client = new ScriptedGemini([() => [text('Without the note.')]]);
-        const rt = runtime(w, client);
+        const rt = scriptedRuntime(w.gateway, client);
         const a = await claim(w, rt);
         const input = await w.runs.input(a);
         assert.equal(input.summary, null, 'a summary depending on a revoked source is unusable');
@@ -1595,7 +1542,7 @@ for (const adapter of adapters)
           [() => [text('FINAL-ANSWER')]],
           json({ text: 'NEW-SUMMARY', decisions: ['d'], openQuestions: [], evidenceRefs: [] })
         );
-        const rt = runtime(w, client, { summaryEveryMessages: 2 });
+        const rt = scriptedRuntime(w.gateway, client, { summaryEveryMessages: 2 });
         await rt.execute(await claim(w, rt), w.runs, new AbortController().signal);
         assert.equal(client.generated.length, 1);
         const request = client.generated[0]!;
@@ -1652,7 +1599,7 @@ for (const adapter of adapters)
             text: `Q${i}`
           });
           const client = new ScriptedGemini([() => [text(`A${i}`)]], body, finish);
-          const rt = runtime(w, client, { summaryEveryMessages: 1 });
+          const rt = scriptedRuntime(w.gateway, client, { summaryEveryMessages: 1 });
           await rt.execute(await claim(w, rt), w.runs, new AbortController().signal);
           assert.equal(client.generated.length, 1);
           const snap = await w.c.snapshot(owner, created.thread.id);
@@ -1682,14 +1629,14 @@ for (const adapter of adapters)
             ],
             json({ text: 'Covered so far', decisions: [], openQuestions: [], evidenceRefs: [] })
           );
-          const rt1 = runtime(w, first, { summaryEveryMessages: 1 });
+          const rt1 = scriptedRuntime(w.gateway, first, { summaryEveryMessages: 1 });
           await rt1.execute(await claim(w, rt1), w.runs, new AbortController().signal);
           const snap = await w.c.snapshot(owner, created.thread.id);
           assert.equal(snap.latestRun!.outcome, 'allowance_exhausted');
           assert.ok(await w.db.get('SELECT id FROM chat_thread_summaries'));
           await w.c.continue(owner, snap.latestRun!.id, 'continue-1');
           const next = new ScriptedGemini([() => [text('Continued answer.')]]);
-          const rt2 = runtime(w, next, { recentVerbatimMessages: 0 });
+          const rt2 = scriptedRuntime(w.gateway, next, { recentVerbatimMessages: 0 });
           const a = await claim(w, rt2);
           assert.equal((await w.runs.input(a)).summaryCoveredCount, 2);
           await rt2.execute(a, w.runs, new AbortController().signal);
@@ -1721,7 +1668,7 @@ for (const adapter of adapters)
           },
           generate: request => client.generate(request)
         };
-        const rt = runtime(w, reporting, { inputTokenLimit: limit });
+        const rt = scriptedRuntime(w.gateway, reporting, { inputTokenLimit: limit });
         await rt.execute(await claim(w, rt), w.runs, new AbortController().signal);
         assert.equal(client.requests.length, 2);
         assert.equal(client.requests[1]!.config.toolConfig?.functionCallingConfig.mode, 'NONE');
@@ -1812,7 +1759,8 @@ import { ChatProposals } from '../../packages/core/service/chat/proposals.ts';
 import {
   type ConformanceAdapter,
   conformanceAdapters,
-  createConformanceDatabase
+  createConformanceDatabase,
+  seedChatIdentities
 } from '../test-helpers.ts';
 /**
  * Scripted Gemini with explicit caches. A cached request must carry no prefix; one naming a
@@ -1872,7 +1820,7 @@ for (const adapter of adapters)
       w: World,
       client: CachingGemini,
       cache = new GeminiStaticCache(client)
-    ) => runtime(w, client, { staticCache: cache });
+    ) => scriptedRuntime(w.gateway, client, { staticCache: cache });
 
     it('cold: the first request goes inline while creation is captured; warm: later and next-run requests reference it', () =>
       world(adapter, async w => {
