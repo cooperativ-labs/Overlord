@@ -188,6 +188,20 @@ Common protocol flags are `--mission-id <id>`, `--objective-id <id>`,
 `--timeout <ms>`. Most payload fields accept either inline JSON or a matching
 `--*-file`; use standard input (`-`) for larger payloads.
 
+`load-context`, `read-context`, `attachment-list`, and `attachment-download-url`
+treat an explicit mission as authoritative: an inherited `OVERLORD_OBJECTIVE_ID`
+applies only when no mission is named or its parent mission display id matches.
+For a mission UUID, pass `--objective-id` to pin the read. These reads never
+change your active execution binding:
+
+```bash
+ovld protocol load-context --mission-id coo:700
+```
+
+`ovld create`, `ovld prompt`, and `protocol add-objectives` return the persisted
+mission and objectives, and human-readable output echoes each objective's agent,
+model, resource, and queue/auto-advance settings.
+
 `--objective-id` is accepted anywhere `--mission-id` is, and takes an objective
 UUID or a display id such as `coo:8.k7xm`. A display id already names its
 mission, so `--mission-id` is optional whenever you pass one:

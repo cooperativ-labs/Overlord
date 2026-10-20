@@ -104,6 +104,11 @@ evidence; MCP does not enumerate changed files or inspect a worktree.
 Unknown item or hunk keys discard only that advisory entry with a bounded warning;
 for duplicate canonical paths, the last valid item wins.
 
+`overlord_create_mission` and `overlord_add_objectives` return the persisted
+`ObjectiveDto` records. Inspect each one's `assignedAgent`, `model`,
+`resourceKey`, and `queueEntry` / `autoAdvance` fields to verify the launch
+settings that were actually saved.
+
 ### Addressing a mission or an objective
 
 Most mission-scoped tools take `objectiveId` — an objective UUID or a display

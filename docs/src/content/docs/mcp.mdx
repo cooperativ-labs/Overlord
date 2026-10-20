@@ -66,6 +66,10 @@ display id in place of `missionId`. This matters most on a mission running
 several objectives at once, where "the active objective" is ambiguous and must
 be named.
 
+`overlord_create_mission` and `overlord_add_objectives` return the persisted
+`ObjectiveDto` records. Check each one's `assignedAgent`, `model`, `resourceKey`,
+and `queueEntry` / `autoAdvance` fields to confirm the launch settings were saved.
+
 Read tools may also render Overlord MCP Apps widgets (`ui://overlord/*`) for project
 selection, mission lists, objective viewers, and file-change summaries. Hosted MCP
 does not expose local filesystem, runner, or branch actions — those stay on the

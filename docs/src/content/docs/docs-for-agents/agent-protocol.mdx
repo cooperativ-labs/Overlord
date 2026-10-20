@@ -70,6 +70,28 @@ subcommands, so a launched agent rarely types it. Two commands never inherit it:
 `discuss-objective`, which wants a draft rather than the objective already
 executing.
 
+### Reading another mission
+
+`load-context`, `read-context`, `attachment-list`, and `attachment-download-url`
+are reads, so an explicit mission (`--mission-id` or the positional argument)
+selects the read on its own. An inherited objective from `OVERLORD_OBJECTIVE_ID`
+or the launch bootstrap is used only when no mission is named, or when its parent
+mission display id matches the one you named. A mission **UUID** cannot be matched
+locally, so pass `--objective-id` explicitly to pin that read. Explicit
+objective/mission pairs are still validated by the backend.
+
+Cross-mission reads never attach, change objective state, move the active
+mission pointer or session cache, or redirect later updates and delivery:
+
+```bash
+# Keep the current execution binding while reading another authorized mission.
+ovld protocol load-context --mission-id coo:700
+```
+
+Unpinned `load-context` can still return `no_active_objective` or
+`ambiguous_active_objective`; name the objective when it does.
+`list-deliveries` is mission-wide and never inherits an objective.
+
 ## Launch, queue, and inspect by objective
 
 These protocol commands take `--objective-id` (UUID or display id) as their
@@ -429,8 +451,8 @@ This is distinct from `--agent`, which records who created the mission (and, on
 | `search` (`search-missions` alias) | Find missions by query, state, project; `--reference <token> --project-id <ref>` is the exhaustive exact-token mode (page with `--cursor` until `complete: true`).                                                         |
 | `statuses`                       | List one project's board columns.                                                                 |
 | `discuss-objective`              | Submit a draft objective for discussion (no session). `--objective-id` names which draft.         |
-| `create` / `prompt`              | Create a draft / create-and-attach a mission.                                                     |
-| `add-objectives`                 | Append ordered objectives to a mission.                                                           |
+| `create` / `prompt`              | Create a draft / create-and-attach a mission. The response returns the persisted mission and objectives so you can verify agent, model, resource, and queue/auto-advance settings. |
+| `add-objectives`                 | Append ordered objectives to a mission; returns each persisted objective's launch settings.        |
 | `update-objective`               | Turn auto-advance on or off, or edit instruction text. Requires `--objective-id`.                 |
 | `update`                         | Post progress, decisions, and optional rationales.                                                |
 | `heartbeat`                      | Liveness ping, no feed event.                                                                     |
