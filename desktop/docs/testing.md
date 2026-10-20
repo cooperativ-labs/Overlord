@@ -6,6 +6,18 @@ the packaged app. It is excluded from the default `yarn test` aggregate.
 
 ## Automated / scriptable
 
+- **Performance capture and animation regression.** Build the SPA with
+  `yarn workspace @overlord/webapp build`, then run
+  `node desktop/scripts/performance-capture-smoke.mjs --motion` from the repo
+  root. This starts a separate Electron instance with temporary user data and
+  a synthetic workload, records for 15 seconds, verifies real CPU profile and
+  paint/layout events plus renderer CPU/memory, and compares the old animations
+  with the actual `StatusMotion` components and built SPA CSS. The fixed version
+  must reduce two-second style recalculations by at least 75%. It does not
+  contact a backend or alter the installed app's data. Omit `--motion` to test
+  recording alone without a SPA build. A graphical Electron environment is
+  required; restricted launch sandboxes can prevent it from starting.
+
 - **Server bundle boots on plain Node.** `yarn workspace @overlord/backend
 build:server` then `node backend/dist-server/index.cjs` against a fresh
   `OVERLORD_SQLITE_PATH` must create + migrate the DB, seed the workspace, and
@@ -57,12 +69,12 @@ build:server` then `node backend/dist-server/index.cjs` against a fresh
    names three of them identically, so read them from the inventory rather than
    from the name:
 
-   | Activity Monitor name | What it is | Rough expectation |
-   | --- | --- | --- |
-   | `Overlord` | Electron main process — window management, IPC, updaters, the local-target bridge | ~100–150 MB |
-   | `Overlord Helper (Renderer)` with `rendererUrl` ending in `/` | The main SPA window | a few hundred MB; **growth over hours is a leak** |
-   | `Overlord Helper (Renderer)` with `rendererUrl` ending in `/quick-task` | The quick-task panel. Only exists once the hotkey has been used in this session | ~60–80 MB |
-   | plain `Overlord Helper` | A utility process. `serviceName: overlord-server` is the embedded backend; anything else is a Chromium service (network, storage, audio) | backend ~300–500 MB in Local, **absent in Remote** |
+   | Activity Monitor name                                                   | What it is                                                                                                                               | Rough expectation                                  |
+   | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+   | `Overlord`                                                              | Electron main process — window management, IPC, updaters, the local-target bridge                                                        | ~100–150 MB                                        |
+   | `Overlord Helper (Renderer)` with `rendererUrl` ending in `/`           | The main SPA window                                                                                                                      | a few hundred MB; **growth over hours is a leak**  |
+   | `Overlord Helper (Renderer)` with `rendererUrl` ending in `/quick-task` | The quick-task panel. Only exists once the hotkey has been used in this session                                                          | ~60–80 MB                                          |
+   | plain `Overlord Helper`                                                 | A utility process. `serviceName: overlord-server` is the embedded backend; anything else is a Chromium service (network, storage, audio) | backend ~300–500 MB in Local, **absent in Remote** |
 
    A plain `Overlord Helper` in Remote mode is only a conformance failure if the
    inventory marks it `isEmbeddedBackend`. Chromium's own network/storage

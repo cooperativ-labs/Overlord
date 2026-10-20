@@ -15,6 +15,7 @@ import {
 import { syncSessionTokenToCliAuth } from './cli-auth-sync.js';
 import type { CliUpdater } from './cli-updater.js';
 import { readDesktopDeviceIdentity } from './device-identity.js';
+import { createDesktopDiagnostics, performanceTracePath } from './diagnostics.js';
 import { invokeDesktopLocalTarget } from './local-target-bridge.js';
 import { isNativeThemeSource, setNativeThemeSource } from './native-theme.js';
 import {
@@ -49,6 +50,36 @@ export function registerIpc({
   getShellOrigin: () => string;
   getBackendController: () => BackendRuntimeController | null;
 }): void {
+  const diagnostics = createDesktopDiagnostics(
+    () => getPublicActiveBackend({ shellOrigin: getShellOrigin() }).mode
+  );
+  // Restrict profiling/file reveal to our main document, never child frames or popups.
+  const requireShell = (event: Electron.IpcMainInvokeEvent) => {
+    const contents = getWindow()?.webContents;
+    if (
+      !contents ||
+      event.sender !== contents ||
+      event.senderFrame !== contents.mainFrame ||
+      new URL(event.senderFrame.url).origin !== getShellOrigin()
+    ) {
+      throw new Error('Diagnostics are available only in the main Overlord window.');
+    }
+  };
+  ipcMain.handle('overlord:diagnostics:status', event => {
+    requireShell(event);
+    return diagnostics.getStatus();
+  });
+  ipcMain.handle('overlord:diagnostics:record', event => {
+    requireShell(event);
+    return diagnostics.record();
+  });
+  ipcMain.handle('overlord:diagnostics:reveal', event => {
+    requireShell(event);
+    if (diagnostics.getStatus().state !== 'ready') return false;
+    shell.showItemInFolder(performanceTracePath());
+    return true;
+  });
+
   ipcMain.handle('overlord:choose-directory', async () => {
     const window = getWindow();
     const properties: Array<'openDirectory' | 'createDirectory'> = [

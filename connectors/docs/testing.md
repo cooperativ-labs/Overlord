@@ -17,6 +17,57 @@ invoke `ovld protocol …`). Tests enforce that it never reaches further.
 
 ---
 
+## Claude plugin CI
+
+`.github/workflows/claude-plugin.yml` runs on relevant pull requests and manual
+dispatch. `yarn connectors:check` includes `yarn connectors:claude:check`, which
+uses the setup managed-file renderer to stage the complete Claude plugin in a
+temporary directory, including the shared skill, references and post-tool hook.
+It runs `claude plugin validate --strict` and removes staging on success or
+failure. Install Claude Code 2.1.303, the CI tooling pin, to run it locally.
+This pin does not update the fixture-backed verified `HARNESS-MATRIX` version.
+
+`claude plugin test` runs mod handler tests (`.test.ts`/`.test.tsx`). Overlord's
+shell-hook/skill plugin has no mod handlers, so the checker reports it as not
+applicable. Hook behavior remains covered by executable descriptor fixtures in
+`connectors:capabilities:check`. A future mod must add native tests and wire
+`claude plugin test` into this job when it ships.
+
+The manual workflow's `run_evals` input enables `yarn connectors:claude:eval`
+only on the default branch, after validation. Configure the repository secret
+`ANTHROPIC_API_KEY` for that job; PR checks receive no model credential.
+Two cases in `test/fixtures/claude-plugin-evals` test inspection without
+attachment and draft creation without execution. They consult the rendered
+mission skill but cannot run shell commands or mutate real missions. They use
+deterministic graders, one run per case, no baseline, a perfect-score threshold,
+a $2 launch ceiling and 90-second per-case timeouts. Claude checks the ceiling
+before launching each run, so one in-flight run can exceed it. This is a small
+behavior smoke suite, not a statistical quality certification.
+
+Reports stay local (`--no-publish`) and are uploaded as GitHub artifacts for
+14 days, including on failure when reports exist. Locally, set
+`CLAUDE_PLUGIN_REPORT_DIR` to a persistent output directory; otherwise the
+checker prints a newly created temporary report directory. Native nonzero
+exit codes propagate, including failed graders, unavailable eval service,
+authentication errors and budget exhaustion. There is no skip-to-green path.
+
+### Hook failure policy
+
+Keep `onFailure` unset for current Claude hooks. `UserPromptSubmit` records
+activity, `PostToolUse` observes an action that already ran, and `Stop` offers
+guidance. Blocking on capture outages would impede prompts without enforcing
+attach-before-edit. Scripts also deliberately suppress transport failures, so
+a manifest field alone would not turn them into policy gates. The dormant
+permission hook must continue to defer to Claude on failure under the contract.
+
+Claude Code 2.1.295 added `onFailure: "block"` for command/HTTP hooks; it has no
+effect on `Stop` or background command hooks. A future attach-before-edit gate
+needs a separate opt-in pre-action policy, explicit unbound-session behavior,
+failure fixtures and contract review before adoption. See Anthropic's
+[hook failure reference](https://code.claude.com/docs/en/hooks#block-the-action-when-a-hook-fails),
+[plugin command reference](https://code.claude.com/docs/en/plugins/cli-reference#plugin-test)
+and [eval documentation](https://code.claude.com/docs/en/plugin-evals).
+
 ## A. Conformance Manifest (shared with Layer 3 §3.1)
 
 For each connector's `conformance-manifest.yaml`

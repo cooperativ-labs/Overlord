@@ -5,7 +5,6 @@ import {
   FolderOpen,
   GitBranch,
   ListOrdered,
-  Loader2,
   RefreshCw,
   Rocket
 } from 'lucide-react';
@@ -17,6 +16,7 @@ import type {
 import { formatAgentHarnessText } from '../../lib/agent-harness-text.ts';
 import { cn } from '../../lib/utils.ts';
 import { AgentIcon } from '../objectives/AgentIcon.tsx';
+import { ExecutingShimmer, StatusSpinner } from '../StatusMotion.tsx';
 
 import { elapsedLabel, isInFlightObjectiveState, relativeTime } from './activity-feed-model.ts';
 import {
@@ -34,12 +34,10 @@ import {
  */
 function ObjectiveStateIcon({ state }: { state: ActivityFeedMissionObjectiveDto['state'] }) {
   if (state === 'executing') {
-    return <Loader2 className="size-3.5 shrink-0 animate-spin text-(--color-ink-dim)" />;
+    return <StatusSpinner className="text-(--color-ink-dim)" />;
   }
   if (state === 'pending_delivery') {
-    return (
-      <RefreshCw className="size-3.5 shrink-0 animate-spin text-(--color-ink-dim) [animation-duration:2.5s]" />
-    );
+    return <StatusSpinner icon={RefreshCw} slow className="text-(--color-ink-dim)" />;
   }
   if (state === 'complete') {
     return <CheckCircle2 className="size-3.5 shrink-0 text-emerald-500" />;
@@ -68,9 +66,7 @@ function MissionObjectiveRow({ objective }: { objective: ActivityFeedMissionObje
       )}
       aria-label={blocked ? 'Blocked: waiting on an answer' : undefined}
     >
-      {inFlight && !blocked ? (
-        <div className="pointer-events-none absolute inset-0 animate-[shimmer_3s_linear_infinite] bg-size-[200%_100%] bg-linear-to-r from-transparent via-emerald-500/20 to-transparent" />
-      ) : null}
+      {inFlight && !blocked ? <ExecutingShimmer /> : null}
       <div className="relative flex min-w-0 items-center gap-2 px-2 py-1 text-xs">
         <ObjectiveStateIcon state={objective.state} />
         <span
@@ -159,7 +155,7 @@ export function MissionRunCard({
               ) : launching ? (
                 <Rocket className="size-3" aria-hidden="true" />
               ) : (
-                <Loader2 className="size-3 animate-spin" aria-hidden="true" />
+                <StatusSpinner className="size-3" />
               )
             }
             label={delivered ? 'delivered' : launching ? 'launching' : 'executing'}

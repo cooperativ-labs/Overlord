@@ -35,6 +35,8 @@ export interface ProcessInventoryEntry {
   name: string | null;
   memoryKb: number;
   peakMemoryKb: number;
+  /** Electron's interval CPU measurement; first read is a baseline. */
+  cpuPercent: number;
   isEmbeddedBackend: boolean;
   /** For renderers: which document this process is hosting, e.g. `/quick-task`. */
   rendererUrl: string | null;
@@ -92,6 +94,7 @@ export function collectProcessInventory({
       name: readOptionalString(metric, 'name'),
       memoryKb: metric.memory?.workingSetSize ?? 0,
       peakMemoryKb: metric.memory?.peakWorkingSetSize ?? 0,
+      cpuPercent: metric.cpu.percentCPUUsage,
       isEmbeddedBackend:
         serviceName === EMBEDDED_BACKEND_SERVICE_NAME ||
         (backendPid !== null && metric.pid === backendPid)

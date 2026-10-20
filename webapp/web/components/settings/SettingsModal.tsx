@@ -1,4 +1,5 @@
 import {
+  Activity,
   Bell,
   Cable,
   Cloud,
@@ -22,6 +23,7 @@ import { AccountPage } from '@/components/settings/AccountPage';
 import { ApplicationPage } from '@/components/settings/ApplicationPage';
 import { BackendPage } from '@/components/settings/BackendPage';
 import { DesktopUpdatesPage } from '@/components/settings/DesktopUpdatesPage';
+import { DiagnosticsPage } from '@/components/settings/DiagnosticsPage';
 import { HotkeysPage } from '@/components/settings/HotkeysPage';
 import { IdePage } from '@/components/settings/IdePage';
 import { IntegrationsPage } from '@/components/settings/IntegrationsPage';
@@ -65,7 +67,8 @@ const adminAppNavItems: SettingsNavItem[] = [{ name: 'Webhooks', icon: Webhook }
 
 const desktopNavItems: SettingsNavItem[] = [
   { name: 'Backend', icon: Cloud },
-  { name: 'Desktop', icon: MonitorDown }
+  { name: 'Desktop', icon: MonitorDown },
+  { name: 'Diagnostics', icon: Activity }
 ];
 
 const userNavItems: SettingsNavItem[] = [
@@ -168,6 +171,7 @@ export function SettingsModal({ open, onOpenChange, initialNav }: SettingsModalP
       )}
       {activeNav === 'Backend' && <BackendPage />}
       {activeNav === 'Desktop' && <DesktopUpdatesPage />}
+      {activeNav === 'Diagnostics' && isDesktop && <DiagnosticsPage />}
       {activeNav === 'Profile' && <UserProfilePage open={open} />}
       {activeNav === 'Account' && <AccountPage open={open} />}
       {activeNav === 'Tokens' && <UserTokensPage open={open} />}

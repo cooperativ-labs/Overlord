@@ -81,6 +81,13 @@ const api = {
   isDesktop: true as const,
   platform: process.platform,
   version: process.env.OVERLORD_DESKTOP_VERSION ?? null,
+  diagnostics: {
+    getStatus: (): Promise<import('./performance-capture.js').PerformanceCaptureStatus> =>
+      ipcRenderer.invoke('overlord:diagnostics:status'),
+    record: (): Promise<import('./performance-capture.js').PerformanceCaptureStatus> =>
+      ipcRenderer.invoke('overlord:diagnostics:record'),
+    reveal: (): Promise<boolean> => ipcRenderer.invoke('overlord:diagnostics:reveal')
+  },
   /** Open the native directory picker; resolves to an absolute path or null. */
   chooseDirectory: (): Promise<string | null> => ipcRenderer.invoke('overlord:choose-directory'),
   /** Stable device fingerprint for this machine (matches the CLI runner). */

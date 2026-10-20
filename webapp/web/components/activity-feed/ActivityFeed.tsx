@@ -37,7 +37,9 @@ function LiveIndicator() {
         aria-hidden="true"
         className={cn(
           'size-1.5 rounded-full',
-          live ? 'animate-pulse bg-emerald-500' : 'bg-amber-500'
+          live
+            ? 'animate-pulse will-change-[opacity] motion-reduce:animate-none bg-emerald-500'
+            : 'bg-amber-500'
         )}
       />
       {live ? 'Live' : 'Reconnecting…'}

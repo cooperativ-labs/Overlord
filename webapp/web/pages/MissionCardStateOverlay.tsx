@@ -1,3 +1,5 @@
+import { ExecutingShimmer } from '../components/StatusMotion.tsx';
+
 import type { MissionCardState } from './missionCardState.ts';
 
 /**
@@ -11,9 +13,7 @@ import type { MissionCardState } from './missionCardState.ts';
 export function MissionCardStateOverlay({ state }: { state: MissionCardState }) {
   return (
     <>
-      {state.shimmer ? (
-        <div className="pointer-events-none absolute inset-0 animate-[shimmer_3s_linear_infinite] bg-size-[200%_100%] bg-linear-to-r from-transparent via-emerald-500/20 to-transparent" />
-      ) : null}
+      {state.shimmer ? <ExecutingShimmer /> : null}
       {state.activeIndicators.map((indicator, index) =>
         indicator.dotClassName ? (
           <span

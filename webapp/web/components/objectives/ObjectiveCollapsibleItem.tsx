@@ -6,7 +6,6 @@ import {
   FolderOpen,
   HelpCircle,
   ListOrdered,
-  Loader2,
   Paperclip,
   RefreshCw,
   Unplug,
@@ -35,6 +34,7 @@ import {
 import { cn } from '../../lib/utils.ts';
 import { useAgentSessionFeed } from '../agent-session/AgentSessionActivity.tsx';
 import { OriginSparklesIcon } from '../OriginSparklesIcon.tsx';
+import { ExecutingShimmer, StatusSpinner } from '../StatusMotion.tsx';
 import { Button } from '../ui/button.tsx';
 import { Collapsible, CollapsibleContent } from '../ui/collapsible.tsx';
 import {
@@ -215,9 +215,7 @@ export function ObjectiveCollapsibleItem({
           alike — but not while the row is blocked: an agent stopped on a
           question is not making progress, and the amber tint says so.
         */}
-        {inFlight && !blocking.isBlocking ? (
-          <div className="pointer-events-none absolute inset-0 z-0 animate-[shimmer_3s_linear_infinite] bg-size-[200%_100%] bg-linear-to-r from-transparent via-emerald-500/20 to-transparent" />
-        ) : null}
+        {inFlight && !blocking.isBlocking ? <ExecutingShimmer /> : null}
         {/*
           The whole header toggles the row, but header actions live on line two
           alongside the badges, and a button cannot nest inside a button. So the
@@ -272,11 +270,11 @@ export function ObjectiveCollapsibleItem({
           <div className="relative flex min-w-0 items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-1.5">
               {isExecuting ? (
-                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
+                <StatusSpinner className="text-muted-foreground" />
               ) : isPendingDelivery ? (
                 // A refresh mark, not a warning: the agent re-attached to the
                 // objective and is working again — nothing has gone wrong.
-                <RefreshCw className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground [animation-duration:2.5s]" />
+                <StatusSpinner icon={RefreshCw} slow className="text-muted-foreground" />
               ) : objective.state === 'complete' ? (
                 <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
               ) : null}

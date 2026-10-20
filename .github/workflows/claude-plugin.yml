@@ -1,0 +1,74 @@
+name: Claude plugin
+
+on:
+  pull_request:
+    paths:
+      - 'connectors/**'
+      - 'contract/**'
+      - 'cli/**'
+      - 'scripts/*claude-plugin*'
+      - 'scripts/*harness*'
+      - 'scripts/sync-connector-versions.mjs'
+      - 'test/fixtures/claude-plugin-evals/**'
+      - 'package.json'
+      - 'yarn.lock'
+      - '.github/workflows/claude-plugin.yml'
+  workflow_dispatch:
+    inputs:
+      run_evals:
+        description: Run paid model evals on the default branch (requires ANTHROPIC_API_KEY)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  # Tooling pin, not a HARNESS-MATRIX compatibility certification.
+  CLAUDE_CODE_VERSION: '2.1.303'
+  CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1'
+  DISABLE_AUTOUPDATER: '1'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: corepack enable
+      - run: yarn install --immutable
+      - run: npm install --global @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
+      - run: node --import tsx --test scripts/check-claude-plugin.test.mjs
+      - run: yarn connectors:check
+
+  eval:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_evals && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLAUDE_PLUGIN_REPORT_DIR: ${{ runner.temp }}/claude-plugin-report
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: corepack enable
+      - run: yarn install --immutable
+      - run: npm install --global @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
+      - name: Evaluate trusted default-branch plugin
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          test -n "$ANTHROPIC_API_KEY" || { echo 'Configure the ANTHROPIC_API_KEY repository secret to run evals.'; exit 1; }
+          yarn connectors:claude:eval
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: claude-plugin-eval
+          path: ${{ runner.temp }}/claude-plugin-report
+          if-no-files-found: warn
+          retention-days: 14

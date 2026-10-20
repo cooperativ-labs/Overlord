@@ -212,6 +212,31 @@ one is the embedded backend needs more than Activity Monitor.
 A Remote profile is conformant when both report **zero** embedded backend
 processes.
 
+### Performance recording
+
+In **Settings → Diagnostics**, choose **Record 15 seconds**, then return to the
+screen showing excessive CPU and use the app normally. Recording continues when
+Settings closes. Reopen Diagnostics and choose **Show capture files** when done.
+Close DevTools before starting a recording.
+
+Electron main writes the latest capture to `<userData>/diagnostics/`:
+
+- `performance.trace.json`: Chromium JavaScript CPU samples and rendering,
+  style, layout and paint events. Load it in DevTools' Performance panel using
+  **Load trace** to inspect the renderer main thread.
+- `performance-summary.json`: app/Electron versions, start/end times, and
+  one-second process CPU/memory snapshots identifying renderer URLs and PIDs.
+
+Recordings are opt-in and stay local. They can include URLs and function names;
+inspect both files before sharing. No screenshot, network-body, heap-dump or
+console-log category is requested. A 32 MiB trace buffer stops accepting events
+when full; a busy recording may therefore cover less than the full interval.
+Each recording replaces the previous two capture files. An application quit
+interrupts recording. The existing periodic inventory also includes interval
+CPU measurements, but its ten-minute cadence is not a substitute for a spike
+capture. The first CPU sample is a baseline, and Electron's interval CPU values
+should not be compared directly with Activity Monitor percentages.
+
 ## 6. Updates
 
 The shell uses `electron-updater` for packaged-app updates. On startup it checks

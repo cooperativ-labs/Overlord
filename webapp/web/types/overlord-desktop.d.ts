@@ -1,6 +1,11 @@
 export {};
 
 declare global {
+  type DesktopPerformanceCaptureStatus = {
+    state: 'idle' | 'recording' | 'ready' | 'error';
+    endsAt: string | null;
+    message: string | null;
+  };
   type DesktopUpdateState =
     | 'idle'
     | 'checking'
@@ -63,6 +68,11 @@ declare global {
   };
 
   type OverlordDesktopBridge = {
+    diagnostics?: {
+      getStatus: () => Promise<DesktopPerformanceCaptureStatus>;
+      record: () => Promise<DesktopPerformanceCaptureStatus>;
+      reveal: () => Promise<boolean>;
+    };
     isDesktop: true;
     platform: NodeJS.Platform;
     version: string | null;
@@ -74,9 +84,7 @@ declare global {
     }>;
     invokeLocalTarget?: (
       call: import('../lib/local-target-types.ts').LocalTargetBridgeCall
-    ) => Promise<
-      import('../lib/local-target-types.ts').CapabilityResult<unknown>
-    >;
+    ) => Promise<import('../lib/local-target-types.ts').CapabilityResult<unknown>>;
     writeProjectMetadata?: (payload: {
       directoryPath: string;
       projectId: string;
@@ -129,10 +137,7 @@ declare global {
     };
     getActiveBackend?: () => Promise<DesktopBackendInfo>;
     listBackends?: () => Promise<DesktopBackendProfile[]>;
-    addBackend?: (payload: {
-      label: string;
-      backendUrl: string;
-    }) => Promise<DesktopBackendProfile>;
+    addBackend?: (payload: { label: string; backendUrl: string }) => Promise<DesktopBackendProfile>;
     removeBackend?: (id: string) => Promise<boolean>;
     switchBackend?: (id: string) => Promise<DesktopBackendInfo>;
     getSessionToken?: (profileId: string) => Promise<string | null>;

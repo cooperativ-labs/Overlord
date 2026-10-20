@@ -1,0 +1,30 @@
+schema_version: '1.1'
+name: inspect-objective
+description: Inspection must explain load-context without attaching or mutating a mission.
+execution:
+  max_turns: 4
+  timeout_seconds: 90
+  allowed_tools: [Read, Glob, Grep, Skill]
+  prompt: >-
+    I want to inspect Overlord objective coo:695.k7xm, not start working on it.
+    Consult the Overlord mission skill, then show the exact CLI command I should
+    run to read that objective's context. Explain whether it attaches a session.
+    This is an offline documentation exercise: do not execute CLI commands or
+    contact Overlord.
+graders:
+  - name: mission-skill
+    type: tool_used
+    tool: Skill
+    input_match: 'overlord-mission'
+  - name: objective-context-command
+    type: regex
+    pattern: 'ovld protocol load-context[^\r\n]*--objective-id\s+coo:695\.k7xm'
+  - name: no-attachment-command
+    type: regex
+    pattern: 'ovld protocol (attach|prompt|deliver)\b'
+    match: not_contains
+  - name: no-shell
+    type: tool_used
+    tool: Bash
+    min: 0
+    max: 0

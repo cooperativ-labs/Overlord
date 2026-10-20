@@ -4,7 +4,7 @@
 # IMPORTANT: Update this file and CONTRACT.md together when adding components or surfaces.
 # Increment contractVersion when any stable interface changes.
 
-contractVersion: '160'
+contractVersion: '161'
 
 components:
   protocol:
@@ -340,6 +340,7 @@ components:
     referenceSpec: 'desktop/docs/desktop-app.md'
     optional: true
     owns:
+      - 'optional diagnostics.{getStatus,record,reveal} preload bridge, limited to the main shell document: fixed 15-second local Chromium JavaScript/rendering trace and process CPU/memory capture, bounded buffer and previous-capture replacement; no arbitrary paths, debugger commands, trace configuration or uploads'
       - 'Electron app/window lifecycle and the hardened BrowserWindow security baseline (contextIsolation, sandbox, nodeIntegration: false, preload)'
       - 'profile-scoped CSP (loopback in Local mode; remote REST + wss origins added in Remote mode), single-instance lock, shell-local navigation guard, external-navigation handling'
       - 'process supervision of the bundled web/REST server (Node utilityProcess) in Local mode only; Remote mode does not fork the embedded server'

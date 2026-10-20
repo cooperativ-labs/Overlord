@@ -226,10 +226,12 @@ test('Claude Channel 1 protocol registrations survive without agent-session obse
   const commandsFor = (event: string) =>
     (hooks.hooks[event] ?? []).flatMap(entry => entry.hooks.map(hook => hook.command));
 
-  assert.ok(commandsFor('PostToolUse').some(c => c.endsWith('/scripts/post-tool-use-hook.sh')));
-  assert.ok(
-    commandsFor('UserPromptSubmit').some(c => c.endsWith('/scripts/user-prompt-submit-hook.sh'))
-  );
+  assert.deepEqual(commandsFor('PostToolUse'), [
+    '"${CLAUDE_PLUGIN_ROOT}/scripts/post-tool-use-hook.sh"'
+  ]);
+  assert.deepEqual(commandsFor('UserPromptSubmit'), [
+    '"${CLAUDE_PLUGIN_ROOT}/scripts/user-prompt-submit-hook.sh"'
+  ]);
   assert.equal(
     commandsFor('PostToolUse').some(c => c.endsWith('/scripts/agent-session-event.sh')),
     false

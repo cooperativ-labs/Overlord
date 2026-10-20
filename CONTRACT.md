@@ -34,13 +34,29 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `160`
+Current version: `161`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
 `contract/components.yaml`) — never a header duplicate. The contract version is
 incremented when any stable interface changes. All conformance manifests must
 declare the contract version they were validated against.
+
+### Version 161 Change Summary
+
+Desktop performance capture (coo:1165.4bn0) adds the optional, feature-detected
+`window.overlord.diagnostics.{getStatus,record,reveal}` bridge. Only the main
+shell document may invoke these fixed operations. One recording runs for 15
+seconds in Electron main, survives settings navigation, and records Chromium
+JavaScript/rendering events plus process CPU/memory samples. Capture is opt-in,
+uses a bounded trace buffer, and replaces only the previous local capture. No
+arbitrary path, trace configuration, debugger command or remote upload is exposed.
+The settings panel explains that traces may contain URLs and function names.
+
+Module impacts: Desktop owns recording and local files; Web adds a diagnostics
+panel when the bridge is available and uses compositor-friendly status animation
+in Feed, mission objectives and board/list/calendar card overlays. REST, Core, Database, Auth, Protocol, CLI,
+Runner, MCP, Connector, Mobile and Automations retain their interfaces.
 
 ### Version 160 Change Summary
 
@@ -2983,6 +2999,7 @@ Owns:
 - Persisted backend **profiles** (`{ id, label, mode: 'local' | 'remote', backendUrl }` + active profile id) in `userData/settings.json`, per-profile Electron **session partitions** (`persist:backend-<id>`), per-backend bearer-token storage via `safeStorage`, and the reload-and-login switcher / first-run chooser
 - The minimal `preload` bridge surface exposed to the renderer as `window.overlord` (feature-detected by the SPA; never required by it), including the additive backend-config ops `getActiveBackend()`, `listBackends()`, `addBackend()`, `removeBackend()`, and `switchBackend(id)`, plus `writeProjectMetadata(...)` for local checkout metadata writes in remote-client mode, `invokeLocalTarget(call)` for unified checkout-local capabilities, and `runnerService.{getStatus,install,start,stop,restart,uninstall}()` which drives the CLI-owned `ovld runner service <action>` operations as a subprocess and returns their parsed JSON result (the shell never manages the service process itself)
 - The feature-detected native notification bridge `window.overlord.showNotification({ title, body, tag?, soundUrl? })`, implemented only through the `overlord:show-notification` IPC handler. It accepts bounded, user-visible presentation only; it never carries a route, credential, token, raw event content, or arbitrary Electron capability.
+- The optional `window.overlord.diagnostics.{getStatus,record,reveal}` bridge for a fixed 15-second local Chromium performance trace and process CPU/memory samples. Only the main shell document may invoke it; capture continues across settings navigation, uses bounded storage, and exposes no arbitrary file paths, debugger commands, trace options or upload capability.
 - Remote OAuth callback ownership: registers `overlord://auth/callback`, receives only an opaque handoff ticket, exchanges it directly from the Electron main process with the active backend, and persists the returned Better Auth session token in the matching profile's `safeStorage`; neither the deep link nor the preload bridge carries a token
 - Mission deep-link ownership: registers and consumes `overlord://missions/<missionId>` where `<missionId>` matches `[A-Za-z0-9:_-]{1,64}`. The main process rejects all other mission URL shapes, focuses or creates the shell window, and emits the shell-local `overlord:navigate` bridge notification for the fixed internal `/user/missions/<missionId>` route. The link carries no credential, ticket, or payload; the feature-detected SPA navigates only to that supplied internal route.
 - Desktop packaging metadata and the build/sign/notarize pipeline (`electron-builder`, entitlements, app-data layout)
