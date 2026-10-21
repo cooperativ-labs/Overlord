@@ -1002,6 +1002,7 @@ Indexes:
 
 - Unique active `(mission_id, position)`.
 - Unique active `(mission_id, display_key)` (`idx_objectives_mission_display_key`).
+- Live `(workspace_id, created_at, id)` (`idx_objectives_transcript_created`, migration `20261021090000_objective_transcript_index`) supports bounded Compose history walks on both editions.
 - `(project_id, state, updated_at)`.
 - `(mission_id, state, position)`.
 
@@ -3156,6 +3157,17 @@ erDiagram
 ```
 
 ## REST API Boundary
+
+`GET /api/objective-transcript` (contract v162) projects full-text objective
+history across active-organization memberships with both `mission:read` and
+`objective:read`, restricted by token project scope before paging. It returns at
+most 100 rows using immutable `(created_at, id)` cursors (`before` descending
+history, `after` ascending new creates), or revalidates at most 100 named
+objective UUIDs with `ids`. One statement limits each workspace's indexed walk
+before merging the candidates; no count or per-objective hydration. The DTO,
+cursor/refresh rules, owner-only Inbox boundary and compatibility guidance are
+documented in `docs/objective-transcript.md`. No existing mutation, instruction
+text or ownership is changed.
 
 The REST API should be the primary remote access path. It should expose domain resources and protocol commands, not raw tables.
 

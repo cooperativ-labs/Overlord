@@ -34,13 +34,60 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `161`
+Current version: `162`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
 `contract/components.yaml`) — never a header duplicate. The contract version is
 incremented when any stable interface changes. All conformance manifests must
 declare the contract version they were validated against.
+
+### Version 162 Change Summary
+
+Bounded Compose objective history (coo:1166.ww5f): authenticated
+`GET /api/objective-transcript` returns `ObjectiveTranscriptPageDto` across the
+caller's active-organization memberships with both `mission:read` and
+`objective:read`, restricted by token project scope before selection. Live
+objectives of live missions in live, active projects qualify, including old
+completed missions. Private profile Inbox captures are never included.
+
+`limit` defaults to 50, accepts 1–100. History is newest first by immutable
+`(created_at, id)`; opaque versioned `before` cursors select strictly older
+rows. `after` selects strictly newer rows, oldest first, with `nextAfter` for
+draining new creates without skipping an intervening page. `nextBefore` is
+present only when another older page exists; `newestCursor` is the newest
+returned key (null for an empty page). Cursors are positions, never authorization
+grants or snapshots. `before`, `after` and `ids` are mutually exclusive. Invalid
+inputs return 400. `ids` is a comma-separated set of 1–100 objective UUIDs:
+revalidate just those rows, no pagination; omitted IDs mean absent or no longer
+authorized and must be removed locally, without disclosing why. No count query
+or per-objective hydration is performed. Full instruction text is retained;
+the bound is rows, not bytes, and a single instruction can still be large.
+
+Every item includes objective identity/revision, creation provenance, assignment,
+instruction/title/state/resource key, and current mission/project presentation
+metadata. Consumers deduplicate by objective ID and sort chronologically for
+display. Use `after` for creates and bounded `ids` revalidation for loaded rows
+after notices/reconnect, including late edits, deletions, mission/project moves
+and authorization changes. A permission expansion needs a fresh history walk;
+an access/account/organization change discards prior cursors and cached rows.
+The existing sequence-based `/sync/changes`/realtime feed remains authoritative
+for changed IDs, including same-timestamp or backdated creates which may precede
+an `after` position. Buffer/replay it around initial loading and revalidate its
+named IDs; a transcript cursor alone is not a change-log cursor.
+The existing owner-only `/api/inbox` stays separate: re-read its authoritative
+capture set after local mutations/reconnect; promotion removes its capture ID
+and introduces the created objective ID. Reconcile optimistic mission creates
+against returned objective IDs, never text. See
+`docs/objective-transcript.md` for mobile compatibility and refresh requirements.
+
+Module impacts: REST adds the read and authorization adapter; Core owns the
+bounded SQL projection; contract package adds DTOs; Database adds the partial
+history index `idx_objectives_transcript_created` on `(workspace_id, created_at, id)`
+on both editions (migration `20261021090000_objective_transcript_index`). Mobile gains an optional read
+surface for its next integration objective; existing clients remain compatible.
+Web, Desktop, Auth, Protocol, CLI, MCP, Runner, Connector, Automations and
+extensions retain their interfaces. No deployment is implied.
 
 ### Version 161 Change Summary
 
@@ -3225,6 +3272,17 @@ answering a decision it is blocked on, and injecting an instruction into it.
 - **Workspace resolution taxonomy**: Entity-addressed reads and writes derive a workspace from their operand and require it in the immutable request `authorizedWorkspaces` set. Single-workspace UI reads require an explicit `workspaceId` and return `400` when omitted. Aggregate parentless reads fan out only across the selected organization's authorized set; when a session holder belongs to multiple organizations, selection is explicit. Parentless writes use `resolveParentlessWorkspace` only for `create-project` and `register-target`; mission writes derive tenancy from their named project and inbox operations are profile-owned. No route may select the oldest membership.
 - **Authorized workspace shape**: Auth resolves once per request `{ organizationId, workspaces: [{ workspaceId, workspaceUserId, roleKeys }] }`, where workspaces are active live memberships intersected with token consent (when present). Services may retain one operation-local `resolvedWorkspaceId`, but must not reinterpret the set from request headers or persistence.
 - **Mission search versioning**: `GET /api/missions/search` is frozen as its v1 array-shaped response. `GET /api/missions/search/v2` returns `SearchMissionsResponseV2`: `{ version: 2, results, appliedFilters, totalMatchedBeforeLimit, workspaceCounts }`. Each result includes project/workspace labels, `dueDatetime`, `relevance` (deterministic fused score with exact display-id / exact-title precedence), `snippet`, `matchedTerms`, and `matchedIn`. Ranking is portable across adapters: display-id short-circuit, meaningful-term coverage floor `min(3, max(1, ceil(termCount / 2)))`, `max(documentScore)` plus bounded corroboration, and recency as rank fusion rather than an eligibility gate. Empty or stop-word-only queries use an explicit `fallback` mode. Complete and cancelled missions stay eligible by default. The REST route accepts only stable `projectIds`, plus `resourceKeys`, status types, `dateField` (`createdAt`, `updatedAt`, or `dueDatetime`), inclusive `from`, exclusive `to`, and global `limit`; it applies no implicit date window. The Protocol, CLI, and MCP v2 surfaces additionally resolve a human project reference and answer an ambiguous one with `project_selection_required` (Version 97). A `dueDatetime` range excludes missions with no due date, because the column is nullable and a due-date window asks about scheduled work. Fan-out is one organization only, with `floor(limit / workspaceCount)` per workspace and UUID-ordered remainder slots; unused quota is not redistributed. V1 and v2 search only the mission, objective, and event index corpus even after delivery indexing ships. Additive `GET /api/search/v3` returns `SearchResponseV3`: mission-anchored groups with `anchorOnly`, ranked `matches[]` (`objective` | `delivery`, each with id, display id, snippet, and score), `matchCounts` before `matchesPerResult` capping, envelope `entityCounts`, and `truncatedCandidates`. `event` is corroboration-only and never appears in `matches`. `matches` is matched-only. Child relevance is `docScore + 0.15 * missionScore`; the coverage floor stays at the group's concatenated haystack. Per-workspace candidate fetch is bounded at 500 documents — above that cap, counts are lower bounds. `entityTypes` defaults to mission, objective, and delivery (`event` is rejected); `objectiveStates` filters returnable children; `matchesPerResult` defaults to 3 and maxes at 10 and is not divided across workspaces. The mission row always anchors the group, including when `anchorOnly` is true. An objective display-id query returns that objective as the group's single match. REST v3 accepts only stable `projectIds`. Protocol `search-missions --response-version 3` returns the same envelope with v3 defaults. Artifacts are not indexed. Protocol `search --reference` (v155) is a separate exhaustive exact-token lookup in one project with continuation (`MissionReferenceSearchResponse`); see the Version 155 summary.
+
+### Mobile → REST (Objective Transcript Surface)
+
+- **Transport**: authenticated HTTPS/JSON; `GET /api/objective-transcript`.
+- **Contract**: `ObjectiveTranscriptPageDto`, contract v162 above and
+  `docs/objective-transcript.md`; 1–100 full-text objective rows with before/after
+  keyset paging or bounded ID revalidation across readable active-organization
+  workspaces. Private Inbox captures remain on their independent owner-only API.
+- **Consumer**: Mobile may adopt this additive surface; current consumers of
+  project mission lists are unchanged. The project-automation route allowlist
+  remains closed to this new route.
 
 ### Mobile → REST (Live Activity Push Surface)
 

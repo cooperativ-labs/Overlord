@@ -147,6 +147,7 @@ import {
   oauthProtectedResourceMetadata,
   redirectToOAuthApproval
 } from './oauth.ts';
+import { listObjectiveTranscript } from './objective-transcript.ts';
 import {
   addOrganizationAdmin,
   listOrganizationAdmins,
@@ -1456,6 +1457,14 @@ app.get(
       before: typeof req.query.before === 'string' ? req.query.before : null
     })
   )
+);
+
+app.get(
+  '/api/objective-transcript',
+  handle((req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    return listObjectiveTranscript(req.query);
+  })
 );
 
 // ---- Deferred-work resolutions ---------------------------------------------

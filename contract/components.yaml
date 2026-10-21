@@ -4,7 +4,7 @@
 # IMPORTANT: Update this file and CONTRACT.md together when adding components or surfaces.
 # Increment contractVersion when any stable interface changes.
 
-contractVersion: '161'
+contractVersion: '162'
 
 components:
   protocol:
@@ -192,6 +192,7 @@ components:
     referenceSpec: 'planning/feature-plans/09-database-schema-contract.md'
     referenceSection: 'REST API Boundary'
     owns:
+      - 'GET /api/objective-transcript (v162): full-text objective projection with 1–100-row keyset pages or bounded UUID revalidation, both mission:read and objective:read per active-organization workspace, token project narrowing before selection, and separate private Inbox capture ownership'
       - 'My Missions retirement (v160): GET /api/workspace/my-missions and PATCH /api/workspace/my-missions/order and their dedicated DTO/column vocabulary are removed; independent project mission, Inbox/Feed and mobile snapshot surfaces are unchanged'
       - 'URL paths and HTTP method contracts'
       - 'project Run Queue REST family: project-scoped reads and queue/entry create, update, pause, move, reorder, and delete operations; every explicit or lazily created queue starts paused except that a lazily created mission queue whose objective sits behind an already-running unqueued sibling seeds that sibling ahead as a running entry and starts unpaused, entry membership/moves never implicitly resume it, explicit pause/resume and queue-definition order use project:update, and direct Run with execution_request:create resumes the containing queue transactionally while launching the selected entry. Forced entry removal and an active-objective disconnect pause the containing queue in their transaction before scheduling the removal tick, so neither recovery action can dispatch a successor; queue entries are target-neutral, their existing read projection additively includes safe execution-request status/error/claim/target/timestamp diagnostics plus bounded impossible-pair codes, ObjectiveDto.queueEntry projects live membership, and compatibility autoAdvance is derived from membership'
@@ -363,6 +364,7 @@ components:
     stableIdentifier: mobile
     referenceSpec: '../OverlordMobile/conformance-manifest.yaml'
     owns:
+      - 'bounded Compose history via GET /api/objective-transcript (contract v162): before/after keyset pages and bounded ids revalidation; full instruction text, objective attribution, current mission/project context; private Inbox capture stays on its independent owner-only API'
       - 'native ActivityKit lifecycle and per-activity push-token registration stream'
       - 'standard user-notification permission prompt and APNs device-token registration, rotation, sync, and revocation on sign-out; device tokens are kept strictly separate from ActivityKit tokens'
       - 'user-visible notification preference UI backed by the profile notification-preferences routes, and handling of notification taps into mission deep links'
@@ -414,13 +416,14 @@ components:
 # Interaction surfaces — the only sanctioned paths between components
 interactionSurfaces:
   mobileToRest:
-    description: 'Native mobile app registers private ActivityKit push tokens over REST; the server owns snapshot recomputation and APNs delivery'
+    description: 'Native mobile app reads bounded objective transcripts and registers private ActivityKit push tokens over authenticated REST'
     from: mobile
     to: rest
     transport: https-json
     authMechanism: bearer-token
-    routeFamily: '/api/mobile/live-activities/:activityId/push-token'
+    routeFamily: '/api/objective-transcript, /api/mobile/live-activities/:activityId/push-token'
     rules:
+      - 'GET /api/objective-transcript is an additive authenticated Compose read: 1–100 objectives, authorized across active-organization memberships with mission:read and objective:read; before/after cursors or bounded ids revalidation, never private Inbox captures'
       - 'PUT accepts only an opaque ActivityKit pushToken and upserts the authenticated profile registration; DELETE revokes only that caller registration and both operations are retry-safe'
       - 'Registrations and tokens are never returned by a read endpoint, included in realtime, or written to application logs'
       - 'The mobile app never sends mission data or an APNs payload; the backend recomputes the bounded account snapshot from authorized data'

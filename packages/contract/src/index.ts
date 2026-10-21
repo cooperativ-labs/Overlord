@@ -746,6 +746,41 @@ export interface MissionDto {
   objectives?: ObjectiveDto[];
 }
 
+/** Full-text Compose projection; identity is the objective, never its text or position. */
+export interface ObjectiveTranscriptItemDto {
+  id: string;
+  workspaceId: string;
+  projectId: string;
+  missionId: string;
+  missionDisplayId: string;
+  missionTitle: string;
+  missionRevision: number;
+  statusType: StatusType;
+  projectName: string;
+  projectColor: string | null;
+  projectRevision: number;
+  title: string | null;
+  instructionText: string;
+  state: ObjectiveState;
+  assignedAgent: string | null;
+  resourceKey: string | null;
+  createdByKind: CreatedByKind;
+  createdByAgent: string | null;
+  createdByWorkspaceUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  revision: number;
+}
+
+export interface ObjectiveTranscriptPageDto {
+  items: ObjectiveTranscriptItemDto[];
+  nextBefore: string | null;
+  /** Continue ascending new-create reads, including when there is no further page yet. */
+  nextAfter: string | null;
+  newestCursor: string | null;
+  hasMore: boolean;
+}
+
 export interface ObjectiveDto {
   id: string;
   workspaceId: string;
