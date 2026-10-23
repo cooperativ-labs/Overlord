@@ -1,14 +1,13 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
+
+import { resolveGlobalDataDir } from '../../database/src/local-paths.ts';
 
 import type { ActiveBackend, BackendProfile } from './backend-profiles.js';
 
-function globalConfigPath(): string {
-  return path.join(
-    process.env.OVLD_HOME?.trim() || path.join(os.homedir(), '.ovld'),
-    'overlord.toml'
-  );
+/** The CLI's global `overlord.toml`, inside the shared per-user data directory. */
+export function globalConfigPath(): string {
+  return path.join(resolveGlobalDataDir(), 'overlord.toml');
 }
 
 function tomlString(value: string): string {
@@ -36,7 +35,7 @@ export function syncOverlordTomlForProfile({
       : 80;
 
   const existing = existsSync(targetPath) ? readExistingConfig(targetPath) : {};
-  const next = {
+  const next: OverlordTomlValues = {
     instanceName: existing.instanceName ?? 'Local Overlord',
     backendMode,
     backendUrl,
@@ -49,21 +48,36 @@ export function syncOverlordTomlForProfile({
     defaultAgent: existing.defaultAgent ?? 'claude'
   };
 
-  writeFileSync(
-    targetPath,
-    `# Overlord instance configuration
-instance_name = ${tomlString(next.instanceName)}
-backend_mode = ${tomlString(next.backendMode)}
-backend_url = ${tomlString(next.backendUrl)}
-web_host = ${tomlString(next.webHost)}
-web_port = ${next.webPort}
-sql_studio_enabled = ${next.sqlStudioEnabled ? 'true' : 'false'}
-sql_studio_host = ${tomlString(next.sqlStudioHost)}
-sql_studio_port = ${next.sqlStudioPort}
-sql_studio_binary = ${tomlString(next.sqlStudioBinary)}
-default_agent = ${tomlString(next.defaultAgent)}
-`
-  );
+  writeFileSync(targetPath, renderOverlordToml(next));
+}
+
+export type OverlordTomlValues = {
+  instanceName: string;
+  backendMode: 'local' | 'cloud';
+  backendUrl: string;
+  webHost: string;
+  webPort: number;
+  sqlStudioEnabled: boolean;
+  sqlStudioHost: string;
+  sqlStudioPort: number;
+  sqlStudioBinary: string;
+  defaultAgent: string;
+};
+
+/** The one renderer for the desktop-written `overlord.toml`. */
+export function renderOverlordToml(values: OverlordTomlValues): string {
+  return `# Overlord instance configuration
+instance_name = ${tomlString(values.instanceName)}
+backend_mode = ${tomlString(values.backendMode)}
+backend_url = ${tomlString(values.backendUrl)}
+web_host = ${tomlString(values.webHost)}
+web_port = ${values.webPort}
+sql_studio_enabled = ${values.sqlStudioEnabled ? 'true' : 'false'}
+sql_studio_host = ${tomlString(values.sqlStudioHost)}
+sql_studio_port = ${values.sqlStudioPort}
+sql_studio_binary = ${tomlString(values.sqlStudioBinary)}
+default_agent = ${tomlString(values.defaultAgent)}
+`;
 }
 
 type ExistingConfig = {

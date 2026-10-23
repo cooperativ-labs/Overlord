@@ -1,8 +1,9 @@
+import { normalizeBaseUrl } from '@overlord/contract';
 import { hostname } from 'node:os';
-import { createInterface } from 'node:readline/promises';
 
 import { writeStoredAuthCredentials } from './auth-credentials.js';
 import { CliError } from './errors.js';
+import { promptLine as promptLineShared } from './prompt.js';
 
 export type AuthLoginMethod = 'password' | 'user_token';
 
@@ -26,10 +27,6 @@ export function validateEmail(email: string): string | null {
     return 'Enter a valid email address.';
   }
   return null;
-}
-
-function normalizeBaseUrl(value: string): string {
-  return value.replace(/\/+$/, '');
 }
 
 export function isBackendReachabilityError(error: unknown): boolean {
@@ -61,35 +58,16 @@ export async function probeBackendReachability({
   }
 }
 
-async function promptLine({
-  message,
-  defaultValue
-}: {
-  message: string;
-  defaultValue?: string;
-}): Promise<string> {
-  if (!process.stdin.isTTY) {
-    throw new CliError({
-      message:
-        'Interactive login requires a TTY. Set OVERLORD_USER_TOKEN / OVLD_USER_TOKEN / USER_TOKEN for non-interactive use.'
-    });
-  }
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    const suffix = defaultValue ? ` [${defaultValue}]` : '';
-    const answer = await rl.question(`${message}${suffix}: `);
-    return answer.trim() || defaultValue || '';
-  } finally {
-    rl.close();
-  }
+const NON_INTERACTIVE_MESSAGE =
+  'Interactive login requires a TTY. Set OVERLORD_USER_TOKEN / OVLD_USER_TOKEN / USER_TOKEN for non-interactive use.';
+
+function promptLine(options: { message: string; defaultValue?: string }): Promise<string> {
+  return promptLineShared({ ...options, nonInteractiveMessage: NON_INTERACTIVE_MESSAGE });
 }
 
 async function promptPassword({ message }: { message: string }): Promise<string> {
   if (!process.stdin.isTTY) {
-    throw new CliError({
-      message:
-        'Interactive login requires a TTY. Set OVERLORD_USER_TOKEN / OVLD_USER_TOKEN / USER_TOKEN for non-interactive use.'
-    });
+    throw new CliError({ message: NON_INTERACTIVE_MESSAGE });
   }
 
   process.stdout.write(`${message}: `);

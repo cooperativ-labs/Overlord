@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,6 +13,7 @@ import {
   pruneObsoleteMigrationLedgerPostgres,
   resolveAppliedMigrationPostgres
 } from './migration-ledger.js';
+import { MIGRATION_FILE_PATTERN, migrationChecksum, migrationComponent } from './migration-files.js';
 import {
   finalizeObjectivesDisplayKeyPostgres,
   isObjectivesDisplayKeyMigration
@@ -23,8 +23,6 @@ import {
   isProjectStatusesMigration
 } from './project-statuses-migration-runtime.js';
 
-const MIGRATION_FILE_PATTERN = /^\d+_[a-z0-9_]+\.sql$/;
-
 /**
  * The PostgreSQL migrations ship inside this package (`@overlord/database`)
  * alongside the SQLite ones and are resolved relative to this module, so the
@@ -32,15 +30,6 @@ const MIGRATION_FILE_PATTERN = /^\d+_[a-z0-9_]+\.sql$/;
  */
 function postgresMigrationsDir(): string {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'postgres', 'migrations');
-}
-
-function checksum(sql: string): string {
-  return createHash('sha256').update(sql).digest('hex');
-}
-
-function migrationComponent(fileName: string): string {
-  const match = fileName.match(/^\d+_ext_([a-z0-9_]+)_/);
-  return match ? `ext:${match[1]}` : 'core';
 }
 
 function loadMigrationSql(fileName: string): {
@@ -54,7 +43,7 @@ function loadMigrationSql(fileName: string): {
   // adapters.
   const version = fileName.split('_', 1)[0] ?? fileName;
   const sql = readFileSync(path.join(postgresMigrationsDir(), fileName), 'utf8');
-  return { version, component: migrationComponent(fileName), sql, checksum: checksum(sql) };
+  return { version, component: migrationComponent(fileName), sql, checksum: migrationChecksum(sql) };
 }
 
 export function listPostgresMigrationFiles(): string[] {

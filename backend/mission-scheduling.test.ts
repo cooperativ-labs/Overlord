@@ -24,7 +24,7 @@ const {
   updateMission,
   reorderBoardColumn
 } = await import('./repository.ts');
-const { ApiError } = await import('./errors.ts');
+const { ServiceError } = await import('../packages/core/service/errors.ts');
 
 function statusId(projectId: string, key: string): string {
   const row = db
@@ -50,13 +50,14 @@ describe('previewMissionSchedule', () => {
     assert.equal(result.dueDatetime, '2026-03-25T09:00:00.000Z');
   });
 
-  it('rejects an invalid schedule with a 400 ApiError', () => {
+  it('rejects an invalid schedule with a 400 validation error', () => {
     assert.throws(
       () =>
         previewMissionSchedule({
           schedule: { ...DAILY_UTC_SCHEDULE, timezone: 'Mars/Base' }
         }),
-      (err: unknown) => err instanceof ApiError && err.status === 400
+      (err: unknown) =>
+        err instanceof ServiceError && err.status === 400 && err.code === 'validation_error'
     );
   });
 });

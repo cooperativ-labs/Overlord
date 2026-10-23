@@ -1,3 +1,4 @@
+import { normalizeBaseUrl } from '@overlord/contract';
 import { chmodSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -72,10 +73,6 @@ export function writeStoredAuthCredentials({
   } catch {
     // Best effort on platforms that restrict chmod.
   }
-}
-
-function normalizeBaseUrl(value: string): string {
-  return value.replace(/\/+$/, '');
 }
 
 export function clearStoredAuthCredentials(): void {

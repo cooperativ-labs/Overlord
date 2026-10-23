@@ -1,4 +1,4 @@
-contractVersion: '155'
+contractVersion: '164'
 componentType: mcp-server
 componentKey: overlord
 label: 'Overlord Hosted MCP Server'

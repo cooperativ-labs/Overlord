@@ -9,6 +9,8 @@ import {
 type ProfileMetadata = {
   avatarUrl?: string;
   agentInstructions?: string;
+  /** Preferred editor URL scheme for file links (for example `vscode` or `cursor`). */
+  editorScheme?: string;
   /**
    * User-level launch-session default (provider + viewer-on-launch) that new
    * execution targets inherit. Stored here for the same reason `editorScheme` is:
@@ -40,6 +42,11 @@ export function agentInstructionsFromProfileMetadata(metadataJson: string): stri
     : null;
 }
 
+export function editorSchemeFromProfileMetadata(metadataJson: string): string | null {
+  const editorScheme = parseProfileMetadata(metadataJson).editorScheme;
+  return typeof editorScheme === 'string' && editorScheme.trim() ? editorScheme.trim() : null;
+}
+
 /**
  * The acting user's default execution provider and viewer-on-launch. A profile
  * that has never opted in reads as `direct`, so nothing changes for existing
@@ -55,11 +62,13 @@ export function mergeProfileMetadataJson({
   metadataJson,
   avatarUrl,
   agentInstructions,
+  editorScheme,
   launchSessionDefaults
 }: {
   metadataJson: string;
   avatarUrl?: string | null;
   agentInstructions?: string | null;
+  editorScheme?: string | null;
   launchSessionDefaults?: LaunchSessionDefaults | null;
 }): string {
   const parsed = { ...parseProfileMetadata(metadataJson) };
@@ -81,6 +90,12 @@ export function mergeProfileMetadataJson({
     const trimmed = agentInstructions?.trim() ?? '';
     if (trimmed) parsed.agentInstructions = trimmed;
     else delete parsed.agentInstructions;
+  }
+
+  if (editorScheme !== undefined) {
+    const trimmed = editorScheme?.trim() ?? '';
+    if (trimmed) parsed.editorScheme = trimmed;
+    else delete parsed.editorScheme;
   }
 
   return JSON.stringify(parsed);

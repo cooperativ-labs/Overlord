@@ -7,9 +7,9 @@ import {
   session
 } from 'electron';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 
+import { globalConfigPath, renderOverlordToml } from './backend-config.js';
 import {
   LOCAL_BACKEND_PROFILE_ID,
   resolveActiveBackend,
@@ -374,18 +374,18 @@ function ensurePackagedConfig(): void {
   mkdirSync(path.dirname(targetPath), { recursive: true });
   writeFileSync(
     targetPath,
-    `# Overlord local instance configuration
-instance_name = "Local Overlord"
-backend_mode = "local"
-backend_url = ${tomlString(`http://${webHost === '0.0.0.0' ? '127.0.0.1' : webHost}:${webPort}`)}
-web_host = ${tomlString(webHost)}
-web_port = ${webPort}
-sql_studio_enabled = false
-sql_studio_host = ${tomlString(sqlStudioHost)}
-sql_studio_port = ${sqlStudioPort}
-sql_studio_binary = ${tomlString(sqlStudioBinary)}
-default_agent = "claude"
-`
+    renderOverlordToml({
+      instanceName: 'Local Overlord',
+      backendMode: 'local',
+      backendUrl: `http://${webHost === '0.0.0.0' ? '127.0.0.1' : webHost}:${webPort}`,
+      webHost,
+      webPort,
+      sqlStudioEnabled: false,
+      sqlStudioHost,
+      sqlStudioPort,
+      sqlStudioBinary,
+      defaultAgent: 'claude'
+    })
   );
 }
 
@@ -437,17 +437,6 @@ function parsePort(value: string | undefined, fallback: number, name: string): n
 
   console.warn(`[desktop] ignoring invalid ${name}=${JSON.stringify(raw)}; using ${fallback}`);
   return fallback;
-}
-
-function globalConfigPath(): string {
-  return path.join(
-    process.env.OVLD_HOME?.trim() || path.join(os.homedir(), '.ovld'),
-    'overlord.toml'
-  );
-}
-
-function tomlString(value: string): string {
-  return JSON.stringify(value);
 }
 
 app.on('before-quit', event => {

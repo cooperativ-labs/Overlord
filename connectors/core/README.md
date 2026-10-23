@@ -58,8 +58,11 @@ editing it:
 - It must stay a standalone runnable `.mjs`. The rendered file is copied into the
   user's home and started directly by the harness, so it may not import anything
   repo-local or require a build step.
-- The tool list must stay in parity with the hosted MCP catalog; `backend/mcp.test.ts`
-  asserts this against `mcp/tool-catalog.ts`.
+- Its `tools` array is generated from the shared catalog in
+  `packages/contract/src/mcp-tools.ts` (between the `BEGIN`/`END GENERATED MCP TOOL
+  CATALOG` markers). Edit tool schemas there and run `yarn connectors:mcp-tools`;
+  `yarn connectors:check` fails on drift, and `backend/mcp.test.ts` asserts the shim
+  publishes the catalog verbatim (minus `outputSchema`).
 
 Post-tool mutation capture uses the same ownership model. The single
 `scripts/capture-change-hook.sh` template is rendered with the adapter key into the existing

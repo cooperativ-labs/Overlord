@@ -1,3 +1,4 @@
+import { overlordMcpToolDefinitions } from '@overlord/contract/mcp-tools';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
@@ -136,6 +137,29 @@ test('local MCP bridge tools stay in sync with hosted MCP registry', async () =>
   for (const relativePath of scripts) {
     assert.deepEqual(await localToolContracts(path.join(repoRoot, relativePath)), expected);
   }
+});
+
+test('local MCP shim publishes the shared contract catalog verbatim, minus outputSchema', async () => {
+  const local = await localToolDefinitions(
+    path.join(repoRoot, 'connectors/core/scripts/overlord-mcp.mjs')
+  );
+  const expected = overlordMcpToolDefinitions({ defaultAgent: '__OVERLORD_ADAPTER_KEY__' }).map(
+    ({ outputSchema: _outputSchema, ...tool }) => tool
+  );
+  assert.deepEqual(local, expected);
+});
+
+test('hosted MCP tools are the shared contract catalog plus widget metadata', () => {
+  const shared = overlordMcpToolDefinitions({ defaultAgent: 'hosted-mcp' });
+  assert.deepEqual(
+    hostedMcpToolDefinitions.map(({ _meta: _widget, ...tool }) => tool),
+    shared
+  );
+  const attach = hostedMcpToolDefinitions.find(tool => tool.name === 'overlord_attach_session');
+  assert.match(
+    String((attach?.inputSchema.properties as Record<string, any>).agent.description),
+    /Defaults to hosted-mcp\./
+  );
 });
 
 test('hosted and local lifecycle tools expose only canonical rationale annotation keys', async () => {

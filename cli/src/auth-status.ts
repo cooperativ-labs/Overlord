@@ -1,3 +1,5 @@
+import { normalizeBaseUrl } from '@overlord/contract';
+
 import {
   authCredentialsPath,
   type AuthCredentialType,
@@ -50,10 +52,6 @@ function resolveExpiry(expiresAt: string | null | undefined): {
     expiresInDays: Math.floor(msRemaining / (24 * 60 * 60 * 1000)),
     expired: msRemaining <= 0
   };
-}
-
-function normalizeBaseUrl(value: string): string {
-  return value.replace(/\/+$/, '');
 }
 
 function inferCredentialTypeFromToken(token: string): AuthCredentialType {

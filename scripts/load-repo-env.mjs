@@ -29,7 +29,8 @@ function applyEnvFile(filePath, { skipKeys = [] } = {}) {
   }
 }
 
-function parseEnvValue(rawValue) {
+/** Parse one `.env` value: strip an unquoted trailing comment and surrounding quotes. */
+export function parseEnvValue(rawValue) {
   let value = rawValue.trim();
   let quote = null;
 

@@ -1,7 +1,7 @@
 import { config as loadEnv } from 'dotenv';
 import path from 'node:path';
 
-import { type EnvProfile } from '../cli/src/env.ts';
+import { type EnvProfile, normalizeEnvFileValue } from '../cli/src/env.ts';
 
 export function loadRepoEnv(path: string): void {
   loadRepoEnvFiles([path]);
@@ -34,18 +34,4 @@ export function loadRepoEnvFiles(paths: string[]): void {
       process.env[key] = value;
     }
   }
-}
-
-function normalizeEnvFileValue({
-  key,
-  value,
-  baseDir
-}: {
-  key: string;
-  value: string;
-  baseDir: string;
-}): string {
-  if (key !== 'OVLD_HOME') return value;
-  if (!value.trim() || path.isAbsolute(value)) return value;
-  return path.resolve(baseDir, value);
 }

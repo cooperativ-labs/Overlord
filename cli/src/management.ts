@@ -1,8 +1,7 @@
-import { createInterface } from 'node:readline/promises';
-
 import { flagBoolean, flagValue, parseArgs } from './args.js';
 import { CliError } from './errors.js';
 import { printJson } from './output.js';
+import { promptLine as promptLineShared } from './prompt.js';
 
 type BackendConfigResult = {
   configPath: string;
@@ -14,27 +13,11 @@ function isHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value.trim());
 }
 
-async function promptLine({
-  message,
-  defaultValue
-}: {
-  message: string;
-  defaultValue?: string;
-}): Promise<string> {
-  if (!process.stdin.isTTY) {
-    throw new CliError({
-      message:
-        'Interactive backend configuration requires a TTY. Run `ovld config set local [url]` or `ovld config set cloud <url>`.'
-    });
-  }
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    const suffix = defaultValue ? ` [${defaultValue}]` : '';
-    const answer = await rl.question(`${message}${suffix}: `);
-    return answer.trim() || defaultValue || '';
-  } finally {
-    rl.close();
-  }
+const NON_INTERACTIVE_MESSAGE =
+  'Interactive backend configuration requires a TTY. Run `ovld config set local [url]` or `ovld config set cloud <url>`.';
+
+function promptLine(options: { message: string; defaultValue?: string }): Promise<string> {
+  return promptLineShared({ ...options, nonInteractiveMessage: NON_INTERACTIVE_MESSAGE });
 }
 
 async function configureBackendInteractive(): Promise<BackendConfigResult> {

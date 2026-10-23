@@ -4,9 +4,14 @@ import type { NextFunction, Request, Response } from 'express';
 import type { ProtocolRequestBody } from '../backend/protocol.ts';
 import { runProtocolSubcommand } from '../backend/protocol.ts';
 
+import { isRecord } from './records.ts';
 import { compactRunQueueResponse } from './run-queue-detail.ts';
 import { compactSearchResponse } from './search-detail.ts';
-import { hostedMcpToolDefinitions, type ToolDefinition } from './tool-catalog.ts';
+import {
+  HOSTED_MCP_DEFAULT_AGENT,
+  hostedMcpToolDefinitions,
+  type ToolDefinition
+} from './tool-catalog.ts';
 import { hostedMcpWidgetResources, readHostedMcpWidget } from './widgets.ts';
 
 const MCP_PROTOCOL_VERSION = '2025-11-25';
@@ -37,10 +42,6 @@ type ToolHandler = (args: Record<string, unknown>) => Promise<unknown>;
 type ToolEntry = ToolDefinition & {
   handler: ToolHandler;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 function optionalString(args: Record<string, unknown>, name: string): string | null {
   const value = args[name];
@@ -594,7 +595,7 @@ const toolHandlers: Record<string, ToolHandler> = {
       'attach',
       protocolBody({
         ...missionScopeFlags(args),
-        '--agent': optionalString(args, 'agent') ?? 'hosted-mcp',
+        '--agent': optionalString(args, 'agent') ?? HOSTED_MCP_DEFAULT_AGENT,
         ...(optionalString(args, 'model') ? { '--model': requiredString(args, 'model') } : {}),
         ...(optionalString(args, 'executionTargetId')
           ? { '--execution-target-id': requiredString(args, 'executionTargetId') }

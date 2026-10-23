@@ -14,6 +14,10 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./mcp-tools": {
+      "types": "./dist/mcp-tools.d.ts",
+      "default": "./dist/mcp-tools.js"
+    },
     "./ext/everhour": {
       "types": "./dist/ext/everhour.d.ts",
       "default": "./dist/ext/everhour.js"

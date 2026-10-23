@@ -143,6 +143,16 @@ async function getScheduleRow(
   );
 }
 
+/** Read one workspace schedule by id; `db` may be an open transaction. */
+export async function getScheduleSummary(
+  db: DatabaseClient,
+  workspaceId: string,
+  scheduleId: string
+): Promise<ScheduleSummary | undefined> {
+  const row = await getScheduleRow(db, workspaceId, scheduleId);
+  return row ? toScheduleSummary(row) : undefined;
+}
+
 export async function getMissionSchedule({
   ctx,
   missionId
@@ -203,7 +213,13 @@ export async function upsertMissionSchedule({
         `SELECT 1 FROM project_statuses WHERE project_id = ? AND key = ? AND deleted_at IS NULL`,
         [mission.project_id, input.nextStatusKey]
       );
-      if (!status) throw new ServiceError('Unknown status for project', 'validation_error', 409);
+      if (!status) {
+        throw new ServiceError(
+          'That status is not available for missions in this project',
+          'validation_error',
+          409
+        );
+      }
     }
 
     const dueDatetime = previewScheduleDueDatetime(input, mission.due_datetime);
@@ -366,11 +382,14 @@ export async function getNextScheduledDueDatetime({
     throw new ServiceError('Schedule not found', 'not_found', 404);
   }
 
-  return previewScheduleDueDatetime(toScheduleInputFromRow(scheduleRow), mission.due_datetime);
+  return previewScheduleDueDatetime(
+    scheduleInputFromSummary(toScheduleSummary(scheduleRow)),
+    mission.due_datetime
+  );
 }
 
-function toScheduleInputFromRow(row: ScheduleRow): ScheduleInput {
-  const summary = toScheduleSummary(row);
+/** The editable input a stored schedule was saved from, for recomputing its next due date. */
+export function scheduleInputFromSummary(summary: ScheduleSummary): ScheduleInput {
   return {
     name: summary.name,
     periodType: summary.periodType,

@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,6 +13,7 @@ import {
   pruneObsoleteMigrationLedgerSqlite,
   resolveAppliedMigrationSqlite
 } from './migration-ledger.js';
+import { MIGRATION_FILE_PATTERN, migrationChecksum, migrationComponent } from './migration-files.js';
 import {
   finalizeNextStatusTypeSqlite,
   isNextStatusTypeMigration
@@ -30,8 +30,6 @@ import {
   finalizeProjectStatusesSqlite,
   isProjectStatusesMigration
 } from './project-statuses-migration-runtime.js';
-
-const MIGRATION_FILE_PATTERN = /^\d+_[a-z0-9_]+\.sql$/;
 
 type BetterSqlite3Constructor = typeof import('better-sqlite3');
 type DatabaseInstance = import('better-sqlite3').Database;
@@ -62,15 +60,6 @@ function resolveDatabasePath(): string {
   return resolveGlobalDatabasePath();
 }
 
-function checksum(sql: string): string {
-  return createHash('sha256').update(sql).digest('hex');
-}
-
-function migrationComponent(fileName: string): string {
-  const match = fileName.match(/^\d+_ext_([a-z0-9_]+)_/);
-  return match ? `ext:${match[1]}` : 'core';
-}
-
 function loadMigration(fileName: string): Migration {
   const version = fileName.split('_', 1)[0];
   if (!version) {
@@ -85,7 +74,7 @@ function loadMigration(fileName: string): Migration {
     component: migrationComponent(fileName),
     fileName,
     sql,
-    checksum: checksum(sql)
+    checksum: migrationChecksum(sql)
   };
 }
 

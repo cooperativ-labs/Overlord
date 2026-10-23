@@ -177,7 +177,8 @@ export function loadEnvDefaults(dir: string, profile: EnvProfile = 'development'
   }
 }
 
-function normalizeEnvFileValue({
+/** A relative `OVLD_HOME` in an env file is resolved against that file's directory. */
+export function normalizeEnvFileValue({
   key,
   value,
   baseDir

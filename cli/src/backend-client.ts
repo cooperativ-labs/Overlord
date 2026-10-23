@@ -1,3 +1,5 @@
+import { normalizeBaseUrl } from '@overlord/contract';
+
 import { readStoredAuthCredentials } from './auth-credentials.js';
 import { loadConfig, resolveBackendUrl } from './config.js';
 import { clientDeviceIdentity } from './device-identity.js';
@@ -33,10 +35,6 @@ export type BackendClient = {
     filename: string;
   }) => Promise<T>;
 };
-
-function normalizeBaseUrl(value: string): string {
-  return value.replace(/\/+$/, '');
-}
 
 function resolveAuthHeaders({ baseUrl }: { baseUrl: string }): {
   headers: Record<string, string>;
