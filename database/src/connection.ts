@@ -10,11 +10,15 @@ import {
 } from './ext-everhour-migration-runtime.js';
 import { resolveGlobalDatabasePath } from './local-paths.js';
 import {
+  MIGRATION_FILE_PATTERN,
+  migrationChecksum,
+  migrationComponent
+} from './migration-files.js';
+import {
   knownMigrationVersions,
   pruneObsoleteMigrationLedgerSqlite,
   resolveAppliedMigrationSqlite
 } from './migration-ledger.js';
-import { MIGRATION_FILE_PATTERN, migrationChecksum, migrationComponent } from './migration-files.js';
 import {
   finalizeNextStatusTypeSqlite,
   isNextStatusTypeMigration
@@ -53,7 +57,12 @@ function loadMigrationSql(fileName: string): {
   const version = fileName.split('_', 1)[0] ?? fileName;
   const filePath = path.join(migrationsDir(), fileName);
   const sql = readFileSync(filePath, 'utf8');
-  return { version, component: migrationComponent(fileName), sql, checksum: migrationChecksum(sql) };
+  return {
+    version,
+    component: migrationComponent(fileName),
+    sql,
+    checksum: migrationChecksum(sql)
+  };
 }
 
 export function listSqliteMigrationFiles(): string[] {

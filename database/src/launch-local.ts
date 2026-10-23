@@ -9,11 +9,15 @@ import {
 } from './ext-everhour-migration-runtime.js';
 import { resolveGlobalDatabasePath } from './local-paths.js';
 import {
+  MIGRATION_FILE_PATTERN,
+  migrationChecksum,
+  migrationComponent
+} from './migration-files.js';
+import {
   knownMigrationVersions,
   pruneObsoleteMigrationLedgerSqlite,
   resolveAppliedMigrationSqlite
 } from './migration-ledger.js';
-import { MIGRATION_FILE_PATTERN, migrationChecksum, migrationComponent } from './migration-files.js';
 import {
   finalizeNextStatusTypeSqlite,
   isNextStatusTypeMigration

@@ -9,11 +9,15 @@ import {
   isExtEverhourPersistenceMigration
 } from './ext-everhour-migration-runtime.js';
 import {
+  MIGRATION_FILE_PATTERN,
+  migrationChecksum,
+  migrationComponent
+} from './migration-files.js';
+import {
   knownMigrationVersions,
   pruneObsoleteMigrationLedgerPostgres,
   resolveAppliedMigrationPostgres
 } from './migration-ledger.js';
-import { MIGRATION_FILE_PATTERN, migrationChecksum, migrationComponent } from './migration-files.js';
 import {
   finalizeObjectivesDisplayKeyPostgres,
   isObjectivesDisplayKeyMigration
@@ -43,7 +47,12 @@ function loadMigrationSql(fileName: string): {
   // adapters.
   const version = fileName.split('_', 1)[0] ?? fileName;
   const sql = readFileSync(path.join(postgresMigrationsDir(), fileName), 'utf8');
-  return { version, component: migrationComponent(fileName), sql, checksum: migrationChecksum(sql) };
+  return {
+    version,
+    component: migrationComponent(fileName),
+    sql,
+    checksum: migrationChecksum(sql)
+  };
 }
 
 export function listPostgresMigrationFiles(): string[] {

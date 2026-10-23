@@ -61,7 +61,7 @@ var init_env_profile = __esm({
 var require_main = __commonJS({
   "../node_modules/dotenv/lib/main.js"(exports2, module2) {
     var fs2 = require("fs");
-    var path29 = require("path");
+    var path30 = require("path");
     var os8 = require("os");
     var crypto2 = require("crypto");
     var TIPS = [
@@ -200,7 +200,7 @@ var require_main = __commonJS({
           possibleVaultPath = options.path.endsWith(".vault") ? options.path : `${options.path}.vault`;
         }
       } else {
-        possibleVaultPath = path29.resolve(process.cwd(), ".env.vault");
+        possibleVaultPath = path30.resolve(process.cwd(), ".env.vault");
       }
       if (fs2.existsSync(possibleVaultPath)) {
         return possibleVaultPath;
@@ -208,7 +208,7 @@ var require_main = __commonJS({
       return null;
     }
     function _resolveHome(envPath) {
-      return envPath[0] === "~" ? path29.join(os8.homedir(), envPath.slice(1)) : envPath;
+      return envPath[0] === "~" ? path30.join(os8.homedir(), envPath.slice(1)) : envPath;
     }
     function _configVault(options) {
       const debug = parseBoolean2(process.env.DOTENV_CONFIG_DEBUG || options && options.debug);
@@ -225,7 +225,7 @@ var require_main = __commonJS({
       return { parsed };
     }
     function configDotenv(options) {
-      const dotenvPath = path29.resolve(process.cwd(), ".env");
+      const dotenvPath = path30.resolve(process.cwd(), ".env");
       let encoding = "utf8";
       let processEnv = process.env;
       if (options && options.processEnv != null) {
@@ -253,13 +253,13 @@ var require_main = __commonJS({
       }
       let lastError;
       const parsedAll = {};
-      for (const path30 of optionPaths) {
+      for (const path31 of optionPaths) {
         try {
-          const parsed = DotenvModule.parse(fs2.readFileSync(path30, { encoding }));
+          const parsed = DotenvModule.parse(fs2.readFileSync(path31, { encoding }));
           DotenvModule.populate(parsedAll, parsed, options);
         } catch (e5) {
           if (debug) {
-            _debug(`failed to load ${path30} ${e5.message}`);
+            _debug(`failed to load ${path31} ${e5.message}`);
           }
           lastError = e5;
         }
@@ -272,7 +272,7 @@ var require_main = __commonJS({
         const shortPaths = [];
         for (const filePath of optionPaths) {
           try {
-            const relative = path29.relative(process.cwd(), filePath);
+            const relative = path30.relative(process.cwd(), filePath);
             shortPaths.push(relative);
           } catch (e5) {
             if (debug) {
@@ -373,6 +373,104 @@ var require_main = __commonJS({
     module2.exports.parse = DotenvModule.parse;
     module2.exports.populate = DotenvModule.populate;
     module2.exports = DotenvModule;
+  }
+});
+
+// ../cli/src/env.ts
+function parseDotenv(src) {
+  const obj2 = {};
+  const line2 = /(?:^|^)\s*(?:export\s+)?([\w.-]+)(?:\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/gm;
+  let lines = src.replace(/\r\n?/g, "\n");
+  let match;
+  while ((match = line2.exec(lines)) !== null) {
+    const key = match[1];
+    if (!key) continue;
+    let value2 = (match[2] ?? "").trim();
+    const maybeQuote = value2[0];
+    value2 = value2.replace(/^(['"`])([\s\S]*)\1$/m, "$2");
+    if (maybeQuote === '"') {
+      value2 = value2.replace(/\\n/g, "\n").replace(/\\r/g, "\r");
+    }
+    obj2[key] = value2;
+  }
+  return obj2;
+}
+function resolveEnvFileNames(profile) {
+  return profile === "production" ? [".env.prod"] : [".env.local"];
+}
+function isInstalledModulePath(moduleDir) {
+  return /[\\/]node_modules[\\/]/.test(moduleDir);
+}
+function isInstalledCliEntrypointPath(entrypointPath) {
+  if (!entrypointPath) return false;
+  if (isInstalledModulePath(entrypointPath)) return true;
+  try {
+    const stat = (0, import_node_fs.lstatSync)(entrypointPath);
+    if (!stat.isSymbolicLink()) return false;
+    const target = (0, import_node_fs.readlinkSync)(entrypointPath);
+    const resolvedTarget = import_node_path2.default.isAbsolute(target) ? target : import_node_path2.default.resolve(import_node_path2.default.dirname(entrypointPath), target);
+    return isInstalledModulePath(resolvedTarget);
+  } catch {
+    return false;
+  }
+}
+function detectCliEnvProfile() {
+  try {
+    const moduleDir = import_node_path2.default.dirname((0, import_node_url2.fileURLToPath)(__overlord_import_meta_url));
+    return isInstalledModulePath(moduleDir) || isInstalledCliEntrypointPath(process.argv[1] ?? "") ? "production" : "development";
+  } catch {
+    return "development";
+  }
+}
+function snapshotRuntimeEnv() {
+  return new Set(
+    Object.entries(process.env).filter(([, value2]) => Boolean(value2?.trim())).map(([key]) => key)
+  );
+}
+function isExplicitRuntimeEnv(key) {
+  return explicitRuntimeKeys.has(key);
+}
+function resolveLayeredEnv({
+  envKey,
+  configValue,
+  fallback: fallback2 = "",
+  envProfile = "development"
+}) {
+  const value2 = process.env[envKey]?.trim();
+  if (value2 && isExplicitRuntimeEnv(envKey)) return value2;
+  if (envProfile === "development" && value2) return value2;
+  if (configValue) return configValue;
+  return value2 || fallback2;
+}
+function loadEnvDefaults(dir, profile = "development") {
+  for (const file2 of resolveEnvFileNames(profile)) {
+    const filePath = import_node_path2.default.join(dir, file2);
+    if (!(0, import_node_fs.existsSync)(filePath)) continue;
+    const parsed = parseDotenv((0, import_node_fs.readFileSync)(filePath, "utf8"));
+    for (const [key, value2] of Object.entries(parsed)) {
+      if (!process.env[key]?.trim()) {
+        process.env[key] = normalizeEnvFileValue({ key, value: value2, baseDir: import_node_path2.default.dirname(filePath) });
+      }
+    }
+  }
+}
+function normalizeEnvFileValue({
+  key,
+  value: value2,
+  baseDir
+}) {
+  if (key !== "OVLD_HOME") return value2;
+  if (!value2.trim() || import_node_path2.default.isAbsolute(value2)) return value2;
+  return import_node_path2.default.resolve(baseDir, value2);
+}
+var import_node_fs, import_node_path2, import_node_url2, explicitRuntimeKeys;
+var init_env = __esm({
+  "../cli/src/env.ts"() {
+    "use strict";
+    import_node_fs = require("node:fs");
+    import_node_path2 = __toESM(require("node:path"), 1);
+    import_node_url2 = require("node:url");
+    explicitRuntimeKeys = snapshotRuntimeEnv();
   }
 });
 
@@ -553,22 +651,39 @@ var init_ext_everhour_migration_runtime = __esm({
 function resolveGlobalDataDir() {
   const override = process.env.OVLD_HOME?.trim();
   if (override)
-    return import_node_path3.default.resolve(override);
-  return import_node_path3.default.join(import_node_os.default.homedir(), GLOBAL_DATA_DIR_NAME);
+    return import_node_path4.default.resolve(override);
+  return import_node_path4.default.join(import_node_os.default.homedir(), GLOBAL_DATA_DIR_NAME);
 }
 function resolveGlobalDatabasePath() {
-  return import_node_path3.default.join(resolveGlobalDataDir(), GLOBAL_DATABASE_FILENAME);
+  return import_node_path4.default.join(resolveGlobalDataDir(), GLOBAL_DATABASE_FILENAME);
 }
-var import_node_os, import_node_path3, LOCAL_DATA_DIR, LOCAL_STORAGE_DIR, GLOBAL_DATA_DIR_NAME, GLOBAL_DATABASE_FILENAME;
+var import_node_os, import_node_path4, LOCAL_DATA_DIR, LOCAL_STORAGE_DIR, GLOBAL_DATA_DIR_NAME, GLOBAL_DATABASE_FILENAME;
 var init_local_paths = __esm({
   "../database/dist/local-paths.js"() {
     "use strict";
     import_node_os = __toESM(require("node:os"), 1);
-    import_node_path3 = __toESM(require("node:path"), 1);
+    import_node_path4 = __toESM(require("node:path"), 1);
     LOCAL_DATA_DIR = "database/.local";
     LOCAL_STORAGE_DIR = `${LOCAL_DATA_DIR}/storage`;
     GLOBAL_DATA_DIR_NAME = ".ovld";
     GLOBAL_DATABASE_FILENAME = "Overlord.sqlite";
+  }
+});
+
+// ../database/dist/migration-files.js
+function migrationChecksum(sql2) {
+  return (0, import_node_crypto.createHash)("sha256").update(sql2).digest("hex");
+}
+function migrationComponent(fileName) {
+  const match = fileName.match(/^\d+_ext_([a-z0-9_]+)_/);
+  return match ? `ext:${match[1]}` : "core";
+}
+var import_node_crypto, MIGRATION_FILE_PATTERN;
+var init_migration_files = __esm({
+  "../database/dist/migration-files.js"() {
+    "use strict";
+    import_node_crypto = require("node:crypto");
+    MIGRATION_FILE_PATTERN = /^\d+_[a-z0-9_]+\.sql$/;
   }
 });
 
@@ -692,7 +807,7 @@ function finalizeNextStatusTypeSqlite(db) {
               FROM project_statuses WHERE project_id = ? AND deleted_at IS NULL`).get(project.id).position;
       db.prepare(`INSERT INTO project_statuses
            (id, workspace_id, project_id, key, name, type, position, is_default, is_terminal, metadata_json, created_at, updated_at, revision)
-         VALUES (?, ?, ?, 'next_up', 'Next Up', 'next', ?, 0, 0, '{}', ?, ?, 1)`).run((0, import_node_crypto.randomUUID)(), project.workspace_id, project.id, position, now2, now2);
+         VALUES (?, ?, ?, 'next_up', 'Next Up', 'next', ?, 0, 0, '{}', ?, ?, 1)`).run((0, import_node_crypto2.randomUUID)(), project.workspace_id, project.id, position, now2, now2);
     }
     db.exec(`UPDATE missions
           SET status_type = (
@@ -702,13 +817,13 @@ function finalizeNextStatusTypeSqlite(db) {
         WHERE status_id IN (SELECT id FROM project_statuses WHERE type = 'next')`);
     db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_project_statuses_active_next
          ON project_statuses (project_id) WHERE type = 'next' AND deleted_at IS NULL`);
-    const invalid2 = db.prepare(`SELECT 1 FROM projects p
+    const invalid3 = db.prepare(`SELECT 1 FROM projects p
           LEFT JOIN project_statuses ps ON ps.project_id = p.id AND ps.deleted_at IS NULL
          WHERE p.deleted_at IS NULL
          GROUP BY p.id
         HAVING SUM(ps.type = 'next') != 1
          LIMIT 1`).get();
-    if (invalid2)
+    if (invalid3)
       throw new Error("Next-status migration could not establish one next status per project");
     db.exec("COMMIT");
   } catch (error53) {
@@ -722,11 +837,11 @@ function finalizeNextStatusTypeSqlite(db) {
   if (foreignKeyViolation)
     throw new Error("Next-status migration foreign-key verification failed");
 }
-var import_node_crypto, MIGRATION_VERSION, OLD_TYPES, NEW_TYPES;
+var import_node_crypto2, MIGRATION_VERSION, OLD_TYPES, NEW_TYPES;
 var init_next_status_type_migration_runtime = __esm({
   "../database/dist/next-status-type-migration-runtime.js"() {
     "use strict";
-    import_node_crypto = require("node:crypto");
+    import_node_crypto2 = require("node:crypto");
     MIGRATION_VERSION = "20260819100000";
     OLD_TYPES = "'draft','execute','review','complete','blocked','cancelled'";
     NEW_TYPES = "'draft','next','execute','review','complete','blocked','cancelled'";
@@ -810,6 +925,13 @@ function formatOvldLaunchCommand({ agent, missionDisplayId, objectiveId = null, 
 }
 var init_agent_launch_flags = __esm({
   "../packages/contract/dist/agent-launch-flags.js"() {
+    "use strict";
+  }
+});
+
+// ../packages/contract/dist/base-url.js
+var init_base_url = __esm({
+  "../packages/contract/dist/base-url.js"() {
     "use strict";
   }
 });
@@ -1353,6 +1475,7 @@ var init_dist = __esm({
   "../packages/contract/dist/index.js"() {
     "use strict";
     init_agent_launch_flags();
+    init_base_url();
     init_chat();
     init_launch_variables();
     init_mission_reference();
@@ -1366,7 +1489,7 @@ var init_dist = __esm({
 });
 
 // ../database/dist/objective-display-key.js
-function generateObjectiveDisplayKey({ length = OBJECTIVE_DISPLAY_KEY_LENGTH, bytes = import_node_crypto2.randomBytes } = {}) {
+function generateObjectiveDisplayKey({ length = OBJECTIVE_DISPLAY_KEY_LENGTH, bytes = import_node_crypto3.randomBytes } = {}) {
   const alphabet = OBJECTIVE_DISPLAY_KEY_ALPHABET;
   const raw = bytes(length);
   let key = "";
@@ -1375,12 +1498,12 @@ function generateObjectiveDisplayKey({ length = OBJECTIVE_DISPLAY_KEY_LENGTH, by
   }
   return key;
 }
-var import_node_crypto2;
+var import_node_crypto3;
 var init_objective_display_key = __esm({
   "../database/dist/objective-display-key.js"() {
     "use strict";
     init_dist();
-    import_node_crypto2 = require("node:crypto");
+    import_node_crypto3 = require("node:crypto");
     init_dist();
   }
 });
@@ -1494,7 +1617,7 @@ function deriveProjectResourceKey({ label, directoryPath }) {
   const labelKey = label?.trim();
   if (labelKey)
     return slugify(labelKey);
-  return slugify(import_node_path4.default.basename(import_node_path4.default.resolve(directoryPath)));
+  return slugify(import_node_path5.default.basename(import_node_path5.default.resolve(directoryPath)));
 }
 function projectResourcesHasResourceKeyColumn(db) {
   const columns = db.prepare(`PRAGMA table_info(project_resources)`).all();
@@ -1531,11 +1654,11 @@ function finalizeProjectResourcesResourceKeySqlite(db) {
       WHERE deleted_at IS NULL
   `);
 }
-var import_node_path4, PROJECT_RESOURCES_RESOURCE_KEY_MIGRATION_VERSION;
+var import_node_path5, PROJECT_RESOURCES_RESOURCE_KEY_MIGRATION_VERSION;
 var init_project_resources_resource_key_migration_runtime = __esm({
   "../database/dist/project-resources-resource-key-migration-runtime.js"() {
     "use strict";
-    import_node_path4 = __toESM(require("node:path"), 1);
+    import_node_path5 = __toESM(require("node:path"), 1);
     PROJECT_RESOURCES_RESOURCE_KEY_MIGRATION_VERSION = "20260707173400";
   }
 });
@@ -1715,7 +1838,7 @@ function finalizeProjectStatusesSqlite(db) {
     for (const project of projects)
       for (const status of statuses)
         if (status.workspace_id === project.workspace_id)
-          insert.run((0, import_node_crypto3.randomUUID)(), project.workspace_id, project.id, status.key, status.name, status.type, status.position, status.is_default, status.is_terminal, status.metadata_json, now2, now2);
+          insert.run((0, import_node_crypto4.randomUUID)(), project.workspace_id, project.id, status.key, status.name, status.type, status.position, status.is_default, status.is_terminal, status.metadata_json, now2, now2);
     db.exec(`UPDATE missions SET status_id = (SELECT ps.id FROM workspace_statuses ws JOIN project_statuses ps ON ps.project_id = missions.project_id AND ps.key = ws.key WHERE ws.id = missions.status_id)`);
     db.exec(`UPDATE missions SET status_id = (SELECT ps.id FROM project_statuses ps WHERE ps.project_id = missions.project_id AND ps.is_default = 1 AND ps.deleted_at IS NULL) WHERE NOT EXISTS (SELECT 1 FROM project_statuses ps WHERE ps.project_id = missions.project_id AND ps.id = missions.status_id)`);
     db.exec(`ALTER TABLE my_mission_positions ADD COLUMN project_id TEXT; UPDATE my_mission_positions SET project_id = (SELECT project_id FROM missions WHERE missions.id = my_mission_positions.mission_id);`);
@@ -1746,7 +1869,7 @@ async function finalizeProjectStatusesPostgres(client) {
       for (const status of statuses)
         if (status.workspace_id === project.workspace_id)
           await tx.run(`INSERT INTO project_statuses (id,workspace_id,project_id,key,name,type,position,is_default,is_terminal,metadata_json,created_at,updated_at,revision) VALUES (?,?,?,?,?,?,?,?,?,?::jsonb,?,?,1)`, [
-            (0, import_node_crypto3.randomUUID)(),
+            (0, import_node_crypto4.randomUUID)(),
             project.workspace_id,
             project.id,
             status.key,
@@ -1778,42 +1901,40 @@ async function finalizeProjectStatusesPostgres(client) {
     await tx.exec(`ALTER TABLE my_mission_positions ALTER COLUMN project_id SET NOT NULL`);
     await tx.exec(`ALTER TABLE my_mission_positions ADD FOREIGN KEY (project_id,status_id) REFERENCES project_statuses(project_id,id) ON DELETE CASCADE`);
     await tx.exec(`ALTER TABLE my_mission_positions ADD FOREIGN KEY (project_id,mission_id) REFERENCES missions(project_id,id) ON DELETE CASCADE`);
-    const invalid2 = await tx.get(`SELECT 1 FROM missions m LEFT JOIN project_statuses ps ON ps.project_id=m.project_id AND ps.id=m.status_id WHERE ps.id IS NULL LIMIT 1`);
+    const invalid3 = await tx.get(`SELECT 1 FROM missions m LEFT JOIN project_statuses ps ON ps.project_id=m.project_id AND ps.id=m.status_id WHERE ps.id IS NULL LIMIT 1`);
     const singleton = await tx.get(`SELECT 1 FROM projects p LEFT JOIN project_statuses ps ON ps.project_id=p.id AND ps.deleted_at IS NULL WHERE p.deleted_at IS NULL GROUP BY p.id HAVING COUNT(*) FILTER (WHERE ps.is_default) != 1 OR COUNT(*) FILTER (WHERE ps.type='execute') != 1 OR COUNT(*) FILTER (WHERE ps.type='review') != 1 LIMIT 1`);
     const fanout = await tx.get(`SELECT 1 FROM (SELECT p.workspace_id,COUNT(*) projects FROM projects p GROUP BY p.workspace_id) p LEFT JOIN (SELECT workspace_id,COUNT(*) statuses FROM workspace_statuses WHERE deleted_at IS NULL GROUP BY workspace_id) ws USING (workspace_id) LEFT JOIN (SELECT workspace_id,COUNT(*) statuses FROM project_statuses GROUP BY workspace_id) ps USING (workspace_id) WHERE COALESCE(ps.statuses,0) != p.projects * COALESCE(ws.statuses,0) LIMIT 1`);
-    if (invalid2 || singleton || fanout)
+    if (invalid3 || singleton || fanout)
       throw new Error("Project-status migration verification failed");
     await tx.exec("ALTER TABLE workspace_statuses RENAME TO workspace_statuses_legacy");
   });
 }
-var import_node_crypto3, PROJECT_STATUSES_MIGRATION_VERSION;
+var import_node_crypto4, PROJECT_STATUSES_MIGRATION_VERSION;
 var init_project_statuses_migration_runtime = __esm({
   "../database/dist/project-statuses-migration-runtime.js"() {
     "use strict";
-    import_node_crypto3 = require("node:crypto");
+    import_node_crypto4 = require("node:crypto");
     PROJECT_STATUSES_MIGRATION_VERSION = "20260819090000";
   }
 });
 
 // ../database/dist/connection.js
 function migrationsDir() {
-  return import_node_path5.default.resolve(import_node_path5.default.dirname((0, import_node_url2.fileURLToPath)(__overlord_import_meta_url)), "..", "sqlite", "migrations");
-}
-function checksum(sql2) {
-  return (0, import_node_crypto4.createHash)("sha256").update(sql2).digest("hex");
-}
-function migrationComponent(fileName) {
-  const match = fileName.match(/^\d+_ext_([a-z0-9_]+)_/);
-  return match ? `ext:${match[1]}` : "core";
+  return import_node_path6.default.resolve(import_node_path6.default.dirname((0, import_node_url3.fileURLToPath)(__overlord_import_meta_url)), "..", "sqlite", "migrations");
 }
 function loadMigrationSql(fileName) {
   const version4 = fileName.split("_", 1)[0] ?? fileName;
-  const filePath = import_node_path5.default.join(migrationsDir(), fileName);
-  const sql2 = (0, import_node_fs.readFileSync)(filePath, "utf8");
-  return { version: version4, component: migrationComponent(fileName), sql: sql2, checksum: checksum(sql2) };
+  const filePath = import_node_path6.default.join(migrationsDir(), fileName);
+  const sql2 = (0, import_node_fs2.readFileSync)(filePath, "utf8");
+  return {
+    version: version4,
+    component: migrationComponent(fileName),
+    sql: sql2,
+    checksum: migrationChecksum(sql2)
+  };
 }
 function listSqliteMigrationFiles() {
-  return (0, import_node_fs.readdirSync)(migrationsDir()).filter((fileName) => MIGRATION_FILE_PATTERN.test(fileName)).sort((left, right) => left.localeCompare(right));
+  return (0, import_node_fs2.readdirSync)(migrationsDir()).filter((fileName) => MIGRATION_FILE_PATTERN.test(fileName)).sort((left, right) => left.localeCompare(right));
 }
 function applyMigration(db, migration) {
   const applied = resolveAppliedMigrationSqlite({ db, migration });
@@ -1843,7 +1964,7 @@ function applyMigration(db, migration) {
      VALUES (?, 'sqlite', ?, ?, ?, ?)`).run(migration.version, migration.component, CONTRACT_VERSION, migration.checksum, (/* @__PURE__ */ new Date()).toISOString());
 }
 function openDatabase({ databasePath: databasePath2 }) {
-  (0, import_node_fs.mkdirSync)(import_node_path5.default.dirname(databasePath2), { recursive: true });
+  (0, import_node_fs2.mkdirSync)(import_node_path6.default.dirname(databasePath2), { recursive: true });
   const Database = loadBetterSqlite3();
   const db = new Database(databasePath2);
   db.pragma("foreign_keys = ON");
@@ -1886,40 +2007,39 @@ function migrateDatabase(db) {
 function resolveDefaultDatabasePath(startDir = process.cwd()) {
   const explicit = process.env.OVERLORD_SQLITE_PATH;
   if (explicit) {
-    return import_node_path5.default.isAbsolute(explicit) ? explicit : import_node_path5.default.resolve(startDir, explicit);
+    return import_node_path6.default.isAbsolute(explicit) ? explicit : import_node_path6.default.resolve(startDir, explicit);
   }
   return resolveGlobalDatabasePath();
 }
 function fixupLocalStoragePaths(db, databasePath2) {
-  const storageDir = import_node_path5.default.join(import_node_path5.default.dirname(import_node_path5.default.resolve(databasePath2)), "storage");
+  const storageDir = import_node_path6.default.join(import_node_path6.default.dirname(import_node_path6.default.resolve(databasePath2)), "storage");
   const buckets = db.prepare(`SELECT id, bucket_key, local_path FROM storage_buckets
        WHERE storage_backend = 'local_fs' AND deleted_at IS NULL`).all();
   const update = db.prepare(`UPDATE storage_buckets SET local_path = ?, updated_at = ? WHERE id = ?`);
   const now2 = (/* @__PURE__ */ new Date()).toISOString();
   for (const bucket of buckets) {
-    if (!bucket.local_path || import_node_path5.default.isAbsolute(bucket.local_path))
+    if (!bucket.local_path || import_node_path6.default.isAbsolute(bucket.local_path))
       continue;
-    update.run(import_node_path5.default.join(storageDir, bucket.bucket_key), now2, bucket.id);
+    update.run(import_node_path6.default.join(storageDir, bucket.bucket_key), now2, bucket.id);
   }
 }
-var import_node_crypto4, import_node_fs, import_node_path5, import_node_url2, MIGRATION_FILE_PATTERN;
+var import_node_fs2, import_node_path6, import_node_url3;
 var init_connection = __esm({
   "../database/dist/connection.js"() {
     "use strict";
-    import_node_crypto4 = require("node:crypto");
-    import_node_fs = require("node:fs");
-    import_node_path5 = __toESM(require("node:path"), 1);
-    import_node_url2 = require("node:url");
+    import_node_fs2 = require("node:fs");
+    import_node_path6 = __toESM(require("node:path"), 1);
+    import_node_url3 = require("node:url");
     init_better_sqlite3_loader();
     init_constants();
     init_ext_everhour_migration_runtime();
     init_local_paths();
+    init_migration_files();
     init_migration_ledger();
     init_next_status_type_migration_runtime();
     init_objective_display_key_migration_runtime();
     init_project_resources_resource_key_migration_runtime();
     init_project_statuses_migration_runtime();
-    MIGRATION_FILE_PATTERN = /^\d+_[a-z0-9_]+\.sql$/;
   }
 });
 
@@ -2393,7 +2513,7 @@ var require_textParsers = __commonJS({
       }
       return value2;
     };
-    var parseJsonArray = function(value2) {
+    var parseJsonArray2 = function(value2) {
       if (!value2) {
         return null;
       }
@@ -2473,8 +2593,8 @@ var require_textParsers = __commonJS({
       register(17, parseByteA);
       register(114, JSON.parse.bind(JSON));
       register(3802, JSON.parse.bind(JSON));
-      register(199, parseJsonArray);
-      register(3807, parseJsonArray);
+      register(199, parseJsonArray2);
+      register(3807, parseJsonArray2);
       register(3907, parseStringArray);
       register(2951, parseStringArray);
       register(791, parseStringArray);
@@ -5305,7 +5425,7 @@ var require_split2 = __commonJS({
 var require_helper = __commonJS({
   "../node_modules/pgpass/lib/helper.js"(exports2, module2) {
     "use strict";
-    var path29 = require("path");
+    var path30 = require("path");
     var Stream = require("stream").Stream;
     var split2 = require_split2();
     var util = require("util");
@@ -5344,7 +5464,7 @@ var require_helper = __commonJS({
     };
     module2.exports.getFileName = function(rawEnv) {
       var env3 = rawEnv || process.env;
-      var file2 = env3.PGPASSFILE || (isWin ? path29.join(env3.APPDATA || "./", "postgresql", "pgpass.conf") : path29.join(env3.HOME || "./", ".pgpass"));
+      var file2 = env3.PGPASSFILE || (isWin ? path30.join(env3.APPDATA || "./", "postgresql", "pgpass.conf") : path30.join(env3.HOME || "./", ".pgpass"));
       return file2;
     };
     module2.exports.usePgPass = function(stats, fname) {
@@ -5476,7 +5596,7 @@ var require_helper = __commonJS({
 var require_lib = __commonJS({
   "../node_modules/pgpass/lib/index.js"(exports2, module2) {
     "use strict";
-    var path29 = require("path");
+    var path30 = require("path");
     var fs2 = require("fs");
     var helper = require_helper();
     module2.exports = function(connInfo, cb) {
@@ -7425,22 +7545,20 @@ var init_client = __esm({
 
 // ../database/dist/migrate-postgres.js
 function postgresMigrationsDir() {
-  return import_node_path6.default.resolve(import_node_path6.default.dirname((0, import_node_url3.fileURLToPath)(__overlord_import_meta_url)), "..", "postgres", "migrations");
-}
-function checksum2(sql2) {
-  return (0, import_node_crypto5.createHash)("sha256").update(sql2).digest("hex");
-}
-function migrationComponent2(fileName) {
-  const match = fileName.match(/^\d+_ext_([a-z0-9_]+)_/);
-  return match ? `ext:${match[1]}` : "core";
+  return import_node_path7.default.resolve(import_node_path7.default.dirname((0, import_node_url4.fileURLToPath)(__overlord_import_meta_url)), "..", "postgres", "migrations");
 }
 function loadMigrationSql2(fileName) {
   const version4 = fileName.split("_", 1)[0] ?? fileName;
-  const sql2 = (0, import_node_fs2.readFileSync)(import_node_path6.default.join(postgresMigrationsDir(), fileName), "utf8");
-  return { version: version4, component: migrationComponent2(fileName), sql: sql2, checksum: checksum2(sql2) };
+  const sql2 = (0, import_node_fs3.readFileSync)(import_node_path7.default.join(postgresMigrationsDir(), fileName), "utf8");
+  return {
+    version: version4,
+    component: migrationComponent(fileName),
+    sql: sql2,
+    checksum: migrationChecksum(sql2)
+  };
 }
 function listPostgresMigrationFiles() {
-  return (0, import_node_fs2.readdirSync)(postgresMigrationsDir()).filter((fileName) => MIGRATION_FILE_PATTERN2.test(fileName)).sort((left, right) => left.localeCompare(right));
+  return (0, import_node_fs3.readdirSync)(postgresMigrationsDir()).filter((fileName) => MIGRATION_FILE_PATTERN.test(fileName)).sort((left, right) => left.localeCompare(right));
 }
 async function schemaMigrationsExists(client) {
   const row = await client.get(`SELECT to_regclass('schema_migrations') AS present`);
@@ -7509,20 +7627,19 @@ async function migratePostgres(client) {
     await recordMigration(client, migration);
   }
 }
-var import_node_crypto5, import_node_fs2, import_node_path6, import_node_url3, MIGRATION_FILE_PATTERN2;
+var import_node_fs3, import_node_path7, import_node_url4;
 var init_migrate_postgres = __esm({
   "../database/dist/migrate-postgres.js"() {
     "use strict";
-    import_node_crypto5 = require("node:crypto");
-    import_node_fs2 = require("node:fs");
-    import_node_path6 = __toESM(require("node:path"), 1);
-    import_node_url3 = require("node:url");
+    import_node_fs3 = require("node:fs");
+    import_node_path7 = __toESM(require("node:path"), 1);
+    import_node_url4 = require("node:url");
     init_constants();
     init_ext_everhour_migration_runtime();
+    init_migration_files();
     init_migration_ledger();
     init_objective_display_key_migration_runtime();
     init_project_statuses_migration_runtime();
-    MIGRATION_FILE_PATTERN2 = /^\d+_[a-z0-9_]+\.sql$/;
   }
 });
 
@@ -7862,7 +7979,7 @@ var init_logger = __esm({
 });
 
 // ../node_modules/@better-auth/core/dist/env/index.mjs
-var init_env = __esm({
+var init_env2 = __esm({
   "../node_modules/@better-auth/core/dist/env/index.mjs"() {
     init_env_impl();
     init_logger();
@@ -8674,10 +8791,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema2) {
   return mergeDefs(schema2._zod.def);
 }
-function getElementAtPath(obj2, path29) {
-  if (!path29)
+function getElementAtPath(obj2, path30) {
+  if (!path30)
     return obj2;
-  return path29.reduce((acc, key) => acc?.[key], obj2);
+  return path30.reduce((acc, key) => acc?.[key], obj2);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -9005,11 +9122,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path29, issues) {
+function prefixIssues(path30, issues) {
   return issues.map((iss) => {
     var _a8;
     (_a8 = iss).path ?? (_a8.path = []);
-    iss.path.unshift(path29);
+    iss.path.unshift(path30);
     return iss;
   });
 }
@@ -9226,16 +9343,16 @@ function flattenError(error53, mapper = (issue2) => issue2.message) {
 }
 function formatError(error53, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error54, path29 = []) => {
+  const processError = (error54, path30 = []) => {
     for (const issue2 of error54.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path29, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path30, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path29, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path30, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path29, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path30, ...issue2.path]);
       } else {
-        const fullpath = [...path29, ...issue2.path];
+        const fullpath = [...path30, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -9262,17 +9379,17 @@ function formatError(error53, mapper = (issue2) => issue2.message) {
 }
 function treeifyError(error53, mapper = (issue2) => issue2.message) {
   const result2 = { errors: [] };
-  const processError = (error54, path29 = []) => {
+  const processError = (error54, path30 = []) => {
     var _a8, _b;
     for (const issue2 of error54.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path29, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path30, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path29, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path30, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path29, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path30, ...issue2.path]);
       } else {
-        const fullpath = [...path29, ...issue2.path];
+        const fullpath = [...path30, ...issue2.path];
         if (fullpath.length === 0) {
           result2.errors.push(mapper(issue2));
           continue;
@@ -9304,8 +9421,8 @@ function treeifyError(error53, mapper = (issue2) => issue2.message) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path29 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path29) {
+  const path30 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path30) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -22735,13 +22852,13 @@ function resolveRef(ref, ctx) {
   if (!ref.startsWith("#")) {
     throw new Error("External $ref is not supported, only local refs (#/...) are allowed");
   }
-  const path29 = ref.slice(1).split("/").filter(Boolean);
-  if (path29.length === 0) {
+  const path30 = ref.slice(1).split("/").filter(Boolean);
+  if (path30.length === 0) {
     return ctx.rootSchema;
   }
   const defsKey = ctx.version === "draft-2020-12" ? "$defs" : "definitions";
-  if (path29[0] === defsKey) {
-    const key = path29[1];
+  if (path30[0] === defsKey) {
+    const key = path30[1];
     if (!key || !ctx.defs[key]) {
       throw new Error(`Reference not found: ${ref}`);
     }
@@ -24848,7 +24965,7 @@ var memoryAdapter;
 var init_dist3 = __esm({
   "../node_modules/@better-auth/memory-adapter/dist/index.mjs"() {
     init_adapter2();
-    init_env();
+    init_env2();
     memoryAdapter = (db, config4) => {
       let lazyOptions = null;
       const adapterCreator = createAdapterFactory({
@@ -43083,10 +43200,10 @@ var init_postgres_driver = __esm({
           throw new Error("`cursor` is not present in your postgres dialect config. It's required to make streaming work in postgres.");
         }
         this.#queryId = compiledQuery.queryId;
-        const cursor2 = this.#client.query(new this.#options.cursor(compiledQuery.sql, compiledQuery.parameters.slice()));
+        const cursor3 = this.#client.query(new this.#options.cursor(compiledQuery.sql, compiledQuery.parameters.slice()));
         try {
           while (true) {
-            const rows = await cursor2.read(chunkSize);
+            const rows = await cursor3.read(chunkSize);
             if (rows.length === 0) {
               break;
             }
@@ -43095,7 +43212,7 @@ var init_postgres_driver = __esm({
             };
           }
         } finally {
-          await cursor2.close();
+          await cursor3.close();
           this.#queryId = void 0;
         }
       }
@@ -44691,7 +44808,7 @@ var init_dist5 = __esm({
   "../node_modules/@better-auth/kysely-adapter/dist/index.mjs"() {
     init_dist4();
     init_adapter2();
-    init_env();
+    init_env2();
     init_string();
     createKyselyAdapter = async (config4) => {
       const db = config4.database;
@@ -50255,7 +50372,7 @@ var require_lib4 = __commonJS({
       var trail = encoder3.end();
       return trail && trail.length > 0 ? Buffer2.concat([res, trail]) : res;
     };
-    iconv.decode = function decode4(buf, encoding, options) {
+    iconv.decode = function decode5(buf, encoding, options) {
       if (typeof buf === "string") {
         if (!iconv.skipDecodeWarning) {
           console.error("Iconv-lite warning: decode()-ing strings is deprecated. Refer to https://github.com/ashtuchkin/iconv-lite/wiki/Use-Buffers-when-decoding");
@@ -59566,11 +59683,11 @@ var require_mime_types = __commonJS({
       }
       return exts[0];
     }
-    function lookup(path29) {
-      if (!path29 || typeof path29 !== "string") {
+    function lookup(path30) {
+      if (!path30 || typeof path30 !== "string") {
         return false;
       }
-      var extension2 = extname("x." + path29).toLowerCase().substr(1);
+      var extension2 = extname("x." + path30).toLowerCase().substr(1);
       if (!extension2) {
         return false;
       }
@@ -61785,7 +61902,7 @@ var require_utils3 = __commonJS({
         return acc;
       }, target);
     };
-    var decode4 = function(str, defaultDecoder2, charset) {
+    var decode5 = function(str, defaultDecoder2, charset) {
       var strWithoutPlus = str.replace(/\+/g, " ");
       if (charset === "iso-8859-1") {
         return strWithoutPlus.replace(/%[0-9a-f]{2}/gi, unescape);
@@ -61898,7 +62015,7 @@ var require_utils3 = __commonJS({
       assign,
       combine,
       compact,
-      decode: decode4,
+      decode: decode5,
       encode: encode5,
       isBuffer: isBuffer2,
       isOverflow,
@@ -63993,7 +64110,7 @@ var require_path_to_regexp = __commonJS({
   "../node_modules/path-to-regexp/index.js"(exports2, module2) {
     module2.exports = pathToRegexp;
     var MATCHING_GROUP_REGEXP = /\\.|\((?:\?<(.*?)>)?(?!\?)/g;
-    function pathToRegexp(path29, keys, options) {
+    function pathToRegexp(path30, keys, options) {
       options = options || {};
       keys = keys || [];
       var strict = options.strict;
@@ -64007,8 +64124,8 @@ var require_path_to_regexp = __commonJS({
       var pos = 0;
       var backtrack = "";
       var m3;
-      if (path29 instanceof RegExp) {
-        while (m3 = MATCHING_GROUP_REGEXP.exec(path29.source)) {
+      if (path30 instanceof RegExp) {
+        while (m3 = MATCHING_GROUP_REGEXP.exec(path30.source)) {
           if (m3[0][0] === "\\") continue;
           keys.push({
             name: m3[1] || name2++,
@@ -64016,18 +64133,18 @@ var require_path_to_regexp = __commonJS({
             offset: m3.index
           });
         }
-        return path29;
+        return path30;
       }
-      if (Array.isArray(path29)) {
-        path29 = path29.map(function(value2) {
+      if (Array.isArray(path30)) {
+        path30 = path30.map(function(value2) {
           return pathToRegexp(value2, keys, options).source;
         });
-        return new RegExp(path29.join("|"), flags);
+        return new RegExp(path30.join("|"), flags);
       }
-      if (typeof path29 !== "string") {
+      if (typeof path30 !== "string") {
         throw new TypeError("path must be a string, array of strings, or regular expression");
       }
-      path29 = path29.replace(
+      path30 = path30.replace(
         /\\.|(\/)?(\.)?:(\w+)(\(.*?\))?(\*)?(\?)?|[.*]|\/\(/g,
         function(match, slash, format2, key, capture, star, optional2, offset) {
           if (match[0] === "\\") {
@@ -64044,7 +64161,7 @@ var require_path_to_regexp = __commonJS({
           if (slash || format2) {
             backtrack = "";
           } else {
-            backtrack += path29.slice(pos, offset);
+            backtrack += path30.slice(pos, offset);
           }
           pos = offset + match.length;
           if (match === "*") {
@@ -64074,7 +64191,7 @@ var require_path_to_regexp = __commonJS({
           return result2;
         }
       );
-      while (m3 = MATCHING_GROUP_REGEXP.exec(path29)) {
+      while (m3 = MATCHING_GROUP_REGEXP.exec(path30)) {
         if (m3[0][0] === "\\") continue;
         if (keysOffset + i5 === keys.length || keys[keysOffset + i5].offset > m3.index) {
           keys.splice(keysOffset + i5, 0, {
@@ -64086,13 +64203,13 @@ var require_path_to_regexp = __commonJS({
         }
         i5++;
       }
-      path29 += strict ? "" : path29[path29.length - 1] === "/" ? "?" : "/?";
+      path30 += strict ? "" : path30[path30.length - 1] === "/" ? "?" : "/?";
       if (end) {
-        path29 += "$";
-      } else if (path29[path29.length - 1] !== "/") {
-        path29 += lookahead ? "(?=/|$)" : "(?:/|$)";
+        path30 += "$";
+      } else if (path30[path30.length - 1] !== "/") {
+        path30 += lookahead ? "(?=/|$)" : "(?:/|$)";
       }
-      return new RegExp("^" + path29, flags);
+      return new RegExp("^" + path30, flags);
     }
   }
 });
@@ -64105,19 +64222,19 @@ var require_layer = __commonJS({
     var debug = require_src3()("express:router:layer");
     var hasOwnProperty = Object.prototype.hasOwnProperty;
     module2.exports = Layer;
-    function Layer(path29, options, fn) {
+    function Layer(path30, options, fn) {
       if (!(this instanceof Layer)) {
-        return new Layer(path29, options, fn);
+        return new Layer(path30, options, fn);
       }
-      debug("new %o", path29);
+      debug("new %o", path30);
       var opts = options || {};
       this.handle = fn;
       this.name = fn.name || "<anonymous>";
       this.params = void 0;
       this.path = void 0;
-      this.regexp = pathRegexp(path29, this.keys = [], opts);
-      this.regexp.fast_star = path29 === "*";
-      this.regexp.fast_slash = path29 === "/" && opts.end === false;
+      this.regexp = pathRegexp(path30, this.keys = [], opts);
+      this.regexp.fast_star = path30 === "*";
+      this.regexp.fast_slash = path30 === "/" && opts.end === false;
     }
     Layer.prototype.handle_error = function handle_error(error53, req, res, next) {
       var fn = this.handle;
@@ -64141,20 +64258,20 @@ var require_layer = __commonJS({
         next(err);
       }
     };
-    Layer.prototype.match = function match(path29) {
+    Layer.prototype.match = function match(path30) {
       var match2;
-      if (path29 != null) {
+      if (path30 != null) {
         if (this.regexp.fast_slash) {
           this.params = {};
           this.path = "";
           return true;
         }
         if (this.regexp.fast_star) {
-          this.params = { "0": decode_param(path29) };
-          this.path = path29;
+          this.params = { "0": decode_param(path30) };
+          this.path = path30;
           return true;
         }
-        match2 = this.regexp.exec(path29);
+        match2 = this.regexp.exec(path30);
       }
       if (!match2) {
         this.params = void 0;
@@ -64247,10 +64364,10 @@ var require_route = __commonJS({
     var slice = Array.prototype.slice;
     var toString = Object.prototype.toString;
     module2.exports = Route;
-    function Route(path29) {
-      this.path = path29;
+    function Route(path30) {
+      this.path = path30;
       this.stack = [];
-      debug("new %o", path29);
+      debug("new %o", path30);
       this.methods = {};
     }
     Route.prototype._handles_method = function _handles_method(method) {
@@ -64462,8 +64579,8 @@ var require_router = __commonJS({
         if (++sync > 100) {
           return setImmediate(next, err);
         }
-        var path29 = getPathname(req);
-        if (path29 == null) {
+        var path30 = getPathname(req);
+        if (path30 == null) {
           return done(layerError);
         }
         var layer;
@@ -64471,7 +64588,7 @@ var require_router = __commonJS({
         var route;
         while (match !== true && idx < stack.length) {
           layer = stack[idx++];
-          match = matchLayer(layer, path29);
+          match = matchLayer(layer, path30);
           route = layer.route;
           if (typeof match !== "boolean") {
             layerError = layerError || match;
@@ -64509,18 +64626,18 @@ var require_router = __commonJS({
           } else if (route) {
             layer.handle_request(req, res, next);
           } else {
-            trim_prefix(layer, layerError, layerPath, path29);
+            trim_prefix(layer, layerError, layerPath, path30);
           }
           sync = 0;
         });
       }
-      function trim_prefix(layer, layerError, layerPath, path29) {
+      function trim_prefix(layer, layerError, layerPath, path30) {
         if (layerPath.length !== 0) {
-          if (layerPath !== path29.slice(0, layerPath.length)) {
+          if (layerPath !== path30.slice(0, layerPath.length)) {
             next(layerError);
             return;
           }
-          var c5 = path29[layerPath.length];
+          var c5 = path30[layerPath.length];
           if (c5 && c5 !== "/" && c5 !== ".") return next(layerError);
           debug("trim prefix (%s) from url %s", layerPath, req.url);
           removed = layerPath;
@@ -64598,7 +64715,7 @@ var require_router = __commonJS({
     };
     proto.use = function use2(fn) {
       var offset = 0;
-      var path29 = "/";
+      var path30 = "/";
       if (typeof fn !== "function") {
         var arg = fn;
         while (Array.isArray(arg) && arg.length !== 0) {
@@ -64606,7 +64723,7 @@ var require_router = __commonJS({
         }
         if (typeof arg !== "function") {
           offset = 1;
-          path29 = fn;
+          path30 = fn;
         }
       }
       var callbacks = flatten(slice.call(arguments, offset));
@@ -64618,8 +64735,8 @@ var require_router = __commonJS({
         if (typeof fn !== "function") {
           throw new TypeError("Router.use() requires a middleware function but got a " + gettype(fn));
         }
-        debug("use %o %s", path29, fn.name || "<anonymous>");
-        var layer = new Layer(path29, {
+        debug("use %o %s", path30, fn.name || "<anonymous>");
+        var layer = new Layer(path30, {
           sensitive: this.caseSensitive,
           strict: false,
           end: false
@@ -64629,9 +64746,9 @@ var require_router = __commonJS({
       }
       return this;
     };
-    proto.route = function route(path29) {
-      var route2 = new Route(path29);
-      var layer = new Layer(path29, {
+    proto.route = function route(path30) {
+      var route2 = new Route(path30);
+      var layer = new Layer(path30, {
         sensitive: this.caseSensitive,
         strict: this.strict,
         end: true
@@ -64641,8 +64758,8 @@ var require_router = __commonJS({
       return route2;
     };
     methods2.concat("all").forEach(function(method) {
-      proto[method] = function(path29) {
-        var route = this.route(path29);
+      proto[method] = function(path30) {
+        var route = this.route(path30);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
       };
@@ -64678,9 +64795,9 @@ var require_router = __commonJS({
       }
       return toString.call(obj2).replace(objectRegExp, "$1");
     }
-    function matchLayer(layer, path29) {
+    function matchLayer(layer, path30) {
       try {
-        return layer.match(path29);
+        return layer.match(path30);
       } catch (err) {
         return err;
       }
@@ -64798,13 +64915,13 @@ var require_view = __commonJS({
   "../node_modules/express/lib/view.js"(exports2, module2) {
     "use strict";
     var debug = require_src3()("express:view");
-    var path29 = require("path");
+    var path30 = require("path");
     var fs2 = require("fs");
-    var dirname = path29.dirname;
-    var basename = path29.basename;
-    var extname = path29.extname;
-    var join6 = path29.join;
-    var resolve = path29.resolve;
+    var dirname = path30.dirname;
+    var basename = path30.basename;
+    var extname = path30.extname;
+    var join6 = path30.join;
+    var resolve = path30.resolve;
     module2.exports = View;
     function View(name2, options) {
       var opts = options || {};
@@ -64833,17 +64950,17 @@ var require_view = __commonJS({
       this.path = this.lookup(fileName);
     }
     View.prototype.lookup = function lookup(name2) {
-      var path30;
+      var path31;
       var roots = [].concat(this.root);
       debug('lookup "%s"', name2);
-      for (var i5 = 0; i5 < roots.length && !path30; i5++) {
+      for (var i5 = 0; i5 < roots.length && !path31; i5++) {
         var root5 = roots[i5];
         var loc = resolve(root5, name2);
         var dir = dirname(loc);
         var file2 = basename(loc);
-        path30 = this.resolve(dir, file2);
+        path31 = this.resolve(dir, file2);
       }
-      return path30;
+      return path31;
     };
     View.prototype.render = function render2(options, callback) {
       debug('render "%s"', this.path);
@@ -64851,21 +64968,21 @@ var require_view = __commonJS({
     };
     View.prototype.resolve = function resolve2(dir, file2) {
       var ext = this.ext;
-      var path30 = join6(dir, file2);
-      var stat = tryStat(path30);
+      var path31 = join6(dir, file2);
+      var stat = tryStat(path31);
       if (stat && stat.isFile()) {
-        return path30;
+        return path31;
       }
-      path30 = join6(dir, basename(file2, ext), "index" + ext);
-      stat = tryStat(path30);
+      path31 = join6(dir, basename(file2, ext), "index" + ext);
+      stat = tryStat(path31);
       if (stat && stat.isFile()) {
-        return path30;
+        return path31;
       }
     };
-    function tryStat(path30) {
-      debug('stat "%s"', path30);
+    function tryStat(path31) {
+      debug('stat "%s"', path31);
       try {
-        return fs2.statSync(path30);
+        return fs2.statSync(path31);
       } catch (e5) {
         return void 0;
       }
@@ -65643,7 +65760,7 @@ var require_types = __commonJS({
 // ../node_modules/mime/mime.js
 var require_mime = __commonJS({
   "../node_modules/mime/mime.js"(exports2, module2) {
-    var path29 = require("path");
+    var path30 = require("path");
     var fs2 = require("fs");
     function Mime() {
       this.types = /* @__PURE__ */ Object.create(null);
@@ -65673,8 +65790,8 @@ var require_mime = __commonJS({
       this.define(map6);
       this._loading = null;
     };
-    Mime.prototype.lookup = function(path30, fallback2) {
-      var ext = path30.replace(/^.*[\.\/\\]/, "").toLowerCase();
+    Mime.prototype.lookup = function(path31, fallback2) {
+      var ext = path31.replace(/^.*[\.\/\\]/, "").toLowerCase();
       return this.types[ext] || fallback2 || this.default_type;
     };
     Mime.prototype.extension = function(mimeType) {
@@ -65908,28 +66025,28 @@ var require_send = __commonJS({
     var ms = require_ms5();
     var onFinished = require_on_finished();
     var parseRange = require_range_parser();
-    var path29 = require("path");
+    var path30 = require("path");
     var statuses = require_statuses();
     var Stream = require("stream");
     var util = require("util");
-    var extname = path29.extname;
-    var join6 = path29.join;
-    var normalize2 = path29.normalize;
-    var resolve = path29.resolve;
-    var sep3 = path29.sep;
+    var extname = path30.extname;
+    var join6 = path30.join;
+    var normalize2 = path30.normalize;
+    var resolve = path30.resolve;
+    var sep3 = path30.sep;
     var BYTES_RANGE_REGEXP = /^ *bytes=/;
     var MAX_MAXAGE = 60 * 60 * 24 * 365 * 1e3;
     var UP_PATH_REGEXP = /(?:^|[\\/])\.\.(?:[\\/]|$)/;
     module2.exports = send;
     module2.exports.mime = mime;
-    function send(req, path30, options) {
-      return new SendStream(req, path30, options);
+    function send(req, path31, options) {
+      return new SendStream(req, path31, options);
     }
-    function SendStream(req, path30, options) {
+    function SendStream(req, path31, options) {
       Stream.call(this);
       var opts = options || {};
       this.options = opts;
-      this.path = path30;
+      this.path = path31;
       this.req = req;
       this._acceptRanges = opts.acceptRanges !== void 0 ? Boolean(opts.acceptRanges) : true;
       this._cacheControl = opts.cacheControl !== void 0 ? Boolean(opts.cacheControl) : true;
@@ -65975,8 +66092,8 @@ var require_send = __commonJS({
       this._index = index2;
       return this;
     }, "send.index: pass index as option");
-    SendStream.prototype.root = function root5(path30) {
-      this._root = resolve(String(path30));
+    SendStream.prototype.root = function root5(path31) {
+      this._root = resolve(String(path31));
       debug("root %s", this._root);
       return this;
     };
@@ -66089,10 +66206,10 @@ var require_send = __commonJS({
       var lastModified = this.res.getHeader("Last-Modified");
       return parseHttpDate(lastModified) <= parseHttpDate(ifRange);
     };
-    SendStream.prototype.redirect = function redirect(path30) {
+    SendStream.prototype.redirect = function redirect(path31) {
       var res = this.res;
       if (hasListeners(this, "directory")) {
-        this.emit("directory", res, path30);
+        this.emit("directory", res, path31);
         return;
       }
       if (this.hasTrailingSlash()) {
@@ -66112,42 +66229,42 @@ var require_send = __commonJS({
     SendStream.prototype.pipe = function pipe2(res) {
       var root5 = this._root;
       this.res = res;
-      var path30 = decode4(this.path);
-      if (path30 === -1) {
+      var path31 = decode5(this.path);
+      if (path31 === -1) {
         this.error(400);
         return res;
       }
-      if (~path30.indexOf("\0")) {
+      if (~path31.indexOf("\0")) {
         this.error(400);
         return res;
       }
       var parts;
       if (root5 !== null) {
-        if (path30) {
-          path30 = normalize2("." + sep3 + path30);
+        if (path31) {
+          path31 = normalize2("." + sep3 + path31);
         }
-        if (UP_PATH_REGEXP.test(path30)) {
-          debug('malicious path "%s"', path30);
+        if (UP_PATH_REGEXP.test(path31)) {
+          debug('malicious path "%s"', path31);
           this.error(403);
           return res;
         }
-        parts = path30.split(sep3);
-        path30 = normalize2(join6(root5, path30));
+        parts = path31.split(sep3);
+        path31 = normalize2(join6(root5, path31));
       } else {
-        if (UP_PATH_REGEXP.test(path30)) {
-          debug('malicious path "%s"', path30);
+        if (UP_PATH_REGEXP.test(path31)) {
+          debug('malicious path "%s"', path31);
           this.error(403);
           return res;
         }
-        parts = normalize2(path30).split(sep3);
-        path30 = resolve(path30);
+        parts = normalize2(path31).split(sep3);
+        path31 = resolve(path31);
       }
       if (containsDotFile(parts)) {
         var access = this._dotfiles;
         if (access === void 0) {
           access = parts[parts.length - 1][0] === "." ? this._hidden ? "allow" : "ignore" : "allow";
         }
-        debug('%s dotfile "%s"', access, path30);
+        debug('%s dotfile "%s"', access, path31);
         switch (access) {
           case "allow":
             break;
@@ -66161,13 +66278,13 @@ var require_send = __commonJS({
         }
       }
       if (this._index.length && this.hasTrailingSlash()) {
-        this.sendIndex(path30);
+        this.sendIndex(path31);
         return res;
       }
-      this.sendFile(path30);
+      this.sendFile(path31);
       return res;
     };
-    SendStream.prototype.send = function send2(path30, stat) {
+    SendStream.prototype.send = function send2(path31, stat) {
       var len = stat.size;
       var options = this.options;
       var opts = {};
@@ -66179,9 +66296,9 @@ var require_send = __commonJS({
         this.headersAlreadySent();
         return;
       }
-      debug('pipe "%s"', path30);
-      this.setHeader(path30, stat);
-      this.type(path30);
+      debug('pipe "%s"', path31);
+      this.setHeader(path31, stat);
+      this.type(path31);
       if (this.isConditionalGET()) {
         if (this.isPreconditionFailure()) {
           this.error(412);
@@ -66230,26 +66347,26 @@ var require_send = __commonJS({
         res.end();
         return;
       }
-      this.stream(path30, opts);
+      this.stream(path31, opts);
     };
-    SendStream.prototype.sendFile = function sendFile(path30) {
+    SendStream.prototype.sendFile = function sendFile(path31) {
       var i5 = 0;
       var self = this;
-      debug('stat "%s"', path30);
-      fs2.stat(path30, function onstat(err, stat) {
-        if (err && err.code === "ENOENT" && !extname(path30) && path30[path30.length - 1] !== sep3) {
+      debug('stat "%s"', path31);
+      fs2.stat(path31, function onstat(err, stat) {
+        if (err && err.code === "ENOENT" && !extname(path31) && path31[path31.length - 1] !== sep3) {
           return next(err);
         }
         if (err) return self.onStatError(err);
-        if (stat.isDirectory()) return self.redirect(path30);
-        self.emit("file", path30, stat);
-        self.send(path30, stat);
+        if (stat.isDirectory()) return self.redirect(path31);
+        self.emit("file", path31, stat);
+        self.send(path31, stat);
       });
       function next(err) {
         if (self._extensions.length <= i5) {
           return err ? self.onStatError(err) : self.error(404);
         }
-        var p3 = path30 + "." + self._extensions[i5++];
+        var p3 = path31 + "." + self._extensions[i5++];
         debug('stat "%s"', p3);
         fs2.stat(p3, function(err2, stat) {
           if (err2) return next(err2);
@@ -66259,7 +66376,7 @@ var require_send = __commonJS({
         });
       }
     };
-    SendStream.prototype.sendIndex = function sendIndex(path30) {
+    SendStream.prototype.sendIndex = function sendIndex(path31) {
       var i5 = -1;
       var self = this;
       function next(err) {
@@ -66267,7 +66384,7 @@ var require_send = __commonJS({
           if (err) return self.onStatError(err);
           return self.error(404);
         }
-        var p3 = join6(path30, self._index[i5]);
+        var p3 = join6(path31, self._index[i5]);
         debug('stat "%s"', p3);
         fs2.stat(p3, function(err2, stat) {
           if (err2) return next(err2);
@@ -66278,10 +66395,10 @@ var require_send = __commonJS({
       }
       next();
     };
-    SendStream.prototype.stream = function stream(path30, options) {
+    SendStream.prototype.stream = function stream(path31, options) {
       var self = this;
       var res = this.res;
-      var stream2 = fs2.createReadStream(path30, options);
+      var stream2 = fs2.createReadStream(path31, options);
       this.emit("stream", stream2);
       stream2.pipe(res);
       function cleanup() {
@@ -66296,10 +66413,10 @@ var require_send = __commonJS({
         self.emit("end");
       });
     };
-    SendStream.prototype.type = function type(path30) {
+    SendStream.prototype.type = function type(path31) {
       var res = this.res;
       if (res.getHeader("Content-Type")) return;
-      var type2 = mime.lookup(path30);
+      var type2 = mime.lookup(path31);
       if (!type2) {
         debug("no content-type");
         return;
@@ -66308,9 +66425,9 @@ var require_send = __commonJS({
       debug("content-type %s", type2);
       res.setHeader("Content-Type", type2 + (charset ? "; charset=" + charset : ""));
     };
-    SendStream.prototype.setHeader = function setHeader(path30, stat) {
+    SendStream.prototype.setHeader = function setHeader(path31, stat) {
       var res = this.res;
-      this.emit("headers", res, path30, stat);
+      this.emit("headers", res, path31, stat);
       if (this._acceptRanges && !res.getHeader("Accept-Ranges")) {
         debug("accept ranges");
         res.setHeader("Accept-Ranges", "bytes");
@@ -66369,9 +66486,9 @@ var require_send = __commonJS({
       }
       return err instanceof Error ? createError(status, err, { expose: false }) : createError(status, err);
     }
-    function decode4(path30) {
+    function decode5(path31) {
       try {
-        return decodeURIComponent(path30);
+        return decodeURIComponent(path31);
       } catch (err) {
         return -1;
       }
@@ -67280,10 +67397,10 @@ var require_utils4 = __commonJS({
     var querystring = require("querystring");
     exports2.etag = createETagGenerator({ weak: false });
     exports2.wetag = createETagGenerator({ weak: true });
-    exports2.isAbsolute = function(path29) {
-      if ("/" === path29[0]) return true;
-      if (":" === path29[1] && ("\\" === path29[2] || "/" === path29[2])) return true;
-      if ("\\\\" === path29.substring(0, 2)) return true;
+    exports2.isAbsolute = function(path30) {
+      if ("/" === path30[0]) return true;
+      if (":" === path30[1] && ("\\" === path30[2] || "/" === path30[2])) return true;
+      if ("\\\\" === path30.substring(0, 2)) return true;
     };
     exports2.flatten = deprecate2.function(
       flatten,
@@ -67495,7 +67612,7 @@ var require_application = __commonJS({
     };
     app2.use = function use2(fn) {
       var offset = 0;
-      var path29 = "/";
+      var path30 = "/";
       if (typeof fn !== "function") {
         var arg = fn;
         while (Array.isArray(arg) && arg.length !== 0) {
@@ -67503,7 +67620,7 @@ var require_application = __commonJS({
         }
         if (typeof arg !== "function") {
           offset = 1;
-          path29 = fn;
+          path30 = fn;
         }
       }
       var fns = flatten(slice.call(arguments, offset));
@@ -67514,12 +67631,12 @@ var require_application = __commonJS({
       var router2 = this._router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router2.use(path29, fn2);
+          return router2.use(path30, fn2);
         }
-        debug(".use app under %s", path29);
-        fn2.mountpath = path29;
+        debug(".use app under %s", path30);
+        fn2.mountpath = path30;
         fn2.parent = this;
-        router2.use(path29, function mounted_app(req, res, next) {
+        router2.use(path30, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             setPrototypeOf(req, orig.request);
@@ -67531,9 +67648,9 @@ var require_application = __commonJS({
       }, this);
       return this;
     };
-    app2.route = function route(path29) {
+    app2.route = function route(path30) {
       this.lazyrouter();
-      return this._router.route(path29);
+      return this._router.route(path30);
     };
     app2.engine = function engine(ext, fn) {
       if (typeof fn !== "function") {
@@ -67584,7 +67701,7 @@ var require_application = __commonJS({
       }
       return this;
     };
-    app2.path = function path29() {
+    app2.path = function path30() {
       return this.parent ? this.parent.path() + this.mountpath : "";
     };
     app2.enabled = function enabled(setting) {
@@ -67600,19 +67717,19 @@ var require_application = __commonJS({
       return this.set(setting, false);
     };
     methods2.forEach(function(method) {
-      app2[method] = function(path29) {
+      app2[method] = function(path30) {
         if (method === "get" && arguments.length === 1) {
-          return this.set(path29);
+          return this.set(path30);
         }
         this.lazyrouter();
-        var route = this._router.route(path29);
+        var route = this._router.route(path30);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
       };
     });
-    app2.all = function all(path29) {
+    app2.all = function all(path30) {
       this.lazyrouter();
-      var route = this._router.route(path29);
+      var route = this._router.route(path30);
       var args = slice.call(arguments, 1);
       for (var i5 = 0; i5 < methods2.length; i5++) {
         route[methods2[i5]].apply(route, args);
@@ -68230,11 +68347,11 @@ var require_mime_types2 = __commonJS({
       }
       return exts[0];
     }
-    function lookup(path29) {
-      if (!path29 || typeof path29 !== "string") {
+    function lookup(path30) {
+      if (!path30 || typeof path30 !== "string") {
         return false;
       }
-      var extension2 = extname("x." + path29).toLowerCase().substr(1);
+      var extension2 = extname("x." + path30).toLowerCase().substr(1);
       if (!extension2) {
         return false;
       }
@@ -68461,7 +68578,7 @@ var require_request = __commonJS({
       var subdomains2 = !isIP2(hostname5) ? hostname5.split(".").reverse() : [hostname5];
       return subdomains2.slice(offset);
     });
-    defineGetter(req, "path", function path29() {
+    defineGetter(req, "path", function path30() {
       return parse6(this).pathname;
     });
     defineGetter(req, "hostname", function hostname5() {
@@ -68550,7 +68667,7 @@ var require_cookie = __commonJS({
       var obj2 = {};
       var len = str.length;
       if (len < 2) return obj2;
-      var dec = opt && opt.decode || decode4;
+      var dec = opt && opt.decode || decode5;
       var index = 0;
       var eqIdx = 0;
       var endIdx = 0;
@@ -68681,15 +68798,15 @@ var require_cookie = __commonJS({
       }
       return str;
     }
-    function decode4(str) {
+    function decode5(str) {
       return str.indexOf("%") !== -1 ? decodeURIComponent(str) : str;
     }
     function isDate2(val) {
       return __toString.call(val) === "[object Date]";
     }
-    function tryDecode4(str, decode5) {
+    function tryDecode4(str, decode6) {
       try {
-        return decode5(str);
+        return decode6(str);
       } catch (e5) {
         return str;
       }
@@ -68710,7 +68827,7 @@ var require_response = __commonJS({
     var http = require("http");
     var isAbsolute = require_utils4().isAbsolute;
     var onFinished = require_on_finished();
-    var path29 = require("path");
+    var path30 = require("path");
     var statuses = require_statuses();
     var merge3 = require_utils_merge();
     var sign3 = require_cookie_signature().sign;
@@ -68719,9 +68836,9 @@ var require_response = __commonJS({
     var setCharset = require_utils4().setCharset;
     var cookie = require_cookie();
     var send = require_send();
-    var extname = path29.extname;
+    var extname = path30.extname;
     var mime = send.mime;
-    var resolve = path29.resolve;
+    var resolve = path30.resolve;
     var vary = require_vary();
     var res = Object.create(http.ServerResponse.prototype);
     module2.exports = res;
@@ -68898,26 +69015,26 @@ var require_response = __commonJS({
       this.type("txt");
       return this.send(body);
     };
-    res.sendFile = function sendFile(path30, options, callback) {
+    res.sendFile = function sendFile(path31, options, callback) {
       var done = callback;
       var req = this.req;
       var res2 = this;
       var next = req.next;
       var opts = options || {};
-      if (!path30) {
+      if (!path31) {
         throw new TypeError("path argument is required to res.sendFile");
       }
-      if (typeof path30 !== "string") {
+      if (typeof path31 !== "string") {
         throw new TypeError("path must be a string to res.sendFile");
       }
       if (typeof options === "function") {
         done = options;
         opts = {};
       }
-      if (!opts.root && !isAbsolute(path30)) {
+      if (!opts.root && !isAbsolute(path31)) {
         throw new TypeError("path must be absolute or specify root to res.sendFile");
       }
-      var pathname = encodeURI(path30);
+      var pathname = encodeURI(path31);
       var file2 = send(req, pathname, opts);
       sendfile(res2, file2, opts, function(err) {
         if (done) return done(err);
@@ -68927,7 +69044,7 @@ var require_response = __commonJS({
         }
       });
     };
-    res.sendfile = function(path30, options, callback) {
+    res.sendfile = function(path31, options, callback) {
       var done = callback;
       var req = this.req;
       var res2 = this;
@@ -68937,7 +69054,7 @@ var require_response = __commonJS({
         done = options;
         opts = {};
       }
-      var file2 = send(req, path30, opts);
+      var file2 = send(req, path31, opts);
       sendfile(res2, file2, opts, function(err) {
         if (done) return done(err);
         if (err && err.code === "EISDIR") return next();
@@ -68950,7 +69067,7 @@ var require_response = __commonJS({
       res.sendfile,
       "res.sendfile: Use res.sendFile instead"
     );
-    res.download = function download(path30, filename, options, callback) {
+    res.download = function download(path31, filename, options, callback) {
       var done = callback;
       var name2 = filename;
       var opts = options || null;
@@ -68967,7 +69084,7 @@ var require_response = __commonJS({
         opts = filename;
       }
       var headers = {
-        "Content-Disposition": contentDisposition(name2 || path30)
+        "Content-Disposition": contentDisposition(name2 || path31)
       };
       if (opts && opts.headers) {
         var keys = Object.keys(opts.headers);
@@ -68980,7 +69097,7 @@ var require_response = __commonJS({
       }
       opts = Object.create(opts);
       opts.headers = headers;
-      var fullPath = !opts.root ? resolve(path30) : path30;
+      var fullPath = !opts.root ? resolve(path31) : path31;
       return this.sendFile(fullPath, opts, done);
     };
     res.contentType = res.type = function contentType(type) {
@@ -69281,11 +69398,11 @@ var require_serve_static = __commonJS({
         }
         var forwardError = !fallthrough;
         var originalUrl = parseUrl2.original(req);
-        var path29 = parseUrl2(req).pathname;
-        if (path29 === "/" && originalUrl.pathname.substr(-1) !== "/") {
-          path29 = "";
+        var path30 = parseUrl2(req).pathname;
+        if (path30 === "/" && originalUrl.pathname.substr(-1) !== "/") {
+          path30 = "";
         }
-        var stream = send(req, path29, opts);
+        var stream = send(req, path30, opts);
         stream.on("directory", onDirectory);
         if (setHeaders) {
           stream.on("headers", setHeaders);
@@ -70409,104 +70526,6 @@ var init_agent_catalog = __esm({
   }
 });
 
-// ../cli/src/env.ts
-function parseDotenv(src) {
-  const obj2 = {};
-  const line2 = /(?:^|^)\s*(?:export\s+)?([\w.-]+)(?:\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/gm;
-  let lines = src.replace(/\r\n?/g, "\n");
-  let match;
-  while ((match = line2.exec(lines)) !== null) {
-    const key = match[1];
-    if (!key) continue;
-    let value2 = (match[2] ?? "").trim();
-    const maybeQuote = value2[0];
-    value2 = value2.replace(/^(['"`])([\s\S]*)\1$/m, "$2");
-    if (maybeQuote === '"') {
-      value2 = value2.replace(/\\n/g, "\n").replace(/\\r/g, "\r");
-    }
-    obj2[key] = value2;
-  }
-  return obj2;
-}
-function resolveEnvFileNames(profile) {
-  return profile === "production" ? [".env.prod"] : [".env.local"];
-}
-function isInstalledModulePath(moduleDir) {
-  return /[\\/]node_modules[\\/]/.test(moduleDir);
-}
-function isInstalledCliEntrypointPath(entrypointPath) {
-  if (!entrypointPath) return false;
-  if (isInstalledModulePath(entrypointPath)) return true;
-  try {
-    const stat = (0, import_node_fs4.lstatSync)(entrypointPath);
-    if (!stat.isSymbolicLink()) return false;
-    const target = (0, import_node_fs4.readlinkSync)(entrypointPath);
-    const resolvedTarget = import_node_path8.default.isAbsolute(target) ? target : import_node_path8.default.resolve(import_node_path8.default.dirname(entrypointPath), target);
-    return isInstalledModulePath(resolvedTarget);
-  } catch {
-    return false;
-  }
-}
-function detectCliEnvProfile() {
-  try {
-    const moduleDir = import_node_path8.default.dirname((0, import_node_url4.fileURLToPath)(__overlord_import_meta_url));
-    return isInstalledModulePath(moduleDir) || isInstalledCliEntrypointPath(process.argv[1] ?? "") ? "production" : "development";
-  } catch {
-    return "development";
-  }
-}
-function snapshotRuntimeEnv() {
-  return new Set(
-    Object.entries(process.env).filter(([, value2]) => Boolean(value2?.trim())).map(([key]) => key)
-  );
-}
-function isExplicitRuntimeEnv(key) {
-  return explicitRuntimeKeys.has(key);
-}
-function resolveLayeredEnv({
-  envKey,
-  configValue,
-  fallback: fallback2 = "",
-  envProfile = "development"
-}) {
-  const value2 = process.env[envKey]?.trim();
-  if (value2 && isExplicitRuntimeEnv(envKey)) return value2;
-  if (envProfile === "development" && value2) return value2;
-  if (configValue) return configValue;
-  return value2 || fallback2;
-}
-function loadEnvDefaults(dir, profile = "development") {
-  for (const file2 of resolveEnvFileNames(profile)) {
-    const filePath = import_node_path8.default.join(dir, file2);
-    if (!(0, import_node_fs4.existsSync)(filePath)) continue;
-    const parsed = parseDotenv((0, import_node_fs4.readFileSync)(filePath, "utf8"));
-    for (const [key, value2] of Object.entries(parsed)) {
-      if (!process.env[key]?.trim()) {
-        process.env[key] = normalizeEnvFileValue2({ key, value: value2, baseDir: import_node_path8.default.dirname(filePath) });
-      }
-    }
-  }
-}
-function normalizeEnvFileValue2({
-  key,
-  value: value2,
-  baseDir
-}) {
-  if (key !== "OVLD_HOME") return value2;
-  if (!value2.trim() || import_node_path8.default.isAbsolute(value2)) return value2;
-  return import_node_path8.default.resolve(baseDir, value2);
-}
-var import_node_fs4, import_node_path8, import_node_url4, explicitRuntimeKeys;
-var init_env2 = __esm({
-  "../cli/src/env.ts"() {
-    "use strict";
-    import_node_fs4 = require("node:fs");
-    import_node_path8 = __toESM(require("node:path"), 1);
-    import_node_url4 = require("node:url");
-    explicitRuntimeKeys = snapshotRuntimeEnv();
-  }
-});
-
 // ../cli/src/redact-secrets.ts
 var init_redact_secrets = __esm({
   "../cli/src/redact-secrets.ts"() {
@@ -70567,11 +70586,8 @@ function findConfigPath(startDir = process.cwd()) {
   }
   return null;
 }
-function resolveGlobalDataDir2() {
-  return process.env.OVLD_HOME?.trim() || import_node_path9.default.join(import_node_os3.default.homedir(), ".ovld");
-}
 function resolveGlobalConfigPath() {
-  return import_node_path9.default.join(resolveGlobalDataDir2(), "overlord.toml");
+  return import_node_path9.default.join(resolveGlobalDataDir(), "overlord.toml");
 }
 function findEffectiveConfigPath(startDir = process.cwd()) {
   const localPath = findConfigPath(startDir);
@@ -70611,7 +70627,7 @@ function resolveDatabasePath(config4, startDir = process.cwd()) {
     const expanded = expandTilde(explicit);
     return import_node_path9.default.isAbsolute(expanded) ? expanded : import_node_path9.default.resolve(resolveProjectRoot(startDir), expanded);
   }
-  return import_node_path9.default.join(resolveGlobalDataDir2(), "Overlord.sqlite");
+  return resolveGlobalDatabasePath();
 }
 function applyDatabaseEnv(config4) {
   if (config4.databaseUrl && !process.env.DATABASE_URL?.trim()) {
@@ -70622,12 +70638,13 @@ var import_node_fs5, import_node_os3, import_node_path9, CLI_ENV_PROFILE, DEFAUL
 var init_config = __esm({
   "../cli/src/config.ts"() {
     "use strict";
+    init_dist2();
     import_node_fs5 = require("node:fs");
     import_node_os3 = __toESM(require("node:os"), 1);
     import_node_path9 = __toESM(require("node:path"), 1);
     init_dist6();
     init_agent_catalog();
-    init_env2();
+    init_env();
     init_errors3();
     CLI_ENV_PROFILE = detectCliEnvProfile();
     DEFAULT_CONFIG = {
@@ -70896,11 +70913,14 @@ var init_context = __esm({
 });
 
 // ../packages/core/service/util.ts
+function isTruthyFlag(value2) {
+  return value2 === true || value2 === 1;
+}
 function nowIso() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
 function newId() {
-  return (0, import_node_crypto8.randomUUID)();
+  return (0, import_node_crypto7.randomUUID)();
 }
 function slugify3(input) {
   const base = input.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
@@ -70912,22 +70932,22 @@ function initialTitleFromInstruction(instruction) {
   return `${firstLine2.slice(0, 77)}...`;
 }
 function generateSessionKey() {
-  const rawKey = SESSION_KEY_PREFIX + (0, import_node_crypto8.randomBytes)(24).toString("base64url");
+  const rawKey = SESSION_KEY_PREFIX + (0, import_node_crypto7.randomBytes)(24).toString("base64url");
   const prefix = rawKey.slice(0, SESSION_KEY_PREFIX.length + 8);
-  const hash2 = (0, import_node_crypto8.createHash)("sha256").update(rawKey).digest("hex");
+  const hash2 = (0, import_node_crypto7.createHash)("sha256").update(rawKey).digest("hex");
   return { rawKey, prefix, hash: hash2 };
 }
 function hashSessionKey(rawKey) {
-  return (0, import_node_crypto8.createHash)("sha256").update(rawKey).digest("hex");
+  return (0, import_node_crypto7.createHash)("sha256").update(rawKey).digest("hex");
 }
 function jsonTextFieldSql(column, field, dialect) {
   return dialect === "postgres" ? `${column}->>'${field}'` : `json_extract(${column}, '$.${field}')`;
 }
-var import_node_crypto8, SESSION_KEY_PREFIX;
+var import_node_crypto7, SESSION_KEY_PREFIX;
 var init_util3 = __esm({
   "../packages/core/service/util.ts"() {
     "use strict";
-    import_node_crypto8 = require("node:crypto");
+    import_node_crypto7 = require("node:crypto");
     SESSION_KEY_PREFIX = "sess_";
   }
 });
@@ -71384,12 +71404,12 @@ var init_worktree_git = __esm({
 
 // ../packages/core/service/local-target/branch-actions-git.ts
 function resolveActionCheckout(input) {
-  const path29 = resolveBranchCheckoutPath({
+  const path30 = resolveBranchCheckoutPath({
     repoPath: input.primaryRepoPath,
     branchName: input.branchName,
     worktreePathHint: input.worktreePath
   });
-  if (path29) return { ok: true, path: path29 };
+  if (path30) return { ok: true, path: path30 };
   return {
     ok: false,
     code: "BRANCH_NO_WORKTREE",
@@ -75188,7 +75208,7 @@ var init_window = __esm({
 
 // ../packages/core/service/agent-session/credential.ts
 function hashSessionChannelToken(rawToken) {
-  return (0, import_node_crypto9.createHash)(SESSION_CHANNEL_TOKEN_HASH_ALGORITHM).update(rawToken).digest("hex");
+  return (0, import_node_crypto8.createHash)(SESSION_CHANNEL_TOKEN_HASH_ALGORITHM).update(rawToken).digest("hex");
 }
 function addSeconds(iso, seconds2) {
   return new Date(new Date(iso).getTime() + seconds2 * 1e3).toISOString();
@@ -75204,11 +75224,11 @@ function renewedExpiry({
   const renewed = new Date(new Date(now2).getTime() + leaseSeconds * 1e3);
   return (renewed < ceiling ? renewed : ceiling).toISOString();
 }
-var import_node_crypto9, SESSION_CHANNEL_TOKEN_HASH_ALGORITHM, SESSION_CHANNEL_LEASE_SECONDS, SESSION_CHANNEL_ABSOLUTE_LIFETIME_SECONDS;
+var import_node_crypto8, SESSION_CHANNEL_TOKEN_HASH_ALGORITHM, SESSION_CHANNEL_LEASE_SECONDS, SESSION_CHANNEL_ABSOLUTE_LIFETIME_SECONDS;
 var init_credential = __esm({
   "../packages/core/service/agent-session/credential.ts"() {
     "use strict";
-    import_node_crypto9 = require("node:crypto");
+    import_node_crypto8 = require("node:crypto");
     SESSION_CHANNEL_TOKEN_HASH_ALGORITHM = "sha256";
     SESSION_CHANNEL_LEASE_SECONDS = 180;
     SESSION_CHANNEL_ABSOLUTE_LIFETIME_SECONDS = 60 * 60 * 24;
@@ -76394,7 +76414,7 @@ var init_local_target = __esm({
 
 // ../packages/core/service/devices.ts
 function deviceFingerprint() {
-  return (0, import_node_crypto10.createHash)("sha256").update(`${(0, import_node_os8.hostname)()}:${(0, import_node_os8.platform)()}`).digest("hex").slice(0, 32);
+  return (0, import_node_crypto9.createHash)("sha256").update(`${(0, import_node_os8.hostname)()}:${(0, import_node_os8.platform)()}`).digest("hex").slice(0, 32);
 }
 function callerDeviceFingerprint() {
   return deviceFingerprint();
@@ -76470,11 +76490,11 @@ async function softDeleteDeviceIfOrphaned({
   });
   return true;
 }
-var import_node_crypto10, import_node_os8;
+var import_node_crypto9, import_node_os8;
 var init_devices = __esm({
   "../packages/core/service/devices.ts"() {
     "use strict";
-    import_node_crypto10 = require("node:crypto");
+    import_node_crypto9 = require("node:crypto");
     import_node_os8 = require("node:os");
     init_change_feed();
     init_util3();
@@ -76491,9 +76511,17 @@ function parseProfileMetadata(metadataJson) {
     return {};
   }
 }
+function avatarUrlFromProfileMetadata(metadataJson) {
+  const avatarUrl = parseProfileMetadata(metadataJson).avatarUrl;
+  return typeof avatarUrl === "string" && avatarUrl.trim() ? avatarUrl : null;
+}
 function agentInstructionsFromProfileMetadata(metadataJson) {
   const agentInstructions = parseProfileMetadata(metadataJson).agentInstructions;
   return typeof agentInstructions === "string" && agentInstructions.trim() ? agentInstructions.trim() : null;
+}
+function editorSchemeFromProfileMetadata(metadataJson) {
+  const editorScheme = parseProfileMetadata(metadataJson).editorScheme;
+  return typeof editorScheme === "string" && editorScheme.trim() ? editorScheme.trim() : null;
 }
 function launchSessionDefaultsFromProfileMetadata(metadataJson) {
   return parseLaunchSessionDefaults(parseProfileMetadata(metadataJson).launchSessionDefaults);
@@ -76502,6 +76530,7 @@ function mergeProfileMetadataJson({
   metadataJson,
   avatarUrl,
   agentInstructions,
+  editorScheme,
   launchSessionDefaults
 }) {
   const parsed = { ...parseProfileMetadata(metadataJson) };
@@ -76520,6 +76549,11 @@ function mergeProfileMetadataJson({
     const trimmed9 = agentInstructions?.trim() ?? "";
     if (trimmed9) parsed.agentInstructions = trimmed9;
     else delete parsed.agentInstructions;
+  }
+  if (editorScheme !== void 0) {
+    const trimmed9 = editorScheme?.trim() ?? "";
+    if (trimmed9) parsed.editorScheme = trimmed9;
+    else delete parsed.editorScheme;
   }
   return JSON.stringify(parsed);
 }
@@ -77123,35 +77157,44 @@ var init_execution_targets = __esm({
 });
 
 // ../packages/core/service/project-resource-key.ts
+function deriveProjectResourceKey2({
+  resourceKey,
+  label,
+  directoryPath
+}) {
+  const explicit = resourceKey?.trim();
+  if (explicit) return slugify3(explicit);
+  const labelKey = label?.trim();
+  if (labelKey) return slugify3(labelKey);
+  return slugify3(import_node_path16.default.basename(import_node_path16.default.resolve(directoryPath)));
+}
+var import_node_path16;
 var init_project_resource_key = __esm({
   "../packages/core/service/project-resource-key.ts"() {
     "use strict";
+    import_node_path16 = __toESM(require("node:path"), 1);
     init_util3();
   }
 });
 
 // ../packages/core/service/projects.ts
-async function seedProjectStatuses({
-  ctx,
-  projectId,
-  now: now2
-}) {
+async function seedDefaultProjectStatuses(db, { workspaceId: workspaceId2, projectId, now: now2 }) {
   for (const status of DEFAULT_STATUSES) {
-    await ctx.db.run(
+    await db.run(
       `INSERT INTO project_statuses
          (id, workspace_id, project_id, key, name, type, position, is_default, is_terminal,
           created_at, updated_at, revision)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
       [
         newId(),
-        ctx.workspace.id,
+        workspaceId2,
         projectId,
         status.key,
         status.name,
         status.type,
         status.position,
-        bindBool(ctx.db.dialect, status.isDefault),
-        bindBool(ctx.db.dialect, status.isTerminal),
+        bindBool(db.dialect, status.isDefault),
+        bindBool(db.dialect, status.isTerminal),
         now2,
         now2
       ]
@@ -77160,9 +77203,6 @@ async function seedProjectStatuses({
 }
 function objectiveResourceRepairHint(resourceKey) {
   return `Run \`ovld add-cwd --key ${resourceKey}\` from the intended checkout on this device.`;
-}
-function isTruthyFlag(value2) {
-  return value2 === true || value2 === 1;
 }
 function backendResourceProvider(ctx, executionTargetId) {
   return resolveBackendResourceProvider(isCoLocatedBackend(ctx.db), {
@@ -77218,7 +77258,11 @@ async function createProject({
         position
       ]
     );
-    await seedProjectStatuses({ ctx: txCtx, projectId: id2, now: now2 });
+    await seedDefaultProjectStatuses(txCtx.db, {
+      workspaceId: txCtx.workspace.id,
+      projectId: id2,
+      now: now2
+    });
     await recordChange({
       ctx: txCtx,
       entityType: "project",
@@ -77388,7 +77432,7 @@ async function assertPrimaryResourceConnected({
   }
   return {
     resource: primary,
-    workingDirectory: import_node_path16.default.resolve(primary.path)
+    workingDirectory: import_node_path17.default.resolve(primary.path)
   };
 }
 function normalizeAccessMode(value2) {
@@ -77498,7 +77542,7 @@ async function assertObjectiveResourceConnected({
   }
   return {
     resource,
-    workingDirectory: import_node_path16.default.resolve(resource.path)
+    workingDirectory: import_node_path17.default.resolve(resource.path)
   };
 }
 async function resolveCwdProjectResource({
@@ -77509,9 +77553,9 @@ async function resolveCwdProjectResource({
 }) {
   const resolvedProjectId = await resolveProjectId(ctx, projectId);
   const preferredExecutionTargetId = executionTargetId ?? await preferredExecutionTargetIdForDiscovery({ ctx });
-  let current = import_node_path16.default.resolve(workingDirectory);
+  let current = import_node_path17.default.resolve(workingDirectory);
   while (true) {
-    const projectJsonPath = import_node_path16.default.join(current, ".overlord", "project.json");
+    const projectJsonPath = import_node_path17.default.join(current, ".overlord", "project.json");
     try {
       const links = readProjectJsonLinks(projectJsonPath, { preferredExecutionTargetId });
       const raw = links.find((link) => link.projectId === resolvedProjectId);
@@ -77532,12 +77576,12 @@ async function resolveCwdProjectResource({
         if (resource.status === "missing") return null;
         return {
           resource,
-          workingDirectory: import_node_path16.default.resolve(resource.path)
+          workingDirectory: import_node_path17.default.resolve(resource.path)
         };
       }
     } catch {
     }
-    const parent = import_node_path16.default.dirname(current);
+    const parent = import_node_path17.default.dirname(current);
     if (parent === current) break;
     current = parent;
   }
@@ -77551,7 +77595,7 @@ async function resolveObjectiveWorkingDirectory({
   executionTargetId = null
 }) {
   if (explicitWorkingDirectory?.trim()) {
-    const resolved = import_node_path16.default.resolve(explicitWorkingDirectory);
+    const resolved = import_node_path17.default.resolve(explicitWorkingDirectory);
     if (ctx.db.dialect === "sqlite" && !(0, import_node_fs15.existsSync)(resolved)) {
       throw new ServiceError(
         `Working directory does not exist: ${resolved}`,
@@ -77641,11 +77685,11 @@ async function discoverProject({
       ]
     };
   }
-  const cwd = import_node_path16.default.resolve(workingDirectory ?? process.cwd());
+  const cwd = import_node_path17.default.resolve(workingDirectory ?? process.cwd());
   let current = cwd;
   const preferredExecutionTargetId = await preferredExecutionTargetIdForDiscovery({ ctx });
   while (true) {
-    const projectJsonPath = import_node_path16.default.join(current, ".overlord", "project.json");
+    const projectJsonPath = import_node_path17.default.join(current, ".overlord", "project.json");
     try {
       const links = readProjectJsonLinks(projectJsonPath, { preferredExecutionTargetId });
       if (links.length > 0) {
@@ -77698,7 +77742,7 @@ async function discoverProject({
       }
     } catch {
     }
-    const parent = import_node_path16.default.dirname(current);
+    const parent = import_node_path17.default.dirname(current);
     if (parent === current) break;
     current = parent;
   }
@@ -77708,13 +77752,13 @@ async function discoverProject({
     404
   );
 }
-var import_node_fs15, import_node_path16, LOCAL_SOURCE_FIRST_ORDER, PRIMARY_RESOURCE_REPAIR_HINT;
+var import_node_fs15, import_node_path17, LOCAL_SOURCE_FIRST_ORDER, PRIMARY_RESOURCE_REPAIR_HINT;
 var init_projects = __esm({
   "../packages/core/service/projects.ts"() {
     "use strict";
     init_dist2();
     import_node_fs15 = require("node:fs");
-    import_node_path16 = __toESM(require("node:path"), 1);
+    import_node_path17 = __toESM(require("node:path"), 1);
     init_local_target();
     init_change_feed();
     init_context();
@@ -79758,9 +79802,9 @@ var init_project_execution_target = __esm({
 function resolveDatabasePath2() {
   const explicit = process.env.OVERLORD_SQLITE_PATH;
   if (explicit) {
-    return import_node_path18.default.isAbsolute(explicit) ? explicit : import_node_path18.default.resolve(REPO_ROOT, explicit);
+    return import_node_path19.default.isAbsolute(explicit) ? explicit : import_node_path19.default.resolve(REPO_ROOT, explicit);
   }
-  const config4 = loadConfig(import_node_path18.default.join(REPO_ROOT, "overlord.toml"), ENV_PROFILE);
+  const config4 = loadConfig(import_node_path19.default.join(REPO_ROOT, "overlord.toml"), ENV_PROFILE);
   applyDatabaseEnv(config4);
   return resolveDatabasePath(config4, REPO_ROOT);
 }
@@ -79787,7 +79831,7 @@ function nowIso2() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
 function newId2() {
-  return (0, import_node_crypto13.randomUUID)();
+  return (0, import_node_crypto12.randomUUID)();
 }
 async function oldestWorkspaceRowFromClient(client) {
   return client.get(
@@ -80131,16 +80175,16 @@ async function currentMaxSeq(client = requireDatabaseClient()) {
   );
   return row?.seq ?? 0;
 }
-var import_node_async_hooks2, import_node_crypto13, import_node_path18, databasePath, adapter, sqliteDb, DATABASE_DIALECT, databaseClient, databaseInitPromise, DATABASE_PATH, defaultWorkspace, ACTOR_WORKSPACE_USER_ID, requestContextStorage, ACTIVE_TOKEN_PROJECT_IDS, ACTIVE_TOKEN_SCOPES, ACTIVE_TOKEN_ID;
+var import_node_async_hooks2, import_node_crypto12, import_node_path19, databasePath, adapter, sqliteDb, DATABASE_DIALECT, databaseClient, databaseInitPromise, DATABASE_PATH, defaultWorkspace, ACTOR_WORKSPACE_USER_ID, requestContextStorage, ACTIVE_TOKEN_PROJECT_IDS, ACTIVE_TOKEN_SCOPES, ACTIVE_TOKEN_ID;
 var init_db = __esm({
   "db.ts"() {
     "use strict";
     init_dist2();
     import_node_async_hooks2 = require("node:async_hooks");
-    import_node_crypto13 = require("node:crypto");
-    import_node_path18 = __toESM(require("node:path"), 1);
+    import_node_crypto12 = require("node:crypto");
+    import_node_path19 = __toESM(require("node:path"), 1);
     init_config();
-    init_env2();
+    init_env();
     init_change_feed();
     init_webhook_events();
     init_env_profile();
@@ -84097,11 +84141,11 @@ var init_types2 = __esm({
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getHomeDir.js
-var import_node_os10, import_node_path20, homeDirCache, getHomeDirCacheKey, getHomeDir;
+var import_node_os10, import_node_path21, homeDirCache, getHomeDirCacheKey, getHomeDir;
 var init_getHomeDir = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getHomeDir.js"() {
     import_node_os10 = require("node:os");
-    import_node_path20 = require("node:path");
+    import_node_path21 = require("node:path");
     homeDirCache = {};
     getHomeDirCacheKey = () => {
       if (process && process.geteuid) {
@@ -84110,7 +84154,7 @@ var init_getHomeDir = __esm({
       return "DEFAULT";
     };
     getHomeDir = () => {
-      const { HOME, USERPROFILE, HOMEPATH, HOMEDRIVE = `C:${import_node_path20.sep}` } = process.env;
+      const { HOME, USERPROFILE, HOMEPATH, HOMEDRIVE = `C:${import_node_path21.sep}` } = process.env;
       if (HOME)
         return HOME;
       if (USERPROFILE)
@@ -84136,16 +84180,16 @@ var init_getProfileName = __esm({
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getSSOTokenFilepath.js
-var import_node_crypto22, import_node_path21, getSSOTokenFilepath;
+var import_node_crypto21, import_node_path22, getSSOTokenFilepath;
 var init_getSSOTokenFilepath = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getSSOTokenFilepath.js"() {
-    import_node_crypto22 = require("node:crypto");
-    import_node_path21 = require("node:path");
+    import_node_crypto21 = require("node:crypto");
+    import_node_path22 = require("node:path");
     init_getHomeDir();
     getSSOTokenFilepath = (id2) => {
-      const hasher = (0, import_node_crypto22.createHash)("sha1");
+      const hasher = (0, import_node_crypto21.createHash)("sha1");
       const cacheName = hasher.update(id2).digest("hex");
-      return (0, import_node_path21.join)(getHomeDir(), ".aws", "sso", "cache", `${cacheName}.json`);
+      return (0, import_node_path22.join)(getHomeDir(), ".aws", "sso", "cache", `${cacheName}.json`);
     };
   }
 });
@@ -84200,24 +84244,24 @@ var init_getConfigData = __esm({
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getConfigFilepath.js
-var import_node_path22, ENV_CONFIG_PATH, getConfigFilepath;
+var import_node_path23, ENV_CONFIG_PATH, getConfigFilepath;
 var init_getConfigFilepath = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getConfigFilepath.js"() {
-    import_node_path22 = require("node:path");
+    import_node_path23 = require("node:path");
     init_getHomeDir();
     ENV_CONFIG_PATH = "AWS_CONFIG_FILE";
-    getConfigFilepath = () => process.env[ENV_CONFIG_PATH] || (0, import_node_path22.join)(getHomeDir(), ".aws", "config");
+    getConfigFilepath = () => process.env[ENV_CONFIG_PATH] || (0, import_node_path23.join)(getHomeDir(), ".aws", "config");
   }
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getCredentialsFilepath.js
-var import_node_path23, ENV_CREDENTIALS_PATH, getCredentialsFilepath;
+var import_node_path24, ENV_CREDENTIALS_PATH, getCredentialsFilepath;
 var init_getCredentialsFilepath = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getCredentialsFilepath.js"() {
-    import_node_path23 = require("node:path");
+    import_node_path24 = require("node:path");
     init_getHomeDir();
     ENV_CREDENTIALS_PATH = "AWS_SHARED_CREDENTIALS_FILE";
-    getCredentialsFilepath = () => process.env[ENV_CREDENTIALS_PATH] || (0, import_node_path23.join)(getHomeDir(), ".aws", "credentials");
+    getCredentialsFilepath = () => process.env[ENV_CREDENTIALS_PATH] || (0, import_node_path24.join)(getHomeDir(), ".aws", "credentials");
   }
 });
 
@@ -84284,23 +84328,23 @@ var init_readFile = __esm({
     import_promises3 = require("node:fs/promises");
     filePromises = {};
     fileIntercept = {};
-    readFile2 = (path29, options) => {
-      if (fileIntercept[path29] !== void 0) {
-        return fileIntercept[path29];
+    readFile2 = (path30, options) => {
+      if (fileIntercept[path30] !== void 0) {
+        return fileIntercept[path30];
       }
-      if (!filePromises[path29] || options?.ignoreCache) {
-        filePromises[path29] = (0, import_promises3.readFile)(path29, "utf8");
+      if (!filePromises[path30] || options?.ignoreCache) {
+        filePromises[path30] = (0, import_promises3.readFile)(path30, "utf8");
       }
-      return filePromises[path29];
+      return filePromises[path30];
     };
   }
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/loadSharedConfigFiles.js
-var import_node_path24, swallowError, loadSharedConfigFiles;
+var import_node_path25, swallowError, loadSharedConfigFiles;
 var init_loadSharedConfigFiles = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/loadSharedConfigFiles.js"() {
-    import_node_path24 = require("node:path");
+    import_node_path25 = require("node:path");
     init_getConfigData();
     init_getConfigFilepath();
     init_getCredentialsFilepath();
@@ -84315,11 +84359,11 @@ var init_loadSharedConfigFiles = __esm({
       const relativeHomeDirPrefix = "~/";
       let resolvedFilepath = filepath;
       if (filepath.startsWith(relativeHomeDirPrefix)) {
-        resolvedFilepath = (0, import_node_path24.join)(homeDir, filepath.slice(2));
+        resolvedFilepath = (0, import_node_path25.join)(homeDir, filepath.slice(2));
       }
       let resolvedConfigFilepath = configFilepath;
       if (configFilepath.startsWith(relativeHomeDirPrefix)) {
-        resolvedConfigFilepath = (0, import_node_path24.join)(homeDir, configFilepath.slice(2));
+        resolvedConfigFilepath = (0, import_node_path25.join)(homeDir, configFilepath.slice(2));
       }
       const parsedFiles = await Promise.all([
         readFile2(resolvedConfigFilepath, {
@@ -84403,8 +84447,8 @@ var init_externalDataInterceptor = __esm({
       getFileRecord() {
         return fileIntercept;
       },
-      interceptFile(path29, contents) {
-        fileIntercept[path29] = Promise.resolve(contents);
+      interceptFile(path30, contents) {
+        fileIntercept[path30] = Promise.resolve(contents);
       },
       getTokenRecord() {
         return tokenIntercept;
@@ -84871,13 +84915,13 @@ var init_resolveDefaultsModeConfig = __esm({
       }
       return { hostname: "169.254.169.254", path: "/" };
     };
-    imdsHttpGet = async ({ hostname: hostname5, path: path29 }) => {
+    imdsHttpGet = async ({ hostname: hostname5, path: path30 }) => {
       const { request } = await import("node:http");
       return new Promise((resolve, reject) => {
         const req = request({
           method: "GET",
           hostname: hostname5.replace(/^\[(.+)]$/, "$1"),
-          path: path29,
+          path: path30,
           timeout: 1e3,
           signal: AbortSignal.timeout(1e3)
         });
@@ -85126,8 +85170,8 @@ var init_createConfigValueProvider = __esm({
               return endpoint.url.href;
             }
             if ("hostname" in endpoint) {
-              const { protocol, hostname: hostname5, port, path: path29 } = endpoint;
-              return `${protocol}//${hostname5}${port ? ":" + port : ""}${path29}`;
+              const { protocol, hostname: hostname5, port, path: path30 } = endpoint;
+              return `${protocol}//${hostname5}${port ? ":" + port : ""}${path30}`;
             }
           }
           return endpoint;
@@ -85542,18 +85586,18 @@ var getAttrPathList;
 var init_getAttrPathList = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/endpoints/util-endpoints/lib/getAttrPathList.js"() {
     init_types3();
-    getAttrPathList = (path29) => {
-      const parts = path29.split(".");
+    getAttrPathList = (path30) => {
+      const parts = path30.split(".");
       const pathList = [];
       for (const part of parts) {
         const squareBracketIndex = part.indexOf("[");
         if (squareBracketIndex !== -1) {
           if (part.indexOf("]") !== part.length - 1) {
-            throw new EndpointError(`Path: '${path29}' does not end with ']'`);
+            throw new EndpointError(`Path: '${path30}' does not end with ']'`);
           }
           const arrayIndex = part.slice(squareBracketIndex + 1, -1);
           if (Number.isNaN(parseInt(arrayIndex))) {
-            throw new EndpointError(`Invalid array index: '${arrayIndex}' in path: '${path29}'`);
+            throw new EndpointError(`Invalid array index: '${arrayIndex}' in path: '${path30}'`);
           }
           if (squareBracketIndex !== 0) {
             pathList.push(part.slice(0, squareBracketIndex));
@@ -85574,9 +85618,9 @@ var init_getAttr = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/endpoints/util-endpoints/lib/getAttr.js"() {
     init_types3();
     init_getAttrPathList();
-    getAttr = (value2, path29) => getAttrPathList(path29).reduce((acc, index) => {
+    getAttr = (value2, path30) => getAttrPathList(path30).reduce((acc, index) => {
       if (typeof acc !== "object") {
-        throw new EndpointError(`Index '${index}' in '${path29}' not found in '${JSON.stringify(value2)}'`);
+        throw new EndpointError(`Index '${index}' in '${path30}' not found in '${JSON.stringify(value2)}'`);
       } else if (Array.isArray(acc)) {
         const i5 = parseInt(index);
         return acc[i5 < 0 ? acc.length + i5 : i5];
@@ -85637,8 +85681,8 @@ var init_parseURL = __esm({
             return value2;
           }
           if (typeof value2 === "object" && "hostname" in value2) {
-            const { hostname: hostname6, port, protocol: protocol2 = "", path: path29 = "", query = {} } = value2;
-            const url2 = new URL(`${protocol2}//${hostname6}${port ? `:${port}` : ""}${path29}`);
+            const { hostname: hostname6, port, protocol: protocol2 = "", path: path30 = "", query = {} } = value2;
+            const url2 = new URL(`${protocol2}//${hostname6}${port ? `:${port}` : ""}${path30}`);
             url2.search = Object.entries(query).map(([k5, v]) => `${k5}=${v}`).join("&");
             return url2;
           }
@@ -86314,10 +86358,10 @@ function castSourceData(toCast, encoding) {
   }
   return fromArrayBuffer(toCast);
 }
-var import_node_crypto23, Hash;
+var import_node_crypto22, Hash;
 var init_hash_node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/serde/hash-node/hash-node.js"() {
-    import_node_crypto23 = require("node:crypto");
+    import_node_crypto22 = require("node:crypto");
     init_buffer_from();
     init_toUint8Array();
     Hash = class {
@@ -86336,7 +86380,7 @@ var init_hash_node = __esm({
         return Promise.resolve(this.hash.digest());
       }
       reset() {
-        this.hash = this.secret ? (0, import_node_crypto23.createHmac)(this.algorithmIdentifier, castSourceData(this.secret)) : (0, import_node_crypto23.createHash)(this.algorithmIdentifier);
+        this.hash = this.secret ? (0, import_node_crypto22.createHmac)(this.algorithmIdentifier, castSourceData(this.secret)) : (0, import_node_crypto22.createHash)(this.algorithmIdentifier);
       }
     };
   }
@@ -86355,7 +86399,7 @@ var init_ChecksumStream = __esm({
       source;
       base64Encoder;
       pendingCallback = null;
-      constructor({ expectedChecksum, checksum: checksum3, source, checksumSourceLocation, base64Encoder }) {
+      constructor({ expectedChecksum, checksum, source, checksumSourceLocation, base64Encoder }) {
         super();
         if (typeof source.pipe === "function") {
           this.source = source;
@@ -86364,7 +86408,7 @@ var init_ChecksumStream = __esm({
         }
         this.base64Encoder = base64Encoder ?? toBase64;
         this.expectedChecksum = expectedChecksum;
-        this.checksum = checksum3;
+        this.checksum = checksum;
         this.checksumSourceLocation = checksumSourceLocation;
         this.source.pipe(this);
       }
@@ -86500,7 +86544,7 @@ var init_createChecksumStream_browser = __esm({
     init_toBase64_browser();
     init_stream_type_check();
     init_ChecksumStream_browser();
-    createChecksumStream = ({ expectedChecksum, checksum: checksum3, source, checksumSourceLocation, base64Encoder }) => {
+    createChecksumStream = ({ expectedChecksum, checksum, source, checksumSourceLocation, base64Encoder }) => {
       if (!isReadableStream(source)) {
         throw new Error(`@smithy/util-stream: unsupported source type ${source?.constructor?.name ?? source} in ChecksumStream.`);
       }
@@ -86512,11 +86556,11 @@ var init_createChecksumStream_browser = __esm({
         start() {
         },
         async transform(chunk, controller) {
-          checksum3.update(chunk);
+          checksum.update(chunk);
           controller.enqueue(chunk);
         },
         async flush(controller) {
-          const digest4 = await checksum3.digest();
+          const digest4 = await checksum.digest();
           const received = encoder3(digest4);
           if (expectedChecksum !== received) {
             const error53 = new Error(`Checksum mismatch: expected "${expectedChecksum}" but received "${received}" in response header "${checksumSourceLocation}".`);
@@ -86571,11 +86615,11 @@ var init_ByteArrayCollector = __esm({
           return bytes;
         }
         const aggregation = this.allocByteArray(this.byteLength);
-        let cursor2 = 0;
+        let cursor3 = 0;
         for (let i5 = 0; i5 < this.byteArrays.length; ++i5) {
           const bytes = this.byteArrays[i5];
-          aggregation.set(bytes, cursor2);
-          cursor2 += bytes.byteLength;
+          aggregation.set(bytes, cursor3);
+          cursor3 += bytes.byteLength;
         }
         this.reset();
         return aggregation;
@@ -86765,8 +86809,8 @@ var init_getAwsChunkedEncodingStream_browser = __esm({
             controller.enqueue(`0\r
 `);
             if (checksumRequired) {
-              const checksum3 = base64Encoder(await digest4);
-              controller.enqueue(`${checksumLocationName}:${checksum3}\r
+              const checksum = base64Encoder(await digest4);
+              controller.enqueue(`${checksumLocationName}:${checksum}\r
 `);
               controller.enqueue(`\r
 `);
@@ -86811,8 +86855,8 @@ function getAwsChunkedEncodingStream2(stream, options) {
     awsChunkedEncodingStream.push(`0\r
 `);
     if (checksumRequired) {
-      const checksum3 = base64Encoder(await digest4);
-      awsChunkedEncodingStream.push(`${checksumLocationName}:${checksum3}\r
+      const checksum = base64Encoder(await digest4);
+      awsChunkedEncodingStream.push(`${checksumLocationName}:${checksum}\r
 `);
       awsChunkedEncodingStream.push(`\r
 `);
@@ -87230,10 +87274,10 @@ __export(serde_exports, {
   toUtf8: () => toUtf8,
   v4: () => v4
 });
-var import_node_crypto24, Uint8ArrayBlobAdapter, _getRandomValues, v4, generateIdempotencyToken;
+var import_node_crypto23, Uint8ArrayBlobAdapter, _getRandomValues, v4, generateIdempotencyToken;
 var init_serde = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/serde/index.js"() {
-    import_node_crypto24 = require("node:crypto");
+    import_node_crypto23 = require("node:crypto");
     init_fromBase64();
     init_toBase64();
     init_Uint8ArrayBlobAdapter();
@@ -87270,7 +87314,7 @@ var init_serde = __esm({
     init_stream_collector();
     Uint8ArrayBlobAdapter = class extends bindUint8ArrayBlobAdapter(toUtf8, fromUtf8, toBase64, fromBase64) {
     };
-    _getRandomValues = import_node_crypto24.getRandomValues;
+    _getRandomValues = import_node_crypto23.getRandomValues;
     v4 = bindV4(_getRandomValues);
     generateIdempotencyToken = v4;
   }
@@ -87747,13 +87791,13 @@ function __disposeResources(env3) {
   }
   return next();
 }
-function __rewriteRelativeImportExtension(path29, preserveJsx) {
-  if (typeof path29 === "string" && /^\.\.?\//.test(path29)) {
-    return path29.replace(/\.(tsx)$|((?:\.d)?)((?:\.[^./]+?)?)\.([cm]?)ts$/i, function(m3, tsx, d5, ext, cm) {
+function __rewriteRelativeImportExtension(path30, preserveJsx) {
+  if (typeof path30 === "string" && /^\.\.?\//.test(path30)) {
+    return path30.replace(/\.(tsx)$|((?:\.d)?)((?:\.[^./]+?)?)\.([cm]?)ts$/i, function(m3, tsx, d5, ext, cm) {
       return tsx ? preserveJsx ? ".jsx" : ".js" : d5 && (!ext || !cm) ? m3 : d5 + ext + "." + cm.toLowerCase() + "js";
     });
   }
-  return path29;
+  return path30;
 }
 var extendStatics, __assign, __createBinding, __setModuleDefault, ownKeys, _SuppressedError, tslib_es6_default;
 var init_tslib_es6 = __esm({
@@ -88753,13 +88797,13 @@ var init_EventStreamCodec = __esm({
         const length = headers.byteLength + body.byteLength + 16;
         const out = new Uint8Array(length);
         const view = new DataView(out.buffer, out.byteOffset, out.byteLength);
-        const checksum3 = new import_crc322.Crc32();
+        const checksum = new import_crc322.Crc32();
         view.setUint32(0, length, false);
         view.setUint32(4, headers.byteLength, false);
-        view.setUint32(8, checksum3.update(out.subarray(0, 8)).digest(), false);
+        view.setUint32(8, checksum.update(out.subarray(0, 8)).digest(), false);
         out.set(headers, 12);
         out.set(body, headers.byteLength + 12);
-        view.setUint32(length - 4, checksum3.update(out.subarray(8, length - 4)).digest(), false);
+        view.setUint32(length - 4, checksum.update(out.subarray(8, length - 4)).digest(), false);
         return out;
       }
       decode(message2) {
@@ -89607,11 +89651,11 @@ var init_HttpBindingProtocol = __esm({
           const opTraits = translateTraits(operationSchema.traits);
           if (opTraits.http) {
             request.method = opTraits.http[0];
-            const [path29, search] = opTraits.http[1].split("?");
+            const [path30, search] = opTraits.http[1].split("?");
             if (request.path == "/") {
-              request.path = path29;
+              request.path = path30;
             } else {
-              request.path += path29;
+              request.path += path30;
             }
             const traitSearchParams = new URLSearchParams(search ?? "");
             for (const [key, value2] of traitSearchParams) {
@@ -90012,8 +90056,8 @@ var init_requestBuilder = __esm({
         return this;
       }
       p(memberName, labelValueProvider, uriLabel, isGreedyLabel) {
-        this.resolvePathStack.push((path29) => {
-          this.path = resolvedPath(path29, this.input, memberName, labelValueProvider, uriLabel, isGreedyLabel);
+        this.resolvePathStack.push((path30) => {
+          this.path = resolvedPath(path30, this.input, memberName, labelValueProvider, uriLabel, isGreedyLabel);
         });
         return this;
       }
@@ -92080,16 +92124,16 @@ var init_createPaginator = __esm({
       command = withCommand(command) ?? command;
       return await client.send(command, ...args);
     };
-    get = (fromObject, path29) => {
-      let cursor2 = fromObject;
-      const pathComponents = path29.split(".");
+    get = (fromObject, path30) => {
+      let cursor3 = fromObject;
+      const pathComponents = path30.split(".");
       for (const step of pathComponents) {
-        if (!cursor2 || typeof cursor2 !== "object") {
+        if (!cursor3 || typeof cursor3 !== "object") {
           return void 0;
         }
-        cursor2 = cursor2[step];
+        cursor3 = cursor3[step];
       }
-      return cursor2;
+      return cursor3;
     };
   }
 });
@@ -92868,19 +92912,19 @@ var init_getRuntimeUserAgentPair = __esm({
 });
 
 // ../node_modules/@aws-sdk/core/dist-es/submodules/client/util-user-agent-node/getNodeModulesParentDirs.js
-var import_node_path25, getNodeModulesParentDirs;
+var import_node_path26, getNodeModulesParentDirs;
 var init_getNodeModulesParentDirs = __esm({
   "../node_modules/@aws-sdk/core/dist-es/submodules/client/util-user-agent-node/getNodeModulesParentDirs.js"() {
-    import_node_path25 = require("node:path");
+    import_node_path26 = require("node:path");
     getNodeModulesParentDirs = (dirname) => {
       const cwd = process.cwd();
       if (!dirname) {
         return [cwd];
       }
-      const normalizedPath = (0, import_node_path25.normalize)(dirname);
-      const parts = normalizedPath.split(import_node_path25.sep);
+      const normalizedPath = (0, import_node_path26.normalize)(dirname);
+      const parts = normalizedPath.split(import_node_path26.sep);
       const nodeModulesIndex = parts.indexOf("node_modules");
-      const parentDir = nodeModulesIndex !== -1 ? parts.slice(0, nodeModulesIndex).join(import_node_path25.sep) : normalizedPath;
+      const parentDir = nodeModulesIndex !== -1 ? parts.slice(0, nodeModulesIndex).join(import_node_path26.sep) : normalizedPath;
       if (cwd === parentDir) {
         return [cwd];
       }
@@ -92927,16 +92971,16 @@ var init_getSanitizedDevTypeScriptVersion = __esm({
 });
 
 // ../node_modules/@aws-sdk/core/dist-es/submodules/client/util-user-agent-node/getTypeScriptUserAgentPair.js
-var import_promises4, import_node_path26, tscVersion, TS_PACKAGE_JSON, getTypeScriptUserAgentPair;
+var import_promises4, import_node_path27, tscVersion, TS_PACKAGE_JSON, getTypeScriptUserAgentPair;
 var init_getTypeScriptUserAgentPair = __esm({
   "../node_modules/@aws-sdk/core/dist-es/submodules/client/util-user-agent-node/getTypeScriptUserAgentPair.js"() {
     init_config3();
     import_promises4 = require("node:fs/promises");
-    import_node_path26 = require("node:path");
+    import_node_path27 = require("node:path");
     init_getNodeModulesParentDirs();
     init_getSanitizedDevTypeScriptVersion();
     init_getSanitizedTypeScriptVersion();
-    TS_PACKAGE_JSON = (0, import_node_path26.join)("node_modules", "typescript", "package.json");
+    TS_PACKAGE_JSON = (0, import_node_path27.join)("node_modules", "typescript", "package.json");
     getTypeScriptUserAgentPair = async () => {
       if (tscVersion === null) {
         return void 0;
@@ -92957,7 +93001,7 @@ var init_getTypeScriptUserAgentPair = __esm({
       let versionFromApp;
       for (const nodeModulesParentDir of nodeModulesParentDirs) {
         try {
-          const appPackageJsonPath = (0, import_node_path26.join)(nodeModulesParentDir, "package.json");
+          const appPackageJsonPath = (0, import_node_path27.join)(nodeModulesParentDir, "package.json");
           const packageJson = await (0, import_promises4.readFile)(appPackageJsonPath, "utf-8");
           const { dependencies, devDependencies } = JSON.parse(packageJson);
           const version4 = devDependencies?.typescript ?? dependencies?.typescript;
@@ -92976,7 +93020,7 @@ var init_getTypeScriptUserAgentPair = __esm({
       let versionFromNodeModules;
       for (const nodeModulesParentDir of nodeModulesParentDirs) {
         try {
-          const tsPackageJsonPath = (0, import_node_path26.join)(nodeModulesParentDir, TS_PACKAGE_JSON);
+          const tsPackageJsonPath = (0, import_node_path27.join)(nodeModulesParentDir, TS_PACKAGE_JSON);
           const packageJson = await (0, import_promises4.readFile)(tsPackageJsonPath, "utf-8");
           const { version: version4 } = JSON.parse(packageJson);
           const sanitizedVersion2 = getSanitizedTypeScriptVersion(version4);
@@ -94974,10 +95018,10 @@ var require_dist_cjs5 = __commonJS({
       }
       return validChecksumAlgorithms.filter(Boolean);
     };
-    var isChecksumWithPartNumber = (checksum3) => {
-      const lastHyphenIndex = checksum3.lastIndexOf("-");
+    var isChecksumWithPartNumber = (checksum) => {
+      const lastHyphenIndex = checksum.lastIndexOf("-");
       if (lastHyphenIndex !== -1) {
-        const numberPart = checksum3.slice(lastHyphenIndex + 1);
+        const numberPart = checksum.slice(lastHyphenIndex + 1);
         if (!numberPart.startsWith("0")) {
           const number4 = parseInt(numberPart, 10);
           if (!isNaN(number4) && number4 >= 1 && number4 <= 1e4) {
@@ -95016,11 +95060,11 @@ var require_dist_cjs5 = __commonJS({
             });
             return;
           }
-          const checksum3 = await getChecksum(responseBody, { checksumAlgorithmFn, base64Encoder });
-          if (checksum3 === checksumFromResponse) {
+          const checksum = await getChecksum(responseBody, { checksumAlgorithmFn, base64Encoder });
+          if (checksum === checksumFromResponse) {
             break;
           }
-          throw new Error(`Checksum mismatch: expected "${checksum3}" but received "${checksumFromResponse}" in response header "${responseHeader}".`);
+          throw new Error(`Checksum mismatch: expected "${checksum}" but received "${checksumFromResponse}" in response header "${responseHeader}".`);
         }
       }
     };
@@ -95682,10 +95726,10 @@ ${longDate}
 ${credentialScope}
 ${toHex2(hashedRequest)}`;
       }
-      getCanonicalPath({ path: path29 }) {
+      getCanonicalPath({ path: path30 }) {
         if (this.uriEscapePath) {
           const normalizedPathSegments = [];
-          for (const pathSegment of path29.split("/")) {
+          for (const pathSegment of path30.split("/")) {
             if (pathSegment?.length === 0)
               continue;
             if (pathSegment === ".")
@@ -95696,11 +95740,11 @@ ${toHex2(hashedRequest)}`;
               normalizedPathSegments.push(pathSegment);
             }
           }
-          const normalizedPath = `${path29?.startsWith("/") ? "/" : ""}${normalizedPathSegments.join("/")}${normalizedPathSegments.length > 0 && path29?.endsWith("/") ? "/" : ""}`;
+          const normalizedPath = `${path30?.startsWith("/") ? "/" : ""}${normalizedPathSegments.join("/")}${normalizedPathSegments.length > 0 && path30?.endsWith("/") ? "/" : ""}`;
           const doubleEncoded = escapeUri2(normalizedPath);
           return doubleEncoded.replace(/%2F/g, "/");
         }
-        return path29;
+        return path30;
       }
       validateResolvedCredentials(credentials) {
         if (typeof credentials !== "object" || typeof credentials.accessKeyId !== "string" || typeof credentials.secretAccessKey !== "string") {
@@ -96348,15 +96392,15 @@ var init_arn = __esm({
 // ../node_modules/@aws-sdk/core/dist-es/submodules/util/util-format-url/format-url.js
 function formatUrl(request) {
   const { port, query } = request;
-  let { protocol, path: path29, hostname: hostname5 } = request;
+  let { protocol, path: path30, hostname: hostname5 } = request;
   if (protocol && protocol.slice(-1) !== ":") {
     protocol += ":";
   }
   if (port) {
     hostname5 += `:${port}`;
   }
-  if (path29 && path29.charAt(0) !== "/") {
-    path29 = `/${path29}`;
+  if (path30 && path30.charAt(0) !== "/") {
+    path30 = `/${path30}`;
   }
   let queryString2 = query ? buildQueryString(query) : "";
   if (queryString2 && queryString2[0] !== "?") {
@@ -96372,7 +96416,7 @@ function formatUrl(request) {
   if (request.fragment) {
     fragment = `#${request.fragment}`;
   }
-  return `${protocol}//${auth2}${hostname5}${path29}${queryString2}${fragment}`;
+  return `${protocol}//${auth2}${hostname5}${path30}${queryString2}${fragment}`;
 }
 var init_format_url = __esm({
   "../node_modules/@aws-sdk/core/dist-es/submodules/util/util-format-url/format-url.js"() {
@@ -108618,12 +108662,12 @@ or increase socketAcquisitionWarningTimeout=(millis) in the NodeHttpHandler conf
             const password = request.password ?? "";
             auth2 = `${username}:${password}`;
           }
-          let path29 = request.path;
+          let path30 = request.path;
           if (queryString2) {
-            path29 += `?${queryString2}`;
+            path30 += `?${queryString2}`;
           }
           if (request.fragment) {
-            path29 += `#${request.fragment}`;
+            path30 += `#${request.fragment}`;
           }
           let hostname5 = request.hostname ?? "";
           if (hostname5[0] === "[" && hostname5.endsWith("]")) {
@@ -108635,7 +108679,7 @@ or increase socketAcquisitionWarningTimeout=(millis) in the NodeHttpHandler conf
             headers: request.headers,
             host: hostname5,
             method: request.method,
-            path: path29,
+            path: path30,
             port: request.port,
             agent,
             auth: auth2
@@ -109038,16 +109082,16 @@ or increase socketAcquisitionWarningTimeout=(millis) in the NodeHttpHandler conf
             reject(err);
           };
           const queryString2 = query ? buildQueryString2(query) : "";
-          let path29 = request.path;
+          let path30 = request.path;
           if (queryString2) {
-            path29 += `?${queryString2}`;
+            path30 += `?${queryString2}`;
           }
           if (request.fragment) {
-            path29 += `#${request.fragment}`;
+            path30 += `#${request.fragment}`;
           }
           const clientHttp2Stream = session.request({
             ...request.headers,
-            [constants.HTTP2_HEADER_PATH]: path29,
+            [constants.HTTP2_HEADER_PATH]: path30,
             [constants.HTTP2_HEADER_METHOD]: method
           });
           if (effectiveRequestTimeout) {
@@ -112167,7 +112211,7 @@ var require_dist_cjs16 = __commonJS({
     var { setCredentialFeature: setCredentialFeature2 } = (init_client4(), __toCommonJS(client_exports2));
     var { CredentialsProviderError: CredentialsProviderError2, readFile: readFile4, parseKnownFiles: parseKnownFiles2, getProfileName: getProfileName2 } = (init_config3(), __toCommonJS(config_exports));
     var { HttpRequest: HttpRequest2 } = (init_protocols(), __toCommonJS(protocols_exports));
-    var { createHash: createHash28, createPrivateKey, createPublicKey, sign: sign3 } = require("node:crypto");
+    var { createHash: createHash27, createPrivateKey, createPublicKey, sign: sign3 } = require("node:crypto");
     var { promises } = require("node:fs");
     var { homedir: homedir2 } = require("node:os");
     var { dirname, join: join6 } = require("node:path");
@@ -112328,7 +112372,7 @@ var require_dist_cjs16 = __commonJS({
       getTokenFilePath() {
         const directory = process.env.AWS_LOGIN_CACHE_DIRECTORY ?? join6(homedir2(), ".aws", "login", "cache");
         const loginSessionBytes = Buffer.from(this.loginSession, "utf8");
-        const loginSessionSha256 = createHash28("sha256").update(loginSessionBytes).digest("hex");
+        const loginSessionSha256 = createHash27("sha256").update(loginSessionBytes).digest("hex");
         return join6(directory, `${loginSessionSha256}.json`);
       }
       derToRawSignature(derSignature) {
@@ -114357,7 +114401,7 @@ var init_Md5Js = __esm({
 function buildNativeClass() {
   return class Md5Node {
     digestLength = 16;
-    hash = (0, import_node_crypto25.createHash)("md5");
+    hash = (0, import_node_crypto24.createHash)("md5");
     update(data) {
       this.hash.update(toUint8Array(data));
     }
@@ -114366,19 +114410,19 @@ function buildNativeClass() {
       return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
     }
     reset() {
-      this.hash = (0, import_node_crypto25.createHash)("md5");
+      this.hash = (0, import_node_crypto24.createHash)("md5");
     }
   };
 }
-var import_node_crypto25, hasNativeCrypto, Md5Node;
+var import_node_crypto24, hasNativeCrypto, Md5Node;
 var init_Md5Node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/checksum/md5/Md5Node.js"() {
-    import_node_crypto25 = require("node:crypto");
+    import_node_crypto24 = require("node:crypto");
     init_serde();
     init_Md5Js();
     hasNativeCrypto = (() => {
       try {
-        (0, import_node_crypto25.createHash)("md5");
+        (0, import_node_crypto24.createHash)("md5");
         return true;
       } catch {
         return false;
@@ -114722,7 +114766,7 @@ function buildNativeClass3() {
       this.finished = false;
     }
     createHash() {
-      return this.secret ? (0, import_node_crypto26.createHmac)("sha256", toBuffer(this.secret)) : (0, import_node_crypto26.createHash)("sha256");
+      return this.secret ? (0, import_node_crypto25.createHmac)("sha256", toBuffer(this.secret)) : (0, import_node_crypto25.createHash)("sha256");
     }
   };
 }
@@ -114735,14 +114779,14 @@ function toBuffer(data) {
   }
   return Buffer.from(data);
 }
-var import_node_crypto26, hasNativeCrypto2, Sha256Node;
+var import_node_crypto25, hasNativeCrypto2, Sha256Node;
 var init_Sha256Node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/checksum/sha256/Sha256Node.js"() {
-    import_node_crypto26 = require("node:crypto");
+    import_node_crypto25 = require("node:crypto");
     init_Sha256Js();
     hasNativeCrypto2 = (() => {
       try {
-        (0, import_node_crypto26.createHash)("sha256");
+        (0, import_node_crypto25.createHash)("sha256");
         return true;
       } catch {
         return false;
@@ -117558,10 +117602,10 @@ var require_base64 = __commonJS({
       return stdCoder.encode(data);
     }
     exports2.encode = encode5;
-    function decode4(s) {
+    function decode5(s) {
       return stdCoder.decode(s);
     }
-    exports2.decode = decode4;
+    exports2.decode = decode5;
     var URLSafeCoder = (
       /** @class */
       (function(_super) {
@@ -118148,10 +118192,11 @@ init_env_profile();
 
 // load-repo-env.ts
 var import_dotenv = __toESM(require_main(), 1);
-var import_node_path2 = __toESM(require("node:path"), 1);
+var import_node_path3 = __toESM(require("node:path"), 1);
+init_env();
 function loadRepoEnvForProfile(repoRoot4, profile) {
   const fileName = profile === "production" ? ".env.prod" : ".env.local";
-  loadRepoEnvFiles([import_node_path2.default.join(repoRoot4, fileName)]);
+  loadRepoEnvFiles([import_node_path3.default.join(repoRoot4, fileName)]);
 }
 function loadRepoEnvFiles(paths2) {
   const merged = {};
@@ -118161,7 +118206,7 @@ function loadRepoEnvFiles(paths2) {
       merged[key] = normalizeEnvFileValue({
         key,
         value: value2,
-        baseDir: import_node_path2.default.dirname(envPath)
+        baseDir: import_node_path3.default.dirname(envPath)
       });
     }
   }
@@ -118170,15 +118215,6 @@ function loadRepoEnvFiles(paths2) {
       process.env[key] = value2;
     }
   }
-}
-function normalizeEnvFileValue({
-  key,
-  value: value2,
-  baseDir
-}) {
-  if (key !== "OVLD_HOME") return value2;
-  if (!value2.trim() || import_node_path2.default.isAbsolute(value2)) return value2;
-  return import_node_path2.default.resolve(baseDir, value2);
 }
 
 // bootstrap-env.ts
@@ -118268,7 +118304,7 @@ function wildcardMatch(pattern, options) {
 }
 
 // ../node_modules/better-auth/dist/utils/url.mjs
-init_env();
+init_env2();
 init_error2();
 var SLASH_CHAR_CODE = "/".charCodeAt(0);
 function isLoopbackForDevScheme(host) {
@@ -118296,13 +118332,13 @@ function assertHasProtocol(url2) {
     throw new BetterAuthError(`Invalid base URL: ${url2}. Please provide a valid base URL.`, { cause: error53 });
   }
 }
-function withPath(url2, path29 = "/api/auth") {
+function withPath(url2, path30 = "/api/auth") {
   assertHasProtocol(url2);
   if (checkHasPath(url2)) return url2;
   const trimmedUrl = trimTrailingSlashes(url2);
-  if (!path29 || path29 === "/") return trimmedUrl;
-  path29 = path29.startsWith("/") ? path29 : `/${path29}`;
-  return `${trimmedUrl}${path29}`;
+  if (!path30 || path30 === "/") return trimmedUrl;
+  path30 = path30.startsWith("/") ? path30 : `/${path30}`;
+  return `${trimmedUrl}${path30}`;
 }
 function validateProxyHeader(header, type) {
   if (!header || header.trim() === "") return false;
@@ -118322,26 +118358,26 @@ function validateProxyHeader(header, type) {
   }
   return false;
 }
-function getBaseURL(url2, path29, request, loadEnv2, trustedProxyHeaders) {
-  if (url2) return withPath(url2, path29);
+function getBaseURL(url2, path30, request, loadEnv2, trustedProxyHeaders) {
+  if (url2) return withPath(url2, path30);
   if (loadEnv2 !== false) {
     const fromEnv2 = env.BETTER_AUTH_URL || env.NEXT_PUBLIC_BETTER_AUTH_URL || env.PUBLIC_BETTER_AUTH_URL || env.NUXT_PUBLIC_BETTER_AUTH_URL || env.NUXT_PUBLIC_AUTH_URL || (env.BASE_URL !== "/" ? env.BASE_URL : void 0);
-    if (fromEnv2) return withPath(fromEnv2, path29);
+    if (fromEnv2) return withPath(fromEnv2, path30);
   }
   const fromRequest = request?.headers.get("x-forwarded-host");
   const fromRequestProto = request?.headers.get("x-forwarded-proto");
   if (fromRequest && fromRequestProto && trustedProxyHeaders) {
     if (validateProxyHeader(fromRequestProto, "proto") && validateProxyHeader(fromRequest, "host")) try {
-      return withPath(`${fromRequestProto}://${fromRequest}`, path29);
+      return withPath(`${fromRequestProto}://${fromRequest}`, path30);
     } catch (_error) {
     }
   }
   if (request) {
     const url3 = getOrigin(request.url);
     if (!url3) throw new BetterAuthError("Could not get origin from request. Please provide a valid base URL.");
-    return withPath(url3, path29);
+    return withPath(url3, path30);
   }
-  if (typeof window !== "undefined" && window.location) return withPath(window.location.origin, path29);
+  if (typeof window !== "undefined" && window.location) return withPath(window.location.origin, path30);
 }
 function getOrigin(url2) {
   try {
@@ -121999,7 +122035,7 @@ function constantTimeEqual(a5, b5) {
 }
 
 // ../node_modules/@better-auth/utils/dist/password.node.mjs
-var import_node_crypto6 = require("node:crypto");
+var import_node_crypto5 = require("node:crypto");
 var config = {
   N: 16384,
   r: 16,
@@ -122008,7 +122044,7 @@ var config = {
 };
 function generateKey(password, salt) {
   return new Promise((resolve, reject) => {
-    (0, import_node_crypto6.scrypt)(
+    (0, import_node_crypto5.scrypt)(
       password.normalize("NFKC"),
       salt,
       config.dkLen,
@@ -122028,7 +122064,7 @@ function generateKey(password, salt) {
   });
 }
 async function hashPassword(password) {
-  const salt = (0, import_node_crypto6.randomBytes)(16).toString("hex");
+  const salt = (0, import_node_crypto5.randomBytes)(16).toString("hex");
   const key = await generateKey(password, salt);
   return `${salt}:${key.toString("hex")}`;
 }
@@ -122133,7 +122169,7 @@ var base64Url = {
 };
 
 // ../node_modules/@better-auth/utils/dist/hash.mjs
-function createHash3(algorithm2, encoding) {
+function createHash2(algorithm2, encoding) {
   return {
     digest: async (input) => {
       const encoder3 = new TextEncoder();
@@ -123058,12 +123094,12 @@ function formatEnvelope(version4, ciphertext) {
   return `${ENVELOPE_PREFIX}${version4}$${ciphertext}`;
 }
 async function rawEncrypt(secret, data) {
-  const keyAsBytes = await createHash3("SHA-256").digest(secret);
+  const keyAsBytes = await createHash2("SHA-256").digest(secret);
   const dataAsBytes = utf8ToBytes(data);
   return bytesToHex(managedNonce(xchacha20poly1305)(new Uint8Array(keyAsBytes)).encrypt(dataAsBytes));
 }
 async function rawDecrypt(secret, hex4) {
-  const keyAsBytes = await createHash3("SHA-256").digest(secret);
+  const keyAsBytes = await createHash2("SHA-256").digest(secret);
   const dataAsBytes = hexToBytes(hex4);
   const chacha = managedNonce(xchacha20poly1305)(new Uint8Array(keyAsBytes));
   return new TextDecoder().decode(chacha.decrypt(dataAsBytes));
@@ -123568,7 +123604,7 @@ var getSessionQuerySchema = optional(object({
 }));
 
 // ../node_modules/better-auth/dist/cookies/index.mjs
-init_env();
+init_env2();
 init_error2();
 
 // ../node_modules/@better-auth/utils/dist/binary.mjs
@@ -124578,7 +124614,7 @@ function fromError(error53, validating) {
 }
 
 // ../node_modules/better-call/dist/context.mjs
-var createInternalContext = async (context, { options, path: path29 }) => {
+var createInternalContext = async (context, { options, path: path30 }) => {
   const headers = new Headers();
   let responseStatus = void 0;
   const { data, error: error53 } = await runValidation(options, context);
@@ -124590,7 +124626,7 @@ var createInternalContext = async (context, { options, path: path29 }) => {
     ...context,
     body: data.body,
     query: data.query,
-    path: context.path || path29 || "virtual:",
+    path: context.path || path30 || "virtual:",
     context: "context" in context && context.context ? context.context : {},
     returned: void 0,
     headers: context?.headers,
@@ -124671,16 +124707,16 @@ var createInternalContext = async (context, { options, path: path29 }) => {
 // ../node_modules/better-call/dist/endpoint.mjs
 init_error();
 function createEndpoint(pathOrOptions, handlerOrOptions, handlerOrNever) {
-  const path29 = typeof pathOrOptions === "string" ? pathOrOptions : void 0;
+  const path30 = typeof pathOrOptions === "string" ? pathOrOptions : void 0;
   const options = typeof handlerOrOptions === "object" ? handlerOrOptions : pathOrOptions;
   const handler = typeof handlerOrOptions === "function" ? handlerOrOptions : handlerOrNever;
   if ((options.method === "GET" || options.method === "HEAD") && options.body) throw new BetterCallError("Body is not allowed with GET or HEAD methods");
-  if (path29 && /\/{2,}/.test(path29)) throw new BetterCallError("Path cannot contain consecutive slashes");
+  if (path30 && /\/{2,}/.test(path30)) throw new BetterCallError("Path cannot contain consecutive slashes");
   const internalHandler = async (...inputCtx) => {
     const context = inputCtx[0] || {};
     const { data: internalContext, error: validationError } = await tryCatch(createInternalContext(context, {
       options,
-      path: path29
+      path: path30
     }));
     if (validationError) {
       if (!(validationError instanceof ValidationError)) throw validationError;
@@ -124719,12 +124755,12 @@ function createEndpoint(pathOrOptions, handlerOrOptions, handlerOrNever) {
     } : response;
   };
   internalHandler.options = options;
-  internalHandler.path = path29;
+  internalHandler.path = path30;
   return internalHandler;
 }
 createEndpoint.create = (opts) => {
-  return (path29, options, handler) => {
-    return createEndpoint(path29, {
+  return (path30, options, handler) => {
+    return createEndpoint(path30, {
       ...options,
       use: [...options?.use || [], ...opts?.use || []]
     }, handler);
@@ -124979,8 +125015,8 @@ function createRouter() {
     static: new NullProtoObj()
   };
 }
-function splitPath(path29) {
-  const [_, ...s] = path29.split("/");
+function splitPath(path30) {
+  const [_, ...s] = path30.split("/");
   return s[s.length - 1] === "" ? s.slice(0, -1) : s;
 }
 function getMatchParams(segments, paramsMap) {
@@ -124995,11 +125031,11 @@ function getMatchParams(segments, paramsMap) {
   }
   return params;
 }
-function addRoute(ctx, method = "", path29, data) {
+function addRoute(ctx, method = "", path30, data) {
   method = method.toUpperCase();
-  if (path29.charCodeAt(0) !== 47) path29 = `/${path29}`;
-  path29 = path29.replace(/\\:/g, "%3A");
-  const segments = splitPath(path29);
+  if (path30.charCodeAt(0) !== 47) path30 = `/${path30}`;
+  path30 = path30.replace(/\\:/g, "%3A");
+  const segments = splitPath(path30);
   let node = ctx.root;
   let _unnamedParamIndex = 0;
   const paramsMap = [];
@@ -125065,14 +125101,14 @@ function getParamRegexp(segment) {
   const regex = segment.replace(/:(\w+)/g, (_, id2) => `(?<${id2}>[^/]+)`).replace(/\./g, "\\.");
   return /* @__PURE__ */ new RegExp(`^${regex}$`);
 }
-function findRoute(ctx, method = "", path29, opts) {
-  if (path29.charCodeAt(path29.length - 1) === 47) path29 = path29.slice(0, -1);
-  const staticNode = ctx.static[path29];
+function findRoute(ctx, method = "", path30, opts) {
+  if (path30.charCodeAt(path30.length - 1) === 47) path30 = path30.slice(0, -1);
+  const staticNode = ctx.static[path30];
   if (staticNode && staticNode.methods) {
     const staticMatch = staticNode.methods[method] || staticNode.methods[""];
     if (staticMatch !== void 0) return staticMatch[0];
   }
-  const segments = splitPath(path29);
+  const segments = splitPath(path30);
   const match = _lookupTree(ctx, ctx.root, method, segments, 0)?.[0];
   if (match === void 0) return;
   if (opts?.params === false) return match;
@@ -125123,9 +125159,9 @@ function _lookupTree(ctx, node, method, segments, index) {
   }
   if (node.wildcard && node.wildcard.methods) return node.wildcard.methods[method] || node.wildcard.methods[""];
 }
-function findAllRoutes(ctx, method = "", path29, opts) {
-  if (path29.charCodeAt(path29.length - 1) === 47) path29 = path29.slice(0, -1);
-  const segments = splitPath(path29);
+function findAllRoutes(ctx, method = "", path30, opts) {
+  if (path30.charCodeAt(path30.length - 1) === 47) path30 = path30.slice(0, -1);
+  const segments = splitPath(path30);
   const matches = _findAll(ctx, ctx.root, method, segments, 0);
   if (opts?.params === false) return matches;
   return matches.map((m3) => {
@@ -125180,25 +125216,25 @@ var createRouter$1 = (endpoints, config4) => {
     const methods2 = Array.isArray(endpoint.options?.method) ? endpoint.options.method : [endpoint.options?.method];
     for (const method of methods2) addRoute(router2, method, endpoint.path, endpoint);
   }
-  if (config4?.routerMiddleware?.length) for (const { path: path29, middleware } of config4.routerMiddleware) addRoute(middlewareRouter, "*", path29, middleware);
+  if (config4?.routerMiddleware?.length) for (const { path: path30, middleware } of config4.routerMiddleware) addRoute(middlewareRouter, "*", path30, middleware);
   const processRequest = async (request) => {
     const url2 = new URL(request.url);
     const pathname = url2.pathname;
-    const path29 = config4?.basePath && config4.basePath !== "/" ? pathname.split(config4.basePath).reduce((acc, curr, index) => {
+    const path30 = config4?.basePath && config4.basePath !== "/" ? pathname.split(config4.basePath).reduce((acc, curr, index) => {
       if (index !== 0) if (index > 1) acc.push(`${config4.basePath}${curr}`);
       else acc.push(curr);
       return acc;
     }, []).join("") : url2.pathname;
-    if (!path29?.length) return new Response(null, {
+    if (!path30?.length) return new Response(null, {
       status: 404,
       statusText: "Not Found"
     });
-    if (/\/{2,}/.test(path29)) return new Response(null, {
+    if (/\/{2,}/.test(path30)) return new Response(null, {
       status: 404,
       statusText: "Not Found"
     });
-    const route = findRoute(router2, request.method, path29);
-    if (path29.endsWith("/") !== route?.data?.path?.endsWith("/") && !config4?.skipTrailingSlashes) return new Response(null, {
+    const route = findRoute(router2, request.method, path30);
+    if (path30.endsWith("/") !== route?.data?.path?.endsWith("/") && !config4?.skipTrailingSlashes) return new Response(null, {
       status: 404,
       statusText: "Not Found"
     });
@@ -125216,7 +125252,7 @@ var createRouter$1 = (endpoints, config4) => {
     try {
       const allowedMediaTypes = handler.options.metadata?.allowedMediaTypes || config4?.allowedMediaTypes;
       const context = {
-        path: path29,
+        path: path30,
         method: request.method,
         headers: request.headers,
         params: route.params ? JSON.parse(JSON.stringify(route.params)) : {},
@@ -125227,7 +125263,7 @@ var createRouter$1 = (endpoints, config4) => {
         asResponse: true,
         context: config4?.routerContext
       };
-      const middlewareRoutes = findAllRoutes(middlewareRouter, "*", path29);
+      const middlewareRoutes = findAllRoutes(middlewareRouter, "*", path30);
       if (middlewareRoutes?.length) for (const { data: middleware, params } of middlewareRoutes) {
         const res = await middleware({
           ...context,
@@ -125291,7 +125327,7 @@ var createAuthMiddleware = createMiddleware.create({ use: [optionsMiddleware, cr
 })] });
 var use = [optionsMiddleware];
 function createAuthEndpoint(pathOrOptions, handlerOrOptions, handlerOrNever) {
-  const path29 = typeof pathOrOptions === "string" ? pathOrOptions : void 0;
+  const path30 = typeof pathOrOptions === "string" ? pathOrOptions : void 0;
   const options = typeof handlerOrOptions === "object" ? handlerOrOptions : pathOrOptions;
   const handler = typeof handlerOrOptions === "function" ? handlerOrOptions : handlerOrNever;
   const wrapped = async (ctx) => {
@@ -125303,7 +125339,7 @@ function createAuthEndpoint(pathOrOptions, handlerOrOptions, handlerOrNever) {
       throw e5;
     }
   };
-  if (path29) return createEndpoint(path29, {
+  if (path30) return createEndpoint(path30, {
     ...options,
     use: [...options?.use || [], ...use]
   }, wrapped);
@@ -125473,7 +125509,7 @@ async function validateFormCsrf(ctx) {
 }
 
 // ../node_modules/better-auth/dist/utils/get-request-ip.mjs
-init_env();
+init_env2();
 
 // ../node_modules/@better-auth/core/dist/utils/ip.mjs
 init_zod();
@@ -125541,8 +125577,8 @@ function normalizeIP(ip, options = {}) {
   if (ipv43) return ipv43.toLowerCase();
   return normalizeIPv6(ip, options.ipv6Subnet ?? 64);
 }
-function createRateLimitKey(ip, path29) {
-  return `${ip}|${path29}`;
+function createRateLimitKey(ip, path30) {
+  return `${ip}|${path30}`;
 }
 
 // ../node_modules/better-auth/dist/utils/get-request-ip.mjs
@@ -125661,7 +125697,7 @@ function getRateLimitStorage(ctx, rateLimitSettings) {
 var ipWarningLogged = false;
 async function resolveRateLimitConfig(req, ctx) {
   const basePath = new URL(ctx.baseURL).pathname;
-  const path29 = normalizePathname(req.url, basePath);
+  const path30 = normalizePathname(req.url, basePath);
   let currentWindow = ctx.rateLimit.window;
   let currentMax = ctx.rateLimit.max;
   const ip = getIp(req, ctx.options);
@@ -125672,14 +125708,14 @@ async function resolveRateLimitConfig(req, ctx) {
     }
     return null;
   }
-  const key = createRateLimitKey(ip, path29);
-  const specialRule = getDefaultSpecialRules().find((rule) => rule.pathMatcher(path29));
+  const key = createRateLimitKey(ip, path30);
+  const specialRule = getDefaultSpecialRules().find((rule) => rule.pathMatcher(path30));
   if (specialRule) {
     currentWindow = specialRule.window;
     currentMax = specialRule.max;
   }
   for (const plugin of ctx.options.plugins || []) if (plugin.rateLimit) {
-    const matchedRule = plugin.rateLimit.find((rule) => rule.pathMatcher(path29));
+    const matchedRule = plugin.rateLimit.find((rule) => rule.pathMatcher(path30));
     if (matchedRule) {
       currentWindow = matchedRule.window;
       currentMax = matchedRule.max;
@@ -125688,8 +125724,8 @@ async function resolveRateLimitConfig(req, ctx) {
   }
   if (ctx.rateLimit.customRules) {
     const _path = Object.keys(ctx.rateLimit.customRules).find((p3) => {
-      if (p3.includes("*")) return wildcardMatch(p3)(path29);
-      return p3 === path29;
+      if (p3.includes("*")) return wildcardMatch(p3)(path30);
+      return p3 === path30;
     });
     if (_path) {
       const customRule = ctx.rateLimit.customRules[_path];
@@ -125744,14 +125780,14 @@ async function onResponseRateLimit(req, ctx) {
 }
 function getDefaultSpecialRules() {
   return [{
-    pathMatcher(path29) {
-      return path29.startsWith("/sign-in") || path29.startsWith("/sign-up") || path29.startsWith("/change-password") || path29.startsWith("/change-email");
+    pathMatcher(path30) {
+      return path30.startsWith("/sign-in") || path30.startsWith("/sign-up") || path30.startsWith("/change-password") || path30.startsWith("/change-email");
     },
     window: 10,
     max: 3
   }, {
-    pathMatcher(path29) {
-      return path29 === "/request-password-reset" || path29 === "/send-verification-email" || path29.startsWith("/forget-password") || path29 === "/email-otp/send-verification-otp" || path29 === "/email-otp/request-password-reset";
+    pathMatcher(path30) {
+      return path30 === "/request-password-reset" || path30 === "/send-verification-email" || path30.startsWith("/forget-password") || path30 === "/email-otp/send-verification-otp" || path30 === "/email-otp/request-password-reset";
     },
     window: 60,
     max: 3
@@ -126194,7 +126230,7 @@ var revokeOtherSessions = createAuthEndpoint("/revoke-other-sessions", {
 
 // ../node_modules/better-auth/dist/db/verification-token-storage.mjs
 var defaultKeyHasher = async (identifier) => {
-  const hash2 = await createHash3("SHA-256").digest(new TextEncoder().encode(identifier));
+  const hash2 = await createHash2("SHA-256").digest(new TextEncoder().encode(identifier));
   return base64Url.encode(new Uint8Array(hash2), { padding: false });
 };
 async function processIdentifier(identifier, option) {
@@ -127188,7 +127224,7 @@ var createInternalAdapter = (adapter2, ctx) => {
 };
 
 // ../node_modules/better-auth/dist/context/helpers.mjs
-init_env();
+init_env2();
 init_error2();
 
 // ../node_modules/defu/dist/defu.mjs
@@ -127845,7 +127881,7 @@ var verifyEmail = createAuthEndpoint("/verify-email", {
 });
 
 // ../node_modules/better-auth/dist/oauth2/link-account.mjs
-init_env();
+init_env2();
 async function handleOAuthUserInfo(c5, opts) {
   const { userInfo, account, callbackURL, disableSignUp, overrideUserInfo } = opts;
   const dbUser = await c5.context.internalAdapter.findOAuthUser(userInfo.email.toLowerCase(), account.accountId, account.providerId).catch((e5) => {
@@ -128382,7 +128418,7 @@ function getURL2(url2, option) {
     }
   }
   if (!basePath.endsWith("/")) basePath += "/";
-  let [path29, urlQuery] = url2.replace(basePath, "").split("?");
+  let [path30, urlQuery] = url2.replace(basePath, "").split("?");
   const queryParams = new URLSearchParams(urlQuery);
   for (const [key, value2] of Object.entries(query || {})) {
     if (value2 == null) continue;
@@ -128401,25 +128437,25 @@ function getURL2(url2, option) {
   }
   if (params) {
     if (Array.isArray(params)) {
-      const paramPaths = path29.split("/").filter((p3) => p3.startsWith(":"));
+      const paramPaths = path30.split("/").filter((p3) => p3.startsWith(":"));
       for (const [index, key] of paramPaths.entries()) {
         const value2 = params[index];
-        path29 = path29.replace(key, value2);
+        path30 = path30.replace(key, value2);
       }
     } else {
       for (const [key, value2] of Object.entries(params)) {
-        path29 = path29.replace(`:${key}`, String(value2));
+        path30 = path30.replace(`:${key}`, String(value2));
       }
     }
   }
-  path29 = path29.split("/").map(encodeURIComponent).join("/");
-  if (path29.startsWith("/")) path29 = path29.slice(1);
+  path30 = path30.split("/").map(encodeURIComponent).join("/");
+  if (path30.startsWith("/")) path30 = path30.slice(1);
   let queryParamString = queryParams.toString();
   queryParamString = queryParamString.length > 0 ? `?${queryParamString}`.replace(/\+/g, "%20") : "";
   if (!basePath.startsWith("http")) {
-    return `${basePath}${path29}${queryParamString}`;
+    return `${basePath}${path30}${queryParamString}`;
   }
-  const _url2 = new URL(`${path29}${queryParamString}`, basePath);
+  const _url2 = new URL(`${path30}${queryParamString}`, basePath);
   return _url2;
 }
 var betterFetch = async (url2, options) => {
@@ -132160,7 +132196,7 @@ var callbackOAuth = createAuthEndpoint("/callback/:id", {
 });
 
 // ../node_modules/better-auth/dist/api/routes/error.mjs
-init_env();
+init_env2();
 function sanitize(input) {
   return input.replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;").replace(/&(?!amp;|lt;|gt;|quot;|#39;|#x[0-9a-fA-F]+;|#[0-9]+;)/g, "&amp;");
 }
@@ -133053,7 +133089,7 @@ var signOut = createAuthEndpoint("/sign-out", {
 });
 
 // ../node_modules/better-auth/dist/api/routes/sign-up.mjs
-init_env();
+init_env2();
 init_error2();
 init_id2();
 init_zod();
@@ -133820,7 +133856,7 @@ var changeEmail = createAuthEndpoint("/change-email", {
 });
 
 // ../node_modules/better-auth/dist/api/dispatch.mjs
-init_env();
+init_env2();
 init_error2();
 init_instrumentation();
 var defuReplaceArrays = createDefu((obj2, key, value2) => {
@@ -134090,7 +134126,7 @@ function toAuthEndpoints(endpoints, ctx) {
 }
 
 // ../node_modules/better-auth/dist/api/index.mjs
-init_env();
+init_env2();
 init_error2();
 init_instrumentation();
 function checkEndpointConflicts(options, logger3) {
@@ -134098,15 +134134,15 @@ function checkEndpointConflicts(options, logger3) {
   options.plugins?.forEach((plugin) => {
     if (plugin.endpoints) {
       for (const [key, endpoint] of Object.entries(plugin.endpoints)) if (endpoint && "path" in endpoint && typeof endpoint.path === "string") {
-        const path29 = endpoint.path;
+        const path30 = endpoint.path;
         let methods2 = [];
         if (endpoint.options && "method" in endpoint.options) {
           if (Array.isArray(endpoint.options.method)) methods2 = endpoint.options.method;
           else if (typeof endpoint.options.method === "string") methods2 = [endpoint.options.method];
         }
         if (methods2.length === 0) methods2 = ["*"];
-        if (!endpointRegistry.has(path29)) endpointRegistry.set(path29, []);
-        endpointRegistry.get(path29).push({
+        if (!endpointRegistry.has(path30)) endpointRegistry.set(path30, []);
+        endpointRegistry.get(path30).push({
           pluginId: plugin.id,
           endpointKey: key,
           methods: methods2
@@ -134115,7 +134151,7 @@ function checkEndpointConflicts(options, logger3) {
     }
   });
   const conflicts = [];
-  for (const [path29, entries] of endpointRegistry.entries()) if (entries.length > 1) {
+  for (const [path30, entries] of endpointRegistry.entries()) if (entries.length > 1) {
     const methodMap = /* @__PURE__ */ new Map();
     let hasConflict = false;
     for (const entry of entries) for (const method of entry.methods) {
@@ -134130,7 +134166,7 @@ function checkEndpointConflicts(options, logger3) {
       const conflictingMethods = [];
       for (const [method, plugins] of methodMap.entries()) if (plugins.length > 1 || method === "*" && entries.length > 1 || method !== "*" && methodMap.has("*")) conflictingMethods.push(method);
       conflicts.push({
-        path: path29,
+        path: path30,
         plugins: uniquePlugins,
         conflictingMethods
       });
@@ -134282,7 +134318,7 @@ var router = (ctx, options) => {
 };
 
 // ../node_modules/better-auth/dist/db/adapter-base.mjs
-init_env();
+init_env2();
 async function getBaseAdapter(options, handleDirectDatabase) {
   let adapter2;
   if (!options.database) {
@@ -134355,7 +134391,7 @@ function getSchema(config4) {
 }
 
 // ../node_modules/better-auth/dist/db/get-migration.mjs
-init_env();
+init_env2();
 init_dist5();
 init_adapter2();
 init_dist4();
@@ -134737,16 +134773,16 @@ function buildSecretConfig(secrets, legacySecret) {
 }
 
 // ../node_modules/better-auth/dist/context/create-context.mjs
-init_env();
+init_env2();
 init_error2();
 init_id2();
 
 // ../node_modules/@better-auth/telemetry/dist/node.mjs
-var import_node_fs3 = __toESM(require("node:fs"), 1);
+var import_node_fs4 = __toESM(require("node:fs"), 1);
 var import_promises = __toESM(require("node:fs/promises"), 1);
 var import_node_os2 = __toESM(require("node:os"), 1);
-var import_node_path7 = __toESM(require("node:path"), 1);
-init_env();
+var import_node_path8 = __toESM(require("node:path"), 1);
+init_env2();
 init_random();
 async function getTelemetryAuthConfig(options, context) {
   return {
@@ -134970,7 +135006,7 @@ function detectEnvironment() {
   return getEnvVar("NODE_ENV") === "production" ? "production" : isCI() ? "ci" : isTest() ? "test" : "development";
 }
 async function hashToBase64(data) {
-  const buffer = await createHash3("SHA-256").digest(data);
+  const buffer = await createHash2("SHA-256").digest(data);
   return base64.encode(buffer);
 }
 var generateId2 = (size) => {
@@ -134982,7 +135018,7 @@ async function readRootPackageJson() {
   try {
     const cwd = process.cwd();
     if (!cwd) return void 0;
-    const raw = await import_promises.default.readFile(import_node_path7.default.join(cwd, "package.json"), "utf-8");
+    const raw = await import_promises.default.readFile(import_node_path8.default.join(cwd, "package.json"), "utf-8");
     packageJSONCache = JSON.parse(raw);
     return packageJSONCache;
   } catch {
@@ -134993,7 +135029,7 @@ async function getPackageVersion(pkg) {
   try {
     const cwd = process.cwd();
     if (!cwd) throw new Error("no-cwd");
-    const pkgJsonPath = import_node_path7.default.join(cwd, "node_modules", pkg, "package.json");
+    const pkgJsonPath = import_node_path8.default.join(cwd, "node_modules", pkg, "package.json");
     const raw = await import_promises.default.readFile(pkgJsonPath, "utf-8");
     return JSON.parse(raw).version || await getVersionFromLocalPackageJson(pkg) || void 0;
   } catch {
@@ -135064,7 +135100,7 @@ function getVendor() {
 var isDockerCached;
 async function hasDockerEnv() {
   try {
-    import_node_fs3.default.statSync("/.dockerenv");
+    import_node_fs4.default.statSync("/.dockerenv");
     return true;
   } catch {
     return false;
@@ -135072,7 +135108,7 @@ async function hasDockerEnv() {
 }
 async function hasDockerCGroup() {
   try {
-    return import_node_fs3.default.readFileSync("/proc/self/cgroup", "utf8").includes("docker");
+    return import_node_fs4.default.readFileSync("/proc/self/cgroup", "utf8").includes("docker");
   } catch {
     return false;
   }
@@ -135084,7 +135120,7 @@ async function isDocker() {
 var isInsideContainerCached;
 var hasContainerEnv = async () => {
   try {
-    import_node_fs3.default.statSync("/run/.containerenv");
+    import_node_fs4.default.statSync("/run/.containerenv");
     return true;
   } catch {
     return false;
@@ -135101,7 +135137,7 @@ async function isWsl() {
       if (await isInsideContainer()) return false;
       return true;
     }
-    return import_node_fs3.default.readFileSync("/proc/version", "utf8").toLowerCase().includes("microsoft") ? !await isInsideContainer() : false;
+    return import_node_fs4.default.readFileSync("/proc/version", "utf8").toLowerCase().includes("microsoft") ? !await isInsideContainer() : false;
   } catch {
     return false;
   }
@@ -135468,7 +135504,7 @@ var betterAuth = (options) => {
 };
 
 // ../node_modules/better-auth/dist/index.mjs
-init_env();
+init_env2();
 init_error2();
 init_error_codes();
 init_id2();
@@ -135570,7 +135606,7 @@ function toOTPIdentifier(type, email3) {
   return `${type}-otp-${email3}`;
 }
 var defaultKeyHasher2 = async (otp) => {
-  const hash2 = await createHash3("SHA-256").digest(new TextEncoder().encode(otp));
+  const hash2 = await createHash2("SHA-256").digest(new TextEncoder().encode(otp));
   return base64Url.encode(new Uint8Array(hash2), { padding: false });
 };
 function splitAtLastColon(input) {
@@ -136311,64 +136347,64 @@ var emailOTP = (options) => {
     }] },
     rateLimit: [
       {
-        pathMatcher(path29) {
-          return path29 === "/email-otp/send-verification-otp";
+        pathMatcher(path30) {
+          return path30 === "/email-otp/send-verification-otp";
         },
         window: opts.rateLimit?.window || 60,
         max: opts.rateLimit?.max || 3
       },
       {
-        pathMatcher(path29) {
-          return path29 === "/email-otp/check-verification-otp";
+        pathMatcher(path30) {
+          return path30 === "/email-otp/check-verification-otp";
         },
         window: opts.rateLimit?.window || 60,
         max: opts.rateLimit?.max || 3
       },
       {
-        pathMatcher(path29) {
-          return path29 === "/email-otp/verify-email";
+        pathMatcher(path30) {
+          return path30 === "/email-otp/verify-email";
         },
         window: opts.rateLimit?.window || 60,
         max: opts.rateLimit?.max || 3
       },
       {
-        pathMatcher(path29) {
-          return path29 === "/sign-in/email-otp";
+        pathMatcher(path30) {
+          return path30 === "/sign-in/email-otp";
         },
         window: opts.rateLimit?.window || 60,
         max: opts.rateLimit?.max || 3
       },
       {
-        pathMatcher(path29) {
-          return path29 === "/email-otp/request-password-reset";
+        pathMatcher(path30) {
+          return path30 === "/email-otp/request-password-reset";
         },
         window: opts.rateLimit?.window || 60,
         max: opts.rateLimit?.max || 3
       },
       {
-        pathMatcher(path29) {
-          return path29 === "/email-otp/reset-password";
+        pathMatcher(path30) {
+          return path30 === "/email-otp/reset-password";
         },
         window: opts.rateLimit?.window || 60,
         max: opts.rateLimit?.max || 3
       },
       {
-        pathMatcher(path29) {
-          return path29 === "/forget-password/email-otp";
+        pathMatcher(path30) {
+          return path30 === "/forget-password/email-otp";
         },
         window: opts.rateLimit?.window || 60,
         max: opts.rateLimit?.max || 3
       },
       {
-        pathMatcher(path29) {
-          return path29 === "/email-otp/request-email-change";
+        pathMatcher(path30) {
+          return path30 === "/email-otp/request-email-change";
         },
         window: opts.rateLimit?.window || 60,
         max: opts.rateLimit?.max || 3
       },
       {
-        pathMatcher(path29) {
-          return path29 === "/email-otp/change-email";
+        pathMatcher(path30) {
+          return path30 === "/email-otp/change-email";
         },
         window: opts.rateLimit?.window || 60,
         max: opts.rateLimit?.max || 3
@@ -136574,7 +136610,7 @@ async function execute(db, sql2, params = []) {
 }
 
 // ../auth/dist/auth/token.js
-var import_node_crypto7 = require("node:crypto");
+var import_node_crypto6 = require("node:crypto");
 var USER_TOKEN_PREFIX = "out_";
 var USER_TOKEN_HASH_ALGORITHM = "sha256";
 var DEFAULT_USER_TOKEN_TTL_DAYS = 90;
@@ -136587,11 +136623,11 @@ function normalizeTimestamp(value2) {
   return value2 instanceof Date ? value2.toISOString() : value2;
 }
 function hashUserTokenSecret(rawToken) {
-  return (0, import_node_crypto7.createHash)(USER_TOKEN_HASH_ALGORITHM).update(rawToken).digest("hex");
+  return (0, import_node_crypto6.createHash)(USER_TOKEN_HASH_ALGORITHM).update(rawToken).digest("hex");
 }
 function generateUserTokenSecret() {
-  const prefix = `${USER_TOKEN_PREFIX}${(0, import_node_crypto7.randomBytes)(4).toString("hex")}`;
-  const secret = `${prefix}${(0, import_node_crypto7.randomBytes)(24).toString("hex")}`;
+  const prefix = `${USER_TOKEN_PREFIX}${(0, import_node_crypto6.randomBytes)(4).toString("hex")}`;
+  const secret = `${prefix}${(0, import_node_crypto6.randomBytes)(24).toString("hex")}`;
   return { secret, prefix, hash: hashUserTokenSecret(secret) };
 }
 async function listActiveTokenScopeGrants(db, tokenId) {
@@ -138171,10 +138207,10 @@ function fromNodeHeaders(nodeHeaders) {
 var import_cors = __toESM(require_lib3(), 1);
 var import_express6 = __toESM(require_express2(), 1);
 var import_node_fs21 = require("node:fs");
-var import_node_path34 = __toESM(require("node:path"), 1);
+var import_node_path35 = __toESM(require("node:path"), 1);
 var import_node_url8 = require("node:url");
 init_config();
-init_env2();
+init_env();
 
 // ../mcp/server.ts
 init_dist();
@@ -140005,9 +140041,6 @@ init_projects();
 init_run_queue();
 init_util3();
 init_webhook_events();
-function isTruthyFlag2(value2) {
-  return value2 === true || value2 === 1;
-}
 async function nextMissionSequence(ctx) {
   await ctx.db.run(
     `INSERT INTO mission_sequences
@@ -140095,14 +140128,13 @@ async function assignMissionTags({
     );
   }
 }
-async function topBoardPosition(ctx, projectId, statusId) {
-  const row = await ctx.db.get(
+async function topBoardPosition(db, projectId, statusId, excludeMissionId) {
+  const row = await db.get(
     `SELECT MIN(board_position) AS min_pos FROM missions
-       WHERE project_id = ? AND status_id = ? AND deleted_at IS NULL`,
-    [projectId, statusId]
+       WHERE project_id = ? AND status_id = ? AND deleted_at IS NULL${excludeMissionId ? " AND id != ?" : ""}`,
+    excludeMissionId ? [projectId, statusId, excludeMissionId] : [projectId, statusId]
   );
-  const minPos = row.min_pos;
-  return minPos === null ? 100 : minPos - 100;
+  return row.min_pos === null ? 100 : row.min_pos - 100;
 }
 async function listObjectives({
   ctx,
@@ -140111,6 +140143,7 @@ async function listObjectives({
   const resolved = await resolveMissionId(ctx, missionId);
   const rows = await ctx.db.all(
     `SELECT o.id, o.mission_id, o.project_id, o.position, o.title, o.instruction_text, o.state,
+            o.assigned_agent, o.model, o.reasoning_effort,
             o.auto_advance, o.resource_key, o.display_key, m.display_id AS mission_display_id
        FROM objectives o
        JOIN missions m ON m.id = o.mission_id
@@ -140134,7 +140167,10 @@ function toObjectiveSummary(row) {
     title: row.title,
     objective: row.instruction_text,
     state: row.state,
-    autoAdvance: isTruthyFlag2(row.auto_advance),
+    assignedAgent: row.assigned_agent,
+    model: row.model,
+    reasoningEffort: row.reasoning_effort,
+    autoAdvance: isTruthyFlag(row.auto_advance),
     resourceKey: row.resource_key?.trim() || null
   };
 }
@@ -140272,6 +140308,9 @@ async function insertObjective({
     title: resolvedTitle,
     instruction_text: instruction,
     state: resolvedState,
+    assigned_agent: assignedAgent ?? null,
+    model: model ?? null,
+    reasoning_effort: reasoningEffort ?? null,
     auto_advance: autoAdvance ? 1 : 0,
     resource_key: normalizedResourceKey,
     display_key: displayKey,
@@ -140391,7 +140430,7 @@ async function createMissionWithObjectives({
         missionTitle,
         status.id,
         status.type,
-        await topBoardPosition(txCtx, resolvedProjectId, status.id),
+        await topBoardPosition(txCtx.db, resolvedProjectId, status.id),
         priority ?? "normal",
         ctx.actorWorkspaceUserId,
         assignedWorkspaceUserId ?? null,
@@ -140885,7 +140924,7 @@ async function moveMissionToReview({
   const mission = await getMissionSummary({ ctx, missionId });
   const reviewStatus = await getReviewStatusId(ctx, mission.projectId);
   const now2 = nowIso();
-  const boardPosition = await topBoardPosition(ctx, mission.projectId, reviewStatus.id);
+  const boardPosition = await topBoardPosition(ctx.db, mission.projectId, reviewStatus.id);
   await ctx.db.run(
     `UPDATE missions SET status_id = ?, status_type = ?, board_position = ?, updated_at = ?, revision = revision + 1
        WHERE id = ?`,
@@ -140916,7 +140955,7 @@ async function moveMissionToExecute({
     return;
   }
   const now2 = nowIso();
-  const boardPosition = await topBoardPosition(ctx, mission.projectId, executeStatus.id);
+  const boardPosition = await topBoardPosition(ctx.db, mission.projectId, executeStatus.id);
   await ctx.db.run(
     `UPDATE missions
        SET status_id = ?, status_type = ?, board_position = ?, updated_at = ?, revision = revision + 1
@@ -140941,7 +140980,7 @@ async function moveMissionToExecute({
 
 // ../packages/core/service/protocol.ts
 init_dist2();
-var import_node_crypto11 = require("node:crypto");
+var import_node_crypto10 = require("node:crypto");
 
 // ../packages/core/service/agent-session/channels.ts
 init_change_feed();
@@ -141258,7 +141297,7 @@ async function findBindableChannelForMission({
 }
 
 // ../packages/core/service/agent-session/pure/evidence-path.ts
-var import_node_path17 = __toESM(require("node:path"), 1);
+var import_node_path18 = __toESM(require("node:path"), 1);
 var MAX_EVIDENCE_PATH_LENGTH = 2e3;
 function hasControlCharacters(value2) {
   for (let index = 0; index < value2.length; index += 1) {
@@ -141278,10 +141317,10 @@ function isExactEvidencePath(value2) {
   if (value2.length === 0 || value2.length > MAX_EVIDENCE_PATH_LENGTH || value2 !== value2.trim() || hasUnsafePathCharacters(value2)) {
     return false;
   }
-  const slashPath = import_node_path17.default.sep === "\\" ? value2.replace(/\\/g, "/") : value2;
-  if (import_node_path17.default.posix.isAbsolute(slashPath) || /^[a-z]:/i.test(slashPath)) return false;
+  const slashPath = import_node_path18.default.sep === "\\" ? value2.replace(/\\/g, "/") : value2;
+  if (import_node_path18.default.posix.isAbsolute(slashPath) || /^[a-z]:/i.test(slashPath)) return false;
   if (slashPath === "." || slashPath === ".." || slashPath.startsWith("../")) return false;
-  return import_node_path17.default.posix.normalize(slashPath) === slashPath;
+  return import_node_path18.default.posix.normalize(slashPath) === slashPath;
 }
 
 // ../packages/core/service/protocol.ts
@@ -141873,9 +141912,7 @@ init_latch_launch();
 init_local_target_mutations();
 
 // ../packages/core/service/objective-parallelism.ts
-function isTruthyFlag3(value2) {
-  return value2 === true || value2 === 1;
-}
+init_util3();
 async function missionAllowsParallelObjectives({
   ctx,
   missionId
@@ -141885,7 +141922,7 @@ async function missionAllowsParallelObjectives({
       WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
     [missionId, ctx.workspace.id]
   );
-  return isTruthyFlag3(row?.allow_parallel_objectives);
+  return isTruthyFlag(row?.allow_parallel_objectives);
 }
 async function countActiveMissionObjectives({
   ctx,
@@ -144187,7 +144224,7 @@ async function connectSession({
   };
 }
 function promptHash(prompt) {
-  return (0, import_node_crypto11.createHash)("sha256").update(prompt).digest("hex");
+  return (0, import_node_crypto10.createHash)("sha256").update(prompt).digest("hex");
 }
 function objectiveFromSession(objectives, session) {
   if (!session) return void 0;
@@ -145931,7 +145968,7 @@ var OBJECTIVE_REOPENABLE_STATES2 = Object.freeze([
 
 // repository.ts
 init_dist2();
-var import_node_path29 = __toESM(require("node:path"), 1);
+var import_node_path30 = __toESM(require("node:path"), 1);
 init_delivery_report();
 init_errors4();
 init_execution_targets();
@@ -146160,18 +146197,18 @@ function mergeMissionBranchObservation({
 
 // ../packages/core/service/mission-reference-search.ts
 init_dist();
-var import_node_crypto12 = require("node:crypto");
+var import_node_crypto11 = require("node:crypto");
 init_errors4();
 function referenceDigest(reference) {
-  return (0, import_node_crypto12.createHash)("sha256").update(reference).digest("hex").slice(0, 24);
+  return (0, import_node_crypto11.createHash)("sha256").update(reference).digest("hex").slice(0, 24);
 }
 function encodeCursor(body) {
   return Buffer.from(JSON.stringify(body), "utf8").toString("base64url");
 }
-function decodeCursor(cursor2, projectId, reference) {
+function decodeCursor(cursor3, projectId, reference) {
   let body = null;
   try {
-    body = JSON.parse(Buffer.from(cursor2, "base64url").toString("utf8"));
+    body = JSON.parse(Buffer.from(cursor3, "base64url").toString("utf8"));
   } catch {
     body = null;
   }
@@ -146206,13 +146243,13 @@ async function searchMissionReferencesInProject({
   workspaceId: workspaceId2,
   projectId,
   reference,
-  cursor: cursor2,
+  cursor: cursor3,
   limit: limit2
 }) {
-  const invalid2 = invalidMissionReference(reference);
-  if (invalid2) throw new ServiceError(invalid2, "validation_error");
+  const invalid3 = invalidMissionReference(reference);
+  if (invalid3) throw new ServiceError(invalid3, "validation_error");
   const pageSize = normalizeMissionReferenceLimit(limit2);
-  const after = cursor2 ? decodeCursor(cursor2, projectId, reference) : null;
+  const after = cursor3 ? decodeCursor(cursor3, projectId, reference) : null;
   const pattern = likePattern(reference);
   const candidates = await db.all(
     `SELECT m.id, m.display_id, m.title, m.status_type, m.status_id, m.project_id,
@@ -146288,8 +146325,261 @@ async function searchMissionReferencesInProject({
   };
 }
 
+// ../packages/core/service/mission-schedules.ts
+init_change_feed();
+init_context();
+init_errors4();
+init_util3();
+function parseJsonArray(json2) {
+  try {
+    const parsed = JSON.parse(json2);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+function toScheduleSummary(row) {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    name: row.name,
+    periodType: row.period_type,
+    periodInterval: row.period_interval,
+    weeksOfMonth: parseJsonArray(row.weeks_of_month_json),
+    daysOfMonth: parseJsonArray(row.days_of_month_json),
+    daysOfWeek: parseJsonArray(row.days_of_week_json),
+    timezone: row.timezone,
+    startDate: row.start_date,
+    nextStatusKey: row.next_status_key,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    revision: row.revision
+  };
+}
+function toScheduleLike(input) {
+  return {
+    name: input.name ?? void 0,
+    periodType: input.periodType,
+    periodInterval: input.periodInterval,
+    weeksOfMonth: input.weeksOfMonth ?? void 0,
+    daysOfMonth: input.daysOfMonth ?? void 0,
+    daysOfWeek: input.daysOfWeek ?? void 0,
+    timezone: input.timezone,
+    startDate: input.startDate ?? void 0
+  };
+}
+function previewScheduleDueDatetime(input, itemDueDatetime) {
+  try {
+    const result2 = generateDateFromSchedule({
+      schedule: toScheduleLike(input),
+      itemDueDatetime: itemDueDatetime ? new Date(itemDueDatetime) : null
+    });
+    return result2.toISOString();
+  } catch (err) {
+    throw new ServiceError(
+      err instanceof Error ? err.message : "Invalid schedule.",
+      "validation_error",
+      400
+    );
+  }
+}
+async function getScheduleRow(db, workspaceId2, scheduleId) {
+  return db.get(
+    `SELECT id, workspace_id, name, period_type, period_interval, weeks_of_month_json,
+            days_of_month_json, days_of_week_json, timezone, start_date, next_status_key,
+            created_at, updated_at, revision
+       FROM schedules WHERE id = ? AND workspace_id = ?`,
+    [scheduleId, workspaceId2]
+  );
+}
+async function getScheduleSummary(db, workspaceId2, scheduleId) {
+  const row = await getScheduleRow(db, workspaceId2, scheduleId);
+  return row ? toScheduleSummary(row) : void 0;
+}
+async function getMissionSchedule({
+  ctx,
+  missionId
+}) {
+  const resolved = await resolveMissionId(ctx, missionId);
+  const mission = await ctx.db.get(
+    `SELECT schedule_id, due_datetime FROM missions WHERE id = ? AND workspace_id = ?`,
+    [resolved.id, ctx.workspace.id]
+  );
+  if (!mission) {
+    throw new ServiceError("Mission not found", "mission_not_found", 404);
+  }
+  if (!mission.schedule_id) {
+    return { dueDatetime: mission.due_datetime, schedule: null };
+  }
+  const scheduleRow = await getScheduleRow(ctx.db, ctx.workspace.id, mission.schedule_id);
+  return {
+    dueDatetime: mission.due_datetime,
+    schedule: scheduleRow ? toScheduleSummary(scheduleRow) : null
+  };
+}
+async function upsertMissionSchedule({
+  ctx,
+  missionId,
+  input
+}) {
+  const resolved = await resolveMissionId(ctx, missionId);
+  return ctx.db.transaction(async (tx) => {
+    const mission = await tx.get(
+      `SELECT id, project_id, schedule_id, due_datetime, revision FROM missions WHERE id = ? AND workspace_id = ?`,
+      [resolved.id, ctx.workspace.id]
+    );
+    if (!mission) {
+      throw new ServiceError("Mission not found", "mission_not_found", 404);
+    }
+    if (input.nextStatusKey) {
+      const status = await tx.get(
+        `SELECT 1 FROM project_statuses WHERE project_id = ? AND key = ? AND deleted_at IS NULL`,
+        [mission.project_id, input.nextStatusKey]
+      );
+      if (!status) {
+        throw new ServiceError(
+          "That status is not available for missions in this project",
+          "validation_error",
+          409
+        );
+      }
+    }
+    const dueDatetime = previewScheduleDueDatetime(input, mission.due_datetime);
+    const now2 = nowIso();
+    const scheduleId = mission.schedule_id ?? newId();
+    if (mission.schedule_id) {
+      await tx.run(
+        `UPDATE schedules
+           SET name = ?, period_type = ?, period_interval = ?, weeks_of_month_json = ?,
+               days_of_month_json = ?, days_of_week_json = ?, timezone = ?, start_date = ?,
+               next_status_key = ?, updated_at = ?, revision = revision + 1
+         WHERE id = ? AND workspace_id = ?`,
+        [
+          input.name?.trim() || null,
+          input.periodType,
+          input.periodInterval,
+          JSON.stringify(input.weeksOfMonth ?? []),
+          JSON.stringify(input.daysOfMonth ?? []),
+          JSON.stringify(input.daysOfWeek ?? []),
+          input.timezone,
+          input.startDate ?? null,
+          input.nextStatusKey ?? null,
+          now2,
+          mission.schedule_id,
+          ctx.workspace.id
+        ]
+      );
+    } else {
+      await tx.run(
+        `INSERT INTO schedules
+           (id, workspace_id, name, period_type, period_interval, weeks_of_month_json,
+            days_of_month_json, days_of_week_json, timezone, start_date, next_status_key,
+            created_at, updated_at, revision)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+        [
+          scheduleId,
+          ctx.workspace.id,
+          input.name?.trim() || null,
+          input.periodType,
+          input.periodInterval,
+          JSON.stringify(input.weeksOfMonth ?? []),
+          JSON.stringify(input.daysOfMonth ?? []),
+          JSON.stringify(input.daysOfWeek ?? []),
+          input.timezone,
+          input.startDate ?? null,
+          input.nextStatusKey ?? null,
+          now2,
+          now2
+        ]
+      );
+    }
+    const revision3 = mission.revision + 1;
+    await tx.run(
+      `UPDATE missions SET schedule_id = ?, due_datetime = ?, updated_at = ?, revision = ?
+         WHERE id = ? AND workspace_id = ?`,
+      [scheduleId, dueDatetime, now2, revision3, mission.id, ctx.workspace.id]
+    );
+    await recordChange({
+      ctx: { ...ctx, db: tx },
+      entityType: "mission",
+      entityId: mission.id,
+      operation: "update",
+      entityRevision: revision3,
+      projectId: resolved.projectId,
+      missionId: mission.id,
+      changedFields: ["schedule_id", "due_datetime"]
+    });
+    const scheduleRow = await getScheduleRow(tx, ctx.workspace.id, scheduleId);
+    if (!scheduleRow) {
+      throw new ServiceError("Schedule not found after upsert", "internal_error", 500);
+    }
+    return { dueDatetime, schedule: toScheduleSummary(scheduleRow) };
+  });
+}
+async function clearMissionSchedule({
+  ctx,
+  missionId
+}) {
+  const resolved = await resolveMissionId(ctx, missionId);
+  await ctx.db.transaction(async (tx) => {
+    const mission = await tx.get(`SELECT id, schedule_id, revision FROM missions WHERE id = ? AND workspace_id = ?`, [
+      resolved.id,
+      ctx.workspace.id
+    ]);
+    if (!mission) {
+      throw new ServiceError("Mission not found", "mission_not_found", 404);
+    }
+    if (!mission.schedule_id) {
+      return;
+    }
+    const now2 = nowIso();
+    const revision3 = mission.revision + 1;
+    await tx.run(
+      `UPDATE missions SET schedule_id = NULL, due_datetime = NULL, updated_at = ?, revision = ?
+         WHERE id = ? AND workspace_id = ?`,
+      [now2, revision3, mission.id, ctx.workspace.id]
+    );
+    await recordChange({
+      ctx: { ...ctx, db: tx },
+      entityType: "mission",
+      entityId: mission.id,
+      operation: "update",
+      entityRevision: revision3,
+      projectId: resolved.projectId,
+      missionId: mission.id,
+      changedFields: ["schedule_id", "due_datetime"]
+    });
+    const stillReferenced = await tx.get(
+      `SELECT id FROM missions WHERE schedule_id = ? AND workspace_id = ? LIMIT 1`,
+      [mission.schedule_id, ctx.workspace.id]
+    );
+    if (!stillReferenced) {
+      await tx.run(`DELETE FROM schedules WHERE id = ? AND workspace_id = ?`, [
+        mission.schedule_id,
+        ctx.workspace.id
+      ]);
+    }
+  });
+}
+function scheduleInputFromSummary(summary) {
+  return {
+    name: summary.name,
+    periodType: summary.periodType,
+    periodInterval: summary.periodInterval,
+    weeksOfMonth: summary.weeksOfMonth,
+    daysOfMonth: summary.daysOfMonth,
+    daysOfWeek: summary.daysOfWeek,
+    timezone: summary.timezone,
+    startDate: summary.startDate,
+    nextStatusKey: summary.nextStatusKey
+  };
+}
+
 // repository.ts
+init_profiles();
 init_project_execution_target();
+init_project_resource_key();
+init_projects();
 init_run_queue();
 init_util3();
 
@@ -146735,8 +147025,8 @@ async function readChangesAfter(afterSeq, workspaceIds, limit2 = CHANGE_BATCH_LI
   const hasMore = rows.length > normalizedLimit;
   const returnedRows = hasMore ? rows.slice(0, normalizedLimit) : rows;
   const changes = returnedRows.map(entityChangeDtoFromRow);
-  const cursor2 = hasMore ? changes[changes.length - 1].seq : scanThroughSeq;
-  return { changes, cursor: cursor2, hasMore };
+  const cursor3 = hasMore ? changes[changes.length - 1].seq : scanThroughSeq;
+  return { changes, cursor: cursor3, hasMore };
 }
 var RealtimeHub = class extends PollLoop {
   clients = /* @__PURE__ */ new Map();
@@ -146825,13 +147115,13 @@ var RealtimeHub = class extends PollLoop {
   heartbeat() {
     for (const { response } of this.clients.values()) response.write(": ping\n\n");
   }
-  broadcastChanges(rows, cursor2) {
+  broadcastChanges(rows, cursor3) {
     for (const client of this.clients.values()) {
       const changes = rows.filter(
         (row) => client.workspaceIds.has(row.workspace_id) && (client.projectIds === null || row.project_id !== null && client.projectIds.has(row.project_id))
       ).map(entityChangeDtoFromRow);
       if (changes.length > 0) {
-        this.send(client.response, "change", { type: "change", changes, cursor: cursor2 });
+        this.send(client.response, "change", { type: "change", changes, cursor: cursor3 });
       }
     }
   }
@@ -146842,11 +147132,11 @@ var RealtimeHub = class extends PollLoop {
     }
   }
   async sendCatchUp(res, afterSeq) {
-    let cursor2 = afterSeq;
+    let cursor3 = afterSeq;
     while (this.clients.has(res)) {
       const client = this.clients.get(res);
       const batch = await readChangesAfter(
-        cursor2,
+        cursor3,
         [...client.workspaceIds],
         CHANGE_BATCH_LIMIT,
         client.projectIds === null ? null : [...client.projectIds]
@@ -146855,15 +147145,15 @@ var RealtimeHub = class extends PollLoop {
       if (batch.changes.length > 0) {
         this.send(res, "change", { type: "change", changes: batch.changes, cursor: batch.cursor });
       }
-      cursor2 = batch.cursor;
+      cursor3 = batch.cursor;
       if (!batch.hasMore) return;
     }
   }
   send(res, event, data) {
     res.write(`event: ${event}
 `);
-    const cursor2 = typeof data === "object" && data && "cursor" in data ? Number(data.cursor) : NaN;
-    if (Number.isFinite(cursor2)) res.write(`id: ${cursor2}
+    const cursor3 = typeof data === "object" && data && "cursor" in data ? Number(data.cursor) : NaN;
+    if (Number.isFinite(cursor3)) res.write(`id: ${cursor3}
 `);
     res.write(`data: ${JSON.stringify(data)}
 
@@ -148199,7 +148489,7 @@ async function getObjectiveLaunchCommand(objectiveRef, query) {
 init_local_target_mutation_queue();
 
 // ext/github/service.ts
-var import_node_crypto14 = require("node:crypto");
+var import_node_crypto13 = require("node:crypto");
 init_db();
 var GITHUB_API = "https://api.github.com";
 var STATE_TTL_MS = 10 * 60 * 1e3;
@@ -148229,15 +148519,15 @@ function appJwt(config4) {
     JSON.stringify({ iat: now2 - 60, exp: now2 + 9 * 60, iss: config4.appId })
   );
   const signingInput = `${encodedHeader}.${encodedPayload}`;
-  const signer = (0, import_node_crypto14.createSign)("RSA-SHA256");
+  const signer = (0, import_node_crypto13.createSign)("RSA-SHA256");
   signer.update(signingInput);
   signer.end();
   return `${signingInput}.${signer.sign(config4.privateKey, "base64url")}`;
 }
-async function githubFetch(path29, token, init2 = {}) {
+async function githubFetch(path30, token, init2 = {}) {
   let response;
   try {
-    response = await fetch(`${GITHUB_API}${path29}`, {
+    response = await fetch(`${GITHUB_API}${path30}`, {
       method: init2.method ?? "GET",
       headers: {
         Accept: "application/vnd.github+json",
@@ -148268,16 +148558,16 @@ async function githubFetch(path29, token, init2 = {}) {
 }
 function signedInstallState(workspaceId2, privateKey) {
   const payload = base64url3(JSON.stringify({ workspaceId: workspaceId2, expiresAt: Date.now() + STATE_TTL_MS }));
-  const mac3 = (0, import_node_crypto14.createHmac)("sha256", privateKey).update(payload).digest("base64url");
+  const mac3 = (0, import_node_crypto13.createHmac)("sha256", privateKey).update(payload).digest("base64url");
   return `${payload}.${mac3}`;
 }
 function verifyInstallState(value2, privateKey) {
   const [payload, suppliedMac, ...extra] = value2?.split(".") ?? [];
   if (!payload || !suppliedMac || extra.length)
     throw new ApiError(400, "Invalid GitHub installation state.");
-  const expectedMac = (0, import_node_crypto14.createHmac)("sha256", privateKey).update(payload).digest("base64url");
+  const expectedMac = (0, import_node_crypto13.createHmac)("sha256", privateKey).update(payload).digest("base64url");
   const sameLength = suppliedMac.length === expectedMac.length;
-  if (!sameLength || !(0, import_node_crypto14.timingSafeEqual)(Buffer.from(suppliedMac), Buffer.from(expectedMac))) {
+  if (!sameLength || !(0, import_node_crypto13.timingSafeEqual)(Buffer.from(suppliedMac), Buffer.from(expectedMac))) {
     throw new ApiError(400, "Invalid GitHub installation state.");
   }
   let decoded;
@@ -148789,7 +149079,7 @@ async function createMissionGitHubPullRequest(missionId, body) {
 
 // ../packages/core/service/chat/store.ts
 init_dist();
-var import_node_crypto15 = require("node:crypto");
+var import_node_crypto14 = require("node:crypto");
 var import_node_util = require("node:util");
 init_errors4();
 
@@ -149128,7 +149418,7 @@ var ChatStore = class _ChatStore {
     await this.db.run(
       `INSERT INTO chat_events (id, thread_id, seq, kind, run_id, attempt_id, fence, payload_json, dependency_set_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        (0, import_node_crypto15.randomUUID)(),
+        (0, import_node_crypto14.randomUUID)(),
         threadId,
         t.last_event_seq,
         payload.kind,
@@ -149205,7 +149495,7 @@ var ChatStore = class _ChatStore {
       await this.db.run(
         `INSERT INTO chat_source_refs (id, thread_id, source_kind, scope_key, connection_id, locator_json, access_state, access_checked_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'unknown', ?, ?, ?) ON CONFLICT (thread_id, scope_key) DO NOTHING`,
         [
-          (0, import_node_crypto15.randomUUID)(),
+          (0, import_node_crypto14.randomUUID)(),
           threadId,
           source.locator.kind,
           source.scopeKey,
@@ -149377,14 +149667,14 @@ var ChatStore = class _ChatStore {
         throw new ChatError("source_access_lost");
     }
     const authorizationRevision = (await this.thread(threadId)).authorization_revision;
-    const digest4 = (0, import_node_crypto15.createHash)("sha256").update(JSON.stringify({ ids, authorizationRevision })).digest("hex");
+    const digest4 = (0, import_node_crypto14.createHash)("sha256").update(JSON.stringify({ ids, authorizationRevision })).digest("hex");
     const old = await this.db.get(
       "SELECT id, invalidated_at FROM chat_dependency_sets WHERE thread_id = ? AND digest = ?",
       [threadId, digest4]
     );
     if (old?.invalidated_at) throw new ChatError("source_access_lost");
     if (old) return old.id;
-    const id2 = (0, import_node_crypto15.randomUUID)();
+    const id2 = (0, import_node_crypto14.randomUUID)();
     await this.db.run(
       "INSERT INTO chat_dependency_sets (id, thread_id, digest, created_at) VALUES (?, ?, ?, ?)",
       [id2, threadId, digest4, this.timestamp()]
@@ -149472,7 +149762,7 @@ var ChatStore = class _ChatStore {
     await this.db.run(
       `INSERT INTO chat_notifications (id, owner_profile_id, organization_id, thread_id, run_id, question_id, type, transition_key, event_seq, state, due_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?) ON CONFLICT (owner_profile_id, thread_id, run_id, type, transition_key) DO NOTHING`,
       [
-        (0, import_node_crypto15.randomUUID)(),
+        (0, import_node_crypto14.randomUUID)(),
         t.owner_profile_id,
         t.organization_id,
         t.id,
@@ -149490,10 +149780,10 @@ var ChatStore = class _ChatStore {
 };
 
 // connections/profile.ts
-var import_node_crypto20 = require("node:crypto");
+var import_node_crypto19 = require("node:crypto");
 
 // connections/crypto.ts
-var import_node_crypto16 = require("node:crypto");
+var import_node_crypto15 = require("node:crypto");
 var SecretEnvelopeError = class extends Error {
   constructor() {
     super("The stored secret cannot be decrypted.");
@@ -149510,8 +149800,8 @@ function sealSecret({
   key,
   aad
 }) {
-  const nonce = (0, import_node_crypto16.randomBytes)(12);
-  const cipher = (0, import_node_crypto16.createCipheriv)("aes-256-gcm", key, nonce);
+  const nonce = (0, import_node_crypto15.randomBytes)(12);
+  const cipher = (0, import_node_crypto15.createCipheriv)("aes-256-gcm", key, nonce);
   cipher.setAAD(Buffer.from(aad, "utf8"));
   const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
   const tag2 = cipher.getAuthTag();
@@ -149527,7 +149817,7 @@ function openSecret({
     throw new SecretEnvelopeError();
   }
   try {
-    const decipher = (0, import_node_crypto16.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
+    const decipher = (0, import_node_crypto15.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
     decipher.setAAD(Buffer.from(aad, "utf8"));
     decipher.setAuthTag(Buffer.from(tagText, "base64url"));
     return Buffer.concat([
@@ -149539,7 +149829,7 @@ function openSecret({
   }
 }
 function hashSecret(value2) {
-  return (0, import_node_crypto16.createHash)("sha256").update(value2).digest("hex");
+  return (0, import_node_crypto15.createHash)("sha256").update(value2).digest("hex");
 }
 
 // connections/authorizations.ts
@@ -149688,7 +149978,7 @@ async function refreshLeased(db, row, lockOwner, options) {
 }
 
 // connections/keyring.ts
-var import_node_crypto17 = require("node:crypto");
+var import_node_crypto16 = require("node:crypto");
 var EVERHOUR_ENV_KEY_ID = "everhour-env";
 var GITHUB_USER_ENV_KEY_ID = "github-user-env";
 var PLATFORM_KEY_ID_PREFIX = "platform-";
@@ -149704,7 +149994,7 @@ function platformKeyFromSecret(secret) {
   const trimmed9 = secret?.trim();
   if (!trimmed9 || trimmed9.length < MIN_PLATFORM_SECRET_LENGTH) return null;
   const key = Buffer.from(
-    (0, import_node_crypto17.hkdfSync)(
+    (0, import_node_crypto16.hkdfSync)(
       "sha256",
       Buffer.from(trimmed9, "utf8"),
       Buffer.from("overlord:account-connections", "utf8"),
@@ -149712,7 +150002,7 @@ function platformKeyFromSecret(secret) {
       32
     )
   );
-  const fingerprint = (0, import_node_crypto17.createHash)("sha256").update("overlord:account-connections:platform-key-id:v1:").update(key).digest("hex").slice(0, 16);
+  const fingerprint = (0, import_node_crypto16.createHash)("sha256").update("overlord:account-connections:platform-key-id:v1:").update(key).digest("hex").slice(0, 16);
   return { id: `${PLATFORM_KEY_ID_PREFIX}${fingerprint}`, key };
 }
 function keyRingFromEnv(env3) {
@@ -149808,7 +150098,7 @@ function parseJson(text) {
 }
 
 // connections/oauth.ts
-var import_node_crypto18 = require("node:crypto");
+var import_node_crypto17 = require("node:crypto");
 
 // connections/egress.ts
 var EgressError = class extends Error {
@@ -149886,8 +150176,8 @@ var METADATA_BYTES = 64 * 1024;
 var TOKEN_BYTES = 64 * 1024;
 var TIMEOUT_MS = 1e4;
 function pkcePair() {
-  const verifier = (0, import_node_crypto18.randomBytes)(32).toString("base64url");
-  return { verifier, challenge: (0, import_node_crypto18.createHash)("sha256").update(verifier).digest("base64url") };
+  const verifier = (0, import_node_crypto17.randomBytes)(32).toString("base64url");
+  return { verifier, challenge: (0, import_node_crypto17.createHash)("sha256").update(verifier).digest("base64url") };
 }
 function sameResource(a5, b5) {
   return a5.replace(/\/+$/, "") === b5.replace(/\/+$/, "");
@@ -150043,7 +150333,7 @@ var KnowledgebaseOAuth = class {
 
 // connections/service.ts
 init_dist();
-var import_node_crypto19 = require("node:crypto");
+var import_node_crypto18 = require("node:crypto");
 
 // connections/policy.ts
 var KNOWLEDGEBASE_TOOL_POLICY_VERSION = 2;
@@ -150056,7 +150346,7 @@ var workspace = {
 };
 var uuid3 = (description) => ({ type: "string", description, pattern: UUID });
 var nodeId = uuid3("Node UUID.");
-var path19 = {
+var path20 = {
   type: "string",
   description: "Workspace-relative document path.",
   minLength: 1,
@@ -150113,7 +150403,7 @@ var READS = [
   {
     name: "read_file",
     description: "Read one Knowledgebase document by path, with its metadata and expected_version (pass that to edit_file).",
-    inputSchema: object2({ workspace, path: path19 }, ["workspace", "path"])
+    inputSchema: object2({ workspace, path: path20 }, ["workspace", "path"])
   },
   {
     name: "get_related",
@@ -150143,7 +150433,7 @@ var READS = [
     inputSchema: object2(
       {
         workspace,
-        path: path19,
+        path: path20,
         node_id: nodeId,
         direction: { type: "string", enum: ["outgoing", "incoming", "both"] }
       },
@@ -150230,7 +150520,7 @@ var WRITES = {
     inputSchema: object2(
       {
         workspace,
-        path: path19,
+        path: path20,
         expected_version: {
           type: "string",
           description: 'Always "new" (create only).',
@@ -150251,7 +150541,7 @@ var WRITES = {
     inputSchema: object2(
       {
         workspace,
-        path: path19,
+        path: path20,
         old_text: { type: "string", maxLength: BODY_CHARS },
         new_text: { type: "string", maxLength: BODY_CHARS },
         expected_version: { type: "string", minLength: 1, maxLength: 200 }
@@ -150480,7 +150770,7 @@ var AccountConnections = class {
   }
   db;
   options;
-  lockOwner = (0, import_node_crypto19.randomUUID)();
+  lockOwner = (0, import_node_crypto18.randomUUID)();
   now() {
     return this.options.now?.() ?? Date.now();
   }
@@ -150535,7 +150825,7 @@ var AccountConnections = class {
     const returnTo = input.returnTo;
     const { knowledgebase, encryption, oauth } = this.ready();
     await this.access(owner);
-    const state2 = (0, import_node_crypto19.randomBytes)(32).toString("base64url");
+    const state2 = (0, import_node_crypto18.randomBytes)(32).toString("base64url");
     const { verifier, challenge } = pkcePair();
     let authorizeUrl;
     try {
@@ -150543,7 +150833,7 @@ var AccountConnections = class {
     } catch {
       throw new ChatError("provider_not_ready");
     }
-    const authorizationId = (0, import_node_crypto19.randomUUID)();
+    const authorizationId = (0, import_node_crypto18.randomUUID)();
     const expiresAt = this.timestamp(AUTHORIZATION_TTL_MS);
     const connectionId = await this.db.transaction(async (tx) => {
       const now2 = this.timestamp();
@@ -150552,7 +150842,7 @@ var AccountConnections = class {
         [owner.profileId, owner.organizationId, "knowledgebase", knowledgebase.mcpUrl]
       );
       if (!row) {
-        const id2 = (0, import_node_crypto19.randomUUID)();
+        const id2 = (0, import_node_crypto18.randomUUID)();
         await tx.run(
           `INSERT INTO account_connections (id, owner_profile_id, organization_id, provider, server_url, state, tool_policy_version, created_at, updated_at) VALUES (?, ?, ?, 'knowledgebase', ?, 'pending', ?, ?, ?)`,
           [
@@ -150886,7 +151176,7 @@ var ProfileConnections = class {
   db;
   ring;
   options;
-  lockOwner = (0, import_node_crypto20.randomUUID)();
+  lockOwner = (0, import_node_crypto19.randomUUID)();
   adapters;
   provider(provider) {
     return this.adapters.get(provider) ?? null;
@@ -151020,7 +151310,7 @@ var ProfileConnections = class {
       );
       return connectionDto(await this.row(profileId, existing.id));
     }
-    const id2 = (0, import_node_crypto20.randomUUID)();
+    const id2 = (0, import_node_crypto19.randomUUID)();
     const draft = { id: id2, owner_profile_id: profileId, organization_id: null, provider };
     await this.db.run(
       `INSERT INTO account_connections (id, owner_profile_id, organization_id, provider, server_url, state, credential_kind, credential_format, credential_ciphertext, credential_key_id, credential_revision, external_account_id, external_account_label, external_account_avatar_url, last_validated_at, connected_at, created_at, updated_at, revision) VALUES (?, ?, NULL, ?, ?, 'connected', 'api_key', 'connection-v1', ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, 1)`,
@@ -151160,10 +151450,10 @@ var ProfileConnections = class {
     if (!adapter2 || !oauth) throw new ChatError("provider_not_available");
     const key = writeKey(this.ring, provider);
     if (!key || !oauth.configured()) throw new ChatError("provider_not_ready");
-    const state2 = (0, import_node_crypto20.randomBytes)(32).toString("base64url");
+    const state2 = (0, import_node_crypto19.randomBytes)(32).toString("base64url");
     const { verifier, challenge } = pkcePair();
     const authorizeUrl = oauth.authorizeUrl({ state: state2, codeChallenge: challenge });
-    const authorizationId = (0, import_node_crypto20.randomUUID)();
+    const authorizationId = (0, import_node_crypto19.randomUUID)();
     const expiresAt = this.timestamp(AUTHORIZATION_TTL_MS);
     await this.find(profileId, provider);
     const connectionId = await this.db.transaction(async (tx) => {
@@ -151173,7 +151463,7 @@ var ProfileConnections = class {
         [profileId, provider]
       );
       if (!row) {
-        const id2 = (0, import_node_crypto20.randomUUID)();
+        const id2 = (0, import_node_crypto19.randomUUID)();
         await tx.run(
           `INSERT INTO account_connections (id, owner_profile_id, organization_id, provider, server_url, state, credential_kind, created_at, updated_at) VALUES (?, ?, NULL, ?, ?, 'pending', ?, ?, ?)`,
           [id2, profileId, provider, adapter2.serverUrl, adapter2.credentialKind, now2, now2]
@@ -151810,12 +152100,12 @@ function createGitHubUserOAuth(connections) {
       nextUrl: nextMatch?.[1] ?? null
     };
   }
-  async function githubUserFetch(path29, token, init2 = {}) {
-    return (await githubUserFetchUrl(path29, token, init2)).data;
+  async function githubUserFetch(path30, token, init2 = {}) {
+    return (await githubUserFetchUrl(path30, token, init2)).data;
   }
-  async function githubUserFetchAll(path29, token) {
+  async function githubUserFetchAll(path30, token) {
     const rows = [];
-    let nextUrl = path29;
+    let nextUrl = path30;
     const visited = /* @__PURE__ */ new Set();
     while (nextUrl) {
       const canonical2 = new URL(nextUrl, GITHUB_API3).toString();
@@ -151957,7 +152247,7 @@ var {
 );
 
 // branch-planning.ts
-var import_node_path19 = __toESM(require("node:path"), 1);
+var import_node_path20 = __toESM(require("node:path"), 1);
 var TITLE_SLUG_MAX = 48;
 function stripCombiningMarks(value2) {
   return value2.normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
@@ -151991,7 +152281,7 @@ function missionWorktreePath({
   branch
 }) {
   const key = resourceKey.trim() || "project";
-  return import_node_path19.default.join(worktreeRoot, projectSlug || "project", key, branchLeaf(branch));
+  return import_node_path20.default.join(worktreeRoot, projectSlug || "project", key, branchLeaf(branch));
 }
 function normalizeRemoteRef(ref) {
   return ref.replace(/^origin\//, "").replace(/^refs\/heads\//, "").replace(/^refs\/remotes\/origin\//, "");
@@ -152108,7 +152398,7 @@ function previewMissionBranch(input) {
 init_db();
 
 // deferred-work.ts
-var import_node_crypto21 = require("node:crypto");
+var import_node_crypto20 = require("node:crypto");
 init_db();
 var RESOLUTION_STATUSES = /* @__PURE__ */ new Set(["done", "dismissed"]);
 var RESOLUTION_OUTCOMES = /* @__PURE__ */ new Set([
@@ -152116,12 +152406,12 @@ var RESOLUTION_OUTCOMES = /* @__PURE__ */ new Set([
   "objective_added"
 ]);
 function legacyDeferredWorkId(text, occurrence) {
-  const digest4 = (0, import_node_crypto21.createHash)("sha256").update(text).digest("hex").slice(0, 16);
+  const digest4 = (0, import_node_crypto20.createHash)("sha256").update(text).digest("hex").slice(0, 16);
   return `deferred-work-${digest4}-${occurrence}`;
 }
 function agentDeferredWorkId(index, agentText) {
   if (!agentText) return `deferred-work-${index}-composed`;
-  const digest4 = (0, import_node_crypto21.createHash)("sha256").update(agentText).digest("hex").slice(0, 16);
+  const digest4 = (0, import_node_crypto20.createHash)("sha256").update(agentText).digest("hex").slice(0, 16);
   return `deferred-work-${index}-${digest4}`;
 }
 function deferredWorkEntries(report) {
@@ -152173,7 +152463,7 @@ function toResolution(row) {
 }
 
 // organizations.ts
-var import_node_path28 = __toESM(require("node:path"), 1);
+var import_node_path29 = __toESM(require("node:path"), 1);
 var import_node_url5 = require("node:url");
 init_db();
 
@@ -152181,7 +152471,7 @@ init_db();
 var import_client_s3 = __toESM(require_dist_cjs21(), 1);
 var import_s3_request_presigner = __toESM(require_dist_cjs22(), 1);
 var import_node_fs18 = require("node:fs");
-var import_node_path27 = __toESM(require("node:path"), 1);
+var import_node_path28 = __toESM(require("node:path"), 1);
 var DEFAULT_PRESIGN_TTL_SECONDS = 300;
 var MIN_PRESIGN_TTL_SECONDS = 60;
 var MAX_PRESIGN_TTL_SECONDS = 300;
@@ -152236,16 +152526,16 @@ function createLocalFsBackend({
   if (!bucket.local_path) {
     throw new ApiError(500, `Bucket '${bucket.bucket_key}' is missing a local_path`);
   }
-  const root5 = import_node_path27.default.isAbsolute(bucket.local_path) ? bucket.local_path : import_node_path27.default.resolve(repoRoot4, bucket.local_path);
+  const root5 = import_node_path28.default.isAbsolute(bucket.local_path) ? bucket.local_path : import_node_path28.default.resolve(repoRoot4, bucket.local_path);
   return {
     async put({ key, bytes }) {
       if (!(0, import_node_fs18.existsSync)(root5)) (0, import_node_fs18.mkdirSync)(root5, { recursive: true });
-      const absolutePath = import_node_path27.default.join(root5, key);
-      (0, import_node_fs18.mkdirSync)(import_node_path27.default.dirname(absolutePath), { recursive: true });
+      const absolutePath = import_node_path28.default.join(root5, key);
+      (0, import_node_fs18.mkdirSync)(import_node_path28.default.dirname(absolutePath), { recursive: true });
       (0, import_node_fs18.writeFileSync)(absolutePath, bytes);
     },
     async getStream({ key }) {
-      const absolutePath = import_node_path27.default.join(root5, key);
+      const absolutePath = import_node_path28.default.join(root5, key);
       if (!(0, import_node_fs18.existsSync)(absolutePath)) throw new ApiError(404, "File not found");
       return (0, import_node_fs18.createReadStream)(absolutePath);
     }
@@ -152346,7 +152636,7 @@ function createStorageBackend({
 }
 
 // organizations.ts
-var repoRoot = import_node_path28.default.resolve(import_node_path28.default.dirname((0, import_node_url5.fileURLToPath)(__overlord_import_meta_url)), "..");
+var repoRoot = import_node_path29.default.resolve(import_node_path29.default.dirname((0, import_node_url5.fileURLToPath)(__overlord_import_meta_url)), "..");
 function parseSettings2(raw) {
   try {
     const parsed = JSON.parse(raw);
@@ -152860,7 +153150,7 @@ function isTerminalStatusType(type) {
   return type === "complete" || type === "cancelled";
 }
 async function uniqueStatusKey(db, { name: name2, projectId }) {
-  const base = slugify4(name2).replace(/-/g, "_");
+  const base = slugify3(name2).replace(/-/g, "_");
   let key = base;
   let suffix = 2;
   while (await db.get(`SELECT 1 FROM project_statuses WHERE project_id = ? AND key = ?`, [
@@ -152988,12 +153278,9 @@ function toStatusDto(r5) {
     name: r5.name,
     type: r5.type,
     position: r5.position,
-    isDefault: isTruthyFlag4(r5.is_default),
-    isTerminal: isTruthyFlag4(r5.is_terminal)
+    isDefault: isTruthyFlag(r5.is_default),
+    isTerminal: isTruthyFlag(r5.is_terminal)
   };
-}
-function isTruthyFlag4(value2) {
-  return value2 === true || value2 === 1;
 }
 async function toProjectResourceDto(r5, observationsByResourceId = /* @__PURE__ */ new Map(), sources = []) {
   const source = sources.find((item) => item.source_kind === "local_checkout") ?? sources[0] ?? null;
@@ -153011,8 +153298,8 @@ async function toProjectResourceDto(r5, observationsByResourceId = /* @__PURE__ 
     type: source?.source_kind === "local_checkout" ? "local_directory" : source?.source_kind ?? "remote_directory",
     label: r5.label,
     path: sourcePath(source),
-    isPrimary: isTruthyFlag4(r5.is_primary),
-    accessMode: isTruthyFlag4(r5.is_primary) ? "read_write" : r5.access_mode === "read" ? "read" : "read_write",
+    isPrimary: isTruthyFlag(r5.is_primary),
+    accessMode: isTruthyFlag(r5.is_primary) ? "read_write" : r5.access_mode === "read" ? "read" : "read_write",
     status: merged.status,
     observedAt: merged.observedAt,
     observationSource: merged.observedAt ? "client" : null,
@@ -153136,7 +153423,7 @@ function toMissionDto(r5, tags = []) {
     hasPendingObjectiveWithInstructions: r5.has_pending_objective_with_instructions === 1,
     hasUnseenBlockingQuestion: r5.has_unseen_blocking_question === 1,
     hasUnseenReturnedToExecute: r5.has_unseen_returned_to_execute === 1,
-    allowParallelObjectives: isTruthyFlag4(r5.allow_parallel_objectives),
+    allowParallelObjectives: isTruthyFlag(r5.allow_parallel_objectives),
     draftObjectiveResourceKey: r5.draft_objective_resource_key?.trim() || null,
     tags,
     createdByKind: toCreatedByKind(r5.created_by_kind),
@@ -153574,7 +153861,7 @@ async function listWorktrees() {
   return [];
 }
 async function removeWorktree(body) {
-  const target = typeof body.path === "string" ? import_node_path29.default.resolve(body.path.trim()) : "";
+  const target = typeof body.path === "string" ? import_node_path30.default.resolve(body.path.trim()) : "";
   if (!target) throw new ApiError(400, "A worktree path is required.");
   if (body.clientExecuted === true) {
     const primaryRepoPath = typeof body.primaryRepoPath === "string" ? body.primaryRepoPath.trim() : "";
@@ -153663,7 +153950,7 @@ function toProjectTagDto(r5) {
     projectId: r5.project_id,
     label: r5.label,
     color: r5.color,
-    active: isTruthyFlag4(r5.active)
+    active: isTruthyFlag(r5.active)
   };
 }
 async function getMissionTags(missionId) {
@@ -153727,7 +154014,7 @@ function toObjectiveDto(r5) {
     title: r5.title,
     instructionText: r5.instruction_text,
     state: r5.state,
-    autoAdvance: r5.queue_entry_id !== void 0 ? Boolean(r5.queue_entry_id) : isTruthyFlag4(r5.auto_advance),
+    autoAdvance: r5.queue_entry_id !== void 0 ? Boolean(r5.queue_entry_id) : isTruthyFlag(r5.auto_advance),
     queueEntry: r5.queue_entry_id && r5.queue_id && r5.queue_name && typeof r5.queue_position === "number" && r5.queue_state ? {
       id: r5.queue_entry_id,
       queueId: r5.queue_id,
@@ -153767,21 +154054,6 @@ function toObjectiveDto(r5) {
     createdByWorkspaceUserId: r5.created_by_workspace_user_id ?? null,
     launchConfigOverrides
   };
-}
-function slugify4(input) {
-  const base = input.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
-  return base.length > 0 ? base : "project";
-}
-function deriveProjectResourceKey3({
-  resourceKey,
-  label,
-  directoryPath
-}) {
-  const explicit = resourceKey?.trim();
-  if (explicit) return slugify4(explicit);
-  const labelKey = label?.trim();
-  if (labelKey) return slugify4(labelKey);
-  return slugify4(import_node_path29.default.basename(import_node_path29.default.resolve(directoryPath)));
 }
 async function assertObjectiveResourceKeyOnProject(db, projectId, resourceKey) {
   const normalized = resourceKey?.trim() || null;
@@ -154399,7 +154671,7 @@ async function insertProjectResource(db, project, body, pathRequiredMessage, opt
   if (sourceUrl && !/^https?:\/\//.test(sourceUrl) && !/^git@[^:]+:.+/.test(sourceUrl)) {
     throw new ApiError(400, "sourceUrl must be an http(s) or SSH Git URL");
   }
-  const resourceKey = deriveProjectResourceKey3({
+  const resourceKey = deriveProjectResourceKey2({
     resourceKey: body.resourceKey,
     label: body.label,
     directoryPath: resourcePath || sourceUrl
@@ -154542,7 +154814,7 @@ async function updateProjectResource(projectId, resourceId, body) {
     const changedFields = [];
     let revision3 = existing.revision;
     if (body.resourceKey !== void 0) {
-      const nextResourceKey = deriveProjectResourceKey3({
+      const nextResourceKey = deriveProjectResourceKey2({
         resourceKey: body.resourceKey,
         label: existing.label,
         directoryPath: existing.resource_key
@@ -154558,7 +154830,7 @@ async function updateProjectResource(projectId, resourceId, body) {
         changedFields.push("resource_key");
       }
     }
-    const becomingPrimary = body.isPrimary === true && !isTruthyFlag4(existing.is_primary);
+    const becomingPrimary = body.isPrimary === true && !isTruthyFlag(existing.is_primary);
     if (becomingPrimary) {
       await clearPrimaryResourcesForTarget(tx, {
         projectId,
@@ -154574,7 +154846,7 @@ async function updateProjectResource(projectId, resourceId, body) {
       changedFields.push("is_primary");
       changedFields.push("access_mode");
     }
-    const staysPrimary = becomingPrimary || isTruthyFlag4(existing.is_primary);
+    const staysPrimary = becomingPrimary || isTruthyFlag(existing.is_primary);
     if (body.accessMode !== void 0 && !staysPrimary) {
       const nextAccessMode = body.accessMode === "read_write" ? "read_write" : "read";
       if (nextAccessMode !== (existing.access_mode === "read" ? "read" : "read_write")) {
@@ -154888,7 +155160,7 @@ async function createProject2(body) {
     }
     const now2 = nowIso2();
     const id2 = newId2();
-    const slug = body.slug?.trim() ? slugify4(body.slug) : slugify4(name2);
+    const slug = body.slug?.trim() ? slugify3(body.slug) : slugify3(name2);
     const settingsJson = buildProjectSettingsJson({ color: color ?? void 0 });
     const maxPosition = await tx.get(
       `SELECT COALESCE(MAX(position), 0) AS max_position FROM projects
@@ -154914,7 +155186,7 @@ async function createProject2(body) {
         position
       ]
     );
-    await seedProjectStatuses2(tx, { projectId: id2, workspaceId: targetWorkspaceId, now: now2 });
+    await seedDefaultProjectStatuses(tx, { projectId: id2, workspaceId: targetWorkspaceId, now: now2 });
     await recordChange2(
       {
         entityType: "project",
@@ -154943,29 +155215,6 @@ async function createProject2(body) {
     }
     return getProject2(id2, tx);
   });
-}
-async function seedProjectStatuses2(db, { projectId, workspaceId: workspaceId2, now: now2 }) {
-  for (const status of DEFAULT_STATUSES) {
-    await db.run(
-      `INSERT INTO project_statuses
-         (id, workspace_id, project_id, key, name, type, position, is_default, is_terminal,
-          created_at, updated_at, revision)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-      [
-        newId2(),
-        workspaceId2,
-        projectId,
-        status.key,
-        status.name,
-        status.type,
-        status.position,
-        bindBool(db.dialect, status.isDefault),
-        bindBool(db.dialect, status.isTerminal),
-        now2,
-        now2
-      ]
-    );
-  }
 }
 function initializationProvisioning(row, resource) {
   const succeeded = row.provisioning_status === "succeeded";
@@ -155023,7 +155272,7 @@ async function initializeProject(body) {
       [
         projectId,
         workspaceId2,
-        slugify4(name2),
+        slugify3(name2),
         name2,
         description,
         workspaceUserId,
@@ -155032,7 +155281,7 @@ async function initializeProject(body) {
         maxPosition.max_position + 1
       ]
     );
-    await seedProjectStatuses2(tx, { projectId, workspaceId: workspaceId2, now: now2 });
+    await seedDefaultProjectStatuses(tx, { projectId, workspaceId: workspaceId2, now: now2 });
     await recordChange2(
       {
         entityType: "project",
@@ -155068,7 +155317,7 @@ async function initializeProject(body) {
     try {
       const repo = await createPrivateGitHubRepository({
         ownerLogin,
-        name: slugify4(name2)
+        name: slugify3(name2)
       });
       initialization = await persistInitializedRepository({ db, initialization, repo });
     } catch (error53) {
@@ -155645,7 +155894,7 @@ async function searchMissionsAcrossWorkspacesV3({
 async function searchMissionReferences({
   projectIds,
   reference,
-  cursor: cursor2,
+  cursor: cursor3,
   limit: limit2
 }) {
   if (projectIds?.length !== 1) {
@@ -155663,22 +155912,9 @@ async function searchMissionReferences({
     workspaceId: workspaceId2,
     projectId,
     reference,
-    cursor: cursor2,
+    cursor: cursor3,
     limit: limit2
   });
-}
-async function topBoardPosition2(db, projectId, statusId, excludeMissionId) {
-  const row = excludeMissionId ? await db.get(
-    `SELECT MIN(board_position) AS min_pos FROM missions
-         WHERE project_id = ? AND status_id = ?
-           AND deleted_at IS NULL AND id != ?`,
-    [projectId, statusId, excludeMissionId]
-  ) : await db.get(
-    `SELECT MIN(board_position) AS min_pos FROM missions
-         WHERE project_id = ? AND status_id = ? AND deleted_at IS NULL`,
-    [projectId, statusId]
-  );
-  return row.min_pos === null ? 100 : row.min_pos - 100;
 }
 async function getProjectStatus(db, projectId, statusId) {
   const statusRow = await db.get(
@@ -155867,7 +156103,7 @@ async function listMissionEvents2(missionRef, limit2 = 200) {
       workspaceUserId: row.actor_workspace_user_id,
       displayName: row.actor_display_name,
       handle: row.actor_handle,
-      avatarUrl: avatarUrlFromMetadata(row.actor_metadata_json ?? "{}")
+      avatarUrl: avatarUrlFromProfileMetadata(row.actor_metadata_json ?? "{}")
     } : null,
     externalUrl: row.external_url,
     ...row.type === "delivery" ? { deliveryId: deliveryIdFromEventPayload(row.payload_json) } : {},
@@ -156353,30 +156589,6 @@ async function updateArtifact(missionRef, artifactId, body) {
     return toArtifactDto(updated);
   });
 }
-async function nextMissionSequence2(db, workspaceId2) {
-  const row = await db.get(
-    `SELECT id, next_value FROM mission_sequences
-         WHERE workspace_id = ? AND scope_type = 'workspace'
-           AND scope_id = ? AND counter_name = 'mission'`,
-    [workspaceId2, workspaceId2]
-  );
-  if (!row) {
-    const seq2 = 1;
-    await db.run(
-      `INSERT INTO mission_sequences (id, workspace_id, scope_type, scope_id, counter_name, next_value, updated_at)
-       VALUES (?, ?, 'workspace', ?, 'mission', ?, ?)`,
-      [newId2(), workspaceId2, workspaceId2, seq2 + 1, nowIso2()]
-    );
-    return seq2;
-  }
-  const seq = row.next_value;
-  await db.run(`UPDATE mission_sequences SET next_value = ?, updated_at = ? WHERE id = ?`, [
-    seq + 1,
-    nowIso2(),
-    row.id
-  ]);
-  return seq;
-}
 async function createMissionTx(body, client = requireDatabaseClient(), alreadyInTransaction = false) {
   const execute2 = async (tx) => {
     const objectiveInputs2 = body.objectives && body.objectives.length > 0 ? body.objectives : body.firstObjective ? [{ objective: body.firstObjective }] : [];
@@ -156716,7 +156928,7 @@ async function patchMissionFieldsTx(missionRef, body) {
       changed.push("status_id", "status_type");
       if (statusRow.id !== existing.status_id) {
         fields.push("board_position = ?");
-        setParams.push(await topBoardPosition2(tx, existing.project_id, statusRow.id, id2));
+        setParams.push(await topBoardPosition(tx, existing.project_id, statusRow.id, id2));
         changed.push("board_position");
         scheduleTriggerStatusType = statusRow.type;
         if (statusRow.type === "execute" && existing.status_type !== "execute") {
@@ -156859,7 +157071,7 @@ async function moveMissionProjectTx({
       targetProjectId,
       statusRow.id,
       statusRow.type,
-      await topBoardPosition2(tx, targetProjectId, statusRow.id, id2)
+      await topBoardPosition(tx, targetProjectId, statusRow.id, id2)
     ];
     const changed = ["project_id", "status_id", "status_type", "board_position"];
     if (body.title !== void 0) {
@@ -157178,216 +157390,64 @@ async function reorderBoardColumn(projectId, body) {
     (t) => t.statusId === statusId
   );
 }
-function parseScheduleJsonArray(json2) {
-  try {
-    const parsed = JSON.parse(json2);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-function toScheduleDto(row) {
+function toMissionScheduleDto(summary) {
   return {
-    id: row.id,
-    workspaceId: row.workspace_id,
-    name: row.name,
-    periodType: row.period_type,
-    periodInterval: row.period_interval,
-    weeksOfMonth: parseScheduleJsonArray(row.weeks_of_month_json),
-    daysOfMonth: parseScheduleJsonArray(row.days_of_month_json),
-    daysOfWeek: parseScheduleJsonArray(row.days_of_week_json),
-    timezone: row.timezone,
-    startDate: row.start_date,
-    nextStatusKey: row.next_status_key,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    revision: row.revision
+    dueDatetime: summary.dueDatetime,
+    schedule: summary.schedule ? {
+      ...summary.schedule,
+      periodType: summary.schedule.periodType
+    } : null
   };
-}
-function toScheduleLike(input) {
-  return {
-    name: input.name ?? void 0,
-    periodType: input.periodType,
-    periodInterval: input.periodInterval,
-    weeksOfMonth: input.weeksOfMonth ?? void 0,
-    daysOfMonth: input.daysOfMonth ?? void 0,
-    daysOfWeek: input.daysOfWeek ?? void 0,
-    timezone: input.timezone,
-    startDate: input.startDate ?? void 0
-  };
-}
-function scheduleRowToInput(row) {
-  const dto = toScheduleDto(row);
-  return {
-    name: dto.name,
-    periodType: dto.periodType,
-    periodInterval: dto.periodInterval,
-    weeksOfMonth: dto.weeksOfMonth,
-    daysOfMonth: dto.daysOfMonth,
-    daysOfWeek: dto.daysOfWeek,
-    timezone: dto.timezone,
-    startDate: dto.startDate,
-    nextStatusKey: dto.nextStatusKey
-  };
-}
-async function getScheduleRow(db, workspaceId2, scheduleId) {
-  return await db.get(
-    `SELECT id, workspace_id, name, period_type, period_interval, weeks_of_month_json,
-            days_of_month_json, days_of_week_json, timezone, start_date, next_status_key,
-            created_at, updated_at, revision
-       FROM schedules WHERE id = ? AND workspace_id = ?`,
-    [scheduleId, workspaceId2]
-  );
-}
-function previewScheduleDueDatetime(input, itemDueDatetime) {
-  try {
-    const result2 = generateDateFromSchedule({
-      schedule: toScheduleLike(input),
-      itemDueDatetime: itemDueDatetime ? new Date(itemDueDatetime) : null
-    });
-    return result2.toISOString();
-  } catch (err) {
-    throw new ApiError(400, err instanceof Error ? err.message : "Invalid schedule.");
-  }
 }
 function previewMissionSchedule(body) {
   if (!body?.schedule) throw new ApiError(400, "schedule is required");
   return { dueDatetime: previewScheduleDueDatetime(body.schedule, body.itemDueDatetime) };
 }
-async function getMissionSchedule(missionRef) {
-  const mission = await getMissionRow(missionRef);
-  if (!mission.schedule_id) {
-    return { dueDatetime: mission.due_datetime, schedule: null };
-  }
-  const scheduleRow = await getScheduleRow(
-    requireDatabaseClient(),
-    mission.workspace_id,
-    mission.schedule_id
+async function getMissionSchedule2(missionRef) {
+  const db = requireDatabaseClient();
+  const scope2 = await requireMissionPermission({
+    missionRef,
+    permission: PERMISSIONS.MISSION_READ,
+    db
+  });
+  const ctx = await buildWebappServiceContextForWorkspace(
+    scope2.workspaceId,
+    db,
+    scope2.workspaceUserId
   );
-  return {
-    dueDatetime: mission.due_datetime,
-    schedule: scheduleRow ? toScheduleDto(scheduleRow) : null
-  };
+  return toMissionScheduleDto(await getMissionSchedule({ ctx, missionId: scope2.missionId }));
 }
-async function upsertMissionSchedule(missionRef, input) {
+async function upsertMissionSchedule2(missionRef, input) {
   if (!input) throw new ApiError(400, "schedule is required");
   return requireDatabaseClient().transaction(async (tx) => {
-    const existing = await getMissionRow(missionRef, tx, PERMISSIONS.MISSION_UPDATE);
-    if (input.nextStatusKey) {
-      const configured = await tx.get(
-        `SELECT 1 FROM project_statuses WHERE project_id = ? AND key = ? AND deleted_at IS NULL`,
-        [existing.project_id, input.nextStatusKey]
-      );
-      if (!configured)
-        throw new ApiError(409, "That status is not available for missions in this project");
-    }
-    const dueDatetime = previewScheduleDueDatetime(input, existing.due_datetime);
-    const now2 = nowIso2();
-    const scheduleId = existing.schedule_id ?? newId2();
-    if (existing.schedule_id) {
-      await tx.run(
-        `UPDATE schedules
-           SET name = ?, period_type = ?, period_interval = ?, weeks_of_month_json = ?,
-               days_of_month_json = ?, days_of_week_json = ?, timezone = ?, start_date = ?,
-               next_status_key = ?, updated_at = ?, revision = revision + 1
-         WHERE id = ? AND workspace_id = ?`,
-        [
-          input.name?.trim() || null,
-          input.periodType,
-          input.periodInterval,
-          JSON.stringify(input.weeksOfMonth ?? []),
-          JSON.stringify(input.daysOfMonth ?? []),
-          JSON.stringify(input.daysOfWeek ?? []),
-          input.timezone,
-          input.startDate ?? null,
-          input.nextStatusKey ?? null,
-          now2,
-          existing.schedule_id,
-          existing.workspace_id
-        ]
-      );
-    } else {
-      await tx.run(
-        `INSERT INTO schedules
-           (id, workspace_id, name, period_type, period_interval, weeks_of_month_json,
-            days_of_month_json, days_of_week_json, timezone, start_date, next_status_key,
-            created_at, updated_at, revision)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-        [
-          scheduleId,
-          existing.workspace_id,
-          input.name?.trim() || null,
-          input.periodType,
-          input.periodInterval,
-          JSON.stringify(input.weeksOfMonth ?? []),
-          JSON.stringify(input.daysOfMonth ?? []),
-          JSON.stringify(input.daysOfWeek ?? []),
-          input.timezone,
-          input.startDate ?? null,
-          input.nextStatusKey ?? null,
-          now2,
-          now2
-        ]
-      );
-    }
-    const revision3 = existing.revision + 1;
-    await tx.run(
-      `UPDATE missions SET schedule_id = ?, due_datetime = ?, updated_at = ?, revision = ?
-         WHERE id = ? AND workspace_id = ?`,
-      [scheduleId, dueDatetime, now2, revision3, existing.id, existing.workspace_id]
+    const scope2 = await requireMissionPermission({
+      missionRef,
+      permission: PERMISSIONS.MISSION_UPDATE,
+      db: tx
+    });
+    const ctx = await buildWebappServiceContextForWorkspace(
+      scope2.workspaceId,
+      tx,
+      scope2.workspaceUserId
     );
-    await recordChange2(
-      {
-        entityType: "mission",
-        entityId: existing.id,
-        operation: "update",
-        entityRevision: revision3,
-        projectId: existing.project_id,
-        missionId: existing.id,
-        changedFields: ["schedule_id", "due_datetime"],
-        workspaceId: existing.workspace_id
-      },
-      tx
+    return toMissionScheduleDto(
+      await upsertMissionSchedule({ ctx, missionId: scope2.missionId, input })
     );
-    const scheduleRow = await getScheduleRow(tx, existing.workspace_id, scheduleId);
-    if (!scheduleRow) throw new ApiError(500, "Schedule not found after upsert");
-    return { dueDatetime, schedule: toScheduleDto(scheduleRow) };
   });
 }
-async function clearMissionSchedule(missionRef) {
+async function clearMissionSchedule2(missionRef) {
   await requireDatabaseClient().transaction(async (tx) => {
-    const existing = await getMissionRow(missionRef, tx, PERMISSIONS.MISSION_UPDATE);
-    if (!existing.schedule_id) return;
-    const now2 = nowIso2();
-    const revision3 = existing.revision + 1;
-    await tx.run(
-      `UPDATE missions SET schedule_id = NULL, due_datetime = NULL, updated_at = ?, revision = ?
-         WHERE id = ? AND workspace_id = ?`,
-      [now2, revision3, existing.id, existing.workspace_id]
+    const scope2 = await requireMissionPermission({
+      missionRef,
+      permission: PERMISSIONS.MISSION_UPDATE,
+      db: tx
+    });
+    const ctx = await buildWebappServiceContextForWorkspace(
+      scope2.workspaceId,
+      tx,
+      scope2.workspaceUserId
     );
-    await recordChange2(
-      {
-        entityType: "mission",
-        entityId: existing.id,
-        operation: "update",
-        entityRevision: revision3,
-        projectId: existing.project_id,
-        missionId: existing.id,
-        changedFields: ["schedule_id", "due_datetime"],
-        workspaceId: existing.workspace_id
-      },
-      tx
-    );
-    const stillReferenced = await tx.get(
-      `SELECT id FROM missions WHERE schedule_id = ? AND workspace_id = ? LIMIT 1`,
-      [existing.schedule_id, existing.workspace_id]
-    );
-    if (!stillReferenced) {
-      await tx.run(`DELETE FROM schedules WHERE id = ? AND workspace_id = ?`, [
-        existing.schedule_id,
-        existing.workspace_id
-      ]);
-    }
+    await clearMissionSchedule({ ctx, missionId: scope2.missionId });
   });
 }
 async function resolveScheduleDuplicateStatus(db, projectId, nextStatusKey) {
@@ -157409,12 +157469,12 @@ async function resolveScheduleDuplicateStatus(db, projectId, nextStatusKey) {
 async function createScheduledDuplicateIfNeeded(tx, mission, newStatusType) {
   if (!isTerminalStatusType(newStatusType) || !mission.schedule_id) return;
   if (newStatusType === "cancelled") return;
-  const scheduleRow = await getScheduleRow(tx, mission.workspace_id, mission.schedule_id);
-  if (!scheduleRow) return;
+  const schedule = await getScheduleSummary(tx, mission.workspace_id, mission.schedule_id);
+  if (!schedule) return;
   let nextDueDatetime;
   try {
     nextDueDatetime = previewScheduleDueDatetime(
-      scheduleRowToInput(scheduleRow),
+      scheduleInputFromSummary(schedule),
       mission.due_datetime
     );
   } catch {
@@ -157423,16 +157483,17 @@ async function createScheduledDuplicateIfNeeded(tx, mission, newStatusType) {
   const targetStatus = await resolveScheduleDuplicateStatus(
     tx,
     mission.project_id,
-    scheduleRow.next_status_key
+    schedule.nextStatusKey
   );
+  const automationCtx = {
+    ...await buildWebappServiceContextForWorkspace(mission.workspace_id, tx, null),
+    origin: { kind: "automation" }
+  };
   const now2 = nowIso2();
   const newMissionId = newId2();
-  const sequence = await nextMissionSequence2(tx, mission.workspace_id);
-  const workspaceRow = await tx.get(`SELECT slug FROM workspaces WHERE id = ?`, [
-    mission.workspace_id
-  ]);
-  const displayId = `${workspaceRow.slug}:${sequence}`;
-  const boardPosition = await topBoardPosition2(tx, mission.project_id, targetStatus.id);
+  const sequence = await nextMissionSequence(automationCtx);
+  const displayId = `${automationCtx.workspace.slug}:${sequence}`;
+  const boardPosition = await topBoardPosition(tx, mission.project_id, targetStatus.id);
   await tx.run(
     `INSERT INTO missions
        (id, workspace_id, project_id, display_id, sequence_number, title,
@@ -157457,7 +157518,7 @@ async function createScheduledDuplicateIfNeeded(tx, mission, newStatusType) {
       mission.notes_text,
       mission.schedule_id,
       nextDueDatetime,
-      bindBool(DATABASE_DIALECT, isTruthyFlag4(mission.allow_parallel_objectives)),
+      bindBool(DATABASE_DIALECT, isTruthyFlag(mission.allow_parallel_objectives)),
       now2,
       now2
     ]
@@ -157492,10 +157553,6 @@ async function createScheduledDuplicateIfNeeded(tx, mission, newStatusType) {
        ORDER BY position DESC LIMIT 1`,
     [mission.id]
   );
-  const automationCtx = {
-    ...await buildWebappServiceContextForWorkspace(mission.workspace_id, tx, null),
-    origin: { kind: "automation" }
-  };
   await insertObjective({
     ctx: automationCtx,
     missionId: newMissionId,
@@ -157676,7 +157733,7 @@ async function listInboxMissions() {
   };
 }
 async function listObjectives2(missionId, db = requireDatabaseClient()) {
-  await requireMissionPermission({
+  const { missionId: resolvedMissionId } = await requireMissionPermission({
     missionRef: missionId,
     permission: PERMISSIONS.OBJECTIVE_READ,
     db
@@ -157702,7 +157759,7 @@ async function listObjectives2(missionId, db = requireDatabaseClient()) {
          LEFT JOIN objectives wo ON wo.id = e.waiting_on_objective_id AND wo.deleted_at IS NULL
         WHERE o.mission_id = ? AND o.deleted_at IS NULL
         ORDER BY o.position ASC`,
-    [missionId]
+    [resolvedMissionId]
   );
   return rows.map(toObjectiveDto);
 }
@@ -158298,47 +158355,6 @@ async function loadOperatorUserRow(db = requireDatabaseClient()) {
   if (!fallback2) throw new ApiError(409, "No local user profile exists");
   return fallback2;
 }
-function parseProfileMetadata2(metadataJson) {
-  try {
-    const parsed = JSON.parse(metadataJson);
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-function avatarUrlFromMetadata(metadataJson) {
-  const avatarUrl = parseProfileMetadata2(metadataJson).avatarUrl;
-  return typeof avatarUrl === "string" && avatarUrl.trim() ? avatarUrl : null;
-}
-function agentInstructionsFromMetadata(metadataJson) {
-  const agentInstructions = parseProfileMetadata2(metadataJson).agentInstructions;
-  return typeof agentInstructions === "string" && agentInstructions.trim() ? agentInstructions.trim() : null;
-}
-function editorSchemeFromMetadata(metadataJson) {
-  const editorScheme = parseProfileMetadata2(metadataJson).editorScheme;
-  return typeof editorScheme === "string" && editorScheme.trim() ? editorScheme.trim() : null;
-}
-function mergeProfileMetadataJson2({
-  metadataJson,
-  avatarUrl,
-  agentInstructions,
-  editorScheme
-}) {
-  const parsed = parseProfileMetadata2(metadataJson);
-  if (avatarUrl) parsed.avatarUrl = avatarUrl;
-  else if (avatarUrl !== void 0) delete parsed.avatarUrl;
-  if (agentInstructions !== void 0) {
-    const trimmed9 = agentInstructions?.trim() ?? "";
-    if (trimmed9) parsed.agentInstructions = trimmed9;
-    else delete parsed.agentInstructions;
-  }
-  if (editorScheme !== void 0) {
-    const trimmed9 = editorScheme?.trim() ?? "";
-    if (trimmed9) parsed.editorScheme = trimmed9;
-    else delete parsed.editorScheme;
-  }
-  return JSON.stringify(parsed);
-}
 async function toProfileDto(row) {
   const authorized = getAuthorizedWorkspacesContext();
   const roles = authorized ? [...new Set(authorized.workspaces.flatMap((workspace2) => workspace2.roleKeys))].sort() : await loadActorRoles({
@@ -158350,9 +158366,9 @@ async function toProfileDto(row) {
     displayName: row.display_name,
     handle: row.handle,
     email: row.email,
-    avatarUrl: avatarUrlFromMetadata(row.metadata_json),
-    agentInstructions: agentInstructionsFromMetadata(row.metadata_json),
-    editorScheme: editorSchemeFromMetadata(row.metadata_json),
+    avatarUrl: avatarUrlFromProfileMetadata(row.metadata_json),
+    agentInstructions: agentInstructionsFromProfileMetadata(row.metadata_json),
+    editorScheme: editorSchemeFromProfileMetadata(row.metadata_json),
     kind: row.kind,
     authProvider: "better-auth",
     roles,
@@ -158524,7 +158540,7 @@ async function updateProfile(body) {
         throw new ApiError(400, "Avatar URL must be an http(s) URL or an uploaded image path");
       }
       setMetadata(
-        mergeProfileMetadataJson2({
+        mergeProfileMetadataJson({
           metadataJson: existing.metadata_json,
           avatarUrl
         })
@@ -158532,7 +158548,7 @@ async function updateProfile(body) {
     }
     if (body.agentInstructions !== void 0) {
       setMetadata(
-        mergeProfileMetadataJson2({
+        mergeProfileMetadataJson({
           metadataJson: metadataJson ?? existing.metadata_json,
           agentInstructions: body.agentInstructions
         })
@@ -158540,7 +158556,7 @@ async function updateProfile(body) {
     }
     if (body.editorScheme !== void 0) {
       setMetadata(
-        mergeProfileMetadataJson2({
+        mergeProfileMetadataJson({
           metadataJson: metadataJson ?? existing.metadata_json,
           editorScheme: body.editorScheme
         })
@@ -159741,14 +159757,17 @@ var missionSubcommands = {
       if (autoAdvance !== void 0) {
         update.autoAdvance = autoAdvance;
       }
+      if (hasFlag(body, "--title")) {
+        update.title = strFlag(body, "--title") ?? "";
+      }
       if (hasFlag(body, "--instruction-text") || hasFlag(body, "--instruction-text-file")) {
         await assertInstructionEditableOnProtocolSurface(objectiveId);
         update.instructionText = resolveInput(body, "--instruction-text", "--instruction-text-file") ?? "";
       }
-      if (autoAdvance === void 0 && update.instructionText === void 0) {
+      if (autoAdvance === void 0 && update.instructionText === void 0 && update.title === void 0) {
         throw new ApiError(
           400,
-          "Provide at least one of --auto-advance/--no-auto-advance or --instruction-text/--instruction-text-file"
+          "Provide at least one of --title, --auto-advance/--no-auto-advance, or --instruction-text/--instruction-text-file"
         );
       }
       return updateObjective2(objectiveId, update);
@@ -159871,12 +159890,12 @@ init_projects();
 init_db();
 
 // workspaces.ts
-var import_node_crypto27 = require("node:crypto");
+var import_node_crypto26 = require("node:crypto");
 
 // sql-studio/sql-studio.ts
 var import_node_child_process7 = require("node:child_process");
 var import_node_fs19 = require("node:fs");
-var import_node_path30 = __toESM(require("node:path"), 1);
+var import_node_path31 = __toESM(require("node:path"), 1);
 function publicHost(host) {
   return host === "0.0.0.0" ? "127.0.0.1" : host;
 }
@@ -159889,7 +159908,7 @@ function sqlStudioUrl({
   return `http://${publicHost(host)}:${port}`;
 }
 function resolveBinary(binary2) {
-  if (import_node_path30.default.isAbsolute(binary2)) {
+  if (import_node_path31.default.isAbsolute(binary2)) {
     return (0, import_node_fs19.existsSync)(binary2) ? binary2 : null;
   }
   if (binary2.includes("/")) {
@@ -164508,8 +164527,8 @@ var Receiving = class {
     const searchParams = new URLSearchParams();
     if (options.html_format !== void 0) searchParams.set("html_format", options.html_format);
     const queryString2 = searchParams.toString();
-    const path29 = queryString2 ? `/emails/receiving/${id2}?${queryString2}` : `/emails/receiving/${id2}`;
-    return await this.resend.get(path29);
+    const path30 = queryString2 ? `/emails/receiving/${id2}?${queryString2}` : `/emails/receiving/${id2}`;
+    return await this.resend.get(path30);
   }
   async list(options = {}) {
     const queryString2 = buildPaginationQuery(options);
@@ -164897,9 +164916,9 @@ var Resend = class {
       "Content-Type": "application/json"
     });
   }
-  async fetchRequest(path29, options = {}) {
+  async fetchRequest(path30, options = {}) {
     try {
-      const response = await fetch(`${this.baseUrl}${path29}`, options);
+      const response = await fetch(`${this.baseUrl}${path30}`, options);
       if (!response.ok) try {
         const rawError = await response.text();
         return {
@@ -164953,7 +164972,7 @@ var Resend = class {
       };
     }
   }
-  async post(path29, entity, options = {}) {
+  async post(path30, entity, options = {}) {
     const headers = new Headers(this.headers);
     const isFormData = typeof FormData !== "undefined" && entity instanceof FormData;
     if (isFormData) headers.delete("Content-Type");
@@ -164965,9 +164984,9 @@ var Resend = class {
       ...options,
       headers
     };
-    return this.fetchRequest(path29, requestOptions2);
+    return this.fetchRequest(path30, requestOptions2);
   }
-  async get(path29, options = {}) {
+  async get(path30, options = {}) {
     const headers = new Headers(this.headers);
     if (options.headers) for (const [key, value2] of new Headers(options.headers).entries()) headers.set(key, value2);
     const requestOptions2 = {
@@ -164975,9 +164994,9 @@ var Resend = class {
       ...options,
       headers
     };
-    return this.fetchRequest(path29, requestOptions2);
+    return this.fetchRequest(path30, requestOptions2);
   }
-  async put(path29, entity, options = {}) {
+  async put(path30, entity, options = {}) {
     const headers = new Headers(this.headers);
     if (options.headers) for (const [key, value2] of new Headers(options.headers).entries()) headers.set(key, value2);
     const requestOptions2 = {
@@ -164986,9 +165005,9 @@ var Resend = class {
       ...options,
       headers
     };
-    return this.fetchRequest(path29, requestOptions2);
+    return this.fetchRequest(path30, requestOptions2);
   }
-  async patch(path29, entity, options = {}) {
+  async patch(path30, entity, options = {}) {
     const headers = new Headers(this.headers);
     if (options.headers) for (const [key, value2] of new Headers(options.headers).entries()) headers.set(key, value2);
     const requestOptions2 = {
@@ -164997,9 +165016,9 @@ var Resend = class {
       ...options,
       headers
     };
-    return this.fetchRequest(path29, requestOptions2);
+    return this.fetchRequest(path30, requestOptions2);
   }
-  async delete(path29, query, options = {}) {
+  async delete(path30, query, options = {}) {
     const headers = new Headers(this.headers);
     if (options.headers) for (const [key, value2] of new Headers(options.headers).entries()) headers.set(key, value2);
     const requestOptions2 = {
@@ -165008,7 +165027,7 @@ var Resend = class {
       ...options,
       headers
     };
-    return this.fetchRequest(path29, requestOptions2);
+    return this.fetchRequest(path30, requestOptions2);
   }
 };
 
@@ -165692,7 +165711,7 @@ function toWorkspaceDto(r5) {
     createdAt: r5.created_at
   };
 }
-function slugify5(input) {
+function slugify4(input) {
   const base = input.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, MAX_WORKSPACE_SLUG_LENGTH);
   return base.length > 0 ? base : "workspace";
 }
@@ -165868,7 +165887,7 @@ async function createWorkspace(body) {
     const otherOrgAdminProfileIds = (await listOrganizationAdminProfileIds(organizationId, tx)).filter((id2) => id2 !== creatorProfileId);
     const nextWorkspaceId = newId2();
     const slug = await uniqueWorkspaceSlug({
-      desired: body.slug?.trim() ? slugify5(body.slug) : suggestSlugFromName(name2),
+      desired: body.slug?.trim() ? slugify4(body.slug) : suggestSlugFromName(name2),
       organizationId,
       client: tx
     });
@@ -165978,7 +165997,7 @@ async function createOrganizationOnboarding(body) {
     );
     const nextWorkspaceId = newId2();
     const slug = await uniqueWorkspaceSlug({
-      desired: body.workspaceSlug?.trim() ? slugify5(body.workspaceSlug) : suggestSlugFromName(workspaceName),
+      desired: body.workspaceSlug?.trim() ? slugify4(body.workspaceSlug) : suggestSlugFromName(workspaceName),
       organizationId,
       client: tx
     });
@@ -166253,9 +166272,9 @@ var INVITATION_HASH_ALGORITHM = "sha256";
 var INVITATION_TTL_DAYS = 14;
 var WORKSPACE_ROLE_KEYS = /* @__PURE__ */ new Set(["ADMIN", "MANAGER", "MEMBER"]);
 function generateInvitationSecret() {
-  const prefix = `${INVITATION_TOKEN_SCHEME}_${(0, import_node_crypto27.randomBytes)(4).toString("hex")}`;
-  const secret = `${prefix}${(0, import_node_crypto27.randomBytes)(24).toString("hex")}`;
-  const hash2 = (0, import_node_crypto27.createHash)(INVITATION_HASH_ALGORITHM).update(secret).digest("hex");
+  const prefix = `${INVITATION_TOKEN_SCHEME}_${(0, import_node_crypto26.randomBytes)(4).toString("hex")}`;
+  const secret = `${prefix}${(0, import_node_crypto26.randomBytes)(24).toString("hex")}`;
+  const hash2 = (0, import_node_crypto26.createHash)(INVITATION_HASH_ALGORITHM).update(secret).digest("hex");
   return { secret, prefix, hash: hash2 };
 }
 var INVITATION_COLUMNS = "id, workspace_id, email, role_key, token_prefix, status, invited_by_workspace_user_id, expires_at, created_at, revision";
@@ -166419,7 +166438,7 @@ async function acceptWorkspaceInvitation(body) {
   if (!rawToken) throw new ApiError(400, "Invitation token is required");
   const profileId = getActiveProfileId();
   if (!profileId) throw new ApiError(401, "Authentication required");
-  const tokenHash = (0, import_node_crypto27.createHash)(INVITATION_HASH_ALGORITHM).update(rawToken).digest("hex");
+  const tokenHash = (0, import_node_crypto26.createHash)(INVITATION_HASH_ALGORITHM).update(rawToken).digest("hex");
   const client = requireDatabaseClient();
   const outcome = await client.transaction(async (tx) => {
     const invitation = await tx.get(
@@ -167465,10 +167484,12 @@ async function runProtocolSubcommand(subcommand, body) {
   }
 }
 
-// ../mcp/run-queue-detail.ts
+// ../mcp/records.ts
 function isRecord(value2) {
   return typeof value2 === "object" && value2 !== null && !Array.isArray(value2);
 }
+
+// ../mcp/run-queue-detail.ts
 function compactRunQueueResponse(value2) {
   if (!isRecord(value2) || !Array.isArray(value2.queues)) return value2;
   return {
@@ -167501,19 +167522,16 @@ function compactRunQueueResponse(value2) {
 }
 
 // ../mcp/search-detail.ts
-function isRecord2(value2) {
-  return typeof value2 === "object" && value2 !== null && !Array.isArray(value2);
-}
 function compactSearchResponse(value2) {
-  if (!isRecord2(value2) || value2.version !== 3 || !Array.isArray(value2.results)) return value2;
+  if (!isRecord(value2) || value2.version !== 3 || !Array.isArray(value2.results)) return value2;
   return {
     ...value2,
     results: value2.results.map((result2) => {
-      if (!isRecord2(result2) || !Array.isArray(result2.matches)) return result2;
+      if (!isRecord(result2) || !Array.isArray(result2.matches)) return result2;
       return {
         ...result2,
         matches: result2.matches.slice(0, 2).map((match) => {
-          if (!isRecord2(match)) return match;
+          if (!isRecord(match)) return match;
           const compact = { ...match };
           delete compact.snippet;
           delete compact.matchedTerms;
@@ -167526,7 +167544,7 @@ function compactSearchResponse(value2) {
   };
 }
 
-// ../mcp/tool-catalog.ts
+// ../packages/contract/dist/mcp-tools.js
 function objectSchema(properties, required2 = []) {
   return {
     type: "object",
@@ -167551,594 +167569,388 @@ var protocolOutputSchema = (description) => ({
 var changeRationalesProperty = (description) => ({
   type: "array",
   description,
-  items: objectSchema(
-    {
-      filePath: stringProperty("Repository-relative path of the changed file."),
-      label: stringProperty("Short reviewer title for the change."),
-      summary: stringProperty("What changed in this file."),
-      why: stringProperty("Why the change was made."),
-      impact: stringProperty("Behavioral impact of the change."),
-      hunks: {
-        type: "array",
-        description: "Optional diff-hunk headers only; file contents and diffs are prohibited.",
-        items: objectSchema({ header: stringProperty("Unified-diff hunk header.") }, ["header"])
-      }
-    },
-    ["filePath", "label", "summary", "why", "impact"]
-  )
+  items: objectSchema({
+    filePath: stringProperty("Repository-relative path of the changed file."),
+    label: stringProperty("Short reviewer title for the change."),
+    summary: stringProperty("What changed in this file."),
+    why: stringProperty("Why the change was made."),
+    impact: stringProperty("Behavioral impact of the change."),
+    hunks: {
+      type: "array",
+      description: "Optional diff-hunk headers only; file contents and diffs are prohibited.",
+      items: objectSchema({ header: stringProperty("Unified-diff hunk header.") }, ["header"])
+    }
+  }, ["filePath", "label", "summary", "why", "impact"])
 });
 var readOnly = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
 var writeAction = { readOnlyHint: false, destructiveHint: false, openWorldHint: false };
 var destructiveAction = { readOnlyHint: false, destructiveHint: true, openWorldHint: false };
-function widget(uri) {
-  return {
-    "openai/outputTemplate": uri,
-    ui: { resourceUri: uri }
-  };
-}
-var hostedMcpToolDefinitions = [
-  {
-    name: "overlord_resolve_project",
-    title: "Resolve Overlord project",
-    description: "Use this when the user identifies an Overlord project by id, slug, name, or exposed repository metadata. Names are matched case-insensitively across every workspace the caller can reach; when a name matches in more than one, this returns a 'project_selection_required' result listing the candidates with their workspaces \u2014 ask the user which one, then retry with workspaceId set. When resolving from .overlord/project.json, the result is the isPrimary project if the checkout is linked to more than one project; linkedProjects lists every linked project.",
-    inputSchema: objectSchema({
-      projectId: stringProperty("Explicit Overlord project id, slug, or project name."),
-      workspaceId: stringProperty(
-        "Optional workspace (id, slug, or name) that narrows an ambiguous projectId. Use this to retry after a 'project_selection_required' result."
-      ),
-      directory: stringProperty(
-        "Optional repository directory path when the MCP client can expose one with .overlord/project.json."
-      )
-    }),
-    outputSchema: protocolOutputSchema(
-      "Resolved Overlord project metadata, or a 'project_selection_required' result listing candidate projects."
-    ),
-    annotations: readOnly,
-    _meta: widget("ui://overlord/project-selector.html")
-  },
-  {
-    name: "overlord_create_project",
-    title: "Create Overlord project",
-    description: "Use this only when the user explicitly asks to create a new Overlord project (workspace project). If the user belongs to more than one workspace and none is specified, this returns a 'workspace_selection_required' result listing the workspaces \u2014 ask the user which one, then call again with workspaceId set to the chosen id, slug, or name.",
-    inputSchema: objectSchema(
-      {
+function overlordMcpToolDefinitions({ defaultAgent }) {
+  return [
+    {
+      name: "overlord_resolve_project",
+      title: "Resolve Overlord project",
+      description: "Use this when the user identifies an Overlord project by id, slug, name, or exposed repository metadata. Names are matched case-insensitively across every workspace the caller can reach; when a name matches in more than one, this returns a 'project_selection_required' result listing the candidates with their workspaces \u2014 ask the user which one, then retry with workspaceId set. When resolving from .overlord/project.json, the result is the isPrimary project if the checkout is linked to more than one project; linkedProjects lists every linked project.",
+      inputSchema: objectSchema({
+        projectId: stringProperty("Explicit Overlord project id, slug, or project name."),
+        workspaceId: stringProperty("Optional workspace (id, slug, or name) that narrows an ambiguous projectId. Use this to retry after a 'project_selection_required' result."),
+        directory: stringProperty("Optional repository directory path when the MCP client can expose one with .overlord/project.json.")
+      }),
+      outputSchema: protocolOutputSchema("Resolved Overlord project metadata, or a 'project_selection_required' result listing candidate projects."),
+      annotations: readOnly
+    },
+    {
+      name: "overlord_create_project",
+      title: "Create Overlord project",
+      description: "Use this only when the user explicitly asks to create a new Overlord project (workspace project). If the user belongs to more than one workspace and none is specified, this returns a 'workspace_selection_required' result listing the workspaces \u2014 ask the user which one, then call again with workspaceId set to the chosen id, slug, or name.",
+      inputSchema: objectSchema({
         name: stringProperty("New project name."),
-        workspaceId: stringProperty(
-          "Workspace to create the project in (id, slug, or name). Required only when the caller belongs to multiple workspaces."
-        ),
+        workspaceId: stringProperty("Workspace to create the project in (id, slug, or name). Required only when the caller belongs to multiple workspaces."),
         description: stringProperty("Optional project description."),
         slug: stringProperty("Optional project slug; defaults to a slug derived from the name.")
-      },
-      ["name"]
-    ),
-    outputSchema: protocolOutputSchema(
-      "The created project (status 'created'), or a 'workspace_selection_required' result listing candidate workspaces."
-    ),
-    annotations: writeAction
-  },
-  {
-    name: "overlord_list_project_statuses",
-    title: "List Overlord project statuses",
-    description: "Use this to read one project's board columns. Status names and order are defined per project, so two projects in the same workspace can label the same lifecycle differently; this is the only way to discover a specific board\u2019s columns. Each status carries a stable type (draft, next, execute, review, complete, blocked, cancelled) that does not vary by project \u2014 use the type for filtering and the name only for display.",
-    inputSchema: objectSchema(
-      {
-        projectId: stringProperty(
-          "Overlord project id, slug, or name. An ambiguous name returns 'project_selection_required'; retry with workspaceId."
-        ),
-        workspaceId: stringProperty(
-          "Optional workspace (id, slug, or name) that narrows an ambiguous projectId."
-        )
-      },
-      ["projectId"]
-    ),
-    outputSchema: protocolOutputSchema(
-      "The project's statuses ordered by board position, each with id, projectId, key, name, type, position, isDefault, and isTerminal."
-    ),
-    annotations: readOnly
-  },
-  {
-    name: "overlord_search_missions",
-    title: "Search Overlord missions",
-    description: "Use this to find missions across the caller's authorized workspaces. Results are mission anchors with only the matching objectives and deliveries in matches; an objective displayId (for example coo:789.2nnh) can be passed directly to overlord_load_mission_context. matches is never the mission's complete objective list. Artifacts are not indexed; load mission context after locating the mission to read them. There is no relative-date parsing or implicit time window: compute absolute ISO bounds and pass from/to. Raise limit for broad questions and inspect workspaceCounts, entityCounts, and truncatedCandidates before claiming a list is complete. appliedFilters.mode 'fallback' means the query contributed nothing and results are a recency listing, not an answer. Compact detail is the default and retains navigation identity while reducing child payload; request full for snippets and child metadata. Ranked results can never prove that no mission mentions something. To prove absence or presence of an exact token (for example a canonical kb-feature: Knowledgebase Feature reference), pass reference with projectId instead: that mode is exhaustive, returns every mission in the project whose live objective text contains the exact token with its statusType, and pages with cursor until complete is true; it accepts only projectId, workspaceId, limit (1-100, default 50) and cursor.",
-    inputSchema: objectSchema({
-      query: stringProperty("Search query text."),
-      reference: stringProperty(
-        "Exact-reference mode: a case-sensitive token of 8-512 characters with no whitespace, matched as a whole token in live objective instruction text. Requires projectId; cannot be combined with query or other ranked filters. Returns MissionReferenceSearchResponse { results, nextCursor, complete }. Absence is proven only after following nextCursor to a page with complete: true."
-      ),
-      cursor: stringProperty(
-        "Exact-reference mode only: the nextCursor from the previous page for the same reference and projectId."
-      ),
-      status: stringProperty(
-        "Comma-separated status TYPES, such as draft,execute,review. Types are workspace-invariant (draft, next, execute, review, complete, blocked, cancelled). Project-defined status names \u2014 the board column labels read by overlord_list_project_statuses \u2014 are not accepted here."
-      ),
-      projectId: stringProperty(
-        "Optional project reference: a stable UUID, a slug, or the project name as the user said it. Names are matched case-insensitively against the projects the caller can reach. If the name matches in more than one workspace the call returns a 'project_selection_required' result listing the candidates with their workspaces \u2014 ask the user which one, then retry with workspaceId set."
-      ),
-      workspaceId: stringProperty(
-        "Optional workspace (id, slug, or name) that narrows an ambiguous projectId. Use this to retry after a 'project_selection_required' result."
-      ),
-      resourceKey: stringProperty(
-        "Optional logical resource key. Keys are matched by name within every selected project."
-      ),
-      dateField: {
-        type: "string",
-        enum: ["createdAt", "updatedAt", "dueDatetime"],
-        description: "Date column for an explicit range: createdAt, updatedAt, or dueDatetime. Defaults to updatedAt only when from or to is supplied. Use dueDatetime for questions about what is scheduled or due \u2014 a mission is scheduled by its due date, not by an execution timer. Missions with no due date are excluded from a dueDatetime range."
-      },
-      from: stringProperty("Optional inclusive ISO-8601 date/time lower bound."),
-      to: stringProperty("Optional exclusive ISO-8601 date/time upper bound."),
-      limit: {
-        type: "number",
-        description: "Maximum result count. Defaults to 25."
-      },
-      entityTypes: stringProperty(
-        "Optional comma-separated v3 entity types: mission, objective, delivery."
-      ),
-      objectiveStates: stringProperty(
-        "Optional comma-separated v3 objective states for matching objectives."
-      ),
-      matchesPerResult: {
-        type: "number",
-        description: "Optional v3 child-match cap per mission (default 3, max 10; compact returns at most 2)."
-      },
-      detail: {
-        type: "string",
-        enum: ["compact", "full"],
-        description: "Result detail: compact (default) keeps child navigation fields and removes child snippets/metadata; full returns the complete v3 child matches."
-      }
-    }),
-    outputSchema: protocolOutputSchema(
-      "SearchResponseV3: mission-anchored results with matched objective/delivery children, appliedFilters, entityCounts, totalMatchedBeforeLimit, workspaceCounts, and truncatedCandidates. With reference: MissionReferenceSearchResponse (kind mission_reference_search, results with statusType and matching objectives, nextCursor, complete). Or a 'project_selection_required' result when projectId names a project in more than one workspace."
-    ),
-    annotations: readOnly,
-    _meta: widget("ui://overlord/mission-list.html")
-  },
-  {
-    name: "overlord_create_mission",
-    title: "Create Overlord mission",
-    description: "Use this to create a draft mission with projectId. To intentionally create an account-owned inbox item, set unassignedToProject to true; omission of both is rejected.",
-    inputSchema: objectSchema(
-      {
-        projectId: stringProperty(
-          "Overlord project id, slug, or name. Required unless unassignedToProject is true."
-        ),
-        unassignedToProject: booleanProperty(
-          "Set true only to intentionally create an account-owned inbox item instead of a project mission. Cannot be combined with projectId."
-        ),
+      }, ["name"]),
+      outputSchema: protocolOutputSchema("The created project (status 'created'), or a 'workspace_selection_required' result listing candidate workspaces."),
+      annotations: writeAction
+    },
+    {
+      name: "overlord_list_project_statuses",
+      title: "List Overlord project statuses",
+      description: "Use this to read one project's board columns. Status names and order are defined per project, so two projects in the same workspace can label the same lifecycle differently; this is the only way to discover a specific board\u2019s columns. Each status carries a stable type (draft, next, execute, review, complete, blocked, cancelled) that does not vary by project \u2014 use the type for filtering and the name only for display.",
+      inputSchema: objectSchema({
+        projectId: stringProperty("Overlord project id, slug, or name. An ambiguous name returns 'project_selection_required'; retry with workspaceId."),
+        workspaceId: stringProperty("Optional workspace (id, slug, or name) that narrows an ambiguous projectId.")
+      }, ["projectId"]),
+      outputSchema: protocolOutputSchema("The project's statuses ordered by board position, each with id, projectId, key, name, type, position, isDefault, and isTerminal."),
+      annotations: readOnly
+    },
+    {
+      name: "overlord_search_missions",
+      title: "Search Overlord missions",
+      description: "Use this to find missions across the caller's authorized workspaces. Results are mission anchors with only the matching objectives and deliveries in matches; an objective displayId (for example coo:789.2nnh) can be passed directly to overlord_load_mission_context. matches is never the mission's complete objective list. Artifacts are not indexed; load mission context after locating the mission to read them. There is no relative-date parsing or implicit time window: compute absolute ISO bounds and pass from/to. Raise limit for broad questions and inspect workspaceCounts, entityCounts, and truncatedCandidates before claiming a list is complete. appliedFilters.mode 'fallback' means the query contributed nothing and results are a recency listing, not an answer. Compact detail is the default and retains navigation identity while reducing child payload; request full for snippets and child metadata. Ranked results can never prove that no mission mentions something. To prove absence or presence of an exact token (for example a canonical kb-feature: Knowledgebase Feature reference), pass reference with projectId instead: that mode is exhaustive, returns every mission in the project whose live objective text contains the exact token with its statusType, and pages with cursor until complete is true; it accepts only projectId, workspaceId, limit (1-100, default 50) and cursor.",
+      inputSchema: objectSchema({
+        query: stringProperty("Search query text."),
+        reference: stringProperty("Exact-reference mode: a case-sensitive token of 8-512 characters with no whitespace, matched as a whole token in live objective instruction text. Requires projectId; cannot be combined with query or other ranked filters. Returns MissionReferenceSearchResponse { results, nextCursor, complete }. Absence is proven only after following nextCursor to a page with complete: true."),
+        cursor: stringProperty("Exact-reference mode only: the nextCursor from the previous page for the same reference and projectId."),
+        status: stringProperty("Comma-separated status TYPES, such as draft,execute,review. Types are workspace-invariant (draft, next, execute, review, complete, blocked, cancelled). Project-defined status names \u2014 the board column labels read by overlord_list_project_statuses \u2014 are not accepted here."),
+        projectId: stringProperty("Optional project reference: a stable UUID, a slug, or the project name as the user said it. Names are matched case-insensitively against the projects the caller can reach. If the name matches in more than one workspace the call returns a 'project_selection_required' result listing the candidates with their workspaces \u2014 ask the user which one, then retry with workspaceId set."),
+        workspaceId: stringProperty("Optional workspace (id, slug, or name) that narrows an ambiguous projectId. Use this to retry after a 'project_selection_required' result."),
+        resourceKey: stringProperty("Optional logical resource key. Keys are matched by name within every selected project."),
+        dateField: {
+          type: "string",
+          enum: ["createdAt", "updatedAt", "dueDatetime"],
+          description: "Date column for an explicit range: createdAt, updatedAt, or dueDatetime. Defaults to updatedAt only when from or to is supplied. Use dueDatetime for questions about what is scheduled or due \u2014 a mission is scheduled by its due date, not by an execution timer. Missions with no due date are excluded from a dueDatetime range."
+        },
+        from: stringProperty("Optional inclusive ISO-8601 date/time lower bound."),
+        to: stringProperty("Optional exclusive ISO-8601 date/time upper bound."),
+        limit: {
+          type: "number",
+          description: "Maximum result count. Defaults to 25."
+        },
+        entityTypes: stringProperty("Optional comma-separated v3 entity types: mission, objective, delivery."),
+        objectiveStates: stringProperty("Optional comma-separated v3 objective states for matching objectives."),
+        matchesPerResult: {
+          type: "number",
+          description: "Optional v3 child-match cap per mission (default 3, max 10; compact returns at most 2)."
+        },
+        detail: {
+          type: "string",
+          enum: ["compact", "full"],
+          description: "Result detail: compact (default) keeps child navigation fields and removes child snippets/metadata; full returns the complete v3 child matches."
+        }
+      }),
+      outputSchema: protocolOutputSchema("SearchResponseV3: mission-anchored results with matched objective/delivery children, appliedFilters, entityCounts, totalMatchedBeforeLimit, workspaceCounts, and truncatedCandidates. With reference: MissionReferenceSearchResponse (kind mission_reference_search, results with statusType and matching objectives, nextCursor, complete). Or a 'project_selection_required' result when projectId names a project in more than one workspace."),
+      annotations: readOnly
+    },
+    {
+      name: "overlord_create_mission",
+      title: "Create Overlord mission",
+      description: "Use this to create a draft mission with projectId. To intentionally create an account-owned inbox item, set unassignedToProject to true; omission of both is rejected.",
+      inputSchema: objectSchema({
+        projectId: stringProperty("Overlord project id, slug, or name. Required unless unassignedToProject is true."),
+        unassignedToProject: booleanProperty("Set true only to intentionally create an account-owned inbox item instead of a project mission. Cannot be combined with projectId."),
         objective: stringProperty("Initial objective text."),
         title: stringProperty("Optional mission title."),
         resourceKey: stringProperty("Optional logical project resource key for the objective."),
-        agent: stringProperty(
-          "Optional agent identifier to assign to the initial objective, such as codex or claude. Omitted leaves the project launch-preference default; set it here instead of appending a second objective just to name an agent."
-        ),
-        model: stringProperty(
-          "Optional model identifier for the assigned agent. Requires agent; rejected without it."
-        ),
-        assignedTo: stringProperty(
-          "Optional workspace member to own the mission (workspace_users.id, profile UUID, orgid:username, bare username, or email). Rejected when the member is not in the workspace; meaningless for an unassigned inbox item."
-        ),
-        autoAdvance: booleanProperty(
-          "When true, Overlord queues the next objective for execution after this one is delivered. Defaults to false."
-        )
-      },
-      ["objective"]
-    ),
-    outputSchema: protocolOutputSchema(
-      "The newly created draft mission, or an intentional unassigned inbox item. For each created objective, inspect the returned ObjectiveDto assignedAgent, model, resourceKey, and queueEntry/autoAdvance fields to verify the persisted launch settings."
-    ),
-    annotations: writeAction
-  },
-  {
-    name: "overlord_create_inbox_item",
-    title: "Create inbox item",
-    description: "Use this to create a private, account-owned unassigned task capture.",
-    inputSchema: objectSchema(
-      {
+        agent: stringProperty("Optional agent identifier to assign to the initial objective, such as codex or claude. Omitted leaves the project launch-preference default; set it here instead of appending a second objective just to name an agent."),
+        model: stringProperty("Optional model identifier for the assigned agent. Requires agent; rejected without it."),
+        assignedTo: stringProperty("Optional workspace member to own the mission (workspace_users.id, profile UUID, orgid:username, bare username, or email). Rejected when the member is not in the workspace; meaningless for an unassigned inbox item."),
+        autoAdvance: booleanProperty("When true, Overlord queues the next objective for execution after this one is delivered. Defaults to false.")
+      }, ["objective"]),
+      outputSchema: protocolOutputSchema("The newly created draft mission, or an intentional unassigned inbox item. For each created objective, inspect the returned ObjectiveDto assignedAgent, model, resourceKey, and queueEntry/autoAdvance fields to verify the persisted launch settings."),
+      annotations: writeAction
+    },
+    {
+      name: "overlord_create_inbox_item",
+      title: "Create inbox item",
+      description: "Use this to create a private, account-owned unassigned task capture.",
+      inputSchema: objectSchema({
         title: stringProperty("Inbox item title."),
         objective: stringProperty("The one objective captured in v1.")
-      },
-      ["title", "objective"]
-    ),
-    outputSchema: protocolOutputSchema("The new explicit unassigned inbox item."),
-    annotations: writeAction
-  },
-  {
-    name: "overlord_load_mission_context",
-    title: "Load mission context",
-    description: "Use this when the user wants to inspect one mission, its objectives, history, artifacts, or shared context.",
-    inputSchema: objectSchema({
-      missionId: stringProperty(
-        "Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission."
-      ),
-      objectiveId: stringProperty(
-        "Objective UUID or display id such as coo:756.k7xm. Returns that objective as the current one instead of rediscovering the mission active objective \u2014 required on a mission running objectives in parallel."
-      ),
-      executionTargetId: stringProperty(
-        "Optional local execution target id for resolving sibling project resource paths."
-      )
-    }),
-    outputSchema: protocolOutputSchema("Structured context for the requested mission."),
-    annotations: readOnly,
-    _meta: widget("ui://overlord/objective-viewer.html")
-  },
-  {
-    name: "overlord_list_deliveries",
-    title: "List mission deliveries",
-    description: "Use this to read a mission's delivered work after locating it. Returns a newest-first MissionDeliveriesDto page { items, total, limit } of normalized delivery records including summary, verification, follow-up notes, and authoritative human-action, tradeoff, risk, deferred-work, and assumption evidence; items are capped at 200 and total is the matching count before that cap. It never exposes raw delivery payloads.",
-    inputSchema: objectSchema({
-      missionId: stringProperty(
-        "Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission."
-      ),
-      objectiveId: stringProperty(
-        "Objective UUID or display id such as coo:756.k7xm. Use a display id when that is the only identifier available."
-      )
-    }),
-    outputSchema: protocolOutputSchema(
-      "The mission's newest-first MissionDeliveriesDto page: items (DeliveryDto, capped at 200), total, and limit."
-    ),
-    annotations: readOnly
-  },
-  {
-    name: "overlord_launch_objective",
-    title: "Launch objective execution",
-    description: "Use this only when the user explicitly asks to start a particular objective. It queues the normal Overlord execution request; it does not attach this MCP agent to perform the work. The objective must be launchable, its workspace must authorize execution, and an existing active request is returned instead of duplicated.",
-    inputSchema: objectSchema(
-      {
+      }, ["title", "objective"]),
+      outputSchema: protocolOutputSchema("The new explicit unassigned inbox item."),
+      annotations: writeAction
+    },
+    {
+      name: "overlord_load_mission_context",
+      title: "Load mission context",
+      description: "Use this when the user wants to inspect one mission, its objectives, history, artifacts, or shared context.",
+      inputSchema: objectSchema({
+        missionId: stringProperty("Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission."),
+        objectiveId: stringProperty("Objective UUID or display id such as coo:756.k7xm. Returns that objective as the current one instead of rediscovering the mission active objective \u2014 required on a mission running objectives in parallel."),
+        executionTargetId: stringProperty("Optional local execution target id for resolving sibling project resource paths.")
+      }),
+      outputSchema: protocolOutputSchema("Structured mission context. Objective summaries include assignedAgent, model, reasoningEffort, and resourceKey so the agent can confirm the objective assignment."),
+      annotations: readOnly
+    },
+    {
+      name: "overlord_list_deliveries",
+      title: "List mission deliveries",
+      description: "Use this to read a mission's delivered work after locating it. Returns a newest-first MissionDeliveriesDto page { items, total, limit } of normalized delivery records including summary, verification, follow-up notes, and authoritative human-action, tradeoff, risk, deferred-work, and assumption evidence; items are capped at 200 and total is the matching count before that cap. It never exposes raw delivery payloads.",
+      inputSchema: objectSchema({
+        missionId: stringProperty("Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission."),
+        objectiveId: stringProperty("Objective UUID or display id such as coo:756.k7xm. Use a display id when that is the only identifier available.")
+      }),
+      outputSchema: protocolOutputSchema("The mission's newest-first MissionDeliveriesDto page: items (DeliveryDto, capped at 200), total, and limit."),
+      annotations: readOnly
+    },
+    {
+      name: "overlord_launch_objective",
+      title: "Launch objective execution",
+      description: "Use this only when the user explicitly asks to start a particular objective. It queues the normal Overlord execution request; it does not attach this MCP agent to perform the work. The objective must be launchable, its workspace must authorize execution, and an existing active request is returned instead of duplicated.",
+      inputSchema: objectSchema({
         objectiveId: stringProperty("Objective UUID or display id such as coo:756.k7xm."),
         agent: stringProperty("Agent identifier to launch, such as codex or claude."),
         model: stringProperty("Optional model identifier to snapshot onto the execution request."),
-        reasoningEffort: stringProperty(
-          "Optional reasoning-effort setting to snapshot onto the execution request."
-        ),
-        executionTargetId: stringProperty(
-          "Optional eligible execution target id. Omit to use the project's normal target selection."
-        )
-      },
-      ["objectiveId", "agent"]
-    ),
-    outputSchema: protocolOutputSchema("The queued or already-active ExecutionRequestDto."),
-    annotations: writeAction
-  },
-  {
-    name: "overlord_reorder_future_objectives",
-    title: "Reorder future objectives",
-    description: "Use this only when the user explicitly asks to change the order of future objectives in one mission. Supply every future objective UUID in its complete desired top-to-bottom order; draft, active, and completed objectives cannot be moved by this tool.",
-    inputSchema: objectSchema(
-      {
+        reasoningEffort: stringProperty("Optional reasoning-effort setting to snapshot onto the execution request."),
+        executionTargetId: stringProperty("Optional eligible execution target id. Omit to use the project's normal target selection.")
+      }, ["objectiveId", "agent"]),
+      outputSchema: protocolOutputSchema("The queued or already-active ExecutionRequestDto."),
+      annotations: writeAction
+    },
+    {
+      name: "overlord_reorder_future_objectives",
+      title: "Reorder future objectives",
+      description: "Use this only when the user explicitly asks to change the order of future objectives in one mission. Supply every future objective UUID in its complete desired top-to-bottom order; draft, active, and completed objectives cannot be moved by this tool.",
+      inputSchema: objectSchema({
         missionId: stringProperty("Mission UUID."),
         orderedObjectiveIds: {
           type: "array",
           description: "Complete desired top-to-bottom UUID order of every objective currently in the future state.",
           items: stringProperty("Future objective UUID.")
         }
-      },
-      ["missionId", "orderedObjectiveIds"]
-    ),
-    outputSchema: protocolOutputSchema("The mission's full ObjectiveDto list in its new order."),
-    annotations: writeAction
-  },
-  {
-    name: "overlord_add_objectives",
-    title: "Add objectives",
-    description: "Use this only when the user explicitly asks to append draft objectives to an existing mission.",
-    inputSchema: objectSchema(
-      {
-        missionId: stringProperty(
-          "Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission."
-        ),
-        objectiveId: stringProperty(
-          "Objective UUID or display id such as coo:756.k7xm. Used only to supply missionId when it is omitted; the new objectives are appended to that objective mission."
-        ),
+      }, ["missionId", "orderedObjectiveIds"]),
+      outputSchema: protocolOutputSchema("The mission's full ObjectiveDto list in its new order."),
+      annotations: writeAction
+    },
+    {
+      name: "overlord_add_objectives",
+      title: "Add objectives",
+      description: "Use this only when the user explicitly asks to append draft objectives to an existing mission.",
+      inputSchema: objectSchema({
+        missionId: stringProperty("Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission."),
+        objectiveId: stringProperty("Objective UUID or display id such as coo:756.k7xm. Used only to supply missionId when it is omitted; the new objectives are appended to that objective mission."),
         objectives: {
           type: "array",
           description: "Objective objects with objective text and optional title, agent/model launch selection, resourceKey, and autoAdvance.",
           items: objectSchema({
             objective: stringProperty("Objective text."),
             title: stringProperty("Optional objective title."),
-            agent: stringProperty(
-              "Optional agent identifier to assign to this objective, such as codex or claude."
-            ),
+            agent: stringProperty("Optional agent identifier to assign to this objective, such as codex or claude."),
             model: stringProperty("Optional model identifier for this objective. Requires agent."),
             resourceKey: stringProperty("Optional logical project resource key."),
-            autoAdvance: booleanProperty(
-              "When true, Overlord queues the next objective for execution after this one is delivered. Defaults to false."
-            )
+            autoAdvance: booleanProperty("When true, Overlord queues the next objective for execution after this one is delivered. Defaults to false.")
           })
         }
-      },
-      ["objectives"]
-    ),
-    outputSchema: protocolOutputSchema(
-      "The mission with the appended draft objectives. Inspect each returned ObjectiveDto assignedAgent, model, resourceKey, and queueEntry/autoAdvance fields to verify the persisted launch settings."
-    ),
-    annotations: writeAction
-  },
-  {
-    name: "overlord_update_objective",
-    title: "Update objective",
-    description: "Use this to turn auto-advance on or off and/or edit instruction text on a draft or future objective.",
-    inputSchema: objectSchema(
-      {
+      }, ["objectives"]),
+      outputSchema: protocolOutputSchema("The mission with the appended draft objectives. Inspect each returned ObjectiveDto assignedAgent, model, resourceKey, and queueEntry/autoAdvance fields to verify the persisted launch settings."),
+      annotations: writeAction
+    },
+    {
+      name: "overlord_update_objective",
+      title: "Update objective",
+      description: "Use this to rewrite an objective title in any state, turn auto-advance on or off, and/or edit instruction text on a draft or future objective.",
+      inputSchema: objectSchema({
         objectiveId: stringProperty("Objective UUID or display id."),
-        autoAdvance: booleanProperty(
-          "When true, Overlord queues the next objective after this one is delivered. When false, delivery waits for approval."
-        ),
-        instructionText: stringProperty(
-          "Replacement instruction text. Allowed only when the objective is in draft or future state; blank clears the text in those states."
-        )
-      },
-      ["objectiveId"]
-    ),
-    outputSchema: protocolOutputSchema(
-      "The updated objective, including autoAdvance and instructionText."
-    ),
-    annotations: writeAction
-  },
-  {
-    name: "overlord_delete_missions",
-    title: "Delete missions",
-    description: "Use this only after showing the resolved mission list to the user and receiving an affirmative response. Soft-deletes one to 100 missions atomically; any missing, duplicate, deleted, or unauthorized target rejects the entire request. Deleting a mission also soft-deletes its live objectives.",
-    inputSchema: objectSchema(
-      {
+        title: stringProperty("Replacement objective title. An empty string clears the custom title and restores instruction-derived presentation."),
+        autoAdvance: booleanProperty("When true, Overlord queues the next objective after this one is delivered. When false, delivery waits for approval."),
+        instructionText: stringProperty("Replacement instruction text. Allowed only when the objective is in draft or future state; blank clears the text in those states.")
+      }, ["objectiveId"]),
+      outputSchema: protocolOutputSchema("The updated objective, including title, assignedAgent, model, reasoningEffort, resourceKey, autoAdvance, and instructionText."),
+      annotations: writeAction
+    },
+    {
+      name: "overlord_delete_missions",
+      title: "Delete missions",
+      description: "Use this only after showing the resolved mission list to the user and receiving an affirmative response. Soft-deletes one to 100 missions atomically; any missing, duplicate, deleted, or unauthorized target rejects the entire request. Deleting a mission also soft-deletes its live objectives.",
+      inputSchema: objectSchema({
         missionIds: {
           type: "array",
           description: "One to 100 unique mission UUIDs or display IDs to delete.",
           items: stringProperty("Mission UUID or workspace display ID.")
         },
-        confirm: booleanProperty(
-          "Must be true only after the user has reviewed the resolved mission list and affirmatively approved deletion."
-        )
-      },
-      ["missionIds", "confirm"]
-    ),
-    outputSchema: protocolOutputSchema("The UUIDs of missions deleted together."),
-    annotations: destructiveAction
-  },
-  {
-    name: "overlord_delete_objectives",
-    title: "Delete objectives",
-    description: "Use this only after showing the resolved objective list to the user and receiving an affirmative response. Soft-deletes one to 100 objectives atomically; any missing, duplicate, deleted, or unauthorized target rejects the entire request. Deleting an objective also removes its live Run Queue membership.",
-    inputSchema: objectSchema(
-      {
+        confirm: booleanProperty("Must be true only after the user has reviewed the resolved mission list and affirmatively approved deletion.")
+      }, ["missionIds", "confirm"]),
+      outputSchema: protocolOutputSchema("The UUIDs of missions deleted together."),
+      annotations: destructiveAction
+    },
+    {
+      name: "overlord_delete_objectives",
+      title: "Delete objectives",
+      description: "Use this only after showing the resolved objective list to the user and receiving an affirmative response. Soft-deletes one to 100 objectives atomically; any missing, duplicate, deleted, or unauthorized target rejects the entire request. Deleting an objective also removes its live Run Queue membership.",
+      inputSchema: objectSchema({
         objectiveIds: {
           type: "array",
           description: "One to 100 unique objective UUIDs or display IDs to delete.",
           items: stringProperty("Objective UUID or display ID.")
         },
-        confirm: booleanProperty(
-          "Must be true only after the user has reviewed the resolved objective list and affirmatively approved deletion."
-        )
-      },
-      ["objectiveIds", "confirm"]
-    ),
-    outputSchema: protocolOutputSchema("The UUIDs of objectives deleted together."),
-    annotations: destructiveAction
-  },
-  {
-    name: "overlord_list_run_queues",
-    title: "List Run Queues",
-    description: "Use this to read a project's authoritative Run Queues before adding, moving, removing, or bulk-reordering entries. Compact detail is the default and includes ordering and blocking state; request full for the complete ProjectRunQueuesDto.",
-    inputSchema: objectSchema({
-      projectId: stringProperty("Optional project UUID, slug, or name."),
-      objectiveId: stringProperty(
-        "Optional objective UUID or display id; derives the project when projectId is omitted."
-      ),
-      missionId: stringProperty(
-        "Optional mission UUID or display id; derives the project when projectId is omitted."
-      ),
-      queue: stringProperty("Optional Run Queue UUID or unambiguous name to return by itself."),
-      detail: {
-        type: "string",
-        enum: ["compact", "full"],
-        description: "Result detail: compact (default) returns queue ordering state; full returns the raw ProjectRunQueuesDto."
-      }
-    }),
-    outputSchema: protocolOutputSchema(
-      "Compact queue state by default, or the raw ProjectRunQueuesDto when detail is full."
-    ),
-    annotations: readOnly
-  },
-  {
-    name: "overlord_reorder_run_queue",
-    title: "Reorder Run Queue entries",
-    description: "Use this only when the user explicitly asks to reorder every entry in one Run Queue. Supply every live entry exactly once, using entry UUIDs, objective UUIDs, or objective display ids. Running and dispatched entries cannot move. On a mismatch, the error returns the current order; re-read the queue and retry.",
-    inputSchema: objectSchema(
-      {
+        confirm: booleanProperty("Must be true only after the user has reviewed the resolved objective list and affirmatively approved deletion.")
+      }, ["objectiveIds", "confirm"]),
+      outputSchema: protocolOutputSchema("The UUIDs of objectives deleted together."),
+      annotations: destructiveAction
+    },
+    {
+      name: "overlord_list_run_queues",
+      title: "List Run Queues",
+      description: "Use this to read a project's authoritative Run Queues before adding, moving, removing, or bulk-reordering entries. Compact detail is the default and includes ordering and blocking state; request full for the complete ProjectRunQueuesDto.",
+      inputSchema: objectSchema({
+        projectId: stringProperty("Optional project UUID, slug, or name."),
+        objectiveId: stringProperty("Optional objective UUID or display id; derives the project when projectId is omitted."),
+        missionId: stringProperty("Optional mission UUID or display id; derives the project when projectId is omitted."),
+        queue: stringProperty("Optional Run Queue UUID or unambiguous name to return by itself."),
+        detail: {
+          type: "string",
+          enum: ["compact", "full"],
+          description: "Result detail: compact (default) returns queue ordering state; full returns the raw ProjectRunQueuesDto."
+        }
+      }),
+      outputSchema: protocolOutputSchema("Compact queue state by default, or the raw ProjectRunQueuesDto when detail is full."),
+      annotations: readOnly
+    },
+    {
+      name: "overlord_reorder_run_queue",
+      title: "Reorder Run Queue entries",
+      description: "Use this only when the user explicitly asks to reorder every entry in one Run Queue. Supply every live entry exactly once, using entry UUIDs, objective UUIDs, or objective display ids. Running and dispatched entries cannot move. On a mismatch, the error returns the current order; re-read the queue and retry.",
+      inputSchema: objectSchema({
         queue: stringProperty("Run Queue UUID or unambiguous name."),
         orderedObjectives: {
           type: "array",
           description: "Complete desired top-to-bottom entry order. Each item may be an entry UUID, objective UUID, or objective display id.",
           items: stringProperty("Run Queue entry UUID, objective UUID, or objective display id.")
         },
-        projectId: stringProperty(
-          "Optional project UUID, slug, or name; disambiguates queue names."
-        )
-      },
-      ["queue", "orderedObjectives"]
-    ),
-    outputSchema: protocolOutputSchema("The reordered RunQueueDto."),
-    annotations: writeAction
-  },
-  {
-    name: "overlord_queue_objective",
-    title: "Queue objective",
-    description: "Use this only when the user explicitly asks to add, move, or remove an objective in the project Run Queue. Queue membership is target-neutral and sequences delivery-driven launches; it does not directly launch the objective. Adding an objective also queues every not-yet-started objective after it in the mission; a removed objective moves to the end of its mission.",
-    inputSchema: objectSchema(
-      {
+        projectId: stringProperty("Optional project UUID, slug, or name; disambiguates queue names.")
+      }, ["queue", "orderedObjectives"]),
+      outputSchema: protocolOutputSchema("The reordered RunQueueDto."),
+      annotations: writeAction
+    },
+    {
+      name: "overlord_queue_objective",
+      title: "Queue objective",
+      description: "Use this only when the user explicitly asks to add, move, or remove an objective in the project Run Queue. Queue membership is target-neutral and sequences delivery-driven launches; it does not directly launch the objective. Adding an objective also queues every not-yet-started objective after it in the mission; a removed objective moves to the end of its mission.",
+      inputSchema: objectSchema({
         objectiveId: stringProperty("Objective UUID or display id such as coo:756.k7xm."),
         queue: stringProperty("Optional Run Queue UUID or unambiguous queue name."),
-        after: stringProperty(
-          "Optional queued predecessor entry id, objective UUID, or objective display id. Its queue is used when queue is omitted."
-        ),
+        after: stringProperty("Optional queued predecessor entry id, objective UUID, or objective display id. Its queue is used when queue is omitted."),
         front: booleanProperty("When true, place this objective first in the selected queue."),
         position: {
           type: "number",
           description: "Optional one-based insertion position in the selected queue."
         },
-        remove: booleanProperty(
-          "When true, remove this objective from the Run Queue instead of adding or moving it."
-        )
-      },
-      ["objectiveId"]
-    ),
-    outputSchema: protocolOutputSchema("The queued entry, or removal confirmation."),
-    annotations: writeAction
-  },
-  {
-    name: "overlord_manage_run_queue",
-    title: "Manage Run Queues",
-    description: "Use this only when the user explicitly asks to create, rename, pause, resume, delete, or reorder the project's Run Queue definitions, or to retry one held queue entry. The queue-definition actions are administrative project-configuration and require a full-scope token; adding, moving, or removing objectives inside a queue uses overlord_queue_objective and overlord_reorder_run_queue instead.",
-    inputSchema: objectSchema(
-      {
+        remove: booleanProperty("When true, remove this objective from the Run Queue instead of adding or moving it.")
+      }, ["objectiveId"]),
+      outputSchema: protocolOutputSchema("The queued entry, or removal confirmation."),
+      annotations: writeAction
+    },
+    {
+      name: "overlord_manage_run_queue",
+      title: "Manage Run Queues",
+      description: "Use this only when the user explicitly asks to create, rename, pause, resume, delete, or reorder the project's Run Queue definitions, or to retry one held queue entry. The queue-definition actions are administrative project-configuration and require a full-scope token; adding, moving, or removing objectives inside a queue uses overlord_queue_objective and overlord_reorder_run_queue instead.",
+      inputSchema: objectSchema({
         action: {
           type: "string",
           enum: ["create", "update", "delete", "reorder_queues", "retry_entry"],
           description: "create a queue, update (rename/pause/resume) one, delete one, reorder the queue definitions, or retry_entry to clear one held entry's hold and attempt budget so the dispatcher tries it again."
         },
-        projectId: stringProperty(
-          "Project UUID, slug, or name. Required for create and reorder_queues."
-        ),
-        queue: stringProperty(
-          "Run Queue UUID or unambiguous name. Required for update and delete."
-        ),
+        projectId: stringProperty("Project UUID, slug, or name. Required for create and reorder_queues."),
+        queue: stringProperty("Run Queue UUID or unambiguous name. Required for update and delete."),
         name: stringProperty("New queue name for create, or the replacement name for update."),
-        paused: booleanProperty(
-          "update only: true pauses dispatching from the queue, false resumes it."
-        ),
-        moveEntriesTo: stringProperty(
-          "delete only: destination queue UUID or unambiguous name. Required when the queue still holds entries."
-        ),
-        entry: stringProperty(
-          "retry_entry only: entry UUID, objective UUID, or objective display id. One of entry or objectiveId is required."
-        ),
-        objectiveId: stringProperty(
-          "retry_entry only: objective UUID or display id whose live entry should be retried."
-        ),
+        paused: booleanProperty("update only: true pauses dispatching from the queue, false resumes it."),
+        moveEntriesTo: stringProperty("delete only: destination queue UUID or unambiguous name. Required when the queue still holds entries."),
+        entry: stringProperty("retry_entry only: entry UUID, objective UUID, or objective display id. One of entry or objectiveId is required."),
+        objectiveId: stringProperty("retry_entry only: objective UUID or display id whose live entry should be retried."),
         orderedQueues: {
           type: "array",
           description: "reorder_queues only: every live queue exactly once, top to bottom, by UUID or unambiguous name. The default queue must stay first.",
           items: stringProperty("Run Queue UUID or unambiguous name.")
         }
-      },
-      ["action"]
-    ),
-    outputSchema: protocolOutputSchema(
-      "The created or updated RunQueueDto, a removal confirmation, the reordered ProjectRunQueuesDto, or the retried RunQueueEntryDto."
-    ),
-    annotations: writeAction
-  },
-  {
-    name: "overlord_attach_session",
-    title: "Attach to mission",
-    description: "Use this only after the user asks the connected agent to begin work on a mission. It opens an MCP-hosted session for later updates and delivery. Pass objectiveId when the caller already knows which objective to execute so attach does not rediscover another one.",
-    inputSchema: objectSchema(
-      {
-        missionId: stringProperty(
-          "Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission."
-        ),
-        objectiveId: stringProperty(
-          "Objective UUID or display id such as coo:756.k7xm. Pins attach to that objective, and supplies missionId when it is omitted."
-        ),
-        agent: stringProperty("Agent identifier. Defaults to hosted-mcp."),
+      }, ["action"]),
+      outputSchema: protocolOutputSchema("The created or updated RunQueueDto, a removal confirmation, the reordered ProjectRunQueuesDto, or the retried RunQueueEntryDto."),
+      annotations: writeAction
+    },
+    {
+      name: "overlord_attach_session",
+      title: "Attach to mission",
+      description: "Use this only after the user asks the connected agent to begin work on a mission. It opens an MCP-hosted session for later updates and delivery. Pass objectiveId when the caller already knows which objective to execute so attach does not rediscover another one.",
+      inputSchema: objectSchema({
+        missionId: stringProperty("Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission."),
+        objectiveId: stringProperty("Objective UUID or display id such as coo:756.k7xm. Pins attach to that objective, and supplies missionId when it is omitted."),
+        agent: stringProperty(`Agent identifier. Defaults to ${defaultAgent}.`),
         model: stringProperty("Optional model identifier."),
-        executionTargetId: stringProperty(
-          "Optional local execution target id for resolving sibling project resource paths."
-        )
-      },
-      []
-    ),
-    outputSchema: protocolOutputSchema(
-      "Attached session context, including the session key required for lifecycle calls."
-    ),
-    annotations: writeAction
-  },
-  {
-    name: "overlord_update_session",
-    title: "Update mission session",
-    description: "Use this only to post the user-requested work update, alert, decision, or discussion summary to an attached mission session.",
-    inputSchema: objectSchema(
-      {
-        missionId: stringProperty(
-          "Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission."
-        ),
-        objectiveId: stringProperty(
-          "Objective UUID or display id such as coo:756.k7xm. Supplies missionId when it is omitted; the session key still determines which objective the event lands on."
-        ),
+        executionTargetId: stringProperty("Optional local execution target id for resolving sibling project resource paths.")
+      }, []),
+      outputSchema: protocolOutputSchema("Attached session context, including the session key required for lifecycle calls."),
+      annotations: writeAction
+    },
+    {
+      name: "overlord_update_session",
+      title: "Update mission session",
+      description: "Use this only to post the user-requested work update, alert, decision, or discussion summary to an attached mission session.",
+      inputSchema: objectSchema({
+        missionId: stringProperty("Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission."),
+        objectiveId: stringProperty("Objective UUID or display id such as coo:756.k7xm. Supplies missionId when it is omitted; the session key still determines which objective the event lands on."),
         sessionKey: stringProperty("Session key returned by overlord_attach_session."),
         summary: stringProperty("Update text."),
         phase: stringProperty("Optional protocol phase."),
         eventType: stringProperty("Optional event type. Defaults to update."),
-        changeRationales: changeRationalesProperty(
-          "Optional reviewer-facing annotations for objective-ledger file evidence."
-        )
-      },
-      ["sessionKey", "summary"]
-    ),
-    outputSchema: protocolOutputSchema("The recorded mission activity event."),
-    annotations: writeAction
-  },
-  {
-    name: "overlord_deliver_session",
-    title: "Deliver mission session",
-    description: "Use this only when the user-requested mission work is complete. It delivers the attached session with an explicit summary, optional file-change rationales, and optional authoritative human-action/tradeoff evidence.",
-    inputSchema: objectSchema(
-      {
-        missionId: stringProperty(
-          "Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission."
-        ),
-        objectiveId: stringProperty(
-          "Objective UUID or display id such as coo:756.k7xm. Supplies missionId when it is omitted; the session key still determines which objective is delivered."
-        ),
+        changeRationales: changeRationalesProperty("Optional reviewer-facing annotations for objective-ledger file evidence.")
+      }, ["sessionKey", "summary"]),
+      outputSchema: protocolOutputSchema("The recorded mission activity event."),
+      annotations: writeAction
+    },
+    {
+      name: "overlord_deliver_session",
+      title: "Deliver mission session",
+      description: "Use this only when the user-requested mission work is complete. It delivers the attached session with an explicit summary, optional file-change rationales, and optional authoritative human-action/tradeoff evidence.",
+      inputSchema: objectSchema({
+        missionId: stringProperty("Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission."),
+        objectiveId: stringProperty("Objective UUID or display id such as coo:756.k7xm. Supplies missionId when it is omitted; the session key still determines which objective is delivered."),
         sessionKey: stringProperty("Session key returned by overlord_attach_session."),
         summary: stringProperty("Delivery summary."),
         artifacts: {
           type: "array",
           description: "Optional mission artifacts to persist with this delivery. Each artifact has type, label, optional content, and optional HTTP(S) url.",
-          items: objectSchema(
-            {
-              type: stringProperty(
-                "Artifact type, such as note, next_steps, test_results, decision, migration, or url."
-              ),
-              label: stringProperty("Human-facing artifact label."),
-              content: stringProperty("Optional text or Markdown content."),
-              url: stringProperty("Optional HTTP(S) URL.")
-            },
-            ["type", "label"]
-          )
+          items: objectSchema({
+            type: stringProperty("Artifact type, such as note, next_steps, test_results, decision, migration, or url."),
+            label: stringProperty("Human-facing artifact label."),
+            content: stringProperty("Optional text or Markdown content."),
+            url: stringProperty("Optional HTTP(S) URL.")
+          }, ["type", "label"])
         },
-        changeRationales: changeRationalesProperty(
-          "Optional reviewer-facing annotations for objective-ledger file evidence."
-        ),
+        changeRationales: changeRationalesProperty("Optional reviewer-facing annotations for objective-ledger file evidence."),
         humanActions: {
           type: "array",
           description: 'Concrete actions a human must perform outside completed agent work. Exclude Git operations and routine review/testing. Each item is read on its own from the delivery card, so give every one an action, reason, and category, plus command, verify, and link whenever they exist. Vague: { action: "Set up the env var for Gemini." }. Good: { action: "Add GEMINI_API_KEY to the production backend service on Railway.", reason: "Compose falls back to the raw summary without it.", category: "environment", command: "railway variables set GEMINI_API_KEY=<key> --service backend", verify: "The next delivery card shows a composed presentation.", link: ".env.example" }.',
-          items: objectSchema(
-            {
-              action: stringProperty(
-                "Required. One imperative sentence naming what to do, where, and with which value."
-              ),
-              reason: stringProperty(
-                "Expected. Why the step is needed and what stays broken until it is done."
-              ),
-              category: stringProperty(
-                "Expected. environment, database, deployment, codegen, packaging, external_service, or other."
-              ),
-              blocking: {
-                type: "boolean",
-                description: "True when the delivered work does not function until this is done."
-              },
-              command: stringProperty(
-                "The exact command, setting name, or value to apply, verbatim; placeholders in <angle brackets>."
-              ),
-              verify: stringProperty(
-                "How the operator confirms it worked: a command, a URL, or the state to observe."
-              ),
-              link: stringProperty(
-                "An HTTP(S) URL or repository-relative file path relevant to the action. No other URI schemes."
-              )
+          items: objectSchema({
+            action: stringProperty("Required. One imperative sentence naming what to do, where, and with which value."),
+            reason: stringProperty("Expected. Why the step is needed and what stays broken until it is done."),
+            category: stringProperty("Expected. environment, database, deployment, codegen, packaging, external_service, or other."),
+            blocking: {
+              type: "boolean",
+              description: "True when the delivered work does not function until this is done."
             },
-            ["action"]
-          )
+            command: stringProperty("The exact command, setting name, or value to apply, verbatim; placeholders in <angle brackets>."),
+            verify: stringProperty("How the operator confirms it worked: a command, a URL, or the state to observe."),
+            link: stringProperty("An HTTP(S) URL or repository-relative file path relevant to the action. No other URI schemes.")
+          }, ["action"])
         },
         tradeoffsMade: {
           type: "array",
@@ -168156,121 +167968,101 @@ var hostedMcpToolDefinitions = [
         knownRisks: { type: "array", items: stringProperty("Residual risk or limitation.") },
         deferredWork: {
           type: "array",
-          items: stringProperty(
-            "Recommended new objective outside this mission (for example an out-of-scope bug). Name the component or file and why it was left. Omit queued future objectives, leftover current-objective work, and human follow-up (those belong in humanActions)."
-          )
+          items: stringProperty("Recommended new objective outside this mission (for example an out-of-scope bug). Name the component or file and why it was left. Omit queued future objectives, leftover current-objective work, and human follow-up (those belong in humanActions).")
         },
-        assumptions: { type: "array", items: stringProperty("Material implementation assumption.") }
-      },
-      ["sessionKey", "summary"]
-    ),
-    outputSchema: protocolOutputSchema(
-      "The completed delivery record and any recorded file changes."
-    ),
-    annotations: writeAction,
-    _meta: widget("ui://overlord/file-changes.html")
-  },
-  {
-    name: "overlord_add_artifact",
-    title: "Add mission artifact",
-    description: "Use this to create a mission artifact during a turn without delivering \u2014 for example a plan, notes, decision, or URL the reviewer should see while work continues. Provide type, label, and at least one of contentText or externalUrl. Optional sessionKey stamps session/objective provenance. Revise later with overlord_update_artifact. Delivery may still attach more artifacts.",
-    inputSchema: objectSchema(
-      {
-        missionId: stringProperty(
-          "Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission."
-        ),
-        objectiveId: stringProperty(
-          "Objective UUID or display id such as coo:756.k7xm. Stamps objective provenance when no live sessionKey is available; sessionKey wins when both are given."
-        ),
-        type: stringProperty(
-          "Artifact type: test_results, next_steps, note, url, decision, or migration."
-        ),
+        assumptions: {
+          type: "array",
+          items: stringProperty("Material implementation assumption.")
+        }
+      }, ["sessionKey", "summary"]),
+      outputSchema: protocolOutputSchema("The completed delivery record and any recorded file changes."),
+      annotations: writeAction
+    },
+    {
+      name: "overlord_add_artifact",
+      title: "Add mission artifact",
+      description: "Use this to create a mission artifact during a turn without delivering \u2014 for example a plan, notes, decision, or URL the reviewer should see while work continues. Provide type, label, and at least one of contentText or externalUrl. Optional sessionKey stamps session/objective provenance. Revise later with overlord_update_artifact. Delivery may still attach more artifacts.",
+      inputSchema: objectSchema({
+        missionId: stringProperty("Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission."),
+        objectiveId: stringProperty("Objective UUID or display id such as coo:756.k7xm. Stamps objective provenance when no live sessionKey is available; sessionKey wins when both are given."),
+        type: stringProperty("Artifact type: test_results, next_steps, note, url, decision, or migration."),
         label: stringProperty("Human-facing label for the artifact."),
         contentText: stringProperty("Optional Markdown/text content."),
         externalUrl: stringProperty("Optional HTTP(S) URL."),
-        sessionKey: stringProperty(
-          "Optional live session key from attach; stamps session/objective provenance when present."
-        )
-      },
-      ["type", "label"]
-    ),
-    outputSchema: protocolOutputSchema("The created artifact DTO (revision 1)."),
-    annotations: writeAction
-  },
-  {
-    name: "overlord_update_artifact",
-    title: "Update mission artifact",
-    description: "Use this when an existing mission artifact must be revised in place (for example a plan written in an earlier objective) rather than delivering a duplicate. Requires the current artifact revision for optimistic concurrency. Provide at least one of label, contentText, or externalUrl.",
-    inputSchema: objectSchema(
-      {
-        missionId: stringProperty(
-          "Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission."
-        ),
-        objectiveId: stringProperty(
-          "Objective UUID or display id such as coo:756.k7xm. Used only to supply missionId when it is omitted."
-        ),
+        sessionKey: stringProperty("Optional live session key from attach; stamps session/objective provenance when present.")
+      }, ["type", "label"]),
+      outputSchema: protocolOutputSchema("The created artifact DTO (revision 1)."),
+      annotations: writeAction
+    },
+    {
+      name: "overlord_update_artifact",
+      title: "Update mission artifact",
+      description: "Use this when an existing mission artifact must be revised in place (for example a plan written in an earlier objective) rather than delivering a duplicate. Requires the current artifact revision for optimistic concurrency. Provide at least one of label, contentText, or externalUrl.",
+      inputSchema: objectSchema({
+        missionId: stringProperty("Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission."),
+        objectiveId: stringProperty("Objective UUID or display id such as coo:756.k7xm. Used only to supply missionId when it is omitted."),
         artifactId: stringProperty("Artifact id from mission context or load-context artifacts."),
         expectedRevision: {
           type: "number",
           description: "Current artifact.revision. Stale values return a conflict error."
         },
         label: stringProperty("Optional new human-facing label."),
-        contentText: stringProperty(
-          "Optional new Markdown/text content. Pass an empty string to clear text content."
-        ),
-        externalUrl: stringProperty(
-          "Optional HTTP(S) URL. Pass an empty string to clear the external URL."
-        )
-      },
-      ["artifactId", "expectedRevision"]
-    ),
-    outputSchema: protocolOutputSchema("The updated artifact DTO including the new revision."),
-    annotations: writeAction
-  },
-  {
-    name: "overlord_record_work",
-    title: "Record completed work as a mission",
-    description: "Use this to log work already finished in this chat as a completed Overlord mission \u2014 one call, no attach/deliver cycle. It creates a mission and a single completed objective, records the file changes and their rationales, lands the mission in the review column, and runs the delivery through the standard Gemini summarizer so it reads like any other delivered mission. Provide an objective (what was asked/done) and a reviewer-facing summary; optional changeRationales may annotate meaningful file changes. Only use this when the work is genuinely complete; use overlord_create_mission for work still to be done.",
-    inputSchema: objectSchema(
-      {
-        projectId: stringProperty(
-          "Overlord project id, slug, or name. Hosted MCP never chooses a project implicitly."
-        ),
-        objective: stringProperty(
-          "What was asked and done, phrased as a completed objective (1-3 sentences)."
-        ),
+        contentText: stringProperty("Optional new Markdown/text content. Pass an empty string to clear text content."),
+        externalUrl: stringProperty("Optional HTTP(S) URL. Pass an empty string to clear the external URL.")
+      }, ["artifactId", "expectedRevision"]),
+      outputSchema: protocolOutputSchema("The updated artifact DTO including the new revision."),
+      annotations: writeAction
+    },
+    {
+      name: "overlord_record_work",
+      title: "Record completed work as a mission",
+      description: "Use this to log work already finished in this chat as a completed Overlord mission \u2014 one call, no attach/deliver cycle. It creates a mission and a single completed objective, records the file changes and their rationales, lands the mission in the review column, and runs the delivery through the standard Gemini summarizer so it reads like any other delivered mission. Provide an objective (what was asked/done) and a reviewer-facing summary; optional changeRationales may annotate meaningful file changes. Only use this when the work is genuinely complete; use overlord_create_mission for work still to be done.",
+      inputSchema: objectSchema({
+        projectId: stringProperty("Overlord project id, slug, or name. Overlord never chooses a project implicitly."),
+        objective: stringProperty("What was asked and done, phrased as a completed objective (1-3 sentences)."),
         summary: stringProperty("Reviewer-facing narrative of what changed and why."),
-        title: stringProperty(
-          "Optional mission title; defaults to a title derived from the objective."
-        ),
-        changeRationales: changeRationalesProperty(
-          "One optional reviewer annotation per meaningful file change."
-        ),
+        title: stringProperty("Optional mission title; defaults to a title derived from the objective."),
+        changeRationales: changeRationalesProperty("One optional reviewer annotation per meaningful file change."),
         changedFiles: {
           type: "array",
           description: "Optional explicit file observations for this sessionless record.",
-          items: objectSchema(
-            {
-              filePath: stringProperty("Repository-relative path."),
-              vcsStatus: stringProperty("Optional VCS status such as M, A, or D.")
-            },
-            ["filePath"]
-          )
+          items: objectSchema({
+            filePath: stringProperty("Repository-relative path."),
+            vcsStatus: stringProperty("Optional VCS status such as M, A, or D.")
+          }, ["filePath"])
         },
         artifacts: {
           type: "array",
           description: "Optional artifacts: next_steps, test_results, decision, note, or url."
         }
-      },
-      ["projectId", "objective", "summary"]
-    ),
-    outputSchema: protocolOutputSchema(
-      "The created review-column mission and the delivery id whose Gemini summary is composing."
-    ),
-    annotations: writeAction,
-    _meta: widget("ui://overlord/file-changes.html")
-  }
-];
+      }, ["projectId", "objective", "summary"]),
+      outputSchema: protocolOutputSchema("The created review-column mission and the delivery id whose Gemini summary is composing."),
+      annotations: writeAction
+    }
+  ];
+}
+
+// ../mcp/tool-catalog.ts
+var HOSTED_MCP_DEFAULT_AGENT = "hosted-mcp";
+var HOSTED_TOOL_WIDGETS = {
+  overlord_resolve_project: "ui://overlord/project-selector.html",
+  overlord_search_missions: "ui://overlord/mission-list.html",
+  overlord_load_mission_context: "ui://overlord/objective-viewer.html",
+  overlord_deliver_session: "ui://overlord/file-changes.html",
+  overlord_record_work: "ui://overlord/file-changes.html"
+};
+function widget(uri) {
+  return {
+    "openai/outputTemplate": uri,
+    ui: { resourceUri: uri }
+  };
+}
+var hostedMcpToolDefinitions = overlordMcpToolDefinitions({
+  defaultAgent: HOSTED_MCP_DEFAULT_AGENT
+}).map((tool) => {
+  const uri = HOSTED_TOOL_WIDGETS[tool.name];
+  return uri ? { ...tool, _meta: widget(uri) } : tool;
+});
 
 // ../mcp/widgets.ts
 var RESOURCE_CSP = {
@@ -168347,9 +168139,6 @@ function readHostedMcpWidget(uri) {
 
 // ../mcp/server.ts
 var MCP_PROTOCOL_VERSION = "2025-11-25";
-function isRecord3(value2) {
-  return typeof value2 === "object" && value2 !== null && !Array.isArray(value2);
-}
 function optionalString(args, name2) {
   const value2 = args[name2];
   return typeof value2 === "string" && value2.trim() ? value2.trim() : null;
@@ -168514,7 +168303,7 @@ function runQueueMcpProtocolCall(name2, args) {
   throw new Error(`Unsupported Run Queue MCP tool: ${name2}`);
 }
 function jsonText(value2) {
-  const structured = isRecord3(value2) ? value2 : { results: value2 };
+  const structured = isRecord(value2) ? value2 : { results: value2 };
   return {
     content: [
       {
@@ -168686,15 +168475,17 @@ var toolHandlers = {
     });
   },
   overlord_update_objective: (args) => {
+    const hasTitle = typeof args.title === "string";
     const hasAutoAdvance = typeof args.autoAdvance === "boolean";
     const hasInstructionText = typeof args.instructionText === "string";
-    if (!hasAutoAdvance && !hasInstructionText) {
-      throw new Error("Provide autoAdvance and/or instructionText");
+    if (!hasTitle && !hasAutoAdvance && !hasInstructionText) {
+      throw new Error("Provide title, autoAdvance, and/or instructionText");
     }
     return runProtocolSubcommand(
       "update-objective",
       protocolBody({
         "--objective-id": requiredString(args, "objectiveId"),
+        ...hasTitle ? { "--title": args.title } : {},
         ...hasAutoAdvance ? autoAdvanceFlags(args) : {},
         ...hasInstructionText ? { "--instruction-text": requiredString(args, "instructionText") } : {}
       })
@@ -168749,7 +168540,7 @@ var toolHandlers = {
     "attach",
     protocolBody({
       ...missionScopeFlags(args),
-      "--agent": optionalString(args, "agent") ?? "hosted-mcp",
+      "--agent": optionalString(args, "agent") ?? HOSTED_MCP_DEFAULT_AGENT,
       ...optionalString(args, "model") ? { "--model": requiredString(args, "model") } : {},
       ...optionalString(args, "executionTargetId") ? { "--execution-target-id": requiredString(args, "executionTargetId") } : {}
     })
@@ -168872,7 +168663,7 @@ function failure(id2, error53) {
   return { jsonrpc: "2.0", id: id2 ?? null, error: error53 };
 }
 async function callTool(params) {
-  if (!isRecord3(params) || !isRecord3(params.arguments)) {
+  if (!isRecord(params) || !isRecord(params.arguments)) {
     throw new Error("tools/call requires params.name and params.arguments");
   }
   const name2 = typeof params.name === "string" ? params.name : "";
@@ -168885,7 +168676,7 @@ async function callTool(params) {
   }
 }
 function readResource(params) {
-  if (!isRecord3(params) || typeof params.uri !== "string") {
+  if (!isRecord(params) || typeof params.uri !== "string") {
     throw new Error("resources/read requires params.uri");
   }
   const resource = readHostedMcpWidget(params.uri);
@@ -168959,7 +168750,7 @@ async function handleMcpPost(req, res, next) {
     const requests = Array.isArray(body) ? body : [body];
     const responses = [];
     for (const item of requests) {
-      const response = await dispatch(isRecord3(item) ? item : {});
+      const response = await dispatch(isRecord(item) ? item : {});
       if (response) responses.push(response);
     }
     if (Array.isArray(body)) {
@@ -168973,10 +168764,10 @@ async function handleMcpPost(req, res, next) {
 }
 
 // ../packages/core/service/chat/conversations.ts
-var import_node_crypto30 = require("node:crypto");
+var import_node_crypto29 = require("node:crypto");
 
 // ../packages/core/service/chat/proposals.ts
-var import_node_crypto29 = require("node:crypto");
+var import_node_crypto28 = require("node:crypto");
 init_workspace_agent_catalog();
 
 // ../packages/core/service/chat/access.ts
@@ -169099,7 +168890,7 @@ function assignmentCatalogProjection(value2) {
 
 // ../packages/core/service/chat/runs.ts
 init_dist2();
-var import_node_crypto28 = require("node:crypto");
+var import_node_crypto27 = require("node:crypto");
 var import_node_util2 = require("node:util");
 function toolProgressLabel(toolId) {
   switch (toolId) {
@@ -169236,7 +169027,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
             );
           }
         }
-        const id2 = (0, import_node_crypto28.randomUUID)(), fence = r5.current_fence + 1, now2 = s.timestamp();
+        const id2 = (0, import_node_crypto27.randomUUID)(), fence = r5.current_fence + 1, now2 = s.timestamp();
         await tx.run(
           "UPDATE chat_runs SET state = 'running', current_fence = ?, active_attempt_id = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
           [fence, id2, now2, r5.id]
@@ -169494,7 +169285,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
         requiredText(req.providerCallId, 200);
         const args = JSON.stringify(req.arguments);
         if (Buffer.byteLength(args) > 64 * 1024) throw new ChatError("limit_exceeded");
-        const callId = (0, import_node_crypto28.randomUUID)();
+        const callId = (0, import_node_crypto27.randomUUID)();
         await s.db.run(
           `INSERT INTO chat_tool_calls (id, run_id, attempt_id, operation_id, turn_index, call_order, provider_call_id, tool_id, policy_version, arguments_json, state, requested_fence, writer_fence, dependency_set_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 'requested', ?, ?, ?, ?, ?)`,
           [
@@ -169664,8 +169455,8 @@ var ChatRuns = class _ChatRuns extends ChatStore {
         [messageId, a5.runId]
       );
       if (messageId && !old) throw new ChatError("invalid_request");
-      const id2 = old ? old.id : (0, import_node_crypto28.randomUUID)();
-      const blocks = old ? JSON.parse(old.blocks_json) : [{ id: (0, import_node_crypto28.randomUUID)(), kind: "text", text: "", evidenceIds: [], fallbackText: "" }];
+      const id2 = old ? old.id : (0, import_node_crypto27.randomUUID)();
+      const blocks = old ? JSON.parse(old.blocks_json) : [{ id: (0, import_node_crypto27.randomUUID)(), kind: "text", text: "", evidenceIds: [], fallbackText: "" }];
       const block = blocks[0];
       if (!block || block.kind !== "text") throw new ChatError("invalid_request");
       if (block.text.length + text.length > s.limits.messageMaxChars)
@@ -169716,7 +169507,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
         "SELECT COUNT(*) AS n FROM chat_questions WHERE run_id = ?",
         [a5.runId]
       );
-      const id2 = (0, import_node_crypto28.randomUUID)(), now2 = s.timestamp();
+      const id2 = (0, import_node_crypto27.randomUUID)(), now2 = s.timestamp();
       await s.db.run(
         `INSERT INTO chat_questions (id, thread_id, run_id, ordinal, state, prompt, options_json, allow_free_text, dependency_set_id, created_at, updated_at) VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?)`,
         [
@@ -169799,7 +169590,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
       );
       const evidence = [];
       for (const [i5, source] of sources.entries()) {
-        const evidenceId = (0, import_node_crypto28.randomUUID)();
+        const evidenceId = (0, import_node_crypto27.randomUUID)();
         await s.db.run(
           `INSERT INTO chat_evidence (id, thread_id, run_id, tool_call_id, source_ref_id, label, excerpt, excerpt_truncated, source_revision, observed_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
@@ -169857,7 +169648,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
       }));
       const others = blocks.filter((b5) => b5.kind !== "evidence");
       others.push({
-        id: (0, import_node_crypto28.randomUUID)(),
+        id: (0, import_node_crypto27.randomUUID)(),
         kind: "evidence",
         evidence,
         fallbackText: `Sources: ${evidence.map((e5) => e5.label).join("; ")}`.slice(0, 4e3)
@@ -169900,7 +169691,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
       if (regressed) throw new ChatError("invalid_request");
       await s.db.run(
         "INSERT INTO chat_thread_summaries (id, thread_id, summary_revision, summary_json, covers_through_message_id, dependency_set_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        [(0, import_node_crypto28.randomUUID)(), a5.threadId, Number(last?.n ?? 0) + 1, json2, latest.id, deps, s.timestamp()]
+        [(0, import_node_crypto27.randomUUID)(), a5.threadId, Number(last?.n ?? 0) + 1, json2, latest.id, deps, s.timestamp()]
       );
     });
   }
@@ -170209,7 +170000,7 @@ var ChatProposals = class _ChatProposals extends ChatStore {
       await runs.assertLease(a5);
       const destinationSet = await s.dependencySet(a5.threadId, sourceIds);
       const dependencySetId = await s.generationDependencies(a5.threadId, destinationSet);
-      const id2 = body.proposalId ?? (0, import_node_crypto29.randomUUID)();
+      const id2 = body.proposalId ?? (0, import_node_crypto28.randomUUID)();
       let next = 1;
       if (body.proposalId) {
         const old = await tx.get(
@@ -170252,10 +170043,10 @@ var ChatProposals = class _ChatProposals extends ChatStore {
         id: a5.id,
         fence: a5.fence
       });
-      const messageId = (0, import_node_crypto29.randomUUID)();
+      const messageId = (0, import_node_crypto28.randomUUID)();
       const blocks = [
         {
-          id: (0, import_node_crypto29.randomUUID)(),
+          id: (0, import_node_crypto28.randomUUID)(),
           kind: "proposal",
           proposalId: id2,
           revision: next,
@@ -170367,7 +170158,7 @@ var ChatProposals = class _ChatProposals extends ChatStore {
           [scope2.project.id]
         );
       }
-      const receiptId = (0, import_node_crypto29.randomUUID)();
+      const receiptId = (0, import_node_crypto28.randomUUID)();
       for (const [i5, m3] of missions.entries()) {
         const scope2 = scopes[i5];
         await s.destination(owner, m3.projectId);
@@ -170431,7 +170222,7 @@ var ChatProposals = class _ChatProposals extends ChatStore {
               expected,
               owner.profileId,
               key,
-              (0, import_node_crypto29.createHash)("sha256").update(JSON.stringify({ id: id2, expected })).digest("hex"),
+              (0, import_node_crypto28.createHash)("sha256").update(JSON.stringify({ id: id2, expected })).digest("hex"),
               thread.authorization_revision,
               s.timestamp()
             ]
@@ -170465,9 +170256,9 @@ var ChatProposals = class _ChatProposals extends ChatStore {
 // ../packages/core/service/chat/conversations.ts
 var Conversations = class _Conversations extends ChatStore {
   /** Resolve HTTP observations through the same private owner gate as domain reads. */
-  async observeHttp(owner, method, path29, request, response) {
-    if (path29.includes("/diagnostics")) return;
-    const [family, id2] = path29.split("/").filter(Boolean);
+  async observeHttp(owner, method, path30, request, response) {
+    if (path30.includes("/diagnostics")) return;
+    const [family, id2] = path30.split("/").filter(Boolean);
     let threadId;
     if (family === "threads" && id2) threadId = id2;
     else if (id2) {
@@ -170486,7 +170277,7 @@ var Conversations = class _Conversations extends ChatStore {
     } catch {
       return;
     }
-    await this.diagnostic(threadId, "http.exchange", { method, path: path29, request, response });
+    await this.diagnostic(threadId, "http.exchange", { method, path: path30, request, response });
   }
   async diagnostics(owner, threadId, after) {
     if (!Number.isSafeInteger(after) || after < 0) throw new ChatError("invalid_request");
@@ -170511,7 +170302,7 @@ var Conversations = class _Conversations extends ChatStore {
     if (message2 !== void 0 && (!message2 || typeof message2 !== "object" || Array.isArray(message2)))
       throw new ChatError("invalid_request");
     return this.db.transaction(async (tx) => {
-      const s = new _Conversations(tx, this.options), id2 = (0, import_node_crypto30.randomUUID)(), now2 = s.timestamp();
+      const s = new _Conversations(tx, this.options), id2 = (0, import_node_crypto29.randomUUID)(), now2 = s.timestamp();
       await s.access(owner);
       await tx.run(
         "INSERT INTO chat_threads (id, owner_profile_id, organization_id, last_activity_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -170525,12 +170316,12 @@ var Conversations = class _Conversations extends ChatStore {
       };
     });
   }
-  async list(owner, archived = false, cursor2) {
+  async list(owner, archived = false, cursor3) {
     await this.access(owner);
     let before;
-    if (cursor2) {
+    if (cursor3) {
       try {
-        before = JSON.parse(Buffer.from(cursor2, "base64url").toString());
+        before = JSON.parse(Buffer.from(cursor3, "base64url").toString());
       } catch {
         throw new ChatError("invalid_request");
       }
@@ -170627,10 +170418,10 @@ var Conversations = class _Conversations extends ChatStore {
       if (Number(count?.n) >= this.limits.concurrentRunsPerOwner)
         throw new ChatError("limit_exceeded");
     }
-    const messageId = (0, import_node_crypto30.randomUUID)(), runId = active?.id ?? (0, import_node_crypto30.randomUUID)(), now2 = this.timestamp();
+    const messageId = (0, import_node_crypto29.randomUUID)(), runId = active?.id ?? (0, import_node_crypto29.randomUUID)(), now2 = this.timestamp();
     const messageCreatedAt = await this.createdAt("chat_messages", id2);
     const blocks = [
-      { id: (0, import_node_crypto30.randomUUID)(), kind: "text", text: body.text, fallbackText: body.text, evidenceIds: [] }
+      { id: (0, import_node_crypto29.randomUUID)(), kind: "text", text: body.text, fallbackText: body.text, evidenceIds: [] }
     ];
     await this.db.run(
       `INSERT INTO chat_messages (id, thread_id, role, state, blocks_json, answers_question_id, client_request_id, created_at, updated_at) VALUES (?, ?, 'user', 'complete', ?, ?, ?, ?, ?)`,
@@ -170755,7 +170546,7 @@ var Conversations = class _Conversations extends ChatStore {
       );
       if (Number(count?.n) >= s.limits.concurrentRunsPerOwner)
         throw new ChatError("limit_exceeded");
-      const newId3 = (0, import_node_crypto30.randomUUID)();
+      const newId3 = (0, import_node_crypto29.randomUUID)();
       const inheritedGrant = storedKnowledgebaseWrite(r5.knowledgebase_write_json);
       await s.db.run(
         `INSERT INTO chat_runs (id, thread_id, trigger_message_id, continued_from_run_id, state, limits_json, knowledgebase_write_json, created_at, updated_at) VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?)`,
@@ -170951,7 +170742,7 @@ init_projects();
 
 // ../packages/core/service/repository-reads.ts
 init_dist();
-var import_node_crypto31 = require("node:crypto");
+var import_node_crypto30 = require("node:crypto");
 init_registry();
 init_repository_paths();
 init_runner_queue_provider();
@@ -171145,7 +170936,7 @@ var defaultProviderFactory = ({ target, queue }) => new RunnerQueueProvider(
   queue
 );
 function repositoryReadIdempotencyKey(actorWorkspaceUserId2, operationId) {
-  const digest4 = (0, import_node_crypto31.createHash)("sha256").update(`${actorWorkspaceUserId2}
+  const digest4 = (0, import_node_crypto30.createHash)("sha256").update(`${actorWorkspaceUserId2}
 ${operationId}`).digest("hex").slice(0, 48);
   return `repository-read:${digest4}`;
 }
@@ -171696,60 +171487,60 @@ var FIND_FEATURE_MISSIONS_DECLARATION = {
     ["projectId", "workspace", "featureNodeId"]
   )
 };
-function validateToolArguments(schema2, value2, path29 = "arguments") {
+function validateToolArguments(schema2, value2, path30 = "arguments") {
   switch (schema2.type) {
     case void 0:
       return null;
     // Any JSON value; the reviewed tool's own validator bounds its size.
     case "object": {
-      if (!value2 || typeof value2 !== "object" || Array.isArray(value2)) return `${path29}_not_object`;
+      if (!value2 || typeof value2 !== "object" || Array.isArray(value2)) return `${path30}_not_object`;
       const record2 = value2;
       for (const key of schema2.required ?? [])
-        if (record2[key] === void 0 || record2[key] === null) return `${path29}.${key}_required`;
+        if (record2[key] === void 0 || record2[key] === null) return `${path30}.${key}_required`;
       if (schema2.maxProperties !== void 0 && Object.keys(record2).length > schema2.maxProperties)
-        return `${path29}_too_many_properties`;
+        return `${path30}_too_many_properties`;
       for (const [key, item] of Object.entries(record2)) {
         const declared = schema2.properties?.[key];
         const child = declared ?? (typeof schema2.additionalProperties === "object" ? schema2.additionalProperties : null);
         if (!child) {
-          if (schema2.additionalProperties === false) return `${path29}.${key}_not_allowed`;
+          if (schema2.additionalProperties === false) return `${path30}.${key}_not_allowed`;
           continue;
         }
         if (declared && (item === void 0 || item === null)) continue;
-        const error53 = validateToolArguments(child, item, `${path29}.${key}`);
+        const error53 = validateToolArguments(child, item, `${path30}.${key}`);
         if (error53) return error53;
       }
       return null;
     }
     case "number":
-      if (typeof value2 !== "number" || !Number.isFinite(value2)) return `${path29}_not_number`;
-      if (schema2.minimum !== void 0 && value2 < schema2.minimum) return `${path29}_too_small`;
-      if (schema2.maximum !== void 0 && value2 > schema2.maximum) return `${path29}_too_large`;
+      if (typeof value2 !== "number" || !Number.isFinite(value2)) return `${path30}_not_number`;
+      if (schema2.minimum !== void 0 && value2 < schema2.minimum) return `${path30}_too_small`;
+      if (schema2.maximum !== void 0 && value2 > schema2.maximum) return `${path30}_too_large`;
       return null;
     case "string":
-      if (typeof value2 !== "string") return `${path29}_not_string`;
+      if (typeof value2 !== "string") return `${path30}_not_string`;
       if (schema2.minLength !== void 0 && value2.length < schema2.minLength)
-        return `${path29}_too_short`;
+        return `${path30}_too_short`;
       if (schema2.maxLength !== void 0 && value2.length > schema2.maxLength)
-        return `${path29}_too_long`;
-      if (schema2.enum && !schema2.enum.includes(value2)) return `${path29}_not_allowed_value`;
-      if (schema2.pattern && !new RegExp(schema2.pattern).test(value2)) return `${path29}_bad_format`;
+        return `${path30}_too_long`;
+      if (schema2.enum && !schema2.enum.includes(value2)) return `${path30}_not_allowed_value`;
+      if (schema2.pattern && !new RegExp(schema2.pattern).test(value2)) return `${path30}_bad_format`;
       return null;
     case "integer":
-      if (!Number.isSafeInteger(value2)) return `${path29}_not_integer`;
+      if (!Number.isSafeInteger(value2)) return `${path30}_not_integer`;
       if (schema2.minimum !== void 0 && value2 < schema2.minimum)
-        return `${path29}_too_small`;
+        return `${path30}_too_small`;
       if (schema2.maximum !== void 0 && value2 > schema2.maximum)
-        return `${path29}_too_large`;
+        return `${path30}_too_large`;
       return null;
     case "boolean":
-      return typeof value2 === "boolean" ? null : `${path29}_not_boolean`;
+      return typeof value2 === "boolean" ? null : `${path30}_not_boolean`;
     case "array":
-      if (!Array.isArray(value2)) return `${path29}_not_array`;
+      if (!Array.isArray(value2)) return `${path30}_not_array`;
       if (schema2.maxItems !== void 0 && value2.length > schema2.maxItems)
-        return `${path29}_too_many`;
+        return `${path30}_too_many`;
       for (let i5 = 0; i5 < value2.length; i5++) {
-        const error53 = schema2.items ? validateToolArguments(schema2.items, value2[i5], `${path29}.${i5}`) : null;
+        const error53 = schema2.items ? validateToolArguments(schema2.items, value2[i5], `${path30}.${i5}`) : null;
         if (error53) return error53;
       }
       return null;
@@ -171822,8 +171613,8 @@ var ChatToolGateway = class {
     const declaration = args.declared.find((d5) => d5.name === args.name);
     if (!declaration || args.name === ASK_USER_TOOL || args.name === PREPARE_PROPOSAL_TOOL)
       return failure2("unknown_tool", "No such read tool is available.");
-    const invalid2 = validateToolArguments(declaration.parameters, args.arguments ?? {});
-    if (invalid2) return failure2("invalid_arguments", invalid2);
+    const invalid3 = validateToolArguments(declaration.parameters, args.arguments ?? {});
+    if (invalid3) return failure2("invalid_arguments", invalid3);
     const input = args.arguments ?? {};
     switch (args.name) {
       case "overlord_list_projects":
@@ -172413,10 +172204,10 @@ function classifyGeminiError(error53) {
 }
 
 // chat/gemini-runtime.ts
-var import_node_crypto36 = require("node:crypto");
+var import_node_crypto35 = require("node:crypto");
 
 // chat-worker.ts
-var import_node_crypto32 = require("node:crypto");
+var import_node_crypto31 = require("node:crypto");
 var ChatRuntimeFailure = class extends Error {
   constructor(failureCode) {
     super(failureCode);
@@ -172447,7 +172238,7 @@ var ChatWorker = class extends PollLoop {
   concurrency;
   lastRetentionAt = 0;
   active = /* @__PURE__ */ new Map();
-  id = (0, import_node_crypto32.randomUUID)();
+  id = (0, import_node_crypto31.randomUUID)();
   async stop() {
     const pass2 = super.stop();
     for (const job of this.active.values()) job.controller.abort();
@@ -172522,7 +172313,7 @@ var ChatWorker = class extends PollLoop {
 };
 
 // chat/gemini-diagnostics.ts
-var import_node_crypto33 = require("node:crypto");
+var import_node_crypto32 = require("node:crypto");
 var RunMetrics = class extends ChatPerformance {
   providerRounds = 0;
   providerRequests = 0;
@@ -172611,7 +172402,7 @@ function instrumentGeminiClient(client, hooks) {
   const { record: record2, metrics } = hooks;
   return {
     async stream(request) {
-      const exchangeId = (0, import_node_crypto33.randomUUID)();
+      const exchangeId = (0, import_node_crypto32.randomUUID)();
       if (metrics) metrics.providerRequests++;
       const started = metrics ? performance.now() : 0;
       const contentBytes = hooks.contentBytes(request);
@@ -172674,7 +172465,7 @@ function instrumentGeminiClient(client, hooks) {
       }
     },
     async generate(request) {
-      const exchangeId = (0, import_node_crypto33.randomUUID)();
+      const exchangeId = (0, import_node_crypto32.randomUUID)();
       if (metrics) metrics.summaryRounds++;
       const cached3 = hooks.staticUseFor(request);
       await record2("provider.request", {
@@ -172700,7 +172491,7 @@ function instrumentGeminiClient(client, hooks) {
 }
 
 // chat/static-cache.ts
-var import_node_crypto34 = require("node:crypto");
+var import_node_crypto33 = require("node:crypto");
 var STATIC_CACHE_SWITCH_TOKENS = 16e3;
 function canonical(value2) {
   if (Array.isArray(value2)) return value2.map(canonical);
@@ -172732,7 +172523,7 @@ var GeminiStaticCache = class {
     return Boolean(this.client.createCache && this.client.deleteCache);
   }
   key(owner, model, prefix) {
-    return (0, import_node_crypto34.createHash)("sha256").update(
+    return (0, import_node_crypto33.createHash)("sha256").update(
       JSON.stringify(canonical({ owner: [owner.profileId, owner.organizationId], model, prefix }))
     ).digest("hex");
   }
@@ -172975,7 +172766,7 @@ ${text}`;
 }
 
 // chat/tool-manifest.ts
-var import_node_crypto35 = require("node:crypto");
+var import_node_crypto34 = require("node:crypto");
 var RELEVANCE_POLICY_VERSION = "expandable-families-v1";
 var TOOL_FAMILIES = ["status", "repository", "knowledgebase", "feature"];
 var EXPAND_CAPABILITIES_TOOL = "expand_capabilities";
@@ -173034,7 +172825,7 @@ function digest3(value2) {
       );
     return v;
   };
-  return (0, import_node_crypto35.createHash)("sha256").update(JSON.stringify(canonical2(value2))).digest("hex");
+  return (0, import_node_crypto34.createHash)("sha256").update(JSON.stringify(canonical2(value2))).digest("hex");
 }
 function createToolManifest(catalog, families) {
   const value2 = {
@@ -173102,7 +172893,7 @@ var GeminiChatRuntime = class {
       provider: "gemini",
       model,
       checkpointVersion: GEMINI_CHECKPOINT_VERSION,
-      configDigest: (0, import_node_crypto36.createHash)("sha256").update(
+      configDigest: (0, import_node_crypto35.createHash)("sha256").update(
         JSON.stringify({
           model,
           SYSTEM_PROMPT_VERSION,
@@ -173428,16 +173219,16 @@ var GeminiRunSession = class {
         );
         continue;
       }
-      const invalid2 = validateToolArguments(
+      const invalid3 = validateToolArguments(
         this.declared.find((d5) => d5.name === ASK_USER_TOOL).parameters,
         call.args
       );
-      if (invalid2) {
+      if (invalid3) {
         await this.runs.toolResult(
           this.attempt,
           call.operationId,
           this.stored(
-            { outcome: "invalid_arguments", content: { error: invalid2 }, sources: [] },
+            { outcome: "invalid_arguments", content: { error: invalid3 }, sources: [] },
             []
           ),
           "invalid_arguments"
@@ -173531,12 +173322,12 @@ var GeminiRunSession = class {
   async read(call) {
     if (call.name === EXPAND_CAPABILITIES_TOOL) {
       const declaration = this.declared.find((d5) => d5.name === EXPAND_CAPABILITIES_TOOL);
-      const invalid2 = declaration ? validateToolArguments(declaration.parameters, call.args) : "unknown_tool";
-      if (invalid2)
+      const invalid3 = declaration ? validateToolArguments(declaration.parameters, call.args) : "unknown_tool";
+      if (invalid3)
         return this.stored(
           {
             outcome: declaration ? "invalid_arguments" : "unknown_tool",
-            content: { error: invalid2 },
+            content: { error: invalid3 },
             sources: []
           },
           []
@@ -173562,10 +173353,10 @@ var GeminiRunSession = class {
     }
     if (call.name === PREPARE_PROPOSAL_TOOL) {
       const declaration = this.declared.find((d5) => d5.name === PREPARE_PROPOSAL_TOOL);
-      const invalid2 = declaration ? validateToolArguments(declaration.parameters, call.args) : "unknown_tool";
-      if (invalid2)
+      const invalid3 = declaration ? validateToolArguments(declaration.parameters, call.args) : "unknown_tool";
+      if (invalid3)
         return this.stored(
-          { outcome: "invalid_arguments", content: { error: invalid2 }, sources: [] },
+          { outcome: "invalid_arguments", content: { error: invalid3 }, sources: [] },
           []
         );
       try {
@@ -174298,8 +174089,8 @@ var KnowledgebaseMcp = class {
       return { ...base, outcome: "reauthorization_required", detail: "connection_not_ready" };
     if (JSON.stringify(args ?? null).length > reviewed.maxArgumentBytes)
       return { ...base, outcome: "invalid_arguments", detail: "arguments_too_large" };
-    const invalid2 = validateArguments(reviewed.inputSchema, args);
-    if (invalid2) return { ...base, outcome: "invalid_arguments", detail: invalid2 };
+    const invalid3 = validateArguments(reviewed.inputSchema, args);
+    if (invalid3) return { ...base, outcome: "invalid_arguments", detail: invalid3 };
     const input = args;
     const workspace2 = typeof input.workspace === "string" ? input.workspace : null;
     base.workspace = workspace2;
@@ -174928,16 +174719,16 @@ function resolveLocalTargetServerCapability({
 
 // execution/local-target-invoke.ts
 var import_node_os12 = __toESM(require("node:os"), 1);
-var import_node_path31 = __toESM(require("node:path"), 1);
+var import_node_path32 = __toESM(require("node:path"), 1);
 init_desktop_bridge();
 init_in_process_provider();
 init_resource_status();
 init_result();
 function resolveServerWorktreeRoot() {
   const override = process.env.OVERLORD_WORKTREE_ROOT?.trim();
-  if (override) return import_node_path31.default.resolve(override);
+  if (override) return import_node_path32.default.resolve(override);
   const home = process.env.OVLD_HOME?.trim() || process.env.OVERLORD_HOME?.trim();
-  return import_node_path31.default.join(home ? import_node_path31.default.resolve(home) : import_node_path31.default.join(import_node_os12.default.homedir(), ".ovld"), "worktrees");
+  return import_node_path32.default.join(home ? import_node_path32.default.resolve(home) : import_node_path32.default.join(import_node_os12.default.homedir(), ".ovld"), "worktrees");
 }
 function withServerDefaults(call) {
   if (call.capability !== "listWorktrees") return call;
@@ -175823,10 +175614,10 @@ function missionRoute(permission, fn) {
 // ext/everhour/service.ts
 init_db();
 var EVERHOUR_BASE_URL = "https://api.everhour.com";
-async function everhourFetch(apiKey, path29, init2 = {}) {
+async function everhourFetch(apiKey, path30, init2 = {}) {
   let res;
   try {
-    res = await fetch(`${EVERHOUR_BASE_URL}${path29}`, {
+    res = await fetch(`${EVERHOUR_BASE_URL}${path30}`, {
       method: init2.method ?? "GET",
       headers: {
         "X-Api-Key": apiKey,
@@ -176755,17 +176546,17 @@ function createEverhourExtensionRouter(handle4, connections) {
     updateProjectTime: updateProjectTime2
   } = createEverhourService(connections);
   const router2 = (0, import_express2.Router)();
-  for (const path29 of ["/user-connection", "/integration"]) {
-    const alias = (req) => recordConnectionAliasHit(`/ext/everhour${path29}`, req);
+  for (const path30 of ["/user-connection", "/integration"]) {
+    const alias = (req) => recordConnectionAliasHit(`/ext/everhour${path30}`, req);
     router2.get(
-      path29,
+      path30,
       handle4((req) => {
         alias(req);
         return getEverhourIntegration2();
       })
     );
     router2.put(
-      path29,
+      path30,
       handle4(
         (req) => {
           alias(req);
@@ -176775,7 +176566,7 @@ function createEverhourExtensionRouter(handle4, connections) {
       )
     );
     router2.delete(
-      path29,
+      path30,
       handle4(
         (req) => {
           alias(req);
@@ -176931,7 +176722,7 @@ function createGitHubExtensionRouter(handle4, options) {
     listGitHubRepositoryOwners: listGitHubRepositoryOwners2
   } = createGitHubUserOAuth(options.connections);
   const router2 = (0, import_express3.Router)();
-  const alias = (path29, req) => recordConnectionAliasHit(`/ext/github${path29}`, req);
+  const alias = (path30, req) => recordConnectionAliasHit(`/ext/github${path30}`, req);
   router2.get(
     "/user-connection",
     handle4((req) => {
@@ -178894,10 +178685,10 @@ async function resolveSessionFromBrowserRequest({
 }
 
 // account-deletion.ts
-var import_node_path32 = __toESM(require("node:path"), 1);
+var import_node_path33 = __toESM(require("node:path"), 1);
 var import_node_url6 = require("node:url");
 init_db();
-var repoRoot2 = import_node_path32.default.resolve(import_node_path32.default.dirname((0, import_node_url6.fileURLToPath)(__overlord_import_meta_url)), "..");
+var repoRoot2 = import_node_path33.default.resolve(import_node_path33.default.dirname((0, import_node_url6.fileURLToPath)(__overlord_import_meta_url)), "..");
 async function cascadeDeleteAccount(profileId) {
   const cleanupImages = await requireDatabaseClient().transaction(async (tx) => {
     const profile = await tx.get(`SELECT id FROM profiles WHERE id = ?`, [
@@ -179142,8 +178933,8 @@ function extractBearerToken(req) {
   return token || null;
 }
 function usesNonBrowserAuthSurface(req) {
-  const path29 = req.path || req.url || req.originalUrl;
-  return path29 === "/protocol" || path29.startsWith("/protocol/") || path29 === "/runner" || path29.startsWith("/runner/") || path29 === "/mcp" || path29.startsWith("/mcp/");
+  const path30 = req.path || req.url || req.originalUrl;
+  return path30 === "/protocol" || path30.startsWith("/protocol/") || path30 === "/runner" || path30.startsWith("/runner/") || path30 === "/mcp" || path30.startsWith("/mcp/");
 }
 function isLoopbackAddress(addr) {
   if (!addr) return false;
@@ -179702,7 +179493,7 @@ function createChatRouter(options) {
 
 // chat-notification-dispatcher.ts
 init_dist();
-var import_node_crypto39 = require("node:crypto");
+var import_node_crypto38 = require("node:crypto");
 
 // ../packages/core/service/notifications/catalog.ts
 init_dist();
@@ -179725,7 +179516,7 @@ function isPushNotificationMode(value2) {
 init_util3();
 
 // apns-client.ts
-var import_node_crypto37 = require("node:crypto");
+var import_node_crypto36 = require("node:crypto");
 var import_node_http2 = __toESM(require("node:http2"), 1);
 var SANDBOX_HOST = "https://api.sandbox.push.apple.com";
 var PRODUCTION_HOST = "https://api.push.apple.com";
@@ -179754,7 +179545,7 @@ function apnsJwt(config4) {
   const signingInput = `${b64url(JSON.stringify({ alg: "ES256", kid: config4.keyId }))}.${b64url(
     JSON.stringify({ iss: config4.teamId, iat: now2 })
   )}`;
-  const signer = (0, import_node_crypto37.createSign)("SHA256");
+  const signer = (0, import_node_crypto36.createSign)("SHA256");
   signer.update(signingInput);
   signer.end();
   const signature = signer.sign({ key: config4.privateKey, dsaEncoding: "ieee-p1363" });
@@ -179818,7 +179609,7 @@ init_db();
 
 // live-activities.ts
 init_dist2();
-var import_node_crypto38 = require("node:crypto");
+var import_node_crypto37 = require("node:crypto");
 init_live_activity_jobs();
 init_util3();
 init_db();
@@ -180160,7 +179951,7 @@ async function buildLiveActivityContentState(db, profileId, now2 = /* @__PURE__ 
   };
 }
 function liveActivityContentHash(state2) {
-  return (0, import_node_crypto38.createHash)("sha256").update(
+  return (0, import_node_crypto37.createHash)("sha256").update(
     JSON.stringify(
       state2 && {
         running: state2.running,
@@ -180699,7 +180490,7 @@ var ChatNotificationDispatcher = class extends PollLoop {
   db;
   options;
   send;
-  workerId = `chat-notifications:${(0, import_node_crypto39.randomUUID)()}`;
+  workerId = `chat-notifications:${(0, import_node_crypto38.randomUUID)()}`;
   /** One claim/deliver pass. Returns how many candidates it processed. */
   async tick() {
     return await this.poll() ?? 0;
@@ -181274,7 +181065,7 @@ function boundComposeText(value2, maxChars) {
 var deliveryComposeWorker = new DeliveryComposeWorker();
 
 // desktop-oauth-handoff.ts
-var import_node_crypto40 = require("node:crypto");
+var import_node_crypto39 = require("node:crypto");
 var HANDOFF_TTL_MS = 6e4;
 var TICKET_PATTERN = /^[A-Za-z0-9_-]{32,128}$/;
 var handoffs = /* @__PURE__ */ new Map();
@@ -181285,7 +181076,7 @@ function discardExpiredHandoffs(now2 = Date.now()) {
 }
 function createOAuthHandoff(sessionToken, audience) {
   discardExpiredHandoffs();
-  const ticket = (0, import_node_crypto40.randomBytes)(32).toString("base64url");
+  const ticket = (0, import_node_crypto39.randomBytes)(32).toString("base64url");
   handoffs.set(ticket, { audience, sessionToken, expiresAt: Date.now() + HANDOFF_TTL_MS });
   return ticket;
 }
@@ -181766,7 +181557,7 @@ async function dismissNotification(id2, body) {
 }
 
 // oauth.ts
-var import_node_crypto41 = require("node:crypto");
+var import_node_crypto40 = require("node:crypto");
 init_db();
 var CLIENT_ID_PREFIX = "ovlc_";
 var AUTH_CODE_PREFIX = "ovla_";
@@ -181801,12 +181592,12 @@ function oauthSigningSecret() {
   return process.env.OVERLORD_OAUTH_SIGNING_SECRET?.trim() || process.env.BETTER_AUTH_SECRET?.trim() || "overlord-local-oauth-development-secret";
 }
 function signPayload(payload) {
-  return (0, import_node_crypto41.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
+  return (0, import_node_crypto40.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
 }
 function fixedTimeEqual(a5, b5) {
   const left = Buffer.from(a5);
   const right = Buffer.from(b5);
-  return left.length === right.length && (0, import_node_crypto41.timingSafeEqual)(left, right);
+  return left.length === right.length && (0, import_node_crypto40.timingSafeEqual)(left, right);
 }
 function jsonError(res, status, error53, description) {
   res.status(status).json({ error: error53, error_description: description });
@@ -182127,7 +181918,7 @@ async function handleOAuthApprove(req, res) {
       issuanceWorkspaceUserId: consent.issuanceWorkspace.workspaceUserId
     }
   );
-  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto41.randomBytes)(32).toString("base64url")}`;
+  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto40.randomBytes)(32).toString("base64url")}`;
   authorizationCodes.set(code, {
     clientId: parsed.clientId,
     redirectUri: parsed.redirectUri,
@@ -182171,7 +181962,7 @@ async function handleOAuthToken(req, res) {
     jsonError(res, 400, "invalid_target", "OAuth resource does not match the authorization code.");
     return;
   }
-  const challenge = (0, import_node_crypto41.createHash)("sha256").update(codeVerifier).digest("base64url");
+  const challenge = (0, import_node_crypto40.createHash)("sha256").update(codeVerifier).digest("base64url");
   if (!codeVerifier || challenge !== entry.codeChallenge) {
     await revokeOrphanedAccessToken(entry.accessToken);
     jsonError(res, 400, "invalid_grant", "PKCE verification failed.");
@@ -182188,6 +181979,155 @@ async function handleOAuthRevoke(req, res) {
   const token = bodyString(req, "token");
   if (token) await revokeUserTokenSecret(token);
   res.status(200).json({ ok: true });
+}
+
+// ../packages/core/service/objective-transcript.ts
+init_errors4();
+var UUID3 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+var ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+function invalid2() {
+  throw new ServiceError("Invalid objective transcript query", "invalid_request", 400);
+}
+function cursor2(key) {
+  return Buffer.from(JSON.stringify([1, key.at, key.id])).toString("base64url");
+}
+function decode4(value2) {
+  if (typeof value2 !== "string" || value2.length > 256 || !/^[\w-]+$/.test(value2)) invalid2();
+  try {
+    const key = JSON.parse(Buffer.from(value2, "base64url").toString());
+    if (!Array.isArray(key) || key.length !== 3 || key[0] !== 1 || typeof key[1] !== "string" || !ISO.test(key[1]) || !Number.isFinite(Date.parse(key[1])) || new Date(key[1]).toISOString() !== key[1] || typeof key[2] !== "string" || !UUID3.test(key[2]))
+      invalid2();
+    const result2 = { at: key[1], id: key[2] };
+    if (cursor2(result2) !== value2) invalid2();
+    return result2;
+  } catch {
+    return invalid2();
+  }
+}
+function parseTranscriptRead(query) {
+  if (Object.keys(query).some((key) => !["limit", "before", "after", "ids"].includes(key))) invalid2();
+  if ([query.before, query.after, query.ids].filter((value2) => value2 !== void 0).length > 1)
+    invalid2();
+  const rawLimit = query.limit ?? "50";
+  if (typeof rawLimit !== "string" || !/^[1-9]\d{0,2}$/.test(rawLimit)) invalid2();
+  const limit2 = Number(rawLimit);
+  if (limit2 > 100) invalid2();
+  let ids = null;
+  if (query.ids !== void 0) {
+    if (typeof query.ids !== "string" || query.ids.length > 3699 || query.limit !== void 0)
+      invalid2();
+    ids = query.ids.split(",");
+    if (ids.length > 100 || ids.some((id2) => !UUID3.test(id2)) || new Set(ids).size !== ids.length)
+      invalid2();
+  }
+  return {
+    limit: limit2,
+    before: query.before === void 0 ? null : decode4(query.before),
+    after: query.after === void 0 ? null : decode4(query.after),
+    ids
+  };
+}
+async function readObjectiveTranscript({
+  db,
+  workspaceIds,
+  allowedProjectIds,
+  read
+}) {
+  const empty = {
+    items: [],
+    nextBefore: null,
+    nextAfter: read.after ? cursor2(read.after) : null,
+    newestCursor: null,
+    hasMore: false
+  };
+  if (!workspaceIds.length || allowedProjectIds?.length === 0) return empty;
+  const marks = (values) => values.map(() => "?").join(",");
+  const filterParams = [];
+  let filter = "";
+  if (allowedProjectIds !== null) {
+    filter += ` AND o.project_id IN (${marks(allowedProjectIds)})`;
+    filterParams.push(...allowedProjectIds);
+  }
+  if (read.ids) {
+    filter += ` AND o.id IN (${marks(read.ids)})`;
+    filterParams.push(...read.ids);
+  }
+  const key = read.before ?? read.after;
+  if (key) {
+    const op2 = read.after ? ">" : "<";
+    filter += ` AND (o.created_at ${op2} ? OR (o.created_at = ? AND o.id ${op2} ?))`;
+    filterParams.push(key.at, key.at, key.id);
+  }
+  const direction = read.after ? "ASC" : "DESC";
+  const limit2 = read.ids ? read.ids.length : read.limit;
+  const lookahead = read.ids ? limit2 : limit2 + 1;
+  const joins = `JOIN missions m ON m.id = o.mission_id AND m.project_id = o.project_id
+      AND m.workspace_id = o.workspace_id AND m.deleted_at IS NULL
+    JOIN projects p ON p.id = o.project_id AND p.workspace_id = o.workspace_id
+      AND p.deleted_at IS NULL AND p.status = 'active'
+    JOIN workspaces w ON w.id = o.workspace_id AND w.deleted_at IS NULL`;
+  const params = [];
+  const scopes = workspaceIds.map((workspaceId2, index) => {
+    params.push(workspaceId2, ...filterParams, lookahead);
+    return `SELECT id FROM (SELECT o.id FROM objectives o ${joins}
+      WHERE o.deleted_at IS NULL AND o.workspace_id = ?${filter}
+      ORDER BY o.created_at ${direction}, o.id ${direction} LIMIT ?) scope_${index}`;
+  });
+  params.push(lookahead);
+  const rows = await db.all(
+    `
+    WITH candidates AS (${scopes.join(" UNION ALL ")})
+    SELECT o.id, o.workspace_id AS "workspaceId", o.project_id AS "projectId",
+      o.mission_id AS "missionId", m.display_id AS "missionDisplayId",
+      m.title AS "missionTitle", m.revision AS "missionRevision", m.status_type AS "statusType",
+      p.name AS "projectName", p.settings_json AS "projectSettings", p.revision AS "projectRevision",
+      o.title, o.instruction_text AS "instructionText", o.state,
+      o.assigned_agent AS "assignedAgent", o.resource_key AS "resourceKey",
+      o.created_by_kind AS "createdByKind", o.created_by_agent AS "createdByAgent",
+      o.created_by_workspace_user_id AS "createdByWorkspaceUserId",
+      o.created_at AS "createdAt", o.updated_at AS "updatedAt", o.revision
+    FROM candidates c JOIN objectives o ON o.id = c.id ${joins}
+    ORDER BY o.created_at ${direction}, o.id ${direction} LIMIT ?`,
+    params
+  );
+  const hasMore = !read.ids && rows.length > limit2;
+  const items = rows.slice(0, limit2).map(({ projectSettings, ...row }) => {
+    let projectColor2 = null;
+    try {
+      const settings = JSON.parse(projectSettings);
+      if (typeof settings["overlord.color"] === "string") projectColor2 = settings["overlord.color"];
+    } catch {
+    }
+    return { ...row, projectColor: projectColor2 };
+  });
+  const asKey = (item) => ({ at: item.createdAt, id: item.id });
+  const last = items.at(-1);
+  const newest = read.after ? last : items[0];
+  return {
+    items,
+    hasMore,
+    nextBefore: !read.ids && !read.after && hasMore && last ? cursor2(asKey(last)) : null,
+    nextAfter: !read.ids && read.after ? last ? cursor2(asKey(last)) : cursor2(read.after) : null,
+    newestCursor: newest ? cursor2(asKey(newest)) : null
+  };
+}
+
+// objective-transcript.ts
+init_db();
+async function listObjectiveTranscript(query = {}) {
+  const read = parseTranscriptRead(query);
+  const db = requireDatabaseClient();
+  const workspaceIds = [];
+  for (const scope2 of await callerMembershipsInActiveOrganization(db)) {
+    if (await actorCan(PERMISSIONS.MISSION_READ, scope2) && await actorCan(PERMISSIONS.OBJECTIVE_READ, scope2))
+      workspaceIds.push(scope2.workspaceId);
+  }
+  return readObjectiveTranscript({
+    db,
+    workspaceIds,
+    allowedProjectIds: getActiveTokenProjectIds(),
+    read
+  });
 }
 
 // project-automation-routes.ts
@@ -182214,8 +182154,8 @@ var ALLOWED = [
 ];
 function projectAutomationRouteGuard(req, res, next) {
   if (getActiveTokenProjectIds() === null) return next();
-  const path29 = req.originalUrl.split("?")[0] ?? "";
-  if (ALLOWED.some(([method, pattern]) => req.method === method && pattern.test(path29)))
+  const path30 = req.originalUrl.split("?")[0] ?? "";
+  if (ALLOWED.some(([method, pattern]) => req.method === method && pattern.test(path30)))
     return next();
   res.status(404).json({ error: "Not found" });
 }
@@ -182585,12 +182525,12 @@ var RunQueueDispatchWorker = class extends WorkerJobPoller {
 var runQueueDispatchWorker = new RunQueueDispatchWorker();
 
 // storage.ts
-var import_node_crypto42 = require("node:crypto");
+var import_node_crypto41 = require("node:crypto");
 var import_node_fs20 = require("node:fs");
-var import_node_path33 = __toESM(require("node:path"), 1);
+var import_node_path34 = __toESM(require("node:path"), 1);
 var import_node_url7 = require("node:url");
 init_db();
-var repoRoot3 = import_node_path33.default.resolve(import_node_path33.default.dirname((0, import_node_url7.fileURLToPath)(__overlord_import_meta_url)), "..");
+var repoRoot3 = import_node_path34.default.resolve(import_node_path34.default.dirname((0, import_node_url7.fileURLToPath)(__overlord_import_meta_url)), "..");
 var MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 var MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 var MAX_ATTACHMENT_LABEL = "25 MB";
@@ -182668,7 +182608,7 @@ async function writeImageObject(bucket, input, storageKeyFor) {
     storageKey,
     sizeBytes: input.bytes.length,
     contentType,
-    checksum: (0, import_node_crypto42.createHash)("sha256").update(input.bytes).digest("hex"),
+    checksum: (0, import_node_crypto41.createHash)("sha256").update(input.bytes).digest("hex"),
     publicUrl: publicUrlFor(bucket.bucket_key, storageKey)
   };
 }
@@ -182704,7 +182644,7 @@ async function uploadUserImage(input, explicitWorkspaceId) {
     (id2, ext) => userImageObjectKey(userId, id2, ext)
   );
   const now2 = nowIso2();
-  const filename = input.filename.trim() || `image${import_node_path33.default.extname(written.storageKey)}`;
+  const filename = input.filename.trim() || `image${import_node_path34.default.extname(written.storageKey)}`;
   return requireDatabaseClient().transaction(async (tx) => {
     await tx.run(
       `INSERT INTO user_images (
@@ -182763,7 +182703,7 @@ async function uploadWorkspaceImage(input, explicitWorkspaceId) {
     (id2, ext) => workspaceImageObjectKey(workspaceId2, id2, ext)
   );
   const now2 = nowIso2();
-  const filename = input.filename.trim() || `image${import_node_path33.default.extname(written.storageKey)}`;
+  const filename = input.filename.trim() || `image${import_node_path34.default.extname(written.storageKey)}`;
   return requireDatabaseClient().transaction(async (tx) => {
     await tx.run(
       `INSERT INTO workspace_images (
@@ -182824,7 +182764,7 @@ async function uploadOrganizationImage(input) {
     input,
     (id2, ext) => organizationImageObjectKey(organizationId, id2, ext)
   );
-  const filename = input.filename.trim() || `image${import_node_path33.default.extname(written.storageKey)}`;
+  const filename = input.filename.trim() || `image${import_node_path34.default.extname(written.storageKey)}`;
   return {
     id: written.id,
     bucketKey: bucket.bucket_key,
@@ -182854,7 +182794,7 @@ async function resolveObjectiveScope(objectiveRef, client = requireDatabaseClien
   return row;
 }
 function attachmentExtension(filename) {
-  const ext = import_node_path33.default.extname(filename).toLowerCase();
+  const ext = import_node_path34.default.extname(filename).toLowerCase();
   return /^\.[a-z0-9]{1,12}$/.test(ext) ? ext : "";
 }
 function toObjectiveAttachmentDto(row) {
@@ -182906,8 +182846,8 @@ async function uploadObjectiveAttachment(input) {
     bytes: input.bytes,
     contentType: contentType ?? "application/octet-stream"
   });
-  const filename = input.filename.trim() || `attachment${import_node_path33.default.extname(storageKey)}`;
-  const checksum3 = (0, import_node_crypto42.createHash)("sha256").update(input.bytes).digest("hex");
+  const filename = input.filename.trim() || `attachment${import_node_path34.default.extname(storageKey)}`;
+  const checksum = (0, import_node_crypto41.createHash)("sha256").update(input.bytes).digest("hex");
   return requireDatabaseClient().transaction(async (tx) => {
     await tx.run(
       `INSERT INTO attachments (
@@ -182930,7 +182870,7 @@ async function uploadObjectiveAttachment(input) {
         filename,
         contentType,
         input.bytes.length,
-        checksum3,
+        checksum,
         getActorWorkspaceUserId(),
         now2,
         now2
@@ -183071,8 +183011,8 @@ async function finalizeStoredObject({
     if (!bucket.local_path) {
       throw new ApiError(500, `Bucket '${bucket.bucket_key}' is missing a local_path`);
     }
-    const root5 = import_node_path33.default.isAbsolute(bucket.local_path) ? bucket.local_path : import_node_path33.default.resolve(repoRoot3, bucket.local_path);
-    const absolutePath = import_node_path33.default.join(root5, storageKey);
+    const root5 = import_node_path34.default.isAbsolute(bucket.local_path) ? bucket.local_path : import_node_path34.default.resolve(repoRoot3, bucket.local_path);
+    const absolutePath = import_node_path34.default.join(root5, storageKey);
     if (!(0, import_node_fs20.existsSync)(absolutePath)) throw new ApiError(404, "File not found");
     return { absolutePath, contentType, filename, forceDownload };
   }
@@ -183088,7 +183028,7 @@ async function resolveStoredObject(bucketKey, storageKey, permission) {
     const organizationId = await requireActiveOrganizationId();
     await requireAnyWorkspacePermission(permission);
     const bucket2 = await resolveOrganizationBucket(organizationId, bucketKey);
-    const ext = import_node_path33.default.extname(storageKey).toLowerCase();
+    const ext = import_node_path34.default.extname(storageKey).toLowerCase();
     return finalizeStoredObject({
       bucket: bucket2,
       storageKey,
@@ -183167,13 +183107,13 @@ init_webhook_events();
 init_db();
 
 // webhook-security.ts
-var import_node_crypto43 = require("node:crypto");
+var import_node_crypto42 = require("node:crypto");
 var import_promises6 = __toESM(require("node:dns/promises"), 1);
 var import_node_net = require("node:net");
 init_db();
 function signWebhookPayload(secret, rawBody) {
   const timestamp2 = Math.floor(Date.now() / 1e3);
-  const signature = (0, import_node_crypto43.createHmac)("sha256", secret).update(`${timestamp2}.${rawBody}`).digest("hex");
+  const signature = (0, import_node_crypto42.createHmac)("sha256", secret).update(`${timestamp2}.${rawBody}`).digest("hex");
   return { header: `t=${timestamp2},v1=${signature}`, timestamp: timestamp2 };
 }
 function internalHostPatterns() {
@@ -183493,7 +183433,7 @@ var webhookDispatcher = new WebhookDispatcher();
 
 // webhooks.ts
 init_dist2();
-var import_node_crypto44 = require("node:crypto");
+var import_node_crypto43 = require("node:crypto");
 init_webhook_events();
 init_db();
 var WEBHOOK_SECRET_SCHEME = "whsec";
@@ -183528,7 +183468,7 @@ function toSubscriptionDto(row) {
   };
 }
 function generateWebhookSecret() {
-  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto44.randomBytes)(24).toString("hex")}` };
+  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto43.randomBytes)(24).toString("hex")}` };
 }
 function normalizeEventTypes(input) {
   if (!Array.isArray(input) || input.length === 0) {
@@ -183961,8 +183901,8 @@ async function getAuthorizedWorkspaceDiscovery() {
 }
 
 // index.ts
-var here2 = import_node_path34.default.dirname((0, import_node_url8.fileURLToPath)(__overlord_import_meta_url));
-var distDir = process.env.OVERLORD_WEBAPP_DIST ? import_node_path34.default.resolve(process.env.OVERLORD_WEBAPP_DIST) : import_node_path34.default.resolve(here2, "..", "dist");
+var here2 = import_node_path35.default.dirname((0, import_node_url8.fileURLToPath)(__overlord_import_meta_url));
+var distDir = process.env.OVERLORD_WEBAPP_DIST ? import_node_path35.default.resolve(process.env.OVERLORD_WEBAPP_DIST) : import_node_path35.default.resolve(here2, "..", "dist");
 var MIN_BACKEND_NODE_MAJOR = 24;
 function assertSupportedBackendNodeVersion() {
   const major = Number.parseInt(process.versions.node.split(".")[0] ?? "", 10);
@@ -184876,6 +184816,13 @@ app.get(
     })
   )
 );
+app.get(
+  "/api/objective-transcript",
+  handle3((req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    return listObjectiveTranscript(req.query);
+  })
+);
 app.put(
   "/api/deliveries/:deliveryId/deferred-work/:actionId/resolution",
   handle3((req) => resolveDeferredWork(req.params.deliveryId, req.params.actionId, req.body), {
@@ -185283,15 +185230,15 @@ app.post(
 );
 app.get(
   "/api/missions/:id/schedule",
-  handle3((req) => getMissionSchedule(req.params.id))
+  handle3((req) => getMissionSchedule2(req.params.id))
 );
 app.put(
   "/api/missions/:id/schedule",
-  handle3((req) => upsertMissionSchedule(req.params.id, req.body), { mutates: true })
+  handle3((req) => upsertMissionSchedule2(req.params.id, req.body), { mutates: true })
 );
 app.delete(
   "/api/missions/:id/schedule",
-  handle3((req) => clearMissionSchedule(req.params.id), { mutates: true })
+  handle3((req) => clearMissionSchedule2(req.params.id), { mutates: true })
 );
 app.post(
   "/api/objectives",
@@ -185614,7 +185561,7 @@ if (resolveServeSpa({ dialect: DATABASE_DIALECT }) && (0, import_node_fs21.exist
   app.use(import_express6.default.static(distDir));
   app.get("*", (req, res, next) => {
     if (req.path.startsWith("/api/")) return next();
-    res.sendFile(import_node_path34.default.join(distDir, "index.html"));
+    res.sendFile(import_node_path35.default.join(distDir, "index.html"));
   });
 }
 app.use(apiErrorHandler);
