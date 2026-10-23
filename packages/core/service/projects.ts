@@ -1,4 +1,4 @@
-import { bindBool, DEFAULT_STATUSES } from '@overlord/database';
+import { bindBool, type DatabaseClient, DEFAULT_STATUSES } from '@overlord/database';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
@@ -34,31 +34,30 @@ export type ProjectSummary = {
 
 export type ProjectResourceAccessMode = 'read' | 'read_write';
 
-async function seedProjectStatuses({
-  ctx,
-  projectId,
-  now
-}: {
-  ctx: ServiceContext;
-  projectId: string;
-  now: string;
-}): Promise<void> {
+/**
+ * Insert the default board statuses for a new project. Takes a bare client so
+ * the REST project-create paths can call it inside their own transaction.
+ */
+export async function seedDefaultProjectStatuses(
+  db: DatabaseClient,
+  { workspaceId, projectId, now }: { workspaceId: string; projectId: string; now: string }
+): Promise<void> {
   for (const status of DEFAULT_STATUSES) {
-    await ctx.db.run(
+    await db.run(
       `INSERT INTO project_statuses
          (id, workspace_id, project_id, key, name, type, position, is_default, is_terminal,
           created_at, updated_at, revision)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
       [
         newId(),
-        ctx.workspace.id,
+        workspaceId,
         projectId,
         status.key,
         status.name,
         status.type,
         status.position,
-        bindBool(ctx.db.dialect, status.isDefault),
-        bindBool(ctx.db.dialect, status.isTerminal),
+        bindBool(db.dialect, status.isDefault),
+        bindBool(db.dialect, status.isTerminal),
         now,
         now
       ]
@@ -203,7 +202,11 @@ export async function createProject({
       ]
     );
 
-    await seedProjectStatuses({ ctx: txCtx, projectId: id, now });
+    await seedDefaultProjectStatuses(txCtx.db, {
+      workspaceId: txCtx.workspace.id,
+      projectId: id,
+      now
+    });
 
     await recordChange({
       ctx: txCtx,
@@ -269,33 +272,6 @@ async function tryGetProject({
     if (error instanceof ServiceError && error.code === 'project_not_found') return null;
     throw error;
   }
-}
-
-export async function listProjects({ ctx }: { ctx: ServiceContext }): Promise<ProjectSummary[]> {
-  const rows = (await ctx.db.all(
-    `SELECT id, slug, name, description, status, created_at, updated_at
-       FROM projects WHERE workspace_id = ? AND deleted_at IS NULL
-       ORDER BY created_at ASC`,
-    [ctx.workspace.id]
-  )) as Array<{
-    id: string;
-    slug: string;
-    name: string;
-    description: string | null;
-    status: string;
-    created_at: string;
-    updated_at: string;
-  }>;
-
-  return rows.map(row => ({
-    id: row.id,
-    slug: row.slug,
-    name: row.name,
-    description: row.description,
-    status: row.status,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at
-  }));
 }
 
 export type ProjectStatusSummary = {

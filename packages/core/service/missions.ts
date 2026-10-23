@@ -3,7 +3,12 @@ import type {
   SearchMissionsResponseV2,
   SearchResponseV3
 } from '@overlord/contract';
-import { bindBool, formatObjectiveDisplayId, OBJECTIVE_STATES } from '@overlord/database';
+import {
+  bindBool,
+  type DatabaseClient,
+  formatObjectiveDisplayId,
+  OBJECTIVE_STATES
+} from '@overlord/database';
 
 import { recordChange } from './change-feed.js';
 import type { ServiceContext } from './context.js';
@@ -95,7 +100,7 @@ export type AttachmentSummary = {
   storageKey: string;
 };
 
-async function nextMissionSequence(ctx: ServiceContext): Promise<number> {
+export async function nextMissionSequence(ctx: ServiceContext): Promise<number> {
   // Seed old workspaces idempotently, then allocate with one atomic update. This
   // also serializes ordinary mission creation against an outer chat transaction.
   await ctx.db.run(
@@ -236,18 +241,25 @@ export async function assignMissionTags({
   }
 }
 
-async function topBoardPosition(
-  ctx: ServiceContext,
+/**
+ * Board position that places a mission above every other mission in a status
+ * column. `excludeMissionId` leaves out the mission being moved, so re-saving it
+ * into its own column does not count its current position.
+ */
+export async function topBoardPosition(
+  db: DatabaseClient,
   projectId: string,
-  statusId: string
+  statusId: string,
+  excludeMissionId?: string
 ): Promise<number> {
-  const row = (await ctx.db.get(
+  const row = (await db.get(
     `SELECT MIN(board_position) AS min_pos FROM missions
-       WHERE project_id = ? AND status_id = ? AND deleted_at IS NULL`,
-    [projectId, statusId]
+       WHERE project_id = ? AND status_id = ? AND deleted_at IS NULL${
+         excludeMissionId ? ' AND id != ?' : ''
+       }`,
+    excludeMissionId ? [projectId, statusId, excludeMissionId] : [projectId, statusId]
   )) as { min_pos: number | null };
-  const minPos = row.min_pos;
-  return minPos === null ? 100 : minPos - 100;
+  return row.min_pos === null ? 100 : row.min_pos - 100;
 }
 
 export async function listObjectives({
@@ -695,7 +707,7 @@ export async function createMissionWithObjectives({
         missionTitle,
         status.id,
         status.type,
-        await topBoardPosition(txCtx, resolvedProjectId, status.id),
+        await topBoardPosition(txCtx.db, resolvedProjectId, status.id),
         priority ?? 'normal',
         ctx.actorWorkspaceUserId,
         assignedWorkspaceUserId ?? null,
@@ -1563,7 +1575,7 @@ export async function moveMissionToReview({
   const mission = await getMissionSummary({ ctx, missionId });
   const reviewStatus = await getReviewStatusId(ctx, mission.projectId);
   const now = nowIso();
-  const boardPosition = await topBoardPosition(ctx, mission.projectId, reviewStatus.id);
+  const boardPosition = await topBoardPosition(ctx.db, mission.projectId, reviewStatus.id);
 
   await ctx.db.run(
     `UPDATE missions SET status_id = ?, status_type = ?, board_position = ?, updated_at = ?, revision = revision + 1
@@ -1601,7 +1613,7 @@ export async function moveMissionToExecute({
   }
 
   const now = nowIso();
-  const boardPosition = await topBoardPosition(ctx, mission.projectId, executeStatus.id);
+  const boardPosition = await topBoardPosition(ctx.db, mission.projectId, executeStatus.id);
 
   await ctx.db.run(
     `UPDATE missions

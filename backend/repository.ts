@@ -9,7 +9,6 @@ import {
   USER_TOKEN_HASH_ALGORITHM,
   USER_TOKEN_PREFIX
 } from '@overlord/auth';
-import { generateDateFromSchedule, type ScheduleLike } from '@overlord/automations';
 import type { CreatedGitHubRepositoryDto } from '@overlord/contract/ext/github';
 import {
   OBJECTIVE_COMPLETED_AT_ASSIGNMENT,
@@ -21,7 +20,6 @@ import {
 import {
   bindBool,
   type DatabaseClient,
-  DEFAULT_STATUSES,
   formatObjectiveDisplayId,
   OBJECTIVE_STATES,
   type ObjectiveState,
@@ -56,6 +54,15 @@ import {
 } from '../packages/core/service/mission-branch-observations.ts';
 import { searchMissionReferencesInProject } from '../packages/core/service/mission-reference-search.ts';
 import {
+  clearMissionSchedule as clearMissionScheduleService,
+  getMissionSchedule as getMissionScheduleService,
+  getScheduleSummary,
+  type MissionScheduleSummary,
+  previewScheduleDueDatetime,
+  scheduleInputFromSummary,
+  upsertMissionSchedule as upsertMissionScheduleService
+} from '../packages/core/service/mission-schedules.ts';
+import {
   allocateWorkspaceSearchLimits,
   mergeWorkspaceMissionSearches,
   mergeWorkspaceSearchV3,
@@ -69,11 +76,20 @@ import {
   createMissionWithObjectives,
   insertArtifactRow,
   insertObjective as createObjectiveOnMission,
+  nextMissionSequence,
+  topBoardPosition,
   writeSharedContext
 } from '../packages/core/service/missions.ts';
 import { emitNotification } from '../packages/core/service/notifications/notifications.ts';
+import {
+  agentInstructionsFromProfileMetadata,
+  avatarUrlFromProfileMetadata,
+  editorSchemeFromProfileMetadata,
+  mergeProfileMetadataJson
+} from '../packages/core/service/profiles.ts';
 import { resolveProjectExecutionTargetForLaunch } from '../packages/core/service/project-execution-target.ts';
 import { deriveProjectResourceKey } from '../packages/core/service/project-resource-key.ts';
+import { seedDefaultProjectStatuses } from '../packages/core/service/projects.ts';
 import {
   enqueueObjectiveAfterLastQueuedSibling,
   enqueueRunQueueDispatch,
@@ -3294,7 +3310,7 @@ export async function createProject(body: CreateProjectBody): Promise<ProjectDto
       ]
     );
 
-    await seedProjectStatuses(tx, { projectId: id, workspaceId: targetWorkspaceId, now });
+    await seedDefaultProjectStatuses(tx, { projectId: id, workspaceId: targetWorkspaceId, now });
 
     await recordChange(
       {
@@ -3326,33 +3342,6 @@ export async function createProject(body: CreateProjectBody): Promise<ProjectDto
 
     return getProject(id, tx);
   });
-}
-
-async function seedProjectStatuses(
-  db: DatabaseClient,
-  { projectId, workspaceId, now }: { projectId: string; workspaceId: string; now: string }
-): Promise<void> {
-  for (const status of DEFAULT_STATUSES) {
-    await db.run(
-      `INSERT INTO project_statuses
-         (id, workspace_id, project_id, key, name, type, position, is_default, is_terminal,
-          created_at, updated_at, revision)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-      [
-        newId(),
-        workspaceId,
-        projectId,
-        status.key,
-        status.name,
-        status.type,
-        status.position,
-        bindBool(db.dialect, status.isDefault),
-        bindBool(db.dialect, status.isTerminal),
-        now,
-        now
-      ]
-    );
-  }
 }
 
 function initializationProvisioning(
@@ -3435,7 +3424,7 @@ export async function initializeProject(
         maxPosition.max_position + 1
       ]
     );
-    await seedProjectStatuses(tx, { projectId, workspaceId, now });
+    await seedDefaultProjectStatuses(tx, { projectId, workspaceId, now });
     await recordChange(
       {
         entityType: 'project',
@@ -4253,27 +4242,6 @@ export async function searchMissionReferences({
 
 // New cards drop in at the top of their column. Gap-based: one step (100) above
 // the current minimum so no renumber is needed until the column is reordered.
-async function topBoardPosition(
-  db: DatabaseClient,
-  projectId: string,
-  statusId: string,
-  excludeMissionId?: string
-): Promise<number> {
-  const row = excludeMissionId
-    ? ((await db.get(
-        `SELECT MIN(board_position) AS min_pos FROM missions
-         WHERE project_id = ? AND status_id = ?
-           AND deleted_at IS NULL AND id != ?`,
-        [projectId, statusId, excludeMissionId]
-      )) as { min_pos: number | null })
-    : ((await db.get(
-        `SELECT MIN(board_position) AS min_pos FROM missions
-         WHERE project_id = ? AND status_id = ? AND deleted_at IS NULL`,
-        [projectId, statusId]
-      )) as { min_pos: number | null });
-  return row.min_pos === null ? 100 : row.min_pos - 100;
-}
-
 async function getProjectStatus(
   db: DatabaseClient,
   projectId: string,
@@ -4543,7 +4511,7 @@ export async function listMissionEvents(
             workspaceUserId: row.actor_workspace_user_id,
             displayName: row.actor_display_name,
             handle: row.actor_handle,
-            avatarUrl: avatarUrlFromMetadata(row.actor_metadata_json ?? '{}')
+            avatarUrl: avatarUrlFromProfileMetadata(row.actor_metadata_json ?? '{}')
           }
         : null,
     externalUrl: row.external_url,
@@ -5191,35 +5159,6 @@ export async function updateArtifact(
     );
     return toArtifactDto(updated);
   });
-}
-
-async function nextMissionSequence(db: DatabaseClient, workspaceId: string): Promise<number> {
-  // Allocate the next workspace-scoped mission number, creating the counter row
-  // if a fresh database somehow lacks it.
-  const row = (await db.get(
-    `SELECT id, next_value FROM mission_sequences
-         WHERE workspace_id = ? AND scope_type = 'workspace'
-           AND scope_id = ? AND counter_name = 'mission'`,
-    [workspaceId, workspaceId]
-  )) as { id: string; next_value: number } | undefined;
-
-  if (!row) {
-    const seq = 1;
-    await db.run(
-      `INSERT INTO mission_sequences (id, workspace_id, scope_type, scope_id, counter_name, next_value, updated_at)
-       VALUES (?, ?, 'workspace', ?, 'mission', ?, ?)`,
-      [newId(), workspaceId, workspaceId, seq + 1, nowIso()]
-    );
-    return seq;
-  }
-
-  const seq = row.next_value;
-  await db.run(`UPDATE mission_sequences SET next_value = ?, updated_at = ? WHERE id = ?`, [
-    seq + 1,
-    nowIso(),
-    row.id
-  ]);
-  return seq;
 }
 
 type CreateMissionResult = {
@@ -6280,110 +6219,20 @@ export async function reorderBoardColumn(
 // planning/feature-plans/mission-scheduling-engine.md and
 // automations/src/scheduling-engine/schedulingEngine.md.
 
-interface ScheduleRow {
-  id: string;
-  workspace_id: string;
-  name: string | null;
-  period_type: string;
-  period_interval: number;
-  weeks_of_month_json: string;
-  days_of_month_json: string;
-  days_of_week_json: string;
-  timezone: string;
-  start_date: string | null;
-  next_status_key: string | null;
-  created_at: string;
-  updated_at: string;
-  revision: number;
-}
+// The schedule SQL and SchedulingEngine translation live in the shared service
+// (packages/core/service/mission-schedules.ts); these REST handlers only add
+// RBAC (requireMissionPermission) and map the summaries onto the REST DTOs.
 
-function parseScheduleJsonArray(json: string): unknown[] {
-  try {
-    const parsed = JSON.parse(json);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function toScheduleDto(row: ScheduleRow): ScheduleDto {
+function toMissionScheduleDto(summary: MissionScheduleSummary): MissionScheduleDto {
   return {
-    id: row.id,
-    workspaceId: row.workspace_id,
-    name: row.name,
-    periodType: row.period_type as ScheduleDto['periodType'],
-    periodInterval: row.period_interval,
-    weeksOfMonth: parseScheduleJsonArray(row.weeks_of_month_json) as number[],
-    daysOfMonth: parseScheduleJsonArray(row.days_of_month_json) as number[],
-    daysOfWeek: parseScheduleJsonArray(row.days_of_week_json) as ScheduleDto['daysOfWeek'],
-    timezone: row.timezone,
-    startDate: row.start_date,
-    nextStatusKey: row.next_status_key,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    revision: row.revision
+    dueDatetime: summary.dueDatetime,
+    schedule: summary.schedule
+      ? {
+          ...summary.schedule,
+          periodType: summary.schedule.periodType as ScheduleDto['periodType']
+        }
+      : null
   };
-}
-
-function toScheduleLike(input: ScheduleInput): ScheduleLike {
-  return {
-    name: input.name ?? undefined,
-    periodType: input.periodType,
-    periodInterval: input.periodInterval,
-    weeksOfMonth: input.weeksOfMonth ?? undefined,
-    daysOfMonth: input.daysOfMonth ?? undefined,
-    daysOfWeek: input.daysOfWeek ?? undefined,
-    timezone: input.timezone,
-    startDate: input.startDate ?? undefined
-  };
-}
-
-function scheduleRowToInput(row: ScheduleRow): ScheduleInput {
-  const dto = toScheduleDto(row);
-  return {
-    name: dto.name,
-    periodType: dto.periodType,
-    periodInterval: dto.periodInterval,
-    weeksOfMonth: dto.weeksOfMonth,
-    daysOfMonth: dto.daysOfMonth,
-    daysOfWeek: dto.daysOfWeek,
-    timezone: dto.timezone,
-    startDate: dto.startDate,
-    nextStatusKey: dto.nextStatusKey
-  };
-}
-
-async function getScheduleRow(
-  db: DatabaseClient,
-  workspaceId: string,
-  scheduleId: string
-): Promise<ScheduleRow | undefined> {
-  return (await db.get(
-    `SELECT id, workspace_id, name, period_type, period_interval, weeks_of_month_json,
-            days_of_month_json, days_of_week_json, timezone, start_date, next_status_key,
-            created_at, updated_at, revision
-       FROM schedules WHERE id = ? AND workspace_id = ?`,
-    [scheduleId, workspaceId]
-  )) as ScheduleRow | undefined;
-}
-
-/**
- * Validates and computes the next due datetime without persisting anything.
- * Powers the ScheduleEditor live preview and the completion trigger below.
- * Validation is delegated to the SchedulingEngine's zod schema
- * (automations/src/scheduling-engine); this layer only translates the thrown
- * validation `Error` into an `ApiError`.
- */
-function previewScheduleDueDatetime(input: ScheduleInput, itemDueDatetime?: string | null): string {
-  try {
-    const result = generateDateFromSchedule({
-      schedule: toScheduleLike(input),
-      itemDueDatetime: itemDueDatetime ? new Date(itemDueDatetime) : null
-    });
-    return result.toISOString();
-  } catch (err) {
-    throw new ApiError(400, err instanceof Error ? err.message : 'Invalid schedule.');
-  }
 }
 
 /** POST /api/missions/schedule/preview */
@@ -6394,19 +6243,18 @@ export function previewMissionSchedule(body: PreviewScheduleBody): { dueDatetime
 
 /** GET /api/missions/:id/schedule */
 export async function getMissionSchedule(missionRef: string): Promise<MissionScheduleDto> {
-  const mission = await getMissionRow(missionRef);
-  if (!mission.schedule_id) {
-    return { dueDatetime: mission.due_datetime, schedule: null };
-  }
-  const scheduleRow = await getScheduleRow(
-    requireDatabaseClient(),
-    mission.workspace_id,
-    mission.schedule_id
+  const db = requireDatabaseClient();
+  const scope = await requireMissionPermission({
+    missionRef,
+    permission: PERMISSIONS.MISSION_READ,
+    db
+  });
+  const ctx = await buildWebappServiceContextForWorkspace(
+    scope.workspaceId,
+    db,
+    scope.workspaceUserId
   );
-  return {
-    dueDatetime: mission.due_datetime,
-    schedule: scheduleRow ? toScheduleDto(scheduleRow) : null
-  };
+  return toMissionScheduleDto(await getMissionScheduleService({ ctx, missionId: scope.missionId }));
 }
 
 /** PUT /api/missions/:id/schedule — create or update the linked schedule and recompute due_datetime. */
@@ -6417,131 +6265,36 @@ export async function upsertMissionSchedule(
   if (!input) throw new ApiError(400, 'schedule is required');
 
   return requireDatabaseClient().transaction(async tx => {
-    const existing = await getMissionRow(missionRef, tx, PERMISSIONS.MISSION_UPDATE);
-    if (input.nextStatusKey) {
-      const configured = await tx.get(
-        `SELECT 1 FROM project_statuses WHERE project_id = ? AND key = ? AND deleted_at IS NULL`,
-        [existing.project_id, input.nextStatusKey]
-      );
-      if (!configured)
-        throw new ApiError(409, 'That status is not available for missions in this project');
-    }
-    const dueDatetime = previewScheduleDueDatetime(input, existing.due_datetime);
-    const now = nowIso();
-    const scheduleId = existing.schedule_id ?? newId();
-
-    if (existing.schedule_id) {
-      await tx.run(
-        `UPDATE schedules
-           SET name = ?, period_type = ?, period_interval = ?, weeks_of_month_json = ?,
-               days_of_month_json = ?, days_of_week_json = ?, timezone = ?, start_date = ?,
-               next_status_key = ?, updated_at = ?, revision = revision + 1
-         WHERE id = ? AND workspace_id = ?`,
-        [
-          input.name?.trim() || null,
-          input.periodType,
-          input.periodInterval,
-          JSON.stringify(input.weeksOfMonth ?? []),
-          JSON.stringify(input.daysOfMonth ?? []),
-          JSON.stringify(input.daysOfWeek ?? []),
-          input.timezone,
-          input.startDate ?? null,
-          input.nextStatusKey ?? null,
-          now,
-          existing.schedule_id,
-          existing.workspace_id
-        ]
-      );
-    } else {
-      await tx.run(
-        `INSERT INTO schedules
-           (id, workspace_id, name, period_type, period_interval, weeks_of_month_json,
-            days_of_month_json, days_of_week_json, timezone, start_date, next_status_key,
-            created_at, updated_at, revision)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-        [
-          scheduleId,
-          existing.workspace_id,
-          input.name?.trim() || null,
-          input.periodType,
-          input.periodInterval,
-          JSON.stringify(input.weeksOfMonth ?? []),
-          JSON.stringify(input.daysOfMonth ?? []),
-          JSON.stringify(input.daysOfWeek ?? []),
-          input.timezone,
-          input.startDate ?? null,
-          input.nextStatusKey ?? null,
-          now,
-          now
-        ]
-      );
-    }
-
-    const revision = existing.revision + 1;
-    await tx.run(
-      `UPDATE missions SET schedule_id = ?, due_datetime = ?, updated_at = ?, revision = ?
-         WHERE id = ? AND workspace_id = ?`,
-      [scheduleId, dueDatetime, now, revision, existing.id, existing.workspace_id]
+    const scope = await requireMissionPermission({
+      missionRef,
+      permission: PERMISSIONS.MISSION_UPDATE,
+      db: tx
+    });
+    const ctx = await buildWebappServiceContextForWorkspace(
+      scope.workspaceId,
+      tx,
+      scope.workspaceUserId
     );
-
-    await recordChange(
-      {
-        entityType: 'mission',
-        entityId: existing.id,
-        operation: 'update',
-        entityRevision: revision,
-        projectId: existing.project_id,
-        missionId: existing.id,
-        changedFields: ['schedule_id', 'due_datetime'],
-        workspaceId: existing.workspace_id
-      },
-      tx
+    return toMissionScheduleDto(
+      await upsertMissionScheduleService({ ctx, missionId: scope.missionId, input })
     );
-
-    const scheduleRow = await getScheduleRow(tx, existing.workspace_id, scheduleId);
-    if (!scheduleRow) throw new ApiError(500, 'Schedule not found after upsert');
-    return { dueDatetime, schedule: toScheduleDto(scheduleRow) };
   });
 }
 
 /** DELETE /api/missions/:id/schedule — unlink and delete the schedule if unreferenced. */
 export async function clearMissionSchedule(missionRef: string): Promise<void> {
   await requireDatabaseClient().transaction(async tx => {
-    const existing = await getMissionRow(missionRef, tx, PERMISSIONS.MISSION_UPDATE);
-    if (!existing.schedule_id) return;
-
-    const now = nowIso();
-    const revision = existing.revision + 1;
-    await tx.run(
-      `UPDATE missions SET schedule_id = NULL, due_datetime = NULL, updated_at = ?, revision = ?
-         WHERE id = ? AND workspace_id = ?`,
-      [now, revision, existing.id, existing.workspace_id]
+    const scope = await requireMissionPermission({
+      missionRef,
+      permission: PERMISSIONS.MISSION_UPDATE,
+      db: tx
+    });
+    const ctx = await buildWebappServiceContextForWorkspace(
+      scope.workspaceId,
+      tx,
+      scope.workspaceUserId
     );
-
-    await recordChange(
-      {
-        entityType: 'mission',
-        entityId: existing.id,
-        operation: 'update',
-        entityRevision: revision,
-        projectId: existing.project_id,
-        missionId: existing.id,
-        changedFields: ['schedule_id', 'due_datetime'],
-        workspaceId: existing.workspace_id
-      },
-      tx
-    );
-
-    const stillReferenced = await tx.get(
-      `SELECT id FROM missions WHERE schedule_id = ? AND workspace_id = ? LIMIT 1`,
-      [existing.schedule_id, existing.workspace_id]
-    );
-    if (!stillReferenced) {
-      await tx.run(`DELETE FROM schedules WHERE id = ? AND workspace_id = ?`, [
-        existing.schedule_id,
-        existing.workspace_id
-      ]);
-    }
+    await clearMissionScheduleService({ ctx, missionId: scope.missionId });
   });
 }
 
@@ -6590,13 +6343,13 @@ async function createScheduledDuplicateIfNeeded(
   if (!isTerminalStatusType(newStatusType) || !mission.schedule_id) return;
   if (newStatusType === 'cancelled') return;
 
-  const scheduleRow = await getScheduleRow(tx, mission.workspace_id, mission.schedule_id);
-  if (!scheduleRow) return;
+  const schedule = await getScheduleSummary(tx, mission.workspace_id, mission.schedule_id);
+  if (!schedule) return;
 
   let nextDueDatetime: string;
   try {
     nextDueDatetime = previewScheduleDueDatetime(
-      scheduleRowToInput(scheduleRow),
+      scheduleInputFromSummary(schedule),
       mission.due_datetime
     );
   } catch {
@@ -6608,16 +6361,20 @@ async function createScheduledDuplicateIfNeeded(
   const targetStatus = await resolveScheduleDuplicateStatus(
     tx,
     mission.project_id,
-    scheduleRow.next_status_key
+    schedule.nextStatusKey
   );
 
+  // Scheduled regenerations are Overlord automation, not a human retyping the
+  // original: no actor, and origin stamps created_by_kind = 'automation' on the
+  // regenerated objective.
+  const automationCtx = {
+    ...(await buildWebappServiceContextForWorkspace(mission.workspace_id, tx, null)),
+    origin: { kind: 'automation' as const }
+  };
   const now = nowIso();
   const newMissionId = newId();
-  const sequence = await nextMissionSequence(tx, mission.workspace_id);
-  const workspaceRow = (await tx.get(`SELECT slug FROM workspaces WHERE id = ?`, [
-    mission.workspace_id
-  ])) as { slug: string };
-  const displayId = `${workspaceRow.slug}:${sequence}`;
+  const sequence = await nextMissionSequence(automationCtx);
+  const displayId = `${automationCtx.workspace.slug}:${sequence}`;
   const boardPosition = await topBoardPosition(tx, mission.project_id, targetStatus.id);
 
   await tx.run(
@@ -6683,13 +6440,6 @@ async function createScheduledDuplicateIfNeeded(
     [mission.id]
   )) as { instruction_text: string } | undefined;
 
-  // Scheduled regenerations are Overlord automation, not a human retyping the
-  // original. Pass origin on the service context so insertObjective stamps
-  // created_by_kind = 'automation' rather than defaulting from webapp source.
-  const automationCtx = {
-    ...(await buildWebappServiceContextForWorkspace(mission.workspace_id, tx, null)),
-    origin: { kind: 'automation' as const }
-  };
   await createObjectiveOnMission({
     ctx: automationCtx,
     missionId: newMissionId,
@@ -6951,7 +6701,8 @@ export async function listObjectives(
   missionId: string,
   db: DatabaseClient = requireDatabaseClient()
 ): Promise<ObjectiveDto[]> {
-  await requireMissionPermission({
+  // Accepts a mission UUID or display id; query by the resolved UUID.
+  const { missionId: resolvedMissionId } = await requireMissionPermission({
     missionRef: missionId,
     permission: PERMISSIONS.OBJECTIVE_READ,
     db
@@ -6977,7 +6728,7 @@ export async function listObjectives(
          LEFT JOIN objectives wo ON wo.id = e.waiting_on_objective_id AND wo.deleted_at IS NULL
         WHERE o.mission_id = ? AND o.deleted_at IS NULL
         ORDER BY o.position ASC`,
-    [missionId]
+    [resolvedMissionId]
   )) as ObjectiveRow[];
   return rows.map(toObjectiveDto);
 }
@@ -7792,63 +7543,6 @@ async function loadOperatorUserRow(db: DatabaseClient = requireDatabaseClient())
   return fallback;
 }
 
-function parseProfileMetadata(metadataJson: string): Record<string, unknown> {
-  try {
-    const parsed = JSON.parse(metadataJson) as unknown;
-    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
-  } catch {
-    return {};
-  }
-}
-
-function avatarUrlFromMetadata(metadataJson: string): string | null {
-  const avatarUrl = parseProfileMetadata(metadataJson).avatarUrl;
-  return typeof avatarUrl === 'string' && avatarUrl.trim() ? avatarUrl : null;
-}
-
-function agentInstructionsFromMetadata(metadataJson: string): string | null {
-  const agentInstructions = parseProfileMetadata(metadataJson).agentInstructions;
-  return typeof agentInstructions === 'string' && agentInstructions.trim()
-    ? agentInstructions.trim()
-    : null;
-}
-
-function editorSchemeFromMetadata(metadataJson: string): string | null {
-  const editorScheme = parseProfileMetadata(metadataJson).editorScheme;
-  return typeof editorScheme === 'string' && editorScheme.trim() ? editorScheme.trim() : null;
-}
-
-/** Merge profile metadata without dropping unrelated keys. */
-function mergeProfileMetadataJson({
-  metadataJson,
-  avatarUrl,
-  agentInstructions,
-  editorScheme
-}: {
-  metadataJson: string;
-  avatarUrl?: string | null;
-  agentInstructions?: string | null;
-  editorScheme?: string | null;
-}): string {
-  const parsed = parseProfileMetadata(metadataJson);
-  if (avatarUrl) parsed.avatarUrl = avatarUrl;
-  else if (avatarUrl !== undefined) delete parsed.avatarUrl;
-
-  if (agentInstructions !== undefined) {
-    const trimmed = agentInstructions?.trim() ?? '';
-    if (trimmed) parsed.agentInstructions = trimmed;
-    else delete parsed.agentInstructions;
-  }
-
-  if (editorScheme !== undefined) {
-    const trimmed = editorScheme?.trim() ?? '';
-    if (trimmed) parsed.editorScheme = trimmed;
-    else delete parsed.editorScheme;
-  }
-
-  return JSON.stringify(parsed);
-}
-
 async function toProfileDto(row: UserRow): Promise<ProfileDto> {
   const authorized = getAuthorizedWorkspacesContext();
   const roles = authorized
@@ -7862,9 +7556,9 @@ async function toProfileDto(row: UserRow): Promise<ProfileDto> {
     displayName: row.display_name,
     handle: row.handle,
     email: row.email,
-    avatarUrl: avatarUrlFromMetadata(row.metadata_json),
-    agentInstructions: agentInstructionsFromMetadata(row.metadata_json),
-    editorScheme: editorSchemeFromMetadata(row.metadata_json),
+    avatarUrl: avatarUrlFromProfileMetadata(row.metadata_json),
+    agentInstructions: agentInstructionsFromProfileMetadata(row.metadata_json),
+    editorScheme: editorSchemeFromProfileMetadata(row.metadata_json),
     kind: row.kind,
     authProvider: 'better-auth',
     roles,

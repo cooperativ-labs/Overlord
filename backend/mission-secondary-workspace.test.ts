@@ -136,6 +136,14 @@ describe('mission and objective access in a secondary (non-active) workspace', (
     );
 
     await assert.doesNotReject(listObjectives(mission.id));
+    // A display id addresses the same mission: the objective query must use the
+    // resolved UUID, not the raw reference.
+    const byUuid = await listObjectives(mission.id);
+    assert.equal(byUuid.length, 1);
+    assert.deepEqual(
+      (await listObjectives(mission.displayId)).map(objective => objective.id),
+      byUuid.map(objective => objective.id)
+    );
     await assert.doesNotReject(listMissionEvents(mission.id));
     await assert.doesNotReject(listMissionFileChanges(mission.id));
     await assert.doesNotReject(listArtifacts(mission.id));
