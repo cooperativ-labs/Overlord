@@ -1,6 +1,7 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
+import { normalizeBaseUrl } from './base-url.js';
 import { resolveGlobalDataDir } from './config.js';
 
 export type AuthCredentialType = 'session_bearer' | 'user_token';
@@ -72,10 +73,6 @@ export function writeStoredAuthCredentials({
   } catch {
     // Best effort on platforms that restrict chmod.
   }
-}
-
-function normalizeBaseUrl(value: string): string {
-  return value.replace(/\/+$/, '');
 }
 
 export function clearStoredAuthCredentials(): void {

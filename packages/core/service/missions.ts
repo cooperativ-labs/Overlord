@@ -27,7 +27,7 @@ import {
   enqueueObjectiveAfterLastQueuedSibling,
   removeRunQueueEntryForObjective
 } from './run-queue.js';
-import { initialTitleFromInstruction, newId, nowIso } from './util.js';
+import { initialTitleFromInstruction, isTruthyFlag, newId, nowIso } from './util.js';
 import { enqueueWebhookEvent } from './webhook-events.js';
 
 export type ObjectiveSummary = {
@@ -94,10 +94,6 @@ export type AttachmentSummary = {
   status: string;
   storageKey: string;
 };
-
-function isTruthyFlag(value: unknown): boolean {
-  return value === true || value === 1;
-}
 
 async function nextMissionSequence(ctx: ServiceContext): Promise<number> {
   // Seed old workspaces idempotently, then allocate with one atomic update. This

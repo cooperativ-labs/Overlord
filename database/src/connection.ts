@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,6 +14,7 @@ import {
   pruneObsoleteMigrationLedgerSqlite,
   resolveAppliedMigrationSqlite
 } from './migration-ledger.js';
+import { MIGRATION_FILE_PATTERN, migrationChecksum, migrationComponent } from './migration-files.js';
 import {
   finalizeNextStatusTypeSqlite,
   isNextStatusTypeMigration
@@ -32,8 +32,6 @@ import {
   isProjectStatusesMigration
 } from './project-statuses-migration-runtime.js';
 
-const MIGRATION_FILE_PATTERN = /^\d+_[a-z0-9_]+\.sql$/;
-
 export type OverlordDatabase = BetterSqlite3Database;
 
 /**
@@ -46,15 +44,6 @@ function migrationsDir(): string {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'sqlite', 'migrations');
 }
 
-function checksum(sql: string): string {
-  return createHash('sha256').update(sql).digest('hex');
-}
-
-function migrationComponent(fileName: string): string {
-  const match = fileName.match(/^\d+_ext_([a-z0-9_]+)_/);
-  return match ? `ext:${match[1]}` : 'core';
-}
-
 function loadMigrationSql(fileName: string): {
   version: string;
   component: string;
@@ -64,7 +53,7 @@ function loadMigrationSql(fileName: string): {
   const version = fileName.split('_', 1)[0] ?? fileName;
   const filePath = path.join(migrationsDir(), fileName);
   const sql = readFileSync(filePath, 'utf8');
-  return { version, component: migrationComponent(fileName), sql, checksum: checksum(sql) };
+  return { version, component: migrationComponent(fileName), sql, checksum: migrationChecksum(sql) };
 }
 
 export function listSqliteMigrationFiles(): string[] {

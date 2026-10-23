@@ -18,7 +18,7 @@ import {
   findActingDeviceExecutionTargetId
 } from './execution-targets.js';
 import { deriveProjectResourceKey } from './project-resource-key.js';
-import { jsonTextFieldSql, newId, nowIso, slugify } from './util.js';
+import { isTruthyFlag, jsonTextFieldSql, newId, nowIso, slugify } from './util.js';
 
 export { deriveProjectResourceKey } from './project-resource-key.js';
 
@@ -112,10 +112,6 @@ export type PrimaryResourceConnection = {
   resource: ProjectResourceSummary;
   workingDirectory: string;
 };
-
-function isTruthyFlag(value: unknown): boolean {
-  return value === true || value === 1;
-}
 
 /**
  * Resolve the provider that observes resource availability for the backend:

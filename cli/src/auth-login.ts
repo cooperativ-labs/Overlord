@@ -2,6 +2,7 @@ import { hostname } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 
 import { writeStoredAuthCredentials } from './auth-credentials.js';
+import { normalizeBaseUrl } from './base-url.js';
 import { CliError } from './errors.js';
 
 export type AuthLoginMethod = 'password' | 'user_token';
@@ -26,10 +27,6 @@ export function validateEmail(email: string): string | null {
     return 'Enter a valid email address.';
   }
   return null;
-}
-
-function normalizeBaseUrl(value: string): string {
-  return value.replace(/\/+$/, '');
 }
 
 export function isBackendReachabilityError(error: unknown): boolean {

@@ -73,6 +73,7 @@ import {
 } from '../packages/core/service/missions.ts';
 import { emitNotification } from '../packages/core/service/notifications/notifications.ts';
 import { resolveProjectExecutionTargetForLaunch } from '../packages/core/service/project-execution-target.ts';
+import { deriveProjectResourceKey } from '../packages/core/service/project-resource-key.ts';
 import {
   enqueueObjectiveAfterLastQueuedSibling,
   enqueueRunQueueDispatch,
@@ -84,7 +85,12 @@ import {
   mergeResourceStatusWithObservation,
   type TargetResourceObservationRow
 } from '../packages/core/service/target-resource-observations.ts';
-import { hashSessionKey, jsonTextFieldSql } from '../packages/core/service/util.ts';
+import {
+  hashSessionKey,
+  isTruthyFlag,
+  jsonTextFieldSql,
+  slugify
+} from '../packages/core/service/util.ts';
 import type {
   ArtifactDto,
   CreateArtifactBody,
@@ -749,10 +755,6 @@ function toStatusDto(r: ProjectStatusRow): ProjectStatusDto {
     isDefault: isTruthyFlag(r.is_default),
     isTerminal: isTruthyFlag(r.is_terminal)
   };
-}
-
-function isTruthyFlag(value: unknown): boolean {
-  return value === true || value === 1;
 }
 
 async function toProjectResourceDto(
@@ -1893,31 +1895,6 @@ function toObjectiveDto(r: ObjectiveRow): ObjectiveDto {
     createdByWorkspaceUserId: r.created_by_workspace_user_id ?? null,
     launchConfigOverrides
   };
-}
-
-function slugify(input: string): string {
-  const base = input
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 48);
-  return base.length > 0 ? base : 'project';
-}
-
-function deriveProjectResourceKey({
-  resourceKey,
-  label,
-  directoryPath
-}: {
-  resourceKey?: string | null;
-  label?: string | null;
-  directoryPath: string;
-}): string {
-  const explicit = resourceKey?.trim();
-  if (explicit) return slugify(explicit);
-  const labelKey = label?.trim();
-  if (labelKey) return slugify(labelKey);
-  return slugify(path.basename(path.resolve(directoryPath)));
 }
 
 async function assertObjectiveResourceKeyOnProject(

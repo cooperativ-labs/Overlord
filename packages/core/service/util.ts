@@ -3,6 +3,11 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 
 const SESSION_KEY_PREFIX = 'sess_';
 
+/** SQLite stores booleans as 0/1 while Postgres returns real booleans. */
+export function isTruthyFlag(value: unknown): boolean {
+  return value === true || value === 1;
+}
+
 export function nowIso(): string {
   return new Date().toISOString();
 }

@@ -5,6 +5,7 @@ import {
   resolveAuthBearerToken
 } from './auth-credentials.js';
 import { validateBearerToken } from './auth-login.js';
+import { normalizeBaseUrl } from './base-url.js';
 import {
   type BackendMode,
   findEffectiveConfigPath,
@@ -50,10 +51,6 @@ function resolveExpiry(expiresAt: string | null | undefined): {
     expiresInDays: Math.floor(msRemaining / (24 * 60 * 60 * 1000)),
     expired: msRemaining <= 0
   };
-}
-
-function normalizeBaseUrl(value: string): string {
-  return value.replace(/\/+$/, '');
 }
 
 function inferCredentialTypeFromToken(token: string): AuthCredentialType {
