@@ -34,13 +34,54 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `163`
+Current version: `164`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
 `contract/components.yaml`) — never a header duplicate. The contract version is
 incremented when any stable interface changes. All conformance manifests must
 declare the contract version they were validated against.
+
+### Version 164 Change Summary
+
+One implementation per workflow across the service, REST, MCP, CLI, and desktop
+modules (duplicate-functionality review, 2026-10-23).
+
+- **MCP tool catalog**: tool names, titles, descriptions, input/output schemas,
+  and safety annotations are defined once in `@overlord/contract/mcp-tools`
+  (`packages/contract/src/mcp-tools.ts`). Hosted MCP projects it and adds MCP
+  Apps widget `_meta`; the local connector shim's `tools` array is generated
+  from it (`yarn connectors:mcp-tools`, enforced by `connectors:check`) and
+  omits `outputSchema`, because the shim forwards Protocol output unwrapped.
+  The local shim gains the drifted inputs the contract already promised
+  (`agent`/`model` on `overlord_add_objectives` items, typed delivery-report
+  arrays, the `dateField` enum, strict human-action items) plus
+  `readOnlyHint`/`destructiveHint`/`openWorldHint` annotations. All additions
+  are additive; no tool was renamed or removed.
+- **REST delegates to the shared service layer**: mission schedule preview,
+  read, upsert, and clear, the scheduled-duplicate mission number, profile
+  metadata reads/merges, default status seeding, and top-of-column board
+  position each have one implementation in `packages/core/service`. REST keeps
+  its RBAC check and DTO mapping only. The scheduled duplicate now allocates
+  its mission number atomically, like every other mission create. Schedule
+  validation errors keep their HTTP status and `error` text and additionally
+  carry `code: validation_error`.
+- **Fix**: `GET /api/missions/:id/objectives` addressed by a mission display id
+  returns that mission's objectives instead of an empty list.
+- **Desktop shared helpers**: Desktop resolves the per-user data directory
+  through the Database package's `local-paths` and normalizes backend URLs with
+  the Contract package helper, so the shell, CLI, and backend agree on
+  `OVLD_HOME` (a relative value is resolved to an absolute path everywhere).
+  Desktop already bundled `packages/core`; its registry entry now declares the
+  `protocol` and `database` dependencies it imports.
+
+Module impacts: MCP and Connector share one catalog (connector package
+versions advance to 0.3.53; re-run `ovld agent-setup <agent>` to pick up the
+richer local schemas). REST changes no route, request, or success shape.
+Protocol/Core gain exports only, and drop an unused `listProjects` that ignored
+token project scope. CLI and Desktop change no command or bridge surface.
+Database, Auth, Runner, Web, Mobile, Automations, and extensions retain their
+interfaces and storage. No migration is required.
 
 ### Version 163 Change Summary
 
@@ -3288,6 +3329,12 @@ answering a decision it is blocked on, and injecting an instruction into it.
 - **Auth**: Token or session auth via Auth Layer before service call
 - **Response shape**: Derived from logical schema camelCase field names
 - **Idempotency**: REST-scope idempotency keys for retried writes
+- **One implementation**: Domain logic that Protocol also needs lives once in
+  `packages/core/service`. A REST handler authorizes the resource, builds a
+  service context for the resource's workspace (with the authorized
+  `workspaceUserId` as actor, inside the handler's transaction when it has
+  one), calls the service, and maps the result onto its DTO. It must not carry
+  a second copy of service SQL or rules (Version 164).
 - **Delivery reads**: `GET /api/missions/:id/deliveries` authorizes against the named mission's owning workspace with the existing `mission:read` permission. It returns a bounded `MissionDeliveriesDto` page: newest-first `DeliveryDto` `items` capped at 200, plus `total` (matching rows before the cap) and `limit` (the applied page size). It synthesizes the deterministic V1 report for legacy payloads; neither `deliveries.payload_json` nor `mission_events.payload_json` are exposed verbatim.
 - **File-change reads**: `GET /api/missions/:id/file-changes` authorizes against the named mission and returns a bounded `MissionFileChangesDto` page with the same `{ items, total, limit }` shape: newest-first changed-file-first `FileChangeDto` `items` capped at 200, plus the pre-cap `total`. A truncated page is incomplete mission-wide evidence; clients that partition `items` by objective must treat missing older rows as a mission-level omission, not as proof those objectives produced nothing.
 - **Account-owned inbox**: Inbox CRUD resolves the authenticated `profiles.id` rather than an ambient workspace. Reads and mutations are scoped to that profile; promotion derives authorization and tenancy solely from its destination project. Inbox CRUD writes do not append workspace `entity_changes`, because those records have no workspace; promotion appends the ordinary mission change in the destination workspace.
@@ -3377,6 +3424,10 @@ answering a decision it is blocked on, and injecting an instruction into it.
 - **Rule**: MCP handlers must not read or write database tables directly.
 - **Authorization**: Every tool call must pass through the same RBAC gates as the
   corresponding REST or protocol operation.
+- **Tool catalog**: Both MCP surfaces publish the one catalog in
+  `@overlord/contract/mcp-tools`. Hosted MCP adds only widget `_meta`; the
+  local connector shim's `tools` array is generated from the catalog without
+  `outputSchema` and must never be edited by hand (Version 164).
 - **Project context**: Hosted MCP cannot observe a cloud agent's current working
   directory. A caller that supplies `projectId` creates a normal mission after
   resolving that resource; an omitted project for the explicit inbox-capable
@@ -3430,6 +3481,7 @@ answering a decision it is blocked on, and injecting an instruction into it.
 - **Credential**: For spawned CLI that needs a network credential (remote/shared deployments), the shell passes a `USER_TOKEN` via `Overlord_USER_TOKEN`; pure-loopback execution talks to the local service layer and needs none
 - **Persistent runner control**: The `runnerService.*` preload ops spawn `ovld runner service <install|start|stop|restart|status|uninstall> --json` in the shell's main process, injecting the active backend URL and (remote mode) token so an install captures the right credential; the parsed JSON status is returned to the renderer. The shell never claims runner queue work, supervises the loop, or generates service files itself — those stay CLI/Runner-owned
 - **Rule**: The shell triggers existing CLI/runner behavior; it must not reimplement launch, terminal, or config logic the CLI/Runner Layers own
+- **Shared paths and helpers**: The shell locates `~/.ovld` (or `OVLD_HOME`) only through the Database package's `local-paths` and normalizes backend URLs with the Contract package helper; it bundles those modules rather than re-deriving them (Version 164)
 
 ---
 

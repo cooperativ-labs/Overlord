@@ -21,8 +21,10 @@ branch actions.
 ## Adding a Tool
 
 1. Confirm the tool maps to an existing service/protocol function.
-2. Add the tool definition and handler in [`server.ts`](server.ts) or split a
-   domain-specific file if the catalog grows.
+2. Add the tool definition in `packages/contract/src/mcp-tools.ts` (shared with
+   the local connector shim), the handler in [`server.ts`](server.ts), and the
+   matching shim handler in `connectors/core/scripts/overlord-mcp.mjs`; then run
+   `yarn connectors:mcp-tools` to regenerate the shim's tool list.
 3. Let backend auth resolve the caller first, then rely on the corresponding
    service/protocol RBAC gate.
 4. Do not read or write database tables directly.

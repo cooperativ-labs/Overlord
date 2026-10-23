@@ -4,7 +4,7 @@
 # IMPORTANT: Update this file and CONTRACT.md together when adding components or surfaces.
 # Increment contractVersion when any stable interface changes.
 
-contractVersion: '163'
+contractVersion: '164'
 
 components:
   protocol:
@@ -357,6 +357,8 @@ components:
       - cli
       - runner
       - auth
+      - protocol
+      - database
     interactionSurfaces:
       - shellToRest
       - shellToCli
@@ -393,6 +395,7 @@ components:
       - 'public ChatGPT mission-first surface: project resolution/selection, mission search/context reads, explicit mission/session writes, and presentation-only widget resources'
       - 'OAuth protected-resource metadata for the hosted MCP resource'
       - 'mapping MCP tool calls to existing service/protocol operations'
+      - 'the one MCP tool catalog (contract v164): names, titles, descriptions, input/output schemas, and safety annotations live in @overlord/contract/mcp-tools; hosted MCP adds only widget _meta, and the local connector shim tools array is generated from it without outputSchema (yarn connectors:mcp-tools, checked by connectors:check)'
       - 'hosted overlord_update_artifact tool forwarding to Protocol update-artifact'
       - 'hosted overlord_add_artifact tool forwarding to Protocol add-artifact'
       - 'project_automation callers (contract v151): hosted MCP needs no new tool input; overlord_create_mission, overlord_load_mission_context, overlord_search_missions, overlord_resolve_project, overlord_list_project_statuses, and overlord_list_deliveries work only for the token selected projects, and every other tool (inbox, add-objectives, launch, queue, session, artifact, delete, project-create, record-work) returns the Protocol denial for that preset before any write'
@@ -571,6 +574,7 @@ interactionSurfaces:
     rules:
       - 'Auth check via Auth Layer before any service call'
       - 'Same service layer as CLI and Protocol Layers'
+      - 'Domain logic Protocol also needs lives once in packages/core/service; REST authorizes, builds a service context for the resource workspace with the authorized workspaceUserId (inside its transaction when it has one), calls the service, and maps the DTO, never re-implementing service SQL or rules (contract v164)'
       - 'Idempotency keys for retried writes'
       - 'Response shapes use camelCase logical field names'
 
@@ -606,6 +610,7 @@ interactionSurfaces:
     transport: service-layer-function-calls
     rules:
       - 'MCP handlers must not read or write database tables directly'
+      - 'Hosted MCP and the local connector shim publish the one @overlord/contract/mcp-tools catalog; the shim tools array is generated and never hand-edited (contract v164)'
       - 'Every tool call must pass through the same RBAC gates as the corresponding REST or protocol operation'
       - 'Mission creation tools require explicit projectId or a prior resolved project identity; missing or ambiguous project context is a tool error'
       - 'Hosted MCP delivery artifacts use the existing Protocol deliver artifact shape and lifecycle; MCP does not create artifact types or write artifact rows directly'
@@ -705,5 +710,6 @@ interactionSurfaces:
     transport: subprocess-and-utility-process
     rules:
       - 'The shell triggers existing CLI/runner behavior; it must not reimplement launch, terminal, or config logic owned by the CLI/Runner Layers'
+      - 'The shell resolves ~/.ovld (OVLD_HOME) only through database local-paths and normalizes backend URLs with the contract helper (contract v164)'
       - 'Spawned CLI needing a network credential receives a USER_TOKEN via Overlord_USER_TOKEN; pure-loopback execution needs none'
       - 'The web/REST server is forked as a Node utilityProcess (Electron ABI), not a separately shipped Node runtime'

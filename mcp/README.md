@@ -101,10 +101,12 @@ and delivery results:
 - `ui://overlord/objective-viewer.html`
 - `ui://overlord/file-changes.html`
 
-The local connector MCP bridge scripts for Codex, Cursor, and Antigravity
-advertise the same canonical tool names and input contract shape. Backend tests
-compare those local `tools/list` responses against this hosted registry so a new
-hosted tool cannot be added without updating shipped connector shims.
+Tool definitions (names, descriptions, schemas, annotations) live once in
+`packages/contract/src/mcp-tools.ts`. [`tool-catalog.ts`](tool-catalog.ts) adds
+only the MCP Apps widget `_meta`, and the local connector MCP bridge for Codex,
+Cursor, and Antigravity has its `tools` array generated from the same module
+(`yarn connectors:mcp-tools`). The local projection omits `outputSchema`
+because the bridge forwards Protocol output without wrapping arrays.
 
 ### Addressing a mission or an objective
 
