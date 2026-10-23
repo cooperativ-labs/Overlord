@@ -523,15 +523,17 @@ const toolHandlers: Record<string, ToolHandler> = {
     });
   },
   overlord_update_objective: args => {
+    const hasTitle = typeof args.title === 'string';
     const hasAutoAdvance = typeof args.autoAdvance === 'boolean';
     const hasInstructionText = typeof args.instructionText === 'string';
-    if (!hasAutoAdvance && !hasInstructionText) {
-      throw new Error('Provide autoAdvance and/or instructionText');
+    if (!hasTitle && !hasAutoAdvance && !hasInstructionText) {
+      throw new Error('Provide title, autoAdvance, and/or instructionText');
     }
     return runProtocolSubcommand(
       'update-objective',
       protocolBody({
         '--objective-id': requiredString(args, 'objectiveId'),
+        ...(hasTitle ? { '--title': args.title as string } : {}),
         ...(hasAutoAdvance ? autoAdvanceFlags(args) : {}),
         ...(hasInstructionText
           ? { '--instruction-text': requiredString(args, 'instructionText') }

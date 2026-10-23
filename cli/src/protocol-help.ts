@@ -126,7 +126,7 @@ Subcommands:
   statuses                List one project's ordered board columns
   discuss-objective      Mark a draft objective as submitted (does not start execution)
   add-objectives         Append ordered objectives to an existing mission
-  update-objective       Set auto-advance and/or instruction text on an objective
+  update-objective       Set title, auto-advance, and/or instruction text on an objective
   delete-missions        Confirmed bulk soft-delete of missions
   delete-objectives      Confirmed bulk soft-delete of objectives
   create                 Create a draft mission without attaching
@@ -274,6 +274,9 @@ load-context:
     --objective-id <id>         Return this objective as the current one instead of
                                 rediscovering the mission's active objective. Required
                                 on a mission running objectives in parallel.
+  Returns:
+    Objective context includes assignedAgent, model, reasoningEffort, and resourceKey
+    so an agent can confirm the selected agent, model/thinking level, and resource.
 
 list-deliveries:
   Purpose:
@@ -557,17 +560,22 @@ add-objectives:
 
 update-objective:
   Purpose:
-    Queue or dequeue compatibility auto-advance and/or edit instruction text on an existing objective.
+    Rewrite an objective title, queue or dequeue compatibility auto-advance,
+    and/or edit instruction text on an existing objective.
   Required:
     --objective-id <id>
     At least one of:
+      --title <text>
       --auto-advance or --no-auto-advance
       --instruction-text <text> or --instruction-text-file <path|->
   Rules:
+    Title edits are allowed in any objective state. An empty title clears the
+    custom title and restores instruction-derived presentation.
     Instruction text may be edited only when the objective is in draft or future state.
     Blank instruction text is allowed in those states.
   Returns:
-    The updated objective JSON. autoAdvance is deprecated and derived from live queueEntry membership.
+    The updated objective JSON, including assignedAgent, model, reasoningEffort,
+    and resourceKey. autoAdvance is deprecated and derived from live queueEntry membership.
 
 delete-missions:
   Purpose:

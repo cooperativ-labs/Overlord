@@ -34,13 +34,33 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `162`
+Current version: `163`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
 `contract/components.yaml`) — never a header duplicate. The contract version is
 incremented when any stable interface changes. All conformance manifests must
 declare the contract version they were validated against.
+
+### Version 163 Change Summary
+
+Objective title editing and assignment visibility (coo:1174.91tr). Protocol
+`update-objective` adds optional `--title`, allowing agents to set or clear an
+objective's custom title without changing its instruction text. Hosted MCP
+`overlord_update_objective` accepts the matching optional `title` input. Both
+surfaces use the existing `objective:update` authorization and shared objective
+service. Objective context returned by Protocol `load-context`/`attach` now
+includes `assignedAgent`, `model`, and `reasoningEffort` alongside its existing
+resource key, making the selected agent, model, thinking level and resource
+visible to CLI and MCP consumers.
+
+Module impacts: Protocol/Core enrich the objective context projection and expose
+the existing title update capability; CLI adds the title flag and documents
+assignment fields; hosted MCP and the local connector MCP shim add the matching
+title input and receive the enriched context response. Connector package
+versions advance to 0.3.52. REST, Database, Auth, Runner, Desktop, Web, Mobile,
+Automations and extensions retain their interfaces and storage. No migration is
+required.
 
 ### Version 162 Change Summary
 
@@ -2737,6 +2757,8 @@ Owns:
 - `resolveObjectiveRef`: accepts an objective UUID or `{mission.display_id}.{display_key}` public id (e.g. `coo:756.k7xm`); rejects a bare mission id and a wrong separator (`:`, `|`, `-`). Protocol `attach` accepts optional `--objective-id` (same forms). When `--objective-id` or `--execution-request-id` is present, attach pins to that objective and must not rediscover via mission state. `--mission-id` may be omitted when `--objective-id` is a full display id; an objective UUID still requires it. Unpinned attach that would have to choose among two or more equally ranked active objectives (`executing`, else `launching`, else `pending_delivery`) returns 409 `ambiguous_active_objective` instead of guessing. Session-channel bind never falls back to a mission-wide unbound channel when an objective id is known.
 - Opt-in objective parallelism: `missions.allow_parallel_objectives` (default false). When true, two objectives on the same mission may execute concurrently on any resource, including the same one — the Runner Layer separates same-resource pairs with per-objective branch/worktree isolation, and a mission that runs without worktrees shares its single checkout by design. Deliver does not move the mission to `review` while any objective is still `launching` / `executing` / `pending_delivery`.
 - Context assembly format returned by `attach`, including additive `displayKey` / `displayId` on `ObjectiveSummary`
+- Objective context summaries returned by `attach` and `load-context` include `assignedAgent`, `model`, `reasoningEffort`, and `resourceKey` so agents can verify execution assignment
+- `update-objective` accepts optional `--title` to replace or clear a custom objective title independently of instruction text; title edits are allowed in any objective state
 - `create`, `prompt`, and `add-objectives` return the persisted mission/objective DTOs so callers can verify each objective's assigned agent, model, resource, and queue/auto-advance settings. CLI human-readable creation output echoes those settings; JSON and MCP responses retain their existing structured shapes.
 - CLI read selector precedence: `load-context`, `read-context`, `attachment-list`
   and `attachment-download-url` inherit a launch objective only when no mission

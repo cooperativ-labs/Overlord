@@ -289,7 +289,9 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
         'Optional local execution target id for resolving sibling project resource paths.'
       )
     }),
-    outputSchema: protocolOutputSchema('Structured context for the requested mission.'),
+    outputSchema: protocolOutputSchema(
+      'Structured mission context. Objective summaries include assignedAgent, model, reasoningEffort, and resourceKey so the agent can confirm the objective assignment.'
+    ),
     annotations: readOnly,
     _meta: widget('ui://overlord/objective-viewer.html')
   },
@@ -395,10 +397,13 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
     name: 'overlord_update_objective',
     title: 'Update objective',
     description:
-      'Use this to turn auto-advance on or off and/or edit instruction text on a draft or future objective.',
+      'Use this to rewrite an objective title in any state, turn auto-advance on or off, and/or edit instruction text on a draft or future objective.',
     inputSchema: objectSchema(
       {
         objectiveId: stringProperty('Objective UUID or display id.'),
+        title: stringProperty(
+          'Replacement objective title. An empty string clears the custom title and restores instruction-derived presentation.'
+        ),
         autoAdvance: booleanProperty(
           'When true, Overlord queues the next objective after this one is delivered. When false, delivery waits for approval.'
         ),
@@ -409,7 +414,7 @@ export const hostedMcpToolDefinitions: ToolDefinition[] = [
       ['objectiveId']
     ),
     outputSchema: protocolOutputSchema(
-      'The updated objective, including autoAdvance and instructionText.'
+      'The updated objective, including title, assignedAgent, model, reasoningEffort, resourceKey, autoAdvance, and instructionText.'
     ),
     annotations: writeAction
   },

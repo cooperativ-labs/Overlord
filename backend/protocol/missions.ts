@@ -598,15 +598,22 @@ export const missionSubcommands: SubcommandTable = {
       if (autoAdvance !== undefined) {
         update.autoAdvance = autoAdvance;
       }
+      if (hasFlag(body, '--title')) {
+        update.title = strFlag(body, '--title') ?? '';
+      }
       if (hasFlag(body, '--instruction-text') || hasFlag(body, '--instruction-text-file')) {
         await assertInstructionEditableOnProtocolSurface(objectiveId);
         update.instructionText =
           resolveInput(body, '--instruction-text', '--instruction-text-file') ?? '';
       }
-      if (autoAdvance === undefined && update.instructionText === undefined) {
+      if (
+        autoAdvance === undefined &&
+        update.instructionText === undefined &&
+        update.title === undefined
+      ) {
         throw new ApiError(
           400,
-          'Provide at least one of --auto-advance/--no-auto-advance or --instruction-text/--instruction-text-file'
+          'Provide at least one of --title, --auto-advance/--no-auto-advance, or --instruction-text/--instruction-text-file'
         );
       }
       return updateObjectiveRecord(objectiveId, update);

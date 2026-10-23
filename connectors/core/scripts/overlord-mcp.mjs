@@ -408,10 +408,13 @@ const tools = [
     name: 'overlord_update_objective',
     title: 'Update objective',
     description:
-      'Turn auto-advance on or off and/or edit instruction text on a draft or future objective.',
+      'Rewrite an objective title in any state, turn auto-advance on or off, and/or edit instruction text on a draft or future objective.',
     inputSchema: objectSchema(
       {
         objectiveId: stringProperty('Objective UUID or display id.'),
+        title: stringProperty(
+          'Replacement objective title. An empty string clears the custom title and restores instruction-derived presentation.'
+        ),
         autoAdvance: booleanProperty(
           'When true, Overlord queues the next objective after this one is delivered. When false, delivery waits for approval.'
         ),
@@ -981,13 +984,15 @@ async function callOverlordTool(name, args) {
     });
   }
   if (name === 'overlord_update_objective') {
+    const hasTitle = typeof args.title === 'string';
     const hasAutoAdvance = typeof args.autoAdvance === 'boolean';
     const hasInstructionText = typeof args.instructionText === 'string';
-    if (!hasAutoAdvance && !hasInstructionText) {
-      throw new Error('Provide autoAdvance and/or instructionText');
+    if (!hasTitle && !hasAutoAdvance && !hasInstructionText) {
+      throw new Error('Provide title, autoAdvance, and/or instructionText');
     }
     return runProtocol('update-objective', {
       'objective-id': requiredString(args, 'objectiveId'),
+      ...(hasTitle ? { title: args.title } : {}),
       ...(hasAutoAdvance
         ? args.autoAdvance
           ? { 'auto-advance': true }
@@ -1271,7 +1276,7 @@ process.stdin.on('data', async chunk => {
         result: {
           protocolVersion: PROTOCOL_VERSION,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.51' }
+          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.52' }
         }
       });
       continue;

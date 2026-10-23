@@ -74,12 +74,12 @@ The current tool catalog is mission-first:
 - `overlord_search_missions`
 - `overlord_create_mission` — requires `projectId`, unless `unassignedToProject: true` deliberately creates an account-owned inbox item; optional `agent` / `model` assign the initial objective's launch selection in the same call
 - `overlord_create_inbox_item`
-- `overlord_load_mission_context`
+- `overlord_load_mission_context` — returns objective assignment fields for the agent, model, thinking level, and resource
 - `overlord_list_deliveries` — read a `{ items, total, limit }` page of normalized delivery summaries, verification/follow-up notes, and authoritative delivery evidence for one mission
 - `overlord_launch_objective` — explicitly queue the normal execution request for one objective; this is distinct from attaching the MCP agent to work
 - `overlord_reorder_future_objectives` — explicitly replace one mission's complete future-objective ordering
 - `overlord_add_objectives`
-- `overlord_update_objective` — turn auto-advance on or off and/or edit instruction text on draft/future objectives
+- `overlord_update_objective` — rewrite the title in any state, turn auto-advance on or off, and/or edit instruction text on draft/future objectives
 - `overlord_delete_missions` — bulk soft-delete one to 100 missions atomically (also soft-deletes live objectives); requires `confirm: true` after the resolved list is shown to and approved by the user
 - `overlord_delete_objectives` — bulk soft-delete one to 100 objectives atomically (also removes live Run Queue membership); requires `confirm: true` after the resolved list is shown to and approved by the user
 - `overlord_list_run_queues` — read compact or full live Run Queue state before changing it

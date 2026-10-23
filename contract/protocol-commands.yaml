@@ -12,7 +12,7 @@
 # entry) are intentionally not listed here: `capture-change` and `changes`. See
 # CONTRACT.md's contract-version-2 changelog entry for the precedent.
 
-contractVersion: '155'
+contractVersion: '163'
 referenceSpec: 'cli/docs/03-agent-protocol.md'
 
 # Transport-level shape shared by every protocol command, independent of subcommand.
@@ -589,19 +589,23 @@ missionDiscovery:
       - creates-objectives-in-draft-state
 
   updateObjective:
-    description: 'Update auto-advance and/or instruction text on an existing objective'
+    description: 'Update title, auto-advance, and/or instruction text on an existing objective'
     requiredFlags:
       - --objective-id
     optionalFlags:
+      - --title
       - --auto-advance
       - --no-auto-advance
       - --instruction-text
       - --instruction-text-file
+    responseShape: ObjectiveDto
     rules:
-      - 'At least one of --auto-advance/--no-auto-advance or --instruction-text/--instruction-text-file is required'
+      - 'At least one of --title, --auto-advance/--no-auto-advance, or --instruction-text/--instruction-text-file is required'
+      - 'An empty --title clears the custom title and returns to instruction-derived presentation; title edits do not change instruction text and are permitted in any state'
       - 'Instruction text may be edited only when the objective is in draft or future state'
       - 'Does not require a session key'
     sideEffects:
+      - updates-objective-title
       - updates-objective-auto-advance
       - updates-objective-instruction-text
 

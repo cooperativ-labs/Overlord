@@ -40,6 +40,9 @@ export type ObjectiveSummary = {
   title: string | null;
   objective: string;
   state: string;
+  assignedAgent: string | null;
+  model: string | null;
+  reasoningEffort: string | null;
   autoAdvance: boolean;
   resourceKey: string | null;
 };
@@ -261,6 +264,7 @@ export async function listObjectives({
   const resolved = await resolveMissionId(ctx, missionId);
   const rows = (await ctx.db.all(
     `SELECT o.id, o.mission_id, o.project_id, o.position, o.title, o.instruction_text, o.state,
+            o.assigned_agent, o.model, o.reasoning_effort,
             o.auto_advance, o.resource_key, o.display_key, m.display_id AS mission_display_id
        FROM objectives o
        JOIN missions m ON m.id = o.mission_id
@@ -275,6 +279,9 @@ export async function listObjectives({
     title: string | null;
     instruction_text: string;
     state: string;
+    assigned_agent: string | null;
+    model: string | null;
+    reasoning_effort: string | null;
     auto_advance: number;
     resource_key: string | null;
     display_key: string;
@@ -292,6 +299,9 @@ function toObjectiveSummary(row: {
   title: string | null;
   instruction_text: string;
   state: string;
+  assigned_agent: string | null;
+  model: string | null;
+  reasoning_effort: string | null;
   auto_advance: number;
   resource_key: string | null;
   display_key: string;
@@ -310,6 +320,9 @@ function toObjectiveSummary(row: {
     title: row.title,
     objective: row.instruction_text,
     state: row.state,
+    assignedAgent: row.assigned_agent,
+    model: row.model,
+    reasoningEffort: row.reasoning_effort,
     autoAdvance: isTruthyFlag(row.auto_advance),
     resourceKey: row.resource_key?.trim() || null
   };
@@ -496,6 +509,9 @@ export async function insertObjective({
     title: resolvedTitle,
     instruction_text: instruction,
     state: resolvedState,
+    assigned_agent: assignedAgent ?? null,
+    model: model ?? null,
+    reasoning_effort: reasoningEffort ?? null,
     auto_advance: autoAdvance ? 1 : 0,
     resource_key: normalizedResourceKey,
     display_key: displayKey,
@@ -1090,6 +1106,7 @@ export async function updateObjective({
   const resolved = await resolveObjectiveRef({ ctx, ref: objectiveId });
   const existing = (await ctx.db.get(
     `SELECT o.id, o.mission_id, o.project_id, o.position, o.title, o.instruction_text, o.state,
+            o.assigned_agent, o.model, o.reasoning_effort,
             o.auto_advance, o.resource_key, o.display_key, o.revision,
             m.display_id AS mission_display_id
        FROM objectives o
@@ -1105,6 +1122,9 @@ export async function updateObjective({
         title: string | null;
         instruction_text: string;
         state: string;
+        assigned_agent: string | null;
+        model: string | null;
+        reasoning_effort: string | null;
         auto_advance: number;
         resource_key: string | null;
         display_key: string;

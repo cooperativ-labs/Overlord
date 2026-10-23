@@ -52,7 +52,9 @@ Requirements:
   `--objective-id` returns that objective as the current one instead of
   rediscovering the mission's active objective — required on a mission running
   objectives in parallel, where unpinned rediscovery returns
-  `ambiguous_active_objective`.
+  `ambiguous_active_objective`. Objective summaries include `assignedAgent`,
+  `model`, `reasoningEffort`, and `resourceKey`; null values indicate the
+  corresponding project default, so the agent can verify the assignment.
 - `list-deliveries`: read one addressed mission's newest-first normalized
   `MissionDeliveriesDto` page (`{ items, total, limit }`), including verification/follow-up
   text and normalized delivery evidence without exposing raw payload JSON.
@@ -114,9 +116,12 @@ Requirements:
   `--objective-model` supply the default for items omitting `agent`. It uses the
   same `autoAdvance` JSON field and `--auto-advance` / `--no-auto-advance` Run
   Queue mapping as create.
-- `update-objective`: maps `--auto-advance` / `--no-auto-advance` to queue
-  membership and can edit instruction text on draft/future objectives. The
-  returned `autoAdvance` field is deprecated and derived from `queueEntry`.
+- `update-objective`: accepts `--title` to replace or clear the custom title
+  without changing the instruction text, maps `--auto-advance` /
+  `--no-auto-advance` to queue membership, and can edit instruction text on
+  draft/future objectives. Context and update responses include the assigned
+  agent, model, reasoning effort, and resource key. The returned `autoAdvance`
+  field is deprecated and derived from `queueEntry`.
 - `delete-missions` and `delete-objectives`: atomically soft-delete one to 100
   unique mission or objective UUID/display-id references from
   `--mission-ids-json` / `--objective-ids-json` (or the matching file flag).
