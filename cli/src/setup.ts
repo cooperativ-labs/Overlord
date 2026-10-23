@@ -23,6 +23,7 @@ import {
 } from './connectors.js';
 import { CliError } from './errors.js';
 import { printJson, printLine, printStepTitle } from './output.js';
+import { promptLine as promptLineShared } from './prompt.js';
 import type { CliRuntime } from './runtime.js';
 import { openCliRuntime } from './runtime.js';
 import { parseTerminalLaunchChord, type TerminalLaunchPlacement } from './terminal-launch-chord.js';
@@ -81,28 +82,11 @@ function launcherForApplicationName(appName: string): string {
   return `open -a ${shellQuote(appName.trim())} --args`;
 }
 
-async function promptLine({
-  message,
-  defaultValue
-}: {
-  message: string;
-  defaultValue?: string;
-}): Promise<string> {
-  if (!process.stdin.isTTY) {
-    throw new CliError({
-      message:
-        'Interactive setup requires a TTY. Use `ovld config set ...` and `ovld agent-setup ...` for non-interactive setup.'
-    });
-  }
-  const { createInterface } = await import('node:readline/promises');
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    const suffix = defaultValue ? ` [${defaultValue}]` : '';
-    const answer = await rl.question(`${message}${suffix}: `);
-    return answer.trim() || defaultValue || '';
-  } finally {
-    rl.close();
-  }
+const NON_INTERACTIVE_MESSAGE =
+  'Interactive setup requires a TTY. Use `ovld config set ...` and `ovld agent-setup ...` for non-interactive setup.';
+
+function promptLine(options: { message: string; defaultValue?: string }): Promise<string> {
+  return promptLineShared({ ...options, nonInteractiveMessage: NON_INTERACTIVE_MESSAGE });
 }
 
 async function promptYesNo(message: string, defaultValue: boolean): Promise<boolean> {

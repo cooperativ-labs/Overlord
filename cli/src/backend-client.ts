@@ -1,5 +1,6 @@
+import { normalizeBaseUrl } from '@overlord/contract';
+
 import { readStoredAuthCredentials } from './auth-credentials.js';
-import { normalizeBaseUrl } from './base-url.js';
 import { loadConfig, resolveBackendUrl } from './config.js';
 import { clientDeviceIdentity } from './device-identity.js';
 import {

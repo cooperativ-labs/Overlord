@@ -112,7 +112,9 @@
     "connectors:capabilities:check": "node scripts/generate-harness-capabilities.mjs --check",
     "connectors:claude:check": "node --import tsx scripts/check-claude-plugin.mts",
     "connectors:claude:eval": "node --import tsx scripts/check-claude-plugin.mts --eval",
-    "connectors:check": "yarn connectors:version:check && yarn connectors:capabilities:check && yarn connectors:claude:check"
+    "connectors:mcp-tools": "node --import tsx scripts/generate-mcp-tool-catalog.mts",
+    "connectors:mcp-tools:check": "node --import tsx scripts/generate-mcp-tool-catalog.mts --check",
+    "connectors:check": "yarn connectors:version:check && yarn connectors:capabilities:check && yarn connectors:mcp-tools:check && yarn connectors:claude:check"
   },
   "dependencies": {
     "@overlord/auth": "workspace:*",

@@ -1,6 +1,4 @@
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
+import { isRecord } from './records.ts';
 
 /** Reduces a v3 MCP search response without losing child navigation identity. */
 export function compactSearchResponse(value: unknown): unknown {

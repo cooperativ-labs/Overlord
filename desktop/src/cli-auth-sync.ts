@@ -1,6 +1,8 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
+
+import { resolveGlobalDataDir } from '../../database/src/local-paths.ts';
+import { normalizeBaseUrl } from '../../packages/contract/src/base-url.ts';
 
 import { LOCAL_BACKEND_PROFILE_ID } from './backend-profiles.js';
 import { getSessionToken, setSessionToken } from './backend-token-store.js';
@@ -14,16 +16,8 @@ type CliStoredAuthCredentials = {
   updatedAt: string;
 };
 
-function resolveGlobalDataDir(): string {
-  return process.env.OVLD_HOME?.trim() || path.join(os.homedir(), '.ovld');
-}
-
 function authCredentialsPath(): string {
   return path.join(resolveGlobalDataDir(), 'auth.json');
-}
-
-function normalizeBaseUrl(value: string): string {
-  return value.replace(/\/+$/, '');
 }
 
 function readCliAuthCredentials(): CliStoredAuthCredentials | null {

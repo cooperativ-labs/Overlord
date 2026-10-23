@@ -2,6 +2,7 @@ import { PARALLEL_BLOCKING_OBJECTIVE_STATES } from '@overlord/automations';
 import type { DatabaseClient } from '@overlord/database';
 
 import type { ServiceContext } from './context.js';
+import { isTruthyFlag } from './util.js';
 
 export async function missionAllowsParallelObjectives({
   ctx,

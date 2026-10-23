@@ -38,7 +38,7 @@ import { fileURLToPath } from 'node:url';
 
 import { DEFAULT_UPDATE_FEED_URL } from '../desktop/update-feed.ts';
 
-import { loadRepoEnvForProfile } from './load-repo-env.mjs';
+import { loadRepoEnvForProfile, parseEnvValue } from './load-repo-env.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const desktopDir = path.join(repoRoot, 'desktop');
@@ -192,32 +192,6 @@ function parseEnvFile(filePath: string): Map<string, string> {
   }
 
   return values;
-}
-
-function parseEnvValue(rawValue: string): string {
-  let value = rawValue.trim();
-  let quote: '"' | "'" | null = null;
-
-  for (let i = 0; i < value.length; i += 1) {
-    const char = value[i];
-    if ((char === '"' || char === "'") && (i === 0 || value[i - 1] !== '\\')) {
-      quote = quote === char ? null : (quote ?? char);
-      continue;
-    }
-    if (char === '#' && !quote && (i === 0 || /\s/.test(value[i - 1]))) {
-      value = value.slice(0, i).trim();
-      break;
-    }
-  }
-
-  if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("'") && value.endsWith("'"))
-  ) {
-    value = value.slice(1, -1);
-  }
-
-  return value;
 }
 
 function resetReleaseDir(): void {

@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react';
 import path from 'node:path';
 import { defineConfig } from 'vite';
 
-import { loadRepoEnvForProfile } from './load-repo-env';
+import { loadRepoEnvForProfile } from '../backend/load-repo-env';
 
 // Development reads `.env.local` only so it never collides with production `.env.prod`.
 loadRepoEnvForProfile(path.resolve(__dirname, '..'), 'development');

@@ -1,3 +1,5 @@
+import { normalizeBaseUrl } from '@overlord/contract';
+
 import {
   authCredentialsPath,
   type AuthCredentialType,
@@ -5,7 +7,6 @@ import {
   resolveAuthBearerToken
 } from './auth-credentials.js';
 import { validateBearerToken } from './auth-login.js';
-import { normalizeBaseUrl } from './base-url.js';
 import {
   type BackendMode,
   findEffectiveConfigPath,

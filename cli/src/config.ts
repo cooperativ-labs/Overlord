@@ -1,3 +1,4 @@
+import { resolveGlobalDatabasePath, resolveGlobalDataDir } from '@overlord/database';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -175,9 +176,9 @@ export function findConfigPath(startDir = process.cwd()): string | null {
   return null;
 }
 
-export function resolveGlobalDataDir(): string {
-  return process.env.OVLD_HOME?.trim() || path.join(os.homedir(), '.ovld');
-}
+// The per-user data directory (`~/.ovld`, or `OVLD_HOME`) is owned by the
+// database package so the CLI, backend, and desktop shell always agree on it.
+export { resolveGlobalDataDir };
 
 export function resolveGlobalConfigPath(): string {
   return path.join(resolveGlobalDataDir(), 'overlord.toml');
@@ -325,7 +326,7 @@ export function resolveDatabasePath(config: OverlordConfig, startDir = process.c
       : path.resolve(resolveProjectRoot(startDir), expanded);
   }
 
-  return path.join(resolveGlobalDataDir(), 'Overlord.sqlite');
+  return resolveGlobalDatabasePath();
 }
 
 export function resolveBackendUrl(

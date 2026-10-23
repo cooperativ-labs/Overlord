@@ -27,6 +27,7 @@ export {
   normalizeAgentLaunchFlags,
   parseAgentLaunchFlagText
 } from './agent-launch-flags.js';
+export { normalizeBaseUrl } from './base-url.js';
 export * from './chat.js';
 export {
   ATTACH_CONTEXT_FIELDS,

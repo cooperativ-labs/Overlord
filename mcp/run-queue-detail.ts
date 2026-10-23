@@ -1,6 +1,4 @@
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
+import { isRecord } from './records.ts';
 
 /** Reduces Run Queue state to the fields an agent needs to plan and verify entry ordering. */
 export function compactRunQueueResponse(value: unknown): unknown {
