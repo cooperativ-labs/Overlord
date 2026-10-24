@@ -1,10 +1,10 @@
 {
   "name": "overlord-cli",
-  "version": "0.2610231436.0",
+  "version": "0.2610241050.0",
   "description": "Overlord CLI — management, agent protocol, and runner for OpenOverlord",
   "type": "module",
   "engines": {
-    "node": ">=24"
+    "node": ">=26"
   },
   "bin": {
     "overlord": "bin/ovld.mjs",

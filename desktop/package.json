@@ -1,11 +1,11 @@
 {
   "name": "Overlord",
-  "version": "0.2610231436.0",
+  "version": "0.2610241050.0",
   "private": true,
   "author": "Cooperativ Labs",
   "description": "Optional Electron desktop shell that wraps the OpenOverlord web control center (the @overlord/webapp SPA + REST/realtime server).",
   "engines": {
-    "node": ">=24"
+    "node": ">=26"
   },
   "main": "dist-electron/main.cjs",
   "scripts": {
@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@google/genai": "^2.24.0",
-    "better-sqlite3": "^12.11.1",
+    "better-sqlite3": "^13.0.3",
     "electron-updater": "^6.8.9"
   },
   "devDependencies": {

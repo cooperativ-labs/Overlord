@@ -19,7 +19,6 @@ import {
 import { cn } from '../lib/utils.ts';
 
 import { MissionObjectivesSection } from './objectives/MissionObjectivesSection.tsx';
-import { MissionSchedulingControls } from './scheduling/MissionSchedulingControls.tsx';
 import { Button as IconButton } from './ui/button.tsx';
 import {
   Dialog,
@@ -213,7 +212,6 @@ function MissionSettingsBar({
         currentStatusId={mission.statusId}
         statuses={mission.statuses}
       />
-      <MissionSchedulingControls mission={mission} />
     </section>
   );
 }

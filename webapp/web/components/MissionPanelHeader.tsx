@@ -6,6 +6,7 @@ import { DeleteMissionButton } from '@/components/DeleteMissionButton';
 import { MissionTimerPopover } from '@/components/everhour/MissionTimerPopover';
 import { MissionBranchControl } from '@/components/MissionBranchControl';
 import { OriginSparklesIcon } from '@/components/OriginSparklesIcon.tsx';
+import { MissionDueDatePopover } from '@/components/scheduling/MissionDueDatePopover.tsx';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -161,6 +162,7 @@ function MissionPanelHeaderBar({ mission, projectId, onClose }: MissionPanelHead
       </div>
 
       <div className="flex min-w-0 shrink items-center justify-end gap-2">
+        <MissionDueDatePopover mission={mission} />
         <MissionTimerPopover missionId={mission.id} />
         <MissionBranchControl mission={mission} />
 

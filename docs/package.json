@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Public Overlord documentation site, rendered with Astro Starlight.",
   "engines": {
-    "node": ">=24"
+    "node": ">=26"
   },
   "scripts": {
     "dev": "astro dev",

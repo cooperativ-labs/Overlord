@@ -1,11 +1,11 @@
 {
   "name": "@overlord/webapp",
-  "version": "0.2610231436.0",
+  "version": "0.2610241050.0",
   "private": true,
   "type": "module",
   "description": "Overlord React SPA that consumes the Overlord backend REST and realtime API.",
   "engines": {
-    "node": ">=24"
+    "node": ">=26"
   },
   "scripts": {
     "dev": "concurrently -k -n server,web -c blue,magenta \"yarn dev:server\" \"yarn dev:web\"",
@@ -29,7 +29,7 @@
     "@fontsource/ibm-plex-mono": "^5.2.7",
     "@overlord/automations": "workspace:*",
     "@overlord/contract": "workspace:*",
-    "better-auth": "^1.2.7",
+    "better-auth": "^1.7.12",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dotenv": "^17.4.2",

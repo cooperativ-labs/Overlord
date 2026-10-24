@@ -106,7 +106,7 @@ function toScheduleLike(input: ScheduleInput): ScheduleLike {
 
 /**
  * Validates and computes the next due datetime without persisting anything.
- * Powers the ScheduleEditor live preview. Validation is delegated entirely to
+ * Powers the mission due-date popover's live repeat preview. Validation is delegated entirely to
  * the SchedulingEngine's zod schema (see automations/src/scheduling-engine);
  * this layer only translates the thrown validation `Error` into a `ServiceError`.
  */

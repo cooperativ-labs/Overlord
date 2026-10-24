@@ -337,6 +337,11 @@ function stageProductionEnv(): void {
  * Building under a throwaway project outside the repo keeps the root copy Node-ABI.
  * The build then fails loudly unless the staged addon loads under the Electron ABI,
  * so a future toolchain change can't silently reintroduce the mismatch.
+ *
+ * better-sqlite3 13 ships N-API prebuilds and loads `prebuilds/<platform>.node`
+ * before `build/Release`. Those prebuilds are removed from both the isolated build
+ * and the staged copy: leaving them in place makes node-gyp skip the compile
+ * (`prebuild_exists`) and makes the packed app ignore the Electron addon.
  */
 function stageNativeAddon(arch: Args['arch']): void {
   if (arch === 'universal') {
@@ -363,6 +368,7 @@ function stageNativeAddon(arch: Args['arch']): void {
   rmSync(dest, { recursive: true, force: true });
   mkdirSync(path.dirname(dest), { recursive: true });
   cpSync(src, dest, { recursive: true });
+  rmSync(path.join(dest, 'prebuilds'), { recursive: true, force: true });
 
   // Compile the Electron-ABI addon in a throwaway project outside the workspace so
   // electron-rebuild's tree-walk can't also rebuild the hoisted root copy.
@@ -371,6 +377,14 @@ function stageNativeAddon(arch: Args['arch']): void {
     const isolated = path.join(buildRoot, 'node_modules', 'better-sqlite3');
     mkdirSync(path.dirname(isolated), { recursive: true });
     cpSync(src, isolated, { recursive: true });
+    rmSync(path.join(isolated, 'prebuilds'), { recursive: true, force: true });
+    const addonApi = path.join(repoRoot, 'node_modules', 'node-addon-api');
+    if (!existsSync(addonApi)) {
+      fail('node-addon-api is not installed at the repo root. Run `yarn install` first.');
+    }
+    cpSync(addonApi, path.join(buildRoot, 'node_modules', 'node-addon-api'), {
+      recursive: true
+    });
     writeFileSync(
       path.join(buildRoot, 'package.json'),
       JSON.stringify({

@@ -5,7 +5,7 @@
   "type": "module",
   "private": true,
   "engines": {
-    "node": ">=24"
+    "node": ">=26"
   },
   "main": "./dist/types/index.js",
   "types": "./dist/types/index.d.ts",
@@ -41,7 +41,7 @@
     "@overlord/contract": "workspace:*",
     "@overlord/database": "workspace:*",
     "kysely": "^0.29.2",
-    "zod": "^4.3.6"
+    "zod": "^4.6.7"
   },
   "license": "MIT"
 }

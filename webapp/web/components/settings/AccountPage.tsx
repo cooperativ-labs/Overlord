@@ -153,7 +153,6 @@ function LinkedAccountsSection() {
     setUnlinkingId(account.id);
     try {
       const result = await authClient.unlinkAccount({
-        providerId: account.providerId,
         accountId: account.accountId
       });
       if (result.error) throw new Error(result.error.message ?? 'Failed to unlink account.');
