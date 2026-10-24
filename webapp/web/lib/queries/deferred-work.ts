@@ -7,12 +7,14 @@ import { keys } from '../query-keys.ts';
 /**
  * Operator decisions on deferred-work items shown on delivery cards (coo:1045).
  * The realtime link also invalidates the mission's deliveries when a resolution
- * changes; the mutation refreshes them at once so the card never lags.
+ * changes; the mutation refreshes them, and the mission summary that projects
+ * the same items as suggestions, at once so neither lags.
  */
 function useRefreshDeliveries() {
   const qc = useQueryClient();
   return (missionId: string) => {
     void qc.invalidateQueries({ queryKey: keys.missionDeliveries(missionId) });
+    void qc.invalidateQueries({ queryKey: keys.missionSummary(missionId) });
   };
 }
 

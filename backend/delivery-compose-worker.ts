@@ -12,13 +12,13 @@ import {
   applyDeliveryPresentation,
   type DeferredWorkObjectiveRef,
   deriveDeterministicActionCandidates,
-  filterDeferredWork,
   reconcileDeliveryComposeDraft
 } from '../packages/core/service/delivery-compose.ts';
 import { nowIso } from '../packages/core/service/util.ts';
 import {
   type ClaimedWorkerJob,
-  DELIVERY_COMPOSE_JOB_TYPE
+  DELIVERY_COMPOSE_JOB_TYPE,
+  enqueueMissionSummaryComposeJob
 } from '../packages/core/service/worker-jobs.ts';
 
 import { recordChange, requireDatabaseClient } from './db.ts';
@@ -280,31 +280,53 @@ async function persistDeliveryReport({
   }
   payload.deliveryReport = nextReport;
 
-  const updated = await client.run(
-    `UPDATE deliveries
-         SET payload_json = ?, updated_at = ?, revision = revision + 1
-       WHERE id = ? AND revision = ? AND deleted_at IS NULL`,
-    [JSON.stringify(payload), now, delivery.id, delivery.revision]
-  );
-  if (updated.changes === 0) {
-    // Another writer won the CAS; treat as success for idempotent workers.
-    return;
-  }
+  // The presentation write, its change, and the mission summary trigger share
+  // one transaction, so the summary always reads composed (or fallback)
+  // markdown and a crash cannot leave a presented delivery untriggered.
+  await client.transaction(async tx => {
+    const updated = await tx.run(
+      `UPDATE deliveries
+           SET payload_json = ?, updated_at = ?, revision = revision + 1
+         WHERE id = ? AND revision = ? AND deleted_at IS NULL`,
+      [JSON.stringify(payload), now, delivery.id, delivery.revision]
+    );
+    if (updated.changes === 0) {
+      // Another writer won the CAS; treat as success for idempotent workers.
+      return;
+    }
 
-  await recordChange(
-    {
-      entityType: 'delivery',
-      entityId: delivery.id,
-      operation: 'update',
-      entityRevision: delivery.revision + 1,
-      projectId: delivery.project_id,
-      missionId: delivery.mission_id,
-      objectiveId: delivery.objective_id,
-      changedFields,
-      workspaceId: delivery.workspace_id
-    },
-    client
-  );
+    await recordChange(
+      {
+        entityType: 'delivery',
+        entityId: delivery.id,
+        operation: 'update',
+        entityRevision: delivery.revision + 1,
+        projectId: delivery.project_id,
+        missionId: delivery.mission_id,
+        objectiveId: delivery.objective_id,
+        changedFields,
+        workspaceId: delivery.workspace_id
+      },
+      tx
+    );
+
+    // Only composed or fallback presentations trigger the summary, never pending.
+    const status = nextReport.presentation.status;
+    if (status === 'composed' || status === 'fallback') {
+      await enqueueMissionSummaryComposeJob({
+        ctx: {
+          db: tx,
+          workspaceId: delivery.workspace_id,
+          actorWorkspaceUserId: null,
+          source: 'runner'
+        },
+        missionId: delivery.mission_id,
+        reason: 'delivery_presented',
+        sourceDeliveryId: delivery.id,
+        now
+      });
+    }
+  });
 }
 
 async function loadComposeContext(
@@ -407,22 +429,11 @@ function toComposeInput({
   plannedObjectives: DeferredWorkObjectiveRef[];
   recentEvents: Array<{ type: string; summary: string }>;
 }): ComposeDeliveryInput {
-  const eligibleDeferredWork = filterDeferredWork({
-    items: report.agentReport.deferredWork,
-    currentObjective: objective,
-    plannedObjectives,
-    humanActions: report.agentReport.humanActions,
-    candidateActions: candidates
-  });
-  const omittedDeferredWork = report.agentReport.deferredWork.filter(
-    item => !eligibleDeferredWork.includes(item)
-  );
   return {
     summary: boundComposeText(delivery.summary, MAX_COMPOSE_SUMMARY_CHARS),
     objectiveTitle: objective.title ?? null,
     objectiveInstruction: objective.instruction ?? null,
     plannedObjectives,
-    omittedDeferredWork,
     verificationSummary: delivery.verification_summary
       ? boundComposeText(delivery.verification_summary, MAX_COMPOSE_AUXILIARY_CHARS)
       : null,
@@ -450,7 +461,6 @@ function toComposeInput({
       ...(tradeoff.sourceRef ? { sourceRef: tradeoff.sourceRef } : {})
     })),
     knownRisks: report.agentReport.knownRisks,
-    deferredWork: eligibleDeferredWork,
     assumptions: report.agentReport.assumptions,
     candidateActions: candidates.map(action => ({
       id: action.id,

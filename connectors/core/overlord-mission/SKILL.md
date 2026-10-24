@@ -32,14 +32,18 @@ when none apply. Human actions are concrete work a user must perform outside com
 never include Git operations or routine review/testing. Every human action needs `action`, `reason`,
 and `category`; add `command`, `verify`, and `link` whenever they exist so the operator can act
 without re-reading the delivery (see **Delivery Evidence** below). Tradeoffs record the
-implementation decision, alternatives considered, and rationale. Each `deferredWork` item
-must be a recommended new objective that is not part of this mission (for example a bug
-discovered here that belongs outside it). Name the component or file involved and say why
-the work was left. Never list work already covered by this mission's future objectives,
-leftover slices of the current objective (add an objective to this mission instead), or
-human implementation follow-up such as deploy, secrets, or migrations (those belong in
-`humanActions`). Use an empty array when nothing qualifies. These fields improve
-review visibility but never block delivery.
+implementation decision, alternatives considered, and rationale.
+Each `deferredWork` item is one recommended objective outside this mission. Be very
+concise. `title` names the work in an imperative phrase. `change` states only the specific
+change that is needed. `location` says where to find it in the code: the file, function,
+component, or command. `doneWhen` states the observable result in one sentence. Do not add
+instructions on how to do the work, background, or rationale. The operator turns the item
+into an objective or a mission as written, so it must read as a task, not as a note.
+Never list work already covered by this mission's future objectives, leftover slices of
+the current objective (add an objective to this mission instead), or human implementation
+follow-up such as deploy, secrets, or migrations (those belong in `humanActions`). Use an
+empty array when nothing qualifies. These fields improve review visibility but never block
+delivery.
 
 For full command syntax, flags, phase values, and event types see **CLI Command Reference** below.
 
@@ -215,13 +219,31 @@ Only list a human action when a person must perform a concrete non-Git step outs
 agent's completed work (for example, add a secret, run a production migration, deploy, or
 configure an external integration). Never list committing, pushing, opening a pull request,
 reviewing code, or ordinary tests. A tradeoff must state the decision, alternatives considered,
-and rationale. Each `deferredWork` item must be a recommended new objective that is not
-part of this mission (for example a bug discovered here that belongs outside it). Name
-the component or file involved and say why the work was left. Never list work already
-covered by this mission's future objectives, leftover slices of the current objective
-(add an objective to this mission instead), or human implementation follow-up such as
-deploy, secrets, or migrations (those belong in `humanActions`). Use an empty array when
-nothing qualifies. Omit the report when none of these facts apply.
+and rationale.
+Each `deferredWork` item is one recommended objective outside this mission. Be very
+concise. `title` names the work in an imperative phrase. `change` states only the specific
+change that is needed. `location` says where to find it in the code: the file, function,
+component, or command. `doneWhen` states the observable result in one sentence. Do not add
+instructions on how to do the work, background, or rationale. The operator turns the item
+into an objective or a mission as written, so it must read as a task, not as a note.
+Never list work already covered by this mission's future objectives,
+leftover slices of the current objective (add an objective to this mission instead), or
+human implementation follow-up such as deploy, secrets, or migrations (those belong in
+`humanActions`). Use an empty array when nothing qualifies. Omit the report when none of these facts apply.
+
+#### Writing a deferred-work item
+
+| Field      | Limit     | What to write                                                       |
+| ---------- | --------- | ------------------------------------------------------------------- |
+| `title`    | 80 chars  | The work, as an imperative phrase. Shown as the row title.          |
+| `change`   | 400 chars | The specific change that is needed, in one or two sentences.        |
+| `location` | 200 chars | Where to find it: the file, function, component, or command.        |
+| `doneWhen` | 200 chars | The observable result, in one sentence.                             |
+
+All four fields are required. A plain string item is rejected with `invalid_input`.
+
+> Vague: `{ "title": "Fix flaky test", "change": "The sync worker has a flaky test.", "location": "backend", "doneWhen": "It passes." }`
+> Good: `{ "title": "Advance the fake clock before the second retry", "change": "The test asserts the retry fired but never advances the fake clock between attempts, so it passes or fails on real time.", "location": "backend/sync-worker.test.ts › retries after a 503", "doneWhen": "The test passes 20 consecutive runs with the fake clock driving both attempts." }`
 
 #### Writing a human action the operator can complete
 
@@ -494,4 +516,4 @@ objective** list grouped by resource. Prepare delivery cheaply:
 - [reference/context.md](reference/context.md) — Shared state, attachments, and large artifact policy
 - [reference/shell-escaping.md](reference/shell-escaping.md) — Heredoc input through explicit `--*-file -` flags
 
-<!-- version: 0.7.0 -->
+<!-- version: 0.8.0 -->

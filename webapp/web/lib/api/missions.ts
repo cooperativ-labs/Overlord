@@ -20,6 +20,7 @@ import type {
   GenerateCommitMessageResultDto,
   InboxItemDto,
   InboxMissionsResponse,
+  MarkMissionSummarySeenBody,
   MissionBranchListDto,
   MissionDeliveriesDto,
   MissionDetailDto,
@@ -27,6 +28,8 @@ import type {
   MissionEventDto,
   MissionFileChangesDto,
   MissionScheduleDto,
+  MissionSummaryResponse,
+  MissionSummarySeenResponse,
   ObjectiveFileChangesDto,
   PreviewScheduleBody,
   PurgeMergedWorktreesBody,
@@ -175,6 +178,11 @@ export const missionsApi = {
     ),
   listMissionDeliveries: (id: string) =>
     request<MissionDeliveriesDto>('GET', `/api/missions/${id}/deliveries`),
+  /** Operator-only mission summary envelope; `eligible` is the only eligibility signal (v166). */
+  getMissionSummary: (id: string) =>
+    request<MissionSummaryResponse>('GET', `/api/missions/${id}/summary`),
+  markMissionSummarySeen: (id: string, body: MarkMissionSummarySeenBody) =>
+    request<MissionSummarySeenResponse>('PUT', `/api/missions/${id}/summary/seen`, body),
   listMissionArtifacts: (id: string) =>
     request<ArtifactDto[]>('GET', `/api/missions/${id}/artifacts`),
   createMissionArtifact: (missionId: string, body: CreateArtifactBody) =>

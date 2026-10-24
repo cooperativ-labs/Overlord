@@ -4,6 +4,7 @@ import { ServiceError } from '../errors.js';
 import { enqueueLiveActivityRefreshForMission } from '../live-activity-jobs.js';
 import { newId, nowIso } from '../util.js';
 import { enqueueWebhookEvent } from '../webhook-events.js';
+import { enqueueMissionSummaryComposeJob } from '../worker-jobs.js';
 
 import { sizeDecisionWindow } from './pure/window.js';
 import type { AgentSessionChannelRow } from './channels.js';
@@ -116,6 +117,32 @@ const REQUEST_COLUMNS = `
   waiter_lease_id, waiter_lease_expires_at, application_state, application_observed_at,
   created_at, updated_at, revision
 `;
+
+/**
+ * Question and choice requests feed the operator-only mission summary
+ * (coo:1202, plan §11 item 7): their creation and every transition out of
+ * `open` trigger a recompose in the same transaction as the write.
+ */
+export async function triggerMissionSummaryForRequest({
+  ctx,
+  request,
+  reason,
+  now
+}: {
+  ctx: ServiceContext;
+  request: { kind: string; mission_id: string | null };
+  reason: 'agent_request_opened' | 'agent_request_closed';
+  now?: string;
+}): Promise<void> {
+  if (request.kind !== 'question' && request.kind !== 'choice') return;
+  if (!request.mission_id) return;
+  await enqueueMissionSummaryComposeJob({
+    ctx,
+    missionId: request.mission_id,
+    reason,
+    ...(now ? { now } : {})
+  });
+}
 
 function boundedSummary(value: string): string {
   const trimmed = value.trim();
@@ -277,6 +304,12 @@ export async function createRequest({
       missionId: channel.mission_id,
       objectiveId: channel.objective_id
     });
+    await triggerMissionSummaryForRequest({
+      ctx: txCtx,
+      request: { kind, mission_id: channel.mission_id },
+      reason: 'agent_request_opened',
+      now
+    });
   });
   return await getRequest({ ctx, requestId: id });
 }
@@ -350,29 +383,37 @@ export async function releaseRequestToTerminal({
 }): Promise<{ released: boolean; request: AgentRequestRow }> {
   const now = nowIso();
   const existing = await getRequest({ ctx, requestId });
-  const updated = await ctx.db.run(
-    `UPDATE agent_requests
-        SET status = 'released_to_terminal', released_reason = ?,
-            waiter_lease_id = NULL, waiter_lease_expires_at = NULL,
-            updated_at = ?, revision = ?
-      WHERE id = ? AND status = 'open' AND revision = ?`,
-    [reason, now, existing.revision + 1, requestId, existing.revision]
-  );
-  if (updated.changes === 0) {
-    return { released: false, request: await getRequest({ ctx, requestId }) };
-  }
-  await recordChange({
-    ctx,
-    entityType: 'agent_request',
-    entityId: requestId,
-    operation: 'update',
-    entityRevision: existing.revision + 1,
-    projectId: existing.project_id,
-    missionId: existing.mission_id,
-    objectiveId: existing.objective_id,
-    changedFields: ['status', 'released_reason']
+  const released = await ctx.db.transaction(async tx => {
+    const txCtx = { ...ctx, db: tx };
+    const updated = await tx.run(
+      `UPDATE agent_requests
+          SET status = 'released_to_terminal', released_reason = ?,
+              waiter_lease_id = NULL, waiter_lease_expires_at = NULL,
+              updated_at = ?, revision = ?
+        WHERE id = ? AND status = 'open' AND revision = ?`,
+      [reason, now, existing.revision + 1, requestId, existing.revision]
+    );
+    if (updated.changes === 0) return false;
+    await recordChange({
+      ctx: txCtx,
+      entityType: 'agent_request',
+      entityId: requestId,
+      operation: 'update',
+      entityRevision: existing.revision + 1,
+      projectId: existing.project_id,
+      missionId: existing.mission_id,
+      objectiveId: existing.objective_id,
+      changedFields: ['status', 'released_reason']
+    });
+    await triggerMissionSummaryForRequest({
+      ctx: txCtx,
+      request: existing,
+      reason: 'agent_request_closed',
+      now
+    });
+    return true;
   });
-  return { released: true, request: await getRequest({ ctx, requestId }) };
+  return { released, request: await getRequest({ ctx, requestId }) };
 }
 
 /** A control-plane harness reported that its own TUI resolved the durable native permission. */
@@ -469,6 +510,12 @@ export async function resolveRequest({
         'resolved_by_workspace_user_id',
         ...(isQuestion ? ['application_state'] : [])
       ]
+    });
+    await triggerMissionSummaryForRequest({
+      ctx: txCtx,
+      request: existing,
+      reason: 'agent_request_closed',
+      now
     });
 
     if (isQuestion && existing.mission_id && existing.project_id && existing.session_id) {
@@ -637,12 +684,26 @@ export async function cancelRequest({
   reason?: string;
 }): Promise<{ cancelled: boolean }> {
   const now = nowIso();
-  const updated = await ctx.db.run(
-    `UPDATE agent_requests
-        SET status = 'cancelled', released_reason = ?, waiter_lease_id = NULL,
-            waiter_lease_expires_at = NULL, updated_at = ?, revision = revision + 1
-      WHERE id = ? AND workspace_id = ? AND status = 'open'`,
-    [reason, now, requestId, ctx.workspace.id]
-  );
-  return { cancelled: updated.changes > 0 };
+  return await ctx.db.transaction(async tx => {
+    const request = await tx.get<{ kind: string; mission_id: string | null }>(
+      `SELECT kind, mission_id FROM agent_requests WHERE id = ? AND workspace_id = ?`,
+      [requestId, ctx.workspace.id]
+    );
+    const updated = await tx.run(
+      `UPDATE agent_requests
+          SET status = 'cancelled', released_reason = ?, waiter_lease_id = NULL,
+              waiter_lease_expires_at = NULL, updated_at = ?, revision = revision + 1
+        WHERE id = ? AND workspace_id = ? AND status = 'open'`,
+      [reason, now, requestId, ctx.workspace.id]
+    );
+    if (updated.changes > 0 && request) {
+      await triggerMissionSummaryForRequest({
+        ctx: { ...ctx, db: tx },
+        request,
+        reason: 'agent_request_closed',
+        now
+      });
+    }
+    return { cancelled: updated.changes > 0 };
+  });
 }

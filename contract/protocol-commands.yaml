@@ -19,7 +19,7 @@
 # (ObjectiveFileChangesDto, scope server_objective) below; the two names never
 # collide and neither claims the other's coverage.
 
-contractVersion: '165'
+contractVersion: '166'
 referenceSpec: 'cli/docs/03-agent-protocol.md'
 
 # Transport-level shape shared by every protocol command, independent of subcommand.
@@ -282,7 +282,7 @@ sessionLifecycle:
       - 'The drain also sends bounded session capture diagnostics (binding recorded at attach, first accepted callback, health codes) through sync-changes capture once per drain when they changed since last accepted.'
     validationRules:
       - 'Objective-ledger changed files and declared paths are review metadata and cannot reject a delivery. No per-file rationale exists.'
-      - '--payload-json / --payload-file may carry an additive deliveryReport object with schemaVersion: 1 and agentReport.{humanActions,tradeoffsMade,knownRisks,deferredWork,assumptions}; omitted or malformed advisory items normalize independently with bounded warnings and can never prevent delivery'
+      - '--payload-json / --payload-file may carry an additive deliveryReport object with schemaVersion: 1 and agentReport.{humanActions,tradeoffsMade,knownRisks,deferredWork,assumptions}; omitted or malformed advisory items normalize independently with bounded warnings, except deferredWork: since contract v166, string items, malformed objects, and overlong fields reject the submission with invalid_input'
       - 'Human actions are bounded and filter Git operations plus routine review/testing instructions before they are persisted in deliveryReport.presentation'
       - 'Each human action has a required action, expected reason and category, optional blocking, and optional command, verify, and link fields; link accepts only an HTTP(S) URL or a repository-relative path, and an item with an invalid link is discarded with a bounded warning'
       - 'The compose worker always appends deterministic_rule actions derived from changed paths (migrations, .env examples, deployment configs, dependency manifests, CI workflow files) to deliveryReport.presentation.humanActions when neither the agent report nor the composed draft already carries them'

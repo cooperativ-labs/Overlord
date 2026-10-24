@@ -1470,7 +1470,7 @@ var init_search = __esm({
 });
 
 // ../packages/contract/dist/index.js
-var MISSION_EVIDENCE_LIST_LIMIT;
+var DEFERRED_WORK_LIMITS, MISSION_EVIDENCE_LIST_LIMIT, MISSION_SUMMARY_EVIDENCE_LIMIT, CAPTURE_GAP_CODES, MAX_CAPTURE_HEALTH_CODES, OBJECTIVE_FILE_CHANGES_LIMIT;
 var init_dist = __esm({
   "../packages/contract/dist/index.js"() {
     "use strict";
@@ -1484,7 +1484,23 @@ var init_dist = __esm({
     init_objective_ref();
     init_resource_paths();
     init_search();
+    DEFERRED_WORK_LIMITS = {
+      maxTitleLength: 80,
+      maxChangeLength: 400,
+      maxLocationLength: 200,
+      maxDoneWhenLength: 200
+    };
     MISSION_EVIDENCE_LIST_LIMIT = 200;
+    MISSION_SUMMARY_EVIDENCE_LIMIT = 100;
+    CAPTURE_GAP_CODES = [
+      "direct_path_unavailable",
+      "native_payload_unavailable",
+      "outcome_unavailable",
+      "outcome_partial",
+      "shell_activity_unverified"
+    ];
+    MAX_CAPTURE_HEALTH_CODES = 16;
+    OBJECTIVE_FILE_CHANGES_LIMIT = 200;
   }
 });
 
@@ -2513,7 +2529,7 @@ var require_textParsers = __commonJS({
       }
       return value2;
     };
-    var parseJsonArray2 = function(value2) {
+    var parseJsonArray3 = function(value2) {
       if (!value2) {
         return null;
       }
@@ -2593,8 +2609,8 @@ var require_textParsers = __commonJS({
       register(17, parseByteA);
       register(114, JSON.parse.bind(JSON));
       register(3802, JSON.parse.bind(JSON));
-      register(199, parseJsonArray2);
-      register(3807, parseJsonArray2);
+      register(199, parseJsonArray3);
+      register(3807, parseJsonArray3);
       register(3907, parseStringArray);
       register(2951, parseStringArray);
       register(791, parseStringArray);
@@ -7230,9 +7246,9 @@ async function configurePgTypeParsers() {
   pgTypeParsersConfigured = true;
   const pg2 = await Promise.resolve().then(() => (init_esm(), esm_exports));
   const { types: types3 } = pg2.default ?? pg2;
-  const toIso = (value2) => value2 === null ? null : new Date(value2).toISOString();
-  types3.setTypeParser(1114, toIso);
-  types3.setTypeParser(1184, toIso);
+  const toIso2 = (value2) => value2 === null ? null : new Date(value2).toISOString();
+  types3.setTypeParser(1114, toIso2);
+  types3.setTypeParser(1184, toIso2);
   types3.setTypeParser(20, (value2) => value2 === null ? null : Number(value2));
   types3.setTypeParser(16, (value2) => value2 === null ? null : value2 === "t" ? 1 : 0);
   const identity = (value2) => value2;
@@ -67468,9 +67484,9 @@ var require_implementation = __commonJS({
         throw new TypeError(ERROR_MESSAGE + target);
       }
       var args = slicy(arguments, 1);
-      var bound;
+      var bound3;
       var binder = function() {
-        if (this instanceof bound) {
+        if (this instanceof bound3) {
           var result2 = target.apply(
             this,
             concatty(args, arguments)
@@ -67490,15 +67506,15 @@ var require_implementation = __commonJS({
       for (var i5 = 0; i5 < boundLength; i5++) {
         boundArgs[i5] = "$" + i5;
       }
-      bound = Function("binder", "return function (" + joiny(boundArgs, ",") + "){ return binder.apply(this,arguments); }")(binder);
+      bound3 = Function("binder", "return function (" + joiny(boundArgs, ",") + "){ return binder.apply(this,arguments); }")(binder);
       if (target.prototype) {
         var Empty = function Empty2() {
         };
         Empty.prototype = target.prototype;
-        bound.prototype = new Empty();
+        bound3.prototype = new Empty();
         Empty.prototype = null;
       }
-      return bound;
+      return bound3;
     };
   }
 });
@@ -81052,6 +81068,205 @@ async function enqueueDeliveryComposeJob({
   }
   return result2;
 }
+function triggerWorkspaceId(ctx) {
+  return "workspace" in ctx ? ctx.workspace.id : ctx.workspaceId;
+}
+function isSummaryEnabled(value2) {
+  return value2 === true || Number(value2) === 1;
+}
+async function recordMissionSummaryChange(db, fields) {
+  await insertEntityChange(db, {
+    workspaceId: fields.workspaceId,
+    projectId: fields.projectId,
+    missionId: fields.missionId,
+    entityType: "mission_summary",
+    entityId: fields.missionId,
+    operation: fields.operation,
+    entityRevision: fields.revision,
+    changedFields: fields.changedFields,
+    actorWorkspaceUserId: fields.actorWorkspaceUserId,
+    actorTokenId: fields.actorTokenId ?? null,
+    source: fields.source
+  });
+}
+async function enqueueMissionSummaryComposeJob({
+  ctx,
+  missionId,
+  reason,
+  sourceDeliveryId = null,
+  now: now2 = nowIso(),
+  maxAttempts = DEFAULT_MAX_ATTEMPTS,
+  priority = DEFAULT_PRIORITY
+}) {
+  const db = ctx.db;
+  const workspaceId2 = triggerWorkspaceId(ctx);
+  const mission = await db.get(
+    `SELECT project_id, summary_enabled FROM missions
+      WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [missionId, workspaceId2]
+  );
+  if (!mission || !isSummaryEnabled(mission.summary_enabled)) {
+    return { triggered: false, generation: null, jobId: null };
+  }
+  const row = await db.get(
+    `INSERT INTO mission_summaries
+         (mission_id, workspace_id, project_id, revision, requested_generation,
+          completed_generation, status, headline, summary_markdown, risks_json,
+          suggestions_json, source_delivery_id, generated_by, generated_at, model,
+          created_at, updated_at)
+       VALUES (?, ?, ?, 1, 1, 0, 'pending', '', '', '[]', '[]', ?, 'deterministic', NULL, NULL, ?, ?)
+       ON CONFLICT (mission_id) DO UPDATE SET
+         requested_generation = mission_summaries.requested_generation + 1,
+         revision = mission_summaries.revision + 1,
+         status = 'pending',
+         source_delivery_id = excluded.source_delivery_id,
+         updated_at = excluded.updated_at
+       RETURNING revision, requested_generation`,
+    [missionId, workspaceId2, mission.project_id, sourceDeliveryId, now2, now2]
+  );
+  const revision3 = Number(row?.revision ?? 1);
+  const generation = Number(row?.requested_generation ?? 1);
+  await recordMissionSummaryChange(db, {
+    workspaceId: workspaceId2,
+    projectId: mission.project_id,
+    missionId,
+    revision: revision3,
+    operation: revision3 === 1 ? "insert" : "update",
+    changedFields: ["status", "requested_generation"],
+    actorWorkspaceUserId: ctx.actorWorkspaceUserId,
+    actorTokenId: ctx.actorTokenId ?? null,
+    source: ctx.source
+  });
+  const result2 = await enqueueWorkerJob({
+    db,
+    workspaceId: workspaceId2,
+    type: MISSION_SUMMARY_COMPOSE_JOB_TYPE,
+    dedupeBy: { field: "missionId", value: missionId },
+    payload: { missionId },
+    priority,
+    maxAttempts,
+    now: now2
+  });
+  console.info(
+    "[mission-summary-compose-worker]",
+    JSON.stringify({
+      event: "mission_summary_requested",
+      missionId,
+      reason,
+      generation,
+      jobId: result2.jobId,
+      enqueued: result2.enqueued
+    })
+  );
+  return { triggered: true, generation, jobId: result2.jobId };
+}
+async function readMissionSummaryGeneration(db, missionId) {
+  const row = await db.get(
+    `SELECT workspace_id, project_id, requested_generation, completed_generation,
+            source_delivery_id, headline, summary_markdown
+       FROM mission_summaries WHERE mission_id = ?`,
+    [missionId]
+  );
+  if (!row) return null;
+  return {
+    workspaceId: row.workspace_id,
+    projectId: row.project_id,
+    requestedGeneration: Number(row.requested_generation),
+    completedGeneration: Number(row.completed_generation),
+    sourceDeliveryId: row.source_delivery_id,
+    previous: row.headline.trim() ? { headline: row.headline, summary: row.summary_markdown } : null
+  };
+}
+async function lockMissionSummaryRow(tx, missionId) {
+  const lockClause = tx.dialect === "postgres" ? "FOR UPDATE" : "";
+  return await tx.get(
+    `SELECT workspace_id, project_id, revision, requested_generation, completed_generation
+         FROM mission_summaries WHERE mission_id = ? ${lockClause}`,
+    [missionId]
+  ) ?? null;
+}
+async function publishMissionSummary({
+  db,
+  missionId,
+  generation,
+  publication,
+  now: now2 = nowIso()
+}) {
+  return db.transaction(async (tx) => {
+    const row = await lockMissionSummaryRow(tx, missionId);
+    if (!row) return "missing";
+    if (Number(row.requested_generation) !== generation || Number(row.completed_generation) >= generation)
+      return "stale";
+    const revision3 = Number(row.revision) + 1;
+    await tx.run(
+      `UPDATE mission_summaries
+          SET status = ?, headline = ?, summary_markdown = ?, risks_json = ?,
+              suggestions_json = ?, source_delivery_id = ?, generated_by = ?,
+              generated_at = ?, model = ?, completed_generation = ?, revision = ?,
+              updated_at = ?
+        WHERE mission_id = ? AND requested_generation = ?`,
+      [
+        publication.status,
+        publication.headline,
+        publication.summary,
+        JSON.stringify(publication.risks),
+        JSON.stringify(publication.suggestions),
+        publication.sourceDeliveryId,
+        publication.generatedBy,
+        now2,
+        publication.model,
+        generation,
+        revision3,
+        now2,
+        missionId,
+        generation
+      ]
+    );
+    await recordMissionSummaryChange(tx, {
+      workspaceId: row.workspace_id,
+      projectId: row.project_id,
+      missionId,
+      revision: revision3,
+      operation: "update",
+      changedFields: [
+        "status",
+        "headline",
+        "summary_markdown",
+        "risks_json",
+        "suggestions_json",
+        "completed_generation"
+      ],
+      actorWorkspaceUserId: null,
+      source: "runner"
+    });
+    return "published";
+  });
+}
+async function completeMissionSummaryComposeJob({
+  db,
+  jobId,
+  missionId,
+  status,
+  lastError = null,
+  now: now2 = nowIso()
+}) {
+  return db.transaction(async (tx) => {
+    const row = await lockMissionSummaryRow(tx, missionId);
+    await finishWorkerJob(tx, jobId, status, lastError, now2);
+    if (!row || Number(row.requested_generation) <= Number(row.completed_generation)) {
+      return { successorJobId: null };
+    }
+    const successor = await enqueueWorkerJob({
+      db: tx,
+      workspaceId: row.workspace_id,
+      type: MISSION_SUMMARY_COMPOSE_JOB_TYPE,
+      dedupeBy: { field: "missionId", value: missionId },
+      payload: { missionId },
+      now: now2
+    });
+    return { successorJobId: successor.jobId };
+  });
+}
 async function missionOwnerProfileId({
   db,
   workspaceId: workspaceId2,
@@ -81067,12 +81282,14 @@ async function missionOwnerProfileId({
   );
   return owner?.profile_id ?? null;
 }
-var DELIVERY_COMPOSE_JOB_TYPE, DEFAULT_MAX_ATTEMPTS, DEFAULT_PRIORITY, DEFAULT_LOCK_TTL_MS, WORKER_JOB_RETRY_BACKOFF_MS;
+var DELIVERY_COMPOSE_JOB_TYPE, MISSION_SUMMARY_COMPOSE_JOB_TYPE, DEFAULT_MAX_ATTEMPTS, DEFAULT_PRIORITY, DEFAULT_LOCK_TTL_MS, WORKER_JOB_RETRY_BACKOFF_MS;
 var init_worker_jobs = __esm({
   "../packages/core/service/worker-jobs.ts"() {
     "use strict";
+    init_change_feed();
     init_util3();
     DELIVERY_COMPOSE_JOB_TYPE = "overlord.delivery.compose.v1";
+    MISSION_SUMMARY_COMPOSE_JOB_TYPE = "overlord.mission.summary.compose.v1";
     DEFAULT_MAX_ATTEMPTS = 5;
     DEFAULT_PRIORITY = 50;
     DEFAULT_LOCK_TTL_MS = 6e4;
@@ -81153,6 +81370,37 @@ var init_live_activity_jobs = __esm({
 function isValidHumanActionLink(link) {
   return linkSchema.safeParse(link).success;
 }
+function deferredWorkInputProblem(deliveryReport) {
+  if (typeof deliveryReport !== "object" || deliveryReport === null) return null;
+  const agentReport = deliveryReport.agentReport;
+  if (typeof agentReport !== "object" || agentReport === null) return null;
+  const deferredWork = agentReport.deferredWork;
+  if (deferredWork === void 0) return null;
+  const field = "deliveryReport.agentReport.deferredWork";
+  if (!Array.isArray(deferredWork)) return `${field} must be an array`;
+  for (const [index, item] of deferredWork.slice(0, MAX_ITEMS).entries()) {
+    if (typeof item !== "object" || item === null || Array.isArray(item)) {
+      return `${field}[${index}] must be an object with title, change, location, and doneWhen; string items are not accepted`;
+    }
+    const parsed = deferredWorkInputSchema.safeParse(item);
+    if (!parsed.success) {
+      const issue2 = parsed.error.issues[0];
+      const key = issue2?.path.length ? `.${issue2.path.join(".")}` : "";
+      return `${field}[${index}]${key}: ${issue2?.message ?? "invalid deferred-work item"}`;
+    }
+  }
+  return null;
+}
+function deferredWorkId(index, item) {
+  const canonical2 = JSON.stringify([
+    item.title.trim(),
+    item.change.trim(),
+    item.location.trim(),
+    item.doneWhen.trim()
+  ]);
+  const digest4 = (0, import_node_crypto8.createHash)("sha256").update(canonical2, "utf8").digest("hex").slice(0, 16);
+  return `deferred-work-${index}-${digest4}`;
+}
 function isDisplayableHumanAction(action) {
   return !GIT_ACTION_PATTERN.test(action) && !ROUTINE_QA_PATTERN.test(action);
 }
@@ -81178,11 +81426,18 @@ function normalizeAgentReport(input2) {
     ...tradeoff.impact ? { impact: tradeoff.impact } : {},
     source: "agent"
   }));
+  const deferredWork = (input2.deferredWork ?? []).map((item, index) => ({
+    id: deferredWorkId(index, item),
+    title: item.title,
+    change: item.change,
+    location: item.location,
+    doneWhen: item.doneWhen
+  }));
   return {
     humanActions,
     tradeoffsMade,
     knownRisks: input2.knownRisks ?? [],
-    deferredWork: input2.deferredWork ?? [],
+    deferredWork,
     assumptions: input2.assumptions ?? []
   };
 }
@@ -81255,7 +81510,7 @@ function salvageWireAgentReport(deliveryReport) {
       ),
       deferredWork: salvageArray(
         report.deferredWork,
-        conciseTextSchema,
+        deferredWorkInputSchema,
         "agentReport.deferredWork",
         warnings
       ),
@@ -81308,10 +81563,12 @@ function markDeliveryPresentationPending(report) {
     }
   };
 }
-var MAX_ITEMS, MAX_ALTERNATIVES, MAX_ACTION_LENGTH, MAX_DETAIL_LENGTH, humanActionCategorySchema, MAX_COMMAND_LENGTH, MAX_LINK_LENGTH, conciseTextSchema, commandTextSchema, LINK_PATTERN, linkSchema, humanActionSchema, tradeoffSchema, GIT_ACTION_PATTERN, ROUTINE_QA_PATTERN, MAX_WARNINGS, DELIVERY_REPORT_ROOT_KEYS, AGENT_REPORT_INPUT_KEYS, normalizedHumanActionSchema, normalizedTradeoffSchema, normalizedAgentReportSchema, deliveryPresentationSchema, persistedDeliveryReportSchema, DELIVERY_REPORT_LIMITS;
+var import_node_crypto8, MAX_ITEMS, MAX_ALTERNATIVES, MAX_ACTION_LENGTH, MAX_DETAIL_LENGTH, humanActionCategorySchema, MAX_COMMAND_LENGTH, MAX_LINK_LENGTH, conciseTextSchema, commandTextSchema, LINK_PATTERN, linkSchema, humanActionSchema, tradeoffSchema, deferredWorkFields, deferredWorkInputSchema, normalizedDeferredWorkSchema, GIT_ACTION_PATTERN, ROUTINE_QA_PATTERN, MAX_WARNINGS, DELIVERY_REPORT_ROOT_KEYS, AGENT_REPORT_INPUT_KEYS, normalizedHumanActionSchema, normalizedTradeoffSchema, normalizedAgentReportSchema, deliveryPresentationSchema, persistedDeliveryReportSchema, DELIVERY_REPORT_LIMITS;
 var init_delivery_report = __esm({
   "../packages/core/service/delivery-report.ts"() {
     "use strict";
+    init_dist();
+    import_node_crypto8 = require("node:crypto");
     init_zod();
     MAX_ITEMS = 12;
     MAX_ALTERNATIVES = 6;
@@ -81347,6 +81604,17 @@ var init_delivery_report = __esm({
       rationale: conciseTextSchema,
       impact: conciseTextSchema.optional()
     });
+    deferredWorkFields = {
+      title: external_exports.string().trim().min(1).max(DEFERRED_WORK_LIMITS.maxTitleLength),
+      change: external_exports.string().trim().min(1).max(DEFERRED_WORK_LIMITS.maxChangeLength),
+      location: external_exports.string().trim().min(1).max(DEFERRED_WORK_LIMITS.maxLocationLength),
+      doneWhen: external_exports.string().trim().min(1).max(DEFERRED_WORK_LIMITS.maxDoneWhenLength)
+    };
+    deferredWorkInputSchema = external_exports.strictObject(deferredWorkFields);
+    normalizedDeferredWorkSchema = external_exports.strictObject({
+      id: external_exports.string().trim().min(1).max(200),
+      ...deferredWorkFields
+    });
     GIT_ACTION_PATTERN = /\b(?:git\s+(?:commit|push|pull|merge|rebase|checkout|switch|branch)|(?:commit|push|pull|merge|rebase|create|open)\s+(?:a\s+)?(?:branch|pull request|pr))\b/i;
     ROUTINE_QA_PATTERN = /\b(?:code review|review (?:the )?code|run (?:the )?tests?|test (?:the )?(?:code|feature)|verify (?:the )?(?:code|feature|implementation|it)(?:\s+(?:works|is working))?|qa)\b/i;
     MAX_WARNINGS = 12;
@@ -81367,7 +81635,7 @@ var init_delivery_report = __esm({
       command: commandTextSchema.optional(),
       verify: conciseTextSchema.optional(),
       link: linkSchema.optional(),
-      source: external_exports.enum(["agent", "change_rationale", "deterministic_rule"]),
+      source: external_exports.enum(["agent", "deterministic_rule"]),
       sourceRef: external_exports.string().trim().min(1).max(200).optional()
     });
     normalizedTradeoffSchema = external_exports.strictObject({
@@ -81376,14 +81644,14 @@ var init_delivery_report = __esm({
       alternativesConsidered: external_exports.array(conciseTextSchema).max(MAX_ALTERNATIVES),
       rationale: conciseTextSchema,
       impact: conciseTextSchema.optional(),
-      source: external_exports.enum(["agent", "change_rationale"]),
+      source: external_exports.literal("agent"),
       sourceRef: external_exports.string().trim().min(1).max(200).optional()
     });
     normalizedAgentReportSchema = external_exports.strictObject({
       humanActions: external_exports.array(normalizedHumanActionSchema).max(MAX_ITEMS),
       tradeoffsMade: external_exports.array(normalizedTradeoffSchema).max(MAX_ITEMS),
       knownRisks: external_exports.array(conciseTextSchema).max(MAX_ITEMS),
-      deferredWork: external_exports.array(conciseTextSchema).max(MAX_ITEMS),
+      deferredWork: external_exports.array(normalizedDeferredWorkSchema).max(MAX_ITEMS),
       assumptions: external_exports.array(conciseTextSchema).max(MAX_ITEMS)
     });
     deliveryPresentationSchema = external_exports.strictObject({
@@ -81392,7 +81660,7 @@ var init_delivery_report = __esm({
       humanActions: external_exports.array(normalizedHumanActionSchema).max(MAX_ITEMS),
       tradeoffsMade: external_exports.array(normalizedTradeoffSchema).max(MAX_ITEMS),
       knownRisks: external_exports.array(conciseTextSchema).max(MAX_ITEMS),
-      deferredWork: external_exports.array(conciseTextSchema).max(MAX_ITEMS),
+      deferredWork: external_exports.array(normalizedDeferredWorkSchema).max(MAX_ITEMS),
       assumptions: external_exports.array(conciseTextSchema).max(MAX_ITEMS),
       generatedBy: external_exports.enum(["deterministic", "gemini"]),
       generatedAt: external_exports.string().max(64).optional(),
@@ -81578,27 +81846,19 @@ async function buildWebhookEnvelope(ctx, {
         }))
       };
       const changedFileRows = await ctx.db.all(
-        `SELECT file_path, vcs_status FROM changed_files
-           WHERE objective_id = ? AND deleted_at IS NULL
-           ORDER BY last_observed_at DESC LIMIT ?`,
+        `SELECT cf.file_path, cf.source, COALESCE(pr.resource_key, o.resource_key) AS resource_key
+           FROM changed_files cf
+           LEFT JOIN objectives o ON o.id = cf.objective_id AND o.deleted_at IS NULL
+           LEFT JOIN project_resources pr ON pr.id = cf.resource_id AND pr.deleted_at IS NULL
+          WHERE cf.objective_id = ? AND cf.deleted_at IS NULL
+          ORDER BY cf.last_observed_at DESC, cf.id DESC LIMIT ?`,
         [entity.objectiveId, FULL_ENVELOPE_ARRAY_LIMIT + 1]
       );
       envelope2.changedFiles = truncateArray(
-        changedFileRows.map((row) => ({ filePath: row.file_path, vcsStatus: row.vcs_status }))
-      );
-      const rationaleRows = await ctx.db.all(
-        `SELECT file_path, label, summary, why, impact FROM change_rationales
-           WHERE delivery_id = ? AND deleted_at IS NULL
-           ORDER BY created_at ASC LIMIT ?`,
-        [delivery.id, FULL_ENVELOPE_ARRAY_LIMIT + 1]
-      );
-      envelope2.changeRationales = truncateArray(
-        rationaleRows.map((row) => ({
+        changedFileRows.map((row) => ({
           filePath: row.file_path,
-          label: row.label,
-          summary: row.summary,
-          why: row.why,
-          impact: row.impact
+          resourceKey: row.resource_key?.trim() || null,
+          source: row.source === "declared_edit" || row.source === "agent_declared" ? row.source : null
         }))
       );
     }
@@ -81656,7 +81916,7 @@ var init_window = __esm({
 
 // ../packages/core/service/agent-session/credential.ts
 function hashSessionChannelToken(rawToken) {
-  return (0, import_node_crypto8.createHash)(SESSION_CHANNEL_TOKEN_HASH_ALGORITHM).update(rawToken).digest("hex");
+  return (0, import_node_crypto9.createHash)(SESSION_CHANNEL_TOKEN_HASH_ALGORITHM).update(rawToken).digest("hex");
 }
 function addSeconds(iso, seconds2) {
   return new Date(new Date(iso).getTime() + seconds2 * 1e3).toISOString();
@@ -81672,11 +81932,11 @@ function renewedExpiry({
   const renewed = new Date(new Date(now2).getTime() + leaseSeconds * 1e3);
   return (renewed < ceiling ? renewed : ceiling).toISOString();
 }
-var import_node_crypto8, SESSION_CHANNEL_TOKEN_HASH_ALGORITHM, SESSION_CHANNEL_LEASE_SECONDS, SESSION_CHANNEL_ABSOLUTE_LIFETIME_SECONDS;
+var import_node_crypto9, SESSION_CHANNEL_TOKEN_HASH_ALGORITHM, SESSION_CHANNEL_LEASE_SECONDS, SESSION_CHANNEL_ABSOLUTE_LIFETIME_SECONDS;
 var init_credential = __esm({
   "../packages/core/service/agent-session/credential.ts"() {
     "use strict";
-    import_node_crypto8 = require("node:crypto");
+    import_node_crypto9 = require("node:crypto");
     SESSION_CHANNEL_TOKEN_HASH_ALGORITHM = "sha256";
     SESSION_CHANNEL_LEASE_SECONDS = 180;
     SESSION_CHANNEL_ABSOLUTE_LIFETIME_SECONDS = 60 * 60 * 24;
@@ -81684,6 +81944,21 @@ var init_credential = __esm({
 });
 
 // ../packages/core/service/agent-session/requests.ts
+async function triggerMissionSummaryForRequest({
+  ctx,
+  request,
+  reason,
+  now: now2
+}) {
+  if (request.kind !== "question" && request.kind !== "choice") return;
+  if (!request.mission_id) return;
+  await enqueueMissionSummaryComposeJob({
+    ctx,
+    missionId: request.mission_id,
+    reason,
+    ...now2 ? { now: now2 } : {}
+  });
+}
 function boundedSummary(value2) {
   const trimmed9 = value2.trim();
   if (!trimmed9) throw new ServiceError("Request summary is required", "invalid_request", 400);
@@ -81786,6 +82061,12 @@ async function createRequest({
       missionId: channel.mission_id,
       objectiveId: channel.objective_id
     });
+    await triggerMissionSummaryForRequest({
+      ctx: txCtx,
+      request: { kind, mission_id: channel.mission_id },
+      reason: "agent_request_opened",
+      now: now2
+    });
   });
   return await getRequest2({ ctx, requestId: id2 });
 }
@@ -81825,29 +82106,37 @@ async function releaseRequestToTerminal({
 }) {
   const now2 = nowIso();
   const existing = await getRequest2({ ctx, requestId });
-  const updated = await ctx.db.run(
-    `UPDATE agent_requests
-        SET status = 'released_to_terminal', released_reason = ?,
-            waiter_lease_id = NULL, waiter_lease_expires_at = NULL,
-            updated_at = ?, revision = ?
-      WHERE id = ? AND status = 'open' AND revision = ?`,
-    [reason, now2, existing.revision + 1, requestId, existing.revision]
-  );
-  if (updated.changes === 0) {
-    return { released: false, request: await getRequest2({ ctx, requestId }) };
-  }
-  await recordChange({
-    ctx,
-    entityType: "agent_request",
-    entityId: requestId,
-    operation: "update",
-    entityRevision: existing.revision + 1,
-    projectId: existing.project_id,
-    missionId: existing.mission_id,
-    objectiveId: existing.objective_id,
-    changedFields: ["status", "released_reason"]
+  const released = await ctx.db.transaction(async (tx) => {
+    const txCtx = { ...ctx, db: tx };
+    const updated = await tx.run(
+      `UPDATE agent_requests
+          SET status = 'released_to_terminal', released_reason = ?,
+              waiter_lease_id = NULL, waiter_lease_expires_at = NULL,
+              updated_at = ?, revision = ?
+        WHERE id = ? AND status = 'open' AND revision = ?`,
+      [reason, now2, existing.revision + 1, requestId, existing.revision]
+    );
+    if (updated.changes === 0) return false;
+    await recordChange({
+      ctx: txCtx,
+      entityType: "agent_request",
+      entityId: requestId,
+      operation: "update",
+      entityRevision: existing.revision + 1,
+      projectId: existing.project_id,
+      missionId: existing.mission_id,
+      objectiveId: existing.objective_id,
+      changedFields: ["status", "released_reason"]
+    });
+    await triggerMissionSummaryForRequest({
+      ctx: txCtx,
+      request: existing,
+      reason: "agent_request_closed",
+      now: now2
+    });
+    return true;
   });
-  return { released: true, request: await getRequest2({ ctx, requestId }) };
+  return { released, request: await getRequest2({ ctx, requestId }) };
 }
 async function markRequestResolvedElsewhere({
   ctx,
@@ -81923,6 +82212,12 @@ async function resolveRequest({
         "resolved_by_workspace_user_id",
         ...isQuestion ? ["application_state"] : []
       ]
+    });
+    await triggerMissionSummaryForRequest({
+      ctx: txCtx,
+      request: existing,
+      reason: "agent_request_closed",
+      now: now2
     });
     if (isQuestion && existing.mission_id && existing.project_id && existing.session_id) {
       const details = parseObject(existing.details_json);
@@ -82030,6 +82325,7 @@ var init_requests = __esm({
     init_live_activity_jobs();
     init_util3();
     init_webhook_events();
+    init_worker_jobs();
     init_window();
     init_credential();
     WAITER_LEASE_SECONDS = 20;
@@ -82862,7 +83158,7 @@ var init_local_target = __esm({
 
 // ../packages/core/service/devices.ts
 function deviceFingerprint() {
-  return (0, import_node_crypto9.createHash)("sha256").update(`${(0, import_node_os8.hostname)()}:${(0, import_node_os8.platform)()}`).digest("hex").slice(0, 32);
+  return (0, import_node_crypto10.createHash)("sha256").update(`${(0, import_node_os8.hostname)()}:${(0, import_node_os8.platform)()}`).digest("hex").slice(0, 32);
 }
 function callerDeviceFingerprint() {
   return deviceFingerprint();
@@ -82938,11 +83234,11 @@ async function softDeleteDeviceIfOrphaned({
   });
   return true;
 }
-var import_node_crypto9, import_node_os8;
+var import_node_crypto10, import_node_os8;
 var init_devices = __esm({
   "../packages/core/service/devices.ts"() {
     "use strict";
-    import_node_crypto9 = require("node:crypto");
+    import_node_crypto10 = require("node:crypto");
     import_node_os8 = require("node:os");
     init_change_feed();
     init_util3();
@@ -86279,7 +86575,7 @@ function nowIso2() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
 function newId2() {
-  return (0, import_node_crypto12.randomUUID)();
+  return (0, import_node_crypto13.randomUUID)();
 }
 async function oldestWorkspaceRowFromClient(client) {
   return client.get(
@@ -86604,6 +86900,15 @@ async function recordChange2(input2, client = requireDatabaseClient()) {
     source: "webapp"
   });
 }
+function restMissionSummaryTriggerContext(tx, workspaceId2, actorWorkspaceUserId2) {
+  return {
+    db: tx,
+    workspaceId: workspaceId2,
+    actorWorkspaceUserId: actorWorkspaceUserId2,
+    actorTokenId: getActiveTokenId(),
+    source: "webapp"
+  };
+}
 async function enqueueWebhookEventRest(input2, client = requireDatabaseClient()) {
   const ctx = {
     db: client,
@@ -86623,13 +86928,13 @@ async function currentMaxSeq(client = requireDatabaseClient()) {
   );
   return row?.seq ?? 0;
 }
-var import_node_async_hooks2, import_node_crypto12, import_node_path19, databasePath, adapter, sqliteDb, DATABASE_DIALECT, databaseClient, databaseInitPromise, DATABASE_PATH, defaultWorkspace, ACTOR_WORKSPACE_USER_ID, requestContextStorage, ACTIVE_TOKEN_PROJECT_IDS, ACTIVE_TOKEN_SCOPES, ACTIVE_TOKEN_ID;
+var import_node_async_hooks2, import_node_crypto13, import_node_path19, databasePath, adapter, sqliteDb, DATABASE_DIALECT, databaseClient, databaseInitPromise, DATABASE_PATH, defaultWorkspace, ACTOR_WORKSPACE_USER_ID, requestContextStorage, ACTIVE_TOKEN_PROJECT_IDS, ACTIVE_TOKEN_SCOPES, ACTIVE_TOKEN_ID;
 var init_db = __esm({
   "db.ts"() {
     "use strict";
     init_dist2();
     import_node_async_hooks2 = require("node:async_hooks");
-    import_node_crypto12 = require("node:crypto");
+    import_node_crypto13 = require("node:crypto");
     import_node_path19 = __toESM(require("node:path"), 1);
     init_config();
     init_env();
@@ -103063,14 +103368,14 @@ var init_ProtocolLib = __esm({
       setQueryCompatError(output2, response) {
         const queryErrorHeader = response.headers?.["x-amzn-query-error"];
         if (output2 !== void 0 && queryErrorHeader != null) {
-          const [Code, Type2] = queryErrorHeader.split(";");
+          const [Code, Type3] = queryErrorHeader.split(";");
           const keys = Object.keys(output2);
           const Error2 = {
             Code,
-            Type: Type2
+            Type: Type3
           };
           output2.Code = Code;
-          output2.Type = Type2;
+          output2.Type = Type3;
           for (let i5 = 0; i5 < keys.length; i5++) {
             const k5 = keys[i5];
             Error2[k5 === "message" ? "Message" : k5] = output2[k5];
@@ -123115,7 +123420,7 @@ var require_dist_cjs21 = __commonJS({
       Enabled: "Enabled",
       Suspended: "Suspended"
     };
-    var Type2 = {
+    var Type3 = {
       AmazonCustomerByEmail: "AmazonCustomerByEmail",
       CanonicalUser: "CanonicalUser",
       Group: "Group"
@@ -123706,7 +124011,7 @@ var require_dist_cjs21 = __commonJS({
     exports2.Tier = Tier;
     exports2.TransitionDefaultMinimumObjectSize = TransitionDefaultMinimumObjectSize;
     exports2.TransitionStorageClass = TransitionStorageClass;
-    exports2.Type = Type2;
+    exports2.Type = Type3;
     exports2.UpdateBucketMetadataAnnotationTableConfigurationCommand = UpdateBucketMetadataAnnotationTableConfigurationCommand;
     exports2.UpdateBucketMetadataInventoryTableConfigurationCommand = UpdateBucketMetadataInventoryTableConfigurationCommand;
     exports2.UpdateBucketMetadataJournalTableConfigurationCommand = UpdateBucketMetadataJournalTableConfigurationCommand;
@@ -141613,9 +141918,9 @@ function assertExistingTableIndexFits({ columnBounds, dbType, existingColumns, f
         requiredBytes += (generatedLength ?? 0) * (dbType === "mysql" ? 4 : 1);
         continue;
       }
-      const bound = columnBounds.get(createDatabaseColumnKey(table2, column));
-      if (!bound?.maxIndexBytes) throw new BetterAuthError(`Cannot create database index "${index.name}" on existing table "${table2}" because column "${column}" is not bounded for ${dbType === "mysql" ? "MySQL" : "SQL Server"}. Change it to a bounded string column, resolve oversized values, then run the migration again.`);
-      requiredBytes += bound.maxIndexBytes;
+      const bound3 = columnBounds.get(createDatabaseColumnKey(table2, column));
+      if (!bound3?.maxIndexBytes) throw new BetterAuthError(`Cannot create database index "${index.name}" on existing table "${table2}" because column "${column}" is not bounded for ${dbType === "mysql" ? "MySQL" : "SQL Server"}. Change it to a bounded string column, resolve oversized values, then run the migration again.`);
+      requiredBytes += bound3.maxIndexBytes;
     } else requiredBytes += 16;
   }
   if (requiredBytes > byteBudget) throw new BetterAuthError(`Cannot create database index "${index.name}" on existing table "${table2}" because its columns can exceed ${dbType === "mysql" ? "MySQL" : "SQL Server"}'s ${byteBudget}-byte index-key limit. Bound the indexed string columns to the generated schema lengths, resolve oversized values, then run the migration again.`);
@@ -144194,17 +144499,22 @@ var COMPOSE_DELIVERY_RESPONSE_SCHEMA = {
       }
     },
     knownRisks: { type: import_genai2.Type.ARRAY, items: { type: import_genai2.Type.STRING } },
-    deferredWork: {
-      type: import_genai2.Type.ARRAY,
-      description: "Eligible deferred work rewritten as self-contained out-of-mission objective statements (see DEFERRED WORK rules). Same order as the eligible agent list; omit items that restated planned work or human follow-up. Empty array is correct when nothing qualifies.",
-      items: { type: import_genai2.Type.STRING }
-    },
     assumptions: { type: import_genai2.Type.ARRAY, items: { type: import_genai2.Type.STRING } },
     reviewHighlights: { type: import_genai2.Type.ARRAY, items: { type: import_genai2.Type.STRING } }
   },
-  required: ["markdown", "humanActions", "tradeoffsMade", "deferredWork"]
+  required: ["markdown", "humanActions", "tradeoffsMade"]
 };
-var DEFERRED_WORK_MAX_CHARS = 800;
+var WRITING_RULES = `WRITING rules:
+- One topic per sentence. Keep sentences short: about 20 words for an instruction, about 25 for a description.
+- Use the active voice and name the actor: "The migration adds a table", not "A table is added".
+- Use the present tense for state and the simple past for what the agent did.
+- Use the imperative for anything the operator must do: "Run the test suite", not "The test suite should be run".
+- Use one term for one thing throughout a message. Do not vary vocabulary for style.
+- Prefer short, common words. Avoid noun stacks longer than three words; rewrite "delivery compose worker fallback path" as "the fallback path of the compose worker".
+- Keep articles ("the", "a"). Do not drop them for brevity.
+- No idioms, no hedging filler, no marketing adjectives.
+- Technical names, commands, paths, and quoted agent text are exempt and are copied exactly.
+- When the evidence is unclear, say that it is unclear. Do not smooth it over.`;
 var SYSTEM_INSTRUCTION = `You compose a polished delivery review message for a coding agent handoff.
 Return JSON only matching the schema.
 Rules:
@@ -144213,16 +144523,11 @@ Rules:
 - Never invent mandatory human actions or implementation tradeoffs without a sourceId match.
 - Every deterministic candidate action is real follow-up work: cite each one unless an agent-reported action already covers the same step.
 - Carry each action's command, verify, and link fields through unchanged when the evidence supplies them; never fabricate a command, URL, or path that is not in the evidence.
+- File paths (a candidate action's link or sourceRef) are context only. Never describe what a file does or why it changed, and never infer behavior, impact, tests, or verification from a file or path name; only the agent summary and the supplied report facts state those.
 - Never include git commit/push/PR actions or routine "review/test the code" actions.
 - Prefer concise, scannable Markdown. Do not include secrets, tokens, or raw diffs.
-DEFERRED WORK rules (deferredWork array):
-- deferredWork is only for recommended NEW objectives that are not part of this mission. Out-of-scope bugs discovered during the work are the canonical example. It is not leftover implementation of the current objective, the next queued objective on this mission, or human follow-up.
-- The prompt lists this mission's planned future objectives and any agent items already omitted as ineligible. Never restate those, never restate a human action or known risk, and never restate leftover slices of the current objective.
-- The deferred-work evidence list is already the eligible subset. Rewrite every remaining item as a self-contained statement of one to three sentences: start with an imperative verb naming the work; name the component, feature, file, command, or data set involved; state what the delivered work already covers and why this piece was left; and state what done looks like when the evidence says so.
-- Resolve references that only make sense inside this delivery ("finding 3", "P2 items", "the next objective", "remaining ~60 moves") by pulling the referenced detail from the agent summary, objective instruction, change rationales, or recent events.
-- Never shorten a kept item, merge two kept items, or reorder them. Empty array is correct when the eligible list is empty or when a remaining item is still leftover in-mission work or human follow-up that slipped through.
-- Only add an item beyond the eligible list when the agent summary explicitly recommends new work outside this mission (for example an out-of-scope bug). Never add leftover in-mission work, a queued future objective, a human action, or a known risk.
-- Use only facts present in the evidence. Do not invent files, commands, scope, or acceptance criteria. Keep each item under ${DEFERRED_WORK_MAX_CHARS} characters.`;
+Apply the WRITING rules below to markdown, humanActions action and reason, tradeoffsMade text, knownRisks, and assumptions. They do not apply to command, verify, link, file paths, identifiers, or quoted agent text; copy those exactly.
+${WRITING_RULES}`;
 function buildComposeDeliveryPrompt(input2) {
   return [
     "Compose a delivery presentation from this bounded evidence.",
@@ -144232,10 +144537,8 @@ ${input2.summary}`,
     input2.objectiveTitle ? `Objective title: ${input2.objectiveTitle}` : null,
     input2.objectiveInstruction ? `Objective instruction (bounded):
 ${input2.objectiveInstruction.slice(0, 2e3)}` : null,
-    input2.plannedObjectives && input2.plannedObjectives.length > 0 ? `Planned future objectives on this mission (already queued \u2014 not deferred work; never restate):
+    input2.plannedObjectives && input2.plannedObjectives.length > 0 ? `Planned future objectives on this mission (already queued; never present them as new work):
 ${JSON.stringify(input2.plannedObjectives)}` : null,
-    input2.omittedDeferredWork && input2.omittedDeferredWork.length > 0 ? `Agent deferred-work items omitted as ineligible (queued on this mission, leftover current-objective work, or human follow-up \u2014 do not restate):
-${JSON.stringify(input2.omittedDeferredWork)}` : null,
     input2.verificationSummary ? `Verification: ${input2.verificationSummary}` : null,
     input2.followUpNotes ? `Follow-up notes: ${input2.followUpNotes}` : null,
     `Human actions evidence:
@@ -144244,14 +144547,10 @@ ${JSON.stringify(input2.humanActions)}`,
 ${JSON.stringify(input2.tradeoffsMade)}`,
     `Known risks:
 ${JSON.stringify(input2.knownRisks)}`,
-    `Deferred work (eligible agent-listed, ${input2.deferredWork.length} item(s); rewrite each as a standalone out-of-mission objective per the DEFERRED WORK rules; empty array is correct when none qualify):
-${JSON.stringify(input2.deferredWork)}`,
     `Assumptions:
 ${JSON.stringify(input2.assumptions)}`,
     `Deterministic candidate actions:
 ${JSON.stringify(input2.candidateActions)}`,
-    `Change rationales:
-${JSON.stringify(input2.changeRationales.slice(0, 20))}`,
     input2.recentEvents && input2.recentEvents.length > 0 ? `Recent objective events:
 ${JSON.stringify(input2.recentEvents.slice(0, 12))}` : null
   ].filter(Boolean).join("\n\n");
@@ -144319,6 +144618,111 @@ var composeDeliveryTool = {
     logPrefix: context?.logPrefix ?? "[automations/compose-delivery]"
   })
 };
+
+// ../automations/dist/compose-mission-summary/compose.js
+var import_genai3 = require("@google/genai");
+var COMPOSE_MISSION_SUMMARY_RESPONSE_SCHEMA = {
+  type: import_genai3.Type.OBJECT,
+  properties: {
+    headline: { type: import_genai3.Type.STRING },
+    summary: { type: import_genai3.Type.STRING },
+    risks: {
+      type: import_genai3.Type.ARRAY,
+      items: {
+        type: import_genai3.Type.OBJECT,
+        properties: {
+          ref: { type: import_genai3.Type.STRING },
+          text: { type: import_genai3.Type.STRING }
+        },
+        required: ["ref"]
+      }
+    }
+  },
+  required: ["headline", "summary", "risks"]
+};
+var MISSION_SUMMARY_SYSTEM_INSTRUCTION = `You maintain the summary of one software mission for the operator who owns it.
+Return JSON only matching the schema.
+Rules:
+- Write for the operator who owns the mission. Say what is done, what is in flight, what is blocked, and what is waiting on them, in that order.
+- The headline is one sentence of at most 140 characters. It names the single most important fact right now. Prefer the newest delivery unless an open blocking action or question outranks it.
+- The summary is Markdown of two to five sentences.
+- When a previous summary is given, update it to match the evidence. Do not restart it from nothing.
+- Keep a risk only when it can change what the operator does next or hides a real follow-up. Drop routine caveats. Cite each kept risk by its ref from the evidence; you may shorten its text.
+- Pending suggestions are context only. You may say that work is waiting; do not restate the suggestions.
+- Use only facts in the evidence. Never invent files, commands, or state.
+Apply the WRITING rules below to headline, summary, and risk text. They do not apply to commands, paths, identifiers, or quoted agent text; copy those exactly.
+${WRITING_RULES}`;
+function buildComposeMissionSummaryPrompt(input2) {
+  return [
+    "Update the mission summary from this bounded evidence.",
+    "",
+    `Mission:
+${JSON.stringify(input2.mission)}`,
+    `Previous summary:
+${JSON.stringify(input2.previousSummary)}`,
+    `Objectives:
+${JSON.stringify(input2.objectives)}`,
+    `Newest delivery:
+${JSON.stringify(input2.newestDelivery)}`,
+    `Open actions:
+${JSON.stringify(input2.openActions)}`,
+    `Open questions:
+${JSON.stringify(input2.openQuestions)}`,
+    `Pending suggestions (context only):
+${JSON.stringify(input2.pendingSuggestions)}`,
+    `Known risks:
+${JSON.stringify(input2.knownRisks)}`,
+    `Counts:
+${JSON.stringify(input2.counts)}`
+  ].join("\n\n");
+}
+async function composeMissionSummaryWithGemini(params) {
+  const { input: input2, env: env3 = process.env, logPrefix = "[automations/compose-mission-summary]", generate } = params;
+  const prompt = buildComposeMissionSummaryPrompt(input2);
+  const text = generate !== void 0 ? await generate({
+    prompt,
+    systemInstruction: MISSION_SUMMARY_SYSTEM_INSTRUCTION,
+    responseSchema: COMPOSE_MISSION_SUMMARY_RESPONSE_SCHEMA
+  }) : await generateMissionSummaryJson({ prompt, env: env3, logPrefix });
+  if (!text)
+    return null;
+  try {
+    const parsed = JSON.parse(text);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+      return null;
+    return parsed;
+  } catch (error64) {
+    console.warn(`${logPrefix} failed to parse Gemini JSON:`, error64);
+    return null;
+  }
+}
+async function generateMissionSummaryJson(params) {
+  const { prompt, env: env3, logPrefix } = params;
+  const client = getGeminiClient(env3);
+  const config4 = readGeminiConfigFromEnv(env3);
+  if (!client || !config4) {
+    console.warn(`${logPrefix} GEMINI_API_KEY not set`);
+    return null;
+  }
+  try {
+    const response = await client.models.generateContent({
+      model: "gemini-3.1-flash-lite",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: {
+        systemInstruction: MISSION_SUMMARY_SYSTEM_INSTRUCTION,
+        temperature: 0.2,
+        maxOutputTokens: 2048,
+        responseMimeType: "application/json",
+        responseSchema: COMPOSE_MISSION_SUMMARY_RESPONSE_SCHEMA
+      }
+    });
+    const text = (response.text ?? "").trim();
+    return text || null;
+  } catch (error64) {
+    console.warn(`${logPrefix} Gemini call failed:`, error64);
+    return null;
+  }
+}
 
 // ../automations/dist/objective-manager/rules.js
 function planRunQueueDispatch(input2) {
@@ -148322,14 +148726,16 @@ async function moveMissionToExecute({
 }
 
 // ../packages/core/service/protocol.ts
+init_dist();
 init_dist2();
-var import_node_crypto10 = require("node:crypto");
+var import_node_crypto11 = require("node:crypto");
 
 // ../packages/core/service/agent-session/channels.ts
 init_change_feed();
 init_errors4();
 init_util3();
 init_credential();
+init_requests();
 var CHANNEL_COLUMNS = `
   id, workspace_id, project_id, mission_id, objective_id, session_id,
   execution_request_id, execution_target_id, runner_registration_id,
@@ -148568,6 +148974,11 @@ async function endChannel({
         WHERE id = ? AND revision = ?`,
       [state2, now2, reason, exitCode, now2, now2, revision3, channelId, existing.revision]
     );
+    const closingQuestions = await tx.all(
+      `SELECT DISTINCT kind, mission_id FROM agent_requests
+        WHERE channel_id = ? AND status = 'open' AND kind IN ('question', 'choice')`,
+      [channelId]
+    );
     await tx.run(
       `UPDATE agent_requests
           SET status = 'released_to_terminal',
@@ -148579,6 +148990,17 @@ async function endChannel({
         WHERE channel_id = ? AND status = 'open'`,
       [state2 === "lost" ? "channel_lost" : "channel_ended", now2, channelId]
     );
+    const summaryMissions = /* @__PURE__ */ new Set();
+    for (const request of closingQuestions) {
+      if (!request.mission_id || summaryMissions.has(request.mission_id)) continue;
+      summaryMissions.add(request.mission_id);
+      await triggerMissionSummaryForRequest({
+        ctx: txCtx,
+        request,
+        reason: "agent_request_closed",
+        now: now2
+      });
+    }
     await tx.run(
       `UPDATE agent_session_inputs
           SET status = 'expired', last_error_code = ?, updated_at = ?, revision = revision + 1
@@ -148949,6 +149371,9 @@ function collectDeferredWorkExclusionTexts({
   }
   return texts;
 }
+function deferredWorkComparisonText(item) {
+  return `${item.title} ${item.change}`;
+}
 function filterDeferredWork({
   items,
   currentObjective,
@@ -148963,38 +149388,10 @@ function filterDeferredWork({
     candidateActions
   });
   if (excluded.length === 0) return items.slice();
-  return items.filter((item) => !excluded.some((text) => deferredWorkTextsOverlap(item, text)));
-}
-function isDeferredWorkRewrite({
-  agentItem,
-  presentationItem
-}) {
-  if (agentItem === presentationItem) return true;
-  const normalizedAgent = normalizeDeferredWorkText(agentItem);
-  const normalizedPresentation = normalizeDeferredWorkText(presentationItem);
-  if (normalizedAgent.length >= 12 && (normalizedPresentation.includes(normalizedAgent) || normalizedAgent.includes(normalizedPresentation))) {
-    return true;
-  }
-  if (deferredWorkTextsOverlap(agentItem, presentationItem)) return true;
-  const agentTokens = significantDeferredWorkTokens(agentItem);
-  const presentationTokens = significantDeferredWorkTokens(presentationItem);
-  if (agentTokens.size === 0 || presentationTokens.size === 0) return false;
-  let intersection2 = 0;
-  for (const token of agentTokens) {
-    if (presentationTokens.has(token)) intersection2 += 1;
-  }
-  return intersection2 >= 2 && intersection2 / agentTokens.size >= 0.5;
-}
-function matchDeferredWorkAgentIndex({
-  presentationItem,
-  agentItems,
-  usedIndexes
-}) {
-  for (let index = 0; index < agentItems.length; index += 1) {
-    if (usedIndexes.has(index)) continue;
-    if (isDeferredWorkRewrite({ agentItem: agentItems[index], presentationItem })) return index;
-  }
-  return null;
+  return items.filter((item) => {
+    const text = deferredWorkComparisonText(item);
+    return !excluded.some((excludedText) => deferredWorkTextsOverlap(text, excludedText));
+  });
 }
 function applyDeferredWorkEligibility({
   report,
@@ -149030,41 +149427,6 @@ function composeEligibility({
     candidateActions: candidates
   };
 }
-function composeDeferredWorkPresentation({
-  eligibleItems,
-  draftItems,
-  currentObjective,
-  plannedObjectives,
-  humanActions,
-  candidateActions
-}) {
-  const merged = reconcileDeferredWork({
-    agentItems: eligibleItems,
-    draftItems
-  });
-  const kept = merged.slice(0, eligibleItems.length);
-  const extras = filterDeferredWork({
-    items: merged.slice(eligibleItems.length),
-    currentObjective,
-    plannedObjectives,
-    humanActions,
-    candidateActions
-  });
-  return [...kept, ...extras];
-}
-function reconcileDeferredWork({
-  agentItems,
-  draftItems,
-  maxItems = DELIVERY_REPORT_LIMITS.maxItems
-}) {
-  if (agentItems.length === 0) return draftItems.slice(0, maxItems);
-  if (draftItems.length < agentItems.length) return agentItems.slice(0, maxItems);
-  const merged = agentItems.map((agentItem, index) => {
-    const draftItem = draftItems[index];
-    return draftItem.length >= agentItem.length ? draftItem : agentItem;
-  });
-  return [...merged, ...draftItems.slice(agentItems.length)].slice(0, maxItems);
-}
 function asCategory(value2) {
   return typeof value2 === "string" && HUMAN_ACTION_CATEGORIES.has(value2) ? value2 : "other";
 }
@@ -149077,23 +149439,9 @@ function evidenceActions({
   for (const action of candidates) byId.set(action.id, action);
   return byId;
 }
-function evidenceTradeoffs({
-  agentReport,
-  rationales
-}) {
+function evidenceTradeoffs(agentReport) {
   const byId = /* @__PURE__ */ new Map();
   for (const tradeoff of agentReport.tradeoffsMade) byId.set(tradeoff.id, tradeoff);
-  for (const rationale of rationales) {
-    byId.set(rationale.id, {
-      id: rationale.id,
-      decision: rationale.label,
-      alternativesConsidered: [],
-      rationale: rationale.why,
-      impact: rationale.impact,
-      source: "change_rationale",
-      sourceRef: rationale.filePath
-    });
-  }
   return byId;
 }
 function optionalActionText(draftValue, sourceValue, maxLength) {
@@ -149126,7 +149474,6 @@ function reconcileDeliveryComposeDraft({
   report,
   draft,
   candidates = [],
-  rationales = [],
   model,
   generatedAt = nowIso(),
   currentObjective,
@@ -149149,10 +149496,7 @@ function reconcileDeliveryComposeDraft({
       actions: report.presentation.humanActions,
       candidates
     }),
-    deferredWork: filterDeferredWork({
-      items: report.presentation.deferredWork,
-      ...eligibility
-    }),
+    deferredWork: eligibleAgentItems,
     generatedBy: "deterministic",
     generatedAt,
     ...model ? { model } : {}
@@ -149165,10 +149509,7 @@ function reconcileDeliveryComposeDraft({
     agentReport: report.agentReport,
     candidates
   });
-  const tradeoffsById = evidenceTradeoffs({
-    agentReport: report.agentReport,
-    rationales
-  });
+  const tradeoffsById = evidenceTradeoffs(report.agentReport);
   const humanActions = [];
   if (Array.isArray(draft.humanActions)) {
     for (const raw of draft.humanActions) {
@@ -149220,11 +149561,8 @@ function reconcileDeliveryComposeDraft({
     humanActions: resolvedActions,
     tradeoffsMade: resolvedTradeoffs,
     knownRisks: clampStringList(draft.knownRisks).length > 0 ? clampStringList(draft.knownRisks) : report.presentation.knownRisks,
-    deferredWork: composeDeferredWorkPresentation({
-      eligibleItems: eligibleAgentItems,
-      draftItems: clampStringList(draft.deferredWork),
-      ...eligibility
-    }),
+    // Deferred work is the agent's own objects, never sent to or rewritten by the model.
+    deferredWork: eligibleAgentItems,
     assumptions: clampStringList(draft.assumptions).length > 0 ? clampStringList(draft.assumptions) : report.presentation.assumptions,
     generatedBy: "gemini",
     generatedAt,
@@ -150879,26 +151217,21 @@ var PROTOCOL_WORKFLOW = `
 2. Post progress with \`ovld protocol update\` or liveness with \`ovld protocol heartbeat\`.
 3. Ask blocking questions with \`ovld protocol ask\` and stop work only when no safe progress remains.
 4. Deliver with \`ovld protocol deliver\` when work is complete. A summary is the only required
-   delivery input; optional change rationales use the canonical \`filePath\` field.
+   delivery input; explain the outcome by behavior or component, not file by file.
 5. Do not stage or commit changes unless explicitly instructed to do so.
 6. Do not continue implementation after delivery without \`--begin-follow-up-work\`.
 
-Optional change-rationale format:
-  Pass an array via \`--change-rationales-json '[ ... ]'\` (or stream it on stdin with
-  \`--change-rationales-file -\` for large arrays). Each entry is a JSON object \u2014 use these
-  exact field names:
-    - \`filePath\` (string, required) \u2014 repo-relative path of the changed file.
-    - \`label\`     (string, required) \u2014 short reviewer-facing title for the change.
-    - \`summary\`   (string, required) \u2014 what changed. This field is named \`summary\`, NOT
-      \`rationale\`; an annotation with unknown or retired keys is ignored with a bounded warning.
-    - \`why\`       (string, required) \u2014 why the change was made.
-    - \`impact\`    (string, required) \u2014 behavioral impact of the change.
-    - \`hunks\`     (optional) \u2014 array of { "header": "@@ -10,6 +10,14 @@" } diff-hunk headers.
-  Do NOT wrap entries under a \`rationale\` key, and do not send a top-level \`file_changes\`
-  artifact. Example single entry:
-    {"filePath":"src/api.ts","label":"Add retry","summary":"Added retry with backoff.","why":"Transient failures.","impact":"Requests retry up to 3x."}
-  Changed files are synchronized from the objective ledger before delivery; do not send changed-file,
-  observed-dirty-path, no-file-change, or rationale-skip inputs with update or deliver.
+Changed files:
+  Overlord keeps a cumulative list of the files changed during this objective from native
+  connector callbacks plus any paths you declare. It is not a Git diff and needs no exhaustive
+  enumeration. Before delivering, read it once with \`ovld protocol changes --objective-id <id>\`
+  (this checkout's sessions) or the server \`objective-changes\` read (synchronized history).
+  Never diff or status-scan the shared worktree, and never send changed-file,
+  observed-dirty-path, or no-file-change inputs. When capture reports shell, unsupported, or
+  partial tool activity, declare only the files you know you changed that it missed (script and
+  generator outputs, deletes, both rename endpoints) with \`--paths a,b\` or \`--paths-file\`
+  (a JSON string array) on the same update or deliver call; they are labelled Declared. When
+  unsure, state the coverage gap in the summary instead of guessing.
 
 Delivery evidence:
   Every delivery should also provide a \`deliveryReport.agentReport\` in \`--payload-json\` or
@@ -150907,7 +151240,9 @@ Delivery evidence:
   human must perform outside completed agent work; never include Git actions or routine review/testing.
   Tradeoffs must describe an implementation decision, alternatives considered, and why it was chosen.
   Deferred work is only a recommended new objective that is not part of this mission (for
-  example an out-of-scope bug); name the component or file and why it was left. Never list
+  example an out-of-scope bug). Each item is an object { title, change, location, doneWhen }:
+  an imperative title, only the specific change needed, where to find it in the code, and
+  the observable result in one sentence; no how-to, background, or rationale. Never list
   work already in this mission's future objectives, leftover slices of the current
   objective, or human follow-up such as deploy, secrets, or migrations (those belong in
   humanActions).`;
@@ -151083,14 +151418,14 @@ function assembleAgentInstructions({
   agentInstructions,
   projectResourcesSection = null
 }) {
-  const objectiveLabel = objective.title?.trim() || `Objective ${objective.position + 1}`;
+  const objectiveLabel2 = objective.title?.trim() || `Objective ${objective.position + 1}`;
   return [
     `# Overlord Agent Instructions`,
     `You are attached to mission **${mission.displayId}** via Overlord.`,
     ``,
     `Mission ID: ${mission.displayId}  <- pass this to every \`ovld protocol ... --mission-id\` call`,
     `Objective ID: ${objective.displayId}  <- pass as --objective-id on attach; never as --mission-id`,
-    `Objective: ${objectiveLabel}`,
+    `Objective: ${objectiveLabel2}`,
     `Project: ${projectName}`,
     "",
     "## Context Location",
@@ -151284,8 +151619,16 @@ async function attachSession({
   executionRequestId,
   executionTargetId = null,
   sessionChannelId = null,
-  objectiveId = null
+  objectiveId = null,
+  captureBindingState = "unknown"
 }) {
+  if (!CAPTURE_BINDING_STATES.includes(captureBindingState)) {
+    throw new ServiceError(
+      "captureBindingState must be bound, unbound, or unknown",
+      "validation_error",
+      400
+    );
+  }
   const mission = await getMissionSummary({ ctx, missionId });
   const objectives = await listObjectives({ ctx, missionId: mission.id });
   const explicitPin = Boolean(objectiveId?.trim() || executionRequestId?.trim());
@@ -151333,6 +151676,17 @@ async function attachSession({
            WHERE id = ?`,
         [externalSessionId2, nowIso(), existing.id]
       );
+    }
+    if (captureBindingState !== "unknown") {
+      await ctx.db.transaction(async (tx) => {
+        await writeCaptureDiagnostics({
+          ctx: { ...ctx, db: tx },
+          mission: context.mission,
+          session: existing,
+          diagnostics: { bindingState: captureBindingState, health: [] },
+          now: nowIso()
+        });
+      });
     }
     const linked = await linkExecutionRequestToSession({
       ctx,
@@ -151446,8 +151800,8 @@ async function attachSession({
            (id, workspace_id, project_id, mission_id, objective_id,
             session_key_prefix, session_key_hash, agent_identifier, model_identifier,
             connection_method, external_session_id, phase, delivery_state, started_at, last_heartbeat_at,
-            metadata_json, created_by_workspace_user_id, created_at, updated_at, revision)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'execute', 'not_delivered', ?, ?, '{}', ?, ?, ?, 1)`,
+            metadata_json, capture_binding_state, created_by_workspace_user_id, created_at, updated_at, revision)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'execute', 'not_delivered', ?, ?, '{}', ?, ?, ?, ?, 1)`,
       [
         sessionId,
         ctx.workspace.id,
@@ -151462,6 +151816,7 @@ async function attachSession({
         externalSessionId2 ?? null,
         now2,
         now2,
+        captureBindingState,
         ctx.actorWorkspaceUserId,
         now2,
         now2
@@ -151567,7 +151922,7 @@ async function connectSession({
   };
 }
 function promptHash(prompt) {
-  return (0, import_node_crypto10.createHash)("sha256").update(prompt).digest("hex");
+  return (0, import_node_crypto11.createHash)("sha256").update(prompt).digest("hex");
 }
 function objectiveFromSession(objectives, session) {
   if (!session) return void 0;
@@ -151873,20 +152228,27 @@ async function heartbeatSession({
 }
 var MAX_SYNC_CHANGE_ITEMS = 25;
 var MAX_SYNC_KEY_LENGTH = 200;
-var MAX_TOOL_WINDOW_ID_LENGTH = 200;
 var MAX_HOOK_HEALTH_LENGTH = 160;
 var MAX_SYNC_KEYS_PER_FILE = 32;
+var MAX_DECLARED_PATHS = 100;
+var MAX_PROTOCOL_EVIDENCE_WARNINGS = 12;
+var MAX_CAPTURE_HEALTH_ITEMS = 32;
 var HOOK_HEALTH_PATTERN = /^[a-z0-9][a-z0-9_.:-]*$/i;
 var SYNC_CHANGE_ALLOWED_KEYS = /* @__PURE__ */ new Set([
   "filePath",
   "idempotencyKey",
   "source",
-  "quality",
-  "overlap",
-  "toolWindowId",
   "observedAt",
   "hookHealth"
 ]);
+var CAPTURE_BINDING_STATES = ["bound", "unbound", "unknown"];
+var ISO_UTC_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/;
+var DECLARED_PATH_HEALTH = "agent_declared";
+function sourceStrength(source) {
+  if (source === "declared_edit") return 2;
+  if (source === "agent_declared") return 1;
+  return 0;
+}
 function normalizeRepoRelativePath(value2) {
   return isExactEvidencePath(value2) ? value2 : null;
 }
@@ -151895,6 +152257,19 @@ function normalizeSyncKey(value2) {
     return null;
   }
   return value2;
+}
+function normalizeHealthCode(value2) {
+  if (typeof value2 !== "string") return null;
+  const trimmed9 = value2.trim();
+  if (!trimmed9 || trimmed9.length > MAX_HOOK_HEALTH_LENGTH || hasControlCharacters(trimmed9) || !HOOK_HEALTH_PATTERN.test(trimmed9)) {
+    return null;
+  }
+  return trimmed9;
+}
+function normalizeObservedAt(value2) {
+  if (typeof value2 !== "string" || value2.length > 64 || !ISO_UTC_PATTERN.test(value2)) return null;
+  const parsed = Date.parse(value2);
+  return Number.isNaN(parsed) ? null : new Date(parsed).toISOString();
 }
 function readSyncChangeIdentity(value2) {
   if (typeof value2 !== "object" || value2 === null || Array.isArray(value2)) {
@@ -151915,7 +152290,7 @@ function validateSyncChange(value2) {
   if (Object.keys(input2).some((key) => !SYNC_CHANGE_ALLOWED_KEYS.has(key))) {
     return {
       ...identity,
-      warning: "change evidence contains unsupported fields"
+      warning: "change evidence contains unsupported fields (quality, overlap, and toolWindowId are retired)"
     };
   }
   const filePath = normalizeRepoRelativePath(input2.filePath);
@@ -151937,152 +152312,96 @@ function validateSyncChange(value2) {
   if (!idempotencyKey) {
     return { ...identity, filePath, warning: "idempotencyKey must be a bounded string" };
   }
-  if (input2.source !== "declared_edit" && input2.source !== "window_observed") {
+  if (input2.source !== "declared_edit" && input2.source !== "agent_declared") {
     return {
       ...identity,
       filePath,
       idempotencyKey,
-      warning: "source must be declared_edit or window_observed"
+      warning: "source must be declared_edit or agent_declared"
     };
   }
-  if (input2.quality !== "direct" && input2.quality !== "window") {
-    return { ...identity, filePath, idempotencyKey, warning: "quality must be direct or window" };
+  let observedAt;
+  if (input2.observedAt !== void 0) {
+    const normalized = normalizeObservedAt(input2.observedAt);
+    if (!normalized) {
+      return {
+        ...identity,
+        filePath,
+        idempotencyKey,
+        warning: "observedAt must be a bounded UTC ISO timestamp"
+      };
+    }
+    observedAt = normalized;
   }
-  if (input2.source === "declared_edit" && input2.quality !== "direct" || input2.source === "window_observed" && input2.quality !== "window") {
-    return {
-      ...identity,
-      filePath,
-      idempotencyKey,
-      warning: "source and quality do not describe the same evidence class"
-    };
-  }
-  if (input2.overlap !== void 0 && typeof input2.overlap !== "boolean") {
-    return { ...identity, filePath, idempotencyKey, warning: "overlap must be a boolean" };
-  }
-  if (input2.toolWindowId !== void 0 && (typeof input2.toolWindowId !== "string" || !input2.toolWindowId.trim() || input2.toolWindowId.length > MAX_TOOL_WINDOW_ID_LENGTH || hasControlCharacters(input2.toolWindowId))) {
-    return {
-      ...identity,
-      filePath,
-      idempotencyKey,
-      warning: "toolWindowId must be a bounded string"
-    };
-  }
-  if (input2.observedAt !== void 0 && (typeof input2.observedAt !== "string" || input2.observedAt.length > 64 || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/.test(input2.observedAt) || Number.isNaN(Date.parse(input2.observedAt)))) {
-    return {
-      ...identity,
-      filePath,
-      idempotencyKey,
-      warning: "observedAt must be a bounded UTC ISO timestamp"
-    };
-  }
-  if (input2.hookHealth !== void 0 && (typeof input2.hookHealth !== "string" || !input2.hookHealth.trim() || input2.hookHealth.length > MAX_HOOK_HEALTH_LENGTH || hasControlCharacters(input2.hookHealth) || !HOOK_HEALTH_PATTERN.test(input2.hookHealth.trim()))) {
-    return {
-      ...identity,
-      filePath,
-      idempotencyKey,
-      warning: "hookHealth must be a bounded string"
-    };
+  let hookHealth;
+  if (input2.hookHealth !== void 0) {
+    const code = normalizeHealthCode(input2.hookHealth);
+    if (!code) {
+      return {
+        ...identity,
+        filePath,
+        idempotencyKey,
+        warning: "hookHealth must be a bounded string"
+      };
+    }
+    hookHealth = code;
   }
   return {
     change: {
       filePath,
       idempotencyKey,
       source: input2.source,
-      quality: input2.quality,
-      overlap: input2.overlap ?? false,
-      ...typeof input2.toolWindowId === "string" ? { toolWindowId: input2.toolWindowId.trim() } : {},
-      ...typeof input2.observedAt === "string" ? { observedAt: input2.observedAt } : {},
-      ...typeof input2.hookHealth === "string" ? { hookHealth: input2.hookHealth.trim() } : {}
+      ...observedAt ? { observedAt } : {},
+      ...hookHealth ? { hookHealth } : {}
     }
   };
 }
-function parseStoredChangeEvidence(value2) {
-  let parsed = {};
+function parseStoredSyncKeys(value2) {
   try {
-    const candidate = JSON.parse(value2 ?? "{}");
-    if (typeof candidate === "object" && candidate !== null && !Array.isArray(candidate)) {
-      parsed = candidate;
-    }
-  } catch {
-    parsed = {};
-  }
-  const source = ["declared_edit", "window_observed"].includes(String(parsed.source)) ? parsed.source : void 0;
-  const quality = parsed.quality === "direct" || parsed.quality === "window" ? parsed.quality : void 0;
-  const boundedString = (candidate, maxLength) => typeof candidate === "string" && candidate.length <= maxLength && !hasControlCharacters(candidate) ? candidate : void 0;
-  return {
-    ...source ? { source } : {},
-    ...quality ? { quality } : {},
-    ...typeof parsed.overlap === "boolean" ? { overlap: parsed.overlap } : {},
-    ...boundedString(parsed.toolWindowId, MAX_TOOL_WINDOW_ID_LENGTH) ? { toolWindowId: boundedString(parsed.toolWindowId, MAX_TOOL_WINDOW_ID_LENGTH) } : {},
-    ...boundedString(parsed.observedAt, 64) ? { observedAt: boundedString(parsed.observedAt, 64) } : {},
-    ...boundedString(parsed.hookHealth, MAX_HOOK_HEALTH_LENGTH) ? { hookHealth: boundedString(parsed.hookHealth, MAX_HOOK_HEALTH_LENGTH) } : {},
-    syncKeys: Array.isArray(parsed.syncKeys) ? parsed.syncKeys.filter(
+    const parsed = JSON.parse(value2 ?? "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
       (key) => typeof key === "string" && key.length > 0 && key.length <= MAX_SYNC_KEY_LENGTH && !hasControlCharacters(key)
-    ).slice(-MAX_SYNC_KEYS_PER_FILE) : []
-  };
-}
-function evidenceStrength(source) {
-  if (source === "declared_edit") return 3;
-  if (source === "window_observed") return 2;
-  return 0;
-}
-function mergeStoredChangeEvidence({
-  existing,
-  incoming
-}) {
-  const incomingIsStrongest = evidenceStrength(incoming.source) >= evidenceStrength(existing.source);
-  const strongest = incomingIsStrongest ? incoming : existing;
-  return {
-    source: strongest.source,
-    quality: strongest.quality,
-    overlap: existing.overlap === true || incoming.overlap,
-    ...strongest.toolWindowId ? { toolWindowId: strongest.toolWindowId } : {},
-    ...strongest.observedAt ? { observedAt: strongest.observedAt } : {},
-    ...incoming.hookHealth ?? existing.hookHealth ? { hookHealth: incoming.hookHealth ?? existing.hookHealth } : {},
-    syncKeys: [...existing.syncKeys, incoming.idempotencyKey].slice(-MAX_SYNC_KEYS_PER_FILE)
-  };
+    ).slice(-MAX_SYNC_KEYS_PER_FILE);
+  } catch {
+    return [];
+  }
 }
 async function upsertChangedFileObservation({
   ctx,
   mission,
-  session,
+  objectiveId,
+  sessionId,
   resourceId,
   change,
   now: now2
 }) {
+  const observedAt = change.observedAt && change.observedAt <= now2 ? change.observedAt : now2;
   const changedFileId = newId();
-  const incomingMetadata = {
-    source: change.source,
-    quality: change.quality,
-    overlap: change.overlap,
-    ...change.toolWindowId ? { toolWindowId: change.toolWindowId } : {},
-    ...change.observedAt ? { observedAt: change.observedAt } : {},
-    ...change.hookHealth ? { hookHealth: change.hookHealth } : {},
-    syncKeys: [change.idempotencyKey]
-  };
+  const syncKeys = change.idempotencyKey ? [change.idempotencyKey] : [];
   const inserted = await ctx.db.run(
     `INSERT INTO changed_files
          (id, workspace_id, project_id, mission_id, objective_id, session_id, resource_id,
-          file_path, vcs_status, current_diff_state, first_observed_at, last_observed_at,
-          last_observed_event_id, observed_metadata_json, created_at, updated_at, revision)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 1)
-       ON CONFLICT (objective_id, file_path)
-         WHERE objective_id IS NOT NULL AND deleted_at IS NULL
+          file_path, source, hook_health, sync_keys_json, first_observed_at, last_observed_at,
+          last_observed_event_id, created_at, updated_at, revision)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, 1)
+       ON CONFLICT (objective_id, (COALESCE(resource_id, '')), file_path)
+         WHERE deleted_at IS NULL
        DO NOTHING`,
     [
       changedFileId,
       ctx.workspace.id,
       mission.projectId,
       mission.id,
-      session.objective_id,
-      session.id,
+      objectiveId,
+      sessionId,
       resourceId,
       change.filePath,
-      null,
-      "unknown",
-      now2,
-      now2,
-      JSON.stringify(incomingMetadata),
+      change.source,
+      change.hookHealth ?? null,
+      JSON.stringify(syncKeys),
+      observedAt,
+      observedAt,
       now2,
       now2
     ]
@@ -152096,30 +152415,43 @@ async function upsertChangedFileObservation({
       entityRevision: 1,
       projectId: mission.projectId,
       missionId: mission.id,
-      objectiveId: session.objective_id
+      objectiveId
     });
     return "accepted";
   }
   const lockClause = ctx.db.dialect === "postgres" ? " FOR UPDATE" : "";
   const existing = await ctx.db.get(
-    `SELECT id, observed_metadata_json, revision FROM changed_files
-       WHERE objective_id = ? AND file_path = ? AND deleted_at IS NULL${lockClause}`,
-    [session.objective_id, change.filePath]
+    `SELECT id, source, hook_health, sync_keys_json, revision FROM changed_files
+       WHERE objective_id = ? AND COALESCE(resource_id, '') = ? AND file_path = ?
+         AND deleted_at IS NULL${lockClause}`,
+    [objectiveId, resourceId ?? "", change.filePath]
   );
   if (!existing) throw new Error("Objective changed-file row disappeared during upsert");
-  const existingMetadata = parseStoredChangeEvidence(existing.observed_metadata_json);
-  if (existingMetadata.syncKeys.includes(change.idempotencyKey)) return "ignored";
-  const mergedMetadata = mergeStoredChangeEvidence({
-    existing: existingMetadata,
-    incoming: change
-  });
+  const existingKeys = parseStoredSyncKeys(existing.sync_keys_json);
+  if (change.idempotencyKey && existingKeys.includes(change.idempotencyKey)) return "ignored";
+  const incomingWins = sourceStrength(change.source) >= sourceStrength(existing.source);
+  const nextSource = incomingWins ? change.source : existing.source;
+  const nextHealth = incomingWins ? change.hookHealth ?? existing.hook_health : existing.hook_health;
+  const nextKeys = change.idempotencyKey ? [...existingKeys, change.idempotencyKey].slice(-MAX_SYNC_KEYS_PER_FILE) : existingKeys;
   await ctx.db.run(
     `UPDATE changed_files
-       SET session_id = ?, resource_id = COALESCE(?, resource_id),
-           last_observed_at = ?, last_observed_event_id = NULL,
-           observed_metadata_json = ?, updated_at = ?, revision = revision + 1
+       SET session_id = ?, source = ?, hook_health = ?, sync_keys_json = ?,
+           first_observed_at = CASE WHEN first_observed_at > ? THEN ? ELSE first_observed_at END,
+           last_observed_at = CASE WHEN last_observed_at < ? THEN ? ELSE last_observed_at END,
+           last_observed_event_id = NULL, updated_at = ?, revision = revision + 1
        WHERE id = ?`,
-    [session.id, resourceId, now2, JSON.stringify(mergedMetadata), now2, existing.id]
+    [
+      sessionId,
+      nextSource,
+      nextHealth,
+      JSON.stringify(nextKeys),
+      observedAt,
+      observedAt,
+      observedAt,
+      observedAt,
+      now2,
+      existing.id
+    ]
   );
   await recordChange({
     ctx,
@@ -152129,8 +152461,191 @@ async function upsertChangedFileObservation({
     entityRevision: existing.revision + 1,
     projectId: mission.projectId,
     missionId: mission.id,
+    objectiveId,
+    changedFields: ["session_id", "source", "hook_health", "last_observed_at"]
+  });
+  return "accepted";
+}
+function normalizeDeclaredPaths(input2) {
+  const paths2 = [];
+  const warnings = [];
+  const warn = (message2) => {
+    if (warnings.length < MAX_PROTOCOL_EVIDENCE_WARNINGS) warnings.push(message2);
+  };
+  if (input2 === void 0 || input2 === null) return { paths: paths2, warnings };
+  if (!Array.isArray(input2)) {
+    warn("Ignored declaredPaths: expected an array of path strings.");
+    return { paths: paths2, warnings };
+  }
+  if (input2.length > MAX_DECLARED_PATHS) {
+    warn(`Ignored ${input2.length - MAX_DECLARED_PATHS} excess declaredPaths item(s).`);
+  }
+  const seen = /* @__PURE__ */ new Set();
+  input2.slice(0, MAX_DECLARED_PATHS).forEach((value2, index) => {
+    const filePath = normalizeRepoRelativePath(value2);
+    if (!filePath) {
+      warn(`Ignored declaredPaths[${index}]: path must be canonical and repository-relative.`);
+      return;
+    }
+    if (isOverlordManagedEvidencePath(filePath)) {
+      warn(`Ignored declaredPaths[${index}]: path is excluded from change reporting.`);
+      return;
+    }
+    if (seen.has(filePath)) return;
+    seen.add(filePath);
+    paths2.push(filePath);
+  });
+  return { paths: paths2, warnings };
+}
+async function applyDeclaredPaths({
+  ctx,
+  mission,
+  objectiveId,
+  sessionId,
+  resourceId,
+  paths: paths2,
+  now: now2
+}) {
+  for (const filePath of paths2) {
+    await upsertChangedFileObservation({
+      ctx,
+      mission,
+      objectiveId,
+      sessionId,
+      resourceId,
+      change: {
+        filePath,
+        idempotencyKey: null,
+        source: "agent_declared",
+        hookHealth: DECLARED_PATH_HEALTH
+      },
+      now: now2
+    });
+  }
+}
+function normalizeCaptureDiagnostics(input2, now2) {
+  const empty = { health: [] };
+  if (typeof input2 !== "object" || input2 === null || Array.isArray(input2)) {
+    return { value: empty, warning: "capture must be an object" };
+  }
+  const candidate = input2;
+  if (Object.keys(candidate).some(
+    (key) => !["bindingState", "callbackObservedAt", "health"].includes(key)
+  )) {
+    return { value: empty, warning: "capture contains unsupported fields" };
+  }
+  const value2 = { health: [] };
+  if (candidate.bindingState !== void 0) {
+    if (!CAPTURE_BINDING_STATES.includes(candidate.bindingState)) {
+      return { value: empty, warning: "capture.bindingState must be bound, unbound, or unknown" };
+    }
+    value2.bindingState = candidate.bindingState;
+  }
+  if (candidate.callbackObservedAt !== void 0 && candidate.callbackObservedAt !== null) {
+    const observed = normalizeObservedAt(candidate.callbackObservedAt);
+    if (!observed) {
+      return { value: empty, warning: "capture.callbackObservedAt must be a UTC ISO timestamp" };
+    }
+    value2.callbackObservedAt = observed <= now2 ? observed : now2;
+  }
+  if (candidate.health !== void 0) {
+    if (!Array.isArray(candidate.health)) {
+      return { value: empty, warning: "capture.health must be an array" };
+    }
+    for (const entry of candidate.health.slice(0, MAX_CAPTURE_HEALTH_ITEMS)) {
+      if (typeof entry !== "object" || entry === null || Array.isArray(entry)) continue;
+      const record2 = entry;
+      const code = normalizeHealthCode(record2.code);
+      const at = normalizeObservedAt(record2.at);
+      if (code && at) value2.health.push({ code, at: at <= now2 ? at : now2 });
+    }
+  }
+  return { value: value2 };
+}
+function parseStoredCaptureHealth(value2) {
+  try {
+    const parsed = JSON.parse(value2 ?? "{}");
+    const out = {};
+    if (typeof parsed.health !== "object" || parsed.health === null) return out;
+    for (const [code, entry] of Object.entries(parsed.health)) {
+      const record2 = entry;
+      if (normalizeHealthCode(code) && typeof record2?.firstAt === "string" && typeof record2.lastAt === "string") {
+        out[code] = { firstAt: record2.firstAt, lastAt: record2.lastAt };
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+function mergeCaptureHealth(existing, incoming) {
+  const merged = { ...existing };
+  const isGap = (code) => CAPTURE_GAP_CODES.includes(code);
+  for (const { code, at } of incoming) {
+    const current = merged[code];
+    if (current) {
+      merged[code] = {
+        firstAt: current.firstAt < at ? current.firstAt : at,
+        lastAt: current.lastAt > at ? current.lastAt : at
+      };
+      continue;
+    }
+    if (Object.keys(merged).length >= MAX_CAPTURE_HEALTH_CODES) {
+      const evictable = Object.entries(merged).filter(([candidate]) => !isGap(candidate)).sort((left, right) => left[1].lastAt.localeCompare(right[1].lastAt))[0];
+      if (!evictable) continue;
+      if (!isGap(code) && evictable[1].lastAt >= at) continue;
+      delete merged[evictable[0]];
+    }
+    merged[code] = { firstAt: at, lastAt: at };
+  }
+  return merged;
+}
+async function writeCaptureDiagnostics({
+  ctx,
+  mission,
+  session,
+  diagnostics,
+  now: now2
+}) {
+  const lockClause = ctx.db.dialect === "postgres" ? " FOR UPDATE" : "";
+  const current = await ctx.db.get(
+    `SELECT capture_binding_state, capture_callback_observed_at, capture_health_json, revision
+       FROM agent_sessions WHERE id = ? AND workspace_id = ?${lockClause}`,
+    [session.id, ctx.workspace.id]
+  );
+  if (!current) throw new ServiceError("Session not found", "invalid_session", 401);
+  const storedHealth = parseStoredCaptureHealth(
+    typeof current.capture_health_json === "string" ? current.capture_health_json : JSON.stringify(current.capture_health_json ?? {})
+  );
+  const nextHealth = mergeCaptureHealth(storedHealth, diagnostics.health);
+  const currentCallback = current.capture_callback_observed_at ? new Date(current.capture_callback_observed_at).toISOString() : null;
+  const nextCallback = diagnostics.callbackObservedAt && (!currentCallback || diagnostics.callbackObservedAt < currentCallback) ? diagnostics.callbackObservedAt : currentCallback;
+  const nextBinding = diagnostics.bindingState ?? current.capture_binding_state;
+  const nextHealthJson = JSON.stringify({ health: nextHealth });
+  const changedFields = [];
+  if (nextBinding !== current.capture_binding_state) changedFields.push("capture_binding_state");
+  if (nextCallback !== currentCallback) changedFields.push("capture_callback_observed_at");
+  if (JSON.stringify({ health: storedHealth }) !== nextHealthJson) {
+    changedFields.push("capture_health_json");
+  }
+  if (changedFields.length === 0) return "ignored";
+  await ctx.db.run(
+    `UPDATE agent_sessions
+        SET capture_binding_state = ?, capture_callback_observed_at = ?, capture_health_json = ?,
+            updated_at = ?, revision = revision + 1
+      WHERE id = ? AND workspace_id = ?`,
+    [nextBinding, nextCallback, nextHealthJson, now2, session.id, ctx.workspace.id]
+  );
+  await recordChange({
+    ctx,
+    entityType: "agent_session",
+    entityId: session.id,
+    operation: "update",
+    entityRevision: current.revision + 1,
+    projectId: mission.projectId,
+    missionId: mission.id,
     objectiveId: session.objective_id,
-    changedFields: ["session_id", "resource_id", "last_observed_at", "observed_metadata_json"]
+    changedFields
   });
   return "accepted";
 }
@@ -152138,10 +152653,14 @@ async function syncChanges({
   ctx,
   missionId,
   sessionKey,
-  changes
+  changes,
+  capture
 }) {
   const mission = await resolveMissionId(ctx, missionId);
-  const session = await getSessionByKey(ctx, sessionKey);
+  const session = await getSessionByKeyMaybeEnded(ctx, sessionKey, { includeEnded: true });
+  if (!session || session.ended_at && session.delivery_state !== "delivered") {
+    throw new ServiceError("Invalid or expired session key", "invalid_session", 401);
+  }
   if (session.mission_id !== mission.id) {
     throw new ServiceError("Session key does not match mission", "invalid_session", 401);
   }
@@ -152164,7 +152683,8 @@ async function syncChanges({
         return await upsertChangedFileObservation({
           ctx: { ...ctx, db: tx },
           mission,
-          session,
+          objectiveId: session.objective_id,
+          sessionId: session.id,
           resourceId,
           change,
           now: nowIso()
@@ -152192,7 +152712,29 @@ async function syncChanges({
       warning: `sync-changes accepts at most ${MAX_SYNC_CHANGE_ITEMS} items per request`
     });
   }
-  return { outcomes };
+  if (capture === void 0) return { outcomes };
+  const now2 = nowIso();
+  const normalized = normalizeCaptureDiagnostics(capture, now2);
+  if (normalized.warning) {
+    return { outcomes, capture: { status: "warning", warning: normalized.warning } };
+  }
+  try {
+    const status = await ctx.db.transaction(
+      async (tx) => writeCaptureDiagnostics({
+        ctx: { ...ctx, db: tx },
+        mission,
+        session,
+        diagnostics: normalized.value,
+        now: now2
+      })
+    );
+    return { outcomes, capture: { status } };
+  } catch {
+    return {
+      outcomes,
+      capture: { status: "warning", warning: "unable to persist capture diagnostics" }
+    };
+  }
 }
 async function updateSession2({
   ctx,
@@ -152206,7 +152748,7 @@ async function updateSession2({
   externalSessionId: externalSessionId2,
   beginFollowUpWork = false,
   followUpIntent,
-  changeRationales
+  declaredPaths
 }) {
   const trimmedSummary = summary.trim();
   if (!trimmedSummary) {
@@ -152232,7 +152774,8 @@ async function updateSession2({
   }
   const now2 = nowIso();
   const eventId = newId();
-  const normalizedRationales = normalizeChangeRationales(changeRationales ?? []);
+  const declared = normalizeDeclaredPaths(declaredPaths);
+  const declaredResourceId = declared.paths.length > 0 ? await resolveSessionResourceId({ ctx, session, mission }) : null;
   await ctx.db.transaction(async (tx) => {
     const txCtx = { ...ctx, db: tx };
     if (beginFollowUpWork) {
@@ -152266,7 +152809,7 @@ async function updateSession2({
         JSON.stringify({
           ...payloadJson ?? {},
           ...followUpIntent ? { followUpIntent } : {},
-          ...normalizedRationales.warnings.length > 0 ? { changeRationaleWarnings: normalizedRationales.warnings } : {}
+          ...declared.warnings.length > 0 ? { declaredPathWarnings: declared.warnings } : {}
         }),
         externalUrl ?? null,
         ctx.source,
@@ -152283,29 +152826,15 @@ async function updateSession2({
       missionId: mission.id,
       objectiveId: session.objective_id
     });
-    if (normalizedRationales.rationales.length > 0) {
-      const changedFiles = await txCtx.db.all(
-        `SELECT id, file_path FROM changed_files
-           WHERE objective_id = ? AND deleted_at IS NULL`,
-        [session.objective_id]
-      );
-      const changedFileIdByPath = new Map(changedFiles.map((row) => [row.file_path, row.id]));
-      for (const rationale of normalizedRationales.rationales) {
-        await insertChangeRationaleRow({
-          ctx: txCtx,
-          projectId: mission.projectId,
-          missionId: mission.id,
-          objectiveId: session.objective_id,
-          sessionId: session.id,
-          deliveryId: null,
-          changedFileId: changedFileIdByPath.get(rationale.filePath) ?? null,
-          sourceEventId: eventId,
-          rationale,
-          isFinal: false,
-          now: now2
-        });
-      }
-    }
+    await applyDeclaredPaths({
+      ctx: txCtx,
+      mission,
+      objectiveId: session.objective_id,
+      sessionId: session.id,
+      resourceId: declaredResourceId,
+      paths: declared.paths,
+      now: now2
+    });
     if (externalSessionId2 !== void 0) {
       await txCtx.db.run(
         `UPDATE agent_sessions SET external_session_id = ?, updated_at = ?, revision = revision + 1
@@ -152420,198 +152949,6 @@ async function askQuestion({
   });
   return { eventId };
 }
-var MAX_CHANGE_RATIONALE_ITEMS = 100;
-var MAX_PROTOCOL_EVIDENCE_WARNINGS = 12;
-var MAX_CHANGE_RATIONALE_LABEL_LENGTH = 240;
-var MAX_CHANGE_RATIONALE_TEXT_LENGTH = 1e4;
-var MAX_CHANGE_RATIONALE_HUNKS = 100;
-var MAX_CHANGE_RATIONALE_HUNK_LENGTH = 1e3;
-var CHANGE_RATIONALE_KEYS = /* @__PURE__ */ new Set(["filePath", "label", "summary", "why", "impact", "hunks"]);
-var CHANGE_RATIONALE_HUNK_KEYS = /* @__PURE__ */ new Set(["header"]);
-function normalizeChangeRationales(input2) {
-  const rationales = [];
-  const rationaleIndexByPath = /* @__PURE__ */ new Map();
-  const warnings = [];
-  const warn = (message2) => {
-    if (warnings.length < MAX_PROTOCOL_EVIDENCE_WARNINGS) warnings.push(message2);
-  };
-  if (!Array.isArray(input2)) {
-    warn("Ignored changeRationales: expected an array.");
-    return { rationales, warnings };
-  }
-  if (input2.length > MAX_CHANGE_RATIONALE_ITEMS) {
-    warn(`Ignored ${input2.length - MAX_CHANGE_RATIONALE_ITEMS} excess change-rationale item(s).`);
-  }
-  input2.slice(0, MAX_CHANGE_RATIONALE_ITEMS).forEach((value2, index) => {
-    if (typeof value2 !== "object" || value2 === null || Array.isArray(value2)) {
-      warn(`Ignored changeRationales[${index}]: expected an object.`);
-      return;
-    }
-    const rationale = value2;
-    if (Object.keys(rationale).some((key) => !CHANGE_RATIONALE_KEYS.has(key))) {
-      warn(`Ignored changeRationales[${index}]: unsupported fields.`);
-      return;
-    }
-    const filePath = normalizeRepoRelativePath(rationale.filePath);
-    const readText = (field, maxLength) => {
-      const candidate = rationale[field];
-      if (typeof candidate !== "string") return null;
-      const normalized2 = candidate.trim();
-      return normalized2 && normalized2.length <= maxLength ? normalized2 : null;
-    };
-    const label = readText("label", MAX_CHANGE_RATIONALE_LABEL_LENGTH);
-    const summary = readText("summary", MAX_CHANGE_RATIONALE_TEXT_LENGTH);
-    const why = readText("why", MAX_CHANGE_RATIONALE_TEXT_LENGTH);
-    const impact = readText("impact", MAX_CHANGE_RATIONALE_TEXT_LENGTH);
-    if (!filePath || !label || !summary || !why || !impact) {
-      warn(
-        `Ignored changeRationales[${index}]: filePath, label, summary, why, and impact must be non-empty bounded strings.`
-      );
-      return;
-    }
-    let hunks;
-    if (rationale.hunks !== void 0) {
-      if (!Array.isArray(rationale.hunks)) {
-        warn(`Ignored changeRationales[${index}].hunks: expected an array.`);
-      } else {
-        if (rationale.hunks.length > MAX_CHANGE_RATIONALE_HUNKS) {
-          warn(
-            `Ignored ${rationale.hunks.length - MAX_CHANGE_RATIONALE_HUNKS} excess changeRationales[${index}].hunks item(s).`
-          );
-        }
-        hunks = rationale.hunks.slice(0, MAX_CHANGE_RATIONALE_HUNKS).flatMap((hunk, hunkIndex) => {
-          if (typeof hunk !== "object" || hunk === null || Array.isArray(hunk)) {
-            warn(`Ignored changeRationales[${index}].hunks[${hunkIndex}]: expected an object.`);
-            return [];
-          }
-          const candidate = hunk;
-          if (Object.keys(candidate).some((key) => !CHANGE_RATIONALE_HUNK_KEYS.has(key))) {
-            warn(`Ignored changeRationales[${index}].hunks[${hunkIndex}]: unsupported fields.`);
-            return [];
-          }
-          const header = candidate.header;
-          if (typeof header !== "string" || !header.trim() || header.length > MAX_CHANGE_RATIONALE_HUNK_LENGTH) {
-            warn(
-              `Ignored changeRationales[${index}].hunks[${hunkIndex}]: header must be a non-empty bounded string.`
-            );
-            return [];
-          }
-          return [{ header: header.trim() }];
-        });
-      }
-    }
-    const normalized = { filePath, label, summary, why, impact, ...hunks ? { hunks } : {} };
-    const previousIndex = rationaleIndexByPath.get(filePath);
-    if (previousIndex === void 0) {
-      rationaleIndexByPath.set(filePath, rationales.length);
-      rationales.push(normalized);
-    } else {
-      rationales[previousIndex] = normalized;
-      warn(`Duplicate changeRationales[${index}]: last valid item for filePath wins.`);
-    }
-  });
-  return { rationales, warnings };
-}
-async function insertChangeRationaleRow({
-  ctx,
-  projectId,
-  missionId,
-  objectiveId,
-  sessionId,
-  deliveryId,
-  changedFileId,
-  sourceEventId,
-  rationale,
-  isFinal,
-  now: now2
-}) {
-  const rationaleId = newId();
-  await ctx.db.run(
-    `INSERT INTO change_rationales
-         (id, workspace_id, project_id, mission_id, objective_id, session_id, delivery_id,
-          changed_file_id, file_path, label, summary, why, impact, hunks_json,
-          source_event_id, is_final, created_at, updated_at, revision)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-    [
-      rationaleId,
-      ctx.workspace.id,
-      projectId,
-      missionId,
-      objectiveId,
-      sessionId,
-      deliveryId,
-      changedFileId,
-      rationale.filePath,
-      rationale.label,
-      rationale.summary,
-      rationale.why,
-      rationale.impact,
-      JSON.stringify(rationale.hunks ?? []),
-      sourceEventId,
-      bindBool(ctx.db.dialect, isFinal),
-      now2,
-      now2
-    ]
-  );
-  await recordChange({
-    ctx,
-    entityType: "change_rationale",
-    entityId: rationaleId,
-    operation: "insert",
-    entityRevision: 1,
-    projectId,
-    missionId,
-    objectiveId
-  });
-  return rationaleId;
-}
-var MAX_RECORD_WORK_CHANGED_FILES = 100;
-var MAX_VCS_STATUS_LENGTH = 32;
-var RECORD_WORK_CHANGED_FILE_KEYS = /* @__PURE__ */ new Set(["filePath", "vcsStatus"]);
-function normalizeRecordWorkChangedFiles(input2) {
-  const files = [];
-  const warnings = [];
-  const warn = (message2) => {
-    if (warnings.length < MAX_PROTOCOL_EVIDENCE_WARNINGS) warnings.push(message2);
-  };
-  if (!Array.isArray(input2)) {
-    warn("Ignored changedFiles: expected an array.");
-    return { files, warnings };
-  }
-  if (input2.length > MAX_RECORD_WORK_CHANGED_FILES) {
-    warn(`Ignored ${input2.length - MAX_RECORD_WORK_CHANGED_FILES} excess changedFiles item(s).`);
-  }
-  input2.slice(0, MAX_RECORD_WORK_CHANGED_FILES).forEach((value2, index) => {
-    if (typeof value2 !== "object" || value2 === null || Array.isArray(value2)) {
-      warn(`Ignored changedFiles[${index}]: expected an object.`);
-      return;
-    }
-    const candidate = value2;
-    if (Object.keys(candidate).some((key) => !RECORD_WORK_CHANGED_FILE_KEYS.has(key))) {
-      warn(`Ignored changedFiles[${index}]: unsupported fields.`);
-      return;
-    }
-    const filePath = normalizeRepoRelativePath(candidate.filePath);
-    if (!filePath) {
-      warn(`Ignored changedFiles[${index}]: filePath must be canonical and repository-relative.`);
-      return;
-    }
-    if (isOverlordManagedEvidencePath(filePath)) {
-      warn(`Ignored changedFiles[${index}]: filePath is excluded from change reporting.`);
-      return;
-    }
-    let vcsStatus = null;
-    if (candidate.vcsStatus !== void 0 && candidate.vcsStatus !== null) {
-      if (typeof candidate.vcsStatus !== "string" || !candidate.vcsStatus.trim() || candidate.vcsStatus.length > MAX_VCS_STATUS_LENGTH || hasControlCharacters(candidate.vcsStatus)) {
-        warn(`Ignored changedFiles[${index}]: vcsStatus must be a bounded string or null.`);
-        return;
-      }
-      vcsStatus = candidate.vcsStatus.trim();
-    }
-    files.push({ filePath, vcsStatus });
-  });
-  return { files, warnings };
-}
 var MAX_PROTOCOL_ARTIFACTS = 100;
 var PROTOCOL_ARTIFACT_KEYS = /* @__PURE__ */ new Set(["type", "label", "content", "url"]);
 function validateProtocolArtifacts(input2) {
@@ -152670,6 +153007,10 @@ function validateProtocolArtifacts(input2) {
     return artifact;
   });
 }
+function assertDeferredWorkInput(deliveryReport) {
+  const problem = deferredWorkInputProblem(deliveryReport);
+  if (problem) throw new ServiceError(problem, "invalid_input", 400);
+}
 function appendDeliveryWarnings(report, warnings) {
   if (warnings.length === 0) return report;
   return {
@@ -152683,7 +153024,7 @@ async function deliverSession({
   sessionKey,
   summary,
   artifacts = [],
-  changeRationales = [],
+  declaredPaths,
   payloadJson,
   verificationSummary,
   followUpNotes
@@ -152692,12 +153033,14 @@ async function deliverSession({
   if (!trimmedSummary) {
     throw new ServiceError("Delivery summary is required", "validation_error");
   }
+  assertDeferredWorkInput(payloadJson?.deliveryReport);
   const mission = await resolveMissionId(ctx, missionId);
   const session = await getSessionByKey(ctx, sessionKey);
   if (session.mission_id !== mission.id) {
     throw new ServiceError("Session key does not match mission", "invalid_session", 401);
   }
-  const normalizedRationales = normalizeChangeRationales(changeRationales);
+  const declared = normalizeDeclaredPaths(declaredPaths);
+  const declaredResourceId = declared.paths.length > 0 ? await resolveSessionResourceId({ ctx, session, mission }) : null;
   const normalizedArtifacts = validateProtocolArtifacts(artifacts);
   const deliveryReport = appendDeliveryWarnings(
     markDeliveryPresentationPending(
@@ -152706,7 +153049,7 @@ async function deliverSession({
         deliveryReport: payloadJson?.deliveryReport
       })
     ),
-    normalizedRationales.warnings
+    declared.warnings
   );
   const missionObjectives = await listObjectives({ ctx, missionId: mission.id });
   const currentObjectiveRow = missionObjectives.find(
@@ -152720,12 +153063,20 @@ async function deliverSession({
   const eventId = newId();
   await ctx.db.transaction(async (tx) => {
     const txCtx = { ...ctx, db: tx };
+    await applyDeclaredPaths({
+      ctx: txCtx,
+      mission,
+      objectiveId: session.objective_id,
+      sessionId: session.id,
+      resourceId: declaredResourceId,
+      paths: declared.paths,
+      now: nowIso()
+    });
     const objectiveChangedFiles = await txCtx.db.all(
-      `SELECT id, file_path FROM changed_files
+      `SELECT file_path FROM changed_files
          WHERE objective_id = ? AND deleted_at IS NULL`,
       [session.objective_id]
     );
-    const changedFileIdByPath = new Map(objectiveChangedFiles.map((row) => [row.file_path, row.id]));
     const eligibleDeliveryReport = applyDeferredWorkEligibility({
       report: deliveryReport,
       currentObjective: currentObjectiveRow ? { title: currentObjectiveRow.title, instruction: currentObjectiveRow.objective } : null,
@@ -152773,22 +153124,6 @@ async function deliverSession({
         label: artifact.label,
         contentText: artifact.content ?? null,
         externalUrl: artifact.url ?? null,
-        now: now2
-      });
-    }
-    for (const rationale of normalizedRationales.rationales) {
-      const changedFileId = changedFileIdByPath.get(rationale.filePath) ?? null;
-      await insertChangeRationaleRow({
-        ctx: txCtx,
-        projectId: mission.projectId,
-        missionId: mission.id,
-        objectiveId: session.objective_id,
-        sessionId: session.id,
-        deliveryId,
-        changedFileId,
-        sourceEventId: null,
-        rationale,
-        isFinal: true,
         now: now2
       });
     }
@@ -153019,8 +153354,7 @@ async function recordWork({
   objective,
   title,
   artifacts = [],
-  changeRationales = [],
-  changedFiles = [],
+  declaredPaths,
   payloadJson,
   assignedTo
 }) {
@@ -153028,8 +153362,8 @@ async function recordWork({
   if (!trimmedSummary) {
     throw new ServiceError("Summary is required for record-work", "validation_error");
   }
-  const normalizedRationales = normalizeChangeRationales(changeRationales);
-  const normalizedChangedFiles = normalizeRecordWorkChangedFiles(changedFiles);
+  assertDeferredWorkInput(payloadJson?.deliveryReport);
+  const declared = normalizeDeclaredPaths(declaredPaths);
   const normalizedArtifacts = validateProtocolArtifacts(artifacts);
   const deliveryReport = appendDeliveryWarnings(
     markDeliveryPresentationPending(
@@ -153040,15 +153374,10 @@ async function recordWork({
         }),
         currentObjective: { title: title ?? null, instruction: objective },
         plannedObjectives: [],
-        candidateActions: deriveDeterministicActionCandidates({
-          filePaths: [
-            ...normalizedChangedFiles.files.map((file2) => file2.filePath),
-            ...normalizedRationales.rationales.map((item) => item.filePath)
-          ]
-        })
+        candidateActions: deriveDeterministicActionCandidates({ filePaths: declared.paths })
       })
     ),
-    [...normalizedRationales.warnings, ...normalizedChangedFiles.warnings]
+    declared.warnings
   );
   if (!projectId) {
     throw new ServiceError(
@@ -153111,69 +153440,15 @@ async function recordWork({
         now: now2
       });
     }
-    const changedFileStatus = /* @__PURE__ */ new Map();
-    for (const rationale of normalizedRationales.rationales) {
-      if (!changedFileStatus.has(rationale.filePath)) {
-        changedFileStatus.set(rationale.filePath, null);
-      }
-    }
-    for (const file2 of normalizedChangedFiles.files) {
-      const normalizedPath = file2.filePath;
-      changedFileStatus.set(
-        normalizedPath,
-        file2.vcsStatus ?? changedFileStatus.get(normalizedPath) ?? null
-      );
-    }
-    const changedFileIdByPath = /* @__PURE__ */ new Map();
-    for (const [normalizedPath, vcsStatus] of changedFileStatus) {
-      const changedFileId = newId();
-      await txCtx.db.run(
-        `INSERT INTO changed_files
-             (id, workspace_id, project_id, mission_id, objective_id, session_id, resource_id,
-              file_path, vcs_status, current_diff_state, first_observed_at, last_observed_at,
-              last_observed_event_id, observed_metadata_json, created_at, updated_at, revision)
-           VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, 'unknown', ?, ?, NULL, '{}', ?, ?, 1)`,
-        [
-          changedFileId,
-          ctx.workspace.id,
-          resolvedProjectId,
-          created.mission.id,
-          objectiveId,
-          normalizedPath,
-          vcsStatus,
-          now2,
-          now2,
-          now2,
-          now2
-        ]
-      );
-      await recordChange({
-        ctx: txCtx,
-        entityType: "changed_file",
-        entityId: changedFileId,
-        operation: "insert",
-        entityRevision: 1,
-        projectId: resolvedProjectId,
-        missionId: created.mission.id,
-        objectiveId
-      });
-      changedFileIdByPath.set(normalizedPath, changedFileId);
-    }
-    for (const rationale of normalizedRationales.rationales) {
-      await insertChangeRationaleRow({
-        ctx: txCtx,
-        projectId: resolvedProjectId,
-        missionId: created.mission.id,
-        objectiveId,
-        sessionId: null,
-        deliveryId,
-        changedFileId: changedFileIdByPath.get(rationale.filePath) ?? null,
-        sourceEventId: null,
-        rationale,
-        isFinal: true,
-        now: now2
-      });
-    }
+    await applyDeclaredPaths({
+      ctx: txCtx,
+      mission: { id: created.mission.id, projectId: resolvedProjectId },
+      objectiveId,
+      sessionId: null,
+      resourceId: null,
+      paths: declared.paths,
+      now: now2
+    });
     await txCtx.db.run(
       `INSERT INTO mission_events
            (id, workspace_id, project_id, mission_id, objective_id,
@@ -153312,6 +153587,139 @@ var OBJECTIVE_REOPENABLE_STATES2 = Object.freeze([
 // repository.ts
 init_dist2();
 var import_node_path30 = __toESM(require("node:path"), 1);
+
+// ../packages/core/service/changes.ts
+init_dist();
+init_context();
+init_errors4();
+function toIso(value2) {
+  return value2 instanceof Date ? value2.toISOString() : value2;
+}
+function toSource(value2) {
+  return value2 === "declared_edit" || value2 === "agent_declared" ? value2 : null;
+}
+function toBindingState(value2) {
+  return value2 === "bound" || value2 === "unbound" ? value2 : "unknown";
+}
+function readHealth(value2) {
+  let parsed = value2;
+  if (typeof value2 === "string") {
+    try {
+      parsed = JSON.parse(value2);
+    } catch {
+      return [];
+    }
+  }
+  const health = parsed?.health;
+  if (typeof health !== "object" || health === null) return [];
+  return Object.entries(health).filter(([, entry]) => typeof entry?.firstAt === "string" && typeof entry.lastAt === "string").map(([code, entry]) => ({
+    code,
+    firstAt: entry.firstAt,
+    lastAt: entry.lastAt
+  })).sort((left, right) => left.code.localeCompare(right.code));
+}
+function deriveCaptureWarnings(sessions) {
+  const warnings = /* @__PURE__ */ new Set();
+  for (const session of sessions) {
+    if (session.bindingState === "unbound") warnings.add("unbound");
+    else if (session.bindingState === "unknown") warnings.add("unknown_binding");
+    else if (!session.callbackObservedAt) warnings.add("bound_no_callback");
+    if (session.health.some((entry) => CAPTURE_GAP_CODES.includes(entry.code))) {
+      warnings.add("tool_activity_uncaptured");
+    }
+  }
+  return [...warnings];
+}
+async function resolveObjectiveInMission({
+  ctx,
+  missionId,
+  ref
+}) {
+  const exact = await ctx.db.get(
+    `SELECT id FROM objectives
+      WHERE id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [ref, missionId, ctx.workspace.id]
+  );
+  if (exact) return exact;
+  const resolved = await resolveObjectiveRef({ ctx, ref, missionId });
+  if (resolved.missionId !== missionId) {
+    throw new ServiceError(
+      "Objective does not belong to the addressed mission",
+      "objective_mismatch",
+      409
+    );
+  }
+  return resolved;
+}
+async function listObjectiveFileChanges({
+  ctx,
+  missionId,
+  objectiveId
+}) {
+  const mission = await resolveMissionId(ctx, missionId);
+  if (!objectiveId?.trim()) {
+    throw new ServiceError("objectiveId is required", "validation_error", 400);
+  }
+  const objective = await resolveObjectiveInMission({
+    ctx,
+    missionId: mission.id,
+    ref: objectiveId
+  });
+  const countRow = await ctx.db.get(
+    `SELECT COUNT(*) AS total FROM changed_files
+      WHERE objective_id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+    [objective.id, mission.id, ctx.workspace.id]
+  );
+  const rows = await ctx.db.all(
+    `SELECT cf.id, cf.mission_id, cf.objective_id, cf.file_path, cf.source, cf.hook_health,
+            cf.last_observed_at, COALESCE(pr.resource_key, o.resource_key) AS resource_key
+       FROM changed_files cf
+       LEFT JOIN objectives o ON o.id = cf.objective_id AND o.deleted_at IS NULL
+       LEFT JOIN project_resources pr ON pr.id = cf.resource_id AND pr.deleted_at IS NULL
+      WHERE cf.objective_id = ? AND cf.mission_id = ? AND cf.workspace_id = ?
+        AND cf.deleted_at IS NULL
+      ORDER BY COALESCE(pr.resource_key, o.resource_key, '') ASC, cf.file_path ASC, cf.id ASC
+      LIMIT ?`,
+    [objective.id, mission.id, ctx.workspace.id, OBJECTIVE_FILE_CHANGES_LIMIT]
+  );
+  const total = Number(countRow?.total ?? 0);
+  const sessionRows = await ctx.db.all(
+    `SELECT id, started_at, capture_binding_state, capture_callback_observed_at, capture_health_json
+       FROM agent_sessions
+      WHERE objective_id = ? AND mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+      ORDER BY started_at ASC, id ASC`,
+    [objective.id, mission.id, ctx.workspace.id]
+  );
+  const sessions = sessionRows.map((row) => ({
+    sessionId: row.id,
+    startedAt: toIso(row.started_at),
+    bindingState: toBindingState(row.capture_binding_state),
+    callbackObservedAt: row.capture_callback_observed_at ? toIso(row.capture_callback_observed_at) : null,
+    health: readHealth(row.capture_health_json)
+  }));
+  const items = rows.map((row) => ({
+    id: row.id,
+    missionId: row.mission_id,
+    objectiveId: row.objective_id,
+    resourceKey: row.resource_key?.trim() || null,
+    filePath: row.file_path,
+    source: toSource(row.source),
+    observedAt: toIso(row.last_observed_at),
+    hookHealth: row.hook_health
+  }));
+  return {
+    scope: "server_objective",
+    missionId: mission.id,
+    objectiveId: objective.id,
+    items,
+    total,
+    limit: OBJECTIVE_FILE_CHANGES_LIMIT,
+    truncated: total > items.length,
+    capture: { sessions, warnings: deriveCaptureWarnings(sessions) }
+  };
+}
+
+// repository.ts
 init_delivery_report();
 init_errors4();
 init_execution_targets();
@@ -153540,10 +153948,10 @@ function mergeMissionBranchObservation({
 
 // ../packages/core/service/mission-reference-search.ts
 init_dist();
-var import_node_crypto11 = require("node:crypto");
+var import_node_crypto12 = require("node:crypto");
 init_errors4();
 function referenceDigest(reference) {
-  return (0, import_node_crypto11.createHash)("sha256").update(reference).digest("hex").slice(0, 24);
+  return (0, import_node_crypto12.createHash)("sha256").update(reference).digest("hex").slice(0, 24);
 }
 function encodeCursor(body) {
   return Buffer.from(JSON.stringify(body), "utf8").toString("base64url");
@@ -153925,6 +154333,7 @@ init_project_resource_key();
 init_projects();
 init_run_queue();
 init_util3();
+init_worker_jobs();
 
 // ../webapp/shared/contract.ts
 init_dist();
@@ -155832,7 +156241,7 @@ async function getObjectiveLaunchCommand(objectiveRef, query) {
 init_local_target_mutation_queue();
 
 // ext/github/service.ts
-var import_node_crypto13 = require("node:crypto");
+var import_node_crypto14 = require("node:crypto");
 init_db();
 var GITHUB_API = "https://api.github.com";
 var STATE_TTL_MS = 10 * 60 * 1e3;
@@ -155862,7 +156271,7 @@ function appJwt(config4) {
     JSON.stringify({ iat: now2 - 60, exp: now2 + 9 * 60, iss: config4.appId })
   );
   const signingInput = `${encodedHeader}.${encodedPayload}`;
-  const signer = (0, import_node_crypto13.createSign)("RSA-SHA256");
+  const signer = (0, import_node_crypto14.createSign)("RSA-SHA256");
   signer.update(signingInput);
   signer.end();
   return `${signingInput}.${signer.sign(config4.privateKey, "base64url")}`;
@@ -155901,16 +156310,16 @@ async function githubFetch(path30, token, init2 = {}) {
 }
 function signedInstallState(workspaceId2, privateKey) {
   const payload = base64url3(JSON.stringify({ workspaceId: workspaceId2, expiresAt: Date.now() + STATE_TTL_MS }));
-  const mac3 = (0, import_node_crypto13.createHmac)("sha256", privateKey).update(payload).digest("base64url");
+  const mac3 = (0, import_node_crypto14.createHmac)("sha256", privateKey).update(payload).digest("base64url");
   return `${payload}.${mac3}`;
 }
 function verifyInstallState(value2, privateKey) {
   const [payload, suppliedMac, ...extra] = value2?.split(".") ?? [];
   if (!payload || !suppliedMac || extra.length)
     throw new ApiError(400, "Invalid GitHub installation state.");
-  const expectedMac = (0, import_node_crypto13.createHmac)("sha256", privateKey).update(payload).digest("base64url");
+  const expectedMac = (0, import_node_crypto14.createHmac)("sha256", privateKey).update(payload).digest("base64url");
   const sameLength = suppliedMac.length === expectedMac.length;
-  if (!sameLength || !(0, import_node_crypto13.timingSafeEqual)(Buffer.from(suppliedMac), Buffer.from(expectedMac))) {
+  if (!sameLength || !(0, import_node_crypto14.timingSafeEqual)(Buffer.from(suppliedMac), Buffer.from(expectedMac))) {
     throw new ApiError(400, "Invalid GitHub installation state.");
   }
   let decoded;
@@ -156422,7 +156831,7 @@ async function createMissionGitHubPullRequest(missionId, body) {
 
 // ../packages/core/service/chat/store.ts
 init_dist();
-var import_node_crypto14 = require("node:crypto");
+var import_node_crypto15 = require("node:crypto");
 var import_node_util = require("node:util");
 init_errors4();
 
@@ -156761,7 +157170,7 @@ var ChatStore = class _ChatStore {
     await this.db.run(
       `INSERT INTO chat_events (id, thread_id, seq, kind, run_id, attempt_id, fence, payload_json, dependency_set_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        (0, import_node_crypto14.randomUUID)(),
+        (0, import_node_crypto15.randomUUID)(),
         threadId,
         t.last_event_seq,
         payload.kind,
@@ -156838,7 +157247,7 @@ var ChatStore = class _ChatStore {
       await this.db.run(
         `INSERT INTO chat_source_refs (id, thread_id, source_kind, scope_key, connection_id, locator_json, access_state, access_checked_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'unknown', ?, ?, ?) ON CONFLICT (thread_id, scope_key) DO NOTHING`,
         [
-          (0, import_node_crypto14.randomUUID)(),
+          (0, import_node_crypto15.randomUUID)(),
           threadId,
           source.locator.kind,
           source.scopeKey,
@@ -157010,14 +157419,14 @@ var ChatStore = class _ChatStore {
         throw new ChatError("source_access_lost");
     }
     const authorizationRevision = (await this.thread(threadId)).authorization_revision;
-    const digest4 = (0, import_node_crypto14.createHash)("sha256").update(JSON.stringify({ ids, authorizationRevision })).digest("hex");
+    const digest4 = (0, import_node_crypto15.createHash)("sha256").update(JSON.stringify({ ids, authorizationRevision })).digest("hex");
     const old = await this.db.get(
       "SELECT id, invalidated_at FROM chat_dependency_sets WHERE thread_id = ? AND digest = ?",
       [threadId, digest4]
     );
     if (old?.invalidated_at) throw new ChatError("source_access_lost");
     if (old) return old.id;
-    const id2 = (0, import_node_crypto14.randomUUID)();
+    const id2 = (0, import_node_crypto15.randomUUID)();
     await this.db.run(
       "INSERT INTO chat_dependency_sets (id, thread_id, digest, created_at) VALUES (?, ?, ?, ?)",
       [id2, threadId, digest4, this.timestamp()]
@@ -157105,7 +157514,7 @@ var ChatStore = class _ChatStore {
     await this.db.run(
       `INSERT INTO chat_notifications (id, owner_profile_id, organization_id, thread_id, run_id, question_id, type, transition_key, event_seq, state, due_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?) ON CONFLICT (owner_profile_id, thread_id, run_id, type, transition_key) DO NOTHING`,
       [
-        (0, import_node_crypto14.randomUUID)(),
+        (0, import_node_crypto15.randomUUID)(),
         t.owner_profile_id,
         t.organization_id,
         t.id,
@@ -157123,10 +157532,10 @@ var ChatStore = class _ChatStore {
 };
 
 // connections/profile.ts
-var import_node_crypto19 = require("node:crypto");
+var import_node_crypto20 = require("node:crypto");
 
 // connections/crypto.ts
-var import_node_crypto15 = require("node:crypto");
+var import_node_crypto16 = require("node:crypto");
 var SecretEnvelopeError = class extends Error {
   constructor() {
     super("The stored secret cannot be decrypted.");
@@ -157143,8 +157552,8 @@ function sealSecret({
   key,
   aad
 }) {
-  const nonce = (0, import_node_crypto15.randomBytes)(12);
-  const cipher = (0, import_node_crypto15.createCipheriv)("aes-256-gcm", key, nonce);
+  const nonce = (0, import_node_crypto16.randomBytes)(12);
+  const cipher = (0, import_node_crypto16.createCipheriv)("aes-256-gcm", key, nonce);
   cipher.setAAD(Buffer.from(aad, "utf8"));
   const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
   const tag2 = cipher.getAuthTag();
@@ -157160,7 +157569,7 @@ function openSecret({
     throw new SecretEnvelopeError();
   }
   try {
-    const decipher = (0, import_node_crypto15.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
+    const decipher = (0, import_node_crypto16.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
     decipher.setAAD(Buffer.from(aad, "utf8"));
     decipher.setAuthTag(Buffer.from(tagText, "base64url"));
     return Buffer.concat([
@@ -157172,7 +157581,7 @@ function openSecret({
   }
 }
 function hashSecret(value2) {
-  return (0, import_node_crypto15.createHash)("sha256").update(value2).digest("hex");
+  return (0, import_node_crypto16.createHash)("sha256").update(value2).digest("hex");
 }
 
 // connections/authorizations.ts
@@ -157321,7 +157730,7 @@ async function refreshLeased(db, row, lockOwner, options) {
 }
 
 // connections/keyring.ts
-var import_node_crypto16 = require("node:crypto");
+var import_node_crypto17 = require("node:crypto");
 var EVERHOUR_ENV_KEY_ID = "everhour-env";
 var GITHUB_USER_ENV_KEY_ID = "github-user-env";
 var PLATFORM_KEY_ID_PREFIX = "platform-";
@@ -157337,7 +157746,7 @@ function platformKeyFromSecret(secret) {
   const trimmed9 = secret?.trim();
   if (!trimmed9 || trimmed9.length < MIN_PLATFORM_SECRET_LENGTH) return null;
   const key = Buffer.from(
-    (0, import_node_crypto16.hkdfSync)(
+    (0, import_node_crypto17.hkdfSync)(
       "sha256",
       Buffer.from(trimmed9, "utf8"),
       Buffer.from("overlord:account-connections", "utf8"),
@@ -157345,7 +157754,7 @@ function platformKeyFromSecret(secret) {
       32
     )
   );
-  const fingerprint = (0, import_node_crypto16.createHash)("sha256").update("overlord:account-connections:platform-key-id:v1:").update(key).digest("hex").slice(0, 16);
+  const fingerprint = (0, import_node_crypto17.createHash)("sha256").update("overlord:account-connections:platform-key-id:v1:").update(key).digest("hex").slice(0, 16);
   return { id: `${PLATFORM_KEY_ID_PREFIX}${fingerprint}`, key };
 }
 function keyRingFromEnv(env3) {
@@ -157441,7 +157850,7 @@ function parseJson(text) {
 }
 
 // connections/oauth.ts
-var import_node_crypto17 = require("node:crypto");
+var import_node_crypto18 = require("node:crypto");
 
 // connections/egress.ts
 var EgressError = class extends Error {
@@ -157519,8 +157928,8 @@ var METADATA_BYTES = 64 * 1024;
 var TOKEN_BYTES = 64 * 1024;
 var TIMEOUT_MS = 1e4;
 function pkcePair() {
-  const verifier = (0, import_node_crypto17.randomBytes)(32).toString("base64url");
-  return { verifier, challenge: (0, import_node_crypto17.createHash)("sha256").update(verifier).digest("base64url") };
+  const verifier = (0, import_node_crypto18.randomBytes)(32).toString("base64url");
+  return { verifier, challenge: (0, import_node_crypto18.createHash)("sha256").update(verifier).digest("base64url") };
 }
 function sameResource(a5, b5) {
   return a5.replace(/\/+$/, "") === b5.replace(/\/+$/, "");
@@ -157676,7 +158085,7 @@ var KnowledgebaseOAuth = class {
 
 // connections/service.ts
 init_dist();
-var import_node_crypto18 = require("node:crypto");
+var import_node_crypto19 = require("node:crypto");
 
 // connections/policy.ts
 var KNOWLEDGEBASE_TOOL_POLICY_VERSION = 2;
@@ -158113,7 +158522,7 @@ var AccountConnections = class {
   }
   db;
   options;
-  lockOwner = (0, import_node_crypto18.randomUUID)();
+  lockOwner = (0, import_node_crypto19.randomUUID)();
   now() {
     return this.options.now?.() ?? Date.now();
   }
@@ -158168,7 +158577,7 @@ var AccountConnections = class {
     const returnTo = input2.returnTo;
     const { knowledgebase, encryption, oauth } = this.ready();
     await this.access(owner);
-    const state2 = (0, import_node_crypto18.randomBytes)(32).toString("base64url");
+    const state2 = (0, import_node_crypto19.randomBytes)(32).toString("base64url");
     const { verifier, challenge } = pkcePair();
     let authorizeUrl;
     try {
@@ -158176,7 +158585,7 @@ var AccountConnections = class {
     } catch {
       throw new ChatError("provider_not_ready");
     }
-    const authorizationId = (0, import_node_crypto18.randomUUID)();
+    const authorizationId = (0, import_node_crypto19.randomUUID)();
     const expiresAt = this.timestamp(AUTHORIZATION_TTL_MS);
     const connectionId = await this.db.transaction(async (tx) => {
       const now2 = this.timestamp();
@@ -158185,7 +158594,7 @@ var AccountConnections = class {
         [owner.profileId, owner.organizationId, "knowledgebase", knowledgebase.mcpUrl]
       );
       if (!row) {
-        const id2 = (0, import_node_crypto18.randomUUID)();
+        const id2 = (0, import_node_crypto19.randomUUID)();
         await tx.run(
           `INSERT INTO account_connections (id, owner_profile_id, organization_id, provider, server_url, state, tool_policy_version, created_at, updated_at) VALUES (?, ?, ?, 'knowledgebase', ?, 'pending', ?, ?, ?)`,
           [
@@ -158519,7 +158928,7 @@ var ProfileConnections = class {
   db;
   ring;
   options;
-  lockOwner = (0, import_node_crypto19.randomUUID)();
+  lockOwner = (0, import_node_crypto20.randomUUID)();
   adapters;
   provider(provider) {
     return this.adapters.get(provider) ?? null;
@@ -158653,7 +159062,7 @@ var ProfileConnections = class {
       );
       return connectionDto(await this.row(profileId, existing.id));
     }
-    const id2 = (0, import_node_crypto19.randomUUID)();
+    const id2 = (0, import_node_crypto20.randomUUID)();
     const draft = { id: id2, owner_profile_id: profileId, organization_id: null, provider };
     await this.db.run(
       `INSERT INTO account_connections (id, owner_profile_id, organization_id, provider, server_url, state, credential_kind, credential_format, credential_ciphertext, credential_key_id, credential_revision, external_account_id, external_account_label, external_account_avatar_url, last_validated_at, connected_at, created_at, updated_at, revision) VALUES (?, ?, NULL, ?, ?, 'connected', 'api_key', 'connection-v1', ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, 1)`,
@@ -158793,10 +159202,10 @@ var ProfileConnections = class {
     if (!adapter2 || !oauth) throw new ChatError("provider_not_available");
     const key = writeKey(this.ring, provider);
     if (!key || !oauth.configured()) throw new ChatError("provider_not_ready");
-    const state2 = (0, import_node_crypto19.randomBytes)(32).toString("base64url");
+    const state2 = (0, import_node_crypto20.randomBytes)(32).toString("base64url");
     const { verifier, challenge } = pkcePair();
     const authorizeUrl = oauth.authorizeUrl({ state: state2, codeChallenge: challenge });
-    const authorizationId = (0, import_node_crypto19.randomUUID)();
+    const authorizationId = (0, import_node_crypto20.randomUUID)();
     const expiresAt = this.timestamp(AUTHORIZATION_TTL_MS);
     await this.find(profileId, provider);
     const connectionId = await this.db.transaction(async (tx) => {
@@ -158806,7 +159215,7 @@ var ProfileConnections = class {
         [profileId, provider]
       );
       if (!row) {
-        const id2 = (0, import_node_crypto19.randomUUID)();
+        const id2 = (0, import_node_crypto20.randomUUID)();
         await tx.run(
           `INSERT INTO account_connections (id, owner_profile_id, organization_id, provider, server_url, state, credential_kind, created_at, updated_at) VALUES (?, ?, NULL, ?, ?, 'pending', ?, ?, ?)`,
           [id2, profileId, provider, adapter2.serverUrl, adapter2.credentialKind, now2, now2]
@@ -159741,41 +160150,14 @@ function previewMissionBranch(input2) {
 init_db();
 
 // deferred-work.ts
-var import_node_crypto20 = require("node:crypto");
 init_db();
 var RESOLUTION_STATUSES = /* @__PURE__ */ new Set(["done", "dismissed"]);
 var RESOLUTION_OUTCOMES = /* @__PURE__ */ new Set([
   "mission_created",
   "objective_added"
 ]);
-function legacyDeferredWorkId(text, occurrence) {
-  const digest4 = (0, import_node_crypto20.createHash)("sha256").update(text).digest("hex").slice(0, 16);
-  return `deferred-work-${digest4}-${occurrence}`;
-}
-function agentDeferredWorkId(index, agentText) {
-  if (!agentText) return `deferred-work-${index}-composed`;
-  const digest4 = (0, import_node_crypto20.createHash)("sha256").update(agentText).digest("hex").slice(0, 16);
-  return `deferred-work-${index}-${digest4}`;
-}
 function deferredWorkEntries(report) {
-  const { presentation, agentReport } = report;
-  const occurrences = /* @__PURE__ */ new Map();
-  const usedAgentIndexes = /* @__PURE__ */ new Set();
-  return presentation.deferredWork.map((action, index) => {
-    const occurrence = (occurrences.get(action) ?? 0) + 1;
-    occurrences.set(action, occurrence);
-    const agentIndex = matchDeferredWorkAgentIndex({
-      presentationItem: action,
-      agentItems: agentReport.deferredWork,
-      usedIndexes: usedAgentIndexes
-    });
-    if (agentIndex !== null) usedAgentIndexes.add(agentIndex);
-    return {
-      id: agentIndex === null ? agentDeferredWorkId(index, void 0) : agentDeferredWorkId(agentIndex, agentReport.deferredWork[agentIndex]),
-      legacyId: legacyDeferredWorkId(action, occurrence),
-      action
-    };
-  });
+  return report.presentation.deferredWork;
 }
 function placeholders(count) {
   return new Array(count).fill("?").join(", ");
@@ -159792,7 +160174,7 @@ async function loadResolutions(deliveryIds) {
   return new Map(rows.map((row) => [`${row.delivery_id}:${row.action_id}`, row]));
 }
 function findResolution(resolutions, deliveryId, entry) {
-  return resolutions.get(`${deliveryId}:${entry.id}`) ?? (entry.legacyId ? resolutions.get(`${deliveryId}:${entry.legacyId}`) : void 0);
+  return resolutions.get(`${deliveryId}:${entry.id}`);
 }
 function toResolution(row) {
   if (!row || !RESOLUTION_STATUSES.has(row.status)) return null;
@@ -159802,6 +160184,16 @@ function toResolution(row) {
     resolvedByWorkspaceUserId: row.resolved_by_workspace_user_id,
     outcome: row.outcome && RESOLUTION_OUTCOMES.has(row.outcome) ? row.outcome : null,
     outcomeRef: row.outcome_ref ?? null
+  };
+}
+function deferredWorkItemDto(entry, row) {
+  return {
+    actionId: entry.id,
+    title: entry.title,
+    change: entry.change,
+    location: entry.location,
+    doneWhen: entry.doneWhen,
+    resolution: toResolution(row)
   };
 }
 
@@ -163311,12 +163703,6 @@ async function cascadeMissionProjectId(db, {
     [newProjectId, now2, missionId, workspaceId2]
   );
   await db.run(
-    `UPDATE change_rationales
-       SET project_id = ?, updated_at = ?, revision = revision + 1
-     WHERE mission_id = ? AND workspace_id = ?`,
-    [newProjectId, now2, missionId, workspaceId2]
-  );
-  await db.run(
     `UPDATE execution_requests
        SET project_id = ?, updated_at = ?, revision = revision + 1
      WHERE mission_id = ? AND workspace_id = ?`,
@@ -163511,28 +163897,19 @@ async function listMissionDeliveries(missionRef, limit2 = MISSION_EVIDENCE_LIST_
         deliveredAt: row.delivered_at,
         agentIdentifier: row.agent_identifier,
         modelIdentifier: row.model_identifier,
-        deferredWorkItems: deferredWorkEntries(report).map((entry) => ({
-          actionId: entry.id,
-          action: entry.action,
-          resolution: toResolution(findResolution(resolutions, row.id, entry))
-        }))
+        deferredWorkItems: deferredWorkEntries(report).map(
+          (entry) => deferredWorkItemDto(entry, findResolution(resolutions, row.id, entry))
+        )
       };
     }),
     total: asTotal(countRow?.total),
     limit: limit2
   };
 }
-var MAX_FILE_CHANGE_HOOK_HEALTH_LENGTH = 160;
-var FILE_CHANGE_HOOK_HEALTH_PATTERN = /^[a-z0-9][a-z0-9_.:-]*$/i;
-function projectFileChangeEvidence(metadata) {
-  const paired = metadata.source === "declared_edit" && metadata.quality === "direct" || metadata.source === "window_observed" && metadata.quality === "window";
-  const health = typeof metadata.hookHealth === "string" ? metadata.hookHealth.trim() : "";
-  return {
-    source: paired ? metadata.source : null,
-    quality: paired ? metadata.quality : null,
-    overlap: paired && metadata.overlap === true,
-    hookHealth: health && health.length <= MAX_FILE_CHANGE_HOOK_HEALTH_LENGTH && FILE_CHANGE_HOOK_HEALTH_PATTERN.test(health) ? health : null
-  };
+async function listObjectiveFileChangesForMission(missionRef, objectiveRef) {
+  const mission = await getMissionRow(missionRef);
+  const ctx = await buildWebappServiceContextForWorkspace(mission.workspace_id);
+  return listObjectiveFileChanges({ ctx, missionId: mission.id, objectiveId: objectiveRef });
 }
 async function listMissionFileChanges(missionRef, limit2 = MISSION_EVIDENCE_LIST_LIMIT) {
   const mission = await getMissionRow(missionRef);
@@ -163544,65 +163921,31 @@ async function listMissionFileChanges(missionRef, limit2 = MISSION_EVIDENCE_LIST
     [mission.id, mission.workspace_id]
   );
   const rows = await db.all(
-    `WITH ranked_rationales AS (
-       SELECT objective_id, file_path, label, summary, why, impact,
-              ROW_NUMBER() OVER (
-                PARTITION BY objective_id, file_path
-                ORDER BY created_at DESC, id DESC
-              ) AS rationale_rank
-         FROM change_rationales
-        WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
-     )
-     SELECT cf.id, cf.mission_id, cf.objective_id, cf.file_path, cr.label, cr.summary,
-              cr.why, cr.impact, cf.last_observed_at AS created_at,
-              cf.vcs_status AS vcs_status,
-              cf.observed_metadata_json,
-              COALESCE(pr_cf.resource_key, o.resource_key) AS resource_key
-         FROM changed_files cf
-         LEFT JOIN ranked_rationales cr
-           ON cr.objective_id = cf.objective_id
-          AND cr.file_path = cf.file_path
-          AND cr.rationale_rank = 1
-         LEFT JOIN objectives o
-           ON o.id = cf.objective_id AND o.deleted_at IS NULL
-         LEFT JOIN project_resources pr_cf
-           ON pr_cf.id = cf.resource_id AND pr_cf.deleted_at IS NULL
-        WHERE cf.mission_id = ? AND cf.workspace_id = ?
-          AND cf.deleted_at IS NULL
-        ORDER BY cf.last_observed_at DESC, cf.id DESC
-        LIMIT ?`,
-    [mission.id, mission.workspace_id, mission.id, mission.workspace_id, limit2]
+    `SELECT cf.id, cf.mission_id, cf.objective_id, cf.file_path, cf.source, cf.hook_health,
+            cf.last_observed_at AS observed_at,
+            COALESCE(pr_cf.resource_key, o.resource_key) AS resource_key
+       FROM changed_files cf
+       LEFT JOIN objectives o
+         ON o.id = cf.objective_id AND o.deleted_at IS NULL
+       LEFT JOIN project_resources pr_cf
+         ON pr_cf.id = cf.resource_id AND pr_cf.deleted_at IS NULL
+      WHERE cf.mission_id = ? AND cf.workspace_id = ?
+        AND cf.deleted_at IS NULL
+      ORDER BY cf.last_observed_at DESC, cf.id DESC
+      LIMIT ?`,
+    [mission.id, mission.workspace_id, limit2]
   );
   return {
-    items: rows.map((row) => {
-      let metadata = {};
-      try {
-        const parsed = JSON.parse(row.observed_metadata_json);
-        if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-          metadata = parsed;
-        }
-      } catch {
-      }
-      const evidence = projectFileChangeEvidence(metadata);
-      return {
-        id: row.id,
-        missionId: row.mission_id,
-        objectiveId: row.objective_id,
-        filePath: row.file_path,
-        fileName: row.file_path.split("/").pop() || row.file_path,
-        label: row.label,
-        summary: row.summary,
-        why: row.why,
-        impact: row.impact,
-        vcsStatus: row.vcs_status,
-        source: evidence.source,
-        quality: evidence.quality,
-        overlap: evidence.overlap,
-        hookHealth: evidence.hookHealth,
-        resourceKey: row.resource_key?.trim() || null,
-        createdAt: row.created_at
-      };
-    }),
+    items: rows.map((row) => ({
+      id: row.id,
+      missionId: row.mission_id,
+      objectiveId: row.objective_id,
+      resourceKey: row.resource_key?.trim() || null,
+      filePath: row.file_path,
+      source: row.source === "declared_edit" || row.source === "agent_declared" ? row.source : null,
+      observedAt: row.observed_at instanceof Date ? row.observed_at.toISOString() : row.observed_at,
+      hookHealth: row.hook_health
+    })),
     total: asTotal(countRow?.total),
     limit: limit2
   };
@@ -165586,6 +165929,14 @@ async function updateObjectiveTx(idRef, body) {
       },
       tx
     );
+    if (changed.includes("reopened_at")) {
+      await enqueueMissionSummaryComposeJob({
+        ctx: restMissionSummaryTriggerContext(tx, workspaceId2, workspaceUserId),
+        missionId: existing.mission_id,
+        reason: "objective_reopened",
+        now: now2
+      });
+    }
     if (body.state !== void 0 && body.state !== existing.state && (body.state === "executing" || body.state === "complete" || existing.state === "executing")) {
       if (body.state === "executing") {
         await enqueueLiveActivityStartForMission({
@@ -166534,6 +166885,10 @@ init_db();
 
 // protocol/delivery-payload.ts
 var RETIRED_SHARED_CHANGE_TRACKING_FLAGS = [
+  "--change-rationales-json",
+  "--change-rationales-file",
+  "--changed-files-json",
+  "--changed-files-file",
   "--no-file-changes",
   "--skip-rationale-for-json",
   "--skip-rationale-for-file",
@@ -166542,11 +166897,12 @@ var RETIRED_SHARED_CHANGE_TRACKING_FLAGS = [
 ];
 var RETIRED_CHANGE_TRACKING_FLAGS = [
   "--track-changed-files",
-  "--changed-files-json",
-  "--changed-files-file",
   ...RETIRED_SHARED_CHANGE_TRACKING_FLAGS
 ];
 var RETIRED_SHARED_CHANGE_TRACKING_FIELDS = [
+  "changeRationales",
+  "change_rationales",
+  "changedFiles",
   "noFileChanges",
   "skipRationaleFor",
   "observedDirtyPaths",
@@ -166555,10 +166911,7 @@ var RETIRED_SHARED_CHANGE_TRACKING_FIELDS = [
   "skip_rationale_for",
   "observed_dirty_paths"
 ];
-var RETIRED_CHANGE_TRACKING_FIELDS = [
-  "changedFiles",
-  ...RETIRED_SHARED_CHANGE_TRACKING_FIELDS
-];
+var RETIRED_CHANGE_TRACKING_FIELDS = RETIRED_SHARED_CHANGE_TRACKING_FIELDS;
 var RETIRED_RECORD_WORK_FLAGS = RETIRED_SHARED_CHANGE_TRACKING_FLAGS;
 var RETIRED_RECORD_WORK_FIELDS = RETIRED_SHARED_CHANGE_TRACKING_FIELDS;
 function rejectRemovedProtocolFlags(body, removedFlags) {
@@ -166588,22 +166941,15 @@ function rejectRemovedProtocolPayloadFields(payload, context, removedFields = RE
 function parseDeliveryPayloadEnvelope(body) {
   const input2 = parseJsonObjectInput(body, "--payload-json", "--payload-file", "delivery payload");
   if (input2 === void 0) return {};
-  const {
-    summary,
-    artifacts,
-    changeRationales,
-    verificationSummary,
-    followUpNotes,
-    ...payloadJson
-  } = input2;
+  const { summary, artifacts, declaredPaths, verificationSummary, followUpNotes, ...payloadJson } = input2;
   if (summary !== void 0 && typeof summary !== "string") {
     throw new ApiError(400, "Delivery payload summary must be a string");
   }
   if (artifacts !== void 0 && !Array.isArray(artifacts)) {
     throw new ApiError(400, "Delivery payload artifacts must be an array");
   }
-  if (changeRationales !== void 0 && !Array.isArray(changeRationales)) {
-    throw new ApiError(400, "Delivery payload changeRationales must be an array");
+  if (declaredPaths !== void 0 && !Array.isArray(declaredPaths)) {
+    throw new ApiError(400, "Delivery payload declaredPaths must be an array of path strings");
   }
   if (verificationSummary !== void 0 && verificationSummary !== null && typeof verificationSummary !== "string") {
     throw new ApiError(400, "Delivery payload verificationSummary must be a string or null");
@@ -166614,7 +166960,7 @@ function parseDeliveryPayloadEnvelope(body) {
   return {
     ...typeof summary === "string" ? { summary } : {},
     ...Array.isArray(artifacts) ? { artifacts } : {},
-    ...Array.isArray(changeRationales) ? { changeRationales } : {},
+    ...Array.isArray(declaredPaths) ? { declaredPaths } : {},
     ...verificationSummary === null || typeof verificationSummary === "string" ? { verificationSummary } : {},
     ...followUpNotes === null || typeof followUpNotes === "string" ? { followUpNotes } : {},
     payloadJson
@@ -167007,6 +167353,14 @@ var missionSubcommands = {
     permission: PERMISSIONS.MISSION_READ,
     handler: (_ctx, body) => listMissionDeliveries(missionRefFlag(body))
   },
+  "objective-changes": {
+    permission: PERMISSIONS.MISSION_READ,
+    handler: (ctx, body) => {
+      const objectiveId = objectiveRefFlag(body);
+      if (!objectiveId) throw new ApiError(400, "objective-changes requires --objective-id");
+      return listObjectiveFileChanges({ ctx, missionId: missionRefFlag(body), objectiveId });
+    }
+  },
   "launch-objective": {
     permission: PERMISSIONS.EXECUTION_REQUEST_CREATE,
     handler: (_ctx, body) => launchObjective(requireFlag(body, "--objective-id"), {
@@ -167170,7 +167524,6 @@ var missionSubcommands = {
       const {
         objective: payloadObjective,
         title: payloadTitle,
-        changedFiles: payloadChangedFiles,
         ...restPayload
       } = envelope2.payloadJson ?? {};
       const artifacts = parseJsonArrayInput(
@@ -167179,21 +167532,12 @@ var missionSubcommands = {
         "--artifacts-file",
         "artifacts"
       );
-      const changeRationales = parseJsonArrayInput(
+      const declaredPaths = parseJsonArrayInput(
         body,
-        "--change-rationales-json",
-        "--change-rationales-file",
-        "changeRationales"
+        "--declared-paths-json",
+        "--declared-paths-file",
+        "declaredPaths"
       );
-      const changedFiles = parseJsonArrayInput(
-        body,
-        "--changed-files-json",
-        "--changed-files-file",
-        "changedFiles"
-      );
-      if (payloadChangedFiles !== void 0 && !Array.isArray(payloadChangedFiles)) {
-        throw new ApiError(400, "changedFiles must be a JSON array", void 0, "invalid_input");
-      }
       const objective = strFlag(body, "--objective") ?? ((body.positional ?? []).join(" ").trim() || void 0) ?? (typeof payloadObjective === "string" ? payloadObjective : void 0);
       if (!objective || !objective.trim()) {
         throw new ApiError(
@@ -167218,8 +167562,7 @@ var missionSubcommands = {
         objective,
         title: strFlag(body, "--title") ?? (typeof payloadTitle === "string" ? payloadTitle : null),
         artifacts: artifacts ?? envelope2.artifacts ?? [],
-        changeRationales: changeRationales ?? envelope2.changeRationales ?? [],
-        changedFiles: changedFiles ?? (Array.isArray(payloadChangedFiles) ? payloadChangedFiles : []),
+        declaredPaths: declaredPaths ?? envelope2.declaredPaths,
         payloadJson: restPayload,
         ...assignedTo !== void 0 ? { assignedTo } : {}
       });
@@ -174497,6 +174840,18 @@ var runQueueSubcommands = {
 };
 
 // protocol/session.ts
+function captureBindingFlag(body) {
+  const value2 = strFlag(body, "--capture-binding");
+  return value2 === void 0 ? void 0 : value2;
+}
+function declaredPathsInput(body) {
+  return parseJsonArrayInput(
+    body,
+    "--declared-paths-json",
+    "--declared-paths-file",
+    "declaredPaths"
+  );
+}
 var sessionSubcommands = {
   // Session lifecycle ------------------------------------------------------
   attach: {
@@ -174513,7 +174868,8 @@ var sessionSubcommands = {
       // The channel id only. Its credential never travels in a protocol flag — it reaches the
       // backend solely as an Authorization header on the adapter route family.
       sessionChannelId: strFlag(body, "--session-channel-id") ?? null,
-      objectiveId: objectiveRefFlag(body)
+      objectiveId: objectiveRefFlag(body),
+      captureBindingState: captureBindingFlag(body)
     })
   },
   connect: {
@@ -174549,12 +174905,7 @@ var sessionSubcommands = {
         externalSessionId: externalSessionId(body),
         beginFollowUpWork: boolFlag(body, "--begin-follow-up-work"),
         followUpIntent: strFlag(body, "--follow-up-intent") ?? null,
-        changeRationales: parseJsonArrayInput(
-          body,
-          "--change-rationales-json",
-          "--change-rationales-file",
-          "changeRationales"
-        )
+        declaredPaths: declaredPathsInput(body)
       });
     }
   },
@@ -174567,11 +174918,18 @@ var sessionSubcommands = {
         "--changes-file",
         "sync-changes input"
       ) ?? [];
+      const capture = parseJsonObjectInput(
+        body,
+        "--capture-json",
+        "--capture-file",
+        "sync-changes capture"
+      );
       return syncChanges({
         ctx,
         missionId: missionRefFlag(body),
         sessionKey: requireFlag(body, "--session-key"),
-        changes
+        changes,
+        ...capture !== void 0 ? { capture } : {}
       });
     }
   },
@@ -174608,19 +174966,13 @@ var sessionSubcommands = {
         "--artifacts-file",
         "artifacts"
       );
-      const changeRationales = parseJsonArrayInput(
-        body,
-        "--change-rationales-json",
-        "--change-rationales-file",
-        "changeRationales"
-      );
       return deliverSession({
         ctx,
         missionId: missionRefFlag(body),
         sessionKey: requireFlag(body, "--session-key"),
         summary: resolveInput(body, "--summary", "--summary-file") ?? envelope2.summary ?? "",
         artifacts: artifacts ?? envelope2.artifacts ?? [],
-        changeRationales: changeRationales ?? envelope2.changeRationales ?? [],
+        declaredPaths: declaredPathsInput(body) ?? envelope2.declaredPaths,
         payloadJson: envelope2.payloadJson,
         verificationSummary: strFlag(body, "--verification-summary") ?? envelope2.verificationSummary ?? null,
         followUpNotes: strFlag(body, "--follow-up-notes") ?? envelope2.followUpNotes ?? null
@@ -174791,6 +175143,7 @@ async function runProtocolSubcommand(subcommand, body) {
     "discover-project",
     "statuses",
     "list-deliveries",
+    "objective-changes",
     "attachment-list",
     "attachment-download-url",
     "auth-status"
@@ -174909,21 +175262,10 @@ var protocolOutputSchema = (description) => ({
   description,
   additionalProperties: true
 });
-var changeRationalesProperty = (description) => ({
+var declaredPathsProperty = (description) => ({
   type: "array",
   description,
-  items: objectSchema({
-    filePath: stringProperty("Repository-relative path of the changed file."),
-    label: stringProperty("Short reviewer title for the change."),
-    summary: stringProperty("What changed in this file."),
-    why: stringProperty("Why the change was made."),
-    impact: stringProperty("Behavioral impact of the change."),
-    hunks: {
-      type: "array",
-      description: "Optional diff-hunk headers only; file contents and diffs are prohibited.",
-      items: objectSchema({ header: stringProperty("Unified-diff hunk header.") }, ["header"])
-    }
-  }, ["filePath", "label", "summary", "why", "impact"])
+  items: stringProperty("Canonical repository-relative path. Deleted and renamed paths (both endpoints) are valid.")
 });
 var readOnly = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
 var writeAction = { readOnlyHint: false, destructiveHint: false, openWorldHint: false };
@@ -175054,6 +175396,17 @@ function overlordMcpToolDefinitions({ defaultAgent }) {
         objectiveId: stringProperty("Objective UUID or display id such as coo:756.k7xm. Use a display id when that is the only identifier available.")
       }),
       outputSchema: protocolOutputSchema("The mission's newest-first MissionDeliveriesDto page: items (DeliveryDto, capped at 200), total, and limit."),
+      annotations: readOnly
+    },
+    {
+      name: "overlord_changes",
+      title: "List objective file changes",
+      description: 'Use this to read the synchronized changed-file evidence of one objective across every session, resource, and device. Returns ObjectiveFileChangesDto { scope: "server_objective", items, total, limit, truncated, capture }: compact rows (resourceKey, filePath, source declared_edit | agent_declared | null for unknown, observedAt, hookHealth) ordered by resource then path and capped at 200, total as the pre-cap count, and persisted capture diagnostics with warnings. It never includes unsynchronized local evidence, needs no attached session, and does not mutate anything.',
+      inputSchema: objectSchema({
+        missionId: stringProperty("Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission."),
+        objectiveId: stringProperty("Required objective UUID or display id such as coo:756.k7xm. An objective that does not belong to missionId is rejected.")
+      }),
+      outputSchema: protocolOutputSchema("ObjectiveFileChangesDto: scope server_objective, missionId, objectiveId, items (FileChangeDto, capped at 200), total, limit, truncated, and capture { sessions, warnings }."),
       annotations: readOnly
     },
     {
@@ -175254,7 +175607,7 @@ function overlordMcpToolDefinitions({ defaultAgent }) {
         summary: stringProperty("Update text."),
         phase: stringProperty("Optional protocol phase."),
         eventType: stringProperty("Optional event type. Defaults to update."),
-        changeRationales: changeRationalesProperty("Optional reviewer-facing annotations for objective-ledger file evidence.")
+        declaredPaths: declaredPathsProperty("Optional paths written by shell commands, generators, or scripts that native capture could not name. Recorded as agent_declared evidence; never an exhaustive list.")
       }, ["sessionKey", "summary"]),
       outputSchema: protocolOutputSchema("The recorded mission activity event."),
       annotations: writeAction
@@ -175262,7 +175615,7 @@ function overlordMcpToolDefinitions({ defaultAgent }) {
     {
       name: "overlord_deliver_session",
       title: "Deliver mission session",
-      description: "Use this only when the user-requested mission work is complete. It delivers the attached session with an explicit summary, optional file-change rationales, and optional authoritative human-action/tradeoff evidence.",
+      description: "Use this only when the user-requested mission work is complete. It delivers the attached session with an explicit summary, optional declared shell/script output paths, and optional authoritative human-action/tradeoff evidence.",
       inputSchema: objectSchema({
         missionId: stringProperty("Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission."),
         objectiveId: stringProperty("Objective UUID or display id such as coo:756.k7xm. Supplies missionId when it is omitted; the session key still determines which objective is delivered."),
@@ -175278,7 +175631,7 @@ function overlordMcpToolDefinitions({ defaultAgent }) {
             url: stringProperty("Optional HTTP(S) URL.")
           }, ["type", "label"])
         },
-        changeRationales: changeRationalesProperty("Optional reviewer-facing annotations for objective-ledger file evidence."),
+        declaredPaths: declaredPathsProperty("Optional paths written by shell commands, generators, or scripts that native capture could not name. Recorded as agent_declared evidence; never an exhaustive list and never required."),
         humanActions: {
           type: "array",
           description: 'Concrete actions a human must perform outside completed agent work. Exclude Git operations and routine review/testing. Each item is read on its own from the delivery card, so give every one an action, reason, and category, plus command, verify, and link whenever they exist. Vague: { action: "Set up the env var for Gemini." }. Good: { action: "Add GEMINI_API_KEY to the production backend service on Railway.", reason: "Compose falls back to the raw summary without it.", category: "environment", command: "railway variables set GEMINI_API_KEY=<key> --service backend", verify: "The next delivery card shows a composed presentation.", link: ".env.example" }.',
@@ -175311,7 +175664,13 @@ function overlordMcpToolDefinitions({ defaultAgent }) {
         knownRisks: { type: "array", items: stringProperty("Residual risk or limitation.") },
         deferredWork: {
           type: "array",
-          items: stringProperty("Recommended new objective outside this mission (for example an out-of-scope bug). Name the component or file and why it was left. Omit queued future objectives, leftover current-objective work, and human follow-up (those belong in humanActions).")
+          description: 'Each deferredWork item is one recommended objective outside this mission. Be very concise. title names the work in an imperative phrase. change states only the specific change that is needed. location says where to find it in the code: the file, function, component, or command. doneWhen states the observable result in one sentence. Do not add instructions on how to do the work, background, or rationale. The operator turns the item into an objective or a mission as written, so it must read as a task, not as a note. Omit queued future objectives, leftover current-objective work, and human follow-up (those belong in humanActions). Vague: { title: "Fix flaky test", change: "The sync worker has a flaky test.", location: "backend", doneWhen: "It passes." }. Good: { title: "Advance the fake clock before the second retry", change: "The test asserts the retry fired but never advances the fake clock between attempts, so it passes or fails on real time.", location: "backend/sync-worker.test.ts \u203A retries after a 503", doneWhen: "The test passes 20 consecutive runs with the fake clock driving both attempts." }.',
+          items: objectSchema({
+            title: stringProperty("Required. The work as an imperative phrase, at most 80 characters."),
+            change: stringProperty("Required. The specific change that is needed, one or two sentences, at most 400 characters."),
+            location: stringProperty("Required. Where to find it: file, function, component, or command, at most 200 characters."),
+            doneWhen: stringProperty("Required. The observable result in one sentence, at most 200 characters.")
+          }, ["title", "change", "location", "doneWhen"])
         },
         assumptions: {
           type: "array",
@@ -175359,21 +175718,13 @@ function overlordMcpToolDefinitions({ defaultAgent }) {
     {
       name: "overlord_record_work",
       title: "Record completed work as a mission",
-      description: "Use this to log work already finished in this chat as a completed Overlord mission \u2014 one call, no attach/deliver cycle. It creates a mission and a single completed objective, records the file changes and their rationales, lands the mission in the review column, and runs the delivery through the standard Gemini summarizer so it reads like any other delivered mission. Provide an objective (what was asked/done) and a reviewer-facing summary; optional changeRationales may annotate meaningful file changes. Only use this when the work is genuinely complete; use overlord_create_mission for work still to be done.",
+      description: "Use this to log work already finished in this chat as a completed Overlord mission \u2014 one call, no attach/deliver cycle. It creates a mission and a single completed objective, records the explicitly declared changed paths, lands the mission in the review column, and runs the delivery through the standard Gemini summarizer so it reads like any other delivered mission. Provide an objective (what was asked/done) and a reviewer-facing summary; optional declaredPaths lists the files the work changed. Only use this when the work is genuinely complete; use overlord_create_mission for work still to be done.",
       inputSchema: objectSchema({
         projectId: stringProperty("Overlord project id, slug, or name. Overlord never chooses a project implicitly."),
         objective: stringProperty("What was asked and done, phrased as a completed objective (1-3 sentences)."),
         summary: stringProperty("Reviewer-facing narrative of what changed and why."),
         title: stringProperty("Optional mission title; defaults to a title derived from the objective."),
-        changeRationales: changeRationalesProperty("One optional reviewer annotation per meaningful file change."),
-        changedFiles: {
-          type: "array",
-          description: "Optional explicit file observations for this sessionless record.",
-          items: objectSchema({
-            filePath: stringProperty("Repository-relative path."),
-            vcsStatus: stringProperty("Optional VCS status such as M, A, or D.")
-          }, ["filePath"])
-        },
+        declaredPaths: declaredPathsProperty("Optional repository-relative paths this work changed, recorded as agent_declared evidence for the completed objective."),
         artifacts: {
           type: "array",
           description: "Optional artifacts: next_steps, test_results, decision, note, or url."
@@ -175429,7 +175780,7 @@ var widgetDefinitions = [
   {
     uri: "ui://overlord/file-changes.html",
     name: "Overlord file-change viewer",
-    description: "Renders delivery details and recorded file-change rationales.",
+    description: "Renders delivery details and the paths changed during the objective.",
     title: "Delivery details"
   },
   {
@@ -175783,6 +176134,7 @@ var toolHandlers = {
     })
   ),
   overlord_list_deliveries: (args) => runProtocolSubcommand("list-deliveries", protocolBody(missionScopeFlags(args))),
+  overlord_changes: (args) => runProtocolSubcommand("objective-changes", protocolBody(missionScopeFlags(args))),
   overlord_launch_objective: (args) => runProtocolSubcommand(
     "launch-objective",
     protocolBody({
@@ -175895,9 +176247,9 @@ var toolHandlers = {
       "--summary": requiredString(args, "summary"),
       ...optionalString(args, "phase") ? { "--phase": requiredString(args, "phase") } : {},
       ...optionalString(args, "eventType") ? { "--event-type": requiredString(args, "eventType") } : {},
-      ...Array.isArray(args.changeRationales) ? { "--change-rationales-file": true } : {}
+      ...Array.isArray(args.declaredPaths) ? { "--declared-paths-file": true } : {}
     },
-    fileInputs: Array.isArray(args.changeRationales) ? { "--change-rationales-file": JSON.stringify(args.changeRationales) } : void 0
+    fileInputs: Array.isArray(args.declaredPaths) ? { "--declared-paths-file": JSON.stringify(args.declaredPaths) } : void 0
   }),
   overlord_deliver_session: (args) => runProtocolSubcommand("deliver", {
     flags: {
@@ -175905,7 +176257,7 @@ var toolHandlers = {
       "--session-key": requiredString(args, "sessionKey"),
       "--summary": requiredString(args, "summary"),
       ...Array.isArray(args.artifacts) ? { "--artifacts-file": true } : {},
-      ...Array.isArray(args.changeRationales) ? { "--change-rationales-file": true } : {},
+      ...Array.isArray(args.declaredPaths) ? { "--declared-paths-file": true } : {},
       ...Array.isArray(args.humanActions) || Array.isArray(args.tradeoffsMade) || Array.isArray(args.knownRisks) || Array.isArray(args.deferredWork) || Array.isArray(args.assumptions) ? {
         "--payload-json": JSON.stringify({
           deliveryReport: {
@@ -175921,9 +176273,9 @@ var toolHandlers = {
         })
       } : {}
     },
-    fileInputs: Array.isArray(args.artifacts) || Array.isArray(args.changeRationales) ? {
+    fileInputs: Array.isArray(args.artifacts) || Array.isArray(args.declaredPaths) ? {
       ...Array.isArray(args.artifacts) ? { "--artifacts-file": JSON.stringify(args.artifacts) } : {},
-      ...Array.isArray(args.changeRationales) ? { "--change-rationales-file": JSON.stringify(args.changeRationales) } : {}
+      ...Array.isArray(args.declaredPaths) ? { "--declared-paths-file": JSON.stringify(args.declaredPaths) } : {}
     } : void 0
   }),
   overlord_add_artifact: (args) => {
@@ -175972,8 +176324,7 @@ var toolHandlers = {
       objective: requiredString(args, "objective"),
       summary: requiredString(args, "summary"),
       ...optionalString(args, "title") ? { title: requiredString(args, "title") } : {},
-      ...Array.isArray(args.changeRationales) ? { changeRationales: args.changeRationales } : {},
-      ...Array.isArray(args.changedFiles) ? { changedFiles: args.changedFiles } : {},
+      ...Array.isArray(args.declaredPaths) ? { declaredPaths: args.declaredPaths } : {},
       ...Array.isArray(args.artifacts) ? { artifacts: args.artifacts } : {}
     };
     return runProtocolSubcommand("record-work", {
@@ -179503,9 +179854,9 @@ Feature link: ${featureUrl}`,
 init_local_target_completion_notify();
 
 // chat/gemini-client.ts
-var import_genai3 = require("@google/genai");
+var import_genai4 = require("@google/genai");
 function sdkGeminiClient(apiKey) {
-  const ai = new import_genai3.GoogleGenAI({ apiKey });
+  const ai = new import_genai4.GoogleGenAI({ apiKey });
   return {
     async stream(request) {
       return await ai.models.generateContentStream(
@@ -187892,11 +188243,9 @@ var ChatNotificationDispatcher = class extends PollLoop {
 init_db();
 
 // deferred-work-resolutions.ts
+init_worker_jobs();
 init_db();
 var OUTCOME_REF_MAX_LENGTH = 64;
-function placeholders3(count) {
-  return new Array(count).fill("?").join(", ");
-}
 async function loadDelivery(deliveryId) {
   return await requireDatabaseClient().get(
     `SELECT d.id AS delivery_id, d.summary AS delivery_summary, d.payload_json,
@@ -187915,19 +188264,13 @@ async function requireDeferredWorkEntry(deliveryId, actionId) {
     notFoundMessage: "Delivery not found"
   });
   const report = deliveryReportFromPayload(row.payload_json, row.delivery_summary);
-  const entry = deferredWorkEntries(report).find(
-    (candidate) => candidate.id === actionId || candidate.legacyId === actionId
-  );
+  const entry = deferredWorkEntries(report).find((candidate) => candidate.id === actionId);
   if (!entry) throw new ApiError(404, "Deferred work item not found");
   return { row, entry, workspaceUserId };
 }
 async function currentItem(row, entry) {
   const resolutions = await loadResolutions([row.delivery_id]);
-  return {
-    actionId: entry.id,
-    action: entry.action,
-    resolution: toResolution(findResolution(resolutions, row.delivery_id, entry))
-  };
+  return deferredWorkItemDto(entry, findResolution(resolutions, row.delivery_id, entry));
 }
 async function actorWorkspaceUserId(workspaceId2, fallback2) {
   const profileId = await resolveActiveProfileId();
@@ -188003,26 +188346,29 @@ async function resolveDeferredWork(deliveryId, actionId, body) {
       },
       tx
     );
+    await enqueueMissionSummaryComposeJob({
+      ctx: restMissionSummaryTriggerContext(tx, row.workspace_id, resolvedBy),
+      missionId: row.mission_id,
+      reason: "deferred_work_resolved",
+      now: now2
+    });
   });
   return currentItem(row, entry);
 }
 async function reopenDeferredWork(deliveryId, actionId) {
   const { row, entry, workspaceUserId } = await requireDeferredWorkEntry(deliveryId, actionId);
   const db = requireDatabaseClient();
-  const resolutionIds = [entry.id, entry.legacyId];
   const existing = await db.get(
-    `SELECT 1 FROM human_action_resolutions
-      WHERE delivery_id = ? AND action_id IN (${placeholders3(resolutionIds.length)})`,
-    [row.delivery_id, ...resolutionIds]
+    `SELECT 1 FROM human_action_resolutions WHERE delivery_id = ? AND action_id = ?`,
+    [row.delivery_id, entry.id]
   );
   if (existing) {
     const actor = await actorWorkspaceUserId(row.workspace_id, workspaceUserId);
     await db.transaction(async (tx) => {
-      await tx.run(
-        `DELETE FROM human_action_resolutions
-          WHERE delivery_id = ? AND action_id IN (${placeholders3(resolutionIds.length)})`,
-        [row.delivery_id, ...resolutionIds]
-      );
+      await tx.run(`DELETE FROM human_action_resolutions WHERE delivery_id = ? AND action_id = ?`, [
+        row.delivery_id,
+        entry.id
+      ]);
       await recordChange2(
         {
           entityType: "human_action_resolution",
@@ -188037,6 +188383,11 @@ async function reopenDeferredWork(deliveryId, actionId) {
         },
         tx
       );
+      await enqueueMissionSummaryComposeJob({
+        ctx: restMissionSummaryTriggerContext(tx, row.workspace_id, actor),
+        missionId: row.mission_id,
+        reason: "deferred_work_reopened"
+      });
     });
   }
   return currentItem(row, entry);
@@ -188049,7 +188400,6 @@ init_db();
 var CLAIM_BATCH_SIZE = 5;
 var MAX_COMPOSE_SUMMARY_CHARS = 6e3;
 var MAX_COMPOSE_AUXILIARY_CHARS = 2e3;
-var MAX_COMPOSE_RATIONALE_CHARS = 800;
 var MAX_COMPOSE_EVENT_CHARS = 1e3;
 function logComposeMetric(event, fields) {
   console.info("[delivery-compose-worker]", JSON.stringify({ event, ...fields }));
@@ -188142,7 +188492,7 @@ var DeliveryComposeWorker = class extends WorkerJobPoller {
   async composeAndPersist(client, deliveryId) {
     const context = await loadComposeContext(client, deliveryId);
     if (!context) return { kind: "missing" };
-    const { delivery, report, rationales, filePaths, objective, plannedObjectives, recentEvents } = context;
+    const { delivery, report, filePaths, objective, plannedObjectives, recentEvents } = context;
     const candidates = deriveDeterministicActionCandidates({ filePaths });
     const model = readGeminiConfigFromEnv()?.model ?? null;
     let draft = null;
@@ -188151,7 +188501,6 @@ var DeliveryComposeWorker = class extends WorkerJobPoller {
       const input2 = toComposeInput({
         delivery,
         report,
-        rationales,
         candidates,
         objective,
         plannedObjectives,
@@ -188169,7 +188518,6 @@ var DeliveryComposeWorker = class extends WorkerJobPoller {
       report,
       draft,
       candidates,
-      rationales,
       model,
       currentObjective: objective,
       plannedObjectives
@@ -188231,29 +188579,46 @@ async function persistDeliveryReport({
     payload = {};
   }
   payload.deliveryReport = nextReport;
-  const updated = await client.run(
-    `UPDATE deliveries
-         SET payload_json = ?, updated_at = ?, revision = revision + 1
-       WHERE id = ? AND revision = ? AND deleted_at IS NULL`,
-    [JSON.stringify(payload), now2, delivery.id, delivery.revision]
-  );
-  if (updated.changes === 0) {
-    return;
-  }
-  await recordChange2(
-    {
-      entityType: "delivery",
-      entityId: delivery.id,
-      operation: "update",
-      entityRevision: delivery.revision + 1,
-      projectId: delivery.project_id,
-      missionId: delivery.mission_id,
-      objectiveId: delivery.objective_id,
-      changedFields,
-      workspaceId: delivery.workspace_id
-    },
-    client
-  );
+  await client.transaction(async (tx) => {
+    const updated = await tx.run(
+      `UPDATE deliveries
+           SET payload_json = ?, updated_at = ?, revision = revision + 1
+         WHERE id = ? AND revision = ? AND deleted_at IS NULL`,
+      [JSON.stringify(payload), now2, delivery.id, delivery.revision]
+    );
+    if (updated.changes === 0) {
+      return;
+    }
+    await recordChange2(
+      {
+        entityType: "delivery",
+        entityId: delivery.id,
+        operation: "update",
+        entityRevision: delivery.revision + 1,
+        projectId: delivery.project_id,
+        missionId: delivery.mission_id,
+        objectiveId: delivery.objective_id,
+        changedFields,
+        workspaceId: delivery.workspace_id
+      },
+      tx
+    );
+    const status = nextReport.presentation.status;
+    if (status === "composed" || status === "fallback") {
+      await enqueueMissionSummaryComposeJob({
+        ctx: {
+          db: tx,
+          workspaceId: delivery.workspace_id,
+          actorWorkspaceUserId: null,
+          source: "runner"
+        },
+        missionId: delivery.mission_id,
+        reason: "delivery_presented",
+        sourceDeliveryId: delivery.id,
+        now: now2
+      });
+    }
+  });
 }
 async function loadComposeContext(client, deliveryId) {
   const delivery = await client.get(
@@ -188274,23 +188639,14 @@ async function loadComposeContext(client, deliveryId) {
     report = null;
   }
   if (!report) return null;
-  const rationaleRows = await client.all(
-    `SELECT id, file_path, label, summary, why, impact
-       FROM change_rationales
-      WHERE delivery_id = ? AND deleted_at IS NULL
-      ORDER BY created_at ASC
+  const filePathRows = await client.all(
+    `SELECT file_path FROM changed_files
+      WHERE objective_id = ? AND deleted_at IS NULL
+      ORDER BY last_observed_at DESC, id DESC
       LIMIT 40`,
-    [deliveryId]
+    [delivery.objective_id]
   );
-  const rationales = rationaleRows.map((row) => ({
-    id: row.id,
-    filePath: row.file_path,
-    label: row.label,
-    summary: row.summary,
-    why: row.why,
-    impact: row.impact
-  }));
-  const filePaths = rationaleRows.map((row) => row.file_path);
+  const filePaths = filePathRows.map((row) => row.file_path);
   const objective = await client.get(
     `SELECT title, instruction_text FROM objectives WHERE id = ?`,
     [delivery.objective_id]
@@ -188311,7 +188667,6 @@ async function loadComposeContext(client, deliveryId) {
   return {
     delivery,
     report,
-    rationales,
     filePaths,
     objective: {
       title: objective?.title ?? null,
@@ -188330,28 +188685,16 @@ async function loadComposeContext(client, deliveryId) {
 function toComposeInput({
   delivery,
   report,
-  rationales,
   candidates,
   objective,
   plannedObjectives,
   recentEvents
 }) {
-  const eligibleDeferredWork = filterDeferredWork({
-    items: report.agentReport.deferredWork,
-    currentObjective: objective,
-    plannedObjectives,
-    humanActions: report.agentReport.humanActions,
-    candidateActions: candidates
-  });
-  const omittedDeferredWork = report.agentReport.deferredWork.filter(
-    (item) => !eligibleDeferredWork.includes(item)
-  );
   return {
     summary: boundComposeText(delivery.summary, MAX_COMPOSE_SUMMARY_CHARS),
     objectiveTitle: objective.title ?? null,
     objectiveInstruction: objective.instruction ?? null,
     plannedObjectives,
-    omittedDeferredWork,
     verificationSummary: delivery.verification_summary ? boundComposeText(delivery.verification_summary, MAX_COMPOSE_AUXILIARY_CHARS) : null,
     followUpNotes: delivery.follow_up_notes ? boundComposeText(delivery.follow_up_notes, MAX_COMPOSE_AUXILIARY_CHARS) : null,
     humanActions: report.agentReport.humanActions.map((action) => ({
@@ -188375,7 +188718,6 @@ function toComposeInput({
       ...tradeoff.sourceRef ? { sourceRef: tradeoff.sourceRef } : {}
     })),
     knownRisks: report.agentReport.knownRisks,
-    deferredWork: eligibleDeferredWork,
     assumptions: report.agentReport.assumptions,
     candidateActions: candidates.map((action) => ({
       id: action.id,
@@ -188387,14 +188729,6 @@ function toComposeInput({
       ...action.link ? { link: action.link } : {},
       source: action.source,
       ...action.sourceRef ? { sourceRef: action.sourceRef } : {}
-    })),
-    changeRationales: rationales.slice(0, 20).map((rationale) => ({
-      id: rationale.id,
-      filePath: boundComposeText(rationale.filePath, MAX_COMPOSE_RATIONALE_CHARS),
-      label: boundComposeText(rationale.label, MAX_COMPOSE_RATIONALE_CHARS),
-      summary: boundComposeText(rationale.summary, MAX_COMPOSE_RATIONALE_CHARS),
-      why: boundComposeText(rationale.why, MAX_COMPOSE_RATIONALE_CHARS),
-      impact: boundComposeText(rationale.impact, MAX_COMPOSE_RATIONALE_CHARS)
     })),
     recentEvents: recentEvents.slice(0, 12).map((event) => ({
       type: event.type,
@@ -188681,6 +189015,865 @@ var LiveActivityDispatcher = class extends WorkerJobPoller {
   }
 };
 var liveActivityDispatcher = new LiveActivityDispatcher();
+
+// mission-summary.ts
+init_db();
+var CURRENT_RUN_PREDICATE = `d.mission_id = ? AND d.workspace_id = ? AND d.deleted_at IS NULL
+      AND (o.reopened_at IS NULL OR d.delivered_at >= o.reopened_at)`;
+function placeholders3(count) {
+  return new Array(count).fill("?").join(", ");
+}
+async function resolveMissionScope(missionRef) {
+  const scope2 = await requireMissionPermission({
+    missionRef,
+    permission: PERMISSIONS.MISSION_READ
+  });
+  const row = await requireDatabaseClient().get(
+    `SELECT summary_enabled FROM missions WHERE id = ? AND workspace_id = ?`,
+    [scope2.missionId, scope2.workspaceId]
+  );
+  if (!row) throw new ApiError(404, "Mission not found");
+  return {
+    missionId: scope2.missionId,
+    workspaceId: scope2.workspaceId,
+    workspaceUserId: scope2.workspaceUserId,
+    // SQLite stores 0/1; PostgreSQL returns a boolean.
+    eligible: row.summary_enabled === true || Number(row.summary_enabled) === 1
+  };
+}
+async function loadSourceDeliveries(scope2) {
+  return await requireDatabaseClient().all(
+    `SELECT ranked.id, ranked.objective_id, ranked.delivered_at, ranked.summary, ranked.payload_json
+       FROM (
+         SELECT d.id, d.objective_id, d.delivered_at, d.summary, d.payload_json,
+                ROW_NUMBER() OVER (
+                  PARTITION BY d.objective_id ORDER BY d.delivered_at DESC, d.id DESC
+                ) AS run_rank
+           FROM deliveries d
+           LEFT JOIN objectives o ON o.id = d.objective_id
+          WHERE ${CURRENT_RUN_PREDICATE}
+       ) ranked
+      WHERE ranked.run_rank = 1
+      ORDER BY ranked.delivered_at DESC, ranked.id DESC`,
+    [scope2.missionId, scope2.workspaceId]
+  );
+}
+async function countCurrentRunDeliveries(scope2) {
+  const row = await requireDatabaseClient().get(
+    `SELECT COUNT(*) AS total
+       FROM deliveries d
+       LEFT JOIN objectives o ON o.id = d.objective_id
+      WHERE ${CURRENT_RUN_PREDICATE}`,
+    [scope2.missionId, scope2.workspaceId]
+  );
+  return Number(row?.total ?? 0);
+}
+async function loadCurrentRunDeliveries(scope2, deliveryIds) {
+  if (deliveryIds.length === 0) return /* @__PURE__ */ new Map();
+  const rows = await requireDatabaseClient().all(
+    `SELECT d.id, d.objective_id, d.delivered_at, d.summary, d.payload_json
+       FROM deliveries d
+       LEFT JOIN objectives o ON o.id = d.objective_id
+      WHERE ${CURRENT_RUN_PREDICATE}
+        AND d.id IN (${placeholders3(deliveryIds.length)})`,
+    [scope2.missionId, scope2.workspaceId, ...deliveryIds]
+  );
+  return new Map(rows.map((row) => [row.id, row]));
+}
+async function latestOpenQuestionAt(scope2) {
+  const row = await requireDatabaseClient().get(
+    `SELECT created_at FROM agent_requests
+      WHERE mission_id = ? AND deleted_at IS NULL AND status = 'open'
+        AND kind IN ('question', 'choice')
+      ORDER BY created_at DESC
+      LIMIT 1`,
+    [scope2.missionId]
+  );
+  return row?.created_at ?? null;
+}
+function latestTimestamp(...values) {
+  let latest = null;
+  for (const value2 of values) {
+    if (!value2) continue;
+    if (latest === null || Date.parse(value2) > Date.parse(latest)) latest = value2;
+  }
+  return latest === null ? null : new Date(latest).toISOString();
+}
+function buildEvidence(sources, currentRunDeliveries) {
+  const actions = [];
+  for (const source of sources) {
+    const report = deliveryReportFromPayload(source.payload_json, source.summary);
+    report.presentation.humanActions.forEach((action) => {
+      const { id: id2, ...fields } = action;
+      actions.push({
+        ...fields,
+        deliveryId: source.id,
+        objectiveId: source.objective_id,
+        actionId: id2,
+        deliveredAt: source.delivered_at,
+        order: actions.length
+      });
+    });
+  }
+  actions.sort(
+    (left, right) => Number(right.blocking === true) - Number(left.blocking === true) || left.order - right.order
+  );
+  const sourceDtos = sources.map((source) => ({
+    objectiveId: source.objective_id,
+    deliveryId: source.id,
+    deliveredAt: source.delivered_at
+  }));
+  const evidence = {
+    actions: actions.slice(0, MISSION_SUMMARY_EVIDENCE_LIMIT).map(({ order: _order, ...action }) => action),
+    sources: sourceDtos.slice(0, MISSION_SUMMARY_EVIDENCE_LIMIT),
+    totals: {
+      actions: actions.length,
+      sources: sourceDtos.length,
+      currentRunDeliveries
+    },
+    truncated: {
+      actions: actions.length > MISSION_SUMMARY_EVIDENCE_LIMIT,
+      sources: sourceDtos.length > MISSION_SUMMARY_EVIDENCE_LIMIT
+    }
+  };
+  return evidence;
+}
+function parseJsonArray2(value2) {
+  if (Array.isArray(value2)) return value2;
+  if (typeof value2 !== "string") return [];
+  try {
+    const parsed = JSON.parse(value2);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+function isNonEmptyString2(value2) {
+  return typeof value2 === "string" && value2.length > 0;
+}
+function parseRiskRefs(value2) {
+  return parseJsonArray2(value2).flatMap((item) => {
+    if (typeof item !== "object" || item === null) return [];
+    const { deliveryId, objectiveId, text } = item;
+    return isNonEmptyString2(deliveryId) && isNonEmptyString2(objectiveId) && isNonEmptyString2(text) ? [{ deliveryId, objectiveId, text }] : [];
+  });
+}
+function parseSuggestionRefs(value2) {
+  return parseJsonArray2(value2).flatMap((item) => {
+    if (typeof item !== "object" || item === null) return [];
+    const { deliveryId, objectiveId, actionId } = item;
+    return isNonEmptyString2(deliveryId) && isNonEmptyString2(objectiveId) && isNonEmptyString2(actionId) ? [{ deliveryId, objectiveId, actionId }] : [];
+  });
+}
+async function projectSummary(scope2, row) {
+  const riskRefs = parseRiskRefs(row.risks_json);
+  const suggestionRefs = parseSuggestionRefs(row.suggestions_json);
+  const deliveries = await loadCurrentRunDeliveries(scope2, [
+    ...new Set([...riskRefs, ...suggestionRefs].map((ref) => ref.deliveryId))
+  ]);
+  const resolutions = await loadResolutions([
+    ...new Set(suggestionRefs.map((ref) => ref.deliveryId).filter((id2) => deliveries.has(id2)))
+  ]);
+  const risks = riskRefs.filter((ref) => deliveries.get(ref.deliveryId)?.objective_id === ref.objectiveId).map(({ deliveryId, objectiveId, text }) => ({
+    deliveryId,
+    objectiveId,
+    deliveredAt: deliveries.get(deliveryId).delivered_at,
+    text
+  }));
+  const suggestions = [];
+  for (const ref of suggestionRefs) {
+    const delivery = deliveries.get(ref.deliveryId);
+    if (!delivery || delivery.objective_id !== ref.objectiveId) continue;
+    const report = deliveryReportFromPayload(delivery.payload_json, delivery.summary);
+    const entry = deferredWorkEntries(report).find((candidate) => candidate.id === ref.actionId);
+    if (!entry) continue;
+    const resolution = toResolution(findResolution(resolutions, delivery.id, entry));
+    if (resolution?.status === "dismissed") continue;
+    const identity = {
+      deliveryId: delivery.id,
+      objectiveId: delivery.objective_id,
+      deliveredAt: delivery.delivered_at,
+      actionId: entry.id,
+      title: entry.title
+    };
+    suggestions.push(
+      resolution ? { ...identity, state: "resolved", resolution } : {
+        ...identity,
+        state: "open",
+        change: entry.change,
+        location: entry.location,
+        doneWhen: entry.doneWhen,
+        resolution: null
+      }
+    );
+  }
+  return {
+    missionId: row.mission_id,
+    revision: Number(row.revision),
+    status: row.status,
+    headline: row.headline,
+    summary: row.summary_markdown,
+    risks,
+    suggestions,
+    sourceDeliveryId: row.source_delivery_id,
+    generatedBy: row.generated_by === "gemini" ? "gemini" : "deterministic",
+    generatedAt: row.generated_at,
+    model: row.model
+  };
+}
+async function loadSeenAt(scope2) {
+  const row = await requireDatabaseClient().get(
+    `SELECT seen_at FROM mission_summary_seen WHERE mission_id = ? AND workspace_user_id = ?`,
+    [scope2.missionId, scope2.workspaceUserId]
+  );
+  return row?.seen_at ?? null;
+}
+async function getMissionSummary2(missionRef) {
+  const scope2 = await resolveMissionScope(missionRef);
+  if (!scope2.eligible) {
+    return { eligible: false, summary: null, evidence: null, watermark: null, seenAt: null };
+  }
+  const db = requireDatabaseClient();
+  const [sources, currentRunDeliveries, openQuestionAt, summaryRow, seenAt] = await Promise.all([
+    loadSourceDeliveries(scope2),
+    countCurrentRunDeliveries(scope2),
+    latestOpenQuestionAt(scope2),
+    db.get(
+      `SELECT mission_id, revision, status, headline, summary_markdown, risks_json,
+              suggestions_json, source_delivery_id, generated_by, generated_at, model
+         FROM mission_summaries
+        WHERE mission_id = ? AND workspace_id = ?`,
+      [scope2.missionId, scope2.workspaceId]
+    ),
+    loadSeenAt(scope2)
+  ]);
+  return {
+    eligible: true,
+    summary: summaryRow ? await projectSummary(scope2, summaryRow) : null,
+    evidence: buildEvidence(sources, currentRunDeliveries),
+    // Every current-run delivery the response draws on is no newer than the
+    // newest source, which is always the first (uncapped) source row.
+    watermark: latestTimestamp(sources[0]?.delivered_at, openQuestionAt),
+    seenAt
+  };
+}
+async function evidenceUpperBound(scope2) {
+  const db = requireDatabaseClient();
+  const delivery = await db.get(
+    `SELECT delivered_at FROM deliveries
+      WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+      ORDER BY delivered_at DESC
+      LIMIT 1`,
+    [scope2.missionId, scope2.workspaceId]
+  );
+  const request = await db.get(
+    `SELECT created_at FROM agent_requests
+      WHERE mission_id = ? AND deleted_at IS NULL AND kind IN ('question', 'choice')
+      ORDER BY created_at DESC
+      LIMIT 1`,
+    [scope2.missionId]
+  );
+  return latestTimestamp(delivery?.delivered_at, request?.created_at);
+}
+function invalidInput(message2) {
+  return new ApiError(400, message2, void 0, "invalid_input");
+}
+async function markMissionSummarySeen(missionRef, body) {
+  const scope2 = await resolveMissionScope(missionRef);
+  const watermark = body && typeof body === "object" ? body.watermark : void 0;
+  if (typeof watermark !== "string" || !Number.isFinite(Date.parse(watermark))) {
+    throw invalidInput("watermark must be an ISO-8601 timestamp");
+  }
+  if (!scope2.eligible) throw invalidInput("This mission has no summary");
+  const seenAt = new Date(watermark).toISOString();
+  const upperBound = await evidenceUpperBound(scope2);
+  if (upperBound === null || Date.parse(seenAt) > Date.parse(upperBound)) {
+    throw invalidInput("watermark is later than the newest mission evidence");
+  }
+  const db = requireDatabaseClient();
+  await db.run(
+    `INSERT INTO mission_summary_seen (mission_id, workspace_user_id, seen_at)
+     VALUES (?, ?, ?)
+     ON CONFLICT (mission_id, workspace_user_id) DO UPDATE SET
+       seen_at = CASE
+         WHEN excluded.seen_at > mission_summary_seen.seen_at THEN excluded.seen_at
+         ELSE mission_summary_seen.seen_at
+       END`,
+    [scope2.missionId, scope2.workspaceUserId, seenAt]
+  );
+  const stored = await loadSeenAt(scope2);
+  return { seenAt: stored ?? seenAt };
+}
+
+// mission-summary-compose-worker.ts
+init_dist();
+init_delivery_report();
+
+// ../packages/core/service/mission-summary-compose.ts
+var MISSION_SUMMARY_LIMITS = {
+  headline: 140,
+  summary: 1200,
+  riskText: 400,
+  risks: 8,
+  riskCandidates: 40,
+  suggestions: 50,
+  fallbackSummarySentences: 3,
+  firstParagraph: 600,
+  newestDeliveryMarkdown: 3e3,
+  questionPrompt: 400,
+  openActions: 40,
+  objectives: 60
+};
+var RUNNING_OBJECTIVE_STATES = /* @__PURE__ */ new Set(["launching", "executing", "pending_delivery"]);
+function newestFirst2(left, right) {
+  const byTime = Date.parse(right.deliveredAt) - Date.parse(left.deliveredAt);
+  if (byTime !== 0) return byTime;
+  return left.id < right.id ? 1 : left.id > right.id ? -1 : 0;
+}
+function splitMissionSummaryRuns({
+  objectives,
+  deliveries
+}) {
+  const reopenedAt = new Map(objectives.map((objective) => [objective.id, objective.reopenedAt]));
+  const sorted = [...deliveries].sort(newestFirst2);
+  const currentRun = [];
+  const latestByObjective = [];
+  const superseded = [];
+  const seenObjectives = /* @__PURE__ */ new Set();
+  for (const delivery of sorted) {
+    const boundary = reopenedAt.get(delivery.objectiveId) ?? null;
+    if (boundary !== null && Date.parse(delivery.deliveredAt) < Date.parse(boundary)) {
+      superseded.push(delivery);
+      continue;
+    }
+    currentRun.push(delivery);
+    if (seenObjectives.has(delivery.objectiveId)) {
+      superseded.push(delivery);
+    } else {
+      seenObjectives.add(delivery.objectiveId);
+      latestByObjective.push(delivery);
+    }
+  }
+  return { currentRun, latestByObjective, superseded };
+}
+function normaliseText(value2) {
+  return value2.trim().replace(/\s+/g, " ").toLowerCase();
+}
+function bound(value2, maxChars) {
+  const trimmed9 = value2.trim();
+  if (trimmed9.length <= maxChars) return trimmed9;
+  return `${trimmed9.slice(0, maxChars - 1).trimEnd()}\u2026`;
+}
+function selectMissionSummarySuggestions({
+  currentRun,
+  resolutionStatus
+}) {
+  const refs = [];
+  const titles = /* @__PURE__ */ new Set();
+  for (const delivery of currentRun) {
+    for (const item of delivery.report.presentation.deferredWork) {
+      if (resolutionStatus.get(`${delivery.id}:${item.id}`) === "dismissed") continue;
+      const title = normaliseText(item.title);
+      if (titles.has(title)) continue;
+      titles.add(title);
+      refs.push({ deliveryId: delivery.id, objectiveId: delivery.objectiveId, actionId: item.id });
+      if (refs.length >= MISSION_SUMMARY_LIMITS.suggestions) return refs;
+    }
+  }
+  return refs;
+}
+function collectMissionSummaryRiskCandidates(deliveries) {
+  const candidates = [];
+  const texts = /* @__PURE__ */ new Set();
+  for (const delivery of deliveries) {
+    delivery.report.presentation.knownRisks.forEach((risk, index) => {
+      const normalised = normaliseText(risk);
+      if (!normalised || texts.has(normalised)) return;
+      texts.add(normalised);
+      candidates.push({
+        deliveryId: delivery.id,
+        objectiveId: delivery.objectiveId,
+        index,
+        text: bound(risk, MISSION_SUMMARY_LIMITS.riskText)
+      });
+    });
+  }
+  return candidates.slice(0, MISSION_SUMMARY_LIMITS.riskCandidates);
+}
+function missionSummaryRiskRef(risk) {
+  return `${risk.deliveryId}:${risk.index}`;
+}
+function collectMissionSummaryOpenActions(latestByObjective) {
+  const actions = latestByObjective.flatMap(
+    (delivery) => delivery.report.presentation.humanActions.map((action) => ({ delivery, action }))
+  );
+  return actions.map((entry, order) => ({ entry, order })).sort(
+    (left, right) => Number(right.entry.action.blocking === true) - Number(left.entry.action.blocking === true) || left.order - right.order
+  ).map(({ entry }) => entry);
+}
+function stripMarkdownInline(text) {
+  return text.replace(/```[\s\S]*?```/g, " ").replace(/`[^`]+`/g, "").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1").replace(/[#*_>~-]/g, "").replace(/\s+/g, " ").trim();
+}
+function deliveryOneSentence(delivery) {
+  const source = delivery.report.presentation.markdown.trim() || delivery.summary.trim();
+  const plain = stripMarkdownInline(source);
+  const match = plain.match(/^[^.!?]+[.!?]?/);
+  return match?.[0]?.trim() || plain.slice(0, 200);
+}
+function deliveryFirstParagraph(delivery) {
+  const source = delivery.report.presentation.markdown.trim() || delivery.summary.trim();
+  const paragraph = source.split(/\n\s*\n/).find((part) => part.trim()) ?? "";
+  return bound(paragraph, MISSION_SUMMARY_LIMITS.firstParagraph);
+}
+function objectiveLabel(objectives, objectiveId) {
+  const objective = objectives.find((candidate) => candidate.id === objectiveId);
+  if (!objective || objective.deleted) return "An objective";
+  return objective.key ? `Objective ${objective.key}` : `Objective "${objective.title}"`;
+}
+function withPeriod(sentence) {
+  return /[.!?…]$/.test(sentence) ? sentence : `${sentence}.`;
+}
+function deterministicMissionSummaryText({
+  objectives,
+  runs,
+  openQuestions
+}) {
+  const newest = runs.latestByObjective[0];
+  if (newest) {
+    const sentences = runs.latestByObjective.slice(0, MISSION_SUMMARY_LIMITS.fallbackSummarySentences).map((delivery) => withPeriod(deliveryOneSentence(delivery))).filter((sentence) => sentence !== ".");
+    return {
+      headline: bound(deliveryOneSentence(newest), MISSION_SUMMARY_LIMITS.headline),
+      summary: bound(sentences.join(" "), MISSION_SUMMARY_LIMITS.summary)
+    };
+  }
+  const question = [...openQuestions].sort(
+    (left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt)
+  )[0];
+  if (question) {
+    return {
+      headline: "An agent is waiting for your answer.",
+      summary: bound(
+        `${objectiveLabel(objectives, question.objectiveId)} asks: ${question.prompt.trim()}`,
+        MISSION_SUMMARY_LIMITS.summary
+      )
+    };
+  }
+  const running = objectives.find(
+    (objective) => !objective.deleted && RUNNING_OBJECTIVE_STATES.has(objective.state)
+  );
+  if (running) {
+    const label = objectiveLabel(objectives, running.id);
+    return {
+      headline: bound(`${label} is running.`, MISSION_SUMMARY_LIMITS.headline),
+      summary: `${label} is running. No objective has delivered yet.`
+    };
+  }
+  return {
+    headline: "No objective has delivered yet.",
+    summary: "The mission is waiting for its first delivery."
+  };
+}
+function deterministicMissionSummaryRisks(runs) {
+  return collectMissionSummaryRiskCandidates(runs.latestByObjective).slice(
+    0,
+    MISSION_SUMMARY_LIMITS.risks
+  );
+}
+function readDraftRisks(draft, candidates) {
+  if (!Array.isArray(draft.risks)) return [];
+  const byRef = new Map(candidates.map((candidate) => [missionSummaryRiskRef(candidate), candidate]));
+  const kept = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const item of draft.risks) {
+    if (!item || typeof item !== "object") continue;
+    const { ref, text } = item;
+    if (typeof ref !== "string") continue;
+    const candidate = byRef.get(ref.trim());
+    if (!candidate || seen.has(ref.trim())) continue;
+    seen.add(ref.trim());
+    const rewritten = typeof text === "string" && text.trim() ? text : candidate.text;
+    kept.push({ ...candidate, text: bound(rewritten, MISSION_SUMMARY_LIMITS.riskText) });
+    if (kept.length >= MISSION_SUMMARY_LIMITS.risks) break;
+  }
+  return kept;
+}
+function reconcileMissionSummaryDraft({
+  draft,
+  objectives,
+  runs,
+  openQuestions,
+  suggestions,
+  model
+}) {
+  const record2 = draft && typeof draft === "object" && !Array.isArray(draft) ? draft : null;
+  const headline = typeof record2?.headline === "string" ? record2.headline.trim() : "";
+  const summary = typeof record2?.summary === "string" ? record2.summary.trim() : "";
+  if (!record2 || !headline || !summary) {
+    return buildDeterministicMissionSummary({ objectives, runs, openQuestions, suggestions });
+  }
+  return {
+    status: "composed",
+    headline: bound(headline, MISSION_SUMMARY_LIMITS.headline),
+    summary: bound(summary, MISSION_SUMMARY_LIMITS.summary),
+    risks: readDraftRisks(record2, collectMissionSummaryRiskCandidates(runs.currentRun)),
+    suggestions,
+    generatedBy: "gemini",
+    model
+  };
+}
+function buildDeterministicMissionSummary({
+  objectives,
+  runs,
+  openQuestions,
+  suggestions
+}) {
+  return {
+    status: "fallback",
+    ...deterministicMissionSummaryText({ objectives, runs, openQuestions }),
+    risks: deterministicMissionSummaryRisks(runs),
+    suggestions,
+    generatedBy: "deterministic",
+    model: null
+  };
+}
+
+// mission-summary-compose-worker.ts
+init_worker_jobs();
+init_db();
+var CLAIM_BATCH_SIZE2 = 5;
+var MAX_PASSES_PER_JOB = 3;
+function logSummaryMetric(event, fields) {
+  console.info("[mission-summary-compose-worker]", JSON.stringify({ event, ...fields }));
+}
+async function loadMissionSummaryEvidence(client, missionId) {
+  return client.transaction(async (tx) => {
+    const generation = await readMissionSummaryGeneration(tx, missionId);
+    if (!generation) return null;
+    const mission = await tx.get(
+      `SELECT title, status_type, display_id, summary_enabled FROM missions
+        WHERE id = ? AND deleted_at IS NULL`,
+      [missionId]
+    );
+    if (!mission) return null;
+    const objectiveRows = await tx.all(
+      `SELECT id, display_key, title, state, reopened_at, deleted_at
+         FROM objectives WHERE mission_id = ?`,
+      [missionId]
+    );
+    const objectives = objectiveRows.map((row) => ({
+      id: row.id,
+      key: formatObjectiveDisplayId({
+        missionDisplayId: mission.display_id,
+        displayKey: row.display_key
+      }),
+      title: row.title?.trim() || "Untitled objective",
+      state: row.state,
+      reopenedAt: row.reopened_at,
+      deleted: row.deleted_at !== null
+    }));
+    const deliveryRows = await tx.all(
+      `SELECT d.id, d.objective_id, d.delivered_at, d.summary, d.payload_json
+         FROM deliveries d
+         LEFT JOIN objectives o ON o.id = d.objective_id
+        WHERE d.mission_id = ? AND d.deleted_at IS NULL
+          AND (o.reopened_at IS NULL OR d.delivered_at >= o.reopened_at)
+        ORDER BY d.delivered_at DESC, d.id DESC`,
+      [missionId]
+    );
+    const deliveries = deliveryRows.map((row) => ({
+      id: row.id,
+      objectiveId: row.objective_id,
+      deliveredAt: row.delivered_at,
+      summary: row.summary,
+      report: reportFromPayload(row.payload_json, row.summary)
+    }));
+    const runs = splitMissionSummaryRuns({ objectives, deliveries });
+    const resolutionRows = runs.currentRun.length === 0 ? [] : await tx.all(
+      `SELECT delivery_id, action_id, status FROM human_action_resolutions
+              WHERE mission_id = ?`,
+      [missionId]
+    );
+    const resolutionStatus = new Map(
+      resolutionRows.map((row) => [`${row.delivery_id}:${row.action_id}`, row.status])
+    );
+    const questionRows = await tx.all(
+      `SELECT id, objective_id, summary, created_at FROM agent_requests
+        WHERE mission_id = ? AND deleted_at IS NULL AND status = 'open'
+          AND kind IN ('question', 'choice')
+        ORDER BY created_at DESC
+        LIMIT 20`,
+      [missionId]
+    );
+    const filePathCount = await tx.get(
+      `SELECT COUNT(DISTINCT file_path) AS total FROM changed_files
+        WHERE mission_id = ? AND deleted_at IS NULL`,
+      [missionId]
+    );
+    return {
+      generation: generation.requestedGeneration,
+      sourceDeliveryId: generation.sourceDeliveryId,
+      previous: generation.previous,
+      mission: {
+        title: mission.title,
+        statusType: mission.status_type,
+        displayId: mission.display_id
+      },
+      objectives,
+      runs,
+      openQuestions: questionRows.map((row) => ({
+        requestId: row.id,
+        objectiveId: row.objective_id,
+        prompt: row.summary,
+        createdAt: row.created_at
+      })),
+      resolutionStatus,
+      counts: {
+        deliveries: runs.currentRun.length,
+        filePaths: Number(filePathCount?.total ?? 0)
+      }
+    };
+  });
+}
+function reportFromPayload(payloadJson, summary) {
+  let deliveryReport;
+  try {
+    deliveryReport = payloadJson ? JSON.parse(payloadJson).deliveryReport : void 0;
+  } catch {
+    deliveryReport = void 0;
+  }
+  return readDeliveryReport({ summary, deliveryReport });
+}
+function bound2(value2, maxChars) {
+  return value2.length <= maxChars ? value2 : value2.slice(0, maxChars);
+}
+function toMissionSummaryInput(evidence, suggestions) {
+  const keyOf = (objectiveId) => evidence.objectives.find((objective) => objective.id === objectiveId && !objective.deleted)?.key ?? "unassigned";
+  const latest = new Map(
+    evidence.runs.latestByObjective.map((delivery) => [delivery.objectiveId, delivery])
+  );
+  const newest = evidence.runs.latestByObjective[0] ?? null;
+  const deliveries = new Map(evidence.runs.currentRun.map((delivery) => [delivery.id, delivery]));
+  return {
+    mission: { title: evidence.mission.title, statusType: evidence.mission.statusType },
+    previousSummary: evidence.previous,
+    objectives: evidence.objectives.filter((objective) => !objective.deleted).slice(0, MISSION_SUMMARY_LIMITS.objectives).map((objective) => {
+      const delivery = latest.get(objective.id);
+      return {
+        key: objective.key,
+        title: objective.title,
+        state: objective.state,
+        latestDelivery: delivery ? {
+          deliveryId: delivery.id,
+          deliveredAt: delivery.deliveredAt,
+          firstParagraph: deliveryFirstParagraph(delivery)
+        } : null
+      };
+    }),
+    newestDelivery: newest ? {
+      objectiveKey: keyOf(newest.objectiveId),
+      markdown: bound2(
+        newest.report.presentation.markdown.trim() || newest.summary,
+        MISSION_SUMMARY_LIMITS.newestDeliveryMarkdown
+      )
+    } : null,
+    openActions: collectMissionSummaryOpenActions(evidence.runs.latestByObjective).slice(0, MISSION_SUMMARY_LIMITS.openActions).map(({ delivery, action }) => ({
+      ref: `${delivery.id}:${action.id}`,
+      objectiveKey: keyOf(delivery.objectiveId),
+      action: action.action,
+      ...action.reason ? { reason: action.reason } : {},
+      blocking: action.blocking === true,
+      category: action.category
+    })),
+    openQuestions: evidence.openQuestions.map((question) => ({
+      requestId: question.requestId,
+      objectiveKey: keyOf(question.objectiveId),
+      prompt: bound2(question.prompt, MISSION_SUMMARY_LIMITS.questionPrompt)
+    })),
+    pendingSuggestions: suggestions.flatMap((ref) => {
+      if (evidence.resolutionStatus.has(`${ref.deliveryId}:${ref.actionId}`)) return [];
+      const item = deliveries.get(ref.deliveryId)?.report.presentation.deferredWork.find((candidate) => candidate.id === ref.actionId);
+      return item ? [{ objectiveKey: keyOf(ref.objectiveId), title: item.title }] : [];
+    }),
+    knownRisks: collectMissionSummaryRiskCandidates(evidence.runs.currentRun).map((risk) => ({
+      ref: missionSummaryRiskRef(risk),
+      objectiveKey: keyOf(risk.objectiveId),
+      text: risk.text
+    })),
+    counts: evidence.counts
+  };
+}
+var MissionSummaryComposeWorker = class extends WorkerJobPoller {
+  generateOverride = null;
+  constructor() {
+    super({
+      workerIdPrefix: "mission-summary-compose",
+      jobTypes: [MISSION_SUMMARY_COMPOSE_JOB_TYPE],
+      logPrefix: "mission-summary-compose-worker",
+      claimBatchSize: CLAIM_BATCH_SIZE2
+    });
+  }
+  /** Test seam: inject a fake Gemini generator. */
+  setGenerateOverride(generate) {
+    this.generateOverride = generate;
+  }
+  shouldPoll() {
+    return process.env.OVERLORD_MISSION_SUMMARY_COMPOSE_DISABLED !== "1";
+  }
+  databaseClient() {
+    return requireDatabaseClient();
+  }
+  /** Test seam: process one claimed job directly. */
+  async processJobForTest(client, job) {
+    await this.processJob(client, job);
+  }
+  async processJob(client, job) {
+    const startedAt = Date.now();
+    let missionId;
+    try {
+      const payload = JSON.parse(job.payload_json);
+      if (typeof payload.missionId !== "string" || !payload.missionId.trim()) {
+        throw new Error("Missing missionId in worker payload");
+      }
+      missionId = payload.missionId.trim();
+    } catch (err) {
+      await this.finishJob(client, job, "failed", `Malformed payload: ${String(err)}`);
+      return;
+    }
+    try {
+      for (let pass2 = 1; pass2 <= MAX_PASSES_PER_JOB; pass2++) {
+        const outcome = await this.composePass(client, missionId, false);
+        if (outcome.kind === "missing") {
+          await completeMissionSummaryComposeJob({
+            db: client,
+            jobId: job.id,
+            missionId,
+            status: "cancelled",
+            lastError: "Mission summary not found"
+          });
+          logSummaryMetric("mission_summary_cancelled", { jobId: job.id, missionId });
+          return;
+        }
+        if (outcome.kind === "stale") {
+          logSummaryMetric("mission_summary_stale", { jobId: job.id, missionId, pass: pass2 });
+          continue;
+        }
+        logSummaryMetric(
+          outcome.result.status === "composed" ? "mission_summary_composed" : "mission_summary_fallback",
+          {
+            jobId: job.id,
+            missionId,
+            attempt: job.attempt_count,
+            pass: pass2,
+            durationMs: Date.now() - startedAt,
+            model: outcome.result.model,
+            risks: outcome.result.risks.length,
+            suggestions: outcome.result.suggestions.length,
+            inputBytes: outcome.inputBytes,
+            estimatedInputTokens: Math.ceil(outcome.inputBytes / 4)
+          }
+        );
+        break;
+      }
+      const { successorJobId } = await completeMissionSummaryComposeJob({
+        db: client,
+        jobId: job.id,
+        missionId,
+        status: "succeeded"
+      });
+      if (successorJobId) {
+        logSummaryMetric("mission_summary_successor_queued", {
+          jobId: job.id,
+          missionId,
+          successorJobId
+        });
+      }
+    } catch (err) {
+      const message2 = err instanceof Error ? err.message : String(err);
+      console.warn(`[mission-summary-compose-worker] job ${job.id} failed:`, message2);
+      if (job.attempt_count < job.max_attempts) {
+        await this.failOrRetry(client, job, err);
+        logSummaryMetric("mission_summary_failed", {
+          jobId: job.id,
+          missionId,
+          attempt: job.attempt_count,
+          retrying: true,
+          durationMs: Date.now() - startedAt
+        });
+        return;
+      }
+      await this.composePass(client, missionId, true).catch((fallbackErr) => {
+        console.warn("[mission-summary-compose-worker] fallback persist failed", fallbackErr);
+      });
+      await completeMissionSummaryComposeJob({
+        db: client,
+        jobId: job.id,
+        missionId,
+        status: "failed",
+        lastError: message2
+      });
+      logSummaryMetric("mission_summary_failed", {
+        jobId: job.id,
+        missionId,
+        attempt: job.attempt_count,
+        durationMs: Date.now() - startedAt
+      });
+    }
+  }
+  async composePass(client, missionId, forceFallback) {
+    const evidence = await loadMissionSummaryEvidence(client, missionId);
+    if (!evidence) return { kind: "missing" };
+    const suggestions = selectMissionSummarySuggestions({
+      currentRun: evidence.runs.currentRun,
+      resolutionStatus: evidence.resolutionStatus
+    });
+    const shared = {
+      objectives: evidence.objectives,
+      runs: evidence.runs,
+      openQuestions: evidence.openQuestions,
+      suggestions
+    };
+    let result2;
+    let inputBytes = 0;
+    const canGenerate = isGeminiConfigured() || this.generateOverride !== null;
+    if (forceFallback || !canGenerate) {
+      result2 = buildDeterministicMissionSummary(shared);
+    } else {
+      const input2 = toMissionSummaryInput(evidence, suggestions);
+      inputBytes = Buffer.byteLength(JSON.stringify(input2), "utf8");
+      const generate = this.generateOverride;
+      const draft = await composeMissionSummaryWithGemini({
+        input: input2,
+        ...generate ? {
+          generate: async ({ prompt, systemInstruction }) => generate({ prompt, systemInstruction })
+        } : {}
+      });
+      result2 = reconcileMissionSummaryDraft({
+        ...shared,
+        draft,
+        model: readGeminiConfigFromEnv()?.model ?? null
+      });
+    }
+    const published = await publishMissionSummary({
+      db: client,
+      missionId,
+      generation: evidence.generation,
+      publication: {
+        status: result2.status,
+        headline: result2.headline,
+        summary: result2.summary,
+        risks: result2.risks,
+        suggestions: result2.suggestions,
+        sourceDeliveryId: evidence.sourceDeliveryId,
+        generatedBy: result2.generatedBy,
+        model: result2.model
+      }
+    });
+    if (published === "missing") return { kind: "missing" };
+    if (published === "stale") return { kind: "stale" };
+    return { kind: "published", result: result2, inputBytes };
+  }
+};
+var missionSummaryComposeWorker = new MissionSummaryComposeWorker();
 
 // notification-dispatcher.ts
 init_change_feed();
@@ -189492,7 +190685,7 @@ var ALLOWED = [
   ["POST", /^\/mcp$/],
   [
     "POST",
-    /^\/api\/protocol\/(?:create|load-context|search-missions|search|discover-project|statuses|list-deliveries|attachment-list|attachment-download-url|auth-status)$/
+    /^\/api\/protocol\/(?:create|load-context|search-missions|search|discover-project|statuses|list-deliveries|objective-changes|attachment-list|attachment-download-url|auth-status)$/
   ]
 ];
 function projectAutomationRouteGuard(req, res, next) {
@@ -190542,7 +191735,7 @@ function redactSecretLikeTokens(text) {
 
 // webhook-dispatcher.ts
 var POLL_INTERVAL_MS = 1e3;
-var CLAIM_BATCH_SIZE2 = 10;
+var CLAIM_BATCH_SIZE3 = 10;
 var REQUEST_TIMEOUT_MS = 1e4;
 var RESPONSE_SNIPPET_LIMIT = 1e3;
 var RETRY_BACKOFF_MS2 = [3e4, 12e4, 6e5, 36e5, 216e5, 864e5];
@@ -190562,7 +191755,7 @@ var WebhookDispatcher = class extends PollLoop {
    */
   async runOnce() {
     const client = requireDatabaseClient();
-    for (let i5 = 0; i5 < CLAIM_BATCH_SIZE2 && !this.isStopped; i5++) {
+    for (let i5 = 0; i5 < CLAIM_BATCH_SIZE3 && !this.isStopped; i5++) {
       const row = await claimNextOutboxMessage(client);
       if (!row) break;
       await this.deliver(client, row);
@@ -191421,6 +192614,7 @@ var mutationPollLoops = [
   realtime,
   webhookDispatcher,
   deliveryComposeWorker,
+  missionSummaryComposeWorker,
   liveActivityDispatcher,
   pushNotificationDispatcher,
   notificationDispatcher
@@ -192535,6 +193729,14 @@ app.get(
   handle3((req) => listMissionDeliveries(req.params.id))
 );
 app.get(
+  "/api/missions/:id/summary",
+  handle3((req) => getMissionSummary2(req.params.id))
+);
+app.put(
+  "/api/missions/:id/summary/seen",
+  handle3((req) => markMissionSummarySeen(req.params.id, req.body), { mutates: true })
+);
+app.get(
   "/api/missions/:id/artifacts",
   handle3((req) => listArtifacts2(req.params.id))
 );
@@ -192565,7 +193767,14 @@ app.patch(
 );
 app.get(
   "/api/missions/:id/file-changes",
-  handle3((req) => listMissionFileChanges(req.params.id))
+  handle3((req) => {
+    const objectiveId = req.query.objectiveId;
+    if (objectiveId === void 0) return listMissionFileChanges(req.params.id);
+    if (typeof objectiveId !== "string" || !objectiveId.trim()) {
+      throw new ApiError(400, "objectiveId must be a single non-empty value");
+    }
+    return listObjectiveFileChangesForMission(req.params.id, objectiveId);
+  })
 );
 app.post(
   "/api/missions/schedule/preview",

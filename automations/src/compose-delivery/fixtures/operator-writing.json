@@ -1,0 +1,16 @@
+{
+  "before": "The implementation of the export capability has been successfully completed and production enablement should now be performed.",
+  "after": {
+    "markdown": "The exporter writes CSV files. Enable the export in production.",
+    "humanActions": [],
+    "tradeoffsMade": [],
+    "knownRisks": [],
+    "assumptions": []
+  },
+  "deferredWork": {
+    "title": "Measure export duration",
+    "change": "Record the duration of each export.",
+    "location": "backend/export.ts",
+    "doneWhen": "Each export records its duration."
+  }
+}

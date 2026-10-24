@@ -135,6 +135,8 @@ import {
   revokeLiveActivityStartToken
 } from './live-activities.ts';
 import { liveActivityDispatcher } from './live-activity-dispatcher.ts';
+import { getMissionSummary, markMissionSummarySeen } from './mission-summary.ts';
+import { missionSummaryComposeWorker } from './mission-summary-compose-worker.ts';
 import { notificationDispatcher } from './notification-dispatcher.ts';
 import { dismissNotification, listNotifications, markNotificationRead } from './notifications.ts';
 import {
@@ -210,9 +212,9 @@ import {
   listMissionDeliveries,
   listMissionEvents,
   listMissionFileChanges,
-  listObjectiveFileChangesForMission,
   listMissions,
   listMissionSharedContext,
+  listObjectiveFileChangesForMission,
   listObjectives,
   listProjectResources,
   listProjects,
@@ -547,6 +549,7 @@ const mutationPollLoops: readonly PollLoop<unknown>[] = [
   realtime,
   webhookDispatcher,
   deliveryComposeWorker,
+  missionSummaryComposeWorker,
   liveActivityDispatcher,
   pushNotificationDispatcher,
   notificationDispatcher
@@ -1893,6 +1896,16 @@ app.get(
 app.get(
   '/api/missions/:id/deliveries',
   handle(req => listMissionDeliveries(req.params.id))
+);
+// Mission summary (contract v166): operator surface only, never exposed to
+// agents through load-context, the mission packet, MCP, or the CLI protocol.
+app.get(
+  '/api/missions/:id/summary',
+  handle(req => getMissionSummary(req.params.id))
+);
+app.put(
+  '/api/missions/:id/summary/seen',
+  handle(req => markMissionSummarySeen(req.params.id, req.body), { mutates: true })
 );
 app.get(
   '/api/missions/:id/artifacts',

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "description": "Conformance fixtures for the contract-v15 deterministic delivery report.",
+  "description": "Conformance fixtures for the deterministic delivery report (contract v15; structured deferred work and its stable id derivation since contract v166).",
   "cases": [
     {
       "name": "complete-agent-report",
@@ -28,12 +28,41 @@
             }
           ],
           "knownRisks": ["Composition worker is deferred."],
-          "deferredWork": ["Delivery detail UI is not included."],
+          "deferredWork": [
+            {
+              "title": "Advance the fake clock before the second retry",
+              "change": "The test asserts the retry fired but never advances the fake clock between attempts, so it passes or fails on real time.",
+              "location": "backend/sync-worker.test.ts › retries after a 503",
+              "doneWhen": "The test passes 20 consecutive runs with the fake clock driving both attempts."
+            },
+            {
+              "title": "  Add a delivery detail route  ",
+              "change": "Clients can read a delivery only through the mission feed.",
+              "location": "backend/index.ts",
+              "doneWhen": "GET /api/deliveries/:id returns one DeliveryDto."
+            }
+          ],
           "assumptions": ["deliveries.payload_json remains the extension point."]
         }
       },
       "expectedHumanActionCount": 1,
-      "expectedTradeoffCount": 1
+      "expectedTradeoffCount": 1,
+      "expectedDeferredWork": [
+        {
+          "id": "deferred-work-0-d8cae660820aadbb",
+          "title": "Advance the fake clock before the second retry",
+          "change": "The test asserts the retry fired but never advances the fake clock between attempts, so it passes or fails on real time.",
+          "location": "backend/sync-worker.test.ts › retries after a 503",
+          "doneWhen": "The test passes 20 consecutive runs with the fake clock driving both attempts."
+        },
+        {
+          "id": "deferred-work-1-77e6d383d326a933",
+          "title": "Add a delivery detail route",
+          "change": "Clients can read a delivery only through the mission feed.",
+          "location": "backend/index.ts",
+          "doneWhen": "GET /api/deliveries/:id returns one DeliveryDto."
+        }
+      ]
     },
     {
       "name": "explicit-empty-arrays",
@@ -64,10 +93,18 @@
         "schemaVersion": 1,
         "agentReport": {
           "humanActions": [
-            { "action": "git push the branch" },
-            { "action": "Open a pull request" },
-            { "action": "Review the code" },
-            { "action": "Run the tests" }
+            {
+              "action": "git push the branch"
+            },
+            {
+              "action": "Open a pull request"
+            },
+            {
+              "action": "Review the code"
+            },
+            {
+              "action": "Run the tests"
+            }
           ]
         }
       },
@@ -97,6 +134,41 @@
       },
       "expectedHumanActionCount": 0,
       "expectedTradeoffCount": 0
+    },
+    {
+      "name": "invalid-deferred-work-items-are-not-normalized",
+      "summary": "Builder salvage drops deferred-work items that are not valid objects.",
+      "deliveryReport": {
+        "schemaVersion": 1,
+        "agentReport": {
+          "deferredWork": [
+            "Delivery detail UI is not included.",
+            {
+              "title": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+              "change": "Too long a title.",
+              "location": "webapp",
+              "doneWhen": "Never."
+            },
+            {
+              "title": "Missing done criteria",
+              "change": "No doneWhen field.",
+              "location": "webapp"
+            },
+            {
+              "title": "Unknown key",
+              "change": "Has a note.",
+              "location": "webapp",
+              "doneWhen": "Never.",
+              "note": "extra"
+            }
+          ]
+        }
+      },
+      "expectedHumanActionCount": 0,
+      "expectedTradeoffCount": 0,
+      "expectedWarningCount": 4,
+      "expectedDeferredWork": [],
+      "protocolRejects": "invalid_input"
     }
   ]
 }

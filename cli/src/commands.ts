@@ -61,9 +61,9 @@ import {
   isUnlinkableExecutionRequestError
 } from './errors.js';
 import { launchAgent } from './launch.js';
-import { buildLocalObjectiveChanges } from './local-objective-changes.js';
 import { recoverLaunchBootstrapFromProjectTmp } from './launch-bootstrap.js';
 import { fetchLaunchSettings } from './launch-settings.js';
+import { buildLocalObjectiveChanges } from './local-objective-changes.js';
 import { resolveNativeSessionId } from './native-session.js';
 import { runOrgSetupCommand } from './org-setup.js';
 import { printJson, printKeyValue } from './output.js';

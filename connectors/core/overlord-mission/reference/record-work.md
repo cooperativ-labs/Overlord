@@ -49,12 +49,17 @@ identical across the CLI (`--payload-file -`) and the hosted MCP tool
   or `decision`.
 - **`deliveryReport`** (optional) — you may include a `deliveryReport.agentReport`
   (`humanActions`, `tradeoffsMade`, `knownRisks`, `deferredWork`, `assumptions`) just as
-  in `deliver`. Each `deferredWork` item must be a recommended new objective that is not
-  part of this mission (for example a bug discovered here that belongs outside it). Name
-  the component or file involved and say why the work was left. Never list work already
-  covered by this mission's future objectives, leftover slices of the current objective,
-  or human implementation follow-up (those belong in `humanActions`). Use an empty array
-  when nothing qualifies. It improves review visibility but never blocks the record.
+  in `deliver`. Each `deferredWork` item is one recommended objective outside this
+  mission. Be very concise. `title` names the work in an imperative phrase. `change`
+  states only the specific change that is needed. `location` says where to find it in
+  the code: the file, function, component, or command. `doneWhen` states the observable
+  result in one sentence. Do not add instructions on how to do the work, background, or
+  rationale. The operator turns the item into an objective or a mission as written, so it
+  must read as a task, not as a note. All four fields are required (at most 80, 400, 200
+  and 200 characters); a plain string item is rejected with `invalid_input`. Never list
+  work already covered by this mission's future objectives, leftover slices of the
+  current objective, or human implementation follow-up (those belong in `humanActions`).
+  Use an empty array when nothing qualifies. It improves review visibility but never blocks the record.
 
 ## CLI
 

@@ -1,5 +1,5 @@
 import { AlertTriangle, Clock3, Lightbulb, ListChecks, Package, Scale } from 'lucide-react';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from 'react';
 
 import {
   Accordion,
@@ -80,17 +80,49 @@ function DeliveryBulletSection({
   );
 }
 
+/**
+ * Which delivery sections a card draws (plan §3.1):
+ *
+ * - `full` — every section, as before the mission summary existed.
+ * - `objective` — drops follow-up actions and deferred work, which the mission
+ *   summary carries for summary-eligible missions. Tradeoffs, known risks,
+ *   assumptions and the full-text accordion stay.
+ */
+export type DeliveryPresentationVariant = 'full' | 'objective';
+
+const MissionDeliveryVariantContext = createContext<DeliveryPresentationVariant>('full');
+
+/**
+ * Provided by the mission panel: `objective` only when the mission summary
+ * envelope says the mission is eligible, so older missions keep `full`.
+ */
+export const MissionDeliveryVariantProvider = MissionDeliveryVariantContext.Provider;
+
+export function useMissionDeliveryVariant(): DeliveryPresentationVariant {
+  return useContext(MissionDeliveryVariantContext);
+}
+
+/** The card variant for a mission summary envelope's eligibility. */
+export function deliveryVariantForEligibility(
+  eligible: boolean | undefined
+): DeliveryPresentationVariant {
+  return eligible === true ? 'objective' : 'full';
+}
+
 export function DeliveryPresentation({
   delivery,
   summaryText,
-  emphasized = false
+  emphasized = false,
+  variant = 'full'
 }: {
   delivery: DeliveryDto;
   summaryText: string;
   /** When true, uses the scaled activity-feed card styling. */
   emphasized?: boolean;
+  variant?: DeliveryPresentationVariant;
 }) {
   const presentation = delivery.report.presentation;
+  const showSummarySections = variant === 'full';
   const cardClass = emphasized
     ? `${DELIVERY_CARD_EMPHASIS_CLASS} grid min-w-0 gap-3 p-3`
     : 'grid min-w-0 gap-3';
@@ -103,7 +135,7 @@ export function DeliveryPresentation({
         </p>
       ) : null}
       <Markdown text={presentation.markdown} />
-      {presentation.humanActions.length > 0 ? (
+      {showSummarySections && presentation.humanActions.length > 0 ? (
         <section
           aria-labelledby={`delivery-actions-${delivery.id}`}
           className="min-w-0 rounded-md border border-sky-300 bg-sky-50 p-3 dark:border-sky-500/50 dark:bg-sky-500/10"
@@ -169,7 +201,7 @@ export function DeliveryPresentation({
           itemClassName="text-red-950 dark:text-red-100"
         />
       ) : null}
-      {delivery.deferredWorkItems.length > 0 ? (
+      {showSummarySections && delivery.deferredWorkItems.length > 0 ? (
         <section
           aria-labelledby={`delivery-deferred-${delivery.id}`}
           className="min-w-0 rounded-md border border-violet-300 bg-violet-50 p-3 dark:border-violet-500/50 dark:bg-violet-500/10"
@@ -272,9 +304,11 @@ export function useCollapseOnDismiss(
 export function MissionDeliveryCard({
   delivery,
   objectiveTitle,
-  defaultExpanded = false
+  defaultExpanded = false,
+  variant = 'full'
 }: {
   delivery: DeliveryDto;
+  variant?: DeliveryPresentationVariant;
   /**
    * Card heading. The mission-level list passes the objective's title; a card
    * rendered inside its own objective passes a run label instead ("Run 1 of 2"),
@@ -307,7 +341,11 @@ export function MissionDeliveryCard({
             {formatDeliveryTimestamp(delivery.deliveredAt)}
           </span>
         </button>
-        <DeliveryPresentation delivery={delivery} summaryText={delivery.summary} />
+        <DeliveryPresentation
+          delivery={delivery}
+          summaryText={delivery.summary}
+          variant={variant}
+        />
       </article>
     );
   }
@@ -340,10 +378,12 @@ export function MissionDeliveryCard({
 
 export function MissionDeliveryList({
   deliveries,
-  objectiveTitleById
+  objectiveTitleById,
+  variant = 'full'
 }: {
   deliveries: DeliveryDto[];
   objectiveTitleById: Map<string, string | null>;
+  variant?: DeliveryPresentationVariant;
 }) {
   const sorted = [...deliveries].sort(
     (a, b) => new Date(b.deliveredAt).getTime() - new Date(a.deliveredAt).getTime()
@@ -356,6 +396,7 @@ export function MissionDeliveryList({
           key={delivery.id}
           delivery={delivery}
           objectiveTitle={objectiveTitleById.get(delivery.objectiveId) ?? null}
+          variant={variant}
         />
       ))}
     </div>

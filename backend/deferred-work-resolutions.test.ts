@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -13,27 +12,44 @@ const { db } = await import('./db.ts');
 const { seedDelivery: seedDeliveryRow } = await import('./test-helpers.ts');
 const { createProject, createMission, listMissionDeliveries } = await import('./repository.ts');
 const { reopenDeferredWork, resolveDeferredWork } = await import('./deferred-work-resolutions.ts');
-const { buildDeliveryReport } = await import('../packages/core/service/delivery-report.ts');
+const { buildDeliveryReport, deferredWorkId } =
+  await import('../packages/core/service/delivery-report.ts');
 
 function newId(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function legacyDeferredWorkId(text: string, occurrence: number): string {
-  const digest = createHash('sha256').update(text).digest('hex').slice(0, 16);
-  return `deferred-work-${digest}-${occurrence}`;
+interface DeferredWorkInput {
+  title: string;
+  change: string;
+  location: string;
+  doneWhen: string;
 }
 
-function rewritePresentationDeferredWork(deliveryId: string, deferredWork: string[]): void {
+/** A structured deferred-work item (contract v166) whose fields all derive from `title`. */
+function item(title: string): DeferredWorkInput {
+  return {
+    title,
+    change: `${title} in the exporter.`,
+    location: 'backend/exporter.ts',
+    doneWhen: `${title} is visible in the export.`
+  };
+}
+
+/** Narrows `presentation.deferredWork` to the agent items at `indexes`, as the composer's eligibility filter does. */
+function keepPresentationDeferredWork(deliveryId: string, indexes: number[]): void {
   const row = db.prepare(`SELECT payload_json FROM deliveries WHERE id = ?`).get(deliveryId) as {
     payload_json: string;
   };
   const payload = JSON.parse(row.payload_json) as {
     deliveryReport: {
-      presentation: { deferredWork: string[]; status: string; generatedBy: string };
+      agentReport: { deferredWork: unknown[] };
+      presentation: { deferredWork: unknown[]; status: string; generatedBy: string };
     };
   };
-  payload.deliveryReport.presentation.deferredWork = deferredWork;
+  payload.deliveryReport.presentation.deferredWork = indexes.map(
+    index => payload.deliveryReport.agentReport.deferredWork[index]
+  );
   payload.deliveryReport.presentation.status = 'composed';
   payload.deliveryReport.presentation.generatedBy = 'gemini';
   db.prepare(`UPDATE deliveries SET payload_json = ? WHERE id = ?`).run(
@@ -59,7 +75,7 @@ function seedDelivery({
   missionId: string;
   objectiveId: string;
   humanActions?: Array<{ action: string; reason?: string; blocking?: boolean }>;
-  deferredWork?: string[];
+  deferredWork?: DeferredWorkInput[];
 }): string {
   const id = newId('delivery');
   const summary = 'Delivered.';
@@ -99,7 +115,7 @@ test('duplicate deferred-work items stay distinct and resolve independently', as
     projectId: project.id,
     missionId: mission.id,
     objectiveId: objective.id,
-    deferredWork: ['Add the audit-log export', 'Add the audit-log export']
+    deferredWork: [item('Add the audit-log export'), item('Add the audit-log export')]
   });
 
   const items = await deferredWorkItems(mission.id, deliveryId);
@@ -108,7 +124,8 @@ test('duplicate deferred-work items stay distinct and resolve independently', as
 
   const resolved = await resolveDeferredWork(deliveryId, items[0]!.actionId, { status: 'done' });
   assert.equal(resolved.actionId, items[0]!.actionId);
-  assert.equal(resolved.action, 'Add the audit-log export');
+  assert.equal(resolved.title, 'Add the audit-log export');
+  assert.equal(resolved.location, 'backend/exporter.ts');
   assert.equal(resolved.resolution?.status, 'done');
   assert.equal(resolved.resolution?.resolvedByWorkspaceUserId, 'operator-workspace-user');
 
@@ -117,130 +134,33 @@ test('duplicate deferred-work items stay distinct and resolve independently', as
   assert.equal(after[1]!.resolution, null);
 });
 
-test('deferred-work ids stay stable across presentation composition', async () => {
-  const { project, mission, objective } = await seedMission('DW Stable');
+test('items carry the agent id through a narrowed presentation', async () => {
+  const { project, mission, objective } = await seedMission('DW Subset');
+  const dropped = item('Implement the CSV export API');
+  const kept = item('Fix the date-dependent lifecycle test');
   const deliveryId = seedDelivery({
     workspaceId: mission.workspaceId,
     projectId: project.id,
     missionId: mission.id,
     objectiveId: objective.id,
-    deferredWork: ['Finish the initial audit-log export implementation']
+    deferredWork: [dropped, kept]
   });
+  const [, second] = await deferredWorkItems(mission.id, deliveryId);
+  assert.equal(second!.actionId, deferredWorkId(1, kept));
+  await resolveDeferredWork(deliveryId, second!.actionId, { status: 'done' });
 
-  const [before] = await deferredWorkItems(mission.id, deliveryId);
-  assert.ok(before);
-  const resolvedBefore = await resolveDeferredWork(deliveryId, before.actionId, { status: 'done' });
-  assert.equal(resolvedBefore.resolution?.status, 'done');
-
-  rewritePresentationDeferredWork(deliveryId, [
-    'Extend the audit-log export implementation with the remaining retention filters.'
-  ]);
-
-  const [after] = await deferredWorkItems(mission.id, deliveryId);
-  assert.ok(after);
-  assert.equal(after.actionId, before.actionId);
-  assert.equal(
-    after.action,
-    'Extend the audit-log export implementation with the remaining retention filters.'
-  );
-  assert.equal(after.resolution?.status, 'done');
-});
-
-test('a compose-added deferred-work item gets a distinct stable id', async () => {
-  const { project, mission, objective } = await seedMission('DW Extra');
-  const deliveryId = seedDelivery({
-    workspaceId: mission.workspaceId,
-    projectId: project.id,
-    missionId: mission.id,
-    objectiveId: objective.id,
-    deferredWork: ['Complete the initial export implementation']
-  });
-  rewritePresentationDeferredWork(deliveryId, [
-    'Complete the initial export implementation with the missing retention filters.',
-    'Document the new retention-filter configuration.'
-  ]);
+  keepPresentationDeferredWork(deliveryId, [1]);
 
   const items = await deferredWorkItems(mission.id, deliveryId);
-  assert.equal(items.length, 2);
-  assert.notEqual(items[0]!.actionId, items[1]!.actionId);
-  assert.equal(items[1]!.actionId, 'deferred-work-1-composed');
-});
-
-test('deferred-work ids follow the agent source after an earlier item is dropped', async () => {
-  const { project, mission, objective } = await seedMission('DW Dropped');
-  const kept = 'Fix the date-dependent employee lifecycle test that failed in payroll.';
-  const deliveryId = seedDelivery({
-    workspaceId: mission.workspaceId,
-    projectId: project.id,
-    missionId: mission.id,
-    objectiveId: objective.id,
-    deferredWork: ['Implement the CSV export API for reports.', kept]
-  });
-  const digest = createHash('sha256').update(kept).digest('hex').slice(0, 16);
-  rewritePresentationDeferredWork(deliveryId, [
-    'Fix the date-dependent employee lifecycle test that failed in payroll before the next close.'
-  ]);
-
-  const items = await deferredWorkItems(mission.id, deliveryId);
-  assert.equal(items.length, 1);
-  assert.equal(items[0]!.actionId, `deferred-work-1-${digest}`);
-});
-
-test('a legacy deferred-work resolution remains visible and can be reopened', async () => {
-  const { project, mission, objective } = await seedMission('DW Legacy Read');
-  const deferredWork = 'Complete the initial audit-log export implementation';
-  const deliveryId = seedDelivery({
-    workspaceId: mission.workspaceId,
-    projectId: project.id,
-    missionId: mission.id,
-    objectiveId: objective.id,
-    deferredWork: [deferredWork]
-  });
-  const legacyId = legacyDeferredWorkId(deferredWork, 1);
-  db.prepare(
-    `INSERT INTO human_action_resolutions
-       (delivery_id, action_id, workspace_id, mission_id, objective_id, status,
-        resolved_by_workspace_user_id, resolved_at)
-     VALUES (?, ?, ?, ?, ?, 'done', ?, ?)`
-  ).run(
-    deliveryId,
-    legacyId,
-    mission.workspaceId,
-    mission.id,
-    objective.id,
-    'operator-workspace-user',
-    new Date().toISOString()
+  assert.deepEqual(
+    items.map(entry => [entry.actionId, entry.title, entry.change, entry.doneWhen]),
+    [[deferredWorkId(1, kept), kept.title, kept.change, kept.doneWhen]]
   );
-
-  const [item] = await deferredWorkItems(mission.id, deliveryId);
-  assert.ok(item);
-  assert.equal(item.resolution?.status, 'done');
-  assert.notEqual(item.actionId, legacyId);
-
-  const reopened = await reopenDeferredWork(deliveryId, legacyId);
-  assert.equal(reopened.actionId, item.actionId);
-  assert.equal(reopened.resolution, null);
-});
-
-test('resolving through a legacy deferred-work id writes the stable id', async () => {
-  const { project, mission, objective } = await seedMission('DW Legacy Write');
-  const deferredWork = 'Complete the initial audit-log export implementation';
-  const deliveryId = seedDelivery({
-    workspaceId: mission.workspaceId,
-    projectId: project.id,
-    missionId: mission.id,
-    objectiveId: objective.id,
-    deferredWork: [deferredWork]
-  });
-  const legacyId = legacyDeferredWorkId(deferredWork, 1);
-
-  const resolved = await resolveDeferredWork(deliveryId, legacyId, { status: 'done' });
-  assert.equal(resolved.resolution?.status, 'done');
-  assert.notEqual(resolved.actionId, legacyId);
-  const row = db
-    .prepare(`SELECT action_id FROM human_action_resolutions WHERE delivery_id = ?`)
-    .get(deliveryId) as { action_id: string };
-  assert.equal(row.action_id, resolved.actionId);
+  assert.equal(items[0]!.resolution?.status, 'done');
+  await assert.rejects(
+    resolveDeferredWork(deliveryId, deferredWorkId(0, dropped), { status: 'done' }),
+    (error: { status?: number }) => error.status === 404
+  );
 });
 
 test('resolving records a realtime change, and reopening forgets the decision', async () => {
@@ -250,7 +170,7 @@ test('resolving records a realtime change, and reopening forgets the decision', 
     projectId: project.id,
     missionId: mission.id,
     objectiveId: objective.id,
-    deferredWork: ['Split the exporter']
+    deferredWork: [item('Split the exporter')]
   });
   const [open] = await deferredWorkItems(mission.id, deliveryId);
   assert.ok(open);
@@ -289,12 +209,12 @@ test('a promotion records which button was chosen on the delivery card', async (
     projectId: project.id,
     missionId: mission.id,
     objectiveId: objective.id,
-    deferredWork: ['Split the exporter', 'Add retries', 'Rename the flag']
+    deferredWork: [item('Split the exporter'), item('Add retries'), item('Rename the flag')]
   });
 
   const before = await deferredWorkItems(mission.id, deliveryId);
   assert.deepEqual(
-    before.map(item => [item.action, item.resolution]),
+    before.map(entry => [entry.title, entry.resolution]),
     [
       ['Split the exporter', null],
       ['Add retries', null],
@@ -318,11 +238,11 @@ test('a promotion records which button was chosen on the delivery card', async (
 
   const after = await deferredWorkItems(mission.id, deliveryId);
   assert.deepEqual(
-    after.map(item => [
-      item.actionId,
-      item.resolution?.status,
-      item.resolution?.outcome,
-      item.resolution?.outcomeRef
+    after.map(entry => [
+      entry.actionId,
+      entry.resolution?.status,
+      entry.resolution?.outcome,
+      entry.resolution?.outcomeRef
     ]),
     [
       [first!.actionId, 'done', 'mission_created', 'coo:77'],
@@ -339,12 +259,12 @@ test('a malformed outcome is rejected', async () => {
     projectId: project.id,
     missionId: mission.id,
     objectiveId: objective.id,
-    deferredWork: ['Split the exporter']
+    deferredWork: [item('Split the exporter')]
   });
-  const [item] = await deferredWorkItems(mission.id, deliveryId);
+  const [open] = await deferredWorkItems(mission.id, deliveryId);
   const rejects400 = (body: unknown) =>
     assert.rejects(
-      resolveDeferredWork(deliveryId, item!.actionId, body),
+      resolveDeferredWork(deliveryId, open!.actionId, body),
       (error: { status?: number }) => error.status === 400
     );
 
@@ -363,7 +283,7 @@ test('a reported human action, an unknown id, and an unknown delivery are reject
     missionId: mission.id,
     objectiveId: objective.id,
     humanActions: [{ action: 'Deploy the worker' }],
-    deferredWork: ['Split the exporter']
+    deferredWork: [item('Split the exporter')]
   });
 
   // Reported human actions are shown on the delivery card but have no resolution.
@@ -372,11 +292,11 @@ test('a reported human action, an unknown id, and an unknown delivery are reject
     (error: { status?: number }) => error.status === 404
   );
   await assert.rejects(
-    resolveDeferredWork(deliveryId, 'deferred-work-9-composed', { status: 'done' }),
+    resolveDeferredWork(deliveryId, 'deferred-work-9-0123456789abcdef', { status: 'done' }),
     (error: { status?: number }) => error.status === 404
   );
   await assert.rejects(
-    resolveDeferredWork('missing-delivery', 'deferred-work-0-composed', { status: 'done' }),
+    resolveDeferredWork('missing-delivery', 'deferred-work-0-0123456789abcdef', { status: 'done' }),
     (error: { status?: number }) => error.status === 404
   );
   await assert.rejects(

@@ -1143,10 +1143,33 @@ const tools = [
         },
         deferredWork: {
           type: 'array',
+          description:
+            'Each deferredWork item is one recommended objective outside this mission. Be very concise. title names the work in an imperative phrase. change states only the specific change that is needed. location says where to find it in the code: the file, function, component, or command. doneWhen states the observable result in one sentence. Do not add instructions on how to do the work, background, or rationale. The operator turns the item into an objective or a mission as written, so it must read as a task, not as a note. Omit queued future objectives, leftover current-objective work, and human follow-up (those belong in humanActions). Vague: { title: "Fix flaky test", change: "The sync worker has a flaky test.", location: "backend", doneWhen: "It passes." }. Good: { title: "Advance the fake clock before the second retry", change: "The test asserts the retry fired but never advances the fake clock between attempts, so it passes or fails on real time.", location: "backend/sync-worker.test.ts › retries after a 503", doneWhen: "The test passes 20 consecutive runs with the fake clock driving both attempts." }.',
           items: {
-            type: 'string',
-            description:
-              'Recommended new objective outside this mission (for example an out-of-scope bug). Name the component or file and why it was left. Omit queued future objectives, leftover current-objective work, and human follow-up (those belong in humanActions).'
+            type: 'object',
+            properties: {
+              title: {
+                type: 'string',
+                description: 'Required. The work as an imperative phrase, at most 80 characters.'
+              },
+              change: {
+                type: 'string',
+                description:
+                  'Required. The specific change that is needed, one or two sentences, at most 400 characters.'
+              },
+              location: {
+                type: 'string',
+                description:
+                  'Required. Where to find it: file, function, component, or command, at most 200 characters.'
+              },
+              doneWhen: {
+                type: 'string',
+                description:
+                  'Required. The observable result in one sentence, at most 200 characters.'
+              }
+            },
+            required: ['title', 'change', 'location', 'doneWhen'],
+            additionalProperties: false
           }
         },
         assumptions: {
@@ -1814,7 +1837,7 @@ process.stdin.on('data', async chunk => {
         result: {
           protocolVersion: PROTOCOL_VERSION,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.56' }
+          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.57' }
         }
       });
       continue;

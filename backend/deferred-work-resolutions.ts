@@ -1,5 +1,6 @@
 import { PERMISSIONS } from '@overlord/auth';
 
+import { enqueueMissionSummaryComposeJob } from '../packages/core/service/worker-jobs.ts';
 import type {
   DeliveryDeferredWorkItemDto,
   HumanActionResolutionOutcome,
@@ -12,16 +13,17 @@ import {
   nowIso,
   recordChange,
   requireDatabaseClient,
-  resolveActiveProfileId
+  resolveActiveProfileId,
+  restMissionSummaryTriggerContext
 } from './db.ts';
 import {
   deferredWorkEntries,
   type DeferredWorkEntry,
+  deferredWorkItemDto,
   findResolution,
   loadResolutions,
   RESOLUTION_OUTCOMES,
-  RESOLUTION_STATUSES,
-  toResolution
+  RESOLUTION_STATUSES
 } from './deferred-work.ts';
 import { ApiError } from './errors.ts';
 import { requireWorkspacePermission } from './rbac.ts';
@@ -37,10 +39,6 @@ import { deliveryReportFromPayload } from './repository.ts';
 
 /** Bound on the display id a promotion records; real display ids are far shorter. */
 const OUTCOME_REF_MAX_LENGTH = 64;
-
-function placeholders(count: number): string {
-  return new Array(count).fill('?').join(', ');
-}
 
 interface DeliveryRow {
   delivery_id: string;
@@ -74,9 +72,7 @@ async function requireDeferredWorkEntry(
     notFoundMessage: 'Delivery not found'
   });
   const report = deliveryReportFromPayload(row.payload_json, row.delivery_summary);
-  const entry = deferredWorkEntries(report).find(
-    candidate => candidate.id === actionId || candidate.legacyId === actionId
-  );
+  const entry = deferredWorkEntries(report).find(candidate => candidate.id === actionId);
   if (!entry) throw new ApiError(404, 'Deferred work item not found');
   return { row, entry, workspaceUserId };
 }
@@ -86,11 +82,7 @@ async function currentItem(
   entry: DeferredWorkEntry
 ): Promise<DeliveryDeferredWorkItemDto> {
   const resolutions = await loadResolutions([row.delivery_id]);
-  return {
-    actionId: entry.id,
-    action: entry.action,
-    resolution: toResolution(findResolution(resolutions, row.delivery_id, entry))
-  };
+  return deferredWorkItemDto(entry, findResolution(resolutions, row.delivery_id, entry));
 }
 
 async function actorWorkspaceUserId(workspaceId: string, fallback: string): Promise<string> {
@@ -185,6 +177,12 @@ export async function resolveDeferredWork(
       },
       tx
     );
+    await enqueueMissionSummaryComposeJob({
+      ctx: restMissionSummaryTriggerContext(tx, row.workspace_id, resolvedBy),
+      missionId: row.mission_id,
+      reason: 'deferred_work_resolved',
+      now
+    });
   });
 
   return currentItem(row, entry);
@@ -197,20 +195,17 @@ export async function reopenDeferredWork(
 ): Promise<DeliveryDeferredWorkItemDto> {
   const { row, entry, workspaceUserId } = await requireDeferredWorkEntry(deliveryId, actionId);
   const db = requireDatabaseClient();
-  const resolutionIds = [entry.id, entry.legacyId];
   const existing = await db.get(
-    `SELECT 1 FROM human_action_resolutions
-      WHERE delivery_id = ? AND action_id IN (${placeholders(resolutionIds.length)})`,
-    [row.delivery_id, ...resolutionIds]
+    `SELECT 1 FROM human_action_resolutions WHERE delivery_id = ? AND action_id = ?`,
+    [row.delivery_id, entry.id]
   );
   if (existing) {
     const actor = await actorWorkspaceUserId(row.workspace_id, workspaceUserId);
     await db.transaction(async tx => {
-      await tx.run(
-        `DELETE FROM human_action_resolutions
-          WHERE delivery_id = ? AND action_id IN (${placeholders(resolutionIds.length)})`,
-        [row.delivery_id, ...resolutionIds]
-      );
+      await tx.run(`DELETE FROM human_action_resolutions WHERE delivery_id = ? AND action_id = ?`, [
+        row.delivery_id,
+        entry.id
+      ]);
       await recordChange(
         {
           entityType: 'human_action_resolution',
@@ -225,6 +220,11 @@ export async function reopenDeferredWork(
         },
         tx
       );
+      await enqueueMissionSummaryComposeJob({
+        ctx: restMissionSummaryTriggerContext(tx, row.workspace_id, actor),
+        missionId: row.mission_id,
+        reason: 'deferred_work_reopened'
+      });
     });
   }
   return currentItem(row, entry);

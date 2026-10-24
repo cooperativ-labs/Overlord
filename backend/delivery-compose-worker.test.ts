@@ -94,6 +94,11 @@ test('compose worker updates presentation from a fake provider and emits deliver
     }
   });
 
+  assert.equal(
+    await ctx.db.get('SELECT mission_id FROM mission_summaries WHERE mission_id = ?', [mission.id]),
+    undefined,
+    'pending delivery presentation does not enqueue a summary'
+  );
   deliveryComposeWorker.setGenerateOverride(async () =>
     JSON.stringify({
       markdown: 'Polished async delivery summary.',
@@ -144,6 +149,11 @@ test('compose worker updates presentation from a fake provider and emits deliver
     assert.equal(payload.deliveryReport.presentation.humanActions[0]?.id, 'human-action-1');
     assert.equal(payload.deliveryReport.presentation.tradeoffsMade[0]?.id, 'tradeoff-1');
     assert.ok(row.revision >= 2);
+    const summary = await ctx.db.get<{ status: string; source_delivery_id: string }>(
+      'SELECT status, source_delivery_id FROM mission_summaries WHERE mission_id = ?',
+      [mission.id]
+    );
+    assert.deepEqual(summary, { status: 'pending', source_delivery_id: delivered.deliveryId });
 
     const change = (await ctx.db.get(
       `SELECT entity_type, changed_fields_json FROM entity_changes
@@ -190,6 +200,12 @@ test('compose worker marks fallback when the fake provider returns invalid JSON'
     };
     assert.equal(payload.deliveryReport.presentation.status, 'fallback');
     assert.equal(payload.deliveryReport.presentation.generatedBy, 'deterministic');
+    assert.ok(
+      await ctx.db.get('SELECT mission_id FROM mission_summaries WHERE mission_id = ?', [
+        mission.id
+      ]),
+      'fallback presentation also enqueues the summary'
+    );
     assert.equal(
       payload.deliveryReport.presentation.markdown,
       'Deterministic fallback should remain readable.'

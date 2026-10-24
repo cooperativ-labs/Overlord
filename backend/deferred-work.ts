@@ -1,7 +1,6 @@
-import { createHash } from 'node:crypto';
-
-import { matchDeferredWorkAgentIndex } from '../packages/core/service/delivery-compose.ts';
 import type {
+  DeferredWorkV1,
+  DeliveryDeferredWorkItemDto,
   DeliveryReportPayloadV1,
   HumanActionResolutionDto,
   HumanActionResolutionOutcome,
@@ -11,10 +10,11 @@ import type {
 import { requireDatabaseClient } from './db.ts';
 
 /**
- * Stable addressing and resolution state for the deferred-work items of a
- * delivery (coo:971, coo:1045). The delivery report is the only place an item's
- * text lives; this module derives the id the delivery card uses to record the
- * operator's decision in `human_action_resolutions`.
+ * Addressing and resolution state for the deferred-work items of a delivery
+ * (coo:971, coo:1045, contract v166). The delivery report is the only place an
+ * item's text lives. Each item carries its stable `DeferredWorkV1.id`, which
+ * the delivery card uses to record the operator's decision in
+ * `human_action_resolutions`.
  */
 
 export const RESOLUTION_STATUSES: ReadonlySet<string> = new Set(['done', 'dismissed']);
@@ -23,15 +23,7 @@ export const RESOLUTION_OUTCOMES: ReadonlySet<string> = new Set([
   'objective_added'
 ]);
 
-export interface DeferredWorkEntry {
-  id: string;
-  /**
-   * The pre-composition deferred-work id. It remains readable during the
-   * identifier migration, but mutation paths always write `id`.
-   */
-  legacyId: string;
-  action: string;
-}
+export type DeferredWorkEntry = DeferredWorkV1;
 
 export interface ResolutionRow {
   delivery_id: string;
@@ -43,40 +35,9 @@ export interface ResolutionRow {
   resolved_by_workspace_user_id: string | null;
 }
 
-function legacyDeferredWorkId(text: string, occurrence: number): string {
-  const digest = createHash('sha256').update(text).digest('hex').slice(0, 16);
-  return `deferred-work-${digest}-${occurrence}`;
-}
-
-function agentDeferredWorkId(index: number, agentText: string | undefined): string {
-  if (!agentText) return `deferred-work-${index}-composed`;
-  const digest = createHash('sha256').update(agentText).digest('hex').slice(0, 16);
-  return `deferred-work-${index}-${digest}`;
-}
-
 /** One entry per `presentation.deferredWork` item, in presentation order. */
 export function deferredWorkEntries(report: DeliveryReportPayloadV1): DeferredWorkEntry[] {
-  const { presentation, agentReport } = report;
-  const occurrences = new Map<string, number>();
-  const usedAgentIndexes = new Set<number>();
-  return presentation.deferredWork.map((action, index) => {
-    const occurrence = (occurrences.get(action) ?? 0) + 1;
-    occurrences.set(action, occurrence);
-    const agentIndex = matchDeferredWorkAgentIndex({
-      presentationItem: action,
-      agentItems: agentReport.deferredWork,
-      usedIndexes: usedAgentIndexes
-    });
-    if (agentIndex !== null) usedAgentIndexes.add(agentIndex);
-    return {
-      id:
-        agentIndex === null
-          ? agentDeferredWorkId(index, undefined)
-          : agentDeferredWorkId(agentIndex, agentReport.deferredWork[agentIndex]),
-      legacyId: legacyDeferredWorkId(action, occurrence),
-      action
-    };
-  });
+  return report.presentation.deferredWork;
 }
 
 function placeholders(count: number): string {
@@ -96,16 +57,13 @@ export async function loadResolutions(deliveryIds: string[]): Promise<Map<string
   return new Map(rows.map(row => [`${row.delivery_id}:${row.action_id}`, row]));
 }
 
-/** The resolution recorded under an entry's id, falling back to its legacy id. */
+/** The resolution recorded under an entry's id. */
 export function findResolution(
   resolutions: Map<string, ResolutionRow>,
   deliveryId: string,
-  entry: { id: string; legacyId?: string }
+  entry: { id: string }
 ): ResolutionRow | undefined {
-  return (
-    resolutions.get(`${deliveryId}:${entry.id}`) ??
-    (entry.legacyId ? resolutions.get(`${deliveryId}:${entry.legacyId}`) : undefined)
-  );
+  return resolutions.get(`${deliveryId}:${entry.id}`);
 }
 
 export function toResolution(row: ResolutionRow | undefined): HumanActionResolutionDto | null {
@@ -119,5 +77,20 @@ export function toResolution(row: ResolutionRow | undefined): HumanActionResolut
         ? (row.outcome as HumanActionResolutionOutcome)
         : null,
     outcomeRef: row.outcome_ref ?? null
+  };
+}
+
+/** The `DeliveryDeferredWorkItemDto` of one entry: the agent's fields verbatim plus its resolution. */
+export function deferredWorkItemDto(
+  entry: DeferredWorkEntry,
+  row: ResolutionRow | undefined
+): DeliveryDeferredWorkItemDto {
+  return {
+    actionId: entry.id,
+    title: entry.title,
+    change: entry.change,
+    location: entry.location,
+    doneWhen: entry.doneWhen,
+    resolution: toResolution(row)
   };
 }

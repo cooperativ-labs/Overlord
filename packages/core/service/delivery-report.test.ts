@@ -123,8 +123,8 @@ describe('delivery-report provenance (contract v165)', () => {
       }
     });
     assert.equal(
-      readDeliveryReport({ summary: 'Delivered.', deliveryReport: built }).presentation.tradeoffsMade
-        .length,
+      readDeliveryReport({ summary: 'Delivered.', deliveryReport: built }).presentation
+        .tradeoffsMade.length,
       1
     );
 

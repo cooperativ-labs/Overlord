@@ -16,7 +16,7 @@ import {
 } from '../../lib/objective-evidence.ts';
 import { cn } from '../../lib/utils.ts';
 import { AgentSessionActivity } from '../agent-session/AgentSessionActivity.tsx';
-import { MissionDeliveryCard } from '../DeliverySummaryCard.tsx';
+import { MissionDeliveryCard, useMissionDeliveryVariant } from '../DeliverySummaryCard.tsx';
 import { InlineEditField } from '../InlineEditField.tsx';
 import { ObjectiveTerminalSessions } from '../ObjectiveTerminalSessions.tsx';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible.tsx';
@@ -80,6 +80,9 @@ function RunDeliveries({
   deliveries: readonly DeliveryDto[];
   expandLatest: boolean;
 }) {
+  // `objective` only on summary-eligible missions; the mission summary carries
+  // their actions and deferred work instead (plan §3.1).
+  const variant = useMissionDeliveryVariant();
   return (
     <div className="grid min-w-0 gap-2">
       {deliveries.map((delivery, index) => (
@@ -88,6 +91,7 @@ function RunDeliveries({
           delivery={delivery}
           objectiveTitle={deliveryLabel(index, deliveries.length)}
           defaultExpanded={expandLatest && index === 0}
+          variant={variant}
         />
       ))}
     </div>

@@ -7,9 +7,7 @@ import {
   applyDeliveryPresentation,
   deriveDeterministicActionCandidates,
   filterDeferredWork,
-  matchDeferredWorkAgentIndex,
   mergeDeterministicActionCandidates,
-  reconcileDeferredWork,
   reconcileDeliveryComposeDraft
 } from './delivery-compose.js';
 import { buildDeliveryReport } from './delivery-report.js';
@@ -39,7 +37,14 @@ function baseReport(): DeliveryReportPayloadV1 {
           }
         ],
         knownRisks: ['Model may paraphrase poorly.'],
-        deferredWork: ['Webhook full-payload parity'],
+        deferredWork: [
+          {
+            title: 'Send the full report in webhook payloads',
+            change: 'The dispatcher sends only the summary, not the normalized report fields.',
+            location: 'packages/core/service/webhook-events.ts',
+            doneWhen: 'A mission.delivered payload carries every normalized report field.'
+          }
+        ],
         assumptions: ['worker_jobs is available']
       }
     }
@@ -273,76 +278,69 @@ describe('delivery-compose reconciliation', () => {
   });
 });
 
+function item(title: string, change: string) {
+  return { title, change, location: 'somewhere.ts', doneWhen: 'It is done.' };
+}
+
 describe('deferred-work reconciliation', () => {
-  const agentItems = ['Webhook full-payload parity', 'Remaining ~60 unassigned moves.'];
-
-  it('accepts enriched draft items in place of their agent sources', () => {
-    const draftItems = [
-      'Bring the webhook payload to parity with the delivery DTO: the dispatcher currently sends only the summary, so add the normalized report fields the docs promise.',
-      'Match the remaining 60 unassigned Cooperativ Labs, Inc. journal moves to vendors; the memo-text pass covered OpenAI, Stratechery, Everhour, and Medium, and the rest need manual matching.'
-    ];
-    assert.deepEqual(reconcileDeferredWork({ agentItems, draftItems }), draftItems);
-  });
-
-  it('keeps the agent text for any item the draft made shorter', () => {
-    const draftItems = ['Webhook parity', agentItems[1]! + ' They belong to Cooperativ Labs, Inc.'];
-    assert.deepEqual(reconcileDeferredWork({ agentItems, draftItems }), [
-      agentItems[0],
-      draftItems[1]
-    ]);
-  });
-
-  it('keeps the whole agent list when the draft drops items', () => {
-    assert.deepEqual(
-      reconcileDeferredWork({
-        agentItems,
-        draftItems: ['One merged and much longer item covering both.']
-      }),
-      agentItems
-    );
-  });
-
-  it('keeps extra draft items the summary surfaced and bounds the total', () => {
-    const extra =
-      'Fix the date-dependent employee lifecycle test that failed before this delivery.';
-    assert.deepEqual(reconcileDeferredWork({ agentItems, draftItems: [...agentItems, extra] }), [
-      ...agentItems,
-      extra
-    ]);
-    const many = Array.from({ length: 15 }, (_, index) => `Deferred item ${index + 1}`);
-    assert.equal(reconcileDeferredWork({ agentItems: [], draftItems: many }).length, 12);
-  });
-
-  it('applies the guard inside reconcileDeliveryComposeDraft', () => {
+  it('sets presentation deferred work to the eligible agent objects whatever the draft returns', () => {
     const report = baseReport();
-    const shortened = reconcileDeliveryComposeDraft({
-      report,
-      draft: { markdown: 'x', deferredWork: ['Parity'] }
-    });
-    assert.deepEqual(shortened.deferredWork, ['Webhook full-payload parity']);
+    const draft = {
+      markdown: 'x',
+      deferredWork: ['Parity'],
+      humanActions: [],
+      tradeoffsMade: []
+    } as unknown as Parameters<typeof reconcileDeliveryComposeDraft>[0]['draft'];
+    const composed = reconcileDeliveryComposeDraft({ report, draft });
+    assert.equal(composed.status, 'composed');
+    assert.deepEqual(composed.deferredWork, report.agentReport.deferredWork);
 
-    const enriched = reconcileDeliveryComposeDraft({
-      report,
-      draft: {
-        markdown: 'x',
-        deferredWork: [
-          'Bring webhook payloads to full parity with the delivery DTO so consumers receive the normalized report fields.'
-        ]
+    const fallback = reconcileDeliveryComposeDraft({ report, draft: null });
+    assert.equal(fallback.status, 'fallback');
+    assert.deepEqual(fallback.deferredWork, report.agentReport.deferredWork);
+  });
+
+  it('drops ineligible agent objects without editing the eligible ones', () => {
+    const report = buildDeliveryReport({
+      summary: 'Shipped.',
+      deliveryReport: {
+        schemaVersion: 1,
+        agentReport: {
+          deferredWork: [
+            item('Implement the CSV export API', 'Implement the CSV export API for reports.'),
+            item(
+              'Fix the employee lifecycle test',
+              'The date-dependent employee lifecycle test failed in payroll.'
+            )
+          ]
+        }
       }
     });
-    assert.deepEqual(enriched.deferredWork, [
-      'Bring webhook payloads to full parity with the delivery DTO so consumers receive the normalized report fields.'
-    ]);
+    const presentation = reconcileDeliveryComposeDraft({
+      report,
+      draft: { markdown: 'x' },
+      plannedObjectives: [
+        {
+          title: 'CSV export API',
+          instruction: 'Implement the CSV export API for the reports page.'
+        }
+      ]
+    });
+    assert.deepEqual(presentation.deferredWork, [report.agentReport.deferredWork[1]]);
   });
 });
 
 describe('deferred-work eligibility', () => {
   it('keeps an out-of-scope bug that does not restate planned or current work', () => {
+    const items = [
+      item(
+        'Fix the dropped retry in the webhook dispatcher',
+        'A race in webhook-dispatcher.ts dropped a retry while composing deliveries.'
+      )
+    ];
     assert.deepEqual(
       filterDeferredWork({
-        items: [
-          'Investigate the race in webhook-dispatcher.ts that dropped a retry while composing deliveries; left because it belongs outside this enrichment work.'
-        ],
+        items,
         currentObjective: {
           title: 'Enrich deferred work',
           instruction: 'Rewrite sparse deferred-work items into standalone objective statements.'
@@ -355,19 +353,18 @@ describe('deferred-work eligibility', () => {
           }
         ]
       }),
-      [
-        'Investigate the race in webhook-dispatcher.ts that dropped a retry while composing deliveries; left because it belongs outside this enrichment work.'
-      ]
+      items
     );
   });
 
-  it('drops items that restate a planned future objective', () => {
+  it('compares on title plus change', () => {
+    const items = [
+      item('CSV export', 'Implement the CSV export API for the reports page.'),
+      item('Fix the payroll test', 'The date-dependent employee lifecycle test failed in payroll.')
+    ];
     assert.deepEqual(
       filterDeferredWork({
-        items: [
-          'Implement the CSV export API for the reports page.',
-          'Fix the date-dependent employee lifecycle test that failed in payroll.'
-        ],
+        items,
         plannedObjectives: [
           {
             title: 'CSV export API',
@@ -376,18 +373,25 @@ describe('deferred-work eligibility', () => {
           }
         ]
       }),
-      ['Fix the date-dependent employee lifecycle test that failed in payroll.']
+      [items[1]]
     );
   });
 
   it('drops items that restate a human action or leftover current-objective work', () => {
+    const items = [
+      item(
+        'Add the Gemini key',
+        'Add GEMINI_API_KEY to the production backend service on Railway.'
+      ),
+      item('Finish validation', 'Finish remaining form validation on the settings page.'),
+      item(
+        'Fix the payroll timezone bug',
+        'employee-lifecycle.ts computes the payroll timezone wrongly.'
+      )
+    ];
     assert.deepEqual(
       filterDeferredWork({
-        items: [
-          'Add GEMINI_API_KEY to the production backend service on Railway.',
-          'Finish remaining form validation on the settings page.',
-          'Investigate the payroll timezone bug found in employee-lifecycle.ts; left because it is outside this settings work.'
-        ],
+        items,
         currentObjective: {
           title: 'Settings validation',
           instruction:
@@ -400,9 +404,7 @@ describe('deferred-work eligibility', () => {
           }
         ]
       }),
-      [
-        'Investigate the payroll timezone bug found in employee-lifecycle.ts; left because it is outside this settings work.'
-      ]
+      [items[2]]
     );
   });
 
@@ -414,8 +416,11 @@ describe('deferred-work eligibility', () => {
           schemaVersion: 1,
           agentReport: {
             deferredWork: [
-              'Implement the CSV export API for reports.',
-              'Fix the date-dependent employee lifecycle test that failed in payroll.'
+              item('CSV export', 'Implement the CSV export API for reports.'),
+              item(
+                'Fix the payroll test',
+                'The date-dependent employee lifecycle test failed in payroll.'
+              )
             ]
           }
         }
@@ -427,58 +432,7 @@ describe('deferred-work eligibility', () => {
         }
       ]
     });
-    assert.deepEqual(report.agentReport.deferredWork, [
-      'Implement the CSV export API for reports.',
-      'Fix the date-dependent employee lifecycle test that failed in payroll.'
-    ]);
-    assert.deepEqual(report.presentation.deferredWork, [
-      'Fix the date-dependent employee lifecycle test that failed in payroll.'
-    ]);
-  });
-
-  it('drops ineligible extras from a compose draft while keeping eligible rewrites', () => {
-    const report = buildDeliveryReport({
-      summary: 'Shipped.',
-      deliveryReport: {
-        schemaVersion: 1,
-        agentReport: {
-          deferredWork: ['Fix the date-dependent employee lifecycle test that failed in payroll.']
-        }
-      }
-    });
-    const presentation = reconcileDeliveryComposeDraft({
-      report,
-      draft: {
-        markdown: 'x',
-        deferredWork: [
-          'Fix the date-dependent employee lifecycle test that failed in payroll before the next close; the previous run broke when the fixture clock crossed a month boundary.',
-          'Implement the CSV export API for the reports page.'
-        ]
-      },
-      plannedObjectives: [
-        {
-          title: 'CSV export API',
-          instruction: 'Implement the CSV export API for the reports page.'
-        }
-      ]
-    });
-    assert.deepEqual(presentation.deferredWork, [
-      'Fix the date-dependent employee lifecycle test that failed in payroll before the next close; the previous run broke when the fixture clock crossed a month boundary.'
-    ]);
-  });
-
-  it('matches a presentation rewrite to its original agent index after an earlier item was dropped', () => {
-    const usedIndexes = new Set<number>();
-    const agentItems = [
-      'Implement the CSV export API for reports.',
-      'Fix the date-dependent employee lifecycle test that failed in payroll.'
-    ];
-    const matched = matchDeferredWorkAgentIndex({
-      presentationItem:
-        'Fix the date-dependent employee lifecycle test that failed in payroll before the next close.',
-      agentItems,
-      usedIndexes
-    });
-    assert.equal(matched, 1);
+    assert.equal(report.agentReport.deferredWork.length, 2);
+    assert.deepEqual(report.presentation.deferredWork, [report.agentReport.deferredWork[1]]);
   });
 });

@@ -516,7 +516,8 @@ function WebhookDialog({
                 <span>
                   <span className="font-medium">Full</span>
                   <span className="block text-xs text-muted-foreground">
-                    Includes mission, objective, delivery report, and changed-file path content in the payload.
+                    Includes mission, objective, delivery report, and changed-file path content in
+                    the payload.
                     {!existing?.isInternal ? ' Only choose this for an endpoint you trust.' : ''}
                   </span>
                 </span>

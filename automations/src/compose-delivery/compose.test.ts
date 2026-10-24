@@ -31,7 +31,6 @@ const sampleInput: ComposeDeliveryInput = {
     }
   ],
   knownRisks: [],
-  deferredWork: [],
   assumptions: [],
   candidateActions: []
 };
@@ -75,19 +74,14 @@ describe('compose-delivery automation', () => {
   });
 });
 
-describe('compose-delivery deferred-work enrichment', () => {
-  it('instructs the model to rewrite eligible deferred work as out-of-mission objectives', () => {
-    assert.match(SYSTEM_INSTRUCTION, /DEFERRED WORK rules/);
-    assert.match(SYSTEM_INSTRUCTION, /not part of this mission/);
-    assert.match(SYSTEM_INSTRUCTION, /Never shorten a kept item/);
-    assert.match(SYSTEM_INSTRUCTION, /out-of-scope bug/);
+describe('compose-delivery deferred work', () => {
+  it('never asks the model for deferred work', () => {
+    assert.doesNotMatch(SYSTEM_INSTRUCTION, /deferred/i);
+    assert.equal('deferredWork' in (COMPOSE_DELIVERY_RESPONSE_SCHEMA.properties ?? {}), false);
+    assert.equal(COMPOSE_DELIVERY_RESPONSE_SCHEMA.required?.includes('deferredWork'), false);
   });
 
-  it('requires the deferredWork array so the model cannot silently omit it', () => {
-    assert.ok(COMPOSE_DELIVERY_RESPONSE_SCHEMA.required?.includes('deferredWork'));
-  });
-
-  it('labels the deferred-work evidence with its eligible count and planned objectives', () => {
+  it('sends no deferred-work section in the prompt body', () => {
     const prompt = buildComposeDeliveryPrompt({
       ...sampleInput,
       plannedObjectives: [
@@ -95,18 +89,20 @@ describe('compose-delivery deferred-work enrichment', () => {
           title: 'CSV export API',
           instruction: 'Implement the CSV export API for the reports page.'
         }
-      ],
-      omittedDeferredWork: ['Implement the CSV export API for reports.'],
-      deferredWork: ['Fix the date-dependent employee lifecycle test that failed in payroll.']
+      ]
     });
-    assert.match(
-      prompt,
-      /Deferred work \(eligible agent-listed, 1 item\(s\); rewrite each as a standalone out-of-mission objective/
-    );
-    assert.match(prompt, /Fix the date-dependent employee lifecycle test that failed in payroll\./);
+    assert.doesNotMatch(prompt, /deferred/i);
     assert.match(prompt, /Planned future objectives on this mission/);
-    assert.match(prompt, /CSV export API/);
-    assert.match(prompt, /omitted as ineligible/);
+  });
+});
+
+describe('compose-delivery writing rules', () => {
+  it('includes the STE-inspired rule list and its exemptions', () => {
+    assert.match(SYSTEM_INSTRUCTION, /WRITING rules:/);
+    assert.match(SYSTEM_INSTRUCTION, /One topic per sentence/);
+    assert.match(SYSTEM_INSTRUCTION, /Use the active voice and name the actor/);
+    assert.match(SYSTEM_INSTRUCTION, /When the evidence is unclear, say that it is unclear/);
+    assert.match(SYSTEM_INSTRUCTION, /do not apply to command, verify, link, file paths/);
   });
 });
 

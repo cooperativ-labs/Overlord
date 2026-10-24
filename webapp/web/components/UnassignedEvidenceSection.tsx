@@ -5,7 +5,7 @@ import {
   ObjectiveEvidenceRule,
   ObjectiveEvidenceTruncationNotice
 } from './objectives/ObjectiveEvidenceRule.tsx';
-import { MissionDeliveryList } from './DeliverySummaryCard.tsx';
+import { MissionDeliveryList, useMissionDeliveryVariant } from './DeliverySummaryCard.tsx';
 import { LiveFileChangeList } from './LiveFileChangeList.tsx';
 
 /**
@@ -28,6 +28,9 @@ export function UnassignedEvidenceSection({
   fileChanges: readonly FileChangeDto[];
   truncation?: ObjectiveEvidenceTruncation;
 }) {
+  // Eligible missions surface these deliveries' actions and suggestions in the
+  // mission summary, which selects them mission-wide (plan §5.5).
+  const variant = useMissionDeliveryVariant();
   const hasDeliveries = evidence.deliveries.length > 0;
   const hasFileChanges = fileChanges.length > 0;
   // Terminal sessions are not repeated here: the mission-level Latch section
@@ -49,7 +52,11 @@ export function UnassignedEvidenceSection({
         {hasDeliveries ? (
           <>
             <ObjectiveEvidenceRule label="Deliveries" count={evidence.deliveries.length} />
-            <MissionDeliveryList deliveries={evidence.deliveries} objectiveTitleById={new Map()} />
+            <MissionDeliveryList
+              deliveries={evidence.deliveries}
+              objectiveTitleById={new Map()}
+              variant={variant}
+            />
             {truncation?.deliveries ? (
               <ObjectiveEvidenceTruncationNotice>
                 {truncation.deliveries}

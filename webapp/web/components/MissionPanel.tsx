@@ -13,11 +13,13 @@ import {
   useMission,
   useMissionDeliveries,
   useMissionFileChanges,
+  useMissionSummary,
   useUpdateMission,
   useUpdateObjective
 } from '../lib/queries.ts';
 import { cn } from '../lib/utils.ts';
 
+import { MissionSummarySection } from './mission-summary/MissionSummarySection.tsx';
 import { MissionObjectivesSection } from './objectives/MissionObjectivesSection.tsx';
 import { Button as IconButton } from './ui/button.tsx';
 import {
@@ -31,6 +33,10 @@ import {
 } from './ui/dialog.tsx';
 import { Separator } from './ui/separator.tsx';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip.tsx';
+import {
+  deliveryVariantForEligibility,
+  MissionDeliveryVariantProvider
+} from './DeliverySummaryCard.tsx';
 import { InlineEditField } from './InlineEditField.tsx';
 import { LiveActivityFeed } from './LiveActivityFeed.tsx';
 import { MissionArtifactsSection } from './MissionArtifactsSection.tsx';
@@ -240,6 +246,10 @@ export function MissionPanel({
   // the capped mission page only feeds the unassigned-evidence fallback.
   const deliveriesQ = useMissionDeliveries(missionId, true);
   const fileChangesQ = useMissionFileChanges(missionId);
+  // Eligibility comes only from the summary envelope (contract v166). Until it
+  // loads, or for an older mission, delivery cards keep the full presentation.
+  const summaryQ = useMissionSummary(missionId);
+  const deliveryVariant = deliveryVariantForEligibility(summaryQ.data?.eligible);
   const evidence = useMemo(
     () =>
       partitionMissionEvidence({
@@ -363,61 +373,68 @@ export function MissionPanel({
           workspaceId={mission.workspaceId}
           sessions={mission.terminalSessions}
         >
-          <section className="border-b border-(--color-border) bg-(--color-surface-1) pb-5 pt-2">
-            <MissionObjectivesSection
-              mission={mission}
-              focusObjectiveRef={focusObjectiveRef}
-              evidence={evidence}
-              evidenceLoading={evidenceLoading}
-              evidenceTruncation={evidenceTruncation}
-            />
-          </section>
+          <MissionDeliveryVariantProvider value={deliveryVariant}>
+            <section className="border-b border-(--color-border) bg-(--color-surface-1) pb-5 pt-2">
+              <MissionObjectivesSection
+                mission={mission}
+                focusObjectiveRef={focusObjectiveRef}
+                evidence={evidence}
+                evidenceLoading={evidenceLoading}
+                evidenceTruncation={evidenceTruncation}
+              />
+            </section>
 
-          {/* Subtle section — supporting context: notes, artifacts, and activity */}
-          <section className="flex flex-col px-5 pt-5 bg-muted h-full pb-10">
-            <MissionNotes missionId={mission.id} notes={mission.notes} />
-            <Separator />
-            <div className="flex flex-col gap-6 mt-8">
-              {/*
+            {/* Subtle section — supporting context: notes, artifacts, and activity */}
+            <section className="flex flex-col px-5 pt-5 bg-muted h-full pb-10">
+              <MissionNotes missionId={mission.id} notes={mission.notes} />
+              <Separator />
+              <div className="flex flex-col gap-6 mt-8">
+                {/*
                 The current Latch session as a full card above the artifacts,
                 with previous sessions collapsed in an accordion (coo:990).
                 Objective rows keep only a minimal attach/end line.
               */}
-              <MissionTerminalSessionsSection
-                sessions={mission.terminalSessions}
-                objectives={mission.objectives}
-              />
-              <div className="space-y-3">
-                <h2 className="text-xs font-semibold uppercase tracking-wide text-(--color-ink-dim)">
-                  Artifacts
-                </h2>
-                <MissionArtifactsSection missionId={mission.id} objectives={mission.objectives} />
-              </div>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xs font-semibold uppercase tracking-wide text-(--color-ink-dim)">
-                    Activity
-                  </h2>
-                  {mission.hasExecutingObjective && <DisconnectActivityButton mission={mission} />}
-                </div>
-                <LiveActivityFeed missionId={mission.id} />
-              </div>
-              {deliveriesQ.isError || fileChangesQ.isError ? (
-                <p className="text-sm text-red-400">
-                  Could not load objective evidence:{' '}
-                  {((deliveriesQ.error ?? fileChangesQ.error) as Error)?.message ?? 'unknown error'}
-                </p>
-              ) : null}
-              <div className="pb-5">
-                <UnassignedEvidenceSection
-                  projectId={mission.projectId}
-                  evidence={evidence.unassigned}
-                  fileChanges={evidence.unassignedFileChanges}
-                  truncation={evidenceTruncation}
+                <MissionTerminalSessionsSection
+                  sessions={mission.terminalSessions}
+                  objectives={mission.objectives}
                 />
+                {/* Agent-maintained mission summary (plan §5); hidden on ineligible missions. */}
+                <MissionSummarySection key={mission.id} mission={mission} />
+                <div className="space-y-3">
+                  <h2 className="text-xs font-semibold uppercase tracking-wide text-(--color-ink-dim)">
+                    Artifacts
+                  </h2>
+                  <MissionArtifactsSection missionId={mission.id} objectives={mission.objectives} />
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xs font-semibold uppercase tracking-wide text-(--color-ink-dim)">
+                      Activity
+                    </h2>
+                    {mission.hasExecutingObjective && (
+                      <DisconnectActivityButton mission={mission} />
+                    )}
+                  </div>
+                  <LiveActivityFeed missionId={mission.id} />
+                </div>
+                {deliveriesQ.isError || fileChangesQ.isError ? (
+                  <p className="text-sm text-red-400">
+                    Could not load objective evidence:{' '}
+                    {((deliveriesQ.error ?? fileChangesQ.error) as Error)?.message ??
+                      'unknown error'}
+                  </p>
+                ) : null}
+                <div className="pb-5">
+                  <UnassignedEvidenceSection
+                    projectId={mission.projectId}
+                    evidence={evidence.unassigned}
+                    fileChanges={evidence.unassignedFileChanges}
+                    truncation={evidenceTruncation}
+                  />
+                </div>
               </div>
-            </div>
-          </section>
+            </section>
+          </MissionDeliveryVariantProvider>
         </MissionLatchSessionProvider>
       </div>
       <MissionSharedStateFooter missionId={mission.id} />

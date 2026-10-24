@@ -73,9 +73,11 @@ test('strips only change_rationale presentation items and keeps order and histor
   db.exec(sqliteMigration);
 
   const read = (id: string) =>
-    (db.prepare(`SELECT payload_json FROM deliveries WHERE id = ?`).get(id) as {
-      payload_json: string;
-    }).payload_json;
+    (
+      db.prepare(`SELECT payload_json FROM deliveries WHERE id = ?`).get(id) as {
+        payload_json: string;
+      }
+    ).payload_json;
   const mixed = JSON.parse(read('mixed'));
   assert.deepEqual(
     mixed.deliveryReport.presentation.tradeoffsMade.map((item: { id: string }) => item.id),

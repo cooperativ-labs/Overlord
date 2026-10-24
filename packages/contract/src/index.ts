@@ -1463,12 +1463,53 @@ export interface TradeoffMadeV1 {
   sourceRef?: string;
 }
 
+/**
+ * Field bounds of an agent-written deferred-work item (contract v166). An item
+ * over a bound, a missing or blank field, an unknown key, or a plain string is
+ * rejected with `invalid_input` by `deliver` and `record-work`.
+ */
+export const DEFERRED_WORK_LIMITS = {
+  maxTitleLength: 80,
+  maxChangeLength: 400,
+  maxLocationLength: 200,
+  maxDoneWhenLength: 200
+} as const;
+
+/**
+ * One recommended objective outside the delivering mission, written by the
+ * agent (contract v166). Nothing rewrites it: the delivery composer never sees
+ * deferred work, and promotion copies the fields verbatim.
+ */
+export interface DeferredWorkInputV1 {
+  /** Imperative, at most 80 characters. Shown as the row title. */
+  title: string;
+  /** The specific change that is needed. One or two sentences, at most 400 characters. */
+  change: string;
+  /** Where to find it: file, function, component, or command. At most 200 characters. */
+  location: string;
+  /** Concise done criteria: the observable result, one sentence, at most 200 characters. */
+  doneWhen: string;
+}
+
+/**
+ * A normalized deferred-work item. `id` is stable and delivery-local:
+ * `deferred-work-<index>-<digest>`, where `index` is the zero-based position in
+ * the normalized `agentReport.deferredWork` array and `digest` is the first 16
+ * hex characters of the SHA-256 of the canonical object, the UTF-8 JSON text of
+ * `[title, change, location, doneWhen]` after trimming each field.
+ * `presentation.deferredWork` carries a subset of the agent items with the same
+ * ids. `contract/delivery-report-v1-fixtures.json` pins the derivation.
+ */
+export interface DeferredWorkV1 extends DeferredWorkInputV1 {
+  id: string;
+}
+
 /** Authoritative, agent-supplied delivery facts. Omitted arrays normalize to `[]`. */
 export interface DeliveryAgentReportInputV1 {
   humanActions?: HumanActionInputV1[];
   tradeoffsMade?: TradeoffMadeInputV1[];
   knownRisks?: string[];
-  deferredWork?: string[];
+  deferredWork?: DeferredWorkInputV1[];
   assumptions?: string[];
 }
 
@@ -1477,7 +1518,7 @@ export interface DeliveryAgentReportV1 {
   humanActions: HumanActionV1[];
   tradeoffsMade: TradeoffMadeV1[];
   knownRisks: string[];
-  deferredWork: string[];
+  deferredWork: DeferredWorkV1[];
   assumptions: string[];
 }
 
@@ -1493,7 +1534,8 @@ export interface DeliveryPresentationV1 {
   humanActions: HumanActionV1[];
   tradeoffsMade: TradeoffMadeV1[];
   knownRisks: string[];
-  deferredWork: string[];
+  /** The eligible agent deferred-work items, verbatim and in agent order (contract v166). */
+  deferredWork: DeferredWorkV1[];
   assumptions: string[];
   generatedBy: 'deterministic' | 'gemini';
   generatedAt?: string;
@@ -1538,10 +1580,17 @@ export interface DeliveryDto {
   deferredWorkItems: DeliveryDeferredWorkItemDto[];
 }
 
-/** A deferred-work item of one delivery, addressable by the deferred-work resolution routes. */
+/**
+ * A deferred-work item of one delivery, addressable by the deferred-work
+ * resolution routes. `actionId` equals the item's `DeferredWorkV1.id`; the
+ * other fields are the agent's text verbatim (contract v166).
+ */
 export interface DeliveryDeferredWorkItemDto {
   actionId: string;
-  action: string;
+  title: string;
+  change: string;
+  location: string;
+  doneWhen: string;
   resolution: HumanActionResolutionDto | null;
 }
 
@@ -1573,6 +1622,155 @@ export interface ResolveHumanActionBody {
   outcome?: HumanActionResolutionOutcome;
   /** Display id of the created mission or objective; requires `outcome`. */
   outcomeRef?: string;
+}
+
+// ---- Mission summary (contract v166) ----
+//
+// Operator surface only. The mission summary and its evidence are never sent
+// to agents: `load-context`, the mission packet, hosted and local MCP tools, and
+// CLI protocol commands do not expose it. The REST routes below are exempt from
+// MCP parity for that reason.
+
+/** Lifecycle of the persisted mission summary row. */
+export type MissionSummaryStatus = 'pending' | 'composed' | 'fallback';
+
+/** Upper bound on `evidence.actions` and on `evidence.sources` in one summary read. */
+export const MISSION_SUMMARY_EVIDENCE_LIMIT = 100;
+
+/** A significant risk kept by the summary composer, attributed to its source delivery. */
+export interface MissionSummaryRiskDto {
+  deliveryId: string;
+  objectiveId: string;
+  /** Original source timestamp; independent of the capped mission delivery feed. */
+  deliveredAt: string;
+  /** The composer's bounded rewrite, or the agent's original risk text. */
+  text: string;
+}
+
+/**
+ * A deferred-work suggestion from an eligible current-run delivery, projected
+ * at read time from the delivery's `DeferredWorkV1` and its resolution, never
+ * copied into the summary row. Dismissed items are omitted. A resolved
+ * (promoted) item carries only its identity, title, and resolution.
+ */
+export type MissionSummarySuggestionDto = {
+  deliveryId: string;
+  objectiveId: string;
+  /** Original source timestamp, including suggestions from older current-run deliveries. */
+  deliveredAt: string;
+  /** The item's `DeferredWorkV1.id`, accepted by the deferred-work resolution routes. */
+  actionId: string;
+  /** Verbatim agent title in either state. */
+  title: string;
+} & (
+  | { state: 'open'; change: string; location: string; doneWhen: string; resolution: null }
+  | { state: 'resolved'; resolution: HumanActionResolutionDto }
+);
+
+/** The composed mission summary. Model-written parts are `headline`, `summary`, and risk text. */
+export interface MissionSummaryDto {
+  missionId: string;
+  /** Increments on every write of the row, including a pending notification. */
+  revision: number;
+  status: MissionSummaryStatus;
+  /** One sentence. Empty in the first pending shell. */
+  headline: string;
+  /** Markdown, two to five sentences. Empty in the first pending shell. */
+  summary: string;
+  risks: MissionSummaryRiskDto[];
+  /** Display order: newest delivery first, deduped by normalized title. */
+  suggestions: MissionSummarySuggestionDto[];
+  /** The delivery whose compose triggered the current or pending pass; null for any other trigger. */
+  sourceDeliveryId: string | null;
+  generatedBy: 'deterministic' | 'gemini';
+  /** Null in the first pending shell. */
+  generatedAt: string | null;
+  model: string | null;
+}
+
+/**
+ * One human action of the latest current-run delivery of an objective. A
+ * delivery is current-run when it was delivered at or after its objective's
+ * `reopenedAt` and no newer current-run delivery exists for the same objective.
+ * Carries every `HumanActionV1` field except `id`, which becomes `actionId`.
+ */
+export interface MissionSummaryActionDto extends Omit<HumanActionV1, 'id'> {
+  deliveryId: string;
+  /** May name a deleted objective; clients render it as the unassigned `Delivery` row. */
+  objectiveId: string;
+  actionId: string;
+  deliveredAt: string;
+}
+
+/** The latest current-run delivery of one objective. */
+export interface MissionSummarySourceDto {
+  /** May name a deleted objective; clients render it as the unassigned `Delivery` row. */
+  objectiveId: string;
+  deliveryId: string;
+  deliveredAt: string;
+}
+
+/**
+ * Summary evidence selected in the database before any limit, so a busy
+ * objective cannot hide another objective's current delivery. Lists are capped
+ * at {@link MISSION_SUMMARY_EVIDENCE_LIMIT}; `totals` are pre-cap counts and
+ * `truncated` is true when a list was cut. Open agent questions are not here;
+ * clients read them from the agent-requests query.
+ */
+export interface MissionSummaryEvidenceDto {
+  /** Blocking first, then newest delivery first, then report order. */
+  actions: MissionSummaryActionDto[];
+  /** Newest first, one per objective (including deleted objectives). */
+  sources: MissionSummarySourceDto[];
+  totals: {
+    actions: number;
+    sources: number;
+    /** Every current-run delivery of the mission, for the `from n deliveries` trailer. */
+    currentRunDeliveries: number;
+  };
+  truncated: { actions: boolean; sources: boolean };
+}
+
+/**
+ * `GET /api/missions/:id/summary`. `eligible` comes from
+ * `missions.summary_enabled`; clients learn eligibility only here, never from
+ * `MissionDto`. An eligible mission may have no summary row yet (`summary`
+ * null) but always has evidence. `watermark` is the ISO time of the newest
+ * evidence item behind this response: the maximum `deliveredAt` of the
+ * current-run deliveries it draws on and `createdAt` of the mission's open
+ * `question` and `choice` agent requests at read time; null when there is none.
+ * `seenAt` is the calling workspace user's stored watermark.
+ */
+export type MissionSummaryResponse =
+  | {
+      eligible: false;
+      summary: null;
+      evidence: null;
+      watermark: null;
+      seenAt: null;
+    }
+  | {
+      eligible: true;
+      summary: MissionSummaryDto | null;
+      evidence: MissionSummaryEvidenceDto;
+      watermark: string | null;
+      seenAt: string | null;
+    };
+
+/**
+ * Body of `PUT /api/missions/:id/summary/seen`: the `watermark` of a summary
+ * response whose evidence the client displayed for two seconds. A value later
+ * than the caller's current authorized evidence maximum, or any value on an
+ * ineligible mission, is rejected with `invalid_input`. Mission read
+ * authorization applies; no entity change is recorded.
+ */
+export interface MarkMissionSummarySeenBody {
+  watermark: string;
+}
+
+/** Response of `PUT /api/missions/:id/summary/seen`: the stored value, `max(existing, watermark)`. */
+export interface MissionSummarySeenResponse {
+  seenAt: string;
 }
 
 // ---- Mission file changes ----

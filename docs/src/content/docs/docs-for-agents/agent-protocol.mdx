@@ -88,6 +88,9 @@ mission pointer or session cache, or redirect later updates and delivery:
 ovld protocol load-context --mission-id coo:700
 ```
 
+The operator-facing mission summary is not part of the agent packet: `load-context` never
+returns it.
+
 Unpinned `load-context` can still return `no_active_objective` or
 `ambiguous_active_objective`; name the objective when it does.
 `list-deliveries` is mission-wide and never inherits an objective.
@@ -240,6 +243,12 @@ Include optional `deliveryReport.agentReport` evidence in `--payload-json` or
 `knownRisks`, `deferredWork`, and `assumptions`. Use empty arrays when there is
 nothing to report. Human actions must be real user follow-up work — never Git
 operations or routine testing/review.
+
+Each `deferredWork` item is one recommended objective outside this mission, written as an
+object `{ title, change, location, doneWhen }` (at most 80, 400, 200, and 200 characters).
+`title` names the work in an imperative phrase, `change` states only the specific change that
+is needed, `location` says where to find it in the code, and `doneWhen` states the observable
+result in one sentence. String items are rejected with `invalid_input`.
 
 #### Human actions the operator can complete
 

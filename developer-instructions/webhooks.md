@@ -97,8 +97,20 @@ Every delivery has the same envelope shape; `type` tells you which event it is.
     "report": {
       // full mode only; normalized delivery report
       "schemaVersion": 1,
-      "agentReport": { "humanActions": [], "tradeoffsMade": [] },
-      "presentation": { "status": "composed", "markdown": "…" }
+      "agentReport": { "humanActions": [], "tradeoffsMade": [], "deferredWork": [] },
+      "presentation": {
+        "status": "composed",
+        "markdown": "…",
+        "deferredWork": [
+          {
+            "id": "deferred-work-0-d8cae660820aadbb",
+            "title": "Advance the fake clock before the second retry",
+            "change": "The test never advances the fake clock between attempts.",
+            "location": "backend/sync-worker.test.ts",
+            "doneWhen": "The test passes 20 consecutive runs."
+          }
+        ]
+      }
     },
     "artifacts": [{ "type": "next_steps", "label": "…", "content": "…" }]
   },
@@ -125,6 +137,10 @@ Every delivery has the same envelope shape; `type` tells you which event it is.
 - `delivery.report` is the normalized, versioned read projection: legacy deliveries receive a
   deterministic report, while newly composed deliveries carry their current presentation. Raw
   `deliveries.payload_json` and internal worker metadata are never included.
+- `deferredWork` items (in `agentReport` and `presentation`) are objects
+  `{ id, title, change, location, doneWhen }` written by the agent and never rewritten by the
+  composer; `presentation.deferredWork` is the eligible subset. Since contract v166 string items
+  no longer exist, and deliveries made before v166 carry an empty `deferredWork` array.
 - `changedFiles` is the objective's cumulative path evidence: `filePath`, the session-resolved
   `resourceKey` (or `null`), and `source` — `declared_edit` (native capture), `agent_declared`
   (declared by the agent), or `null` (historical provenance unknown). It is not a Git diff or

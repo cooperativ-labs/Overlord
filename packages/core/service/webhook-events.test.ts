@@ -34,6 +34,14 @@ describe('delivery webhook envelopes', () => {
           deliveryReport: {
             schemaVersion: 1,
             agentReport: {
+              deferredWork: [
+                {
+                  title: 'Measure export duration',
+                  change: 'Record export duration.',
+                  location: 'backend/export.ts',
+                  doneWhen: 'Each export records its duration.'
+                }
+              ],
               humanActions: [
                 {
                   action: 'Set GEMINI_API_KEY in the production environment.',
@@ -69,6 +77,11 @@ describe('delivery webhook envelopes', () => {
       assert.equal(full.delivery?.report?.presentation.status, 'pending');
       assert.equal(full.delivery?.report?.agentReport.humanActions[0]?.source, 'agent');
       assert.equal(full.delivery?.report?.agentReport.tradeoffsMade[0]?.source, 'agent');
+      const deferred = full.delivery?.report?.agentReport.deferredWork[0];
+      assert.ok(deferred);
+      assert.match(deferred.id, /^deferred-work-0-[a-f0-9]{16}$/);
+      assert.equal(deferred.title, 'Measure export duration');
+      assert.deepEqual(full.delivery?.report?.presentation.deferredWork, [deferred]);
 
       const thin = await buildWebhookEnvelope(ctx, {
         outboxMessageId: 'thin-envelope',

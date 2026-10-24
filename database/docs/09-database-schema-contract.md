@@ -904,6 +904,7 @@ Durable work unit and review record.
 | `branch_override`              | text         | no       | User-pinned branch chosen in the mission panel to override the planner's default; consumed (and cleared) by the runner at the next branch preparation. Null means automatic selection.                                                                                                                                                                                                                                                                                                                                                          |
 | `worktree_preference`          | text         | no       | Per-mission override of the user's `worktreeBranchAutomationEnabled` launch default (stored in `profiles.metadata_json`, not on the workspace). `null` inherits the user default; `'worktree'` forces a branch + worktree for this mission even when automation is off; `'branch'` forces a branch without a dedicated worktree (checked out in the project's primary repo). Persistent (not cleared by the runner). App-validated open set (no DB CHECK).                                                                                                                                                |
 | `allow_parallel_objectives`    | Bool         | yes      | Opt-in permission for two objectives on this mission to execute at once, on the same `resource_key` or different ones. Default `false` (serial sibling 409). Checkout safety is the Runner Layer's job: with worktrees on, a concurrently launched same-resource objective is planned onto `<mission branch>-<objectives.display_key>` in its own worktree; with worktrees off, the mission has one checkout that concurrent objectives share deliberately. Not a unique index; enforced in `launchObjective` and `validateObjectiveLifecycle`. |
+| `summary_enabled`              | Bool         | yes      | Mission-summary eligibility (contract v166). Default `true`, so every creation path (REST, protocol `create` / `prompt`, `record-work`, MCP, inbox promotion, scheduled duplicates) is eligible with no per-path code; the v166 migration sets every existing row to `false`. Never inferred from a `mission_summaries` row; an ineligible mission never gets a summary row or compose job.                                                                                                                                                     |
 | `schedule_id`                  | Id           | no       | FK to `schedules`. Null means the mission does not repeat. On SQLite this is a plain (non-composite) FK added via `ALTER TABLE`, since SQLite cannot add a table-level composite FK without a full table rebuild; Postgres adds the org-scoped composite `(workspace_id, schedule_id)` FK. Every read/write path still scopes by `workspace_id` in application code regardless of dialect.                                                                                                                                                      |
 | `due_datetime`                 | TimestampUTC | no       | Computed next occurrence for a scheduled mission; null when unscheduled. Recomputed by the SchedulingEngine (`@overlord/automations`) whenever the schedule is created/updated, and again for the duplicate mission spawned when a scheduled mission reaches a `complete`-type status (see `createScheduledDuplicateIfNeeded` in `backend/repository.ts`).                                                                                                                                                                                      |
 | `created_by_workspace_user_id` | Id           | no       | FK to `workspace_users`. For an agent-authored mission this is the human behind the authenticating token — the member the agent acted as, or on behalf of.                                                                                                                                                                                                                                                                                                                                                                                      |
@@ -1377,8 +1378,10 @@ history.
 
 Operator decisions on the deferred-work items an agent reports in a delivery (coo:971,
 coo:1045). The item text is never copied here: `action_id` names the stable delivery-local
-deferred-work id derived from the item's agent-report index and text digest, which stays the
-same when the compose worker rewrites `presentation.deferredWork`. Reopening an item deletes
+`DeferredWorkV1.id` (`deferred-work-<index>-<digest>`, the agent-report index plus the digest
+of the canonical `[title, change, location, doneWhen]` object, contract v166), which
+`presentation.deferredWork` carries unchanged because nothing rewrites an item. The v166
+migration deleted the rows of every historical string item together with the items. Reopening an item deletes
 its row; there is no soft delete or revision. The table was introduced for reported human
 actions (coo:963, contract v136); those resolutions were deleted when the Human Actions feed
 was removed (coo:1098, contract v150), and only `deferred-work-*` ids are written now.
@@ -1403,7 +1406,64 @@ Indexes:
 
 Mutations emit `entity_changes` rows with `entity_type = 'human_action_resolution'`,
 `entity_id = '<delivery_id>:<action_id>'`, and the mission and objective ids, so the webapp
-can refresh the mission's delivery cards.
+can refresh the mission's delivery cards. Creating or deleting a row on a summary-eligible
+mission also triggers `overlord.mission.summary.compose.v1` in the same transaction (v166).
+
+### `mission_summaries`
+
+The agent-maintained mission summary (coo:1202, contract v166): one row per mission whose
+`missions.summary_enabled` is true, replaced in place. It is an operator surface only and is
+never part of `load-context`, the mission packet, MCP, or CLI protocol output. Not indexed in
+`search_documents`.
+
+| Column                 | Type         | Required | Notes                                                                                                   |
+| ---------------------- | ------------ | -------- | ------------------------------------------------------------------------------------------------------- |
+| `mission_id`           | Id           | yes      | Primary key; FK to `missions`, cascade delete.                                                          |
+| `workspace_id`         | Id           | yes      | FK to `workspaces`; denormalized from the mission.                                                      |
+| `project_id`           | Id           | yes      | FK to `projects`; denormalized from the mission.                                                        |
+| `revision`             | integer      | yes      | Increments on every write, including a pending notification.                                            |
+| `requested_generation` | integer      | yes      | Increments transactionally on every compose trigger, including while a job is queued or running.        |
+| `completed_generation` | integer      | yes      | Generation represented by the last published result; `0` until the first publication.                  |
+| `status`               | text         | yes      | Closed: `pending`, `composed`, `fallback`.                                                              |
+| `headline`             | text         | yes      | One sentence; empty in the first pending shell.                                                         |
+| `summary_markdown`     | text         | yes      | Two to five sentences of Markdown; empty in the first pending shell.                                    |
+| `risks_json`           | Json         | yes      | `[{ deliveryId, objectiveId, index, text }]`; `text` is the composer's bounded rewrite or the original. |
+| `suggestions_json`     | Json         | yes      | `[{ deliveryId, objectiveId, actionId }]` in display order; references only, never item text.          |
+| `source_delivery_id`   | Id           | no       | Delivery whose compose triggered this pass; null for any other trigger. Soft reference.                 |
+| `generated_by`         | text         | yes      | Closed: `deterministic`, `gemini`.                                                                      |
+| `generated_at`         | TimestampUTC | no       | Null in the first pending shell.                                                                        |
+| `model`                | text         | no       |                                                                                                         |
+| `created_at`           | TimestampUTC | yes      |                                                                                                         |
+| `updated_at`           | TimestampUTC | yes      |                                                                                                         |
+
+Indexes:
+
+- Primary key `(mission_id)`.
+- `(workspace_id, updated_at)`.
+
+A trigger increments `requested_generation`, sets `status = 'pending'`, bumps `revision`,
+and keeps the previous content in the transaction of the write it follows; the first trigger
+inserts a pending shell. The worker publishes only while `requested_generation` still equals
+the generation it captured, then sets `completed_generation`. Every write appends an
+`entity_changes` row with `entity_type = 'mission_summary'`, `entity_id = mission_id`, and
+`mission_id` set.
+
+### `mission_summary_seen`
+
+Per-user acknowledgement of displayed mission-summary evidence (contract v166), used for the
+new-since-last-visit marker.
+
+| Column              | Type         | Required | Notes                                                                 |
+| ------------------- | ------------ | -------- | --------------------------------------------------------------------- |
+| `mission_id`        | Id           | yes      | FK to `missions`, cascade delete. Part of the primary key.            |
+| `workspace_user_id` | Id           | yes      | FK to `workspace_users`, cascade delete. Part of the primary key.     |
+| `seen_at`           | TimestampUTC | yes      | Evidence watermark; written as `max(existing, watermark)`, never back. |
+
+Indexes:
+
+- Primary key `(mission_id, workspace_user_id)`.
+
+Writes append no `entity_changes` row; the value affects only the caller's own view.
 
 ### `artifacts`
 
@@ -1608,7 +1668,11 @@ delivery-presentation composition. Its `payload_json` carries `{ "deliveryId": "
 only. Protocol delivery (`deliverSession` / `recordWork`) enqueues one job in the same
 transaction as the delivery insert; the backend composition worker claims, retries with
 lock expiry, and updates only `deliveries.payload_json.deliveryReport.presentation`.
-Delivery success never waits on the worker or Gemini. The core
+Delivery success never waits on the worker or Gemini. Core type
+`overlord.mission.summary.compose.v1` (contract v166) carries `{ "missionId": "<id>" }` only;
+it is enqueued for summary-eligible missions in the transaction of each trigger write (see
+`mission_summaries`), coalesced by mission, and never loses a trigger because the counter lives
+on the summary row rather than in the job. The core
 `overlord.execution_target.lease_cleanup.v1` type carries only `{ executionTargetId,
 expectedRevision }`; its handler rechecks the leased target transactionally before cleanup and is
 safe to replay after a worker restart.
@@ -2716,7 +2780,7 @@ V3 retrieval selects `entity_id` so matching objectives and deliveries are ident
 
 The index is maintained by adapter triggers, not application writes: insert/update/delete on `missions`, `objectives`, `mission_events`, and `deliveries` keep `search_documents` (and the adapter full-text index) in sync, and a soft delete of a mission removes every document for that mission so deleted missions never surface. Workspace moves first remove the old workspace's document and then upsert the new one. Delivery rows are omitted once soft-deleted. `content_hash` and `source_revision` allow incremental reindexing instead of blind rebuilds.
 
-Mission document bodies concatenate the title/display ID with `constraints_text`, `output_format_text`, and `notes_text`. `notes_text` remains excluded from attach/load context and prompt assembly, but is searchable by every authorized caller, including agents. Delivery document bodies concatenate `summary`, `verification_summary`, `follow_up_notes`, and only `deliveryReport.agentReport.humanActions`, `knownRisks`, `deferredWork`, `assumptions`, and each `tradeoffsMade[].decision`; adapters cap that resulting body at 20,000 characters. Text beyond that cap is not searchable. Artifacts are not indexed.
+Mission document bodies concatenate the title/display ID with `constraints_text`, `output_format_text`, and `notes_text`. `notes_text` remains excluded from attach/load context and prompt assembly, but is searchable by every authorized caller, including agents. Delivery document bodies concatenate `summary`, `verification_summary`, `follow_up_notes`, and only `deliveryReport.agentReport.humanActions`, `knownRisks`, `deferredWork` (each item's `title`, `change`, `location`, and `doneWhen` since v166; the `20261024140100_deferred_work_structured_cutover` migration recreated the delivery triggers and cleared historical string items), `assumptions`, and each `tradeoffsMade[].decision`; adapters cap that resulting body at 20,000 characters. Text beyond that cap is not searchable. Artifacts are not indexed.
 
 - **SQLite** implements the full-text index as an external-content FTS5 virtual table (`search_documents_fts`) over `search_documents`, with `mission_id`/`entity_type` carried as `UNINDEXED` columns so a single `bm25()`-ranked query can return and weight missions. V3 child identity comes from joining `search_documents` on `rowid`, not from adding `entity_id` to the virtual table.
 - **Postgres** implements it as a generated `tsvector` column with a GIN index and `plpgsql` sync triggers; trigram indexes and a stable search RPC may be added as adapter details.
@@ -2797,7 +2861,7 @@ Closed values:
 
 Open extension values:
 
-- `workspaces.kind`, `profiles.kind`, `execution_targets.type`, `project_resources.type`, `storage_buckets.storage_backend`, `artifacts.type`, `mission_events.source`, `entity_changes.entity_type`, `entity_changes.source`, `outbox_messages.topic`, `worker_jobs.type` (including core-documented `overlord.delivery.compose.v1`), RBAC permission names, connector identifiers, and `webhook_subscriptions.event_types_json` values (the webhook event catalog).
+- `workspaces.kind`, `profiles.kind`, `execution_targets.type`, `project_resources.type`, `storage_buckets.storage_backend`, `artifacts.type`, `mission_events.source`, `entity_changes.entity_type`, `entity_changes.source`, `outbox_messages.topic`, `worker_jobs.type` (including core-documented `overlord.delivery.compose.v1` and `overlord.mission.summary.compose.v1`), RBAC permission names, connector identifiers, and `webhook_subscriptions.event_types_json` values (the webhook event catalog).
 - `execution_targets.type` documents `local` and `virtual` as core values. A `virtual` target is realized by an external gateway over the Virtual Target Queue Surface.
 - Virtual execution target open vocabularies: `execution_target_registrations.gateway_key` (namespaced adapter key, e.g. `racecar` — **not** an `execution_targets.type`), `execution_target_registrations.health` (`healthy`, `degraded`, `unreachable`, `unknown`), `project_resource_sources.source_kind` (`git`, `local_checkout`, `source_bundle`, …), `execution_request_observations.kind` (`progress`, `launch`, `failure`, `lifecycle_resource`, …), `execution_request_grants.kind` (`launch`, `attachment`, `download`, `credential_reference`, …), `execution_requests.failure_code` (typed, e.g. `source_incompatible`), `execution_requests.failure_phase` (`claim`, `source`, `environment`, `launch`, …), and `mission_target_resources.kind` (`car`, `environment`, `run`, …).
 - Extension values must be namespaced unless they are accepted into core documentation.

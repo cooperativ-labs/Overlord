@@ -1,0 +1,216 @@
+{
+  "description": "Shared fixture for the Mission summary client derivations (plan mission-summary-section-implementation.md §5.2, §5.6). The web tests (webapp/web/lib/mission-summary-derive.test.ts) and the iOS tests (OverlordTests/MissionSummaryDeriveTests.swift) both load this file and assert the `expected` block. A review mission with four deliveries across three objectives: delivery-a1 is superseded for actions by the newer delivery-a2 on the same objective, objective obj-x was deleted (its delivery renders as the unassigned `Delivery` row), and obj-c has one open question. seenAt sits between the second and third delivery so the new-item dot is exercised. The envelope is what the server returns: it already applied supersession and selection; the client merges questions, dedupes actions by normalised text and dates suggestions and risks.",
+  "contractVersion": 167,
+  "reviewMission": {
+    "input": {
+      "mission": {
+        "id": "mission-1",
+        "displayId": "coo:900",
+        "statusType": "review",
+        "objectives": [
+          { "id": "obj-a", "displayId": "coo:900.aaaa", "title": "Build the derive module", "state": "complete", "reopenedAt": null },
+          { "id": "obj-c", "displayId": "coo:900.cccc", "title": "Port the section to iOS", "state": "executing", "reopenedAt": null },
+          { "id": "obj-d", "displayId": "coo:900.dddd", "title": "Write the docs", "state": "pending_delivery", "reopenedAt": null },
+          { "id": "obj-e", "displayId": "coo:900.eeee", "title": "Polish the empty state", "state": "future", "reopenedAt": null }
+        ]
+      },
+      "deliveries": [
+        { "id": "delivery-c4", "objectiveId": "obj-c", "deliveredAt": "2026-10-23T10:00:00.000Z" },
+        { "id": "delivery-x3", "objectiveId": "obj-x", "deliveredAt": "2026-10-22T10:00:00.000Z" },
+        { "id": "delivery-a2", "objectiveId": "obj-a", "deliveredAt": "2026-10-21T10:00:00.000Z" },
+        { "id": "delivery-a1", "objectiveId": "obj-a", "deliveredAt": "2026-10-20T10:00:00.000Z" }
+      ],
+      "summaryResponse": {
+        "eligible": true,
+        "summary": {
+          "missionId": "mission-1",
+          "revision": 7,
+          "status": "composed",
+          "headline": "The derive module is ready for review; the iOS port is waiting on your answer.",
+          "summary": "Two objectives have delivered. The derive module has tests for every rule. The iOS port stopped on a question about the formatter.",
+          "risks": [
+            { "deliveryId": "delivery-c4", "deliveredAt": "2026-10-23T10:00:00.000Z", "objectiveId": "obj-c", "text": "The formatter move can break the widget target." },
+            { "deliveryId": "delivery-a1", "deliveredAt": "2026-10-20T10:00:00.000Z", "objectiveId": "obj-a", "text": "Text-based dedupe can fold two different actions into one." }
+          ],
+          "suggestions": [
+            {
+              "deliveryId": "delivery-c4", "deliveredAt": "2026-10-23T10:00:00.000Z",
+              "objectiveId": "obj-c",
+              "actionId": "deferred-work-0-c4c4c4c4c4c4c4c4",
+              "title": "Share the relative-time formatter",
+              "state": "open",
+              "change": "Replace the two inline relative-time implementations with one helper.",
+              "location": "webapp/web/components/mission-summary/",
+              "doneWhen": "Both call sites import the helper.",
+              "resolution": null
+            },
+            {
+              "deliveryId": "delivery-a1", "deliveredAt": "2026-10-20T10:00:00.000Z",
+              "objectiveId": "obj-a",
+              "actionId": "deferred-work-0-a1a1a1a1a1a1a1a1",
+              "title": "Add derivation tests on iOS",
+              "state": "resolved",
+              "resolution": {
+                "status": "done",
+                "resolvedAt": "2026-10-21T09:00:00.000Z",
+                "resolvedByWorkspaceUserId": "wu-1",
+                "outcome": "objective_added",
+                "outcomeRef": "coo:900.ffff"
+              }
+            },
+            {
+              "deliveryId": "delivery-x3", "deliveredAt": "2026-10-22T10:00:00.000Z",
+              "objectiveId": "obj-x",
+              "actionId": "deferred-work-0-x3x3x3x3x3x3x3x3",
+              "title": "Record when the summary was last seen",
+              "state": "open",
+              "change": "Store a per-user seen marker and mark newer items.",
+              "location": "missions table · mission detail route",
+              "doneWhen": "Items newer than the marker show a dot.",
+              "resolution": null
+            }
+          ],
+          "sourceDeliveryId": "delivery-c4",
+          "generatedBy": "gemini",
+          "generatedAt": "2026-10-23T10:05:00.000Z",
+          "model": "gemini-test"
+        },
+        "evidence": {
+          "actions": [
+            {
+              "deliveryId": "delivery-c4",
+              "objectiveId": "obj-c",
+              "actionId": "human-action-0",
+              "deliveredAt": "2026-10-23T10:00:00.000Z",
+              "action": "Run the migration on staging",
+              "reason": "The iOS build reads the new column.",
+              "category": "database",
+              "blocking": true,
+              "command": "yarn db:migrate --env staging",
+              "verify": "The summary route returns eligible: true.",
+              "source": "agent"
+            },
+            {
+              "deliveryId": "delivery-c4",
+              "objectiveId": "obj-c",
+              "actionId": "human-action-1",
+              "deliveredAt": "2026-10-23T10:00:00.000Z",
+              "action": "Add OVERLORD_FLAG to the backend env.",
+              "reason": "The flag gates the new section.",
+              "category": "environment",
+              "blocking": false,
+              "source": "agent"
+            },
+            {
+              "deliveryId": "delivery-x3",
+              "objectiveId": "obj-x",
+              "actionId": "human-action-0",
+              "deliveredAt": "2026-10-22T10:00:00.000Z",
+              "action": "add  OVERLORD_FLAG to the backend env",
+              "category": "environment",
+              "blocking": false,
+              "source": "agent"
+            },
+            {
+              "deliveryId": "delivery-x3",
+              "objectiveId": "obj-x",
+              "actionId": "human-action-1",
+              "deliveredAt": "2026-10-22T10:00:00.000Z",
+              "action": "Rotate the webhook secret",
+              "category": "external_service",
+              "blocking": false,
+              "link": "developer-instructions/webhooks.md",
+              "source": "agent"
+            },
+            {
+              "deliveryId": "delivery-a2",
+              "objectiveId": "obj-a",
+              "actionId": "human-action-0",
+              "deliveredAt": "2026-10-21T10:00:00.000Z",
+              "action": "Review the empty-state copy",
+              "category": "other",
+              "blocking": false,
+              "source": "agent"
+            }
+          ],
+          "sources": [
+            { "objectiveId": "obj-c", "deliveryId": "delivery-c4", "deliveredAt": "2026-10-23T10:00:00.000Z" },
+            { "objectiveId": "obj-x", "deliveryId": "delivery-x3", "deliveredAt": "2026-10-22T10:00:00.000Z" },
+            { "objectiveId": "obj-a", "deliveryId": "delivery-a2", "deliveredAt": "2026-10-21T10:00:00.000Z" }
+          ],
+          "totals": { "actions": 5, "sources": 3, "currentRunDeliveries": 4 },
+          "truncated": { "actions": false, "sources": false }
+        },
+        "watermark": "2026-10-23T11:00:00.000Z",
+        "seenAt": "2026-10-21T12:00:00.000Z"
+      },
+      "agentRequests": [
+        { "id": "request-q1", "missionId": "mission-1", "objectiveId": "obj-c", "kind": "question", "status": "open", "summary": "Should the formatter live in OverlordCore or the app target?", "createdAt": "2026-10-23T11:00:00.000Z" },
+        { "id": "request-q2", "missionId": "mission-1", "objectiveId": "obj-a", "kind": "question", "status": "resolved", "summary": "Which fixture?", "createdAt": "2026-10-20T08:00:00.000Z" },
+        { "id": "request-p3", "missionId": "mission-1", "objectiveId": "obj-c", "kind": "permission", "status": "open", "summary": "Allow npm install?", "createdAt": "2026-10-23T11:30:00.000Z" }
+      ],
+      "fileChanges": {
+        "truncated": false,
+        "items": [
+          { "id": "fc-1", "missionId": "mission-1", "objectiveId": "obj-c", "resourceKey": "mobile", "filePath": "OverlordCore/MissionSummaryDerive.swift", "source": "declared_edit", "observedAt": "2026-10-23T09:00:00.000Z", "hookHealth": null },
+          { "id": "fc-2", "missionId": "mission-1", "objectiveId": "obj-a", "resourceKey": "web", "filePath": "webapp/web/lib/mission-summary-derive.ts", "source": "agent_declared", "observedAt": "2026-10-21T09:00:00.000Z", "hookHealth": null },
+          { "id": "fc-3", "missionId": "mission-1", "objectiveId": "obj-c", "resourceKey": "web", "filePath": "webapp/web/lib/mission-summary-derive.ts", "source": "declared_edit", "observedAt": "2026-10-23T08:00:00.000Z", "hookHealth": null },
+          { "id": "fc-4", "missionId": "mission-1", "objectiveId": "obj-x", "resourceKey": "web", "filePath": "README.md", "source": null, "observedAt": "2026-10-22T09:00:00.000Z", "hookHealth": null },
+          { "id": "fc-5", "missionId": "mission-1", "objectiveId": "obj-a", "resourceKey": "web", "filePath": "webapp/web/components/MissionPanel.tsx", "source": "declared_edit", "observedAt": "2026-10-20T09:00:00.000Z", "hookHealth": null },
+          { "id": "fc-6", "missionId": "mission-1", "objectiveId": "obj-a", "resourceKey": "web", "filePath": "webapp/web/components/mission-summary/MissionSummarySection.tsx", "source": "declared_edit", "observedAt": "2026-10-20T09:30:00.000Z", "hookHealth": null },
+          { "id": "fc-7", "missionId": "mission-1", "objectiveId": "obj-a", "resourceKey": "web", "filePath": "webapp/web/components/mission-summary/MissionSummaryPost.tsx", "source": "declared_edit", "observedAt": "2026-10-20T09:40:00.000Z", "hookHealth": null },
+          { "id": "fc-8", "missionId": "mission-1", "objectiveId": "obj-a", "resourceKey": "web", "filePath": "webapp/web/components/mission-summary/MissionSummaryFiles.tsx", "source": "agent_declared", "observedAt": "2026-10-20T09:50:00.000Z", "hookHealth": null }
+        ]
+      }
+    },
+    "expected": {
+      "visitBaseline": "2026-10-21T12:00:00.000Z",
+      "statusChip": { "label": "In review", "tone": "review" },
+      "runningSentences": [
+        "Port the section to iOS is waiting on a question.",
+        "Write the docs is running."
+      ],
+      "sources": [
+        { "deliveryId": "delivery-c4", "objectiveKey": "coo:900.cccc", "label": "coo:900.cccc", "live": true },
+        { "deliveryId": "delivery-x3", "objectiveKey": null, "label": "Delivery", "live": false },
+        { "deliveryId": "delivery-a2", "objectiveKey": "coo:900.aaaa", "label": "coo:900.aaaa", "live": false }
+      ],
+      "actions": [
+        { "key": "action:delivery-c4:human-action-0", "kind": "action", "title": "Run the migration on staging", "blocking": true, "objectiveKey": "coo:900.cccc", "isNew": true },
+        { "key": "request:request-q1", "kind": "question", "title": "Answer the agent's question on Port the section to iOS", "blocking": false, "objectiveKey": "coo:900.cccc", "isNew": true },
+        { "key": "action:delivery-c4:human-action-1", "kind": "action", "title": "Add OVERLORD_FLAG to the backend env.", "blocking": false, "objectiveKey": "coo:900.cccc", "isNew": true },
+        { "key": "action:delivery-x3:human-action-1", "kind": "action", "title": "Rotate the webhook secret", "blocking": false, "objectiveKey": null, "isNew": true },
+        { "key": "action:delivery-a2:human-action-0", "kind": "action", "title": "Review the empty-state copy", "blocking": false, "objectiveKey": "coo:900.aaaa", "isNew": false }
+      ],
+      "suggestions": [
+        { "actionId": "deferred-work-0-c4c4c4c4c4c4c4c4", "state": "open", "objectiveKey": "coo:900.cccc", "isNew": true },
+        { "actionId": "deferred-work-0-x3x3x3x3x3x3x3x3", "state": "open", "objectiveKey": null, "isNew": true },
+        { "actionId": "deferred-work-0-a1a1a1a1a1a1a1a1", "state": "resolved", "objectiveKey": "coo:900.aaaa", "isNew": false }
+      ],
+      "risks": [
+        { "deliveryId": "delivery-c4", "objectiveKey": "coo:900.cccc", "isNew": true },
+        { "deliveryId": "delivery-a1", "objectiveKey": "coo:900.aaaa", "isNew": false }
+      ],
+      "files": {
+        "total": 7,
+        "truncated": false,
+        "resourceCount": 2,
+        "showResourceKey": true,
+        "collapsedChips": [
+          { "resourceKey": "mobile", "directory": "OverlordCore/", "basename": "MissionSummaryDerive.swift", "badge": "N" },
+          { "resourceKey": "web", "directory": "webapp/web/lib/", "basename": "mission-summary-derive.ts", "badge": "N" },
+          { "resourceKey": "web", "directory": "", "basename": "README.md", "badge": "?" },
+          { "resourceKey": "web", "directory": "webapp/web/components/mission-summary/", "basename": "MissionSummaryFiles.tsx", "badge": "D" },
+          { "resourceKey": "web", "directory": "webapp/web/components/mission-summary/", "basename": "MissionSummaryPost.tsx", "badge": "N" },
+          { "resourceKey": "web", "directory": "webapp/web/components/mission-summary/", "basename": "MissionSummarySection.tsx", "badge": "N" }
+        ],
+        "hiddenCount": 1
+      },
+      "trailer": { "generatedAt": "2026-10-23T10:05:00.000Z", "currentRunDeliveries": 4 },
+      "sectionState": "summary",
+      "updatingSourceObjectiveKey": "coo:900.cccc",
+      "watermark": "2026-10-23T11:00:00.000Z",
+      "watermarkNeedsAck": true
+    }
+  }
+}

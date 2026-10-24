@@ -31,13 +31,11 @@ export type ComposeDeliveryInput = {
   objectiveTitle?: string | null;
   objectiveInstruction?: string | null;
   plannedObjectives?: ComposeDeliveryPlannedObjective[];
-  omittedDeferredWork?: string[];
   verificationSummary?: string | null;
   followUpNotes?: string | null;
   humanActions: ComposeDeliveryEvidenceItem[];
   tradeoffsMade: ComposeDeliveryEvidenceItem[];
   knownRisks: string[];
-  deferredWork: string[];
   assumptions: string[];
   candidateActions: ComposeDeliveryEvidenceItem[];
   recentEvents?: Array<{ type: string; summary: string }>;
@@ -48,7 +46,6 @@ export type ComposeDeliveryDraft = {
   humanActions?: Array<Record<string, unknown>>;
   tradeoffsMade?: Array<Record<string, unknown>>;
   knownRisks?: string[];
-  deferredWork?: string[];
   assumptions?: string[];
   reviewHighlights?: string[];
 };
@@ -88,20 +85,27 @@ export const COMPOSE_DELIVERY_RESPONSE_SCHEMA: Schema = {
       }
     },
     knownRisks: { type: Type.ARRAY, items: { type: Type.STRING } },
-    deferredWork: {
-      type: Type.ARRAY,
-      description:
-        'Eligible deferred work rewritten as self-contained out-of-mission objective statements (see DEFERRED WORK rules). Same order as the eligible agent list; omit items that restated planned work or human follow-up. Empty array is correct when nothing qualifies.',
-      items: { type: Type.STRING }
-    },
     assumptions: { type: Type.ARRAY, items: { type: Type.STRING } },
     reviewHighlights: { type: Type.ARRAY, items: { type: Type.STRING } }
   },
-  required: ['markdown', 'humanActions', 'tradeoffsMade', 'deferredWork']
+  required: ['markdown', 'humanActions', 'tradeoffsMade']
 };
 
-/** Per-item ceiling for a rewritten deferred-work statement; matches the core detail limit. */
-export const DEFERRED_WORK_MAX_CHARS = 800;
+/**
+ * STE-inspired writing rules (loosely based on ASD-STE100), shared with the
+ * mission summary composer. Guidance for the model, not a checker.
+ */
+export const WRITING_RULES = `WRITING rules:
+- One topic per sentence. Keep sentences short: about 20 words for an instruction, about 25 for a description.
+- Use the active voice and name the actor: "The migration adds a table", not "A table is added".
+- Use the present tense for state and the simple past for what the agent did.
+- Use the imperative for anything the operator must do: "Run the test suite", not "The test suite should be run".
+- Use one term for one thing throughout a message. Do not vary vocabulary for style.
+- Prefer short, common words. Avoid noun stacks longer than three words; rewrite "delivery compose worker fallback path" as "the fallback path of the compose worker".
+- Keep articles ("the", "a"). Do not drop them for brevity.
+- No idioms, no hedging filler, no marketing adjectives.
+- Technical names, commands, paths, and quoted agent text are exempt and are copied exactly.
+- When the evidence is unclear, say that it is unclear. Do not smooth it over.`;
 
 export const SYSTEM_INSTRUCTION = `You compose a polished delivery review message for a coding agent handoff.
 Return JSON only matching the schema.
@@ -114,14 +118,8 @@ Rules:
 - File paths (a candidate action's link or sourceRef) are context only. Never describe what a file does or why it changed, and never infer behavior, impact, tests, or verification from a file or path name; only the agent summary and the supplied report facts state those.
 - Never include git commit/push/PR actions or routine "review/test the code" actions.
 - Prefer concise, scannable Markdown. Do not include secrets, tokens, or raw diffs.
-DEFERRED WORK rules (deferredWork array):
-- deferredWork is only for recommended NEW objectives that are not part of this mission. Out-of-scope bugs discovered during the work are the canonical example. It is not leftover implementation of the current objective, the next queued objective on this mission, or human follow-up.
-- The prompt lists this mission's planned future objectives and any agent items already omitted as ineligible. Never restate those, never restate a human action or known risk, and never restate leftover slices of the current objective.
-- The deferred-work evidence list is already the eligible subset. Rewrite every remaining item as a self-contained statement of one to three sentences: start with an imperative verb naming the work; name the component, feature, file, command, or data set involved; state what the delivered work already covers and why this piece was left; and state what done looks like when the evidence says so.
-- Resolve references that only make sense inside this delivery ("finding 3", "P2 items", "the next objective", "remaining ~60 moves") by pulling the referenced detail from the agent summary, objective instruction, or recent events.
-- Never shorten a kept item, merge two kept items, or reorder them. Empty array is correct when the eligible list is empty or when a remaining item is still leftover in-mission work or human follow-up that slipped through.
-- Only add an item beyond the eligible list when the agent summary explicitly recommends new work outside this mission (for example an out-of-scope bug). Never add leftover in-mission work, a queued future objective, a human action, or a known risk.
-- Use only facts present in the evidence. Do not invent files, commands, scope, or acceptance criteria. Keep each item under ${DEFERRED_WORK_MAX_CHARS} characters.`;
+Apply the WRITING rules below to markdown, humanActions action and reason, tradeoffsMade text, knownRisks, and assumptions. They do not apply to command, verify, link, file paths, identifiers, or quoted agent text; copy those exactly.
+${WRITING_RULES}`;
 
 export function buildComposeDeliveryPrompt(input: ComposeDeliveryInput): string {
   return [
@@ -133,13 +131,8 @@ export function buildComposeDeliveryPrompt(input: ComposeDeliveryInput): string 
       ? `Objective instruction (bounded):\n${input.objectiveInstruction.slice(0, 2000)}`
       : null,
     input.plannedObjectives && input.plannedObjectives.length > 0
-      ? `Planned future objectives on this mission (already queued — not deferred work; never restate):\n${JSON.stringify(
+      ? `Planned future objectives on this mission (already queued; never present them as new work):\n${JSON.stringify(
           input.plannedObjectives
-        )}`
-      : null,
-    input.omittedDeferredWork && input.omittedDeferredWork.length > 0
-      ? `Agent deferred-work items omitted as ineligible (queued on this mission, leftover current-objective work, or human follow-up — do not restate):\n${JSON.stringify(
-          input.omittedDeferredWork
         )}`
       : null,
     input.verificationSummary ? `Verification: ${input.verificationSummary}` : null,
@@ -147,7 +140,6 @@ export function buildComposeDeliveryPrompt(input: ComposeDeliveryInput): string 
     `Human actions evidence:\n${JSON.stringify(input.humanActions)}`,
     `Tradeoffs evidence:\n${JSON.stringify(input.tradeoffsMade)}`,
     `Known risks:\n${JSON.stringify(input.knownRisks)}`,
-    `Deferred work (eligible agent-listed, ${input.deferredWork.length} item(s); rewrite each as a standalone out-of-mission objective per the DEFERRED WORK rules; empty array is correct when none qualify):\n${JSON.stringify(input.deferredWork)}`,
     `Assumptions:\n${JSON.stringify(input.assumptions)}`,
     `Deterministic candidate actions:\n${JSON.stringify(input.candidateActions)}`,
     input.recentEvents && input.recentEvents.length > 0

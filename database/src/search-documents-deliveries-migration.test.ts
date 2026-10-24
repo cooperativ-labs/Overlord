@@ -96,7 +96,16 @@ test('delivery search documents backfill idempotently and stay synchronized [sql
       agentReport: {
         humanActions: ['rotate public key'],
         knownRisks: ['cache warmup'],
-        deferredWork: ['document rollout'],
+        // Structured since contract v166; the trigger indexes the item fields.
+        deferredWork: [
+          {
+            id: 'deferred-work-0-0123456789abcdef',
+            title: 'document rollout',
+            change: 'Write the rollout runbook.',
+            location: 'docs/rollout.md',
+            doneWhen: 'The runbook is published.'
+          }
+        ],
         assumptions: ['staging matches production'],
         tradeoffsMade: [{ decision: 'kept the bounded index' }]
       }
@@ -127,7 +136,7 @@ test('delivery search documents backfill idempotently and stay synchronized [sql
     'Follow-up one',
     'rotate public key',
     'cache warmup',
-    'document rollout',
+    'document rollout Write the rollout runbook\\. docs/rollout\\.md The runbook is published\\.',
     'staging matches production',
     'kept the bounded index'
   ]) {

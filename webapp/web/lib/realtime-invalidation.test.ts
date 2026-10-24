@@ -120,6 +120,7 @@ test('routes mission events, deliveries, attachments, and shared context to scop
     ['mission', 'mission-1', 'events'],
     ['mission', 'mission-1', 'deliveries'],
     ['activity-feed'],
+    ['mission', 'mission-1', 'summary'],
     ['objective', 'objective-1', 'attachments'],
     ['mission', 'mission-1', 'context']
   ]);
@@ -151,6 +152,7 @@ test('routes agent-session changes to the mission panel action-card queries', ()
   assert.equal(mode, 'targeted');
   assert.deepEqual(calls, [
     ['mission', 'mission-1', 'agent-requests'],
+    ['mission', 'mission-1', 'summary'],
     ['mission', 'mission-1', 'agent-session-inputs']
   ]);
 });
@@ -218,7 +220,7 @@ test('falls back to full invalidation for malformed or unroutable changes', () =
   }
 });
 
-test('routes deferred-work resolutions to the mission deliveries', () => {
+test('routes deferred-work resolutions to the mission deliveries and summary', () => {
   const { client, calls } = fakeClient();
 
   const mode = invalidateRealtimeChanges(client, [
@@ -231,5 +233,23 @@ test('routes deferred-work resolutions to the mission deliveries', () => {
   ]);
 
   assert.equal(mode, 'targeted');
-  assert.deepEqual(calls, [['mission', 'mission-1', 'deliveries']]);
+  assert.deepEqual(calls, [
+    ['mission', 'mission-1', 'deliveries'],
+    ['mission', 'mission-1', 'summary']
+  ]);
+});
+
+test('routes mission summary changes to the summary envelope only', () => {
+  const { client, calls } = fakeClient();
+
+  const mode = invalidateRealtimeChanges(client, [
+    change({
+      entityType: 'mission_summary',
+      entityId: 'mission-1',
+      changedFields: ['requested_generation']
+    })
+  ]);
+
+  assert.equal(mode, 'targeted');
+  assert.deepEqual(calls, [['mission', 'mission-1', 'summary']]);
 });

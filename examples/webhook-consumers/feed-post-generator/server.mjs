@@ -50,12 +50,23 @@ async function hydrateMission(envelope) {
   return { ...envelope, mission: { ...envelope.mission, ...mission } };
 }
 
+/**
+ * Titles of the recommended follow-up objectives in a `full` payload. Each
+ * deferred-work item is an object { id, title, change, location, doneWhen };
+ * string items no longer exist.
+ */
+function followUpTitles(envelope) {
+  const items = envelope.delivery?.report?.presentation?.deferredWork ?? [];
+  return items.map(item => item.title).filter(Boolean);
+}
+
 /** Digest mission context into a short feed post. Falls back to a deterministic summary when no LLM key is configured or the call fails -- the same posture as the upstream pipeline. */
 async function draftFeedPost(envelope) {
   const fallback = {
     title: envelope.mission.title ?? envelope.mission.displayId,
     summary: envelope.delivery?.summary?.slice(0, 240) ?? 'A mission was delivered for review.',
-    tags: [envelope.type]
+    tags: [envelope.type],
+    followUps: followUpTitles(envelope)
   };
   if (!GEMINI_API_KEY) return fallback;
 

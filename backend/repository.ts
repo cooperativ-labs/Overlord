@@ -108,6 +108,7 @@ import {
   jsonTextFieldSql,
   slugify
 } from '../packages/core/service/util.ts';
+import { enqueueMissionSummaryComposeJob } from '../packages/core/service/worker-jobs.ts';
 import type {
   ArtifactDto,
   CreateArtifactBody,
@@ -138,12 +139,12 @@ import type {
   MissionDto,
   MissionEventDto,
   MissionFileChangesDto,
-  ObjectiveFileChangesDto,
   MissionReferenceSearchResponse,
   MissionScheduleDto,
   MissionSearchDateField,
   MissionWorktreePreference,
   ObjectiveDto,
+  ObjectiveFileChangesDto,
   PreviewScheduleBody,
   ProfileDto,
   ProjectDto,
@@ -225,13 +226,14 @@ import {
   projectInTokenScope,
   recordChange,
   requireDatabaseClient,
-  resolveActiveProfileId
+  resolveActiveProfileId,
+  restMissionSummaryTriggerContext
 } from './db.ts';
 import {
   deferredWorkEntries,
+  deferredWorkItemDto,
   findResolution,
-  loadResolutions,
-  toResolution
+  loadResolutions
 } from './deferred-work.ts';
 import { ApiError } from './errors.ts';
 import { resolveObjectiveIdForRest } from './objective-ref.ts';
@@ -4602,11 +4604,9 @@ export async function listMissionDeliveries(
         deliveredAt: row.delivered_at,
         agentIdentifier: row.agent_identifier,
         modelIdentifier: row.model_identifier,
-        deferredWorkItems: deferredWorkEntries(report).map(entry => ({
-          actionId: entry.id,
-          action: entry.action,
-          resolution: toResolution(findResolution(resolutions, row.id, entry))
-        }))
+        deferredWorkItems: deferredWorkEntries(report).map(entry =>
+          deferredWorkItemDto(entry, findResolution(resolutions, row.id, entry))
+        )
       };
     }),
     total: asTotal(countRow?.total),
@@ -7291,6 +7291,16 @@ async function updateObjectiveTx(
       },
       tx
     );
+
+    // A new run boundary changes which deliveries the mission summary may use.
+    if (changed.includes('reopened_at')) {
+      await enqueueMissionSummaryComposeJob({
+        ctx: restMissionSummaryTriggerContext(tx, workspaceId, workspaceUserId),
+        missionId: existing.mission_id,
+        reason: 'objective_reopened',
+        now
+      });
+    }
 
     if (
       body.state !== undefined &&

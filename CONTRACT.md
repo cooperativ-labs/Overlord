@@ -34,13 +34,135 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `165`
+Current version: `167`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
 `contract/components.yaml`) — never a header duplicate. The contract version is
 incremented when any stable interface changes. All conformance manifests must
 declare the contract version they were validated against.
+
+### Version 167 Change Summary
+
+Mission summary validation (coo:1202): `MissionSummaryRiskDto` and both arms of
+`MissionSummarySuggestionDto` now include required `deliveredAt`, the original
+source delivery timestamp. The operator read projects it from the delivery row;
+it is not model output or persisted summary JSON. Web and iOS use this timestamp
+for new-since-visit dots, even when the source is older than the capped delivery
+feed or superseded in latest-per-objective evidence. Promoted suggestions remain
+compact and never carry a new dot.
+
+Impact: contract DTOs, the backend summary projection, web and mobile derivations,
+and their shared fixtures change together. Database storage, core worker refs,
+automations, auth, CLI, MCP, connectors, webhooks, and agent packets are unchanged.
+The summary remains an operator-only surface with the existing parity exemption.
+
+### Version 166 Change Summary
+
+Mission summary (coo:1202, phase 2 of
+`planning/feature-plans/mission-summary-section-implementation.md`) and
+agent-written structured deferred work. Single breaking cutover: no aliases,
+dual acceptance, or legacy decoders.
+
+- **Structured deferred work.** `DeliveryAgentReportInputV1.deferredWork` is
+  `DeferredWorkInputV1[]` (`title` ≤ 80, `change` ≤ 400, `location` ≤ 200,
+  `doneWhen` ≤ 200 characters, all required and non-blank, no other keys;
+  `DEFERRED_WORK_LIMITS`). `DeliveryAgentReportV1.deferredWork` and
+  `DeliveryPresentationV1.deferredWork` are `DeferredWorkV1[]`, the input plus a
+  stable delivery-local `id`: `deferred-work-<index>-<digest>`, where `index` is
+  the zero-based position in the normalized agent report and `digest` is the
+  first 16 hex characters of the SHA-256 of the UTF-8 JSON text of `[title,
+  change, location, doneWhen]` with each field trimmed.
+  `contract/delivery-report-v1-fixtures.json` pins the derivation. `deliver`
+  and `record-work` (Protocol, CLI `--payload-json|file`, hosted and local MCP)
+  reject a string item, an over-long or missing field, or an unknown key with
+  `invalid_input`; there is no string compatibility.
+- **The deferred-work rewrite is reversed.** The Version 139 rule (coo:986) that the
+  compose-delivery automation rewrites each deferred-work item as a standalone
+  objective statement (and may add items) is withdrawn. The composer no longer
+  receives deferred work, and its response schema has no `deferredWork`.
+  `presentation.deferredWork` is the eligible subset of the agent items,
+  verbatim and with the agent ids: `filterDeferredWork` still drops items that
+  restate planned objectives or human follow-up, comparing `title` + `change`,
+  and never edits an item. The index-marked composed id is retired.
+- **`DeliveryDeferredWorkItemDto`** is `{ actionId, title, change, location,
+  doneWhen, resolution }`; `action` is removed. `actionId` equals the item's
+  `DeferredWorkV1.id`. The deferred-work resolution routes keep their paths,
+  bodies, and authorization. Promotion through `POST /api/objectives` or `POST
+  /api/missions` uses `title` as the title and, as the instruction, `change`, a
+  blank line, `Location: {location}`, a blank line, `Done when: {doneWhen}`.
+- **Historical deferred work is dropped.** Migrations in both editions clear
+  historical `agentReport.deferredWork` and `presentation.deferredWork` arrays,
+  delete their `human_action_resolutions` rows, preserve every other report
+  field and delivery, and refresh the affected delivery search documents. Old
+  ids are not remapped and the legacy presentation-text id match is removed.
+- **`mission.delivered` webhook payload.** The full envelope's `delivery.report`
+  carries the new `deferredWork` object shape in both `agentReport` and
+  `presentation`. Thin envelopes are unchanged. Webhook consumers that read
+  deferred work must move to the object shape.
+- **Mission summary eligibility.** `missions.summary_enabled` (Bool, NOT NULL,
+  default true) is set false for every mission that exists at migration time.
+  Every creation path after the cutover (REST, Protocol `create` / `prompt`,
+  `record-work`, MCP, inbox promotion, scheduled duplicates) is eligible through
+  the column default without per-path code. Ineligible missions get no summary
+  row and no compose job, now or later. Clients learn eligibility only from the
+  summary read envelope; `MissionDto` and `MissionDetailDto` do not change.
+- **Storage.** `mission_summaries` (one row per eligible mission, replaced in
+  place: `revision`, `requested_generation`, `completed_generation`, `status`
+  `pending | composed | fallback`, `headline`, `summary_markdown`, `risks_json`,
+  `suggestions_json` as references only, `source_delivery_id`, `generated_by`,
+  `generated_at`, `model`) and `mission_summary_seen` (one row per mission and
+  workspace user). Writing a summary row appends `entity_changes` with
+  `entity_type = mission_summary` (open vocabulary), `entity_id` = the mission
+  id, and the mission id set. A seen write appends no entity change.
+- **Compose job.** `worker_jobs` gains core type
+  `overlord.mission.summary.compose.v1` with payload `{ missionId }`. Each
+  trigger increments `requested_generation`, sets `pending`, bumps the revision,
+  and emits the entity change in the transaction of the write it follows,
+  keeping prior content. Triggers: a delivery presentation persisted as
+  `composed` or `fallback`; a deferred-work resolution create or delete; an
+  agent request of kind `question` or `choice` on creation and on every
+  transition out of `open`; an objective reopening. Publication is guarded by
+  the captured generation, so a trigger during generation causes a fresh pass.
+- **REST.** `GET /api/missions/:id/summary` (mission read authorization)
+  returns `MissionSummaryResponse`: `{ eligible: false, summary: null,
+  evidence: null, watermark: null, seenAt: null }` for an ineligible mission,
+  else `{ eligible: true, summary: MissionSummaryDto | null, evidence:
+  MissionSummaryEvidenceDto, watermark, seenAt }`. Evidence (latest current-run
+  delivery per objective, its human actions, and source rows, deleted
+  objectives included) is selected in the database before any limit, capped at
+  `MISSION_SUMMARY_EVIDENCE_LIMIT` with pre-cap `totals` and `truncated` flags.
+  Suggestions are projected at read time from the source delivery's deferred
+  work and resolution: open items carry every field, promoted items only
+  identity, title, and resolution, dismissed items and items whose delivery is
+  no longer current-run are omitted. `watermark` is the newest `deliveredAt` of
+  the current-run deliveries the response draws on or `createdAt` of an open
+  `question` or `choice` request. `PUT /api/missions/:id/summary/seen` takes
+  `{ watermark }`, rejects a value later than the caller's current evidence
+  maximum or any value on an ineligible mission with `invalid_input`, stores
+  `max(existing, watermark)` per workspace user, and returns `{ seenAt }`. The
+  evidence maximum is the newest `delivered_at` of any live delivery or
+  `created_at` of any `question` or `choice` request of the mission, whatever
+  its status, so answering a request or reopening an objective after the read
+  cannot reject the acknowledgement of evidence that was displayed.
+- **Operator surface only; MCP parity exemption.** The summary, its evidence,
+  and the seen marker are never sent to agents. `load-context`, the attach
+  mission packet, hosted and local MCP tools, and CLI protocol commands do not
+  expose them, now or later. The two routes are exempt from the REST/MCP parity
+  that PM-management surfaces otherwise follow (Version 101).
+
+Module impacts: Contract (this bump: DTOs, fixtures). Database (both
+migrations, Kysely types). Protocol/Core (strict deferred-work schemas, id
+derivation, compose job, triggers, read projection). REST (two routes, the
+resolution DTO shape). Automations (delivery composer loses deferred work,
+writing rules; new mission-summary composer). CLI and MCP (payload validation,
+catalog, connector and shared-skill guidance). Webhooks (payload shape). Web,
+Desktop, and Mobile (structured deferred work, summary section). Runner and
+Auth are unaffected.
+
+Status: contract only (coo:1202.y02v). Storage, routes, the deferred-work data
+cutover, composer, worker, connectors, and clients land in the later objectives
+of coo:1202; nothing here ships the feature.
 
 ### Version 165 Change Summary
 
@@ -3018,7 +3140,10 @@ Owns:
 - The virtual execution target core tables (`execution_target_registrations`, `project_environment_definitions`, `project_resource_sources`, `execution_request_snapshots`, `execution_request_grants`, `execution_request_observations`, `mission_target_resources`) and the additive `execution_requests` snapshot/failure/gateway columns — these are **core** (not `ext_` extension) because they drive queue status, audit, authorization, and UI. The immutable `execution_request_snapshots` row (canonical `payload_json` + SHA-256 `payload_digest`) is created in the same transaction as its `queued` request and is never updated; retrying only increments `attempt_count`. Grant records store hashes/opaque IDs, never bearer values
 - Optional per-agent `launchDefaults` in each `project_resource_sources.descriptor_json`; these source-owned pre-commands and normalized flags are project configuration and contain no credentials
 - The **Agent Session Exchange** core tables — `agent_session_channels`, `agent_session_events`, `agent_requests`, and `agent_session_inputs` — declared by this contract and migrated with the channel bootstrap. They are core rather than `ext_` because they drive authorization, audit, presence, and UI gating. The scoped channel credential is stored hash-only and scoped to exactly one channel; `native_session_id` is a correlation alias and never an authorization key; raw native payloads are never persisted (no transcripts or transcript paths, no raw tool input or output, no file contents, no environment variables), and stored summaries are bounded, redacted, and carry a `formatter_version`. No derived capability tier is persisted — a connector's static tier is derived from fixtures at build time and a session's effective capabilities live in `capabilities_json` on its channel. The documented-but-never-migrated `hook_events` and `permission_requests` designs are **superseded** by them: sanitized hook events become normalized `agent_session_events`, and a permission becomes one kind of `agent_requests`. The closed `permission_requests.status` vocabulary and the `mission_events.type = permission_request` value remain valid; only the dedicated tables are retired, and no component may begin writing them
-- `human_action_resolutions`: operator decisions on the deferred-work items of a delivery (the reported-human-action resolutions it also held before v150 were deleted by migration). Primary key `(delivery_id, action_id)` where `action_id` is the stable delivery-local deferred-work id derived from the matching agent-report index plus the immutable agent-report text digest (an index-marked composed id for compose-added extras; legacy presentation-text ids remain readable); denormalized `workspace_id`, `mission_id`, `objective_id`; closed `status` (`done` \| `dismissed`); nullable closed `outcome` (`mission_created` \| `objective_added`) and `outcome_ref` recording a promotion (v147); `resolved_by_workspace_user_id`; `resolved_at`. Rows cascade with their delivery, are never soft-deleted (reopening deletes the row), and never duplicate the item text — the delivery report stays the sole source of what the item says.
+- `human_action_resolutions`: operator decisions on the deferred-work items of a delivery (the reported-human-action resolutions it also held before v150 were deleted by migration). Primary key `(delivery_id, action_id)` where `action_id` is the stable delivery-local `DeferredWorkV1.id` (agent-report index plus the digest of the canonical deferred-work object, v166; historical string-item rows were deleted with their items by the v166 migration); denormalized `workspace_id`, `mission_id`, `objective_id`; closed `status` (`done` \| `dismissed`); nullable closed `outcome` (`mission_created` \| `objective_added`) and `outcome_ref` recording a promotion (v147); `resolved_by_workspace_user_id`; `resolved_at`. Rows cascade with their delivery, are never soft-deleted (reopening deletes the row), and never duplicate the item text — the delivery report stays the sole source of what the item says.
+- `missions.summary_enabled` (v166): Bool, NOT NULL, default true; false for every mission that existed at the v166 migration. It is the only source of mission-summary eligibility and is never inferred from a summary row.
+- `mission_summaries` (v166): one row per eligible mission, primary key `mission_id` (FK cascade), denormalized `workspace_id` and `project_id`, `revision`, `requested_generation`, `completed_generation`, closed `status` (`pending` \| `composed` \| `fallback`), `headline`, `summary_markdown`, `risks_json` (`{ deliveryId, objectiveId, index, text }[]`), `suggestions_json` (`{ deliveryId, objectiveId, actionId }[]` references only; item text is read from the delivery report at projection time), nullable `source_delivery_id`, closed `generated_by` (`deterministic` \| `gemini`), nullable `generated_at` and `model`, `created_at`, `updated_at`. Replaced in place; every write appends a `mission_summary` entity change.
+- `mission_summary_seen` (v166): `mission_id`, `workspace_user_id` (both FK cascade, primary key on the pair) and `seen_at`, the monotonic per-user evidence watermark. Writes append no entity change.
 - Controlled vocabularies (closed and open sets)
 - The **assistant conversation** core tables (contract v152): `chat_threads`, `chat_messages`, `chat_runs`, `chat_run_attempts`, `chat_provider_checkpoints`, `chat_tool_calls`, `chat_source_refs`, `chat_dependency_sets`, `chat_dependency_set_members`, `chat_evidence`, `chat_thread_summaries`, `chat_questions`, `chat_events`, `chat_work_proposals`, `chat_work_proposal_revisions`, `chat_work_receipts`, `chat_work_receipt_missions`, `chat_presence`, `chat_event_acks`, and `chat_notifications`, plus `account_connections`, `account_connection_authorizations`, and `missions.created_from_chat_thread_id` (soft reference, no FK). Both editions enforce the same invariants: one unfinished run per thread, one leased attempt per run, attempt/checkpoint/tool-call/event writes only at the run's current fence, gap-free append-only per-thread event sequences, one open question per run, frozen proposal revisions, one creation receipt per proposal and per `(owner, client request id)`, monotonic acknowledgements, one conversation notification per `(owner, thread, run, type, transition)` addressed to the thread owner, and one live account connection per `(owner, organization, provider, server)`. Every row cascades from `profiles`/`organizations`. Checkpoint payloads, tool results, and credential envelopes are private server state
 - Soft-delete and revision semantics
@@ -3132,8 +3257,9 @@ Owns:
 - Profile-owned inbox capture: authenticated `/api/inbox` CRUD and `/api/inbox/:id/promote`. Every item route resolves the caller's profile and returns `404` for an item owned by another profile. Promotion checks `mission:create` only on the destination project, calls the ordinary mission-create transaction with the capture fields, and consumes the item atomically. Account-owned inbox mutations are intentionally absent from workspace `entity_changes`; promotion retains normal mission realtime behavior.
 - Cross-workspace inbox missions: authenticated `GET /api/inbox/missions` returns a bounded `InboxMissionsResponse` unioning agent-authored missions in status type `next` with missions of any creator that are past due or due today or tomorrow (UTC day boundaries; `complete` and `cancelled` status types excluded from both due slices), across every workspace the caller actively belongs to in the active organization and may `mission:read`. Only active projects contribute Inbox cards; archived projects are excluded regardless of inclusion reason. Human-created missions appear only through the overdue and due-soon windows. Each row is an `InboxMissionDto` (`MissionDto` plus project name/color and inclusion `reasons` of `agent_next`, `overdue`, `due_soon`, and/or `recent`); a mission qualifying several ways is one card carrying every reason, and `overdue` and `due_soon` are mutually exclusive. Overdue rows lead, most recently overdue first (due date descending), then due-soon rows soonest first, then agent-Next rows newest-first, each slice capped independently. The additive `recent` reason labels rows created within the past 7 days. Distinct from profile-owned `/api/inbox` capture.
 - Cross-workspace activity feed: authenticated `GET /api/activity-feed` returns a bounded, mission-anchored `ActivityFeedDto` across every workspace the caller actively belongs to in the active organization, authorized with `mission:read` per workspace. Its kinds are `mission_run`, `mission_delivered`, and `blocking_question`. A mission with at least one `launching` / `executing` / `pending_delivery` objective is a single `ActivityFeedMissionItemDto` keyed `mission:<missionId>` — never one card per objective — carrying `runState` (`launching` \| `executing`), every objective of that mission as `ActivityFeedMissionObjectiveDto` in mission-panel display order, and `activeObjectiveIds` for the objectives that are live. Its chrome fields describe the mission's _primary_ running objective: the launching one when there is one, else the oldest active one. `pending_delivery` counts as live work, so a re-attached objective keeps its mission on the feed instead of dropping out between its last update and delivery. A mission whose most recent live delivery falls in the requested two-week window and that has no live objective is a `mission_delivered` card of the same DTO shape with `runState: 'delivered'` and empty `activeObjectiveIds`. Optional `before` (ISO-8601 UTC) selects the next older two-week delivered window and omits live runs and questions; `nextBefore` is that window's start when older delivered missions exist, else null. `blocking_question` items remain unseen `ask` mission events from the past 3 days. `items` is grouped rather than purely time-descending — launching missions, then executing ones, then questions, then delivered, newest-first within each group. `createdByKind` / `createdByAgent` describe the item's subject: the mission for `mission_run` and `mission_delivered`, the objective behind the ask for `blocking_question`. Agent identity treats the protocol session sentinel `unknown` as absent and falls back to the objective's `assigned_agent`. Truncation is reported through `counts` rather than implied, and no raw payload JSON is exposed.
-- Deferred-work resolutions: authenticated `PUT /api/deliveries/:deliveryId/deferred-work/:actionId/resolution` with `{ status, outcome?, outcomeRef? }` (`status` is `done` \| `dismissed`; `outcome` is `mission_created` \| `objective_added` and only with `status: 'done'`, else 400) upserts a `human_action_resolutions` row and `DELETE` on the same path removes it; both require `mission:update` on the delivery's workspace, return the refreshed `DeliveryDeferredWorkItemDto`, 404 an unknown delivery or an action id that is not one of the delivery's deferred-work ids (reported human actions have no resolution since v150), and emit a `human_action_resolution` entity-change row carrying the mission and objective ids. The webapp may promote deferred work through the existing `POST /api/missions` surface (text as the first objective, `statusId` omitted so the project default applies) or `POST /api/objectives` as a future objective on the delivering mission, then record the matching outcome. No raw payload JSON is exposed.
-- Delivery read projection: `GET /api/missions/:id/deliveries` returns a bounded `MissionDeliveriesDto` page (`items`, `total`, `limit`) of authorized `DeliveryDto` records with a normalized versioned report, while delivery mission events expose their additive `deliveryId` without exposing raw event or delivery payload JSON. `items` is newest-first and capped at 200; `total` is the matching row count before that cap. Each `DeliveryDto` carries `deferredWorkItems` — `{ actionId, action, resolution }` per presentation deferred-work entry, addressed with the same stable ids as the deferred-work resolution routes (v147).
+- Deferred-work resolutions: authenticated `PUT /api/deliveries/:deliveryId/deferred-work/:actionId/resolution` with `{ status, outcome?, outcomeRef? }` (`status` is `done` \| `dismissed`; `outcome` is `mission_created` \| `objective_added` and only with `status: 'done'`, else 400) upserts a `human_action_resolutions` row and `DELETE` on the same path removes it; both require `mission:update` on the delivery's workspace, return the refreshed `DeliveryDeferredWorkItemDto`, 404 an unknown delivery or an action id that is not one of the delivery's deferred-work ids (reported human actions have no resolution since v150), and emit a `human_action_resolution` entity-change row carrying the mission and objective ids. The webapp may promote deferred work through the existing `POST /api/missions` surface (`title` as the first objective's title and `change`, `Location: {location}`, `Done when: {doneWhen}` separated by blank lines as its instruction, `statusId` omitted so the project default applies) or `POST /api/objectives` as a future objective on the delivering mission with the same title and instruction (v166), then record the matching outcome. No raw payload JSON is exposed.
+- Mission summary (v166, operator surface only, exempt from MCP parity): `GET /api/missions/:id/summary` with mission read authorization returns `MissionSummaryResponse` (`{ eligible, summary, evidence, watermark, seenAt }`; all null except `eligible: false` for an ineligible mission). Evidence is selected in the database before limits and capped at `MISSION_SUMMARY_EVIDENCE_LIMIT` with pre-cap totals and truncation flags; suggestions are projected at read time from current-run delivery deferred work and resolutions (dismissed and no-longer-current items omitted, promoted items reduced to identity, title, and resolution). `PUT /api/missions/:id/summary/seen` takes `{ watermark }`, rejects a value later than the caller's current evidence maximum or any value on an ineligible mission with `invalid_input`, upserts `max(existing, watermark)` for the calling workspace user, returns `{ seenAt }`, and records no entity change. Neither route has a Protocol, CLI, or MCP counterpart.
+- Delivery read projection: `GET /api/missions/:id/deliveries` returns a bounded `MissionDeliveriesDto` page (`items`, `total`, `limit`) of authorized `DeliveryDto` records with a normalized versioned report, while delivery mission events expose their additive `deliveryId` without exposing raw event or delivery payload JSON. `items` is newest-first and capped at 200; `total` is the matching row count before that cap. Each `DeliveryDto` carries `deferredWorkItems` — `{ actionId, title, change, location, doneWhen, resolution }` (v166) per presentation deferred-work entry, addressed with the same stable ids as the deferred-work resolution routes (v147).
 - Editable mission artifacts: authenticated `PATCH /api/missions/:id/artifacts/:artifactId` accepts `expectedRevision` plus a non-empty subset of `{ label, contentText, externalUrl }`, requires `mission:update` on the named mission, retains delivery/session/objective provenance and `contentJson`, rejects stale edits with `409` and non-HTTP(S) external URLs, and emits an `artifact` entity-change row in the write transaction. The client renders `contentText` as safe Markdown and edits these human-facing fields in place. The same mutation is also reachable through Protocol `update-artifact` and MCP `overlord_update_artifact` (see Protocol / MCP ownership).
 - Mid-turn mission artifact creation: authenticated `POST /api/missions/:id/artifacts` accepts `{ type, label }` plus at least one of `{ contentText, externalUrl }`, requires `artifact:create` on the named mission, optionally stamps `objectiveId` / `sessionId` provenance, leaves `delivery_id` null, rejects non-HTTP(S) external URLs, and emits an `artifact` entity-change insert in the same transaction. The same mutation is reachable through Protocol `add-artifact` and MCP `overlord_add_artifact`.
 - Mission shared context: authenticated `GET /api/missions/:id/context` returns `SharedContextEntryDto` records (`key`, `value`, `valueKind`, `tags`, `updatedAt`, `revision`) authorized with `mission:read`; authenticated `PUT /api/missions/:id/context` upserts one entry by `{ key, value }` with `mission:update`, mirrors Protocol `write-context`/`read-context`, and emits a `shared_context_entry` entity-change in the same transaction. The web client renders these entries in a collapsed Shared State mission footer and supports in-place edits.
@@ -3367,7 +3493,7 @@ These are the **only sanctioned paths** between components. Bypassing these surf
 - **Response format**: JSON on stdout; non-zero exit on error
 - **Inbox capture**: `ovld protocol create --inbox` creates an account-owned unassigned capture. Ordinary non-executing `create` uses an explicit project first, then discovered project, then this inbox fallback; `prompt` and `record-work` continue to fail without a project because they imply executable work.
 - **Shell-special content**: Must use `--summary-file -` / `--payload-file -` with stdin heredoc
-- **Delivery evidence**: `deliver` accepts an optional versioned `deliveryReport.agentReport` object. Its `humanActions`, `tradeoffsMade`, `knownRisks`, `deferredWork`, and `assumptions` fields are advisory agent evidence, normalized to empty arrays when absent. Malformed advisory items are discarded independently with bounded warnings; evidence, change tracking, and model availability never delay delivery. Human actions must exclude Git operations and routine review/testing; the protocol applies this exclusion before persistence. Each human action carries a required `action`, expected `reason` and `category`, optional `blocking`, and optional `command`, `verify`, and `link` (HTTP(S) URL or repository-relative path only) that are preserved verbatim through normalization and composition. Deferred work is recommended new work outside the current mission; `presentation.deferredWork` is the eligible subset after dropping items that restate planned sibling objectives, leftover current-objective work, or human follow-up, while `agentReport.deferredWork` is never rewritten. The stored `deliveryReport.presentation` begins as an immediate deterministic fallback and is marked `pending` when a compose job is enqueued; a background worker may later replace only `presentation` with a Gemini-composed or `fallback` result, and in every outcome it appends the deterministic path-derived `deterministic_rule` actions (migrations, env examples, deployment configs, dependency manifests, CI workflow files) that the agent and model did not already cover. The original delivery summary remains immutable.
+- **Delivery evidence**: `deliver` accepts an optional versioned `deliveryReport.agentReport` object. Its `humanActions`, `tradeoffsMade`, `knownRisks`, `deferredWork`, and `assumptions` fields are advisory agent evidence, normalized to empty arrays when absent. Malformed advisory items are discarded independently with bounded warnings; evidence, change tracking, and model availability never delay delivery. Human actions must exclude Git operations and routine review/testing; the protocol applies this exclusion before persistence. Each human action carries a required `action`, expected `reason` and `category`, optional `blocking`, and optional `command`, `verify`, and `link` (HTTP(S) URL or repository-relative path only) that are preserved verbatim through normalization and composition. Deferred work is recommended new work outside the current mission, written by the agent as `DeferredWorkInputV1` objects (`title`, `change`, `location`, `doneWhen`; v166); a string item, an over-long or missing field, or an unknown key is rejected with `invalid_input`. Nothing rewrites an item: `presentation.deferredWork` is the eligible subset of the agent objects, with their ids, after dropping items that restate planned sibling objectives, leftover current-objective work, or human follow-up. The stored `deliveryReport.presentation` begins as an immediate deterministic fallback and is marked `pending` when a compose job is enqueued; a background worker may later replace only `presentation` with a Gemini-composed or `fallback` result, and in every outcome it appends the deterministic path-derived `deterministic_rule` actions (migrations, env examples, deployment configs, dependency manifests, CI workflow files) that the agent and model did not already cover. The original delivery summary remains immutable.
 
 ### Protocol → Database (Service Layer)
 

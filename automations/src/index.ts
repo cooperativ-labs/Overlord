@@ -11,6 +11,16 @@ export {
   resetGeminiClientForTests as resetComposeDeliveryGeminiClientForTests
 } from './compose-delivery/index.js';
 export type {
+  ComposeMissionSummaryDraft,
+  ComposeMissionSummaryInput
+} from './compose-mission-summary/index.js';
+export {
+  buildComposeMissionSummaryPrompt,
+  COMPOSE_MISSION_SUMMARY_RESPONSE_SCHEMA,
+  composeMissionSummaryWithGemini,
+  MISSION_SUMMARY_SYSTEM_INSTRUCTION
+} from './compose-mission-summary/index.js';
+export type {
   AutoAdvanceDecision,
   EnsureDraftSlotPlan,
   ManageObjectiveLifecycleInput,

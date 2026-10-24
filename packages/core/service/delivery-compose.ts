@@ -1,4 +1,5 @@
 import type {
+  DeferredWorkV1,
   DeliveryAgentReportV1,
   DeliveryPresentationV1,
   DeliveryReportPayloadV1,
@@ -30,7 +31,6 @@ export type ComposeDeliveryDraft = {
   humanActions?: unknown;
   tradeoffsMade?: unknown;
   knownRisks?: unknown;
-  deferredWork?: unknown;
   assumptions?: unknown;
   reviewHighlights?: unknown;
 };
@@ -326,24 +326,30 @@ function collectDeferredWorkExclusionTexts({
   return texts;
 }
 
+/** The text eligibility compares for a deferred-work item: its title plus its change. */
+export function deferredWorkComparisonText(item: Pick<DeferredWorkV1, 'title' | 'change'>): string {
+  return `${item.title} ${item.change}`;
+}
+
 /**
- * Drops deferred-work statements that restate planned work on this mission,
+ * Drops deferred-work items that restate planned work on this mission,
  * leftover slices of the current objective, or human implementation follow-up.
- * Eligible items stay in their original order.
+ * Items are compared on `title + change` and are never edited. Eligible items
+ * stay in their original order.
  */
-export function filterDeferredWork({
+export function filterDeferredWork<T extends Pick<DeferredWorkV1, 'title' | 'change'>>({
   items,
   currentObjective,
   plannedObjectives,
   humanActions,
   candidateActions
 }: {
-  items: string[];
+  items: T[];
   currentObjective?: DeferredWorkObjectiveRef | null;
   plannedObjectives?: DeferredWorkObjectiveRef[];
   humanActions?: Array<{ action: string; reason?: string }>;
   candidateActions?: Array<{ action: string; reason?: string }>;
-}): string[] {
+}): T[] {
   const excluded = collectDeferredWorkExclusionTexts({
     currentObjective,
     plannedObjectives,
@@ -351,56 +357,10 @@ export function filterDeferredWork({
     candidateActions
   });
   if (excluded.length === 0) return items.slice();
-  return items.filter(item => !excluded.some(text => deferredWorkTextsOverlap(item, text)));
-}
-
-function isDeferredWorkRewrite({
-  agentItem,
-  presentationItem
-}: {
-  agentItem: string;
-  presentationItem: string;
-}): boolean {
-  if (agentItem === presentationItem) return true;
-  const normalizedAgent = normalizeDeferredWorkText(agentItem);
-  const normalizedPresentation = normalizeDeferredWorkText(presentationItem);
-  if (
-    normalizedAgent.length >= 12 &&
-    (normalizedPresentation.includes(normalizedAgent) ||
-      normalizedAgent.includes(normalizedPresentation))
-  ) {
-    return true;
-  }
-  if (deferredWorkTextsOverlap(agentItem, presentationItem)) return true;
-  const agentTokens = significantDeferredWorkTokens(agentItem);
-  const presentationTokens = significantDeferredWorkTokens(presentationItem);
-  if (agentTokens.size === 0 || presentationTokens.size === 0) return false;
-  let intersection = 0;
-  for (const token of agentTokens) {
-    if (presentationTokens.has(token)) intersection += 1;
-  }
-  return intersection >= 2 && intersection / agentTokens.size >= 0.5;
-}
-
-/**
- * Maps a presentation deferred-work item onto the unused agent-report index it
- * was rewritten from. Returns null for compose-added extras. Walks agent items
- * in order so dropped earlier items do not steal a later rewrite's identity.
- */
-export function matchDeferredWorkAgentIndex({
-  presentationItem,
-  agentItems,
-  usedIndexes
-}: {
-  presentationItem: string;
-  agentItems: string[];
-  usedIndexes: Set<number>;
-}): number | null {
-  for (let index = 0; index < agentItems.length; index += 1) {
-    if (usedIndexes.has(index)) continue;
-    if (isDeferredWorkRewrite({ agentItem: agentItems[index]!, presentationItem })) return index;
-  }
-  return null;
+  return items.filter(item => {
+    const text = deferredWorkComparisonText(item);
+    return !excluded.some(excludedText => deferredWorkTextsOverlap(text, excludedText));
+  });
 }
 
 /**
@@ -456,63 +416,6 @@ function composeEligibility({
     humanActions: report.agentReport.humanActions,
     candidateActions: candidates
   };
-}
-
-function composeDeferredWorkPresentation({
-  eligibleItems,
-  draftItems,
-  currentObjective,
-  plannedObjectives,
-  humanActions,
-  candidateActions
-}: {
-  eligibleItems: string[];
-  draftItems: string[];
-  currentObjective?: DeferredWorkObjectiveRef | null;
-  plannedObjectives?: DeferredWorkObjectiveRef[];
-  humanActions?: Array<{ action: string; reason?: string }>;
-  candidateActions?: Array<{ action: string; reason?: string }>;
-}): string[] {
-  const merged = reconcileDeferredWork({
-    agentItems: eligibleItems,
-    draftItems
-  });
-  const kept = merged.slice(0, eligibleItems.length);
-  const extras = filterDeferredWork({
-    items: merged.slice(eligibleItems.length),
-    currentObjective,
-    plannedObjectives,
-    humanActions,
-    candidateActions
-  });
-  return [...kept, ...extras];
-}
-
-/**
- * Chooses the deferred-work list for a composed presentation. The compose
- * automation is asked to rewrite each *eligible* agent-listed item as a
- * standalone objective statement, so a draft item may only replace its source
- * when it is at least as detailed (never shorter). A draft that drops eligible
- * items keeps that eligible list untouched; extra draft items beyond it are
- * kept only when they still pass eligibility, bounded. With no eligible agent
- * items, the filtered draft list is used as-is.
- */
-export function reconcileDeferredWork({
-  agentItems,
-  draftItems,
-  maxItems = DELIVERY_REPORT_LIMITS.maxItems
-}: {
-  agentItems: string[];
-  draftItems: string[];
-  maxItems?: number;
-}): string[] {
-  if (agentItems.length === 0) return draftItems.slice(0, maxItems);
-  if (draftItems.length < agentItems.length) return agentItems.slice(0, maxItems);
-  const merged = agentItems.map((agentItem, index) => {
-    const draftItem = draftItems[index]!;
-    return draftItem.length >= agentItem.length ? draftItem : agentItem;
-  });
-  return [...merged, ...draftItems.slice(agentItems.length)].slice(0, maxItems);
 }
 
 function asCategory(value: unknown): HumanActionCategory {
@@ -620,10 +523,7 @@ export function reconcileDeliveryComposeDraft({
       actions: report.presentation.humanActions,
       candidates
     }),
-    deferredWork: filterDeferredWork({
-      items: report.presentation.deferredWork,
-      ...eligibility
-    }),
+    deferredWork: eligibleAgentItems,
     generatedBy: 'deterministic',
     generatedAt,
     ...(model ? { model } : {})
@@ -716,11 +616,8 @@ export function reconcileDeliveryComposeDraft({
       clampStringList(draft.knownRisks).length > 0
         ? clampStringList(draft.knownRisks)
         : report.presentation.knownRisks,
-    deferredWork: composeDeferredWorkPresentation({
-      eligibleItems: eligibleAgentItems,
-      draftItems: clampStringList(draft.deferredWork),
-      ...eligibility
-    }),
+    // Deferred work is the agent's own objects, never sent to or rewritten by the model.
+    deferredWork: eligibleAgentItems,
     assumptions:
       clampStringList(draft.assumptions).length > 0
         ? clampStringList(draft.assumptions)

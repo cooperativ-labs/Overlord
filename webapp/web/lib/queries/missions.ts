@@ -16,6 +16,7 @@ import type {
   MissionDeliveriesDto,
   MissionDetailDto,
   MissionScheduleDto,
+  MissionSummaryResponse,
   PreviewScheduleBody,
   RemoveWorktreeBody,
   ScheduleInput,
@@ -150,6 +151,38 @@ export const useMissionDeliveries = (id: string, enabled: boolean) =>
     queryFn: () => api.listMissionDeliveries(id),
     enabled
   });
+
+/**
+ * The mission summary envelope (contract v166). Its `eligible` flag decides
+ * whether the objective accordion trims delivery cards; realtime invalidates it
+ * on `mission_summary`, `delivery`, `agent_request` and `human_action_resolution`.
+ */
+export const useMissionSummary = (id: string, enabled = true) =>
+  useQuery<MissionSummaryResponse>({
+    queryKey: keys.missionSummary(id),
+    queryFn: () => api.getMissionSummary(id),
+    enabled: enabled && Boolean(id)
+  });
+
+/**
+ * Acknowledge a displayed summary snapshot (`PUT /api/missions/:id/summary/seen`).
+ * The server stores `max(existing, watermark)` and records no entity change, so
+ * the cached envelope's `seenAt` is advanced here, monotonically. Callers keep
+ * their own visit baseline; this never changes which rows carry a dot.
+ */
+export function useMarkMissionSummarySeen(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (watermark: string) => api.markMissionSummarySeen(id, { watermark }),
+    onSuccess: ({ seenAt }) => {
+      qc.setQueryData<MissionSummaryResponse>(keys.missionSummary(id), current => {
+        if (!current?.eligible) return current;
+        const stored = current.seenAt ? Date.parse(current.seenAt) : Number.NEGATIVE_INFINITY;
+        return Date.parse(seenAt) > stored ? { ...current, seenAt } : current;
+      });
+    }
+  });
+}
 
 /**
  * Answerable agent-session requests for one mission.

@@ -320,7 +320,7 @@ describe('deliverSession mechanical change capture', () => {
               }
             ],
             knownRisks: ['AI composition is intentionally deferred to Phase 3.'],
-            deferredWork: ['Delivery detail UI is Phase 2.'],
+            deferredWork: [],
             assumptions: ['The existing payload_json field remains the delivery extension point.']
           }
         }
@@ -419,9 +419,24 @@ describe('deliverSession mechanical change capture', () => {
               }
             ],
             deferredWork: [
-              'Implement the CSV export API for the reports page.',
-              'Add GEMINI_API_KEY to the production backend service on Railway.',
-              'Investigate the payroll timezone bug found in employee-lifecycle.ts; left because it is outside this settings work.'
+              {
+                title: 'Implement the CSV export API',
+                change: 'Implement the CSV export API for the reports page.',
+                location: 'backend/reports.ts',
+                doneWhen: 'Operators can download filtered rows.'
+              },
+              {
+                title: 'Add the Gemini key',
+                change: 'Add GEMINI_API_KEY to the production backend service on Railway.',
+                location: 'Railway backend service',
+                doneWhen: 'The backend reads the key at startup.'
+              },
+              {
+                title: 'Fix the payroll timezone bug',
+                change: 'employee-lifecycle.ts computes the payroll timezone wrongly.',
+                location: 'payroll/employee-lifecycle.ts',
+                doneWhen: 'Payroll dates match the company timezone.'
+              }
             ]
           }
         }
@@ -433,15 +448,61 @@ describe('deliverSession mechanical change capture', () => {
     ])) as { payload_json: string };
     const payload = JSON.parse(row.payload_json) as {
       deliveryReport: {
-        agentReport: { deferredWork: string[] };
-        presentation: { deferredWork: string[] };
+        agentReport: { deferredWork: Array<{ id: string; title: string }> };
+        presentation: { deferredWork: Array<{ id: string; title: string }> };
       };
     };
 
     assert.equal(payload.deliveryReport.agentReport.deferredWork.length, 3);
     assert.deepEqual(payload.deliveryReport.presentation.deferredWork, [
-      'Investigate the payroll timezone bug found in employee-lifecycle.ts; left because it is outside this settings work.'
+      payload.deliveryReport.agentReport.deferredWork[2]
     ]);
+
+    await db.close();
+  });
+
+  it('rejects string or malformed deferred work with invalid_input and persists nothing', async () => {
+    const { db, ctx } = await setup();
+    const { mission } = await submittedMission(ctx, 'Strict Deferred Work');
+    const attached = await attachSession({ ctx, missionId: mission.displayId });
+    const deliverWith = (deferredWork: unknown) =>
+      deliverSession({
+        ctx,
+        missionId: mission.displayId,
+        sessionKey: attached.sessionKey,
+        summary: 'Delivery with deferred work.',
+        payloadJson: { deliveryReport: { schemaVersion: 1, agentReport: { deferredWork } } }
+      });
+    const valid = {
+      title: 'Advance the fake clock before the second retry',
+      change: 'The test never advances the fake clock between attempts.',
+      location: 'backend/sync-worker.test.ts',
+      doneWhen: 'The test passes 20 consecutive runs.'
+    };
+    const invalidInput = (pattern: RegExp) => (error: unknown) =>
+      error instanceof ServiceError &&
+      error.code === 'invalid_input' &&
+      pattern.test(error.message);
+
+    await assert.rejects(
+      deliverWith(['Investigate the payroll timezone bug.']),
+      invalidInput(/deferredWork\[0\] must be an object.*string items are not accepted/)
+    );
+    await assert.rejects(
+      deliverWith([valid, { ...valid, title: 'x'.repeat(81) }]),
+      invalidInput(/deferredWork\[1\]\.title/)
+    );
+    await assert.rejects(deliverWith([{ ...valid, doneWhen: '  ' }]), invalidInput(/doneWhen/));
+    await assert.rejects(
+      deliverWith([{ ...valid, why: 'extra' }]),
+      invalidInput(/deferredWork\[0\]/)
+    );
+    await assert.rejects(deliverWith('not a list'), invalidInput(/must be an array/));
+
+    const count = (await ctx.db.get(`SELECT COUNT(*) AS n FROM deliveries WHERE mission_id = ?`, [
+      mission.id
+    ])) as { n: number };
+    assert.equal(count.n, 0);
 
     await db.close();
   });

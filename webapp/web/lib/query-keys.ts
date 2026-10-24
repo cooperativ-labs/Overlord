@@ -63,6 +63,8 @@ export const keys = {
   worktrees: ['worktrees'] as const,
   missionEvents: (id: string) => ['mission', id, 'events'] as const,
   missionDeliveries: (id: string) => ['mission', id, 'deliveries'] as const,
+  /** Operator-only mission summary envelope (`GET /api/missions/:id/summary`). */
+  missionSummary: (id: string) => ['mission', id, 'summary'] as const,
   missionArtifacts: (id: string) => ['mission', id, 'artifacts'] as const,
   missionSharedContext: (id: string) => ['mission', id, 'context'] as const,
   missionFileChanges: (id: string) => ['mission', id, 'file-changes'] as const,

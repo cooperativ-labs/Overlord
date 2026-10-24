@@ -26,7 +26,11 @@ import {
   applyDeferredWorkEligibility,
   deriveDeterministicActionCandidates
 } from './delivery-compose.js';
-import { buildDeliveryReport, markDeliveryPresentationPending } from './delivery-report.js';
+import {
+  buildDeliveryReport,
+  deferredWorkInputProblem,
+  markDeliveryPresentationPending
+} from './delivery-report.js';
 import { ServiceError } from './errors.js';
 import { linkExecutionRequestToSession } from './execution-requests.js';
 import { findActingDeviceExecutionTargetId } from './execution-targets.js';
@@ -140,7 +144,9 @@ Delivery evidence:
   human must perform outside completed agent work; never include Git actions or routine review/testing.
   Tradeoffs must describe an implementation decision, alternatives considered, and why it was chosen.
   Deferred work is only a recommended new objective that is not part of this mission (for
-  example an out-of-scope bug); name the component or file and why it was left. Never list
+  example an out-of-scope bug). Each item is an object { title, change, location, doneWhen }:
+  an imperative title, only the specific change needed, where to find it in the code, and
+  the observable result in one sentence; no how-to, background, or rationale. Never list
   work already in this mission's future objectives, leftover slices of the current
   objective, or human follow-up such as deploy, secrets, or migrations (those belong in
   humanActions).`;
@@ -2462,6 +2468,12 @@ function validateProtocolArtifacts(input: unknown): ProtocolArtifactInput[] {
   });
 }
 
+/** Deferred work is strict (contract v166): a string or malformed item rejects the delivery. */
+function assertDeferredWorkInput(deliveryReport: unknown): void {
+  const problem = deferredWorkInputProblem(deliveryReport);
+  if (problem) throw new ServiceError(problem, 'invalid_input', 400);
+}
+
 function appendDeliveryWarnings<T extends { warnings?: string[] }>(
   report: T,
   warnings: string[]
@@ -2499,6 +2511,7 @@ export async function deliverSession({
   if (!trimmedSummary) {
     throw new ServiceError('Delivery summary is required', 'validation_error');
   }
+  assertDeferredWorkInput(payloadJson?.deliveryReport);
 
   const mission = await resolveMissionId(ctx, missionId);
   const session = await getSessionByKey(ctx, sessionKey);
@@ -2921,6 +2934,7 @@ export async function recordWork({
   if (!trimmedSummary) {
     throw new ServiceError('Summary is required for record-work', 'validation_error');
   }
+  assertDeferredWorkInput(payloadJson?.deliveryReport);
   const declared = normalizeDeclaredPaths(declaredPaths);
   const normalizedArtifacts = validateProtocolArtifacts(artifacts);
   const deliveryReport = appendDeliveryWarnings(

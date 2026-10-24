@@ -8,7 +8,6 @@ import type {
   ResolveHumanActionBody
 } from '../../shared/contract.ts';
 import { api } from '../lib/api.ts';
-import { firstObjectiveCreatePayload } from '../lib/project-resources.ts';
 import {
   keys,
   useCreateMission,
@@ -22,17 +21,32 @@ import { cn } from '../lib/utils.ts';
 export interface DeferredWorkItemData {
   deliveryId: string;
   actionId: string;
-  /** The delivery's own text; never rewritten. */
-  action: string;
+  /** The agent's structured item, verbatim; never rewritten (contract v166). */
+  title: string;
+  change: string;
+  location: string;
+  doneWhen: string;
   /** The delivering mission and objective. */
   missionId: string;
   objectiveId: string;
   resolution: HumanActionResolutionDto | null;
 }
 
-type Pending = 'mission' | 'objective' | 'dismiss' | 'reopen' | null;
+/**
+ * The objective a promotion creates: the item's title, and an instruction of
+ * `change`, `Location: …` and `Done when: …` separated by blank lines, verbatim
+ * (plan §11 item 6).
+ */
+export function deferredWorkPromotion(
+  item: Pick<DeferredWorkItemData, 'title' | 'change' | 'location' | 'doneWhen'>
+): { title: string; instructionText: string } {
+  return {
+    title: item.title,
+    instructionText: `${item.change}\n\nLocation: ${item.location}\n\nDone when: ${item.doneWhen}`
+  };
+}
 
-const actionButtonClass =
+export const deferredWorkActionButtonClass =
   'inline-flex items-center gap-1 rounded-md border border-violet-300 bg-white/70 px-2 py-0.5 text-xs font-medium text-violet-800 transition-colors hover:bg-white disabled:opacity-50 dark:border-violet-500/50 dark:bg-violet-950/30 dark:text-violet-200 dark:hover:bg-violet-950/50';
 
 /** Human label for the decision recorded on a deferred-work item. */
@@ -56,35 +70,30 @@ function OutcomeIcon({ resolution }: { resolution: HumanActionResolutionDto }) {
   return <Icon className="size-3" aria-hidden="true" />;
 }
 
+export type DeferredWorkPending = 'mission' | 'objective' | 'dismiss' | 'reopen' | null;
+
+/** A mission created by a Create mission promotion. */
+export type PromotedMission = {
+  id: string;
+  displayId: string;
+  objectiveDisplayId: string | null;
+};
+
 /**
- * One deferred-work item from a delivery card (coo:1045). While open it offers
- * Create mission, Add objective, and Dismiss; once handled it fades, drops the
- * buttons, and shows which one was chosen. The decision is recorded in
- * `human_action_resolutions`.
+ * The promotion, dismiss and reopen handlers of one deferred-work item, shared
+ * by the delivery card and the mission summary's Suggested next rows so both
+ * record the same decision through the same mutations.
  */
-export function DeferredWorkItem({
-  item,
-  details,
-  onMissionCreated,
-  className
-}: {
-  item: DeferredWorkItemData;
-  /** Extra context drawn between the text and the controls. */
-  details?: ReactNode;
-  /** Called with the new mission once a Create mission promotion is recorded. */
-  onMissionCreated?: (mission: {
-    id: string;
-    displayId: string;
-    objectiveDisplayId: string | null;
-  }) => void;
-  className?: string;
-}) {
+export function useDeferredWorkActions(
+  item: DeferredWorkItemData,
+  { onMissionCreated }: { onMissionCreated?: (mission: PromotedMission) => void } = {}
+) {
   const qc = useQueryClient();
   const createMission = useCreateMission();
   const createObjective = useCreateObjective();
   const resolve = useResolveDeferredWork();
   const reopen = useReopenDeferredWork();
-  const [pending, setPending] = useState<Pending>(null);
+  const [pending, setPending] = useState<DeferredWorkPending>(null);
   const [error, setError] = useState<string | null>(null);
   // The server answer lands before the delivery/rail queries refetch; show it at once.
   const [localResolution, setLocalResolution] = useState<
@@ -93,7 +102,7 @@ export function DeferredWorkItem({
   useEffect(() => setLocalResolution(undefined), [item.resolution]);
 
   const resolution = localResolution === undefined ? item.resolution : localResolution;
-  const instructionText = item.action.trim();
+  const promotion = deferredWorkPromotion(item);
 
   async function record(body: ResolveHumanActionBody) {
     const updated = await resolve.mutateAsync({
@@ -119,7 +128,7 @@ export function DeferredWorkItem({
     );
   }
 
-  async function run(kind: Exclude<Pending, null>, task: () => Promise<void>) {
+  async function run(kind: Exclude<DeferredWorkPending, null>, task: () => Promise<void>) {
     setPending(kind);
     setError(null);
     try {
@@ -131,12 +140,20 @@ export function DeferredWorkItem({
     }
   }
 
-  const handleCreateMission = () =>
+  const createMissionFromItem = () =>
     run('mission', async () => {
       const source = await loadMission();
+      const resourceKey = resourceKeyOf(source)?.trim();
       const created = await createMission.mutateAsync({
         projectId: source.projectId,
-        ...firstObjectiveCreatePayload(instructionText, resourceKeyOf(source))
+        title: promotion.title,
+        objectives: [
+          {
+            objective: promotion.instructionText,
+            title: promotion.title,
+            ...(resourceKey ? { resourceKey } : {})
+          }
+        ]
       });
       await record({ status: 'done', outcome: 'mission_created', outcomeRef: created.displayId });
       onMissionCreated?.({
@@ -146,21 +163,22 @@ export function DeferredWorkItem({
       });
     });
 
-  const handleAddObjective = () =>
+  const addObjectiveFromItem = () =>
     run('objective', async () => {
       const source = await loadMission();
       const created = await createObjective.mutateAsync({
         missionId: item.missionId,
-        instructionText,
+        instructionText: promotion.instructionText,
+        title: promotion.title,
         state: 'future',
         resourceKey: resourceKeyOf(source)
       });
       await record({ status: 'done', outcome: 'objective_added', outcomeRef: created.displayId });
     });
 
-  const handleDismiss = () => run('dismiss', () => record({ status: 'dismissed' }));
+  const dismiss = () => run('dismiss', () => record({ status: 'dismissed' }));
 
-  const handleReopen = () =>
+  const reopenItem = () =>
     run('reopen', async () => {
       const updated = await reopen.mutateAsync({
         deliveryId: item.deliveryId,
@@ -170,11 +188,56 @@ export function DeferredWorkItem({
       setLocalResolution(updated.resolution);
     });
 
-  const busy = pending !== null;
+  return {
+    resolution,
+    pending,
+    busy: pending !== null,
+    error,
+    createMission: createMissionFromItem,
+    addObjective: addObjectiveFromItem,
+    dismiss,
+    reopen: reopenItem
+  };
+}
+
+/**
+ * One deferred-work item from a delivery card (coo:1045). While open it offers
+ * Create mission, Add objective, and Dismiss; once handled it fades, drops the
+ * buttons, and shows which one was chosen. The decision is recorded in
+ * `human_action_resolutions`.
+ */
+export function DeferredWorkItem({
+  item,
+  details,
+  onMissionCreated,
+  className
+}: {
+  item: DeferredWorkItemData;
+  /** Extra context drawn between the text and the controls. */
+  details?: ReactNode;
+  /** Called with the new mission once a Create mission promotion is recorded. */
+  onMissionCreated?: (mission: PromotedMission) => void;
+  className?: string;
+}) {
+  const {
+    resolution,
+    pending,
+    busy,
+    error,
+    createMission: handleCreateMission,
+    addObjective: handleAddObjective,
+    dismiss: handleDismiss,
+    reopen: handleReopen
+  } = useDeferredWorkActions(item, { onMissionCreated });
 
   return (
     <div className={cn('min-w-0 transition-opacity', resolution && 'opacity-60', className)}>
-      <p className="wrap-anywhere">{item.action}</p>
+      <p className="font-medium wrap-anywhere">{item.title}</p>
+      <p className="wrap-anywhere">{item.change}</p>
+      <p className="mt-0.5 font-mono text-xs wrap-anywhere opacity-80">{item.location}</p>
+      <p className="mt-0.5 text-xs wrap-anywhere">
+        <span className="font-medium">Done when:</span> {item.doneWhen}
+      </p>
       {details}
       {resolution ? (
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
@@ -190,7 +253,7 @@ export function DeferredWorkItem({
             disabled={busy}
             onClick={() => void handleReopen()}
             title="Reopen"
-            aria-label={`Reopen: ${item.action}`}
+            aria-label={`Reopen: ${item.title}`}
             className="inline-flex size-5 items-center justify-center rounded text-violet-700 opacity-70 transition-opacity hover:opacity-100 disabled:opacity-40 dark:text-violet-300"
           >
             <RotateCcw className="size-3" aria-hidden="true" />
@@ -202,7 +265,7 @@ export function DeferredWorkItem({
             type="button"
             disabled={busy}
             onClick={() => void handleCreateMission()}
-            className={actionButtonClass}
+            className={deferredWorkActionButtonClass}
           >
             <FolderPlus className="size-3.5" aria-hidden="true" />
             {pending === 'mission' ? 'Creating…' : 'Create mission'}
@@ -211,7 +274,7 @@ export function DeferredWorkItem({
             type="button"
             disabled={busy}
             onClick={() => void handleAddObjective()}
-            className={actionButtonClass}
+            className={deferredWorkActionButtonClass}
           >
             <ListPlus className="size-3.5" aria-hidden="true" />
             {pending === 'objective' ? 'Adding…' : 'Add objective'}
@@ -220,7 +283,7 @@ export function DeferredWorkItem({
             type="button"
             disabled={busy}
             onClick={() => void handleDismiss()}
-            className={actionButtonClass}
+            className={deferredWorkActionButtonClass}
           >
             <X className="size-3.5" aria-hidden="true" />
             {pending === 'dismiss' ? 'Dismissing…' : 'Dismiss'}

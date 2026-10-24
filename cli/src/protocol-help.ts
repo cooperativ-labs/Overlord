@@ -751,8 +751,10 @@ deliver:
       humanActions, tradeoffsMade, knownRisks, deferredWork, assumptions } }. Use empty arrays
     when none apply. Human actions exclude Git operations and routine review/testing.
     Deferred work is only a recommended new objective that is not part of this mission
-    (for example an out-of-scope bug). Name the component or file involved and say why
-    the work was left. Never list work already covered by this mission's future
+    (for example an out-of-scope bug). Each item is { title, change, location, doneWhen }:
+    an imperative title (<=80), only the specific change needed (<=400), where to find it
+    in the code (<=200), and the observable result in one sentence (<=200). String items
+    are rejected with invalid_input. Never list work already covered by this mission's future
     objectives, leftover slices of the current objective, or human implementation
     follow-up (those belong in humanActions). Use an empty array when nothing qualifies.
   Human action shape (each item in agentReport.humanActions):

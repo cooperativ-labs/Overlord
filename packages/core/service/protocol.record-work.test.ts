@@ -28,6 +28,30 @@ describe('recordWork (record completed chat work as a review mission)', () => {
     await db.close();
   });
 
+  it('rejects a string deferred-work item with invalid_input before creating a mission', async () => {
+    const { db, ctx } = await setup();
+    const project = await createProject({ ctx, name: 'Record Strict Deferred Work' });
+
+    await assert.rejects(
+      recordWork({
+        ctx,
+        projectId: project.id,
+        objective: 'Build the widget.',
+        summary: 'Added the widget.',
+        payloadJson: {
+          deliveryReport: { schemaVersion: 1, agentReport: { deferredWork: ['Add tests later.'] } }
+        }
+      }),
+      (error: unknown) => error instanceof ServiceError && error.code === 'invalid_input'
+    );
+    const missions = (await db.get(`SELECT COUNT(*) AS n FROM missions WHERE project_id = ?`, [
+      project.id
+    ])) as { n: number };
+    assert.equal(missions.n, 0);
+
+    await db.close();
+  });
+
   it('creates a review mission with one completed objective and a delivery', async () => {
     const { db, ctx } = await setup();
     const project = await createProject({ ctx, name: 'Record Basic' });

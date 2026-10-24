@@ -1059,6 +1059,7 @@ export interface Missions {
   sequence_number: number;
   status_id: string;
   status_type: string;
+  summary_enabled: Generated<number>;
   title: string;
   updated_at: string;
   workspace_id: string;
@@ -1079,6 +1080,32 @@ export interface MissionStatusSeen {
   mission_id: string;
   seen_at: string;
   status_id: string;
+}
+
+export interface MissionSummaries {
+  completed_generation: Generated<number>;
+  created_at: string;
+  generated_at: string | null;
+  generated_by: string;
+  headline: Generated<string>;
+  mission_id: string | null;
+  model: string | null;
+  project_id: string;
+  requested_generation: Generated<number>;
+  revision: Generated<number>;
+  risks_json: Generated<string>;
+  source_delivery_id: string | null;
+  status: string;
+  suggestions_json: Generated<string>;
+  summary_markdown: Generated<string>;
+  updated_at: string;
+  workspace_id: string;
+}
+
+export interface MissionSummarySeen {
+  mission_id: string;
+  seen_at: string;
+  workspace_user_id: string;
 }
 
 export interface MissionTags {
@@ -1804,6 +1831,8 @@ export interface DB {
   mission_events: MissionEvents;
   mission_sequences: MissionSequences;
   mission_status_seen: MissionStatusSeen;
+  mission_summaries: MissionSummaries;
+  mission_summary_seen: MissionSummarySeen;
   mission_tags: MissionTags;
   mission_target_resources: MissionTargetResources;
   missions: Missions;

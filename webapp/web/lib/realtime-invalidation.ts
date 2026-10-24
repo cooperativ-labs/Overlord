@@ -119,13 +119,20 @@ function routeChange(change: EntityChangeDto): QueryKey[] | null {
     case 'delivery': {
       const missionId = missionIdFor(change);
       if (!missionId) return null;
-      return [keys.missionDeliveries(missionId), keys.activityFeed];
+      // A delivery changes the summary envelope's evidence and watermark.
+      return [keys.missionDeliveries(missionId), keys.activityFeed, keys.missionSummary(missionId)];
     }
     case 'human_action_resolution': {
-      // A deferred-work decision changes the delivery card that shows it.
+      // A deferred-work decision changes the delivery card that shows it and the
+      // summary suggestion projected from it.
       const missionId = missionIdFor(change);
       if (!missionId) return null;
-      return [keys.missionDeliveries(missionId)];
+      return [keys.missionDeliveries(missionId), keys.missionSummary(missionId)];
+    }
+    case 'mission_summary': {
+      const missionId = missionIdFor(change);
+      if (!missionId) return null;
+      return [keys.missionSummary(missionId)];
     }
     case 'changed_file': {
       const missionId = missionIdFor(change);
@@ -146,7 +153,8 @@ function routeChange(change: EntityChangeDto): QueryKey[] | null {
     case 'agent_request': {
       const missionId = missionIdFor(change);
       if (!missionId) return null;
-      return [keys.missionAgentRequests(missionId)];
+      // Open questions and choices move the summary watermark.
+      return [keys.missionAgentRequests(missionId), keys.missionSummary(missionId)];
     }
     case 'agent_session_input':
     case 'agent_session_channel': {

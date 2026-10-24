@@ -1,10 +1,14 @@
-import type {
-  DeliveryAgentReportInputV1,
-  DeliveryAgentReportV1,
-  DeliveryReportPayloadV1,
-  HumanActionV1,
-  TradeoffMadeV1
+import {
+  DEFERRED_WORK_LIMITS,
+  type DeferredWorkInputV1,
+  type DeferredWorkV1,
+  type DeliveryAgentReportInputV1,
+  type DeliveryAgentReportV1,
+  type DeliveryReportPayloadV1,
+  type HumanActionV1,
+  type TradeoffMadeV1
 } from '@overlord/contract';
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 
 const MAX_ITEMS = 12;
@@ -55,6 +59,67 @@ const tradeoffSchema = z.strictObject({
   impact: conciseTextSchema.optional()
 });
 
+const deferredWorkFields = {
+  title: z.string().trim().min(1).max(DEFERRED_WORK_LIMITS.maxTitleLength),
+  change: z.string().trim().min(1).max(DEFERRED_WORK_LIMITS.maxChangeLength),
+  location: z.string().trim().min(1).max(DEFERRED_WORK_LIMITS.maxLocationLength),
+  doneWhen: z.string().trim().min(1).max(DEFERRED_WORK_LIMITS.maxDoneWhenLength)
+};
+
+/** Agent-written deferred-work item (contract v166); plain strings are not accepted. */
+export const deferredWorkInputSchema = z.strictObject(deferredWorkFields);
+
+const normalizedDeferredWorkSchema = z.strictObject({
+  id: z.string().trim().min(1).max(200),
+  ...deferredWorkFields
+});
+
+/**
+ * Strict check of the wire `deliveryReport.agentReport.deferredWork` (contract
+ * v166). Unlike the other advisory fields, which are salvaged item by item,
+ * a deferred-work list that is not an array of `DeferredWorkInputV1` objects
+ * rejects the whole delivery: a string item, a missing, blank or over-long
+ * field, or an unknown key. Returns the first problem, or null when the list is
+ * absent or valid. Excess items keep the salvage behaviour (truncation with a
+ * warning).
+ */
+export function deferredWorkInputProblem(deliveryReport: unknown): string | null {
+  if (typeof deliveryReport !== 'object' || deliveryReport === null) return null;
+  const agentReport = (deliveryReport as { agentReport?: unknown }).agentReport;
+  if (typeof agentReport !== 'object' || agentReport === null) return null;
+  const deferredWork = (agentReport as { deferredWork?: unknown }).deferredWork;
+  if (deferredWork === undefined) return null;
+  const field = 'deliveryReport.agentReport.deferredWork';
+  if (!Array.isArray(deferredWork)) return `${field} must be an array`;
+  for (const [index, item] of deferredWork.slice(0, MAX_ITEMS).entries()) {
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+      return `${field}[${index}] must be an object with title, change, location, and doneWhen; string items are not accepted`;
+    }
+    const parsed = deferredWorkInputSchema.safeParse(item);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      const key = issue?.path.length ? `.${issue.path.join('.')}` : '';
+      return `${field}[${index}]${key}: ${issue?.message ?? 'invalid deferred-work item'}`;
+    }
+  }
+  return null;
+}
+
+/**
+ * Stable delivery-local deferred-work id (contract v166): the zero-based index in
+ * the normalized agent report plus a digest of the canonical object.
+ */
+export function deferredWorkId(index: number, item: DeferredWorkInputV1): string {
+  const canonical = JSON.stringify([
+    item.title.trim(),
+    item.change.trim(),
+    item.location.trim(),
+    item.doneWhen.trim()
+  ]);
+  const digest = createHash('sha256').update(canonical, 'utf8').digest('hex').slice(0, 16);
+  return `deferred-work-${index}-${digest}`;
+}
+
 const GIT_ACTION_PATTERN =
   /\b(?:git\s+(?:commit|push|pull|merge|rebase|checkout|switch|branch)|(?:commit|push|pull|merge|rebase|create|open)\s+(?:a\s+)?(?:branch|pull request|pr))\b/i;
 const ROUTINE_QA_PATTERN =
@@ -90,11 +155,19 @@ function normalizeAgentReport(input: DeliveryAgentReportInputV1): DeliveryAgentR
     source: 'agent'
   }));
 
+  const deferredWork: DeferredWorkV1[] = (input.deferredWork ?? []).map((item, index) => ({
+    id: deferredWorkId(index, item),
+    title: item.title,
+    change: item.change,
+    location: item.location,
+    doneWhen: item.doneWhen
+  }));
+
   return {
     humanActions,
     tradeoffsMade,
     knownRisks: input.knownRisks ?? [],
-    deferredWork: input.deferredWork ?? [],
+    deferredWork,
     assumptions: input.assumptions ?? []
   };
 }
@@ -188,7 +261,7 @@ function salvageWireAgentReport(deliveryReport: unknown): {
       ),
       deferredWork: salvageArray(
         report.deferredWork,
-        conciseTextSchema,
+        deferredWorkInputSchema,
         'agentReport.deferredWork',
         warnings
       ),
@@ -230,7 +303,7 @@ const normalizedAgentReportSchema = z.strictObject({
   humanActions: z.array(normalizedHumanActionSchema).max(MAX_ITEMS),
   tradeoffsMade: z.array(normalizedTradeoffSchema).max(MAX_ITEMS),
   knownRisks: z.array(conciseTextSchema).max(MAX_ITEMS),
-  deferredWork: z.array(conciseTextSchema).max(MAX_ITEMS),
+  deferredWork: z.array(normalizedDeferredWorkSchema).max(MAX_ITEMS),
   assumptions: z.array(conciseTextSchema).max(MAX_ITEMS)
 });
 
@@ -240,7 +313,7 @@ const deliveryPresentationSchema = z.strictObject({
   humanActions: z.array(normalizedHumanActionSchema).max(MAX_ITEMS),
   tradeoffsMade: z.array(normalizedTradeoffSchema).max(MAX_ITEMS),
   knownRisks: z.array(conciseTextSchema).max(MAX_ITEMS),
-  deferredWork: z.array(conciseTextSchema).max(MAX_ITEMS),
+  deferredWork: z.array(normalizedDeferredWorkSchema).max(MAX_ITEMS),
   assumptions: z.array(conciseTextSchema).max(MAX_ITEMS),
   generatedBy: z.enum(['deterministic', 'gemini']),
   generatedAt: z.string().max(64).optional(),

@@ -11,6 +11,7 @@ import {
   renewedExpiry,
   SESSION_CHANNEL_LEASE_SECONDS
 } from './credential.js';
+import { triggerMissionSummaryForRequest } from './requests.js';
 
 /**
  * Session channels — the durable identity that carries agent-session traffic.
@@ -500,6 +501,11 @@ export async function endChannel({
         WHERE id = ? AND revision = ?`,
       [state, now, reason, exitCode, now, now, revision, channelId, existing.revision]
     );
+    const closingQuestions = await tx.all<{ kind: string; mission_id: string | null }>(
+      `SELECT DISTINCT kind, mission_id FROM agent_requests
+        WHERE channel_id = ? AND status = 'open' AND kind IN ('question', 'choice')`,
+      [channelId]
+    );
     await tx.run(
       `UPDATE agent_requests
           SET status = 'released_to_terminal',
@@ -511,6 +517,17 @@ export async function endChannel({
         WHERE channel_id = ? AND status = 'open'`,
       [state === 'lost' ? 'channel_lost' : 'channel_ended', now, channelId]
     );
+    const summaryMissions = new Set<string>();
+    for (const request of closingQuestions) {
+      if (!request.mission_id || summaryMissions.has(request.mission_id)) continue;
+      summaryMissions.add(request.mission_id);
+      await triggerMissionSummaryForRequest({
+        ctx: txCtx,
+        request,
+        reason: 'agent_request_closed',
+        now
+      });
+    }
     await tx.run(
       `UPDATE agent_session_inputs
           SET status = 'expired', last_error_code = ?, updated_at = ?, revision = revision + 1
