@@ -114,6 +114,11 @@ For adapter hook scripts and installed hook paths, including the shared
   explicit, and must not require a separate mission environment value; unbound hooks remain
   silent and write nothing. Each hook passes its connector key through `--agent`; tests reject a
   generic path parser that could misclassify a Read input as an edit. No real DB, no real agent.
+- **Outcome gating:** every adapter whose post-tool rule captures edits pins its outcome
+  semantics with `normalized-event` fixtures: a `successOnly` rule shows `outcome: ok`, and a
+  decoded result (Codex `Exit code: <n>`) has both a success and a failure fixture. Capture unit
+  tests prove failed, cancelled, and unknown outcomes append no path. These are source/payload
+  fixtures, not live harness smokes; record that distinction in validation.
 - **Shared capture rendering:** Claude, Codex, and Cursor fixtures execute the one core capture
   template with their adapter key substituted. Setup tests assert that it lands at each existing
   harness-native managed path, is executable, and contains no unresolved placeholder.

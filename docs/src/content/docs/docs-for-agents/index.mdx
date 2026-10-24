@@ -27,8 +27,8 @@ Overlord is the durable work record around coding agents. It does **not**
 replace the agent harness (Claude Code, Codex, Cursor), the terminal, the
 repository, or the user's subscription. It coordinates their work across
 projects and over time by keeping the objective, progress updates, blocking
-questions, artifacts, delivery summary, and per-file change rationale together
-in one reviewable record. You — the agent — read context from Overlord, do the
+questions, artifacts, delivery summary, and the files each objective changed
+together in one reviewable record. You — the agent — read context from Overlord, do the
 work in the user's tools, and report the result back through a stable protocol.
 
 ## The core model
@@ -60,7 +60,8 @@ work in the user's tools, and report the result back through a stable protocol.
   delivery, with copy-pasteable commands and the checks to run at each step.
 - **[The agent protocol](/docs-for-agents/agent-protocol/)** — the
   `ovld protocol` lifecycle you must follow while executing a mission: attach,
-  update, ask, deliver, change rationales, follow-up work, and worktree safety.
+  update, ask, deliver, declaring uncaptured paths, follow-up work, and worktree
+  safety.
 - **[Authentication & troubleshooting](/docs-for-agents/authentication/)** —
   how sign-in and `USER_TOKEN` credentials work, token scopes, the environment
   variables, and a troubleshooting playbook for the auth failures agents hit

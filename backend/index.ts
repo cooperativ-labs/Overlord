@@ -210,6 +210,7 @@ import {
   listMissionDeliveries,
   listMissionEvents,
   listMissionFileChanges,
+  listObjectiveFileChangesForMission,
   listMissions,
   listMissionSharedContext,
   listObjectives,
@@ -1924,7 +1925,14 @@ app.patch(
 );
 app.get(
   '/api/missions/:id/file-changes',
-  handle(req => listMissionFileChanges(req.params.id))
+  handle(req => {
+    const objectiveId = req.query.objectiveId;
+    if (objectiveId === undefined) return listMissionFileChanges(req.params.id);
+    if (typeof objectiveId !== 'string' || !objectiveId.trim()) {
+      throw new ApiError(400, 'objectiveId must be a single non-empty value');
+    }
+    return listObjectiveFileChangesForMission(req.params.id, objectiveId);
+  })
 );
 app.post(
   '/api/missions/schedule/preview',

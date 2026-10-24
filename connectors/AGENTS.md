@@ -85,11 +85,28 @@ A connector may invoke `ovld protocol capture-change` from a native post-mutatio
 `OVERLORD_OBJECTIVE_ID` is explicit in the launch environment. Mission scope is recovered from
 that objective's exact active-session binding; cwd never selects it. The hook must remain silent
 and perform no write when the objective id or `ovld` is unavailable. A directly named native edit
-path records objective-bound, non-exclusive `declared_edit`/`direct` evidence only after the
-connector-owned codec normalizes it as `file.edited`. The hook must pass its connector key through
-`--agent`; generic payload path parsing is forbidden. Codec-normalized read, search, and fetch
-callbacks are silent no-ops. Mutation-capable callbacks without a normalized edit path, plus shell,
-generic, unknown, and unmapped callbacks, record unavailable evidence health. Every hook
+path records objective-bound, non-exclusive `declared_edit` evidence only after the
+connector-owned codec normalizes it as `file.edited` **and** its outcome is `ok`. The hook must
+pass its connector key through `--agent`; generic payload path parsing is forbidden.
+
+Outcome is decided in the codec, never guessed in capture:
+
+- `outcomePath` decodes a boolean, status word, or numeric exit code; `outcomeExitCodePrefix`
+  decodes a leading `<prefix><n>` line of a text result (Codex `apply_patch`: `Exit code: 0`).
+  Only the decoded value is kept.
+- `successOnly: true` declares that the harness emits this event only for successful calls and
+  routes failures elsewhere. It must cite source/binary evidence for the harness version in the
+  codec comment and be pinned by a normalized-event fixture; never infer it from an event name.
+- An absent or unrecognized result is unknown, never success.
+
+Capture then applies: `ok` with exact paths appends evidence; `blocked` appends nothing;
+`error`/`cancelled` append nothing and record sticky `outcome_partial` (a non-atomic edit may have
+partially applied, so the agent declares actual writes); unknown records `outcome_unavailable`;
+shell records `shell_activity_unverified` (coverage uncertainty, never a claimed write); other
+no-path, generic, and unmapped callbacks record `direct_path_unavailable`. Codec-normalized
+read, search, and fetch callbacks append no evidence but still record callback observation.
+Patch-text extraction reduces `*** Add|Update|Delete File:` and `*** Move to:` headers, so a
+rename keeps both endpoints. Every hook
 registration must be backed by a `script-io` fixture, and every mutation window claim must be
 backed by a `mutation-window` fixture. Claude, Codex, and Cursor render this callback from
 `connectors/core/scripts/capture-change-hook.sh`; their adapter directories own only the native

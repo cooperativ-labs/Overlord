@@ -75,6 +75,8 @@ capabilities:
     native: PostToolUse
     fixtures:
       - fixtures/normalize-post-tool-use.json
+      - fixtures/normalize-post-tool-use-failed.json
+      - fixtures/normalize-post-tool-use-rename.json
       - fixtures/agent-session-hooks.json
       - fixtures/post-tool-use-hook.json
       - fixtures/post-tool-use-unbound.json

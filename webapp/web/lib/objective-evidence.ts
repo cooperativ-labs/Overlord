@@ -6,16 +6,18 @@ import type {
 } from '../../shared/contract.ts';
 
 /**
- * Everything one objective produced while it ran, grouped so the mission panel
- * can render it inside that objective's accordion (coo:879). Each list is
- * newest first, so index 0 is always the most recent run's evidence.
+ * The per-run evidence one objective produced, grouped so the mission panel can
+ * render it inside that objective's accordion (coo:879). Each list is newest
+ * first, so index 0 is always the most recent run's evidence.
+ *
+ * File changes are not here: they are cumulative per objective, not per run,
+ * and come from the server objective read (`useObjectiveFileChanges`) rather
+ * than a partition of the capped mission-wide page.
  */
 export type ObjectiveEvidence = {
   objectiveId: string;
   /** Newest delivery first (`deliveredAt` descending). */
   deliveries: DeliveryDto[];
-  /** Newest observation first (`createdAt` descending). */
-  fileChanges: FileChangeDto[];
   /** Newest session first (`createdAt` descending). */
   terminalSessions: TerminalSessionDto[];
 };
@@ -29,12 +31,16 @@ export type MissionEvidencePartition = {
    * the mission-level "Unassigned evidence" fallback instead of dropped.
    */
   unassigned: ObjectiveEvidence;
+  /**
+   * Mission-page file-change rows whose objective is gone. The objective read
+   * rejects a deleted objective, so this is the only place they surface.
+   */
+  unassignedFileChanges: FileChangeDto[];
 };
 
 const EMPTY_EVIDENCE: ObjectiveEvidence = Object.freeze({
   objectiveId: '',
   deliveries: [],
-  fileChanges: [],
   terminalSessions: []
 }) as ObjectiveEvidence;
 
@@ -43,16 +49,18 @@ function newestFirst<T>(items: readonly T[], at: (item: T) => string): T[] {
 }
 
 function emptyEvidence(objectiveId: string): ObjectiveEvidence {
-  return { objectiveId, deliveries: [], fileChanges: [], terminalSessions: [] };
+  return { objectiveId, deliveries: [], terminalSessions: [] };
 }
 
 /**
- * Partition a mission's deliveries, file changes, and terminal sessions by the
- * objective that produced them.
+ * Partition a mission's deliveries and terminal sessions by the objective that
+ * produced them, and pick out file-change rows whose objective is gone.
  *
- * Every evidence DTO already carries `objectiveId`, so no per-objective fetch is
- * needed: the mission-level queries are fetched once and split here. Pure and
- * synchronous so the panel can memoise it on the query results.
+ * Every evidence DTO already carries `objectiveId`, so the mission-level
+ * queries are fetched once and split here. File changes of live objectives are
+ * deliberately not partitioned: the mission page is capped, so each objective
+ * reads its own server-filtered list instead. Pure and synchronous so the panel
+ * can memoise it on the query results.
  */
 export function partitionMissionEvidence({
   objectives,
@@ -69,6 +77,9 @@ export function partitionMissionEvidence({
     objectives.map(objective => [objective.id, emptyEvidence(objective.id)])
   );
   const unassigned = emptyEvidence('');
+  const unassignedFileChanges = newestFirst(fileChanges, item => item.observedAt).filter(
+    fileChange => !byObjectiveId.has(fileChange.objectiveId)
+  );
 
   const bucketFor = (objectiveId: string): ObjectiveEvidence =>
     byObjectiveId.get(objectiveId) ?? unassigned;
@@ -76,14 +87,11 @@ export function partitionMissionEvidence({
   for (const delivery of newestFirst(deliveries, item => item.deliveredAt)) {
     bucketFor(delivery.objectiveId).deliveries.push(delivery);
   }
-  for (const fileChange of newestFirst(fileChanges, item => item.createdAt)) {
-    bucketFor(fileChange.objectiveId).fileChanges.push(fileChange);
-  }
   for (const session of newestFirst(terminalSessions, item => item.createdAt)) {
     bucketFor(session.objectiveId).terminalSessions.push(session);
   }
 
-  return { byObjectiveId, unassigned };
+  return { byObjectiveId, unassigned, unassignedFileChanges };
 }
 
 /**
@@ -99,7 +107,6 @@ export type ObjectiveRun = {
   /** Whether this is the objective's most recent run. */
   latest: boolean;
   deliveries: DeliveryDto[];
-  fileChanges: FileChangeDto[];
   terminalSessions: TerminalSessionDto[];
 };
 
@@ -108,14 +115,12 @@ function parseTime(value: string): number {
   return Number.isNaN(time) ? 0 : time;
 }
 
-function runHasEvidence(
-  run: Pick<ObjectiveRun, 'deliveries' | 'fileChanges' | 'terminalSessions'>
-) {
-  return run.deliveries.length > 0 || run.fileChanges.length > 0 || run.terminalSessions.length > 0;
+function runHasEvidence(run: Pick<ObjectiveRun, 'deliveries' | 'terminalSessions'>) {
+  return run.deliveries.length > 0 || run.terminalSessions.length > 0;
 }
 
-function emptyRun(): Pick<ObjectiveRun, 'deliveries' | 'fileChanges' | 'terminalSessions'> {
-  return { deliveries: [], fileChanges: [], terminalSessions: [] };
+function emptyRun(): Pick<ObjectiveRun, 'deliveries' | 'terminalSessions'> {
+  return { deliveries: [], terminalSessions: [] };
 }
 
 /**
@@ -156,9 +161,6 @@ export function groupEvidenceByRun(
     for (const delivery of evidence.deliveries) {
       (parseTime(delivery.deliveredAt) >= boundary ? latest : earlier).deliveries.push(delivery);
     }
-    for (const fileChange of evidence.fileChanges) {
-      (parseTime(fileChange.createdAt) >= boundary ? latest : earlier).fileChanges.push(fileChange);
-    }
     for (const session of evidence.terminalSessions) {
       (parseTime(session.createdAt) >= boundary ? latest : earlier).terminalSessions.push(session);
     }
@@ -170,7 +172,6 @@ export function groupEvidenceByRun(
     if (deliveries.length <= 1) {
       buckets.push({
         deliveries: [...deliveries],
-        fileChanges: [...evidence.fileChanges],
         terminalSessions: [...evidence.terminalSessions]
       });
     } else {
@@ -187,9 +188,6 @@ export function groupEvidenceByRun(
         const run = emptyRun();
         run.deliveries.push(delivery);
         buckets.push(run);
-      }
-      for (const fileChange of evidence.fileChanges) {
-        buckets[bucketFor(parseTime(fileChange.createdAt))]!.fileChanges.push(fileChange);
       }
       for (const session of evidence.terminalSessions) {
         buckets[bucketFor(parseTime(session.createdAt))]!.terminalSessions.push(session);
@@ -224,22 +222,23 @@ export function evidenceForObjective(
 }
 
 /**
- * Whether the objective has run before: it left at least one delivery, file
- * change, or terminal session. Drives the "Previous runs" strip on a reverted
- * draft and the guard that stops an emptied draft from deleting that history.
+ * Whether the objective has run before: it left at least one delivery or
+ * terminal session, or (from the objective read) at least one changed path.
+ * Drives the "Previous runs" strip on a reverted draft and the guard that stops
+ * an emptied draft from deleting that history.
  */
-export function objectiveHasHistory(evidence: ObjectiveEvidence | null | undefined): boolean {
+export function objectiveHasHistory(
+  evidence: ObjectiveEvidence | null | undefined,
+  fileChangeTotal = 0
+): boolean {
+  if (fileChangeTotal > 0) return true;
   if (!evidence) return false;
-  return (
-    evidence.deliveries.length > 0 ||
-    evidence.fileChanges.length > 0 ||
-    evidence.terminalSessions.length > 0
-  );
+  return evidence.deliveries.length > 0 || evidence.terminalSessions.length > 0;
 }
 
 /** Whether any evidence lost its objective and needs the mission-level fallback. */
 export function hasUnassignedEvidence(partition: MissionEvidencePartition): boolean {
-  return objectiveHasHistory(partition.unassigned);
+  return objectiveHasHistory(partition.unassigned) || partition.unassignedFileChanges.length > 0;
 }
 
 /**
@@ -247,7 +246,8 @@ export function hasUnassignedEvidence(partition: MissionEvidencePartition): bool
  * of the full history. Null when `total` is not greater than `returned` — that
  * page is complete. The notice is mission-scoped because
  * {@link partitionMissionEvidence} splits one fetch across objectives, so a
- * truncated page under-reports several objectives at once.
+ * truncated page under-reports several objectives at once. Objective file lists
+ * carry their own truncation from the objective read.
  */
 export function truncatedEvidenceNotice({
   returned,

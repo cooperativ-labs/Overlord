@@ -26,7 +26,7 @@ with a CLI-first product surface on top of it. Agents interact through the
 contract whether it's reached from the CLI, the hosted API, or
 [MCP](/docs-for-agents/mcp/). A runner claims queued execution requests and
 launches agents. Everything an agent produces — progress, questions, artifacts,
-delivery, per-file rationale — lands as durable records that the review surface
+delivery summary, changed-file paths — lands as durable records that the review surface
 reads back.
 
 ## Modules, in reading order
@@ -68,11 +68,11 @@ what data moves at each hop — see [From "Run" to delivery](/docs-for-agents/mi
 5. **Work & report.** The agent posts updates, may ask blocking questions, and
    objective-bound connector callbacks append direct path evidence locally.
 6. **Deliver.** The client drains that evidence independently and the agent
-   delivers a summary plus optional current annotations. The objective moves to
+   delivers a narrative summary, declaring any paths capture missed. The objective moves to
    `complete`, the mission to `review`, and auto-advance may launch the next
    objective.
 7. **Review.** The **review/change-tracking** surface reads every durable file
-   observation with its attribution metadata and optional rationale.
+   observation with its resource and source (Native, Declared, or Unknown).
 
 Throughout, the **auth** module resolves identity and enforces RBAC, and the
 **database** module provides the portable schema all of this persists to.

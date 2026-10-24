@@ -60,7 +60,7 @@ Requirements:
   on different `resource_key`s or the same one; a same-resource pair gets a
   per-objective branch and worktree when the mission uses worktrees, and shares the
   mission's single checkout when it does not.
-- Missions retain activity history, delivery records, artifacts, attachments, shared context, and change rationales.
+- Missions retain activity history, delivery records, artifacts, attachments, shared context, and changed-file evidence.
 - A mission can be agent-executable or human-only.
 - Mission content is persistent and should be treated as shared project memory.
 
@@ -96,7 +96,7 @@ Requirements:
 - Created by `ovld protocol attach`, `prompt`, or `connect`.
 - Stores a session key used by subsequent protocol commands.
 - Tracks agent identifier, model identifier, connection method, native external session ID when available, start/end timestamps, phase, liveness heartbeat, and delivery state.
-- Can record progress updates, blocking questions, permission requests, artifacts, change rationales, shared context writes, and final delivery.
+- Can record progress updates, blocking questions, permission requests, artifacts, declared changed paths, shared context writes, and final delivery.
 - Connector callbacks capture exact, objective-bound path evidence in a local objective/session ledger. Protocol update, preflight, and delivery drain that evidence independently of the progress or delivery payload.
 - Durable changed-file identity is `(objective_id, file_path)` across sessions; the observing session remains provenance rather than part of the identity.
 - Attach should be idempotent enough for agent retries and re-attachments.
@@ -184,7 +184,7 @@ Requirements:
 4. Objective moves to `executing`.
 5. Agent posts progress updates or heartbeats.
 6. Agent asks a blocking question if needed and stops.
-7. Agent delivers summary, artifacts, and change rationales.
+7. Agent delivers a summary (and optional artifacts and delivery report); changed-file evidence syncs separately.
 8. Objective moves to `complete`; mission moves to `review`.
 9. If another draft objective exists and auto-advance is enabled, Overlord queues it for runner execution.
 

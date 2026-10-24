@@ -255,7 +255,7 @@ This module is the developer-facing home for three components defined in
 | Component      | Stable id  | What it owns                                                                                                                                                                        |
 | -------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | CLI Layer      | `cli`      | Management command names/shapes, project linking & discovery, config file locations (`overlord.toml`, `.overlord/project.json`), human-readable output conventions                  |
-| Protocol Layer | `protocol` | `ovld protocol` subcommands and flags, session lifecycle (`attach → (update\|heartbeat)* → (ask\|deliver)`), context-assembly format, delivery payload + change-rationale recording |
+| Protocol Layer | `protocol` | `ovld protocol` subcommands and flags, session lifecycle (`attach → (update\|heartbeat)* → (ask\|deliver)`), context-assembly format, delivery payload + declared-path recording |
 | Runner Layer   | `runner`   | `execution_requests` queue claiming and launch, working-directory resolution, `ovld runner` commands, execution-target selection                                                    |
 
 These stay distinct components in the contract (separate interaction surfaces
@@ -273,7 +273,7 @@ colocation convention):
 - [03 — Agent Protocol](https://github.com/cooperativ-labs/OpenOverlord/blob/main/cli/docs/03-agent-protocol.md): `ovld protocol` lifecycle, context assembly, updates, delivery, attachments.
 - [04 — Runner and Launch Execution](https://github.com/cooperativ-labs/OpenOverlord/blob/main/cli/docs/04-runner-and-launch-execution.md): execution requests, local runner, launch command generation, auto-advance.
 - [06 — Core Domain and Lifecycle](https://github.com/cooperativ-labs/OpenOverlord/blob/main/cli/docs/06-core-domain-and-lifecycle.md): projects, missions, objectives, sessions, events, statuses, state transitions.
-- [11 — Review, Artifacts, and Change Tracking](https://github.com/cooperativ-labs/OpenOverlord/blob/main/cli/docs/11-review-artifacts-and-change-tracking.md): delivery review records, artifacts, objective-ledger evidence, and optional rationale annotations.
+- [11 — Review, Artifacts, and Change Tracking](https://github.com/cooperativ-labs/OpenOverlord/blob/main/cli/docs/11-review-artifacts-and-change-tracking.md): delivery review records, artifacts, objective-ledger evidence, and declared paths.
 - [Test Plan](https://github.com/cooperativ-labs/OpenOverlord/blob/main/cli/docs/testing.md): test plan for the `cli`, `protocol`, and `runner` components — management commands, protocol lifecycle/attach-shape/validation conformance, runner queue atomicity, and surface smoke tests. Part of the root [TEST_PLAN.md](https://github.com/cooperativ-labs/OpenOverlord/blob/main/TEST_PLAN.md).
 
 ### Code & Tests

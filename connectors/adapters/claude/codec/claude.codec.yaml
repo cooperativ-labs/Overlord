@@ -33,6 +33,11 @@ events:
     origin: agent
     toolPath: tool_name
     inputPath: tool_input
+    # Success-only by harness contract: Claude Code's hook table (verified in the shipped
+    # 2.1.310 binary) reads "PostToolUse — Run after successful tool" and routes failures to
+    # the separate PostToolUseFailure event, which Overlord does not register. A failed or
+    # denied Write therefore never reaches capture as native evidence.
+    successOnly: true
     # A file-mutating tool becomes `file.edited` instead, so the feed can show a change
     # timeline without the reader having to know which tool names mutate files.
     fileEditKind: file.edited

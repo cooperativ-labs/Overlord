@@ -35,19 +35,11 @@ function fileChange(overrides: Partial<FileChangeDto> & { id: string }): FileCha
   return {
     missionId: 'mission-1',
     objectiveId: 'obj-1',
-    filePath: 'src/index.ts',
-    fileName: 'index.ts',
-    label: null,
-    summary: null,
-    why: null,
-    impact: null,
-    vcsStatus: null,
-    source: null,
-    quality: null,
-    overlap: false,
-    hookHealth: null,
     resourceKey: null,
-    createdAt: '2026-08-30T10:00:00.000Z',
+    filePath: 'src/index.ts',
+    source: null,
+    observedAt: '2026-08-30T10:00:00.000Z',
+    hookHealth: null,
     ...overrides
   };
 }
@@ -71,7 +63,7 @@ function session(
   };
 }
 
-test('groups every evidence kind under its objective, newest first', () => {
+test('groups deliveries and sessions under their objective, newest first', () => {
   const partition = partitionMissionEvidence({
     objectives: [{ id: 'obj-1' }, { id: 'obj-2' }],
     deliveries: [
@@ -80,8 +72,8 @@ test('groups every evidence kind under its objective, newest first', () => {
       delivery({ id: 'd-other', objectiveId: 'obj-2' })
     ],
     fileChanges: [
-      fileChange({ id: 'f-old', createdAt: '2026-08-30T10:00:00.000Z' }),
-      fileChange({ id: 'f-new', createdAt: '2026-08-30T11:00:00.000Z' })
+      fileChange({ id: 'f-live' }),
+      fileChange({ id: 'f-other', objectiveId: 'obj-2' })
     ],
     terminalSessions: [
       session({ providerSessionId: 's-old', createdAt: '2026-08-30T09:00:00.000Z' }),
@@ -94,10 +86,9 @@ test('groups every evidence kind under its objective, newest first', () => {
     first.deliveries.map(item => item.id),
     ['d-new', 'd-old']
   );
-  assert.deepEqual(
-    first.fileChanges.map(item => item.id),
-    ['f-new', 'f-old']
-  );
+  // Live objectives read their own file list; the capped page is never split.
+  assert.equal('fileChanges' in first, false);
+  assert.deepEqual(partition.unassignedFileChanges, []);
   assert.deepEqual(
     first.terminalSessions.map(item => item.providerSessionId),
     ['s-new', 's-old']
@@ -108,7 +99,6 @@ test('groups every evidence kind under its objective, newest first', () => {
     second.deliveries.map(item => item.id),
     ['d-other']
   );
-  assert.equal(second.fileChanges.length, 0);
   assert.equal(second.terminalSessions.length, 0);
   assert.equal(hasUnassignedEvidence(partition), false);
 });
@@ -117,7 +107,15 @@ test('routes evidence with no live objective to the unassigned bucket', () => {
   const partition = partitionMissionEvidence({
     objectives: [{ id: 'obj-1' }],
     deliveries: [delivery({ id: 'orphan', objectiveId: 'deleted-objective' })],
-    fileChanges: [fileChange({ id: 'kept' })]
+    fileChanges: [
+      fileChange({ id: 'kept' }),
+      fileChange({ id: 'orphan-old', objectiveId: 'deleted-objective' }),
+      fileChange({
+        id: 'orphan-new',
+        objectiveId: 'deleted-objective',
+        observedAt: '2026-08-31T10:00:00.000Z'
+      })
+    ]
   });
 
   assert.equal(hasUnassignedEvidence(partition), true);
@@ -125,7 +123,18 @@ test('routes evidence with no live objective to the unassigned bucket', () => {
     partition.unassigned.deliveries.map(item => item.id),
     ['orphan']
   );
-  assert.equal(evidenceForObjective(partition, 'obj-1').fileChanges.length, 1);
+  assert.deepEqual(
+    partition.unassignedFileChanges.map(item => item.id),
+    ['orphan-new', 'orphan-old']
+  );
+});
+
+test('an orphaned file change alone counts as unassigned evidence', () => {
+  const partition = partitionMissionEvidence({
+    objectives: [{ id: 'obj-1' }],
+    fileChanges: [fileChange({ id: 'orphan', objectiveId: 'deleted-objective' })]
+  });
+  assert.equal(hasUnassignedEvidence(partition), true);
 });
 
 test('reports an empty record for an objective that produced nothing', () => {
@@ -139,9 +148,12 @@ test('reports an empty record for an objective that produced nothing', () => {
 });
 
 test('objectiveHasHistory is true for any single evidence kind', () => {
-  const base = { objectiveId: 'obj-1', deliveries: [], fileChanges: [], terminalSessions: [] };
+  const base = { objectiveId: 'obj-1', deliveries: [], terminalSessions: [] };
   assert.equal(objectiveHasHistory({ ...base, deliveries: [delivery({ id: 'd' })] }), true);
-  assert.equal(objectiveHasHistory({ ...base, fileChanges: [fileChange({ id: 'f' })] }), true);
+  // File evidence comes from the objective read's pre-cap total.
+  assert.equal(objectiveHasHistory(base, 3), true);
+  assert.equal(objectiveHasHistory(undefined, 1), true);
+  assert.equal(objectiveHasHistory(base, 0), false);
   assert.equal(
     objectiveHasHistory({ ...base, terminalSessions: [session({ providerSessionId: 's' })] }),
     true
@@ -191,18 +203,15 @@ test('formats elapsed time compactly and refuses missing or inverted ranges', ()
 
 function evidenceOf({
   deliveries = [],
-  fileChanges = [],
   terminalSessions = []
 }: {
   deliveries?: DeliveryDto[];
-  fileChanges?: FileChangeDto[];
   terminalSessions?: TerminalSessionDto[];
 }) {
   return evidenceForObjective(
     partitionMissionEvidence({
       objectives: [{ id: 'obj-1' }],
       deliveries,
-      fileChanges,
       terminalSessions
     }),
     'obj-1'
@@ -214,11 +223,6 @@ test('splits evidence at reopenedAt: rows at or after it are the latest run', ()
     deliveries: [
       delivery({ id: 'd-run1', deliveredAt: '2026-08-30T10:00:00.000Z' }),
       delivery({ id: 'd-run2', deliveredAt: '2026-09-02T10:00:00.000Z' })
-    ],
-    fileChanges: [
-      fileChange({ id: 'f-run1', createdAt: '2026-08-30T09:30:00.000Z' }),
-      fileChange({ id: 'f-boundary', createdAt: '2026-09-01T12:00:00.000Z' }),
-      fileChange({ id: 'f-run2', createdAt: '2026-09-02T09:00:00.000Z' })
     ],
     terminalSessions: [
       session({ providerSessionId: 's-run1', createdAt: '2026-08-30T09:00:00.000Z' }),
@@ -238,10 +242,6 @@ test('splits evidence at reopenedAt: rows at or after it are the latest run', ()
     ['d-run2']
   );
   assert.deepEqual(
-    latest!.fileChanges.map(item => item.id),
-    ['f-run2', 'f-boundary']
-  );
-  assert.deepEqual(
     latest!.terminalSessions.map(item => item.providerSessionId),
     ['s-run2']
   );
@@ -252,10 +252,6 @@ test('splits evidence at reopenedAt: rows at or after it are the latest run', ()
   assert.deepEqual(
     earlier!.deliveries.map(item => item.id),
     ['d-run1']
-  );
-  assert.deepEqual(
-    earlier!.fileChanges.map(item => item.id),
-    ['f-run1']
   );
   assert.deepEqual(
     earlier!.terminalSessions.map(item => item.providerSessionId),
@@ -273,7 +269,6 @@ test('a run with no delivery, or with two, is still one run when reopenedAt is s
       delivery({ id: 'd-first', deliveredAt: '2026-08-30T10:00:00.000Z' }),
       delivery({ id: 'd-follow-up', deliveredAt: '2026-08-30T15:00:00.000Z' })
     ],
-    fileChanges: [fileChange({ id: 'f-run2', createdAt: '2026-09-02T09:00:00.000Z' })],
     terminalSessions: [
       session({ providerSessionId: 's-run1', createdAt: '2026-08-30T09:00:00.000Z' }),
       session({ providerSessionId: 's-run2', createdAt: '2026-09-02T08:00:00.000Z' })
@@ -283,10 +278,6 @@ test('a run with no delivery, or with two, is still one run when reopenedAt is s
   const runs = groupEvidenceByRun(evidence, { reopenedAt: '2026-09-01T00:00:00.000Z' });
   assert.equal(runs.length, 2);
   assert.deepEqual(runs[0]!.deliveries, []);
-  assert.deepEqual(
-    runs[0]!.fileChanges.map(item => item.id),
-    ['f-run2']
-  );
   assert.deepEqual(
     runs[1]!.deliveries.map(item => item.id),
     ['d-follow-up', 'd-first']
@@ -299,8 +290,7 @@ test('a run with no delivery, or with two, is still one run when reopenedAt is s
 
 test('a reverted draft drops its not-yet-started latest run and keeps the earlier one', () => {
   const evidence = evidenceOf({
-    deliveries: [delivery({ id: 'd-run1', deliveredAt: '2026-08-30T10:00:00.000Z' })],
-    fileChanges: [fileChange({ id: 'f-run1', createdAt: '2026-08-30T09:30:00.000Z' })]
+    deliveries: [delivery({ id: 'd-run1', deliveredAt: '2026-08-30T10:00:00.000Z' })]
   });
   const reopenedAt = '2026-09-01T12:00:00.000Z';
 
@@ -329,11 +319,6 @@ test('falls back to delivery-order inference when reopenedAt is null', () => {
       delivery({ id: 'd-run1', deliveredAt: '2026-08-30T10:00:00.000Z' }),
       delivery({ id: 'd-run2', deliveredAt: '2026-09-02T10:00:00.000Z' })
     ],
-    fileChanges: [
-      fileChange({ id: 'f-run1', createdAt: '2026-08-30T09:30:00.000Z' }),
-      fileChange({ id: 'f-run2', createdAt: '2026-09-02T09:00:00.000Z' }),
-      fileChange({ id: 'f-after', createdAt: '2026-09-03T09:00:00.000Z' })
-    ],
     terminalSessions: [
       session({ providerSessionId: 's-run1', createdAt: '2026-08-30T09:00:00.000Z' }),
       session({ providerSessionId: 's-run2', createdAt: '2026-09-02T08:00:00.000Z' })
@@ -346,11 +331,6 @@ test('falls back to delivery-order inference when reopenedAt is null', () => {
     runs[0]!.deliveries.map(item => item.id),
     ['d-run2']
   );
-  // Rows newer than the last delivery belong to the latest run.
-  assert.deepEqual(
-    runs[0]!.fileChanges.map(item => item.id),
-    ['f-after', 'f-run2']
-  );
   assert.deepEqual(
     runs[0]!.terminalSessions.map(item => item.providerSessionId),
     ['s-run2']
@@ -358,10 +338,6 @@ test('falls back to delivery-order inference when reopenedAt is null', () => {
   assert.deepEqual(
     runs[1]!.deliveries.map(item => item.id),
     ['d-run1']
-  );
-  assert.deepEqual(
-    runs[1]!.fileChanges.map(item => item.id),
-    ['f-run1']
   );
   assert.deepEqual(
     runs[1]!.terminalSessions.map(item => item.providerSessionId),
@@ -374,14 +350,12 @@ test('without a boundary and at most one delivery everything is a single run', (
   const single = groupEvidenceByRun(
     evidenceOf({
       deliveries: [delivery({ id: 'd' })],
-      fileChanges: [fileChange({ id: 'f' })],
       terminalSessions: [session({ providerSessionId: 's' })]
     }),
     { reopenedAt: null }
   );
   assert.equal(single.length, 1);
   assert.equal(single[0]!.deliveries.length, 1);
-  assert.equal(single[0]!.fileChanges.length, 1);
   assert.equal(single[0]!.terminalSessions.length, 1);
   assert.equal(objectiveRunLabel(single[0]!), null);
 

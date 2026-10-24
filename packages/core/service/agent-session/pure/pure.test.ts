@@ -528,3 +528,97 @@ test('codec: replaying the identical native payload yields the identical event i
   });
   assert.equal(first?.eventId, replay?.eventId);
 });
+
+const CODEX_PATCH_CODEC: CodecSpec = {
+  codecVersion: 1,
+  adapter: 'codex',
+  eventNamePath: 'hook_event_name',
+  projectRootPaths: ['cwd'],
+  events: [
+    {
+      native: 'PostToolUse',
+      kind: 'tool.completed',
+      origin: 'agent',
+      toolPath: 'tool_name',
+      inputPath: 'tool_input',
+      outcomePath: 'tool_response',
+      outcomeExitCodePrefix: 'Exit code: ',
+      fileEditKind: 'file.edited',
+      filePathPaths: ['path'],
+      filePathPatchTextPaths: ['command']
+    }
+  ]
+};
+
+function codexPatchEvent(command: string, toolResponse: unknown) {
+  return normalizeNativeEvent({
+    codec: CODEX_PATCH_CODEC,
+    payload: {
+      hook_event_name: 'PostToolUse',
+      cwd: '/repo',
+      tool_name: 'apply_patch',
+      tool_input: { command },
+      tool_response: toolResponse
+    },
+    occurredAt: '2026-08-01T00:00:00.000Z'
+  });
+}
+
+test('codec: patch Move to headers keep both rename endpoints alongside deletes', () => {
+  const event = codexPatchEvent(
+    '*** Begin Patch\n*** Update File: /repo/src/a.ts\n*** Move to: /repo/src/b.ts\n@@\n-x\n+y\n' +
+      '*** Delete File: src/gone.ts\n*** End Patch',
+    'Exit code: 0\nOutput:\nSuccess.'
+  );
+  assert.deepEqual(event?.payload.paths, ['src/a.ts', 'src/b.ts', 'src/gone.ts']);
+  assert.equal(event?.payload.outcome, 'ok');
+});
+
+test('codec: exit-code outcomes decode only a leading exit line and never retain output', () => {
+  const patch = '*** Begin Patch\n*** Add File: src/new.ts\n+x\n*** End Patch';
+  assert.equal(codexPatchEvent(patch, 'Exit code: 0\nWall time: 1s')?.payload.outcome, 'ok');
+  assert.equal(codexPatchEvent(patch, 'Exit code: 1\nOutput:\nfailed')?.payload.outcome, 'error');
+  assert.equal(codexPatchEvent(patch, 0)?.payload.outcome, 'ok');
+  assert.equal(codexPatchEvent(patch, 2)?.payload.outcome, 'error');
+  // Recognizable words without the declared exit-code line stay unknown, as does no result.
+  assert.equal(
+    codexPatchEvent(patch, 'Success. Updated the following files:')?.payload.outcome,
+    undefined
+  );
+  assert.equal(codexPatchEvent(patch, 'Output:\nExit code: 0')?.payload.outcome, undefined);
+  assert.equal(codexPatchEvent(patch, undefined)?.payload.outcome, undefined);
+  assert.ok(
+    !JSON.stringify(codexPatchEvent(patch, 'Exit code: 1\nsecret-output')).includes('secret-output')
+  );
+});
+
+test('codec: successOnly seals ok only when no outcome was decoded', () => {
+  const codec: CodecSpec = {
+    ...CLAUDE_CODEC,
+    events: CLAUDE_CODEC.events.map(rule =>
+      rule.native === 'PostToolUse' ? { ...rule, successOnly: true as const } : rule
+    )
+  };
+  const event = normalizeNativeEvent({
+    codec,
+    payload: {
+      hook_event_name: 'PostToolUse',
+      cwd: '/repo',
+      tool_name: 'Write',
+      tool_input: { file_path: '/repo/src/a.ts' }
+    },
+    occurredAt: '2026-08-01T00:00:00.000Z'
+  });
+  assert.equal(event?.payload.outcome, 'ok');
+  const withoutGuarantee = normalizeNativeEvent({
+    codec: CLAUDE_CODEC,
+    payload: {
+      hook_event_name: 'PostToolUse',
+      cwd: '/repo',
+      tool_name: 'Write',
+      tool_input: { file_path: '/repo/src/a.ts' }
+    },
+    occurredAt: '2026-08-01T00:00:00.000Z'
+  });
+  assert.equal(withoutGuarantee?.payload.outcome, undefined);
+});

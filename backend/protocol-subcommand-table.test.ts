@@ -26,6 +26,7 @@ const EXPECTED_PERMISSIONS = {
   prompt: PERMISSIONS.MISSION_CREATE,
   'load-context': PERMISSIONS.MISSION_READ,
   'list-deliveries': PERMISSIONS.MISSION_READ,
+  'objective-changes': PERMISSIONS.MISSION_READ,
   'launch-objective': PERMISSIONS.EXECUTION_REQUEST_CREATE,
   'reorder-future-objectives': PERMISSIONS.OBJECTIVE_UPDATE,
   'queue-objective': PERMISSIONS.EXECUTION_REQUEST_CREATE,

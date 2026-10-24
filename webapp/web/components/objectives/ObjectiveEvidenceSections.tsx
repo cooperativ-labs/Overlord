@@ -18,7 +18,6 @@ import { cn } from '../../lib/utils.ts';
 import { AgentSessionActivity } from '../agent-session/AgentSessionActivity.tsx';
 import { MissionDeliveryCard } from '../DeliverySummaryCard.tsx';
 import { InlineEditField } from '../InlineEditField.tsx';
-import { LiveFileChangeList } from '../LiveFileChangeList.tsx';
 import { ObjectiveTerminalSessions } from '../ObjectiveTerminalSessions.tsx';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible.tsx';
 
@@ -26,21 +25,25 @@ import { ObjectiveAttachmentList } from './ObjectiveAttachments.tsx';
 import {
   ObjectiveEvidenceEmpty,
   ObjectiveEvidenceRule,
-  ObjectiveEvidenceSection,
   ObjectiveEvidenceTruncationNotice
 } from './ObjectiveEvidenceRule.tsx';
+import { ObjectiveFileChanges } from './ObjectiveFileChanges.tsx';
 
 /**
  * Which arrangement of the evidence stack to draw (coo:879 §4.2 / §4.3 / §4.5):
  *
- * - `complete` — instruction → deliveries → file changes → terminal session
- *   (only when one exists) → earlier runs → attachments.
+ * - `complete` — instruction → deliveries → files changed during this
+ *   objective → terminal session (only when one exists) → earlier runs →
+ *   attachments.
  * - `active` — instruction → agent activity → prior deliveries (only on a
- *   pending-delivery re-attach) → file changes (live) → terminal session
+ *   pending-delivery re-attach) → files changed (live) → terminal session
  *   (only when one exists) → earlier runs → attachments.
- * - `history` — the reverted draft's previous runs, with no instruction (the
- *   draft's editable field already shows it) and no attachments (the draft's
- *   own footer lists them).
+ * - `history` — the reverted draft's previous runs, then the objective's
+ *   cumulative file list, with no instruction (the draft's editable field
+ *   already shows it) and no attachments (the draft's own footer lists them).
+ *
+ * The file list is cumulative per objective, so it appears once and never
+ * inside a run; runs split only deliveries and terminal sessions.
  *
  * In `complete` and `active`, the instruction is the first thing under the
  * row's trigger, drawn flat with no rule or disclosure of its own (coo:1041).
@@ -49,7 +52,6 @@ export type ObjectiveEvidenceMode = 'complete' | 'active' | 'history';
 
 export type ObjectiveEvidenceLoading = {
   deliveries: boolean;
-  fileChanges: boolean;
 };
 
 function deliveryLabel(index: number, total: number): string {
@@ -136,14 +138,12 @@ function LiveTag() {
   );
 }
 
-/** The three evidence bodies of one run, so every arrangement draws them the same way. */
+/** The per-run evidence bodies, so every arrangement draws them the same way. */
 function buildRunSections({
-  objective,
   run,
   loading,
   expandLatestDelivery
 }: {
-  objective: ObjectiveDto;
   run: ObjectiveRun;
   loading: ObjectiveEvidenceLoading;
   expandLatestDelivery: boolean;
@@ -164,49 +164,31 @@ function buildRunSections({
     />
   );
 
-  const fileChanges = loading.fileChanges ? (
-    <ObjectiveEvidenceEmpty>Loading file changes…</ObjectiveEvidenceEmpty>
-  ) : (
-    <LiveFileChangeList
-      projectId={objective.projectId}
-      fileChanges={run.fileChanges}
-      emptyState={<ObjectiveEvidenceEmpty>No file changes</ObjectiveEvidenceEmpty>}
-    />
-  );
-
   return {
     deliveries,
     terminalSessions,
-    fileChanges,
-    deliveryCount: loading.deliveries ? undefined : run.deliveries.length,
-    fileChangeCount: loading.fileChanges ? undefined : run.fileChanges.length
+    deliveryCount: loading.deliveries ? undefined : run.deliveries.length
   };
 }
 
-/** Deliveries → file changes → terminal session (if any) for one run, as a flat stack. */
+/** Deliveries → terminal session (if any) for one run, as a flat stack. */
 function RunStack({
-  objective,
   run,
   loading,
   expandLatestDelivery,
   truncation
 }: {
-  objective: ObjectiveDto;
   run: ObjectiveRun;
   loading: ObjectiveEvidenceLoading;
   expandLatestDelivery: boolean;
   truncation: ObjectiveEvidenceTruncation;
 }) {
-  const sections = buildRunSections({ objective, run, loading, expandLatestDelivery });
+  const sections = buildRunSections({ run, loading, expandLatestDelivery });
   return (
     <div className="grid min-w-0 gap-2">
       <ObjectiveEvidenceRule label="Deliveries" count={sections.deliveryCount} />
       {sections.deliveries}
       <TruncationNotice notice={truncation.deliveries} />
-      <ObjectiveEvidenceSection label="File changes" count={sections.fileChangeCount}>
-        {sections.fileChanges}
-        <TruncationNotice notice={truncation.fileChanges} />
-      </ObjectiveEvidenceSection>
       {sections.terminalSessions}
     </div>
   );
@@ -218,13 +200,11 @@ function RunStack({
  * evidence stack. Opens to the same flat run stack the latest run uses.
  */
 function EarlierRunRow({
-  objective,
   run,
   loading,
   truncation,
   defaultOpen = false
 }: {
-  objective: ObjectiveDto;
   run: ObjectiveRun;
   loading: ObjectiveEvidenceLoading;
   truncation: ObjectiveEvidenceTruncation;
@@ -233,7 +213,6 @@ function EarlierRunRow({
   const [open, setOpen] = useState(defaultOpen);
   const summary = [
     run.deliveries.length > 0 ? countLabel(run.deliveries.length, 'delivery', 'deliveries') : null,
-    run.fileChanges.length > 0 ? countLabel(run.fileChanges.length, 'file', 'files') : null,
     run.terminalSessions.length > 0
       ? countLabel(run.terminalSessions.length, 'session', 'sessions')
       : null
@@ -259,7 +238,6 @@ function EarlierRunRow({
         </CollapsibleTrigger>
         <CollapsibleContent className="px-3 pb-3">
           <RunStack
-            objective={objective}
             run={run}
             loading={loading}
             expandLatestDelivery={false}
@@ -273,12 +251,10 @@ function EarlierRunRow({
 
 /** The collapsed rows for every run before the latest, under one rule. */
 function EarlierRuns({
-  objective,
   runs,
   loading,
   truncation
 }: {
-  objective: ObjectiveDto;
   runs: readonly ObjectiveRun[];
   loading: ObjectiveEvidenceLoading;
   truncation: ObjectiveEvidenceTruncation;
@@ -289,13 +265,7 @@ function EarlierRuns({
       <ObjectiveEvidenceRule label="Earlier runs" count={runs.length} />
       <div className="grid min-w-0 gap-1.5">
         {runs.map(run => (
-          <EarlierRunRow
-            key={run.number}
-            objective={objective}
-            run={run}
-            loading={loading}
-            truncation={truncation}
-          />
+          <EarlierRunRow key={run.number} run={run} loading={loading} truncation={truncation} />
         ))}
       </div>
     </>
@@ -306,13 +276,13 @@ function EarlierRuns({
  * The flat, full-width stack of everything one objective produced, rendered
  * inside its accordion (coo:879 §4.2). The instruction leads, flat and
  * unlabeled, directly under the row's trigger (coo:1041); the sections after
- * it are separated by thin labeled rules. The File changes rule is also a
+ * it are separated by thin labeled rules. The files-changed rule is also a
  * disclosure trigger that starts closed (chevron left of the label), because
  * its body is unbounded; deliveries and the terminal session stay flat and
  * always visible, and the terminal session is omitted entirely when the run
- * has none. Beyond those, only secondary rows (earlier runs, individual
- * file-change cards) fold. Empty states are one-line muted italics
- * so "ran with no changes" reads distinctly from "still loading".
+ * has none. Beyond those, only secondary rows (earlier runs, capture details)
+ * fold. Empty states are one-line muted italics so "nothing captured" and
+ * "tracking unavailable" read distinctly from "still loading".
  *
  * Every stack container is `min-w-0` and the row's panel forces
  * `overflow-wrap: anywhere`, so a single unbroken token in an instruction, a
@@ -322,7 +292,7 @@ function EarlierRuns({
  * Evidence is split into runs by `objective.reopenedAt` (contract v133), with
  * delivery-order inference as the fallback for objectives that predate the
  * column; see `groupEvidenceByRun`. The latest run is the flat stack; earlier
- * runs are collapsed "Run 1 of 2" rows.
+ * runs are collapsed "Run 1 of 2" rows. The file list spans every run.
  */
 export function ObjectiveEvidenceSections({
   objective,
@@ -344,38 +314,31 @@ export function ObjectiveEvidenceSections({
   const runs = groupEvidenceByRun(evidence, objective, { keepEmptyLatest: mode !== 'history' });
 
   if (mode === 'history') {
-    if (runs.length === 0) return null;
-    if (runs.length === 1) {
-      return (
-        <RunStack
-          objective={objective}
-          run={runs[0]!}
-          loading={loading}
-          expandLatestDelivery
-          truncation={truncation}
-        />
-      );
-    }
-    // Several previous runs: every one is a row, the most recent open.
     return (
-      <div className="grid min-w-0 gap-1.5">
-        {runs.map((run, index) => (
-          <EarlierRunRow
-            key={run.number}
-            objective={objective}
-            run={run}
-            loading={loading}
-            truncation={truncation}
-            defaultOpen={index === 0}
-          />
-        ))}
+      <div className="grid min-w-0 gap-2">
+        {runs.length === 1 ? (
+          <RunStack run={runs[0]!} loading={loading} expandLatestDelivery truncation={truncation} />
+        ) : runs.length > 1 ? (
+          // Several previous runs: every one is a row, the most recent open.
+          <div className="grid min-w-0 gap-1.5">
+            {runs.map((run, index) => (
+              <EarlierRunRow
+                key={run.number}
+                run={run}
+                loading={loading}
+                truncation={truncation}
+                defaultOpen={index === 0}
+              />
+            ))}
+          </div>
+        ) : null}
+        <ObjectiveFileChanges objective={objective} />
       </div>
     );
   }
 
   const [latest, ...earlier] = runs as [ObjectiveRun, ...ObjectiveRun[]];
   const sections = buildRunSections({
-    objective,
     run: latest,
     loading,
     expandLatestDelivery: mode !== 'active'
@@ -393,21 +356,9 @@ export function ObjectiveEvidenceSections({
             <TruncationNotice notice={truncation.deliveries} />
           </>
         ) : null}
-        <ObjectiveEvidenceSection
-          label="File changes"
-          count={sections.fileChangeCount}
-          trailing={<LiveTag />}
-        >
-          {sections.fileChanges}
-          <TruncationNotice notice={truncation.fileChanges} />
-        </ObjectiveEvidenceSection>
+        <ObjectiveFileChanges objective={objective} trailing={<LiveTag />} />
         {sections.terminalSessions}
-        <EarlierRuns
-          objective={objective}
-          runs={earlier}
-          loading={loading}
-          truncation={truncation}
-        />
+        <EarlierRuns runs={earlier} loading={loading} truncation={truncation} />
         {attachments.length > 0 ? (
           <>
             <ObjectiveEvidenceRule label="Attachments" count={attachments.length} />
@@ -424,12 +375,9 @@ export function ObjectiveEvidenceSections({
       <ObjectiveEvidenceRule label="Deliveries" count={sections.deliveryCount} />
       {sections.deliveries}
       <TruncationNotice notice={truncation.deliveries} />
-      <ObjectiveEvidenceSection label="File changes" count={sections.fileChangeCount}>
-        {sections.fileChanges}
-        <TruncationNotice notice={truncation.fileChanges} />
-      </ObjectiveEvidenceSection>
+      <ObjectiveFileChanges objective={objective} />
       {sections.terminalSessions}
-      <EarlierRuns objective={objective} runs={earlier} loading={loading} truncation={truncation} />
+      <EarlierRuns runs={earlier} loading={loading} truncation={truncation} />
       {attachments.length > 0 ? (
         <>
           <ObjectiveEvidenceRule label="Attachments" count={attachments.length} />

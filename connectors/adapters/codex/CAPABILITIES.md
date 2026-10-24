@@ -6,7 +6,7 @@
 
 **Harness version verified** `0.147.0` · **range** `>=0.124.0` · **scheme** `semver`
 
-**Descriptor digest** `4d4908a81023cf7943ebbcb35d8477751f97d916597adc3bf3cec63bdb58dc4b`
+**Descriptor digest** `b3120edbb3f8a017801de0b9b085c42f05f1d7c335246e224cd283e874ddc542`
 
 > The tier is derived from passing fixtures, never authored. `unsupported` means the harness
 > cannot do it — do not attempt it. `not-implemented` means it is buildable and unbuilt: that is
@@ -59,7 +59,7 @@ path. Runtime file evidence is unavailable for this adapter.
 | `observe.prompt` | ✅ supported | `UserPromptSubmit` | fixtures: `fixtures/normalize-user-prompt.json` |
 | `observe.toolCall` | 🚧 not-implemented | `PreToolUse` | tracked as `latch-engine` |
 | `observe.toolResult` | 🚧 not-implemented | `PostToolUse` | tracked as `latch-engine` |
-| `observe.fileEdit` | ✅ supported | `PostToolUse` | fixtures: `fixtures/normalize-post-tool-use.json`, `fixtures/agent-session-hooks.json`, `fixtures/post-tool-use-hook.json`, `fixtures/post-tool-use-unbound.json` |
+| `observe.fileEdit` | ✅ supported | `PostToolUse` | fixtures: `fixtures/normalize-post-tool-use.json`, `fixtures/normalize-post-tool-use-failed.json`, `fixtures/normalize-post-tool-use-rename.json`, `fixtures/agent-session-hooks.json`, `fixtures/post-tool-use-hook.json`, `fixtures/post-tool-use-unbound.json` |
 | `observe.sessionLifecycle` | 🚧 not-implemented | `SessionStart` | tracked as `latch-engine` |
 | `decide.shell` | 🚧 not-implemented | `PermissionRequest` | tracked as `latch-engine` |
 | `decide.mcp` | 🚧 not-implemented | `PermissionRequest` | tracked as `latch-engine` |

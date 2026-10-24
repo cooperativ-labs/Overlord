@@ -1,7 +1,7 @@
 {
   "fixtureVersion": 1,
   "kind": "normalized-event",
-  "description": "Recorded Codex PostToolUse payload proving file edits are reduced to structural metadata and never leak written content or tool output.",
+  "description": "Codex PostToolUse apply_patch payload in the upstream hook shape (tool_input.command patch text; tool_response text whose first line is `Exit code: 0`). Proves the edit is reduced to structural metadata plus a decoded `ok` outcome and never leaks written content or tool output.",
   "codec": "codec/codex.codec.yaml",
   "occurredAt": "2026-08-01T00:00:00.000Z",
   "payload": {
@@ -12,8 +12,10 @@
     "cwd": "/repo",
     "hook_event_name": "PostToolUse",
     "tool_name": "apply_patch",
-    "tool_input": { "command": "*** Begin Patch\n*** Update File: /repo/src/token.ts\n+const key = 'AKIAIOSFODNN7EXAMPLE';\n*** End Patch" },
-    "tool_response": { "text": "changed with postgres://user:hunter2@db/app" }
+    "tool_input": {
+      "command": "*** Begin Patch\n*** Update File: /repo/src/token.ts\n+const key = 'AKIAIOSFODNN7EXAMPLE';\n*** End Patch"
+    },
+    "tool_response": "Exit code: 0\nWall time: 0.1 seconds\nOutput:\nSuccess. Updated the following files:\nM src/token.ts\nconnected with postgres://user:hunter2@db/app\n"
   },
   "expect": {
     "eventId": "ev_bf289659aca425896e8c26747d35c87e",
@@ -32,6 +34,7 @@
       "tool": "edit",
       "action": "Write a file",
       "paths": ["src/token.ts"],
+      "outcome": "ok",
       "formatterVersion": 1
     }
   },

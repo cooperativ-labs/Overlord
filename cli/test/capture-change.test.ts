@@ -51,10 +51,9 @@ test('captures a direct native path under the canonical objective ledger', () =>
       sessionKey: SESSION_KEY
     }).map(entry => ({
       filePath: entry.filePath,
-      source: entry.source,
-      quality: entry.quality
+      source: entry.source
     })),
-    [{ filePath: 'src/edited.ts', source: 'declared_edit', quality: 'direct' }]
+    [{ filePath: 'src/edited.ts', source: 'declared_edit' }]
   );
   assert.deepEqual(
     captureChangeFromPayload({
@@ -109,6 +108,8 @@ test('captures declared notebook and apply_patch paths without retaining native 
             path.join(workspace, 'generated', 'one.ts') +
             '\nsecret=AKIAIOSFODNN7EXAMPLE\n*** Add File: generated/two.ts\n*** End Patch'
         },
+        tool_response:
+          'Exit code: 0\nWall time: 0.1 seconds\nOutput:\nSuccess. Updated the following files:\nM generated/one.ts\nA generated/two.ts\n',
         cwd: workspace
       }),
       objectiveOverride: OBJECTIVE_DISPLAY_ID,
@@ -127,7 +128,7 @@ test('captures declared notebook and apply_patch paths without retaining native 
   );
 });
 
-test('read callbacks are silent while shell callbacks record unavailable health', () => {
+test('read callbacks are silent while shell callbacks record a shell coverage gap', () => {
   const workspace = makeWorkspace();
   writeFileSync(path.join(workspace, 'generated.ts'), 'generated\n');
 
@@ -183,7 +184,87 @@ test('read callbacks are silent while shell callbacks record unavailable health'
       objectiveId: OBJECTIVE_ID,
       sessionKey: SESSION_KEY
     }).at(-1)?.code,
-    'direct_path_unavailable'
+    'shell_activity_unverified'
+  );
+});
+
+function codexPatchPayload(workspace: string, patch: string, toolResponse?: string): string {
+  return JSON.stringify({
+    hook_event_name: 'PostToolUse',
+    tool_name: 'apply_patch',
+    tool_input: { command: patch },
+    ...(toolResponse === undefined ? {} : { tool_response: toolResponse }),
+    cwd: workspace
+  });
+}
+
+test('Codex apply_patch renames and deletes record both endpoints only on exit code 0', () => {
+  const workspace = makeWorkspace();
+  const patch =
+    '*** Begin Patch\n*** Update File: src/old-name.ts\n*** Move to: src/new-name.ts\n@@\n-old\n+new\n' +
+    '*** Delete File: src/removed.ts\n*** End Patch';
+
+  assert.deepEqual(
+    captureChangeFromPayload({
+      agent: 'codex',
+      rawPayload: codexPatchPayload(
+        workspace,
+        patch,
+        'Exit code: 0\nWall time: 0 seconds\nOutput:\nSuccess. Updated the following files:\nM src/new-name.ts\nD src/removed.ts\n'
+      ),
+      objectiveOverride: OBJECTIVE_DISPLAY_ID,
+      fallbackCwd: workspace
+    }),
+    { recorded: true, objectiveId: OBJECTIVE_ID, files: 3 }
+  );
+  assert.deepEqual(
+    readUnsyncedChangeEvidence({
+      workingDirectory: workspace,
+      objectiveId: OBJECTIVE_ID,
+      sessionKey: SESSION_KEY
+    }).map(entry => entry.filePath),
+    ['src/old-name.ts', 'src/new-name.ts', 'src/removed.ts']
+  );
+});
+
+test('failed and unknown native edit outcomes append no evidence and record bounded gaps', () => {
+  const workspace = makeWorkspace();
+  const patch = '*** Begin Patch\n*** Update File: src/attempted.ts\n@@\n-a\n+b\n*** End Patch';
+  const identity = {
+    workingDirectory: workspace,
+    objectiveId: OBJECTIVE_ID,
+    sessionKey: SESSION_KEY
+  };
+
+  assert.deepEqual(
+    captureChangeFromPayload({
+      agent: 'codex',
+      rawPayload: codexPatchPayload(workspace, patch, 'Exit code: 1\nOutput:\nerror: hunk failed'),
+      objectiveOverride: OBJECTIVE_DISPLAY_ID,
+      fallbackCwd: workspace
+    }),
+    { recorded: false, reason: 'native edit failed' }
+  );
+  assert.equal(readChangeLedgerHealth(identity).at(-1)?.code, 'outcome_partial');
+
+  for (const toolResponse of [
+    undefined,
+    'Success. Updated the following files:\nM src/attempted.ts'
+  ]) {
+    assert.deepEqual(
+      captureChangeFromPayload({
+        agent: 'codex',
+        rawPayload: codexPatchPayload(workspace, patch, toolResponse),
+        objectiveOverride: OBJECTIVE_DISPLAY_ID,
+        fallbackCwd: workspace
+      }),
+      { recorded: false, reason: 'native edit outcome is unavailable' }
+    );
+  }
+  assert.deepEqual(readUnsyncedChangeEvidence(identity), []);
+  assert.deepEqual(
+    readChangeLedgerHealth(identity).map(entry => entry.code),
+    ['outcome_partial', 'outcome_unavailable']
   );
 });
 

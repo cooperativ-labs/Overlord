@@ -33,6 +33,7 @@
       "subject": "notebooks/analysis.ipynb",
       "detail": "26 bytes",
       "paths": ["notebooks/analysis.ipynb"],
+      "outcome": "ok",
       "formatterVersion": 1
     }
   },

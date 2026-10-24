@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { listChangedFilesForReview } from './changes.js';
+import { listObjectiveFileChanges } from './changes.js';
 import { ServiceError } from './errors.js';
 import { createProject } from './projects.js';
 import { recordWork } from './protocol.js';
@@ -37,15 +37,7 @@ describe('recordWork (record completed chat work as a review mission)', () => {
       projectId: project.id,
       objective: 'Build the widget the user asked for.',
       summary: 'Added the widget and wired it up.',
-      changeRationales: [
-        {
-          filePath: 'src/widget.ts',
-          label: 'Add widget',
-          summary: 'New widget module.',
-          why: 'User asked for a widget.',
-          impact: 'Widget renders.'
-        }
-      ]
+      declaredPaths: ['src/widget.ts']
     });
 
     const missionRow = (await db.get(`SELECT status_type FROM missions WHERE id = ?`, [
@@ -67,7 +59,7 @@ describe('recordWork (record completed chat work as a review mission)', () => {
     await db.close();
   });
 
-  it('populates changed_files from rationale paths so the review panel shows them covered', async () => {
+  it('stores explicit paths as sessionless agent declarations and drops unsafe ones', async () => {
     const { db, ctx } = await setup();
     const project = await createProject({ ctx, name: 'Record Coverage' });
 
@@ -76,55 +68,33 @@ describe('recordWork (record completed chat work as a review mission)', () => {
       projectId: project.id,
       objective: 'Ship the feature.',
       summary: 'Shipped it.',
-      changeRationales: [
-        {
-          filePath: 'src/a.ts',
-          label: 'A',
-          summary: 'Changed A.',
-          why: 'Because A.',
-          impact: 'A works.'
-        }
-      ],
-      // An explicit changed-file input with no rationale surfaces as missing_rationale.
-      changedFiles: [
+      declaredPaths: [
+        'src/a.ts',
         null,
-        { filePath: '/private/host-path.ts', vcsStatus: 'M' },
-        { filePath: '.overlord/tmp/scratch.txt', vcsStatus: 'M' },
-        { filePath: 'src/invalid-status.ts', vcsStatus: 'x'.repeat(33) },
-        { filePath: 'src/b.ts', vcsStatus: 'M' }
+        '/private/host-path.ts',
+        '.overlord/tmp/scratch.txt',
+        'src/b.ts'
       ]
     });
 
-    const files = await listChangedFilesForReview({
-      ctx,
-      missionId: mission.id
-    });
-    const byPath = new Map(files.map(file => [file.filePath, file]));
+    const objectiveId = (
+      (await db.get(`SELECT id FROM objectives WHERE mission_id = ?`, [mission.id])) as {
+        id: string;
+      }
+    ).id;
+    const files = await listObjectiveFileChanges({ ctx, missionId: mission.id, objectiveId });
+    const byPath = new Map(files.items.map(file => [file.filePath, file]));
 
-    assert.equal(byPath.get('src/a.ts')?.coverage, 'covered');
-    assert.equal(byPath.get('src/a.ts')?.currentDiffState, 'unknown');
-    assert.equal(byPath.get('src/b.ts')?.coverage, 'missing_rationale');
-    assert.equal(byPath.get('src/b.ts')?.currentDiffState, 'unknown');
-    assert.equal(byPath.get('src/b.ts')?.vcsStatus, 'M');
-    assert.equal(byPath.has('/private/host-path.ts'), false);
-    assert.equal(byPath.has('.overlord/tmp/scratch.txt'), false);
-    assert.equal(byPath.has('src/invalid-status.ts'), false);
-    const rationaleLink = (await db.get(
-      `SELECT changed_file_id FROM change_rationales WHERE mission_id = ? AND file_path = ?`,
-      [mission.id, 'src/a.ts']
-    )) as { changed_file_id: string | null };
-    assert.ok(
-      rationaleLink.changed_file_id,
-      'record-work rationale links to its objective/path row'
-    );
+    assert.deepEqual([...byPath.keys()].sort(), ['src/a.ts', 'src/b.ts']);
+    assert.equal(byPath.get('src/a.ts')?.source, 'agent_declared');
+    assert.equal(byPath.get('src/a.ts')?.resourceKey, null);
+    assert.deepEqual(files.capture.sessions, []);
     const reviewChanges = (await db.all(
       `SELECT entity_type, operation FROM entity_changes
-        WHERE mission_id = ? AND entity_type IN ('changed_file', 'change_rationale')
-        ORDER BY entity_type, seq`,
+        WHERE mission_id = ? AND entity_type = 'changed_file' ORDER BY seq`,
       [mission.id]
     )) as Array<{ entity_type: string; operation: string }>;
     assert.deepEqual(reviewChanges, [
-      { entity_type: 'change_rationale', operation: 'insert' },
       { entity_type: 'changed_file', operation: 'insert' },
       { entity_type: 'changed_file', operation: 'insert' }
     ]);
@@ -132,7 +102,7 @@ describe('recordWork (record completed chat work as a review mission)', () => {
       deliveryId
     ])) as { payload_json: string };
     const warnings = JSON.parse(delivery.payload_json).deliveryReport.warnings as string[];
-    assert.equal(warnings.length, 4);
+    assert.equal(warnings.length, 3);
 
     await db.close();
   });

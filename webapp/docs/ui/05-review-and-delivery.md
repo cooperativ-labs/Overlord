@@ -49,13 +49,17 @@ mission detail when status is `review`).
   lets the reviewer page through prior deliveries; the latest is shown by default.
 
 ### File evidence
-- The core review affordance starts from `changed_files`, so every mechanically
-  observed objective/path row stays visible with source, quality, overlap, and
-  bounded hook health.
-- A `change_rationale` can optionally add `label`, `summary`, `why`, and `impact`.
-  Missing prose is neutral review metadata and never blocks delivery.
+- Each objective shows **Files changed during this objective**: compact rows
+  (basename, directory, optional Native / Declared / Unknown chip) grouped by
+  resource, read from the server objective projection. There is no per-file
+  explanation; the delivery summary explains the work by behavior or component.
+- The list is cumulative objective evidence, including edits later reverted. It
+  is not a Git diff or a delivery-time snapshot, and late sync may extend it.
+- Capture warnings (tracking unbound, configured with no callback, unknown, some
+  tool activity uncaptured), truncation and the empty-versus-unavailable
+  distinction are shown at objective level. None of them blocks delivery.
 - File ownership is never inferred from Git status or a shared checkout. There is
-  no unassigned-workspace bucket, rationale skip, or worktree-wide delta.
+  no worktree-wide delta.
 
 ### Artifacts
 - Grouped by `artifacts.type`: `test_results`, `next_steps`, `note`, `url`,
@@ -105,7 +109,7 @@ mission detail when status is `review`).
 | --- | --- | --- |
 | Delivery summary + history | `GET /missions/:id/deliveries` → `['mission', id, 'deliveries']` | `delivery` insert/update → new delivery card; status badge |
 | Artifacts | within deliveries payload | `artifact` deltas |
-| File evidence | `GET /api/missions/:id/file-changes` (`changed_files` first, optional rationale join) | `changed_file`/`change_rationale` deltas refresh the file list |
+| File evidence | `GET /api/missions/:id/file-changes?objectiveId=` (`ObjectiveFileChangesDto`) | `changed_file` and `agent_session` deltas refresh the objective list |
 | Follow-up thread | `GET /missions/:id/events` | `mission_event` deltas (`ask`, `decision`, `user_follow_up`) |
 | Objective history | `['mission', id]` | `objective` deltas (incl. `pending_delivery`) |
 

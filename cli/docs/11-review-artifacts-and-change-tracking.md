@@ -2,7 +2,7 @@
 
 ## Goal
 
-Port the review record that makes Overlord useful after an agent finishes: delivery summaries, artifacts, shared context, and file-level change rationales.
+Port the review record that makes Overlord useful after an agent finishes: delivery summaries, artifacts, shared context, and a compact list of the files changed during each objective.
 
 ## Delivery Review Requirements
 
@@ -11,7 +11,7 @@ A delivery should preserve:
 - What was asked.
 - What happened.
 - What was delivered.
-- What changed and why.
+- What changed and why, explained by behavior or component in the summary.
 - What verification was run.
 - What still needs follow-up.
 
@@ -19,7 +19,8 @@ Requirements:
 
 - Delivery summary is a narrative, not a command log.
 - Delivery moves the mission to review.
-- Delivery stores artifacts and change rationales as first-class records.
+- Delivery stores the summary, artifacts, and delivery report as first-class records. There is no
+  per-file explanation record; the objective's changed-file evidence is stored separately.
 - Delivery is linked to the objective and, when work happened through an attached agent, the session. `record-work` deliveries may have no session.
 - Follow-up deliveries should not destroy previous delivery history.
 
@@ -62,31 +63,24 @@ Requirements:
 - Support JSON values and strings.
 - Support tags and filtered reads.
 
-## Change Rationale Requirements
+## Delivery Summary And File Evidence
 
-Rationales are optional reviewer annotations for mechanically observed paths:
-
-```json
-{
-  "label": "Short reviewer title",
-  "filePath": "path/to/file.ts",
-  "summary": "What changed.",
-  "why": "Why it changed.",
-  "impact": "Behavioral impact.",
-  "hunks": [{ "header": "@@ -10,6 +10,14 @@" }]
-}
-```
+Contract v165 removed per-file change rationales. Delivery explains the outcome, why it
+matters, verification, and limitations by behavior or component in the summary. Reviewers see
+a separate, cumulative **Files changed during this objective** list grouped by resource.
 
 Rules:
 
-- Changed files are captured mechanically, so delivery neither requires a rationale nor can
-  fail for lacking one.
-- When one is supplied, `filePath`, `label`, `summary`, `why`, and `impact` are all required
-  on that entry; a malformed entry is salvaged per item and returns a warning.
-- `hunks` should be captured when available.
-- Formatting-only changes may remain mechanically observed without a rationale.
+- A summary is the only required delivery input. Tracking gaps and sync failures never block
+  delivery.
+- Before delivering, the agent reads the captured paths once (`ovld protocol changes`), declares
+  only files it knows it changed that capture missed, and writes the summary. A handful of
+  representative paths is enough; there is no exhaustive enumeration gate.
+- `--change-rationales-*`, `--changed-files-*`, and the `changeRationales` / `changedFiles` payload
+  fields are rejected.
 - Do not send `file_changes` as a generic artifact.
-- Record rationales during `update` or during `deliver`.
+- The optional delivery composer may condense the summary and report facts, but it never
+  generates per-file explanations, behavior, or test claims from filenames.
 
 ## Mechanical Changed File Capture
 
@@ -100,33 +94,47 @@ changed:
   record it; neither overwrites nor suppresses the other.
 - `capture-change` requires an explicit objective-bound session. CWD only supplies the workspace
   root and never selects an objective.
-- A native post-tool payload that directly names an edited path records
-  `source=declared_edit`, `quality=direct`. A shell/no-path callback records unavailable health
-  and claims no file. Overlord never promotes a shared-worktree delta to attribution.
-- `source=window_observed`, `quality=window` is reserved for a connector whose strict fixtures
-  and runtime both prove a matched pre/post mutation window; no shipped connector currently does.
-- The owner-only ledger stores normalized workspace-relative paths and bounded source, quality,
-  overlap, window, and hook-health metadata. It never stores or transmits file content, diffs,
-  commands, transcripts, environment values, fingerprints, or absolute host paths.
+- A native post-tool payload that the connector codec normalizes as a file edit **with a
+  successful outcome** records `source=declared_edit` (shown as Native). Failed, blocked, and
+  cancelled calls add no path; unknown outcomes record `outcome_unavailable` and partial failures
+  `outcome_partial`. Shell callbacks record `shell_activity_unverified` (coverage uncertainty,
+  never a claimed write), and other pathless or unmapped callbacks `direct_path_unavailable`.
+  Overlord never promotes a shared-worktree delta to attribution.
+- Known shell, script, and generator outputs, deletes, and both rename endpoints that capture
+  missed are declared with `--paths a,b` or `--paths-file <path|->` (a JSON string array) on
+  `update` or `deliver`, and record `source=agent_declared` (shown as Declared). A later
+  declaration never downgrades native evidence.
+- The owner-only ledger (schema v3) stores normalized workspace-relative paths with source,
+  observation time, bounded hook health, sync state, and per-session capture binding/callback
+  state. It never stores or transmits file content, diffs, commands, transcripts, environment
+  values, fingerprints, or absolute host paths.
 - `.overlordignore` patterns are applied before ledger insertion. Matching paths never enter the
   ledger or reach the backend.
 - Paths under `.overlord/` are always excluded at the same boundary, including ephemeral runtime
   files and `project.json`.
 - `sync-changes` processes bounded batches independently. Invalid items become warnings; valid
   siblings persist. Sync and hook failures are advisory and cannot reject delivery.
-- Run `ovld protocol changes --objective-id <id>` to drain the ledger and inspect
-  `objectiveId`, `synced`, `warning`, `unsyncedEvidence`, and bounded health entries.
+- Run `ovld protocol changes --objective-id <id>` to drain the ledger and read this checkout's
+  evidence (`LocalObjectiveChangesDto`, `scope: local_objective_sessions`): synced and pending
+  paths deduplicated by path, a 200-row cap with pre-cap `total` and `truncated`, sync counts,
+  capture binding, and warnings. `coverage: unavailable` means no local session matched, not
+  that nothing changed.
+- `ovld protocol objective-changes --objective-id <id>` (hosted MCP `overlord_changes`, REST
+  `GET /api/missions/:id/file-changes?objectiveId=`) reads the objective's synchronized evidence
+  across every session, resource, and device (`scope: server_objective`). It cannot see
+  unsynchronized local rows.
 
 ## Review State
 
-- The active changed-file identity is `(objective_id, file_path)` across sessions. A later
-  observation refreshes last-observer provenance instead of creating a duplicate row.
-- A changed-file row can exist without a rationale and remains fully reviewable.
-- Review starts from mechanically observed `changed_files` and joins the latest optional
-  rationale, whether it was recorded during update or delivery. It never starts from rationale
-  prose.
-- `record-work` is the sole path that accepts explicit `changedFiles`, because completed chat work
-  has no attached execution target capable of producing a ledger.
+- The active changed-file identity is `(objective_id, resolved resource, file_path)` across
+  sessions, so the same relative path in two resources stays two rows. A later observation
+  refreshes the last observed time instead of creating a duplicate row.
+- Rows are cumulative objective evidence, including edits later reverted. They are not a Git
+  diff, a delivery-time snapshot, or proof of exclusive ownership; late sync may extend them.
+- `source` is `declared_edit` (Native), `agent_declared` (Declared), or `null` (Unknown, for
+  historical rows whose provenance could not be established).
+- `record-work` accepts explicit `declaredPaths`, recorded as Declared with no session, because
+  completed chat work has no attached execution target capable of producing a ledger.
 
 Future web/desktop requirements are documented in [web-app.md](../../webapp/docs/web-app.md).
 
@@ -139,7 +147,7 @@ Humans should be able to review:
 - Blocking questions and answers.
 - Delivery summary.
 - Artifacts.
-- Changed files, attribution metadata, hook health, and optional rationales.
+- Changed files by resource, their Native / Declared / Unknown source, and capture or sync warnings.
 - Follow-up objectives.
 
 CLI review commands can be added before UI:
@@ -148,7 +156,7 @@ CLI review commands can be added before UI:
 - `ovld mission events <id>`
 - `ovld mission deliveries <id>`
 - `ovld mission artifacts <id>`
-- `ovld mission rationales <id>`
+- `ovld mission file-changes <id>`
 
 Agents update an existing artifact in place with
 `ovld protocol update-artifact` (or MCP `overlord_update_artifact`) rather than
@@ -166,11 +174,11 @@ Requirements:
 - Terminal output should only be persisted when a user or agent records it.
 - Secrets should not be pasted into missions, artifacts, updates, or shared context.
 - Attachments are explicit uploads/imports.
-- Change rationales store descriptions and hunk headers, not necessarily full file contents.
+- Changed-file evidence stores paths and bounded provenance metadata, never file contents.
 
 ## Acceptance Criteria
 
 - A delivered mission can be reviewed without opening the original agent chat.
-- Mechanically observed paths remain reviewable with or without optional rationale prose.
+- The changed-file list distinguishes empty evidence, unavailable tracking, and truncated results.
 - A later objective can read shared context written by an earlier objective.
 - Artifacts and attachments are distinguishable.

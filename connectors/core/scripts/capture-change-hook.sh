@@ -1,9 +1,11 @@
 #!/bin/bash
 # Overlord post-tool capture callback. `capture-change --agent __OVERLORD_ADAPTER_KEY__`
-# applies the connector-owned codec; only a normalized `file.edited` path becomes
-# objective-bound, non-exclusive `declared_edit`/`direct` evidence. Normalized reads,
-# searches, and fetches are ignored. Mutation-capable callbacks without a normalized edit
-# path, plus shell, generic, unknown, and unmapped callbacks, record unavailable health.
+# applies the connector-owned codec; only a normalized `file.edited` path whose outcome is
+# `ok` (decoded from the payload, or guaranteed by a success-only hook) becomes
+# objective-bound, non-exclusive `declared_edit` evidence. Every scoped callback, including a
+# harmless read, records callback observation. Failed/cancelled edits record outcome_partial,
+# unknown outcomes outcome_unavailable, shell calls shell_activity_unverified, and other
+# no-path callbacks direct_path_unavailable; none of them appends a path.
 
 OBJECTIVE_REF="${OVERLORD_OBJECTIVE_ID:-}"
 

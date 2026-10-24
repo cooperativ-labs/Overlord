@@ -82,7 +82,9 @@ test('deduplicates workflow invalidations across objective, request, and session
     ['mission', 'mission-1'],
     ['project', 'project-1', 'missions'],
     ['activity-feed'],
-    ['inbox-missions']
+    ['inbox-missions'],
+    // Capture diagnostics ride on the objective file-change read.
+    ['mission', 'mission-1', 'file-changes']
   ]);
 });
 
@@ -168,7 +170,7 @@ test('routes durable notification changes to the profile-owned history query', (
   assert.deepEqual(calls, [['notifications']]);
 });
 
-test('routes changed-file evidence and rationale annotations to the mission file list', () => {
+test('routes changed-file evidence to the mission file-change prefix', () => {
   const { client, calls } = fakeClient();
 
   const mode = invalidateRealtimeChanges(client, [
@@ -176,13 +178,7 @@ test('routes changed-file evidence and rationale annotations to the mission file
       entityType: 'changed_file',
       entityId: 'changed-file-1',
       objectiveId: 'objective-1',
-      changedFields: ['observed_metadata_json']
-    }),
-    change({
-      entityType: 'change_rationale',
-      entityId: 'rationale-1',
-      objectiveId: 'objective-1',
-      changedFields: []
+      changedFields: ['source', 'last_observed_at']
     })
   ]);
 

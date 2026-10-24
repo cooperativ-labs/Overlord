@@ -127,13 +127,19 @@ function routeChange(change: EntityChangeDto): QueryKey[] | null {
       if (!missionId) return null;
       return [keys.missionDeliveries(missionId)];
     }
-    case 'changed_file':
-    case 'change_rationale': {
+    case 'changed_file': {
       const missionId = missionIdFor(change);
       if (!missionId) return null;
       return [keys.missionFileChanges(missionId)];
     }
-    case 'agent_session':
+    case 'agent_session': {
+      // Capture binding, first callback and health live on the session row and
+      // ride on the objective file-change read, so refresh it with the workflow.
+      const workflowKeys = missionWorkflowKeys(change);
+      const missionId = missionIdFor(change);
+      if (!missionId) return workflowKeys;
+      return [...(workflowKeys ?? []), keys.missionFileChanges(missionId)];
+    }
     case 'execution_request': {
       return missionWorkflowKeys(change);
     }

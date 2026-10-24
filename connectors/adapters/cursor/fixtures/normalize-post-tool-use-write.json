@@ -34,6 +34,7 @@
       "subject": "config/secrets.ts",
       "detail": "99 bytes",
       "paths": ["config/secrets.ts"],
+      "outcome": "ok",
       "formatterVersion": 1
     }
   },

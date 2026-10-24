@@ -1,11 +1,11 @@
 ---
 title: Review deliveries
-description: Evaluate agent work with its original objective and the reason for each change.
+description: Evaluate agent work with its original objective, delivery summary, and changed files.
 ---
 
 The delivery is more than a completion message. It brings together the original
-objective, progress history, artifacts, changed files, and the agent's reason
-for meaningful changes. Review from the mission so you have that context in
+objective, progress history, the agent's narrative summary, artifacts, and the
+files changed during the objective. Review from the mission so you have that context in
 one place.
 
 ## What to check
@@ -13,22 +13,38 @@ one place.
 - Does the delivery address the objective that was actually requested?
 - Did the agent record an important limitation, decision, or follow-up?
 - Do the reported file changes make sense for the task?
-- Does the rationale explain why the important changes were needed?
+- Does the summary explain the outcome, why it was needed, how it was verified,
+  and any limitations?
 - Are tests, screenshots, links, or other artifacts available when relevant?
 - If an earlier objective left a plan artifact, did a follow-up revise it in
   place (rather than leaving a stale plan and a duplicate)?
 
-## File changes
+## Files changed during this objective
 
-When an objective-bound connector directly observes an edited path, Overlord
-stores a file-level **change record** with source, quality, overlap, hook health,
-and optional reviewer rationale. Those records are separate from chat narrative
-and link back to the objective that produced them.
+The delivery summary describes the work by behavior or component. Separately,
+the review shows a cumulative **Files changed during this objective** list,
+grouped by resource. Each row shows the resource, the relative path, and, when
+known, a source chip:
 
-Overlord does not infer ownership from the shared worktree. A recorded path can
-open the current local diff when that resource is available; missing prose or
-unavailable hook evidence remains visible review metadata and never blocks
-delivery.
+- **Native** — at least one successful native edit callback from the agent's connector.
+- **Declared** — the agent declared the path (for example a shell or generator
+  output, a delete, or both ends of a rename).
+- **Unknown** — a historical row whose provenance could not be established.
+
+Read the list for what it is. It is not a Git diff, not a snapshot taken at
+delivery, and not proof that the objective exclusively owns a file. A late sync
+may still extend it, and edits that were later reverted still appear. Overlord
+never infers ownership from the shared worktree.
+
+When tracking was incomplete, the review says so instead of guessing:
+
+- "Automatic file tracking was not active for this session."
+- "File tracking is configured but no callback has been observed."
+- "Automatic file tracking availability is unknown."
+- "Some tool activity could not be captured; declared paths may be needed."
+- "Some captured paths have not synchronized."
+
+These warnings are review context; they never block delivery.
 
 ## Inspect a delivery from the terminal
 
@@ -36,12 +52,12 @@ delivery.
 ovld mission context <mission-id>
 ovld mission deliveries <mission-id>
 ovld mission artifacts <mission-id>
-ovld mission rationales <mission-id>
+ovld mission file-changes <mission-id>
 ovld changes status --mission-id <mission-id>
 ```
 
-Use `ovld changes rationales --mission-id <mission-id>` when you only need the
-recorded explanations for file changes.
+Use `ovld changes status --objective-id <objective-id>` for the server's
+changed-file list for one objective, across sessions, resources, and devices.
 
 ## Continue instead of restarting
 

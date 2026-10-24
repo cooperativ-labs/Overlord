@@ -36,11 +36,14 @@ function countLabel(count: number, singular: string, plural: string): string {
 export function ObjectiveHistoryStrip({
   objective,
   evidence,
+  fileCount = 0,
   loading,
   truncation
 }: {
   objective: ObjectiveDto;
   evidence: ObjectiveEvidence;
+  /** Pre-cap total from the objective file-change read. */
+  fileCount?: number;
   loading: ObjectiveEvidenceLoading;
   truncation?: ObjectiveEvidenceTruncation;
 }) {
@@ -53,9 +56,7 @@ export function ObjectiveHistoryStrip({
     evidence.deliveries.length > 0
       ? countLabel(evidence.deliveries.length, 'delivery', 'deliveries')
       : null,
-    evidence.fileChanges.length > 0
-      ? countLabel(evidence.fileChanges.length, 'file', 'files')
-      : null,
+    fileCount > 0 ? countLabel(fileCount, 'file', 'files') : null,
     evidence.terminalSessions.length > 0
       ? countLabel(evidence.terminalSessions.length, 'session', 'sessions')
       : null

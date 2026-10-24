@@ -1,0 +1,42 @@
+{
+  "fixtureVersion": 1,
+  "kind": "normalized-event",
+  "description": "Codex PostToolUse for an apply_patch that ran and exited non-zero (`Exit code: 1`). The codec decodes outcome `error`, so capture appends no native evidence for the attempted path and records outcome_partial instead. The tool output (with a credential) never enters the envelope.",
+  "codec": "codec/codex.codec.yaml",
+  "occurredAt": "2026-08-01T00:00:00.000Z",
+  "payload": {
+    "session_id": "codex-session-1",
+    "turn_id": "turn-1",
+    "tool_use_id": "call-3",
+    "transcript_path": "/Users/jake/.codex/sessions/secret.jsonl",
+    "cwd": "/repo",
+    "hook_event_name": "PostToolUse",
+    "tool_name": "apply_patch",
+    "tool_input": {
+      "command": "*** Begin Patch\n*** Update File: /repo/src/attempted.ts\n@@\n-const a = 1;\n+const a = 'AKIAIOSFODNN7EXAMPLE';\n*** End Patch"
+    },
+    "tool_response": "Exit code: 1\nWall time: 0.1 seconds\nOutput:\nerror: hunk failed near postgres://user:hunter2@db/app\n"
+  },
+  "expect": {
+    "eventId": "ev_4f0111e1e5440a7f448e6fda0caaaf82",
+    "producerSequence": null,
+    "occurredAt": "2026-08-01T00:00:00.000Z",
+    "kind": "file.edited",
+    "severity": "info",
+    "nativeEvent": "PostToolUse",
+    "nativeTurnId": "turn-1",
+    "nativeCallId": "call-3",
+    "subagentId": null,
+    "correlationId": "codex-session-1",
+    "origin": "agent",
+    "summary": "Write a file",
+    "payload": {
+      "tool": "edit",
+      "action": "Write a file",
+      "paths": ["src/attempted.ts"],
+      "outcome": "error",
+      "formatterVersion": 1
+    }
+  },
+  "mustNotContain": ["AKIAIOSFODNN7EXAMPLE", "hunter2", "secret.jsonl", "/Users/jake"]
+}

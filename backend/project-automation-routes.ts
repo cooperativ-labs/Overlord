@@ -20,7 +20,7 @@ const ALLOWED: readonly [string, RegExp][] = [
   ['POST', /^\/mcp$/],
   [
     'POST',
-    /^\/api\/protocol\/(?:create|load-context|search-missions|search|discover-project|statuses|list-deliveries|attachment-list|attachment-download-url|auth-status)$/
+    /^\/api\/protocol\/(?:create|load-context|search-missions|search|discover-project|statuses|list-deliveries|objective-changes|attachment-list|attachment-download-url|auth-status)$/
   ]
 ];
 

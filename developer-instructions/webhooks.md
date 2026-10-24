@@ -102,9 +102,9 @@ Every delivery has the same envelope shape; `type` tells you which event it is.
     },
     "artifacts": [{ "type": "next_steps", "label": "…", "content": "…" }]
   },
-  "changedFiles": [{ "filePath": "lib/api.ts", "vcsStatus": "modified" }],
-  "changeRationales": [
-    { "filePath": "lib/api.ts", "label": "…", "summary": "…", "why": "…", "impact": "…" }
+  "changedFiles": [
+    // full mode only; cumulative objective path evidence, never per-file prose
+    { "filePath": "lib/api.ts", "resourceKey": "primary", "source": "declared_edit" }
   ],
   "missionEvents": [{ "id": "…", "type": "update", "summary": "…", "createdAt": "…" }],
   "links": {
@@ -117,7 +117,7 @@ Every delivery has the same envelope shape; `type` tells you which event it is.
 ```
 
 - **`thin` mode** sends only ids and `links` — the fields marked "full mode only" above,
-  including `delivery.report`, plus `changedFiles`/`changeRationales`/`missionEvents`, are
+  including `delivery.report`, plus `changedFiles`/`missionEvents`, are
   omitted entirely. Nothing about a mission ever rests on a third-party endpoint unless it pulls
   with a valid token.
 - **`full` mode** sends the snapshot above. Long arrays are capped (currently 50 entries) with a
@@ -125,6 +125,11 @@ Every delivery has the same envelope shape; `type` tells you which event it is.
 - `delivery.report` is the normalized, versioned read projection: legacy deliveries receive a
   deterministic report, while newly composed deliveries carry their current presentation. Raw
   `deliveries.payload_json` and internal worker metadata are never included.
+- `changedFiles` is the objective's cumulative path evidence: `filePath`, the session-resolved
+  `resourceKey` (or `null`), and `source` — `declared_edit` (native capture), `agent_declared`
+  (declared by the agent), or `null` (historical provenance unknown). It is not a Git diff or
+  a delivery-time snapshot, carries no per-file explanation, and may grow if evidence syncs
+  after delivery. Contract v165 removed `changeRationales` and `vcsStatus`.
 - `objective`/`session`/`delivery` are present only when the firing event carries them (e.g.
   `mission.status_changed` has no `delivery`).
 

@@ -1,4 +1,10 @@
-import { bindBool, UPDATE_EVENT_TYPES, UPDATE_PHASES } from '@overlord/database';
+import {
+  CAPTURE_GAP_CODES,
+  type CaptureBindingState,
+  type FileChangeSource,
+  MAX_CAPTURE_HEALTH_CODES
+} from '@overlord/contract';
+import { UPDATE_EVENT_TYPES, UPDATE_PHASES } from '@overlord/database';
 import { createHash } from 'node:crypto';
 
 import {
@@ -111,26 +117,21 @@ const PROTOCOL_WORKFLOW = `
 2. Post progress with \`ovld protocol update\` or liveness with \`ovld protocol heartbeat\`.
 3. Ask blocking questions with \`ovld protocol ask\` and stop work only when no safe progress remains.
 4. Deliver with \`ovld protocol deliver\` when work is complete. A summary is the only required
-   delivery input; optional change rationales use the canonical \`filePath\` field.
+   delivery input; explain the outcome by behavior or component, not file by file.
 5. Do not stage or commit changes unless explicitly instructed to do so.
 6. Do not continue implementation after delivery without \`--begin-follow-up-work\`.
 
-Optional change-rationale format:
-  Pass an array via \`--change-rationales-json '[ ... ]'\` (or stream it on stdin with
-  \`--change-rationales-file -\` for large arrays). Each entry is a JSON object — use these
-  exact field names:
-    - \`filePath\` (string, required) — repo-relative path of the changed file.
-    - \`label\`     (string, required) — short reviewer-facing title for the change.
-    - \`summary\`   (string, required) — what changed. This field is named \`summary\`, NOT
-      \`rationale\`; an annotation with unknown or retired keys is ignored with a bounded warning.
-    - \`why\`       (string, required) — why the change was made.
-    - \`impact\`    (string, required) — behavioral impact of the change.
-    - \`hunks\`     (optional) — array of { "header": "@@ -10,6 +10,14 @@" } diff-hunk headers.
-  Do NOT wrap entries under a \`rationale\` key, and do not send a top-level \`file_changes\`
-  artifact. Example single entry:
-    {"filePath":"src/api.ts","label":"Add retry","summary":"Added retry with backoff.","why":"Transient failures.","impact":"Requests retry up to 3x."}
-  Changed files are synchronized from the objective ledger before delivery; do not send changed-file,
-  observed-dirty-path, no-file-change, or rationale-skip inputs with update or deliver.
+Changed files:
+  Overlord keeps a cumulative list of the files changed during this objective from native
+  connector callbacks plus any paths you declare. It is not a Git diff and needs no exhaustive
+  enumeration. Before delivering, read it once with \`ovld protocol changes --objective-id <id>\`
+  (this checkout's sessions) or the server \`objective-changes\` read (synchronized history).
+  Never diff or status-scan the shared worktree, and never send changed-file,
+  observed-dirty-path, or no-file-change inputs. When capture reports shell, unsupported, or
+  partial tool activity, declare only the files you know you changed that it missed (script and
+  generator outputs, deletes, both rename endpoints) with \`--paths a,b\` or \`--paths-file\`
+  (a JSON string array) on the same update or deliver call; they are labelled Declared. When
+  unsure, state the coverage gap in the summary instead of guessing.
 
 Delivery evidence:
   Every delivery should also provide a \`deliveryReport.agentReport\` in \`--payload-json\` or
@@ -666,7 +667,8 @@ export async function attachSession({
   executionRequestId,
   executionTargetId = null,
   sessionChannelId = null,
-  objectiveId = null
+  objectiveId = null,
+  captureBindingState = 'unknown'
 }: {
   ctx: ServiceContext;
   missionId: string;
@@ -690,7 +692,21 @@ export async function attachSession({
   sessionChannelId?: string | null;
   /** UUID or `{mission.display_id}.{display_key}`. Pins attach; skips rediscovery. */
   objectiveId?: string | null;
+  /**
+   * Declared capture binding observed by the attaching client: `bound` when its
+   * explicit objective environment matches, `unbound` when absent or mismatched,
+   * `unknown` for hosted attaches with no local information. Configuration
+   * evidence only — it never claims a hook is installed or has run.
+   */
+  captureBindingState?: CaptureBindingState;
 }): Promise<AttachResponse & { sessionKey: string }> {
+  if (!CAPTURE_BINDING_STATES.includes(captureBindingState)) {
+    throw new ServiceError(
+      'captureBindingState must be bound, unbound, or unknown',
+      'validation_error',
+      400
+    );
+  }
   const mission = await getMissionSummary({ ctx, missionId });
   const objectives = await listObjectives({ ctx, missionId: mission.id });
   const explicitPin = Boolean(objectiveId?.trim() || executionRequestId?.trim());
@@ -741,6 +757,17 @@ export async function attachSession({
            WHERE id = ?`,
         [externalSessionId, nowIso(), existing.id]
       );
+    }
+    if (captureBindingState !== 'unknown') {
+      await ctx.db.transaction(async tx => {
+        await writeCaptureDiagnostics({
+          ctx: { ...ctx, db: tx },
+          mission: context.mission,
+          session: existing,
+          diagnostics: { bindingState: captureBindingState, health: [] },
+          now: nowIso()
+        });
+      });
     }
     const linked = await linkExecutionRequestToSession({
       ctx,
@@ -866,8 +893,8 @@ export async function attachSession({
            (id, workspace_id, project_id, mission_id, objective_id,
             session_key_prefix, session_key_hash, agent_identifier, model_identifier,
             connection_method, external_session_id, phase, delivery_state, started_at, last_heartbeat_at,
-            metadata_json, created_by_workspace_user_id, created_at, updated_at, revision)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'execute', 'not_delivered', ?, ?, '{}', ?, ?, ?, 1)`,
+            metadata_json, capture_binding_state, created_by_workspace_user_id, created_at, updated_at, revision)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'execute', 'not_delivered', ?, ?, '{}', ?, ?, ?, ?, 1)`,
       [
         sessionId,
         ctx.workspace.id,
@@ -882,6 +909,7 @@ export async function attachSession({
         externalSessionId ?? null,
         now,
         now,
+        captureBindingState,
         ctx.actorWorkspaceUserId,
         now,
         now
@@ -1402,31 +1430,29 @@ export async function heartbeatSession({
 
 const MAX_SYNC_CHANGE_ITEMS = 25;
 const MAX_SYNC_KEY_LENGTH = 200;
-const MAX_TOOL_WINDOW_ID_LENGTH = 200;
 const MAX_HOOK_HEALTH_LENGTH = 160;
 const MAX_SYNC_KEYS_PER_FILE = 32;
+const MAX_DECLARED_PATHS = 100;
+const MAX_PROTOCOL_EVIDENCE_WARNINGS = 12;
+const MAX_CAPTURE_HEALTH_ITEMS = 32;
 const HOOK_HEALTH_PATTERN = /^[a-z0-9][a-z0-9_.:-]*$/i;
 const SYNC_CHANGE_ALLOWED_KEYS = new Set([
   'filePath',
   'idempotencyKey',
   'source',
-  'quality',
-  'overlap',
-  'toolWindowId',
   'observedAt',
   'hookHealth'
 ]);
+const CAPTURE_BINDING_STATES: readonly CaptureBindingState[] = ['bound', 'unbound', 'unknown'];
+const ISO_UTC_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/;
+const DECLARED_PATH_HEALTH = 'agent_declared';
 
-export type ChangeEvidenceSource = 'declared_edit' | 'window_observed';
-export type ChangeEvidenceQuality = 'direct' | 'window';
+export type ChangeEvidenceSource = FileChangeSource;
 
 type SyncChangeInput = {
   filePath?: unknown;
   idempotencyKey?: unknown;
   source?: unknown;
-  quality?: unknown;
-  overlap?: unknown;
-  toolWindowId?: unknown;
   observedAt?: unknown;
   hookHealth?: unknown;
 };
@@ -1440,24 +1466,19 @@ type SyncChangeOutcome = {
 
 type ValidSyncChange = {
   filePath: string;
-  idempotencyKey: string;
+  /** Null for declarations, which are naturally idempotent (they only refresh `observedAt`). */
+  idempotencyKey: string | null;
   source: ChangeEvidenceSource;
-  quality: ChangeEvidenceQuality;
-  overlap: boolean;
-  toolWindowId?: string;
   observedAt?: string;
   hookHealth?: string;
 };
 
-type StoredChangeEvidence = {
-  source?: ChangeEvidenceSource;
-  quality?: ChangeEvidenceQuality;
-  overlap?: boolean;
-  toolWindowId?: string;
-  observedAt?: string;
-  hookHealth?: string;
-  syncKeys: string[];
-};
+/** Native evidence outranks a declaration; unknown historical provenance outranks nothing. */
+function sourceStrength(source: string | null): number {
+  if (source === 'declared_edit') return 2;
+  if (source === 'agent_declared') return 1;
+  return 0;
+}
 
 function normalizeRepoRelativePath(value: unknown): string | null {
   return isExactEvidencePath(value) ? value : null;
@@ -1474,6 +1495,27 @@ function normalizeSyncKey(value: unknown): string | null {
     return null;
   }
   return value;
+}
+
+function normalizeHealthCode(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (
+    !trimmed ||
+    trimmed.length > MAX_HOOK_HEALTH_LENGTH ||
+    hasControlCharacters(trimmed) ||
+    !HOOK_HEALTH_PATTERN.test(trimmed)
+  ) {
+    return null;
+  }
+  return trimmed;
+}
+
+/** Canonical millisecond UTC ISO string (the storage format), or null when malformed. */
+function normalizeObservedAt(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length > 64 || !ISO_UTC_PATTERN.test(value)) return null;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? null : new Date(parsed).toISOString();
 }
 
 function readSyncChangeIdentity(value: unknown): {
@@ -1493,7 +1535,7 @@ function readSyncChangeIdentity(value: unknown): {
 function validateSyncChange(
   value: unknown
 ):
-  | { change: ValidSyncChange }
+  | { change: ValidSyncChange & { idempotencyKey: string } }
   | { warning: string; filePath: string | null; idempotencyKey: string | null } {
   const identity = readSyncChangeIdentity(value);
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -1503,7 +1545,8 @@ function validateSyncChange(
   if (Object.keys(input).some(key => !SYNC_CHANGE_ALLOWED_KEYS.has(key))) {
     return {
       ...identity,
-      warning: 'change evidence contains unsupported fields'
+      warning:
+        'change evidence contains unsupported fields (quality, overlap, and toolWindowId are retired)'
     };
   }
   const filePath = normalizeRepoRelativePath(input.filePath);
@@ -1525,216 +1568,117 @@ function validateSyncChange(
   if (!idempotencyKey) {
     return { ...identity, filePath, warning: 'idempotencyKey must be a bounded string' };
   }
-  if (input.source !== 'declared_edit' && input.source !== 'window_observed') {
+  if (input.source !== 'declared_edit' && input.source !== 'agent_declared') {
     return {
       ...identity,
       filePath,
       idempotencyKey,
-      warning: 'source must be declared_edit or window_observed'
+      warning: 'source must be declared_edit or agent_declared'
     };
   }
-  if (input.quality !== 'direct' && input.quality !== 'window') {
-    return { ...identity, filePath, idempotencyKey, warning: 'quality must be direct or window' };
+  let observedAt: string | undefined;
+  if (input.observedAt !== undefined) {
+    const normalized = normalizeObservedAt(input.observedAt);
+    if (!normalized) {
+      return {
+        ...identity,
+        filePath,
+        idempotencyKey,
+        warning: 'observedAt must be a bounded UTC ISO timestamp'
+      };
+    }
+    observedAt = normalized;
   }
-  if (
-    (input.source === 'declared_edit' && input.quality !== 'direct') ||
-    (input.source === 'window_observed' && input.quality !== 'window')
-  ) {
-    return {
-      ...identity,
-      filePath,
-      idempotencyKey,
-      warning: 'source and quality do not describe the same evidence class'
-    };
-  }
-  if (input.overlap !== undefined && typeof input.overlap !== 'boolean') {
-    return { ...identity, filePath, idempotencyKey, warning: 'overlap must be a boolean' };
-  }
-  if (
-    input.toolWindowId !== undefined &&
-    (typeof input.toolWindowId !== 'string' ||
-      !input.toolWindowId.trim() ||
-      input.toolWindowId.length > MAX_TOOL_WINDOW_ID_LENGTH ||
-      hasControlCharacters(input.toolWindowId))
-  ) {
-    return {
-      ...identity,
-      filePath,
-      idempotencyKey,
-      warning: 'toolWindowId must be a bounded string'
-    };
-  }
-  if (
-    input.observedAt !== undefined &&
-    (typeof input.observedAt !== 'string' ||
-      input.observedAt.length > 64 ||
-      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/.test(input.observedAt) ||
-      Number.isNaN(Date.parse(input.observedAt)))
-  ) {
-    return {
-      ...identity,
-      filePath,
-      idempotencyKey,
-      warning: 'observedAt must be a bounded UTC ISO timestamp'
-    };
-  }
-  if (
-    input.hookHealth !== undefined &&
-    (typeof input.hookHealth !== 'string' ||
-      !input.hookHealth.trim() ||
-      input.hookHealth.length > MAX_HOOK_HEALTH_LENGTH ||
-      hasControlCharacters(input.hookHealth) ||
-      !HOOK_HEALTH_PATTERN.test(input.hookHealth.trim()))
-  ) {
-    return {
-      ...identity,
-      filePath,
-      idempotencyKey,
-      warning: 'hookHealth must be a bounded string'
-    };
+  let hookHealth: string | undefined;
+  if (input.hookHealth !== undefined) {
+    const code = normalizeHealthCode(input.hookHealth);
+    if (!code) {
+      return {
+        ...identity,
+        filePath,
+        idempotencyKey,
+        warning: 'hookHealth must be a bounded string'
+      };
+    }
+    hookHealth = code;
   }
   return {
     change: {
       filePath,
       idempotencyKey,
       source: input.source,
-      quality: input.quality,
-      overlap: input.overlap ?? false,
-      ...(typeof input.toolWindowId === 'string'
-        ? { toolWindowId: input.toolWindowId.trim() }
-        : {}),
-      ...(typeof input.observedAt === 'string' ? { observedAt: input.observedAt } : {}),
-      ...(typeof input.hookHealth === 'string' ? { hookHealth: input.hookHealth.trim() } : {})
+      ...(observedAt ? { observedAt } : {}),
+      ...(hookHealth ? { hookHealth } : {})
     }
   };
 }
 
-function parseStoredChangeEvidence(value: string | null): StoredChangeEvidence {
-  let parsed: Record<string, unknown> = {};
+function parseStoredSyncKeys(value: string | null | undefined): string[] {
   try {
-    const candidate = JSON.parse(value ?? '{}') as unknown;
-    if (typeof candidate === 'object' && candidate !== null && !Array.isArray(candidate)) {
-      parsed = candidate as Record<string, unknown>;
-    }
+    const parsed = JSON.parse(value ?? '[]') as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(
+        (key): key is string =>
+          typeof key === 'string' &&
+          key.length > 0 &&
+          key.length <= MAX_SYNC_KEY_LENGTH &&
+          !hasControlCharacters(key)
+      )
+      .slice(-MAX_SYNC_KEYS_PER_FILE);
   } catch {
-    parsed = {};
+    return [];
   }
-  const source = ['declared_edit', 'window_observed'].includes(String(parsed.source))
-    ? (parsed.source as StoredChangeEvidence['source'])
-    : undefined;
-  const quality =
-    parsed.quality === 'direct' || parsed.quality === 'window' ? parsed.quality : undefined;
-  const boundedString = (candidate: unknown, maxLength: number): string | undefined =>
-    typeof candidate === 'string' &&
-    candidate.length <= maxLength &&
-    !hasControlCharacters(candidate)
-      ? candidate
-      : undefined;
-  return {
-    ...(source ? { source } : {}),
-    ...(quality ? { quality } : {}),
-    ...(typeof parsed.overlap === 'boolean' ? { overlap: parsed.overlap } : {}),
-    ...(boundedString(parsed.toolWindowId, MAX_TOOL_WINDOW_ID_LENGTH)
-      ? { toolWindowId: boundedString(parsed.toolWindowId, MAX_TOOL_WINDOW_ID_LENGTH) }
-      : {}),
-    ...(boundedString(parsed.observedAt, 64)
-      ? { observedAt: boundedString(parsed.observedAt, 64) }
-      : {}),
-    ...(boundedString(parsed.hookHealth, MAX_HOOK_HEALTH_LENGTH)
-      ? { hookHealth: boundedString(parsed.hookHealth, MAX_HOOK_HEALTH_LENGTH) }
-      : {}),
-    syncKeys: Array.isArray(parsed.syncKeys)
-      ? parsed.syncKeys
-          .filter(
-            (key): key is string =>
-              typeof key === 'string' &&
-              key.length > 0 &&
-              key.length <= MAX_SYNC_KEY_LENGTH &&
-              !hasControlCharacters(key)
-          )
-          .slice(-MAX_SYNC_KEYS_PER_FILE)
-      : []
-  };
 }
 
-function evidenceStrength(source: StoredChangeEvidence['source']): number {
-  if (source === 'declared_edit') return 3;
-  if (source === 'window_observed') return 2;
-  return 0;
-}
-
-function mergeStoredChangeEvidence({
-  existing,
-  incoming
-}: {
-  existing: StoredChangeEvidence;
-  incoming: ValidSyncChange;
-}): StoredChangeEvidence {
-  const incomingIsStrongest =
-    evidenceStrength(incoming.source) >= evidenceStrength(existing.source);
-  const strongest = incomingIsStrongest ? incoming : existing;
-  return {
-    source: strongest.source,
-    quality: strongest.quality,
-    overlap: existing.overlap === true || incoming.overlap,
-    ...(strongest.toolWindowId ? { toolWindowId: strongest.toolWindowId } : {}),
-    ...(strongest.observedAt ? { observedAt: strongest.observedAt } : {}),
-    ...((incoming.hookHealth ?? existing.hookHealth)
-      ? { hookHealth: incoming.hookHealth ?? existing.hookHealth }
-      : {}),
-    syncKeys: [...existing.syncKeys, incoming.idempotencyKey].slice(-MAX_SYNC_KEYS_PER_FILE)
-  };
-}
-
-/** Upsert one validated objective-ledger observation inside the caller's transaction. */
+/**
+ * Upsert one validated observation inside the caller's transaction. Identity is
+ * objective + resolved resource + path; the resource comes from the authorized
+ * session (or is null for sessionless declarations), never from the caller.
+ */
 async function upsertChangedFileObservation({
   ctx,
   mission,
-  session,
+  objectiveId,
+  sessionId,
   resourceId,
   change,
   now
 }: {
   ctx: ServiceContext;
   mission: { id: string; projectId: string };
-  session: { id: string; objective_id: string };
+  objectiveId: string;
+  sessionId: string | null;
   resourceId: string | null;
   change: ValidSyncChange;
   now: string;
 }): Promise<'accepted' | 'ignored'> {
+  const observedAt = change.observedAt && change.observedAt <= now ? change.observedAt : now;
   const changedFileId = newId();
-  const incomingMetadata: StoredChangeEvidence = {
-    source: change.source,
-    quality: change.quality,
-    overlap: change.overlap,
-    ...(change.toolWindowId ? { toolWindowId: change.toolWindowId } : {}),
-    ...(change.observedAt ? { observedAt: change.observedAt } : {}),
-    ...(change.hookHealth ? { hookHealth: change.hookHealth } : {}),
-    syncKeys: [change.idempotencyKey]
-  };
+  const syncKeys = change.idempotencyKey ? [change.idempotencyKey] : [];
   const inserted = await ctx.db.run(
     `INSERT INTO changed_files
          (id, workspace_id, project_id, mission_id, objective_id, session_id, resource_id,
-          file_path, vcs_status, current_diff_state, first_observed_at, last_observed_at,
-          last_observed_event_id, observed_metadata_json, created_at, updated_at, revision)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 1)
-       ON CONFLICT (objective_id, file_path)
-         WHERE objective_id IS NOT NULL AND deleted_at IS NULL
+          file_path, source, hook_health, sync_keys_json, first_observed_at, last_observed_at,
+          last_observed_event_id, created_at, updated_at, revision)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, 1)
+       ON CONFLICT (objective_id, (COALESCE(resource_id, '')), file_path)
+         WHERE deleted_at IS NULL
        DO NOTHING`,
     [
       changedFileId,
       ctx.workspace.id,
       mission.projectId,
       mission.id,
-      session.objective_id,
-      session.id,
+      objectiveId,
+      sessionId,
       resourceId,
       change.filePath,
-      null,
-      'unknown',
-      now,
-      now,
-      JSON.stringify(incomingMetadata),
+      change.source,
+      change.hookHealth ?? null,
+      JSON.stringify(syncKeys),
+      observedAt,
+      observedAt,
       now,
       now
     ]
@@ -1748,32 +1692,59 @@ async function upsertChangedFileObservation({
       entityRevision: 1,
       projectId: mission.projectId,
       missionId: mission.id,
-      objectiveId: session.objective_id
+      objectiveId
     });
     return 'accepted';
   }
 
   const lockClause = ctx.db.dialect === 'postgres' ? ' FOR UPDATE' : '';
   const existing = (await ctx.db.get(
-    `SELECT id, observed_metadata_json, revision FROM changed_files
-       WHERE objective_id = ? AND file_path = ? AND deleted_at IS NULL${lockClause}`,
-    [session.objective_id, change.filePath]
-  )) as { id: string; observed_metadata_json: string | null; revision: number } | undefined;
+    `SELECT id, source, hook_health, sync_keys_json, revision FROM changed_files
+       WHERE objective_id = ? AND COALESCE(resource_id, '') = ? AND file_path = ?
+         AND deleted_at IS NULL${lockClause}`,
+    [objectiveId, resourceId ?? '', change.filePath]
+  )) as
+    | {
+        id: string;
+        source: string | null;
+        hook_health: string | null;
+        sync_keys_json: string | null;
+        revision: number;
+      }
+    | undefined;
   if (!existing) throw new Error('Objective changed-file row disappeared during upsert');
 
-  const existingMetadata = parseStoredChangeEvidence(existing.observed_metadata_json);
-  if (existingMetadata.syncKeys.includes(change.idempotencyKey)) return 'ignored';
-  const mergedMetadata = mergeStoredChangeEvidence({
-    existing: existingMetadata,
-    incoming: change
-  });
+  const existingKeys = parseStoredSyncKeys(existing.sync_keys_json);
+  if (change.idempotencyKey && existingKeys.includes(change.idempotencyKey)) return 'ignored';
+  // Native evidence is never downgraded by a later declaration; the health code
+  // follows whichever observation currently defines the displayed source.
+  const incomingWins = sourceStrength(change.source) >= sourceStrength(existing.source);
+  const nextSource = incomingWins ? change.source : existing.source;
+  const nextHealth = incomingWins
+    ? (change.hookHealth ?? existing.hook_health)
+    : existing.hook_health;
+  const nextKeys = change.idempotencyKey
+    ? [...existingKeys, change.idempotencyKey].slice(-MAX_SYNC_KEYS_PER_FILE)
+    : existingKeys;
   await ctx.db.run(
     `UPDATE changed_files
-       SET session_id = ?, resource_id = COALESCE(?, resource_id),
-           last_observed_at = ?, last_observed_event_id = NULL,
-           observed_metadata_json = ?, updated_at = ?, revision = revision + 1
+       SET session_id = ?, source = ?, hook_health = ?, sync_keys_json = ?,
+           first_observed_at = CASE WHEN first_observed_at > ? THEN ? ELSE first_observed_at END,
+           last_observed_at = CASE WHEN last_observed_at < ? THEN ? ELSE last_observed_at END,
+           last_observed_event_id = NULL, updated_at = ?, revision = revision + 1
        WHERE id = ?`,
-    [session.id, resourceId, now, JSON.stringify(mergedMetadata), now, existing.id]
+    [
+      sessionId,
+      nextSource,
+      nextHealth,
+      JSON.stringify(nextKeys),
+      observedAt,
+      observedAt,
+      observedAt,
+      observedAt,
+      now,
+      existing.id
+    ]
   );
   await recordChange({
     ctx,
@@ -1783,30 +1754,305 @@ async function upsertChangedFileObservation({
     entityRevision: existing.revision + 1,
     projectId: mission.projectId,
     missionId: mission.id,
-    objectiveId: session.objective_id,
-    changedFields: ['session_id', 'resource_id', 'last_observed_at', 'observed_metadata_json']
+    objectiveId,
+    changedFields: ['session_id', 'source', 'hook_health', 'last_observed_at']
   });
   return 'accepted';
 }
 
 /**
- * Persist objective-ledger observations without ever making delivery depend on
- * them. Every item has its own transaction so malformed siblings cannot roll
- * back valid metadata-only evidence.
+ * Validate an agent-declared path list (shell/script/generator outputs, deletes,
+ * renames, `record-work`). Absent targets are valid; only unsafe, ignored or
+ * Overlord-managed paths are dropped, with a bounded warning.
+ */
+function normalizeDeclaredPaths(input: unknown): { paths: string[]; warnings: string[] } {
+  const paths: string[] = [];
+  const warnings: string[] = [];
+  const warn = (message: string): void => {
+    if (warnings.length < MAX_PROTOCOL_EVIDENCE_WARNINGS) warnings.push(message);
+  };
+  if (input === undefined || input === null) return { paths, warnings };
+  if (!Array.isArray(input)) {
+    warn('Ignored declaredPaths: expected an array of path strings.');
+    return { paths, warnings };
+  }
+  if (input.length > MAX_DECLARED_PATHS) {
+    warn(`Ignored ${input.length - MAX_DECLARED_PATHS} excess declaredPaths item(s).`);
+  }
+  const seen = new Set<string>();
+  input.slice(0, MAX_DECLARED_PATHS).forEach((value, index) => {
+    const filePath = normalizeRepoRelativePath(value);
+    if (!filePath) {
+      warn(`Ignored declaredPaths[${index}]: path must be canonical and repository-relative.`);
+      return;
+    }
+    if (isOverlordManagedEvidencePath(filePath)) {
+      warn(`Ignored declaredPaths[${index}]: path is excluded from change reporting.`);
+      return;
+    }
+    if (seen.has(filePath)) return;
+    seen.add(filePath);
+    paths.push(filePath);
+  });
+  return { paths, warnings };
+}
+
+/** Record declared paths inside the caller's transaction. Never blocks the host operation. */
+async function applyDeclaredPaths({
+  ctx,
+  mission,
+  objectiveId,
+  sessionId,
+  resourceId,
+  paths,
+  now
+}: {
+  ctx: ServiceContext;
+  mission: { id: string; projectId: string };
+  objectiveId: string;
+  sessionId: string | null;
+  resourceId: string | null;
+  paths: string[];
+  now: string;
+}): Promise<void> {
+  for (const filePath of paths) {
+    await upsertChangedFileObservation({
+      ctx,
+      mission,
+      objectiveId,
+      sessionId,
+      resourceId,
+      change: {
+        filePath,
+        idempotencyKey: null,
+        source: 'agent_declared',
+        hookHealth: DECLARED_PATH_HEALTH
+      },
+      now
+    });
+  }
+}
+
+type CaptureDiagnosticsInput = {
+  bindingState?: unknown;
+  callbackObservedAt?: unknown;
+  health?: unknown;
+};
+
+type NormalizedCaptureDiagnostics = {
+  bindingState?: CaptureBindingState;
+  callbackObservedAt?: string;
+  health: Array<{ code: string; at: string }>;
+};
+
+function normalizeCaptureDiagnostics(
+  input: unknown,
+  now: string
+): { value: NormalizedCaptureDiagnostics; warning?: string } {
+  const empty: NormalizedCaptureDiagnostics = { health: [] };
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+    return { value: empty, warning: 'capture must be an object' };
+  }
+  const candidate = input as CaptureDiagnosticsInput;
+  if (
+    Object.keys(candidate).some(
+      key => !['bindingState', 'callbackObservedAt', 'health'].includes(key)
+    )
+  ) {
+    return { value: empty, warning: 'capture contains unsupported fields' };
+  }
+  const value: NormalizedCaptureDiagnostics = { health: [] };
+  if (candidate.bindingState !== undefined) {
+    if (!CAPTURE_BINDING_STATES.includes(candidate.bindingState as CaptureBindingState)) {
+      return { value: empty, warning: 'capture.bindingState must be bound, unbound, or unknown' };
+    }
+    value.bindingState = candidate.bindingState as CaptureBindingState;
+  }
+  if (candidate.callbackObservedAt !== undefined && candidate.callbackObservedAt !== null) {
+    const observed = normalizeObservedAt(candidate.callbackObservedAt);
+    if (!observed) {
+      return { value: empty, warning: 'capture.callbackObservedAt must be a UTC ISO timestamp' };
+    }
+    value.callbackObservedAt = observed <= now ? observed : now;
+  }
+  if (candidate.health !== undefined) {
+    if (!Array.isArray(candidate.health)) {
+      return { value: empty, warning: 'capture.health must be an array' };
+    }
+    for (const entry of candidate.health.slice(0, MAX_CAPTURE_HEALTH_ITEMS)) {
+      if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) continue;
+      const record = entry as { code?: unknown; at?: unknown };
+      const code = normalizeHealthCode(record.code);
+      const at = normalizeObservedAt(record.at);
+      if (code && at) value.health.push({ code, at: at <= now ? at : now });
+    }
+  }
+  return { value };
+}
+
+type StoredCaptureHealth = Record<string, { firstAt: string; lastAt: string }>;
+
+function parseStoredCaptureHealth(value: string | null | undefined): StoredCaptureHealth {
+  try {
+    const parsed = JSON.parse(value ?? '{}') as { health?: unknown };
+    const out: StoredCaptureHealth = {};
+    if (typeof parsed.health !== 'object' || parsed.health === null) return out;
+    for (const [code, entry] of Object.entries(parsed.health as Record<string, unknown>)) {
+      const record = entry as { firstAt?: unknown; lastAt?: unknown } | null;
+      if (
+        normalizeHealthCode(code) &&
+        typeof record?.firstAt === 'string' &&
+        typeof record.lastAt === 'string'
+      ) {
+        out[code] = { firstAt: record.firstAt, lastAt: record.lastAt };
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Fold incoming health codes into the per-code aggregate. A known gap code is
+ * sticky: when the bounded map is full, the oldest non-gap code is evicted first
+ * and a gap code is never displaced by a non-gap code.
+ */
+function mergeCaptureHealth(
+  existing: StoredCaptureHealth,
+  incoming: Array<{ code: string; at: string }>
+): StoredCaptureHealth {
+  const merged: StoredCaptureHealth = { ...existing };
+  const isGap = (code: string): boolean => (CAPTURE_GAP_CODES as readonly string[]).includes(code);
+  for (const { code, at } of incoming) {
+    const current = merged[code];
+    if (current) {
+      merged[code] = {
+        firstAt: current.firstAt < at ? current.firstAt : at,
+        lastAt: current.lastAt > at ? current.lastAt : at
+      };
+      continue;
+    }
+    if (Object.keys(merged).length >= MAX_CAPTURE_HEALTH_CODES) {
+      const evictable = Object.entries(merged)
+        .filter(([candidate]) => !isGap(candidate))
+        .sort((left, right) => left[1].lastAt.localeCompare(right[1].lastAt))[0];
+      if (!evictable) continue;
+      if (!isGap(code) && evictable[1].lastAt >= at) continue;
+      delete merged[evictable[0]];
+    }
+    merged[code] = { firstAt: at, lastAt: at };
+  }
+  return merged;
+}
+
+/**
+ * Persist bounded capture diagnostics for the authorized session and emit a
+ * session refresh in the same transaction. Binding is configuration evidence;
+ * the earliest accepted callback is retained; health aggregates are idempotent.
+ */
+async function writeCaptureDiagnostics({
+  ctx,
+  mission,
+  session,
+  diagnostics,
+  now
+}: {
+  ctx: ServiceContext;
+  mission: { id: string; projectId: string };
+  session: { id: string; objective_id: string };
+  diagnostics: NormalizedCaptureDiagnostics;
+  now: string;
+}): Promise<'accepted' | 'ignored'> {
+  const lockClause = ctx.db.dialect === 'postgres' ? ' FOR UPDATE' : '';
+  const current = (await ctx.db.get(
+    `SELECT capture_binding_state, capture_callback_observed_at, capture_health_json, revision
+       FROM agent_sessions WHERE id = ? AND workspace_id = ?${lockClause}`,
+    [session.id, ctx.workspace.id]
+  )) as
+    | {
+        capture_binding_state: string;
+        capture_callback_observed_at: string | Date | null;
+        capture_health_json: string | Record<string, unknown> | null;
+        revision: number;
+      }
+    | undefined;
+  if (!current) throw new ServiceError('Session not found', 'invalid_session', 401);
+
+  const storedHealth = parseStoredCaptureHealth(
+    typeof current.capture_health_json === 'string'
+      ? current.capture_health_json
+      : JSON.stringify(current.capture_health_json ?? {})
+  );
+  const nextHealth = mergeCaptureHealth(storedHealth, diagnostics.health);
+  const currentCallback = current.capture_callback_observed_at
+    ? new Date(current.capture_callback_observed_at).toISOString()
+    : null;
+  const nextCallback =
+    diagnostics.callbackObservedAt &&
+    (!currentCallback || diagnostics.callbackObservedAt < currentCallback)
+      ? diagnostics.callbackObservedAt
+      : currentCallback;
+  const nextBinding = diagnostics.bindingState ?? current.capture_binding_state;
+  const nextHealthJson = JSON.stringify({ health: nextHealth });
+  const changedFields: string[] = [];
+  if (nextBinding !== current.capture_binding_state) changedFields.push('capture_binding_state');
+  if (nextCallback !== currentCallback) changedFields.push('capture_callback_observed_at');
+  if (JSON.stringify({ health: storedHealth }) !== nextHealthJson) {
+    changedFields.push('capture_health_json');
+  }
+  if (changedFields.length === 0) return 'ignored';
+
+  await ctx.db.run(
+    `UPDATE agent_sessions
+        SET capture_binding_state = ?, capture_callback_observed_at = ?, capture_health_json = ?,
+            updated_at = ?, revision = revision + 1
+      WHERE id = ? AND workspace_id = ?`,
+    [nextBinding, nextCallback, nextHealthJson, now, session.id, ctx.workspace.id]
+  );
+  await recordChange({
+    ctx,
+    entityType: 'agent_session',
+    entityId: session.id,
+    operation: 'update',
+    entityRevision: current.revision + 1,
+    projectId: mission.projectId,
+    missionId: mission.id,
+    objectiveId: session.objective_id,
+    changedFields
+  });
+  return 'accepted';
+}
+
+/**
+ * Persist objective-ledger observations and bounded capture diagnostics without
+ * ever making delivery depend on them. Every item has its own transaction so
+ * malformed siblings cannot roll back valid metadata-only evidence.
  */
 export async function syncChanges({
   ctx,
   missionId,
   sessionKey,
-  changes
+  changes,
+  capture
 }: {
   ctx: ServiceContext;
   missionId: string;
   sessionKey: string;
   changes: unknown[];
-}): Promise<{ outcomes: SyncChangeOutcome[] }> {
+  capture?: unknown;
+}): Promise<{
+  outcomes: SyncChangeOutcome[];
+  capture?: { status: 'accepted' | 'ignored' | 'warning'; warning?: string };
+}> {
   const mission = await resolveMissionId(ctx, missionId);
-  const session = await getSessionByKey(ctx, sessionKey);
+  // Delivery is non-blocking even when the ledger drain fails. Permit only
+  // evidence recovery on delivered sessions; lifecycle writers still require
+  // an active key and all callers retain the normal authorization boundary.
+  const session = await getSessionByKeyMaybeEnded(ctx, sessionKey, { includeEnded: true });
+  if (!session || (session.ended_at && session.delivery_state !== 'delivered')) {
+    throw new ServiceError('Invalid or expired session key', 'invalid_session', 401);
+  }
   if (session.mission_id !== mission.id) {
     throw new ServiceError('Session key does not match mission', 'invalid_session', 401);
   }
@@ -1830,7 +2076,8 @@ export async function syncChanges({
         return await upsertChangedFileObservation({
           ctx: { ...ctx, db: tx },
           mission,
-          session,
+          objectiveId: session.objective_id,
+          sessionId: session.id,
           resourceId,
           change,
           now: nowIso()
@@ -1858,7 +2105,30 @@ export async function syncChanges({
       warning: `sync-changes accepts at most ${MAX_SYNC_CHANGE_ITEMS} items per request`
     });
   }
-  return { outcomes };
+
+  if (capture === undefined) return { outcomes };
+  const now = nowIso();
+  const normalized = normalizeCaptureDiagnostics(capture, now);
+  if (normalized.warning) {
+    return { outcomes, capture: { status: 'warning', warning: normalized.warning } };
+  }
+  try {
+    const status = await ctx.db.transaction(async tx =>
+      writeCaptureDiagnostics({
+        ctx: { ...ctx, db: tx },
+        mission,
+        session,
+        diagnostics: normalized.value,
+        now
+      })
+    );
+    return { outcomes, capture: { status } };
+  } catch {
+    return {
+      outcomes,
+      capture: { status: 'warning', warning: 'unable to persist capture diagnostics' }
+    };
+  }
 }
 
 export async function updateSession({
@@ -1873,7 +2143,7 @@ export async function updateSession({
   externalSessionId,
   beginFollowUpWork = false,
   followUpIntent,
-  changeRationales
+  declaredPaths
 }: {
   ctx: ServiceContext;
   missionId: string;
@@ -1886,7 +2156,8 @@ export async function updateSession({
   externalSessionId?: string | null;
   beginFollowUpWork?: boolean;
   followUpIntent?: string | null;
-  changeRationales?: ChangeRationaleInput[] | null;
+  /** Known shell/script outputs, deletes, or renames the native hook could not name. */
+  declaredPaths?: unknown;
 }): Promise<{ eventId: string }> {
   const trimmedSummary = summary.trim();
   if (!trimmedSummary) {
@@ -1917,7 +2188,9 @@ export async function updateSession({
 
   const now = nowIso();
   const eventId = newId();
-  const normalizedRationales = normalizeChangeRationales(changeRationales ?? []);
+  const declared = normalizeDeclaredPaths(declaredPaths);
+  const declaredResourceId =
+    declared.paths.length > 0 ? await resolveSessionResourceId({ ctx, session, mission }) : null;
 
   await ctx.db.transaction(async tx => {
     const txCtx = { ...ctx, db: tx };
@@ -1953,9 +2226,7 @@ export async function updateSession({
         JSON.stringify({
           ...(payloadJson ?? {}),
           ...(followUpIntent ? { followUpIntent } : {}),
-          ...(normalizedRationales.warnings.length > 0
-            ? { changeRationaleWarnings: normalizedRationales.warnings }
-            : {})
+          ...(declared.warnings.length > 0 ? { declaredPathWarnings: declared.warnings } : {})
         }),
         externalUrl ?? null,
         ctx.source,
@@ -1973,29 +2244,15 @@ export async function updateSession({
       objectiveId: session.objective_id
     });
 
-    if (normalizedRationales.rationales.length > 0) {
-      const changedFiles = (await txCtx.db.all(
-        `SELECT id, file_path FROM changed_files
-           WHERE objective_id = ? AND deleted_at IS NULL`,
-        [session.objective_id]
-      )) as Array<{ id: string; file_path: string }>;
-      const changedFileIdByPath = new Map(changedFiles.map(row => [row.file_path, row.id]));
-      for (const rationale of normalizedRationales.rationales) {
-        await insertChangeRationaleRow({
-          ctx: txCtx,
-          projectId: mission.projectId,
-          missionId: mission.id,
-          objectiveId: session.objective_id,
-          sessionId: session.id,
-          deliveryId: null,
-          changedFileId: changedFileIdByPath.get(rationale.filePath) ?? null,
-          sourceEventId: eventId,
-          rationale,
-          isFinal: false,
-          now
-        });
-      }
-    }
+    await applyDeclaredPaths({
+      ctx: txCtx,
+      mission,
+      objectiveId: session.objective_id,
+      sessionId: session.id,
+      resourceId: declaredResourceId,
+      paths: declared.paths,
+      now
+    });
 
     if (externalSessionId !== undefined) {
       await txCtx.db.run(
@@ -2131,257 +2388,6 @@ export async function askQuestion({
   return { eventId };
 }
 
-export type ChangeRationaleInput = {
-  /** Canonical repository-relative path of the changed file. */
-  filePath: string;
-  label: string;
-  summary: string;
-  why: string;
-  impact: string;
-  hunks?: Array<{ header: string }>;
-};
-
-type NormalizedChangeRationale = {
-  filePath: string;
-  label: string;
-  summary: string;
-  why: string;
-  impact: string;
-  hunks?: Array<{ header: string }>;
-};
-
-const MAX_CHANGE_RATIONALE_ITEMS = 100;
-const MAX_PROTOCOL_EVIDENCE_WARNINGS = 12;
-const MAX_CHANGE_RATIONALE_LABEL_LENGTH = 240;
-const MAX_CHANGE_RATIONALE_TEXT_LENGTH = 10_000;
-const MAX_CHANGE_RATIONALE_HUNKS = 100;
-const MAX_CHANGE_RATIONALE_HUNK_LENGTH = 1_000;
-const CHANGE_RATIONALE_KEYS = new Set(['filePath', 'label', 'summary', 'why', 'impact', 'hunks']);
-const CHANGE_RATIONALE_HUNK_KEYS = new Set(['header']);
-
-function normalizeChangeRationales(input: unknown): {
-  rationales: NormalizedChangeRationale[];
-  warnings: string[];
-} {
-  const rationales: NormalizedChangeRationale[] = [];
-  const rationaleIndexByPath = new Map<string, number>();
-  const warnings: string[] = [];
-  const warn = (message: string): void => {
-    if (warnings.length < MAX_PROTOCOL_EVIDENCE_WARNINGS) warnings.push(message);
-  };
-  if (!Array.isArray(input)) {
-    warn('Ignored changeRationales: expected an array.');
-    return { rationales, warnings };
-  }
-  if (input.length > MAX_CHANGE_RATIONALE_ITEMS) {
-    warn(`Ignored ${input.length - MAX_CHANGE_RATIONALE_ITEMS} excess change-rationale item(s).`);
-  }
-  input.slice(0, MAX_CHANGE_RATIONALE_ITEMS).forEach((value, index) => {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-      warn(`Ignored changeRationales[${index}]: expected an object.`);
-      return;
-    }
-    const rationale = value as Record<string, unknown>;
-    if (Object.keys(rationale).some(key => !CHANGE_RATIONALE_KEYS.has(key))) {
-      warn(`Ignored changeRationales[${index}]: unsupported fields.`);
-      return;
-    }
-    const filePath = normalizeRepoRelativePath(rationale.filePath);
-    const readText = (
-      field: 'label' | 'summary' | 'why' | 'impact',
-      maxLength: number
-    ): string | null => {
-      const candidate = rationale[field];
-      if (typeof candidate !== 'string') return null;
-      const normalized = candidate.trim();
-      return normalized && normalized.length <= maxLength ? normalized : null;
-    };
-    const label = readText('label', MAX_CHANGE_RATIONALE_LABEL_LENGTH);
-    const summary = readText('summary', MAX_CHANGE_RATIONALE_TEXT_LENGTH);
-    const why = readText('why', MAX_CHANGE_RATIONALE_TEXT_LENGTH);
-    const impact = readText('impact', MAX_CHANGE_RATIONALE_TEXT_LENGTH);
-    if (!filePath || !label || !summary || !why || !impact) {
-      warn(
-        `Ignored changeRationales[${index}]: filePath, label, summary, why, and impact must be non-empty bounded strings.`
-      );
-      return;
-    }
-    let hunks: Array<{ header: string }> | undefined;
-    if (rationale.hunks !== undefined) {
-      if (!Array.isArray(rationale.hunks)) {
-        warn(`Ignored changeRationales[${index}].hunks: expected an array.`);
-      } else {
-        if (rationale.hunks.length > MAX_CHANGE_RATIONALE_HUNKS) {
-          warn(
-            `Ignored ${rationale.hunks.length - MAX_CHANGE_RATIONALE_HUNKS} excess changeRationales[${index}].hunks item(s).`
-          );
-        }
-        hunks = rationale.hunks.slice(0, MAX_CHANGE_RATIONALE_HUNKS).flatMap((hunk, hunkIndex) => {
-          if (typeof hunk !== 'object' || hunk === null || Array.isArray(hunk)) {
-            warn(`Ignored changeRationales[${index}].hunks[${hunkIndex}]: expected an object.`);
-            return [];
-          }
-          const candidate = hunk as Record<string, unknown>;
-          if (Object.keys(candidate).some(key => !CHANGE_RATIONALE_HUNK_KEYS.has(key))) {
-            warn(`Ignored changeRationales[${index}].hunks[${hunkIndex}]: unsupported fields.`);
-            return [];
-          }
-          const header = candidate.header;
-          if (
-            typeof header !== 'string' ||
-            !header.trim() ||
-            header.length > MAX_CHANGE_RATIONALE_HUNK_LENGTH
-          ) {
-            warn(
-              `Ignored changeRationales[${index}].hunks[${hunkIndex}]: header must be a non-empty bounded string.`
-            );
-            return [];
-          }
-          return [{ header: header.trim() }];
-        });
-      }
-    }
-    const normalized = { filePath, label, summary, why, impact, ...(hunks ? { hunks } : {}) };
-    const previousIndex = rationaleIndexByPath.get(filePath);
-    if (previousIndex === undefined) {
-      rationaleIndexByPath.set(filePath, rationales.length);
-      rationales.push(normalized);
-    } else {
-      rationales[previousIndex] = normalized;
-      warn(`Duplicate changeRationales[${index}]: last valid item for filePath wins.`);
-    }
-  });
-  return { rationales, warnings };
-}
-
-async function insertChangeRationaleRow({
-  ctx,
-  projectId,
-  missionId,
-  objectiveId,
-  sessionId,
-  deliveryId,
-  changedFileId,
-  sourceEventId,
-  rationale,
-  isFinal,
-  now
-}: {
-  ctx: ServiceContext;
-  projectId: string;
-  missionId: string;
-  objectiveId: string;
-  sessionId: string | null;
-  deliveryId: string | null;
-  changedFileId: string | null;
-  sourceEventId: string | null;
-  rationale: NormalizedChangeRationale;
-  isFinal: boolean;
-  now: string;
-}): Promise<string> {
-  const rationaleId = newId();
-  await ctx.db.run(
-    `INSERT INTO change_rationales
-         (id, workspace_id, project_id, mission_id, objective_id, session_id, delivery_id,
-          changed_file_id, file_path, label, summary, why, impact, hunks_json,
-          source_event_id, is_final, created_at, updated_at, revision)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-    [
-      rationaleId,
-      ctx.workspace.id,
-      projectId,
-      missionId,
-      objectiveId,
-      sessionId,
-      deliveryId,
-      changedFileId,
-      rationale.filePath,
-      rationale.label,
-      rationale.summary,
-      rationale.why,
-      rationale.impact,
-      JSON.stringify(rationale.hunks ?? []),
-      sourceEventId,
-      bindBool(ctx.db.dialect, isFinal),
-      now,
-      now
-    ]
-  );
-  await recordChange({
-    ctx,
-    entityType: 'change_rationale',
-    entityId: rationaleId,
-    operation: 'insert',
-    entityRevision: 1,
-    projectId,
-    missionId,
-    objectiveId
-  });
-  return rationaleId;
-}
-
-type NormalizedRecordWorkChangedFile = {
-  filePath: string;
-  vcsStatus: string | null;
-};
-
-const MAX_RECORD_WORK_CHANGED_FILES = 100;
-const MAX_VCS_STATUS_LENGTH = 32;
-const RECORD_WORK_CHANGED_FILE_KEYS = new Set(['filePath', 'vcsStatus']);
-
-function normalizeRecordWorkChangedFiles(input: unknown): {
-  files: NormalizedRecordWorkChangedFile[];
-  warnings: string[];
-} {
-  const files: NormalizedRecordWorkChangedFile[] = [];
-  const warnings: string[] = [];
-  const warn = (message: string): void => {
-    if (warnings.length < MAX_PROTOCOL_EVIDENCE_WARNINGS) warnings.push(message);
-  };
-  if (!Array.isArray(input)) {
-    warn('Ignored changedFiles: expected an array.');
-    return { files, warnings };
-  }
-  if (input.length > MAX_RECORD_WORK_CHANGED_FILES) {
-    warn(`Ignored ${input.length - MAX_RECORD_WORK_CHANGED_FILES} excess changedFiles item(s).`);
-  }
-  input.slice(0, MAX_RECORD_WORK_CHANGED_FILES).forEach((value, index) => {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-      warn(`Ignored changedFiles[${index}]: expected an object.`);
-      return;
-    }
-    const candidate = value as Record<string, unknown>;
-    if (Object.keys(candidate).some(key => !RECORD_WORK_CHANGED_FILE_KEYS.has(key))) {
-      warn(`Ignored changedFiles[${index}]: unsupported fields.`);
-      return;
-    }
-    const filePath = normalizeRepoRelativePath(candidate.filePath);
-    if (!filePath) {
-      warn(`Ignored changedFiles[${index}]: filePath must be canonical and repository-relative.`);
-      return;
-    }
-    if (isOverlordManagedEvidencePath(filePath)) {
-      warn(`Ignored changedFiles[${index}]: filePath is excluded from change reporting.`);
-      return;
-    }
-    let vcsStatus: string | null = null;
-    if (candidate.vcsStatus !== undefined && candidate.vcsStatus !== null) {
-      if (
-        typeof candidate.vcsStatus !== 'string' ||
-        !candidate.vcsStatus.trim() ||
-        candidate.vcsStatus.length > MAX_VCS_STATUS_LENGTH ||
-        hasControlCharacters(candidate.vcsStatus)
-      ) {
-        warn(`Ignored changedFiles[${index}]: vcsStatus must be a bounded string or null.`);
-        return;
-      }
-      vcsStatus = candidate.vcsStatus.trim();
-    }
-    files.push({ filePath, vcsStatus });
-  });
-  return { files, warnings };
-}
-
 type ProtocolArtifactInput = {
   type: string;
   label: string;
@@ -2473,7 +2479,7 @@ export async function deliverSession({
   sessionKey,
   summary,
   artifacts = [],
-  changeRationales = [],
+  declaredPaths,
   payloadJson,
   verificationSummary,
   followUpNotes
@@ -2483,7 +2489,8 @@ export async function deliverSession({
   sessionKey: string;
   summary: string;
   artifacts?: unknown[];
-  changeRationales?: ChangeRationaleInput[];
+  /** Known shell/script outputs, deletes, or renames the native hook could not name. */
+  declaredPaths?: unknown;
   payloadJson?: Record<string, unknown> | null;
   verificationSummary?: string | null;
   followUpNotes?: string | null;
@@ -2499,7 +2506,9 @@ export async function deliverSession({
     throw new ServiceError('Session key does not match mission', 'invalid_session', 401);
   }
 
-  const normalizedRationales = normalizeChangeRationales(changeRationales);
+  const declared = normalizeDeclaredPaths(declaredPaths);
+  const declaredResourceId =
+    declared.paths.length > 0 ? await resolveSessionResourceId({ ctx, session, mission }) : null;
   const normalizedArtifacts = validateProtocolArtifacts(artifacts);
   const deliveryReport = appendDeliveryWarnings(
     markDeliveryPresentationPending(
@@ -2508,7 +2517,7 @@ export async function deliverSession({
         deliveryReport: payloadJson?.deliveryReport
       })
     ),
-    normalizedRationales.warnings
+    declared.warnings
   );
   const missionObjectives = await listObjectives({ ctx, missionId: mission.id });
   const currentObjectiveRow = missionObjectives.find(
@@ -2529,15 +2538,22 @@ export async function deliverSession({
 
   await ctx.db.transaction(async tx => {
     const txCtx = { ...ctx, db: tx };
+    // Declarations are evidence, not a delivery gate; they land before the
+    // deterministic operator actions are derived from the objective's paths.
+    await applyDeclaredPaths({
+      ctx: txCtx,
+      mission,
+      objectiveId: session.objective_id,
+      sessionId: session.id,
+      resourceId: declaredResourceId,
+      paths: declared.paths,
+      now: nowIso()
+    });
     const objectiveChangedFiles = (await txCtx.db.all(
-      `SELECT id, file_path FROM changed_files
+      `SELECT file_path FROM changed_files
          WHERE objective_id = ? AND deleted_at IS NULL`,
       [session.objective_id]
-    )) as Array<{
-      id: string;
-      file_path: string;
-    }>;
-    const changedFileIdByPath = new Map(objectiveChangedFiles.map(row => [row.file_path, row.id]));
+    )) as Array<{ file_path: string }>;
     const eligibleDeliveryReport = applyDeferredWorkEligibility({
       report: deliveryReport,
       currentObjective: currentObjectiveRow
@@ -2589,23 +2605,6 @@ export async function deliverSession({
         label: artifact.label,
         contentText: artifact.content ?? null,
         externalUrl: artifact.url ?? null,
-        now
-      });
-    }
-
-    for (const rationale of normalizedRationales.rationales) {
-      const changedFileId = changedFileIdByPath.get(rationale.filePath) ?? null;
-      await insertChangeRationaleRow({
-        ctx: txCtx,
-        projectId: mission.projectId,
-        missionId: mission.id,
-        objectiveId: session.objective_id,
-        sessionId: session.id,
-        deliveryId,
-        changedFileId,
-        sourceEventId: null,
-        rationale,
-        isFinal: true,
         now
       });
     }
@@ -2902,8 +2901,7 @@ export async function recordWork({
   objective,
   title,
   artifacts = [],
-  changeRationales = [],
-  changedFiles = [],
+  declaredPaths,
   payloadJson,
   assignedTo
 }: {
@@ -2913,8 +2911,8 @@ export async function recordWork({
   objective: string;
   title?: string | null;
   artifacts?: unknown[];
-  changeRationales?: ChangeRationaleInput[];
-  changedFiles?: unknown[];
+  /** Explicit paths for the already-completed work; stored as `agent_declared`, sessionless. */
+  declaredPaths?: unknown;
   payloadJson?: Record<string, unknown> | null;
   /** Explicit `--assigned-to` member ref; when omitted, the §7.1 default chain applies. */
   assignedTo?: string | null;
@@ -2923,8 +2921,7 @@ export async function recordWork({
   if (!trimmedSummary) {
     throw new ServiceError('Summary is required for record-work', 'validation_error');
   }
-  const normalizedRationales = normalizeChangeRationales(changeRationales);
-  const normalizedChangedFiles = normalizeRecordWorkChangedFiles(changedFiles);
+  const declared = normalizeDeclaredPaths(declaredPaths);
   const normalizedArtifacts = validateProtocolArtifacts(artifacts);
   const deliveryReport = appendDeliveryWarnings(
     markDeliveryPresentationPending(
@@ -2935,15 +2932,10 @@ export async function recordWork({
         }),
         currentObjective: { title: title ?? null, instruction: objective },
         plannedObjectives: [],
-        candidateActions: deriveDeterministicActionCandidates({
-          filePaths: [
-            ...normalizedChangedFiles.files.map(file => file.filePath),
-            ...normalizedRationales.rationales.map(item => item.filePath)
-          ]
-        })
+        candidateActions: deriveDeterministicActionCandidates({ filePaths: declared.paths })
       })
     ),
-    [...normalizedRationales.warnings, ...normalizedChangedFiles.warnings]
+    declared.warnings
   );
 
   if (!projectId) {
@@ -3012,72 +3004,17 @@ export async function recordWork({
       });
     }
 
-    // record-work has no attached execution target, so its explicit changed-file
-    // list remains authoritative. Include rationale paths so every annotation
-    // links to the durable objective/path row created in this transaction.
-    const changedFileStatus = new Map<string, string | null>();
-    for (const rationale of normalizedRationales.rationales) {
-      if (!changedFileStatus.has(rationale.filePath)) {
-        changedFileStatus.set(rationale.filePath, null);
-      }
-    }
-    for (const file of normalizedChangedFiles.files) {
-      const normalizedPath = file.filePath;
-      changedFileStatus.set(
-        normalizedPath,
-        file.vcsStatus ?? changedFileStatus.get(normalizedPath) ?? null
-      );
-    }
-    const changedFileIdByPath = new Map<string, string>();
-    for (const [normalizedPath, vcsStatus] of changedFileStatus) {
-      const changedFileId = newId();
-      await txCtx.db.run(
-        `INSERT INTO changed_files
-             (id, workspace_id, project_id, mission_id, objective_id, session_id, resource_id,
-              file_path, vcs_status, current_diff_state, first_observed_at, last_observed_at,
-              last_observed_event_id, observed_metadata_json, created_at, updated_at, revision)
-           VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, 'unknown', ?, ?, NULL, '{}', ?, ?, 1)`,
-        [
-          changedFileId,
-          ctx.workspace.id,
-          resolvedProjectId,
-          created.mission.id,
-          objectiveId,
-          normalizedPath,
-          vcsStatus,
-          now,
-          now,
-          now,
-          now
-        ]
-      );
-      await recordChange({
-        ctx: txCtx,
-        entityType: 'changed_file',
-        entityId: changedFileId,
-        operation: 'insert',
-        entityRevision: 1,
-        projectId: resolvedProjectId,
-        missionId: created.mission.id,
-        objectiveId
-      });
-      changedFileIdByPath.set(normalizedPath, changedFileId);
-    }
-    for (const rationale of normalizedRationales.rationales) {
-      await insertChangeRationaleRow({
-        ctx: txCtx,
-        projectId: resolvedProjectId,
-        missionId: created.mission.id,
-        objectiveId,
-        sessionId: null,
-        deliveryId,
-        changedFileId: changedFileIdByPath.get(rationale.filePath) ?? null,
-        sourceEventId: null,
-        rationale,
-        isFinal: true,
-        now
-      });
-    }
+    // record-work has no attached session, so its explicit paths are sessionless
+    // declarations with no resolved resource. They never claim native capture.
+    await applyDeclaredPaths({
+      ctx: txCtx,
+      mission: { id: created.mission.id, projectId: resolvedProjectId },
+      objectiveId,
+      sessionId: null,
+      resourceId: null,
+      paths: declared.paths,
+      now
+    });
 
     await txCtx.db.run(
       `INSERT INTO mission_events

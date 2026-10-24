@@ -248,6 +248,7 @@ export async function runProtocolSubcommand(
       'discover-project',
       'statuses',
       'list-deliveries',
+      'objective-changes',
       'attachment-list',
       'attachment-download-url',
       'auth-status'

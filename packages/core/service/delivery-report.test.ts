@@ -110,3 +110,46 @@ describe('delivery-report human action normalization (contract v137)', () => {
     assert.equal(isValidHumanActionLink(''), false);
   });
 });
+
+describe('delivery-report provenance (contract v165)', () => {
+  it('admits only agent and deterministic_rule item sources', () => {
+    const built = buildDeliveryReport({
+      summary: 'Delivered.',
+      deliveryReport: {
+        schemaVersion: 1,
+        agentReport: {
+          tradeoffsMade: [{ decision: 'Keep the worker', rationale: 'It survives restarts.' }]
+        }
+      }
+    });
+    assert.equal(
+      readDeliveryReport({ summary: 'Delivered.', deliveryReport: built }).presentation.tradeoffsMade
+        .length,
+      1
+    );
+
+    // A retired per-file rationale item no longer parses; the one-time
+    // 20261024130000 migration strips such items from stored reports.
+    const retired = {
+      ...built,
+      presentation: {
+        ...built.presentation,
+        status: 'composed',
+        tradeoffsMade: [
+          ...built.presentation.tradeoffsMade,
+          {
+            id: 'rationale-1',
+            decision: 'Add backoff',
+            alternativesConsidered: [],
+            rationale: 'Transient failures.',
+            source: 'change_rationale',
+            sourceRef: 'lib/api.ts'
+          }
+        ]
+      }
+    };
+    const read = readDeliveryReport({ summary: 'Delivered.', deliveryReport: retired });
+    assert.equal(read.presentation.status, 'deterministic');
+    assert.ok(read.presentation.tradeoffsMade.every(item => item.source === 'agent'));
+  });
+});

@@ -3,6 +3,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  readFileSync,
   realpathSync,
   statSync,
   symlinkSync,
@@ -23,9 +24,16 @@ import {
 } from '../src/active-objective-sessions.ts';
 import {
   appendChangeEvidence,
+  changeLedgerCaptureFingerprint,
+  changeLedgerCapturePayload,
+  declareChangePaths,
   markChangeEvidenceSynced,
+  markChangeLedgerCaptureSynced,
   readChangeLedgerHealth,
+  readChangeLedgerSnapshot,
   readUnsyncedChangeEvidence,
+  recordChangeLedgerBinding,
+  recordChangeLedgerCallback,
   recordChangeLedgerHealth,
   removeChangeLedger,
   resetChangeLedger
@@ -144,10 +152,7 @@ test('insertion stores only bounded workspace-relative non-ignored paths and rea
       ' src/whitespace.ts ',
       `src/${'x'.repeat(2_001)}`
     ],
-    source: 'window_observed',
-    quality: 'window',
-    overlap: true,
-    toolWindowId: 'window-1',
+    source: 'declared_edit',
     hookHealth: 'paired_hook_healthy'
   });
 
@@ -156,10 +161,7 @@ test('insertion stores only bounded workspace-relative non-ignored paths and rea
     {
       idempotencyKey: readUnsyncedChangeEvidence(identity)[0]?.idempotencyKey,
       filePath: 'src/accepted.ts',
-      source: 'window_observed',
-      quality: 'window',
-      overlap: true,
-      toolWindowId: 'window-1',
+      source: 'declared_edit',
       observedAt: readUnsyncedChangeEvidence(identity)[0]?.observedAt,
       hookHealth: 'paired_hook_healthy'
     }
@@ -210,34 +212,213 @@ test('oversized ignore policies fail closed before path insertion', () => {
   }
 });
 
-test('quality defaults deterministically from evidence source', () => {
-  const { workspace } = isolatedWorkspace('ovld-ledger-quality');
+test('schema v2 ledgers upgrade once: pending rows keep keys, window rows are dropped', () => {
+  const { home, workspace } = isolatedWorkspace('ovld-ledger-upgrade');
   const identity = {
     workingDirectory: workspace,
-    objectiveId: 'objective-quality',
-    sessionKey: 'sess_quality'
+    objectiveId: 'objective-upgrade',
+    sessionKey: 'sess_upgrade'
   };
   resetChangeLedger(identity);
-  appendChangeEvidence({ ...identity, filePaths: ['direct.ts'], source: 'declared_edit' });
-  appendChangeEvidence({ ...identity, filePaths: ['observed.ts'], source: 'window_observed' });
-  assert.equal(
-    appendChangeEvidence({
-      ...identity,
-      filePaths: ['mismatched.ts'],
-      source: 'window_observed',
-      quality: 'direct'
-    }),
-    0
+  const ledgerDirectory = path.join(home, 'change-ledgers');
+  const [ledgerName] = readdirSync(ledgerDirectory);
+  assert.ok(ledgerName);
+  const target = path.join(ledgerDirectory, ledgerName);
+  const current = JSON.parse(readFileSync(target, 'utf8')) as Record<string, unknown>;
+  const at = '2026-10-01T10:00:00.000Z';
+  writeFileSync(
+    target,
+    JSON.stringify({
+      schemaVersion: 2,
+      workingDirectory: current.workingDirectory,
+      objectiveId: current.objectiveId,
+      sessionKeyHash: current.sessionKeyHash,
+      evidence: [
+        {
+          idempotencyKey: 'native-pending',
+          filePath: 'src/native.ts',
+          source: 'declared_edit',
+          quality: 'direct',
+          overlap: false,
+          observedAt: at,
+          hookHealth: 'direct_path_observed'
+        },
+        {
+          idempotencyKey: 'native-synced',
+          filePath: 'src/synced.ts',
+          source: 'declared_edit',
+          quality: 'direct',
+          overlap: false,
+          observedAt: at,
+          syncedAt: at
+        },
+        {
+          idempotencyKey: 'generator',
+          filePath: 'gen/out.ts',
+          source: 'declared_edit',
+          quality: 'direct',
+          overlap: false,
+          observedAt: at,
+          hookHealth: 'agent_declared_generator_output'
+        },
+        {
+          idempotencyKey: 'window',
+          filePath: 'src/window.ts',
+          source: 'window_observed',
+          quality: 'window',
+          overlap: true,
+          toolWindowId: 'window-1',
+          observedAt: at
+        }
+      ],
+      health: [{ at, code: 'shell_activity_unverified' }]
+    })
   );
 
+  const expected = [
+    {
+      idempotencyKey: 'native-pending',
+      filePath: 'src/native.ts',
+      source: 'declared_edit',
+      observedAt: at,
+      hookHealth: 'direct_path_observed'
+    },
+    {
+      idempotencyKey: 'native-synced',
+      filePath: 'src/synced.ts',
+      source: 'declared_edit',
+      observedAt: at,
+      syncedAt: at
+    },
+    {
+      idempotencyKey: 'generator',
+      filePath: 'gen/out.ts',
+      source: 'agent_declared',
+      observedAt: at,
+      hookHealth: 'agent_declared'
+    }
+  ];
+  const before = readChangeLedgerSnapshot(identity);
+  assert.deepEqual(before?.evidence, expected);
+  assert.equal(before?.capture.bindingState, 'unknown');
   assert.deepEqual(
-    readUnsyncedChangeEvidence(identity).map(entry => [entry.filePath, entry.quality]),
+    before?.health.map(entry => entry.code),
+    ['shell_activity_unverified', 'legacy_window_evidence_discarded:1']
+  );
+  // Reads never rewrite the file; the next locked mutation persists schema v3.
+  assert.equal(
+    (JSON.parse(readFileSync(target, 'utf8')) as { schemaVersion: number }).schemaVersion,
+    2
+  );
+  recordChangeLedgerHealth({ ...identity, code: 'direct_path_observed' });
+  const persisted = JSON.parse(readFileSync(target, 'utf8')) as {
+    schemaVersion: number;
+    evidence: unknown[];
+  };
+  assert.equal(persisted.schemaVersion, 3);
+  assert.deepEqual(persisted.evidence, expected);
+  assert.deepEqual(
+    readUnsyncedChangeEvidence(identity).map(entry => entry.idempotencyKey),
+    ['native-pending', 'generator']
+  );
+});
+
+test('declared paths normalize safely and keep commas, deletes, and both rename endpoints', () => {
+  const { workspace } = isolatedWorkspace('ovld-ledger-declared');
+  const outside = mkdtempSync(path.join(os.tmpdir(), 'ovld-ledger-declared-outside-'));
+  symlinkSync(outside, path.join(workspace, 'escape'));
+  writeFileSync(path.join(workspace, '.overlordignore'), 'private/**\n');
+  mkdirSync(path.join(workspace, 'src'), { recursive: true });
+  writeFileSync(path.join(workspace, 'src', 'kept.ts'), '');
+  const identity = {
+    workingDirectory: workspace,
+    objectiveId: 'objective-declared',
+    sessionKey: 'sess_declared'
+  };
+  resetChangeLedger(identity);
+  appendChangeEvidence({ ...identity, filePaths: ['src/kept.ts'], source: 'declared_edit' });
+
+  const result = declareChangePaths({
+    ...identity,
+    filePaths: [
+      'docs/a,b.md',
+      'src/deleted.ts',
+      'src/old-name.ts',
+      'src/new-name.ts',
+      path.join(realpathSync(workspace), 'src', 'kept.ts'),
+      '../outside.ts',
+      'escape/secret.ts',
+      'private/token.txt',
+      42
+    ]
+  });
+
+  assert.equal(result.recorded, true);
+  assert.deepEqual(result.accepted, [
+    'docs/a,b.md',
+    'src/deleted.ts',
+    'src/old-name.ts',
+    'src/new-name.ts',
+    'src/kept.ts'
+  ]);
+  assert.deepEqual(
+    result.rejected.map(entry => entry.reason),
+    ['outside_workspace_path', 'outside_workspace_path', 'ignored_path', 'invalid_path']
+  );
+  const evidence = readUnsyncedChangeEvidence(identity);
+  assert.deepEqual(
+    evidence.map(entry => [entry.filePath, entry.source, entry.hookHealth]),
     [
-      ['direct.ts', 'direct'],
-      ['observed.ts', 'window']
+      ['src/kept.ts', 'declared_edit', undefined],
+      ['docs/a,b.md', 'agent_declared', 'agent_declared'],
+      ['src/deleted.ts', 'agent_declared', 'agent_declared'],
+      ['src/old-name.ts', 'agent_declared', 'agent_declared'],
+      ['src/new-name.ts', 'agent_declared', 'agent_declared'],
+      ['src/kept.ts', 'agent_declared', 'agent_declared']
     ]
   );
-  assert.equal(readChangeLedgerHealth(identity).at(-1)?.code, 'source_quality_mismatch');
+  // Re-declaring is idempotent.
+  assert.deepEqual(declareChangePaths({ ...identity, filePaths: ['docs/a,b.md'] }).accepted, [
+    'docs/a,b.md'
+  ]);
+  assert.equal(readUnsyncedChangeEvidence(identity).length, 6);
+});
+
+test('binding and first callback are recorded separately from edit evidence', () => {
+  const { workspace } = isolatedWorkspace('ovld-ledger-capture');
+  const identity = {
+    workingDirectory: workspace,
+    objectiveId: 'objective-capture',
+    sessionKey: 'sess_capture'
+  };
+  resetChangeLedger(identity);
+  assert.equal(readChangeLedgerSnapshot(identity)?.capture.bindingState, 'unknown');
+  recordChangeLedgerBinding({ ...identity, bindingState: 'bound' });
+  const unobserved = readChangeLedgerSnapshot(identity);
+  assert.deepEqual(unobserved?.capture, { bindingState: 'bound' });
+
+  recordChangeLedgerCallback(identity);
+  const first = readChangeLedgerSnapshot(identity)?.capture.callbackObservedAt;
+  assert.ok(first);
+  recordChangeLedgerCallback(identity);
+  assert.equal(readChangeLedgerSnapshot(identity)?.capture.callbackObservedAt, first);
+  assert.deepEqual(readUnsyncedChangeEvidence(identity), []);
+
+  const snapshot = readChangeLedgerSnapshot(identity);
+  assert.ok(snapshot);
+  const fingerprint = changeLedgerCaptureFingerprint(snapshot);
+  markChangeLedgerCaptureSynced({ ...identity, fingerprint });
+  assert.equal(readChangeLedgerSnapshot(identity)?.capture.syncedFingerprint, fingerprint);
+  // A stale fingerprint never marks newer local diagnostics as synchronized.
+  recordChangeLedgerHealth({ ...identity, code: 'direct_path_unavailable' });
+  markChangeLedgerCaptureSynced({ ...identity, fingerprint });
+  const changed = readChangeLedgerSnapshot(identity);
+  assert.ok(changed);
+  assert.notEqual(changeLedgerCaptureFingerprint(changed), changed.capture.syncedFingerprint);
+  assert.deepEqual(
+    changeLedgerCapturePayload(changed).health.map(entry => entry.code),
+    ['direct_path_unavailable']
+  );
 });
 
 test('repeated health codes coalesce without evicting distinct diagnostics', () => {
@@ -260,6 +441,27 @@ test('repeated health codes coalesce without evicting distinct diagnostics', () 
   );
   assert.ok(health[1]?.at);
   assert.ok(health[1]?.at >= (firstTimestamp ?? ''));
+});
+
+test('capture gap codes stay sticky when later diagnostics overflow the bounded list', () => {
+  const { workspace } = isolatedWorkspace('ovld-ledger-sticky');
+  const identity = {
+    workingDirectory: workspace,
+    objectiveId: 'objective-sticky',
+    sessionKey: 'sess_sticky'
+  };
+  resetChangeLedger(identity);
+  recordChangeLedgerHealth({ ...identity, code: 'shell_activity_unverified' });
+  recordChangeLedgerHealth({ ...identity, code: 'outcome_unavailable' });
+  for (let index = 0; index < 40; index += 1) {
+    recordChangeLedgerHealth({ ...identity, code: `diagnostic_${index}` });
+  }
+
+  const codes = readChangeLedgerHealth(identity).map(entry => entry.code);
+  assert.equal(codes.length, 32);
+  assert.deepEqual(codes.slice(0, 2), ['shell_activity_unverified', 'outcome_unavailable']);
+  assert.equal(codes.at(-1), 'diagnostic_39');
+  assert.ok(!codes.includes('diagnostic_0'));
 });
 
 test('ledger cleanup refuses unsynced evidence and removes a fully synced ledger', () => {

@@ -1,4 +1,4 @@
-import { listChangedFilesForReview, listRationalesForReview } from '@overlord/core/service/changes';
+import { listObjectiveFileChanges } from '@overlord/core/service/changes';
 import {
   claimNextExecutionRequest,
   clearExecutionRequests,
@@ -723,7 +723,7 @@ test('durable dispatch preserves the next objective explicit agent until worker 
   await db.close();
 });
 
-test('change review reports missing and covered rationales', async () => {
+test('objective change review reports compact synchronized evidence without annotations', async () => {
   const { db, ctx } = await createContext();
   const project = await createProject({ ctx, name: 'Change Review Test' });
   const { mission, objectives } = await createMissionWithObjectives({
@@ -742,39 +742,25 @@ test('change review reports missing and covered rationales', async () => {
       {
         filePath: 'src/example.ts',
         idempotencyKey: 'change-review-example-1',
-        source: 'declared_edit',
-        quality: 'direct',
-        overlap: false
+        source: 'declared_edit'
       }
     ]
   });
-  assert.equal(
-    (await listChangedFilesForReview({ ctx, missionId: mission.displayId }))[0]?.coverage,
-    'missing_rationale'
-  );
-
   await deliverSession({
     ctx,
     missionId: mission.displayId,
     sessionKey: attached.sessionKey,
-    summary: 'Delivered tracked change',
-    changeRationales: [
-      {
-        filePath: 'src/example.ts',
-        label: 'Example change',
-        summary: 'Updated the example.',
-        why: 'Required for the test.',
-        impact: 'Review shows covered rationale.'
-      }
-    ]
+    summary: 'Delivered tracked change'
   });
 
-  const files = await listChangedFilesForReview({
+  const review = await listObjectiveFileChanges({
     ctx,
-    missionId: mission.displayId
+    missionId: mission.displayId,
+    objectiveId: attached.session.objectiveId
   });
-  assert.equal(files[0]?.coverage, 'covered');
-  assert.equal((await listRationalesForReview({ ctx, missionId: mission.displayId })).length, 1);
+  assert.equal(review.total, 1);
+  assert.equal(review.items[0]?.filePath, 'src/example.ts');
+  assert.equal(review.items[0]?.source, 'declared_edit');
 
   await db.close();
 });

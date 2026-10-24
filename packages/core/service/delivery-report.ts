@@ -212,7 +212,7 @@ const normalizedHumanActionSchema = z.strictObject({
   command: commandTextSchema.optional(),
   verify: conciseTextSchema.optional(),
   link: linkSchema.optional(),
-  source: z.enum(['agent', 'change_rationale', 'deterministic_rule']),
+  source: z.enum(['agent', 'deterministic_rule']),
   sourceRef: z.string().trim().min(1).max(200).optional()
 });
 
@@ -222,7 +222,7 @@ const normalizedTradeoffSchema = z.strictObject({
   alternativesConsidered: z.array(conciseTextSchema).max(MAX_ALTERNATIVES),
   rationale: conciseTextSchema,
   impact: conciseTextSchema.optional(),
-  source: z.enum(['agent', 'change_rationale']),
+  source: z.literal('agent'),
   sourceRef: z.string().trim().min(1).max(200).optional()
 });
 

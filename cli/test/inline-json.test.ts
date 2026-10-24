@@ -6,21 +6,17 @@ import { runProtocolCommand } from '../src/commands.ts';
 import type { CliRuntime } from '../src/runtime.ts';
 
 test('rejectOversizedInlineJson allows compact inline JSON', () => {
-  const flags = parseArgs([
-    'deliver',
-    '--change-rationales-json',
-    '[{"label":"x","filePath":"a.ts","summary":"s","why":"w","impact":"i"}]'
-  ]).flags;
+  const flags = parseArgs(['deliver', '--declared-paths-json', '["scripts/generated.ts"]']).flags;
 
   assert.doesNotThrow(() => rejectOversizedInlineJson({ flags }));
 });
 
-test('rejectOversizedInlineJson rejects oversized change-rationales-json', () => {
+test('rejectOversizedInlineJson rejects oversized declared-paths-json', () => {
   const oversized = 'x'.repeat(MAX_INLINE_JSON_CHARS + 1);
-  const flags = parseArgs(['deliver', '--change-rationales-json', oversized]).flags;
+  const flags = parseArgs(['deliver', '--declared-paths-json', oversized]).flags;
 
-  assert.throws(() => rejectOversizedInlineJson({ flags }), /change-rationales-json is too large/);
-  assert.throws(() => rejectOversizedInlineJson({ flags }), /--change-rationales-file -/);
+  assert.throws(() => rejectOversizedInlineJson({ flags }), /declared-paths-json is too large/);
+  assert.throws(() => rejectOversizedInlineJson({ flags }), /--declared-paths-file -/);
 });
 
 test('rejectOversizedInlineJson points sync changes to the canonical file flag', () => {
@@ -68,11 +64,11 @@ test('runProtocolCommand rejects oversized inline JSON before calling the backen
           'coo:1',
           '--summary',
           'Done.',
-          '--change-rationales-json',
+          '--declared-paths-json',
           oversized
         ]
       }),
-    /--change-rationales-json is too large/
+    /--declared-paths-json is too large/
   );
   assert.equal(posted, false);
 });

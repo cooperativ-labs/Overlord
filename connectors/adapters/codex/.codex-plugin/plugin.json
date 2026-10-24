@@ -1,6 +1,6 @@
 {
   "name": "overlord",
-  "version": "0.3.53",
+  "version": "0.3.56",
   "description": "Chat-driven access to Overlord mission protocol workflows with hook-driven activity capture.",
   "author": {
     "name": "Cooperativ",
@@ -38,7 +38,7 @@
     "defaultPrompt": [
       "Attach to Overlord mission 123 and summarize the context before editing code",
       "Post an execute update to this Overlord mission after a meaningful implementation step",
-      "Deliver this Overlord mission with artifacts and change rationales"
+      "Deliver this Overlord mission with a summary and any declared paths"
     ],
     "brandColor": "#1E6B5C",
     "composerIcon": "./assets/icon.png",

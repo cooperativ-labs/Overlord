@@ -27,6 +27,7 @@ import type {
   MissionEventDto,
   MissionFileChangesDto,
   MissionScheduleDto,
+  ObjectiveFileChangesDto,
   PreviewScheduleBody,
   PurgeMergedWorktreesBody,
   PurgeWorktreesResultDto,
@@ -186,6 +187,11 @@ export const missionsApi = {
     request<SharedContextEntryDto>('PUT', `/api/missions/${missionId}/context`, body),
   listMissionFileChanges: (id: string) =>
     request<MissionFileChangesDto>('GET', `/api/missions/${id}/file-changes`),
+  listObjectiveFileChanges: (missionId: string, objectiveId: string) =>
+    request<ObjectiveFileChangesDto>(
+      'GET',
+      `/api/missions/${missionId}/file-changes?objectiveId=${encodeURIComponent(objectiveId)}`
+    ),
 
   listAgentSessionInputs: (missionId: string) =>
     request<AgentSessionInputsResponse>(

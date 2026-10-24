@@ -262,12 +262,29 @@ export function useUpsertMissionSharedContext(missionId: string) {
   });
 }
 
-// Change rationale writes currently arrive through broad fallback invalidation
-// unless a future feed row carries a more specific file-change entity type.
+// Mission-wide capped page. Only the unassigned-evidence fallback (rows whose
+// objective was deleted) reads it; objective views use the objective read below
+// rather than partition this capped list. `changed_file` and `agent_session`
+// entity changes invalidate the shared prefix.
 export const useMissionFileChanges = (id: string) =>
   useQuery({
     queryKey: keys.missionFileChanges(id),
     queryFn: () => api.listMissionFileChanges(id)
+  });
+
+/**
+ * Cumulative synchronized path evidence and capture diagnostics for one
+ * objective, filtered on the server before the 200-row cap.
+ */
+export const useObjectiveFileChanges = (
+  missionId: string,
+  objectiveId: string,
+  { enabled = true }: { enabled?: boolean } = {}
+) =>
+  useQuery({
+    queryKey: keys.objectiveFileChanges(missionId, objectiveId),
+    queryFn: () => api.listObjectiveFileChanges(missionId, objectiveId),
+    enabled
   });
 
 // ---- Mutations -----------------------------------------------------------

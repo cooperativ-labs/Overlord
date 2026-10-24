@@ -1,4 +1,4 @@
-contractVersion: "164"
+contractVersion: "165"
 componentType: connector
 componentKey: codex
 label: "Codex Connector"
@@ -14,7 +14,7 @@ connector:
   harnessCapabilities:
     path: connectors/adapters/codex/harness-capabilities.yaml
     schemaVersion: 1
-    digest: "4d4908a81023cf7943ebbcb35d8477751f97d916597adc3bf3cec63bdb58dc4b"
+    digest: "b3120edbb3f8a017801de0b9b085c42f05f1d7c335246e224cd283e874ddc542"
   # ── END GENERATED ────────────────────────────────────────────────────────────
   installPath: "~/.codex/plugins/overlord"
   managedFiles:

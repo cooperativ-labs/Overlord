@@ -7,7 +7,7 @@ import test from 'node:test';
 
 const tempDir = mkdtempSync(path.join(tmpdir(), 'overlord-evidence-list-'));
 const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
-const { db, WORKSPACE } = await bootstrapIntegrationTestDb({
+const { db, WORKSPACE, operatorWorkspaceUserId } = await bootstrapIntegrationTestDb({
   sqlitePath: path.join(tempDir, 'webapp.sqlite')
 });
 
@@ -77,10 +77,9 @@ function insertFileChanges({
 }) {
   const insert = db.prepare(
     `INSERT INTO changed_files
-       (id, workspace_id, project_id, mission_id, objective_id, file_path, vcs_status,
-        current_diff_state, first_observed_at, last_observed_at, observed_metadata_json,
-        created_at, updated_at, revision)
-     VALUES (?, ?, ?, ?, ?, ?, 'M', 'present', ?, ?, '{}', ?, ?, 1)`
+       (id, workspace_id, project_id, mission_id, objective_id, file_path, source,
+        first_observed_at, last_observed_at, created_at, updated_at, revision)
+     VALUES (?, ?, ?, ?, ?, ?, 'declared_edit', ?, ?, ?, ?, 1)`
   );
   const run = db.transaction(() => {
     for (let index = 0; index < count; index += 1) {
@@ -194,4 +193,120 @@ test('listMissionFileChanges reports a complete page just under, at, and over th
     false,
     'oldest file change is dropped when over the cap'
   );
+});
+
+test('objective file-change reads filter by objective before count and the cap', async () => {
+  const { runProtocolSubcommand } = await import('./protocol.ts');
+  const { createObjective, listObjectiveFileChangesForMission } = await import('./repository.ts');
+  const busy = await createEvidenceMission();
+  const quiet = await createObjective({
+    missionId: busy.mission.id,
+    instructionText: 'Quiet objective'
+  });
+  insertFileChanges({
+    missionId: busy.mission.id,
+    projectId: busy.project.id,
+    objectiveId: busy.objectiveId,
+    count: OVER_CAP + 49
+  });
+  db.prepare(
+    `INSERT INTO changed_files
+       (id, workspace_id, project_id, mission_id, objective_id, file_path, source,
+        first_observed_at, last_observed_at, created_at, updated_at, revision)
+     VALUES (?, ?, ?, ?, ?, 'quiet/a.ts', NULL, ?, ?, ?, ?, 1)`
+  ).run(
+    newId(),
+    WORKSPACE.id,
+    busy.project.id,
+    busy.mission.id,
+    quiet.id,
+    isoAt(0),
+    isoAt(0),
+    isoAt(0),
+    isoAt(0)
+  );
+
+  // The mission-wide page is dominated by the busy objective's newer rows.
+  const missionPage = await listMissionFileChanges(busy.mission.id);
+  assert.equal(
+    missionPage.items.some(item => item.objectiveId === quiet.id),
+    false
+  );
+
+  const quietPage = await listObjectiveFileChangesForMission(busy.mission.id, quiet.id);
+  assert.equal(quietPage.scope, 'server_objective');
+  assert.equal(quietPage.total, 1);
+  assert.equal(quietPage.truncated, false);
+  assert.deepEqual(
+    quietPage.items.map(item => [item.filePath, item.source]),
+    [['quiet/a.ts', null]]
+  );
+
+  const busyPage = (await runProtocolSubcommand('objective-changes', {
+    flags: { '--mission-id': busy.mission.id, '--objective-id': busy.objectiveId }
+  })) as Awaited<ReturnType<typeof listObjectiveFileChangesForMission>>;
+  assert.equal(busyPage.total, OVER_CAP + 49);
+  assert.equal(busyPage.items.length, AT_CAP);
+  assert.equal(busyPage.limit, AT_CAP);
+  assert.equal(busyPage.truncated, true);
+  assert.ok(busyPage.items.every(item => item.objectiveId === busy.objectiveId));
+  assert.ok(Array.isArray(busyPage.capture.sessions));
+
+  // A foreign mission/objective pair is rejected, not silently scoped.
+  const foreign = await createEvidenceMission();
+  await assert.rejects(() => listObjectiveFileChangesForMission(foreign.mission.id, quiet.id));
+  await assert.rejects(() =>
+    runProtocolSubcommand('objective-changes', {
+      flags: { '--mission-id': foreign.mission.id, '--objective-id': quiet.id }
+    })
+  );
+  await assert.rejects(
+    () =>
+      runProtocolSubcommand('objective-changes', { flags: { '--mission-id': busy.mission.id } }),
+    /objective-id/
+  );
+});
+
+test('objective evidence reads preserve project-token scope and deny diagnostic writes', async () => {
+  const { createUserToken } = await import('./repository.ts');
+  const { runProtocolSubcommand } = await import('./protocol.ts');
+  const { setActiveTokenAuth, setActiveWorkspaceUser } = await import('./db.ts');
+  const allowed = await createEvidenceMission();
+  const foreign = await createEvidenceMission();
+  const { token } = await createUserToken({
+    label: 'Evidence reader',
+    scope: 'project_automation',
+    projectIds: [allowed.project.id]
+  });
+  setActiveTokenAuth({
+    workspaceUserId: operatorWorkspaceUserId,
+    tokenId: token.id,
+    scopeGrants: token.scopeGrants,
+    projectIds: [allowed.project.id]
+  });
+  try {
+    const read = (await runProtocolSubcommand('objective-changes', {
+      flags: { '--mission-id': allowed.mission.id, '--objective-id': allowed.objectiveId }
+    })) as { scope: string; total: number };
+    assert.equal(read.scope, 'server_objective');
+    assert.equal(read.total, 0);
+    await assert.rejects(
+      runProtocolSubcommand('objective-changes', {
+        flags: { '--mission-id': foreign.mission.id, '--objective-id': foreign.objectiveId }
+      }),
+      (error: unknown) => error instanceof Error && 'status' in error && error.status === 404
+    );
+    await assert.rejects(
+      runProtocolSubcommand('sync-changes', {
+        flags: {
+          '--mission-id': allowed.mission.id,
+          '--session-key': 'not-authorized',
+          '--capture-json': '{"bindingState":"bound"}'
+        }
+      }),
+      (error: unknown) => error instanceof Error && 'status' in error && error.status === 404
+    );
+  } finally {
+    setActiveWorkspaceUser(operatorWorkspaceUserId);
+  }
 });

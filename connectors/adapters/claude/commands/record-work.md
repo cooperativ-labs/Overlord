@@ -9,8 +9,7 @@ Immediately record the work you just completed in this chat as a new Overlord mi
 Synthesize from the current conversation:
 - `objective`: what was asked / what was done (1–3 sentences).
 - `summary`: reviewer-friendly narrative of what changed and why.
-- `changeRationales` (optional): reviewer annotations for changes whose reason is not obvious (`filePath`, `label`, `summary`, `why`, `impact`, optional `hunks`).
-- `changedFiles` (optional, `record-work` only): files known from this completed chat work that have no rationale. Each entry is an object with canonical repository-relative `filePath` and optional `vcsStatus`; never infer ownership from a shared-worktree-wide status or diff.
+- `declaredPaths` (optional): repository-relative paths you know this work changed, as a JSON string array (deleted files and both rename endpoints are valid). They are recorded as Declared; never infer them from a shared-worktree-wide status or diff, and never explain files one by one.
 - `title` (optional): mission title; defaults to a title derived from the objective.
 - `artifacts` (optional): `next_steps`, `test_results`, `decision`, `note`, `url`.
 
@@ -22,7 +21,7 @@ Run:
 and stream a single JSON object on stdin via a single-quoted heredoc (`<<'EOF'`):
 
 ```
-{ "objective": "...", "summary": "...", "title": "...", "changeRationales": [...], "changedFiles": [...], "artifacts": [...] }
+{ "objective": "...", "summary": "...", "title": "...", "declaredPaths": [...], "artifacts": [...] }
 ```
 
 After the command succeeds, report the new `MISSION_ID`.

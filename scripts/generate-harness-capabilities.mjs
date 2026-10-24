@@ -79,7 +79,8 @@ function resolveSchemaRef(rootSchema, ref) {
 function valueMatchesType(value, type) {
   if (type === 'null') return value === null;
   if (type === 'array') return Array.isArray(value);
-  if (type === 'object') return value !== null && typeof value === 'object' && !Array.isArray(value);
+  if (type === 'object')
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
   if (type === 'integer') return Number.isInteger(value);
   if (type === 'number') return typeof value === 'number' && Number.isFinite(value);
   return typeof value === type;
@@ -556,7 +557,9 @@ function renderMatrix({ adapters }) {
   );
 
   lines.push('## Adapters', '');
-  lines.push('| Adapter | Harness | Verified version | Shape | Tier | Mutation evidence | Binding | Decision hold |');
+  lines.push(
+    '| Adapter | Harness | Verified version | Shape | Tier | Mutation evidence | Binding | Decision hold |'
+  );
   lines.push('| --- | --- | --- | --- | --- | --- | --- | --- |');
   for (const { adapter, descriptor, tier } of adapters) {
     lines.push(
@@ -640,6 +643,8 @@ const CODEC_RULE_KEYS = new Set([
   'promptPath',
   'detailPath',
   'outcomePath',
+  'outcomeExitCodePrefix',
+  'successOnly',
   'fileEditKind',
   'filePathPaths',
   'filePathPatchTextPaths'
@@ -712,15 +717,11 @@ export function validateCodec({ adapter, codec, errors, integrationShape }) {
       );
     }
     if (rule.fileEditKind !== undefined && rule.fileEditKind !== 'file.edited') {
-      errors.push(
-        `${at(`events.${rule.native}`)}: fileEditKind must be the literal "file.edited"`
-      );
+      errors.push(`${at(`events.${rule.native}`)}: fileEditKind must be the literal "file.edited"`);
     }
     if (rule.fileEditKind === 'file.edited') {
       if (!isBoundedDottedPath(rule.toolPath) || !isBoundedDottedPath(rule.inputPath)) {
-        errors.push(
-          `${at(`events.${rule.native}`)}: fileEditKind requires toolPath and inputPath`
-        );
+        errors.push(`${at(`events.${rule.native}`)}: fileEditKind requires toolPath and inputPath`);
       }
       if (
         !Array.isArray(rule.filePathPaths) ||
@@ -745,13 +746,40 @@ export function validateCodec({ adapter, codec, errors, integrationShape }) {
           `${at(`events.${rule.native}`)}: filePathPatchTextPaths must contain 1-4 unique bounded dotted paths relative to inputPath`
         );
       }
-    } else if (
-      rule.filePathPaths !== undefined ||
-      rule.filePathPatchTextPaths !== undefined
-    ) {
+    } else if (rule.filePathPaths !== undefined || rule.filePathPatchTextPaths !== undefined) {
       errors.push(
         `${at(`events.${rule.native}`)}: filePathPaths is only valid with fileEditKind "file.edited" (as is filePathPatchTextPaths)`
       );
+    }
+    if (rule.outcomePath !== undefined && !isBoundedDottedPath(rule.outcomePath)) {
+      errors.push(`${at(`events.${rule.native}`)}: outcomePath must be a bounded dotted path`);
+    }
+    if (rule.outcomeExitCodePrefix !== undefined) {
+      if (rule.outcomePath === undefined) {
+        errors.push(`${at(`events.${rule.native}`)}: outcomeExitCodePrefix requires outcomePath`);
+      }
+      if (
+        typeof rule.outcomeExitCodePrefix !== 'string' ||
+        rule.outcomeExitCodePrefix.trim() === '' ||
+        rule.outcomeExitCodePrefix.length > 40 ||
+        [...rule.outcomeExitCodePrefix].some(character => character.charCodeAt(0) < 0x20)
+      ) {
+        errors.push(
+          `${at(`events.${rule.native}`)}: outcomeExitCodePrefix must be a 1-40 character single-line string`
+        );
+      }
+    }
+    if (rule.successOnly !== undefined) {
+      // A success-only claim turns an unknown outcome into native edit evidence, so it is only
+      // meaningful on a completion event and must be the literal `true`.
+      if (rule.successOnly !== true) {
+        errors.push(`${at(`events.${rule.native}`)}: successOnly must be the literal true`);
+      }
+      if (rule.kind !== 'tool.completed') {
+        errors.push(
+          `${at(`events.${rule.native}`)}: successOnly is only valid on a tool.completed rule`
+        );
+      }
     }
     if (!['agent', 'user', 'system'].includes(rule.origin)) {
       errors.push(`${at(`events.${rule.native}`)}: origin must be agent, user, or system`);
@@ -871,18 +899,8 @@ function renderCatalog({ adapters }) {
         'direct';
       return {
         classification: descriptor.mutationHooks.classification,
-        pathEvidenceSource:
-          !hasDirectPath
-            ? 'unavailable'
-            : descriptor.mutationHooks.classification === 'paired'
-              ? 'window_observed'
-              : 'declared_edit',
-        pathEvidenceQuality:
-          !hasDirectPath
-            ? 'unavailable'
-            : descriptor.mutationHooks.classification === 'paired'
-              ? 'window'
-              : 'direct',
+        pathEvidenceSource: hasDirectPath ? 'declared_edit' : 'unavailable',
+        pathEvidenceQuality: hasDirectPath ? 'direct' : 'unavailable',
         shellEvidence: 'unavailable',
         pathlessEvidence: 'unavailable',
         fixture: descriptor.mutationHooks.fixture,
@@ -985,8 +1003,8 @@ export type HarnessDescriptor = {
   };
   mutationHooks: {
     classification: MutationHookClassification;
-    pathEvidenceSource: 'declared_edit' | 'window_observed' | 'unavailable';
-    pathEvidenceQuality: 'direct' | 'window' | 'unavailable';
+    pathEvidenceSource: 'declared_edit' | 'unavailable';
+    pathEvidenceQuality: 'direct' | 'unavailable';
     shellEvidence: 'unavailable';
     pathlessEvidence: 'unavailable';
     fixture: string;
@@ -1114,7 +1132,11 @@ function main() {
   const vocabularyChecks = [
     ['capability ids', CAPABILITY_IDS, extensionPoints.agentSession?.capabilityIds ?? []],
     ['capability statuses', STATUSES, extensionPoints.agentSession?.capabilityStatuses ?? []],
-    ['integration shapes', INTEGRATION_SHAPES, extensionPoints.agentSession?.integrationShapes ?? []],
+    [
+      'integration shapes',
+      INTEGRATION_SHAPES,
+      extensionPoints.agentSession?.integrationShapes ?? []
+    ],
     ['fixture kinds', FIXTURE_KINDS, extensionPoints.agentSession?.fixtureKinds ?? []]
   ];
   for (const [label, schemaValues, registryValues] of vocabularyChecks) {

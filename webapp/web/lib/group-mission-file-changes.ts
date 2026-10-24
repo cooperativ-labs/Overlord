@@ -1,10 +1,14 @@
 import type { FileChangeDto, ProjectResourceDto } from '../../shared/contract.ts';
 
-import {
-  distinctProjectResourceKeys,
-  primaryResourceConnection,
-  projectResourceLabel
-} from './project-resources.ts';
+import { projectResourceLabel } from './project-resources.ts';
+
+/**
+ * Group key for rows whose resource was never resolved (sessionless
+ * record-work). In a multi-resource project they are not attributed to the
+ * primary resource by guesswork; they get their own group.
+ */
+export const UNRESOLVED_RESOURCE_KEY = '__unresolved__';
+const UNRESOLVED_RESOURCE_LABEL = 'Unresolved resource';
 
 export type FileChangeResourceGroup = {
   resourceKey: string;
@@ -12,20 +16,18 @@ export type FileChangeResourceGroup = {
   fileChanges: FileChangeDto[];
 };
 
-export function resolveFileChangeResourceKey({
-  fileChange,
-  fallbackResourceKey
-}: {
-  fileChange: FileChangeDto;
-  fallbackResourceKey: string;
-}): string {
-  return fileChange.resourceKey?.trim() || fallbackResourceKey;
+function groupLabel(resources: ProjectResourceDto[], resourceKey: string): string {
+  return resourceKey === UNRESOLVED_RESOURCE_KEY
+    ? UNRESOLVED_RESOURCE_LABEL
+    : projectResourceLabel({ resources, resourceKey });
 }
 
 /**
- * Groups mission file changes by resource when a project has multiple resources
- * and the mission touched more than one of them. Otherwise returns a single flat
- * group so callers can render one list without section headers.
+ * Groups objective path evidence by its recorded resource, even if that resource
+ * is no longer linked on this device (null counts as its own group).
+ * A single evidence group is flat so callers render one
+ * list without headers. Row order within a group is preserved; the server read
+ * already sorts by resource then path.
  */
 export function groupMissionFileChanges({
   fileChanges,
@@ -34,47 +36,12 @@ export function groupMissionFileChanges({
   fileChanges: FileChangeDto[];
   resources: ProjectResourceDto[];
 }): { shouldGroup: boolean; groups: FileChangeResourceGroup[] } {
-  const resourceKeys = distinctProjectResourceKeys(resources);
-  const fallbackResourceKey =
-    primaryResourceConnection(resources).primary?.resourceKey ?? resourceKeys[0] ?? 'primary';
-
   if (fileChanges.length === 0) {
     return { shouldGroup: false, groups: [] };
   }
 
   const resolveKey = (fileChange: FileChangeDto) =>
-    resolveFileChangeResourceKey({ fileChange, fallbackResourceKey });
-
-  if (resourceKeys.length <= 1) {
-    return {
-      shouldGroup: false,
-      groups: [
-        {
-          resourceKey: resolveKey(fileChanges[0]!),
-          resourceLabel: projectResourceLabel({
-            resources,
-            resourceKey: resolveKey(fileChanges[0]!)
-          }),
-          fileChanges
-        }
-      ]
-    };
-  }
-
-  const keysInChanges = new Set(fileChanges.map(resolveKey));
-  if (keysInChanges.size <= 1) {
-    const resourceKey = [...keysInChanges][0] ?? fallbackResourceKey;
-    return {
-      shouldGroup: false,
-      groups: [
-        {
-          resourceKey,
-          resourceLabel: projectResourceLabel({ resources, resourceKey }),
-          fileChanges
-        }
-      ]
-    };
-  }
+    fileChange.resourceKey?.trim() || UNRESOLVED_RESOURCE_KEY;
 
   const groupOrder: string[] = [];
   const byKey = new Map<string, FileChangeDto[]>();
@@ -88,10 +55,10 @@ export function groupMissionFileChanges({
   }
 
   return {
-    shouldGroup: true,
+    shouldGroup: groupOrder.length > 1,
     groups: groupOrder.map(resourceKey => ({
       resourceKey,
-      resourceLabel: projectResourceLabel({ resources, resourceKey }),
+      resourceLabel: groupLabel(resources, resourceKey),
       fileChanges: byKey.get(resourceKey) ?? []
     }))
   };

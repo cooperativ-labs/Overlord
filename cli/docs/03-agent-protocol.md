@@ -199,10 +199,10 @@ no surface carries a private copy of it.
 Requirements:
 
 - `attach`: start the working session and return full context. Optional `--objective-id` (UUID or `{mission.display_id}.{display_key}`) pins the session to that objective. When `--objective-id` or `--execution-request-id` is present, attach must not rediscover another objective from mission state. `--mission-id` is required only when it cannot be derived (see [Addressing](#addressing-a-mission-or-an-objective)).
-- `update`: post progress, discussion/decision events, optional change rationales, and follow-up execution transitions.
+- `update`: post progress, discussion/decision events, optional declared paths, and follow-up execution transitions.
 - `heartbeat`: update liveness and transient telemetry without creating a mission event.
 - `ask`: post a blocking question and stop work.
-- `deliver`: finish work, store artifacts/rationales, mark objective complete, and move mission to review.
+- `deliver`: finish work, store the summary, artifacts, and delivery report, mark objective complete, and move mission to review.
 - `hook-event`: record connector lifecycle events such as `UserPromptSubmit` and future `Stop`. `UserPromptSubmit` records follow-up user activity without requiring a live session and without reopening execution.
 - `resume-follow-up`: explicitly reopen a completed objective for post-delivery implementation follow-up, returning a new session key.
 
@@ -333,7 +333,7 @@ The agent instructions should include:
 - `external-session-id`
 - `begin-follow-up-work`
 - `follow-up-intent`
-- `change-rationales-json` or `change-rationales-file`
+- `paths` or `paths-file` (declared outputs native capture missed)
 
 Post-delivery discussion vs execution:
 
@@ -355,17 +355,23 @@ Changed-file tracking requirements:
   through `sync-changes`.
 - Capture requires an explicit objective-bound session. CWD only normalizes paths and never
   selects an objective.
-- A direct native edit path records `declared_edit` / `direct` evidence. Shell/no-path callbacks
-  record unavailable health and claim no path. No worktree-wide VCS delta is used as attribution.
-- A paired connector may record `window_observed` / `window` only after strict fixtures and the
-  installed runtime prove matching pre/post semantics. No shipped connector currently does.
-- Ledger insertion rejects absolute, parent-traversal, out-of-workspace, ignored, or oversized
-  paths. Only normalized workspace-relative paths and bounded source, quality, overlap, window,
-  and hook-health metadata reach the backend.
-- Changed files are upserted by objective and normalized path across sessions. Session/resource
-  fields retain last-observer provenance.
-- Agents may add optional rationale annotations during update or delivery. Missing or malformed
-  optional evidence produces bounded warnings and never rejects the lifecycle transition.
+- A native edit path records `declared_edit` (Native) evidence only when the connector codec
+  decodes a successful outcome. Failed, blocked, and cancelled calls add no path; unknown and
+  partial outcomes record `outcome_unavailable` / `outcome_partial`. Shell callbacks record
+  `shell_activity_unverified` and other pathless callbacks `direct_path_unavailable`; neither
+  claims a path. No worktree-wide VCS delta is used as attribution.
+- `--paths a,b` / `--paths-file <path|->` (a JSON string array) declare known shell, script, and
+  generator outputs, deletes, and both rename endpoints that capture missed. They are recorded as
+  `agent_declared` (Declared) before the lifecycle request and never downgrade native evidence.
+- Ledger insertion rejects absolute paths outside the checkout, parent traversal, symlink
+  escapes, ignored and Overlord-managed paths, and oversized input. Only normalized
+  workspace-relative paths, source, observation time, bounded hook health, and session capture
+  binding/callback state reach the backend.
+- Changed files are upserted by objective, resolved resource, and normalized path across
+  sessions. Repeated observation refreshes the last observed time.
+- There is no per-file explanation input; `--change-rationales-*`, `--changed-files-*`, and the
+  `changeRationales` / `changedFiles` payload fields are rejected. Missing paths or capture gaps
+  produce bounded warnings and never reject the lifecycle transition.
 
 Supported phases:
 
@@ -391,19 +397,21 @@ Supported event types:
 
 - `summary`
 - `artifacts`
-- `changeRationales`
+- `paths` / `paths-file` (optional declared outputs)
 - `payload-json`
 - `payload-file`
 - `payload-json.deliveryReport` / `payload-file.deliveryReport` (optional versioned agent evidence)
 
 Delivery rules:
 
-- A summary is the only required delivery content. Rationales and delivery-report evidence are
-  optional annotations.
-- Do not store generic `file_changes` artifacts as a substitute for structured rationales.
+- A summary is the only required delivery content. Write it by behavior or component: outcome,
+  why, verification, and limitations, including any capture gap the agent could not reconcile.
+  Delivery-report evidence and artifacts are optional annotations.
+- Do not store generic `file_changes` artifacts, and do not enumerate every changed file.
 - The CLI drains objective-ledger evidence before delivery. Sync warnings, unavailable hooks,
-  missing paths, and missing rationales never reject delivery.
-- Delivery accepts no changed-file, observed-dirty-path, no-file-change, or rationale-skip input.
+  and missing paths never reject delivery.
+- Delivery accepts no changed-file, observed-dirty-path, no-file-change, rationale, or
+  rationale-skip input.
 - Delivery is the final review boundary, but it should not be the first time Overlord learns which files changed during the session.
 - Delivery moves the active objective to `complete`.
 - Delivery moves the mission to review unless another explicit status is requested later.
@@ -427,11 +435,23 @@ Delivery rules:
   `.env.example` edits, dependency manifests, and CI workflow files even when the agent
   reported none.
 
-### Change Ledger Preflight
+### Change Evidence Preflight
 
-`ovld protocol changes --objective-id <display id>` synchronizes the explicitly bound
-objective ledger and reports local evidence/health still pending. It does not inspect or classify
-the shared worktree and it never invents rationale or skip payloads.
+Before delivering, the agent reads captured evidence once:
+
+- `ovld protocol changes --objective-id <display id>` synchronizes every locally known ledger of
+  the objective, then returns `LocalObjectiveChangesDto` (`scope: local_objective_sessions`):
+  synced and pending paths deduplicated by path, capped at 200 with a pre-cap `total` and
+  `truncated`, sync counts, capture binding, and warnings computed per session so a newer
+  healthy session cannot hide an earlier gap. With no matching local session it reports
+  `coverage: unavailable`, not an empty list.
+- `ovld protocol objective-changes --objective-id <display id>` (hosted MCP `overlord_changes`)
+  returns `ObjectiveFileChangesDto` (`scope: server_objective`): synchronized evidence across
+  every session, resource, and device, with persisted capture diagnostics. It cannot see
+  unsynchronized local rows. It needs no attach and mutates nothing.
+
+Neither read inspects or classifies the shared worktree. The agent then declares only files it
+knows it changed that capture missed, and writes the summary.
 
 ## Record-Work Requirements
 
@@ -442,13 +462,13 @@ Requirements:
 - Create a mission directly in review.
 - Create a completed objective.
 - Store a delivery summary.
-- Store artifacts and change rationales if provided.
-- Record a `changed_files` row for every rationale's `filePath` plus any explicit
-  `--changed-files-json` entry, so the review panel matches a normal delivery even when prose is
-  omitted.
+- Store artifacts and the delivery report if provided.
+- Record a `changed_files` row with `agent_declared` provenance and no resource for every
+  explicit `declaredPaths` entry (`--declared-paths-json|file`), so the review panel matches a
+  normal delivery.
 - Store delivery and changed-file records without requiring an `agent_sessions` row; session attribution is null for `record-work`.
 - Enqueue the standard delivery compose job so the Gemini delivery summary runs exactly as it does for a normal `deliver`.
-- Accept the whole submission as a single `--payload-json` / `--payload-file` envelope (`{ objective, summary, title, changeRationales, changedFiles, artifacts }`), with explicit flags overriding envelope fields.
+- Accept the whole submission as a single `--payload-json` / `--payload-file` envelope (`{ objective, summary, title, declaredPaths, artifacts, deliveryReport }`), with explicit flags overriding envelope fields.
 - Do not use it for in-progress work.
 
 The exact submission format is documented in the shared connector reference at
@@ -459,6 +479,6 @@ The exact submission format is documented in the shared connector reference at
 - Agents can complete the full lifecycle using only `ovld protocol`.
 - `attach` gives enough context for a new agent session to continue work without reading prior chat.
 - Follow-up messages from hooks are preserved as events.
-- Delivery with missing required rationale fields fails with a useful error.
+- Delivery with only a summary succeeds; retired rationale and changed-file inputs fail with a useful error.
 - Protocol payloads can be sent via stdin to avoid shell quoting failures.
 - Local MVP command names remain compatible with future HTTP/MCP surfaces.

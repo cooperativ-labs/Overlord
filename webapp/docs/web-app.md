@@ -113,21 +113,22 @@ Requirements:
 - Delivery summary visible at top of review state.
 - Artifacts grouped by type.
 - Human action/follow-up section.
-- Change rationales grouped by objective and file.
+- Files changed during each objective, grouped by resource (no per-file prose).
 - Objective completion history.
 - Redelivery indicator for `pending_delivery`.
 - Buttons/actions to complete, reopen, add follow-up objective, or ask for changes.
 
-### File Changes
+### Files changed during this objective
 
 Requirements:
 
-- Show the mission's durable changed-file observations, grouped by logical resource
-  when needed.
-- Show source, quality, overlap, bounded hook health, and optional rationale prose.
-- Keep observed paths visible when no rationale exists.
+- Per objective, show compact cumulative path rows from the server objective read
+  (`?objectiveId=`), grouped by logical resource when needed.
+- Show basename, directory and an optional Native / Declared / Unknown chip only.
+- Show capture warnings, truncation, and empty-versus-unavailable states honestly;
+  never present an empty list as "no files changed".
 - Open a path in the configured editor only when its target/resource root is available.
-- Never scan Git status or infer an unassigned workspace set.
+- Never scan Git status or infer ownership from a shared worktree.
 
 The projection contains metadata only. It never uploads repository contents and
 never performs VCS mutations.

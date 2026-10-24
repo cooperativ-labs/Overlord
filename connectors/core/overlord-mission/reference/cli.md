@@ -88,34 +88,60 @@ ovld protocol deliver --session-key <sessionKey> \
 ```
 
 This is the normal delivery shape: a summary is sufficient. The CLI syncs objective-ledger
-evidence independently before the lifecycle transition.
+evidence independently before the lifecycle transition; tracking gaps and sync failures never
+block delivery. Write the summary by behavior or component (outcome, why, verification, and
+limitations); there is no per-file explanation input.
 
-Artifacts, optional change rationales, and a delivery report remain current annotations when
-they add review value. Use `--payload-json` when the full delivery object fits comfortably inline
-(roughly under 8 KB). Larger inline `--*-json` values are rejected; stream them through the
-corresponding `--*-file -` flag.
+Artifacts and a delivery report remain optional annotations when they add review value. Use
+`--payload-json` when the full delivery object fits comfortably inline (roughly under 8 KB).
+Larger inline `--*-json` values are rejected; stream them through the corresponding `--*-file -`
+flag.
 
 If `heartbeat` succeeds but `deliver` or `update` fails, the session is likely fine — retry with the corresponding `--*-file -` flag instead of inline `--*-json`.
 
-### Change ledger health
+### Captured file evidence
 
-Use this only to inspect or troubleshoot objective-ledger synchronization and hook health:
+Read the objective's captured paths once before writing the delivery summary:
 
 ```bash
-ovld protocol changes --mission-id $MISSION_ID
+ovld protocol changes --objective-id $OBJECTIVE_ID            # this checkout's sessions
+ovld protocol objective-changes --objective-id $OBJECTIVE_ID  # synchronized server history
 ```
 
-It may flush pending metadata-only ledger entries for the attached objective, then reports the
-binding, synchronization result, evidence source/quality, and bounded hook health. It does not
-read or diff the worktree, classify files by agent ownership, draft rationales, or gate delivery.
-Native paths normalized by the connector-owned codec as `file.edited` are valid, non-exclusive
-`declared_edit`/`direct` evidence. Codec-normalized read, search, and fetch callbacks are silent
-no-ops. Mutation-capable callbacks without a normalized edit path, plus shell, generic, unknown,
-and unmapped callbacks, report unavailable evidence health.
+`changes` is local-only: it syncs pending ledger entries (failure is advisory) and returns
+`LocalObjectiveChangesDto` with `scope: "local_objective_sessions"`, synced and pending paths
+deduplicated by path, a 200-row cap with pre-cap `total` and `truncated`, and capture and sync
+warnings. `coverage: "unavailable"` means no local session matched, not that nothing changed.
+`objective-changes` (hosted MCP `overlord_changes`) returns `ObjectiveFileChangesDto` with
+`scope: "server_objective"` across every session, resource, and device, but cannot see
+unsynchronized local rows. Neither read diffs the worktree, classifies ownership, or gates
+delivery.
 
-For outputs of a generator, migration, or file-writing script that the hook cannot name, an agent
-may add `--paths path/one.ts,path/two.ts` to its existing `update` or `deliver` call. It is
-optional, paths-only metadata; it is never a request to enumerate every changed or opened file.
+Rows are cumulative objective evidence, including edits later reverted. `source` is
+`declared_edit` (Native: at least one successful native edit callback), `agent_declared`
+(Declared), or `null` (Unknown historical provenance). Native capture appends a path only for a
+codec-normalized edit with a successful outcome; reads, searches, and fetches are silent. Gap
+codes mean capture may be incomplete, not that a file changed: `shell_activity_unverified`
+(shell ran), `outcome_partial` / `outcome_unavailable` (an edit failed partway or its result was
+unknown, so no path was recorded), and `direct_path_unavailable` (an unmappable tool ran).
+Binding warnings distinguish an unbound session, a bound session with no observed callback, and
+unknown (hosted) availability.
+
+When you know you changed files capture missed (shell or heredoc writes, script or generator
+outputs, deletes, and both rename endpoints), declare exactly those on the existing `update` or
+`deliver` call:
+
+```bash
+ovld protocol deliver --session-key <sessionKey> --objective-id $OBJECTIVE_ID \
+  --summary "Narrative: what you did and next steps." \
+  --paths src/generated/schema.ts,docs/old-name.md,docs/new-name.md
+```
+
+Use `--paths-file <path|->` with a JSON string array for long lists or paths containing commas.
+Paths are normalized against the checkout; traversal, symlinks leaving the checkout, ignored
+paths, and Overlord-managed paths are rejected with a reason on stderr and never fail the call.
+Absent targets (deleted or renamed-away files) are valid. Never enumerate every changed or
+opened file, and when unsure, describe the coverage gap in the summary instead of guessing.
 
 ### Shared worktree safety (critical)
 
@@ -132,42 +158,11 @@ uses the same summary-only delivery as every other objective.
 
 Ordinary deliver artifacts should use `next_steps`, `test_results`, `migration`, `note`, `url`, or `decision`.
 
-## Optional Change Rationales
+## Retired Per-File Inputs
 
-Rationales are optional annotations stored as `change_rationales` rows. Overlord records
-which files an objective changed on its own, so a delivery never requires them and cannot
-fail for lacking them. Supply one only when the reason for a change is not obvious from the
-diff.
-
-Attach them to `update` while working, or to `deliver` at the end. Inline
-`--change-rationales-json` is fine for a few entries; larger arrays are **rejected** — use
-`--change-rationales-file -` and stream JSON on stdin. The same ~8 KB inline limit applies to
-`--payload-json` and other `--*-json` flags.
-
-**Fields per entry:** `filePath`, `label`, `summary`, `why`, `impact` (all strings),
-plus optional `hunks` containing only a `header` string. Use the canonical
-`filePath` spelling. Do not wrap the entry under a `rationale` key. Unknown keys
-discard only that advisory item or hunk with a bounded warning; the last valid
-item wins when a canonical path is repeated.
-
-```bash
-ovld protocol update --session-key <sessionKey> --mission-id $MISSION_ID \
-  --summary "Added retry logic." --phase execute \
-  --change-rationales-json '[{"label":"Add backoff","filePath":"lib/api.ts","summary":"Added retry.","why":"Transient failures.","impact":"Retries 3x.","hunks":[{"header":"@@ -22,4 +22,18 @@"}]}]'
-```
-
-For many entries (roughly 5+), stream them through `--change-rationales-file -` to avoid shell quoting failures:
-
-```bash
-ovld protocol deliver --session-key <sessionKey> --mission-id $MISSION_ID \
-  --summary "Narrative: what you did and next steps." \
-  --change-rationales-file - <<'EOF'
-[
-  {"label":"Add backoff","filePath":"lib/api.ts","summary":"Added retry.","why":"Transient failures.","impact":"Retries 3x."},
-  {"label":"Update config","filePath":"lib/config.ts","summary":"Added timeout.","why":"Match new defaults.","impact":"Requests time out after 30s."}
-]
-EOF
-```
+`--change-rationales-json|file`, `--changed-files-json|file`, and the `changeRationales` /
+`changedFiles` payload fields are rejected on `update`, `deliver`, and `record-work`. Explain
+changes in the summary and declare missed paths with `--paths` / `--paths-file`.
 
 ## Project Discovery And Mission Creation
 
@@ -183,7 +178,7 @@ When creating missions from within a repository:
 - `add-objectives` uses the same per-item `autoAdvance` field and `--auto-advance` / `--no-auto-advance` mapping.
 - Every objective item on `create`, `prompt`, and `add-objectives` also takes optional `"agent"` and `"model"` (a model requires an agent), and `--objective-agent <id>` / `--objective-model <id>` set the default for items that name no `agent` of their own. Assign the agent on the objectives you are already creating rather than appending a second objective just to name one. `--objective-agent` is distinct from `--agent`, which records creation provenance (and, on `prompt`, the attaching agent).
 - Use `ovld protocol run-queue [--project-id <id|slug|name>|--objective-id <id>|--mission-id <id>] [--queue <id|name>]` to inspect live queues. Entry operations use `queue-objective --objective-id <id> [--queue <id|name>] [--after <queued-entry|objective>|--front|--position <rank>]`, `dequeue-objective --objective-id <id>`, and `reorder-run-queue --queue <id|name> --ordered-entries-json <json>`; they require `execution_request:create`. Queue-definition operations use `create-run-queue`, `update-run-queue`, `delete-run-queue`, and `reorder-project-run-queues`; they require `project:update` and therefore a full-scope token.
-- `record-work` creates exactly one **completed** objective from a single `--objective` (or positional / an `objective` field in `--payload-json`) plus a `--summary` and file-change data — it does not take `--objectives-json`. See [record-work.md](record-work.md).
+- `record-work` creates exactly one **completed** objective from a single `--objective` (or positional / an `objective` field in `--payload-json`) plus a `--summary` and optional `declaredPaths` — it does not take `--objectives-json`. See [record-work.md](record-work.md).
 
 ```bash
 ovld protocol create --project-id <project-id> --agent <agent-identifier> --objectives-json '[{"objective":"Capture follow-up work from this repository"}]'
@@ -211,25 +206,20 @@ ovld protocol update-objective --objective-id <objective-uuid> --auto-advance
 ### Record Completed Work
 
 Record already-finished chat work as a completed review mission in one call — no
-`attach`/`deliver`. Creates a mission with one completed objective, records explicitly supplied
-changed files and optional rationales, lands it in review, and runs the Gemini delivery summary.
+`attach`/`deliver`. Creates a mission with one completed objective, records declared paths as
+Declared evidence, lands it in review, and runs the Gemini delivery summary.
 
 ```bash
 ovld protocol record-work --payload-file - <<'EOF'
 {
   "objective": "Add a CSV export button to the reports page.",
   "summary": "Added a CSV export control and the serializer behind it.",
-  "changeRationales": [
-    { "filePath": "src/reports/export.ts", "label": "CSV serializer",
-      "summary": "New CSV serializer.", "why": "Users need offline reports.",
-      "impact": "Reports can be exported as CSV." }
-  ]
+  "declaredPaths": ["src/reports/export.ts"]
 }
 EOF
 ```
 
-The full submission format, including the `record-work`-only `changedFiles` field and MCP
-equivalent, is in [record-work.md](record-work.md).
+The full submission format, including `declaredPaths` rules and the MCP equivalent, is in [record-work.md](record-work.md).
 
 To inspect project resolution explicitly:
 

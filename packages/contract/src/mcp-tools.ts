@@ -48,23 +48,11 @@ const protocolOutputSchema = (description: string): Record<string, unknown> => (
   additionalProperties: true
 });
 
-const changeRationalesProperty = (description: string): Record<string, unknown> => ({
+const declaredPathsProperty = (description: string): Record<string, unknown> => ({
   type: 'array',
   description,
-  items: objectSchema(
-    {
-      filePath: stringProperty('Repository-relative path of the changed file.'),
-      label: stringProperty('Short reviewer title for the change.'),
-      summary: stringProperty('What changed in this file.'),
-      why: stringProperty('Why the change was made.'),
-      impact: stringProperty('Behavioral impact of the change.'),
-      hunks: {
-        type: 'array',
-        description: 'Optional diff-hunk headers only; file contents and diffs are prohibited.',
-        items: objectSchema({ header: stringProperty('Unified-diff hunk header.') }, ['header'])
-      }
-    },
-    ['filePath', 'label', 'summary', 'why', 'impact']
+  items: stringProperty(
+    'Canonical repository-relative path. Deleted and renamed paths (both endpoints) are valid.'
   )
 });
 
@@ -315,6 +303,24 @@ export function overlordMcpToolDefinitions({
       }),
       outputSchema: protocolOutputSchema(
         "The mission's newest-first MissionDeliveriesDto page: items (DeliveryDto, capped at 200), total, and limit."
+      ),
+      annotations: readOnly
+    },
+    {
+      name: 'overlord_changes',
+      title: 'List objective file changes',
+      description:
+        'Use this to read the synchronized changed-file evidence of one objective across every session, resource, and device. Returns ObjectiveFileChangesDto { scope: "server_objective", items, total, limit, truncated, capture }: compact rows (resourceKey, filePath, source declared_edit | agent_declared | null for unknown, observedAt, hookHealth) ordered by resource then path and capped at 200, total as the pre-cap count, and persisted capture diagnostics with warnings. It never includes unsynchronized local evidence, needs no attached session, and does not mutate anything.',
+      inputSchema: objectSchema({
+        missionId: stringProperty(
+          'Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission.'
+        ),
+        objectiveId: stringProperty(
+          'Required objective UUID or display id such as coo:756.k7xm. An objective that does not belong to missionId is rejected.'
+        )
+      }),
+      outputSchema: protocolOutputSchema(
+        'ObjectiveFileChangesDto: scope server_objective, missionId, objectiveId, items (FileChangeDto, capped at 200), total, limit, truncated, and capture { sessions, warnings }.'
       ),
       annotations: readOnly
     },
@@ -637,8 +643,8 @@ export function overlordMcpToolDefinitions({
           summary: stringProperty('Update text.'),
           phase: stringProperty('Optional protocol phase.'),
           eventType: stringProperty('Optional event type. Defaults to update.'),
-          changeRationales: changeRationalesProperty(
-            'Optional reviewer-facing annotations for objective-ledger file evidence.'
+          declaredPaths: declaredPathsProperty(
+            'Optional paths written by shell commands, generators, or scripts that native capture could not name. Recorded as agent_declared evidence; never an exhaustive list.'
           )
         },
         ['sessionKey', 'summary']
@@ -650,7 +656,7 @@ export function overlordMcpToolDefinitions({
       name: 'overlord_deliver_session',
       title: 'Deliver mission session',
       description:
-        'Use this only when the user-requested mission work is complete. It delivers the attached session with an explicit summary, optional file-change rationales, and optional authoritative human-action/tradeoff evidence.',
+        'Use this only when the user-requested mission work is complete. It delivers the attached session with an explicit summary, optional declared shell/script output paths, and optional authoritative human-action/tradeoff evidence.',
       inputSchema: objectSchema(
         {
           missionId: stringProperty(
@@ -677,8 +683,8 @@ export function overlordMcpToolDefinitions({
               ['type', 'label']
             )
           },
-          changeRationales: changeRationalesProperty(
-            'Optional reviewer-facing annotations for objective-ledger file evidence.'
+          declaredPaths: declaredPathsProperty(
+            'Optional paths written by shell commands, generators, or scripts that native capture could not name. Recorded as agent_declared evidence; never an exhaustive list and never required.'
           ),
           humanActions: {
             type: 'array',
@@ -815,9 +821,9 @@ export function overlordMcpToolDefinitions({
       title: 'Record completed work as a mission',
       description:
         'Use this to log work already finished in this chat as a completed Overlord mission — one call, no attach/deliver cycle. ' +
-        'It creates a mission and a single completed objective, records the file changes and their rationales, lands the mission in ' +
+        'It creates a mission and a single completed objective, records the explicitly declared changed paths, lands the mission in ' +
         'the review column, and runs the delivery through the standard Gemini summarizer so it reads like any other delivered mission. ' +
-        'Provide an objective (what was asked/done) and a reviewer-facing summary; optional changeRationales may annotate meaningful file changes. ' +
+        'Provide an objective (what was asked/done) and a reviewer-facing summary; optional declaredPaths lists the files the work changed. ' +
         'Only use this when the work is genuinely complete; use overlord_create_mission for work still to be done.',
       inputSchema: objectSchema(
         {
@@ -831,20 +837,9 @@ export function overlordMcpToolDefinitions({
           title: stringProperty(
             'Optional mission title; defaults to a title derived from the objective.'
           ),
-          changeRationales: changeRationalesProperty(
-            'One optional reviewer annotation per meaningful file change.'
+          declaredPaths: declaredPathsProperty(
+            'Optional repository-relative paths this work changed, recorded as agent_declared evidence for the completed objective.'
           ),
-          changedFiles: {
-            type: 'array',
-            description: 'Optional explicit file observations for this sessionless record.',
-            items: objectSchema(
-              {
-                filePath: stringProperty('Repository-relative path.'),
-                vcsStatus: stringProperty('Optional VCS status such as M, A, or D.')
-              },
-              ['filePath']
-            )
-          },
           artifacts: {
             type: 'array',
             description: 'Optional artifacts: next_steps, test_results, decision, note, or url.'

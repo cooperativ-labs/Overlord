@@ -33,8 +33,7 @@ const sampleInput: ComposeDeliveryInput = {
   knownRisks: [],
   deferredWork: [],
   assumptions: [],
-  candidateActions: [],
-  changeRationales: []
+  candidateActions: []
 };
 
 describe('compose-delivery automation', () => {
@@ -108,5 +107,17 @@ describe('compose-delivery deferred-work enrichment', () => {
     assert.match(prompt, /Planned future objectives on this mission/);
     assert.match(prompt, /CSV export API/);
     assert.match(prompt, /omitted as ineligible/);
+  });
+});
+
+describe('compose-delivery file evidence', () => {
+  it('never sends per-file prose and forbids path-derived claims', () => {
+    const prompt = buildComposeDeliveryPrompt(sampleInput);
+    assert.doesNotMatch(prompt, /change rationale|changeRationale/i);
+    assert.doesNotMatch(SYSTEM_INSTRUCTION, /change rationales/i);
+    assert.match(
+      SYSTEM_INSTRUCTION,
+      /never infer behavior, impact, tests, or verification from a file or path name/
+    );
   });
 });

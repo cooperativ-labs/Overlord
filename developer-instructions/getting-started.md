@@ -8,7 +8,7 @@ mission in about ten minutes.
 - A running local Overlord instance
 - A project linked to a git repository
 - An agent connector installed in your harness (Claude Code, Codex, or Cursor)
-- A delivered mission with change rationales you can inspect
+- A delivered mission whose summary and changed files you can inspect
 
 ---
 
@@ -219,18 +219,16 @@ Once the agent delivers, inspect what it produced:
 # Read the delivery summary
 ovld mission deliveries 1:1042
 
-# See all file changes with rationale
-ovld changes rationales --mission-id 1:1042
-
-# Diff the exact changes
-ovld changes diff --mission-id 1:1042
+# See the files each objective changed (Native / Declared / Unknown)
+ovld mission file-changes 1:1042
 
 # Full mission context (history, shared state, artifacts)
 ovld mission context 1:1042
 ```
 
-The change rationales explain what each file change does and why — an audit
-trail that lives alongside the diff.
+The delivery summary explains what changed and why by behavior or component; the
+file list is the cumulative footprint captured during the objective. It is not a Git
+diff, so use your normal Git tooling when you want to read the changes themselves.
 
 ---
 

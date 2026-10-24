@@ -12,6 +12,7 @@ import {
 import { captureChangeFromPayload } from '../src/capture-change.ts';
 import {
   appendChangeEvidence,
+  readChangeLedgerSnapshot,
   readUnsyncedChangeEvidence,
   recordChangeLedgerHealth
 } from '../src/change-ledger.ts';
@@ -37,6 +38,21 @@ function makeWorkspace(): string {
   return workspace;
 }
 
+async function captureStdoutText(action: () => Promise<void>): Promise<string> {
+  let written = '';
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    written += String(chunk);
+    return true;
+  }) as typeof process.stdout.write;
+  try {
+    await action();
+  } finally {
+    process.stdout.write = originalWrite;
+  }
+  return written;
+}
+
 async function captureStdout(action: () => Promise<void>): Promise<unknown> {
   let written = '';
   const originalWrite = process.stdout.write.bind(process.stdout);
@@ -59,8 +75,7 @@ test('deliver drains every ledger batch and sends no retired change-tracking fla
     objectiveId: OBJECTIVE_ID,
     sessionKey: SESSION_KEY,
     filePaths: Array.from({ length: 31 }, (_, index) => `src/file-${index}.ts`),
-    source: 'declared_edit',
-    quality: 'direct'
+    source: 'declared_edit'
   });
 
   const requests: Array<{ path: string; body: unknown }> = [];
@@ -99,6 +114,8 @@ test('deliver drains every ledger batch and sends no retired change-tracking fla
     close: () => {}
   } satisfies CliRuntime;
 
+  const pathsFile = path.join(workspace, 'declared-paths.json');
+  writeFileSync(pathsFile, JSON.stringify(['generated/a,b.ts', 'src/removed.ts', '../escape.ts']));
   const originalCwd = process.cwd();
   process.chdir(workspace);
   try {
@@ -112,6 +129,8 @@ test('deliver drains every ledger batch and sends no retired change-tracking fla
         OBJECTIVE_DISPLAY_ID,
         '--paths',
         'generated/one.ts,generated/two.ts',
+        '--paths-file',
+        pathsFile,
         '--summary',
         'Done.'
       ]
@@ -125,6 +144,11 @@ test('deliver drains every ledger batch and sends no retired change-tracking fla
   assert.ok(delivery);
   const flags = (delivery.body as { flags: Record<string, string | true> }).flags;
   assert.equal('--paths' in flags, false);
+  assert.equal('--paths-file' in flags, false);
+  assert.equal(
+    '--paths-file' in (delivery.body as { fileInputs: Record<string, string> }).fileInputs,
+    false
+  );
   for (const retired of [
     '--changed-files-json',
     '--changed-files-file',
@@ -136,16 +160,25 @@ test('deliver drains every ledger batch and sends no retired change-tracking fla
   ]) {
     assert.equal(retired in flags, false);
   }
-  const syncedPaths = requests
+  const synced = requests
     .filter(request => request.path === '/api/protocol/sync-changes')
     .flatMap(request => {
       const syncFlags = (request.body as { flags: Record<string, string> }).flags;
-      return (JSON.parse(syncFlags['--changes-json'] ?? '[]') as Array<{ filePath: string }>).map(
-        entry => entry.filePath
-      );
+      return JSON.parse(syncFlags['--changes-json'] ?? '[]') as Array<{
+        filePath: string;
+        source: string;
+      }>;
     });
-  assert.ok(syncedPaths.includes('generated/one.ts'));
-  assert.ok(syncedPaths.includes('generated/two.ts'));
+  const declared = synced
+    .filter(entry => entry.source === 'agent_declared')
+    .map(entry => entry.filePath);
+  assert.deepEqual(declared, [
+    'generated/one.ts',
+    'generated/two.ts',
+    'generated/a,b.ts',
+    'src/removed.ts'
+  ]);
+  assert.equal(synced.filter(entry => entry.source === 'declared_edit').length, 31);
   assert.deepEqual(readActiveSessions(workspace), []);
   assert.deepEqual(
     readUnsyncedChangeEvidence({
@@ -345,7 +378,7 @@ test('deliver preserves the exact binding when ledger synchronization cannot pro
   assert.equal(readCachedSessionKey(cacheIdentity), newSessionKey);
 });
 
-test('changes reports objective ledger health without inspecting the worktree', async () => {
+test('changes returns the local objective read without inspecting the worktree', async () => {
   const workspace = makeWorkspace();
   const runtime = {
     backend: {
@@ -381,12 +414,69 @@ test('changes reports objective ledger health without inspecting the worktree', 
   }
 
   assert.deepEqual(output, {
+    scope: 'local_objective_sessions',
     objectiveId: OBJECTIVE_ID,
-    synced: 0,
-    warning: null,
-    unsyncedEvidence: 0,
-    health: []
+    coverage: 'available',
+    items: [],
+    total: 0,
+    limit: 200,
+    truncated: false,
+    sync: { synced: 0, pending: 0, failed: false },
+    capture: { bindingState: 'unknown', callbackObserved: false, healthCodes: [] },
+    warnings: ['unknown_binding']
   });
+});
+
+test('changes reports unavailable coverage, not an empty list, without a local session', async () => {
+  const workspace = mkdtempSync(path.join(os.tmpdir(), 'ovld-layer3-unbound-'));
+  const runtime = {
+    backend: {
+      baseUrl: 'http://example.test',
+      health: async () => ({ ok: true }),
+      get: async () => {
+        throw new Error('unexpected GET');
+      },
+      post: async () => {
+        throw new Error('the local read never reaches the backend without a session');
+      },
+      patch: async () => ({}),
+      delete: async () => ({})
+    },
+    close: () => {}
+  } satisfies CliRuntime;
+  const originalCwd = process.cwd();
+  process.chdir(workspace);
+  try {
+    const output = (await captureStdout(() =>
+      runProtocolCommand({
+        runtime,
+        subcommand: 'changes',
+        args: ['--objective-id', OBJECTIVE_DISPLAY_ID]
+      })
+    )) as { coverage: string; items: unknown[] };
+    assert.equal(output.coverage, 'unavailable');
+    assert.deepEqual(output.items, []);
+    await assert.rejects(
+      () =>
+        runProtocolCommand({
+          runtime,
+          subcommand: 'changes',
+          args: ['--objective-id', OBJECTIVE_DISPLAY_ID, '--mission-id', 'coo:999']
+        }),
+      /does not belong to mission coo:999/
+    );
+    await assert.rejects(
+      () =>
+        runProtocolCommand({
+          runtime,
+          subcommand: 'changes',
+          args: ['--objective-id', OBJECTIVE_DISPLAY_ID, '--session-key', 'sess_foreign']
+        }),
+      /does not identify a local session/
+    );
+  } finally {
+    process.chdir(originalCwd);
+  }
 });
 
 test('changes never prints or transmits stored ledger rows with hostile extra fields', async () => {
@@ -465,15 +555,14 @@ test('changes never prints or transmits stored ledger rows with hostile extra fi
     process.chdir(originalCwd);
   }
 
-  assert.deepEqual(requests, []);
-  assert.deepEqual(output, {
-    objectiveId: OBJECTIVE_ID,
-    synced: 0,
-    warning: null,
-    unsyncedEvidence: 0,
-    health: []
-  });
-  assert.doesNotMatch(JSON.stringify(output), /raw secret|private\/repository|vcsStatus|state/);
+  // Only bounded capture diagnostics travel; no hostile stored row is transmitted.
+  assert.equal(requests.length, 1);
+  const sentFlags = (requests[0] as { body: { flags: Record<string, string> } }).body.flags;
+  assert.equal(sentFlags['--changes-json'], '[]');
+  assert.doesNotMatch(JSON.stringify(requests), /raw secret|private\/repository|vcsStatus/);
+  assert.deepEqual((output as { items: unknown[] }).items, []);
+  assert.deepEqual((output as { capture: { healthCodes: string[] } }).capture.healthCodes, []);
+  assert.doesNotMatch(JSON.stringify(output), /raw secret|private\/repository|vcsStatus|"state"/);
 
   recordChangeLedgerHealth({ ...identity, code: 'invalid_stored_rows_rejected' });
   const rewritten = readFileSync(ledgerPath, 'utf8');
@@ -527,7 +616,17 @@ test('changes recovers the live exact binding when its session-key cache is miss
     process.chdir(originalCwd);
   }
 
-  assert.equal((output as { synced: number }).synced, 1);
+  const local = output as {
+    total: number;
+    items: Array<{ filePath: string; source: string; syncState: string }>;
+    sync: { pending: number };
+  };
+  assert.equal(local.total, 1);
+  assert.deepEqual(
+    local.items.map(item => [item.filePath, item.source, item.syncState]),
+    [['src/cacheless.ts', 'declared_edit', 'synced']]
+  );
+  assert.equal(local.sync.pending, 0);
   assert.deepEqual(
     readUnsyncedChangeEvidence({
       workingDirectory: workspace,
@@ -597,7 +696,14 @@ test('changes stops when backend acknowledgements do not match exact batch key a
   }
 
   assert.equal(syncCalls, 1);
-  assert.equal((output as { warning: unknown }).warning, 'change ledger sync made no progress');
+  const local = output as {
+    items: Array<{ syncState: string }>;
+    sync: { failed: boolean; pending: number };
+    warnings: string[];
+  };
+  assert.deepEqual(local.sync, { synced: 0, pending: 1, failed: true });
+  assert.equal(local.items[0]?.syncState, 'pending');
+  assert.ok(local.warnings.includes('sync_failed'));
   assert.equal(
     readUnsyncedChangeEvidence({
       workingDirectory: workspace,
@@ -681,7 +787,7 @@ test('explicit sync-changes requires an exact local tuple and exact acknowledgem
     }).length,
     2
   );
-  await runSync([{ ...first, source: 'window_observed', quality: 'window' }]);
+  await runSync([{ ...first, source: 'agent_declared' }]);
   assert.equal(
     readUnsyncedChangeEvidence({
       workingDirectory: workspace,
@@ -759,6 +865,85 @@ test('changes bounds aggregate health across pending retry bindings', async () =
     process.chdir(originalCwd);
   }
 
-  assert.equal((output as { health: unknown[] }).health.length, 128);
-  assert.equal((output as { unsyncedEvidence: number }).unsyncedEvidence, 5);
+  const local = output as {
+    total: number;
+    capture: { healthCodes: string[] };
+    sync: { pending: number };
+  };
+  assert.equal(local.capture.healthCodes.length, 32);
+  assert.equal(local.total, 5);
+  assert.equal(local.sync.pending, 5);
+});
+
+test('attach records an honest capture binding from the explicit launch objective', async () => {
+  const attachWith = async (launchObjective: string | undefined) => {
+    process.env.OVLD_HOME = mkdtempSync(path.join(os.tmpdir(), 'ovld-attach-binding-home-'));
+    const workspace = mkdtempSync(path.join(os.tmpdir(), 'ovld-attach-binding-workspace-'));
+    const sessionKey = 'sess_binding';
+    const attachFlags: Array<Record<string, unknown>> = [];
+    const runtime = {
+      backend: {
+        baseUrl: 'http://example.test',
+        health: async () => ({ ok: true }),
+        get: async () => ({}),
+        post: async ({ path: requestPath, body }: { path: string; body: unknown }) => {
+          if (requestPath !== '/api/protocol/attach') return {};
+          attachFlags.push((body as { flags: Record<string, unknown> }).flags);
+          return {
+            sessionKey,
+            mission: { id: 'mission-uuid', displayId: MISSION_ID, title: 'Mission' },
+            objective: { id: OBJECTIVE_ID, displayId: OBJECTIVE_DISPLAY_ID }
+          };
+        },
+        patch: async () => ({}),
+        delete: async () => ({})
+      },
+      close: () => {}
+    } satisfies CliRuntime;
+    const previous = process.env.OVERLORD_OBJECTIVE_ID;
+    if (launchObjective === undefined) delete process.env.OVERLORD_OBJECTIVE_ID;
+    else process.env.OVERLORD_OBJECTIVE_ID = launchObjective;
+    const originalCwd = process.cwd();
+    process.chdir(workspace);
+    try {
+      await captureStdoutText(() =>
+        runProtocolCommand({
+          runtime,
+          subcommand: 'attach',
+          args: ['--objective-id', OBJECTIVE_DISPLAY_ID, '--capture-binding', 'bound']
+        })
+      );
+    } finally {
+      process.chdir(originalCwd);
+      if (previous === undefined) delete process.env.OVERLORD_OBJECTIVE_ID;
+      else process.env.OVERLORD_OBJECTIVE_ID = previous;
+    }
+    return {
+      sent: attachFlags[0]?.['--capture-binding'],
+      local: readChangeLedgerSnapshot({
+        workingDirectory: workspace,
+        objectiveId: OBJECTIVE_ID,
+        sessionKey
+      })?.capture
+    };
+  };
+
+  // No launch objective: the hook cannot capture; a caller-supplied claim is ignored.
+  assert.deepEqual(await attachWith(undefined), {
+    sent: 'unbound',
+    local: { bindingState: 'unbound' }
+  });
+  assert.deepEqual(await attachWith(OBJECTIVE_DISPLAY_ID), {
+    sent: 'bound',
+    local: { bindingState: 'bound' }
+  });
+  // Same objective in another form resolves against the attach response.
+  assert.deepEqual(await attachWith(OBJECTIVE_ID), {
+    sent: undefined,
+    local: { bindingState: 'bound' }
+  });
+  assert.deepEqual(await attachWith('coo:1.other'), {
+    sent: undefined,
+    local: { bindingState: 'unbound' }
+  });
 });

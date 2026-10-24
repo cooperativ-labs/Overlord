@@ -8,7 +8,11 @@ import {
   type ObjectiveEvidenceTruncation,
   objectiveHasHistory
 } from '../../lib/objective-evidence.ts';
-import { useDeleteObjective, useUpdateObjective } from '../../lib/queries.ts';
+import {
+  useDeleteObjective,
+  useObjectiveFileChanges,
+  useUpdateObjective
+} from '../../lib/queries.ts';
 import { useRepositoryMentionOptions } from '../../lib/useRepositoryMentionOptions.ts';
 import { cn } from '../../lib/utils.ts';
 import { InlineEditField } from '../InlineEditField.tsx';
@@ -52,7 +56,7 @@ export function DraftObjective({
   executionRequests,
   allowParallelObjectives = false,
   evidence,
-  evidenceLoading = { deliveries: false, fileChanges: false },
+  evidenceLoading = { deliveries: false },
   evidenceTruncation
 }: DraftObjectiveProps) {
   const update = useUpdateObjective();
@@ -74,7 +78,12 @@ export function DraftObjective({
     dragState
   } = useObjectiveAttachmentState(objective.id);
   const isLaunching = objective.state === 'launching';
-  const hasHistory = objectiveHasHistory(evidence);
+  // Only an objective that already ran can have file evidence behind it.
+  const fileChangesQuery = useObjectiveFileChanges(objective.missionId, objective.id, {
+    enabled: evidence !== undefined && objective.startedAt !== null
+  });
+  const fileCount = fileChangesQuery.data?.total ?? 0;
+  const hasHistory = objectiveHasHistory(evidence, fileCount);
 
   return (
     <FileDropZone
@@ -163,6 +172,7 @@ export function DraftObjective({
         <ObjectiveHistoryStrip
           objective={objective}
           evidence={evidence}
+          fileCount={fileCount}
           loading={evidenceLoading}
           truncation={evidenceTruncation}
         />

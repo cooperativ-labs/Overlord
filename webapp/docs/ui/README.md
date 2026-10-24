@@ -69,7 +69,7 @@ gating, acceptance criteria).
 | 03 | [Mission Detail](03-mission-detail.md) | The core screen: target header, objectives, editor, activity timeline, context, artifacts — **plus an As-built section documenting the shipped single-column mission presentation and the deviations to ratify** |
 | 04 | [Execution & Runner](04-execution-and-runner.md) | Run controls, execution-request queue, runner status, approval gates |
 | 05 | [Review & Delivery](05-review-and-delivery.md) | Delivery summary, artifacts, file evidence, review actions |
-| 06 | [File Changes](06-current-changes.md) | Objective-ledger attribution and optional rationale annotations |
+| 06 | [Files changed during this objective](06-current-changes.md) | Compact cumulative objective path evidence and capture diagnostics |
 | 07 | [Connectors & Doctor](07-connectors-and-doctor.md) | Connector install/health, `doctor` results, permission-request review |
 | 08 | [Settings](08-settings.md) | Instance, execution targets, project workflow, terminal, danger zone |
 | 09 | [Users, Roles & Tokens](09-users-roles-and-tokens.md) | Multi-user admin, RBAC roles, `USER_TOKEN` lifecycle (capability-gated) |

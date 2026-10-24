@@ -50,14 +50,31 @@ export type CodecEventRule = {
   promptPath?: string;
   /** Dotted path to a short structural detail (a lifecycle `source`, a reason code). */
   detailPath?: string;
-  /** Dotted path to a boolean/string success indicator. Never the output itself. */
+  /**
+   * Dotted path to a boolean, string, or numeric (exit code) success indicator. Only the
+   * decoded `ok | error | blocked | cancelled` value is kept; the output itself never is.
+   */
   outcomePath?: string;
+  /**
+   * When `outcomePath` names a text result whose first line is `<prefix><integer>` (Codex
+   * `apply_patch`: `Exit code: 0`), decode that integer as an exit code: 0 is `ok`, anything
+   * else `error`. Only the leading line is inspected and the text is never retained.
+   */
+  outcomeExitCodePrefix?: string;
+  /**
+   * The harness emits this native event only after a successful call (failures go to a
+   * different event that is not registered here). Must be backed by fixture/source evidence
+   * for the harness version. With no decoded outcome the event is sealed as `ok`; an
+   * explicitly decoded outcome still wins. Never declare it from the event name alone.
+   */
+  successOnly?: true;
   /** Ordered dotted paths, relative to inputPath, that may carry exact edit evidence. */
   filePathPaths?: string[];
   /**
    * Ordered dotted paths, relative to inputPath, containing a unified-patch-like
-   * string. Only `*** Add|Update|Delete File:` headers are reduced to paths;
-   * the patch text itself never enters the normalized event.
+   * string. Only `*** Add|Update|Delete File:` and `*** Move to:` headers are
+   * reduced to paths, so a rename keeps both endpoints; the patch text itself
+   * never enters the normalized event.
    */
   filePathPatchTextPaths?: string[];
   /**
@@ -128,10 +145,25 @@ function boundedId(value: unknown): string | null {
   return text === '' ? null : text;
 }
 
-function readOutcome(value: unknown): NormalizedEventPayload['outcome'] | undefined {
+function exitCodeOutcome(code: number): NormalizedEventPayload['outcome'] | undefined {
+  if (!Number.isSafeInteger(code)) return undefined;
+  return code === 0 ? 'ok' : 'error';
+}
+
+function readOutcome(
+  value: unknown,
+  exitCodePrefix: string | undefined
+): NormalizedEventPayload['outcome'] | undefined {
   if (value === undefined || value === null) return undefined;
   if (value === true) return 'ok';
   if (value === false) return 'error';
+  if (typeof value === 'number') return exitCodeOutcome(value);
+  if (typeof value === 'string' && exitCodePrefix) {
+    const firstLine = (value.slice(0, 200).split('\n', 1)[0] ?? '').trim();
+    if (!firstLine.startsWith(exitCodePrefix)) return undefined;
+    const digits = firstLine.slice(exitCodePrefix.length).trim();
+    return /^-?\d{1,6}$/.test(digits) ? exitCodeOutcome(Number(digits)) : undefined;
+  }
   if (typeof value === 'string') {
     const lowered = value.toLowerCase();
     if (lowered === 'ok' || lowered === 'success' || lowered === 'completed') return 'ok';
@@ -144,7 +176,7 @@ function readOutcome(value: unknown): NormalizedEventPayload['outcome'] | undefi
   return undefined;
 }
 
-const PATCH_HEADER = /^\*\*\* (?:Add|Update|Delete) File: (.+)$/gm;
+const PATCH_HEADER = /^\*\*\* (?:(?:Add|Update|Delete) File|Move to): (.+)$/gm;
 const MAX_PATCH_PATHS = 32;
 
 function declaredPatchPaths(
@@ -282,9 +314,10 @@ export function normalizeNativeEvent({
   }
 
   if (rule.outcomePath) {
-    const outcome = readOutcome(readPath(payload, rule.outcomePath));
+    const outcome = readOutcome(readPath(payload, rule.outcomePath), rule.outcomeExitCodePrefix);
     if (outcome) sealedInput.outcome = outcome;
   }
+  if (rule.successOnly && !sealedInput.outcome) sealedInput.outcome = 'ok';
 
   const payloadOut = sealPayload(sealedInput);
   const summary = summarizeEvent(kind, payloadOut);

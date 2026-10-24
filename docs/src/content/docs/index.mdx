@@ -17,8 +17,8 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 import HowOverlordWorks from '../../components/HowOverlordWorks.astro';
 
 Overlord is the durable work record around your coding agents. It keeps the
-objective, progress, questions, artifacts, delivery notes, and file-change
-rationale together—whether you work from the desktop app, terminal, or an
+objective, progress, questions, artifacts, delivery notes, and the files each
+objective changed together—whether you work from the desktop app, terminal, or an
 agent's own interface.
 
 It works with the tools and subscriptions you already use. Overlord is not a
@@ -29,8 +29,8 @@ their work across projects and over time.
 
 You organize work as **projects → missions → objectives**, and each objective is
 handed to exactly one **agent session**. The agent attaches, works against your
-repository, posts progress, and delivers a reviewable result with per-file change
-rationale—all recorded on the mission so nothing is lost between passes.
+repository, posts progress, and delivers a reviewable result with a narrative
+summary and the list of files it changed—all recorded on the mission so nothing is lost between passes.
 
 <HowOverlordWorks />
 
@@ -47,8 +47,8 @@ rationale—all recorded on the mission so nothing is lost between passes.
     An objective is one agent pass: plan, implement, review, or follow-up.
   </Card>
   <Card title="Deliveries" icon="approval">
-    Review the result with the original request, activity, artifacts, and change rationale in one
-    place.
+    Review the result with the original request, activity, delivery summary, artifacts, and changed
+    files in one place.
   </Card>
 </CardGrid>
 

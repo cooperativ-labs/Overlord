@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, describe, it } from 'node:test';
 
-import { listChangedFilesForReview } from './changes.js';
+import { listObjectiveFileChanges } from './changes.js';
 import { createServiceContext } from './context.js';
 import { ServiceError } from './errors.js';
 import { claimNextExecutionRequest, expireStaleExecutionRequests } from './execution-requests.js';
@@ -21,6 +21,7 @@ import {
   resolveLaunchConfig
 } from './project-execution-target.js';
 import { findPrimaryProjectResource } from './projects.js';
+import { syncChanges } from './protocol.js';
 import { claimNextQueuedRequest } from './queue-runtime.js';
 import {
   blockRunQueueEntry,
@@ -30,6 +31,7 @@ import {
   resetWedgedLaunchingObjective
 } from './run-queue.js';
 import { seedServiceOperator } from './test-helpers.js';
+import { generateSessionKey } from './util.js';
 
 /**
  * Adapter conformance for the hosted-backend runtime path (mission `coo:5`,
@@ -275,68 +277,28 @@ async function insertChangedFile(
     objectiveId: string;
     projectId: string;
     filePath: string;
-    vcsStatus?: string;
-    observedMetadataJson?: string;
-    currentDiffState?: string;
+    resourceId?: string | null;
+    source?: 'declared_edit' | 'agent_declared' | null;
   }
 ): Promise<string> {
   const id = `cf_${randomUUID()}`;
   const now = ISO();
   await client.run(
     `INSERT INTO changed_files
-       (id, workspace_id, project_id, mission_id, objective_id, file_path, vcs_status,
-        current_diff_state, first_observed_at, last_observed_at, observed_metadata_json,
-        created_at, updated_at, revision)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+       (id, workspace_id, project_id, mission_id, objective_id, resource_id, file_path, source,
+        first_observed_at, last_observed_at, created_at, updated_at, revision)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
     [
       id,
       WORKSPACE_ID,
       input.projectId,
       input.missionId,
       input.objectiveId,
+      input.resourceId ?? null,
       input.filePath,
-      input.vcsStatus ?? 'M',
-      input.currentDiffState ?? 'present',
+      input.source ?? null,
       now,
       now,
-      input.observedMetadataJson ?? '{}',
-      now,
-      now
-    ]
-  );
-  return id;
-}
-
-async function insertChangeRationale(
-  client: DatabaseClient,
-  input: {
-    missionId: string;
-    objectiveId: string;
-    projectId: string;
-    filePath: string;
-    label: string;
-    isFinal?: boolean;
-  }
-): Promise<string> {
-  const id = `cr_${randomUUID()}`;
-  const now = ISO();
-  await client.run(
-    `INSERT INTO change_rationales
-       (id, workspace_id, project_id, mission_id, objective_id, file_path, label,
-        summary, why, impact, hunks_json, is_final, created_at, updated_at, revision)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, 1)`,
-    [
-      id,
-      WORKSPACE_ID,
-      input.projectId,
-      input.missionId,
-      input.objectiveId,
-      input.filePath,
-      input.label,
-      'Summary.',
-      'Why.',
-      'Impact.',
-      input.isFinal ? 1 : 0,
       now,
       now
     ]
@@ -715,7 +677,7 @@ for (const adapter of adapters) {
       }
     });
 
-    it('aggregates rationale labels across dialect boundaries (text-aggregation drift)', async () => {
+    it('projects compact objective path evidence identically on both adapters', async () => {
       const { client, teardown } = await adapter.create();
       try {
         const graph = await seedGraph(client);
@@ -725,112 +687,156 @@ for (const adapter of adapters) {
           missionId: graph.missionId,
           objectiveId: graph.objectiveId,
           projectId: graph.projectId,
-          filePath: 'src/feature.ts'
+          filePath: 'src/native.ts',
+          source: 'declared_edit'
         });
-        await insertChangeRationale(client, {
+        await insertChangedFile(client, {
           missionId: graph.missionId,
           objectiveId: graph.objectiveId,
           projectId: graph.projectId,
-          filePath: 'src/feature.ts',
-          label: 'Label One'
-        });
-        await insertChangeRationale(client, {
-          missionId: graph.missionId,
-          objectiveId: graph.objectiveId,
-          projectId: graph.projectId,
-          filePath: 'src/feature.ts',
-          label: 'Label Two'
+          filePath: 'src/unknown.ts'
         });
 
-        const files = await listChangedFilesForReview({
+        const read = await listObjectiveFileChanges({
           ctx,
-          missionId: graph.missionId
+          missionId: graph.missionId,
+          objectiveId: graph.objectiveId
         });
-
-        assert.equal(files.length, 1);
-        const file = files[0]!;
-        assert.equal(file.filePath, 'src/feature.ts');
-        assert.equal(file.rationaleCount, 2);
-        assert.equal(file.coverage, 'covered');
-        assert.ok(
-          file.rationaleLabels.includes('Label One'),
-          `expected 'Label One' in ${JSON.stringify(file.rationaleLabels)}`
+        assert.equal(read.scope, 'server_objective');
+        assert.deepEqual(
+          read.items.map(item => [item.filePath, item.source]),
+          [
+            ['src/native.ts', 'declared_edit'],
+            ['src/unknown.ts', null]
+          ]
         );
-        assert.ok(
-          file.rationaleLabels.includes('Label Two'),
-          `expected 'Label Two' in ${JSON.stringify(file.rationaleLabels)}`
-        );
+        assert.equal(read.total, 2);
+        assert.equal(read.truncated, false);
+        assert.match(read.items[0]!.observedAt, /^\d{4}-\d{2}-\d{2}T/);
       } finally {
         await teardown();
       }
     });
 
-    it('classifies optional rationale coverage across both adapters', async () => {
+    it('upserts evidence with provenance precedence and capture diagnostics identically', async () => {
       const { client, teardown } = await adapter.create();
       try {
         const graph = await seedGraph(client);
         const ctx = await createServiceContext({ db: client, source: 'webapp' });
-
-        await insertChangedFile(client, {
-          missionId: graph.missionId,
-          objectiveId: graph.objectiveId,
-          projectId: graph.projectId,
-          filePath: 'src/covered.ts'
+        const { rawKey, prefix, hash } = generateSessionKey();
+        const now = ISO();
+        await client.run(
+          `INSERT INTO agent_sessions
+             (id, workspace_id, project_id, mission_id, objective_id, session_key_prefix,
+              session_key_hash, agent_identifier, connection_method, phase, delivery_state,
+              started_at, created_at, updated_at, revision)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'conformance', 'cli', 'execute', 'not_delivered',
+                   ?, ?, ?, 1)`,
+          [
+            `sess_${randomUUID()}`,
+            WORKSPACE_ID,
+            graph.projectId,
+            graph.missionId,
+            graph.objectiveId,
+            prefix,
+            hash,
+            now,
+            now,
+            now
+          ]
+        );
+        const sync = (
+          key: string,
+          source: 'declared_edit' | 'agent_declared',
+          observedAt: string,
+          capture?: unknown
+        ) =>
+          syncChanges({
+            ctx,
+            missionId: graph.missionId,
+            sessionKey: rawKey,
+            changes: [{ filePath: 'src/up.ts', idempotencyKey: key, source, observedAt }],
+            ...(capture !== undefined ? { capture } : {})
+          });
+        const first = await sync('k1', 'agent_declared', '2026-10-02T00:00:00Z', {
+          bindingState: 'bound',
+          callbackObservedAt: '2026-10-02T00:00:00Z',
+          health: [{ code: 'direct_path_unavailable', at: '2026-10-02T00:00:00Z' }]
         });
-        await insertChangeRationale(client, {
-          missionId: graph.missionId,
-          objectiveId: graph.objectiveId,
-          projectId: graph.projectId,
-          filePath: 'src/covered.ts',
-          label: 'Coverage Label'
-        });
+        assert.equal(first.outcomes[0]?.status, 'accepted');
+        assert.equal(first.capture?.status, 'accepted');
+        const upgrade = await sync('k2', 'declared_edit', '2026-10-01T00:00:00Z');
+        assert.equal(upgrade.outcomes[0]?.status, 'accepted');
+        const replay = await sync('k2', 'declared_edit', '2026-10-01T00:00:00Z');
+        assert.equal(replay.outcomes[0]?.status, 'ignored');
+        const downgrade = await sync('k3', 'agent_declared', '2026-10-03T00:00:00Z');
+        assert.equal(downgrade.outcomes[0]?.status, 'accepted');
 
-        await insertChangedFile(client, {
-          missionId: graph.missionId,
-          objectiveId: graph.objectiveId,
-          projectId: graph.projectId,
-          filePath: 'src/missing.ts',
-          observedMetadataJson: '{"rationaleSkipped":true}'
-        });
-
-        const files = await listChangedFilesForReview({
+        const read = await listObjectiveFileChanges({
           ctx,
-          missionId: graph.missionId
+          missionId: graph.missionId,
+          objectiveId: graph.objectiveId
         });
-
-        assert.equal(files.length, 2);
-        const byPath = new Map(files.map(f => [f.filePath, f]));
-        assert.equal(byPath.get('src/covered.ts')?.coverage, 'covered');
-        assert.equal(byPath.get('src/missing.ts')?.coverage, 'missing_rationale');
+        assert.equal(read.items.length, 1);
+        assert.equal(read.items[0]?.source, 'declared_edit');
+        assert.equal(read.items[0]?.observedAt, '2026-10-03T00:00:00.000Z');
+        assert.equal(read.capture.sessions[0]?.bindingState, 'bound');
+        assert.equal(read.capture.sessions[0]?.callbackObservedAt, '2026-10-02T00:00:00.000Z');
+        assert.deepEqual(read.capture.warnings, ['tool_activity_uncaptured']);
+        const row = await client.get<{ first_observed_at: string | Date }>(
+          `SELECT first_observed_at FROM changed_files WHERE file_path = 'src/up.ts'`
+        );
+        assert.equal(new Date(row!.first_observed_at).toISOString(), '2026-10-01T00:00:00.000Z');
+        await client.run(
+          "UPDATE agent_sessions SET delivery_state = 'delivered', ended_at = ? WHERE session_key_hash = ?",
+          [now, hash]
+        );
+        assert.equal(
+          (await sync('late', 'agent_declared', '2026-10-04T00:00:00Z')).outcomes[0]?.status,
+          'accepted'
+        );
+        assert.equal(
+          (await sync('late', 'agent_declared', '2026-10-04T00:00:00Z')).outcomes[0]?.status,
+          'ignored'
+        );
+        await client.run(
+          "UPDATE agent_sessions SET delivery_state = 'not_delivered' WHERE session_key_hash = ?",
+          [hash]
+        );
+        await assert.rejects(sync('cancelled', 'declared_edit', now), /Invalid or expired/);
       } finally {
         await teardown();
       }
     });
 
-    // `resolved` remains part of the stored diff-state vocabulary even though
-    // current checkout discovery and reconciliation inputs have been removed.
-    it('classifies a resolved changed_files row without demanding a rationale', async () => {
+    it('keeps the same relative path distinct per resource but unique within one', async () => {
       const { client, teardown } = await adapter.create();
       try {
         const graph = await seedGraph(client);
-        const ctx = await createServiceContext({ db: client, source: 'webapp' });
-
-        await insertChangedFile(client, {
-          missionId: graph.missionId,
-          objectiveId: graph.objectiveId,
-          projectId: graph.projectId,
-          filePath: 'src/resolved.ts',
-          currentDiffState: 'resolved'
-        });
-
-        const files = await listChangedFilesForReview({
-          ctx,
-          missionId: graph.missionId
-        });
-
-        assert.equal(files.length, 1);
-        assert.equal(files[0]?.filePath, 'src/resolved.ts');
-        assert.equal(files[0]?.coverage, 'resolved');
+        const now = ISO();
+        const resourceIds = [`res_${randomUUID()}`, `res_${randomUUID()}`];
+        for (const [index, resourceId] of resourceIds.entries()) {
+          await client.run(
+            `INSERT INTO project_resources
+               (id, workspace_id, project_id, resource_key, label, is_primary, status,
+                created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, false, 'active', ?, ?)`,
+            [resourceId, WORKSPACE_ID, graph.projectId, `res-${index}`, `Res ${index}`, now, now]
+          );
+        }
+        const insert = (resourceId: string | null) =>
+          insertChangedFile(client, {
+            missionId: graph.missionId,
+            objectiveId: graph.objectiveId,
+            projectId: graph.projectId,
+            filePath: 'src/same.ts',
+            resourceId
+          });
+        await insert(resourceIds[0]!);
+        await insert(resourceIds[1]!);
+        await insert(null);
+        await assert.rejects(insert(resourceIds[0]!));
+        await assert.rejects(insert(null));
       } finally {
         await teardown();
       }
@@ -874,20 +880,19 @@ for (const adapter of adapters) {
           filePath: 'src/shared.ts'
         });
 
-        const missionWide = await listChangedFilesForReview({
-          ctx,
-          missionId: graph.missionId
-        });
-        assert.equal(missionWide.length, 2, 'same path in two objectives remains two records');
-
-        const filtered = await listChangedFilesForReview({
+        const filtered = await listObjectiveFileChanges({
           ctx,
           missionId: graph.missionId,
           objectiveId: graph.objectiveId
         });
-
-        assert.equal(filtered.length, 1);
-        assert.equal(filtered[0]!.filePath, 'src/shared.ts');
+        assert.equal(filtered.items.length, 1);
+        assert.equal(filtered.items[0]!.filePath, 'src/shared.ts');
+        const second = await listObjectiveFileChanges({
+          ctx,
+          missionId: graph.missionId,
+          objectiveId: secondObjectiveId
+        });
+        assert.equal(second.total, 1, 'same path in two objectives remains independent');
       } finally {
         await teardown();
       }

@@ -34,7 +34,7 @@ When a later objective or follow-up must revise a plan, notes, or URL artifact c
 For large artifacts such as planning documents, architecture decisions, research summaries, or design documents: **save the full content as a markdown file in the linked repository, then summarize it in the artifact returned to the mission.**
 
 - Save to a meaningful path in the repository (e.g., `ai/feature-plans/my-feature.md` for feature plans, `docs/decisions/my-decision.md` for architecture decision records).
-- Commit the file as part of the mission's work so it appears in `changeRationales`.
+- Write it with your normal edit tool so native capture lists it among the objective's changed files (declare it with `--paths` if you wrote it from a shell command).
 - Prefer `add-artifact` mid-turn (or a delivery artifact) with a `note` or `decision` type, a concise summary, and the repository file path — not the full document content.
 
 This keeps the mission feed readable while preserving the full document in version control where it can be reviewed, diffed, and referenced later. If that summary artifact already exists on the mission, revise it with `update-artifact` rather than creating another copy.

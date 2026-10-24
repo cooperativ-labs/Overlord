@@ -217,8 +217,10 @@ delivering the wrong thing.
 
 ## Deliver
 
-Delivery is the concluding step. It stores the summary and optional current
-annotations, moves the objective to `complete`, and moves the mission to review.
+Delivery is the concluding step. It stores the summary and any optional
+structured report, moves the objective to `complete`, and moves the mission to
+review. A summary-only delivery is valid and is never blocked by file-tracking
+gaps.
 
 ```bash
 ovld protocol deliver --session-key <sessionKey> --objective-id coo:312.k7xm \
@@ -226,8 +228,9 @@ ovld protocol deliver --session-key <sessionKey> --objective-id coo:312.k7xm \
 ```
 
 <Aside type="tip">
-  The `--summary` is the first thing the reviewer reads. Write it as a short narrative — what you
-  did and what's next — not a command list.
+  The `--summary` is the first thing the reviewer reads. Write it as a short narrative organized by
+  behavior or component — the outcome, why it was needed, how you verified it, and any limitations —
+  not a command list or a per-file walkthrough. Naming a handful of representative paths is fine.
 </Aside>
 
 ### Structured delivery evidence
@@ -279,38 +282,68 @@ same step yourself with a concrete `command` and `verify` gives the operator
 something better than the generic wording.
 
 Delivery remains immediate: Overlord stores a deterministic report first, then
-may compose a clearer presentation asynchronously. The original summary is
-never replaced.
+may compose a clearer presentation asynchronously. The optional composer only
+condenses the facts in your summary and report; it never generates per-file
+explanations, behavior, or test claims from filenames. When composition is
+unavailable the raw summary is shown, and the original summary is never
+replaced.
 
 ### Changed files are captured for you
 
-You do **not** enumerate changed files or inspect `git status` for delivery. An
-objective-bound connector callback records only paths directly named by its
-native edit payload. The CLI synchronizes that local ledger separately from the
-delivery request. Shell and no-path callbacks record unavailable hook health;
-they never trigger a worktree scan.
+You do **not** enumerate changed files, diff, or run `git status` on a shared
+worktree to build the list. Reviewers see a separate cumulative list, **Files
+changed during this objective**, grouped by resource. An objective-bound
+connector callback appends a path only for a connector-codec-normalized edit
+whose outcome is successful; reads, searches, and fetches are silent. The CLI
+synchronizes that local ledger separately from the delivery request, and never
+infers ownership from timestamps, cwd, or branch.
 
-Rationales are optional reviewer annotations, not coverage requirements. When a
-rationale is useful, each entry uses the canonical fields `filePath`, `label`,
-`summary`, `why`, and `impact`, plus optional `hunks` containing only `header`.
-Do not wrap an entry, use a snake-case alias, or send a `file_changes` artifact.
-Unknown keys discard only that advisory entry with a bounded warning; the last
-valid entry wins when a canonical path is repeated.
+Capture reports gaps instead of guessing:
+
+- `shell_activity_unverified` — a shell command ran; it may or may not have written files.
+- `outcome_partial` / `outcome_unavailable` — an edit failed partway or its result is unknown; no path is recorded.
+- `direct_path_unavailable` — the tool's payload could not be mapped to a path.
+
+### Declare paths capture can't see
+
+When you know a write escaped native capture — shell or heredoc writes,
+script or generator outputs, deletes, or renames (declare **both** endpoints) —
+declare those paths on the same `update` or `deliver` call:
+
+```bash
+ovld protocol deliver --session-key <sessionKey> --objective-id coo:312.k7xm \
+  --summary "Regenerated the API client and removed the legacy shim." \
+  --paths lib/generated/client.ts,lib/legacy-shim.ts
+```
+
+Use `--paths-file <path|->` with a JSON string array when paths contain commas
+or the list is long. Over MCP, pass `declaredPaths` (an array of strings) to
+`overlord_update_session` or `overlord_deliver_session`. Declared paths appear
+with the **Declared** source. Unsafe paths — traversal, symlinks leaving the
+checkout, ignored files, or Overlord-managed files — are rejected with a reason
+and never fail the call; deleted targets are valid. You don't need exhaustive
+enumeration: declare known misses, not every file.
 
 ### Preflight before delivering
 
-Run the local-only preflight first. It drains the exact objective ledger and
-reports remaining evidence plus bounded hook health; it never scans or
-classifies the shared worktree:
+Run the local-only preflight first. It reads this checkout's sessions for the
+objective (`scope: local_objective_sessions`, synced and pending rows, capped at
+200 with pre-cap `total`/`truncated`) plus bounded hook health; it never scans
+or classifies the shared worktree:
 
 ```bash
 ovld protocol changes --objective-id coo:312.k7xm
 ```
 
+`coverage: unavailable` means no local session matched — not that nothing
+changed. For the server's view across sessions, resources, and devices
+(`scope: server_objective`; it cannot see unsynced local rows), run
+`ovld protocol objective-changes --objective-id <id>`.
+
 ### Large payloads and special characters
 
-Inline `--*-json` values are rejected above ~8 KB. For large arrays, stream on
-stdin with `--change-rationales-file -` (or `--payload-file -`). When a summary
+Inline `--*-json` values are rejected above ~8 KB. For large payloads, stream
+on stdin with `--payload-file -` (or `--paths-file -` for a long path list). When a summary
 or question contains backticks, `$vars`, or other shell-special characters, use
 `--summary-file -` / `--question-file -` with a single-quoted heredoc:
 
@@ -336,9 +369,10 @@ If `git status` shows unrelated dirty paths:
 <Steps>
 
 1. Leave those files intact.
-2. Do not fabricate a rationale for work you didn't do.
+2. Do not declare paths or describe work you didn't do, and never infer
+   ownership from timestamps, cwd, or branch.
 3. Run `ovld protocol changes --objective-id <objective>` to inspect only the
-   current objective's recorded evidence.
+   current objective's recorded paths from this checkout.
 4. Deliver the summary normally. Unrelated worktree state is not a delivery
    input and cannot block the lifecycle transition.
 
@@ -357,8 +391,8 @@ asks for follow-up work.
   - If no live session exists:
     `ovld protocol resume-follow-up --mission-id <id> --summary "Beginning follow-up work."`
     and use the returned session key.
-- During follow-up execution, post updates and record change rationales just like
-  the first pass, then **deliver again**.
+- During follow-up execution, post updates and declare any uncaptured paths just
+  like the first pass, then **deliver again**.
 
 ## Create an artifact during a turn
 
@@ -454,11 +488,12 @@ This is distinct from `--agent`, which records who created the mission (and, on
 | `create` / `prompt`              | Create a draft / create-and-attach a mission. The response returns the persisted mission and objectives so you can verify agent, model, resource, and queue/auto-advance settings. |
 | `add-objectives`                 | Append ordered objectives to a mission; returns each persisted objective's launch settings.        |
 | `update-objective`               | Turn auto-advance on or off, or edit instruction text. Requires `--objective-id`.                 |
-| `update`                         | Post progress, decisions, and optional rationales.                                                |
+| `update`                         | Post progress and decisions; optionally declare uncaptured paths.                                 |
 | `heartbeat`                      | Liveness ping, no feed event.                                                                     |
 | `ask`                            | Post a blocking question and stop.                                                                |
-| `deliver`                        | Finish: summary, artifacts, rationales, mark complete.                                            |
-| `changes`                        | Local preflight of changed-file attribution.                                                      |
+| `deliver`                        | Finish: summary, artifacts, optional declared paths, mark complete.                               |
+| `changes`                        | Local-only read of this checkout's recorded paths for an objective.                               |
+| `objective-changes`              | Server read of an objective's changed files across sessions and devices.                          |
 | `resume-follow-up`               | Reopen a delivered objective for follow-up.                                                       |
 | `read-context` / `write-context` | Read or store persistent shared context.                                                          |
 | `add-artifact`                   | Create a mission artifact mid-turn (no delivery required).                                        |

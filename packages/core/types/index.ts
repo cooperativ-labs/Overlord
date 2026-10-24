@@ -23,7 +23,6 @@ export type {
   AgentSessions,
   Artifacts,
   ChangedFiles,
-  ChangeRationales,
   Deliveries,
   Devices,
   EntityChanges,

@@ -26,6 +26,7 @@ export const SUPPORTED_PROTOCOL_SUBCOMMANDS = [
   'list-deliveries',
   'list-organizations',
   'load-context',
+  'objective-changes',
   'prompt',
   'read-context',
   'record-work',
@@ -132,15 +133,16 @@ Subcommands:
   create                 Create a draft mission without attaching
   prompt                 Create a mission and attach to it immediately
   record-work            Record completed-from-chat work as a review mission (no attach)
-  update                 Post progress, activity events, and optional change rationales
+  update                 Post progress and activity events; optionally declare shell/script paths
   heartbeat              Send a liveness ping without creating a mission event
   ask                    Post a blocking question and move the mission to review
   deliver                Finish work, send artifacts, and move the mission to review
   resume-follow-up       Reopen a completed objective for post-delivery follow-up work
   hook-event             Record a connector lifecycle hook (e.g. UserPromptSubmit)
   capture-change         Local-only: append direct-path hook evidence to an objective ledger
-  changes                Sync and inspect the attached objective's local change ledger
-                         (source, overlap, and hook-health evidence); never arbitrate peers
+  changes                Local-only: sync and read this checkout's evidence for one objective
+                         (synced + pending paths, capture/sync warnings); never arbitrate peers
+  objective-changes      Read the objective's synchronized evidence across sessions and devices
   read-context           Read shared persistent context for this mission
   write-context          Write shared persistent context for future sessions
   add-artifact           Create a mission artifact during a turn (no delivery required)
@@ -244,6 +246,10 @@ attach:
     --execution-request-id <id> Link this attach to a runner execution request
     --objective-id <id>         Pin attach to this objective (UUID or coo:756.k7xm)
     --external-session-id <id>  Native agent thread/session id for resume
+  Notes:
+    The CLI records the session's capture binding: bound when OVERLORD_OBJECTIVE_ID
+    names the attached objective, unbound otherwise. Bound is configuration evidence
+    only; it never claims the capture hook is installed or has run.
   Returns:
     Full JSON including session.sessionKey, mission, history, artifacts, sharedState,
     and agentInstructions with required workflow instructions and structured-field pointers.
@@ -291,6 +297,21 @@ list-deliveries:
     DeliveryDto records including summary, verification, follow-up notes, and
     normalized delivery report evidence, capped at 200. total is the matching
     row count before that cap.
+
+objective-changes:
+  Purpose:
+    Read the synchronized changed-path evidence of exactly one objective across every
+    session, resource, and device. Needs no attach and mutates nothing. It cannot see
+    unsynchronized local rows; use \`changes\` for this checkout's pending evidence.
+  Required:
+    --objective-id <id>         Display id (coo:756.k7xm) or UUID with --mission-id
+  Optional:
+    --mission-id <id>           Required when --objective-id is a UUID
+  Returns:
+    ObjectiveFileChangesDto { scope: "server_objective", items, total, limit, truncated,
+    capture }. items are compact rows (resourceKey, filePath, source declared_edit |
+    agent_declared | null for unknown, observedAt, hookHealth) ordered by resource then
+    path, capped at 200; total is the pre-cap count after the objective filter.
 
 launch-objective:
   Purpose:
@@ -653,7 +674,7 @@ record-work:
   Purpose:
     Record work already completed in chat as a completed mission in review, in one
     call — no attach/deliver cycle. Creates a mission with a single completed
-    objective, records the file changes and their rationales, lands it in the review
+    objective, records the explicitly declared changed paths, lands it in the review
     column, and runs the delivery through the standard Gemini summarizer so it reads
     like any other delivered mission. Use instead of create + attach + deliver.
   Required:
@@ -664,18 +685,16 @@ record-work:
     --title <text>
     --assigned-to <id>          Workspace member to own the mission
     --artifacts-json / --artifacts-file <path|->
-    --change-rationales-json / --change-rationales-file <path|->
-    --changed-files-json / --changed-files-file <path|->
+    --declared-paths-json / --declared-paths-file <path|->
+                                JSON array of repository-relative paths the work changed
     --payload-json / --payload-file <path|->   (single envelope; see Notes)
   Notes:
     Efficient form: stream one JSON object on stdin via \`--payload-file -\` carrying
-    { objective, summary, title?, changeRationales, changedFiles?, artifacts? }.
+    { objective, summary, title?, declaredPaths?, artifacts? }.
     Explicit flags always win over fields inside --payload-json.
-    Change-rationale entries use the same shape documented under \`deliver\`
-    (filePath, label, summary, why, impact; summary is named "summary", not "rationale").
-    Every rationale's filePath is recorded as a changed file (shown "covered" in
-    review); add --changed-files-json for touched files without a rationale. The
-    full submission format lives in reference/record-work.md.
+    Declared paths are stored as agent_declared with no resource and no VCS status;
+    explain why they changed in the summary. The full submission format lives in
+    reference/record-work.md.
 
 update:
   Purpose:
@@ -692,13 +711,11 @@ update:
     --payload-json / --payload-file <path|->
     --external-url <url|null>
     --external-session-id <id|null>
-    --change-rationales-json / --change-rationales-file <path|->
+    --paths <a,b,c> / --paths-file <path|->   Declare shell/script outputs (see deliver)
   Notes:
     Pass --summary-file - to read the summary from stdin and avoid shell quoting issues.
     Inline --*-json values larger than ~8 KB are rejected; use the paired --*-file - flag.
     After delivery, pass --begin-follow-up-work before posting execution updates.
-    Change-rationale entries use the same shape documented under \`deliver\`
-    (filePath, label, summary, why, impact; summary is named "summary", not "rationale").
 
 heartbeat:
   Purpose:
@@ -724,12 +741,12 @@ ask:
 
 deliver:
   Purpose:
-    Conclude the session and submit the final narrative plus artifacts/change rationales.
+    Conclude the session and submit the final narrative plus optional artifacts.
   Required:
     --session-key <key>
     --mission-id <id>
     --summary or --summary-file <path|->
-    or: --payload-json / --payload-file <path|-> with { summary, artifacts, changeRationales }
+    or: --payload-json / --payload-file <path|-> with { summary, artifacts }
     The payload may also include deliveryReport: { schemaVersion: 1, agentReport: {
       humanActions, tradeoffsMade, knownRisks, deferredWork, assumptions } }. Use empty arrays
     when none apply. Human actions exclude Git operations and routine review/testing.
@@ -755,58 +772,62 @@ deliver:
     report those yourself when you can supply the real command and verify step.
   Optional:
     --artifacts-json / --artifacts-file <path|->
-    --change-rationales-json / --change-rationales-file <path|->
+    --paths <a,b,c>             Declare paths native capture missed (comma-separated)
+    --paths-file <path|->       Same, as a JSON array of path strings (commas allowed)
     --verification-summary <text>
     --follow-up-notes <text>
-  Change-rationale entry shape (each item in --change-rationales-json / -file):
-    {
-      "filePath":  "src/api.ts",   // required repo-relative path.
-      "label":     "Add retry",     // required. short reviewer-facing title.
-      "summary":   "Added retry.",  // required. WHAT changed. The field is named "summary", NOT "rationale".
-      "why":       "Flaky calls.",  // required. WHY it changed.
-      "impact":    "Retries 3x.",   // required. behavioral impact.
-      "hunks":     [{ "header": "@@ -10,6 +10,14 @@" }]  // optional.
-    }
-    Pass an array of these. Do NOT wrap entries under a "rationale" key and do not send a
-    top-level "file_changes" artifact. label/summary/why/impact must be non-empty strings.
   Notes:
-    A normal delivery requires only --summary. The CLI syncs objective-bound ledger
-    evidence automatically before update, changes, and deliver. Optional rationales,
-    hook health, and path attribution cannot fail delivery. Do not continue implementation
-    after delivery without explicit follow-up.
+    A normal delivery requires only --summary: explain the outcome, why, verification,
+    and limitations by behavior or component. No per-file explanation exists. The CLI
+    syncs objective-bound ledger evidence before update, changes, and deliver; tracking
+    gaps and sync failure never fail delivery. Do not continue implementation after
+    delivery without explicit follow-up.
 
-    --paths <a,b,c> is optional, metadata-only evidence for outputs of a generator,
-    migration, or script. It is batched into this existing call, never inspects VCS,
-    and is not an instruction to list every changed or opened file.
-    Inline --*-json values larger than ~8 KB are rejected; use --change-rationales-file -
-    (or --payload-file -) and stream JSON on stdin. Keep --summary inline.
-    Run \`${primaryCommand} protocol changes --objective-id <id>\` to inspect the attached
-    objective ledger and retry any advisory sync. It never claims or excludes another
-    objective's paths.
+    Before delivering, read \`${primaryCommand} protocol changes --objective-id <id>\` once.
+    Declare with --paths / --paths-file only paths you know you changed that native
+    capture missed: shell/heredoc/script/generator outputs, deletes, and both rename
+    endpoints. They are recorded as agent_declared in this objective's ledger, are
+    normalized against this checkout (absolute paths inside it are accepted; traversal,
+    out-of-checkout symlinks, ignored and Overlord-managed paths are rejected with a
+    reason on stderr), and absent targets are valid. Never enumerate opened files or a
+    shared-worktree diff; when unsure, describe the coverage limitation instead.
+    Inline --*-json values larger than ~8 KB are rejected; use --payload-file - and
+    stream JSON on stdin. Keep --summary inline.
 
 capture-change:
   Purpose:
     Normalize one raw native callback with the named connector codec and append only
-    declared Write/Edit paths to the exact objective/session ledger. The raw payload
+    successful native edit paths to the exact objective/session ledger. The raw payload
     remains local and input is bounded to 1 MiB.
   Required:
     --agent <connector-key>
     --objective-id <id>
     native callback JSON on stdin
   Notes:
-    Read/search/fetch callbacks are silent. Shell, unknown, unmapped, and pathless
-    mutation callbacks record bounded unavailable health without claiming a path.
+    Every scoped callback records callback observation; read/search/fetch callbacks
+    append no evidence. A path is appended only when the codec decodes outcome ok.
+    blocked appends nothing; error/cancelled record outcome_partial; unknown records
+    outcome_unavailable; shell records shell_activity_unverified; other pathless or
+    unmapped callbacks record direct_path_unavailable. None of these claims a path.
 
 changes:
   Purpose:
-    Sync and inspect the attached objective's local ledger. Reports whether evidence
-    remains unsynced, but never scans the shared worktree, claims peer paths, or drafts
-    rationale/skip payloads. Sync failure is advisory.
+    Local-only read of this checkout's evidence for one objective. Drains every
+    locally known ledger of the objective, then returns synced and pending paths
+    deduplicated by path. Never scans the shared worktree, claims peer paths, or reads
+    the backend's history; sync failure is advisory.
   Required:
     --objective-id <id>
   Optional:
     --mission-id <id>           Required when objective id does not encode mission scope
-    --session-key <key>         Validate one exact binding; every matching live/retry ledger drains
+    --session-key <key>         Must identify a local session of the objective
+  Returns:
+    LocalObjectiveChangesDto { scope: "local_objective_sessions", objectiveId, coverage,
+    items, total, limit, truncated, sync, capture, warnings }. items are
+    { filePath, source declared_edit | agent_declared, observedAt, hookHealth,
+    syncState synced | pending } sorted by path and capped at 200; total counts distinct
+    local paths. coverage "unavailable" means no local session matched, not "no files
+    changed". This is not complete cross-device history: use objective-changes.
 
 sync-changes:
   Purpose:

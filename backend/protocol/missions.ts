@@ -1,11 +1,11 @@
 import { PERMISSIONS } from '@overlord/auth';
 import { type UpdateObjectiveBody } from '@overlord/contract';
 
+import { listObjectiveFileChanges } from '../../packages/core/service/changes.ts';
 import { resolveProjectId, type ServiceContext } from '../../packages/core/service/context.ts';
 import { parseMissionSearchOptions } from '../../packages/core/service/mission-search.ts';
 import {
   addObjectivesToMission,
-  type ChangeRationaleInput,
   discussObjective,
   loadMissionContext,
   protocolCreate,
@@ -384,11 +384,6 @@ function objectiveInputs(body: ProtocolRequestBody): ObjectiveInput[] {
   );
 }
 
-type ChangedFileInput = {
-  filePath: string;
-  vcsStatus?: string | null;
-};
-
 export const missionSubcommands: SubcommandTable = {
   // Mission creation and discovery -----------------------------------------
   create: {
@@ -483,6 +478,15 @@ export const missionSubcommands: SubcommandTable = {
   'list-deliveries': {
     permission: PERMISSIONS.MISSION_READ,
     handler: (_ctx, body) => listMissionDeliveries(missionRefFlag(body))
+  },
+
+  'objective-changes': {
+    permission: PERMISSIONS.MISSION_READ,
+    handler: (ctx, body) => {
+      const objectiveId = objectiveRefFlag(body);
+      if (!objectiveId) throw new ApiError(400, 'objective-changes requires --objective-id');
+      return listObjectiveFileChanges({ ctx, missionId: missionRefFlag(body), objectiveId });
+    }
   },
 
   'launch-objective': {
@@ -674,14 +678,13 @@ export const missionSubcommands: SubcommandTable = {
         RETIRED_RECORD_WORK_FIELDS
       );
       // record-work is often driven from a single streamed JSON envelope, so
-      // `objective`, `title`, and `changedFiles` may arrive either as flags or as
-      // fields inside `--payload-json`/`--payload-file`. Pull them out of the
-      // leftover payload here (flags always win) and keep the rest (e.g.
-      // `deliveryReport`) as the stored delivery payload.
+      // `objective` and `title` may arrive either as flags or as fields inside
+      // `--payload-json`/`--payload-file`. Pull them out of the leftover payload
+      // here (flags always win) and keep the rest (e.g. `deliveryReport`) as the
+      // stored delivery payload.
       const {
         objective: payloadObjective,
         title: payloadTitle,
-        changedFiles: payloadChangedFiles,
         ...restPayload
       } = envelope.payloadJson ?? {};
       const artifacts = parseJsonArrayInput<ArtifactInput>(
@@ -690,21 +693,12 @@ export const missionSubcommands: SubcommandTable = {
         '--artifacts-file',
         'artifacts'
       );
-      const changeRationales = parseJsonArrayInput<ChangeRationaleInput>(
+      const declaredPaths = parseJsonArrayInput<unknown>(
         body,
-        '--change-rationales-json',
-        '--change-rationales-file',
-        'changeRationales'
+        '--declared-paths-json',
+        '--declared-paths-file',
+        'declaredPaths'
       );
-      const changedFiles = parseJsonArrayInput<ChangedFileInput>(
-        body,
-        '--changed-files-json',
-        '--changed-files-file',
-        'changedFiles'
-      );
-      if (payloadChangedFiles !== undefined && !Array.isArray(payloadChangedFiles)) {
-        throw new ApiError(400, 'changedFiles must be a JSON array', undefined, 'invalid_input');
-      }
       const objective =
         strFlag(body, '--objective') ??
         ((body.positional ?? []).join(' ').trim() || undefined) ??
@@ -732,9 +726,7 @@ export const missionSubcommands: SubcommandTable = {
         objective,
         title: strFlag(body, '--title') ?? (typeof payloadTitle === 'string' ? payloadTitle : null),
         artifacts: artifacts ?? envelope.artifacts ?? [],
-        changeRationales: changeRationales ?? envelope.changeRationales ?? [],
-        changedFiles:
-          changedFiles ?? (Array.isArray(payloadChangedFiles) ? payloadChangedFiles : []),
+        declaredPaths: declaredPaths ?? envelope.declaredPaths,
         payloadJson: restPayload,
         ...(assignedTo !== undefined ? { assignedTo } : {})
       });

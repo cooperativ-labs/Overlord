@@ -120,12 +120,11 @@ export function parseJsonFlag(
 export const MAX_INLINE_JSON_CHARS = 8_192;
 
 const INLINE_JSON_FLAG_PAIRS = [
-  { jsonFlag: '--change-rationales-json', fileFlag: '--change-rationales-file' },
   { jsonFlag: '--payload-json', fileFlag: '--payload-file' },
   { jsonFlag: '--artifacts-json', fileFlag: '--artifacts-file' },
   { jsonFlag: '--objectives-json', fileFlag: '--objectives-file' },
   { jsonFlag: '--changes-json', fileFlag: '--changes-file' },
-  { jsonFlag: '--changed-files-json', fileFlag: '--changed-files-file' },
+  { jsonFlag: '--declared-paths-json', fileFlag: '--declared-paths-file' },
   { jsonFlag: '--value-json', fileFlag: '--value-file' }
 ] as const;
 

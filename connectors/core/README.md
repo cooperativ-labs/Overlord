@@ -21,7 +21,7 @@ follow:
 - treat mission context as authoritative
 - update or heartbeat while working
 - ask exactly one blocking question and stop
-- deliver last with artifacts and change rationales
+- deliver last with a behavior-level summary, declaring only paths native capture missed
 - use safe stdin/file flags for shell-special payloads
 - repair local auth/setup before asking the user to intervene
 

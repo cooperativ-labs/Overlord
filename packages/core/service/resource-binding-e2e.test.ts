@@ -201,9 +201,7 @@ describe('resource binding end-to-end (simulated cross-repo mission)', () => {
           {
             filePath: `src/e2e-${resourceKey}.ts`,
             idempotencyKey: `resource-${resourceKey}-1`,
-            source: 'declared_edit',
-            quality: 'direct',
-            overlap: false
+            source: 'declared_edit'
           }
         ]
       });

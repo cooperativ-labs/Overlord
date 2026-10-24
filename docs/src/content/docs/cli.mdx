@@ -76,7 +76,7 @@ Supported built-in connector names currently include `claude`, `codex`, `cursor`
 | `ovld execution --mission-id <id> [--objective-id <id>] [--agent <id>] [--model <id>] [--thinking <level>] [--json]`                                                                  | Alias of `attach` without positional-`missionId` support. `--mission-id` is optional when `--objective-id` is a display id (e.g. `coo:8.k7xm`), same as `attach`.                       |
 | `ovld missions list [--status <csv>] [--query <text>] [--project-id <id>] [--limit <n>] [--json]`                                                                                     | List missions.                                                                                                                                                                           |
 | `ovld statuses list --project-id <id> [--json]`                                                                                                                                       | List one project's board columns. Status names are per project; status types are not.                                                                                                    |
-| `ovld mission context\|events\|deliveries\|artifacts\|rationales <mission-id> [--json]`                                                                                               | Inspect a mission and its work record. Accepts an objective display id, which names its mission.                                                                                         |
+| `ovld mission context\|events\|deliveries\|artifacts\|file-changes <mission-id> [--json]`                                                                                             | Inspect a mission and its work record. Accepts an objective display id, which names its mission.                                                                                         |
 | `ovld launch <agent> --mission-id <id> [--objective-id <id>] [--working-directory <path>] [--model <id>] [--thinking <level>] [--branch <name>] [--no-worktree] [--terminal <launcher>\|--no-terminal] [--pre-command <cmd>] [--dry-run] [--json]` | Start an agent locally with mission context. `--objective-id` with a display id supplies `--mission-id`.                                                                                 |
 | `ovld restart <agent> ...`                                                                                                                                                            | Resume an agent where native resume is supported.                                                                                                                                        |
 | `ovld run\|connect\|resume <agent> <mission-id> ...`                                                                                                                                  | Compatibility aliases for local launch.                                                                                                                                                  |
@@ -100,8 +100,7 @@ Repeat `--flag <value>` to pass supported options through to the agent, and use
 | `ovld runner service start\|stop\|restart [--json]`                                                                     | Control the registered service.                                                             |
 | `ovld runner service status [--json]`                                                                                   | Show service state and diagnostics.                                                         |
 | `ovld runner service uninstall [--json]`                                                                                | Remove the registered service.                                                              |
-| `ovld changes status --mission-id <id> [--objective-id <id>] [--json]`                                                  | Show changed-file status for a mission.                                                     |
-| `ovld changes rationales --mission-id <id> [--objective-id <id>] [--json]`                                              | List recorded file-change rationales.                                                       |
+| `ovld changes status --mission-id <id> [--objective-id <id>] [--json]`                                                  | Show changed files for a mission; with `--objective-id`, the server objective read.         |
 
 ## Live sessions and decisions
 
@@ -168,15 +167,16 @@ Every command below is available from `ovld protocol help`.
 | `create`                           | Create a draft mission without attaching.                                                                 |
 | `prompt`                           | Create a mission and attach immediately.                                                                  |
 | `record-work`                      | Record completed chat work as a review mission.                                                           |
-| `update`                           | Post progress, activity, and optional change rationale.                                                   |
+| `update`                           | Post progress and activity; `--paths`/`--paths-file` declare uncaptured paths.                            |
 | `heartbeat`                        | Send liveness information without creating a feed event.                                                  |
 | `ask`                              | Raise a blocking question for a human reviewer.                                                           |
-| `deliver`                          | Finish the session with summary, artifacts, and rationale.                                                |
+| `deliver`                          | Finish the session with summary, artifacts, and optional declared paths.                                  |
 | `resume-follow-up`                 | Reopen completed work for a follow-up.                                                                    |
 | `hook-event`                       | Record a connector lifecycle event.                                                                       |
 | `capture-change`                   | Locally capture direct, objective-bound native edit paths (connector use).                                |
 | `sync-changes`                     | Synchronize one bounded objective-ledger batch.                                                            |
-| `changes`                          | Drain and report the exact objective ledger and hook health before delivery.                               |
+| `changes`                          | Local-only read of this checkout's recorded paths and hook health for an objective.                       |
+| `objective-changes`                | Server read of an objective's changed files across sessions, resources, and devices.                      |
 | `read-context` / `write-context`   | Read or store persistent mission context.                                                                 |
 | `add-artifact`                     | Create a mission artifact mid-turn without delivering.                                                    |
 | `update-artifact`                  | Revise an existing mission artifact in place (label / content / URL).                                     |

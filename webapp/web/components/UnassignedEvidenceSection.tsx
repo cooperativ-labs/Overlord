@@ -1,3 +1,4 @@
+import type { FileChangeDto } from '../../shared/contract.ts';
 import type { ObjectiveEvidence, ObjectiveEvidenceTruncation } from '../lib/objective-evidence.ts';
 
 import {
@@ -18,14 +19,17 @@ import { LiveFileChangeList } from './LiveFileChangeList.tsx';
 export function UnassignedEvidenceSection({
   projectId,
   evidence,
+  fileChanges,
   truncation
 }: {
   projectId: string;
   evidence: ObjectiveEvidence;
+  /** Mission-page rows whose objective was deleted (the objective read rejects it). */
+  fileChanges: readonly FileChangeDto[];
   truncation?: ObjectiveEvidenceTruncation;
 }) {
   const hasDeliveries = evidence.deliveries.length > 0;
-  const hasFileChanges = evidence.fileChanges.length > 0;
+  const hasFileChanges = fileChanges.length > 0;
   // Terminal sessions are not repeated here: the mission-level Latch section
   // (coo:990) already lists every session on the mission, including the ones
   // whose objective has been deleted.
@@ -55,8 +59,8 @@ export function UnassignedEvidenceSection({
         ) : null}
         {hasFileChanges ? (
           <>
-            <ObjectiveEvidenceRule label="File changes" count={evidence.fileChanges.length} />
-            <LiveFileChangeList projectId={projectId} fileChanges={evidence.fileChanges} />
+            <ObjectiveEvidenceRule label="Files changed" count={fileChanges.length} />
+            <LiveFileChangeList projectId={projectId} fileChanges={fileChanges} />
             {truncation?.fileChanges ? (
               <ObjectiveEvidenceTruncationNotice>
                 {truncation.fileChanges}

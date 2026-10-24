@@ -35,12 +35,12 @@ Required content:
 - Attach first.
 - Treat mission prompt/context as authoritative.
 - Post meaningful progress updates.
-- Include changed-file tracking with normal progress updates when the CLI/runtime can do so without extra agent calls.
+- Let native capture record changed files; read the objective's captured paths once before delivering and never diff a shared worktree.
 - Use heartbeat during long mechanical work with no meaningful update.
 - Ask exactly one blocking question and stop when blocked.
-- Deliver last with summary, artifacts, and change rationales.
+- Deliver last with a summary written by behavior or component, plus artifacts when they add review value.
 - Never revert, restore, or delete concurrent work from other agents or missions to deliver; ask instead.
-- Record all meaningful file changes as structured rationales.
+- Declare only known shell/script/generator outputs, deletes, and rename endpoints that capture missed (`--paths` / `--paths-file`); there is no per-file explanation input.
 - Use stdin/file flags for shell-special content.
 - Use stdin/file flags for oversized JSON payloads (`--*-json` values above ~8 KB are rejected; use `--*-file -`).
 - Do not continue implementation after delivery unless follow-up execution is explicitly requested.

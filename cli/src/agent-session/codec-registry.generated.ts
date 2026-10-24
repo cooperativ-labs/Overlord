@@ -32,6 +32,7 @@ export const AGENT_SESSION_CODECS: Record<string, CodecSpec> = {
         "origin": "agent",
         "toolPath": "tool_name",
         "inputPath": "tool_input",
+        "successOnly": true,
         "fileEditKind": "file.edited",
         "filePathPaths": [
           "file_path",
@@ -82,6 +83,8 @@ export const AGENT_SESSION_CODECS: Record<string, CodecSpec> = {
         "inputPath": "tool_input",
         "callIdPath": "tool_use_id",
         "turnIdPath": "turn_id",
+        "outcomePath": "tool_response",
+        "outcomeExitCodePrefix": "Exit code: ",
         "fileEditKind": "file.edited",
         "filePathPaths": [
           "file_path",
@@ -144,6 +147,7 @@ export const AGENT_SESSION_CODECS: Record<string, CodecSpec> = {
         "toolPath": "tool_name",
         "inputPath": "tool_input",
         "callIdPath": "call_id",
+        "successOnly": true,
         "fileEditKind": "file.edited",
         "filePathPaths": [
           "file_path",

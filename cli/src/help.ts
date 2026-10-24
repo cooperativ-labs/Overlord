@@ -72,7 +72,7 @@ Missions:
                                                List one project's board columns (key, name, type,
                                                position, default/terminal). Statuses are defined
                                                per project, so they vary between projects.
-  ${primaryCommand} mission context|events|deliveries|artifacts|rationales <missionId> [--json]
+  ${primaryCommand} mission context|events|deliveries|artifacts|file-changes <missionId> [--json]
   ${primaryCommand} requests [--mission-id <id>] [--objective-id <id>] [--json]
                                                List open and recent agent decisions
   ${primaryCommand} requests resolve <id> --revision <n> --decision allow|deny|ask [--text <text>]
@@ -85,7 +85,6 @@ Launch and runner:
 
 Changes:
   ${primaryCommand} changes status --mission-id <id> [--objective-id <id>] [--json]
-  ${primaryCommand} changes rationales --mission-id <id> [--objective-id <id>] [--json]
 
 Agents:
   Built-in agents (claude, codex, cursor, pi, antigravity, opencode) need an

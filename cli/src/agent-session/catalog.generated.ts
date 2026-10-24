@@ -79,8 +79,8 @@ export type HarnessDescriptor = {
   };
   mutationHooks: {
     classification: MutationHookClassification;
-    pathEvidenceSource: 'declared_edit' | 'window_observed' | 'unavailable';
-    pathEvidenceQuality: 'direct' | 'window' | 'unavailable';
+    pathEvidenceSource: 'declared_edit' | 'unavailable';
+    pathEvidenceQuality: 'direct' | 'unavailable';
     shellEvidence: 'unavailable';
     pathlessEvidence: 'unavailable';
     fixture: string;
@@ -492,7 +492,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
     "codec": "codex",
     "integrationShape": "callback",
     "capabilityTier": 1,
-    "descriptorDigest": "4d4908a81023cf7943ebbcb35d8477751f97d916597adc3bf3cec63bdb58dc4b",
+    "descriptorDigest": "b3120edbb3f8a017801de0b9b085c42f05f1d7c335246e224cd283e874ddc542",
     "descriptorSchemaVersion": 1,
     "harness": {
       "name": "Codex CLI",
@@ -1271,7 +1271,7 @@ export const HARNESS_DESCRIPTORS: HarnessDescriptor[] = [
   }
 ];
 
-export const HARNESS_CATALOG_DIGEST = '9b5e5074ad777fa04280b57040141eab441d4d386da054cc415f8f2166460672';
+export const HARNESS_CATALOG_DIGEST = '4a4d783280e116b9f7ca59bf2bbd1e19f5cd60725d08ae6eb4e064087ba3d84d';
 
 export function findHarnessDescriptor(adapter: string): HarnessDescriptor | undefined {
   return HARNESS_DESCRIPTORS.find(entry => entry.adapter === adapter);

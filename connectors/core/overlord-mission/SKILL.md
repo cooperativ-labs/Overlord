@@ -95,7 +95,7 @@ Use this mode when the conversation starts normally and the user asks the agent 
 5. If the user wants to establish a persistent session with a mission by ID, run `ovld protocol attach --mission-id <mission_id>`.
 6. If the user wants to find a mission but does not know the ID, run `ovld protocol search-missions --query "..." --status execute,review` and ask the user to confirm.
 7. If you need to understand project routing before prompting, use `ovld protocol discover-project`.
-8. If the user wants to **record work that is already finished** in this chat (for example, something you just built in a chat app) as a completed mission, run `ovld protocol record-work --project-id <project-id>` (or the hosted `overlord_record_work` MCP tool). This creates a mission with one completed objective, records explicitly supplied changed files and optional rationales, lands it in the review column, and runs the standard Gemini delivery summary — all in one call, with no `attach`/`deliver`. Do **not** use it for in-progress work. The exact submission format is in [reference/record-work.md](reference/record-work.md).
+8. If the user wants to **record work that is already finished** in this chat (for example, something you just built in a chat app) as a completed mission, run `ovld protocol record-work --project-id <project-id>` (or the hosted `overlord_record_work` MCP tool). This creates a mission with one completed objective, records any paths you declare as Declared evidence, lands it in the review column, and runs the standard Gemini delivery summary — all in one call, with no `attach`/`deliver`. Do **not** use it for in-progress work. The exact submission format is in [reference/record-work.md](reference/record-work.md).
 9. If you need other lifecycle commands or flags, run `ovld protocol help` and use the real subcommand list instead of guessing.
 10. Once you attach to a mission, switch back to Mode 1 and follow the full mission lifecycle.
 
@@ -172,15 +172,18 @@ ovld protocol deliver --session-key <sessionKey> \
 ```
 
 This is the normal delivery shape: a summary is sufficient. The CLI syncs objective-ledger
-evidence independently before the lifecycle transition.
+evidence independently before the lifecycle transition, and tracking gaps or sync failures never
+block delivery. See **Delivery And Change Evidence** below for how to prepare the summary.
 
-After running a generator, migration, or script that writes files, you may add its known outputs
-to this existing call with `--paths path/one.ts,path/two.ts`. This is optional, paths-only
-metadata for outputs the native hook cannot name; never use it to enumerate every changed or
-opened file, and never make a separate call just to declare paths.
+When you know you changed files that native capture could not name (shell or heredoc writes,
+script or generator outputs, deletes, and both endpoints of a rename), add exactly those to the
+same `update` or `deliver` call with `--paths path/one.ts,path/two.ts`, or `--paths-file <path|->`
+with a JSON string array when a path contains a comma or the list is long. They are recorded as
+Declared, never as native capture. Never use it to enumerate every changed or opened file, and
+never make a separate call just to declare paths.
 
-Artifacts, optional change rationales, and a delivery report remain current annotations when
-they add review value. Use `--payload-json` when the full delivery object fits comfortably inline
+Artifacts and a delivery report remain optional annotations when they add review value. There
+is no per-file explanation input. Use `--payload-json` when the full delivery object fits comfortably inline
 (roughly under 8 KB). Larger inline `--*-json` values are rejected; stream them through the
 corresponding `--*-file -` flag. A real scratch path belongs under `$OVERLORD_TMPDIR` (this launch's private
 `.overlord/tmp/sessions/<id>/` directory); `deliver` removes that directory for you, and nothing
@@ -260,21 +263,42 @@ migrations, `.env.example` changes, dependency manifests, CI workflow files) and
 them, so leaving one out never hides it; reporting it yourself with a real `command` and
 `verify` replaces the generic wording with something the operator can follow.
 
-### Change ledger health (diagnostic)
+### Reading captured file evidence
 
-Use this only to inspect or troubleshoot objective-ledger synchronization and hook health:
+Read the objective's captured paths once before you write the delivery summary:
 
 ```bash
-ovld protocol changes --mission-id $MISSION_ID
+ovld protocol changes --objective-id $OBJECTIVE_ID
 ```
 
-It may flush pending metadata-only ledger entries for the attached objective, then reports the
-binding, synchronization result, evidence source/quality, and bounded hook health. It does not
-read or diff the worktree, classify files by agent ownership, draft rationales, or gate delivery.
-Native paths normalized by the connector-owned codec as `file.edited` are valid, non-exclusive
-`declared_edit`/`direct` evidence. Codec-normalized read, search, and fetch callbacks are silent
-no-ops. Mutation-capable callbacks without a normalized edit path, plus shell, generic, unknown,
-and unmapped callbacks, report unavailable evidence health.
+This is a local read of this checkout's sessions for the objective. It syncs pending ledger
+entries first (sync failure is advisory), then returns synced and pending paths deduplicated by
+path, capped at 200 rows with a pre-cap `total` and `truncated`, plus capture and sync warnings.
+`coverage: "unavailable"` means no local session matched, not "no files changed". It is not
+complete cross-device history: `ovld protocol objective-changes --objective-id $OBJECTIVE_ID`
+(hosted MCP `overlord_changes`) reads the objective's synchronized evidence across sessions,
+resources, and devices, but cannot see unsynchronized local rows. Neither read diffs the
+worktree, classifies ownership, or gates delivery.
+
+Each row is cumulative objective evidence, including edits later reverted, with a source:
+
+- `declared_edit` (shown as Native): at least one successful native edit callback named the path.
+- `agent_declared` (shown as Declared): you or a record-work call declared the path.
+- `null` (shown as Unknown): historical evidence whose provenance could not be established.
+
+Native capture appends a path only for a codec-normalized edit whose outcome is successful.
+Reads, searches, and fetches are silent. Warnings tell you where capture may be incomplete:
+
+- `shell_activity_unverified`: a shell command ran; it may or may not have written files.
+- `outcome_partial` / `outcome_unavailable`: an edit failed partway or its result was unknown,
+  so no path was recorded.
+- `direct_path_unavailable`: a tool ran that capture cannot map to paths.
+- Binding warnings: tracking was not active for the session (unbound), is configured but no
+  callback has been observed, or its availability is unknown (hosted).
+- Sync warnings: some captured paths have not synchronized yet.
+
+A warning is not proof that a file changed. Declare only files you know you changed and capture
+missed; when unsure, say in the summary that coverage may be incomplete instead of guessing.
 
 ### Shared worktree safety (critical)
 
@@ -291,41 +315,32 @@ uses the same summary-only delivery as every other objective.
 
 Ordinary deliver artifacts should use `next_steps`, `test_results`, `migration`, `note`, `url`, or `decision`.
 
-### Optional Change Rationales
+### Declaring paths native capture missed
 
-Rationales are optional annotations. Overlord records which files an objective changed on its
-own, so a delivery never needs them and can never fail for lacking them. Supply one only when
-the reason for a change is not obvious from the diff.
+Per-file explanations no longer exist: `--change-rationales-*`, `--changed-files-*`, and the
+`changeRationales` / `changedFiles` payload fields are rejected. Explain changes in the summary.
 
-Attach them to `update` while working, or to `deliver` at the end. Inline
-`--change-rationales-json` is fine for a few entries; larger arrays are **rejected** — use
-`--change-rationales-file -` and stream JSON on stdin. The same ~8 KB inline limit applies to
-`--payload-json` and other `--*-json` flags.
-
-**Fields per entry:** `filePath`, `label`, `summary`, `why`, `impact` (all strings).
-Use the canonical `filePath` spelling. Do not wrap the entry under a `rationale` key.
-
-**Never revert, restore, or delete file changes from other agents or missions.** Leave
-unrelated dirty files intact.
+Declare known misses on the call you are already making. A rename declares both endpoints, and
+a deleted or renamed-away path is valid even though it no longer exists:
 
 ```bash
-ovld protocol update --session-key <sessionKey> --mission-id $MISSION_ID \
-  --summary "Added retry logic." --phase execute \
-  --change-rationales-json '[{"label":"Add backoff","filePath":"lib/api.ts","summary":"Added retry.","why":"Transient failures.","impact":"Retries 3x.","hunks":[{"header":"@@ -22,4 +22,18 @@"}]}]'
+ovld protocol deliver --session-key <sessionKey> --objective-id $OBJECTIVE_ID \
+  --summary "Narrative: what you did and next steps." \
+  --paths src/generated/schema.ts,docs/old-name.md,docs/new-name.md
 ```
 
-For many entries (roughly 5+), stream them through `--change-rationales-file -` to avoid shell quoting failures:
+For a long list, or a path containing a comma, stream a JSON string array:
 
 ```bash
-ovld protocol deliver --session-key <sessionKey> --mission-id $MISSION_ID \
+ovld protocol deliver --session-key <sessionKey> --objective-id $OBJECTIVE_ID \
   --summary "Narrative: what you did and next steps." \
-  --change-rationales-file - <<'EOF'
-[
-  {"label":"Add backoff","filePath":"lib/api.ts","summary":"Added retry.","why":"Transient failures.","impact":"Retries 3x."},
-  {"label":"Update config","filePath":"lib/config.ts","summary":"Added timeout.","why":"Match new defaults.","impact":"Requests time out after 30s."}
-]
+  --paths-file - <<'EOF'
+["src/generated/schema.ts", "fixtures/a,b.json"]
 EOF
 ```
+
+Paths are normalized against the checkout. Traversal, symlinks that leave the checkout, ignored
+paths, and Overlord-managed paths are rejected with a reason on stderr and never fail the call.
 
 ### Project Discovery And Mission Creation
 
@@ -427,18 +442,24 @@ A checkout may be linked to more than one project. Default mission association t
 
 ## Delivery And Change Evidence
 
-Normal delivery contains the narrative summary only. The CLI synchronizes objective-ledger
-evidence independently; neither the agent nor a shared working tree supplies an ownership list.
+The reviewer sees your summary and, separately, a cumulative **Files changed during this
+objective** list grouped by resource. Prepare delivery cheaply:
 
-- Add a change rationale only when a non-obvious implementation reason materially helps review.
-- Do not send `file_changes` as an artifact or reconstruct paths from `git status`.
-- `ovld protocol changes` is a ledger-sync and hook-health diagnostic. It does not classify
-  ownership or draft annotations.
-- Do not include unrelated worktree changes in delivery annotations or artifacts.
+1. Read the captured paths once (`ovld protocol changes --objective-id <id>`, or
+   `overlord_changes` over MCP). See **Reading captured file evidence** above.
+2. If capture warns about shell, partial, or unsupported activity and you know of files you
+   changed that it missed, declare exactly those with `--paths` / `--paths-file` on `deliver`.
+3. Write the summary by behavior or component: the outcome, why it matters, how you verified it,
+   and material limitations, including any capture gap you could not reconcile. A handful of
+   representative paths is enough; never enumerate every file or explain files one by one.
+
+- Do not run `git status` or `git diff` on a shared worktree to build the list, and do not send
+  `file_changes` artifacts. Never infer ownership from timestamps, cwd, a branch, or an
+  unrelated dirty file.
+- The list is not a Git diff, a delivery-time snapshot, or proof of exclusive ownership; late
+  synchronization may extend it after delivery. That never blocks or invalidates delivery.
 - **Never revert, restore, or delete file changes from other agents or missions.**
 - A read-only result uses the same delivery command; summarize that no code change was needed.
-
-The optional annotation shape and `--change-rationales-file -` guidance are under **Optional Change Rationales** above.
 
 ## Rules
 
@@ -473,4 +494,4 @@ The optional annotation shape and `--change-rationales-file -` guidance are unde
 - [reference/context.md](reference/context.md) — Shared state, attachments, and large artifact policy
 - [reference/shell-escaping.md](reference/shell-escaping.md) — Heredoc input through explicit `--*-file -` flags
 
-<!-- version: 0.6.0 -->
+<!-- version: 0.7.0 -->

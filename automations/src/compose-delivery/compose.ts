@@ -40,14 +40,6 @@ export type ComposeDeliveryInput = {
   deferredWork: string[];
   assumptions: string[];
   candidateActions: ComposeDeliveryEvidenceItem[];
-  changeRationales: Array<{
-    id: string;
-    filePath: string;
-    label: string;
-    summary: string;
-    why: string;
-    impact: string;
-  }>;
   recentEvents?: Array<{ type: string; summary: string }>;
 };
 
@@ -119,13 +111,14 @@ Rules:
 - Never invent mandatory human actions or implementation tradeoffs without a sourceId match.
 - Every deterministic candidate action is real follow-up work: cite each one unless an agent-reported action already covers the same step.
 - Carry each action's command, verify, and link fields through unchanged when the evidence supplies them; never fabricate a command, URL, or path that is not in the evidence.
+- File paths (a candidate action's link or sourceRef) are context only. Never describe what a file does or why it changed, and never infer behavior, impact, tests, or verification from a file or path name; only the agent summary and the supplied report facts state those.
 - Never include git commit/push/PR actions or routine "review/test the code" actions.
 - Prefer concise, scannable Markdown. Do not include secrets, tokens, or raw diffs.
 DEFERRED WORK rules (deferredWork array):
 - deferredWork is only for recommended NEW objectives that are not part of this mission. Out-of-scope bugs discovered during the work are the canonical example. It is not leftover implementation of the current objective, the next queued objective on this mission, or human follow-up.
 - The prompt lists this mission's planned future objectives and any agent items already omitted as ineligible. Never restate those, never restate a human action or known risk, and never restate leftover slices of the current objective.
 - The deferred-work evidence list is already the eligible subset. Rewrite every remaining item as a self-contained statement of one to three sentences: start with an imperative verb naming the work; name the component, feature, file, command, or data set involved; state what the delivered work already covers and why this piece was left; and state what done looks like when the evidence says so.
-- Resolve references that only make sense inside this delivery ("finding 3", "P2 items", "the next objective", "remaining ~60 moves") by pulling the referenced detail from the agent summary, objective instruction, change rationales, or recent events.
+- Resolve references that only make sense inside this delivery ("finding 3", "P2 items", "the next objective", "remaining ~60 moves") by pulling the referenced detail from the agent summary, objective instruction, or recent events.
 - Never shorten a kept item, merge two kept items, or reorder them. Empty array is correct when the eligible list is empty or when a remaining item is still leftover in-mission work or human follow-up that slipped through.
 - Only add an item beyond the eligible list when the agent summary explicitly recommends new work outside this mission (for example an out-of-scope bug). Never add leftover in-mission work, a queued future objective, a human action, or a known risk.
 - Use only facts present in the evidence. Do not invent files, commands, scope, or acceptance criteria. Keep each item under ${DEFERRED_WORK_MAX_CHARS} characters.`;
@@ -157,7 +150,6 @@ export function buildComposeDeliveryPrompt(input: ComposeDeliveryInput): string 
     `Deferred work (eligible agent-listed, ${input.deferredWork.length} item(s); rewrite each as a standalone out-of-mission objective per the DEFERRED WORK rules; empty array is correct when none qualify):\n${JSON.stringify(input.deferredWork)}`,
     `Assumptions:\n${JSON.stringify(input.assumptions)}`,
     `Deterministic candidate actions:\n${JSON.stringify(input.candidateActions)}`,
-    `Change rationales:\n${JSON.stringify(input.changeRationales.slice(0, 20))}`,
     input.recentEvents && input.recentEvents.length > 0
       ? `Recent objective events:\n${JSON.stringify(input.recentEvents.slice(0, 12))}`
       : null

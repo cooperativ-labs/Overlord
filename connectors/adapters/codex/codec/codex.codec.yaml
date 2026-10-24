@@ -28,13 +28,22 @@ events:
     inputPath: tool_input
     callIdPath: tool_use_id
     turnIdPath: turn_id
+    # Codex runs PostToolUse after a handler returns a result, but apply_patch reports its own
+    # failure inside that result: `tool_response` is text whose first line is `Exit code: <n>`
+    # (upstream codex-rs hook test `post_tool_use_records_additional_context_for_apply_patch`
+    # asserts the `Exit code: 0` / `Success. Updated the following files:` shape). Only the
+    # leading exit code is decoded; the text is never retained. A missing or unrecognized
+    # line stays unknown, so capture records outcome_unavailable rather than native evidence.
+    outcomePath: tool_response
+    outcomeExitCodePrefix: 'Exit code: '
     fileEditKind: file.edited
     filePathPaths:
       - file_path
       - filePath
       - path
     # Codex apply_patch carries destinations in bounded patch headers rather
-    # than a standalone path field. The codec extracts only those headers.
+    # than a standalone path field. The codec extracts only Add/Update/Delete
+    # File and Move to headers, so a rename keeps both endpoints.
     filePathPatchTextPaths:
       - command
       - patch

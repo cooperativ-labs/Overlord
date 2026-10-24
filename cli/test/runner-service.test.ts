@@ -124,7 +124,9 @@ test('applyPollJitter stays within +/-10 percent of the base interval', () => {
 
 test('resolveOvldInvocation prefers an explicit override, otherwise re-runs the entry', () => {
   const prior = process.env.OVLD_RUNNER_EXEC;
+  const priorElectron = process.env.ELECTRON_RUN_AS_NODE;
   try {
+    delete process.env.ELECTRON_RUN_AS_NODE;
     process.env.OVLD_RUNNER_EXEC = '/usr/local/bin/ovld';
     assert.deepEqual(resolveOvldInvocation(['node', 'cli.js'], '/node'), {
       program: '/usr/local/bin/ovld',
@@ -146,6 +148,8 @@ test('resolveOvldInvocation prefers an explicit override, otherwise re-runs the 
   } finally {
     if (prior === undefined) delete process.env.OVLD_RUNNER_EXEC;
     else process.env.OVLD_RUNNER_EXEC = prior;
+    if (priorElectron === undefined) delete process.env.ELECTRON_RUN_AS_NODE;
+    else process.env.ELECTRON_RUN_AS_NODE = priorElectron;
   }
 });
 

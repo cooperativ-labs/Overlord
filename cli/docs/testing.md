@@ -99,9 +99,9 @@ shared with [Layer 3 §3.5](../../TEST_PLAN.md#35-protocol-command-surface-confo
 
 ### B5. Delivery validation — advisory change evidence
 
-- Delivery succeeds with no file evidence or rationale.
-- Each optional rationale requires canonical `filePath`, `label`, `summary`,
-  `why`, and `impact`; retired aliases are rejected.
+- Delivery succeeds with only a summary and no file evidence.
+- `--paths` / `--paths-file` declarations are recorded as `agent_declared`;
+  retired rationale and changed-file inputs are rejected.
 - `sync-changes` salvages valid siblings, warns per invalid item, and never gates
   delivery.
 - Delivery rejects retired changed-file, observed-dirty, no-file, and

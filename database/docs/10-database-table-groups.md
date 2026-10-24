@@ -55,8 +55,7 @@ Every Overlord installation needs these. They cover the fundamental workflow: cr
 | `objective_attachments`  | File metadata for uploads/imports scoped to an objective.         |
 | `deliveries`             | Final or follow-up delivery review boundaries.                    |
 | `artifacts`              | Structured review artifacts attached to deliveries.               |
-| `changed_files`          | Update-time file metadata recorded during a session.              |
-| `change_rationales`      | Structured per-file records of what changed, why, and the impact. |
+| `changed_files`          | Objective-scoped, resource-aware changed-path evidence.           |
 
 ### Queue, Idempotency, and Change Feed
 

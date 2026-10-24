@@ -451,6 +451,34 @@ const tools = [
     }
   },
   {
+    name: 'overlord_changes',
+    title: 'List objective file changes',
+    description:
+      'Use this to read the synchronized changed-file evidence of one objective across every session, resource, and device. Returns ObjectiveFileChangesDto { scope: "server_objective", items, total, limit, truncated, capture }: compact rows (resourceKey, filePath, source declared_edit | agent_declared | null for unknown, observedAt, hookHealth) ordered by resource then path and capped at 200, total as the pre-cap count, and persisted capture diagnostics with warnings. It never includes unsynchronized local evidence, needs no attached session, and does not mutate anything.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        missionId: {
+          type: 'string',
+          description:
+            'Mission UUID or workspace display id. Optional when objectiveId is a display id such as coo:756.k7xm, which already names its mission.'
+        },
+        objectiveId: {
+          type: 'string',
+          description:
+            'Required objective UUID or display id such as coo:756.k7xm. An objective that does not belong to missionId is rejected.'
+        }
+      },
+      required: [],
+      additionalProperties: false
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: false
+    }
+  },
+  {
     name: 'overlord_launch_objective',
     title: 'Launch objective execution',
     description:
@@ -945,51 +973,14 @@ const tools = [
           type: 'string',
           description: 'Optional event type. Defaults to update.'
         },
-        changeRationales: {
+        declaredPaths: {
           type: 'array',
-          description: 'Optional reviewer-facing annotations for objective-ledger file evidence.',
+          description:
+            'Optional paths written by shell commands, generators, or scripts that native capture could not name. Recorded as agent_declared evidence; never an exhaustive list.',
           items: {
-            type: 'object',
-            properties: {
-              filePath: {
-                type: 'string',
-                description: 'Repository-relative path of the changed file.'
-              },
-              label: {
-                type: 'string',
-                description: 'Short reviewer title for the change.'
-              },
-              summary: {
-                type: 'string',
-                description: 'What changed in this file.'
-              },
-              why: {
-                type: 'string',
-                description: 'Why the change was made.'
-              },
-              impact: {
-                type: 'string',
-                description: 'Behavioral impact of the change.'
-              },
-              hunks: {
-                type: 'array',
-                description:
-                  'Optional diff-hunk headers only; file contents and diffs are prohibited.',
-                items: {
-                  type: 'object',
-                  properties: {
-                    header: {
-                      type: 'string',
-                      description: 'Unified-diff hunk header.'
-                    }
-                  },
-                  required: ['header'],
-                  additionalProperties: false
-                }
-              }
-            },
-            required: ['filePath', 'label', 'summary', 'why', 'impact'],
-            additionalProperties: false
+            type: 'string',
+            description:
+              'Canonical repository-relative path. Deleted and renamed paths (both endpoints) are valid.'
           }
         }
       },
@@ -1006,7 +997,7 @@ const tools = [
     name: 'overlord_deliver_session',
     title: 'Deliver mission session',
     description:
-      'Use this only when the user-requested mission work is complete. It delivers the attached session with an explicit summary, optional file-change rationales, and optional authoritative human-action/tradeoff evidence.',
+      'Use this only when the user-requested mission work is complete. It delivers the attached session with an explicit summary, optional declared shell/script output paths, and optional authoritative human-action/tradeoff evidence.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1057,51 +1048,14 @@ const tools = [
             additionalProperties: false
           }
         },
-        changeRationales: {
+        declaredPaths: {
           type: 'array',
-          description: 'Optional reviewer-facing annotations for objective-ledger file evidence.',
+          description:
+            'Optional paths written by shell commands, generators, or scripts that native capture could not name. Recorded as agent_declared evidence; never an exhaustive list and never required.',
           items: {
-            type: 'object',
-            properties: {
-              filePath: {
-                type: 'string',
-                description: 'Repository-relative path of the changed file.'
-              },
-              label: {
-                type: 'string',
-                description: 'Short reviewer title for the change.'
-              },
-              summary: {
-                type: 'string',
-                description: 'What changed in this file.'
-              },
-              why: {
-                type: 'string',
-                description: 'Why the change was made.'
-              },
-              impact: {
-                type: 'string',
-                description: 'Behavioral impact of the change.'
-              },
-              hunks: {
-                type: 'array',
-                description:
-                  'Optional diff-hunk headers only; file contents and diffs are prohibited.',
-                items: {
-                  type: 'object',
-                  properties: {
-                    header: {
-                      type: 'string',
-                      description: 'Unified-diff hunk header.'
-                    }
-                  },
-                  required: ['header'],
-                  additionalProperties: false
-                }
-              }
-            },
-            required: ['filePath', 'label', 'summary', 'why', 'impact'],
-            additionalProperties: false
+            type: 'string',
+            description:
+              'Canonical repository-relative path. Deleted and renamed paths (both endpoints) are valid.'
           }
         },
         humanActions: {
@@ -1314,7 +1268,7 @@ const tools = [
     name: 'overlord_record_work',
     title: 'Record completed work as a mission',
     description:
-      'Use this to log work already finished in this chat as a completed Overlord mission — one call, no attach/deliver cycle. It creates a mission and a single completed objective, records the file changes and their rationales, lands the mission in the review column, and runs the delivery through the standard Gemini summarizer so it reads like any other delivered mission. Provide an objective (what was asked/done) and a reviewer-facing summary; optional changeRationales may annotate meaningful file changes. Only use this when the work is genuinely complete; use overlord_create_mission for work still to be done.',
+      'Use this to log work already finished in this chat as a completed Overlord mission — one call, no attach/deliver cycle. It creates a mission and a single completed objective, records the explicitly declared changed paths, lands the mission in the review column, and runs the delivery through the standard Gemini summarizer so it reads like any other delivered mission. Provide an objective (what was asked/done) and a reviewer-facing summary; optional declaredPaths lists the files the work changed. Only use this when the work is genuinely complete; use overlord_create_mission for work still to be done.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1335,70 +1289,14 @@ const tools = [
           type: 'string',
           description: 'Optional mission title; defaults to a title derived from the objective.'
         },
-        changeRationales: {
+        declaredPaths: {
           type: 'array',
-          description: 'One optional reviewer annotation per meaningful file change.',
+          description:
+            'Optional repository-relative paths this work changed, recorded as agent_declared evidence for the completed objective.',
           items: {
-            type: 'object',
-            properties: {
-              filePath: {
-                type: 'string',
-                description: 'Repository-relative path of the changed file.'
-              },
-              label: {
-                type: 'string',
-                description: 'Short reviewer title for the change.'
-              },
-              summary: {
-                type: 'string',
-                description: 'What changed in this file.'
-              },
-              why: {
-                type: 'string',
-                description: 'Why the change was made.'
-              },
-              impact: {
-                type: 'string',
-                description: 'Behavioral impact of the change.'
-              },
-              hunks: {
-                type: 'array',
-                description:
-                  'Optional diff-hunk headers only; file contents and diffs are prohibited.',
-                items: {
-                  type: 'object',
-                  properties: {
-                    header: {
-                      type: 'string',
-                      description: 'Unified-diff hunk header.'
-                    }
-                  },
-                  required: ['header'],
-                  additionalProperties: false
-                }
-              }
-            },
-            required: ['filePath', 'label', 'summary', 'why', 'impact'],
-            additionalProperties: false
-          }
-        },
-        changedFiles: {
-          type: 'array',
-          description: 'Optional explicit file observations for this sessionless record.',
-          items: {
-            type: 'object',
-            properties: {
-              filePath: {
-                type: 'string',
-                description: 'Repository-relative path.'
-              },
-              vcsStatus: {
-                type: 'string',
-                description: 'Optional VCS status such as M, A, or D.'
-              }
-            },
-            required: ['filePath'],
-            additionalProperties: false
+            type: 'string',
+            description:
+              'Canonical repository-relative path. Deleted and renamed paths (both endpoints) are valid.'
           }
         },
         artifacts: {
@@ -1597,6 +1495,9 @@ async function callOverlordTool(name, args) {
   }
   if (name === 'overlord_list_deliveries') {
     return runProtocol('list-deliveries', missionScopeFlags(args));
+  }
+  if (name === 'overlord_changes') {
+    return runProtocol('objective-changes', missionScopeFlags(args));
   }
   if (name === 'overlord_launch_objective') {
     return runProtocol('launch-objective', {
@@ -1818,9 +1719,7 @@ async function callOverlordTool(name, args) {
       ...(optionalString(args, 'eventType')
         ? { 'event-type': requiredString(args, 'eventType') }
         : {}),
-      ...(Array.isArray(args.changeRationales)
-        ? { 'change-rationales-json': args.changeRationales }
-        : {})
+      ...(Array.isArray(args.declaredPaths) ? { 'declared-paths-json': args.declaredPaths } : {})
     });
   }
   if (name === 'overlord_deliver_session') {
@@ -1829,9 +1728,7 @@ async function callOverlordTool(name, args) {
       'session-key': requiredString(args, 'sessionKey'),
       summary: requiredString(args, 'summary'),
       ...(Array.isArray(args.artifacts) ? { 'artifacts-json': args.artifacts } : {}),
-      ...(Array.isArray(args.changeRationales)
-        ? { 'change-rationales-json': args.changeRationales }
-        : {}),
+      ...(Array.isArray(args.declaredPaths) ? { 'declared-paths-json': args.declaredPaths } : {}),
       ...(Array.isArray(args.humanActions) ||
       Array.isArray(args.tradeoffsMade) ||
       Array.isArray(args.knownRisks) ||
@@ -1899,10 +1796,7 @@ async function callOverlordTool(name, args) {
         objective: requiredString(args, 'objective'),
         summary: requiredString(args, 'summary'),
         ...(optionalString(args, 'title') ? { title: requiredString(args, 'title') } : {}),
-        ...(Array.isArray(args.changeRationales)
-          ? { changeRationales: args.changeRationales }
-          : {}),
-        ...(Array.isArray(args.changedFiles) ? { changedFiles: args.changedFiles } : {}),
+        ...(Array.isArray(args.declaredPaths) ? { declaredPaths: args.declaredPaths } : {}),
         ...(Array.isArray(args.artifacts) ? { artifacts: args.artifacts } : {})
       }
     });
@@ -1920,7 +1814,7 @@ process.stdin.on('data', async chunk => {
         result: {
           protocolVersion: PROTOCOL_VERSION,
           capabilities: { tools: { listChanged: false } },
-          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.53' }
+          serverInfo: { name: 'overlord-__OVERLORD_ADAPTER_KEY__', version: '0.3.56' }
         }
       });
       continue;

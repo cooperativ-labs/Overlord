@@ -10,7 +10,6 @@ import type { DatabaseClient } from '@overlord/database';
 
 import {
   applyDeliveryPresentation,
-  type ChangeRationaleEvidence,
   type DeferredWorkObjectiveRef,
   deriveDeterministicActionCandidates,
   filterDeferredWork,
@@ -28,7 +27,6 @@ import { WorkerJobPoller } from './worker-job-poller.ts';
 const CLAIM_BATCH_SIZE = 5;
 const MAX_COMPOSE_SUMMARY_CHARS = 6_000;
 const MAX_COMPOSE_AUXILIARY_CHARS = 2_000;
-const MAX_COMPOSE_RATIONALE_CHARS = 800;
 const MAX_COMPOSE_EVENT_CHARS = 1_000;
 
 type WorkerJobRow = ClaimedWorkerJob;
@@ -175,8 +173,7 @@ class DeliveryComposeWorker extends WorkerJobPoller {
     const context = await loadComposeContext(client, deliveryId);
     if (!context) return { kind: 'missing' };
 
-    const { delivery, report, rationales, filePaths, objective, plannedObjectives, recentEvents } =
-      context;
+    const { delivery, report, filePaths, objective, plannedObjectives, recentEvents } = context;
     const candidates = deriveDeterministicActionCandidates({ filePaths });
     const model = readGeminiConfigFromEnv()?.model ?? null;
 
@@ -186,7 +183,6 @@ class DeliveryComposeWorker extends WorkerJobPoller {
       const input = toComposeInput({
         delivery,
         report,
-        rationales,
         candidates,
         objective,
         plannedObjectives,
@@ -208,7 +204,6 @@ class DeliveryComposeWorker extends WorkerJobPoller {
       report,
       draft,
       candidates,
-      rationales,
       model,
       currentObjective: objective,
       plannedObjectives
@@ -318,7 +313,6 @@ async function loadComposeContext(
 ): Promise<{
   delivery: DeliveryRow;
   report: DeliveryReportPayloadV1;
-  rationales: ChangeRationaleEvidence[];
   filePaths: string[];
   objective: DeferredWorkObjectiveRef;
   plannedObjectives: DeferredWorkObjectiveRef[];
@@ -346,32 +340,16 @@ async function loadComposeContext(
   }
   if (!report) return null;
 
-  const rationaleRows = (await client.all(
-    `SELECT id, file_path, label, summary, why, impact
-       FROM change_rationales
-      WHERE delivery_id = ? AND deleted_at IS NULL
-      ORDER BY created_at ASC
+  // Cumulative objective path evidence feeds only the deterministic operator
+  // action rules; paths are never sent to the model as per-file explanations.
+  const filePathRows = (await client.all(
+    `SELECT file_path FROM changed_files
+      WHERE objective_id = ? AND deleted_at IS NULL
+      ORDER BY last_observed_at DESC, id DESC
       LIMIT 40`,
-    [deliveryId]
-  )) as Array<{
-    id: string;
-    file_path: string;
-    label: string;
-    summary: string;
-    why: string;
-    impact: string;
-  }>;
-
-  const rationales: ChangeRationaleEvidence[] = rationaleRows.map(row => ({
-    id: row.id,
-    filePath: row.file_path,
-    label: row.label,
-    summary: row.summary,
-    why: row.why,
-    impact: row.impact
-  }));
-
-  const filePaths = rationaleRows.map(row => row.file_path);
+    [delivery.objective_id]
+  )) as Array<{ file_path: string }>;
+  const filePaths = filePathRows.map(row => row.file_path);
 
   const objective = (await client.get(
     `SELECT title, instruction_text FROM objectives WHERE id = ?`,
@@ -396,7 +374,6 @@ async function loadComposeContext(
   return {
     delivery,
     report,
-    rationales,
     filePaths,
     objective: {
       title: objective?.title ?? null,
@@ -418,7 +395,6 @@ async function loadComposeContext(
 function toComposeInput({
   delivery,
   report,
-  rationales,
   candidates,
   objective,
   plannedObjectives,
@@ -426,7 +402,6 @@ function toComposeInput({
 }: {
   delivery: DeliveryRow;
   report: DeliveryReportPayloadV1;
-  rationales: ChangeRationaleEvidence[];
   candidates: ReturnType<typeof deriveDeterministicActionCandidates>;
   objective: DeferredWorkObjectiveRef;
   plannedObjectives: DeferredWorkObjectiveRef[];
@@ -487,14 +462,6 @@ function toComposeInput({
       ...(action.link ? { link: action.link } : {}),
       source: action.source,
       ...(action.sourceRef ? { sourceRef: action.sourceRef } : {})
-    })),
-    changeRationales: rationales.slice(0, 20).map(rationale => ({
-      id: rationale.id,
-      filePath: boundComposeText(rationale.filePath, MAX_COMPOSE_RATIONALE_CHARS),
-      label: boundComposeText(rationale.label, MAX_COMPOSE_RATIONALE_CHARS),
-      summary: boundComposeText(rationale.summary, MAX_COMPOSE_RATIONALE_CHARS),
-      why: boundComposeText(rationale.why, MAX_COMPOSE_RATIONALE_CHARS),
-      impact: boundComposeText(rationale.impact, MAX_COMPOSE_RATIONALE_CHARS)
     })),
     recentEvents: recentEvents.slice(0, 12).map(event => ({
       type: event.type,

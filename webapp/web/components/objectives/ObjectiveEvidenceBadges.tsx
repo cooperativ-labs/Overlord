@@ -42,24 +42,26 @@ function CountBadge({
 
 /**
  * Compact evidence counts for a collapsed objective row (coo:879 §4.2): how
- * many deliveries and file changes it produced, how long it ran, and the state
- * of its newest Latch session. Zero counts and missing timestamps render
- * nothing, so a row that produced no evidence shows no badges rather than a
- * row of zeros.
+ * many deliveries it produced, how many files were changed during it, how long
+ * it ran, and the state of its newest Latch session. Zero counts and missing
+ * timestamps render nothing, so a row that produced no evidence shows no badges
+ * rather than a row of zeros.
  */
 export function ObjectiveEvidenceBadges({
   evidence,
+  fileCount = 0,
   startedAt,
   completedAt,
   className
 }: {
   evidence: ObjectiveEvidence;
+  /** Pre-cap total from the objective file-change read. */
+  fileCount?: number;
   startedAt: string | null;
   completedAt: string | null;
   className?: string;
 }) {
   const deliveryCount = evidence.deliveries.length;
-  const fileCount = evidence.fileChanges.length;
   const elapsed = formatObjectiveElapsed({ startedAt, completedAt });
   const newestSession = evidence.terminalSessions[0] ?? null;
   const items: ReactNode[] = [];
@@ -80,7 +82,11 @@ export function ObjectiveEvidenceBadges({
         key="files"
         icon={<FileCode2 className="h-3 w-3" aria-hidden="true" />}
         count={fileCount}
-        label={fileCount === 1 ? '1 file changed' : `${fileCount} files changed`}
+        label={
+          fileCount === 1
+            ? '1 file changed during this objective'
+            : `${fileCount} files changed during this objective`
+        }
       />
     );
   }

@@ -2,8 +2,8 @@
 
 Open-source management layer for AI coding agents. Overlord persists work as
 **missions** with structured **objectives**, routes execution to the right
-**device**, and records **change rationales** so every agent session builds on
-the last.
+**device**, and records **delivery summaries** and the files each objective
+changed so every agent session builds on the last.
 
 To sign up for a hosted account, visit [Overlord | AI Agent Management](https://www.ovld.ai/)
 
@@ -29,7 +29,7 @@ To sign up for a hosted account, visit [Overlord | AI Agent Management](https://
 
 Overlord is a project management layer for AI coding agents (Claude Code, Codex, Cursor, OpenCode, Antigravity, and others). Instead of treating each agent session as a one-shot, throwaway interaction, Overlord persists work as **missions** with structured **objectives**, accumulates **shared context** as work progresses, and routes execution to the right **device** for the job — your laptop, a remote workstation, or a cloud runner.
 
-The result is a Kanban-style workflow where humans plan and agents execute, with every session producing artifacts, change rationales, and history that the next session inherits.
+The result is a Kanban-style workflow where humans plan and agents execute, with every session producing a delivery summary, artifacts, a changed-file list, and history that the next session inherits.
 
 ![Overlord 2](https://ovld.ai/images/overlord-2.png)
 
@@ -39,7 +39,7 @@ The result is a Kanban-style workflow where humans plan and agents execute, with
 |--------------------------------------------------------------|--------------------------------------------------------------|
 | Users lose track of context between prompts                  | Structured Kanban workflow lets you thoroughly plan prompts and prompt sequences |
 | Agent sessions lose context between runs                     | Missions persist objectives, history, attachments, and shared state in the backend |
-| Hard to track what an agent actually changed and why         | Agents record `changeRationales` per file as part of the deliver step |
+| Hard to track what an agent actually changed and why         | Connector hooks record the files each objective changed, and the agent's delivery summary explains the change by behavior |
 | Plans, missions, and code drift apart                         | One mission holds many ordered objectives sharing the same context and artifacts |
 | Agent lock-in: hard to switch between different agents between each turn | Assign any agent you want to each objective.                 |
 
@@ -124,7 +124,7 @@ The top-level container. A project is mapped to a git repository and a local wor
 
 #### Mission 🎫
 
-A unit of work, identified like `1:1204` (`<workspace>:<sequence>`). A mission represents a feature, bug, or goal that may take one or many steps to complete. Missions hold the shared state that every objective beneath them can read and contribute to: history, attachments, artifacts, human-only notes, and recorded change rationales.
+A unit of work, identified like `1:1204` (`<workspace>:<sequence>`). A mission represents a feature, bug, or goal that may take one or many steps to complete. Missions hold the shared state that every objective beneath them can read and contribute to: history, attachments, artifacts, human-only notes, and the files each objective changed.
 
 #### Objective 🎯
 
@@ -136,11 +136,11 @@ The live attachment between an agent (Claude Code, Codex, Cursor, etc.) and an o
 
 #### Shared Context 📚
 
-Everything attached to the mission that survives across objectives: `write-context` entries, uploaded attachments, recorded artifacts, prior session history, and change rationales. The next agent session inherits all of it.
+Everything attached to the mission that survives across objectives: `write-context` entries, uploaded attachments, recorded artifacts, prior session history, delivery summaries, and changed-file evidence. The next agent session inherits all of it.
 
-#### Change Rationale 📝
+#### Delivery Summary and Changed Files 📝
 
-A structured record per modified file describing **what** changed, **why**, and the **impact**. Agents emit these during `deliver`, producing an audit trail that lives alongside the diff and survives long after the session ends.
+At `deliver`, the agent writes a narrative summary of **what** changed, **why**, and how it was verified, organized by behavior or component. Alongside it, Overlord shows a cumulative list of the files changed during the objective, captured by connector hooks (with any shell or script outputs the agent declares), so reviewers can see both the story and the footprint long after the session ends.
 
 ### Workflow
 
@@ -158,7 +158,7 @@ sequenceDiagram
     Agent->>Repo: Read / edit files
     Agent->>Overlord: ovld protocol update (progress)
     Agent->>Repo: Continue work
-    Agent->>Overlord: ovld protocol deliver<br/>(summary + changeRationales)
+    Agent->>Overlord: ovld protocol deliver<br/>(summary; file evidence syncs separately)
     Overlord->>Human: Mission advances to next objective or done
 ```
 

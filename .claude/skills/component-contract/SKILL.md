@@ -124,6 +124,6 @@ Do not skip step 3.
 
 ## Delivery Reminder
 
-When delivering a ticket that involved contract-touching changes, include `CONTRACT.md` and any updated `contract/*.yaml` files in `changeRationales` — these are first-class behavioral file changes, not documentation noise.
+When delivering a ticket that involved contract-touching changes, name the contract version and the interface changes (`CONTRACT.md`, any updated `contract/*.yaml`, and the impact on other modules) in the delivery summary. These are first-class behavioral changes, not documentation noise. If `CONTRACT.md` or a contract YAML was written from a shell command rather than a native edit tool, declare it with `--paths` so it appears among the objective's changed files.
 
-<!-- version: 1.0.0 -->
+<!-- version: 1.1.0 -->

@@ -30,7 +30,7 @@ const widgetDefinitions: Array<
   {
     uri: 'ui://overlord/file-changes.html',
     name: 'Overlord file-change viewer',
-    description: 'Renders delivery details and recorded file-change rationales.',
+    description: 'Renders delivery details and the paths changed during the objective.',
     title: 'Delivery details'
   },
   {

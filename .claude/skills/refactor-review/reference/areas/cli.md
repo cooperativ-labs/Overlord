@@ -63,7 +63,7 @@ being restated in `help.ts` / `protocol-help.ts`. Triplicated flag lists that ha
 high-value finding; route pure documentation mismatches to `drift-review`.
 
 ### stdin/file input handling
-Protocol commands accept `--*-json`, `--*-file`, and `-` (stdin) for payloads, rationales,
+Protocol commands accept `--*-json`, `--*-file`, and `-` (stdin) for payloads, declared paths,
 artifacts, and summaries, with an inline size limit. That resolution logic must exist once. Flag
 per-flag re-implementations of "inline or file or stdin" and any input path that skips the size
 check.

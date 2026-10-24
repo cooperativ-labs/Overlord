@@ -5,17 +5,12 @@ export type RunnerClaimResult = {
   longPoll: boolean;
 };
 
-type ClaimResponse = Pick<
-  Response,
-  | 'headersSent'
-  | 'writableEnded'
-  | 'status'
-  | 'setHeader'
-  | 'flushHeaders'
-  | 'json'
-  | 'write'
-  | 'end'
->;
+type ClaimResponse = Pick<Response, 'headersSent' | 'writableEnded' | 'flushHeaders' | 'write'> & {
+  status(code: number): unknown;
+  setHeader(name: string, value: string): unknown;
+  json(body: RunnerClaimResult): unknown;
+  end(): unknown;
+};
 
 /** Flush 200 + JSON content-type with no body so proxies see a live response during LISTEN. */
 export function flushRunnerClaimHeaders(res: ClaimResponse): void {

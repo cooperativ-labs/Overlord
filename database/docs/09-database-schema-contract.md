@@ -1366,6 +1366,13 @@ Indexes:
 - `(objective_id, delivered_at)`.
 - `(session_id)`.
 
+Delivery-report item provenance (`source`) is `agent` or `deterministic_rule`. The
+version-165 migration `20261024130000_delivery_reports_retire_change_rationale`
+removed persisted presentation items whose provenance was the retired
+`change_rationale` value, keeping every other item in stored order. Legacy
+top-level payload keys such as `changeRationales` remain as inert, never-read
+history.
+
 ### `human_action_resolutions`
 
 Operator decisions on the deferred-work items an agent reports in a delivery (coo:971,
@@ -1431,80 +1438,57 @@ Indexes:
 
 ### `changed_files`
 
-Objective-ledger file metadata, upserted by objective/path through `sync-changes`.
-It persists only bounded metadata, never file content, diffs, commands,
-transcripts, environment values, fingerprints, or absolute host paths.
+Objective-ledger file metadata, upserted by objective + resolved resource + path
+through `sync-changes` and by explicit declarations. It persists only bounded
+metadata, never file content, diffs, commands, transcripts, environment values,
+fingerprints, absolute host paths, or per-file explanatory prose.
 
-| Column                   | Type         | Required | Notes                                                                                                                                                                                                                                     |
-| ------------------------ | ------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                     | Id           | yes      |                                                                                                                                                                                                                                           |
-| `workspace_id`           | Id           | yes      | FK to `workspaces`.                                                                                                                                                                                                                       |
-| `project_id`             | Id           | yes      | FK to `projects`.                                                                                                                                                                                                                         |
-| `mission_id`             | Id           | yes      | FK to `missions`.                                                                                                                                                                                                                         |
-| `objective_id`           | Id           | yes      | FK to `objectives`.                                                                                                                                                                                                                       |
-| `session_id`             | Id           | no       | FK to `agent_sessions`; null for `record-work` changed-file metadata.                                                                                                                                                                     |
-| `resource_id`            | Id           | no       | FK to `project_resources` when known. `sync-changes` refreshes it from the observing session's resolved resource, so review surfaces can identify which project resource produced the change. |
-| `file_path`              | Path         | yes      | Normalized repo-relative path.                                                                                                                                                                                                            |
-| `vcs_status`             | text         | no       | `modified`, `added`, `deleted`, etc.                                                                                                                                                                                                      |
-| `current_diff_state`     | text         | yes      | `present`, `resolved`, `unknown`, `unavailable`. New objective-ledger and `record-work` path observations use `unknown`: neither path establishes that a current VCS diff exists. Historical `present` and `resolved` rows remain readable. |
-| `first_observed_at`      | TimestampUTC | yes      |                                                                                                                                                                                                                                           |
-| `last_observed_at`       | TimestampUTC | yes      |                                                                                                                                                                                                                                           |
-| `last_observed_event_id` | Id           | no       | FK to `mission_events`.                                                                                                                                                                                                                   |
-| `observed_metadata_json` | Json         | yes      | Bounded source, quality, overlap, tool-window, adapter-version, and hook-health metadata only; never content, diffs, commands, transcripts, environment values, or fingerprints.                                                         |
-| `created_at`             | TimestampUTC | yes      |                                                                                                                                                                                                                                           |
-| `updated_at`             | TimestampUTC | yes      |                                                                                                                                                                                                                                           |
-| `deleted_at`             | TimestampUTC | no       | Tombstone.                                                                                                                                                                                                                                |
-| `revision`               | integer      | yes      |                                                                                                                                                                                                                                           |
+| Column                   | Type         | Required | Notes                                                                                                                                                                                                                        |
+| ------------------------ | ------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                     | Id           | yes      |                                                                                                                                                                                                                              |
+| `workspace_id`           | Id           | yes      | FK to `workspaces`.                                                                                                                                                                                                          |
+| `project_id`             | Id           | yes      | FK to `projects`.                                                                                                                                                                                                            |
+| `mission_id`             | Id           | yes      | FK to `missions`.                                                                                                                                                                                                            |
+| `objective_id`           | Id           | yes      | FK to `objectives`.                                                                                                                                                                                                          |
+| `session_id`             | Id           | no       | FK to `agent_sessions`; last observing session. Null for sessionless `record-work` declarations.                                                                                                                              |
+| `resource_id`            | Id           | no       | FK to `project_resources`, resolved from the authorized session — never from a caller-supplied claim. Null for sessionless declarations and unresolved sessions.                                                              |
+| `file_path`              | Path         | yes      | Normalized repo-relative path.                                                                                                                                                                                               |
+| `source`                 | text         | no       | `declared_edit` (at least one successful native observation) or `agent_declared`; null when historical provenance is unknown. Native evidence is never downgraded by a later declaration.                                     |
+| `hook_health`            | text         | no       | Bounded health code of the latest observation (≤160 chars, `[a-z0-9_.:-]`).                                                                                                                                                   |
+| `sync_keys_json`         | Json         | yes      | Last ≤32 idempotency keys applied to this row, so a retried batch is a no-op.                                                                                                                                                |
+| `first_observed_at`      | TimestampUTC | yes      |                                                                                                                                                                                                                              |
+| `last_observed_at`       | TimestampUTC | yes      | Projected as `observedAt`.                                                                                                                                                                                                   |
+| `last_observed_event_id` | Id           | no       | FK to `mission_events`.                                                                                                                                                                                                      |
+| `created_at`             | TimestampUTC | yes      |                                                                                                                                                                                                                              |
+| `updated_at`             | TimestampUTC | yes      |                                                                                                                                                                                                                              |
+| `deleted_at`             | TimestampUTC | no       | Tombstone.                                                                                                                                                                                                                   |
+| `revision`               | integer      | yes      |                                                                                                                                                                                                                              |
 
 Indexes:
 
-- Unique active `(objective_id, file_path)`. A changed-file row is objective-owned
-  across sessions; a later observation may refresh its session metadata but cannot
-  create a second active row for the same objective/path.
+- Unique active `(objective_id, COALESCE(resource_id, ''), file_path)`. A row is
+  objective-owned across sessions; equal relative paths in different resources are
+  distinct rows. A later observation refreshes session, last-observed time, health
+  and (by precedence) source on the same row. Two objectives may each own the same
+  physical path independently.
 - `(mission_id, objective_id, file_path)`.
 - `(project_id, updated_at)`.
 
-`objective_id` is mandatory. Every later observation refreshes `session_id`,
-`resource_id`, last-observed time, and bounded provenance on the same active row.
-Evidence precedence prevents a weaker observation from replacing a stronger
-source/quality pair. `record-work` is the only writer with a null session because
-it has no execution target ledger.
+Retired by the version-165 cutover: `vcs_status`, `current_diff_state`,
+`observed_metadata_json` (window/quality/overlap/tool-window metadata) and the
+`change_rationales` table. Rows whose historical provenance was not reliably
+recorded keep their path with `source = NULL`.
 
-### `change_rationales`
+### `agent_sessions` capture diagnostics
 
-Structured rationale records for meaningful file changes.
+Bounded capture metadata lives on the session so an empty path list still explains
+itself.
 
-| Column            | Type         | Required | Notes                                          |
-| ----------------- | ------------ | -------- | ---------------------------------------------- |
-| `id`              | Id           | yes      |                                                |
-| `workspace_id`    | Id           | yes      | FK to `workspaces`.                            |
-| `project_id`      | Id           | yes      | FK to `projects`.                              |
-| `mission_id`      | Id           | yes      | FK to `missions`.                              |
-| `objective_id`    | Id           | yes      | FK to `objectives`.                            |
-| `session_id`      | Id           | no       | FK to `agent_sessions`.                        |
-| `delivery_id`     | Id           | no       | FK to `deliveries`.                            |
-| `changed_file_id` | Id           | no       | FK to `changed_files`.                         |
-| `file_path`       | Path         | yes      | Normalized repo-relative path.                 |
-| `label`           | text         | yes      | Short reviewer title.                          |
-| `summary`         | text         | yes      | What changed.                                  |
-| `why`             | text         | yes      | Why it changed.                                |
-| `impact`          | text         | yes      | Behavioral impact.                             |
-| `hunks_json`      | Json         | yes      | Hunk headers/metadata only.                    |
-| `source_event_id` | Id           | no       | FK to `mission_events`.                        |
-| `is_final`        | Bool         | yes      | True when associated with a delivery boundary. |
-| `created_at`      | TimestampUTC | yes      |                                                |
-| `updated_at`      | TimestampUTC | yes      |                                                |
-| `deleted_at`      | TimestampUTC | no       | Tombstone.                                     |
-| `revision`        | integer      | yes      |                                                |
-
-Indexes:
-
-- `(mission_id, objective_id, file_path)`.
-- `(delivery_id, file_path)`.
-- Optional unique active final rationale `(delivery_id, file_path)`.
-
-Rationales are optional annotations. Missing rationale prose never blocks delivery;
-review starts from `changed_files` and joins the latest applicable rationale.
+| Column                         | Type         | Required | Notes                                                                                                                                                                              |
+| ------------------------------ | ------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `capture_binding_state`        | text         | yes      | `bound`, `unbound`, or `unknown` (default). Configuration evidence only, never proof that a hook is installed or running.                                                          |
+| `capture_callback_observed_at` | TimestampUTC | no       | First accepted scoped callback, including harmless reads. Distinct from a successful native edit.                                                                                  |
+| `capture_health_json`          | Json         | yes      | `{ "health": { "<code>": { "firstAt", "lastAt" } } }`, at most 16 distinct codes. Aggregated per code (idempotent under retries) so evicting detail never erases a sticky gap; known gap codes are never displaced by other codes. No raw callbacks/output. |
 
 ## Runner, Jobs, And Protocol Idempotency
 
@@ -2854,7 +2838,6 @@ JSON columns are either extension space or contracted structures:
 - `manifest_json`: connector-managed file manifest and checksums.
 - `connector_config_json`: custom harness command templates, launch argument mapping, hook support, and connector capabilities. Must not contain secrets.
 - `policy_json`: workspace extension availability policy, such as default availability and optional workspace-user restrictions.
-- `hunks_json`: rationale hunk headers/metadata only, as defined in the review plan.
 - `metadata_json` and `settings_json`: namespaced extension/core metadata unless a table note defines a stricter structure.
 
 Adapters may validate contracted JSON with CHECK constraints or generated schema tests. Services must validate it before persistence.
@@ -3134,7 +3117,7 @@ The project should ship shared tests that every database adapter must pass. Requ
 - Active uniqueness rules reject duplicate active statuses, role assignments, mission positions, tags, and idempotency keys.
 - Queue claiming is atomic under concurrent runner attempts.
 - Soft deletes produce tombstones and change-feed rows.
-- `record-work` can create a delivery and rationales without an agent session.
+- `record-work` can create a delivery and declared changed-file rows without an agent session.
 - Extension migrations can run without colliding with core migration versions or table names.
 
 ## ER Diagram
@@ -3152,7 +3135,6 @@ erDiagram
   objectives ||--o{ agent_sessions : runs
   missions ||--o{ mission_events : records
   objectives ||--o{ deliveries : completes
-  deliveries ||--o{ change_rationales : includes
   missions ||--o{ entity_changes : emits
 ```
 
@@ -3255,7 +3237,7 @@ Conflict handling can start simple:
 - Raw session keys should not be persisted. Store hashes and prefixes.
 - Attachment bytes live in storage backends, not inline database rows.
 - Repository files and full diffs are not persisted unless explicitly uploaded as attachments.
-- Change tracking stores paths, VCS statuses, rationale text, and hunk headers, not full file contents.
+- Change tracking stores paths and bounded provenance/capture metadata, never file contents, diffs, commands, or raw callbacks.
 - Hook payloads, audit metadata, and outbox payloads must be secret-redacted before persistence.
 - Authorization grants use domain capabilities, not table names.
 - **Virtual execution targets.** Provider tokens, Git tokens, user tokens, and agent secrets never appear in `execution_request_snapshots.payload_json`, observations, grants, events, logs, or UI DTOs. `execution_request_grants` stores only hashes/opaque IDs and short-lived, single-purpose, request/target/gateway-bound scopes; grant exchange is audited and never returns the user's Overlord token. `project_resource_sources.descriptor_json` carries credential-reference IDs and opaque `targetRelativeRef`/`workspaceRef` handles, never server-readable filesystem paths. Free-text gateway error details are bounded and redacted before persistence, with safe `failure_code`s returned to the UI. Registrations, claims, grant exchanges, source-compatibility overrides, and delegated lifecycle actions are all audited.
@@ -3269,7 +3251,7 @@ The first implementable migration does not need every table above. A practical M
 2. `projects`, `project_statuses`, `devices`, `execution_targets`, `workspace_user_execution_targets`, `user_execution_target_preferences`, `project_resources`, `project_user_preferences`.
 3. `mission_sequences`, `missions`, `objectives`, `agent_sessions`.
 4. `mission_events`, `shared_context_entries`, `objective_attachments`.
-5. `deliveries`, `artifacts`, `changed_files`, `change_rationales`.
+5. `deliveries`, `artifacts`, `changed_files`.
 6. `execution_requests`, `idempotency_keys`.
 7. `entity_changes`, `schema_migrations`.
 8. Default seed rows for the local workspace/statuses/mission sequence.

@@ -27,6 +27,7 @@ import {
 } from '@overlord/database';
 import path from 'node:path';
 
+import { listObjectiveFileChanges } from '../packages/core/service/changes.ts';
 import type { ServiceContext } from '../packages/core/service/context.ts';
 import { readDeliveryReport } from '../packages/core/service/delivery-report.ts';
 import { ServiceError } from '../packages/core/service/errors.ts';
@@ -122,7 +123,6 @@ import type {
   CreateUserTokenResultDto,
   DefaultProjectPreferenceDto,
   DeliveryReportPayloadV1,
-  FileChangeDto,
   GenerateCommitMessageResultDto,
   InboxItemDto,
   InboxMissionDto,
@@ -138,6 +138,7 @@ import type {
   MissionDto,
   MissionEventDto,
   MissionFileChangesDto,
+  ObjectiveFileChangesDto,
   MissionReferenceSearchResponse,
   MissionScheduleDto,
   MissionSearchDateField,
@@ -4308,12 +4309,6 @@ async function cascadeMissionProjectId(
     [newProjectId, now, missionId, workspaceId]
   );
   await db.run(
-    `UPDATE change_rationales
-       SET project_id = ?, updated_at = ?, revision = revision + 1
-     WHERE mission_id = ? AND workspace_id = ?`,
-    [newProjectId, now, missionId, workspaceId]
-  );
-  await db.run(
     `UPDATE execution_requests
        SET project_id = ?, updated_at = ?, revision = revision + 1
      WHERE mission_id = ? AND workspace_id = ?`,
@@ -4624,53 +4619,33 @@ interface FileChangeRow {
   mission_id: string;
   objective_id: string;
   file_path: string;
-  label: string | null;
-  summary: string | null;
-  why: string | null;
-  impact: string | null;
-  vcs_status: string | null;
-  observed_metadata_json: string;
+  source: string | null;
+  hook_health: string | null;
   resource_key: string | null;
-  created_at: string;
-}
-
-const MAX_FILE_CHANGE_HOOK_HEALTH_LENGTH = 160;
-const FILE_CHANGE_HOOK_HEALTH_PATTERN = /^[a-z0-9][a-z0-9_.:-]*$/i;
-
-function projectFileChangeEvidence(metadata: {
-  source?: unknown;
-  quality?: unknown;
-  overlap?: unknown;
-  hookHealth?: unknown;
-}): {
-  source: FileChangeDto['source'];
-  quality: FileChangeDto['quality'];
-  overlap: boolean;
-  hookHealth: string | null;
-} {
-  const paired =
-    (metadata.source === 'declared_edit' && metadata.quality === 'direct') ||
-    (metadata.source === 'window_observed' && metadata.quality === 'window');
-  const health = typeof metadata.hookHealth === 'string' ? metadata.hookHealth.trim() : '';
-  return {
-    source: paired ? (metadata.source as FileChangeDto['source']) : null,
-    quality: paired ? (metadata.quality as FileChangeDto['quality']) : null,
-    overlap: paired && metadata.overlap === true,
-    hookHealth:
-      health &&
-      health.length <= MAX_FILE_CHANGE_HOOK_HEALTH_LENGTH &&
-      FILE_CHANGE_HOOK_HEALTH_PATTERN.test(health)
-        ? health
-        : null
-  };
+  observed_at: string | Date;
 }
 
 /**
- * Returns a mission's observed changed files newest-first for the File Changes
- * section, with an optional rationale. Like the activity feed, the global SSE change feed
- * invalidates the client query so changes recorded by the agent or CLI in
- * another process stream into the panel without a manual refresh.
+ * Returns a mission's observed changed files newest-first as compact cumulative
+ * path evidence (no per-file prose). Like the activity feed, the global SSE change
+ * feed invalidates the client query so changes recorded by the agent or CLI in
+ * another process stream into the panel without a manual refresh. Objective views
+ * use the objective-scoped read, never a partition of this capped list.
  */
+/**
+ * REST `GET /api/missions/:id/file-changes?objectiveId=`: the server objective
+ * read (ObjectiveFileChangesDto). Mission read authorization runs first; the
+ * service then validates the objective against that mission before any SQL.
+ */
+export async function listObjectiveFileChangesForMission(
+  missionRef: string,
+  objectiveRef: string
+): Promise<ObjectiveFileChangesDto> {
+  const mission = await getMissionRow(missionRef);
+  const ctx = await buildWebappServiceContextForWorkspace(mission.workspace_id);
+  return listObjectiveFileChanges({ ctx, missionId: mission.id, objectiveId: objectiveRef });
+}
+
 export async function listMissionFileChanges(
   missionRef: string,
   limit = MISSION_EVIDENCE_LIST_LIMIT
@@ -4684,71 +4659,31 @@ export async function listMissionFileChanges(
     [mission.id, mission.workspace_id]
   )) as { total: number | string | bigint } | undefined;
   const rows = (await db.all(
-    `WITH ranked_rationales AS (
-       SELECT objective_id, file_path, label, summary, why, impact,
-              ROW_NUMBER() OVER (
-                PARTITION BY objective_id, file_path
-                ORDER BY created_at DESC, id DESC
-              ) AS rationale_rank
-         FROM change_rationales
-        WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
-     )
-     SELECT cf.id, cf.mission_id, cf.objective_id, cf.file_path, cr.label, cr.summary,
-              cr.why, cr.impact, cf.last_observed_at AS created_at,
-              cf.vcs_status AS vcs_status,
-              cf.observed_metadata_json,
-              COALESCE(pr_cf.resource_key, o.resource_key) AS resource_key
-         FROM changed_files cf
-         LEFT JOIN ranked_rationales cr
-           ON cr.objective_id = cf.objective_id
-          AND cr.file_path = cf.file_path
-          AND cr.rationale_rank = 1
-         LEFT JOIN objectives o
-           ON o.id = cf.objective_id AND o.deleted_at IS NULL
-         LEFT JOIN project_resources pr_cf
-           ON pr_cf.id = cf.resource_id AND pr_cf.deleted_at IS NULL
-        WHERE cf.mission_id = ? AND cf.workspace_id = ?
-          AND cf.deleted_at IS NULL
-        ORDER BY cf.last_observed_at DESC, cf.id DESC
-        LIMIT ?`,
-    [mission.id, mission.workspace_id, mission.id, mission.workspace_id, limit]
+    `SELECT cf.id, cf.mission_id, cf.objective_id, cf.file_path, cf.source, cf.hook_health,
+            cf.last_observed_at AS observed_at,
+            COALESCE(pr_cf.resource_key, o.resource_key) AS resource_key
+       FROM changed_files cf
+       LEFT JOIN objectives o
+         ON o.id = cf.objective_id AND o.deleted_at IS NULL
+       LEFT JOIN project_resources pr_cf
+         ON pr_cf.id = cf.resource_id AND pr_cf.deleted_at IS NULL
+      WHERE cf.mission_id = ? AND cf.workspace_id = ?
+        AND cf.deleted_at IS NULL
+      ORDER BY cf.last_observed_at DESC, cf.id DESC
+      LIMIT ?`,
+    [mission.id, mission.workspace_id, limit]
   )) as FileChangeRow[];
   return {
-    items: rows.map(row => {
-      let metadata: {
-        source?: unknown;
-        quality?: unknown;
-        overlap?: unknown;
-        hookHealth?: unknown;
-      } = {};
-      try {
-        const parsed = JSON.parse(row.observed_metadata_json) as unknown;
-        if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-          metadata = parsed as typeof metadata;
-        }
-      } catch {
-        // Unreadable stored metadata remains reviewable without attribution labels.
-      }
-      const evidence = projectFileChangeEvidence(metadata);
-      return {
-        id: row.id,
-        missionId: row.mission_id,
-        objectiveId: row.objective_id,
-        filePath: row.file_path,
-        fileName: row.file_path.split('/').pop() || row.file_path,
-        label: row.label,
-        summary: row.summary,
-        why: row.why,
-        impact: row.impact,
-        vcsStatus: row.vcs_status,
-        source: evidence.source,
-        quality: evidence.quality,
-        overlap: evidence.overlap,
-        hookHealth: evidence.hookHealth,
-        resourceKey: row.resource_key?.trim() || null,
-        createdAt: row.created_at
-      };
-    }),
+    items: rows.map(row => ({
+      id: row.id,
+      missionId: row.mission_id,
+      objectiveId: row.objective_id,
+      resourceKey: row.resource_key?.trim() || null,
+      filePath: row.file_path,
+      source: row.source === 'declared_edit' || row.source === 'agent_declared' ? row.source : null,
+      observedAt: row.observed_at instanceof Date ? row.observed_at.toISOString() : row.observed_at,
+      hookHealth: row.hook_health
+    })),
     total: asTotal(countRow?.total),
     limit
   };

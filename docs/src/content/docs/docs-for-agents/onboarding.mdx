@@ -195,18 +195,20 @@ ovld runner service install # background service
 
 ## Step 5 — Review the delivery
 
-When the agent finishes, it **delivers**: a summary, artifacts, the changed
-files, and a rationale for each meaningful change. Show the user where to look:
+When the agent finishes, it **delivers**: a narrative summary of the outcome,
+why it was needed, how it was verified, and any limitations, plus optional
+artifacts. The files changed during the objective are tracked separately. Show
+the user where to look:
 
 - In the **web or desktop app**, open the mission to see the objective, the
-  activity feed, the delivery summary, artifacts, changed files, and rationale
-  side by side with the original request.
+  activity feed, the delivery summary, artifacts, and the files changed during
+  this objective side by side with the original request.
 - From the **CLI**:
 
   ```bash
   ovld mission context <mission-id>
   ovld mission deliveries <mission-id>
-  ovld changes rationales --mission-id <mission-id>
+  ovld mission file-changes <mission-id>
   ```
 
 If the work needs another pass, the user continues the **same mission** with a

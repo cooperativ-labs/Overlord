@@ -11,8 +11,15 @@
 # HTTP surface (no POST /api/protocol/<subcommand>, no backend handler, no permission
 # entry) are intentionally not listed here: `capture-change` and `changes`. See
 # CONTRACT.md's contract-version-2 changelog entry for the precedent.
+#
+# Routing split (contract v165): the CLI-local `ovld protocol changes` reads this
+# working directory's objective ledgers (LocalObjectiveChangesDto, scope
+# local_objective_sessions) and is never sent to the backend. The server read of
+# synchronized objective history is the backend subcommand `objective-changes`
+# (ObjectiveFileChangesDto, scope server_objective) below; the two names never
+# collide and neither claims the other's coverage.
 
-contractVersion: '163'
+contractVersion: '165'
 referenceSpec: 'cli/docs/03-agent-protocol.md'
 
 # Transport-level shape shared by every protocol command, independent of subcommand.
@@ -32,31 +39,27 @@ requestEnvelope:
       - 'CLI load-context, read-context, attachment-list and attachment-download-url inherit an objective only with no explicit mission (flag or positional) or a matching parent mission display id. Opaque UUIDs need an explicit objective pin on mission-selected reads. Explicit pairs retain validation; lifecycle/mutation targeting is unchanged. list-deliveries remains mission-wide and never inherits an objective. Reads never rebind execution sessions.'
       - 'Reference grammar is owned by @overlord/contract (parseObjectiveRef / formatObjectiveDisplayId / missionDisplayIdFromObjectiveRef) and re-exported by @overlord/database; no surface may carry a private copy.'
   fileInputs:
-    description: "Canonical per-flag map of resolved --*-file payloads: { '--summary-file': '<content>', '--change-rationales-file': '<content>', ... }."
+    description: "Canonical per-flag map of resolved --*-file payloads: { '--summary-file': '<content>', '--declared-paths-file': '<content>', ... }."
     rules:
       - "At most one --*-file flag may use literal '-' (true stdin) per invocation; passing two stdin flags fails fast on the client with a CliError naming the offending flags. Real file paths are unlimited."
       - 'Every file-backed input is read only from its own fileInputs entry; no shared stdin payload or fallback field exists.'
-  changeRationaleInput:
-    description: 'Shape of each optional --change-rationales entry on deliver, update, and record-work.'
-    requiredFields:
-      - filePath
-      - label
-      - summary
-      - why
-      - impact
-    optionalFields:
-      - hunks
+  declaredPathsInput:
+    description: 'Shape of --declared-paths-json / --declared-paths-file (and the declaredPaths payload field) on update, deliver, and record-work: a JSON array of repository-relative path strings.'
     validationRules:
-      - 'Items accept exactly filePath, label, summary, why, impact, and optional hunks; unknown or retired fields discard that item with a bounded warning.'
-      - 'Each optional hunk accepts exactly one non-empty bounded header field; malformed hunks are discarded independently with bounded warnings.'
-      - 'After canonical path normalization, the last valid item for a duplicate filePath wins with a bounded warning.'
-      - 'Annotations are advisory: discarded items and hunks never reject update, deliver, or record-work.'
-  changedFileInput:
-    description: 'Shape of each explicit --changed-files entry on sessionless record-work.'
-    requiredFields:
-      - filePath
-    optionalFields:
-      - vcsStatus
+      - 'Each item is a canonical, bounded, repository-relative path; at most 100 items. Unsafe (absolute, traversal, control characters), Overlord-managed, and non-string items are discarded individually with a bounded warning; duplicates collapse.'
+      - 'Deleted and renamed paths are valid even when absent on disk; both rename endpoints may be declared. Commas are path characters inside the JSON array.'
+      - 'Declarations are stored with source agent_declared and never claim native capture. Native evidence for the same objective, resource, and path is never downgraded.'
+      - 'Declarations are advisory and never reject update, deliver, or record-work.'
+  retiredInputs:
+    description: 'Rejected with HTTP 400 invalid_input (not aliased, ignored, or dual-written) from contract v165.'
+    flags:
+      - --change-rationales-json
+      - --change-rationales-file
+      - --changed-files-json
+      - --changed-files-file
+    payloadFields:
+      - changeRationales
+      - changedFiles
 
 sessionLifecycle:
   attach:
@@ -76,6 +79,9 @@ sessionLifecycle:
       # When this flag or --execution-request-id is present, attach must not rediscover
       # another objective from mission state. A display id supplies --mission-id.
       - --objective-id
+      # Declared capture binding observed by the attaching client: bound | unbound | unknown
+      # (default unknown). Configuration evidence only; never proof that a hook ran.
+      - --capture-binding
     returnsSessionKey: true
     responseShape: attach-response-v3
     rules:
@@ -87,7 +93,7 @@ sessionLifecycle:
       - binds-session-channel
 
   update:
-    description: 'Post progress event; optionally record rationale annotations for ledger-observed paths'
+    description: 'Post progress event; optionally declare shell/script-written paths the native hook could not name'
     requiredFlags: []
     requiresSessionKey: true
     optionalFlags:
@@ -105,9 +111,10 @@ sessionLifecycle:
       - --payload-file
       - --external-url
       - --external-session-id
-      - --change-rationales-json
-      - --change-rationales-file
+      - --declared-paths-json
+      - --declared-paths-file
       - --paths
+      - --paths-file
       - --begin-follow-up-work
       - --follow-up-intent
     validPhases:
@@ -127,8 +134,8 @@ sessionLifecycle:
     sideEffects:
       - appends-mission-event
       - appends-optional-generator-output-ledger-evidence
-      - records-optional-change-rationale-annotations
-      - emits-scoped-change-rationale-entity-changes
+      - records-optional-agent-declared-changed-files
+      - emits-scoped-changed-file-entity-changes
 
   hookEvent:
     description: 'Record connector lifecycle events such as UserPromptSubmit without requiring a live agent session'
@@ -192,27 +199,46 @@ sessionLifecycle:
       - --objective-id
       - --changes-json
       - --changes-file
+      - --capture-json
+      - --capture-file
     requestInput:
       requiredFields:
         - filePath
         - idempotencyKey
         - source
-        - quality
       optionalFields:
-        - overlap
-        - toolWindowId
         - observedAt
         - hookHealth
+    captureInput:
+      description: 'Optional bounded session capture diagnostics: { bindingState?, callbackObservedAt?, health?: [{ code, at }] }; unsupported keys reject the whole capture object with a warning.'
     responseShape: sync-changes-v1
     rules:
       - 'Each item is processed independently and returns accepted, ignored, or warning; invalid siblings never roll back accepted evidence.'
-      - 'source is declared_edit or window_observed; quality is direct or window. fallback_delta is not accepted.'
-      - 'Only normalized workspace-relative path and bounded source/quality/overlap/window/health metadata persist. Absolute paths, parent traversal, file content, diffs, commands, transcripts, environment values, and fingerprints are prohibited.'
-      - 'Accepted path evidence sets current_diff_state to unknown; synchronization does not inspect VCS state or claim that a current diff exists.'
-      - 'Replay of an idempotencyKey for the same objective/path is ignored; sync failure and warnings cannot reject delivery.'
+      - 'source is declared_edit (native) or agent_declared. window_observed, quality, overlap, and toolWindowId are retired and rejected per item with a clear warning.'
+      - 'Only normalized workspace-relative path and bounded source/health/observedAt metadata persist. Absolute paths, parent traversal, file content, diffs, commands, transcripts, environment values, raw callbacks, and fingerprints are prohibited.'
+      - 'Row identity is objective + resource resolved from the authorized session + path. Native evidence is never downgraded by a later declaration; observedAt extends first/last observation and never moves them past now.'
+      - 'Replay of an idempotencyKey for the same row is ignored; sync failure and warnings cannot reject delivery.'
+      - 'Advisory recovery accepts ended delivered sessions, with current caller authorization and unchanged mission/objective/resource binding. Deleted or ended non-delivered sessions remain invalid. Recovery never reopens lifecycle state or rewrites a delivery.'
+      - 'Capture diagnostics are written to the authorized session only: binding state, earliest accepted callback, and per-code first/last health aggregates (at most 16 codes; known gap codes are sticky and never displaced). They emit an agent_session entity change in the same transaction.'
     sideEffects:
-      - upserts-changed-files-by-objective-path
+      - upserts-changed-files-by-objective-resource-path
       - emits-scoped-changed-file-entity-changes
+      - updates-session-capture-diagnostics
+      - emits-scoped-agent-session-entity-changes
+
+  objectiveChanges:
+    description: 'Read synchronized changed-path evidence for exactly one objective across all sessions, resources, and devices (ObjectiveFileChangesDto)'
+    requiredFlags: []
+    optionalFlags:
+      - --mission-id
+      - --objective-id
+    responseShape: objective-file-changes-v1
+    rules:
+      - 'Server-only read of persisted rows; never reads an execution target filesystem and never sees unsynchronized local ledger rows. The response says so with scope server_objective.'
+      - 'The objective is validated against the addressed mission before any SQL; a foreign mission/objective pair is rejected. The objective filter applies before count and the 200-row limit.'
+      - 'Returns { scope, missionId, objectiveId, items, total, limit, truncated, capture } with compact FileChangeDto items ordered by resource then path, total as the pre-cap count, and persisted per-session capture diagnostics plus derived warnings.'
+      - 'Needs no attach and no mutation; reuses mission read authorization, active workspace membership, and token project scope.'
+    sideEffects: []
 
   ask:
     description: 'Post a single blocking question and stop work'
@@ -242,28 +268,30 @@ sessionLifecycle:
       - --mission-id
       - --objective-id
       - --artifacts
-      - --change-rationales-json
-      - --change-rationales-file
+      - --declared-paths-json
+      - --declared-paths-file
       - --payload-json
       - --payload-file
       - --verification-summary
       - --follow-up-notes
       - --paths
+      - --paths-file
     clientCapture:
       - 'The client CLI drains every pending bounded batch from the attached objective ledger through sync-changes before delivery. It never derives or injects file paths from a worktree delta.'
-      - 'An optional bounded --paths list may append agent-known generator, migration, or script outputs to the attached objective ledger before the drain. It is not a changed-file reconciliation input.'
+      - 'Optional bounded --paths (comma list) and --paths-file (JSON string array; commas are path characters) append agent-known shell/script/generator outputs, deletes, and both rename endpoints to the attached objective ledger as agent_declared before the drain. They are normalized against the session checkout (absent targets valid; traversal, out-of-checkout symlinks, ignored and Overlord-managed paths rejected with a reason) and are not a changed-file reconciliation input.'
+      - 'The drain also sends bounded session capture diagnostics (binding recorded at attach, first accepted callback, health codes) through sync-changes capture once per drain when they changed since last accepted.'
     validationRules:
-      - 'Objective-ledger changed files and optional rationales are review metadata and cannot reject a delivery.'
+      - 'Objective-ledger changed files and declared paths are review metadata and cannot reject a delivery. No per-file rationale exists.'
       - '--payload-json / --payload-file may carry an additive deliveryReport object with schemaVersion: 1 and agentReport.{humanActions,tradeoffsMade,knownRisks,deferredWork,assumptions}; omitted or malformed advisory items normalize independently with bounded warnings and can never prevent delivery'
       - 'Human actions are bounded and filter Git operations plus routine review/testing instructions before they are persisted in deliveryReport.presentation'
       - 'Each human action has a required action, expected reason and category, optional blocking, and optional command, verify, and link fields; link accepts only an HTTP(S) URL or a repository-relative path, and an item with an invalid link is discarded with a bounded warning'
       - 'The compose worker always appends deterministic_rule actions derived from changed paths (migrations, .env examples, deployment configs, dependency manifests, CI workflow files) to deliveryReport.presentation.humanActions when neither the agent report nor the composed draft already carries them'
       - 'deliveryReport.presentation starts as an immediate deterministic/pending fallback; a durable overlord.delivery.compose.v1 worker job may asynchronously replace only presentation while delivery success and latency never depend on an automation provider'
-      - 'Changed-file attribution, hook health, and rationale coverage are objective-scoped review metadata aggregated across sessions (and no-session record-work records); none can reject delivery.'
+      - 'Changed-file provenance and capture diagnostics are objective-scoped review metadata aggregated across sessions (and no-session record-work records); none can reject delivery.'
       - 'Delivery is the final work boundary — no implementation after delivery without explicit follow-up'
     sideEffects:
-      - records-optional-change-rationale-annotations
-      - emits-scoped-change-rationale-entity-changes
+      - records-optional-agent-declared-changed-files
+      - emits-scoped-changed-file-entity-changes
       - stores-delivery-record
       - objective-state-to-complete
       - mission-status-to-review
@@ -645,14 +673,14 @@ missionDiscovery:
       - 'Requires --project-id; completed work always records a normal project mission and never discovers a project implicitly.'
       - 'For work already done in chat, not for in-progress work'
       - '--assigned-to resolves one workspace member by the same rules as on create; an unresolvable member is rejected rather than silently left unassigned'
-      - 'Explicit changed-file paths set current_diff_state to unknown; record-work does not inspect a current checkout.'
+      - 'Explicit declaredPaths are stored as sessionless agent_declared rows with a null resource; record-work does not inspect a current checkout and accepts no VCS status.'
       - 'Denied for a project_automation USER_TOKEN before any write (contract v151): record-work creates a completed objective and a delivery, which exceed mission:create'
     sideEffects:
       - creates-mission-in-review-status
       - creates-completed-objective
       - creates-delivery-record-without-session-attribution
-      - records-explicit-changed-files-and-optional-rationale-annotations
-      - emits-scoped-changed-file-and-change-rationale-entity-changes
+      - records-explicit-declared-paths
+      - emits-scoped-changed-file-entity-changes
 
 artifacts:
   addArtifact:

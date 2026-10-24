@@ -75,6 +75,7 @@ The current tool catalog is mission-first:
 - `overlord_create_mission` — requires `projectId`, unless `unassignedToProject: true` deliberately creates an account-owned inbox item; optional `agent` / `model` assign the initial objective's launch selection in the same call
 - `overlord_create_inbox_item`
 - `overlord_load_mission_context` — returns objective assignment fields for the agent, model, thinking level, and resource
+- `overlord_changes` — read one objective's synchronized changed-file evidence (`ObjectiveFileChangesDto`, server scope, capped at 200)
 - `overlord_list_deliveries` — read a `{ items, total, limit }` page of normalized delivery summaries, verification/follow-up notes, and authoritative delivery evidence for one mission
 - `overlord_launch_objective` — explicitly queue the normal execution request for one objective; this is distinct from attaching the MCP agent to work
 - `overlord_reorder_future_objectives` — explicitly replace one mission's complete future-objective ordering
@@ -91,7 +92,7 @@ The current tool catalog is mission-first:
 - `overlord_deliver_session`
 - `overlord_add_artifact` — create a mission artifact mid-turn without delivering (type / label / contentText / externalUrl) via Protocol `add-artifact`
 - `overlord_update_artifact` — revise an existing mission artifact in place (label / contentText / externalUrl) via Protocol `update-artifact`
-- `overlord_record_work` — record work already finished in chat as one review-column mission (completed objective, file-change rationales, Gemini delivery summary), no attach/deliver cycle
+- `overlord_record_work` — record work already finished in chat as one review-column mission (completed objective, optional declared paths, Gemini delivery summary), no attach/deliver cycle
 
 Widgets are attached to project resolution, mission search, mission-context,
 and delivery results:
@@ -183,12 +184,17 @@ validated and persisted by the existing Protocol/REST service layer, never
 directly by MCP.
 
 `overlord_update_session`, `overlord_deliver_session`, and `overlord_record_work`
-all accept optional
-canonical `changeRationales` annotations. Each item uses `filePath`, `label`,
-`summary`, `why`, `impact`, and optional header-only `hunks`; changed-file paths
-themselves come from objective-ledger evidence, not from MCP or a worktree scan.
-Unknown item or hunk keys discard only that advisory entry with a bounded warning;
-for duplicate canonical paths, the last valid item wins.
+accept optional `declaredPaths`: canonical repository-relative paths written by
+shell commands, generators, or scripts that native capture could not name. They
+are stored as `agent_declared` evidence, never gate delivery, and are not an
+exhaustive list. Per-file change rationales and `changedFiles` are retired.
+
+`overlord_changes` (Protocol `objective-changes` / REST
+`GET /api/missions/:id/file-changes?objectiveId=`) reads the synchronized
+changed-file evidence of one objective as `ObjectiveFileChangesDto` (scope
+`server_objective`, capped at 200 with `total`/`truncated`, plus capture
+diagnostics). It never includes unsynchronized local evidence; the CLI-local
+`ovld protocol changes` read is a different, local-only surface.
 
 `overlord_update_artifact` is the supported way to revise such an artifact later
 (for example during a follow-up objective) without creating a duplicate. It

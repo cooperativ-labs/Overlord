@@ -348,9 +348,9 @@ ships its tests with its code — never after.
 | --- | --- | --- |
 | 0 | Skeleton, config, SQLite connection, schema source | L0 contract/manifest validation; `withAdapter` harness; migration-applies test |
 | 1 | CLI mission management, seed | L2 service-layer CRUD; mission-sequence; L4 `ovld` smoke |
-| 2 | Agent protocol MVP | L3 protocol-surface + attach-response; rationale-on-deliver; state machine (objectives) |
+| 2 | Agent protocol MVP | L3 protocol-surface + attach-response; summary-only deliver; state machine (objectives) |
 | 3 | Local launch + runner | L3 runner queue atomicity; execution_requests state machine |
-| 4 | Review features | L2 artifacts/rationales/shared-context; record-work without session |
+| 4 | Review features | L2 artifacts/declared-paths/shared-context; record-work without session |
 | 5 | Auth, RBAC, tokens, extensions, adapters, MCP, web | Auth/RBAC suites; adapter conformance for new adapters; REST + UI; MCP transport/tool tests |
 
 ---

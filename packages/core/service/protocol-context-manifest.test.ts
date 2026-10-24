@@ -127,26 +127,17 @@ describe('protocol context manifest', () => {
         {
           filePath: 'src/direct.ts',
           idempotencyKey: 'resource-binding-1',
-          source: 'declared_edit',
-          quality: 'direct'
+          source: 'declared_edit'
         }
       ]
     });
 
     const changedFile = (await db.get(
-      `SELECT resource_id, vcs_status, current_diff_state, observed_metadata_json
-         FROM changed_files WHERE session_id = ? AND deleted_at IS NULL`,
+      `SELECT resource_id, source FROM changed_files WHERE session_id = ? AND deleted_at IS NULL`,
       [attached.session.id]
-    )) as {
-      resource_id: string | null;
-      vcs_status: string | null;
-      current_diff_state: string;
-      observed_metadata_json: string;
-    };
+    )) as { resource_id: string | null; source: string | null };
     assert.equal(changedFile.resource_id, resource.id);
-    assert.equal(changedFile.vcs_status, null);
-    assert.equal(changedFile.current_diff_state, 'unknown');
-    assert.equal(JSON.parse(changedFile.observed_metadata_json).overlap, false);
+    assert.equal(changedFile.source, 'declared_edit');
     await db.close();
   });
 
@@ -173,96 +164,70 @@ describe('protocol context manifest', () => {
         {
           filePath: 'src/evidence.ts',
           idempotencyKey: 'evidence-1',
-          source: 'declared_edit',
-          quality: 'direct',
-          overlap: false
+          source: 'declared_edit'
         },
         {
           filePath: '../escape.ts',
           idempotencyKey: 'parent-segment',
-          source: 'declared_edit',
-          quality: 'direct',
-          overlap: false
+          source: 'declared_edit'
         },
         {
           filePath: '/absolute.ts',
           idempotencyKey: 'absolute',
-          source: 'declared_edit',
-          quality: 'direct',
-          overlap: false
+          source: 'declared_edit'
         },
         {
           filePath: 'C:/drive.ts',
           idempotencyKey: 'drive',
-          source: 'declared_edit',
-          quality: 'direct',
-          overlap: false
+          source: 'declared_edit'
         },
         {
           filePath: 'C:drive-relative.ts',
           idempotencyKey: 'drive-relative',
-          source: 'declared_edit',
-          quality: 'direct',
-          overlap: false
+          source: 'declared_edit'
         },
         {
           filePath: 'src\\windows.ts',
           idempotencyKey: 'backslash',
-          source: 'declared_edit',
-          quality: 'direct',
-          overlap: false
+          source: 'declared_edit'
         },
         {
           filePath: ' src/leading-space.ts',
           idempotencyKey: 'leading-space',
-          source: 'declared_edit',
-          quality: 'direct',
-          overlap: false
+          source: 'declared_edit'
         },
         {
           filePath: 'src/trailing-space.ts ',
           idempotencyKey: 'trailing-space',
-          source: 'declared_edit',
-          quality: 'direct',
-          overlap: false
+          source: 'declared_edit'
         },
         {
           filePath: 'src//empty-segment.ts',
           idempotencyKey: 'empty-segment',
-          source: 'declared_edit',
-          quality: 'direct',
-          overlap: false
+          source: 'declared_edit'
         },
         {
           filePath: 'src/./dot-segment.ts',
           idempotencyKey: 'dot-segment',
-          source: 'declared_edit',
-          quality: 'direct',
-          overlap: false
+          source: 'declared_edit'
         },
         {
           filePath: 'src/retired-state.ts',
           idempotencyKey: 'retired-state',
           state: 'present',
-          source: 'declared_edit',
-          quality: 'direct',
-          overlap: false
+          source: 'declared_edit'
         },
         {
           filePath: 'src/retired-vcs-status.ts',
           idempotencyKey: 'retired-vcs-status',
           vcsStatus: 'modified',
-          source: 'declared_edit',
-          quality: 'direct',
-          overlap: false
+          source: 'declared_edit'
         },
         {
           filePath: 'src/prohibited-content.ts',
           idempotencyKey: 'prohibited-content',
           content: 'must never cross the metadata-only boundary',
-          source: 'declared_edit',
-          quality: 'direct',
-          overlap: false
+          source: 'declared_edit'
         }
       ]
     });
@@ -307,9 +272,7 @@ describe('protocol context manifest', () => {
         {
           filePath: 'src/evidence.ts',
           idempotencyKey: 'evidence-1',
-          source: 'declared_edit',
-          quality: 'direct',
-          overlap: false
+          source: 'declared_edit'
         }
       ]
     });
@@ -327,25 +290,19 @@ describe('protocol context manifest', () => {
         {
           filePath: 'src/evidence.ts',
           idempotencyKey: 'evidence-2',
-          source: 'window_observed',
-          quality: 'window',
-          overlap: true,
-          toolWindowId: 'window-2'
+          source: 'agent_declared'
         }
       ]
     });
     assert.equal(weaker.outcomes[0]?.status, 'accepted');
     const stored = (await db.get(
-      `SELECT session_id, observed_metadata_json FROM changed_files WHERE objective_id = ? AND file_path = ?`,
+      `SELECT session_id, source, sync_keys_json FROM changed_files WHERE objective_id = ? AND file_path = ?`,
       [attached.session.objectiveId, 'src/evidence.ts']
-    )) as { session_id: string | null; observed_metadata_json: string };
+    )) as { session_id: string | null; source: string | null; sync_keys_json: string };
+    // A later declaration refreshes the observer but never downgrades native evidence.
     assert.equal(stored.session_id, secondSession.session.id);
-    assert.deepEqual(JSON.parse(stored.observed_metadata_json), {
-      source: 'declared_edit',
-      quality: 'direct',
-      overlap: true,
-      syncKeys: ['evidence-1', 'evidence-2']
-    });
+    assert.equal(stored.source, 'declared_edit');
+    assert.deepEqual(JSON.parse(stored.sync_keys_json), ['evidence-1', 'evidence-2']);
     await db.close();
   });
 
@@ -372,14 +329,12 @@ describe('protocol context manifest', () => {
         {
           filePath: '.overlord/tmp/launch.sh',
           idempotencyKey: 'overlord-tmp',
-          source: 'declared_edit',
-          quality: 'direct'
+          source: 'declared_edit'
         },
         {
           filePath: 'src/accepted.ts',
           idempotencyKey: 'accepted',
-          source: 'declared_edit',
-          quality: 'direct'
+          source: 'declared_edit'
         }
       ]
     });

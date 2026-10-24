@@ -1,4 +1,9 @@
 import {
+  CAPTURE_GAP_CODES,
+  type CaptureBindingState,
+  type FileChangeSource
+} from '@overlord/contract';
+import {
   isExactEvidencePath,
   isOverlordManagedEvidencePath,
   MAX_EVIDENCE_PATH_LENGTH
@@ -15,16 +20,17 @@ import {
   writeOwnerOnlyFileAtomically
 } from './local-file-storage.js';
 
-export type LedgerSource = 'declared_edit' | 'window_observed';
-export type LedgerQuality = 'direct' | 'window';
+/**
+ * `declared_edit` is a successful native connector observation; `agent_declared`
+ * is an explicit agent declaration (`--paths`/`--paths-file`) for shell/script
+ * outputs, deletes, and renames that native capture cannot name.
+ */
+export type LedgerSource = FileChangeSource;
 
 export type LedgerEvidence = {
   idempotencyKey: string;
   filePath: string;
   source: LedgerSource;
-  quality: LedgerQuality;
-  overlap: boolean;
-  toolWindowId?: string;
   observedAt: string;
   hookHealth?: string;
   syncedAt?: string;
@@ -32,13 +38,35 @@ export type LedgerEvidence = {
 
 export type ChangeLedgerHealth = { at: string; code: string };
 
+/**
+ * Local capture diagnostics for one session. `bindingState` is configuration
+ * evidence recorded at attach (never proof a hook ran); `callbackObservedAt` is
+ * the first accepted scoped callback, even a harmless read. `syncedFingerprint`
+ * remembers the last diagnostics the backend accepted so unchanged state is not
+ * resent on every drain.
+ */
+export type ChangeLedgerCapture = {
+  bindingState: CaptureBindingState;
+  callbackObservedAt?: string;
+  syncedFingerprint?: string;
+};
+
+export type ChangeLedgerSnapshot = {
+  evidence: LedgerEvidence[];
+  health: ChangeLedgerHealth[];
+  capture: ChangeLedgerCapture;
+};
+
+const LEDGER_SCHEMA_VERSION = 3;
+
 type Ledger = {
-  schemaVersion: 2;
+  schemaVersion: typeof LEDGER_SCHEMA_VERSION;
   workingDirectory: string;
   objectiveId: string;
   sessionKeyHash: string;
   evidence: LedgerEvidence[];
   health: ChangeLedgerHealth[];
+  capture: ChangeLedgerCapture;
 };
 
 type LedgerIdentity = {
@@ -53,6 +81,25 @@ const MAX_PATHS_PER_APPEND = 512;
 /** Hard bound for one objective/session ledger across arbitrarily long sessions. */
 const MAX_LEDGER_EVIDENCE = 10_000;
 const MAX_HEALTH_ENTRIES = 32;
+const STICKY_HEALTH_CODES: ReadonlySet<string> = new Set(CAPTURE_GAP_CODES);
+
+/**
+ * Bound the rolling health list without losing a capture gap: when over the cap,
+ * the oldest non-gap entries are evicted first, so "some activity was not
+ * captured" survives any amount of later healthy or diagnostic churn.
+ */
+function boundHealth(health: ChangeLedgerHealth[]): ChangeLedgerHealth[] {
+  let excess = health.length - MAX_HEALTH_ENTRIES;
+  if (excess <= 0) return health;
+  const kept = health.filter(entry => {
+    if (excess > 0 && !STICKY_HEALTH_CODES.has(entry.code)) {
+      excess -= 1;
+      return false;
+    }
+    return true;
+  });
+  return kept.slice(-MAX_HEALTH_ENTRIES);
+}
 const MAX_HEALTH_CODE_LENGTH = 160;
 const MAX_IGNORE_FILE_BYTES = 64 * 1024;
 const MAX_IGNORE_LINES = 512;
@@ -64,14 +111,24 @@ const LEDGER_EVIDENCE_KEYS = new Set([
   'idempotencyKey',
   'filePath',
   'source',
-  'quality',
-  'overlap',
-  'toolWindowId',
   'observedAt',
   'hookHealth',
   'syncedAt'
 ]);
 const LEDGER_HEALTH_KEYS = new Set(['at', 'code']);
+const LEDGER_CAPTURE_KEYS = new Set(['bindingState', 'callbackObservedAt', 'syncedFingerprint']);
+const CAPTURE_BINDING_STATES: readonly CaptureBindingState[] = ['bound', 'unbound', 'unknown'];
+/** Health attached to every agent declaration; matches the backend's declared-path health. */
+export const AGENT_DECLARED_HEALTH = 'agent_declared';
+/** Schema v2 marked `--paths` generator declarations with this health on `declared_edit` rows. */
+const LEGACY_GENERATOR_DECLARATION_HEALTH = 'agent_declared_generator_output';
+const LEGACY_WINDOW_DISCARDED_HEALTH = 'legacy_window_evidence_discarded';
+const LEGACY_V2_EVIDENCE_KEYS = new Set([
+  ...LEDGER_EVIDENCE_KEYS,
+  'quality',
+  'overlap',
+  'toolWindowId'
+]);
 
 function canonicalObjectiveId(objectiveId: string): string {
   return typeof objectiveId === 'string' ? objectiveId.trim() : '';
@@ -89,12 +146,13 @@ function sessionKeyHash(sessionKey: string): string {
 
 function emptyLedger(input: LedgerIdentity): Ledger {
   return {
-    schemaVersion: 2,
+    schemaVersion: LEDGER_SCHEMA_VERSION,
     workingDirectory: canonicalDirectory(input.workingDirectory),
     objectiveId: canonicalObjectiveId(input.objectiveId),
     sessionKeyHash: sessionKeyHash(input.sessionKey),
     evidence: [],
-    health: []
+    health: [],
+    capture: { bindingState: 'unknown' }
   };
 }
 
@@ -105,9 +163,10 @@ function readLedger(input: LedgerIdentity): Ledger | null {
     if (!existsSync(target)) return expected;
     const raw = readBoundedUtf8File(target, MAX_LEDGER_FILE_BYTES);
     if (raw === null) return null;
-    const value = JSON.parse(raw) as Partial<Ledger>;
+    const value = JSON.parse(raw) as Partial<Omit<Ledger, 'schemaVersion'>> & {
+      schemaVersion?: unknown;
+    };
     if (
-      value.schemaVersion !== 2 ||
       value.workingDirectory !== expected.workingDirectory ||
       value.objectiveId !== expected.objectiveId ||
       value.sessionKeyHash !== expected.sessionKeyHash ||
@@ -116,14 +175,123 @@ function readLedger(input: LedgerIdentity): Ledger | null {
     ) {
       return null;
     }
+    const health = value.health.filter(isStoredHealth);
+    if (value.schemaVersion === 2) {
+      return upgradeSchemaV2Ledger({ expected, evidence: value.evidence, health });
+    }
+    if (value.schemaVersion !== LEDGER_SCHEMA_VERSION) return null;
+    const capture = readStoredCapture(value.capture);
+    if (!capture) return null;
     return {
       ...expected,
       evidence: value.evidence.filter(isStoredEvidence).slice(0, MAX_LEDGER_EVIDENCE),
-      health: value.health.filter(isStoredHealth).slice(-MAX_HEALTH_ENTRIES)
+      health: boundHealth(health),
+      capture
     };
   } catch {
     return null;
   }
+}
+
+/**
+ * One-time v2 -> v3 upgrade. Readers see the upgraded shape immediately and the
+ * next locked mutation persists it, so pending rows keep their idempotency keys
+ * and sync markers. Native rows stay native and the known generator marker
+ * becomes `agent_declared`. Window rows were never native evidence: they are
+ * dropped with a visible health code rather than promoted. Binding state was not
+ * recorded by v2 and is therefore unknown.
+ */
+function upgradeSchemaV2Ledger({
+  expected,
+  evidence,
+  health
+}: {
+  expected: Ledger;
+  evidence: unknown[];
+  health: ChangeLedgerHealth[];
+}): Ledger {
+  const upgraded: LedgerEvidence[] = [];
+  let discardedWindowRows = 0;
+  for (const value of evidence.slice(0, MAX_LEDGER_EVIDENCE)) {
+    if (!isStoredV2Evidence(value)) continue;
+    if (value.source !== 'declared_edit') {
+      discardedWindowRows += 1;
+      continue;
+    }
+    const declared = value.hookHealth === LEGACY_GENERATOR_DECLARATION_HEALTH;
+    const hookHealth = declared ? AGENT_DECLARED_HEALTH : value.hookHealth;
+    upgraded.push({
+      idempotencyKey: value.idempotencyKey,
+      filePath: value.filePath,
+      source: declared ? 'agent_declared' : 'declared_edit',
+      observedAt: value.observedAt,
+      ...(hookHealth ? { hookHealth } : {}),
+      ...(value.syncedAt ? { syncedAt: value.syncedAt } : {})
+    });
+  }
+  const ledger: Ledger = { ...expected, evidence: upgraded, health: [...health] };
+  if (discardedWindowRows > 0) {
+    appendHealth(ledger, `${LEGACY_WINDOW_DISCARDED_HEALTH}:${discardedWindowRows}`);
+  }
+  ledger.health = boundHealth(ledger.health);
+  return ledger;
+}
+
+type StoredV2Evidence = Omit<LedgerEvidence, 'source'> & {
+  source: 'declared_edit' | 'window_observed';
+};
+
+function isStoredV2Evidence(value: unknown): value is StoredV2Evidence {
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    Object.keys(value).some(key => !LEGACY_V2_EVIDENCE_KEYS.has(key))
+  ) {
+    return false;
+  }
+  const entry = value as Partial<Omit<LedgerEvidence, 'source'>> & { source?: unknown };
+  return (
+    (entry.source === 'declared_edit' || entry.source === 'window_observed') &&
+    isStoredEvidence({
+      idempotencyKey: entry.idempotencyKey,
+      filePath: entry.filePath,
+      source: 'declared_edit',
+      observedAt: entry.observedAt,
+      ...(entry.hookHealth !== undefined ? { hookHealth: entry.hookHealth } : {}),
+      ...(entry.syncedAt !== undefined ? { syncedAt: entry.syncedAt } : {})
+    })
+  );
+}
+
+function readStoredCapture(value: unknown): ChangeLedgerCapture | null {
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    Object.keys(value).some(key => !LEDGER_CAPTURE_KEYS.has(key))
+  ) {
+    return null;
+  }
+  const capture = value as Partial<ChangeLedgerCapture>;
+  if (!CAPTURE_BINDING_STATES.includes(capture.bindingState as CaptureBindingState)) return null;
+  if (
+    capture.callbackObservedAt !== undefined &&
+    !isCanonicalUtcTimestamp(capture.callbackObservedAt)
+  ) {
+    return null;
+  }
+  if (
+    capture.syncedFingerprint !== undefined &&
+    (typeof capture.syncedFingerprint !== 'string' || capture.syncedFingerprint.length > 128)
+  ) {
+    return null;
+  }
+  return {
+    bindingState: capture.bindingState as CaptureBindingState,
+    ...(capture.callbackObservedAt ? { callbackObservedAt: capture.callbackObservedAt } : {}),
+    ...(capture.syncedFingerprint ? { syncedFingerprint: capture.syncedFingerprint } : {})
+  };
 }
 
 function isStoredEvidence(value: unknown): value is LedgerEvidence {
@@ -140,15 +308,8 @@ function isStoredEvidence(value: unknown): value is LedgerEvidence {
     typeof entry.idempotencyKey === 'string' &&
     boundedOpaqueIdentifier(entry.idempotencyKey) === entry.idempotencyKey &&
     isExactEvidencePath(entry.filePath) &&
-    ['declared_edit', 'window_observed'].includes(String(entry.source)) &&
-    ['direct', 'window'].includes(String(entry.quality)) &&
-    ((entry.source === 'declared_edit' && entry.quality === 'direct') ||
-      (entry.source === 'window_observed' && entry.quality === 'window')) &&
-    typeof entry.overlap === 'boolean' &&
+    (entry.source === 'declared_edit' || entry.source === 'agent_declared') &&
     isCanonicalUtcTimestamp(entry.observedAt) &&
-    (entry.toolWindowId === undefined ||
-      (typeof entry.toolWindowId === 'string' &&
-        boundedOpaqueIdentifier(entry.toolWindowId) === entry.toolWindowId)) &&
     (entry.hookHealth === undefined ||
       (typeof entry.hookHealth === 'string' &&
         boundedHealthCode(entry.hookHealth) === entry.hookHealth)) &&
@@ -195,7 +356,7 @@ function mutateLedger<T>(
       const ledger = readLedger(normalized);
       if (!ledger) return fallback;
       const result = mutation(ledger);
-      ledger.health = ledger.health.slice(-MAX_HEALTH_ENTRIES);
+      ledger.health = boundHealth(ledger.health);
       writeLedger(normalized, ledger);
       return result;
     });
@@ -203,11 +364,6 @@ function mutateLedger<T>(
     // Change tracking is advisory. A local lock/write failure must not disrupt a tool call.
     return fallback;
   }
-}
-
-function qualityForSource(source: LedgerSource): LedgerQuality {
-  if (source === 'declared_edit') return 'direct';
-  return 'window';
 }
 
 function boundedHealthCode(code: string): string {
@@ -381,83 +537,208 @@ export function resetChangeLedger(input: LedgerIdentity): void {
   }
 }
 
+type AppendResult = {
+  appended: number;
+  accepted: string[];
+  rejected: Array<{ path: string; reason: string }>;
+};
+
+function appendEvidenceToLedger(
+  ledger: Ledger,
+  input: { filePaths: unknown[]; source: LedgerSource; hookHealth?: string }
+): AppendResult {
+  const result: AppendResult = { appended: 0, accepted: [], rejected: [] };
+  const now = new Date().toISOString();
+  if (input.source !== 'declared_edit' && input.source !== 'agent_declared') {
+    appendHealth(ledger, 'invalid_evidence_source');
+    return result;
+  }
+  const source = input.source;
+  const hookHealth =
+    typeof input.hookHealth === 'string' ? boundedHealthCode(input.hookHealth) : '';
+  const root = ledger.workingDirectory;
+  const ignore = loadIgnoreRules(root);
+  if (ignore.unavailable) {
+    appendHealth(ledger, 'ignore_policy_unavailable');
+    for (const rawPath of input.filePaths.slice(0, MAX_PATHS_PER_APPEND)) {
+      result.rejected.push({ path: String(rawPath), reason: 'ignore_policy_unavailable' });
+    }
+    return result;
+  }
+  if (input.filePaths.length > MAX_PATHS_PER_APPEND) {
+    appendHealth(ledger, 'path_input_truncated');
+  }
+  const rejectedCounts = new Map<string, number>();
+  const reject = (rawPath: unknown, reason: string): void => {
+    rejectedCounts.set(reason, (rejectedCounts.get(reason) ?? 0) + 1);
+    result.rejected.push({ path: typeof rawPath === 'string' ? rawPath : String(rawPath), reason });
+  };
+  let capacityReached = false;
+  const seen = new Set(ledger.evidence.map(entry => `${entry.filePath}\0${entry.source}`));
+  for (const rawPath of input.filePaths.slice(0, MAX_PATHS_PER_APPEND)) {
+    if (typeof rawPath !== 'string') {
+      reject(rawPath, 'invalid_path');
+      continue;
+    }
+    const normalized = normalizeWorkspacePath({ root, rawPath, ignoreRules: ignore.rules });
+    if ('reason' in normalized) {
+      reject(rawPath, normalized.reason);
+      continue;
+    }
+    const key = `${normalized.filePath}\0${source}`;
+    if (seen.has(key)) {
+      if (!result.accepted.includes(normalized.filePath)) {
+        result.accepted.push(normalized.filePath);
+      }
+      continue;
+    }
+    if (ledger.evidence.length >= MAX_LEDGER_EVIDENCE) {
+      capacityReached = true;
+      reject(rawPath, 'ledger_capacity_reached');
+      continue;
+    }
+    ledger.evidence.push({
+      idempotencyKey: randomUUID(),
+      filePath: normalized.filePath,
+      source,
+      observedAt: now,
+      ...(hookHealth ? { hookHealth } : {})
+    });
+    seen.add(key);
+    result.accepted.push(normalized.filePath);
+    result.appended += 1;
+  }
+  if (hookHealth) appendHealth(ledger, hookHealth);
+  if (capacityReached) appendHealth(ledger, 'ledger_capacity_reached');
+  for (const [reason, count] of rejectedCounts) {
+    if (reason !== 'ledger_capacity_reached') appendHealth(ledger, `${reason}:${count}`);
+  }
+  return result;
+}
+
+/** Append successful native edit paths (`declared_edit`); returns the number of new rows. */
 export function appendChangeEvidence(
   input: LedgerIdentity & {
     filePaths: string[];
     source: LedgerSource;
-    quality?: LedgerQuality;
-    overlap?: boolean;
-    toolWindowId?: string;
     hookHealth?: string;
   }
 ): number {
   if (!Array.isArray(input.filePaths)) return 0;
+  return mutateLedger(input, ledger => appendEvidenceToLedger(ledger, input).appended, 0);
+}
+
+export type DeclaredPathsResult = {
+  /** Normalized repository-relative paths now declared (including repeats already in the ledger). */
+  accepted: string[];
+  rejected: Array<{ path: string; reason: string }>;
+  /** False when local storage could not be read or written; nothing was recorded. */
+  recorded: boolean;
+};
+
+/**
+ * Record agent-declared paths (shell/script/generator outputs, deletes, both
+ * rename endpoints) as `agent_declared`. Paths are normalized against the
+ * session's canonical working directory with the same rules as native capture:
+ * absent targets are valid, while traversal, out-of-root symlinks, ignored and
+ * Overlord-managed paths are rejected with a reason. Never inspects VCS.
+ */
+export function declareChangePaths(
+  input: LedgerIdentity & { filePaths: unknown[] }
+): DeclaredPathsResult {
+  const unrecorded: DeclaredPathsResult = { accepted: [], rejected: [], recorded: false };
+  if (!Array.isArray(input.filePaths)) return unrecorded;
   return mutateLedger(
     input,
     ledger => {
-      const now = new Date().toISOString();
-      if (input.source !== 'declared_edit' && input.source !== 'window_observed') {
-        appendHealth(ledger, 'invalid_evidence_source');
-        return 0;
-      }
-      const source = input.source;
-      const expectedQuality = qualityForSource(source);
-      if (input.quality !== undefined && input.quality !== expectedQuality) {
-        appendHealth(ledger, 'source_quality_mismatch');
-        return 0;
-      }
-      const quality = input.quality ?? expectedQuality;
-      const toolWindowId = boundedOpaqueIdentifier(input.toolWindowId);
-      const hookHealth =
-        typeof input.hookHealth === 'string' ? boundedHealthCode(input.hookHealth) : '';
-      const root = ledger.workingDirectory;
-      const ignore = loadIgnoreRules(root);
-      if (ignore.unavailable) {
-        appendHealth(ledger, 'ignore_policy_unavailable');
-        return 0;
-      }
-      if (input.filePaths.length > MAX_PATHS_PER_APPEND) {
-        appendHealth(ledger, 'path_input_truncated');
-      }
-      const rejected = new Map<string, number>();
-      let capacityReached = false;
-      const seen = new Set(ledger.evidence.map(entry => `${entry.filePath}\0${entry.source}`));
-      let appended = 0;
-      for (const rawPath of input.filePaths.slice(0, MAX_PATHS_PER_APPEND)) {
-        if (typeof rawPath !== 'string') {
-          rejected.set('invalid_path', (rejected.get('invalid_path') ?? 0) + 1);
-          continue;
-        }
-        const normalized = normalizeWorkspacePath({ root, rawPath, ignoreRules: ignore.rules });
-        if ('reason' in normalized) {
-          rejected.set(normalized.reason, (rejected.get(normalized.reason) ?? 0) + 1);
-          continue;
-        }
-        if (seen.has(`${normalized.filePath}\0${source}`)) continue;
-        if (ledger.evidence.length >= MAX_LEDGER_EVIDENCE) {
-          capacityReached = true;
-          continue;
-        }
-        ledger.evidence.push({
-          idempotencyKey: randomUUID(),
-          filePath: normalized.filePath,
-          source,
-          quality,
-          overlap: input.overlap === true,
-          ...(toolWindowId ? { toolWindowId } : {}),
-          observedAt: now,
-          ...(hookHealth ? { hookHealth } : {})
-        });
-        seen.add(`${normalized.filePath}\0${source}`);
-        appended += 1;
-      }
-      if (hookHealth) appendHealth(ledger, hookHealth);
-      if (capacityReached) appendHealth(ledger, 'ledger_capacity_reached');
-      for (const [reason, count] of rejected) appendHealth(ledger, `${reason}:${count}`);
-      return appended;
+      const result = appendEvidenceToLedger(ledger, {
+        filePaths: input.filePaths,
+        source: 'agent_declared',
+        hookHealth: AGENT_DECLARED_HEALTH
+      });
+      return { accepted: result.accepted, rejected: result.rejected, recorded: true };
     },
-    0
+    unrecorded
   );
+}
+
+/** Persist the binding declared at attach. Configuration evidence only; never proof a hook ran. */
+export function recordChangeLedgerBinding(
+  input: LedgerIdentity & { bindingState: CaptureBindingState }
+): void {
+  if (!CAPTURE_BINDING_STATES.includes(input.bindingState)) return;
+  mutateLedger(
+    input,
+    ledger => {
+      ledger.capture = { ...ledger.capture, bindingState: input.bindingState };
+    },
+    undefined
+  );
+}
+
+/**
+ * Record the first accepted scoped callback for this session, including a
+ * harmless read. It is a separate fact from a successful native edit.
+ */
+export function recordChangeLedgerCallback(input: LedgerIdentity): void {
+  if (readLedger(input)?.capture.callbackObservedAt) return;
+  mutateLedger(
+    input,
+    ledger => {
+      if (ledger.capture.callbackObservedAt) return;
+      ledger.capture = { ...ledger.capture, callbackObservedAt: new Date().toISOString() };
+    },
+    undefined
+  );
+}
+
+/** Bounded capture diagnostics in the `sync-changes --capture-json` shape. */
+export function changeLedgerCapturePayload(snapshot: ChangeLedgerSnapshot): {
+  bindingState: CaptureBindingState;
+  callbackObservedAt?: string;
+  health: Array<{ code: string; at: string }>;
+} {
+  return {
+    bindingState: snapshot.capture.bindingState,
+    ...(snapshot.capture.callbackObservedAt
+      ? { callbackObservedAt: snapshot.capture.callbackObservedAt }
+      : {}),
+    health: snapshot.health.map(entry => ({ code: entry.code, at: entry.at }))
+  };
+}
+
+export function changeLedgerCaptureFingerprint(snapshot: ChangeLedgerSnapshot): string {
+  return createHash('sha256')
+    .update(JSON.stringify(changeLedgerCapturePayload(snapshot)))
+    .digest('hex');
+}
+
+/** Remember diagnostics the backend accepted, unless local state changed meanwhile. */
+export function markChangeLedgerCaptureSynced(
+  input: LedgerIdentity & { fingerprint: string }
+): void {
+  mutateLedger(
+    input,
+    ledger => {
+      const current = changeLedgerCaptureFingerprint(ledger);
+      if (current === input.fingerprint) {
+        ledger.capture = { ...ledger.capture, syncedFingerprint: input.fingerprint };
+      }
+    },
+    undefined,
+    { requireExisting: true }
+  );
+}
+
+/** Evidence, health and capture state of one ledger, or null when it cannot be read. */
+export function readChangeLedgerSnapshot(input: LedgerIdentity): ChangeLedgerSnapshot | null {
+  const objectiveId = canonicalObjectiveId(input.objectiveId);
+  const sessionKey = typeof input.sessionKey === 'string' ? input.sessionKey.trim() : '';
+  if (!objectiveId || !sessionKey) return null;
+  const ledger = readLedger({ ...input, objectiveId, sessionKey });
+  return ledger
+    ? { evidence: ledger.evidence, health: ledger.health, capture: ledger.capture }
+    : null;
 }
 
 export function recordChangeLedgerHealth(input: LedgerIdentity & { code: string }): void {

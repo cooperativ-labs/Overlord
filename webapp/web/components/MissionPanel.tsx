@@ -234,9 +234,10 @@ export function MissionPanel({
     select: state => objectiveSearchFromLocation(state.location.search)
   });
   const missionQ = useMission(missionId, { refetchBranchState: true });
-  // Evidence is fetched once per mission and partitioned by objective (coo:879);
-  // nothing is fetched per objective on expand. Terminal sessions ride on the
-  // mission detail itself.
+  // Deliveries are fetched once per mission and partitioned by objective
+  // (coo:879); terminal sessions ride on the mission detail itself. File
+  // changes are read per objective from the server (filtered before its cap);
+  // the capped mission page only feeds the unassigned-evidence fallback.
   const deliveriesQ = useMissionDeliveries(missionId, true);
   const fileChangesQ = useMissionFileChanges(missionId);
   const evidence = useMemo(
@@ -263,8 +264,8 @@ export function MissionPanel({
     [deliveriesQ.data, fileChangesQ.data]
   );
   const evidenceLoading = useMemo(
-    () => ({ deliveries: deliveriesQ.isLoading, fileChanges: fileChangesQ.isLoading }),
-    [deliveriesQ.isLoading, fileChangesQ.isLoading]
+    () => ({ deliveries: deliveriesQ.isLoading }),
+    [deliveriesQ.isLoading]
   );
   const [isScrolling, setIsScrolling] = useState(false);
   const scrollIdleTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -411,6 +412,7 @@ export function MissionPanel({
                 <UnassignedEvidenceSection
                   projectId={mission.projectId}
                   evidence={evidence.unassigned}
+                  fileChanges={evidence.unassignedFileChanges}
                   truncation={evidenceTruncation}
                 />
               </div>

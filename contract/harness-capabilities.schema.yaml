@@ -184,10 +184,12 @@ properties:
   #
   # This records what the native harness has actually proven. A post-only native edit callback
   # may forward its native payload to `capture-change --agent <connector>`. Only a path the
-  # connector-owned codec normalizes as `file.edited` becomes objective-bound, non-exclusive
-  # `declared_edit`/`direct` evidence. Codec-normalized read, search, and fetch callbacks are
-  # silent no-ops. Mutation-capable callbacks without a normalized edit path, plus shell,
-  # generic, unknown, and unmapped callbacks, record unavailable evidence health.
+  # connector-owned codec normalizes as `file.edited` with outcome `ok` (decoded via
+  # `outcomePath`/`outcomeExitCodePrefix`, or guaranteed by a fixture-backed `successOnly` rule)
+  # becomes objective-bound, non-exclusive `declared_edit` evidence. Failed/cancelled edits record
+  # `outcome_partial`, unknown outcomes `outcome_unavailable`, shell calls
+  # `shell_activity_unverified`, and other no-path callbacks `direct_path_unavailable`; none of
+  # them appends a path. Codec-normalized read, search, and fetch callbacks append nothing.
   # Only a strictly proven `paired` descriptor may emit authoritative window evidence.
 
   mutationHooks:

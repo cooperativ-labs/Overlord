@@ -7,8 +7,8 @@ Agents receive the objective together with relevant mission history and project
 context. They can add progress notes, questions, links, screenshots, test
 results, and other artifacts while working.
 
-At delivery, inspect the artifacts alongside the changed files and rationale.
-Artifacts support the handoff; they do not replace a clear delivery summary.
+At delivery, inspect the artifacts alongside the delivery summary and the list
+of files changed during the objective. Artifacts support the handoff; they do not replace a clear delivery summary.
 
 ## Shared mission context
 
@@ -18,18 +18,14 @@ know â€” architecture notes, a deploy target, the path to environment secrets â€
 rather than conversation history. It survives when work pauses, resumes later,
 or moves between agent runtimes.
 
-## Change rationales
+## Files changed during the objective
 
-Change rationales are optional structured reviewer annotations for an observed
-file:
-
-- a short reviewer title
-- the file path
-- what changed, why it changed, and the behavioral impact
-- optional diff-hunk headers
-
-The objective/session ledger supplies file evidence independently. A file remains
-reviewable without prose, and a missing rationale never blocks delivery.
+The delivery summary explains the work by behavior or component; files are
+tracked separately. Connector callbacks record successful native edits, and
+agents declare paths capture can't see (shell or generator outputs, deletes,
+both ends of a rename). Reviewers see the cumulative list grouped by resource,
+each path marked **Native**, **Declared**, or **Unknown**. Tracking gaps never
+block delivery.
 
 ## Artifacts
 
@@ -82,7 +78,7 @@ key is required for updates. Supply the current `revision` as `--expected-revisi
 ```bash
 ovld mission context <mission-id>
 ovld mission artifacts <mission-id>
-ovld mission rationales <mission-id>
+ovld mission file-changes <mission-id>
 ovld changes status --mission-id <mission-id>
 ```
 

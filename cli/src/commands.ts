@@ -35,11 +35,16 @@ import {
 import { type BranchAutomationPayload, prepareMissionBranch } from './branch-preparation.js';
 import { captureChangeFromPayload } from './capture-change.js';
 import {
-  appendChangeEvidence,
+  changeLedgerCaptureFingerprint,
+  changeLedgerCapturePayload,
+  type ChangeLedgerSnapshot,
+  declareChangePaths,
   type LedgerEvidence,
   markChangeEvidenceSynced,
-  readChangeLedgerHealth,
-  readUnsyncedChangeEvidence
+  markChangeLedgerCaptureSynced,
+  readChangeLedgerSnapshot,
+  readUnsyncedChangeEvidence,
+  recordChangeLedgerBinding
 } from './change-ledger.js';
 import { isLoopbackBackendUrl, loadConfig, resolveBackendUrl } from './config.js';
 import { clientDeviceIdentity } from './device-identity.js';
@@ -56,6 +61,7 @@ import {
   isUnlinkableExecutionRequestError
 } from './errors.js';
 import { launchAgent } from './launch.js';
+import { buildLocalObjectiveChanges } from './local-objective-changes.js';
 import { recoverLaunchBootstrapFromProjectTmp } from './launch-bootstrap.js';
 import { fetchLaunchSettings } from './launch-settings.js';
 import { resolveNativeSessionId } from './native-session.js';
@@ -152,9 +158,6 @@ const SYNC_CHANGE_EVIDENCE_KEYS = new Set([
   'filePath',
   'idempotencyKey',
   'source',
-  'quality',
-  'overlap',
-  'toolWindowId',
   'observedAt',
   'hookHealth'
 ]);
@@ -170,11 +173,8 @@ function canonicalChangeEvidenceTuple(value: unknown): string | null {
   if (
     typeof record.idempotencyKey !== 'string' ||
     typeof record.filePath !== 'string' ||
-    (record.source !== 'declared_edit' && record.source !== 'window_observed') ||
-    (record.quality !== 'direct' && record.quality !== 'window') ||
-    typeof record.overlap !== 'boolean' ||
+    (record.source !== 'declared_edit' && record.source !== 'agent_declared') ||
     typeof record.observedAt !== 'string' ||
-    (record.toolWindowId !== undefined && typeof record.toolWindowId !== 'string') ||
     (record.hookHealth !== undefined && typeof record.hookHealth !== 'string')
   ) {
     return null;
@@ -183,9 +183,6 @@ function canonicalChangeEvidenceTuple(value: unknown): string | null {
     record.idempotencyKey,
     record.filePath,
     record.source,
-    record.quality,
-    record.overlap,
-    record.toolWindowId ?? null,
     record.observedAt,
     record.hookHealth ?? null
   ]);
@@ -281,14 +278,20 @@ async function syncObjectiveLedger({
   sessionKey: string;
   active: { missionId: string; objectiveId: string; sessionKey: string };
 }): Promise<{ synced: number; warning?: string }> {
+  const identity = { workingDirectory, objectiveId: active.objectiveId, sessionKey };
   let synced = 0;
+  let captureAttempted = false;
   while (true) {
-    const changes = readUnsyncedChangeEvidence({
-      workingDirectory,
-      objectiveId: active.objectiveId,
-      sessionKey
-    }).slice(0, 25);
-    if (changes.length === 0) return { synced };
+    const changes = readUnsyncedChangeEvidence(identity).slice(0, 25);
+    // Capture diagnostics (binding, first callback, bounded health) travel once
+    // per drain with the first batch, or alone, when they changed since the
+    // backend last accepted them.
+    const snapshot = captureAttempted ? null : readChangeLedgerSnapshot(identity);
+    const captureFingerprint = snapshot ? changeLedgerCaptureFingerprint(snapshot) : null;
+    const sendCapture =
+      snapshot !== null && captureFingerprint !== snapshot.capture.syncedFingerprint;
+    captureAttempted = true;
+    if (changes.length === 0 && !sendCapture) return { synced };
 
     try {
       const result = await runtime.backend.post<unknown>({
@@ -301,10 +304,22 @@ async function syncObjectiveLedger({
           flags: {
             '--session-key': sessionKey,
             '--mission-id': missionId,
-            '--changes-json': JSON.stringify(changes)
+            '--changes-json': JSON.stringify(changes),
+            ...(sendCapture && snapshot
+              ? { '--capture-json': JSON.stringify(changeLedgerCapturePayload(snapshot)) }
+              : {})
           }
         }
       });
+      const captureStatus = asRecord(asRecord(result).capture).status;
+      if (
+        sendCapture &&
+        captureFingerprint &&
+        (captureStatus === 'accepted' || captureStatus === 'ignored')
+      ) {
+        markChangeLedgerCaptureSynced({ ...identity, fingerprint: captureFingerprint });
+      }
+      if (changes.length === 0) return { synced };
       const outcomes = asRecord(result).outcomes;
       const batch = new Map(
         changes.map(change => [changeEvidenceIdentityKey(change), change] as const)
@@ -633,10 +648,10 @@ const PROTOCOL_FILE_FLAGS = [
   '--options-file',
   '--payload-file',
   '--artifacts-file',
-  '--change-rationales-file',
   '--objectives-file',
   '--changes-file',
-  '--changed-files-file',
+  '--declared-paths-file',
+  '--paths-file',
   '--value-file',
   '--content-text-file',
   '--prompt-file',
@@ -680,6 +695,7 @@ const OBJECTIVE_SCOPED_SUBCOMMANDS = new Set([
   'heartbeat',
   'hook-event',
   'load-context',
+  'objective-changes',
   'read-context',
   'capture-change',
   'resume-follow-up',
@@ -695,70 +711,127 @@ const OBJECTIVE_SCOPED_SUBCOMMANDS = new Set([
 // objective's ledger. `list-deliveries` never inherits an objective at all.
 const READ_ONLY_MISSION_SUBCOMMANDS = new Set([
   'load-context',
+  'objective-changes',
   'read-context',
   'attachment-list',
   'attachment-download-url'
 ]);
 
+const RETIRED_RATIONALE_FLAGS = ['--change-rationales-json', '--change-rationales-file'] as const;
+const RETIRED_CHANGED_FILES_FLAGS = ['--changed-files-json', '--changed-files-file'] as const;
 const RETIRED_CHANGE_TRACKING_FLAGS: Record<string, readonly string[]> = {
-  update: ['--track-changed-files', '--changed-files-json', '--changed-files-file'],
+  update: ['--track-changed-files', ...RETIRED_CHANGED_FILES_FLAGS, ...RETIRED_RATIONALE_FLAGS],
   deliver: [
-    '--changed-files-json',
-    '--changed-files-file',
+    ...RETIRED_CHANGED_FILES_FLAGS,
+    ...RETIRED_RATIONALE_FLAGS,
     '--observed-dirty-paths-json',
     '--observed-dirty-paths-file',
     '--no-file-changes',
     '--skip-rationale-for-json',
     '--skip-rationale-for-file'
-  ]
+  ],
+  'record-work': [...RETIRED_CHANGED_FILES_FLAGS, ...RETIRED_RATIONALE_FLAGS]
 };
 
-const MAX_CHANGES_HEALTH_ENTRIES = 128;
 const MAX_DECLARED_OUTPUT_PATHS = 512;
 
 /**
- * `--paths` is deliberately narrow: a single batched declaration for outputs
- * the agent knows a generator or script produced.  It is not a VCS
- * reconciliation path, and it is resolved locally before the normal ledger
- * drain so no raw list crosses the lifecycle request.
+ * Read `--paths a,b` and/or `--paths-file <path|->` (a JSON array of path
+ * strings, so commas and long lists round-trip) into one declaration list.
+ */
+function declaredOutputPathInputs({
+  flags,
+  fileInputs
+}: {
+  flags: Record<string, string | true>;
+  fileInputs: Record<string, string>;
+}): string[] | null {
+  const inline = flags['--paths'];
+  const fileContent = fileInputs['--paths-file'];
+  if (inline === undefined && fileContent === undefined) return null;
+  const paths: string[] = [];
+  if (inline !== undefined) {
+    if (typeof inline !== 'string' || inline.trim() === '') {
+      throw new CliError({ message: '--paths requires a comma-separated list of output paths.' });
+    }
+    paths.push(
+      ...inline
+        .split(',')
+        .map(entry => entry.trim())
+        .filter(Boolean)
+    );
+  }
+  if (fileContent !== undefined) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(fileContent);
+    } catch {
+      throw new CliError({ message: '--paths-file must contain a JSON array of path strings.' });
+    }
+    if (!Array.isArray(parsed) || parsed.some(entry => typeof entry !== 'string')) {
+      throw new CliError({ message: '--paths-file must contain a JSON array of path strings.' });
+    }
+    paths.push(...(parsed as string[]));
+  }
+  if (paths.length === 0) {
+    throw new CliError({ message: '--paths/--paths-file requires at least one output path.' });
+  }
+  if (paths.length > MAX_DECLARED_OUTPUT_PATHS) {
+    throw new CliError({
+      message: `--paths/--paths-file accepts at most ${MAX_DECLARED_OUTPUT_PATHS} paths per call.`
+    });
+  }
+  return paths;
+}
+
+/**
+ * Declarations are deliberately narrow: paths the agent knows it changed that
+ * native capture could not name (shell/script/generator outputs, deletes, both
+ * rename endpoints). They are recorded locally as `agent_declared` before the
+ * normal ledger drain, so no raw list crosses the lifecycle request and the
+ * local read shows them immediately. This is not VCS reconciliation. Rejected
+ * paths are reported and never block the lifecycle call.
  */
 function appendDeclaredOutputPaths({
   flags,
+  fileInputs,
   active,
   workingDirectory
 }: {
   flags: Record<string, string | true>;
+  fileInputs: Record<string, string>;
   active: { objectiveId: string; sessionKey: string } | undefined;
   workingDirectory: string;
 }): void {
-  const value = flags['--paths'];
-  if (value === undefined) return;
+  const paths = declaredOutputPathInputs({ flags, fileInputs });
   delete flags['--paths'];
-  if (typeof value !== 'string' || value.trim() === '') {
-    throw new CliError({ message: '--paths requires a comma-separated list of output paths.' });
-  }
+  delete flags['--paths-file'];
+  delete fileInputs['--paths-file'];
+  if (paths === null) return;
   if (!active) {
     throw new CliError({
-      message: '--paths requires the attached objective session in this working directory.'
+      message:
+        '--paths/--paths-file requires the attached objective session in this working directory.'
     });
   }
-  const paths = value
-    .split(',')
-    .map(entry => entry.trim())
-    .filter(Boolean);
-  if (paths.length === 0) {
-    throw new CliError({ message: '--paths requires at least one output path.' });
-  }
-  appendChangeEvidence({
+  const result = declareChangePaths({
     workingDirectory,
     objectiveId: active.objectiveId,
     sessionKey: active.sessionKey,
-    filePaths: paths.slice(0, MAX_DECLARED_OUTPUT_PATHS),
-    source: 'declared_edit',
-    quality: 'direct',
-    overlap: false,
-    hookHealth: 'agent_declared_generator_output'
+    filePaths: paths
   });
+  if (!result.recorded) {
+    console.error('[overlord] Declared paths could not be recorded in the local change ledger.');
+    return;
+  }
+  for (const rejected of result.rejected.slice(0, 20)) {
+    console.error(
+      `[overlord] Ignored declared path ${JSON.stringify(rejected.path)}: ${rejected.reason}`
+    );
+  }
+  if (result.rejected.length > 20) {
+    console.error(`[overlord] Ignored ${result.rejected.length - 20} more declared path(s).`);
+  }
 }
 
 /**
@@ -872,7 +945,8 @@ export async function runProtocolCommand({
     throw new CliError({
       message:
         `${suppliedRetiredFlags.join(', ')} ${suppliedRetiredFlags.length === 1 ? 'was' : 'were'} removed. ` +
-        'File evidence is captured and synchronized from the objective ledger.'
+        'Explain changes in the summary; file evidence is captured in the objective ledger. ' +
+        'Declare shell/script outputs native capture missed with --paths or --paths-file.'
     });
   }
   if (
@@ -982,10 +1056,12 @@ export async function runProtocolCommand({
     return;
   }
 
-  // Preflight drains the attached objective ledger, then reports its local
-  // health. It deliberately does not inspect or classify the shared worktree:
-  // a path may belong to more than one objective and peer arbitration is not
-  // an attribution mechanism.
+  // CLI-local objective evidence read (`LocalObjectiveChangesDto`). It drains
+  // every locally known ledger of the addressed objective, snapshots synced and
+  // pending rows before any finalization can remove a ledger, then retires
+  // fully synchronized delivered sessions. It never reaches a backend read,
+  // never inspects or classifies the shared worktree, and never claims to be
+  // complete cross-device history: that is Protocol `objective-changes`.
   if (subcommand === 'changes') {
     if (!objectiveRef) {
       throw new CliError({
@@ -998,26 +1074,33 @@ export async function runProtocolCommand({
           'Mission scope is required when --objective-id is not a mission-qualified display id.'
       });
     }
-    const sessionKey =
-      (typeof flags['--session-key'] === 'string' && flags['--session-key']) ||
-      (objectiveRef
-        ? readCachedSessionKey({ missionId, workingDirectory, objectiveId: objectiveRef })
-        : undefined);
-    const objectiveSessions = objectiveRef
-      ? readObjectiveSessions({ workingDirectory, objectiveId: objectiveRef })
-      : [];
+    const objectiveMission = missionDisplayIdFromObjectiveRef(objectiveRef);
+    if (objectiveMission && missionId.includes(':') && objectiveMission !== missionId.trim()) {
+      throw new CliError({
+        message: `Objective ${objectiveRef} does not belong to mission ${missionId}.`
+      });
+    }
+    const objectiveSessions = readObjectiveSessions({
+      workingDirectory,
+      objectiveId: objectiveRef
+    }).filter(
+      entry =>
+        !missionId.includes(':') ||
+        !entry.missionId.includes(':') ||
+        entry.missionId === missionId.trim()
+    );
     const explicitSessionKey =
-      typeof flags['--session-key'] === 'string' ? flags['--session-key'] : undefined;
-    const explicitSessionMatches =
-      !explicitSessionKey ||
-      objectiveSessions.some(entry => entry.sessionKey === explicitSessionKey);
-    const candidates = explicitSessionMatches ? objectiveSessions : [];
-    const selected =
-      (sessionKey ? objectiveSessions.find(entry => entry.sessionKey === sessionKey) : undefined) ??
-      objectiveSessions.find(entry => !entry.deliveryPendingSync);
-    let synced = 0;
-    const warnings: string[] = [];
-    for (const entry of candidates) {
+      typeof flags['--session-key'] === 'string' ? flags['--session-key'].trim() : undefined;
+    if (
+      explicitSessionKey &&
+      !objectiveSessions.some(entry => entry.sessionKey === explicitSessionKey)
+    ) {
+      throw new CliError({
+        message: `--session-key does not identify a local session of objective ${objectiveRef} in this working directory.`
+      });
+    }
+    let syncFailed = false;
+    for (const entry of objectiveSessions) {
       const result = await syncObjectiveLedger({
         runtime,
         workingDirectory,
@@ -1025,26 +1108,22 @@ export async function runProtocolCommand({
         sessionKey: entry.sessionKey,
         active: entry
       });
-      synced += result.synced;
-      if (result.warning && !warnings.includes(result.warning)) warnings.push(result.warning);
+      if (result.warning) syncFailed = true;
     }
-    let unsyncedEvidence = 0;
-    const allHealth = candidates.flatMap(entry => {
-      unsyncedEvidence += readUnsyncedChangeEvidence({
-        workingDirectory,
-        objectiveId: entry.objectiveId,
-        sessionKey: entry.sessionKey
-      }).length;
-      return readChangeLedgerHealth({
+    const snapshots = objectiveSessions.flatMap((entry): ChangeLedgerSnapshot[] => {
+      const snapshot = readChangeLedgerSnapshot({
         workingDirectory,
         objectiveId: entry.objectiveId,
         sessionKey: entry.sessionKey
       });
+      return snapshot ? [snapshot] : [];
     });
-    const health = allHealth
-      .sort((left, right) => left.at.localeCompare(right.at))
-      .slice(-MAX_CHANGES_HEALTH_ENTRIES);
-    for (const entry of candidates.filter(candidate => candidate.deliveryPendingSync)) {
+    const local = buildLocalObjectiveChanges({
+      objectiveId: objectiveSessions[0]?.objectiveId ?? objectiveRef,
+      snapshots,
+      syncFailed
+    });
+    for (const entry of objectiveSessions.filter(candidate => candidate.deliveryPendingSync)) {
       const stillUnsynced = readUnsyncedChangeEvidence({
         workingDirectory,
         objectiveId: entry.objectiveId,
@@ -1068,18 +1147,7 @@ export async function runProtocolCommand({
     if (readActiveSessions(workingDirectory).length === 0) {
       clearActiveMissionPointer(workingDirectory);
     }
-    printJson({
-      objectiveId: selected?.objectiveId ?? objectiveSessions[0]?.objectiveId ?? null,
-      synced,
-      warning:
-        candidates.length === 0
-          ? 'no attached objective session'
-          : warnings.length > 0
-            ? warnings.join('; ')
-            : null,
-      unsyncedEvidence,
-      health
-    });
+    printJson(local);
     return;
   }
 
@@ -1149,7 +1217,7 @@ export async function runProtocolCommand({
       ? readActiveSessions(workingDirectory).find(entry => entry.sessionKey === sessionKey)
       : undefined;
     lifecycleActive = active;
-    appendDeclaredOutputPaths({ flags, active, workingDirectory });
+    appendDeclaredOutputPaths({ flags, fileInputs, active, workingDirectory });
     if (sessionKey && active) {
       await syncObjectiveLedger({ runtime, workingDirectory, missionId, sessionKey, active });
     }
@@ -1176,6 +1244,18 @@ export async function runProtocolCommand({
     if (preferredTargetId) {
       flags['--execution-target-id'] = preferredTargetId;
     }
+  }
+
+  // Capture binding is configuration evidence only: the capture hook selects an
+  // objective solely from OVERLORD_OBJECTIVE_ID, so a session whose launch env
+  // does not name this objective cannot be captured. A bound attach never claims
+  // that a hook is installed or has run. When the env names the objective in a
+  // different form, the binding is resolved against the attach response below.
+  const launchObjectiveEnv = process.env.OVERLORD_OBJECTIVE_ID?.trim() || undefined;
+  if (subcommand === 'attach') {
+    delete flags['--capture-binding'];
+    if (!launchObjectiveEnv) flags['--capture-binding'] = 'unbound';
+    else if (objectiveRef?.trim() === launchObjectiveEnv) flags['--capture-binding'] = 'bound';
   }
 
   const protocolBody = {
@@ -1299,13 +1379,25 @@ export async function runProtocolCommand({
         const objectiveIdentity =
           (typeof attachedObjective.id === 'string' && attachedObjective.id.trim()) ||
           attachedObjectiveId;
-        writeActiveSession({
+        const bound = writeActiveSession({
           workingDirectory,
           missionId,
           objectiveId: objectiveIdentity,
           objectiveAliases: [...objectiveAliases],
           sessionKey: resultRecord.sessionKey
         });
+        if (bound) {
+          recordChangeLedgerBinding({
+            workingDirectory,
+            objectiveId: objectiveIdentity,
+            sessionKey: resultRecord.sessionKey,
+            bindingState:
+              launchObjectiveEnv &&
+              (launchObjectiveEnv === objectiveIdentity || objectiveAliases.has(launchObjectiveEnv))
+                ? 'bound'
+                : 'unbound'
+          });
+        }
       }
     }
   }
@@ -2069,21 +2161,21 @@ export async function runManagementCommand({
       if (!missionId) {
         throw new CliError({
           message:
-            'Usage: ovld mission context|events|deliveries|artifacts|rationales <missionId> [--json]'
+            'Usage: ovld mission context|events|deliveries|artifacts|file-changes <missionId> [--json]'
         });
       }
       const pathBySub: Record<string, string> = {
         context: `/api/missions/${encodeURIComponent(missionId)}`,
         events: `/api/missions/${encodeURIComponent(missionId)}/events`,
         artifacts: `/api/missions/${encodeURIComponent(missionId)}/artifacts`,
-        rationales: `/api/missions/${encodeURIComponent(missionId)}/file-changes`,
+        'file-changes': `/api/missions/${encodeURIComponent(missionId)}/file-changes`,
         deliveries: `/api/missions/${encodeURIComponent(missionId)}/deliveries`
       };
       const path = sub ? pathBySub[sub] : undefined;
       if (!path) {
         throw new CliError({
           message:
-            'Usage: ovld mission context|events|deliveries|artifacts|rationales <missionId> [--json]'
+            'Usage: ovld mission context|events|deliveries|artifacts|file-changes <missionId> [--json]'
         });
       }
       const result = await runtime.backend.get<unknown>(path);
@@ -2100,31 +2192,29 @@ export async function runManagementCommand({
       const objectiveRef = flagValue(parsed.flags, '--objective-id');
       const missionId =
         flagValue(parsed.flags, '--mission-id') ?? missionDisplayIdFromObjectiveRef(objectiveRef);
-      if (!missionId) {
+      if (sub !== 'status' || !missionId) {
         throw new CliError({
           message:
-            'Usage: ovld changes status|rationales --mission-id <id> (or --objective-id <mission-display-id>.<key>)'
+            'Usage: ovld changes status --mission-id <id> [--objective-id <id>] [--json] (or --objective-id <mission-display-id>.<key>)'
         });
       }
-      if (sub !== 'status' && sub !== 'rationales') {
-        throw new CliError({ message: 'Usage: ovld changes status|rationales --mission-id <id>' });
-      }
-      const page = await runtime.backend.get<unknown>(
-        `/api/missions/${encodeURIComponent(missionId)}/file-changes`
+      // With an objective, the server filters before count and the 200-row cap
+      // (ObjectiveFileChangesDto); never partition a capped mission-wide page.
+      const query = objectiveRef ? `?objectiveId=${encodeURIComponent(objectiveRef)}` : '';
+      const result = await runtime.backend.get<unknown>(
+        `/api/missions/${encodeURIComponent(missionId)}/file-changes${query}`
       );
-      // The route is mission-scoped and each row carries its objective, so
-      // narrow here rather than making `--objective-id` a flag that parses and
-      // then quietly does nothing.
-      let result = missionEvidenceItems(page) ?? [];
-      if (objectiveRef) {
-        const mission = await runtime.backend.get<unknown>(
-          `/api/missions/${encodeURIComponent(missionId)}`
-        );
-        const objectiveId = objectiveIdForRef(mission, objectiveRef);
-        result = result.filter(row => asRecord(row).objectiveId === objectiveId);
+      if (json) {
+        printJson(result);
+        return;
       }
-      if (json) printJson({ files: result, rationales: result });
-      else for (const row of result) console.log(JSON.stringify(row));
+      for (const row of missionEvidenceItems(result) ?? []) console.log(JSON.stringify(row));
+      const record = asRecord(result);
+      if (record.truncated === true) {
+        console.log(
+          `Showing ${String(record.limit)} of ${String(record.total)} changed paths (truncated).`
+        );
+      }
       return;
     }
     default:

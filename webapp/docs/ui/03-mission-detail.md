@@ -279,7 +279,7 @@ Objective 3 · Implement runtime                         state: draft  [ Save ]
 | Activity | `GET /missions/:id/events` → `['mission', id, 'events']` | `mission_event` insert → prepend `EventItem` |
 | Context | `GET /api/missions/:id/context` | `shared_context_entry` deltas |
 | Artifacts | `GET /missions/:id/deliveries` | `delivery`/`artifact` deltas |
-| Changes | `GET /api/missions/:id/file-changes` | `changed_file`/`change_rationale` inserts and updates invalidate the projection |
+| Changes | `GET /api/missions/:id/file-changes?objectiveId=` per objective (mission-wide page only for deleted objectives) | `changed_file` and `agent_session` changes invalidate `['mission', id, 'file-changes']` and every objective key under it |
 
 One realtime subscription scoped to `mission:<id>` (a `stream_key` the change feed
 supports) drives all of the above. Heartbeats update the session strip age but do

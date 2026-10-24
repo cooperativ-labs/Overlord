@@ -154,8 +154,11 @@ ground from the system's point of view, plus everything before and after.
 
    - Best-effort drains every bounded batch from the objective/session change
      ledger. Per-item warnings and unavailable sync never reject delivery.
-   - Validates the summary and writes `deliveries`, optional artifacts and
-     rationale annotations, and a `delivery`-type mission event.
+   - Records any `--paths` / `--paths-file` declared paths as **Declared**.
+     Unsafe paths are rejected with a reason without failing the call.
+   - Validates the summary and writes `deliveries`, optional artifacts, and a
+     `delivery`-type mission event. A summary-only delivery is valid and is
+     never blocked by tracking gaps.
    - Normalizes optional delivery evidence (human actions, tradeoffs, risks,
      deferred work, and assumptions), stores a deterministic presentation, and
      queues optional AI composition without delaying the delivery transaction.
@@ -188,9 +191,10 @@ ground from the system's point of view, plus everything before and after.
 11. ### Review reads the durable records back
 
     Nothing in review is derived live from the agent's session — the review
-    surface reads the `deliveries`, `artifacts`, optional `change_rationales`,
-    and changed-file observations written in step 8. File observations remain
-    visible without prose.
+    surface reads the `deliveries`, `artifacts`, and the cumulative changed-file
+    list for the objective (grouped by resource, each path marked Native,
+    Declared, or Unknown). That list is not a Git diff or a delivery-time
+    snapshot; a late sync may still extend it.
 
 </Steps>
 

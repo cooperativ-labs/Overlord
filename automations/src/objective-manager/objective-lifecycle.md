@@ -309,7 +309,7 @@ backward transition out of `launching`.
 ### 5.5 `executing` (and others) → `complete` — delivery
 
 **Trigger:** the agent calls `deliver`. After persisting the delivery event,
-artifacts, and change rationales:
+artifacts, delivery report, and any declared paths:
 
 1. Update the session's objective to `complete` with `completed_at = now()`,
    CAS-guarded on `state IN ('executing','pending_delivery','launching','draft')` —
@@ -369,10 +369,9 @@ Notes:
 ### 5.7 → `pending_delivery` — follow-up work after a delivery
 
 **Trigger:** after an objective has at least one delivery, a subsequent protocol
-`update` or rationale-recording call carrying a **meaningful follow-up work signal**
+`update` call carrying a **meaningful follow-up work signal**
 transitions it to `pending_delivery`. Meaningful signals:
 
-- any change rationales,
 - a commit ID or diff stat in the snapshot,
 - explicit follow-up intent of `pending_delivery`,
 - non-empty artifacts/deliverables in the payload,

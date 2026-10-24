@@ -1,4 +1,3 @@
-import { type ChangeRationaleInput } from '../../packages/core/service/protocol.ts';
 import { ApiError } from '../errors.ts';
 
 import { hasFlag, parseJsonObjectInput, type ProtocolRequestBody } from './flags.ts';
@@ -8,7 +7,13 @@ import { hasFlag, parseJsonObjectInput, type ProtocolRequestBody } from './flags
 // The delivery envelope and retired change-tracking inputs shared by `update`
 // and `deliver` (./session.ts) and `record-work` (./missions.ts).
 
+// Per-file rationale and changed-file object inputs are retired (contract v165).
+// They are rejected with a clear error instead of being aliased or ignored.
 const RETIRED_SHARED_CHANGE_TRACKING_FLAGS = [
+  '--change-rationales-json',
+  '--change-rationales-file',
+  '--changed-files-json',
+  '--changed-files-file',
   '--no-file-changes',
   '--skip-rationale-for-json',
   '--skip-rationale-for-file',
@@ -18,12 +23,13 @@ const RETIRED_SHARED_CHANGE_TRACKING_FLAGS = [
 
 export const RETIRED_CHANGE_TRACKING_FLAGS = [
   '--track-changed-files',
-  '--changed-files-json',
-  '--changed-files-file',
   ...RETIRED_SHARED_CHANGE_TRACKING_FLAGS
 ] as const;
 
 const RETIRED_SHARED_CHANGE_TRACKING_FIELDS = [
+  'changeRationales',
+  'change_rationales',
+  'changedFiles',
   'noFileChanges',
   'skipRationaleFor',
   'observedDirtyPaths',
@@ -33,10 +39,7 @@ const RETIRED_SHARED_CHANGE_TRACKING_FIELDS = [
   'observed_dirty_paths'
 ] as const;
 
-const RETIRED_CHANGE_TRACKING_FIELDS = [
-  'changedFiles',
-  ...RETIRED_SHARED_CHANGE_TRACKING_FIELDS
-] as const;
+const RETIRED_CHANGE_TRACKING_FIELDS = RETIRED_SHARED_CHANGE_TRACKING_FIELDS;
 
 export const RETIRED_RECORD_WORK_FLAGS = RETIRED_SHARED_CHANGE_TRACKING_FLAGS;
 export const RETIRED_RECORD_WORK_FIELDS = RETIRED_SHARED_CHANGE_TRACKING_FIELDS;
@@ -84,7 +87,7 @@ export type ArtifactInput = {
 type DeliveryPayloadEnvelope = {
   summary?: string;
   artifacts?: ArtifactInput[];
-  changeRationales?: ChangeRationaleInput[];
+  declaredPaths?: unknown[];
   verificationSummary?: string | null;
   followUpNotes?: string | null;
   payloadJson?: Record<string, unknown>;
@@ -98,22 +101,16 @@ export function parseDeliveryPayloadEnvelope(body: ProtocolRequestBody): Deliver
   const input = parseJsonObjectInput(body, '--payload-json', '--payload-file', 'delivery payload');
   if (input === undefined) return {};
 
-  const {
-    summary,
-    artifacts,
-    changeRationales,
-    verificationSummary,
-    followUpNotes,
-    ...payloadJson
-  } = input;
+  const { summary, artifacts, declaredPaths, verificationSummary, followUpNotes, ...payloadJson } =
+    input;
   if (summary !== undefined && typeof summary !== 'string') {
     throw new ApiError(400, 'Delivery payload summary must be a string');
   }
   if (artifacts !== undefined && !Array.isArray(artifacts)) {
     throw new ApiError(400, 'Delivery payload artifacts must be an array');
   }
-  if (changeRationales !== undefined && !Array.isArray(changeRationales)) {
-    throw new ApiError(400, 'Delivery payload changeRationales must be an array');
+  if (declaredPaths !== undefined && !Array.isArray(declaredPaths)) {
+    throw new ApiError(400, 'Delivery payload declaredPaths must be an array of path strings');
   }
   if (
     verificationSummary !== undefined &&
@@ -128,9 +125,7 @@ export function parseDeliveryPayloadEnvelope(body: ProtocolRequestBody): Deliver
   return {
     ...(typeof summary === 'string' ? { summary } : {}),
     ...(Array.isArray(artifacts) ? { artifacts: artifacts as ArtifactInput[] } : {}),
-    ...(Array.isArray(changeRationales)
-      ? { changeRationales: changeRationales as ChangeRationaleInput[] }
-      : {}),
+    ...(Array.isArray(declaredPaths) ? { declaredPaths } : {}),
     ...(verificationSummary === null || typeof verificationSummary === 'string'
       ? { verificationSummary }
       : {}),

@@ -160,13 +160,11 @@ export interface WebhookEnvelope {
       url?: string | null;
     }>;
   };
-  changedFiles?: Array<{ filePath: string; vcsStatus: string | null }> & { truncated?: boolean };
-  changeRationales?: Array<{
+  /** Cumulative objective path evidence; never per-file prose, VCS status, or window metadata. */
+  changedFiles?: Array<{
     filePath: string;
-    label: string;
-    summary: string;
-    why: string;
-    impact: string;
+    resourceKey: string | null;
+    source: 'declared_edit' | 'agent_declared' | null;
   }> & { truncated?: boolean };
   missionEvents?: Array<{ id: string; type: string; summary: string; createdAt: string }> & {
     truncated?: boolean;
@@ -361,34 +359,20 @@ export async function buildWebhookEnvelope(
       };
 
       const changedFileRows = (await ctx.db.all(
-        `SELECT file_path, vcs_status FROM changed_files
-           WHERE objective_id = ? AND deleted_at IS NULL
-           ORDER BY last_observed_at DESC LIMIT ?`,
+        `SELECT cf.file_path, cf.source, COALESCE(pr.resource_key, o.resource_key) AS resource_key
+           FROM changed_files cf
+           LEFT JOIN objectives o ON o.id = cf.objective_id AND o.deleted_at IS NULL
+           LEFT JOIN project_resources pr ON pr.id = cf.resource_id AND pr.deleted_at IS NULL
+          WHERE cf.objective_id = ? AND cf.deleted_at IS NULL
+          ORDER BY cf.last_observed_at DESC, cf.id DESC LIMIT ?`,
         [entity.objectiveId, FULL_ENVELOPE_ARRAY_LIMIT + 1]
-      )) as Array<{ file_path: string; vcs_status: string | null }>;
+      )) as Array<{ file_path: string; source: string | null; resource_key: string | null }>;
       envelope.changedFiles = truncateArray(
-        changedFileRows.map(row => ({ filePath: row.file_path, vcsStatus: row.vcs_status }))
-      );
-
-      const rationaleRows = (await ctx.db.all(
-        `SELECT file_path, label, summary, why, impact FROM change_rationales
-           WHERE delivery_id = ? AND deleted_at IS NULL
-           ORDER BY created_at ASC LIMIT ?`,
-        [delivery.id, FULL_ENVELOPE_ARRAY_LIMIT + 1]
-      )) as Array<{
-        file_path: string;
-        label: string;
-        summary: string;
-        why: string;
-        impact: string;
-      }>;
-      envelope.changeRationales = truncateArray(
-        rationaleRows.map(row => ({
+        changedFileRows.map(row => ({
           filePath: row.file_path,
-          label: row.label,
-          summary: row.summary,
-          why: row.why,
-          impact: row.impact
+          resourceKey: row.resource_key?.trim() || null,
+          source:
+            row.source === 'declared_edit' || row.source === 'agent_declared' ? row.source : null
         }))
       );
     }

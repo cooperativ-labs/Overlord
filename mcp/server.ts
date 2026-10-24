@@ -484,6 +484,8 @@ const toolHandlers: Record<string, ToolHandler> = {
     ),
   overlord_list_deliveries: args =>
     runProtocolSubcommand('list-deliveries', protocolBody(missionScopeFlags(args))),
+  overlord_changes: args =>
+    runProtocolSubcommand('objective-changes', protocolBody(missionScopeFlags(args))),
   overlord_launch_objective: args =>
     runProtocolSubcommand(
       'launch-objective',
@@ -612,10 +614,10 @@ const toolHandlers: Record<string, ToolHandler> = {
         ...(optionalString(args, 'eventType')
           ? { '--event-type': requiredString(args, 'eventType') }
           : {}),
-        ...(Array.isArray(args.changeRationales) ? { '--change-rationales-file': true } : {})
+        ...(Array.isArray(args.declaredPaths) ? { '--declared-paths-file': true } : {})
       },
-      fileInputs: Array.isArray(args.changeRationales)
-        ? { '--change-rationales-file': JSON.stringify(args.changeRationales) }
+      fileInputs: Array.isArray(args.declaredPaths)
+        ? { '--declared-paths-file': JSON.stringify(args.declaredPaths) }
         : undefined
     }),
   overlord_deliver_session: args =>
@@ -625,7 +627,7 @@ const toolHandlers: Record<string, ToolHandler> = {
         '--session-key': requiredString(args, 'sessionKey'),
         '--summary': requiredString(args, 'summary'),
         ...(Array.isArray(args.artifacts) ? { '--artifacts-file': true } : {}),
-        ...(Array.isArray(args.changeRationales) ? { '--change-rationales-file': true } : {}),
+        ...(Array.isArray(args.declaredPaths) ? { '--declared-paths-file': true } : {}),
         ...(Array.isArray(args.humanActions) ||
         Array.isArray(args.tradeoffsMade) ||
         Array.isArray(args.knownRisks) ||
@@ -654,13 +656,13 @@ const toolHandlers: Record<string, ToolHandler> = {
           : {})
       },
       fileInputs:
-        Array.isArray(args.artifacts) || Array.isArray(args.changeRationales)
+        Array.isArray(args.artifacts) || Array.isArray(args.declaredPaths)
           ? {
               ...(Array.isArray(args.artifacts)
                 ? { '--artifacts-file': JSON.stringify(args.artifacts) }
                 : {}),
-              ...(Array.isArray(args.changeRationales)
-                ? { '--change-rationales-file': JSON.stringify(args.changeRationales) }
+              ...(Array.isArray(args.declaredPaths)
+                ? { '--declared-paths-file': JSON.stringify(args.declaredPaths) }
                 : {})
             }
           : undefined
@@ -708,13 +710,12 @@ const toolHandlers: Record<string, ToolHandler> = {
   },
   overlord_record_work: args => {
     // record-work takes one payload-file envelope so objective/summary/title and
-    // file-change arrays travel as one unambiguous JSON object.
+    // declared-path arrays travel as one unambiguous JSON object.
     const payload: Record<string, unknown> = {
       objective: requiredString(args, 'objective'),
       summary: requiredString(args, 'summary'),
       ...(optionalString(args, 'title') ? { title: requiredString(args, 'title') } : {}),
-      ...(Array.isArray(args.changeRationales) ? { changeRationales: args.changeRationales } : {}),
-      ...(Array.isArray(args.changedFiles) ? { changedFiles: args.changedFiles } : {}),
+      ...(Array.isArray(args.declaredPaths) ? { declaredPaths: args.declaredPaths } : {}),
       ...(Array.isArray(args.artifacts) ? { artifacts: args.artifacts } : {})
     };
     return runProtocolSubcommand('record-work', {

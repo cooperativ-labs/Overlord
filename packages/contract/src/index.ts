@@ -1391,8 +1391,12 @@ export interface AgentSessionInputsResponse {
 
 // ---- Delivery reports (coo:364, contract v15) -----------------------------
 
-/** Sources allowed to support a persisted delivery-report item. */
-export type DeliveryEvidenceSource = 'agent' | 'change_rationale' | 'deterministic_rule';
+/**
+ * Sources allowed to support a persisted delivery-report item. Contract v165
+ * retired `change_rationale`: per-file prose is never evidence for an action or
+ * tradeoff.
+ */
+export type DeliveryEvidenceSource = 'agent' | 'deterministic_rule';
 
 /** User-facing grouping for a concrete post-delivery action. */
 export type HumanActionCategory =
@@ -1455,7 +1459,7 @@ export interface TradeoffMadeV1 {
   alternativesConsidered: string[];
   rationale: string;
   impact?: string;
-  source: Extract<DeliveryEvidenceSource, 'agent' | 'change_rationale'>;
+  source: Extract<DeliveryEvidenceSource, 'agent'>;
   sourceRef?: string;
 }
 
@@ -1574,37 +1578,154 @@ export interface ResolveHumanActionBody {
 // ---- Mission file changes ----
 
 /**
- * A mechanically observed `changed_files` row surfaced in the mission panel,
- * optionally joined to the latest agent-authored rationale for the same
- * objective and path.
+ * Provenance of a changed path. `declared_edit` means at least one successful
+ * native connector observation; `agent_declared` means only an explicit agent
+ * declaration (shell/script/generator output, delete, rename, `record-work`).
+ * `null` means historical provenance is unknown and must display as Unknown.
+ * Native evidence is never downgraded by a later declaration.
+ */
+export type FileChangeSource = 'declared_edit' | 'agent_declared';
+
+/**
+ * Compact cumulative objective path evidence. One row per objective + resolved
+ * resource + normalized relative path. It is not a Git diff, a delivery-time
+ * snapshot, proof of exclusive ownership, or proof that every edit was captured.
+ * Clients derive the basename from `filePath`. No per-file prose, VCS status, or
+ * window metadata exists on this row.
  */
 export interface FileChangeDto {
   id: string;
   missionId: string;
   objectiveId: string;
-  /** Repository-relative path of the changed file. */
-  filePath: string;
-  /** Basename of `filePath`, for compact display in the card header. */
-  fileName: string;
-  /** Optional agent-authored rationale for the mechanically observed path. */
-  label: string | null;
-  summary: string | null;
-  why: string | null;
-  impact: string | null;
-  /** Version-control status of the file (e.g. `modified`, `added`), when known. */
-  vcsStatus: string | null;
-  /** Attribution source from objective-ledger evidence, when known. */
-  source: 'declared_edit' | 'window_observed' | null;
-  /** Evidence quality paired with `source`, when known. */
-  quality: 'direct' | 'window' | null;
-  /** Whether the evidence window overlapped another mutation-capable window. */
-  overlap: boolean;
-  /** Bounded hook-health status captured by the execution target, when known. */
-  hookHealth: string | null;
-  /** Logical project resource the change belongs to, when known. */
+  /** Logical project resource the path belongs to; null when not resolved (e.g. sessionless record-work). */
   resourceKey: string | null;
-  /** Time this path evidence was last observed (`changed_files.last_observed_at`). */
-  createdAt: string;
+  /** Repository-relative path. */
+  filePath: string;
+  source: FileChangeSource | null;
+  /** Time this path was last observed or declared (`changed_files.last_observed_at`). */
+  observedAt: string;
+  /** Bounded health code of the latest observation, when known. */
+  hookHealth: string | null;
+}
+
+/** Declared binding between a session and the connector's capture hook. Configuration evidence only. */
+export type CaptureBindingState = 'bound' | 'unbound' | 'unknown';
+
+/**
+ * Bounded sticky capture gap codes that mean "some tool activity could not be
+ * captured as a path". Any other bounded code is retained as health only.
+ */
+export const CAPTURE_GAP_CODES = [
+  'direct_path_unavailable',
+  'native_payload_unavailable',
+  'outcome_unavailable',
+  'outcome_partial',
+  'shell_activity_unverified'
+] as const;
+export type CaptureGapCode = (typeof CAPTURE_GAP_CODES)[number];
+
+export const MAX_CAPTURE_HEALTH_CODES = 16;
+
+/** Per-code first/last aggregate (idempotent under retries); sticky even if finer detail is evicted. */
+export interface CaptureHealthEntryDto {
+  code: string;
+  firstAt: string;
+  lastAt: string;
+}
+
+/** Persisted bounded capture diagnostics for one agent session. */
+export interface CaptureSessionDto {
+  sessionId: string;
+  startedAt: string;
+  bindingState: CaptureBindingState;
+  /** First accepted scoped callback, including harmless reads. Not proof of a successful edit. */
+  callbackObservedAt: string | null;
+  health: CaptureHealthEntryDto[];
+}
+
+/**
+ * Objective-level warnings derived across every session of the objective; a
+ * newer healthy session never hides an earlier gap. `sync_pending` and
+ * `sync_failed` are local-only (see {@link LocalObjectiveChangesDto}).
+ */
+export type CaptureWarningCode =
+  | 'unbound'
+  | 'bound_no_callback'
+  | 'unknown_binding'
+  | 'tool_activity_uncaptured'
+  | 'sync_pending'
+  | 'sync_failed';
+
+export const CAPTURE_WARNING_MESSAGES: Record<CaptureWarningCode, string> = {
+  unbound: 'Automatic file tracking was not active for this session.',
+  bound_no_callback: 'File tracking is configured but no callback has been observed.',
+  unknown_binding: 'Automatic file tracking availability is unknown.',
+  tool_activity_uncaptured:
+    'Some tool activity could not be captured; declared paths may be needed.',
+  sync_pending: 'Some captured paths have not synchronized.',
+  sync_failed: 'Some captured paths have not synchronized.'
+};
+
+/** Hard cap on rows returned by every objective file-change read. */
+export const OBJECTIVE_FILE_CHANGES_LIMIT = 200;
+
+/**
+ * Server objective read: Protocol `objective-changes` (`POST
+ * /api/protocol/objective-changes`), hosted MCP `overlord_changes`, and REST
+ * `GET /api/missions/:id/file-changes?objectiveId=`. Synchronized evidence across
+ * every session, resource and device of one objective; it cannot see
+ * unsynchronized local rows and never claims to. `total` is the distinct
+ * path/resource count before the cap; the objective filter is applied in SQL
+ * before count and limit.
+ */
+export interface ObjectiveFileChangesDto {
+  scope: 'server_objective';
+  missionId: string;
+  objectiveId: string;
+  items: FileChangeDto[];
+  total: number;
+  limit: number;
+  truncated: boolean;
+  capture: {
+    sessions: CaptureSessionDto[];
+    warnings: CaptureWarningCode[];
+  };
+}
+
+export type LocalFileChangeSyncState = 'synced' | 'pending';
+
+/** One locally known path; deduplicated by path across matching local sessions. */
+export interface LocalFileChangeDto {
+  filePath: string;
+  source: FileChangeSource;
+  observedAt: string;
+  hookHealth: string | null;
+  syncState: LocalFileChangeSyncState;
+}
+
+/**
+ * CLI-local read: `ovld protocol changes --objective-id ...` (never sent to the
+ * backend). Covers only ledgers of this working directory's locally known
+ * sessions for the objective, including pending rows; it is explicitly not
+ * complete cross-device objective history. `total` counts distinct paths in that
+ * local scope. A call with no matching local session reports
+ * `coverage: 'unavailable'`, never "no files changed".
+ */
+export interface LocalObjectiveChangesDto {
+  scope: 'local_objective_sessions';
+  objectiveId: string;
+  coverage: 'available' | 'unavailable';
+  items: LocalFileChangeDto[];
+  total: number;
+  limit: number;
+  truncated: boolean;
+  sync: { synced: number; pending: number; failed: boolean };
+  capture: {
+    bindingState: CaptureBindingState;
+    callbackObserved: boolean;
+    healthCodes: string[];
+  };
+  warnings: CaptureWarningCode[];
 }
 
 /**
@@ -1619,9 +1740,10 @@ export interface MissionDeliveriesDto {
 }
 
 /**
- * Bounded newest-first page for `GET /api/missions/:id/file-changes`.
- * `items` is capped at {@link MISSION_EVIDENCE_LIST_LIMIT}; `total` is the
- * matching row count before that cap.
+ * Bounded newest-first page for the mission-wide `GET /api/missions/:id/file-changes`
+ * (no `objectiveId`). `items` is capped at {@link MISSION_EVIDENCE_LIST_LIMIT};
+ * `total` is the matching row count before that cap. Objective views must use
+ * {@link ObjectiveFileChangesDto} rather than partition this capped list.
  */
 export interface MissionFileChangesDto {
   items: FileChangeDto[];

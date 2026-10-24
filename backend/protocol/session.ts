@@ -1,9 +1,9 @@
 import { PERMISSIONS } from '@overlord/auth';
+import type { CaptureBindingState } from '@overlord/contract';
 
 import {
   askQuestion,
   attachSession,
-  type ChangeRationaleInput,
   connectSession,
   deliverSession,
   heartbeatSession,
@@ -38,6 +38,22 @@ import {
 // attach/connect through deliver: the agent-session lifecycle, spread into the
 // dispatch table in backend/protocol.ts.
 
+/** Optional `--capture-binding bound|unbound|unknown`, validated by the service. */
+function captureBindingFlag(body: Parameters<typeof strFlag>[0]): CaptureBindingState | undefined {
+  const value = strFlag(body, '--capture-binding');
+  return value === undefined ? undefined : (value as CaptureBindingState);
+}
+
+/** Agent-declared shell/script outputs, deletes, and renames (`--declared-paths-json|file`). */
+function declaredPathsInput(body: Parameters<typeof strFlag>[0]): unknown[] | undefined {
+  return parseJsonArrayInput<unknown>(
+    body,
+    '--declared-paths-json',
+    '--declared-paths-file',
+    'declaredPaths'
+  );
+}
+
 export const sessionSubcommands: SubcommandTable = {
   // Session lifecycle ------------------------------------------------------
   attach: {
@@ -55,7 +71,8 @@ export const sessionSubcommands: SubcommandTable = {
         // The channel id only. Its credential never travels in a protocol flag — it reaches the
         // backend solely as an Authorization header on the adapter route family.
         sessionChannelId: strFlag(body, '--session-channel-id') ?? null,
-        objectiveId: objectiveRefFlag(body)
+        objectiveId: objectiveRefFlag(body),
+        captureBindingState: captureBindingFlag(body)
       })
   },
 
@@ -94,12 +111,7 @@ export const sessionSubcommands: SubcommandTable = {
         externalSessionId: externalSessionId(body),
         beginFollowUpWork: boolFlag(body, '--begin-follow-up-work'),
         followUpIntent: strFlag(body, '--follow-up-intent') ?? null,
-        changeRationales: parseJsonArrayInput<ChangeRationaleInput>(
-          body,
-          '--change-rationales-json',
-          '--change-rationales-file',
-          'changeRationales'
-        )
+        declaredPaths: declaredPathsInput(body)
       });
     }
   },
@@ -114,11 +126,18 @@ export const sessionSubcommands: SubcommandTable = {
           '--changes-file',
           'sync-changes input'
         ) ?? [];
+      const capture = parseJsonObjectInput(
+        body,
+        '--capture-json',
+        '--capture-file',
+        'sync-changes capture'
+      );
       return syncChanges({
         ctx,
         missionId: missionRefFlag(body),
         sessionKey: requireFlag(body, '--session-key'),
-        changes
+        changes,
+        ...(capture !== undefined ? { capture } : {})
       });
     }
   },
@@ -165,19 +184,13 @@ export const sessionSubcommands: SubcommandTable = {
         '--artifacts-file',
         'artifacts'
       );
-      const changeRationales = parseJsonArrayInput<ChangeRationaleInput>(
-        body,
-        '--change-rationales-json',
-        '--change-rationales-file',
-        'changeRationales'
-      );
       return deliverSession({
         ctx,
         missionId: missionRefFlag(body),
         sessionKey: requireFlag(body, '--session-key'),
         summary: resolveInput(body, '--summary', '--summary-file') ?? envelope.summary ?? '',
         artifacts: artifacts ?? envelope.artifacts ?? [],
-        changeRationales: changeRationales ?? envelope.changeRationales ?? [],
+        declaredPaths: declaredPathsInput(body) ?? envelope.declaredPaths,
         payloadJson: envelope.payloadJson,
         verificationSummary:
           strFlag(body, '--verification-summary') ?? envelope.verificationSummary ?? null,

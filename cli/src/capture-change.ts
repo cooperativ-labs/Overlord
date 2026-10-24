@@ -9,7 +9,11 @@ import {
   resolveWorkingDirectoryForObjective,
   withActiveObjectiveSession
 } from './active-objective-sessions.js';
-import { appendChangeEvidence, recordChangeLedgerHealth } from './change-ledger.js';
+import {
+  appendChangeEvidence,
+  recordChangeLedgerCallback,
+  recordChangeLedgerHealth
+} from './change-ledger.js';
 import { canonicalDirectory } from './local-file-storage.js';
 
 const MAX_PATH_HINTS = 16;
@@ -144,9 +148,11 @@ export type CaptureChangeResult =
   | { recorded: false; reason: string };
 
 /**
- * Append direct native edit paths to the explicitly addressed objective ledger.
- * Shell/no-path callbacks record health only; this function never scans a
- * worktree and never reads transcripts or file content.
+ * Append direct native edit paths to the explicitly addressed objective ledger,
+ * but only for an edit whose connector-decoded outcome is `ok` (decoded from the
+ * payload or guaranteed by a success-only hook). Failed, cancelled, unknown,
+ * shell and no-path callbacks record bounded health only; this function never
+ * scans a worktree and never reads transcripts or file content.
  */
 export function captureChangeFromPayload({
   agent,
@@ -215,6 +221,7 @@ export function captureChangeFromPayload({
     normalized?.kind === 'file.edited' && Array.isArray(normalized.payload.paths)
       ? normalized.payload.paths.filter((value): value is string => typeof value === 'string')
       : [];
+  const outcome = normalized?.payload.outcome;
   const confidentlyNonMutating =
     normalized?.kind === 'tool.completed' &&
     (normalized.payload.tool === 'read' ||
@@ -225,6 +232,13 @@ export function captureChangeFromPayload({
     objectiveId,
     fallback: { recorded: false, reason: 'no matching objective session binding' },
     action: session => {
+      // Any callback scoped to this binding proves the hook reached the ledger,
+      // even a harmless read. It is not evidence of a successful edit.
+      recordChangeLedgerCallback({
+        workingDirectory,
+        objectiveId: session.objectiveId,
+        sessionKey: session.sessionKey
+      });
       if (payloadFailure) {
         recordChangeLedgerHealth({
           workingDirectory,
@@ -237,6 +251,47 @@ export function captureChangeFromPayload({
       if (confidentlyNonMutating) {
         return { recorded: false, reason: 'native event is confidently non-mutating' };
       }
+      if (normalized?.kind !== 'file.edited') {
+        // A shell call may or may not have written files; it is a coverage gap, never
+        // evidence that a write happened.
+        recordChangeLedgerHealth({
+          workingDirectory,
+          objectiveId: session.objectiveId,
+          sessionKey: session.sessionKey,
+          code:
+            normalized?.payload.tool === 'shell'
+              ? 'shell_activity_unverified'
+              : 'direct_path_unavailable'
+        });
+        return { recorded: false, reason: 'native event is not a declared file edit' };
+      }
+      // Only a decoded or harness-guaranteed success becomes native evidence. A blocked call
+      // never ran; a failed or cancelled one may have partially applied, and an unknown result
+      // proves nothing, so neither appends attempted paths.
+      if (outcome === 'blocked') {
+        return { recorded: false, reason: 'native edit was blocked' };
+      }
+      if (outcome === 'error' || outcome === 'cancelled') {
+        recordChangeLedgerHealth({
+          workingDirectory,
+          objectiveId: session.objectiveId,
+          sessionKey: session.sessionKey,
+          code: 'outcome_partial'
+        });
+        return {
+          recorded: false,
+          reason: `native edit ${outcome === 'error' ? 'failed' : 'was cancelled'}`
+        };
+      }
+      if (outcome !== 'ok') {
+        recordChangeLedgerHealth({
+          workingDirectory,
+          objectiveId: session.objectiveId,
+          sessionKey: session.sessionKey,
+          code: 'outcome_unavailable'
+        });
+        return { recorded: false, reason: 'native edit outcome is unavailable' };
+      }
       if (directPaths.length === 0) {
         recordChangeLedgerHealth({
           workingDirectory,
@@ -244,13 +299,7 @@ export function captureChangeFromPayload({
           sessionKey: session.sessionKey,
           code: 'direct_path_unavailable'
         });
-        return {
-          recorded: false,
-          reason:
-            normalized?.kind === 'file.edited'
-              ? 'native edit contains no exact path evidence'
-              : 'native event is not a declared file edit'
-        };
+        return { recorded: false, reason: 'native edit contains no exact path evidence' };
       }
 
       const files = appendChangeEvidence({
@@ -259,8 +308,6 @@ export function captureChangeFromPayload({
         sessionKey: session.sessionKey,
         filePaths: directPaths,
         source: 'declared_edit',
-        quality: 'direct',
-        overlap: false,
         hookHealth: 'direct_path_observed'
       });
       if (files === 0) {

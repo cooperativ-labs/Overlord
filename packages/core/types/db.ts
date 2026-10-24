@@ -202,6 +202,9 @@ export interface AgentSessionInputs {
 
 export interface AgentSessions {
   agent_identifier: string;
+  capture_binding_state: Generated<string>;
+  capture_callback_observed_at: string | null;
+  capture_health_json: Generated<string>;
   connection_method: string;
   created_at: string;
   created_by_workspace_user_id: string | null;
@@ -268,45 +271,22 @@ export interface Attachments {
 
 export interface ChangedFiles {
   created_at: string;
-  current_diff_state: string;
   deleted_at: string | null;
   file_path: string;
   first_observed_at: string;
+  hook_health: string | null;
   id: string | null;
   last_observed_at: string;
   last_observed_event_id: string | null;
   mission_id: string;
   objective_id: string;
-  observed_metadata_json: Generated<string>;
   project_id: string;
   resource_id: string | null;
   revision: Generated<number>;
   session_id: string | null;
+  source: string | null;
+  sync_keys_json: Generated<string>;
   updated_at: string;
-  vcs_status: string | null;
-  workspace_id: string;
-}
-
-export interface ChangeRationales {
-  changed_file_id: string | null;
-  created_at: string;
-  deleted_at: string | null;
-  delivery_id: string | null;
-  file_path: string;
-  hunks_json: Generated<string>;
-  id: string | null;
-  impact: string;
-  is_final: Generated<number>;
-  label: string;
-  mission_id: string;
-  objective_id: string;
-  project_id: string;
-  revision: Generated<number>;
-  session_id: string | null;
-  source_event_id: string | null;
-  summary: string;
-  updated_at: string;
-  why: string;
   workspace_id: string;
 }
 
@@ -1772,7 +1752,6 @@ export interface DB {
   agent_sessions: AgentSessions;
   artifacts: Artifacts;
   attachments: Attachments;
-  change_rationales: ChangeRationales;
   changed_files: ChangedFiles;
   chat_dependency_set_members: ChatDependencySetMembers;
   chat_dependency_sets: ChatDependencySets;

@@ -68,6 +68,11 @@ events:
     toolPath: tool_name
     inputPath: tool_input
     callIdPath: call_id
+    # Success-only by harness contract. The shipped cursor-agent 2026.09.23 executor fires
+    # postToolUse from `fireSuccessAsync` only when the tool result `isSuccess` (or its stream
+    # succeeded); errors, aborts, and preToolUse/permission denials go to `postToolUseFailure`
+    # with `error_message`/`failure_type`, which Overlord does not register.
+    successOnly: true
     fileEditKind: file.edited
     # Live Cursor Write payloads use file_path; path/filePath match the write
     # formatter's key order so an alternate Cursor dialect still captures.

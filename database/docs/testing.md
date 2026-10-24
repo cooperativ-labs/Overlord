@@ -125,9 +125,9 @@ used as-is. See [15 — Test Database Provisioning](15-test-database-provisionin
 
 ## 8. Record-Work Without Session (Adapter Suite §8)
 
-> "`record-work` can create a delivery and rationales without an agent session."
+> "`record-work` can create a delivery and declared changed paths without an agent session."
 
-- A delivery + change_rationales can be created with no `agent_sessions` row;
+- A delivery + changed_files can be created with no `agent_sessions` row;
   delivery attribution fields tolerate the null-session case.
 - The mission lands in `review` status and a completed objective is created
   (matches `recordWork` side effects in `protocol-commands.yaml`).
@@ -152,8 +152,8 @@ used as-is. See [15 — Test Database Provisioning](15-test-database-provisionin
   hash + non-secret prefix (shared assertion with the [auth test plan](../../auth/docs/testing.md)).
 - Hook payloads, audit metadata, and outbox payloads are secret-redacted before
   persistence.
-- Change tracking stores paths, VCS statuses, rationale text, and hunk headers —
-  not full file contents (assert `changed_files`/`change_rationales` never hold a
+- Change tracking stores paths, provenance, and bounded health codes —
+  not full file contents (assert `changed_files` never holds a
   blob).
 - Authorization data references domain capabilities, not table names.
 

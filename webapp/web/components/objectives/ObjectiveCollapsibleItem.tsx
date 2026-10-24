@@ -27,6 +27,7 @@ import { missionDraftResourceBadgeKey, projectResourceLabel } from '../../lib/pr
 import {
   useAgentCatalog,
   useObjectiveAttachments,
+  useObjectiveFileChanges,
   useProject,
   useProjectResources,
   useUpdateObjective
@@ -122,6 +123,11 @@ export function ObjectiveCollapsibleItem({
   const catalogQuery = useAgentCatalog(projectQuery.data?.workspaceId);
   const resourcesQuery = useProjectResources(objective.projectId);
   const { data: attachments = [] } = useObjectiveAttachments(objective.id);
+  // Same key as the expanded file section, so expanding never refetches. Only
+  // an objective that has started can have captured anything.
+  const fileChangesQuery = useObjectiveFileChanges(objective.missionId, objective.id, {
+    enabled: objective.startedAt !== null
+  });
   const hasAttachments = attachments.length > 0;
   const resources = resourcesQuery.data ?? [];
   const resourceKey = missionDraftResourceBadgeKey({
@@ -396,6 +402,7 @@ export function ObjectiveCollapsibleItem({
               ) : null}
               <ObjectiveEvidenceBadges
                 evidence={evidence}
+                fileCount={fileChangesQuery.data?.total}
                 startedAt={objective.startedAt}
                 completedAt={objective.completedAt}
               />

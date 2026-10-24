@@ -38,6 +38,7 @@
       "action": "Run a shell command",
       "subject": "yarn",
       "detail": "yarn test --silent",
+      "outcome": "ok",
       "formatterVersion": 1
     }
   },

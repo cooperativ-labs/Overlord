@@ -34,13 +34,168 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `164`
+Current version: `165`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
 `contract/components.yaml`) — never a header duplicate. The contract version is
 incremented when any stable interface changes. All conformance manifests must
 declare the contract version they were validated against.
+
+### Version 165 Change Summary
+
+Breaking cutover for objective change tracking (coo:1199; single user, no
+aliases, dual writes, or compatibility DTOs). A delivery explains the outcome
+and rationale in its summary; **Files changed during this objective** is a
+separate compact, cumulative list grouped by resource. Per-file rationale,
+VCS status, current-diff state, and window/quality/overlap metadata are removed.
+
+- **`FileChangeDto`** is exactly `id`, `missionId`, `objectiveId`,
+  `resourceKey | null`, `filePath`, `source`, `observedAt`, `hookHealth | null`.
+  `createdAt` is renamed `observedAt` (last observation). `source` is
+  `declared_edit` (at least one successful native observation), `agent_declared`
+  (declaration only), or `null` (historical provenance unknown — shown as
+  Unknown, never relabelled native). Clients derive the basename. The list is
+  not a Git diff, a delivery snapshot, proof of exclusive ownership, or proof
+  that every edit was captured.
+- **Identity** is one row per objective + session-resolved resource + normalized
+  path (`idx_changed_files_active_objective_resource_path`). The resource comes
+  from the authorized session, never a caller claim; sessionless `record-work`
+  declarations use a null resource. Equal relative paths in different resources
+  are distinct; two objectives may each associate the same physical path. Native
+  evidence is never downgraded by a later declaration; a repeated observation
+  extends first/last observation times and replays of an idempotency key are
+  ignored. `sync-changes` accepts only `filePath`, `idempotencyKey`, `source`
+  (`declared_edit | agent_declared`), `observedAt`, `hookHealth`; `quality`,
+  `overlap`, `toolWindowId`, and `window_observed` are rejected per item.
+- **Declared paths.** `update`, `deliver`, and sessionless `record-work` accept
+  `declaredPaths` (`--declared-paths-json|file`): bounded canonical path strings,
+  stored `agent_declared` and never gating the operation. Deleted/renamed targets
+  are valid. `changeRationales`/`--change-rationales-*` and `changedFiles`
+  (`vcsStatus`)/`--changed-files-*` are retired and rejected with `invalid_input`.
+- **Capture diagnostics** are persisted on the session
+  (`agent_sessions.capture_binding_state | capture_callback_observed_at |
+  capture_health_json`): `bound | unbound | unknown` binding (configuration
+  evidence only, set by `attach --capture-binding` or `sync-changes` capture
+  input), the earliest accepted callback (even a harmless read), and bounded
+  per-code first/last health aggregates. Known gap codes
+  (`CAPTURE_GAP_CODES`) are sticky. Writes are authorized by the session key,
+  idempotent, and emit an `agent_session` entity change in the same transaction.
+  Objective warnings (`CaptureWarningCode`) are derived across all sessions so a
+  newer healthy session never hides an earlier gap.
+- **Two distinct reads, no collision.** CLI-local `ovld protocol changes
+  --objective-id …` returns `LocalObjectiveChangesDto` (scope
+  `local_objective_sessions`, this directory's ledgers, synced and pending rows,
+  200-row cap, `coverage: unavailable` when no local session matches). It is
+  never sent to the backend. The server read is Protocol `objective-changes`
+  (`POST /api/protocol/objective-changes`), hosted MCP `overlord_changes`, and
+  REST `GET /api/missions/:id/file-changes?objectiveId=`, returning
+  `ObjectiveFileChangesDto` (scope `server_objective`, `{ items, total, limit,
+  truncated, capture }`). The objective is validated against the addressed
+  mission before SQL and filters before count and limit. It needs no attach and
+  cannot see unsynchronized local evidence. `objective-changes` is a mission-read
+  Protocol subcommand on the `project_automation` allowlist alongside
+  `list-deliveries`; REST `file-changes` without `objectiveId` keeps the
+  mission-wide `MissionFileChangesDto` page, which clients must never partition
+  by objective. A blank or repeated `objectiveId` is rejected with 400.
+- **MCP parity.** Hosted `overlord_changes` and the generated local shim forward
+  to Protocol `objective-changes` (the local shim through the CLI passthrough of
+  the same backend subcommand, never the CLI-local `changes` read).
+  `overlord_update_session`, `overlord_deliver_session`, and
+  `overlord_record_work` accept `declaredPaths` (string array, `agent_declared`)
+  and no longer publish `changeRationales` or `changedFiles`.
+- **Storage.** Migrations `20261024120000_changed_files_resource_provenance`
+  (SQLite and PostgreSQL) add `changed_files.source|hook_health|sync_keys_json`,
+  drop `vcs_status|current_diff_state|observed_metadata_json`, drop
+  `change_rationales`, and add the session capture columns. Provenance is mapped
+  only where reliable (latest native observation → `declared_edit`; a single
+  generator declaration or sessionless record-work → `agent_declared`;
+  everything else, including window evidence, → `null`). Historical migrations
+  are unchanged.
+- **Webhook envelope** drops `changeRationales`; `changedFiles` items become
+  `{ filePath, resourceKey, source }`. Delivery composition no longer reads
+  rationale rows.
+
+- **CLI ledger and local read (coo:1199.tndc).** The objective/session ledger is
+  schema v3: rows carry only `idempotencyKey`, `filePath`, `source`
+  (`declared_edit | agent_declared`), `observedAt`, `hookHealth`, `syncedAt`,
+  plus per-session `capture` (`bindingState`, `callbackObservedAt`). A v2 ledger
+  is upgraded once under the ledger lock: idempotency keys and sync markers are
+  kept, the v2 generator-declaration marker becomes `agent_declared`, and window
+  rows are dropped (never promoted) with `legacy_window_evidence_discarded:<n>`
+  health. `update`/`deliver` `--paths` (comma list) and `--paths-file` (JSON
+  string array) append `agent_declared` rows normalized against the session
+  checkout before the drain; rejected paths are reported on stderr and never
+  block. CLI `attach` sends `--capture-binding bound` only when
+  `OVERLORD_OBJECTIVE_ID` names the attached objective and `unbound` when it is
+  absent (any caller-supplied value is replaced); differently spelled ids are
+  resolved against the attach response locally and synced as capture input. The
+  first accepted scoped callback (including a harmless read) is recorded
+  separately from edit evidence. Capture diagnostics travel once per drain via
+  `sync-changes --capture-json` when changed. `ovld protocol changes` drains,
+  snapshots, then finalizes, and prints exactly `LocalObjectiveChangesDto`; a
+  foreign mission/objective pair or a `--session-key` that is not a local
+  session of the objective is rejected. Top-level `ovld changes status
+  --objective-id` uses REST `file-changes?objectiveId=` (server filters before the
+  cap); `ovld changes rationales`, `ovld mission rationales` (now `ovld mission
+  file-changes`), and the `rationales` JSON alias are removed, and
+  `--change-rationales-*`/`--changed-files-*` are rejected client-side on
+  `update`, `deliver`, and `record-work`.
+
+- **Connector outcome gating (coo:1199.1cqh).** The codec dialect gains
+  `outcomeExitCodePrefix` (decode a leading `<prefix><n>` line of a text result;
+  0 → `ok`, else `error`), numeric `outcomePath` values (exit codes), and
+  `successOnly: true` (a fixture- and source-backed guarantee that the harness
+  emits the event only for successful calls; seals `ok` when nothing was
+  decoded). Absent or unrecognized results stay unknown, never success. Patch
+  extraction also reduces `*** Move to:` headers, so renames keep both
+  endpoints. `capture-change` appends native `declared_edit` evidence only for a
+  `file.edited` event whose outcome is `ok`; `blocked` appends nothing,
+  `error`/`cancelled` record `outcome_partial`, unknown records
+  `outcome_unavailable`, shell records `shell_activity_unverified`, and other
+  no-path callbacks record `direct_path_unavailable`. Every scoped callback,
+  including a harmless read, still records callback observation. The local
+  ledger evicts non-gap health before any `CAPTURE_GAP_CODES` entry. Adapter
+  declarations: Claude `PostToolUse` and Cursor `postToolUse` are `successOnly`
+  (failures go to the unregistered `PostToolUseFailure`/`postToolUseFailure`);
+  Codex `PostToolUse` decodes `tool_response` via `Exit code: `. OpenCode keeps
+  its status mapping and registers no capture; Pi and Antigravity register no
+  capture. No raw payload, tool output, or patch text is persisted.
+
+- **Delivery composition and report provenance (coo:1199.j1qg).**
+  `DeliveryEvidenceSource` is `agent | deterministic_rule`; `change_rationale`
+  is retired from `HumanActionV1.source`, and `TradeoffMadeV1.source` is only
+  `agent`. The compose worker and `compose-delivery` automation input carry no
+  per-file prose: the model receives the agent summary, report facts, objective
+  context, recent events, and deterministic candidate actions (whose `link` /
+  `sourceRef` may name a path). Its instruction forbids describing files or
+  inferring behavior, impact, tests, or verification from a path name, and
+  tradeoffs may cite only agent tradeoff ids. Raw-summary fallback and
+  path-derived `deterministic_rule` actions are unchanged. Migration
+  `20261024130000_delivery_reports_retire_change_rationale` (SQLite and
+  PostgreSQL) removes persisted presentation items whose provenance was
+  `change_rationale`, so historical reports keep parsing under the strict
+  read schema; legacy top-level payload keys such as `changeRationales` remain
+  inert, never-read history. Pending compose jobs need no migration: a job
+  carries only its delivery id and rereads the migrated report.
+- **Agent guidance.** Attach `agentInstructions`, the shared
+  `overlord-mission` skill (0.7.0), CLI help, and docs tell agents to read the
+  captured evidence once, declare only known shell/script/generator outputs,
+  deletes, and both rename endpoints that capture missed, and summarize by
+  behavior or component. There is no exhaustive enumeration gate and no
+  shared-worktree diff. Delivery-time snapshots are deferred; every list is
+  labelled cumulative.
+
+`sync-changes` also accepts an ended, delivered session for advisory evidence
+recovery. The authenticated caller still needs current workspace membership and
+event permission; mission, objective and resource remain pinned to that session.
+Deleted sessions and ended sessions without a delivery remain invalid. Recovery
+does not reopen the session/objective or rewrite the delivery summary/report.
+
+Status: contract, storage, service, REST/Protocol/MCP, the CLI ledger and
+reads, connector outcome gating, delivery composition, webhooks, agent guidance,
+web/desktop and mobile use the new shapes. Coordinated installation and database
+migration are required; repository validation is not production rollout.
 
 ### Version 164 Change Summary
 
@@ -1508,7 +1663,8 @@ and `POST /api/protocol/:subcommand` for exactly `create` (project form only),
 (`--project-id` form only; the working-directory form and the
 `project_selection_required` choice list would name hidden projects),
 `statuses`, `list-deliveries`, `attachment-list`, `attachment-download-url`, and
-`auth-status`. `GET /api/meta`, legacy `GET /api/missions/search` and
+`auth-status` (plus `objective-changes` from version 165, a mission-read subcommand
+gated by the same project predicate). `GET /api/meta`, legacy `GET /api/missions/search` and
 `GET /api/missions/search/v2`, the `/api/agent-requests` and
 `/api/agent-session-inputs` readers, protocol `read-context`, and every
 `/ext/*` route are deliberately outside the list even where a grant would pass;
@@ -2815,10 +2971,11 @@ Owns:
   Web, Mobile, Automations and extensions require no implementation changes.
 - Delivery payload structure and validation rules
 - Versioned delivery-report evidence and deterministic/pending presentation in `deliveries.payload_json`, with optional asynchronous Gemini composition of `presentation` only
-- Objective/session-ledger changed-file synchronization plus optional update,
-  delivery, and record-work rationale annotations. Accepted changed-file and
-  rationale writes emit scoped `entity_changes` in the same transaction so the
-  changed-file-first REST projection refreshes without scanning a worktree
+- Objective/session-ledger changed-file synchronization, optional update,
+  delivery, and record-work declared paths, and bounded session capture
+  diagnostics (version 165). Accepted changed-file and capture-diagnostic writes
+  emit scoped `entity_changes` in the same transaction so the changed-file-first
+  REST projection refreshes without scanning a worktree
 - Idempotency key scope naming for protocol operations (`protocol.*`)
 - In-place mission artifact updates via `ovld protocol update-artifact` / `POST /api/protocol/update-artifact`, which apply the same editable-field and revision rules as REST `PATCH /api/missions/:id/artifacts/:artifactId` without requiring a live session key
 - Mid-turn mission artifact creation via `ovld protocol add-artifact` / `POST /api/protocol/add-artifact`, which creates an artifact without a delivery using the same `createArtifact` service as REST `POST /api/missions/:id/artifacts`; an optional session key stamps session/objective provenance when present
@@ -3237,14 +3394,12 @@ These are the **only sanctioned paths** between components. Bypassing these surf
 - **Transport**: Shell scripts invoking `ovld protocol hook-event` for follow-up activity or the local-only `ovld protocol capture-change` command for file evidence
 - **Rule**: Hook scripts must not write to the database directly; use protocol commands only
 - **Scope**: file capture requires an explicit objective identity and its attached protocol session. The working directory is only the normalization root and never selects an objective. An unbound callback performs no attribution.
-- **Direct edit capture**: a post-tool callback must pass its connector key, and may append `declared_edit` / `direct` evidence only when that connector's compiled codec normalizes the event as `file.edited` with an exact path. The CLI bounds the normalized workspace-relative path and applies `.overlordignore` before writing the owner-only objective/session ledger. Generic path-key parsing is forbidden; known read-only callbacks are silent, while mutation-capable, shell, unmapped, and no-path callbacks record bounded unavailable health and claim no path.
-- **Mutation-window foundation**: each shipped connector declares a fixture-backed
-  `mutationHooks` classification in its harness descriptor. A paired pre/post
-  runtime may run only when strict fixtures and the installed connector both
-  prove matching session, call, workspace, tool, outcome, and path/window
-  semantics. It records `window_observed` / `window` evidence with honest
-  overlap state. `post-only` and `unsupported` classifications never trigger a
-  worktree-wide delta or synthesize attribution.
+- **Direct edit capture**: a post-tool callback must pass its connector key, and may append `declared_edit` evidence (source only; quality is retired in version 165) only when that connector's compiled codec normalizes the event as `file.edited` with an exact path. The CLI bounds the normalized workspace-relative path and applies `.overlordignore` before writing the owner-only objective/session ledger. Generic path-key parsing is forbidden; known read-only callbacks are silent, while mutation-capable, shell, unmapped, and no-path callbacks record bounded unavailable health and claim no path.
+- **Mutation-window foundation (retired in version 165)**: the paired-window
+  vocabulary (`window_observed`, quality, overlap, tool windows) has no writer and
+  is removed from the wire and storage. `mutationHooks` classifications remain
+  connector descriptor metadata only; no connector runs a worktree-wide delta or
+  synthesizes attribution.
 - **Privacy boundary**: native payloads, file contents, diffs, raw commands,
   transcript content or paths, environment values, fingerprints, and absolute
   host paths never cross this adapter surface.
@@ -3336,7 +3491,7 @@ answering a decision it is blocked on, and injecting an instruction into it.
   one), calls the service, and maps the result onto its DTO. It must not carry
   a second copy of service SQL or rules (Version 164).
 - **Delivery reads**: `GET /api/missions/:id/deliveries` authorizes against the named mission's owning workspace with the existing `mission:read` permission. It returns a bounded `MissionDeliveriesDto` page: newest-first `DeliveryDto` `items` capped at 200, plus `total` (matching rows before the cap) and `limit` (the applied page size). It synthesizes the deterministic V1 report for legacy payloads; neither `deliveries.payload_json` nor `mission_events.payload_json` are exposed verbatim.
-- **File-change reads**: `GET /api/missions/:id/file-changes` authorizes against the named mission and returns a bounded `MissionFileChangesDto` page with the same `{ items, total, limit }` shape: newest-first changed-file-first `FileChangeDto` `items` capped at 200, plus the pre-cap `total`. A truncated page is incomplete mission-wide evidence; clients that partition `items` by objective must treat missing older rows as a mission-level omission, not as proof those objectives produced nothing.
+- **File-change reads**: `GET /api/missions/:id/file-changes` authorizes against the named mission and returns a bounded `MissionFileChangesDto` page with the same `{ items, total, limit }` shape: newest-first compact `FileChangeDto` `items` capped at 200, plus the pre-cap `total`. A truncated mission-wide page is incomplete evidence; clients must never partition it by objective. Per-objective views use the validated objective-scoped read (`objectiveId` query parameter / Protocol `objective-changes` / MCP `overlord_changes`), whose `ObjectiveFileChangesDto` filters in SQL before count and the 200-row cap and carries persisted capture diagnostics (version 165).
 - **Account-owned inbox**: Inbox CRUD resolves the authenticated `profiles.id` rather than an ambient workspace. Reads and mutations are scoped to that profile; promotion derives authorization and tenancy solely from its destination project. Inbox CRUD writes do not append workspace `entity_changes`, because those records have no workspace; promotion appends the ordinary mission change in the destination workspace.
 - **Workspace resolution taxonomy**: Entity-addressed reads and writes derive a workspace from their operand and require it in the immutable request `authorizedWorkspaces` set. Single-workspace UI reads require an explicit `workspaceId` and return `400` when omitted. Aggregate parentless reads fan out only across the selected organization's authorized set; when a session holder belongs to multiple organizations, selection is explicit. Parentless writes use `resolveParentlessWorkspace` only for `create-project` and `register-target`; mission writes derive tenancy from their named project and inbox operations are profile-owned. No route may select the oldest membership.
 - **Authorized workspace shape**: Auth resolves once per request `{ organizationId, workspaces: [{ workspaceId, workspaceUserId, roleKeys }] }`, where workspaces are active live memberships intersected with token consent (when present). Services may retain one operation-local `resolvedWorkspaceId`, but must not reinterpret the set from request headers or persistence.

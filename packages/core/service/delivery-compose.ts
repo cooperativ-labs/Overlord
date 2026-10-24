@@ -37,15 +37,6 @@ export type ComposeDeliveryDraft = {
 
 export type DeterministicActionCandidate = HumanActionV1;
 
-export type ChangeRationaleEvidence = {
-  id: string;
-  filePath: string;
-  label: string;
-  summary: string;
-  why: string;
-  impact: string;
-};
-
 /**
  * Derives human-action candidates from changed file paths. They carry
  * `deterministic_rule` provenance: the model may rephrase or cite them but never
@@ -543,26 +534,10 @@ function evidenceActions({
   return byId;
 }
 
-function evidenceTradeoffs({
-  agentReport,
-  rationales
-}: {
-  agentReport: DeliveryAgentReportV1;
-  rationales: ChangeRationaleEvidence[];
-}): Map<string, TradeoffMadeV1> {
+/** Tradeoffs come only from the agent's report; no file path is ever a tradeoff source. */
+function evidenceTradeoffs(agentReport: DeliveryAgentReportV1): Map<string, TradeoffMadeV1> {
   const byId = new Map<string, TradeoffMadeV1>();
   for (const tradeoff of agentReport.tradeoffsMade) byId.set(tradeoff.id, tradeoff);
-  for (const rationale of rationales) {
-    byId.set(rationale.id, {
-      id: rationale.id,
-      decision: rationale.label,
-      alternativesConsidered: [],
-      rationale: rationale.why,
-      impact: rationale.impact,
-      source: 'change_rationale',
-      sourceRef: rationale.filePath
-    });
-  }
   return byId;
 }
 
@@ -615,7 +590,6 @@ export function reconcileDeliveryComposeDraft({
   report,
   draft,
   candidates = [],
-  rationales = [],
   model,
   generatedAt = nowIso(),
   currentObjective,
@@ -624,7 +598,6 @@ export function reconcileDeliveryComposeDraft({
   report: DeliveryReportPayloadV1;
   draft: ComposeDeliveryDraft | null;
   candidates?: DeterministicActionCandidate[];
-  rationales?: ChangeRationaleEvidence[];
   model?: string | null;
   generatedAt?: string;
   currentObjective?: DeferredWorkObjectiveRef | null;
@@ -666,10 +639,7 @@ export function reconcileDeliveryComposeDraft({
     agentReport: report.agentReport,
     candidates
   });
-  const tradeoffsById = evidenceTradeoffs({
-    agentReport: report.agentReport,
-    rationales
-  });
+  const tradeoffsById = evidenceTradeoffs(report.agentReport);
 
   const humanActions: HumanActionV1[] = [];
   if (Array.isArray(draft.humanActions)) {

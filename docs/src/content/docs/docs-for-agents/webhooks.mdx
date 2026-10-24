@@ -113,10 +113,8 @@ Every delivery has the same envelope shape; `type` tells you which event it is.
     },
     "artifacts": [{ "type": "next_steps", "label": "…", "content": "…" }]
   },
-  "changedFiles": [{ "filePath": "lib/api.ts", "vcsStatus": "modified" }],
-  "changeRationales": [
-    { "filePath": "lib/api.ts", "label": "…", "summary": "…", "why": "…", "impact": "…" }
-  ],
+  // full mode only; source is "declared_edit" | "agent_declared" | null
+  "changedFiles": [{ "filePath": "lib/api.ts", "resourceKey": "app", "source": "declared_edit" }],
   "missionEvents": [{ "id": "…", "type": "update", "summary": "…", "createdAt": "…" }],
   "links": {
     "mission": "/api/missions/6f0fc5b0-…",
@@ -129,10 +127,14 @@ Every delivery has the same envelope shape; `type` tells you which event it is.
 
 - **`thin` mode** sends only ids and `links` — the fields marked "full mode
   only" above, including `delivery.report`, plus
-  `changedFiles`/`changeRationales`/`missionEvents`, are omitted entirely.
+  `changedFiles`/`missionEvents`, are omitted entirely.
   Nothing about a mission ever rests on a third-party endpoint unless it pulls
   with a valid token.
-- **`full` mode** sends the snapshot above. Long arrays are capped (currently 50
+- **`full` mode** sends the snapshot above. Each `changedFiles` item is
+  `{ filePath, resourceKey, source }`, where `source` is `declared_edit` (native
+  capture), `agent_declared` (declared by the agent), or `null` (historical,
+  provenance unknown). There is no `vcsStatus` and no per-file rationale; the
+  list is not a Git diff. Long arrays are capped (currently 50
   entries) with a `"truncated": true` marker; use the pull path (§5) for the
   rest.
 - `delivery.report` is the normalized, versioned read projection: legacy deliveries receive a

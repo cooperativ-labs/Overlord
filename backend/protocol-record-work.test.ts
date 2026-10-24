@@ -26,7 +26,7 @@ type RecordWorkResult = { mission: { id: string }; deliveryId: string };
 test('record-work accepts the whole submission as one --payload-json envelope', async () => {
   const project = await createProject({ name: 'Record Work Envelope' });
 
-  // The objective, title, and file-change arrays all arrive inside the single
+  // The objective, title, and declared paths all arrive inside the single
   // envelope — no --objective flag. This is the ergonomic path the shared
   // reference documents for chat connectors.
   const result = (await runProtocolSubcommand('record-work', {
@@ -36,16 +36,7 @@ test('record-work accepts the whole submission as one --payload-json envelope', 
         objective: 'Built the export button the user asked for.',
         title: 'CSV export',
         summary: 'Added a CSV export control and the serializer behind it.',
-        changeRationales: [
-          {
-            filePath: 'src/export.ts',
-            label: 'CSV serializer',
-            summary: 'New CSV serializer.',
-            why: 'Users need offline reports.',
-            impact: 'Reports export as CSV.'
-          }
-        ],
-        changedFiles: [{ filePath: 'src/generated.ts', vcsStatus: 'M' }]
+        declaredPaths: ['src/export.ts', 'src/generated.ts']
       })
     }
   })) as RecordWorkResult;
@@ -67,80 +58,60 @@ test('record-work accepts the whole submission as one --payload-json envelope', 
   assert.deepEqual(
     files.map(f => f.file_path),
     ['src/export.ts', 'src/generated.ts'],
-    'both rationale-derived and explicit changed files are recorded'
+    'every explicitly declared path is recorded'
   );
 
-  const linked = (await db.get(
-    `SELECT cf.id, cf.workspace_id, cf.project_id, cf.objective_id, cf.last_observed_at
-       FROM changed_files cf
-      WHERE cf.mission_id = ? AND cf.file_path = 'src/export.ts'`,
-    [result.mission.id]
-  )) as {
-    id: string;
-    workspace_id: string;
-    project_id: string;
-    objective_id: string;
-    last_observed_at: string;
-  };
-  await db.run(
-    `INSERT INTO change_rationales
-       (id, workspace_id, project_id, mission_id, objective_id, changed_file_id, file_path,
-        label, summary, why, impact, hunks_json, is_final, created_at, updated_at, revision)
-     VALUES ('newest-rationale', ?, ?, ?, ?, ?, 'src/export.ts', 'Newest rationale',
-             'Latest summary.', 'Latest reason.', 'Latest impact.', '[]', 0, ?, ?, 1)`,
-    [
-      linked.workspace_id,
-      linked.project_id,
-      result.mission.id,
-      linked.objective_id,
-      linked.id,
-      '2099-01-01T00:00:00.000Z',
-      '2099-01-01T00:00:00.000Z'
-    ]
-  );
-  await db.run(
-    `UPDATE changed_files SET observed_metadata_json = ?
-       WHERE mission_id = ? AND file_path = 'src/export.ts'`,
-    [
-      JSON.stringify({
-        source: 'declared_edit',
-        quality: 'window',
-        overlap: true,
-        hookHealth: 'x'.repeat(161)
-      }),
-      result.mission.id
-    ]
-  );
-  await db.run(
-    `UPDATE changed_files SET observed_metadata_json = ?
-       WHERE mission_id = ? AND file_path = 'src/generated.ts'`,
-    [
-      JSON.stringify({
-        source: 'window_observed',
-        quality: 'window',
-        overlap: true,
-        hookHealth: ' paired_hook_healthy '
-      }),
-      result.mission.id
-    ]
-  );
   const projected = await listMissionFileChanges(result.mission.id);
-  assert.equal(projected.items.filter(change => change.filePath === 'src/export.ts').length, 1);
-  assert.equal(
-    projected.items.find(change => change.filePath === 'src/export.ts')?.label,
-    'Newest rationale'
+  assert.deepEqual(
+    projected.items.map(change => [change.filePath, change.source, change.resourceKey]).sort(),
+    [
+      ['src/export.ts', 'agent_declared', null],
+      ['src/generated.ts', 'agent_declared', null]
+    ]
   );
-  const invalidEvidence = projected.items.find(change => change.filePath === 'src/export.ts');
-  assert.equal(invalidEvidence?.createdAt, linked.last_observed_at);
-  assert.equal(invalidEvidence?.source, null);
-  assert.equal(invalidEvidence?.quality, null);
-  assert.equal(invalidEvidence?.overlap, false);
-  assert.equal(invalidEvidence?.hookHealth, null);
-  const validEvidence = projected.items.find(change => change.filePath === 'src/generated.ts');
-  assert.equal(validEvidence?.source, 'window_observed');
-  assert.equal(validEvidence?.quality, 'window');
-  assert.equal(validEvidence?.overlap, true);
-  assert.equal(validEvidence?.hookHealth, 'paired_hook_healthy');
+  assert.deepEqual(Object.keys(projected.items[0] ?? {}).sort(), [
+    'filePath',
+    'hookHealth',
+    'id',
+    'missionId',
+    'objectiveId',
+    'observedAt',
+    'resourceKey',
+    'source'
+  ]);
+});
+
+test('record-work rejects retired rationale and changed-file inputs clearly', async () => {
+  const project = await createProject({ name: 'Record Work Retired Inputs' });
+  for (const retired of [
+    { changeRationales: [] },
+    { changedFiles: [{ filePath: 'src/a.ts', vcsStatus: 'M' }] }
+  ]) {
+    await assert.rejects(
+      runProtocolSubcommand('record-work', {
+        flags: {
+          '--project-id': project.id,
+          '--payload-json': JSON.stringify({
+            objective: 'Retired input.',
+            summary: 'Did something.',
+            ...retired
+          })
+        }
+      }),
+      /Unsupported record-work payload field/
+    );
+  }
+  await assert.rejects(
+    runProtocolSubcommand('record-work', {
+      flags: {
+        '--project-id': project.id,
+        '--objective': 'Retired flag.',
+        '--summary': 'Did something.',
+        '--change-rationales-json': '[]'
+      }
+    }),
+    /Unsupported protocol flag/
+  );
 });
 
 test('record-work rejects a submission with no objective anywhere', async () => {

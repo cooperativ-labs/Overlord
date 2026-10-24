@@ -8,14 +8,14 @@ import { resolveProtocolFileInputs } from '../src/commands.ts';
 
 test('each file flag carries its own resolved payload', async () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'ovld-file-inputs-'));
-  const rationalesPath = path.join(dir, 'rationales.json');
+  const pathsFile = path.join(dir, 'paths.json');
   const changesPath = path.join(dir, 'changes.json');
-  writeFileSync(rationalesPath, '[{"filePath":"a.ts"}]', 'utf8');
+  writeFileSync(pathsFile, '["a,b.ts"]', 'utf8');
   writeFileSync(changesPath, '[{"filePath":"b.ts"}]', 'utf8');
 
   const flags = new Map<string, string | true>([
     ['--summary-file', '-'],
-    ['--change-rationales-file', rationalesPath],
+    ['--paths-file', pathsFile],
     ['--changes-file', changesPath]
   ]);
 
@@ -24,23 +24,23 @@ test('each file flag carries its own resolved payload', async () => {
     stdin: 'A long summary streamed on stdin.'
   });
 
-  // The summary came from stdin; the rationales came from the real file path.
+  // The summary came from stdin; the declared paths came from the real file path.
   assert.equal(fileInputs['--summary-file'], 'A long summary streamed on stdin.');
-  assert.equal(fileInputs['--change-rationales-file'], '[{"filePath":"a.ts"}]');
+  assert.equal(fileInputs['--paths-file'], '["a,b.ts"]');
   assert.equal(fileInputs['--changes-file'], '[{"filePath":"b.ts"}]');
 });
 
 test('passing two stdin (-) flags fails fast and names both flags', async () => {
   const flags = new Map<string, string | true>([
     ['--summary-file', '-'],
-    ['--change-rationales-file', '-']
+    ['--declared-paths-file', '-']
   ]);
 
   await assert.rejects(
     () => resolveProtocolFileInputs({ flags, stdin: 'payload' }),
     (err: Error) => {
       assert.match(err.message, /--summary-file/);
-      assert.match(err.message, /--change-rationales-file/);
+      assert.match(err.message, /--declared-paths-file/);
       assert.match(err.message, /stdin/i);
       return true;
     }

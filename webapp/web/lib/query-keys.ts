@@ -66,6 +66,12 @@ export const keys = {
   missionArtifacts: (id: string) => ['mission', id, 'artifacts'] as const,
   missionSharedContext: (id: string) => ['mission', id, 'context'] as const,
   missionFileChanges: (id: string) => ['mission', id, 'file-changes'] as const,
+  /**
+   * Server objective read (`?objectiveId=`). Nested under `missionFileChanges`
+   * so invalidating the mission prefix refreshes every objective's list.
+   */
+  objectiveFileChanges: (missionId: string, objectiveId: string) =>
+    ['mission', missionId, 'file-changes', 'objective', objectiveId] as const,
   /** Answerable agent-session requests (permission / question / choice / retry) for a mission. */
   missionAgentRequests: (id: string, objectiveId?: string | null) =>
     objectiveId
