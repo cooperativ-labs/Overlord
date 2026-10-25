@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Overlord React SPA that consumes the Overlord backend REST and realtime API.",
   "engines": {
-    "node": ">=26"
+    "node": ">=24"
   },
   "scripts": {
     "dev": "concurrently -k -n server,web -c blue,magenta \"yarn dev:server\" \"yarn dev:web\"",
