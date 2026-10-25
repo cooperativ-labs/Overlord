@@ -196,6 +196,7 @@ components:
     referenceSpec: 'planning/feature-plans/09-database-schema-contract.md'
     referenceSection: 'REST API Boundary'
     owns:
+      - 'native GitHub OAuth: browser-bound identical callback recovery for at most 60 seconds; native auth callback returns a one-time ticket or bounded error code; auth error fallback never redirects to backend root'
       - 'GET /api/objective-transcript (v162): full-text objective projection with 1–100-row keyset pages or bounded UUID revalidation, both mission:read and objective:read per active-organization workspace, token project narrowing before selection, and separate private Inbox capture ownership'
       - 'My Missions retirement (v160): GET /api/workspace/my-missions and PATCH /api/workspace/my-missions/order and their dedicated DTO/column vocabulary are removed; independent project mission, Inbox/Feed and mobile snapshot surfaces are unchanged'
       - 'URL paths and HTTP method contracts'

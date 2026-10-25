@@ -3412,6 +3412,27 @@ Depends on:
 
 The dependency arrow points one way only: `webapp`, `cli`, and `database` MUST NOT depend on `desktop`.
 
+### Native GitHub sign-in recovery
+
+Native clients start `GET /api/auth/desktop/github`, receive a browser-owned
+GitHub authorization redirect, and finish at `GET /api/auth/desktop/callback`.
+Success returns `overlord://auth/callback?ticket=...`; the opaque, single-use
+60-second ticket is exchanged at `POST /api/auth/desktop/exchange` for a bearer
+session. Failures return the same native callback with `error=access_denied`,
+`state_mismatch`, or `sign_in_failed`, without a ticket. Clients validate the
+callback scheme, host and path and display bounded, local error text.
+
+The REST adapter may share the initial validated GitHub callback response for
+up to 60 seconds with an identical retry bearing both the original signed
+Better Auth state cookie and a random HttpOnly native-flow cookie. Recovery is
+bounded and process-local; it must not re-exchange a provider code, bypass state
+validation, or return a response to a different browser or changed callback.
+The native-flow cookie expires after ten minutes. Missing/expired recovery
+requires a fresh sign-in. `/api/auth/error` returns native errors only for a
+recognized native browser flow; other callers get a useful status page, never
+an unconditional redirect to the backend root. These responses are not cached.
+Recovery diagnostics log only hashed correlation identifiers and lifecycle events.
+
 ### 11. Mobile REST Consumer
 
 **Stable identifier**: `mobile`

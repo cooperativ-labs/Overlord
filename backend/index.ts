@@ -2,7 +2,7 @@ import './bootstrap-env.ts';
 
 import { githubOAuthConfigFromEnv, type Permission, PERMISSIONS } from '@overlord/auth';
 import { loadExternalAutomations } from '@overlord/automations';
-import { fromNodeHeaders } from 'better-auth/node';
+import { fromNodeHeaders, toNodeHandler } from 'better-auth/node';
 import cors from 'cors';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { existsSync } from 'node:fs';
@@ -94,12 +94,7 @@ import {
   createAgentSessionInputHumanRouter,
   prepareMissionSessionChannel
 } from './agent-session-routes.ts';
-import {
-  auth,
-  authNodeHandler,
-  getAllowedBrowserOrigins,
-  requireAuthenticatedSession
-} from './auth.ts';
+import { auth, getAllowedBrowserOrigins, requireAuthenticatedSession } from './auth.ts';
 import { createChatRouter } from './chat.ts';
 import { ChatNotificationDispatcher } from './chat-notification-dispatcher.ts';
 import { ChatWorker } from './chat-worker.ts';
@@ -118,7 +113,6 @@ import {
 import { reopenDeferredWork, resolveDeferredWork } from './deferred-work-resolutions.ts';
 import { deliveryComposeWorker } from './delivery-compose-worker.ts';
 import {
-  beginDesktopGitHubOAuth,
   browserOAuthCallbackUrl,
   consumeBrowserOAuthHandoff,
   consumeDesktopOAuthHandoff,
@@ -137,6 +131,7 @@ import {
 import { liveActivityDispatcher } from './live-activity-dispatcher.ts';
 import { getMissionSummary, markMissionSummarySeen } from './mission-summary.ts';
 import { missionSummaryComposeWorker } from './mission-summary-compose-worker.ts';
+import { createNativeGitHubOAuth } from './native-github-oauth.ts';
 import { notificationDispatcher } from './notification-dispatcher.ts';
 import { dismissNotification, listNotifications, markNotificationRead } from './notifications.ts';
 import {
@@ -406,35 +401,21 @@ app.use(
   })
 );
 // Better Auth owns `/api/auth/*` except this browser-to-desktop handoff. The
-// browser session becomes a one-time opaque ticket; only Electron main may
-// exchange it for the session token, so no credential is placed in the URL.
-app.get('/api/auth/desktop/github', async (_req, res, next) => {
-  try {
-    const oauthResponse = await beginDesktopGitHubOAuth(auth, resolveAuthBaseUrl());
-    if (!oauthResponse.ok) {
-      const body = await oauthResponse.text();
-      res.status(oauthResponse.status).type('application/json').send(body);
-      return;
-    }
-
-    const payload = (await oauthResponse.json()) as { url?: unknown };
-    if (typeof payload.url !== 'string' || !payload.url) {
-      throw new Error('Better Auth did not return a GitHub authorization URL');
-    }
-    for (const cookie of oauthResponse.headers.getSetCookie()) res.append('Set-Cookie', cookie);
-    res.redirect(302, payload.url);
-  } catch (error) {
-    next(error);
-  }
-});
+// browser session becomes a one-time opaque ticket that the native client
+// exchanges for the session token, so no credential is placed in the URL.
+const nativeOAuthHandler = toNodeHandler(createNativeGitHubOAuth(auth, resolveAuthBaseUrl()));
+app.get('/api/auth/desktop/github', nativeOAuthHandler);
 
 app.get('/api/auth/desktop/callback', async (req, res, next) => {
   try {
+    if ('error' in req.query) {
+      await nativeOAuthHandler(req, res);
+      return;
+    }
+    res.set('Cache-Control', 'no-store').set('Referrer-Policy', 'no-referrer');
     const browserSession = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
     if (!browserSession?.session.token) {
-      res
-        .status(401)
-        .send('Your sign-in session is missing or expired. Return to Overlord and try again.');
+      res.redirect(302, '/api/auth/desktop/callback?error=state_mismatch');
       return;
     }
     res.redirect(
@@ -508,7 +489,7 @@ app.get(
   createProfileConnectionCallbackHandler({ provider: 'github', runtime: connectionsModule })
 );
 
-app.all('/api/auth/*', authNodeHandler);
+app.all('/api/auth/*', nativeOAuthHandler);
 
 const jsonBody = express.json();
 const urlEncodedBody = express.urlencoded({ extended: false });

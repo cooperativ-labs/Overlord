@@ -134,7 +134,9 @@ function resolvePostgresBinDir() {
     }
     return override;
   }
-  if (commandExists('initdb') && commandExists('pg_ctl')) return '';
+  // Client-only installs (Homebrew `libpq`) put initdb/pg_ctl on PATH without
+  // the server binary initdb needs, so require `postgres` as well.
+  if (commandExists('initdb') && commandExists('pg_ctl') && commandExists('postgres')) return '';
 
   const embedded = path.join(
     repoRoot,

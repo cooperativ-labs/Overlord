@@ -82,7 +82,8 @@ export function beginDesktopGitHubOAuth(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         provider: 'github',
-        callbackURL: new URL('/api/auth/desktop/callback', authBaseUrl).toString()
+        callbackURL: new URL('/api/auth/desktop/callback', authBaseUrl).toString(),
+        errorCallbackURL: new URL('/api/auth/desktop/callback', authBaseUrl).toString()
       })
     })
   );

@@ -62,7 +62,8 @@ test('desktop GitHub OAuth uses the fixed callback through Better Auth', async (
   assert.equal(request?.url, 'https://backend.ovld.ai/api/auth/sign-in/social');
   assert.deepEqual(await request?.json(), {
     provider: 'github',
-    callbackURL: 'https://backend.ovld.ai/api/auth/desktop/callback'
+    callbackURL: 'https://backend.ovld.ai/api/auth/desktop/callback',
+    errorCallbackURL: 'https://backend.ovld.ai/api/auth/desktop/callback'
   });
   assert.equal(response.ok, true);
 });
