@@ -1,5 +1,10 @@
+import { Check, Copy } from 'lucide-react';
 import { useId, useState } from 'react';
 
+import type { ProjectResourceDto } from '../../../shared/contract.ts';
+import { isDesktopShell } from '../../lib/api-base.ts';
+import { buildEditorFileHref, getEditorSchemeLabel } from '../../lib/helpers/editor-scheme.ts';
+import { useCopyToClipboard } from '../../lib/hooks/use-copy-to-clipboard.ts';
 import {
   fileProvenanceLabel,
   SUMMARY_FILE_CHIP_LIMIT,
@@ -7,6 +12,8 @@ import {
   type SummaryFileChip,
   type SummaryFiles
 } from '../../lib/mission-summary-derive.ts';
+import { useProfile } from '../../lib/queries';
+import { useProjectResources } from '../../lib/queries/projects.ts';
 import { cn } from '../../lib/utils.ts';
 
 import { SummaryBlockHeading, summaryFocusRing } from './MissionSummaryParts.tsx';
@@ -35,14 +42,37 @@ function Badge({ badge, small = false }: { badge: SummaryFileBadge; small?: bool
   );
 }
 
-function FileChip({ chip, showResourceKey }: { chip: SummaryFileChip; showResourceKey: boolean }) {
+/** Absolute path of a chip on this device, or null when its resource is not linked here. */
+function resolveAbsolutePath(
+  chip: SummaryFileChip,
+  resources: ProjectResourceDto[]
+): string | null {
+  const resource = chip.resourceKey
+    ? resources.find(candidate => candidate.resourceKey === chip.resourceKey)
+    : resources.find(candidate => candidate.isPrimary);
+  if (!resource?.path) return null;
+  if (chip.filePath.startsWith('/')) return chip.filePath;
+  return `${resource.path.replace(/\/+$/, '')}/${chip.filePath}`;
+}
+
+function FileChip({
+  chip,
+  showResourceKey,
+  absolutePath,
+  editorScheme
+}: {
+  chip: SummaryFileChip;
+  showResourceKey: boolean;
+  absolutePath: string | null;
+  editorScheme: string | null;
+}) {
+  const { copied, copy } = useCopyToClipboard();
   const resource = showResourceKey && chip.resourceKey ? `${chip.resourceKey}, ` : '';
-  return (
-    <li
-      className="inline-flex min-h-[26px] min-w-0 max-w-full items-center gap-1.5 rounded-md border border-(--color-border) bg-(--color-surface-1) px-2 py-0.5 font-mono text-xs text-(--color-ink)"
-      title={chip.filePath}
-    >
-      <span className="sr-only">{`${resource}${chip.filePath}, ${fileProvenanceLabel(chip.badge)}`}</span>
+  const canOpen = absolutePath !== null && isDesktopShell();
+  const ideLabel = getEditorSchemeLabel(editorScheme);
+
+  const label = (
+    <>
       <Badge badge={chip.badge} />
       {showResourceKey && chip.resourceKey ? (
         <span
@@ -63,6 +93,50 @@ function FileChip({ chip, showResourceKey }: { chip: SummaryFileChip; showResour
       <span aria-hidden="true" className="min-w-0 truncate">
         {chip.basename}
       </span>
+    </>
+  );
+
+  return (
+    <li
+      className="group inline-flex min-h-[26px] min-w-0 max-w-full items-center gap-1.5 rounded-md border border-(--color-border) bg-(--color-surface-1) px-2 py-0.5 font-mono text-xs text-(--color-ink)"
+      title={chip.filePath}
+    >
+      {canOpen ? (
+        <button
+          type="button"
+          aria-label={`Open ${chip.filePath} in ${ideLabel}`}
+          onClick={() =>
+            window.open(
+              buildEditorFileHref(absolutePath, editorScheme),
+              '_blank',
+              'noopener,noreferrer'
+            )
+          }
+          className={cn(
+            'inline-flex min-w-0 items-center gap-1.5 rounded-sm hover:underline',
+            summaryFocusRing
+          )}
+        >
+          {label}
+        </button>
+      ) : (
+        <>
+          <span className="sr-only">{`${resource}${chip.filePath}, ${fileProvenanceLabel(chip.badge)}`}</span>
+          {label}
+        </>
+      )}
+      <button
+        type="button"
+        aria-label={copied ? 'Copied file path' : `Copy full path of ${chip.basename}`}
+        onClick={() => void copy(absolutePath ?? chip.filePath)}
+        className={cn(
+          'inline-flex shrink-0 items-center rounded-sm text-(--color-ink-dim) hover:text-(--color-ink)',
+          copied ? 'opacity-100' : 'opacity-0 focus-visible:opacity-100 group-hover:opacity-100',
+          summaryFocusRing
+        )}
+      >
+        {copied ? <Check className="size-3 text-green-600" /> : <Copy className="size-3" />}
+      </button>
     </li>
   );
 }
@@ -72,7 +146,15 @@ function FileChip({ chip, showResourceKey }: { chip: SummaryFileChip; showResour
  * provenance badge, directory, basename, and the resource key when the mission
  * spans resources. Cumulative evidence, not a diff; no line counts (coo:1199).
  */
-export function MissionSummaryFiles({ files }: { files: SummaryFiles }) {
+export function MissionSummaryFiles({
+  files,
+  projectId
+}: {
+  files: SummaryFiles;
+  projectId: string;
+}) {
+  const resources = useProjectResources(projectId).data ?? [];
+  const editorScheme = useProfile().data?.editorScheme ?? null;
   const [expanded, setExpanded] = useState(false);
   const headingId = useId();
   const listId = useId();
@@ -96,7 +178,13 @@ export function MissionSummaryFiles({ files }: { files: SummaryFiles }) {
       </div>
       <ul id={listId} className="flex min-w-0 flex-wrap gap-1.5 pb-1 pt-0.5">
         {visible.map(chip => (
-          <FileChip key={chip.key} chip={chip} showResourceKey={files.showResourceKey} />
+          <FileChip
+            key={chip.key}
+            chip={chip}
+            showResourceKey={files.showResourceKey}
+            absolutePath={resolveAbsolutePath(chip, resources)}
+            editorScheme={editorScheme}
+          />
         ))}
         {hidden > 0 ? (
           <li className="inline-flex">

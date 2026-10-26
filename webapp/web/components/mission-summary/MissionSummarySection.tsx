@@ -272,7 +272,7 @@ export function MissionSummarySection({ mission }: { mission: MissionDetailDto }
         {state.kind === 'summary' ? (
           <MissionSummaryRisks rows={riskRows} dimmed={state.updating} />
         ) : null}
-        <MissionSummaryFiles files={files} />
+        <MissionSummaryFiles files={files} projectId={mission.projectId} />
         <SummaryFooter />
       </section>
     </div>

@@ -29892,14 +29892,14 @@ var init_get_default_model_name = __esm({
 });
 
 // ../node_modules/@better-auth/core/dist/db/adapter/get-id-field.mjs
-function encodeDeterministicId(digest4, options) {
+function encodeDeterministicId(digest5, options) {
   const generateId3 = options.advanced?.database?.generateId;
   if (generateId3 === "serial" && !warnedSerialDeterministicId) {
     warnedSerialDeterministicId = true;
     logger.warn('Single-use checks (such as SAML assertion IDs, DPoP proofs, and private_key_jwt assertions) need string ids and are not enforced with `advanced.database.generateId: "serial"`.');
   }
-  if (generateId3 !== "uuid") return base64Url.encode(digest4, { padding: false });
-  const bytes = digest4.slice(0, 16);
+  if (generateId3 !== "uuid") return base64Url.encode(digest5, { padding: false });
+  const bytes = digest5.slice(0, 16);
   bytes[6] = bytes[6] & 15 | 80;
   bytes[8] = bytes[8] & 63 | 128;
   const value2 = hex3.encode(bytes);
@@ -77407,6 +77407,12 @@ function hashSessionKey(rawKey2) {
 function jsonTextFieldSql(column, field, dialect) {
   return dialect === "postgres" ? `${column}->>'${field}'` : `json_extract(${column}, '$.${field}')`;
 }
+function toCreatedByKind(value2) {
+  return value2 === "agent" || value2 === "automation" ? value2 : "human";
+}
+function sqlPlaceholders(count) {
+  return new Array(count).fill("?").join(", ");
+}
 var import_node_crypto7, SESSION_KEY_PREFIX;
 var init_util3 = __esm({
   "../packages/core/service/util.ts"() {
@@ -81398,8 +81404,8 @@ function deferredWorkId(index, item) {
     item.location.trim(),
     item.doneWhen.trim()
   ]);
-  const digest4 = (0, import_node_crypto8.createHash)("sha256").update(canonical2, "utf8").digest("hex").slice(0, 16);
-  return `deferred-work-${index}-${digest4}`;
+  const digest5 = (0, import_node_crypto8.createHash)("sha256").update(canonical2, "utf8").digest("hex").slice(0, 16);
+  return `deferred-work-${index}-${digest5}`;
 }
 function isDisplayableHumanAction(action) {
   return !GIT_ACTION_PATTERN.test(action) && !ROUTINE_QA_PATTERN.test(action);
@@ -85745,12 +85751,12 @@ async function readRunnerLiveness({
   const liveness = /* @__PURE__ */ new Map();
   const unique = [...new Set(executionTargetIds.filter((id2) => id2))];
   if (unique.length === 0) return liveness;
-  const placeholders4 = unique.map(() => "?").join(", ");
+  const placeholders = unique.map(() => "?").join(", ");
   const rows = await ctx.db.all(
     `SELECT execution_target_id, relation, health, last_heartbeat_at
        FROM execution_target_runner_registrations
       WHERE workspace_id = ? AND deleted_at IS NULL
-        AND execution_target_id IN (${placeholders4})`,
+        AND execution_target_id IN (${placeholders})`,
     [ctx.workspace.id, ...unique]
   );
   for (const row of rows) {
@@ -86359,14 +86365,14 @@ async function deleteWorkspaceExecutionTarget({
   if (!target) {
     throw new ServiceError("Execution target not found", "not_found", 404);
   }
-  const placeholders4 = ACTIVE_QUEUE_STATUSES.map(() => "?").join(", ");
+  const placeholders = ACTIVE_QUEUE_STATUSES.map(() => "?").join(", ");
   const activeQueue = await ctx.db.get(
     `SELECT COUNT(*) AS count
        FROM execution_requests
       WHERE workspace_id = ?
         AND deleted_at IS NULL
         AND (execution_target_id = ? OR claimed_by_execution_target_id = ?)
-        AND status IN (${placeholders4})`,
+        AND status IN (${placeholders})`,
     [ctx.workspace.id, id2, id2, ...ACTIVE_QUEUE_STATUSES]
   );
   if (Number(activeQueue?.count ?? 0) > 0) {
@@ -86988,7 +86994,7 @@ var init_branch_activity = __esm({
   }
 });
 
-// execution/local-target-completion-notify.ts
+// execution/pg-listen.ts
 async function connectWithTimeout({
   client,
   timeoutMs
@@ -87009,6 +87015,59 @@ async function connectWithTimeout({
     void connectPromise.catch(() => void 0);
   }
 }
+async function armPostgresListener({
+  connectionString,
+  channel,
+  connectTimeoutMs,
+  createClient
+}) {
+  if (!connectionString) return null;
+  const client = createClient ? await createClient(connectionString) : await (async () => {
+    const pg2 = await Promise.resolve().then(() => (init_esm(), esm_exports));
+    const Client3 = (pg2.default ?? pg2).Client;
+    return new Client3({
+      connectionString,
+      connectionTimeoutMillis: connectTimeoutMs
+    });
+  })();
+  try {
+    await connectWithTimeout({ client, timeoutMs: connectTimeoutMs });
+    await client.query(`LISTEN ${channel}`);
+  } catch {
+    await client.end().catch(() => void 0);
+    return null;
+  }
+  let settled = false;
+  let resolveWait = null;
+  const finish = () => {
+    if (settled) return;
+    settled = true;
+    resolveWait?.();
+  };
+  client.on("notification", finish);
+  client.on("error", finish);
+  return {
+    wait: (timeoutMs) => new Promise((resolve) => {
+      const timer = setTimeout(finish, timeoutMs);
+      resolveWait = () => {
+        clearTimeout(timer);
+        resolve();
+      };
+      if (settled) resolveWait();
+    }),
+    close: async () => {
+      settled = true;
+      await client.end().catch(() => void 0);
+    }
+  };
+}
+var init_pg_listen = __esm({
+  "execution/pg-listen.ts"() {
+    "use strict";
+  }
+});
+
+// execution/local-target-completion-notify.ts
 function createCompletionListenerFactory({
   connectionString = process.env.DATABASE_URL,
   maxWaitMs = COMPLETION_LISTEN_MAX_WAIT_MS,
@@ -87017,44 +87076,17 @@ function createCompletionListenerFactory({
 } = {}) {
   if (!connectionString) return null;
   return async ({ timeoutMs }) => {
-    const client = createClient ? await createClient(connectionString) : await (async () => {
-      const pg2 = await Promise.resolve().then(() => (init_esm(), esm_exports));
-      const Client3 = (pg2.default ?? pg2).Client;
-      return new Client3({
-        connectionString,
-        connectionTimeoutMillis: connectTimeoutMs
-      });
-    })();
-    try {
-      await connectWithTimeout({ client, timeoutMs: connectTimeoutMs });
-      await client.query(`LISTEN ${COMPLETION_CHANNEL}`);
-    } catch {
-      await client.end().catch(() => void 0);
-      return null;
-    }
-    let settled = false;
-    let resolveWait = null;
-    const finish = () => {
-      if (settled) return;
-      settled = true;
-      resolveWait?.();
-    };
-    client.on("notification", finish);
-    client.on("error", finish);
+    const listener = await armPostgresListener({
+      connectionString,
+      channel: COMPLETION_CHANNEL,
+      connectTimeoutMs,
+      createClient
+    });
+    if (!listener) return null;
     const waitMs = Math.max(0, Math.min(timeoutMs, maxWaitMs));
     return {
-      wait: () => new Promise((resolve) => {
-        const timer = setTimeout(finish, waitMs);
-        resolveWait = () => {
-          clearTimeout(timer);
-          resolve();
-        };
-        if (settled) resolveWait();
-      }),
-      close: async () => {
-        settled = true;
-        await client.end().catch(() => void 0);
-      }
+      wait: () => listener.wait(waitMs),
+      close: listener.close
     };
   };
 }
@@ -87062,6 +87094,7 @@ var COMPLETION_CHANNEL, COMPLETION_LISTEN_CONNECT_TIMEOUT_MS, COMPLETION_LISTEN_
 var init_local_target_completion_notify = __esm({
   "execution/local-target-completion-notify.ts"() {
     "use strict";
+    init_pg_listen();
     COMPLETION_CHANNEL = "overlord_execution_request_completed";
     COMPLETION_LISTEN_CONNECT_TIMEOUT_MS = 3e3;
     COMPLETION_LISTEN_MAX_WAIT_MS = 25e3;
@@ -88354,7 +88387,7 @@ var init_ListSchema = __esm({
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/schema/schemas/MapSchema.js
-var MapSchema, map4;
+var MapSchema, map3;
 var init_MapSchema = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/schema/schemas/MapSchema.js"() {
     init_Schema();
@@ -88366,7 +88399,7 @@ var init_MapSchema = __esm({
       valueSchema;
       symbol = _MapSchema.symbol;
     };
-    map4 = (namespace, name2, traits, keySchema, valueSchema) => Schema.assign(new MapSchema(), {
+    map3 = (namespace, name2, traits, keySchema, valueSchema) => Schema.assign(new MapSchema(), {
       name: name2,
       namespace,
       traits,
@@ -88943,7 +88976,7 @@ __export(schema_exports, {
   getSchemaSerdePlugin: () => getSchemaSerdePlugin,
   isStaticSchema: () => isStaticSchema,
   list: () => list,
-  map: () => map4,
+  map: () => map3,
   op: () => op,
   operation: () => operation,
   serializerMiddlewareOption: () => serializerMiddlewareOption,
@@ -89487,7 +89520,7 @@ var init_NoOpLogger = __esm({
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/client/smithy-client/object-mapping.js
-function map5(arg0, arg1, arg2) {
+function map4(arg0, arg1, arg2) {
   let target;
   let filter;
   let instructions;
@@ -89531,7 +89564,7 @@ var init_object_mapping = __esm({
       return out;
     };
     mapWithFilter = (target, filter, instructions) => {
-      return map5(target, Object.entries(instructions).reduce((_instructions, [key, value2]) => {
+      return map4(target, Object.entries(instructions).reduce((_instructions, [key, value2]) => {
         if (Array.isArray(value2)) {
           _instructions[key] = value2;
         } else {
@@ -89655,7 +89688,7 @@ __export(client_exports, {
   invalidProvider: () => invalidProvider,
   isSerializableHeaderValue: () => isSerializableHeaderValue,
   loadConfigsForDefaultMode: () => loadConfigsForDefaultMode,
-  map: () => map5,
+  map: () => map4,
   normalizeProvider: () => normalizeProvider,
   resolveChecksumRuntimeConfig: () => resolveChecksumRuntimeConfig,
   resolveDefaultRuntimeConfig: () => resolveDefaultRuntimeConfig,
@@ -90933,14 +90966,14 @@ var init_getProfileName = __esm({
 });
 
 // ../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getSSOTokenFilepath.js
-var import_node_crypto21, import_node_path22, getSSOTokenFilepath;
+var import_node_crypto15, import_node_path22, getSSOTokenFilepath;
 var init_getSSOTokenFilepath = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/config/shared-ini-file-loader/getSSOTokenFilepath.js"() {
-    import_node_crypto21 = require("node:crypto");
+    import_node_crypto15 = require("node:crypto");
     import_node_path22 = require("node:path");
     init_getHomeDir();
     getSSOTokenFilepath = (id2) => {
-      const hasher = (0, import_node_crypto21.createHash)("sha1");
+      const hasher = (0, import_node_crypto15.createHash)("sha1");
       const cacheName = hasher.update(id2).digest("hex");
       return (0, import_node_path22.join)(getHomeDir(), ".aws", "sso", "cache", `${cacheName}.json`);
     };
@@ -93111,10 +93144,10 @@ function castSourceData(toCast, encoding) {
   }
   return fromArrayBuffer(toCast);
 }
-var import_node_crypto22, Hash;
+var import_node_crypto16, Hash;
 var init_hash_node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/serde/hash-node/hash-node.js"() {
-    import_node_crypto22 = require("node:crypto");
+    import_node_crypto16 = require("node:crypto");
     init_buffer_from();
     init_toUint8Array();
     Hash = class {
@@ -93133,7 +93166,7 @@ var init_hash_node = __esm({
         return Promise.resolve(this.hash.digest());
       }
       reset() {
-        this.hash = this.secret ? (0, import_node_crypto22.createHmac)(this.algorithmIdentifier, castSourceData(this.secret)) : (0, import_node_crypto22.createHash)(this.algorithmIdentifier);
+        this.hash = this.secret ? (0, import_node_crypto16.createHmac)(this.algorithmIdentifier, castSourceData(this.secret)) : (0, import_node_crypto16.createHash)(this.algorithmIdentifier);
       }
     };
   }
@@ -93187,8 +93220,8 @@ var init_ChecksumStream = __esm({
       }
       async _final(callback) {
         try {
-          const digest4 = await this.checksum.digest();
-          const received = this.base64Encoder(digest4);
+          const digest5 = await this.checksum.digest();
+          const received = this.base64Encoder(digest5);
           if (this.expectedChecksum !== received) {
             return callback(new Error(`Checksum mismatch: expected "${this.expectedChecksum}" but received "${received}" in response header "${this.checksumSourceLocation}".`));
           }
@@ -93313,8 +93346,8 @@ var init_createChecksumStream_browser = __esm({
           controller.enqueue(chunk);
         },
         async flush(controller) {
-          const digest4 = await checksum.digest();
-          const received = encoder3(digest4);
+          const digest5 = await checksum.digest();
+          const received = encoder3(digest5);
           if (expectedChecksum !== received) {
             const error64 = new Error(`Checksum mismatch: expected "${expectedChecksum}" but received "${received}" in response header "${checksumSourceLocation}".`);
             controller.error(error64);
@@ -93553,7 +93586,7 @@ var init_getAwsChunkedEncodingStream_browser = __esm({
     getAwsChunkedEncodingStream = (readableStream, options) => {
       const { base64Encoder, bodyLengthChecker, checksumAlgorithmFn, checksumLocationName, streamHasher } = options;
       const checksumRequired = base64Encoder !== void 0 && bodyLengthChecker !== void 0 && checksumAlgorithmFn !== void 0 && checksumLocationName !== void 0 && streamHasher !== void 0;
-      const digest4 = checksumRequired ? streamHasher(checksumAlgorithmFn, readableStream) : void 0;
+      const digest5 = checksumRequired ? streamHasher(checksumAlgorithmFn, readableStream) : void 0;
       const reader = readableStream.getReader();
       return new ReadableStream({
         async pull(controller) {
@@ -93562,7 +93595,7 @@ var init_getAwsChunkedEncodingStream_browser = __esm({
             controller.enqueue(`0\r
 `);
             if (checksumRequired) {
-              const checksum = base64Encoder(await digest4);
+              const checksum = base64Encoder(await digest5);
               controller.enqueue(`${checksumLocationName}:${checksum}\r
 `);
               controller.enqueue(`\r
@@ -93589,7 +93622,7 @@ function getAwsChunkedEncodingStream2(stream, options) {
   }
   const { base64Encoder, bodyLengthChecker, checksumAlgorithmFn, checksumLocationName, streamHasher } = options;
   const checksumRequired = base64Encoder !== void 0 && checksumAlgorithmFn !== void 0 && checksumLocationName !== void 0 && streamHasher !== void 0;
-  const digest4 = checksumRequired ? streamHasher(checksumAlgorithmFn, readable) : void 0;
+  const digest5 = checksumRequired ? streamHasher(checksumAlgorithmFn, readable) : void 0;
   const awsChunkedEncodingStream = new import_node_stream4.Readable({
     read: () => {
     }
@@ -93608,7 +93641,7 @@ function getAwsChunkedEncodingStream2(stream, options) {
     awsChunkedEncodingStream.push(`0\r
 `);
     if (checksumRequired) {
-      const checksum = base64Encoder(await digest4);
+      const checksum = base64Encoder(await digest5);
       awsChunkedEncodingStream.push(`${checksumLocationName}:${checksum}\r
 `);
       awsChunkedEncodingStream.push(`\r
@@ -94027,10 +94060,10 @@ __export(serde_exports, {
   toUtf8: () => toUtf8,
   v4: () => v4
 });
-var import_node_crypto23, Uint8ArrayBlobAdapter, _getRandomValues, v4, generateIdempotencyToken;
+var import_node_crypto17, Uint8ArrayBlobAdapter, _getRandomValues, v4, generateIdempotencyToken;
 var init_serde = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/serde/index.js"() {
-    import_node_crypto23 = require("node:crypto");
+    import_node_crypto17 = require("node:crypto");
     init_fromBase64();
     init_toBase64();
     init_Uint8ArrayBlobAdapter();
@@ -94067,7 +94100,7 @@ var init_serde = __esm({
     init_stream_collector();
     Uint8ArrayBlobAdapter = class extends bindUint8ArrayBlobAdapter(toUtf8, fromUtf8, toBase64, fromBase64) {
     };
-    _getRandomValues = import_node_crypto23.getRandomValues;
+    _getRandomValues = import_node_crypto17.getRandomValues;
     v4 = bindV4(_getRandomValues);
     generateIdempotencyToken = v4;
   }
@@ -103115,10 +103148,10 @@ var init_throw_200_exceptions = __esm({
 });
 
 // ../node_modules/@aws-sdk/core/dist-es/submodules/util/util-arn-parser/arn.js
-var validate3, parse5, build;
+var validate2, parse5, build;
 var init_arn = __esm({
   "../node_modules/@aws-sdk/core/dist-es/submodules/util/util-arn-parser/arn.js"() {
-    validate3 = (str) => typeof str === "string" && str.indexOf("arn:") === 0 && str.split(":").length >= 6;
+    validate2 = (str) => typeof str === "string" && str.indexOf("arn:") === 0 && str.split(":").length >= 6;
     parse5 = (arn) => {
       const segments = arn.split(":");
       if (segments.length < 6 || segments[0] !== "arn")
@@ -103183,7 +103216,7 @@ __export(util_exports2, {
   build: () => build,
   formatUrl: () => formatUrl,
   parse: () => parse5,
-  validate: () => validate3
+  validate: () => validate2
 });
 var init_util5 = __esm({
   "../node_modules/@aws-sdk/core/dist-es/submodules/util/index.js"() {
@@ -103237,7 +103270,7 @@ var init_bucket_endpoint_middleware = __esm({
 function validateBucketNameMiddleware({ bucketEndpoint }) {
   return (next) => async (args) => {
     const { input: { Bucket } } = args;
-    if (!bucketEndpoint && typeof Bucket === "string" && !validate3(Bucket) && Bucket.indexOf("/") >= 0) {
+    if (!bucketEndpoint && typeof Bucket === "string" && !validate2(Bucket) && Bucket.indexOf("/") >= 0) {
       const err = new Error(`Bucket name shouldn't contain '/', received '${Bucket}'`);
       err.name = "InvalidBucketName";
       throw err;
@@ -105683,7 +105716,7 @@ var init_bucketEndpointMiddleware = __esm({
       if (HttpRequest.isInstance(request)) {
         if (options.bucketEndpoint) {
           request.hostname = bucketName;
-        } else if (validate3(bucketName)) {
+        } else if (validate2(bucketName)) {
           const bucketArn = parse5(bucketName);
           const clientRegion = await options.region();
           const useDualstackEndpoint = await options.useDualstackEndpoint();
@@ -118964,7 +118997,7 @@ var require_dist_cjs16 = __commonJS({
     var { setCredentialFeature: setCredentialFeature2 } = (init_client4(), __toCommonJS(client_exports2));
     var { CredentialsProviderError: CredentialsProviderError2, readFile: readFile4, parseKnownFiles: parseKnownFiles2, getProfileName: getProfileName2 } = (init_config3(), __toCommonJS(config_exports));
     var { HttpRequest: HttpRequest2 } = (init_protocols(), __toCommonJS(protocols_exports));
-    var { createHash: createHash27, createPrivateKey, createPublicKey, sign: sign2 } = require("node:crypto");
+    var { createHash: createHash28, createPrivateKey, createPublicKey, sign: sign2 } = require("node:crypto");
     var { promises } = require("node:fs");
     var { homedir: homedir2 } = require("node:os");
     var { dirname, join: join6 } = require("node:path");
@@ -119125,7 +119158,7 @@ var require_dist_cjs16 = __commonJS({
       getTokenFilePath() {
         const directory = process.env.AWS_LOGIN_CACHE_DIRECTORY ?? join6(homedir2(), ".aws", "login", "cache");
         const loginSessionBytes = Buffer.from(this.loginSession, "utf8");
-        const loginSessionSha256 = createHash27("sha256").update(loginSessionBytes).digest("hex");
+        const loginSessionSha256 = createHash28("sha256").update(loginSessionBytes).digest("hex");
         return join6(directory, `${loginSessionSha256}.json`);
       }
       derToRawSignature(derSignature) {
@@ -121154,7 +121187,7 @@ var init_Md5Js = __esm({
 function buildNativeClass() {
   return class Md5Node {
     digestLength = 16;
-    hash = (0, import_node_crypto24.createHash)("md5");
+    hash = (0, import_node_crypto18.createHash)("md5");
     update(data) {
       this.hash.update(toUint8Array2(data));
     }
@@ -121163,19 +121196,19 @@ function buildNativeClass() {
       return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
     }
     reset() {
-      this.hash = (0, import_node_crypto24.createHash)("md5");
+      this.hash = (0, import_node_crypto18.createHash)("md5");
     }
   };
 }
-var import_node_crypto24, hasNativeCrypto, Md5Node;
+var import_node_crypto18, hasNativeCrypto, Md5Node;
 var init_Md5Node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/checksum/md5/Md5Node.js"() {
-    import_node_crypto24 = require("node:crypto");
+    import_node_crypto18 = require("node:crypto");
     init_serde();
     init_Md5Js();
     hasNativeCrypto = (() => {
       try {
-        (0, import_node_crypto24.createHash)("md5");
+        (0, import_node_crypto18.createHash)("md5");
         return true;
       } catch {
         return false;
@@ -121519,7 +121552,7 @@ function buildNativeClass3() {
       this.finished = false;
     }
     createHash() {
-      return this.secret ? (0, import_node_crypto25.createHmac)("sha256", toBuffer(this.secret)) : (0, import_node_crypto25.createHash)("sha256");
+      return this.secret ? (0, import_node_crypto19.createHmac)("sha256", toBuffer(this.secret)) : (0, import_node_crypto19.createHash)("sha256");
     }
   };
 }
@@ -121532,14 +121565,14 @@ function toBuffer(data) {
   }
   return Buffer.from(data);
 }
-var import_node_crypto25, hasNativeCrypto2, Sha256Node;
+var import_node_crypto19, hasNativeCrypto2, Sha256Node;
 var init_Sha256Node = __esm({
   "../node_modules/@smithy/core/dist-es/submodules/checksum/sha256/Sha256Node.js"() {
-    import_node_crypto25 = require("node:crypto");
+    import_node_crypto19 = require("node:crypto");
     init_Sha256Js();
     hasNativeCrypto2 = (() => {
       try {
-        (0, import_node_crypto25.createHash)("sha256");
+        (0, import_node_crypto19.createHash)("sha256");
         return true;
       } catch {
         return false;
@@ -124732,17 +124765,17 @@ var require_sha256 = __commonJS({
       exports3.HMAC = HMAC;
       function hash2(data) {
         var h5 = new Hash2().update(data);
-        var digest4 = h5.digest();
+        var digest5 = h5.digest();
         h5.clean();
-        return digest4;
+        return digest5;
       }
       exports3.hash = hash2;
       exports3["default"] = hash2;
       function hmac3(key, data) {
         var h5 = new HMAC(key).update(data);
-        var digest4 = h5.digest();
+        var digest5 = h5.digest();
         h5.clean();
-        return digest4;
+        return digest5;
       }
       exports3.hmac = hmac3;
       function fillBuffer(buffer, hmac4, info2, counter) {
@@ -135031,8 +135064,8 @@ function getIdTokenVerifyOptions(options) {
 }
 async function sha256Hex(value2) {
   const data = new TextEncoder().encode(value2);
-  const digest4 = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(digest4)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  const digest5 = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(digest5)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 async function nonceMatches(claimNonce, nonce, comparison = "exact") {
   if (typeof claimNonce !== "string") return false;
@@ -146899,7 +146932,7 @@ function addEntityCount({
     counts2[entityType] += amount;
   }
 }
-function sqlPlaceholders(count) {
+function sqlPlaceholders2(count) {
   return Array.from({ length: count }, () => "?").join(", ");
 }
 function firstLine(text) {
@@ -147046,7 +147079,7 @@ async function loadMatchMetadata({
     const rows = await db.all(
       `SELECT id, display_key, title, instruction_text, state, created_at, updated_at
          FROM objectives
-        WHERE id IN (${sqlPlaceholders(uniqueObjectives.length)}) AND deleted_at IS NULL`,
+        WHERE id IN (${sqlPlaceholders2(uniqueObjectives.length)}) AND deleted_at IS NULL`,
       uniqueObjectives
     );
     for (const row of rows) {
@@ -147065,7 +147098,7 @@ async function loadMatchMetadata({
     const rows = await db.all(
       `SELECT id, objective_id, summary, created_at, updated_at
          FROM deliveries
-        WHERE id IN (${sqlPlaceholders(uniqueDeliveries.length)}) AND deleted_at IS NULL`,
+        WHERE id IN (${sqlPlaceholders2(uniqueDeliveries.length)}) AND deleted_at IS NULL`,
       uniqueDeliveries
     );
     for (const row of rows) {
@@ -147465,7 +147498,7 @@ async function searchFullTextV3({
       JOIN projects p ON p.id = t.project_id
       JOIN workspaces w ON w.id = t.workspace_id
       WHERE ${missionSearchMatchPredicate(dialect)}
-        AND ${missionSearchEntityTypeColumnV3()} IN (${sqlPlaceholders(docTypes.length)})${filters.sql}
+        AND ${missionSearchEntityTypeColumnV3()} IN (${sqlPlaceholders2(docTypes.length)})${filters.sql}
       ORDER BY doc_score DESC
       LIMIT ?`,
     [
@@ -150942,13 +150975,13 @@ async function loadTargetResourceObservations({
 }) {
   const byResource = /* @__PURE__ */ new Map();
   if (resourceIds.length === 0) return byResource;
-  const placeholders4 = resourceIds.map(() => "?").join(", ");
+  const placeholders = resourceIds.map(() => "?").join(", ");
   const rows = await ctx.db.all(
     `SELECT execution_target_id, resource_id, state, git_root, branch, git_commit,
             observed_at, updated_at
        FROM target_resource_observations
       WHERE workspace_id = ?
-        AND resource_id IN (${placeholders4})`,
+        AND resource_id IN (${placeholders})`,
     [ctx.workspace.id, ...resourceIds]
   );
   for (const row of rows) {
@@ -153510,6 +153543,12 @@ var ApiError = class extends Error {
   detail;
   code;
 };
+function requiredString(value2, field, max) {
+  const normalized = typeof value2 === "string" ? value2.trim() : "";
+  if (!normalized) throw new ApiError(400, `${field} is required`);
+  if (normalized.length > max) throw new ApiError(400, `${field} is too long`);
+  return normalized;
+}
 function apiErrorFromBodyParser(error64) {
   if (!error64 || typeof error64 !== "object") return null;
   const { type } = error64;
@@ -153573,6 +153612,9 @@ function apiErrorHandler(err, _req, res, _next) {
   res.status(500).json({ error: message2, detail: message2 });
 }
 
+// repository.ts
+init_dist();
+
 // ../packages/core/dist/service/objective-lifecycle-timestamps.js
 var OBJECTIVE_LAUNCHED_AT_ASSIGNMENT2 = "launched_at = COALESCE(launched_at, ?)";
 var OBJECTIVE_STARTED_AT_ASSIGNMENT2 = "started_at = COALESCE(started_at, ?)";
@@ -153586,7 +153628,7 @@ var OBJECTIVE_REOPENABLE_STATES2 = Object.freeze([
 
 // repository.ts
 init_dist2();
-var import_node_path30 = __toESM(require("node:path"), 1);
+var import_node_path31 = __toESM(require("node:path"), 1);
 
 // ../packages/core/service/changes.ts
 init_dist();
@@ -153899,7 +153941,7 @@ async function loadMissionBranchObservationsForMissions({
 }) {
   const byMission = /* @__PURE__ */ new Map();
   if (!executionTargetId || missionIds.length === 0) return byMission;
-  const placeholders4 = missionIds.map(() => "?").join(", ");
+  const placeholders = missionIds.map(() => "?").join(", ");
   const normalizedKey = resourceKey?.trim() || null;
   const params = [ctx.workspace.id, executionTargetId, ...missionIds];
   const resourceFilter = normalizedKey ? "AND resource_key = ?" : "";
@@ -153911,7 +153953,7 @@ async function loadMissionBranchObservationsForMissions({
        FROM mission_branch_observations
       WHERE workspace_id = ?
         AND execution_target_id = ?
-        AND mission_id IN (${placeholders4})
+        AND mission_id IN (${placeholders})
         ${resourceFilter}`,
     params
   );
@@ -154334,9 +154376,6 @@ init_projects();
 init_run_queue();
 init_util3();
 init_worker_jobs();
-
-// ../webapp/shared/contract.ts
-init_dist();
 
 // automation/commit-message-automation.ts
 var MAX_DIFF_CHARS = 12e3;
@@ -156829,3175 +156868,6 @@ async function createMissionGitHubPullRequest(missionId, body) {
   };
 }
 
-// ../packages/core/service/chat/store.ts
-init_dist();
-var import_node_crypto15 = require("node:crypto");
-var import_node_util = require("node:util");
-init_errors4();
-
-// ../packages/core/service/chat/performance.ts
-var import_node_async_hooks3 = require("node:async_hooks");
-var ChatPerformance = class {
-  startedAt = (/* @__PURE__ */ new Date()).toISOString();
-  started = performance.now();
-  spans = {};
-  first = {};
-  elapsed() {
-    return performance.now() - this.started;
-  }
-  mark(name2) {
-    this.first[name2] ??= this.elapsed();
-  }
-  add(name2, durationMs) {
-    const span = this.spans[name2] ??= { count: 0, totalMs: 0, minMs: durationMs, maxMs: 0 };
-    span.count++;
-    span.totalMs += durationMs;
-    span.minMs = Math.min(span.minMs, durationMs);
-    span.maxMs = Math.max(span.maxMs, durationMs);
-  }
-};
-var scope = new import_node_async_hooks3.AsyncLocalStorage();
-function chatSpanElapsed(name2, started) {
-  scope.getStore()?.add(name2, performance.now() - started);
-}
-function chatSyncSpan(name2, fn) {
-  const metrics = scope.getStore();
-  if (!metrics) return fn();
-  const start2 = performance.now();
-  try {
-    return fn();
-  } finally {
-    metrics.add(name2, performance.now() - start2);
-  }
-}
-function withChatPerformance(metrics, fn) {
-  return scope.run(metrics, fn);
-}
-async function chatSpan(name2, fn) {
-  const metrics = scope.getStore();
-  if (!metrics) return fn();
-  const start2 = performance.now();
-  try {
-    return await fn();
-  } finally {
-    metrics.add(name2, performance.now() - start2);
-  }
-}
-
-// ../packages/core/service/chat/diagnostics.ts
-function diagnosticJson(value2) {
-  const ancestors = [];
-  return JSON.stringify(value2, function(_key, item) {
-    if (typeof item === "bigint") return item.toString();
-    if (item && typeof item === "object") {
-      while (ancestors.length && ancestors.at(-1)?.serialized !== this) ancestors.pop();
-      if (ancestors.some((ancestor) => ancestor.source === item)) return "[Circular reference]";
-      const serialized = item instanceof Error ? Object.fromEntries(
-        Object.getOwnPropertyNames(item).map((key) => [
-          key,
-          item[key]
-        ])
-      ) : item;
-      ancestors.push({ source: item, serialized });
-      return serialized;
-    }
-    return item;
-  }) ?? "null";
-}
-async function appendDiagnostic(db, threadId, kind, payload, createdAt, runId = null, attemptId = null) {
-  const serialized = chatSyncSpan("diagnostic.serialization", () => diagnosticJson(payload));
-  await chatSpan(
-    "diagnostic.insert",
-    () => db.run(
-      `INSERT INTO chat_diagnostics (thread_id, seq, kind, payload_json, created_at, run_id, attempt_id)
-     SELECT ?, COALESCE(MAX(seq), 0) + 1, ?, ?, ?, ?, ? FROM chat_diagnostics WHERE thread_id = ?`,
-      [threadId, kind, serialized, createdAt, runId, attemptId, threadId]
-    )
-  );
-}
-async function diagnosticPage(db, threadId, after) {
-  const rows = await db.all("SELECT * FROM chat_diagnostics WHERE thread_id = ? AND seq > ? ORDER BY seq LIMIT 101", [
-    threadId,
-    after
-  ]);
-  const entries = rows.slice(0, 100).map((row) => ({
-    threadId: row.thread_id,
-    seq: row.seq,
-    runId: row.run_id,
-    attemptId: row.attempt_id,
-    kind: row.kind,
-    payload: JSON.parse(row.payload_json),
-    createdAt: row.created_at
-  }));
-  return { entries, nextCursor: entries.at(-1)?.seq ?? after, hasMore: rows.length > 100 };
-}
-
-// ../packages/core/service/chat/knowledgebase-writes.ts
-var KNOWLEDGEBASE_WRITE_TOOLS = [
-  "create_node",
-  "edit_file",
-  "set_properties",
-  "add_relation",
-  "update_relation",
-  "remove_relation"
-];
-var WRITE_TOOLS = new Set(KNOWLEDGEBASE_WRITE_TOOLS);
-function knowledgebaseWriteTool(toolId) {
-  const tool = /^kb_[0-9a-f]{12}_([a-z_]{1,48})$/.exec(toolId)?.[1];
-  return tool && WRITE_TOOLS.has(tool) ? tool : null;
-}
-var CONNECTION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-var WORKSPACE = /^[a-z0-9][a-z0-9-]{0,62}$/;
-function parseKnowledgebaseWrite(value2) {
-  if (value2 === void 0 || value2 === null) return null;
-  if (typeof value2 !== "object" || Array.isArray(value2)) return "invalid";
-  const { connectionId, workspace: workspace2, ...rest } = value2;
-  if (Object.keys(rest).length || typeof connectionId !== "string" || !CONNECTION_ID.test(connectionId) || typeof workspace2 !== "string" || !WORKSPACE.test(workspace2))
-    return "invalid";
-  return { connectionId: connectionId.toLowerCase(), workspace: workspace2 };
-}
-function sameKnowledgebaseWrite(a5, b5) {
-  return a5?.connectionId === b5?.connectionId && a5?.workspace === b5?.workspace;
-}
-function storedKnowledgebaseWrite(json2) {
-  if (!json2) return null;
-  try {
-    const grant = parseKnowledgebaseWrite(typeof json2 === "string" ? JSON.parse(json2) : json2);
-    return grant === "invalid" ? null : grant;
-  } catch {
-    return null;
-  }
-}
-var UNCERTAIN_WRITE_RESULT = {
-  outcome: "uncertain",
-  content: {
-    error: "uncertain",
-    message: "This Knowledgebase write was interrupted after it was sent, so it may or may not have been applied. Reread the node, relation, or path by its stable id before deciding whether to try again; never repeat a create blindly."
-  },
-  evidence: []
-};
-
-// ../packages/core/service/chat/store.ts
-var ChatError = class extends ServiceError {
-  /**
-   * @param detail Optional specific reason for the assistant's own tool results (for example
-   * which resource key is not registered). It is never part of an HTTP error body.
-   */
-  constructor(code, detail) {
-    const status = code === "not_found" || code === "chat_unavailable" || code === "provider_not_available" ? 404 : code === "invalid_request" ? 400 : code === "limit_exceeded" ? 429 : code === "provider_not_ready" ? 503 : code === "credential_rejected" ? 422 : code === "provider_unavailable" ? 502 : 409;
-    super(code.replaceAll("_", " "), code, status);
-    this.detail = detail;
-  }
-  detail;
-};
-var requiredText = (value2, max) => {
-  if (typeof value2 !== "string" || !value2.trim() || value2.length > max)
-    throw new ChatError("invalid_request");
-  return value2;
-};
-function revision(value2) {
-  if (!Number.isSafeInteger(value2) || Number(value2) < 1) throw new ChatError("invalid_request");
-  return Number(value2);
-}
-function messageDto(r5) {
-  return {
-    id: r5.id,
-    threadId: r5.thread_id,
-    role: r5.role,
-    state: r5.state,
-    blocks: JSON.parse(r5.blocks_json),
-    runId: r5.run_id,
-    answersQuestionId: r5.answers_question_id,
-    clientRequestId: r5.client_request_id,
-    createdAt: r5.created_at,
-    updatedAt: r5.updated_at,
-    revision: r5.revision
-  };
-}
-function questionDto(r5) {
-  return {
-    id: r5.id,
-    threadId: r5.thread_id,
-    runId: r5.run_id,
-    ordinal: r5.ordinal,
-    state: r5.state,
-    prompt: r5.prompt,
-    options: JSON.parse(r5.options_json),
-    allowFreeText: Boolean(r5.allow_free_text),
-    answerMessageId: r5.answer_message_id,
-    createdAt: r5.created_at,
-    answeredAt: r5.answered_at,
-    revision: r5.revision
-  };
-}
-function runDto(r5, continueAvailable = false) {
-  return {
-    id: r5.id,
-    threadId: r5.thread_id,
-    triggerMessageId: r5.trigger_message_id,
-    state: r5.state,
-    outcome: r5.outcome,
-    failureCode: r5.failure_code,
-    continuedFromRunId: r5.continued_from_run_id,
-    continueAvailable,
-    knowledgebaseWrite: storedKnowledgebaseWrite(r5.knowledgebase_write_json),
-    usage: {
-      toolCalls: r5.tool_call_count,
-      activeProcessingMs: r5.active_processing_ms,
-      gatheredContentBytes: r5.gathered_content_bytes
-    },
-    cancelRequestedAt: r5.cancel_requested_at,
-    createdAt: r5.created_at,
-    updatedAt: r5.updated_at,
-    completedAt: r5.completed_at,
-    revision: r5.revision
-  };
-}
-var unavailableBlocks = () => [
-  {
-    id: "unavailable",
-    kind: "unavailable",
-    reason: "source_access_lost",
-    regenerable: true,
-    fallbackText: "Source access is no longer available."
-  }
-];
-var ChatStore = class _ChatStore {
-  constructor(db, options = {}) {
-    this.db = db;
-    this.options = options;
-    this.limits = { ...CHAT_DEFAULT_LIMITS, ...options.limits };
-  }
-  db;
-  options;
-  limits;
-  now() {
-    return this.options.now?.() ?? Date.now();
-  }
-  timestamp() {
-    return new Date(this.now()).toISOString();
-  }
-  /** Diagnostic observations may record late provider failures after a lease ends. */
-  async diagnostic(threadId, kind, payload, runId = null, attemptId = null) {
-    const started = performance.now();
-    await chatSpan(
-      "diagnostic.transaction",
-      () => this.db.transaction(async (tx) => {
-        chatSpanElapsed("diagnostic.admission", started);
-        const store = new _ChatStore(tx, this.options);
-        await store.lockForDiagnostic(threadId);
-        await appendDiagnostic(tx, threadId, kind, payload, store.timestamp(), runId, attemptId);
-      })
-    );
-  }
-  async lockForDiagnostic(id2) {
-    const result2 = await chatSpan(
-      "thread.lock",
-      () => this.db.run("UPDATE chat_threads SET id = id WHERE id = ?", [id2])
-    );
-    if (!result2.changes) throw new ChatError("not_found");
-  }
-  async access(owner) {
-    const member2 = await this.db.get(
-      `SELECT wu.id FROM workspace_users wu JOIN workspaces w ON w.id = wu.workspace_id JOIN organizations o ON o.id = w.organization_id WHERE wu.profile_id = ? AND w.organization_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL AND w.deleted_at IS NULL AND o.deleted_at IS NULL LIMIT 1`,
-      [owner.profileId, owner.organizationId]
-    );
-    if (!member2) throw new ChatError("not_found");
-  }
-  async generationDependencies(threadId, setId) {
-    const sets = await this.db.all(
-      "SELECT id FROM chat_dependency_sets WHERE thread_id = ? AND invalidated_at IS NULL",
-      [threadId]
-    );
-    return sets.length || setId ? this.dependencySet(threadId, [], [...sets.map((s) => s.id), ...setId ? [setId] : []]) : null;
-  }
-  async createdAt(table2, threadId) {
-    const last = await this.db.get(
-      `SELECT created_at FROM ${table2} WHERE thread_id = ? ORDER BY created_at DESC LIMIT 1`,
-      [threadId]
-    );
-    return new Date(Math.max(this.now(), last ? Date.parse(last.created_at) + 1 : 0)).toISOString();
-  }
-  async thread(id2, owner) {
-    const row = await this.db.get(
-      `SELECT * FROM chat_threads WHERE id = ?${owner ? " AND owner_profile_id = ? AND organization_id = ?" : ""}`,
-      owner ? [id2, owner.profileId, owner.organizationId] : [id2]
-    );
-    if (!row) throw new ChatError("not_found");
-    return row;
-  }
-  async lock(id2, owner) {
-    if (owner) await this.access(owner);
-    const result2 = await chatSpan(
-      "thread.lock",
-      () => this.db.run(
-        `UPDATE chat_threads SET id = id WHERE id = ?${owner ? " AND owner_profile_id = ? AND organization_id = ?" : ""}`,
-        owner ? [id2, owner.profileId, owner.organizationId] : [id2]
-      )
-    );
-    if (!result2.changes) throw new ChatError("not_found");
-    return this.thread(id2, owner);
-  }
-  async run(id2) {
-    const r5 = await this.db.get("SELECT * FROM chat_runs WHERE id = ?", [id2]);
-    if (!r5) throw new ChatError("not_found");
-    return r5;
-  }
-  async threadDto(r5) {
-    const active = await this.db.get(
-      "SELECT * FROM chat_runs WHERE thread_id = ? AND state IN ('queued','running','waiting_user')",
-      [r5.id]
-    );
-    return {
-      id: r5.id,
-      organizationId: r5.organization_id,
-      title: r5.title,
-      titleSource: r5.title_source,
-      archivedAt: r5.archived_at,
-      lastActivityAt: r5.last_activity_at,
-      activeRunState: active?.state ?? null,
-      createdAt: r5.created_at,
-      updatedAt: r5.updated_at,
-      revision: r5.revision
-    };
-  }
-  async append(threadId, payload, dependencySetId = null, attempt) {
-    await this.db.run(
-      "UPDATE chat_threads SET last_event_seq = last_event_seq + 1, last_activity_at = ? WHERE id = ?",
-      [this.timestamp(), threadId]
-    );
-    const t = await this.thread(threadId);
-    await this.db.run(
-      `INSERT INTO chat_events (id, thread_id, seq, kind, run_id, attempt_id, fence, payload_json, dependency_set_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        (0, import_node_crypto15.randomUUID)(),
-        threadId,
-        t.last_event_seq,
-        payload.kind,
-        attempt?.runId ?? null,
-        attempt?.id ?? null,
-        attempt?.fence ?? null,
-        JSON.stringify(payload),
-        dependencySetId,
-        this.timestamp()
-      ]
-    );
-    const runId = attempt?.runId ?? ("run" in payload ? payload.run.id : "runId" in payload ? payload.runId : null);
-    const run = runId ? await this.run(runId) : null;
-    const attempts = runId ? await this.db.all(
-      "SELECT * FROM chat_run_attempts WHERE run_id = ? ORDER BY attempt_number",
-      [runId]
-    ) : [];
-    const tool = "toolCallId" in payload ? await this.db.get("SELECT * FROM chat_tool_calls WHERE id = ?", [payload.toolCallId]) : null;
-    await appendDiagnostic(
-      this.db,
-      threadId,
-      payload.kind,
-      { event: payload, eventSeq: t.last_event_seq, run, attempts, tool },
-      this.timestamp(),
-      runId,
-      attempt?.id ?? null
-    );
-    await this.retain(threadId);
-    return t.last_event_seq;
-  }
-  async retain(id2) {
-    const t = await this.thread(id2);
-    const oldest = await this.db.get(
-      "SELECT seq FROM chat_events WHERE thread_id = ? AND created_at >= ? ORDER BY seq LIMIT 1",
-      [id2, new Date(this.now() - this.limits.eventRetentionMs).toISOString()]
-    );
-    const boundary = Math.max(
-      t.retained_from_seq,
-      oldest?.seq ?? t.last_event_seq + 1,
-      t.last_event_seq - this.limits.eventRetentionCount + 1
-    );
-    await this.db.run("DELETE FROM chat_events WHERE thread_id = ? AND seq < ?", [id2, boundary]);
-    await this.db.run("UPDATE chat_threads SET retained_from_seq = ? WHERE id = ?", [boundary, id2]);
-  }
-  async authorized(setId) {
-    if (!setId) return true;
-    const set2 = await this.db.get(
-      "SELECT invalidated_at FROM chat_dependency_sets WHERE id = ?",
-      [setId]
-    );
-    return Boolean(set2 && !set2.invalidated_at);
-  }
-  async projectMessage(r5) {
-    const dto = messageDto(r5);
-    if (r5.invalidated_at || !await this.authorized(r5.dependency_set_id))
-      dto.blocks = unavailableBlocks();
-    return dto;
-  }
-  /**
-   * Registers source identities for a thread (upsert by stable scope key) and returns their ids.
-   * A Knowledgebase locator's display path may differ between results for the same node, so
-   * identity is compared without it; every other locator must match exactly.
-   */
-  async registerSources(owner, threadId, sources) {
-    const ids = [];
-    const identity = (l3) => l3.kind === "knowledgebase" ? { ...l3, path: null } : l3;
-    for (const source of sources) {
-      requiredText(source.scopeKey, 1e3);
-      const now2 = this.timestamp();
-      const connection = source.locator.kind === "knowledgebase" ? await this.db.get(
-        "SELECT id FROM account_connections WHERE id = ? AND owner_profile_id = ? AND organization_id = ?",
-        [source.locator.connectionId, owner.profileId, owner.organizationId]
-      ) : void 0;
-      await this.db.run(
-        `INSERT INTO chat_source_refs (id, thread_id, source_kind, scope_key, connection_id, locator_json, access_state, access_checked_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'unknown', ?, ?, ?) ON CONFLICT (thread_id, scope_key) DO NOTHING`,
-        [
-          (0, import_node_crypto15.randomUUID)(),
-          threadId,
-          source.locator.kind,
-          source.scopeKey,
-          connection?.id ?? null,
-          JSON.stringify(source.locator),
-          now2,
-          now2,
-          now2
-        ]
-      );
-      const row = await this.db.get(
-        "SELECT id, locator_json FROM chat_source_refs WHERE thread_id = ? AND scope_key = ?",
-        [threadId, source.scopeKey]
-      );
-      if (!(0, import_node_util.isDeepStrictEqual)(identity(JSON.parse(row.locator_json)), identity(source.locator)))
-        throw new ChatError("invalid_request");
-      ids.push(row.id);
-    }
-    return ids;
-  }
-  async checkSources(threadId, onlyIds) {
-    return chatSpan("source.authorization", () => this.checkSourcesMeasured(threadId, onlyIds));
-  }
-  async checkSourcesMeasured(threadId, onlyIds) {
-    const t = await this.thread(threadId);
-    const owner = { profileId: t.owner_profile_id, organizationId: t.organization_id };
-    try {
-      await this.access(owner);
-    } catch {
-      const runs = await this.db.all(
-        "SELECT * FROM chat_runs WHERE thread_id = ? AND state IN ('queued','running','waiting_user')",
-        [threadId]
-      );
-      for (const r5 of runs) await this.finish(r5, "failed", null, "source_access_lost");
-      return;
-    }
-    const sources = (await this.db.all("SELECT * FROM chat_source_refs WHERE thread_id = ?", [threadId])).filter((source) => !onlyIds || onlyIds.includes(source.id));
-    for (const source of sources) {
-      let state2 = "unknown";
-      const checkSource = this.options.checkSource;
-      if (checkSource) {
-        const signal = AbortSignal.timeout(3e3);
-        try {
-          state2 = await chatSpan(
-            "source.checker",
-            () => Promise.race([
-              checkSource(owner, JSON.parse(source.locator_json), signal),
-              new Promise(
-                (resolve) => signal.addEventListener("abort", () => resolve("unknown"), { once: true })
-              )
-            ])
-          );
-        } catch {
-        }
-      }
-      await this.db.run(
-        "UPDATE chat_source_refs SET access_state = ?, access_checked_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
-        [state2, this.timestamp(), this.timestamp(), source.id]
-      );
-      if (state2 !== "authorized") await this.invalidate(threadId, source.id);
-    }
-  }
-  /** Rechecks one thread's sources under its row lock, e.g. after a connection loses access. */
-  async revalidate(threadId) {
-    await this.db.transaction(async (tx) => {
-      const s = new _ChatStore(tx, this.options);
-      await s.lock(threadId);
-      await s.checkSources(threadId);
-    });
-  }
-  /** Rechecks every thread that cites a source obtained through `connectionId`. */
-  async revalidateConnection(connectionId) {
-    const threads = await this.db.all(
-      "SELECT DISTINCT thread_id FROM chat_source_refs WHERE connection_id = ?",
-      [connectionId]
-    );
-    for (const { thread_id } of threads) await this.revalidate(thread_id);
-  }
-  async invalidate(threadId, sourceId) {
-    const sets = await this.db.all(
-      `SELECT s.id FROM chat_dependency_sets s JOIN chat_dependency_set_members m ON m.dependency_set_id = s.id WHERE s.thread_id = ? AND m.source_ref_id = ? AND s.invalidated_at IS NULL`,
-      [threadId, sourceId]
-    );
-    if (!sets.length) return;
-    const messageIds = [], proposalIds = [];
-    for (const { id: id2 } of sets) {
-      await this.db.run("UPDATE chat_dependency_sets SET invalidated_at = ? WHERE id = ?", [
-        this.timestamp(),
-        id2
-      ]);
-      messageIds.push(
-        ...(await this.db.all(
-          "SELECT id FROM chat_messages WHERE dependency_set_id = ?",
-          [id2]
-        )).map((r5) => r5.id)
-      );
-      proposalIds.push(
-        ...(await this.db.all(
-          "SELECT proposal_id FROM chat_work_proposal_revisions WHERE dependency_set_id = ?",
-          [id2]
-        )).map((r5) => r5.proposal_id)
-      );
-      for (const table2 of [
-        "chat_messages",
-        "chat_thread_summaries",
-        "chat_provider_checkpoints",
-        "chat_work_proposal_revisions"
-      ])
-        await this.db.run(`UPDATE ${table2} SET invalidated_at = ? WHERE dependency_set_id = ?`, [
-          this.timestamp(),
-          id2
-        ]);
-      const questions = await this.db.all(
-        "SELECT * FROM chat_questions WHERE dependency_set_id = ? AND state = 'open'",
-        [id2]
-      );
-      for (const q2 of questions) {
-        await this.db.run(
-          "UPDATE chat_questions SET state = 'superseded', revision = revision + 1, updated_at = ? WHERE id = ?",
-          [this.timestamp(), q2.id]
-        );
-        await this.append(
-          threadId,
-          {
-            kind: "question.closed",
-            question: questionDto({ ...q2, state: "superseded", revision: q2.revision + 1 })
-          },
-          id2
-        );
-      }
-    }
-    await this.db.run(
-      "UPDATE chat_threads SET authorization_revision = authorization_revision + 1 WHERE id = ?",
-      [threadId]
-    );
-    await this.append(threadId, {
-      kind: "content.invalidated",
-      messageIds: [...new Set(messageIds)],
-      proposalIds: [...new Set(proposalIds)]
-    });
-    const runs = await this.db.all(
-      "SELECT * FROM chat_runs WHERE thread_id = ? AND state IN ('running','waiting_user')",
-      [threadId]
-    );
-    for (const r5 of runs) await this.finish(r5, "failed", null, "source_access_lost");
-  }
-  async dependencySet(threadId, sourceIds, inherited = []) {
-    const union2 = new Set(sourceIds);
-    for (const setId of inherited) {
-      const set2 = await this.db.get(
-        "SELECT thread_id FROM chat_dependency_sets WHERE id = ?",
-        [setId]
-      );
-      if (set2?.thread_id !== threadId || !await this.authorized(setId))
-        throw new ChatError("source_access_lost");
-      for (const row of await this.db.all(
-        "SELECT source_ref_id FROM chat_dependency_set_members WHERE dependency_set_id = ?",
-        [setId]
-      ))
-        union2.add(row.source_ref_id);
-    }
-    const ids = [...union2].sort();
-    for (const id3 of ids) {
-      const source = await this.db.get(
-        "SELECT * FROM chat_source_refs WHERE id = ? AND thread_id = ?",
-        [id3, threadId]
-      );
-      if (!source || source.access_state !== "authorized")
-        throw new ChatError("source_access_lost");
-    }
-    const authorizationRevision = (await this.thread(threadId)).authorization_revision;
-    const digest4 = (0, import_node_crypto15.createHash)("sha256").update(JSON.stringify({ ids, authorizationRevision })).digest("hex");
-    const old = await this.db.get(
-      "SELECT id, invalidated_at FROM chat_dependency_sets WHERE thread_id = ? AND digest = ?",
-      [threadId, digest4]
-    );
-    if (old?.invalidated_at) throw new ChatError("source_access_lost");
-    if (old) return old.id;
-    const id2 = (0, import_node_crypto15.randomUUID)();
-    await this.db.run(
-      "INSERT INTO chat_dependency_sets (id, thread_id, digest, created_at) VALUES (?, ?, ?, ?)",
-      [id2, threadId, digest4, this.timestamp()]
-    );
-    for (const sourceId of ids)
-      await this.db.run(
-        "INSERT INTO chat_dependency_set_members (dependency_set_id, source_ref_id) VALUES (?, ?)",
-        [id2, sourceId]
-      );
-    return id2;
-  }
-  async finish(r5, state2, outcome = null, failure4 = null) {
-    const now2 = this.timestamp();
-    await this.db.run(
-      `UPDATE chat_run_attempts SET state = ?, ended_at = ? WHERE run_id = ? AND state = 'leased'`,
-      [
-        state2 === "completed" ? "succeeded" : state2 === "cancelled" ? "cancelled" : "fenced",
-        now2,
-        r5.id
-      ]
-    );
-    await this.db.run(
-      `UPDATE chat_runs SET state = ?, outcome = ?, failure_code = ?, completed_at = ?, active_attempt_id = NULL, current_fence = current_fence + 1, updated_at = ?, revision = revision + 1 WHERE id = ?`,
-      [state2, outcome, failure4, now2, now2, r5.id]
-    );
-    const questions = await this.db.all(
-      "SELECT * FROM chat_questions WHERE run_id = ? AND state = 'open'",
-      [r5.id]
-    );
-    await this.db.run(
-      "UPDATE chat_questions SET state = 'cancelled', updated_at = ?, revision = revision + 1 WHERE run_id = ? AND state = 'open'",
-      [now2, r5.id]
-    );
-    await this.db.run(
-      "UPDATE chat_tool_calls SET state = 'cancelled', completed_at = ?, updated_at = ? WHERE run_id = ? AND state IN ('requested','executing')",
-      [now2, now2, r5.id]
-    );
-    const partials = await this.db.all(
-      "SELECT * FROM chat_messages WHERE run_id = ? AND state = 'streaming'",
-      [r5.id]
-    );
-    await this.db.run(
-      "UPDATE chat_messages SET state = 'interrupted', updated_at = ?, revision = revision + 1 WHERE run_id = ? AND state = 'streaming'",
-      [now2, r5.id]
-    );
-    for (const message2 of partials)
-      await this.append(
-        r5.thread_id,
-        {
-          kind: "message.completed",
-          message: messageDto({
-            ...message2,
-            state: "interrupted",
-            updated_at: now2,
-            revision: message2.revision + 1
-          })
-        },
-        message2.dependency_set_id
-      );
-    for (const q2 of questions)
-      await this.append(
-        r5.thread_id,
-        {
-          kind: "question.closed",
-          question: questionDto({
-            ...q2,
-            state: "cancelled",
-            revision: q2.revision + 1,
-            updated_at: now2
-          })
-        },
-        q2.dependency_set_id
-      );
-    await this.db.run("DELETE FROM chat_provider_checkpoints WHERE run_id = ?", [r5.id]);
-    const updated = await this.run(r5.id);
-    const seq = await this.append(r5.thread_id, {
-      kind: "run.updated",
-      run: runDto(updated, outcome === "allowance_exhausted")
-    });
-    if (state2 !== "cancelled") await this.notification(updated, seq);
-    return runDto(updated, outcome === "allowance_exhausted");
-  }
-  async notification(r5, seq, question) {
-    const t = await this.thread(r5.thread_id);
-    await this.db.run(
-      `INSERT INTO chat_notifications (id, owner_profile_id, organization_id, thread_id, run_id, question_id, type, transition_key, event_seq, state, due_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?) ON CONFLICT (owner_profile_id, thread_id, run_id, type, transition_key) DO NOTHING`,
-      [
-        (0, import_node_crypto15.randomUUID)(),
-        t.owner_profile_id,
-        t.organization_id,
-        t.id,
-        r5.id,
-        question?.id ?? null,
-        question ? "chat_needs_answer" : "chat_finished",
-        question ? `question:${question.ordinal}` : `terminal:${r5.state}`,
-        seq,
-        new Date(this.now() + this.limits.notificationGraceMs).toISOString(),
-        this.timestamp(),
-        this.timestamp()
-      ]
-    );
-  }
-};
-
-// connections/profile.ts
-var import_node_crypto20 = require("node:crypto");
-
-// connections/crypto.ts
-var import_node_crypto16 = require("node:crypto");
-var SecretEnvelopeError = class extends Error {
-  constructor() {
-    super("The stored secret cannot be decrypted.");
-  }
-};
-function decodeEncryptionKey(encoded) {
-  const trimmed9 = encoded?.trim();
-  if (!trimmed9) return null;
-  const key = Buffer.from(trimmed9, "base64url");
-  return key.length === 32 ? key : null;
-}
-function sealSecret({
-  plaintext,
-  key,
-  aad
-}) {
-  const nonce = (0, import_node_crypto16.randomBytes)(12);
-  const cipher = (0, import_node_crypto16.createCipheriv)("aes-256-gcm", key, nonce);
-  cipher.setAAD(Buffer.from(aad, "utf8"));
-  const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
-  const tag2 = cipher.getAuthTag();
-  return `v1.${nonce.toString("base64url")}.${tag2.toString("base64url")}.${ciphertext.toString("base64url")}`;
-}
-function openSecret({
-  envelope: envelope2,
-  key,
-  aad
-}) {
-  const [version4, nonceText, tagText, ciphertextText, ...extra] = envelope2.split(".");
-  if (version4 !== "v1" || !nonceText || !tagText || !ciphertextText || extra.length > 0) {
-    throw new SecretEnvelopeError();
-  }
-  try {
-    const decipher = (0, import_node_crypto16.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
-    decipher.setAAD(Buffer.from(aad, "utf8"));
-    decipher.setAuthTag(Buffer.from(tagText, "base64url"));
-    return Buffer.concat([
-      decipher.update(Buffer.from(ciphertextText, "base64url")),
-      decipher.final()
-    ]).toString("utf8");
-  } catch {
-    throw new SecretEnvelopeError();
-  }
-}
-function hashSecret(value2) {
-  return (0, import_node_crypto16.createHash)("sha256").update(value2).digest("hex");
-}
-
-// connections/authorizations.ts
-var AUTHORIZATION_TTL_MS = 10 * 60 * 1e3;
-var MAX_OPEN_AUTHORIZATIONS = 5;
-var AUTHORIZATION_STATE_PATTERN = /^[A-Za-z0-9_-]{40,80}$/;
-var MAX_AUTHORIZATION_CODE_LENGTH = 2048;
-function verifierAad(row, authorizationId) {
-  return `overlord:account-connection-authorization:v1:${row.owner_profile_id}:${row.organization_id ?? "-"}:${row.id}:${authorizationId}`;
-}
-async function beginAuthorization(tx, options) {
-  const { row, authorizationId, state: state2, verifier, key, returnTo, expiresAt, now: now2 } = options;
-  await tx.run(
-    "DELETE FROM account_connection_authorizations WHERE connection_id = ? AND (consumed_at IS NOT NULL OR expires_at <= ?)",
-    [row.id, now2]
-  );
-  const open2 = await tx.get(
-    "SELECT COUNT(*) AS n FROM account_connection_authorizations WHERE connection_id = ?",
-    [row.id]
-  );
-  if (Number(open2?.n ?? 0) >= MAX_OPEN_AUTHORIZATIONS) throw new ChatError("limit_exceeded");
-  await tx.run(
-    "INSERT INTO account_connection_authorizations (id, connection_id, state_hash, pkce_verifier_ciphertext, return_to, return_url, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-    [
-      authorizationId,
-      row.id,
-      hashSecret(state2),
-      sealSecret({ plaintext: verifier, key, aad: verifierAad(row, authorizationId) }),
-      returnTo,
-      options.returnUrl ?? null,
-      expiresAt,
-      now2
-    ]
-  );
-}
-async function consumeAuthorization(tx, options) {
-  const { state: state2, providerFilter, now: now2 } = options;
-  const auth2 = await tx.get(
-    providerFilter === void 0 ? "SELECT * FROM account_connection_authorizations WHERE state_hash = ?" : "SELECT a.* FROM account_connection_authorizations a JOIN account_connections c ON c.id = a.connection_id WHERE a.state_hash = ? AND c.provider = ? AND c.organization_id IS NULL",
-    [hashSecret(state2), ...providerFilter === void 0 ? [] : [providerFilter]]
-  );
-  if (!auth2) return null;
-  const result2 = await tx.run(
-    "UPDATE account_connection_authorizations SET consumed_at = ? WHERE id = ? AND consumed_at IS NULL AND expires_at > ?",
-    [now2, auth2.id, now2]
-  );
-  const row = await tx.get(
-    "SELECT * FROM account_connections WHERE id = ? AND state <> 'disconnected'",
-    [auth2.connection_id]
-  );
-  return { auth: auth2, row, fresh: result2.changes === 1 };
-}
-
-// connections/credential-rows.ts
-var REFRESH_LEASE_MS = 15e3;
-var ACCESS_EXPIRY_SKEW_MS = 6e4;
-var ConnectionAccessError = class extends Error {
-  constructor(code) {
-    super(code);
-    this.code = code;
-  }
-  code;
-};
-function requireReauthorization(db, id2, code, now2, lockOwner) {
-  return db.run(
-    `UPDATE account_connections SET state = 'reauthorization_required', credential_ciphertext = NULL, credential_key_id = NULL, access_expires_at = NULL, refresh_lock_owner = NULL, refresh_lock_until = NULL, last_error_code = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'connected'${lockOwner ? " AND refresh_lock_owner = ?" : ""}`,
-    [code, now2, id2, ...lockOwner ? [lockOwner] : []]
-  );
-}
-function recordError(db, id2, code, now2) {
-  return db.run(
-    "UPDATE account_connections SET last_error_code = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
-    [code, now2, id2]
-  );
-}
-async function eraseCredential(tx, id2, now2, options) {
-  await tx.run(
-    `UPDATE account_connections SET state = 'disconnected', credential_ciphertext = NULL, credential_key_id = NULL, access_expires_at = NULL, refresh_expires_at = NULL, refresh_lock_owner = NULL, refresh_lock_until = NULL, disconnected_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ?${options.onlyIfLive ? " AND state <> 'disconnected'" : ""}`,
-    [now2, now2, id2]
-  );
-  await tx.run("DELETE FROM account_connection_authorizations WHERE connection_id = ?", [id2]);
-}
-function acquireRefreshLease(db, row, lockOwner, until, now2) {
-  return db.run(
-    `UPDATE account_connections SET refresh_lock_owner = ?, refresh_lock_until = ? WHERE id = ? AND state = 'connected' AND credential_revision = ? AND (refresh_lock_owner IS NULL OR refresh_lock_until <= ?)`,
-    [lockOwner, until, row.id, row.credential_revision, now2]
-  );
-}
-function releaseRefreshLease(db, row, lockOwner, code) {
-  return db.run(
-    "UPDATE account_connections SET refresh_lock_owner = NULL, refresh_lock_until = NULL, last_error_code = ? WHERE id = ? AND refresh_lock_owner = ?",
-    [code, row.id, lockOwner]
-  );
-}
-async function withRefreshLease(db, lockOwner, options, refresh) {
-  const deadline = options.now() + REFRESH_LEASE_MS * 2;
-  for (; ; ) {
-    if (options.signal?.aborted) throw new ConnectionAccessError("unavailable");
-    const found = await options.read();
-    if (!found) continue;
-    const { row, credential } = found;
-    const stale = options.staleRevision !== void 0 && row.credential_revision <= options.staleRevision;
-    const fresh = row.access_expires_at === null || Date.parse(row.access_expires_at) - ACCESS_EXPIRY_SKEW_MS > options.now();
-    if (!stale && fresh)
-      return {
-        accessToken: credential.accessToken,
-        credentialRevision: row.credential_revision,
-        row
-      };
-    if (!credential.refreshToken) {
-      await options.requireReauthorization(row, "grant_expired");
-      throw new ConnectionAccessError("reauthorization_required");
-    }
-    const leased = await acquireRefreshLease(
-      db,
-      row,
-      lockOwner,
-      options.timestamp(REFRESH_LEASE_MS),
-      options.timestamp()
-    );
-    if (leased.changes === 1) {
-      await refresh(row, credential.refreshToken);
-      continue;
-    }
-    if (options.now() > deadline) throw new ConnectionAccessError("unavailable");
-    await options.sleep(100);
-  }
-}
-async function refreshLeased(db, row, lockOwner, options) {
-  const release2 = async () => {
-    await releaseRefreshLease(db, row, lockOwner, "refresh_unavailable");
-    throw new ConnectionAccessError("unavailable");
-  };
-  if (options.available && !options.available()) return release2();
-  let grant;
-  try {
-    grant = await options.exchange();
-  } catch (error64) {
-    if (options.invalidGrant(error64)) {
-      await options.requireReauthorization("invalid_grant");
-      throw new ConnectionAccessError("reauthorization_required");
-    }
-    return release2();
-  }
-  await options.persist(grant);
-}
-
-// connections/keyring.ts
-var import_node_crypto17 = require("node:crypto");
-var EVERHOUR_ENV_KEY_ID = "everhour-env";
-var GITHUB_USER_ENV_KEY_ID = "github-user-env";
-var PLATFORM_KEY_ID_PREFIX = "platform-";
-var RESERVED_KEY_IDS = /* @__PURE__ */ new Set([EVERHOUR_ENV_KEY_ID, GITHUB_USER_ENV_KEY_ID]);
-var MIN_PLATFORM_SECRET_LENGTH = 32;
-function isPlatformKeyId(id2) {
-  return id2.startsWith(PLATFORM_KEY_ID_PREFIX);
-}
-function isReservedKeyId(id2) {
-  return RESERVED_KEY_IDS.has(id2) || isPlatformKeyId(id2);
-}
-function platformKeyFromSecret(secret) {
-  const trimmed9 = secret?.trim();
-  if (!trimmed9 || trimmed9.length < MIN_PLATFORM_SECRET_LENGTH) return null;
-  const key = Buffer.from(
-    (0, import_node_crypto17.hkdfSync)(
-      "sha256",
-      Buffer.from(trimmed9, "utf8"),
-      Buffer.from("overlord:account-connections", "utf8"),
-      Buffer.from("overlord:account-connections:platform-key:v1", "utf8"),
-      32
-    )
-  );
-  const fingerprint = (0, import_node_crypto17.createHash)("sha256").update("overlord:account-connections:platform-key-id:v1:").update(key).digest("hex").slice(0, 16);
-  return { id: `${PLATFORM_KEY_ID_PREFIX}${fingerprint}`, key };
-}
-function keyRingFromEnv(env3) {
-  const currentKey = decodeEncryptionKey(env3.ACCOUNT_CONNECTIONS_ENCRYPTION_KEY);
-  const requestedId = env3.ACCOUNT_CONNECTIONS_ENCRYPTION_KEY_ID?.trim() || "k1";
-  if (currentKey && isReservedKeyId(requestedId))
-    console.error(
-      `[connections] ACCOUNT_CONNECTIONS_ENCRYPTION_KEY_ID "${requestedId}" is reserved; using "k1"`
-    );
-  const currentId = isReservedKeyId(requestedId) ? "k1" : requestedId;
-  const everhour = decodeEncryptionKey(env3.EVERHOUR_API_KEY_ENCRYPTION_KEY) ?? decodeEncryptionKey(env3.GITHUB_USER_TOKEN_ENCRYPTION_KEY);
-  const github2 = decodeEncryptionKey(env3.GITHUB_USER_TOKEN_ENCRYPTION_KEY);
-  return {
-    current: currentKey ? { id: currentId, key: currentKey } : null,
-    fallback: {
-      ...everhour ? { everhour: { id: EVERHOUR_ENV_KEY_ID, key: everhour } } : {},
-      ...github2 ? { github: { id: GITHUB_USER_ENV_KEY_ID, key: github2 } } : {}
-    },
-    platform: platformKeyFromSecret(env3.BETTER_AUTH_SECRET)
-  };
-}
-function writeKey(ring, provider) {
-  return ring.current ?? ring.fallback[provider] ?? ring.platform ?? null;
-}
-function writeKeySource(ring, provider) {
-  if (ring.current) return "explicit";
-  if (ring.fallback[provider]) return "fallback";
-  return ring.platform ? "platform" : null;
-}
-function knowledgebaseKeyById(ring, id2) {
-  if (ring.current?.id === id2) return ring.current;
-  if (ring.platform?.id === id2) return ring.platform;
-  return null;
-}
-function keyById(ring, id2) {
-  if (ring.current?.id === id2) return ring.current;
-  for (const entry of Object.values(ring.fallback)) if (entry?.id === id2) return entry;
-  if (ring.platform?.id === id2) return ring.platform;
-  return null;
-}
-function missingKeyIsConfiguration(ring, keyId, format2, scope2 = "profile") {
-  if (isPlatformKeyId(keyId)) return ring.platform === null;
-  if (scope2 === "organization") return ring.current === null;
-  return RESERVED_KEY_IDS.has(keyId) || format2 !== "connection-v1" || ring.current === null;
-}
-function connectionCredentialAad(row) {
-  return `overlord:account-connection:v1:${row.owner_profile_id}:${row.organization_id ?? "-"}:${row.provider}:${row.id}`;
-}
-function openCredential(row, key) {
-  const format2 = row.credential_format;
-  if (format2 === "everhour-user-key-v1") {
-    const apiKey = openSecret({
-      envelope: row.credential_ciphertext,
-      key,
-      aad: `overlord:everhour-user-key:v1:${row.owner_profile_id}:api-key`
-    });
-    return { kind: "api_key", apiKey };
-  }
-  if (format2 === "github-user-oauth-v1") {
-    const parsed = parseJson(row.credential_ciphertext);
-    if (!parsed || typeof parsed.access !== "string") throw new SecretEnvelopeError();
-    const aad = (purpose) => `overlord:github-user-oauth:v1:${row.owner_profile_id}:${purpose}`;
-    return {
-      kind: "oauth",
-      accessToken: openSecret({ envelope: parsed.access, key, aad: aad("access") }),
-      refreshToken: typeof parsed.refresh === "string" ? openSecret({ envelope: parsed.refresh, key, aad: aad("refresh") }) : null
-    };
-  }
-  if (format2 !== "connection-v1") throw new SecretEnvelopeError();
-  const value2 = parseJson(
-    openSecret({ envelope: row.credential_ciphertext, key, aad: connectionCredentialAad(row) })
-  );
-  if (value2 && typeof value2.apiKey === "string") return { kind: "api_key", apiKey: value2.apiKey };
-  if (value2 && typeof value2.accessToken === "string")
-    return {
-      kind: "oauth",
-      accessToken: value2.accessToken,
-      refreshToken: typeof value2.refreshToken === "string" ? value2.refreshToken : null
-    };
-  throw new SecretEnvelopeError();
-}
-function credentialPlaintext(credential) {
-  return JSON.stringify(
-    credential.kind === "api_key" ? { apiKey: credential.apiKey } : { accessToken: credential.accessToken, refreshToken: credential.refreshToken }
-  );
-}
-function parseJson(text) {
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new SecretEnvelopeError();
-  }
-}
-
-// connections/oauth.ts
-var import_node_crypto18 = require("node:crypto");
-
-// connections/egress.ts
-var EgressError = class extends Error {
-  constructor(code, message2 = code) {
-    super(message2);
-    this.code = code;
-  }
-  code;
-};
-function assertEgress(url2, allowedOrigins) {
-  let parsed;
-  try {
-    parsed = new URL(url2);
-  } catch {
-    throw new EgressError("egress_denied");
-  }
-  if (parsed.protocol !== "https:" || parsed.username || parsed.password || !allowedOrigins.includes(parsed.origin))
-    throw new EgressError("egress_denied");
-  return parsed;
-}
-async function egressFetch(fetchImpl, allowedOrigins, url2, init2, bounds) {
-  assertEgress(url2, allowedOrigins);
-  const timeout = AbortSignal.timeout(bounds.timeoutMs);
-  const signal = bounds.signal ? AbortSignal.any([timeout, bounds.signal]) : timeout;
-  let response;
-  try {
-    response = await fetchImpl(url2, { ...init2, redirect: "manual", signal });
-  } catch {
-    throw new EgressError(timeout.aborted ? "timeout" : "network");
-  }
-  if (response.status >= 300 && response.status < 400) {
-    await response.body?.cancel().catch(() => void 0);
-    throw new EgressError("redirect");
-  }
-  const chunks = [];
-  let bytes = 0, truncated = false;
-  try {
-    const reader = response.body?.getReader();
-    while (reader) {
-      const { done, value: value2 } = await reader.read();
-      if (done) break;
-      if (bytes + value2.byteLength > bounds.maxBytes) {
-        chunks.push(value2.subarray(0, bounds.maxBytes - bytes));
-        bytes = bounds.maxBytes;
-        truncated = true;
-        await reader.cancel().catch(() => void 0);
-        break;
-      }
-      chunks.push(value2);
-      bytes += value2.byteLength;
-    }
-  } catch {
-    throw new EgressError(timeout.aborted ? "timeout" : "network");
-  }
-  return {
-    status: response.status,
-    headers: response.headers,
-    text: Buffer.concat(chunks).toString("utf8"),
-    truncated,
-    bytes
-  };
-}
-
-// connections/oauth.ts
-var OAuthError = class extends Error {
-  constructor(code) {
-    super(code);
-    this.code = code;
-  }
-  code;
-};
-var OAUTH_SCOPE = "openid offline_access";
-var METADATA_TTL_MS = 10 * 60 * 1e3;
-var METADATA_BYTES = 64 * 1024;
-var TOKEN_BYTES = 64 * 1024;
-var TIMEOUT_MS = 1e4;
-function pkcePair() {
-  const verifier = (0, import_node_crypto18.randomBytes)(32).toString("base64url");
-  return { verifier, challenge: (0, import_node_crypto18.createHash)("sha256").update(verifier).digest("base64url") };
-}
-function sameResource(a5, b5) {
-  return a5.replace(/\/+$/, "") === b5.replace(/\/+$/, "");
-}
-var KnowledgebaseOAuth = class {
-  constructor(options) {
-    this.options = options;
-  }
-  options;
-  metadata = null;
-  now() {
-    return this.options.now?.() ?? Date.now();
-  }
-  async json(url2, init2 = {}) {
-    const response = await egressFetch(this.options.fetch, this.options.egressOrigins, url2, init2, {
-      timeoutMs: TIMEOUT_MS,
-      maxBytes: init2.method === "POST" ? TOKEN_BYTES : METADATA_BYTES
-    });
-    let body = null;
-    if (!response.truncated) {
-      try {
-        const parsed = JSON.parse(response.text);
-        if (parsed && typeof parsed === "object" && !Array.isArray(parsed))
-          body = parsed;
-      } catch {
-        body = null;
-      }
-    }
-    return { status: response.status, body };
-  }
-  /** RFC 9728 protected-resource metadata, then RFC 8414 authorization-server metadata. */
-  async discover() {
-    if (this.metadata && this.now() - this.metadata.at < METADATA_TTL_MS)
-      return this.metadata.value;
-    try {
-      const resource = new URL(this.options.mcpUrl);
-      const prm = await this.json(
-        `${resource.origin}/.well-known/oauth-protected-resource${resource.pathname.replace(/\/+$/, "")}`
-      );
-      const servers = prm.body?.authorization_servers;
-      if (prm.status !== 200 || typeof prm.body?.resource !== "string" || !sameResource(prm.body.resource, this.options.mcpUrl) || !Array.isArray(servers) || typeof servers[0] !== "string")
-        throw new OAuthError("misconfigured");
-      const issuer = new URL(servers[0]);
-      const as = await this.json(
-        `${issuer.origin}/.well-known/oauth-authorization-server${issuer.pathname.replace(/\/+$/, "")}`
-      );
-      const body = as.body;
-      const methods2 = body?.code_challenge_methods_supported;
-      if (as.status !== 200 || !body || typeof body.authorization_endpoint !== "string" || typeof body.token_endpoint !== "string" || !Array.isArray(methods2) || !methods2.includes("S256"))
-        throw new OAuthError("misconfigured");
-      const value2 = {
-        issuer: String(body.issuer ?? issuer.toString()),
-        authorizationEndpoint: body.authorization_endpoint,
-        tokenEndpoint: body.token_endpoint,
-        revocationEndpoint: typeof body.revocation_endpoint === "string" ? body.revocation_endpoint : null
-      };
-      for (const endpoint of [
-        value2.authorizationEndpoint,
-        value2.tokenEndpoint,
-        ...value2.revocationEndpoint ? [value2.revocationEndpoint] : []
-      ]) {
-        const url2 = new URL(endpoint);
-        if (url2.protocol !== "https:" || !this.options.egressOrigins.includes(url2.origin))
-          throw new OAuthError("misconfigured");
-      }
-      this.metadata = { value: value2, at: this.now() };
-      return value2;
-    } catch (error64) {
-      if (error64 instanceof OAuthError) throw error64;
-      throw new OAuthError(error64 instanceof EgressError ? "unavailable" : "misconfigured");
-    }
-  }
-  async authorizeUrl(state2, challenge) {
-    const { authorizationEndpoint: authorizationEndpoint3 } = await this.discover();
-    const url2 = new URL(authorizationEndpoint3);
-    url2.search = new URLSearchParams({
-      response_type: "code",
-      client_id: this.options.clientId,
-      redirect_uri: this.options.redirectUri,
-      code_challenge: challenge,
-      code_challenge_method: "S256",
-      scope: OAUTH_SCOPE,
-      resource: this.options.mcpUrl,
-      state: state2
-    }).toString();
-    return url2.toString();
-  }
-  async token(params) {
-    const { tokenEndpoint: tokenEndpoint3 } = await this.discover();
-    let response;
-    try {
-      response = await this.json(tokenEndpoint3, {
-        method: "POST",
-        headers: {
-          "content-type": "application/x-www-form-urlencoded",
-          accept: "application/json"
-        },
-        body: new URLSearchParams({
-          ...params,
-          client_id: this.options.clientId,
-          resource: this.options.mcpUrl
-        }).toString()
-      });
-    } catch {
-      throw new OAuthError("unavailable");
-    }
-    const body = response.body;
-    if (response.status === 200 && typeof body?.access_token === "string") {
-      const number4 = (value2) => typeof value2 === "number" && Number.isFinite(value2) && value2 > 0 ? value2 : null;
-      return {
-        accessToken: body.access_token,
-        refreshToken: typeof body.refresh_token === "string" ? body.refresh_token : null,
-        expiresIn: number4(body.expires_in),
-        refreshExpiresIn: number4(body.refresh_token_expires_in),
-        scope: typeof body.scope === "string" ? body.scope : null
-      };
-    }
-    if (response.status >= 400 && response.status < 500 && ["invalid_grant", "invalid_client", "unauthorized_client"].includes(String(body?.error)))
-      throw new OAuthError("invalid_grant");
-    throw new OAuthError("unavailable");
-  }
-  exchangeCode(code, verifier) {
-    return this.token({
-      grant_type: "authorization_code",
-      code,
-      redirect_uri: this.options.redirectUri,
-      code_verifier: verifier
-    });
-  }
-  refresh(refreshToken2) {
-    return this.token({ grant_type: "refresh_token", refresh_token: refreshToken2 });
-  }
-  /** Best-effort RFC 7009 revocation; never throws. */
-  async revoke(token, hint) {
-    try {
-      const { revocationEndpoint } = await this.discover();
-      if (!revocationEndpoint) return false;
-      const response = await this.json(revocationEndpoint, {
-        method: "POST",
-        headers: { "content-type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          token,
-          token_type_hint: hint,
-          client_id: this.options.clientId
-        }).toString()
-      });
-      return response.status === 200;
-    } catch {
-      return false;
-    }
-  }
-};
-
-// connections/service.ts
-init_dist();
-var import_node_crypto19 = require("node:crypto");
-
-// connections/policy.ts
-var KNOWLEDGEBASE_TOOL_POLICY_VERSION = 2;
-var JSON_BOUNDS = { depth: 8, nodes: 4e3, stringChars: 16 * 1024, keyChars: 128 };
-var UUID = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$";
-var workspace = {
-  type: "string",
-  description: "Knowledgebase workspace slug, from list_workspaces.",
-  pattern: "^[a-z0-9][a-z0-9-]{0,62}$"
-};
-var uuid3 = (description) => ({ type: "string", description, pattern: UUID });
-var nodeId = uuid3("Node UUID.");
-var path20 = {
-  type: "string",
-  description: "Workspace-relative document path.",
-  minLength: 1,
-  maxLength: 512
-};
-var limit = (max) => ({ type: "integer", minimum: 1, maximum: max });
-var cursor = { type: "string", maxLength: 512 };
-var name = (description) => ({
-  type: "string",
-  description,
-  minLength: 1,
-  maxLength: 64
-});
-var revision2 = (description) => ({
-  type: "integer",
-  description,
-  minimum: 0
-});
-var anyJson = (description) => ({ description });
-var map3 = (description, maxProperties, values) => ({
-  type: "object",
-  description,
-  additionalProperties: values,
-  maxProperties
-});
-var object2 = (properties, required2 = []) => ({
-  type: "object",
-  properties,
-  required: required2,
-  additionalProperties: false
-});
-var BODY_CHARS = 24 * 1024;
-var READS = [
-  {
-    name: "list_workspaces",
-    description: "List the Knowledgebase workspaces this connection can read.",
-    inputSchema: object2({})
-  },
-  {
-    name: "search",
-    description: "Search notes, people, companies, projects, and meetings in one Knowledgebase workspace. Returns matching nodes with ids and paths.",
-    inputSchema: object2(
-      {
-        workspace,
-        q: { type: "string", minLength: 1, maxLength: 500 },
-        type: { type: "string", maxLength: 64 },
-        path_prefix: { type: "string", maxLength: 512 },
-        limit: limit(25),
-        cursor
-      },
-      ["workspace", "q"]
-    )
-  },
-  {
-    name: "read_file",
-    description: "Read one Knowledgebase document by path, with its metadata and expected_version (pass that to edit_file).",
-    inputSchema: object2({ workspace, path: path20 }, ["workspace", "path"])
-  },
-  {
-    name: "get_related",
-    description: "Get a node's properties (with metadata_revision) and its typed relations (with relation ids and revisions) to other nodes.",
-    inputSchema: object2({ workspace, node_id: nodeId }, ["workspace", "node_id"]),
-    complete: true
-  },
-  {
-    name: "list_children",
-    description: "List the children of a node, such as the notes under a project.",
-    inputSchema: object2(
-      {
-        workspace,
-        node_id: nodeId,
-        type: { type: "string", maxLength: 64 },
-        relation: { type: "string", maxLength: 64 },
-        category: { type: "string", enum: ["markdown", "resource"] },
-        limit: limit(50),
-        cursor
-      },
-      ["workspace", "node_id"]
-    )
-  },
-  {
-    name: "get_links",
-    description: "List the Markdown links into or out of a document.",
-    inputSchema: object2(
-      {
-        workspace,
-        path: path20,
-        node_id: nodeId,
-        direction: { type: "string", enum: ["outgoing", "incoming", "both"] }
-      },
-      ["workspace"]
-    )
-  },
-  {
-    name: "read_resource",
-    description: "Read a semantic resource (an entity page) as text.",
-    inputSchema: object2(
-      {
-        workspace,
-        resource_id: uuid3("Resource UUID."),
-        format: { type: "string", enum: ["text", "markdown"] }
-      },
-      ["workspace", "resource_id"]
-    )
-  },
-  {
-    name: "list_entities",
-    description: "List entities of a type, such as projects or people.",
-    inputSchema: object2(
-      { workspace, type: { type: "string", maxLength: 64 }, limit: limit(50), cursor },
-      ["workspace"]
-    )
-  },
-  {
-    name: "query",
-    description: 'Find nodes by entity type (for example "feature"), property predicates and relations. where is JSON containment; where_in matches any listed value; where_empty matches missing, null or empty keys; every rel entry must match. order_by sorts by a numeric attribute of the explicit relation to one rel target (for Features ranked in a Project: {relation: {type: "project", to_node_id}, key: "rank"}), unranked last. include adds properties with metadata_revision and outgoing relations with relation ids, revisions and attributes. Paged (at most 100): follow next_cursor until it is absent; a missing next_cursor is the only proof that a listing is complete.',
-    inputSchema: object2(
-      {
-        workspace,
-        type: name("Entity type name or alias, e.g. feature."),
-        where: map3("Property containment predicates.", 16, anyJson("Property value.")),
-        where_in: map3("Properties matching any listed value.", 8, {
-          type: "array",
-          items: anyJson("Allowed value."),
-          maxItems: 50
-        }),
-        where_empty: {
-          type: "array",
-          description: "Property keys that must be missing, null or empty.",
-          items: { type: "string", minLength: 1, maxLength: 128 },
-          maxItems: 16
-        },
-        rel: {
-          type: "array",
-          items: object2({ type: name("Relation type name."), to_node_id: nodeId }),
-          maxItems: 4
-        },
-        order_by: object2(
-          {
-            relation: object2({ type: name("Relation type name."), to_node_id: nodeId }, [
-              "type",
-              "to_node_id"
-            ]),
-            key: name("Numeric relation attribute, e.g. rank."),
-            direction: { type: "string", enum: ["asc", "desc"] }
-          },
-          ["relation", "key"]
-        ),
-        include: {
-          type: "array",
-          items: { type: "string", enum: ["properties", "relations"] },
-          maxItems: 2
-        },
-        limit: limit(100),
-        cursor
-      },
-      ["workspace"]
-    ),
-    complete: true
-  },
-  {
-    name: "get_registries",
-    description: "List the entity, relation and resource types of a workspace with their stable ids, aliases and schemas. Use before creating typed nodes or relations.",
-    inputSchema: object2({ workspace }, ["workspace"]),
-    complete: true
-  }
-].map((tool) => ({ access: "read", maxArgumentBytes: 4 * 1024, ...tool }));
-var WRITES = {
-  create_node: {
-    description: "Create a new document or folder. Link the note to what it is about with inline body lines such as project:: [[Clear Comply]]. entity_type_id comes from get_registries. Returns the new node with its id and versions.",
-    inputSchema: object2(
-      {
-        workspace,
-        path: path20,
-        expected_version: {
-          type: "string",
-          description: 'Always "new" (create only).',
-          enum: ["new"]
-        },
-        entity_type_id: uuid3("Entity type id from get_registries."),
-        kind: { type: "string", enum: ["file", "folder"] },
-        content: { type: "string", description: "Markdown body.", maxLength: BODY_CHARS },
-        content_type: { type: "string", maxLength: 100 },
-        properties: map3("Explicit properties to set.", 64, anyJson("Property value."))
-      },
-      ["workspace", "path", "expected_version"]
-    ),
-    maxArgumentBytes: 48 * 1024
-  },
-  edit_file: {
-    description: 'Replace exactly one occurrence of old_text in a document (old_text "" writes an empty document). Requires expected_version from read_file; a changed document returns a conflict instead of overwriting.',
-    inputSchema: object2(
-      {
-        workspace,
-        path: path20,
-        old_text: { type: "string", maxLength: BODY_CHARS },
-        new_text: { type: "string", maxLength: BODY_CHARS },
-        expected_version: { type: "string", minLength: 1, maxLength: 200 }
-      },
-      ["workspace", "path", "old_text", "new_text", "expected_version"]
-    ),
-    maxArgumentBytes: 56 * 1024
-  },
-  set_properties: {
-    description: "Set explicit properties on a node. Only the keys passed change; null removes an explicit property. Requires expected_metadata_revision (metadata_revision from get_related or query include properties). Text-derived fields must be edited in their document; content_updated_at is server-maintained.",
-    inputSchema: object2(
-      {
-        workspace,
-        node_id: nodeId,
-        properties: map3("Keys to set; null removes.", 32, anyJson("Property value, or null.")),
-        expected_metadata_revision: revision2("The node metadata_revision you read.")
-      },
-      ["workspace", "node_id", "properties", "expected_metadata_revision"]
-    ),
-    maxArgumentBytes: 32 * 1024
-  },
-  add_relation: {
-    description: "Create an explicit typed relation between two node ids (relation_type name or relation_type_id from get_registries), with optional attributes such as a citations list. Prefer inline relation:: [[Title]] lines when the target can be named in a body.",
-    inputSchema: object2(
-      {
-        workspace,
-        from_node_id: nodeId,
-        to_node_id: nodeId,
-        relation_type_id: uuid3("Relation type id from get_registries."),
-        relation_type: name("Relation type name."),
-        attributes: map3("Relation attributes.", 32, anyJson("Attribute value."))
-      },
-      ["workspace", "from_node_id", "to_node_id"]
-    ),
-    maxArgumentBytes: 32 * 1024
-  },
-  update_relation: {
-    description: "Replace the attributes of an explicit relation. Read it first (get_related or query include relations) for its id, revision and current attributes; attributes are replaced wholesale, so carry over every key you are not changing. Requires expected_revision.",
-    inputSchema: object2(
-      {
-        workspace,
-        relation_id: uuid3("Relation UUID."),
-        attributes: map3("The complete new attributes.", 32, anyJson("Attribute value.")),
-        expected_revision: revision2("The relation revision you read.")
-      },
-      ["workspace", "relation_id", "attributes", "expected_revision"]
-    ),
-    maxArgumentBytes: 32 * 1024
-  },
-  remove_relation: {
-    description: "Remove one explicit relation (for example unlinking a Project). Requires its expected_revision. Inline relations are removed by editing their declaring document instead.",
-    inputSchema: object2(
-      {
-        workspace,
-        relation_id: uuid3("Relation UUID."),
-        expected_revision: revision2("The relation revision you read.")
-      },
-      ["workspace", "relation_id", "expected_revision"]
-    ),
-    destructive: true,
-    maxArgumentBytes: 4 * 1024
-  }
-};
-var REVIEWED_KNOWLEDGEBASE_TOOLS = [
-  ...READS,
-  ...KNOWLEDGEBASE_WRITE_TOOLS.map((tool) => ({
-    name: tool,
-    access: "write",
-    ...WRITES[tool]
-  }))
-];
-var REVIEWED = new Map(REVIEWED_KNOWLEDGEBASE_TOOLS.map((tool) => [tool.name, tool]));
-function reviewedTool(name2) {
-  return REVIEWED.get(name2) ?? null;
-}
-function exposable(serverTool) {
-  const reviewed = reviewedTool(serverTool.name);
-  if (!reviewed) return null;
-  if (reviewed.access === "read") {
-    if (serverTool.annotations?.readOnlyHint !== true) return null;
-    if (serverTool.annotations?.destructiveHint === true) return null;
-    return reviewed;
-  }
-  if (serverTool.annotations?.destructiveHint === true && !reviewed.destructive) return null;
-  return reviewed;
-}
-function namespacedToolId(connectionId, tool) {
-  return `kb_${connectionId.replaceAll("-", "").slice(0, 12)}_${tool}`;
-}
-function parseToolId(id2) {
-  const match = /^kb_([0-9a-f]{12})_([a-z_]{1,48})$/.exec(id2);
-  return match ? { connectionPrefix: match[1], tool: match[2] } : null;
-}
-var MAX_ARGUMENT_BYTES = 4 * 1024;
-function validateArguments(schema2, value2, at = "arguments") {
-  const budget = { nodes: 0 };
-  return validate2(schema2, value2, at, 0, budget);
-}
-function validate2(schema2, value2, at, depth, budget) {
-  if (++budget.nodes > JSON_BOUNDS.nodes) return `${at} is too large`;
-  if (depth > JSON_BOUNDS.depth) return `${at} is nested too deeply`;
-  switch (schema2.type) {
-    case void 0:
-      return validateJson(value2, at, depth, budget);
-    case "object": {
-      if (!value2 || typeof value2 !== "object" || Array.isArray(value2))
-        return `${at} must be an object`;
-      const record2 = value2;
-      for (const key of schema2.required ?? [])
-        if (record2[key] === void 0) return `${at}.${key} is required`;
-      const keys = Object.keys(record2);
-      if (schema2.maxProperties !== void 0 && keys.length > schema2.maxProperties)
-        return `${at} has too many properties`;
-      for (const key of keys) {
-        const child = schema2.properties?.[key] ?? (typeof schema2.additionalProperties === "object" ? schema2.additionalProperties : null);
-        if (!child) return `${at}.${key} is not allowed`;
-        if (!key.length || key.length > JSON_BOUNDS.keyChars) return `${at} has an invalid key`;
-        const error64 = validate2(child, record2[key], `${at}.${key}`, depth + 1, budget);
-        if (error64) return error64;
-      }
-      return null;
-    }
-    case "string":
-      if (typeof value2 !== "string") return `${at} must be a string`;
-      if (schema2.minLength !== void 0 && value2.length < schema2.minLength)
-        return `${at} is too short`;
-      if (schema2.maxLength !== void 0 && value2.length > schema2.maxLength)
-        return `${at} is too long`;
-      if (schema2.pattern && !new RegExp(schema2.pattern).test(value2)) return `${at} is malformed`;
-      if (schema2.enum && !schema2.enum.includes(value2)) return `${at} is not an allowed value`;
-      return null;
-    case "integer":
-      if (!Number.isSafeInteger(value2)) return `${at} must be an integer`;
-      if (schema2.minimum !== void 0 && value2 < schema2.minimum)
-        return `${at} is too small`;
-      if (schema2.maximum !== void 0 && value2 > schema2.maximum)
-        return `${at} is too large`;
-      return null;
-    case "number":
-      if (typeof value2 !== "number" || !Number.isFinite(value2)) return `${at} must be a number`;
-      if (schema2.minimum !== void 0 && value2 < schema2.minimum) return `${at} is too small`;
-      if (schema2.maximum !== void 0 && value2 > schema2.maximum) return `${at} is too large`;
-      return null;
-    case "boolean":
-      return typeof value2 === "boolean" ? null : `${at} must be a boolean`;
-    case "array":
-      if (!Array.isArray(value2)) return `${at} must be an array`;
-      if (schema2.maxItems !== void 0 && value2.length > schema2.maxItems)
-        return `${at} has too many items`;
-      for (const [index, item] of value2.entries()) {
-        const error64 = schema2.items ? validate2(schema2.items, item, `${at}[${index}]`, depth + 1, budget) : validateJson(item, `${at}[${index}]`, depth + 1, budget);
-        if (error64) return error64;
-      }
-      return null;
-  }
-}
-function validateJson(value2, at, depth, budget) {
-  if (++budget.nodes > JSON_BOUNDS.nodes) return `${at} is too large`;
-  if (depth > JSON_BOUNDS.depth) return `${at} is nested too deeply`;
-  if (value2 === null || typeof value2 === "boolean") return null;
-  if (typeof value2 === "number") return Number.isFinite(value2) ? null : `${at} must be finite`;
-  if (typeof value2 === "string")
-    return value2.length > JSON_BOUNDS.stringChars ? `${at} is too long` : null;
-  if (Array.isArray(value2)) {
-    for (const [index, item] of value2.entries()) {
-      const error64 = validateJson(item, `${at}[${index}]`, depth + 1, budget);
-      if (error64) return error64;
-    }
-    return null;
-  }
-  if (typeof value2 === "object") {
-    for (const [key, item] of Object.entries(value2)) {
-      if (!key.length || key.length > JSON_BOUNDS.keyChars) return `${at} has an invalid key`;
-      const error64 = validateJson(item, `${at}.${key}`, depth + 1, budget);
-      if (error64) return error64;
-    }
-    return null;
-  }
-  return `${at} is not JSON`;
-}
-
-// connections/service.ts
-var credentialAad = connectionCredentialAad;
-function stringArray(json2) {
-  let value2 = [];
-  try {
-    value2 = JSON.parse(json2);
-  } catch {
-    value2 = [];
-  }
-  return Array.isArray(value2) ? value2.filter((w) => typeof w === "string") : [];
-}
-function assistantWriteScope(row) {
-  return row.provider === "knowledgebase" && row.assistant_write_scope === "all_workspaces" ? "all_workspaces" : "per_request";
-}
-function connectionDto(row) {
-  const hasAccount = row.external_account_id !== null || row.external_account_label !== null || row.external_account_avatar_url !== null;
-  return {
-    id: row.id,
-    provider: row.provider,
-    organizationId: row.organization_id,
-    scope: row.organization_id === null ? "profile" : "organization",
-    credentialKind: row.credential_kind,
-    account: hasAccount ? {
-      id: row.external_account_id,
-      label: row.external_account_label,
-      avatarUrl: row.external_account_avatar_url
-    } : null,
-    scopes: stringArray(row.granted_scopes_json),
-    lastValidatedAt: row.last_validated_at,
-    serverUrl: row.server_url,
-    state: row.state,
-    authorizedWorkspaces: stringArray(row.authorized_workspaces_json),
-    assistantWriteScope: assistantWriteScope(row),
-    toolPolicyVersion: row.tool_policy_version,
-    lastErrorCode: row.last_error_code,
-    connectedAt: row.connected_at,
-    updatedAt: row.updated_at,
-    revision: row.revision
-  };
-}
-var AccountConnections = class {
-  constructor(db, options) {
-    this.db = db;
-    this.options = options;
-  }
-  db;
-  options;
-  lockOwner = (0, import_node_crypto19.randomUUID)();
-  now() {
-    return this.options.now?.() ?? Date.now();
-  }
-  timestamp(offsetMs = 0) {
-    return new Date(this.now() + offsetMs).toISOString();
-  }
-  sleep(ms) {
-    return this.options.sleep?.(ms) ?? new Promise((resolve) => setTimeout(resolve, ms));
-  }
-  ready() {
-    const { knowledgebase, encryption } = this.options.config;
-    if (!knowledgebase || !encryption || !this.options.oauth)
-      throw new ChatError("provider_not_ready");
-    return { knowledgebase, encryption, oauth: this.options.oauth };
-  }
-  async access(owner) {
-    await new ChatStore(this.db).access(owner);
-  }
-  /** The caller's row, or null. Never returns another owner's or organization's row. */
-  async row(owner, id2) {
-    return await this.db.get(
-      "SELECT * FROM account_connections WHERE id = ? AND owner_profile_id = ? AND organization_id = ?",
-      [id2, owner.profileId, owner.organizationId]
-    ) ?? null;
-  }
-  /** Live (not disconnected) connections the caller owns in the organization. */
-  async liveRows(owner, provider) {
-    return this.db.all(
-      `SELECT * FROM account_connections WHERE owner_profile_id = ? AND organization_id = ? AND state <> 'disconnected'${provider ? " AND provider = ?" : ""} ORDER BY created_at, id`,
-      [owner.profileId, owner.organizationId, ...provider ? [provider] : []]
-    );
-  }
-  async list(owner) {
-    await this.access(owner);
-    const items = [];
-    for (const row of await this.liveRows(owner)) {
-      const now2 = this.timestamp();
-      if (row.state === "connected" && row.access_expires_at !== null && row.access_expires_at <= now2 && row.refresh_expires_at !== null && row.refresh_expires_at <= now2) {
-        await this.requireReauthorization(row.id, "grant_expired");
-        const fresh = await this.row(owner, row.id);
-        if (fresh) items.push(connectionDto(fresh));
-        continue;
-      }
-      items.push(connectionDto(row));
-    }
-    return { items };
-  }
-  async start(owner, body) {
-    const input2 = body;
-    if (!input2 || input2.provider !== "knowledgebase" || input2.returnTo !== "mobile" && input2.returnTo !== "web")
-      throw new ChatError("invalid_request");
-    const returnTo = input2.returnTo;
-    const { knowledgebase, encryption, oauth } = this.ready();
-    await this.access(owner);
-    const state2 = (0, import_node_crypto19.randomBytes)(32).toString("base64url");
-    const { verifier, challenge } = pkcePair();
-    let authorizeUrl;
-    try {
-      authorizeUrl = await oauth.authorizeUrl(state2, challenge);
-    } catch {
-      throw new ChatError("provider_not_ready");
-    }
-    const authorizationId = (0, import_node_crypto19.randomUUID)();
-    const expiresAt = this.timestamp(AUTHORIZATION_TTL_MS);
-    const connectionId = await this.db.transaction(async (tx) => {
-      const now2 = this.timestamp();
-      let row = await tx.get(
-        `SELECT * FROM account_connections WHERE owner_profile_id = ? AND organization_id = ? AND provider = ? AND server_url = ? AND state <> 'disconnected'`,
-        [owner.profileId, owner.organizationId, "knowledgebase", knowledgebase.mcpUrl]
-      );
-      if (!row) {
-        const id2 = (0, import_node_crypto19.randomUUID)();
-        await tx.run(
-          `INSERT INTO account_connections (id, owner_profile_id, organization_id, provider, server_url, state, tool_policy_version, created_at, updated_at) VALUES (?, ?, ?, 'knowledgebase', ?, 'pending', ?, ?, ?)`,
-          [
-            id2,
-            owner.profileId,
-            owner.organizationId,
-            knowledgebase.mcpUrl,
-            KNOWLEDGEBASE_TOOL_POLICY_VERSION,
-            now2,
-            now2
-          ]
-        );
-        row = await tx.get("SELECT * FROM account_connections WHERE id = ?", [
-          id2
-        ]);
-      }
-      await beginAuthorization(tx, {
-        row,
-        authorizationId,
-        state: state2,
-        verifier,
-        key: encryption.key,
-        returnTo,
-        expiresAt,
-        now: now2
-      });
-      return row.id;
-    });
-    return { connectionId, authorizeUrl, expiresAt };
-  }
-  /** Public OAuth callback. Consumes the single-use state; never throws for user-facing input. */
-  async complete(query) {
-    const state2 = typeof query.state === "string" ? query.state : "";
-    if (!AUTHORIZATION_STATE_PATTERN.test(state2)) return { status: "expired", returnTo: null };
-    let ready;
-    try {
-      ready = this.ready();
-    } catch {
-      return { status: "failed", returnTo: null };
-    }
-    const now2 = this.timestamp();
-    const consumed = await this.db.transaction((tx) => consumeAuthorization(tx, { state: state2, now: now2 }));
-    if (!consumed) return { status: "expired", returnTo: null };
-    const returnTo = consumed.auth.return_to;
-    const { row, auth: auth2 } = consumed;
-    if (!consumed.fresh || !row) return { status: "expired", returnTo };
-    if (query.error !== void 0) {
-      await this.recordError(row.id, "authorization_denied");
-      return { status: "denied", returnTo };
-    }
-    const code = typeof query.code === "string" && query.code.length <= MAX_AUTHORIZATION_CODE_LENGTH ? query.code : "";
-    if (!code) return { status: "failed", returnTo };
-    try {
-      await this.access({ profileId: row.owner_profile_id, organizationId: row.organization_id });
-    } catch {
-      return { status: "failed", returnTo };
-    }
-    let tokens;
-    try {
-      const verifier = openSecret({
-        envelope: auth2.pkce_verifier_ciphertext,
-        key: ready.encryption.key,
-        aad: verifierAad(row, auth2.id)
-      });
-      tokens = await ready.oauth.exchangeCode(code, verifier);
-    } catch (error64) {
-      await this.recordError(
-        row.id,
-        error64 instanceof OAuthError ? `token_${error64.code}` : "token_exchange_failed"
-      );
-      return { status: "failed", returnTo };
-    }
-    let workspaces = null;
-    try {
-      workspaces = await this.options.listWorkspaces?.(tokens.accessToken) ?? null;
-    } catch {
-      workspaces = null;
-    }
-    const stored = await this.db.transaction(async (tx) => {
-      const at = this.timestamp();
-      const result2 = await tx.run(
-        `UPDATE account_connections SET state = 'connected', credential_ciphertext = ?, credential_key_id = ?, credential_revision = credential_revision + 1, access_expires_at = ?, refresh_expires_at = ?, authorized_workspaces_json = ?, tool_policy_version = ?, refresh_lock_owner = NULL, refresh_lock_until = NULL, last_refreshed_at = ?, last_error_code = NULL, connected_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND state <> 'disconnected'`,
-        [
-          this.seal(row, { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken }),
-          ready.encryption.keyId,
-          tokens.expiresIn ? this.timestamp(tokens.expiresIn * 1e3) : null,
-          tokens.refreshExpiresIn ? this.timestamp(tokens.refreshExpiresIn * 1e3) : null,
-          JSON.stringify(workspaces ?? []),
-          KNOWLEDGEBASE_TOOL_POLICY_VERSION,
-          at,
-          at,
-          at,
-          row.id
-        ]
-      );
-      return result2.changes === 1;
-    });
-    if (!stored) {
-      await this.revokeUpstream({
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken
-      });
-      return { status: "failed", returnTo };
-    }
-    return { status: "connected", returnTo };
-  }
-  /**
-   * `PATCH /api/connections/:id` (v158): the owner's Knowledgebase settings. Only a
-   * live Knowledgebase row can change; the write is revision-checked. The MCP client
-   * re-reads the row on every call, so narrowing the scope takes effect at once.
-   */
-  async update(owner, id2, body) {
-    await this.access(owner);
-    const input2 = body;
-    if (!input2 || typeof input2 !== "object" || Array.isArray(input2))
-      throw new ChatError("invalid_request");
-    const { expectedRevision: expected, assistantWriteScope: scope2, ...rest } = input2;
-    if (Object.keys(rest).length || !ACCOUNT_CONNECTION_ASSISTANT_WRITE_SCOPES.includes(scope2))
-      throw new ChatError("invalid_request");
-    const revision3 = revision(expected);
-    const row = await this.row(owner, id2);
-    if (!row || row.state === "disconnected") throw new ChatError("not_found");
-    if (row.provider !== "knowledgebase") throw new ChatError("invalid_request");
-    if (row.revision !== revision3) throw new ChatError("stale_revision");
-    if (row.assistant_write_scope !== scope2) {
-      const result2 = await this.db.run(
-        "UPDATE account_connections SET assistant_write_scope = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND revision = ?",
-        [scope2, this.timestamp(), id2, revision3]
-      );
-      if (!result2.changes) throw new ChatError("stale_revision");
-    }
-    return connectionDto(await this.row(owner, id2));
-  }
-  async disconnect(owner, id2) {
-    await this.access(owner);
-    const row = await this.row(owner, id2);
-    if (!row || row.state === "disconnected") throw new ChatError("not_found");
-    let credentials = null;
-    try {
-      const key = row.credential_key_id ? knowledgebaseKeyById(this.options.config.keyRing, row.credential_key_id) : null;
-      credentials = key ? this.open(row, key) : null;
-    } catch {
-      credentials = null;
-    }
-    await this.db.transaction(async (tx) => {
-      const now2 = this.timestamp();
-      await eraseCredential(tx, id2, now2, { onlyIfLive: false });
-    });
-    if (credentials) await this.revokeUpstream(credentials);
-    await this.options.onAccessLost?.(id2);
-    return connectionDto(await this.row(owner, id2));
-  }
-  /**
-   * A current access token for the caller's connection. Refresh is serialized
-   * per connection by a database lease; the rotated credential is persisted
-   * before it is returned. Pass `staleRevision` after the provider rejected a
-   * token so concurrent callers coalesce on one refresh.
-   */
-  async accessToken(owner, id2, options = {}) {
-    let ready;
-    try {
-      ready = this.ready();
-    } catch {
-      throw new ConnectionAccessError("unavailable");
-    }
-    return withRefreshLease(
-      this.db,
-      this.lockOwner,
-      {
-        now: () => this.now(),
-        timestamp: (offset) => this.timestamp(offset),
-        sleep: (ms) => this.sleep(ms),
-        staleRevision: options.staleRevision,
-        signal: options.signal,
-        read: async () => {
-          const row = await this.row(owner, id2);
-          if (!row || row.state === "disconnected") throw new ConnectionAccessError("not_found");
-          if (row.state !== "connected")
-            throw new ConnectionAccessError("reauthorization_required");
-          const key = row.credential_key_id ? knowledgebaseKeyById(this.options.config.keyRing, row.credential_key_id) : null;
-          if (!key && row.credential_key_id && missingKeyIsConfiguration(
-            this.options.config.keyRing,
-            row.credential_key_id,
-            row.credential_format,
-            "organization"
-          ))
-            throw new ConnectionAccessError("unavailable");
-          let credentials;
-          try {
-            if (!key) throw new SecretEnvelopeError();
-            credentials = this.open(row, key);
-          } catch {
-            await this.requireReauthorization(id2, "credential_unreadable");
-            throw new ConnectionAccessError("reauthorization_required");
-          }
-          if (key.id !== ready.encryption.keyId) {
-            await this.reseal(row, credentials, ready.encryption);
-            return null;
-          }
-          return { row, credential: credentials };
-        },
-        requireReauthorization: (row, code) => this.requireReauthorization(row.id, code)
-      },
-      (row, token) => this.refreshLeased(row, token, ready)
-    );
-  }
-  async refreshLeased(row, refreshToken2, ready) {
-    await refreshLeased(this.db, row, this.lockOwner, {
-      exchange: () => ready.oauth.refresh(refreshToken2),
-      invalidGrant: (error64) => error64 instanceof OAuthError && error64.code === "invalid_grant",
-      requireReauthorization: (code) => this.requireReauthorization(row.id, code, this.lockOwner),
-      persist: async (tokens) => {
-        const now2 = this.timestamp();
-        await this.db.run(
-          `UPDATE account_connections SET credential_ciphertext = ?, credential_key_id = ?, credential_revision = credential_revision + 1, access_expires_at = ?, refresh_expires_at = COALESCE(?, refresh_expires_at), last_refreshed_at = ?, last_error_code = NULL, refresh_lock_owner = NULL, refresh_lock_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'connected' AND refresh_lock_owner = ? AND credential_revision = ?`,
-          [
-            this.seal(row, {
-              accessToken: tokens.accessToken,
-              refreshToken: tokens.refreshToken ?? refreshToken2
-            }),
-            ready.encryption.keyId,
-            tokens.expiresIn ? this.timestamp(tokens.expiresIn * 1e3) : null,
-            tokens.refreshExpiresIn ? this.timestamp(tokens.refreshExpiresIn * 1e3) : null,
-            now2,
-            now2,
-            row.id,
-            this.lockOwner,
-            row.credential_revision
-          ]
-        );
-      }
-    });
-  }
-  /** Marks the connection unusable until the owner signs in again and erases its credential. */
-  async requireReauthorization(id2, code, lockOwner) {
-    const result2 = await requireReauthorization(this.db, id2, code, this.timestamp(), lockOwner);
-    if (result2.changes === 1) await this.options.onAccessLost?.(id2);
-  }
-  async setAuthorizedWorkspaces(id2, workspaces) {
-    await this.db.run(
-      `UPDATE account_connections SET authorized_workspaces_json = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'connected' AND authorized_workspaces_json <> ?`,
-      [JSON.stringify(workspaces), this.timestamp(), id2, JSON.stringify(workspaces)]
-    );
-  }
-  async recordError(id2, code) {
-    await recordError(this.db, id2, code, this.timestamp());
-  }
-  seal(row, credentials) {
-    const { encryption } = this.ready();
-    return sealSecret({
-      plaintext: JSON.stringify(credentials),
-      key: encryption.key,
-      aad: credentialAad(row)
-    });
-  }
-  /** Re-seal the same credential under the write key; the token itself is unchanged. */
-  async reseal(row, credentials, key) {
-    await this.db.run(
-      `UPDATE account_connections SET credential_ciphertext = ?, credential_key_id = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'connected' AND credential_key_id = ? AND credential_revision = ?`,
-      [
-        sealSecret({
-          plaintext: JSON.stringify(credentials),
-          key: key.key,
-          aad: credentialAad(row)
-        }),
-        key.keyId,
-        this.timestamp(),
-        row.id,
-        row.credential_key_id,
-        row.credential_revision
-      ]
-    );
-  }
-  open(row, key) {
-    if (!row.credential_ciphertext) throw new SecretEnvelopeError();
-    const value2 = JSON.parse(
-      openSecret({
-        envelope: row.credential_ciphertext,
-        key: key.key,
-        aad: credentialAad(row)
-      })
-    );
-    if (typeof value2.accessToken !== "string") throw new SecretEnvelopeError();
-    return {
-      accessToken: value2.accessToken,
-      refreshToken: typeof value2.refreshToken === "string" ? value2.refreshToken : null
-    };
-  }
-  async revokeUpstream(credentials) {
-    const oauth = this.options.oauth;
-    if (!oauth) return;
-    if (credentials.refreshToken) await oauth.revoke(credentials.refreshToken, "refresh_token");
-    await oauth.revoke(credentials.accessToken, "access_token");
-  }
-};
-
-// connections/profile.ts
-var ProviderOAuthError = class extends Error {
-  constructor(code) {
-    super(code);
-    this.code = code;
-  }
-  code;
-};
-var ProviderCredentialError = class extends Error {
-  constructor(code, upstreamStatus2, upstreamMessage) {
-    super(code);
-    this.code = code;
-    this.upstreamStatus = upstreamStatus2;
-    this.upstreamMessage = upstreamMessage;
-  }
-  code;
-  upstreamStatus;
-  upstreamMessage;
-};
-var MAX_API_KEY_LENGTH = 512;
-var MAX_RETURN_PATH_LENGTH = 512;
-function isSafeReturnPath(value2) {
-  return typeof value2 === "string" && value2.length <= MAX_RETURN_PATH_LENGTH && value2.startsWith("/") && !value2.startsWith("//") && !value2.includes("\\") && ![...value2].some((ch) => ch.charCodeAt(0) < 32 || ch.charCodeAt(0) === 127);
-}
-function profileConnections(db, providers, env3 = process.env) {
-  return new ProfileConnections(db, keyRingFromEnv(env3), providers);
-}
-var ProfileConnections = class {
-  constructor(db, ring, providers = [], options = {}) {
-    this.db = db;
-    this.ring = ring;
-    this.options = options;
-    this.adapters = new Map(providers.map((adapter2) => [adapter2.provider, adapter2]));
-  }
-  db;
-  ring;
-  options;
-  lockOwner = (0, import_node_crypto20.randomUUID)();
-  adapters;
-  provider(provider) {
-    return this.adapters.get(provider) ?? null;
-  }
-  now() {
-    return this.options.now?.() ?? Date.now();
-  }
-  timestamp(offsetMs = 0) {
-    return new Date(this.now() + offsetMs).toISOString();
-  }
-  sleep(ms) {
-    return this.options.sleep?.(ms) ?? new Promise((resolve) => setTimeout(resolve, ms));
-  }
-  /** Every supplied provider, with whether a connection can be stored on this server. */
-  providers() {
-    return [...this.adapters.values()].map((adapter2) => {
-      const reason = adapter2.oauth && !adapter2.oauth.configured() ? "not_configured" : writeKey(this.ring, adapter2.provider) === null ? "encryption_not_configured" : null;
-      return {
-        provider: adapter2.provider,
-        scope: "profile",
-        credentialKind: adapter2.credentialKind,
-        available: reason === null,
-        reason
-      };
-    });
-  }
-  /** Whether a connection for `provider` can be made on this server right now. */
-  available(provider) {
-    return this.providers().find((entry) => entry.provider === provider)?.available === true;
-  }
-  /** The caller's live profile-scoped connections, adopting legacy rows first. */
-  async list(profileId) {
-    const items = [];
-    for (const adapter2 of this.adapters.values()) {
-      const row = await this.find(profileId, adapter2.provider);
-      if (row) items.push(connectionDto(row));
-    }
-    return items;
-  }
-  /** The caller's row by id, in any state, or null. Never another profile's row. */
-  async row(profileId, id2) {
-    return await this.db.get(
-      "SELECT * FROM account_connections WHERE id = ? AND owner_profile_id = ? AND organization_id IS NULL",
-      [id2, profileId]
-    ) ?? null;
-  }
-  /**
-   * The caller's live connection for a provider, or null. When the profile has no
-   * row for the provider in any state, a live legacy row is adopted verbatim first
-   * (lazy adoption for one release, for rows an older instance wrote after the
-   * migration ran). A disconnected profile is never resurrected.
-   */
-  async find(profileId, provider) {
-    const live = await this.liveRow(profileId, provider);
-    if (live) return live;
-    const adapter2 = this.adapters.get(provider);
-    if (!adapter2?.legacy) return null;
-    const legacy = await adapter2.legacy.find(this.db, profileId);
-    if (!legacy) return null;
-    await this.db.transaction(async (tx) => {
-      const any2 = await tx.get(
-        "SELECT 1 AS present FROM account_connections WHERE owner_profile_id = ? AND provider = ?",
-        [profileId, provider]
-      );
-      if (any2) return;
-      if (adapter2.uniqueExternalAccount && legacy.account.id !== null && await tx.get(
-        `SELECT 1 AS present FROM account_connections WHERE provider = ? AND external_account_id = ? AND state <> 'disconnected'`,
-        [provider, legacy.account.id]
-      ))
-        return;
-      await tx.run(
-        `INSERT INTO account_connections (id, owner_profile_id, organization_id, provider, server_url, state, credential_kind, credential_format, credential_ciphertext, credential_key_id, credential_revision, access_expires_at, refresh_expires_at, external_account_id, external_account_label, external_account_avatar_url, granted_scopes_json, last_validated_at, connected_at, created_at, updated_at, revision) VALUES (?, ?, NULL, ?, ?, 'connected', ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1) ON CONFLICT (id) DO NOTHING`,
-        [
-          legacy.id,
-          profileId,
-          provider,
-          adapter2.serverUrl,
-          adapter2.credentialKind,
-          legacy.format,
-          legacy.ciphertext,
-          legacy.keyId,
-          legacy.accessExpiresAt ?? null,
-          legacy.refreshExpiresAt ?? null,
-          legacy.account.id,
-          legacy.account.label,
-          legacy.account.avatarUrl ?? null,
-          JSON.stringify(legacy.scopes ?? []),
-          legacy.lastValidatedAt,
-          legacy.createdAt,
-          legacy.createdAt,
-          legacy.updatedAt
-        ]
-      );
-    });
-    return this.liveRow(profileId, provider);
-  }
-  async liveRow(profileId, provider) {
-    return await this.db.get(
-      `SELECT * FROM account_connections WHERE owner_profile_id = ? AND organization_id IS NULL AND provider = ? AND state <> 'disconnected'`,
-      [profileId, provider]
-    ) ?? null;
-  }
-  /**
-   * Store (or rotate) an API key the caller already validated upstream. Answers
-   * `provider_not_ready` when no key can seal it; nothing is stored in plaintext.
-   */
-  async storeApiKey(profileId, provider, apiKey, account) {
-    const adapter2 = this.adapters.get(provider);
-    if (!adapter2 || adapter2.credentialKind !== "api_key")
-      throw new ChatError("provider_not_available");
-    const key = writeKey(this.ring, provider);
-    if (!key) throw new ChatError("provider_not_ready");
-    const existing = await this.find(profileId, provider);
-    const now2 = this.timestamp();
-    const credential = { kind: "api_key", apiKey };
-    if (existing) {
-      await this.db.run(
-        `UPDATE account_connections SET state = 'connected', credential_kind = 'api_key', credential_format = 'connection-v1', credential_ciphertext = ?, credential_key_id = ?, credential_revision = credential_revision + 1, external_account_id = ?, external_account_label = ?, external_account_avatar_url = ?, last_validated_at = ?, last_error_code = NULL, connected_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND owner_profile_id = ? AND state <> 'disconnected'`,
-        [
-          this.seal(existing, credential, key),
-          key.id,
-          account.id,
-          account.label,
-          account.avatarUrl ?? null,
-          now2,
-          now2,
-          now2,
-          existing.id,
-          profileId
-        ]
-      );
-      return connectionDto(await this.row(profileId, existing.id));
-    }
-    const id2 = (0, import_node_crypto20.randomUUID)();
-    const draft = { id: id2, owner_profile_id: profileId, organization_id: null, provider };
-    await this.db.run(
-      `INSERT INTO account_connections (id, owner_profile_id, organization_id, provider, server_url, state, credential_kind, credential_format, credential_ciphertext, credential_key_id, credential_revision, external_account_id, external_account_label, external_account_avatar_url, last_validated_at, connected_at, created_at, updated_at, revision) VALUES (?, ?, NULL, ?, ?, 'connected', 'api_key', 'connection-v1', ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, 1)`,
-      [
-        id2,
-        profileId,
-        provider,
-        adapter2.serverUrl,
-        this.seal(draft, credential, key),
-        key.id,
-        account.id,
-        account.label,
-        account.avatarUrl ?? null,
-        now2,
-        now2,
-        now2,
-        now2
-      ]
-    );
-    return connectionDto(await this.row(profileId, id2));
-  }
-  /** `POST /api/connections/api-keys`: validate upstream through the adapter, then store. */
-  async setApiKey(profileId, body) {
-    const input2 = body;
-    const adapter2 = this.provider(input2?.provider);
-    if (!adapter2 || adapter2.credentialKind !== "api_key" || !adapter2.validateApiKey)
-      throw new ChatError("provider_not_available");
-    const apiKey = typeof input2?.apiKey === "string" ? input2.apiKey.trim() : "";
-    if (!apiKey || apiKey.length > MAX_API_KEY_LENGTH) throw new ChatError("invalid_request");
-    if (!writeKey(this.ring, adapter2.provider)) throw new ChatError("provider_not_ready");
-    let account;
-    try {
-      account = await adapter2.validateApiKey(apiKey);
-    } catch (error64) {
-      if (error64 instanceof ProviderCredentialError && error64.code === "rejected")
-        throw new ChatError("credential_rejected");
-      throw new ChatError("provider_unavailable");
-    }
-    return this.storeApiKey(profileId, adapter2.provider, apiKey, account);
-  }
-  /**
-   * The caller's plaintext credential for a provider, or null when there is no
-   * connected row. Throws `ConnectionAccessError('unavailable')` when the key it
-   * was sealed with is not configured (nothing is erased), and
-   * `ConnectionAccessError('reauthorization_required')` when the envelope is
-   * unreadable (it is erased). Re-seals legacy and fallback-key envelopes under
-   * the current key after a successful read.
-   */
-  async credential(profileId, provider) {
-    const row = await this.find(profileId, provider);
-    if (!row || row.state !== "connected" || !row.credential_ciphertext || !row.credential_key_id)
-      return null;
-    if (row.credential_format !== "connection-v1") {
-      const legacy = this.adapters.get(provider)?.legacy;
-      if (legacy && !await legacy.isLive(this.db, row.id)) {
-        await this.erase(row);
-        return null;
-      }
-    }
-    const key = keyById(this.ring, row.credential_key_id);
-    if (!key) {
-      if (missingKeyIsConfiguration(
-        this.ring,
-        row.credential_key_id,
-        row.credential_format
-      ))
-        throw new ConnectionAccessError("unavailable");
-      await this.requireReauthorization(row, "credential_unreadable");
-      throw new ConnectionAccessError("reauthorization_required");
-    }
-    let credential;
-    try {
-      credential = openCredential(
-        { ...row, credential_ciphertext: row.credential_ciphertext },
-        key.key
-      );
-    } catch (error64) {
-      if (!(error64 instanceof SecretEnvelopeError)) throw error64;
-      await this.requireReauthorization(row, "credential_unreadable");
-      throw new ConnectionAccessError("reauthorization_required");
-    }
-    const current = this.ring.current;
-    if (current && (row.credential_key_id !== current.id || row.credential_format !== "connection-v1")) {
-      await this.reseal(row, credential, current);
-      const resealed = await this.row(profileId, row.id);
-      if (resealed?.state === "connected") return { credential, row: resealed };
-    }
-    return { credential, row };
-  }
-  /**
-   * `DELETE /api/connections/:id` for a profile-scoped row: erase first, then revoke
-   * an OAuth token upstream (best-effort), then tombstone the legacy row.
-   */
-  async disconnect(profileId, id2) {
-    const row = await this.row(profileId, id2);
-    if (!row || row.state === "disconnected") throw new ChatError("not_found");
-    await this.disconnectRow(profileId, row.provider, row);
-    return connectionDto(await this.row(profileId, id2));
-  }
-  /** Disconnect the caller's connection for a provider, if any (legacy alias routes). */
-  async disconnectProvider(profileId, provider) {
-    await this.disconnectRow(profileId, provider, await this.find(profileId, provider));
-  }
-  async disconnectRow(profileId, provider, row) {
-    const adapter2 = this.adapters.get(provider);
-    const credential = row ? this.peek(row) : null;
-    if (row) await this.erase(row);
-    if (credential?.kind === "oauth" && adapter2?.oauth)
-      await adapter2.oauth.revoke(credential.accessToken).catch(() => void 0);
-    await adapter2?.legacy?.tombstone(this.db, profileId, this.timestamp());
-  }
-  // ---- OAuth (profile-scoped, confidential client) --------------------------
-  /** `POST /api/connections` for a profile-scoped OAuth provider. */
-  async startOAuth(profileId, body) {
-    const input2 = body;
-    const adapter2 = this.provider(input2?.provider);
-    if (!adapter2?.oauth) throw new ChatError("provider_not_available");
-    if (input2?.returnTo !== "mobile" && input2?.returnTo !== "web")
-      throw new ChatError("invalid_request");
-    let returnUrl = null;
-    if (input2.returnPath !== void 0 && input2.returnPath !== null) {
-      if (input2.returnTo !== "web" || !isSafeReturnPath(input2.returnPath))
-        throw new ChatError("invalid_request");
-      returnUrl = input2.returnPath;
-    }
-    return this.beginOAuth(profileId, adapter2.provider, { returnTo: input2.returnTo, returnUrl });
-  }
-  /**
-   * Begin a sign-in: hashed single-use state bound to the caller's connection (a live
-   * one is reused for a reconnect; otherwise a `pending` row is created), and a PKCE
-   * verifier sealed under the provider's write key. `returnUrl` is either a relative
-   * web path or an absolute target a legacy alias already validated.
-   */
-  async beginOAuth(profileId, provider, target) {
-    const adapter2 = this.adapters.get(provider);
-    const oauth = adapter2?.oauth;
-    if (!adapter2 || !oauth) throw new ChatError("provider_not_available");
-    const key = writeKey(this.ring, provider);
-    if (!key || !oauth.configured()) throw new ChatError("provider_not_ready");
-    const state2 = (0, import_node_crypto20.randomBytes)(32).toString("base64url");
-    const { verifier, challenge } = pkcePair();
-    const authorizeUrl = oauth.authorizeUrl({ state: state2, codeChallenge: challenge });
-    const authorizationId = (0, import_node_crypto20.randomUUID)();
-    const expiresAt = this.timestamp(AUTHORIZATION_TTL_MS);
-    await this.find(profileId, provider);
-    const connectionId = await this.db.transaction(async (tx) => {
-      const now2 = this.timestamp();
-      let row = await tx.get(
-        `SELECT * FROM account_connections WHERE owner_profile_id = ? AND organization_id IS NULL AND provider = ? AND state <> 'disconnected'`,
-        [profileId, provider]
-      );
-      if (!row) {
-        const id2 = (0, import_node_crypto20.randomUUID)();
-        await tx.run(
-          `INSERT INTO account_connections (id, owner_profile_id, organization_id, provider, server_url, state, credential_kind, created_at, updated_at) VALUES (?, ?, NULL, ?, ?, 'pending', ?, ?, ?)`,
-          [id2, profileId, provider, adapter2.serverUrl, adapter2.credentialKind, now2, now2]
-        );
-        row = await tx.get("SELECT * FROM account_connections WHERE id = ?", [
-          id2
-        ]);
-      }
-      await beginAuthorization(tx, {
-        row,
-        authorizationId,
-        state: state2,
-        verifier,
-        key: key.key,
-        returnTo: target.returnTo,
-        returnUrl: target.returnUrl,
-        expiresAt,
-        now: now2
-      });
-      return row.id;
-    });
-    return { connectionId, authorizeUrl, expiresAt };
-  }
-  /**
-   * The provider's public callback. Consumes the single-use state (bound to this
-   * provider), exchanges the code, checks the required scopes and the account, then
-   * seals the grant. Never throws for user-facing input; stores nothing on failure.
-   */
-  async completeOAuth(provider, query) {
-    const adapter2 = this.adapters.get(provider);
-    const oauth = adapter2?.oauth;
-    const state2 = typeof query.state === "string" ? query.state : "";
-    const outcome = (status, rest = {}) => ({
-      status,
-      returnTo: null,
-      returnUrl: null,
-      connectionId: null,
-      errorCode: null,
-      ...rest
-    });
-    if (!adapter2 || !oauth || !AUTHORIZATION_STATE_PATTERN.test(state2)) return outcome("expired");
-    const now2 = this.timestamp();
-    const consumed = await this.db.transaction(
-      (tx) => consumeAuthorization(tx, { state: state2, providerFilter: provider, now: now2 })
-    );
-    if (!consumed) return outcome("expired");
-    const { auth: auth2, row } = consumed;
-    const target = {
-      returnTo: auth2.return_to,
-      returnUrl: auth2.return_url ?? null,
-      connectionId: auth2.connection_id
-    };
-    if (!consumed.fresh || !row) return outcome("expired", target);
-    const fail2 = async (status, code2) => {
-      await this.recordError(row.id, code2);
-      return outcome(status, { ...target, errorCode: code2 });
-    };
-    if (query.error !== void 0) return fail2("denied", "authorization_denied");
-    const code = typeof query.code === "string" && query.code.length <= MAX_AUTHORIZATION_CODE_LENGTH ? query.code : "";
-    if (!code) return outcome("failed", target);
-    const key = writeKey(this.ring, provider);
-    let grant;
-    try {
-      if (!key || !oauth.configured()) throw new ProviderOAuthError("unavailable");
-      const verifier = openSecret({
-        envelope: auth2.pkce_verifier_ciphertext,
-        key: key.key,
-        aad: verifierAad(row, auth2.id)
-      });
-      grant = await oauth.exchangeCode({ code, codeVerifier: verifier });
-    } catch (error64) {
-      return fail2(
-        "failed",
-        error64 instanceof ProviderOAuthError ? `token_${error64.code}` : "token_exchange_failed"
-      );
-    }
-    if (!oauth.requiredScopes.every((scope2) => grant.scopes.includes(scope2)))
-      return fail2("failed", "insufficient_scope");
-    let account;
-    try {
-      account = await oauth.describeAccount(grant.accessToken);
-    } catch {
-      return fail2("failed", "account_lookup_failed");
-    }
-    if (adapter2.uniqueExternalAccount && await this.db.get(
-      `SELECT 1 AS present FROM account_connections WHERE provider = ? AND external_account_id = ? AND owner_profile_id <> ? AND state <> 'disconnected'`,
-      [provider, account.id, row.owner_profile_id]
-    ))
-      return fail2("failed", "account_in_use");
-    const at = this.timestamp();
-    let stored;
-    try {
-      const result2 = await this.db.run(
-        `UPDATE account_connections SET state = 'connected', credential_kind = 'oauth', credential_format = 'connection-v1', credential_ciphertext = ?, credential_key_id = ?, credential_revision = credential_revision + 1, access_expires_at = ?, refresh_expires_at = ?, external_account_id = ?, external_account_label = ?, external_account_avatar_url = ?, granted_scopes_json = ?, last_validated_at = ?, refresh_lock_owner = NULL, refresh_lock_until = NULL, last_refreshed_at = ?, last_error_code = NULL, connected_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND state <> 'disconnected'`,
-        [
-          this.seal(
-            row,
-            { kind: "oauth", accessToken: grant.accessToken, refreshToken: grant.refreshToken },
-            key
-          ),
-          key.id,
-          grant.expiresIn ? this.timestamp(grant.expiresIn * 1e3) : null,
-          grant.refreshExpiresIn ? this.timestamp(grant.refreshExpiresIn * 1e3) : null,
-          account.id,
-          account.label,
-          account.avatarUrl ?? null,
-          JSON.stringify(grant.scopes),
-          at,
-          at,
-          at,
-          at,
-          row.id
-        ]
-      );
-      stored = result2.changes === 1;
-    } catch {
-      return fail2("failed", "account_in_use");
-    }
-    if (!stored) {
-      await oauth.revoke(grant.accessToken).catch(() => void 0);
-      return outcome("failed", target);
-    }
-    return outcome("connected", target);
-  }
-  /**
-   * A current OAuth access token for the caller's connection. An expiring token is
-   * refreshed under a per-connection database lease, so concurrent callers share one
-   * upstream refresh, and the rotated credential is persisted before it is returned.
-   * Pass `staleRevision` after the provider rejected a token to force that refresh.
-   */
-  async oauthAccessToken(profileId, provider, options = {}) {
-    const oauth = this.adapters.get(provider)?.oauth;
-    if (!oauth) throw new ConnectionAccessError("not_found");
-    return withRefreshLease(
-      this.db,
-      this.lockOwner,
-      {
-        now: () => this.now(),
-        timestamp: (offset) => this.timestamp(offset),
-        sleep: (ms) => this.sleep(ms),
-        staleRevision: options.staleRevision,
-        read: async () => {
-          const found = await this.credential(profileId, provider);
-          if (!found || found.credential.kind !== "oauth") {
-            const live = await this.liveRow(profileId, provider);
-            throw new ConnectionAccessError(
-              live?.state === "reauthorization_required" ? "reauthorization_required" : "not_found"
-            );
-          }
-          const { row } = found;
-          const credential = found.credential;
-          return { row, credential };
-        },
-        requireReauthorization: (row, code) => this.requireReauthorization(row, code)
-      },
-      (row, token) => this.refreshLeased(row, provider, oauth, token)
-    );
-  }
-  async refreshLeased(row, provider, oauth, refreshToken2) {
-    const key = writeKey(this.ring, provider);
-    await refreshLeased(this.db, row, this.lockOwner, {
-      available: () => key !== null && oauth.configured(),
-      exchange: () => oauth.refresh(refreshToken2),
-      invalidGrant: (error64) => error64 instanceof ProviderOAuthError && error64.code === "invalid_grant",
-      requireReauthorization: (code) => this.requireReauthorization(row, code, this.lockOwner),
-      persist: async (grant) => {
-        if (!oauth.requiredScopes.every((scope2) => grant.scopes.includes(scope2))) {
-          await this.requireReauthorization(row, "insufficient_scope", this.lockOwner);
-          throw new ConnectionAccessError("reauthorization_required");
-        }
-        const now2 = this.timestamp();
-        await this.db.run(
-          `UPDATE account_connections SET credential_ciphertext = ?, credential_key_id = ?, credential_format = 'connection-v1', credential_revision = credential_revision + 1, access_expires_at = ?, refresh_expires_at = COALESCE(?, refresh_expires_at), granted_scopes_json = ?, last_refreshed_at = ?, last_error_code = NULL, refresh_lock_owner = NULL, refresh_lock_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'connected' AND refresh_lock_owner = ? AND credential_revision = ?`,
-          [
-            this.seal(
-              row,
-              {
-                kind: "oauth",
-                accessToken: grant.accessToken,
-                refreshToken: grant.refreshToken ?? refreshToken2
-              },
-              key
-            ),
-            key.id,
-            grant.expiresIn ? this.timestamp(grant.expiresIn * 1e3) : null,
-            grant.refreshExpiresIn ? this.timestamp(grant.refreshExpiresIn * 1e3) : null,
-            JSON.stringify(grant.scopes),
-            now2,
-            now2,
-            row.id,
-            this.lockOwner,
-            row.credential_revision
-          ]
-        );
-      }
-    });
-  }
-  /** Record a re-validated upstream account for the caller's connected row. */
-  async recordAccount(profileId, provider, account) {
-    const now2 = this.timestamp();
-    await this.db.run(
-      `UPDATE account_connections SET external_account_label = ?, external_account_avatar_url = ?, last_validated_at = ?, updated_at = ?, revision = revision + 1 WHERE owner_profile_id = ? AND organization_id IS NULL AND provider = ? AND state = 'connected'`,
-      [account.label, account.avatarUrl ?? null, now2, now2, profileId, provider]
-    );
-  }
-  /** Mark the caller's connection unusable until they sign in again (erases the credential). */
-  async requireReauthorizationFor(profileId, provider, code) {
-    const row = await this.liveRow(profileId, provider);
-    if (row) await this.requireReauthorization(row, code);
-  }
-  /**
-   * Re-seal connected profile-scoped rows still under a legacy format or a
-   * fallback key. Bounded and idempotent; logs counts only.
-   */
-  async resealSweep(limit2 = 500) {
-    const current = this.ring.current;
-    if (!current) return { resealed: 0, remaining: await this.legacyKeyedCount() };
-    const rows = await this.db.all(
-      `SELECT * FROM account_connections WHERE organization_id IS NULL AND state = 'connected' AND (credential_format <> 'connection-v1' OR credential_key_id <> ?) ORDER BY created_at, id LIMIT ?`,
-      [current.id, limit2]
-    );
-    let resealed = 0;
-    for (const row of rows) {
-      try {
-        if (await this.credential(row.owner_profile_id, row.provider))
-          resealed += 1;
-      } catch {
-      }
-    }
-    return { resealed, remaining: await this.legacyKeyedCount() };
-  }
-  async legacyKeyedCount() {
-    const row = await this.db.get(
-      `SELECT COUNT(*) AS n FROM account_connections WHERE organization_id IS NULL AND credential_ciphertext IS NOT NULL AND (credential_format <> 'connection-v1' OR credential_key_id <> ?)`,
-      [this.ring.current?.id ?? ""]
-    );
-    return Number(row?.n ?? 0);
-  }
-  seal(row, credential, key) {
-    return sealSecret({
-      plaintext: credentialPlaintext(credential),
-      key: key.key,
-      aad: connectionCredentialAad(row)
-    });
-  }
-  async reseal(row, credential, key) {
-    await this.db.run(
-      `UPDATE account_connections SET credential_ciphertext = ?, credential_key_id = ?, credential_format = 'connection-v1', credential_revision = credential_revision + 1, updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'connected' AND credential_revision = ?`,
-      [this.seal(row, credential, key), key.id, this.timestamp(), row.id, row.credential_revision]
-    );
-  }
-  /** Open a row's credential without side effects (disconnect's upstream revocation). */
-  peek(row) {
-    if (!row.credential_ciphertext || !row.credential_key_id) return null;
-    const key = keyById(this.ring, row.credential_key_id);
-    if (!key) return null;
-    try {
-      return openCredential({ ...row, credential_ciphertext: row.credential_ciphertext }, key.key);
-    } catch {
-      return null;
-    }
-  }
-  async erase(row) {
-    const now2 = this.timestamp();
-    await this.db.transaction(async (tx) => {
-      await eraseCredential(tx, row.id, now2, { onlyIfLive: true });
-    });
-  }
-  async requireReauthorization(row, code, lockOwner) {
-    await requireReauthorization(this.db, row.id, code, this.timestamp(), lockOwner);
-  }
-  async recordError(id2, code) {
-    await recordError(this.db, id2, code, this.timestamp());
-  }
-};
-
-// ext/github/user-oauth.ts
-init_db();
-
-// http/public-backend-url.ts
-var PUBLIC_BACKEND_URL_ENV_KEYS = [
-  "BETTER_AUTH_URL",
-  "BACKEND_URL",
-  "OVERLORD_BACKEND_URL"
-];
-function normalizeOriginUrl(value2) {
-  const trimmed9 = value2.trim().replace(/\/+$/, "");
-  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed9) ? trimmed9 : `http://${trimmed9}`;
-  return new URL(withScheme).origin;
-}
-function readConfiguredPublicBackendUrls() {
-  const origins = [];
-  const seen = /* @__PURE__ */ new Set();
-  for (const key of PUBLIC_BACKEND_URL_ENV_KEYS) {
-    const raw = process.env[key]?.trim();
-    if (!raw) continue;
-    const origin = normalizeOriginUrl(raw);
-    if (seen.has(origin)) continue;
-    seen.add(origin);
-    origins.push(origin);
-  }
-  return origins;
-}
-function resolveLoopbackAuthBaseUrl() {
-  const authBaseHost = process.env.OVERLORD_WEB_HOST && process.env.OVERLORD_WEB_HOST !== "0.0.0.0" ? process.env.OVERLORD_WEB_HOST : "127.0.0.1";
-  const authBasePort = process.env.OVERLORD_WEB_PORT ?? "4310";
-  return `http://${authBaseHost}:${authBasePort}`;
-}
-function resolveAuthBaseUrl() {
-  const configured = readConfiguredPublicBackendUrls();
-  if (configured.length > 0) return configured[0];
-  return resolveLoopbackAuthBaseUrl();
-}
-
-// ext/github/connection-provider.ts
-var GITHUB_SERVER_URL = "https://github.com";
-var GITHUB_REPOSITORY_CALLBACK_PATH = "/api/auth/callback/github/repository";
-var GITHUB_REPOSITORY_SCOPES = ["repo", "read:org"];
-var GITHUB_API2 = "https://api.github.com";
-var GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize";
-var GITHUB_ACCESS_TOKEN_URL = "https://github.com/login/oauth/access_token";
-function redirectUri() {
-  return new URL(GITHUB_REPOSITORY_CALLBACK_PATH, resolveAuthBaseUrl()).toString();
-}
-function requireClient() {
-  const client = githubOAuthConfigFromEnv();
-  if (!client) throw new ProviderOAuthError("unavailable");
-  return client;
-}
-function seconds(value2) {
-  return typeof value2 === "number" && Number.isFinite(value2) && value2 > 0 ? value2 : null;
-}
-function parseGitHubScopes(value2) {
-  let parsed = value2;
-  if (typeof value2 === "string") {
-    try {
-      parsed = JSON.parse(value2);
-    } catch {
-      return [];
-    }
-  }
-  return Array.isArray(parsed) ? parsed.filter((scope2) => typeof scope2 === "string") : [];
-}
-async function tokenRequest(body) {
-  let response;
-  try {
-    response = await fetch(GITHUB_ACCESS_TOKEN_URL, {
-      method: "POST",
-      headers: { Accept: "application/json", "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    });
-  } catch {
-    throw new ProviderOAuthError("unavailable");
-  }
-  let result2;
-  try {
-    result2 = await response.json();
-  } catch {
-    throw new ProviderOAuthError("unavailable");
-  }
-  if (result2.error === "bad_verification_code" || result2.error === "bad_refresh_token")
-    throw new ProviderOAuthError("invalid_grant");
-  if (!response.ok || typeof result2.access_token !== "string" || !result2.access_token)
-    throw new ProviderOAuthError("unavailable");
-  return {
-    accessToken: result2.access_token,
-    refreshToken: typeof result2.refresh_token === "string" && result2.refresh_token ? result2.refresh_token : null,
-    expiresIn: seconds(result2.expires_in),
-    refreshExpiresIn: seconds(result2.refresh_token_expires_in),
-    scopes: typeof result2.scope === "string" ? result2.scope.split(/[,\s]+/).map((scope2) => scope2.trim()).filter(Boolean) : []
-  };
-}
-async function describeAccount(accessToken) {
-  const response = await fetch(`${GITHUB_API2}/user`, {
-    headers: {
-      Accept: "application/vnd.github+json",
-      Authorization: `Bearer ${accessToken}`,
-      "X-GitHub-Api-Version": "2022-11-28"
-    }
-  });
-  if (!response.ok) throw new Error("GitHub account lookup failed");
-  const user = await response.json();
-  const id2 = typeof user.id === "number" || typeof user.id === "string" ? String(user.id) : "";
-  const login = typeof user.login === "string" ? user.login.trim() : "";
-  if (!id2 || !login) throw new Error("GitHub returned incomplete account metadata");
-  return {
-    id: id2,
-    label: login,
-    avatarUrl: typeof user.avatar_url === "string" ? user.avatar_url : null
-  };
-}
-async function revoke(accessToken) {
-  const client = githubOAuthConfigFromEnv();
-  if (!client) return;
-  try {
-    await fetch(`${GITHUB_API2}/applications/${encodeURIComponent(client.clientId)}/token`, {
-      method: "DELETE",
-      headers: {
-        Accept: "application/vnd.github+json",
-        Authorization: `Basic ${Buffer.from(`${client.clientId}:${client.clientSecret}`).toString("base64")}`,
-        "Content-Type": "application/json",
-        "X-GitHub-Api-Version": "2022-11-28"
-      },
-      body: JSON.stringify({ access_token: accessToken })
-    });
-  } catch {
-  }
-}
-function githubConnectionProvider() {
-  return {
-    provider: "github",
-    label: "GitHub",
-    serverUrl: GITHUB_SERVER_URL,
-    credentialKind: "oauth",
-    uniqueExternalAccount: true,
-    oauth: {
-      callbackPath: GITHUB_REPOSITORY_CALLBACK_PATH,
-      requiredScopes: GITHUB_REPOSITORY_SCOPES,
-      configured: () => githubOAuthConfigFromEnv() !== null,
-      authorizeUrl({ state: state2, codeChallenge }) {
-        const url2 = new URL(GITHUB_AUTHORIZE_URL);
-        url2.searchParams.set("client_id", requireClient().clientId);
-        url2.searchParams.set("redirect_uri", redirectUri());
-        url2.searchParams.set("scope", GITHUB_REPOSITORY_SCOPES.join(" "));
-        url2.searchParams.set("state", state2);
-        url2.searchParams.set("allow_signup", "false");
-        url2.searchParams.set("code_challenge", codeChallenge);
-        url2.searchParams.set("code_challenge_method", "S256");
-        return url2.toString();
-      },
-      exchangeCode({ code, codeVerifier }) {
-        const client = requireClient();
-        return tokenRequest({
-          client_id: client.clientId,
-          client_secret: client.clientSecret,
-          code,
-          redirect_uri: redirectUri(),
-          code_verifier: codeVerifier
-        });
-      },
-      refresh(refreshToken2) {
-        const client = requireClient();
-        return tokenRequest({
-          client_id: client.clientId,
-          client_secret: client.clientSecret,
-          grant_type: "refresh_token",
-          refresh_token: refreshToken2
-        });
-      },
-      revoke,
-      describeAccount
-    },
-    legacy: {
-      async find(db, profileId) {
-        const row = await db.get(
-          `SELECT id, github_user_id, github_login, avatar_url, scopes_json,
-                  access_token_ciphertext, refresh_token_ciphertext,
-                  access_token_expires_at, refresh_token_expires_at,
-                  last_validated_at, created_at, updated_at
-             FROM ext_github_user_connections
-            WHERE profile_id = ? AND deleted_at IS NULL AND access_token_ciphertext <> 'revoked:v1'`,
-          [profileId]
-        );
-        if (!row) return null;
-        return {
-          id: row.id,
-          ciphertext: JSON.stringify({
-            access: row.access_token_ciphertext,
-            refresh: row.refresh_token_ciphertext
-          }),
-          format: "github-user-oauth-v1",
-          keyId: GITHUB_USER_ENV_KEY_ID,
-          account: { id: row.github_user_id, label: row.github_login, avatarUrl: row.avatar_url },
-          scopes: parseGitHubScopes(row.scopes_json),
-          accessExpiresAt: row.access_token_expires_at,
-          refreshExpiresAt: row.refresh_token_expires_at,
-          lastValidatedAt: row.last_validated_at,
-          createdAt: row.created_at,
-          updatedAt: row.updated_at
-        };
-      },
-      async isLive(db, legacyId) {
-        return Boolean(
-          await db.get(
-            "SELECT 1 AS present FROM ext_github_user_connections WHERE id = ? AND deleted_at IS NULL",
-            [legacyId]
-          )
-        );
-      },
-      async tombstone(db, profileId, at) {
-        await db.run(
-          `UPDATE ext_github_user_connections
-              SET deleted_at = ?, updated_at = ?, access_token_ciphertext = 'revoked:v1',
-                  refresh_token_ciphertext = NULL, access_token_expires_at = NULL,
-                  refresh_token_expires_at = NULL, revision = revision + 1
-            WHERE profile_id = ? AND deleted_at IS NULL`,
-          [at, at, profileId]
-        );
-      }
-    }
-  };
-}
-
-// ext/github/user-oauth.ts
-var GITHUB_API3 = "https://api.github.com";
-var NOT_CONFIGURED = "GitHub repository authorization is not configured on this Overlord server.";
-var RECONNECT = "Reconnect GitHub to refresh repository access.";
-function createGitHubUserOAuth(connections) {
-  function githubUserOAuthConfigured2() {
-    return connections().available("github");
-  }
-  async function activeProfileId(client = requireDatabaseClient()) {
-    const profileId = await resolveActiveProfileId(client);
-    if (!profileId) throw new ApiError(401, "Authentication required.");
-    return profileId;
-  }
-  function connectionDto2(row) {
-    const connected = row?.state === "connected";
-    return {
-      configured: githubUserOAuthConfigured2(),
-      connected,
-      account: connected && row.external_account_id && row.external_account_label ? {
-        id: row.external_account_id,
-        login: row.external_account_label,
-        avatarUrl: row.external_account_avatar_url
-      } : null,
-      scopes: connected ? parseGitHubScopes(row.granted_scopes_json) : []
-    };
-  }
-  async function getGitHubUserConnection2() {
-    const client = requireDatabaseClient();
-    const profileId = await activeProfileId(client);
-    return connectionDto2(await connections().find(profileId, "github"));
-  }
-  function validatedReturnUrl(value2, allowedBrowserOrigins2) {
-    if (value2 === void 0 || value2 === null || value2 === "") return null;
-    if (typeof value2 !== "string") throw new ApiError(400, "GitHub return URL is invalid.");
-    let url2;
-    try {
-      url2 = new URL(value2);
-    } catch {
-      throw new ApiError(400, "GitHub return URL is invalid.");
-    }
-    if (url2.protocol === "overlord:" && url2.hostname === "github" && url2.pathname === "/callback" && !url2.username && !url2.password) {
-      return url2.toString();
-    }
-    if ((url2.protocol === "https:" || url2.protocol === "http:") && allowedBrowserOrigins2.includes(url2.origin)) {
-      return url2.toString();
-    }
-    throw new ApiError(400, "GitHub return URL is not an allowed Overlord destination.");
-  }
-  async function beginGitHubUserAuthorization2(body, allowedBrowserOrigins2) {
-    const client = requireDatabaseClient();
-    const store = connections();
-    if (!store.available("github")) throw new ApiError(503, NOT_CONFIGURED);
-    const profileId = await activeProfileId(client);
-    const returnUrl = validatedReturnUrl(body.returnTo, allowedBrowserOrigins2);
-    try {
-      const started = await store.beginOAuth(profileId, "github", {
-        returnTo: returnUrl?.startsWith("overlord:") ? "mobile" : "web",
-        returnUrl
-      });
-      return { authorizationUrl: started.authorizeUrl };
-    } catch (error64) {
-      if (error64 instanceof ChatError && error64.code === "provider_not_ready")
-        throw new ApiError(503, NOT_CONFIGURED);
-      if (error64 instanceof ChatError && error64.code === "limit_exceeded")
-        throw new ApiError(429, "Too many GitHub sign-ins are open; try again in a few minutes.");
-      throw error64;
-    }
-  }
-  async function completeGitHubUserAuthorization2(input2) {
-    const client = requireDatabaseClient();
-    const outcome = await connections().completeOAuth("github", input2);
-    if (outcome.status === "expired")
-      throw new ApiError(400, "GitHub authorization state has expired or was already used.");
-    if (outcome.status !== "connected") {
-      if (outcome.errorCode === "insufficient_scope")
-        throw new ApiError(
-          403,
-          "GitHub authorization did not grant private-repository and organization access."
-        );
-      if (outcome.errorCode === "account_in_use")
-        throw new ApiError(409, "This GitHub account is already connected to another user.");
-      throw new ApiError(502, "GitHub did not complete repository authorization.");
-    }
-    const row = await client.get("SELECT * FROM account_connections WHERE id = ?", [
-      outcome.connectionId
-    ]);
-    return { connection: connectionDto2(row ?? null), returnUrl: outcome.returnUrl };
-  }
-  function accessError(error64, notConnected) {
-    if (!(error64 instanceof ConnectionAccessError)) return error64;
-    if (error64.code === "not_found") return new ApiError(409, notConnected);
-    if (error64.code === "reauthorization_required") return new ApiError(401, RECONNECT);
-    return githubUserOAuthConfigured2() ? new ApiError(502, "Could not reach GitHub.") : new ApiError(503, NOT_CONFIGURED);
-  }
-  async function connectedToken(profileId, notConnected, staleRevision) {
-    try {
-      return await connections().oauthAccessToken(profileId, "github", { staleRevision });
-    } catch (error64) {
-      throw accessError(error64, notConnected);
-    }
-  }
-  async function githubUserFetchUrl(url2, token, init2 = {}) {
-    const target = new URL(url2, GITHUB_API3);
-    if (target.origin !== GITHUB_API3)
-      throw new ApiError(502, "GitHub returned an invalid page link.");
-    let response;
-    try {
-      response = await fetch(target, {
-        method: init2.method ?? "GET",
-        headers: {
-          Accept: "application/vnd.github+json",
-          Authorization: `Bearer ${token}`,
-          "X-GitHub-Api-Version": "2022-11-28",
-          ...init2.body === void 0 ? {} : { "Content-Type": "application/json" }
-        },
-        body: init2.body === void 0 ? void 0 : JSON.stringify(init2.body)
-      });
-    } catch {
-      throw new ApiError(502, "Could not reach GitHub.");
-    }
-    if (!response.ok) {
-      const status = response.status === 401 ? 401 : response.status === 403 ? 403 : 502;
-      throw new ApiError(
-        status,
-        `GitHub rejected the connected account request (${response.status}).`
-      );
-    }
-    const nextMatch = response.headers.get("link")?.split(",").map((part) => part.trim()).find((part) => part.endsWith('rel="next"'))?.match(/^<([^>]+)>/);
-    return {
-      data: await response.json(),
-      nextUrl: nextMatch?.[1] ?? null
-    };
-  }
-  async function githubUserFetch(path30, token, init2 = {}) {
-    return (await githubUserFetchUrl(path30, token, init2)).data;
-  }
-  async function githubUserFetchAll(path30, token) {
-    const rows = [];
-    let nextUrl = path30;
-    const visited = /* @__PURE__ */ new Set();
-    while (nextUrl) {
-      const canonical2 = new URL(nextUrl, GITHUB_API3).toString();
-      if (visited.has(canonical2)) throw new ApiError(502, "GitHub returned a repeated page link.");
-      visited.add(canonical2);
-      const page = await githubUserFetchUrl(
-        nextUrl,
-        token
-      );
-      rows.push(...page.data);
-      nextUrl = page.nextUrl;
-    }
-    return rows;
-  }
-  async function listGitHubRepositoryOwners2() {
-    const client = requireDatabaseClient();
-    const profileId = await activeProfileId(client);
-    const store = connections();
-    const notConnected = "Connect GitHub before choosing a repository owner.";
-    let access = await connectedToken(profileId, notConnected);
-    let user;
-    try {
-      user = await githubUserFetch("/user", access.accessToken);
-    } catch (error64) {
-      if (!(error64 instanceof ApiError) || error64.status !== 401) throw error64;
-      access = await connectedToken(profileId, notConnected, access.credentialRevision);
-      try {
-        user = await githubUserFetch("/user", access.accessToken);
-      } catch (retryError) {
-        if (retryError instanceof ApiError && retryError.status === 401) {
-          await store.requireReauthorizationFor(profileId, "github", "invalid_grant");
-          throw new ApiError(401, RECONNECT);
-        }
-        throw retryError;
-      }
-    }
-    const token = access.accessToken;
-    if (String(user.id) !== access.row.external_account_id) {
-      await store.requireReauthorizationFor(profileId, "github", "identity_changed");
-      throw new ApiError(401, "The connected GitHub identity changed; reconnect GitHub.");
-    }
-    const memberships = await githubUserFetchAll(
-      "/user/memberships/orgs?state=active&per_page=100",
-      token
-    );
-    const organizations = await Promise.all(
-      memberships.filter((membership) => membership.state === "active" && membership.organization?.login).map(async (membership) => {
-        const login = membership.organization.login.trim();
-        const policy = await githubUserFetch(`/orgs/${encodeURIComponent(login)}`, token);
-        const canCreate = membership.role === "admin" || Boolean(
-          policy.members_can_create_private_repositories ?? policy.members_can_create_repositories
-        );
-        return canCreate ? {
-          login,
-          type: "organization",
-          avatarUrl: membership.organization?.avatar_url ?? null,
-          canCreateRepositories: true
-        } : null;
-      })
-    );
-    await store.recordAccount(profileId, "github", {
-      id: String(user.id),
-      label: user.login,
-      avatarUrl: user.avatar_url ?? null
-    });
-    return [
-      {
-        login: user.login,
-        type: "personal",
-        avatarUrl: user.avatar_url ?? null,
-        canCreateRepositories: true
-      },
-      ...organizations.filter((owner) => owner !== null).sort((left, right) => left.login.localeCompare(right.login))
-    ];
-  }
-  async function createPrivateGitHubRepository2({
-    ownerLogin,
-    name: name2
-  }) {
-    const normalizedOwner = ownerLogin.trim();
-    const normalizedName = name2.trim();
-    if (!/^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,99})$/.test(normalizedName)) {
-      throw new ApiError(400, "GitHub repository name is invalid.");
-    }
-    const owners = await listGitHubRepositoryOwners2();
-    const owner = owners.find(
-      (candidate) => candidate.login.toLowerCase() === normalizedOwner.toLowerCase()
-    );
-    if (!owner)
-      throw new ApiError(403, "The selected GitHub owner cannot create private repositories.");
-    const client = requireDatabaseClient();
-    const profileId = await activeProfileId(client);
-    const { accessToken: token } = await connectedToken(
-      profileId,
-      "Connect GitHub before creating a repository."
-    );
-    const endpoint = owner.type === "personal" ? "/user/repos" : `/orgs/${encodeURIComponent(owner.login)}/repos`;
-    const response = await githubUserFetch(endpoint, token, {
-      method: "POST",
-      body: { name: normalizedName, private: true, auto_init: false }
-    });
-    if (!response.id || !response.full_name || !response.clone_url || !response.private || response.owner?.login?.toLowerCase() !== owner.login.toLowerCase()) {
-      throw new ApiError(502, "GitHub returned an invalid private repository response.");
-    }
-    return {
-      id: String(response.id),
-      fullName: response.full_name,
-      defaultBranch: response.default_branch ?? "main",
-      private: true,
-      cloneUrl: response.clone_url
-    };
-  }
-  async function disconnectGitHubUser2() {
-    const client = requireDatabaseClient();
-    const profileId = await activeProfileId(client);
-    await connections().disconnectProvider(profileId, "github");
-    return connectionDto2(null);
-  }
-  return {
-    githubUserOAuthConfigured: githubUserOAuthConfigured2,
-    getGitHubUserConnection: getGitHubUserConnection2,
-    beginGitHubUserAuthorization: beginGitHubUserAuthorization2,
-    completeGitHubUserAuthorization: completeGitHubUserAuthorization2,
-    listGitHubRepositoryOwners: listGitHubRepositoryOwners2,
-    createPrivateGitHubRepository: createPrivateGitHubRepository2,
-    disconnectGitHubUser: disconnectGitHubUser2
-  };
-}
-var {
-  githubUserOAuthConfigured,
-  getGitHubUserConnection,
-  beginGitHubUserAuthorization,
-  completeGitHubUserAuthorization,
-  listGitHubRepositoryOwners,
-  createPrivateGitHubRepository,
-  disconnectGitHubUser
-} = createGitHubUserOAuth(
-  () => profileConnections(requireDatabaseClient(), [githubConnectionProvider()])
-);
-
 // branch-planning.ts
 var import_node_path20 = __toESM(require("node:path"), 1);
 var TITLE_SLUG_MAX = 48;
@@ -160150,6 +157020,7 @@ function previewMissionBranch(input2) {
 init_db();
 
 // deferred-work.ts
+init_util3();
 init_db();
 var RESOLUTION_STATUSES = /* @__PURE__ */ new Set(["done", "dismissed"]);
 var RESOLUTION_OUTCOMES = /* @__PURE__ */ new Set([
@@ -160159,16 +157030,13 @@ var RESOLUTION_OUTCOMES = /* @__PURE__ */ new Set([
 function deferredWorkEntries(report) {
   return report.presentation.deferredWork;
 }
-function placeholders(count) {
-  return new Array(count).fill("?").join(", ");
-}
 async function loadResolutions(deliveryIds) {
   if (deliveryIds.length === 0) return /* @__PURE__ */ new Map();
   const rows = await requireDatabaseClient().all(
     `SELECT delivery_id, action_id, status, outcome, outcome_ref, resolved_at,
             resolved_by_workspace_user_id
        FROM human_action_resolutions
-      WHERE delivery_id IN (${placeholders(deliveryIds.length)})`,
+      WHERE delivery_id IN (${sqlPlaceholders(deliveryIds.length)})`,
     deliveryIds
   );
   return new Map(rows.map((row) => [`${row.delivery_id}:${row.action_id}`, row]));
@@ -160578,11 +157446,11 @@ function toOrganizationAdminDto(row) {
 async function loadOrganizationAdmins(organizationId, client) {
   const profileIds = await listOrganizationAdminProfileIds(organizationId, client);
   if (profileIds.length === 0) return [];
-  const placeholders4 = profileIds.map(() => "?").join(", ");
+  const placeholders = profileIds.map(() => "?").join(", ");
   const rows = await client.all(
     `SELECT id AS user_id, display_name, handle, email, metadata_json
        FROM profiles
-      WHERE id IN (${placeholders4}) AND deleted_at IS NULL
+      WHERE id IN (${placeholders}) AND deleted_at IS NULL
       ORDER BY display_name ASC`,
     profileIds
   );
@@ -160733,6 +157601,894 @@ async function deleteOrganizationIfEmpty(organizationId, client) {
       WHERE organization_id = ? AND deleted_at IS NULL`,
     [now2, now2, organizationId]
   );
+}
+
+// storage.ts
+var import_node_crypto20 = require("node:crypto");
+var import_node_fs19 = require("node:fs");
+var import_node_path30 = __toESM(require("node:path"), 1);
+var import_node_url6 = require("node:url");
+init_db();
+var repoRoot2 = import_node_path30.default.resolve(import_node_path30.default.dirname((0, import_node_url6.fileURLToPath)(__overlord_import_meta_url)), "..");
+var MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+var MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+var MAX_ATTACHMENT_LABEL = "25 MB";
+var IMAGE_EXTENSIONS = {
+  "image/png": ".png",
+  "image/jpeg": ".jpg",
+  "image/gif": ".gif",
+  "image/webp": ".webp"
+};
+async function resolveBucket(bucketKey, workspaceId2) {
+  const row = await requireDatabaseClient().get(
+    `SELECT id, bucket_key, storage_backend, base_url, local_path, settings_json
+       FROM storage_buckets
+      WHERE workspace_id = ? AND bucket_key = ? AND deleted_at IS NULL`,
+    [workspaceId2, bucketKey]
+  );
+  if (!row) throw new ApiError(404, `Unknown storage bucket '${bucketKey}'`);
+  return row;
+}
+async function requireActiveOrganizationId() {
+  const organizationId = await getActiveOrganizationIdOrNull();
+  if (!organizationId) throw new ApiError(404, "No active organization");
+  return organizationId;
+}
+async function resolveOrganizationBucket(organizationId, bucketKey) {
+  const row = await requireDatabaseClient().get(
+    `SELECT id, bucket_key, storage_backend, base_url, local_path, settings_json
+       FROM storage_buckets
+      WHERE organization_id = ? AND bucket_key = ? AND deleted_at IS NULL`,
+    [organizationId, bucketKey]
+  );
+  if (!row) throw new ApiError(404, `Unknown storage bucket '${bucketKey}'`);
+  return row;
+}
+function extensionForImage(contentType) {
+  const ext = IMAGE_EXTENSIONS[contentType.toLowerCase()];
+  if (!ext) {
+    throw new ApiError(415, "Unsupported image type. Upload a PNG, JPEG, GIF, or WebP image.");
+  }
+  return ext;
+}
+function publicUrlFor(bucketKey, storageKey) {
+  return `/api/storage/${encodeURIComponent(bucketKey)}/${encodeURIComponent(storageKey)}`;
+}
+function userImageObjectKey(userId, imageId, ext) {
+  return `user-images/${userId}/${imageId}${ext}`;
+}
+function workspaceImageObjectKey(workspaceId2, imageId, ext) {
+  return `workspace-files/${workspaceId2}/images/${imageId}${ext}`;
+}
+function organizationImageObjectKey(organizationId, imageId, ext) {
+  return `organization-files/${organizationId}/images/${imageId}${ext}`;
+}
+function attachmentObjectKey(workspaceId2, attachmentId, ext) {
+  return `workspace-files/${workspaceId2}/attachments/${attachmentId}${ext}`;
+}
+function escapeSqlLike(value2) {
+  return value2.replace(/[\\%_]/g, (match) => `\\${match}`);
+}
+async function writeImageObject(bucket, input2, storageKeyFor) {
+  if (!input2.bytes || input2.bytes.length === 0) {
+    throw new ApiError(400, "No image data received");
+  }
+  if (input2.bytes.length > MAX_IMAGE_BYTES) {
+    throw new ApiError(413, "Image is too large. The maximum size is 8 MB.");
+  }
+  const contentType = input2.contentType.split(";")[0].trim().toLowerCase();
+  const ext = extensionForImage(contentType);
+  const id2 = newId2();
+  const storageKey = storageKeyFor(id2, ext);
+  const backend = createStorageBackend({ bucket, repoRoot: repoRoot2 });
+  await backend.put({ key: storageKey, bytes: input2.bytes, contentType });
+  return {
+    id: id2,
+    storageKey,
+    sizeBytes: input2.bytes.length,
+    contentType,
+    checksum: (0, import_node_crypto20.createHash)("sha256").update(input2.bytes).digest("hex"),
+    publicUrl: publicUrlFor(bucket.bucket_key, storageKey)
+  };
+}
+async function operatorUserId() {
+  const client = requireDatabaseClient();
+  if (getActorWorkspaceUserId()) {
+    const row = await client.get(
+      `SELECT profile_id FROM workspace_users WHERE id = ?`,
+      [getActorWorkspaceUserId()]
+    );
+    if (row) return row.profile_id;
+  }
+  const fallback2 = await client.get(
+    `SELECT id FROM profiles
+      WHERE kind = 'human' AND status = 'active' AND deleted_at IS NULL
+      ORDER BY created_at ASC LIMIT 1`
+  );
+  if (!fallback2) throw new ApiError(409, "No local user profile exists");
+  return fallback2.id;
+}
+function uploadWorkspaceId(explicitWorkspaceId) {
+  const workspaceId2 = explicitWorkspaceId?.trim() || getImplicitWorkspaceIdOrNull();
+  if (!workspaceId2) throw new ApiError(400, "workspaceId is required");
+  return workspaceId2;
+}
+async function uploadUserImage(input2, explicitWorkspaceId) {
+  const workspaceId2 = uploadWorkspaceId(explicitWorkspaceId);
+  const bucket = await resolveBucket("user-images", workspaceId2);
+  const userId = await operatorUserId();
+  const written = await writeImageObject(
+    bucket,
+    input2,
+    (id2, ext) => userImageObjectKey(userId, id2, ext)
+  );
+  const now2 = nowIso2();
+  const filename = input2.filename.trim() || `image${import_node_path30.default.extname(written.storageKey)}`;
+  return requireDatabaseClient().transaction(async (tx) => {
+    await tx.run(
+      `INSERT INTO user_images (
+         id, workspace_id, profile_id, storage_bucket_id, storage_key,
+         filename, content_type, size_bytes, checksum_sha256, public_url, metadata_json,
+         created_by_workspace_user_id, created_at, updated_at, revision
+       ) VALUES (
+         ?, ?, ?, ?, ?,
+         ?, ?, ?, ?, ?, '{}',
+         ?, ?, ?, 1
+       )`,
+      [
+        written.id,
+        workspaceId2,
+        userId,
+        bucket.id,
+        written.storageKey,
+        filename,
+        written.contentType,
+        written.sizeBytes,
+        written.checksum,
+        written.publicUrl,
+        getActorWorkspaceUserId(),
+        now2,
+        now2
+      ]
+    );
+    await recordChange2(
+      {
+        entityType: "user_image",
+        entityId: written.id,
+        operation: "insert",
+        entityRevision: 1,
+        workspaceId: workspaceId2
+      },
+      tx
+    );
+    return {
+      id: written.id,
+      bucketKey: bucket.bucket_key,
+      storageKey: written.storageKey,
+      filename,
+      contentType: written.contentType,
+      sizeBytes: written.sizeBytes,
+      url: written.publicUrl,
+      createdAt: now2
+    };
+  });
+}
+async function uploadWorkspaceImage(input2, explicitWorkspaceId) {
+  const workspaceId2 = uploadWorkspaceId(explicitWorkspaceId);
+  const bucket = await resolveBucket("workspace-images", workspaceId2);
+  const written = await writeImageObject(
+    bucket,
+    input2,
+    (id2, ext) => workspaceImageObjectKey(workspaceId2, id2, ext)
+  );
+  const now2 = nowIso2();
+  const filename = input2.filename.trim() || `image${import_node_path30.default.extname(written.storageKey)}`;
+  return requireDatabaseClient().transaction(async (tx) => {
+    await tx.run(
+      `INSERT INTO workspace_images (
+         id, workspace_id, storage_bucket_id, storage_key,
+         filename, content_type, size_bytes, checksum_sha256, public_url, metadata_json,
+         created_by_workspace_user_id, created_at, updated_at, revision
+       ) VALUES (
+         ?, ?, ?, ?,
+         ?, ?, ?, ?, ?, '{}',
+         ?, ?, ?, 1
+       )`,
+      [
+        written.id,
+        workspaceId2,
+        bucket.id,
+        written.storageKey,
+        filename,
+        written.contentType,
+        written.sizeBytes,
+        written.checksum,
+        written.publicUrl,
+        getActorWorkspaceUserId(),
+        now2,
+        now2
+      ]
+    );
+    await recordChange2(
+      {
+        entityType: "workspace_image",
+        entityId: written.id,
+        operation: "insert",
+        entityRevision: 1,
+        workspaceId: workspaceId2
+      },
+      tx
+    );
+    return {
+      id: written.id,
+      bucketKey: bucket.bucket_key,
+      storageKey: written.storageKey,
+      filename,
+      contentType: written.contentType,
+      sizeBytes: written.sizeBytes,
+      url: written.publicUrl,
+      createdAt: now2
+    };
+  });
+}
+async function uploadOrganizationImage(input2) {
+  const organizationId = await requireActiveOrganizationId();
+  const profileId = await resolveActiveProfileId();
+  if (!profileId || !await isOrganizationAdmin(profileId, organizationId)) {
+    throw new ApiError(403, "Organization admin required");
+  }
+  const bucket = await resolveOrganizationBucket(organizationId, "organization-images");
+  const written = await writeImageObject(
+    bucket,
+    input2,
+    (id2, ext) => organizationImageObjectKey(organizationId, id2, ext)
+  );
+  const filename = input2.filename.trim() || `image${import_node_path30.default.extname(written.storageKey)}`;
+  return {
+    id: written.id,
+    bucketKey: bucket.bucket_key,
+    storageKey: written.storageKey,
+    filename,
+    contentType: written.contentType,
+    sizeBytes: written.sizeBytes,
+    url: written.publicUrl,
+    createdAt: nowIso2()
+  };
+}
+var ATTACHMENTS_BUCKET_KEY = "attachments";
+async function resolveObjectiveScope(objectiveRef, client = requireDatabaseClient(), permission = PERMISSIONS.ATTACHMENT_READ) {
+  const resolved = await resolveObjectiveIdForRest({ ref: objectiveRef, db: client });
+  const row = await client.get(
+    `SELECT id, workspace_id, project_id, mission_id FROM objectives
+      WHERE id = ? AND deleted_at IS NULL`,
+    [resolved.id]
+  );
+  if (!row) throw new ApiError(404, "Objective not found");
+  await requireWorkspacePermission({
+    workspaceId: row.workspace_id,
+    permission,
+    db: client,
+    notFoundMessage: "Objective not found"
+  });
+  return row;
+}
+function assertAttachmentBytes(bytes) {
+  if (!bytes || bytes.length === 0) {
+    throw new ApiError(400, "No file data received");
+  }
+  if (bytes.length > MAX_ATTACHMENT_BYTES) {
+    throw new ApiError(
+      413,
+      `File too large. Attachments can be no longer than ${MAX_ATTACHMENT_LABEL}.`
+    );
+  }
+}
+function attachmentExtension(filename) {
+  const ext = import_node_path30.default.extname(filename).toLowerCase();
+  return /^\.[a-z0-9]{1,12}$/.test(ext) ? ext : "";
+}
+function toObjectiveAttachmentDto(row) {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    projectId: row.project_id,
+    missionId: row.mission_id,
+    objectiveId: row.objective_id,
+    inboxItemId: row.inbox_item_id,
+    bucketKey: ATTACHMENTS_BUCKET_KEY,
+    storageKey: row.storage_key,
+    filename: row.filename,
+    contentType: row.content_type,
+    sizeBytes: row.size_bytes,
+    uploadStatus: row.upload_status,
+    url: publicUrlFor(ATTACHMENTS_BUCKET_KEY, row.storage_key),
+    createdAt: row.created_at
+  };
+}
+var ATTACHMENT_COLUMNS = `id, workspace_id, project_id, mission_id, objective_id, inbox_item_id,
+  storage_key, filename, content_type, size_bytes, upload_status, created_at`;
+async function uploadObjectiveAttachment(input2) {
+  assertAttachmentBytes(input2.bytes);
+  const scope2 = await resolveObjectiveScope(
+    input2.objectiveId,
+    void 0,
+    PERMISSIONS.ATTACHMENT_CREATE
+  );
+  const bucket = await resolveBucket(ATTACHMENTS_BUCKET_KEY, scope2.workspace_id);
+  const id2 = newId2();
+  const storageKey = attachmentObjectKey(
+    scope2.workspace_id,
+    id2,
+    attachmentExtension(input2.filename)
+  );
+  const now2 = nowIso2();
+  const contentType = input2.contentType.split(";")[0].trim().toLowerCase() || null;
+  const backend = createStorageBackend({ bucket, repoRoot: repoRoot2 });
+  await backend.put({
+    key: storageKey,
+    bytes: input2.bytes,
+    contentType: contentType ?? "application/octet-stream"
+  });
+  const filename = input2.filename.trim() || `attachment${import_node_path30.default.extname(storageKey)}`;
+  const checksum = (0, import_node_crypto20.createHash)("sha256").update(input2.bytes).digest("hex");
+  return requireDatabaseClient().transaction(async (tx) => {
+    await tx.run(
+      `INSERT INTO attachments (
+         id, workspace_id, project_id, mission_id, objective_id, storage_bucket_id,
+         storage_key, filename, content_type, size_bytes, checksum_sha256, upload_status,
+         metadata_json, created_by_workspace_user_id, created_at, updated_at, revision
+       ) VALUES (
+         ?, ?, ?, ?, ?, ?,
+         ?, ?, ?, ?, ?, 'available',
+         '{}', ?, ?, ?, 1
+       )`,
+      [
+        id2,
+        scope2.workspace_id,
+        scope2.project_id,
+        scope2.mission_id,
+        scope2.id,
+        bucket.id,
+        storageKey,
+        filename,
+        contentType,
+        input2.bytes.length,
+        checksum,
+        getActorWorkspaceUserId(),
+        now2,
+        now2
+      ]
+    );
+    await recordChange2(
+      {
+        entityType: "attachment",
+        entityId: id2,
+        operation: "insert",
+        entityRevision: 1,
+        projectId: scope2.project_id,
+        missionId: scope2.mission_id,
+        objectiveId: scope2.id,
+        workspaceId: scope2.workspace_id
+      },
+      tx
+    );
+    return toObjectiveAttachmentDto({
+      id: id2,
+      workspace_id: scope2.workspace_id,
+      project_id: scope2.project_id,
+      mission_id: scope2.mission_id,
+      objective_id: scope2.id,
+      inbox_item_id: null,
+      storage_key: storageKey,
+      filename,
+      content_type: contentType,
+      size_bytes: input2.bytes.length,
+      upload_status: "available",
+      created_at: now2
+    });
+  });
+}
+async function listObjectiveAttachments(objectiveId) {
+  const scope2 = await resolveObjectiveScope(objectiveId);
+  const rows = await requireDatabaseClient().all(
+    `SELECT ${ATTACHMENT_COLUMNS} FROM attachments
+      WHERE objective_id = ? AND workspace_id = ? AND deleted_at IS NULL
+      ORDER BY created_at ASC`,
+    [scope2.id, scope2.workspace_id]
+  );
+  return rows.map(toObjectiveAttachmentDto);
+}
+async function deleteObjectiveAttachment(objectiveId, attachmentId) {
+  const { remaining, cleanup } = await requireDatabaseClient().transaction(async (tx) => {
+    const scope2 = await resolveObjectiveScope(objectiveId, tx, PERMISSIONS.ATTACHMENT_DELETE);
+    const row = await tx.get(
+      `SELECT a.id, a.revision, a.storage_key,
+              b.id AS bucket_id, b.bucket_key, b.storage_backend, b.local_path, b.settings_json
+         FROM attachments a
+         JOIN storage_buckets b ON b.id = a.storage_bucket_id
+        WHERE a.id = ? AND a.objective_id = ? AND a.workspace_id = ?
+          AND a.deleted_at IS NULL AND b.deleted_at IS NULL`,
+      [attachmentId, scope2.id, scope2.workspace_id]
+    );
+    if (!row) throw new ApiError(404, "Attachment not found");
+    const now2 = nowIso2();
+    await tx.run(
+      `UPDATE attachments
+          SET deleted_at = ?, upload_status = 'deleted', updated_at = ?,
+              revision = revision + 1
+        WHERE id = ?`,
+      [now2, now2, attachmentId]
+    );
+    await recordChange2(
+      {
+        entityType: "attachment",
+        entityId: attachmentId,
+        operation: "delete",
+        entityRevision: row.revision + 1,
+        projectId: scope2.project_id,
+        missionId: scope2.mission_id,
+        objectiveId: scope2.id,
+        workspaceId: scope2.workspace_id
+      },
+      tx
+    );
+    const rows = await tx.all(
+      `SELECT ${ATTACHMENT_COLUMNS} FROM attachments
+        WHERE objective_id = ? AND workspace_id = ? AND deleted_at IS NULL
+        ORDER BY created_at ASC`,
+      [scope2.id, scope2.workspace_id]
+    );
+    return {
+      remaining: rows.map(toObjectiveAttachmentDto),
+      cleanup: {
+        key: row.storage_key,
+        bucket: {
+          id: row.bucket_id,
+          bucket_key: row.bucket_key,
+          storage_backend: row.storage_backend,
+          local_path: row.local_path,
+          settings_json: row.settings_json
+        }
+      }
+    };
+  });
+  await removeStoredObjects([cleanup]);
+  return remaining;
+}
+async function removeStoredObjects(objects) {
+  for (const object3 of objects) {
+    if (object3.bucket.storage_backend === "s3" || object3.bucket.storage_backend === "railway_volume") {
+      const backend = createStorageBackend({ bucket: object3.bucket, repoRoot: repoRoot2 });
+      await backend.deleteObject?.({ key: object3.key });
+    }
+  }
+}
+async function ownedInboxItemId(inboxItemId, client = requireDatabaseClient()) {
+  const profileId = await resolveActiveProfileId(client);
+  if (!profileId) throw new ApiError(401, "Authentication required");
+  const row = await client.get(
+    `SELECT id FROM inbox_items WHERE id = ? AND profile_id = ?`,
+    [inboxItemId, profileId]
+  );
+  if (!row) throw new ApiError(404, "Inbox item not found");
+  return row.id;
+}
+async function inboxAttachmentWorkspace(inboxItemId) {
+  const client = requireDatabaseClient();
+  const existing = await client.get(
+    `SELECT workspace_id FROM attachments
+      WHERE inbox_item_id = ? AND deleted_at IS NULL
+      ORDER BY created_at ASC LIMIT 1`,
+    [inboxItemId]
+  );
+  const memberships = await getResourceLookupWorkspaceIds(client);
+  const implicit = getImplicitWorkspaceIdOrNull();
+  const candidates = [
+    ...existing ? [existing.workspace_id] : [],
+    ...implicit && memberships.includes(implicit) ? [implicit] : [],
+    ...memberships
+  ];
+  let denied = null;
+  for (const workspaceId2 of new Set(candidates)) {
+    try {
+      const workspaceUserId = await requireWorkspacePermission({
+        workspaceId: workspaceId2,
+        permission: PERMISSIONS.ATTACHMENT_CREATE,
+        db: client
+      });
+      return { workspaceId: workspaceId2, workspaceUserId };
+    } catch (error64) {
+      if (!(error64 instanceof ApiError) || error64.status !== 403 && error64.status !== 404) {
+        throw error64;
+      }
+      denied ??= error64;
+    }
+  }
+  if (denied) throw denied;
+  throw new ApiError(409, "Join a workspace before attaching files to Inbox items");
+}
+async function listInboxAttachmentRows(inboxItemId, client) {
+  return client.all(
+    `SELECT ${ATTACHMENT_COLUMNS} FROM attachments
+      WHERE inbox_item_id = ? AND deleted_at IS NULL
+      ORDER BY created_at ASC`,
+    [inboxItemId]
+  );
+}
+async function uploadInboxItemAttachment(input2) {
+  assertAttachmentBytes(input2.bytes);
+  const inboxItemId = await ownedInboxItemId(input2.inboxItemId);
+  const { workspaceId: workspaceId2, workspaceUserId } = await inboxAttachmentWorkspace(inboxItemId);
+  const bucket = await resolveBucket(ATTACHMENTS_BUCKET_KEY, workspaceId2);
+  const id2 = newId2();
+  const storageKey = attachmentObjectKey(workspaceId2, id2, attachmentExtension(input2.filename));
+  const now2 = nowIso2();
+  const contentType = input2.contentType.split(";")[0].trim().toLowerCase() || null;
+  const backend = createStorageBackend({ bucket, repoRoot: repoRoot2 });
+  await backend.put({
+    key: storageKey,
+    bytes: input2.bytes,
+    contentType: contentType ?? "application/octet-stream"
+  });
+  const filename = input2.filename.trim() || `attachment${import_node_path30.default.extname(storageKey)}`;
+  const checksum = (0, import_node_crypto20.createHash)("sha256").update(input2.bytes).digest("hex");
+  try {
+    await requireDatabaseClient().transaction(async (tx) => {
+      await ownedInboxItemId(inboxItemId, tx);
+      await tx.run(
+        `INSERT INTO attachments (
+           id, workspace_id, inbox_item_id, storage_bucket_id,
+           storage_key, filename, content_type, size_bytes, checksum_sha256, upload_status,
+           metadata_json, created_by_workspace_user_id, created_at, updated_at, revision
+         ) VALUES (
+           ?, ?, ?, ?,
+           ?, ?, ?, ?, ?, 'available',
+           '{}', ?, ?, ?, 1
+         )`,
+        [
+          id2,
+          workspaceId2,
+          inboxItemId,
+          bucket.id,
+          storageKey,
+          filename,
+          contentType,
+          input2.bytes.length,
+          checksum,
+          workspaceUserId,
+          now2,
+          now2
+        ]
+      );
+    });
+  } catch (error64) {
+    await removeStoredObjects([{ key: storageKey, bucket }]);
+    throw error64;
+  }
+  return toObjectiveAttachmentDto({
+    id: id2,
+    workspace_id: workspaceId2,
+    project_id: null,
+    mission_id: null,
+    objective_id: null,
+    inbox_item_id: inboxItemId,
+    storage_key: storageKey,
+    filename,
+    content_type: contentType,
+    size_bytes: input2.bytes.length,
+    upload_status: "available",
+    created_at: now2
+  });
+}
+async function listInboxItemAttachments(inboxItemId) {
+  const client = requireDatabaseClient();
+  const id2 = await ownedInboxItemId(inboxItemId, client);
+  return (await listInboxAttachmentRows(id2, client)).map(toObjectiveAttachmentDto);
+}
+var INBOX_ATTACHMENT_STORAGE_SELECT = `SELECT a.id, a.workspace_id, a.storage_key,
+         b.id AS bucket_id, b.bucket_key, b.storage_backend, b.local_path, b.settings_json
+    FROM attachments a
+    JOIN storage_buckets b ON b.id = a.storage_bucket_id`;
+function storedObjectRef(row) {
+  return {
+    key: row.storage_key,
+    bucket: {
+      id: row.bucket_id,
+      bucket_key: row.bucket_key,
+      storage_backend: row.storage_backend,
+      local_path: row.local_path,
+      settings_json: row.settings_json
+    }
+  };
+}
+async function tombstoneInboxAttachmentRows(rows, tx) {
+  const now2 = nowIso2();
+  for (const row of rows) {
+    await tx.run(
+      `UPDATE attachments
+          SET deleted_at = ?, upload_status = 'deleted', updated_at = ?,
+              revision = revision + 1
+        WHERE id = ?`,
+      [now2, now2, row.id]
+    );
+  }
+  return rows.map(storedObjectRef);
+}
+async function deleteInboxItemAttachment(inboxItemId, attachmentId) {
+  const { remaining, cleanup } = await requireDatabaseClient().transaction(async (tx) => {
+    const id2 = await ownedInboxItemId(inboxItemId, tx);
+    const rows = await tx.all(
+      `${INBOX_ATTACHMENT_STORAGE_SELECT}
+        WHERE a.id = ? AND a.inbox_item_id = ? AND a.deleted_at IS NULL`,
+      [attachmentId, id2]
+    );
+    if (rows.length === 0) throw new ApiError(404, "Attachment not found");
+    const cleanup2 = await tombstoneInboxAttachmentRows(rows, tx);
+    const remaining2 = (await listInboxAttachmentRows(id2, tx)).map(toObjectiveAttachmentDto);
+    return { remaining: remaining2, cleanup: cleanup2 };
+  });
+  await removeStoredObjects(cleanup);
+  return remaining;
+}
+async function tombstoneInboxItemAttachmentsTx(tx, where) {
+  const rows = "inboxItemId" in where ? await tx.all(
+    `${INBOX_ATTACHMENT_STORAGE_SELECT}
+            WHERE a.inbox_item_id = ? AND a.deleted_at IS NULL`,
+    [where.inboxItemId]
+  ) : await tx.all(
+    `${INBOX_ATTACHMENT_STORAGE_SELECT}
+            JOIN inbox_items i ON i.id = a.inbox_item_id
+           WHERE i.profile_id = ? AND a.deleted_at IS NULL`,
+    [where.profileId]
+  );
+  return tombstoneInboxAttachmentRows(rows, tx);
+}
+var removeInboxAttachmentObjects = removeStoredObjects;
+async function readStoredBytes(object3) {
+  const stream = await createStorageBackend({ bucket: object3.bucket, repoRoot: repoRoot2 }).getStream({
+    key: object3.key
+  });
+  const chunks = [];
+  for await (const chunk of stream) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
+}
+async function copyInboxAttachmentsToWorkspace(inboxItemId, targetWorkspaceId) {
+  const client = requireDatabaseClient();
+  const rows = await client.all(
+    `SELECT a.id, a.workspace_id, a.storage_key, a.content_type,
+            b.id AS bucket_id, b.bucket_key, b.storage_backend, b.local_path, b.settings_json
+       FROM attachments a
+       JOIN storage_buckets b ON b.id = a.storage_bucket_id
+      WHERE a.inbox_item_id = ? AND a.deleted_at IS NULL AND a.workspace_id <> ?`,
+    [inboxItemId, targetWorkspaceId]
+  );
+  if (rows.length === 0) return [];
+  const bucket = await resolveBucket(ATTACHMENTS_BUCKET_KEY, targetWorkspaceId);
+  const backend = createStorageBackend({ bucket, repoRoot: repoRoot2 });
+  const copies = [];
+  try {
+    for (const row of rows) {
+      const source = storedObjectRef(row);
+      const storageKey = attachmentObjectKey(
+        targetWorkspaceId,
+        row.id,
+        import_node_path30.default.extname(row.storage_key)
+      );
+      await backend.put({
+        key: storageKey,
+        bytes: await readStoredBytes(source),
+        contentType: row.content_type ?? "application/octet-stream"
+      });
+      copies.push({
+        attachmentId: row.id,
+        storageBucketId: bucket.id,
+        storageKey,
+        source,
+        target: { key: storageKey, bucket }
+      });
+    }
+  } catch (error64) {
+    await removeStoredObjects(copies.map((copy) => copy.target));
+    throw error64;
+  }
+  return copies;
+}
+async function repointInboxAttachmentsTx(tx, input2) {
+  const rows = await tx.all(
+    `SELECT id, workspace_id, revision FROM attachments
+      WHERE inbox_item_id = ? AND deleted_at IS NULL
+      ORDER BY created_at ASC`,
+    [input2.inboxItemId]
+  );
+  const copies = new Map(input2.copies.map((copy) => [copy.attachmentId, copy]));
+  const now2 = nowIso2();
+  for (const row of rows) {
+    const changedFields = ["project_id", "mission_id", "objective_id", "inbox_item_id"];
+    if (row.workspace_id === input2.workspaceId) {
+      await tx.run(
+        `UPDATE attachments
+            SET project_id = ?, mission_id = ?, objective_id = ?, inbox_item_id = NULL,
+                updated_at = ?, revision = revision + 1
+          WHERE id = ?`,
+        [input2.projectId, input2.missionId, input2.objectiveId, now2, row.id]
+      );
+    } else {
+      const copy = copies.get(row.id);
+      if (!copy) {
+        throw new ApiError(409, "Inbox attachments changed during promotion. Try again.");
+      }
+      await tx.run(
+        `UPDATE attachments
+            SET workspace_id = ?, storage_bucket_id = ?, storage_key = ?,
+                project_id = ?, mission_id = ?, objective_id = ?, inbox_item_id = NULL,
+                updated_at = ?, revision = revision + 1
+          WHERE id = ?`,
+        [
+          input2.workspaceId,
+          copy.storageBucketId,
+          copy.storageKey,
+          input2.projectId,
+          input2.missionId,
+          input2.objectiveId,
+          now2,
+          row.id
+        ]
+      );
+      changedFields.unshift("workspace_id", "storage_bucket_id", "storage_key");
+    }
+    await recordChange2(
+      {
+        entityType: "attachment",
+        entityId: row.id,
+        operation: "update",
+        entityRevision: row.revision + 1,
+        projectId: input2.projectId,
+        missionId: input2.missionId,
+        objectiveId: input2.objectiveId,
+        workspaceId: input2.workspaceId,
+        changedFields
+      },
+      tx
+    );
+  }
+}
+var SERVABLE_OBJECT_TABLES = {
+  "user-images": "user_images",
+  "workspace-images": "workspace_images",
+  attachments: "attachments"
+};
+var CONTENT_TYPE_BY_EXTENSION = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp"
+};
+async function finalizeStoredObject({
+  bucket,
+  storageKey,
+  contentType,
+  filename,
+  forceDownload
+}) {
+  const backend = createStorageBackend({ bucket, repoRoot: repoRoot2 });
+  const readSettings = readStorageReadSettings(bucket.settings_json);
+  if (readSettings.presignReads && backend.presignGet) {
+    const responseContentDisposition = forceDownload ? `attachment; filename="${filename.replace(/"/g, '\\"')}"` : void 0;
+    return {
+      contentType,
+      filename,
+      forceDownload,
+      presignedRedirectUrl: await backend.presignGet({
+        key: storageKey,
+        ttlSeconds: readSettings.presignTtlSeconds,
+        responseContentDisposition
+      })
+    };
+  }
+  if (bucket.storage_backend === "local_fs") {
+    if (!bucket.local_path) {
+      throw new ApiError(500, `Bucket '${bucket.bucket_key}' is missing a local_path`);
+    }
+    const root5 = import_node_path30.default.isAbsolute(bucket.local_path) ? bucket.local_path : import_node_path30.default.resolve(repoRoot2, bucket.local_path);
+    const absolutePath = import_node_path30.default.join(root5, storageKey);
+    if (!(0, import_node_fs19.existsSync)(absolutePath)) throw new ApiError(404, "File not found");
+    return { absolutePath, contentType, filename, forceDownload };
+  }
+  return {
+    bodyStream: await backend.getStream({ key: storageKey }),
+    contentType,
+    filename,
+    forceDownload
+  };
+}
+async function resolveStoredObject(bucketKey, storageKey, permission) {
+  if (bucketKey === "organization-images") {
+    const organizationId = await requireActiveOrganizationId();
+    await requireAnyWorkspacePermission(permission);
+    const bucket2 = await resolveOrganizationBucket(organizationId, bucketKey);
+    const ext = import_node_path30.default.extname(storageKey).toLowerCase();
+    return finalizeStoredObject({
+      bucket: bucket2,
+      storageKey,
+      contentType: CONTENT_TYPE_BY_EXTENSION[ext] ?? "application/octet-stream",
+      filename: `logo${ext}`,
+      forceDownload: false
+    });
+  }
+  const table2 = SERVABLE_OBJECT_TABLES[bucketKey];
+  if (!table2) throw new ApiError(404, `Serving is not configured for bucket '${bucketKey}'`);
+  if (bucketKey === "attachments" && getActiveTokenProjectIds() !== null) {
+    const attachment = await requireDatabaseClient().get(
+      `SELECT project_id FROM attachments WHERE storage_key = ? AND deleted_at IS NULL`,
+      [storageKey]
+    );
+    if (!attachment?.project_id || !projectInTokenScope(attachment.project_id)) {
+      throw new ApiError(404, "File not found");
+    }
+  }
+  if (bucketKey === ATTACHMENTS_BUCKET_KEY) {
+    const attachment = await requireDatabaseClient().get(
+      `SELECT inbox_item_id FROM attachments WHERE storage_key = ? AND deleted_at IS NULL`,
+      [storageKey]
+    );
+    if (attachment?.inbox_item_id) {
+      await ownedInboxItemId(attachment.inbox_item_id).catch(() => {
+        throw new ApiError(404, "File not found");
+      });
+    }
+  }
+  let row = await requireDatabaseClient().get(
+    `SELECT workspace_id, storage_bucket_id, storage_key, content_type, filename FROM ${table2}
+      WHERE storage_key = ? AND deleted_at IS NULL`,
+    [storageKey]
+  );
+  if (!row && bucketKey === "user-images" && !storageKey.includes("/")) {
+    const legacyStorageKeyLike = `%/${escapeSqlLike(storageKey)}`;
+    row = await requireDatabaseClient().get(
+      `SELECT workspace_id, storage_bucket_id, storage_key, content_type, filename FROM user_images
+        WHERE deleted_at IS NULL
+          AND (
+            public_url = ?
+            OR storage_key = ?
+            OR storage_key LIKE ? ESCAPE '\\'
+          )
+        ORDER BY created_at DESC
+        LIMIT 1`,
+      [publicUrlFor(bucketKey, storageKey), storageKey, legacyStorageKeyLike]
+    );
+  }
+  if (!row) throw new ApiError(404, "File not found");
+  await requireWorkspacePermission({
+    workspaceId: row.workspace_id,
+    permission,
+    notFoundMessage: "File not found"
+  });
+  const bucket = await resolveBucket(bucketKey, row.workspace_id);
+  if (bucket.id !== row.storage_bucket_id) throw new ApiError(404, "File not found");
+  return finalizeStoredObject({
+    bucket,
+    storageKey: row.storage_key,
+    contentType: row.content_type ?? "application/octet-stream",
+    filename: row.filename,
+    forceDownload: bucketKey === ATTACHMENTS_BUCKET_KEY
+  });
+}
+function serveStoredObject(res, resolved) {
+  if (resolved.presignedRedirectUrl) {
+    res.redirect(302, resolved.presignedRedirectUrl);
+    return;
+  }
+  if (resolved.absolutePath) {
+    res.sendFile(resolved.absolutePath);
+    return;
+  }
+  if (resolved.bodyStream) {
+    resolved.bodyStream.pipe(res);
+    return;
+  }
+  throw new ApiError(500, "Stored object has no byte source");
 }
 
 // repository.ts
@@ -161128,9 +158884,6 @@ async function promoteFallbackPrimary(db, {
       WHERE id = ?`,
     [bindBool(DATABASE_DIALECT, true), now2, fallback2.id]
   );
-}
-function toCreatedByKind(value2) {
-  return value2 === "agent" || value2 === "automation" ? value2 : "human";
 }
 function toMissionDto(r5, tags = []) {
   return {
@@ -161596,7 +159349,7 @@ async function listWorktrees() {
   return [];
 }
 async function removeWorktree(body) {
-  const target = typeof body.path === "string" ? import_node_path30.default.resolve(body.path.trim()) : "";
+  const target = typeof body.path === "string" ? import_node_path31.default.resolve(body.path.trim()) : "";
   if (!target) throw new ApiError(400, "A worktree path is required.");
   if (body.clientExecuted === true) {
     const primaryRepoPath = typeof body.primaryRepoPath === "string" ? body.primaryRepoPath.trim() : "";
@@ -161702,12 +159455,12 @@ async function getMissionTags(missionId) {
 async function getTagsByMission(missionIds) {
   const byMission = /* @__PURE__ */ new Map();
   if (missionIds.length === 0) return byMission;
-  const placeholders4 = missionIds.map(() => "?").join(", ");
+  const placeholders = missionIds.map(() => "?").join(", ");
   const rows = await requireDatabaseClient().all(
     `SELECT tt.mission_id, pt.id, pt.workspace_id, pt.project_id, pt.label, pt.color, pt.active, pt.revision
          FROM mission_tags tt
          JOIN project_tags pt ON pt.id = tt.tag_id AND pt.deleted_at IS NULL
-        WHERE tt.mission_id IN (${placeholders4})
+        WHERE tt.mission_id IN (${placeholders})
         ORDER BY ${orderByLabelAsc("pt.label")}`,
     missionIds
   );
@@ -162968,7 +160721,7 @@ function initializationProvisioning(row, resource) {
     error: row.failure_message
   };
 }
-async function initializeProject(body) {
+async function initializeProject(body, deps) {
   const db = requireDatabaseClient();
   const workspaceId2 = body.workspaceId?.trim();
   const idempotencyKey = body.idempotencyKey?.trim();
@@ -163050,7 +160803,7 @@ async function initializeProject(body) {
   });
   if (initialization.provisioning_status !== "not_requested" && initialization.provisioning_status !== "succeeded") {
     try {
-      const repo = await createPrivateGitHubRepository({
+      const repo = await deps.createPrivateGitHubRepository({
         ownerLogin,
         name: slugify3(name2)
       });
@@ -163318,7 +161071,7 @@ ${missionHasUnseenReturnedToExecuteSql},
 async function getObjectivesByMission(missionIds, db = requireDatabaseClient()) {
   const byMission = /* @__PURE__ */ new Map();
   if (missionIds.length === 0) return byMission;
-  const placeholders4 = missionIds.map(() => "?").join(", ");
+  const placeholders = missionIds.map(() => "?").join(", ");
   const rows = await db.all(
     `SELECT o.*, m.display_id AS mission_display_id,
          e.id AS queue_entry_id, e.queue_id, q.name AS queue_name,
@@ -163338,7 +161091,7 @@ async function getObjectivesByMission(missionIds, db = requireDatabaseClient()) 
          LEFT JOIN run_queue_entries e ON e.objective_id = o.id AND e.deleted_at IS NULL
          LEFT JOIN run_queues q ON q.id = e.queue_id AND q.deleted_at IS NULL
          LEFT JOIN objectives wo ON wo.id = e.waiting_on_objective_id AND wo.deleted_at IS NULL
-        WHERE o.mission_id IN (${placeholders4}) AND o.deleted_at IS NULL
+        WHERE o.mission_id IN (${placeholders}) AND o.deleted_at IS NULL
         ORDER BY o.mission_id ASC, o.position ASC`,
     missionIds
   );
@@ -163354,9 +161107,9 @@ var WINDOWED_MISSION_STATUS_TYPES = ["complete", "cancelled"];
 var COMPLETED_MISSION_WINDOW_MS = COMPLETED_MISSION_WINDOW_DAYS * 24 * 60 * 60 * 1e3;
 function completedMissionWindowSql(includeAllCompleted, now2 = Date.now()) {
   if (includeAllCompleted) return { sql: "", params: [] };
-  const placeholders4 = WINDOWED_MISSION_STATUS_TYPES.map(() => "?").join(", ");
+  const placeholders = WINDOWED_MISSION_STATUS_TYPES.map(() => "?").join(", ");
   return {
-    sql: ` AND (t.status_type NOT IN (${placeholders4}) OR t.updated_at >= ?)`,
+    sql: ` AND (t.status_type NOT IN (${placeholders}) OR t.updated_at >= ?)`,
     params: [
       ...WINDOWED_MISSION_STATUS_TYPES,
       new Date(now2 - COMPLETED_MISSION_WINDOW_MS).toISOString()
@@ -164353,9 +162106,9 @@ async function syncMissionTags(db, {
     await db.run(`DELETE FROM mission_tags WHERE mission_id = ?`, [missionId]);
     return;
   }
-  const placeholders4 = unique.map(() => "?").join(", ");
+  const placeholders = unique.map(() => "?").join(", ");
   await db.run(
-    `DELETE FROM mission_tags WHERE mission_id = ? AND tag_id NOT IN (${placeholders4})`,
+    `DELETE FROM mission_tags WHERE mission_id = ? AND tag_id NOT IN (${placeholders})`,
     [missionId, ...unique]
   );
   for (const tagId of unique) {
@@ -164398,6 +162151,10 @@ async function createMission(body) {
   }
   return detail;
 }
+var INBOX_ITEM_COLUMNS = `id, title, objectives_json, due_datetime, priority,
+  (SELECT COUNT(*) FROM attachments a
+    WHERE a.inbox_item_id = inbox_items.id AND a.deleted_at IS NULL) AS attachment_count,
+  created_at, updated_at`;
 function validateInboxBody(body) {
   const title = typeof body.title === "string" ? body.title.trim() : "";
   if (!title) throw new ApiError(400, "Inbox title is required");
@@ -164429,6 +162186,7 @@ function toInboxItemDto(row) {
     objectives,
     dueDatetime: row.due_datetime,
     priority: row.priority,
+    attachmentCount: Number(row.attachment_count),
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -164440,7 +162198,7 @@ async function activeInboxProfileId(db) {
 }
 async function ownedInboxRow(db, profileId, id2) {
   const row = await db.get(
-    `SELECT id, title, objectives_json, due_datetime, priority, created_at, updated_at
+    `SELECT ${INBOX_ITEM_COLUMNS}
        FROM inbox_items WHERE id = ? AND profile_id = ?`,
     [id2, profileId]
   );
@@ -164451,7 +162209,7 @@ async function listInboxItems() {
   const db = requireDatabaseClient();
   const profileId = await activeInboxProfileId(db);
   const rows = await db.all(
-    `SELECT id, title, objectives_json, due_datetime, priority, created_at, updated_at
+    `SELECT ${INBOX_ITEM_COLUMNS}
        FROM inbox_items WHERE profile_id = ? ORDER BY created_at DESC`,
     [profileId]
   );
@@ -164472,6 +162230,7 @@ async function createInboxItem(body) {
     objectives_json: JSON.stringify(input2.objectives),
     due_datetime: input2.dueDatetime,
     priority: input2.priority,
+    attachment_count: 0,
     created_at: now2,
     updated_at: now2
   };
@@ -164512,6 +162271,7 @@ async function updateInboxItem(id2, body) {
     objectives: input2.objectives,
     dueDatetime: input2.dueDatetime,
     priority: input2.priority,
+    attachmentCount: Number(existing.attachment_count),
     createdAt: existing.created_at,
     updatedAt: now2
   };
@@ -164519,12 +162279,24 @@ async function updateInboxItem(id2, body) {
 async function deleteInboxItem(id2) {
   const db = requireDatabaseClient();
   const profileId = await activeInboxProfileId(db);
-  await ownedInboxRow(db, profileId, id2);
-  await db.run(`DELETE FROM inbox_items WHERE id = ? AND profile_id = ?`, [id2, profileId]);
+  const cleanup = await db.transaction(async (tx) => {
+    await ownedInboxRow(tx, profileId, id2);
+    const objects = await tombstoneInboxItemAttachmentsTx(tx, { inboxItemId: id2 });
+    await tx.run(`DELETE FROM inbox_items WHERE id = ? AND profile_id = ?`, [id2, profileId]);
+    return objects;
+  });
+  await removeInboxAttachmentObjects(cleanup);
 }
 async function promoteInboxItem(id2, projectId) {
   const db = requireDatabaseClient();
   const profileId = await activeInboxProfileId(db);
+  await ownedInboxRow(db, profileId, id2);
+  const { workspaceId: workspaceId2 } = await requireProjectPermission({
+    projectId,
+    permission: PERMISSIONS.MISSION_CREATE,
+    db
+  });
+  const copies = await copyInboxAttachmentsToWorkspace(id2, workspaceId2);
   const missionId = await db.transaction(async (tx) => {
     const item = await ownedInboxRow(tx, profileId, id2);
     const objectives = JSON.parse(item.objectives_json);
@@ -164539,9 +162311,21 @@ async function promoteInboxItem(id2, projectId) {
       tx,
       true
     );
+    await repointInboxAttachmentsTx(tx, {
+      inboxItemId: id2,
+      workspaceId: workspaceId2,
+      projectId,
+      missionId: created.missionId,
+      objectiveId: created.objectiveIds[0],
+      copies
+    });
     await tx.run(`DELETE FROM inbox_items WHERE id = ? AND profile_id = ?`, [id2, profileId]);
     return created.missionId;
+  }).catch(async (error64) => {
+    await removeInboxAttachmentObjects(copies.map((copy) => copy.target));
+    throw error64;
   });
+  await removeInboxAttachmentObjects(copies.map((copy) => copy.source));
   return getMissionDetail(missionId);
 }
 async function generateMissionTitle(missionRef) {
@@ -166988,12 +164772,12 @@ async function resolveProjectRefChoices({
   const allowedProjectIds = getActiveTokenProjectIds();
   if (allowedProjectIds?.length === 0) return [];
   const db = serviceDatabaseClient();
-  const placeholders4 = workspaceIds.map(() => "?").join(", ");
+  const placeholders = workspaceIds.map(() => "?").join(", ");
   const selectChoice = `SELECT p.id, p.name, p.slug, p.workspace_id, w.name AS workspace_name,
             w.slug AS workspace_slug
        FROM projects p
        JOIN workspaces w ON w.id = p.workspace_id
-      WHERE p.deleted_at IS NULL AND p.workspace_id IN (${placeholders4})${allowedProjectIds === null ? "" : ` AND p.id IN (${allowedProjectIds.map(() => "?").join(", ")})`}`;
+      WHERE p.deleted_at IS NULL AND p.workspace_id IN (${placeholders})${allowedProjectIds === null ? "" : ` AND p.id IN (${allowedProjectIds.map(() => "?").join(", ")})`}`;
   const choiceParams = [...workspaceIds, ...allowedProjectIds ?? []];
   const toChoice = (row) => ({
     id: row.id,
@@ -167576,12 +165360,12 @@ init_projects();
 init_db();
 
 // workspaces.ts
-var import_node_crypto26 = require("node:crypto");
+var import_node_crypto21 = require("node:crypto");
 
 // sql-studio/sql-studio.ts
 var import_node_child_process7 = require("node:child_process");
-var import_node_fs19 = require("node:fs");
-var import_node_path31 = __toESM(require("node:path"), 1);
+var import_node_fs20 = require("node:fs");
+var import_node_path32 = __toESM(require("node:path"), 1);
 function publicHost(host) {
   return host === "0.0.0.0" ? "127.0.0.1" : host;
 }
@@ -167594,11 +165378,11 @@ function sqlStudioUrl({
   return `http://${publicHost(host)}:${port}`;
 }
 function resolveBinary(binary2) {
-  if (import_node_path31.default.isAbsolute(binary2)) {
-    return (0, import_node_fs19.existsSync)(binary2) ? binary2 : null;
+  if (import_node_path32.default.isAbsolute(binary2)) {
+    return (0, import_node_fs20.existsSync)(binary2) ? binary2 : null;
   }
   if (binary2.includes("/")) {
-    return (0, import_node_fs19.existsSync)(binary2) ? binary2 : null;
+    return (0, import_node_fs20.existsSync)(binary2) ? binary2 : null;
   }
   return binary2;
 }
@@ -167693,6 +165477,580 @@ function getSqlStudioState() {
 
 // workspaces.ts
 init_db();
+
+// email-templates/constants.ts
+var EMAIL_BRAND = {
+  name: "Overlord",
+  domainLabel: "app.ovld.ai",
+  tagline: "Agent work, organized.",
+  logoPath: "/images/256.png"
+};
+var STANDARD_DISCLAIMER = "You're receiving this because someone \u2014 probably you \u2014 used this email address with Overlord. If that wasn't you, you can safely ignore this message.";
+
+// email-templates/html.ts
+function escapeHtmlText(value2) {
+  return value2.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function escapeHtmlAttribute(value2) {
+  return escapeHtmlText(value2).replace(/"/g, "&quot;");
+}
+
+// email-templates/layout.ts
+var EMAIL_STYLES = `
+      @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+      body,
+      table,
+      td,
+      a {
+        -webkit-text-size-adjust: 100%;
+        -ms-text-size-adjust: 100%;
+      }
+      table,
+      td {
+        mso-table-lspace: 0pt;
+        mso-table-rspace: 0pt;
+      }
+      img {
+        -ms-interpolation-mode: bicubic;
+        border: 0;
+        outline: none;
+        text-decoration: none;
+      }
+      body {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+      }
+      a {
+        color: #1c1917;
+      }
+      a.cta:hover {
+        background: #000 !important;
+      }
+      a.text-link:hover {
+        text-decoration: underline !important;
+      }
+      /* Responsive */
+      @media only screen and (max-width: 620px) {
+        .container {
+          width: 100% !important;
+          padding-left: 20px !important;
+          padding-right: 20px !important;
+        }
+        .card {
+          padding: 28px 24px !important;
+          border-radius: 18px !important;
+        }
+        .headline {
+          font-size: 26px !important;
+          line-height: 1.15 !important;
+        }
+        .otp {
+          font-size: 30px !important;
+          letter-spacing: 8px !important;
+        }
+        .footer {
+          padding: 24px 24px 32px !important;
+        }
+        .stack-block {
+          padding: 14px 16px !important;
+        }
+      }`;
+function escapeConfirmationUrl(url2) {
+  return {
+    href: escapeHtmlAttribute(url2),
+    text: escapeHtmlText(url2)
+  };
+}
+function emailInlineCode(value2) {
+  return `<span
+                      style="
+                        font-family: 'IBM Plex Mono', 'SF Mono', Menlo, Consolas, monospace;
+                        font-size: 0.92em;
+                        background: #f4f3ee;
+                        border: 1px solid #e7e5e0;
+                        border-radius: 4px;
+                        padding: 1px 6px;
+                        color: #1c1917;
+                      "
+                      >${escapeHtmlText(value2)}</span>`;
+}
+function renderEyebrow(text) {
+  return `<div
+                  style="
+                    font-family: 'IBM Plex Mono', 'SF Mono', Menlo, Consolas, monospace;
+                    font-size: 11px;
+                    font-weight: 500;
+                    letter-spacing: 0.22em;
+                    text-transform: uppercase;
+                    color: #a8a29e;
+                    margin: 0 0 18px;
+                  "
+                >
+                  ${escapeHtmlText(text)}
+                </div>`;
+}
+function renderHeadline(text) {
+  return `<h1
+                  class="headline"
+                  style="
+                    margin: 0 0 16px;
+                    font-family: 'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                    font-weight: 600;
+                    font-size: 30px;
+                    line-height: 1.1;
+                    letter-spacing: -0.04em;
+                    color: #1c1917;
+                  "
+                >
+                  ${escapeHtmlText(text)}
+                </h1>`;
+}
+function renderBodyBlock(innerHtml) {
+  return `<div
+                  style="
+                    font-family: 'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                    font-size: 16px;
+                    line-height: 1.6;
+                    color: #57534e;
+                  "
+                >
+                  ${innerHtml}
+                </div>`;
+}
+function renderCtaButton({ href, label }) {
+  return `<table
+                  role="presentation"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                  style="margin: 28px 0 8px"
+                >
+                  <tr>
+                    <td style="background: #1c1917; border-radius: 9999px">
+                      <a
+                        class="cta"
+                        href="${href}"
+                        style="
+                          display: inline-block;
+                          padding: 14px 28px;
+                          font-family:
+                            'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                          font-weight: 600;
+                          font-size: 15px;
+                          letter-spacing: -0.01em;
+                          color: #fafaf7;
+                          text-decoration: none;
+                          border-radius: 9999px;
+                        "
+                      >
+                        ${label}
+                      </a>
+                    </td>
+                  </tr>
+                </table>`;
+}
+function renderFallbackLink({ href, text }) {
+  return `<div
+                  style="
+                    margin-top: 24px;
+                    padding-top: 24px;
+                    border-top: 1px solid #e7e5e0;
+                    font-family: 'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                    font-size: 13px;
+                    line-height: 1.5;
+                    color: #a8a29e;
+                  "
+                >
+                  Button doesn't work? Paste this URL into your browser:<br />
+                  <a
+                    class="text-link"
+                    href="${href}"
+                    style="color: #57534e; word-break: break-all; text-decoration: underline"
+                    >${text}</a
+                  >
+                </div>`;
+}
+function renderTokenBlock({ token }) {
+  const tokenText = escapeHtmlText(token);
+  return `<table
+                  role="presentation"
+                  cellpadding="0"
+                  cellspacing="0"
+                  border="0"
+                  width="100%"
+                  style="margin: 28px 0 24px"
+                >
+                  <tr>
+                    <td
+                      style="
+                        border-top: 1px solid #e7e5e0;
+                        text-align: center;
+                        position: relative;
+                      "
+                    >
+                      <span
+                        style="
+                          background: #ffffff;
+                          padding: 0 12px;
+                          position: relative;
+                          top: -10px;
+                          font-family: 'IBM Plex Mono', monospace;
+                          font-size: 11px;
+                          letter-spacing: 0.18em;
+                          color: #a8a29e;
+                          text-transform: uppercase;
+                        "
+                      >
+                        OR USE CODE
+                      </span>
+                    </td>
+                  </tr>
+                </table>
+
+                <div style="text-align: center; margin-bottom: 12px">
+                  <div
+                    style="
+                      font-family: 'Space Grotesk', sans-serif;
+                      font-size: 14px;
+                      color: #78716c;
+                      margin-bottom: 12px;
+                    "
+                  >
+                    Enter this verification code in Overlord
+                  </div>
+                  <div
+                    class="otp"
+                    style="
+                      display: inline-block;
+                      padding: 18px 24px;
+                      background: #fafaf9;
+                      border: 1px solid #e7e5e0;
+                      border-radius: 16px;
+                      font-family: 'IBM Plex Mono', monospace;
+                      font-size: 34px;
+                      font-weight: 500;
+                      letter-spacing: 0.35em;
+                      color: #1c1917;
+                      line-height: 1;
+                    "
+                  >
+                    ${tokenText}
+                  </div>
+                  <div
+                    style="
+                      margin-top: 12px;
+                      font-family: 'Space Grotesk', sans-serif;
+                      font-size: 13px;
+                      color: #a8a29e;
+                    "
+                  >
+                    This code expires in 1 hour.
+                  </div>
+                </div>`;
+}
+function buildTransactionalEmail({
+  title,
+  preheader,
+  siteUrl,
+  cardContent,
+  footerExtra = ""
+}) {
+  const siteHref = escapeHtmlAttribute(siteUrl);
+  const logoHref = escapeHtmlAttribute(`${siteUrl.replace(/\/$/, "")}${EMAIL_BRAND.logoPath}`);
+  const preheaderText = escapeHtmlText(preheader);
+  return `<!doctype html>
+<html lang="en" style="margin: 0; padding: 0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="x-apple-disable-message-reformatting" />
+    <meta name="color-scheme" content="light only" />
+    <meta name="supported-color-schemes" content="light only" />
+    <title>${escapeHtmlText(title)}</title>
+    <!--[if mso]>
+      <style>
+        * {
+          font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
+        }
+      </style>
+    <![endif]-->
+    <style>${EMAIL_STYLES}
+    </style>
+  </head>
+  <body
+    style="
+      margin: 0;
+      padding: 0;
+      background: #f6f4ef;
+      font-family: 'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      color: #1c1917;
+    "
+  >
+    <!-- Preheader (hidden in clients, shown in inbox preview) -->
+    <div
+      style="
+        display: none;
+        max-height: 0;
+        overflow: hidden;
+        mso-hide: all;
+        font-size: 1px;
+        line-height: 1px;
+        color: #f6f4ef;
+      "
+    >
+      ${preheaderText}
+    </div>
+
+    <table
+      role="presentation"
+      cellpadding="0"
+      cellspacing="0"
+      border="0"
+      width="100%"
+      style="background: #f6f4ef"
+    >
+      <tr>
+        <td align="center" style="padding: 32px 16px 8px">
+          <!-- Brand row -->
+          <table
+            role="presentation"
+            cellpadding="0"
+            cellspacing="0"
+            border="0"
+            width="600"
+            class="container"
+            style="max-width: 600px; width: 100%"
+          >
+            <tr>
+              <td align="left" style="padding: 0 4px 24px">
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td style="vertical-align: middle; padding-right: 12px">
+                      <img
+                        src="${logoHref}"
+                        width="36"
+                        height="36"
+                        alt="${EMAIL_BRAND.name}"
+                        style="display: block; width: 36px; height: 36px; border-radius: 8px"
+                      />
+                    </td>
+                    <td
+                      style="
+                        vertical-align: middle;
+                        font-family:
+                          'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                        font-weight: 600;
+                        font-size: 18px;
+                        letter-spacing: -0.02em;
+                        color: #1c1917;
+                      "
+                    >
+                      ${EMAIL_BRAND.name}
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+
+          <!-- Card -->
+          <table
+            role="presentation"
+            cellpadding="0"
+            cellspacing="0"
+            border="0"
+            width="600"
+            class="container"
+            style="max-width: 600px; width: 100%"
+          >
+            <tr>
+              <td
+                class="card"
+                style="
+                  background: #ffffff;
+                  border: 1px solid #e7e5e0;
+                  border-radius: 20px;
+                  padding: 40px 40px 36px;
+                "
+              >
+                ${cardContent}
+              </td>
+            </tr>
+          </table>
+
+          <!-- Footer -->
+          <table
+            role="presentation"
+            cellpadding="0"
+            cellspacing="0"
+            border="0"
+            width="600"
+            class="container"
+            style="max-width: 600px; width: 100%"
+          >
+            <tr>
+              <td
+                class="footer"
+                align="left"
+                style="
+                  padding: 28px 4px 40px;
+                  font-family: 'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+                  font-size: 12px;
+                  line-height: 1.6;
+                  color: #a8a29e;
+                "
+              >
+                <div style="margin-bottom: 8px">
+                  <a
+                    class="text-link"
+                    href="${siteHref}"
+                    style="color: #57534e; text-decoration: none; font-weight: 500"
+                    >${EMAIL_BRAND.domainLabel}</a
+                  >
+                  &nbsp;\xB7&nbsp; ${EMAIL_BRAND.tagline}
+                </div>
+                ${footerExtra}
+                <div style="margin-top: 8px; color: #a8a29e">
+                  ${STANDARD_DISCLAIMER}
+                </div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
+// email-templates/confirm-email.ts
+function confirmEmailSubject() {
+  return "Confirm your email to start running agents";
+}
+function confirmEmailHtml({ confirmationUrl, token, siteUrl }) {
+  const link = escapeConfirmationUrl(confirmationUrl);
+  const cardContent = [
+    renderEyebrow("CONFIRM SIGNUP"),
+    renderHeadline("Confirm your email to start running agents."),
+    renderBodyBlock(`<p style="margin: 0 0 14px">
+                    Welcome to Overlord. One last step \u2014 confirm this is your email address so we
+                    can open up your workspace.
+                  </p>
+                  <p style="margin: 0">
+                    Once confirmed, you can create tickets, assign Claude Code, Codex, Cursor,
+                    Gemini, or OpenCode, and review diffs before anything lands.
+                  </p>`),
+    renderCtaButton({ href: link.href, label: "Confirm Email&nbsp;\u2192" }),
+    renderTokenBlock({ token }),
+    renderFallbackLink({ href: link.href, text: link.text })
+  ].join("\n");
+  return buildTransactionalEmail({
+    title: "Confirm your email to start running agents.",
+    preheader: "Confirm your email to finish setting up Overlord.",
+    siteUrl,
+    cardContent
+  });
+}
+
+// email-templates/invite-user.ts
+function inviteUserSubject() {
+  return "You've been invited to Overlord";
+}
+function inviteUserHtml({ email: email3, confirmationUrl, siteUrl }) {
+  const link = escapeConfirmationUrl(confirmationUrl);
+  const cardContent = [
+    renderEyebrow("WORKSPACE INVITE"),
+    renderHeadline("You've been invited to Overlord."),
+    renderBodyBlock(`<p style="margin: 0 0 14px">
+                    Someone added
+                    ${emailInlineCode(email3)}
+                    to a workspace on Overlord \u2014 a control plane for running AI coding agents on
+                    tickets, with human review on every diff.
+                  </p>
+                  <p style="margin: 0">
+                    Accept the invite to set up your account and join the board.
+                  </p>`),
+    renderCtaButton({ href: link.href, label: "Accept Invite&nbsp;\u2192" }),
+    renderFallbackLink({ href: link.href, text: link.text })
+  ].join("\n");
+  return buildTransactionalEmail({
+    title: "You've been invited to Overlord.",
+    preheader: "You've been invited to a workspace on Overlord.",
+    siteUrl,
+    cardContent
+  });
+}
+
+// email-templates/magic-link.ts
+function magicLinkSubject() {
+  return "Sign in to Overlord";
+}
+function magicLinkHtml({ email: email3, confirmationUrl, token, siteUrl }) {
+  const link = escapeConfirmationUrl(confirmationUrl);
+  const cardContent = [
+    renderEyebrow("MAGIC LINK"),
+    renderHeadline("Sign in to Overlord."),
+    renderBodyBlock(`<p style="margin: 0 0 14px">
+                    You asked for a one-time sign-in link for
+                    ${emailInlineCode(email3)}. Tap the button below to land back in your workspace \u2014 no password required.
+                  </p>
+                  <p style="margin: 0; color: #a8a29e; font-size: 14px">
+                    This link expires shortly and can only be used once.
+                  </p>`),
+    renderCtaButton({ href: link.href, label: "Sign In&nbsp;\u2192" }),
+    renderTokenBlock({ token }),
+    renderFallbackLink({ href: link.href, text: link.text })
+  ].join("\n");
+  return buildTransactionalEmail({
+    title: "Sign in to Overlord.",
+    preheader: "Your one-time sign-in link for Overlord.",
+    siteUrl,
+    cardContent,
+    footerExtra: `<div style="margin: 8px 0">
+                  If you didn't request this link, you can ignore this email \u2014 your account stays
+                  locked.
+                </div>`
+  });
+}
+
+// email-templates/reset-password.ts
+function resetPasswordSubject() {
+  return "Reset your password";
+}
+function resetPasswordHtml({
+  email: email3,
+  confirmationUrl,
+  token,
+  siteUrl
+}) {
+  const link = escapeConfirmationUrl(confirmationUrl);
+  const cardContent = [
+    renderEyebrow("PASSWORD RESET"),
+    renderHeadline("Reset your password."),
+    renderBodyBlock(`<p style="margin: 0 0 14px">
+                    Someone requested a password reset for
+                    ${emailInlineCode(email3)}. If that was you, set a new one below.
+                  </p>
+                  <p style="margin: 0; color: #a8a29e; font-size: 14px">
+                    This link expires in 1 hour. After resetting, all other active sessions will be
+                    signed out.
+                  </p>`),
+    renderCtaButton({ href: link.href, label: "Reset Password&nbsp;\u2192" }),
+    ...token ? [renderTokenBlock({ token })] : [],
+    renderFallbackLink({ href: link.href, text: link.text })
+  ].join("\n");
+  return buildTransactionalEmail({
+    title: "Reset your password.",
+    preheader: "Reset your Overlord password.",
+    siteUrl,
+    cardContent,
+    footerExtra: `<div style="margin: 8px 0">
+                  If you didn't request a reset, you can safely ignore this email \u2014 your password
+                  won't change.
+                </div>`
+  });
+}
 
 // ../node_modules/postal-mime/src/decode-strings.js
 var textEncoder = new TextEncoder();
@@ -172717,588 +171075,16 @@ var Resend = class {
   }
 };
 
-// email-templates/constants.ts
-var EMAIL_BRAND = {
-  name: "Overlord",
-  domainLabel: "app.ovld.ai",
-  tagline: "Agent work, organized.",
-  logoPath: "/images/256.png"
-};
-var STANDARD_DISCLAIMER = "You're receiving this because someone \u2014 probably you \u2014 used this email address with Overlord. If that wasn't you, you can safely ignore this message.";
-
-// email-templates/html.ts
-function escapeHtmlText(value2) {
-  return value2.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-function escapeHtmlAttribute(value2) {
-  return escapeHtmlText(value2).replace(/"/g, "&quot;");
-}
-
-// email-templates/layout.ts
-var EMAIL_STYLES = `
-      @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap');
-      body,
-      table,
-      td,
-      a {
-        -webkit-text-size-adjust: 100%;
-        -ms-text-size-adjust: 100%;
-      }
-      table,
-      td {
-        mso-table-lspace: 0pt;
-        mso-table-rspace: 0pt;
-      }
-      img {
-        -ms-interpolation-mode: bicubic;
-        border: 0;
-        outline: none;
-        text-decoration: none;
-      }
-      body {
-        margin: 0 !important;
-        padding: 0 !important;
-        width: 100% !important;
-      }
-      a {
-        color: #1c1917;
-      }
-      a.cta:hover {
-        background: #000 !important;
-      }
-      a.text-link:hover {
-        text-decoration: underline !important;
-      }
-      /* Responsive */
-      @media only screen and (max-width: 620px) {
-        .container {
-          width: 100% !important;
-          padding-left: 20px !important;
-          padding-right: 20px !important;
-        }
-        .card {
-          padding: 28px 24px !important;
-          border-radius: 18px !important;
-        }
-        .headline {
-          font-size: 26px !important;
-          line-height: 1.15 !important;
-        }
-        .otp {
-          font-size: 30px !important;
-          letter-spacing: 8px !important;
-        }
-        .footer {
-          padding: 24px 24px 32px !important;
-        }
-        .stack-block {
-          padding: 14px 16px !important;
-        }
-      }`;
-function escapeConfirmationUrl(url2) {
-  return {
-    href: escapeHtmlAttribute(url2),
-    text: escapeHtmlText(url2)
-  };
-}
-function emailInlineCode(value2) {
-  return `<span
-                      style="
-                        font-family: 'IBM Plex Mono', 'SF Mono', Menlo, Consolas, monospace;
-                        font-size: 0.92em;
-                        background: #f4f3ee;
-                        border: 1px solid #e7e5e0;
-                        border-radius: 4px;
-                        padding: 1px 6px;
-                        color: #1c1917;
-                      "
-                      >${escapeHtmlText(value2)}</span>`;
-}
-function renderEyebrow(text) {
-  return `<div
-                  style="
-                    font-family: 'IBM Plex Mono', 'SF Mono', Menlo, Consolas, monospace;
-                    font-size: 11px;
-                    font-weight: 500;
-                    letter-spacing: 0.22em;
-                    text-transform: uppercase;
-                    color: #a8a29e;
-                    margin: 0 0 18px;
-                  "
-                >
-                  ${escapeHtmlText(text)}
-                </div>`;
-}
-function renderHeadline(text) {
-  return `<h1
-                  class="headline"
-                  style="
-                    margin: 0 0 16px;
-                    font-family: 'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-                    font-weight: 600;
-                    font-size: 30px;
-                    line-height: 1.1;
-                    letter-spacing: -0.04em;
-                    color: #1c1917;
-                  "
-                >
-                  ${escapeHtmlText(text)}
-                </h1>`;
-}
-function renderBodyBlock(innerHtml) {
-  return `<div
-                  style="
-                    font-family: 'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-                    font-size: 16px;
-                    line-height: 1.6;
-                    color: #57534e;
-                  "
-                >
-                  ${innerHtml}
-                </div>`;
-}
-function renderCtaButton({ href, label }) {
-  return `<table
-                  role="presentation"
-                  cellpadding="0"
-                  cellspacing="0"
-                  border="0"
-                  style="margin: 28px 0 8px"
-                >
-                  <tr>
-                    <td style="background: #1c1917; border-radius: 9999px">
-                      <a
-                        class="cta"
-                        href="${href}"
-                        style="
-                          display: inline-block;
-                          padding: 14px 28px;
-                          font-family:
-                            'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-                          font-weight: 600;
-                          font-size: 15px;
-                          letter-spacing: -0.01em;
-                          color: #fafaf7;
-                          text-decoration: none;
-                          border-radius: 9999px;
-                        "
-                      >
-                        ${label}
-                      </a>
-                    </td>
-                  </tr>
-                </table>`;
-}
-function renderFallbackLink({ href, text }) {
-  return `<div
-                  style="
-                    margin-top: 24px;
-                    padding-top: 24px;
-                    border-top: 1px solid #e7e5e0;
-                    font-family: 'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-                    font-size: 13px;
-                    line-height: 1.5;
-                    color: #a8a29e;
-                  "
-                >
-                  Button doesn't work? Paste this URL into your browser:<br />
-                  <a
-                    class="text-link"
-                    href="${href}"
-                    style="color: #57534e; word-break: break-all; text-decoration: underline"
-                    >${text}</a
-                  >
-                </div>`;
-}
-function renderTokenBlock({ token }) {
-  const tokenText = escapeHtmlText(token);
-  return `<table
-                  role="presentation"
-                  cellpadding="0"
-                  cellspacing="0"
-                  border="0"
-                  width="100%"
-                  style="margin: 28px 0 24px"
-                >
-                  <tr>
-                    <td
-                      style="
-                        border-top: 1px solid #e7e5e0;
-                        text-align: center;
-                        position: relative;
-                      "
-                    >
-                      <span
-                        style="
-                          background: #ffffff;
-                          padding: 0 12px;
-                          position: relative;
-                          top: -10px;
-                          font-family: 'IBM Plex Mono', monospace;
-                          font-size: 11px;
-                          letter-spacing: 0.18em;
-                          color: #a8a29e;
-                          text-transform: uppercase;
-                        "
-                      >
-                        OR USE CODE
-                      </span>
-                    </td>
-                  </tr>
-                </table>
-
-                <div style="text-align: center; margin-bottom: 12px">
-                  <div
-                    style="
-                      font-family: 'Space Grotesk', sans-serif;
-                      font-size: 14px;
-                      color: #78716c;
-                      margin-bottom: 12px;
-                    "
-                  >
-                    Enter this verification code in Overlord
-                  </div>
-                  <div
-                    class="otp"
-                    style="
-                      display: inline-block;
-                      padding: 18px 24px;
-                      background: #fafaf9;
-                      border: 1px solid #e7e5e0;
-                      border-radius: 16px;
-                      font-family: 'IBM Plex Mono', monospace;
-                      font-size: 34px;
-                      font-weight: 500;
-                      letter-spacing: 0.35em;
-                      color: #1c1917;
-                      line-height: 1;
-                    "
-                  >
-                    ${tokenText}
-                  </div>
-                  <div
-                    style="
-                      margin-top: 12px;
-                      font-family: 'Space Grotesk', sans-serif;
-                      font-size: 13px;
-                      color: #a8a29e;
-                    "
-                  >
-                    This code expires in 1 hour.
-                  </div>
-                </div>`;
-}
-function buildTransactionalEmail({
-  title,
-  preheader,
-  siteUrl,
-  cardContent,
-  footerExtra = ""
-}) {
-  const siteHref = escapeHtmlAttribute(siteUrl);
-  const logoHref = escapeHtmlAttribute(`${siteUrl.replace(/\/$/, "")}${EMAIL_BRAND.logoPath}`);
-  const preheaderText = escapeHtmlText(preheader);
-  return `<!doctype html>
-<html lang="en" style="margin: 0; padding: 0">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <meta name="x-apple-disable-message-reformatting" />
-    <meta name="color-scheme" content="light only" />
-    <meta name="supported-color-schemes" content="light only" />
-    <title>${escapeHtmlText(title)}</title>
-    <!--[if mso]>
-      <style>
-        * {
-          font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
-        }
-      </style>
-    <![endif]-->
-    <style>${EMAIL_STYLES}
-    </style>
-  </head>
-  <body
-    style="
-      margin: 0;
-      padding: 0;
-      background: #f6f4ef;
-      font-family: 'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-      color: #1c1917;
-    "
-  >
-    <!-- Preheader (hidden in clients, shown in inbox preview) -->
-    <div
-      style="
-        display: none;
-        max-height: 0;
-        overflow: hidden;
-        mso-hide: all;
-        font-size: 1px;
-        line-height: 1px;
-        color: #f6f4ef;
-      "
-    >
-      ${preheaderText}
-    </div>
-
-    <table
-      role="presentation"
-      cellpadding="0"
-      cellspacing="0"
-      border="0"
-      width="100%"
-      style="background: #f6f4ef"
-    >
-      <tr>
-        <td align="center" style="padding: 32px 16px 8px">
-          <!-- Brand row -->
-          <table
-            role="presentation"
-            cellpadding="0"
-            cellspacing="0"
-            border="0"
-            width="600"
-            class="container"
-            style="max-width: 600px; width: 100%"
-          >
-            <tr>
-              <td align="left" style="padding: 0 4px 24px">
-                <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-                  <tr>
-                    <td style="vertical-align: middle; padding-right: 12px">
-                      <img
-                        src="${logoHref}"
-                        width="36"
-                        height="36"
-                        alt="${EMAIL_BRAND.name}"
-                        style="display: block; width: 36px; height: 36px; border-radius: 8px"
-                      />
-                    </td>
-                    <td
-                      style="
-                        vertical-align: middle;
-                        font-family:
-                          'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-                        font-weight: 600;
-                        font-size: 18px;
-                        letter-spacing: -0.02em;
-                        color: #1c1917;
-                      "
-                    >
-                      ${EMAIL_BRAND.name}
-                    </td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
-          </table>
-
-          <!-- Card -->
-          <table
-            role="presentation"
-            cellpadding="0"
-            cellspacing="0"
-            border="0"
-            width="600"
-            class="container"
-            style="max-width: 600px; width: 100%"
-          >
-            <tr>
-              <td
-                class="card"
-                style="
-                  background: #ffffff;
-                  border: 1px solid #e7e5e0;
-                  border-radius: 20px;
-                  padding: 40px 40px 36px;
-                "
-              >
-                ${cardContent}
-              </td>
-            </tr>
-          </table>
-
-          <!-- Footer -->
-          <table
-            role="presentation"
-            cellpadding="0"
-            cellspacing="0"
-            border="0"
-            width="600"
-            class="container"
-            style="max-width: 600px; width: 100%"
-          >
-            <tr>
-              <td
-                class="footer"
-                align="left"
-                style="
-                  padding: 28px 4px 40px;
-                  font-family: 'Space Grotesk', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-                  font-size: 12px;
-                  line-height: 1.6;
-                  color: #a8a29e;
-                "
-              >
-                <div style="margin-bottom: 8px">
-                  <a
-                    class="text-link"
-                    href="${siteHref}"
-                    style="color: #57534e; text-decoration: none; font-weight: 500"
-                    >${EMAIL_BRAND.domainLabel}</a
-                  >
-                  &nbsp;\xB7&nbsp; ${EMAIL_BRAND.tagline}
-                </div>
-                ${footerExtra}
-                <div style="margin-top: 8px; color: #a8a29e">
-                  ${STANDARD_DISCLAIMER}
-                </div>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>`;
-}
-
-// email-templates/confirm-email.ts
-function confirmEmailSubject() {
-  return "Confirm your email to start running agents";
-}
-function confirmEmailHtml({ confirmationUrl, token, siteUrl }) {
-  const link = escapeConfirmationUrl(confirmationUrl);
-  const cardContent = [
-    renderEyebrow("CONFIRM SIGNUP"),
-    renderHeadline("Confirm your email to start running agents."),
-    renderBodyBlock(`<p style="margin: 0 0 14px">
-                    Welcome to Overlord. One last step \u2014 confirm this is your email address so we
-                    can open up your workspace.
-                  </p>
-                  <p style="margin: 0">
-                    Once confirmed, you can create tickets, assign Claude Code, Codex, Cursor,
-                    Gemini, or OpenCode, and review diffs before anything lands.
-                  </p>`),
-    renderCtaButton({ href: link.href, label: "Confirm Email&nbsp;\u2192" }),
-    renderTokenBlock({ token }),
-    renderFallbackLink({ href: link.href, text: link.text })
-  ].join("\n");
-  return buildTransactionalEmail({
-    title: "Confirm your email to start running agents.",
-    preheader: "Confirm your email to finish setting up Overlord.",
-    siteUrl,
-    cardContent
-  });
-}
-
-// email-templates/invite-user.ts
-function inviteUserSubject() {
-  return "You've been invited to Overlord";
-}
-function inviteUserHtml({ email: email3, confirmationUrl, siteUrl }) {
-  const link = escapeConfirmationUrl(confirmationUrl);
-  const cardContent = [
-    renderEyebrow("WORKSPACE INVITE"),
-    renderHeadline("You've been invited to Overlord."),
-    renderBodyBlock(`<p style="margin: 0 0 14px">
-                    Someone added
-                    ${emailInlineCode(email3)}
-                    to a workspace on Overlord \u2014 a control plane for running AI coding agents on
-                    tickets, with human review on every diff.
-                  </p>
-                  <p style="margin: 0">
-                    Accept the invite to set up your account and join the board.
-                  </p>`),
-    renderCtaButton({ href: link.href, label: "Accept Invite&nbsp;\u2192" }),
-    renderFallbackLink({ href: link.href, text: link.text })
-  ].join("\n");
-  return buildTransactionalEmail({
-    title: "You've been invited to Overlord.",
-    preheader: "You've been invited to a workspace on Overlord.",
-    siteUrl,
-    cardContent
-  });
-}
-
-// email-templates/magic-link.ts
-function magicLinkSubject() {
-  return "Sign in to Overlord";
-}
-function magicLinkHtml({ email: email3, confirmationUrl, token, siteUrl }) {
-  const link = escapeConfirmationUrl(confirmationUrl);
-  const cardContent = [
-    renderEyebrow("MAGIC LINK"),
-    renderHeadline("Sign in to Overlord."),
-    renderBodyBlock(`<p style="margin: 0 0 14px">
-                    You asked for a one-time sign-in link for
-                    ${emailInlineCode(email3)}. Tap the button below to land back in your workspace \u2014 no password required.
-                  </p>
-                  <p style="margin: 0; color: #a8a29e; font-size: 14px">
-                    This link expires shortly and can only be used once.
-                  </p>`),
-    renderCtaButton({ href: link.href, label: "Sign In&nbsp;\u2192" }),
-    renderTokenBlock({ token }),
-    renderFallbackLink({ href: link.href, text: link.text })
-  ].join("\n");
-  return buildTransactionalEmail({
-    title: "Sign in to Overlord.",
-    preheader: "Your one-time sign-in link for Overlord.",
-    siteUrl,
-    cardContent,
-    footerExtra: `<div style="margin: 8px 0">
-                  If you didn't request this link, you can ignore this email \u2014 your account stays
-                  locked.
-                </div>`
-  });
-}
-
-// email-templates/reset-password.ts
-function resetPasswordSubject() {
-  return "Reset your password";
-}
-function resetPasswordHtml({
-  email: email3,
-  confirmationUrl,
-  token,
-  siteUrl
-}) {
-  const link = escapeConfirmationUrl(confirmationUrl);
-  const cardContent = [
-    renderEyebrow("PASSWORD RESET"),
-    renderHeadline("Reset your password."),
-    renderBodyBlock(`<p style="margin: 0 0 14px">
-                    Someone requested a password reset for
-                    ${emailInlineCode(email3)}. If that was you, set a new one below.
-                  </p>
-                  <p style="margin: 0; color: #a8a29e; font-size: 14px">
-                    This link expires in 1 hour. After resetting, all other active sessions will be
-                    signed out.
-                  </p>`),
-    renderCtaButton({ href: link.href, label: "Reset Password&nbsp;\u2192" }),
-    ...token ? [renderTokenBlock({ token })] : [],
-    renderFallbackLink({ href: link.href, text: link.text })
-  ].join("\n");
-  return buildTransactionalEmail({
-    title: "Reset your password.",
-    preheader: "Reset your Overlord password.",
-    siteUrl,
-    cardContent,
-    footerExtra: `<div style="margin: 8px 0">
-                  If you didn't request a reset, you can safely ignore this email \u2014 your password
-                  won't change.
-                </div>`
-  });
-}
-
-// email-invitation.ts
-var FROM_ADDRESS = "Overlord <verify@notifications.cooperativ.io>";
-var SITE_URL = process.env.OVERLORD_SITE_URL ?? "https://app.ovld.ai";
+// email-client.ts
 var resendClient = null;
 function requireResendClient() {
   resendClient ??= new Resend(process.env.RESEND_API_KEY);
   return resendClient;
 }
+
+// email-invitation.ts
+var FROM_ADDRESS = "Overlord <verify@notifications.cooperativ.io>";
+var SITE_URL = process.env.OVERLORD_SITE_URL ?? "https://app.ovld.ai";
 async function sendInviteEmailViaResend({
   email: email3,
   confirmationUrl
@@ -173958,9 +171744,9 @@ var INVITATION_HASH_ALGORITHM = "sha256";
 var INVITATION_TTL_DAYS = 14;
 var WORKSPACE_ROLE_KEYS = /* @__PURE__ */ new Set(["ADMIN", "MANAGER", "MEMBER"]);
 function generateInvitationSecret() {
-  const prefix = `${INVITATION_TOKEN_SCHEME}_${(0, import_node_crypto26.randomBytes)(4).toString("hex")}`;
-  const secret = `${prefix}${(0, import_node_crypto26.randomBytes)(24).toString("hex")}`;
-  const hash2 = (0, import_node_crypto26.createHash)(INVITATION_HASH_ALGORITHM).update(secret).digest("hex");
+  const prefix = `${INVITATION_TOKEN_SCHEME}_${(0, import_node_crypto21.randomBytes)(4).toString("hex")}`;
+  const secret = `${prefix}${(0, import_node_crypto21.randomBytes)(24).toString("hex")}`;
+  const hash2 = (0, import_node_crypto21.createHash)(INVITATION_HASH_ALGORITHM).update(secret).digest("hex");
   return { secret, prefix, hash: hash2 };
 }
 var INVITATION_COLUMNS = "id, workspace_id, email, role_key, token_prefix, status, invited_by_workspace_user_id, expires_at, created_at, revision";
@@ -174124,7 +171910,7 @@ async function acceptWorkspaceInvitation(body) {
   if (!rawToken) throw new ApiError(400, "Invitation token is required");
   const profileId = getActiveProfileId();
   if (!profileId) throw new ApiError(401, "Authentication required");
-  const tokenHash = (0, import_node_crypto26.createHash)(INVITATION_HASH_ALGORITHM).update(rawToken).digest("hex");
+  const tokenHash = (0, import_node_crypto21.createHash)(INVITATION_HASH_ALGORITHM).update(rawToken).digest("hex");
   const client = requireDatabaseClient();
   const outcome = await client.transaction(async (tx) => {
     const invitation = await tx.get(
@@ -175012,13 +172798,13 @@ async function protocolWorkspaceId(body) {
   const scopes = await callerWorkspaceMemberships();
   if (scopes.length === 0) return null;
   const workspaceIds = scopes.map((scope2) => scope2.workspaceId);
-  const placeholders4 = workspaceIds.map(() => "?").join(", ");
+  const placeholders = workspaceIds.map(() => "?").join(", ");
   const db = serviceDatabaseClient();
   const executionRequestId = strFlag(body, "--execution-request-id");
   if (executionRequestId) {
     const request = await db.get(
       `SELECT workspace_id FROM execution_requests
-        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders4})`,
+        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders})`,
       [executionRequestId, ...workspaceIds]
     );
     if (request) return request.workspace_id;
@@ -175027,7 +172813,7 @@ async function protocolWorkspaceId(body) {
   if (sessionKey) {
     const session = await db.get(
       `SELECT workspace_id FROM agent_sessions
-        WHERE session_key_hash = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders4})`,
+        WHERE session_key_hash = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders})`,
       [hashSessionKey(sessionKey), ...workspaceIds]
     );
     if (session) return session.workspace_id;
@@ -175036,7 +172822,7 @@ async function protocolWorkspaceId(body) {
   if (objectiveRef) {
     const objective = await db.get(
       `SELECT workspace_id FROM objectives
-        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders4})`,
+        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders})`,
       [objectiveRef, ...workspaceIds]
     );
     if (objective) return objective.workspace_id;
@@ -175045,13 +172831,13 @@ async function protocolWorkspaceId(body) {
   if (missionRef) {
     const byId = await db.get(
       `SELECT workspace_id FROM missions
-        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders4})`,
+        WHERE id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders})`,
       [missionRef, ...workspaceIds]
     );
     if (byId) return byId.workspace_id;
     const byDisplay = await db.all(
       `SELECT workspace_id, project_id FROM missions
-        WHERE display_id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders4})`,
+        WHERE display_id = ? AND deleted_at IS NULL AND workspace_id IN (${placeholders})`,
       [missionRef, ...workspaceIds]
     );
     const visible = byDisplay.filter((row) => projectInTokenScope(row.project_id));
@@ -175837,13 +173623,13 @@ function optionalString(args, name2) {
   const value2 = args[name2];
   return typeof value2 === "string" && value2.trim() ? value2.trim() : null;
 }
-function requiredString(args, name2) {
+function requiredString2(args, name2) {
   const value2 = optionalString(args, name2);
   if (!value2) throw new Error(`Missing required argument: ${name2}`);
   return value2;
 }
 function optionalProjectRef(args) {
-  return optionalString(args, "projectId") ? requiredString(args, "projectId") : null;
+  return optionalString(args, "projectId") ? requiredString2(args, "projectId") : null;
 }
 function missionScopeFlags(args) {
   const objectiveId = optionalString(args, "objectiveId");
@@ -175872,9 +173658,9 @@ function runQueueMcpProtocolCall(name2, args) {
       subcommand: "run-queue",
       body: protocolBody({
         ...optionalProjectRef(args) ? { "--project-id": optionalProjectRef(args) } : {},
-        ...optionalString(args, "objectiveId") ? { "--objective-id": requiredString(args, "objectiveId") } : {},
-        ...optionalString(args, "missionId") ? { "--mission-id": requiredString(args, "missionId") } : {},
-        ...optionalString(args, "queue") ? { "--queue": requiredString(args, "queue") } : {}
+        ...optionalString(args, "objectiveId") ? { "--objective-id": requiredString2(args, "objectiveId") } : {},
+        ...optionalString(args, "missionId") ? { "--mission-id": requiredString2(args, "missionId") } : {},
+        ...optionalString(args, "queue") ? { "--queue": requiredString2(args, "queue") } : {}
       })
     };
   }
@@ -175885,7 +173671,7 @@ function runQueueMcpProtocolCall(name2, args) {
     return {
       subcommand: "reorder-run-queue",
       body: protocolBody({
-        "--queue": requiredString(args, "queue"),
+        "--queue": requiredString2(args, "queue"),
         "--ordered-entries-json": JSON.stringify(args.orderedObjectives),
         ...optionalProjectRef(args) ? { "--project-id": optionalProjectRef(args) } : {}
       })
@@ -175904,15 +173690,15 @@ function runQueueMcpProtocolCall(name2, args) {
     if (args.remove === true) {
       return {
         subcommand: "dequeue-objective",
-        body: protocolBody({ "--objective-id": requiredString(args, "objectiveId") })
+        body: protocolBody({ "--objective-id": requiredString2(args, "objectiveId") })
       };
     }
     return {
       subcommand: "queue-objective",
       body: protocolBody({
-        "--objective-id": requiredString(args, "objectiveId"),
-        ...optionalString(args, "queue") ? { "--queue": requiredString(args, "queue") } : {},
-        ...hasAfter ? { "--after": requiredString(args, "after") } : {},
+        "--objective-id": requiredString2(args, "objectiveId"),
+        ...optionalString(args, "queue") ? { "--queue": requiredString2(args, "queue") } : {},
+        ...hasAfter ? { "--after": requiredString2(args, "after") } : {},
         ...hasFront ? { "--front": true } : {},
         ...hasPosition ? { "--position": String(args.position) } : {}
       })
@@ -176041,8 +173827,8 @@ function referenceSearchProtocolBody(args) {
   return protocolBody({
     "--reference": reference,
     ...optionalProjectRef(args) ? { "--project-id": optionalProjectRef(args) } : {},
-    ...optionalString(args, "workspaceId") ? { "--workspace-id": requiredString(args, "workspaceId") } : {},
-    ...optionalString(args, "cursor") ? { "--cursor": requiredString(args, "cursor") } : {},
+    ...optionalString(args, "workspaceId") ? { "--workspace-id": requiredString2(args, "workspaceId") } : {},
+    ...optionalString(args, "cursor") ? { "--cursor": requiredString2(args, "cursor") } : {},
     ...typeof args.limit === "number" && Number.isFinite(args.limit) ? { "--limit": String(Math.trunc(args.limit)) } : {},
     ...rankedSearchFlagsForReference(args)
   });
@@ -176051,25 +173837,25 @@ var toolHandlers = {
   overlord_resolve_project: (args) => runProtocolSubcommand(
     "discover-project",
     protocolBody({
-      ...optionalString(args, "projectId") ? { "--project-id": requiredString(args, "projectId") } : {},
-      ...optionalString(args, "workspaceId") ? { "--workspace-id": requiredString(args, "workspaceId") } : {},
-      ...optionalString(args, "directory") ? { "--directory": requiredString(args, "directory") } : {}
+      ...optionalString(args, "projectId") ? { "--project-id": requiredString2(args, "projectId") } : {},
+      ...optionalString(args, "workspaceId") ? { "--workspace-id": requiredString2(args, "workspaceId") } : {},
+      ...optionalString(args, "directory") ? { "--directory": requiredString2(args, "directory") } : {}
     })
   ),
   overlord_create_project: (args) => runProtocolSubcommand(
     "create-project",
     protocolBody({
-      "--name": requiredString(args, "name"),
-      ...optionalString(args, "workspaceId") ? { "--workspace-id": requiredString(args, "workspaceId") } : {},
-      ...optionalString(args, "description") ? { "--description": requiredString(args, "description") } : {},
-      ...optionalString(args, "slug") ? { "--slug": requiredString(args, "slug") } : {}
+      "--name": requiredString2(args, "name"),
+      ...optionalString(args, "workspaceId") ? { "--workspace-id": requiredString2(args, "workspaceId") } : {},
+      ...optionalString(args, "description") ? { "--description": requiredString2(args, "description") } : {},
+      ...optionalString(args, "slug") ? { "--slug": requiredString2(args, "slug") } : {}
     })
   ),
   overlord_list_project_statuses: (args) => runProtocolSubcommand(
     "statuses",
     protocolBody({
-      "--project-id": requiredString(args, "projectId"),
-      ...optionalString(args, "workspaceId") ? { "--workspace-id": requiredString(args, "workspaceId") } : {}
+      "--project-id": requiredString2(args, "projectId"),
+      ...optionalString(args, "workspaceId") ? { "--workspace-id": requiredString2(args, "workspaceId") } : {}
     })
   ),
   overlord_search_missions: async (args) => {
@@ -176086,17 +173872,17 @@ var toolHandlers = {
       "search",
       protocolBody({
         "--response-version": "3",
-        ...optionalString(args, "query") ? { "--query": requiredString(args, "query") } : {},
-        ...optionalString(args, "status") ? { "--status": requiredString(args, "status") } : {},
+        ...optionalString(args, "query") ? { "--query": requiredString2(args, "query") } : {},
+        ...optionalString(args, "status") ? { "--status": requiredString2(args, "status") } : {},
         ...optionalProjectRef(args) ? { "--project-id": optionalProjectRef(args) } : {},
-        ...optionalString(args, "workspaceId") ? { "--workspace-id": requiredString(args, "workspaceId") } : {},
-        ...optionalString(args, "resourceKey") ? { "--resource-key": requiredString(args, "resourceKey") } : {},
-        ...optionalString(args, "dateField") ? { "--date-field": requiredString(args, "dateField") } : {},
-        ...optionalString(args, "from") ? { "--from": requiredString(args, "from") } : {},
-        ...optionalString(args, "to") ? { "--to": requiredString(args, "to") } : {},
+        ...optionalString(args, "workspaceId") ? { "--workspace-id": requiredString2(args, "workspaceId") } : {},
+        ...optionalString(args, "resourceKey") ? { "--resource-key": requiredString2(args, "resourceKey") } : {},
+        ...optionalString(args, "dateField") ? { "--date-field": requiredString2(args, "dateField") } : {},
+        ...optionalString(args, "from") ? { "--from": requiredString2(args, "from") } : {},
+        ...optionalString(args, "to") ? { "--to": requiredString2(args, "to") } : {},
         ...typeof args.limit === "number" && Number.isFinite(args.limit) ? { "--limit": String(Math.trunc(args.limit)) } : {},
-        ...optionalString(args, "entityTypes") ? { "--entity-types": requiredString(args, "entityTypes") } : {},
-        ...optionalString(args, "objectiveStates") ? { "--objective-states": requiredString(args, "objectiveStates") } : {},
+        ...optionalString(args, "entityTypes") ? { "--entity-types": requiredString2(args, "entityTypes") } : {},
+        ...optionalString(args, "objectiveStates") ? { "--objective-states": requiredString2(args, "objectiveStates") } : {},
         ...typeof args.matchesPerResult === "number" && Number.isFinite(args.matchesPerResult) ? {
           "--matches-per-result": String(Math.trunc(args.matchesPerResult))
         } : {}
@@ -176107,14 +173893,14 @@ var toolHandlers = {
   overlord_create_mission: (args) => runProtocolSubcommand(
     "create",
     protocolBody({
-      ...optionalString(args, "projectId") ? { "--project-id": requiredString(args, "projectId") } : {},
+      ...optionalString(args, "projectId") ? { "--project-id": requiredString2(args, "projectId") } : {},
       ...args.unassignedToProject === true ? { "--unassigned-to-project": true } : {},
-      "--objective": requiredString(args, "objective"),
-      ...optionalString(args, "title") ? { "--title": requiredString(args, "title") } : {},
-      ...optionalString(args, "resourceKey") ? { "--resource": requiredString(args, "resourceKey") } : {},
-      ...optionalString(args, "agent") ? { "--objective-agent": requiredString(args, "agent") } : {},
-      ...optionalString(args, "model") ? { "--objective-model": requiredString(args, "model") } : {},
-      ...optionalString(args, "assignedTo") ? { "--assigned-to": requiredString(args, "assignedTo") } : {},
+      "--objective": requiredString2(args, "objective"),
+      ...optionalString(args, "title") ? { "--title": requiredString2(args, "title") } : {},
+      ...optionalString(args, "resourceKey") ? { "--resource": requiredString2(args, "resourceKey") } : {},
+      ...optionalString(args, "agent") ? { "--objective-agent": requiredString2(args, "agent") } : {},
+      ...optionalString(args, "model") ? { "--objective-model": requiredString2(args, "model") } : {},
+      ...optionalString(args, "assignedTo") ? { "--assigned-to": requiredString2(args, "assignedTo") } : {},
       ...autoAdvanceFlags(args)
     })
   ),
@@ -176122,15 +173908,15 @@ var toolHandlers = {
     "create",
     protocolBody({
       "--unassigned-to-project": true,
-      "--title": requiredString(args, "title"),
-      "--objective": requiredString(args, "objective")
+      "--title": requiredString2(args, "title"),
+      "--objective": requiredString2(args, "objective")
     })
   ),
   overlord_load_mission_context: (args) => runProtocolSubcommand(
     "load-context",
     protocolBody({
       ...missionScopeFlags(args),
-      ...optionalString(args, "executionTargetId") ? { "--execution-target-id": requiredString(args, "executionTargetId") } : {}
+      ...optionalString(args, "executionTargetId") ? { "--execution-target-id": requiredString2(args, "executionTargetId") } : {}
     })
   ),
   overlord_list_deliveries: (args) => runProtocolSubcommand("list-deliveries", protocolBody(missionScopeFlags(args))),
@@ -176138,11 +173924,11 @@ var toolHandlers = {
   overlord_launch_objective: (args) => runProtocolSubcommand(
     "launch-objective",
     protocolBody({
-      "--objective-id": requiredString(args, "objectiveId"),
-      "--agent": requiredString(args, "agent"),
-      ...optionalString(args, "model") ? { "--model": requiredString(args, "model") } : {},
-      ...optionalString(args, "reasoningEffort") ? { "--reasoning-effort": requiredString(args, "reasoningEffort") } : {},
-      ...optionalString(args, "executionTargetId") ? { "--execution-target-id": requiredString(args, "executionTargetId") } : {}
+      "--objective-id": requiredString2(args, "objectiveId"),
+      "--agent": requiredString2(args, "agent"),
+      ...optionalString(args, "model") ? { "--model": requiredString2(args, "model") } : {},
+      ...optionalString(args, "reasoningEffort") ? { "--reasoning-effort": requiredString2(args, "reasoningEffort") } : {},
+      ...optionalString(args, "executionTargetId") ? { "--execution-target-id": requiredString2(args, "executionTargetId") } : {}
     })
   ),
   overlord_reorder_future_objectives: (args) => {
@@ -176152,7 +173938,7 @@ var toolHandlers = {
     return runProtocolSubcommand(
       "reorder-future-objectives",
       protocolBody({
-        "--mission-id": requiredString(args, "missionId"),
+        "--mission-id": requiredString2(args, "missionId"),
         "--ordered-objective-ids-json": JSON.stringify(args.orderedObjectiveIds)
       })
     );
@@ -176179,10 +173965,10 @@ var toolHandlers = {
     return runProtocolSubcommand(
       "update-objective",
       protocolBody({
-        "--objective-id": requiredString(args, "objectiveId"),
+        "--objective-id": requiredString2(args, "objectiveId"),
         ...hasTitle ? { "--title": args.title } : {},
         ...hasAutoAdvance ? autoAdvanceFlags(args) : {},
-        ...hasInstructionText ? { "--instruction-text": requiredString(args, "instructionText") } : {}
+        ...hasInstructionText ? { "--instruction-text": requiredString2(args, "instructionText") } : {}
       })
     );
   },
@@ -176236,17 +174022,17 @@ var toolHandlers = {
     protocolBody({
       ...missionScopeFlags(args),
       "--agent": optionalString(args, "agent") ?? HOSTED_MCP_DEFAULT_AGENT,
-      ...optionalString(args, "model") ? { "--model": requiredString(args, "model") } : {},
-      ...optionalString(args, "executionTargetId") ? { "--execution-target-id": requiredString(args, "executionTargetId") } : {}
+      ...optionalString(args, "model") ? { "--model": requiredString2(args, "model") } : {},
+      ...optionalString(args, "executionTargetId") ? { "--execution-target-id": requiredString2(args, "executionTargetId") } : {}
     })
   ),
   overlord_update_session: (args) => runProtocolSubcommand("update", {
     flags: {
       ...missionScopeFlags(args),
-      "--session-key": requiredString(args, "sessionKey"),
-      "--summary": requiredString(args, "summary"),
-      ...optionalString(args, "phase") ? { "--phase": requiredString(args, "phase") } : {},
-      ...optionalString(args, "eventType") ? { "--event-type": requiredString(args, "eventType") } : {},
+      "--session-key": requiredString2(args, "sessionKey"),
+      "--summary": requiredString2(args, "summary"),
+      ...optionalString(args, "phase") ? { "--phase": requiredString2(args, "phase") } : {},
+      ...optionalString(args, "eventType") ? { "--event-type": requiredString2(args, "eventType") } : {},
       ...Array.isArray(args.declaredPaths) ? { "--declared-paths-file": true } : {}
     },
     fileInputs: Array.isArray(args.declaredPaths) ? { "--declared-paths-file": JSON.stringify(args.declaredPaths) } : void 0
@@ -176254,8 +174040,8 @@ var toolHandlers = {
   overlord_deliver_session: (args) => runProtocolSubcommand("deliver", {
     flags: {
       ...missionScopeFlags(args),
-      "--session-key": requiredString(args, "sessionKey"),
-      "--summary": requiredString(args, "summary"),
+      "--session-key": requiredString2(args, "sessionKey"),
+      "--summary": requiredString2(args, "summary"),
       ...Array.isArray(args.artifacts) ? { "--artifacts-file": true } : {},
       ...Array.isArray(args.declaredPaths) ? { "--declared-paths-file": true } : {},
       ...Array.isArray(args.humanActions) || Array.isArray(args.tradeoffsMade) || Array.isArray(args.knownRisks) || Array.isArray(args.deferredWork) || Array.isArray(args.assumptions) ? {
@@ -176288,8 +174074,8 @@ var toolHandlers = {
     return runProtocolSubcommand("add-artifact", {
       flags: {
         ...missionScopeFlags(args),
-        "--type": requiredString(args, "type"),
-        "--label": requiredString(args, "label"),
+        "--type": requiredString2(args, "type"),
+        "--label": requiredString2(args, "label"),
         ...hasContentText ? { "--content-text-file": true } : {},
         ...hasExternalUrl ? { "--external-url": args.externalUrl } : {},
         ...sessionKey ? { "--session-key": sessionKey } : {}
@@ -176310,7 +174096,7 @@ var toolHandlers = {
     return runProtocolSubcommand("update-artifact", {
       flags: {
         ...missionScopeFlags(args),
-        "--artifact-id": requiredString(args, "artifactId"),
+        "--artifact-id": requiredString2(args, "artifactId"),
         "--expected-revision": String(Math.trunc(args.expectedRevision)),
         ...hasLabel ? { "--label": args.label } : {},
         ...hasContentText ? { "--content-text-file": true } : {},
@@ -176321,15 +174107,15 @@ var toolHandlers = {
   },
   overlord_record_work: (args) => {
     const payload = {
-      objective: requiredString(args, "objective"),
-      summary: requiredString(args, "summary"),
-      ...optionalString(args, "title") ? { title: requiredString(args, "title") } : {},
+      objective: requiredString2(args, "objective"),
+      summary: requiredString2(args, "summary"),
+      ...optionalString(args, "title") ? { title: requiredString2(args, "title") } : {},
       ...Array.isArray(args.declaredPaths) ? { declaredPaths: args.declaredPaths } : {},
       ...Array.isArray(args.artifacts) ? { artifacts: args.artifacts } : {}
     };
     return runProtocolSubcommand("record-work", {
       flags: {
-        "--project-id": requiredString(args, "projectId"),
+        "--project-id": requiredString2(args, "projectId"),
         "--payload-file": true
       },
       fileInputs: { "--payload-file": JSON.stringify(payload) }
@@ -176458,10 +174244,152 @@ async function handleMcpPost(req, res, next) {
 }
 
 // ../packages/core/service/chat/conversations.ts
-var import_node_crypto29 = require("node:crypto");
+var import_node_crypto25 = require("node:crypto");
+
+// ../packages/core/service/chat/performance.ts
+var import_node_async_hooks3 = require("node:async_hooks");
+var ChatPerformance = class {
+  startedAt = (/* @__PURE__ */ new Date()).toISOString();
+  started = performance.now();
+  spans = {};
+  first = {};
+  elapsed() {
+    return performance.now() - this.started;
+  }
+  mark(name2) {
+    this.first[name2] ??= this.elapsed();
+  }
+  add(name2, durationMs) {
+    const span = this.spans[name2] ??= { count: 0, totalMs: 0, minMs: durationMs, maxMs: 0 };
+    span.count++;
+    span.totalMs += durationMs;
+    span.minMs = Math.min(span.minMs, durationMs);
+    span.maxMs = Math.max(span.maxMs, durationMs);
+  }
+};
+var scope = new import_node_async_hooks3.AsyncLocalStorage();
+function chatSpanElapsed(name2, started) {
+  scope.getStore()?.add(name2, performance.now() - started);
+}
+function chatSyncSpan(name2, fn) {
+  const metrics = scope.getStore();
+  if (!metrics) return fn();
+  const start2 = performance.now();
+  try {
+    return fn();
+  } finally {
+    metrics.add(name2, performance.now() - start2);
+  }
+}
+function withChatPerformance(metrics, fn) {
+  return scope.run(metrics, fn);
+}
+async function chatSpan(name2, fn) {
+  const metrics = scope.getStore();
+  if (!metrics) return fn();
+  const start2 = performance.now();
+  try {
+    return await fn();
+  } finally {
+    metrics.add(name2, performance.now() - start2);
+  }
+}
+
+// ../packages/core/service/chat/diagnostics.ts
+function diagnosticJson(value2) {
+  const ancestors = [];
+  return JSON.stringify(value2, function(_key, item) {
+    if (typeof item === "bigint") return item.toString();
+    if (item && typeof item === "object") {
+      while (ancestors.length && ancestors.at(-1)?.serialized !== this) ancestors.pop();
+      if (ancestors.some((ancestor) => ancestor.source === item)) return "[Circular reference]";
+      const serialized = item instanceof Error ? Object.fromEntries(
+        Object.getOwnPropertyNames(item).map((key) => [
+          key,
+          item[key]
+        ])
+      ) : item;
+      ancestors.push({ source: item, serialized });
+      return serialized;
+    }
+    return item;
+  }) ?? "null";
+}
+async function appendDiagnostic(db, threadId, kind, payload, createdAt, runId = null, attemptId = null) {
+  const serialized = chatSyncSpan("diagnostic.serialization", () => diagnosticJson(payload));
+  await chatSpan(
+    "diagnostic.insert",
+    () => db.run(
+      `INSERT INTO chat_diagnostics (thread_id, seq, kind, payload_json, created_at, run_id, attempt_id)
+     SELECT ?, COALESCE(MAX(seq), 0) + 1, ?, ?, ?, ?, ? FROM chat_diagnostics WHERE thread_id = ?`,
+      [threadId, kind, serialized, createdAt, runId, attemptId, threadId]
+    )
+  );
+}
+async function diagnosticPage(db, threadId, after) {
+  const rows = await db.all("SELECT * FROM chat_diagnostics WHERE thread_id = ? AND seq > ? ORDER BY seq LIMIT 101", [
+    threadId,
+    after
+  ]);
+  const entries = rows.slice(0, 100).map((row) => ({
+    threadId: row.thread_id,
+    seq: row.seq,
+    runId: row.run_id,
+    attemptId: row.attempt_id,
+    kind: row.kind,
+    payload: JSON.parse(row.payload_json),
+    createdAt: row.created_at
+  }));
+  return { entries, nextCursor: entries.at(-1)?.seq ?? after, hasMore: rows.length > 100 };
+}
+
+// ../packages/core/service/chat/knowledgebase-writes.ts
+var KNOWLEDGEBASE_WRITE_TOOLS = [
+  "create_node",
+  "edit_file",
+  "set_properties",
+  "add_relation",
+  "update_relation",
+  "remove_relation"
+];
+var WRITE_TOOLS = new Set(KNOWLEDGEBASE_WRITE_TOOLS);
+function knowledgebaseWriteTool(toolId) {
+  const tool = /^kb_[0-9a-f]{12}_([a-z_]{1,48})$/.exec(toolId)?.[1];
+  return tool && WRITE_TOOLS.has(tool) ? tool : null;
+}
+var CONNECTION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+var WORKSPACE = /^[a-z0-9][a-z0-9-]{0,62}$/;
+function parseKnowledgebaseWrite(value2) {
+  if (value2 === void 0 || value2 === null) return null;
+  if (typeof value2 !== "object" || Array.isArray(value2)) return "invalid";
+  const { connectionId, workspace: workspace2, ...rest } = value2;
+  if (Object.keys(rest).length || typeof connectionId !== "string" || !CONNECTION_ID.test(connectionId) || typeof workspace2 !== "string" || !WORKSPACE.test(workspace2))
+    return "invalid";
+  return { connectionId: connectionId.toLowerCase(), workspace: workspace2 };
+}
+function sameKnowledgebaseWrite(a5, b5) {
+  return a5?.connectionId === b5?.connectionId && a5?.workspace === b5?.workspace;
+}
+function storedKnowledgebaseWrite(json2) {
+  if (!json2) return null;
+  try {
+    const grant = parseKnowledgebaseWrite(typeof json2 === "string" ? JSON.parse(json2) : json2);
+    return grant === "invalid" ? null : grant;
+  } catch {
+    return null;
+  }
+}
+var UNCERTAIN_WRITE_RESULT = {
+  outcome: "uncertain",
+  content: {
+    error: "uncertain",
+    message: "This Knowledgebase write was interrupted after it was sent, so it may or may not have been applied. Reread the node, relation, or path by its stable id before deciding whether to try again; never repeat a create blindly."
+  },
+  evidence: []
+};
 
 // ../packages/core/service/chat/proposals.ts
-var import_node_crypto28 = require("node:crypto");
+var import_node_crypto24 = require("node:crypto");
 init_workspace_agent_catalog();
 
 // ../packages/core/service/chat/access.ts
@@ -176584,8 +174512,568 @@ function assignmentCatalogProjection(value2) {
 
 // ../packages/core/service/chat/runs.ts
 init_dist2();
-var import_node_crypto27 = require("node:crypto");
+var import_node_crypto23 = require("node:crypto");
 var import_node_util2 = require("node:util");
+
+// ../packages/core/service/chat/store.ts
+init_dist();
+var import_node_crypto22 = require("node:crypto");
+var import_node_util = require("node:util");
+init_errors4();
+var ChatError = class extends ServiceError {
+  /**
+   * @param detail Optional specific reason for the assistant's own tool results (for example
+   * which resource key is not registered). It is never part of an HTTP error body.
+   */
+  constructor(code, detail) {
+    const status = code === "not_found" || code === "chat_unavailable" || code === "provider_not_available" ? 404 : code === "invalid_request" ? 400 : code === "limit_exceeded" ? 429 : code === "provider_not_ready" ? 503 : code === "credential_rejected" ? 422 : code === "provider_unavailable" ? 502 : 409;
+    super(code.replaceAll("_", " "), code, status);
+    this.detail = detail;
+  }
+  detail;
+};
+var requiredText = (value2, max) => {
+  if (typeof value2 !== "string" || !value2.trim() || value2.length > max)
+    throw new ChatError("invalid_request");
+  return value2;
+};
+function revision(value2) {
+  if (!Number.isSafeInteger(value2) || Number(value2) < 1) throw new ChatError("invalid_request");
+  return Number(value2);
+}
+function messageDto(r5) {
+  return {
+    id: r5.id,
+    threadId: r5.thread_id,
+    role: r5.role,
+    state: r5.state,
+    blocks: JSON.parse(r5.blocks_json),
+    runId: r5.run_id,
+    answersQuestionId: r5.answers_question_id,
+    clientRequestId: r5.client_request_id,
+    createdAt: r5.created_at,
+    updatedAt: r5.updated_at,
+    revision: r5.revision
+  };
+}
+function questionDto(r5) {
+  return {
+    id: r5.id,
+    threadId: r5.thread_id,
+    runId: r5.run_id,
+    ordinal: r5.ordinal,
+    state: r5.state,
+    prompt: r5.prompt,
+    options: JSON.parse(r5.options_json),
+    allowFreeText: Boolean(r5.allow_free_text),
+    answerMessageId: r5.answer_message_id,
+    createdAt: r5.created_at,
+    answeredAt: r5.answered_at,
+    revision: r5.revision
+  };
+}
+function runDto(r5, continueAvailable = false) {
+  return {
+    id: r5.id,
+    threadId: r5.thread_id,
+    triggerMessageId: r5.trigger_message_id,
+    state: r5.state,
+    outcome: r5.outcome,
+    failureCode: r5.failure_code,
+    continuedFromRunId: r5.continued_from_run_id,
+    continueAvailable,
+    knowledgebaseWrite: storedKnowledgebaseWrite(r5.knowledgebase_write_json),
+    usage: {
+      toolCalls: r5.tool_call_count,
+      activeProcessingMs: r5.active_processing_ms,
+      gatheredContentBytes: r5.gathered_content_bytes
+    },
+    cancelRequestedAt: r5.cancel_requested_at,
+    createdAt: r5.created_at,
+    updatedAt: r5.updated_at,
+    completedAt: r5.completed_at,
+    revision: r5.revision
+  };
+}
+var unavailableBlocks = () => [
+  {
+    id: "unavailable",
+    kind: "unavailable",
+    reason: "source_access_lost",
+    regenerable: true,
+    fallbackText: "Source access is no longer available."
+  }
+];
+var ChatStore = class _ChatStore {
+  constructor(db, options = {}) {
+    this.db = db;
+    this.options = options;
+    this.limits = { ...CHAT_DEFAULT_LIMITS, ...options.limits };
+  }
+  db;
+  options;
+  limits;
+  now() {
+    return this.options.now?.() ?? Date.now();
+  }
+  timestamp() {
+    return new Date(this.now()).toISOString();
+  }
+  /** Diagnostic observations may record late provider failures after a lease ends. */
+  async diagnostic(threadId, kind, payload, runId = null, attemptId = null) {
+    const started = performance.now();
+    await chatSpan(
+      "diagnostic.transaction",
+      () => this.db.transaction(async (tx) => {
+        chatSpanElapsed("diagnostic.admission", started);
+        const store = new _ChatStore(tx, this.options);
+        await store.lockForDiagnostic(threadId);
+        await appendDiagnostic(tx, threadId, kind, payload, store.timestamp(), runId, attemptId);
+      })
+    );
+  }
+  async lockForDiagnostic(id2) {
+    const result2 = await chatSpan(
+      "thread.lock",
+      () => this.db.run("UPDATE chat_threads SET id = id WHERE id = ?", [id2])
+    );
+    if (!result2.changes) throw new ChatError("not_found");
+  }
+  async access(owner) {
+    const member2 = await this.db.get(
+      `SELECT wu.id FROM workspace_users wu JOIN workspaces w ON w.id = wu.workspace_id JOIN organizations o ON o.id = w.organization_id WHERE wu.profile_id = ? AND w.organization_id = ? AND wu.status = 'active' AND wu.deleted_at IS NULL AND w.deleted_at IS NULL AND o.deleted_at IS NULL LIMIT 1`,
+      [owner.profileId, owner.organizationId]
+    );
+    if (!member2) throw new ChatError("not_found");
+  }
+  async generationDependencies(threadId, setId) {
+    const sets = await this.db.all(
+      "SELECT id FROM chat_dependency_sets WHERE thread_id = ? AND invalidated_at IS NULL",
+      [threadId]
+    );
+    return sets.length || setId ? this.dependencySet(threadId, [], [...sets.map((s) => s.id), ...setId ? [setId] : []]) : null;
+  }
+  async createdAt(table2, threadId) {
+    const last = await this.db.get(
+      `SELECT created_at FROM ${table2} WHERE thread_id = ? ORDER BY created_at DESC LIMIT 1`,
+      [threadId]
+    );
+    return new Date(Math.max(this.now(), last ? Date.parse(last.created_at) + 1 : 0)).toISOString();
+  }
+  async thread(id2, owner) {
+    const row = await this.db.get(
+      `SELECT * FROM chat_threads WHERE id = ?${owner ? " AND owner_profile_id = ? AND organization_id = ?" : ""}`,
+      owner ? [id2, owner.profileId, owner.organizationId] : [id2]
+    );
+    if (!row) throw new ChatError("not_found");
+    return row;
+  }
+  async lock(id2, owner) {
+    if (owner) await this.access(owner);
+    const result2 = await chatSpan(
+      "thread.lock",
+      () => this.db.run(
+        `UPDATE chat_threads SET id = id WHERE id = ?${owner ? " AND owner_profile_id = ? AND organization_id = ?" : ""}`,
+        owner ? [id2, owner.profileId, owner.organizationId] : [id2]
+      )
+    );
+    if (!result2.changes) throw new ChatError("not_found");
+    return this.thread(id2, owner);
+  }
+  async run(id2) {
+    const r5 = await this.db.get("SELECT * FROM chat_runs WHERE id = ?", [id2]);
+    if (!r5) throw new ChatError("not_found");
+    return r5;
+  }
+  async threadDto(r5) {
+    const active = await this.db.get(
+      "SELECT * FROM chat_runs WHERE thread_id = ? AND state IN ('queued','running','waiting_user')",
+      [r5.id]
+    );
+    return {
+      id: r5.id,
+      organizationId: r5.organization_id,
+      title: r5.title,
+      titleSource: r5.title_source,
+      archivedAt: r5.archived_at,
+      lastActivityAt: r5.last_activity_at,
+      activeRunState: active?.state ?? null,
+      createdAt: r5.created_at,
+      updatedAt: r5.updated_at,
+      revision: r5.revision
+    };
+  }
+  async append(threadId, payload, dependencySetId = null, attempt) {
+    await this.db.run(
+      "UPDATE chat_threads SET last_event_seq = last_event_seq + 1, last_activity_at = ? WHERE id = ?",
+      [this.timestamp(), threadId]
+    );
+    const t = await this.thread(threadId);
+    await this.db.run(
+      `INSERT INTO chat_events (id, thread_id, seq, kind, run_id, attempt_id, fence, payload_json, dependency_set_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        (0, import_node_crypto22.randomUUID)(),
+        threadId,
+        t.last_event_seq,
+        payload.kind,
+        attempt?.runId ?? null,
+        attempt?.id ?? null,
+        attempt?.fence ?? null,
+        JSON.stringify(payload),
+        dependencySetId,
+        this.timestamp()
+      ]
+    );
+    const runId = attempt?.runId ?? ("run" in payload ? payload.run.id : "runId" in payload ? payload.runId : null);
+    const run = runId ? await this.run(runId) : null;
+    const attempts = runId ? await this.db.all(
+      "SELECT * FROM chat_run_attempts WHERE run_id = ? ORDER BY attempt_number",
+      [runId]
+    ) : [];
+    const tool = "toolCallId" in payload ? await this.db.get("SELECT * FROM chat_tool_calls WHERE id = ?", [payload.toolCallId]) : null;
+    await appendDiagnostic(
+      this.db,
+      threadId,
+      payload.kind,
+      { event: payload, eventSeq: t.last_event_seq, run, attempts, tool },
+      this.timestamp(),
+      runId,
+      attempt?.id ?? null
+    );
+    await this.retain(threadId);
+    return t.last_event_seq;
+  }
+  async retain(id2) {
+    const t = await this.thread(id2);
+    const oldest = await this.db.get(
+      "SELECT seq FROM chat_events WHERE thread_id = ? AND created_at >= ? ORDER BY seq LIMIT 1",
+      [id2, new Date(this.now() - this.limits.eventRetentionMs).toISOString()]
+    );
+    const boundary = Math.max(
+      t.retained_from_seq,
+      oldest?.seq ?? t.last_event_seq + 1,
+      t.last_event_seq - this.limits.eventRetentionCount + 1
+    );
+    await this.db.run("DELETE FROM chat_events WHERE thread_id = ? AND seq < ?", [id2, boundary]);
+    await this.db.run("UPDATE chat_threads SET retained_from_seq = ? WHERE id = ?", [boundary, id2]);
+  }
+  async authorized(setId) {
+    if (!setId) return true;
+    const set2 = await this.db.get(
+      "SELECT invalidated_at FROM chat_dependency_sets WHERE id = ?",
+      [setId]
+    );
+    return Boolean(set2 && !set2.invalidated_at);
+  }
+  async projectMessage(r5) {
+    const dto = messageDto(r5);
+    if (r5.invalidated_at || !await this.authorized(r5.dependency_set_id))
+      dto.blocks = unavailableBlocks();
+    return dto;
+  }
+  /**
+   * Registers source identities for a thread (upsert by stable scope key) and returns their ids.
+   * A Knowledgebase locator's display path may differ between results for the same node, so
+   * identity is compared without it; every other locator must match exactly.
+   */
+  async registerSources(owner, threadId, sources) {
+    const ids = [];
+    const identity = (l3) => l3.kind === "knowledgebase" ? { ...l3, path: null } : l3;
+    for (const source of sources) {
+      requiredText(source.scopeKey, 1e3);
+      const now2 = this.timestamp();
+      const connection = source.locator.kind === "knowledgebase" ? await this.db.get(
+        "SELECT id FROM account_connections WHERE id = ? AND owner_profile_id = ? AND organization_id = ?",
+        [source.locator.connectionId, owner.profileId, owner.organizationId]
+      ) : void 0;
+      await this.db.run(
+        `INSERT INTO chat_source_refs (id, thread_id, source_kind, scope_key, connection_id, locator_json, access_state, access_checked_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 'unknown', ?, ?, ?) ON CONFLICT (thread_id, scope_key) DO NOTHING`,
+        [
+          (0, import_node_crypto22.randomUUID)(),
+          threadId,
+          source.locator.kind,
+          source.scopeKey,
+          connection?.id ?? null,
+          JSON.stringify(source.locator),
+          now2,
+          now2,
+          now2
+        ]
+      );
+      const row = await this.db.get(
+        "SELECT id, locator_json FROM chat_source_refs WHERE thread_id = ? AND scope_key = ?",
+        [threadId, source.scopeKey]
+      );
+      if (!(0, import_node_util.isDeepStrictEqual)(identity(JSON.parse(row.locator_json)), identity(source.locator)))
+        throw new ChatError("invalid_request");
+      ids.push(row.id);
+    }
+    return ids;
+  }
+  async checkSources(threadId, onlyIds) {
+    return chatSpan("source.authorization", () => this.checkSourcesMeasured(threadId, onlyIds));
+  }
+  async checkSourcesMeasured(threadId, onlyIds) {
+    const t = await this.thread(threadId);
+    const owner = { profileId: t.owner_profile_id, organizationId: t.organization_id };
+    try {
+      await this.access(owner);
+    } catch {
+      const runs = await this.db.all(
+        "SELECT * FROM chat_runs WHERE thread_id = ? AND state IN ('queued','running','waiting_user')",
+        [threadId]
+      );
+      for (const r5 of runs) await this.finish(r5, "failed", null, "source_access_lost");
+      return;
+    }
+    const sources = (await this.db.all("SELECT * FROM chat_source_refs WHERE thread_id = ?", [threadId])).filter((source) => !onlyIds || onlyIds.includes(source.id));
+    for (const source of sources) {
+      let state2 = "unknown";
+      const checkSource = this.options.checkSource;
+      if (checkSource) {
+        const signal = AbortSignal.timeout(3e3);
+        try {
+          state2 = await chatSpan(
+            "source.checker",
+            () => Promise.race([
+              checkSource(owner, JSON.parse(source.locator_json), signal),
+              new Promise(
+                (resolve) => signal.addEventListener("abort", () => resolve("unknown"), { once: true })
+              )
+            ])
+          );
+        } catch {
+        }
+      }
+      await this.db.run(
+        "UPDATE chat_source_refs SET access_state = ?, access_checked_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
+        [state2, this.timestamp(), this.timestamp(), source.id]
+      );
+      if (state2 !== "authorized") await this.invalidate(threadId, source.id);
+    }
+  }
+  /** Rechecks one thread's sources under its row lock, e.g. after a connection loses access. */
+  async revalidate(threadId) {
+    await this.db.transaction(async (tx) => {
+      const s = new _ChatStore(tx, this.options);
+      await s.lock(threadId);
+      await s.checkSources(threadId);
+    });
+  }
+  /** Rechecks every thread that cites a source obtained through `connectionId`. */
+  async revalidateConnection(connectionId) {
+    const threads = await this.db.all(
+      "SELECT DISTINCT thread_id FROM chat_source_refs WHERE connection_id = ?",
+      [connectionId]
+    );
+    for (const { thread_id } of threads) await this.revalidate(thread_id);
+  }
+  async invalidate(threadId, sourceId) {
+    const sets = await this.db.all(
+      `SELECT s.id FROM chat_dependency_sets s JOIN chat_dependency_set_members m ON m.dependency_set_id = s.id WHERE s.thread_id = ? AND m.source_ref_id = ? AND s.invalidated_at IS NULL`,
+      [threadId, sourceId]
+    );
+    if (!sets.length) return;
+    const messageIds = [], proposalIds = [];
+    for (const { id: id2 } of sets) {
+      await this.db.run("UPDATE chat_dependency_sets SET invalidated_at = ? WHERE id = ?", [
+        this.timestamp(),
+        id2
+      ]);
+      messageIds.push(
+        ...(await this.db.all(
+          "SELECT id FROM chat_messages WHERE dependency_set_id = ?",
+          [id2]
+        )).map((r5) => r5.id)
+      );
+      proposalIds.push(
+        ...(await this.db.all(
+          "SELECT proposal_id FROM chat_work_proposal_revisions WHERE dependency_set_id = ?",
+          [id2]
+        )).map((r5) => r5.proposal_id)
+      );
+      for (const table2 of [
+        "chat_messages",
+        "chat_thread_summaries",
+        "chat_provider_checkpoints",
+        "chat_work_proposal_revisions"
+      ])
+        await this.db.run(`UPDATE ${table2} SET invalidated_at = ? WHERE dependency_set_id = ?`, [
+          this.timestamp(),
+          id2
+        ]);
+      const questions = await this.db.all(
+        "SELECT * FROM chat_questions WHERE dependency_set_id = ? AND state = 'open'",
+        [id2]
+      );
+      for (const q2 of questions) {
+        await this.db.run(
+          "UPDATE chat_questions SET state = 'superseded', revision = revision + 1, updated_at = ? WHERE id = ?",
+          [this.timestamp(), q2.id]
+        );
+        await this.append(
+          threadId,
+          {
+            kind: "question.closed",
+            question: questionDto({ ...q2, state: "superseded", revision: q2.revision + 1 })
+          },
+          id2
+        );
+      }
+    }
+    await this.db.run(
+      "UPDATE chat_threads SET authorization_revision = authorization_revision + 1 WHERE id = ?",
+      [threadId]
+    );
+    await this.append(threadId, {
+      kind: "content.invalidated",
+      messageIds: [...new Set(messageIds)],
+      proposalIds: [...new Set(proposalIds)]
+    });
+    const runs = await this.db.all(
+      "SELECT * FROM chat_runs WHERE thread_id = ? AND state IN ('running','waiting_user')",
+      [threadId]
+    );
+    for (const r5 of runs) await this.finish(r5, "failed", null, "source_access_lost");
+  }
+  async dependencySet(threadId, sourceIds, inherited = []) {
+    const union2 = new Set(sourceIds);
+    for (const setId of inherited) {
+      const set2 = await this.db.get(
+        "SELECT thread_id FROM chat_dependency_sets WHERE id = ?",
+        [setId]
+      );
+      if (set2?.thread_id !== threadId || !await this.authorized(setId))
+        throw new ChatError("source_access_lost");
+      for (const row of await this.db.all(
+        "SELECT source_ref_id FROM chat_dependency_set_members WHERE dependency_set_id = ?",
+        [setId]
+      ))
+        union2.add(row.source_ref_id);
+    }
+    const ids = [...union2].sort();
+    for (const id3 of ids) {
+      const source = await this.db.get(
+        "SELECT * FROM chat_source_refs WHERE id = ? AND thread_id = ?",
+        [id3, threadId]
+      );
+      if (!source || source.access_state !== "authorized")
+        throw new ChatError("source_access_lost");
+    }
+    const authorizationRevision = (await this.thread(threadId)).authorization_revision;
+    const digest5 = (0, import_node_crypto22.createHash)("sha256").update(JSON.stringify({ ids, authorizationRevision })).digest("hex");
+    const old = await this.db.get(
+      "SELECT id, invalidated_at FROM chat_dependency_sets WHERE thread_id = ? AND digest = ?",
+      [threadId, digest5]
+    );
+    if (old?.invalidated_at) throw new ChatError("source_access_lost");
+    if (old) return old.id;
+    const id2 = (0, import_node_crypto22.randomUUID)();
+    await this.db.run(
+      "INSERT INTO chat_dependency_sets (id, thread_id, digest, created_at) VALUES (?, ?, ?, ?)",
+      [id2, threadId, digest5, this.timestamp()]
+    );
+    for (const sourceId of ids)
+      await this.db.run(
+        "INSERT INTO chat_dependency_set_members (dependency_set_id, source_ref_id) VALUES (?, ?)",
+        [id2, sourceId]
+      );
+    return id2;
+  }
+  async finish(r5, state2, outcome = null, failure4 = null) {
+    const now2 = this.timestamp();
+    await this.db.run(
+      `UPDATE chat_run_attempts SET state = ?, ended_at = ? WHERE run_id = ? AND state = 'leased'`,
+      [
+        state2 === "completed" ? "succeeded" : state2 === "cancelled" ? "cancelled" : "fenced",
+        now2,
+        r5.id
+      ]
+    );
+    await this.db.run(
+      `UPDATE chat_runs SET state = ?, outcome = ?, failure_code = ?, completed_at = ?, active_attempt_id = NULL, current_fence = current_fence + 1, updated_at = ?, revision = revision + 1 WHERE id = ?`,
+      [state2, outcome, failure4, now2, now2, r5.id]
+    );
+    const questions = await this.db.all(
+      "SELECT * FROM chat_questions WHERE run_id = ? AND state = 'open'",
+      [r5.id]
+    );
+    await this.db.run(
+      "UPDATE chat_questions SET state = 'cancelled', updated_at = ?, revision = revision + 1 WHERE run_id = ? AND state = 'open'",
+      [now2, r5.id]
+    );
+    await this.db.run(
+      "UPDATE chat_tool_calls SET state = 'cancelled', completed_at = ?, updated_at = ? WHERE run_id = ? AND state IN ('requested','executing')",
+      [now2, now2, r5.id]
+    );
+    const partials = await this.db.all(
+      "SELECT * FROM chat_messages WHERE run_id = ? AND state = 'streaming'",
+      [r5.id]
+    );
+    await this.db.run(
+      "UPDATE chat_messages SET state = 'interrupted', updated_at = ?, revision = revision + 1 WHERE run_id = ? AND state = 'streaming'",
+      [now2, r5.id]
+    );
+    for (const message2 of partials)
+      await this.append(
+        r5.thread_id,
+        {
+          kind: "message.completed",
+          message: messageDto({
+            ...message2,
+            state: "interrupted",
+            updated_at: now2,
+            revision: message2.revision + 1
+          })
+        },
+        message2.dependency_set_id
+      );
+    for (const q2 of questions)
+      await this.append(
+        r5.thread_id,
+        {
+          kind: "question.closed",
+          question: questionDto({
+            ...q2,
+            state: "cancelled",
+            revision: q2.revision + 1,
+            updated_at: now2
+          })
+        },
+        q2.dependency_set_id
+      );
+    await this.db.run("DELETE FROM chat_provider_checkpoints WHERE run_id = ?", [r5.id]);
+    const updated = await this.run(r5.id);
+    const seq = await this.append(r5.thread_id, {
+      kind: "run.updated",
+      run: runDto(updated, outcome === "allowance_exhausted")
+    });
+    if (state2 !== "cancelled") await this.notification(updated, seq);
+    return runDto(updated, outcome === "allowance_exhausted");
+  }
+  async notification(r5, seq, question) {
+    const t = await this.thread(r5.thread_id);
+    await this.db.run(
+      `INSERT INTO chat_notifications (id, owner_profile_id, organization_id, thread_id, run_id, question_id, type, transition_key, event_seq, state, due_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?) ON CONFLICT (owner_profile_id, thread_id, run_id, type, transition_key) DO NOTHING`,
+      [
+        (0, import_node_crypto22.randomUUID)(),
+        t.owner_profile_id,
+        t.organization_id,
+        t.id,
+        r5.id,
+        question?.id ?? null,
+        question ? "chat_needs_answer" : "chat_finished",
+        question ? `question:${question.ordinal}` : `terminal:${r5.state}`,
+        seq,
+        new Date(this.now() + this.limits.notificationGraceMs).toISOString(),
+        this.timestamp(),
+        this.timestamp()
+      ]
+    );
+  }
+};
+
+// ../packages/core/service/chat/runs.ts
 function toolProgressLabel(toolId) {
   switch (toolId) {
     case "overlord_list_projects":
@@ -176721,7 +175209,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
             );
           }
         }
-        const id2 = (0, import_node_crypto27.randomUUID)(), fence = r5.current_fence + 1, now2 = s.timestamp();
+        const id2 = (0, import_node_crypto23.randomUUID)(), fence = r5.current_fence + 1, now2 = s.timestamp();
         await tx.run(
           "UPDATE chat_runs SET state = 'running', current_fence = ?, active_attempt_id = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
           [fence, id2, now2, r5.id]
@@ -176979,7 +175467,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
         requiredText(req.providerCallId, 200);
         const args = JSON.stringify(req.arguments);
         if (Buffer.byteLength(args) > 64 * 1024) throw new ChatError("limit_exceeded");
-        const callId = (0, import_node_crypto27.randomUUID)();
+        const callId = (0, import_node_crypto23.randomUUID)();
         await s.db.run(
           `INSERT INTO chat_tool_calls (id, run_id, attempt_id, operation_id, turn_index, call_order, provider_call_id, tool_id, policy_version, arguments_json, state, requested_fence, writer_fence, dependency_set_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 'requested', ?, ?, ?, ?, ?)`,
           [
@@ -177149,8 +175637,8 @@ var ChatRuns = class _ChatRuns extends ChatStore {
         [messageId, a5.runId]
       );
       if (messageId && !old) throw new ChatError("invalid_request");
-      const id2 = old ? old.id : (0, import_node_crypto27.randomUUID)();
-      const blocks = old ? JSON.parse(old.blocks_json) : [{ id: (0, import_node_crypto27.randomUUID)(), kind: "text", text: "", evidenceIds: [], fallbackText: "" }];
+      const id2 = old ? old.id : (0, import_node_crypto23.randomUUID)();
+      const blocks = old ? JSON.parse(old.blocks_json) : [{ id: (0, import_node_crypto23.randomUUID)(), kind: "text", text: "", evidenceIds: [], fallbackText: "" }];
       const block = blocks[0];
       if (!block || block.kind !== "text") throw new ChatError("invalid_request");
       if (block.text.length + text.length > s.limits.messageMaxChars)
@@ -177201,7 +175689,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
         "SELECT COUNT(*) AS n FROM chat_questions WHERE run_id = ?",
         [a5.runId]
       );
-      const id2 = (0, import_node_crypto27.randomUUID)(), now2 = s.timestamp();
+      const id2 = (0, import_node_crypto23.randomUUID)(), now2 = s.timestamp();
       await s.db.run(
         `INSERT INTO chat_questions (id, thread_id, run_id, ordinal, state, prompt, options_json, allow_free_text, dependency_set_id, created_at, updated_at) VALUES (?, ?, ?, ?, 'open', ?, ?, ?, ?, ?, ?)`,
         [
@@ -177284,7 +175772,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
       );
       const evidence = [];
       for (const [i5, source] of sources.entries()) {
-        const evidenceId = (0, import_node_crypto27.randomUUID)();
+        const evidenceId = (0, import_node_crypto23.randomUUID)();
         await s.db.run(
           `INSERT INTO chat_evidence (id, thread_id, run_id, tool_call_id, source_ref_id, label, excerpt, excerpt_truncated, source_revision, observed_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
@@ -177342,7 +175830,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
       }));
       const others = blocks.filter((b5) => b5.kind !== "evidence");
       others.push({
-        id: (0, import_node_crypto27.randomUUID)(),
+        id: (0, import_node_crypto23.randomUUID)(),
         kind: "evidence",
         evidence,
         fallbackText: `Sources: ${evidence.map((e5) => e5.label).join("; ")}`.slice(0, 4e3)
@@ -177385,7 +175873,7 @@ var ChatRuns = class _ChatRuns extends ChatStore {
       if (regressed) throw new ChatError("invalid_request");
       await s.db.run(
         "INSERT INTO chat_thread_summaries (id, thread_id, summary_revision, summary_json, covers_through_message_id, dependency_set_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        [(0, import_node_crypto27.randomUUID)(), a5.threadId, Number(last?.n ?? 0) + 1, json2, latest.id, deps, s.timestamp()]
+        [(0, import_node_crypto23.randomUUID)(), a5.threadId, Number(last?.n ?? 0) + 1, json2, latest.id, deps, s.timestamp()]
       );
     });
   }
@@ -177694,7 +176182,7 @@ var ChatProposals = class _ChatProposals extends ChatStore {
       await runs.assertLease(a5);
       const destinationSet = await s.dependencySet(a5.threadId, sourceIds);
       const dependencySetId = await s.generationDependencies(a5.threadId, destinationSet);
-      const id2 = body.proposalId ?? (0, import_node_crypto28.randomUUID)();
+      const id2 = body.proposalId ?? (0, import_node_crypto24.randomUUID)();
       let next = 1;
       if (body.proposalId) {
         const old = await tx.get(
@@ -177737,10 +176225,10 @@ var ChatProposals = class _ChatProposals extends ChatStore {
         id: a5.id,
         fence: a5.fence
       });
-      const messageId = (0, import_node_crypto28.randomUUID)();
+      const messageId = (0, import_node_crypto24.randomUUID)();
       const blocks = [
         {
-          id: (0, import_node_crypto28.randomUUID)(),
+          id: (0, import_node_crypto24.randomUUID)(),
           kind: "proposal",
           proposalId: id2,
           revision: next,
@@ -177852,7 +176340,7 @@ var ChatProposals = class _ChatProposals extends ChatStore {
           [scope2.project.id]
         );
       }
-      const receiptId = (0, import_node_crypto28.randomUUID)();
+      const receiptId = (0, import_node_crypto24.randomUUID)();
       for (const [i5, m3] of missions.entries()) {
         const scope2 = scopes[i5];
         await s.destination(owner, m3.projectId);
@@ -177916,7 +176404,7 @@ var ChatProposals = class _ChatProposals extends ChatStore {
               expected,
               owner.profileId,
               key,
-              (0, import_node_crypto28.createHash)("sha256").update(JSON.stringify({ id: id2, expected })).digest("hex"),
+              (0, import_node_crypto24.createHash)("sha256").update(JSON.stringify({ id: id2, expected })).digest("hex"),
               thread.authorization_revision,
               s.timestamp()
             ]
@@ -177996,7 +176484,7 @@ var Conversations = class _Conversations extends ChatStore {
     if (message2 !== void 0 && (!message2 || typeof message2 !== "object" || Array.isArray(message2)))
       throw new ChatError("invalid_request");
     return this.db.transaction(async (tx) => {
-      const s = new _Conversations(tx, this.options), id2 = (0, import_node_crypto29.randomUUID)(), now2 = s.timestamp();
+      const s = new _Conversations(tx, this.options), id2 = (0, import_node_crypto25.randomUUID)(), now2 = s.timestamp();
       await s.access(owner);
       await tx.run(
         "INSERT INTO chat_threads (id, owner_profile_id, organization_id, last_activity_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -178112,10 +176600,10 @@ var Conversations = class _Conversations extends ChatStore {
       if (Number(count?.n) >= this.limits.concurrentRunsPerOwner)
         throw new ChatError("limit_exceeded");
     }
-    const messageId = (0, import_node_crypto29.randomUUID)(), runId = active?.id ?? (0, import_node_crypto29.randomUUID)(), now2 = this.timestamp();
+    const messageId = (0, import_node_crypto25.randomUUID)(), runId = active?.id ?? (0, import_node_crypto25.randomUUID)(), now2 = this.timestamp();
     const messageCreatedAt = await this.createdAt("chat_messages", id2);
     const blocks = [
-      { id: (0, import_node_crypto29.randomUUID)(), kind: "text", text: body.text, fallbackText: body.text, evidenceIds: [] }
+      { id: (0, import_node_crypto25.randomUUID)(), kind: "text", text: body.text, fallbackText: body.text, evidenceIds: [] }
     ];
     await this.db.run(
       `INSERT INTO chat_messages (id, thread_id, role, state, blocks_json, answers_question_id, client_request_id, created_at, updated_at) VALUES (?, ?, 'user', 'complete', ?, ?, ?, ?, ?)`,
@@ -178240,7 +176728,7 @@ var Conversations = class _Conversations extends ChatStore {
       );
       if (Number(count?.n) >= s.limits.concurrentRunsPerOwner)
         throw new ChatError("limit_exceeded");
-      const newId3 = (0, import_node_crypto29.randomUUID)();
+      const newId3 = (0, import_node_crypto25.randomUUID)();
       const inheritedGrant = storedKnowledgebaseWrite(r5.knowledgebase_write_json);
       await s.db.run(
         `INSERT INTO chat_runs (id, thread_id, trigger_message_id, continued_from_run_id, state, limits_json, knowledgebase_write_json, created_at, updated_at) VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?)`,
@@ -178436,7 +176924,7 @@ init_projects();
 
 // ../packages/core/service/repository-reads.ts
 init_dist();
-var import_node_crypto30 = require("node:crypto");
+var import_node_crypto26 = require("node:crypto");
 init_registry();
 init_repository_paths();
 init_runner_queue_provider();
@@ -178448,7 +176936,7 @@ init_projects();
 function invalid2(message2) {
   throw new ServiceError(message2, "invalid_request", 400);
 }
-function requiredString2(body, key) {
+function requiredString3(body, key) {
   const value2 = body[key];
   if (typeof value2 !== "string" || value2.trim() === "") invalid2(`${key} is required.`);
   return value2.trim();
@@ -178474,14 +176962,14 @@ function parseRepositoryReadRequest(raw) {
   if (!REPOSITORY_READ_OPERATIONS.includes(operation2)) {
     invalid2(`operation must be one of ${REPOSITORY_READ_OPERATIONS.join(", ")}.`);
   }
-  const operationId = requiredString2(body, "operationId");
+  const operationId = requiredString3(body, "operationId");
   if (!REPOSITORY_READ_OPERATION_ID_PATTERN.test(operationId)) {
     invalid2('operationId must be 8-128 characters of letters, digits, ".", "_", ":" or "-".');
   }
   const binding = {
-    executionTargetId: requiredString2(body, "executionTargetId"),
-    projectId: requiredString2(body, "projectId"),
-    resourceKey: requiredString2(body, "resourceKey"),
+    executionTargetId: requiredString3(body, "executionTargetId"),
+    projectId: requiredString3(body, "projectId"),
+    resourceKey: requiredString3(body, "resourceKey"),
     operationId
   };
   switch (operation2) {
@@ -178630,9 +177118,9 @@ var defaultProviderFactory = ({ target, queue }) => new RunnerQueueProvider(
   queue
 );
 function repositoryReadIdempotencyKey(actorWorkspaceUserId2, operationId) {
-  const digest4 = (0, import_node_crypto30.createHash)("sha256").update(`${actorWorkspaceUserId2}
+  const digest5 = (0, import_node_crypto26.createHash)("sha256").update(`${actorWorkspaceUserId2}
 ${operationId}`).digest("hex").slice(0, 48);
-  return `repository-read:${digest4}`;
+  return `repository-read:${digest5}`;
 }
 function stableJson(value2) {
   if (Array.isArray(value2)) return `[${value2.map(stableJson).join(",")}]`;
@@ -179898,10 +178386,10 @@ function classifyGeminiError(error64) {
 }
 
 // chat/gemini-runtime.ts
-var import_node_crypto35 = require("node:crypto");
+var import_node_crypto31 = require("node:crypto");
 
 // chat-worker.ts
-var import_node_crypto31 = require("node:crypto");
+var import_node_crypto27 = require("node:crypto");
 var ChatRuntimeFailure = class extends Error {
   constructor(failureCode) {
     super(failureCode);
@@ -179932,7 +178420,7 @@ var ChatWorker = class extends PollLoop {
   concurrency;
   lastRetentionAt = 0;
   active = /* @__PURE__ */ new Map();
-  id = (0, import_node_crypto31.randomUUID)();
+  id = (0, import_node_crypto27.randomUUID)();
   async stop() {
     const pass2 = super.stop();
     for (const job of this.active.values()) job.controller.abort();
@@ -180007,7 +178495,7 @@ var ChatWorker = class extends PollLoop {
 };
 
 // chat/gemini-diagnostics.ts
-var import_node_crypto32 = require("node:crypto");
+var import_node_crypto28 = require("node:crypto");
 var RunMetrics = class extends ChatPerformance {
   providerRounds = 0;
   providerRequests = 0;
@@ -180096,7 +178584,7 @@ function instrumentGeminiClient(client, hooks) {
   const { record: record2, metrics } = hooks;
   return {
     async stream(request) {
-      const exchangeId = (0, import_node_crypto32.randomUUID)();
+      const exchangeId = (0, import_node_crypto28.randomUUID)();
       if (metrics) metrics.providerRequests++;
       const started = metrics ? performance.now() : 0;
       const contentBytes = hooks.contentBytes(request);
@@ -180159,7 +178647,7 @@ function instrumentGeminiClient(client, hooks) {
       }
     },
     async generate(request) {
-      const exchangeId = (0, import_node_crypto32.randomUUID)();
+      const exchangeId = (0, import_node_crypto28.randomUUID)();
       if (metrics) metrics.summaryRounds++;
       const cached3 = hooks.staticUseFor(request);
       await record2("provider.request", {
@@ -180185,7 +178673,7 @@ function instrumentGeminiClient(client, hooks) {
 }
 
 // chat/static-cache.ts
-var import_node_crypto33 = require("node:crypto");
+var import_node_crypto29 = require("node:crypto");
 var STATIC_CACHE_SWITCH_TOKENS = 16e3;
 function canonical(value2) {
   if (Array.isArray(value2)) return value2.map(canonical);
@@ -180217,7 +178705,7 @@ var GeminiStaticCache = class {
     return Boolean(this.client.createCache && this.client.deleteCache);
   }
   key(owner, model, prefix) {
-    return (0, import_node_crypto33.createHash)("sha256").update(
+    return (0, import_node_crypto29.createHash)("sha256").update(
       JSON.stringify(canonical({ owner: [owner.profileId, owner.organizationId], model, prefix }))
     ).digest("hex");
   }
@@ -180460,7 +178948,7 @@ ${text}`;
 }
 
 // chat/tool-manifest.ts
-var import_node_crypto34 = require("node:crypto");
+var import_node_crypto30 = require("node:crypto");
 var RELEVANCE_POLICY_VERSION = "expandable-families-v1";
 var TOOL_FAMILIES = ["status", "repository", "knowledgebase", "feature"];
 var EXPAND_CAPABILITIES_TOOL = "expand_capabilities";
@@ -180519,7 +179007,7 @@ function digest3(value2) {
       );
     return v;
   };
-  return (0, import_node_crypto34.createHash)("sha256").update(JSON.stringify(canonical2(value2))).digest("hex");
+  return (0, import_node_crypto30.createHash)("sha256").update(JSON.stringify(canonical2(value2))).digest("hex");
 }
 function createToolManifest(catalog, families) {
   const value2 = {
@@ -180587,7 +179075,7 @@ var GeminiChatRuntime = class {
       provider: "gemini",
       model,
       checkpointVersion: GEMINI_CHECKPOINT_VERSION,
-      configDigest: (0, import_node_crypto35.createHash)("sha256").update(
+      configDigest: (0, import_node_crypto31.createHash)("sha256").update(
         JSON.stringify({
           model,
           SYSTEM_PROMPT_VERSION,
@@ -181466,6 +179954,178 @@ function chatLimitsFromEnv(env3) {
   return limits;
 }
 
+// connections/keyring.ts
+var import_node_crypto33 = require("node:crypto");
+
+// connections/crypto.ts
+var import_node_crypto32 = require("node:crypto");
+var SecretEnvelopeError = class extends Error {
+  constructor() {
+    super("The stored secret cannot be decrypted.");
+  }
+};
+function decodeEncryptionKey(encoded) {
+  const trimmed9 = encoded?.trim();
+  if (!trimmed9) return null;
+  const key = Buffer.from(trimmed9, "base64url");
+  return key.length === 32 ? key : null;
+}
+function sealSecret({
+  plaintext,
+  key,
+  aad
+}) {
+  const nonce = (0, import_node_crypto32.randomBytes)(12);
+  const cipher = (0, import_node_crypto32.createCipheriv)("aes-256-gcm", key, nonce);
+  cipher.setAAD(Buffer.from(aad, "utf8"));
+  const ciphertext = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  const tag2 = cipher.getAuthTag();
+  return `v1.${nonce.toString("base64url")}.${tag2.toString("base64url")}.${ciphertext.toString("base64url")}`;
+}
+function openSecret({
+  envelope: envelope2,
+  key,
+  aad
+}) {
+  const [version4, nonceText, tagText, ciphertextText, ...extra] = envelope2.split(".");
+  if (version4 !== "v1" || !nonceText || !tagText || !ciphertextText || extra.length > 0) {
+    throw new SecretEnvelopeError();
+  }
+  try {
+    const decipher = (0, import_node_crypto32.createDecipheriv)("aes-256-gcm", key, Buffer.from(nonceText, "base64url"));
+    decipher.setAAD(Buffer.from(aad, "utf8"));
+    decipher.setAuthTag(Buffer.from(tagText, "base64url"));
+    return Buffer.concat([
+      decipher.update(Buffer.from(ciphertextText, "base64url")),
+      decipher.final()
+    ]).toString("utf8");
+  } catch {
+    throw new SecretEnvelopeError();
+  }
+}
+function hashSecret(value2) {
+  return (0, import_node_crypto32.createHash)("sha256").update(value2).digest("hex");
+}
+
+// connections/keyring.ts
+var EVERHOUR_ENV_KEY_ID = "everhour-env";
+var GITHUB_USER_ENV_KEY_ID = "github-user-env";
+var PLATFORM_KEY_ID_PREFIX = "platform-";
+var RESERVED_KEY_IDS = /* @__PURE__ */ new Set([EVERHOUR_ENV_KEY_ID, GITHUB_USER_ENV_KEY_ID]);
+var MIN_PLATFORM_SECRET_LENGTH = 32;
+function isPlatformKeyId(id2) {
+  return id2.startsWith(PLATFORM_KEY_ID_PREFIX);
+}
+function isReservedKeyId(id2) {
+  return RESERVED_KEY_IDS.has(id2) || isPlatformKeyId(id2);
+}
+function platformKeyFromSecret(secret) {
+  const trimmed9 = secret?.trim();
+  if (!trimmed9 || trimmed9.length < MIN_PLATFORM_SECRET_LENGTH) return null;
+  const key = Buffer.from(
+    (0, import_node_crypto33.hkdfSync)(
+      "sha256",
+      Buffer.from(trimmed9, "utf8"),
+      Buffer.from("overlord:account-connections", "utf8"),
+      Buffer.from("overlord:account-connections:platform-key:v1", "utf8"),
+      32
+    )
+  );
+  const fingerprint = (0, import_node_crypto33.createHash)("sha256").update("overlord:account-connections:platform-key-id:v1:").update(key).digest("hex").slice(0, 16);
+  return { id: `${PLATFORM_KEY_ID_PREFIX}${fingerprint}`, key };
+}
+function keyRingFromEnv(env3) {
+  const currentKey = decodeEncryptionKey(env3.ACCOUNT_CONNECTIONS_ENCRYPTION_KEY);
+  const requestedId = env3.ACCOUNT_CONNECTIONS_ENCRYPTION_KEY_ID?.trim() || "k1";
+  if (currentKey && isReservedKeyId(requestedId))
+    console.error(
+      `[connections] ACCOUNT_CONNECTIONS_ENCRYPTION_KEY_ID "${requestedId}" is reserved; using "k1"`
+    );
+  const currentId = isReservedKeyId(requestedId) ? "k1" : requestedId;
+  const everhour = decodeEncryptionKey(env3.EVERHOUR_API_KEY_ENCRYPTION_KEY) ?? decodeEncryptionKey(env3.GITHUB_USER_TOKEN_ENCRYPTION_KEY);
+  const github2 = decodeEncryptionKey(env3.GITHUB_USER_TOKEN_ENCRYPTION_KEY);
+  return {
+    current: currentKey ? { id: currentId, key: currentKey } : null,
+    fallback: {
+      ...everhour ? { everhour: { id: EVERHOUR_ENV_KEY_ID, key: everhour } } : {},
+      ...github2 ? { github: { id: GITHUB_USER_ENV_KEY_ID, key: github2 } } : {}
+    },
+    platform: platformKeyFromSecret(env3.BETTER_AUTH_SECRET)
+  };
+}
+function writeKey(ring, provider) {
+  return ring.current ?? ring.fallback[provider] ?? ring.platform ?? null;
+}
+function writeKeySource(ring, provider) {
+  if (ring.current) return "explicit";
+  if (ring.fallback[provider]) return "fallback";
+  return ring.platform ? "platform" : null;
+}
+function knowledgebaseKeyById(ring, id2) {
+  if (ring.current?.id === id2) return ring.current;
+  if (ring.platform?.id === id2) return ring.platform;
+  return null;
+}
+function keyById(ring, id2) {
+  if (ring.current?.id === id2) return ring.current;
+  for (const entry of Object.values(ring.fallback)) if (entry?.id === id2) return entry;
+  if (ring.platform?.id === id2) return ring.platform;
+  return null;
+}
+function missingKeyIsConfiguration(ring, keyId, format2, scope2 = "profile") {
+  if (isPlatformKeyId(keyId)) return ring.platform === null;
+  if (scope2 === "organization") return ring.current === null;
+  return RESERVED_KEY_IDS.has(keyId) || format2 !== "connection-v1" || ring.current === null;
+}
+function connectionCredentialAad(row) {
+  return `overlord:account-connection:v1:${row.owner_profile_id}:${row.organization_id ?? "-"}:${row.provider}:${row.id}`;
+}
+function openCredential(row, key) {
+  const format2 = row.credential_format;
+  if (format2 === "everhour-user-key-v1") {
+    const apiKey = openSecret({
+      envelope: row.credential_ciphertext,
+      key,
+      aad: `overlord:everhour-user-key:v1:${row.owner_profile_id}:api-key`
+    });
+    return { kind: "api_key", apiKey };
+  }
+  if (format2 === "github-user-oauth-v1") {
+    const parsed = parseJson(row.credential_ciphertext);
+    if (!parsed || typeof parsed.access !== "string") throw new SecretEnvelopeError();
+    const aad = (purpose) => `overlord:github-user-oauth:v1:${row.owner_profile_id}:${purpose}`;
+    return {
+      kind: "oauth",
+      accessToken: openSecret({ envelope: parsed.access, key, aad: aad("access") }),
+      refreshToken: typeof parsed.refresh === "string" ? openSecret({ envelope: parsed.refresh, key, aad: aad("refresh") }) : null
+    };
+  }
+  if (format2 !== "connection-v1") throw new SecretEnvelopeError();
+  const value2 = parseJson(
+    openSecret({ envelope: row.credential_ciphertext, key, aad: connectionCredentialAad(row) })
+  );
+  if (value2 && typeof value2.apiKey === "string") return { kind: "api_key", apiKey: value2.apiKey };
+  if (value2 && typeof value2.accessToken === "string")
+    return {
+      kind: "oauth",
+      accessToken: value2.accessToken,
+      refreshToken: typeof value2.refreshToken === "string" ? value2.refreshToken : null
+    };
+  throw new SecretEnvelopeError();
+}
+function credentialPlaintext(credential) {
+  return JSON.stringify(
+    credential.kind === "api_key" ? { apiKey: credential.apiKey } : { accessToken: credential.accessToken, refreshToken: credential.refreshToken }
+  );
+}
+function parseJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new SecretEnvelopeError();
+  }
+}
+
 // connections/config.ts
 var DEFAULT_KNOWLEDGEBASE_MCP_URL = "https://knowledge.chaselubitz.com/mcp";
 var DISABLED_VALUES = /* @__PURE__ */ new Set(["off", "none", "disabled", "false"]);
@@ -181512,6 +180172,1272 @@ var CLIENT_METADATA_PATH = "/oauth/clients/knowledgebase.json";
 var CALLBACK_PATH = "/api/connections/knowledgebase/callback";
 var MOBILE_RETURN_URL = "overlord://connections/callback";
 var WEB_RETURN_PATH = "/settings/connections";
+
+// connections/egress.ts
+var EgressError = class extends Error {
+  constructor(code, message2 = code) {
+    super(message2);
+    this.code = code;
+  }
+  code;
+};
+function assertEgress(url2, allowedOrigins) {
+  let parsed;
+  try {
+    parsed = new URL(url2);
+  } catch {
+    throw new EgressError("egress_denied");
+  }
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password || !allowedOrigins.includes(parsed.origin))
+    throw new EgressError("egress_denied");
+  return parsed;
+}
+async function egressFetch(fetchImpl, allowedOrigins, url2, init2, bounds) {
+  assertEgress(url2, allowedOrigins);
+  const timeout = AbortSignal.timeout(bounds.timeoutMs);
+  const signal = bounds.signal ? AbortSignal.any([timeout, bounds.signal]) : timeout;
+  let response;
+  try {
+    response = await fetchImpl(url2, { ...init2, redirect: "manual", signal });
+  } catch {
+    throw new EgressError(timeout.aborted ? "timeout" : "network");
+  }
+  if (response.status >= 300 && response.status < 400) {
+    await response.body?.cancel().catch(() => void 0);
+    throw new EgressError("redirect");
+  }
+  const chunks = [];
+  let bytes = 0, truncated = false;
+  try {
+    const reader = response.body?.getReader();
+    while (reader) {
+      const { done, value: value2 } = await reader.read();
+      if (done) break;
+      if (bytes + value2.byteLength > bounds.maxBytes) {
+        chunks.push(value2.subarray(0, bounds.maxBytes - bytes));
+        bytes = bounds.maxBytes;
+        truncated = true;
+        await reader.cancel().catch(() => void 0);
+        break;
+      }
+      chunks.push(value2);
+      bytes += value2.byteLength;
+    }
+  } catch {
+    throw new EgressError(timeout.aborted ? "timeout" : "network");
+  }
+  return {
+    status: response.status,
+    headers: response.headers,
+    text: Buffer.concat(chunks).toString("utf8"),
+    truncated,
+    bytes
+  };
+}
+
+// connections/policy.ts
+var KNOWLEDGEBASE_TOOL_POLICY_VERSION = 2;
+var JSON_BOUNDS = { depth: 8, nodes: 4e3, stringChars: 16 * 1024, keyChars: 128 };
+var UUID = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$";
+var workspace = {
+  type: "string",
+  description: "Knowledgebase workspace slug, from list_workspaces.",
+  pattern: "^[a-z0-9][a-z0-9-]{0,62}$"
+};
+var uuid3 = (description) => ({ type: "string", description, pattern: UUID });
+var nodeId = uuid3("Node UUID.");
+var path26 = {
+  type: "string",
+  description: "Workspace-relative document path.",
+  minLength: 1,
+  maxLength: 512
+};
+var limit = (max) => ({ type: "integer", minimum: 1, maximum: max });
+var cursor = { type: "string", maxLength: 512 };
+var name = (description) => ({
+  type: "string",
+  description,
+  minLength: 1,
+  maxLength: 64
+});
+var revision2 = (description) => ({
+  type: "integer",
+  description,
+  minimum: 0
+});
+var anyJson = (description) => ({ description });
+var map5 = (description, maxProperties, values) => ({
+  type: "object",
+  description,
+  additionalProperties: values,
+  maxProperties
+});
+var object2 = (properties, required2 = []) => ({
+  type: "object",
+  properties,
+  required: required2,
+  additionalProperties: false
+});
+var BODY_CHARS = 24 * 1024;
+var READS = [
+  {
+    name: "list_workspaces",
+    description: "List the Knowledgebase workspaces this connection can read.",
+    inputSchema: object2({})
+  },
+  {
+    name: "search",
+    description: "Search notes, people, companies, projects, and meetings in one Knowledgebase workspace. Returns matching nodes with ids and paths.",
+    inputSchema: object2(
+      {
+        workspace,
+        q: { type: "string", minLength: 1, maxLength: 500 },
+        type: { type: "string", maxLength: 64 },
+        path_prefix: { type: "string", maxLength: 512 },
+        limit: limit(25),
+        cursor
+      },
+      ["workspace", "q"]
+    )
+  },
+  {
+    name: "read_file",
+    description: "Read one Knowledgebase document by path, with its metadata and expected_version (pass that to edit_file).",
+    inputSchema: object2({ workspace, path: path26 }, ["workspace", "path"])
+  },
+  {
+    name: "get_related",
+    description: "Get a node's properties (with metadata_revision) and its typed relations (with relation ids and revisions) to other nodes.",
+    inputSchema: object2({ workspace, node_id: nodeId }, ["workspace", "node_id"]),
+    complete: true
+  },
+  {
+    name: "list_children",
+    description: "List the children of a node, such as the notes under a project.",
+    inputSchema: object2(
+      {
+        workspace,
+        node_id: nodeId,
+        type: { type: "string", maxLength: 64 },
+        relation: { type: "string", maxLength: 64 },
+        category: { type: "string", enum: ["markdown", "resource"] },
+        limit: limit(50),
+        cursor
+      },
+      ["workspace", "node_id"]
+    )
+  },
+  {
+    name: "get_links",
+    description: "List the Markdown links into or out of a document.",
+    inputSchema: object2(
+      {
+        workspace,
+        path: path26,
+        node_id: nodeId,
+        direction: { type: "string", enum: ["outgoing", "incoming", "both"] }
+      },
+      ["workspace"]
+    )
+  },
+  {
+    name: "read_resource",
+    description: "Read a semantic resource (an entity page) as text.",
+    inputSchema: object2(
+      {
+        workspace,
+        resource_id: uuid3("Resource UUID."),
+        format: { type: "string", enum: ["text", "markdown"] }
+      },
+      ["workspace", "resource_id"]
+    )
+  },
+  {
+    name: "list_entities",
+    description: "List entities of a type, such as projects or people.",
+    inputSchema: object2(
+      { workspace, type: { type: "string", maxLength: 64 }, limit: limit(50), cursor },
+      ["workspace"]
+    )
+  },
+  {
+    name: "query",
+    description: 'Find nodes by entity type (for example "feature"), property predicates and relations. where is JSON containment; where_in matches any listed value; where_empty matches missing, null or empty keys; every rel entry must match. order_by sorts by a numeric attribute of the explicit relation to one rel target (for Features ranked in a Project: {relation: {type: "project", to_node_id}, key: "rank"}), unranked last. include adds properties with metadata_revision and outgoing relations with relation ids, revisions and attributes. Paged (at most 100): follow next_cursor until it is absent; a missing next_cursor is the only proof that a listing is complete.',
+    inputSchema: object2(
+      {
+        workspace,
+        type: name("Entity type name or alias, e.g. feature."),
+        where: map5("Property containment predicates.", 16, anyJson("Property value.")),
+        where_in: map5("Properties matching any listed value.", 8, {
+          type: "array",
+          items: anyJson("Allowed value."),
+          maxItems: 50
+        }),
+        where_empty: {
+          type: "array",
+          description: "Property keys that must be missing, null or empty.",
+          items: { type: "string", minLength: 1, maxLength: 128 },
+          maxItems: 16
+        },
+        rel: {
+          type: "array",
+          items: object2({ type: name("Relation type name."), to_node_id: nodeId }),
+          maxItems: 4
+        },
+        order_by: object2(
+          {
+            relation: object2({ type: name("Relation type name."), to_node_id: nodeId }, [
+              "type",
+              "to_node_id"
+            ]),
+            key: name("Numeric relation attribute, e.g. rank."),
+            direction: { type: "string", enum: ["asc", "desc"] }
+          },
+          ["relation", "key"]
+        ),
+        include: {
+          type: "array",
+          items: { type: "string", enum: ["properties", "relations"] },
+          maxItems: 2
+        },
+        limit: limit(100),
+        cursor
+      },
+      ["workspace"]
+    ),
+    complete: true
+  },
+  {
+    name: "get_registries",
+    description: "List the entity, relation and resource types of a workspace with their stable ids, aliases and schemas. Use before creating typed nodes or relations.",
+    inputSchema: object2({ workspace }, ["workspace"]),
+    complete: true
+  }
+].map((tool) => ({ access: "read", maxArgumentBytes: 4 * 1024, ...tool }));
+var WRITES = {
+  create_node: {
+    description: "Create a new document or folder. Link the note to what it is about with inline body lines such as project:: [[Clear Comply]]. entity_type_id comes from get_registries. Returns the new node with its id and versions.",
+    inputSchema: object2(
+      {
+        workspace,
+        path: path26,
+        expected_version: {
+          type: "string",
+          description: 'Always "new" (create only).',
+          enum: ["new"]
+        },
+        entity_type_id: uuid3("Entity type id from get_registries."),
+        kind: { type: "string", enum: ["file", "folder"] },
+        content: { type: "string", description: "Markdown body.", maxLength: BODY_CHARS },
+        content_type: { type: "string", maxLength: 100 },
+        properties: map5("Explicit properties to set.", 64, anyJson("Property value."))
+      },
+      ["workspace", "path", "expected_version"]
+    ),
+    maxArgumentBytes: 48 * 1024
+  },
+  edit_file: {
+    description: 'Replace exactly one occurrence of old_text in a document (old_text "" writes an empty document). Requires expected_version from read_file; a changed document returns a conflict instead of overwriting.',
+    inputSchema: object2(
+      {
+        workspace,
+        path: path26,
+        old_text: { type: "string", maxLength: BODY_CHARS },
+        new_text: { type: "string", maxLength: BODY_CHARS },
+        expected_version: { type: "string", minLength: 1, maxLength: 200 }
+      },
+      ["workspace", "path", "old_text", "new_text", "expected_version"]
+    ),
+    maxArgumentBytes: 56 * 1024
+  },
+  set_properties: {
+    description: "Set explicit properties on a node. Only the keys passed change; null removes an explicit property. Requires expected_metadata_revision (metadata_revision from get_related or query include properties). Text-derived fields must be edited in their document; content_updated_at is server-maintained.",
+    inputSchema: object2(
+      {
+        workspace,
+        node_id: nodeId,
+        properties: map5("Keys to set; null removes.", 32, anyJson("Property value, or null.")),
+        expected_metadata_revision: revision2("The node metadata_revision you read.")
+      },
+      ["workspace", "node_id", "properties", "expected_metadata_revision"]
+    ),
+    maxArgumentBytes: 32 * 1024
+  },
+  add_relation: {
+    description: "Create an explicit typed relation between two node ids (relation_type name or relation_type_id from get_registries), with optional attributes such as a citations list. Prefer inline relation:: [[Title]] lines when the target can be named in a body.",
+    inputSchema: object2(
+      {
+        workspace,
+        from_node_id: nodeId,
+        to_node_id: nodeId,
+        relation_type_id: uuid3("Relation type id from get_registries."),
+        relation_type: name("Relation type name."),
+        attributes: map5("Relation attributes.", 32, anyJson("Attribute value."))
+      },
+      ["workspace", "from_node_id", "to_node_id"]
+    ),
+    maxArgumentBytes: 32 * 1024
+  },
+  update_relation: {
+    description: "Replace the attributes of an explicit relation. Read it first (get_related or query include relations) for its id, revision and current attributes; attributes are replaced wholesale, so carry over every key you are not changing. Requires expected_revision.",
+    inputSchema: object2(
+      {
+        workspace,
+        relation_id: uuid3("Relation UUID."),
+        attributes: map5("The complete new attributes.", 32, anyJson("Attribute value.")),
+        expected_revision: revision2("The relation revision you read.")
+      },
+      ["workspace", "relation_id", "attributes", "expected_revision"]
+    ),
+    maxArgumentBytes: 32 * 1024
+  },
+  remove_relation: {
+    description: "Remove one explicit relation (for example unlinking a Project). Requires its expected_revision. Inline relations are removed by editing their declaring document instead.",
+    inputSchema: object2(
+      {
+        workspace,
+        relation_id: uuid3("Relation UUID."),
+        expected_revision: revision2("The relation revision you read.")
+      },
+      ["workspace", "relation_id", "expected_revision"]
+    ),
+    destructive: true,
+    maxArgumentBytes: 4 * 1024
+  }
+};
+var REVIEWED_KNOWLEDGEBASE_TOOLS = [
+  ...READS,
+  ...KNOWLEDGEBASE_WRITE_TOOLS.map((tool) => ({
+    name: tool,
+    access: "write",
+    ...WRITES[tool]
+  }))
+];
+var REVIEWED = new Map(REVIEWED_KNOWLEDGEBASE_TOOLS.map((tool) => [tool.name, tool]));
+function reviewedTool(name2) {
+  return REVIEWED.get(name2) ?? null;
+}
+function exposable(serverTool) {
+  const reviewed = reviewedTool(serverTool.name);
+  if (!reviewed) return null;
+  if (reviewed.access === "read") {
+    if (serverTool.annotations?.readOnlyHint !== true) return null;
+    if (serverTool.annotations?.destructiveHint === true) return null;
+    return reviewed;
+  }
+  if (serverTool.annotations?.destructiveHint === true && !reviewed.destructive) return null;
+  return reviewed;
+}
+function namespacedToolId(connectionId, tool) {
+  return `kb_${connectionId.replaceAll("-", "").slice(0, 12)}_${tool}`;
+}
+function parseToolId(id2) {
+  const match = /^kb_([0-9a-f]{12})_([a-z_]{1,48})$/.exec(id2);
+  return match ? { connectionPrefix: match[1], tool: match[2] } : null;
+}
+function validateArguments(schema2, value2, at = "arguments") {
+  const budget = { nodes: 0 };
+  return validate3(schema2, value2, at, 0, budget);
+}
+function validate3(schema2, value2, at, depth, budget) {
+  if (++budget.nodes > JSON_BOUNDS.nodes) return `${at} is too large`;
+  if (depth > JSON_BOUNDS.depth) return `${at} is nested too deeply`;
+  switch (schema2.type) {
+    case void 0:
+      return validateJson(value2, at, depth, budget);
+    case "object": {
+      if (!value2 || typeof value2 !== "object" || Array.isArray(value2))
+        return `${at} must be an object`;
+      const record2 = value2;
+      for (const key of schema2.required ?? [])
+        if (record2[key] === void 0) return `${at}.${key} is required`;
+      const keys = Object.keys(record2);
+      if (schema2.maxProperties !== void 0 && keys.length > schema2.maxProperties)
+        return `${at} has too many properties`;
+      for (const key of keys) {
+        const child = schema2.properties?.[key] ?? (typeof schema2.additionalProperties === "object" ? schema2.additionalProperties : null);
+        if (!child) return `${at}.${key} is not allowed`;
+        if (!key.length || key.length > JSON_BOUNDS.keyChars) return `${at} has an invalid key`;
+        const error64 = validate3(child, record2[key], `${at}.${key}`, depth + 1, budget);
+        if (error64) return error64;
+      }
+      return null;
+    }
+    case "string":
+      if (typeof value2 !== "string") return `${at} must be a string`;
+      if (schema2.minLength !== void 0 && value2.length < schema2.minLength)
+        return `${at} is too short`;
+      if (schema2.maxLength !== void 0 && value2.length > schema2.maxLength)
+        return `${at} is too long`;
+      if (schema2.pattern && !new RegExp(schema2.pattern).test(value2)) return `${at} is malformed`;
+      if (schema2.enum && !schema2.enum.includes(value2)) return `${at} is not an allowed value`;
+      return null;
+    case "integer":
+      if (!Number.isSafeInteger(value2)) return `${at} must be an integer`;
+      if (schema2.minimum !== void 0 && value2 < schema2.minimum)
+        return `${at} is too small`;
+      if (schema2.maximum !== void 0 && value2 > schema2.maximum)
+        return `${at} is too large`;
+      return null;
+    case "number":
+      if (typeof value2 !== "number" || !Number.isFinite(value2)) return `${at} must be a number`;
+      if (schema2.minimum !== void 0 && value2 < schema2.minimum) return `${at} is too small`;
+      if (schema2.maximum !== void 0 && value2 > schema2.maximum) return `${at} is too large`;
+      return null;
+    case "boolean":
+      return typeof value2 === "boolean" ? null : `${at} must be a boolean`;
+    case "array":
+      if (!Array.isArray(value2)) return `${at} must be an array`;
+      if (schema2.maxItems !== void 0 && value2.length > schema2.maxItems)
+        return `${at} has too many items`;
+      for (const [index, item] of value2.entries()) {
+        const error64 = schema2.items ? validate3(schema2.items, item, `${at}[${index}]`, depth + 1, budget) : validateJson(item, `${at}[${index}]`, depth + 1, budget);
+        if (error64) return error64;
+      }
+      return null;
+  }
+}
+function validateJson(value2, at, depth, budget) {
+  if (++budget.nodes > JSON_BOUNDS.nodes) return `${at} is too large`;
+  if (depth > JSON_BOUNDS.depth) return `${at} is nested too deeply`;
+  if (value2 === null || typeof value2 === "boolean") return null;
+  if (typeof value2 === "number") return Number.isFinite(value2) ? null : `${at} must be finite`;
+  if (typeof value2 === "string")
+    return value2.length > JSON_BOUNDS.stringChars ? `${at} is too long` : null;
+  if (Array.isArray(value2)) {
+    for (const [index, item] of value2.entries()) {
+      const error64 = validateJson(item, `${at}[${index}]`, depth + 1, budget);
+      if (error64) return error64;
+    }
+    return null;
+  }
+  if (typeof value2 === "object") {
+    for (const [key, item] of Object.entries(value2)) {
+      if (!key.length || key.length > JSON_BOUNDS.keyChars) return `${at} has an invalid key`;
+      const error64 = validateJson(item, `${at}.${key}`, depth + 1, budget);
+      if (error64) return error64;
+    }
+    return null;
+  }
+  return `${at} is not JSON`;
+}
+
+// connections/service.ts
+init_dist();
+var import_node_crypto36 = require("node:crypto");
+
+// connections/credential-rows.ts
+var REFRESH_LEASE_MS = 15e3;
+var ACCESS_EXPIRY_SKEW_MS = 6e4;
+var ConnectionAccessError = class extends Error {
+  constructor(code) {
+    super(code);
+    this.code = code;
+  }
+  code;
+};
+function requireReauthorization(db, id2, code, now2, lockOwner) {
+  return db.run(
+    `UPDATE account_connections SET state = 'reauthorization_required', credential_ciphertext = NULL, credential_key_id = NULL, access_expires_at = NULL, refresh_lock_owner = NULL, refresh_lock_until = NULL, last_error_code = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'connected'${lockOwner ? " AND refresh_lock_owner = ?" : ""}`,
+    [code, now2, id2, ...lockOwner ? [lockOwner] : []]
+  );
+}
+function recordError(db, id2, code, now2) {
+  return db.run(
+    "UPDATE account_connections SET last_error_code = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
+    [code, now2, id2]
+  );
+}
+async function eraseCredential(tx, id2, now2, options) {
+  await tx.run(
+    `UPDATE account_connections SET state = 'disconnected', credential_ciphertext = NULL, credential_key_id = NULL, access_expires_at = NULL, refresh_expires_at = NULL, refresh_lock_owner = NULL, refresh_lock_until = NULL, disconnected_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ?${options.onlyIfLive ? " AND state <> 'disconnected'" : ""}`,
+    [now2, now2, id2]
+  );
+  await tx.run("DELETE FROM account_connection_authorizations WHERE connection_id = ?", [id2]);
+}
+function storeConnectionGrant(db, row, grant, options) {
+  const { now: now2, leaseOwner } = options;
+  const columns = Object.entries(grant.columns ?? {});
+  const assignments = columns.map(([name2]) => `${name2} = ?, `).join("");
+  const values = columns.map(([, value2]) => value2);
+  if (leaseOwner === void 0)
+    return db.run(
+      `UPDATE account_connections SET state = 'connected', credential_ciphertext = ?, credential_key_id = ?, credential_revision = credential_revision + 1, access_expires_at = ?, refresh_expires_at = ?, ${assignments}refresh_lock_owner = NULL, refresh_lock_until = NULL, last_refreshed_at = ?, last_error_code = NULL, connected_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND state <> 'disconnected'`,
+      [
+        grant.ciphertext,
+        grant.keyId,
+        grant.accessExpiresAt,
+        grant.refreshExpiresAt,
+        ...values,
+        now2,
+        now2,
+        now2,
+        row.id
+      ]
+    );
+  return db.run(
+    `UPDATE account_connections SET credential_ciphertext = ?, credential_key_id = ?, credential_revision = credential_revision + 1, access_expires_at = ?, refresh_expires_at = COALESCE(?, refresh_expires_at), ${assignments}last_refreshed_at = ?, last_error_code = NULL, refresh_lock_owner = NULL, refresh_lock_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'connected' AND refresh_lock_owner = ? AND credential_revision = ?`,
+    [
+      grant.ciphertext,
+      grant.keyId,
+      grant.accessExpiresAt,
+      grant.refreshExpiresAt,
+      ...values,
+      now2,
+      now2,
+      row.id,
+      leaseOwner,
+      row.credential_revision
+    ]
+  );
+}
+function acquireRefreshLease(db, row, lockOwner, until, now2) {
+  return db.run(
+    `UPDATE account_connections SET refresh_lock_owner = ?, refresh_lock_until = ? WHERE id = ? AND state = 'connected' AND credential_revision = ? AND (refresh_lock_owner IS NULL OR refresh_lock_until <= ?)`,
+    [lockOwner, until, row.id, row.credential_revision, now2]
+  );
+}
+function releaseRefreshLease(db, row, lockOwner, code) {
+  return db.run(
+    "UPDATE account_connections SET refresh_lock_owner = NULL, refresh_lock_until = NULL, last_error_code = ? WHERE id = ? AND refresh_lock_owner = ?",
+    [code, row.id, lockOwner]
+  );
+}
+async function withRefreshLease(db, lockOwner, options, refresh) {
+  const deadline = options.now() + REFRESH_LEASE_MS * 2;
+  for (; ; ) {
+    if (options.signal?.aborted) throw new ConnectionAccessError("unavailable");
+    const found = await options.read();
+    if (!found) continue;
+    const { row, credential } = found;
+    const stale = options.staleRevision !== void 0 && row.credential_revision <= options.staleRevision;
+    const fresh = row.access_expires_at === null || Date.parse(row.access_expires_at) - ACCESS_EXPIRY_SKEW_MS > options.now();
+    if (!stale && fresh)
+      return {
+        accessToken: credential.accessToken,
+        credentialRevision: row.credential_revision,
+        row
+      };
+    if (!credential.refreshToken) {
+      await options.requireReauthorization(row, "grant_expired");
+      throw new ConnectionAccessError("reauthorization_required");
+    }
+    const leased = await acquireRefreshLease(
+      db,
+      row,
+      lockOwner,
+      options.timestamp(REFRESH_LEASE_MS),
+      options.timestamp()
+    );
+    if (leased.changes === 1) {
+      await refresh(row, credential.refreshToken);
+      continue;
+    }
+    if (options.now() > deadline) throw new ConnectionAccessError("unavailable");
+    await options.sleep(100);
+  }
+}
+async function refreshLeased(db, row, lockOwner, options) {
+  const release2 = async () => {
+    await releaseRefreshLease(db, row, lockOwner, "refresh_unavailable");
+    throw new ConnectionAccessError("unavailable");
+  };
+  if (options.available && !options.available()) return release2();
+  let grant;
+  try {
+    grant = await options.exchange();
+  } catch (error64) {
+    if (options.invalidGrant(error64)) {
+      await options.requireReauthorization("invalid_grant");
+      throw new ConnectionAccessError("reauthorization_required");
+    }
+    return release2();
+  }
+  await options.persist(grant);
+}
+
+// connections/oauth.ts
+var import_node_crypto34 = require("node:crypto");
+var OAuthError = class extends Error {
+  constructor(code) {
+    super(code);
+    this.code = code;
+  }
+  code;
+};
+var OAUTH_SCOPE = "openid offline_access";
+var METADATA_TTL_MS = 10 * 60 * 1e3;
+var METADATA_BYTES = 64 * 1024;
+var TOKEN_BYTES = 64 * 1024;
+var TIMEOUT_MS = 1e4;
+function pkcePair() {
+  const verifier = (0, import_node_crypto34.randomBytes)(32).toString("base64url");
+  return { verifier, challenge: (0, import_node_crypto34.createHash)("sha256").update(verifier).digest("base64url") };
+}
+function sameResource(a5, b5) {
+  return a5.replace(/\/+$/, "") === b5.replace(/\/+$/, "");
+}
+var KnowledgebaseOAuth = class {
+  constructor(options) {
+    this.options = options;
+  }
+  options;
+  metadata = null;
+  now() {
+    return this.options.now?.() ?? Date.now();
+  }
+  async json(url2, init2 = {}) {
+    const response = await egressFetch(this.options.fetch, this.options.egressOrigins, url2, init2, {
+      timeoutMs: TIMEOUT_MS,
+      maxBytes: init2.method === "POST" ? TOKEN_BYTES : METADATA_BYTES
+    });
+    let body = null;
+    if (!response.truncated) {
+      try {
+        const parsed = JSON.parse(response.text);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed))
+          body = parsed;
+      } catch {
+        body = null;
+      }
+    }
+    return { status: response.status, body };
+  }
+  /** RFC 9728 protected-resource metadata, then RFC 8414 authorization-server metadata. */
+  async discover() {
+    if (this.metadata && this.now() - this.metadata.at < METADATA_TTL_MS)
+      return this.metadata.value;
+    try {
+      const resource = new URL(this.options.mcpUrl);
+      const prm = await this.json(
+        `${resource.origin}/.well-known/oauth-protected-resource${resource.pathname.replace(/\/+$/, "")}`
+      );
+      const servers = prm.body?.authorization_servers;
+      if (prm.status !== 200 || typeof prm.body?.resource !== "string" || !sameResource(prm.body.resource, this.options.mcpUrl) || !Array.isArray(servers) || typeof servers[0] !== "string")
+        throw new OAuthError("misconfigured");
+      const issuer = new URL(servers[0]);
+      const as = await this.json(
+        `${issuer.origin}/.well-known/oauth-authorization-server${issuer.pathname.replace(/\/+$/, "")}`
+      );
+      const body = as.body;
+      const methods2 = body?.code_challenge_methods_supported;
+      if (as.status !== 200 || !body || typeof body.authorization_endpoint !== "string" || typeof body.token_endpoint !== "string" || !Array.isArray(methods2) || !methods2.includes("S256"))
+        throw new OAuthError("misconfigured");
+      const value2 = {
+        issuer: String(body.issuer ?? issuer.toString()),
+        authorizationEndpoint: body.authorization_endpoint,
+        tokenEndpoint: body.token_endpoint,
+        revocationEndpoint: typeof body.revocation_endpoint === "string" ? body.revocation_endpoint : null
+      };
+      for (const endpoint of [
+        value2.authorizationEndpoint,
+        value2.tokenEndpoint,
+        ...value2.revocationEndpoint ? [value2.revocationEndpoint] : []
+      ]) {
+        const url2 = new URL(endpoint);
+        if (url2.protocol !== "https:" || !this.options.egressOrigins.includes(url2.origin))
+          throw new OAuthError("misconfigured");
+      }
+      this.metadata = { value: value2, at: this.now() };
+      return value2;
+    } catch (error64) {
+      if (error64 instanceof OAuthError) throw error64;
+      throw new OAuthError(error64 instanceof EgressError ? "unavailable" : "misconfigured");
+    }
+  }
+  async authorizeUrl(state2, challenge) {
+    const { authorizationEndpoint: authorizationEndpoint3 } = await this.discover();
+    const url2 = new URL(authorizationEndpoint3);
+    url2.search = new URLSearchParams({
+      response_type: "code",
+      client_id: this.options.clientId,
+      redirect_uri: this.options.redirectUri,
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+      scope: OAUTH_SCOPE,
+      resource: this.options.mcpUrl,
+      state: state2
+    }).toString();
+    return url2.toString();
+  }
+  async token(params) {
+    const { tokenEndpoint: tokenEndpoint3 } = await this.discover();
+    let response;
+    try {
+      response = await this.json(tokenEndpoint3, {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          accept: "application/json"
+        },
+        body: new URLSearchParams({
+          ...params,
+          client_id: this.options.clientId,
+          resource: this.options.mcpUrl
+        }).toString()
+      });
+    } catch {
+      throw new OAuthError("unavailable");
+    }
+    const body = response.body;
+    if (response.status === 200 && typeof body?.access_token === "string") {
+      const number4 = (value2) => typeof value2 === "number" && Number.isFinite(value2) && value2 > 0 ? value2 : null;
+      return {
+        accessToken: body.access_token,
+        refreshToken: typeof body.refresh_token === "string" ? body.refresh_token : null,
+        expiresIn: number4(body.expires_in),
+        refreshExpiresIn: number4(body.refresh_token_expires_in),
+        scope: typeof body.scope === "string" ? body.scope : null
+      };
+    }
+    if (response.status >= 400 && response.status < 500 && ["invalid_grant", "invalid_client", "unauthorized_client"].includes(String(body?.error)))
+      throw new OAuthError("invalid_grant");
+    throw new OAuthError("unavailable");
+  }
+  exchangeCode(code, verifier) {
+    return this.token({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: this.options.redirectUri,
+      code_verifier: verifier
+    });
+  }
+  refresh(refreshToken2) {
+    return this.token({ grant_type: "refresh_token", refresh_token: refreshToken2 });
+  }
+  /** Best-effort RFC 7009 revocation; never throws. */
+  async revoke(token, hint) {
+    try {
+      const { revocationEndpoint } = await this.discover();
+      if (!revocationEndpoint) return false;
+      const response = await this.json(revocationEndpoint, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          token,
+          token_type_hint: hint,
+          client_id: this.options.clientId
+        }).toString()
+      });
+      return response.status === 200;
+    } catch {
+      return false;
+    }
+  }
+};
+
+// connections/oauth-flow.ts
+var import_node_crypto35 = require("node:crypto");
+
+// connections/authorizations.ts
+var AUTHORIZATION_TTL_MS = 10 * 60 * 1e3;
+var MAX_OPEN_AUTHORIZATIONS = 5;
+var AUTHORIZATION_STATE_PATTERN = /^[A-Za-z0-9_-]{40,80}$/;
+var MAX_AUTHORIZATION_CODE_LENGTH = 2048;
+function verifierAad(row, authorizationId) {
+  return `overlord:account-connection-authorization:v1:${row.owner_profile_id}:${row.organization_id ?? "-"}:${row.id}:${authorizationId}`;
+}
+async function beginAuthorization(tx, options) {
+  const { row, authorizationId, state: state2, verifier, key, returnTo, expiresAt, now: now2 } = options;
+  await tx.run(
+    "DELETE FROM account_connection_authorizations WHERE connection_id = ? AND (consumed_at IS NOT NULL OR expires_at <= ?)",
+    [row.id, now2]
+  );
+  const open2 = await tx.get(
+    "SELECT COUNT(*) AS n FROM account_connection_authorizations WHERE connection_id = ?",
+    [row.id]
+  );
+  if (Number(open2?.n ?? 0) >= MAX_OPEN_AUTHORIZATIONS) throw new ChatError("limit_exceeded");
+  await tx.run(
+    "INSERT INTO account_connection_authorizations (id, connection_id, state_hash, pkce_verifier_ciphertext, return_to, return_url, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    [
+      authorizationId,
+      row.id,
+      hashSecret(state2),
+      sealSecret({ plaintext: verifier, key, aad: verifierAad(row, authorizationId) }),
+      returnTo,
+      options.returnUrl ?? null,
+      expiresAt,
+      now2
+    ]
+  );
+}
+async function consumeAuthorization(tx, options) {
+  const { state: state2, providerFilter, now: now2 } = options;
+  const auth2 = await tx.get(
+    providerFilter === void 0 ? "SELECT * FROM account_connection_authorizations WHERE state_hash = ?" : "SELECT a.* FROM account_connection_authorizations a JOIN account_connections c ON c.id = a.connection_id WHERE a.state_hash = ? AND c.provider = ? AND c.organization_id IS NULL",
+    [hashSecret(state2), ...providerFilter === void 0 ? [] : [providerFilter]]
+  );
+  if (!auth2) return null;
+  const result2 = await tx.run(
+    "UPDATE account_connection_authorizations SET consumed_at = ? WHERE id = ? AND consumed_at IS NULL AND expires_at > ?",
+    [now2, auth2.id, now2]
+  );
+  const row = await tx.get(
+    "SELECT * FROM account_connections WHERE id = ? AND state <> 'disconnected'",
+    [auth2.connection_id]
+  );
+  return { auth: auth2, row, fresh: result2.changes === 1 };
+}
+
+// connections/oauth-flow.ts
+async function beginConnectionOAuth(db, options) {
+  const state2 = (0, import_node_crypto35.randomBytes)(32).toString("base64url");
+  const { verifier, challenge } = pkcePair();
+  const authorizeUrl = await options.authorizeUrl(state2, challenge);
+  const authorizationId = (0, import_node_crypto35.randomUUID)();
+  const expiresAt = options.timestamp(AUTHORIZATION_TTL_MS);
+  const connectionId = await db.transaction(async (tx) => {
+    const now2 = options.timestamp();
+    let row = await options.findLiveRow(tx);
+    if (!row) {
+      const id2 = (0, import_node_crypto35.randomUUID)();
+      await options.insertPendingRow(tx, id2, now2);
+      row = await tx.get("SELECT * FROM account_connections WHERE id = ?", [id2]);
+    }
+    await beginAuthorization(tx, {
+      row,
+      authorizationId,
+      state: state2,
+      verifier,
+      key: options.key,
+      returnTo: options.returnTo,
+      returnUrl: options.returnUrl,
+      expiresAt,
+      now: now2
+    });
+    return row.id;
+  });
+  return { connectionId, authorizeUrl, expiresAt };
+}
+async function completeConnectionOAuth(db, query, options) {
+  const outcome = (status, rest = {}) => ({
+    status,
+    returnTo: null,
+    returnUrl: null,
+    connectionId: null,
+    errorCode: null,
+    ...rest
+  });
+  const state2 = typeof query.state === "string" ? query.state : "";
+  if (!AUTHORIZATION_STATE_PATTERN.test(state2)) return outcome("expired");
+  if (options.ready && !options.ready()) return outcome("failed");
+  const now2 = options.timestamp();
+  const consumed = await db.transaction(
+    (tx) => consumeAuthorization(tx, { state: state2, providerFilter: options.providerFilter, now: now2 })
+  );
+  if (!consumed) return outcome("expired");
+  const { auth: auth2, row } = consumed;
+  const target = {
+    returnTo: auth2.return_to,
+    returnUrl: auth2.return_url ?? null,
+    connectionId: auth2.connection_id
+  };
+  if (!consumed.fresh || !row) return outcome("expired", target);
+  const fail2 = async (status, code2) => {
+    await recordError(db, row.id, code2, options.timestamp());
+    return outcome(status, { ...target, errorCode: code2 });
+  };
+  if (query.error !== void 0) return fail2("denied", "authorization_denied");
+  const code = typeof query.code === "string" && query.code.length <= MAX_AUTHORIZATION_CODE_LENGTH ? query.code : "";
+  if (!code) return outcome("failed", target);
+  if (options.admit && !await options.admit(row)) return outcome("failed", target);
+  let grant;
+  try {
+    const codeVerifier = openSecret({
+      envelope: auth2.pkce_verifier_ciphertext,
+      key: options.verifierKey(),
+      aad: verifierAad(row, auth2.id)
+    });
+    grant = await options.exchange(code, codeVerifier);
+  } catch (error64) {
+    return fail2("failed", options.exchangeErrorCode(error64));
+  }
+  const persisted = await options.persist(row, grant);
+  if (persisted === "disconnected") {
+    await options.revoke(grant);
+    return outcome("failed", target);
+  }
+  if (persisted !== "stored") return fail2("failed", persisted.errorCode);
+  return outcome("connected", target);
+}
+
+// connections/service.ts
+var credentialAad = connectionCredentialAad;
+function stringArray(json2) {
+  let value2 = [];
+  try {
+    value2 = JSON.parse(json2);
+  } catch {
+    value2 = [];
+  }
+  return Array.isArray(value2) ? value2.filter((w) => typeof w === "string") : [];
+}
+function assistantWriteScope(row) {
+  return row.provider === "knowledgebase" && row.assistant_write_scope === "all_workspaces" ? "all_workspaces" : "per_request";
+}
+function connectionDto(row) {
+  const hasAccount = row.external_account_id !== null || row.external_account_label !== null || row.external_account_avatar_url !== null;
+  return {
+    id: row.id,
+    provider: row.provider,
+    organizationId: row.organization_id,
+    scope: row.organization_id === null ? "profile" : "organization",
+    credentialKind: row.credential_kind,
+    account: hasAccount ? {
+      id: row.external_account_id,
+      label: row.external_account_label,
+      avatarUrl: row.external_account_avatar_url
+    } : null,
+    scopes: stringArray(row.granted_scopes_json),
+    lastValidatedAt: row.last_validated_at,
+    serverUrl: row.server_url,
+    state: row.state,
+    authorizedWorkspaces: stringArray(row.authorized_workspaces_json),
+    assistantWriteScope: assistantWriteScope(row),
+    toolPolicyVersion: row.tool_policy_version,
+    lastErrorCode: row.last_error_code,
+    connectedAt: row.connected_at,
+    updatedAt: row.updated_at,
+    revision: row.revision
+  };
+}
+var AccountConnections = class {
+  constructor(db, options) {
+    this.db = db;
+    this.options = options;
+  }
+  db;
+  options;
+  lockOwner = (0, import_node_crypto36.randomUUID)();
+  now() {
+    return this.options.now?.() ?? Date.now();
+  }
+  timestamp(offsetMs = 0) {
+    return new Date(this.now() + offsetMs).toISOString();
+  }
+  sleep(ms) {
+    return this.options.sleep?.(ms) ?? new Promise((resolve) => setTimeout(resolve, ms));
+  }
+  ready() {
+    const { knowledgebase, encryption } = this.options.config;
+    if (!knowledgebase || !encryption || !this.options.oauth)
+      throw new ChatError("provider_not_ready");
+    return { knowledgebase, encryption, oauth: this.options.oauth };
+  }
+  async access(owner) {
+    await new ChatStore(this.db).access(owner);
+  }
+  /** The caller's row, or null. Never returns another owner's or organization's row. */
+  async row(owner, id2) {
+    return await this.db.get(
+      "SELECT * FROM account_connections WHERE id = ? AND owner_profile_id = ? AND organization_id = ?",
+      [id2, owner.profileId, owner.organizationId]
+    ) ?? null;
+  }
+  /** Live (not disconnected) connections the caller owns in the organization. */
+  async liveRows(owner, provider) {
+    return this.db.all(
+      `SELECT * FROM account_connections WHERE owner_profile_id = ? AND organization_id = ? AND state <> 'disconnected'${provider ? " AND provider = ?" : ""} ORDER BY created_at, id`,
+      [owner.profileId, owner.organizationId, ...provider ? [provider] : []]
+    );
+  }
+  async list(owner) {
+    await this.access(owner);
+    const items = [];
+    for (const row of await this.liveRows(owner)) {
+      const now2 = this.timestamp();
+      if (row.state === "connected" && row.access_expires_at !== null && row.access_expires_at <= now2 && row.refresh_expires_at !== null && row.refresh_expires_at <= now2) {
+        await this.requireReauthorization(row.id, "grant_expired");
+        const fresh = await this.row(owner, row.id);
+        if (fresh) items.push(connectionDto(fresh));
+        continue;
+      }
+      items.push(connectionDto(row));
+    }
+    return { items };
+  }
+  async start(owner, body) {
+    const input2 = body;
+    if (!input2 || input2.provider !== "knowledgebase" || input2.returnTo !== "mobile" && input2.returnTo !== "web")
+      throw new ChatError("invalid_request");
+    const returnTo = input2.returnTo;
+    const { knowledgebase, encryption, oauth } = this.ready();
+    await this.access(owner);
+    return beginConnectionOAuth(this.db, {
+      timestamp: (offset) => this.timestamp(offset),
+      key: encryption.key,
+      returnTo,
+      authorizeUrl: async (state2, challenge) => {
+        try {
+          return await oauth.authorizeUrl(state2, challenge);
+        } catch {
+          throw new ChatError("provider_not_ready");
+        }
+      },
+      findLiveRow: (tx) => tx.get(
+        `SELECT * FROM account_connections WHERE owner_profile_id = ? AND organization_id = ? AND provider = ? AND server_url = ? AND state <> 'disconnected'`,
+        [owner.profileId, owner.organizationId, "knowledgebase", knowledgebase.mcpUrl]
+      ),
+      insertPendingRow: (tx, id2, now2) => tx.run(
+        `INSERT INTO account_connections (id, owner_profile_id, organization_id, provider, server_url, state, tool_policy_version, created_at, updated_at) VALUES (?, ?, ?, 'knowledgebase', ?, 'pending', ?, ?, ?)`,
+        [
+          id2,
+          owner.profileId,
+          owner.organizationId,
+          knowledgebase.mcpUrl,
+          KNOWLEDGEBASE_TOOL_POLICY_VERSION,
+          now2,
+          now2
+        ]
+      )
+    });
+  }
+  /** Public OAuth callback. Consumes the single-use state; never throws for user-facing input. */
+  async complete(query) {
+    const { status, returnTo } = await completeConnectionOAuth(this.db, query, {
+      timestamp: () => this.timestamp(),
+      ready: () => {
+        try {
+          this.ready();
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      admit: async (row) => {
+        try {
+          await this.access({
+            profileId: row.owner_profile_id,
+            organizationId: row.organization_id
+          });
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      verifierKey: () => this.ready().encryption.key,
+      exchange: (code, verifier) => this.ready().oauth.exchangeCode(code, verifier),
+      exchangeErrorCode: (error64) => error64 instanceof OAuthError ? `token_${error64.code}` : "token_exchange_failed",
+      persist: async (row, tokens) => {
+        let workspaces = null;
+        try {
+          workspaces = await this.options.listWorkspaces?.(tokens.accessToken) ?? null;
+        } catch {
+          workspaces = null;
+        }
+        const stored = await this.db.transaction(async (tx) => {
+          const result2 = await storeConnectionGrant(
+            tx,
+            row,
+            {
+              ciphertext: this.seal(row, {
+                accessToken: tokens.accessToken,
+                refreshToken: tokens.refreshToken
+              }),
+              keyId: this.ready().encryption.keyId,
+              accessExpiresAt: tokens.expiresIn ? this.timestamp(tokens.expiresIn * 1e3) : null,
+              refreshExpiresAt: tokens.refreshExpiresIn ? this.timestamp(tokens.refreshExpiresIn * 1e3) : null,
+              columns: {
+                authorized_workspaces_json: JSON.stringify(workspaces ?? []),
+                tool_policy_version: KNOWLEDGEBASE_TOOL_POLICY_VERSION
+              }
+            },
+            { now: this.timestamp() }
+          );
+          return result2.changes === 1;
+        });
+        return stored ? "stored" : "disconnected";
+      },
+      revoke: (tokens) => this.revokeUpstream({ accessToken: tokens.accessToken, refreshToken: tokens.refreshToken })
+    });
+    return { status, returnTo };
+  }
+  /**
+   * `PATCH /api/connections/:id` (v158): the owner's Knowledgebase settings. Only a
+   * live Knowledgebase row can change; the write is revision-checked. The MCP client
+   * re-reads the row on every call, so narrowing the scope takes effect at once.
+   */
+  async update(owner, id2, body) {
+    await this.access(owner);
+    const input2 = body;
+    if (!input2 || typeof input2 !== "object" || Array.isArray(input2))
+      throw new ChatError("invalid_request");
+    const { expectedRevision: expected, assistantWriteScope: scope2, ...rest } = input2;
+    if (Object.keys(rest).length || !ACCOUNT_CONNECTION_ASSISTANT_WRITE_SCOPES.includes(scope2))
+      throw new ChatError("invalid_request");
+    const revision3 = revision(expected);
+    const row = await this.row(owner, id2);
+    if (!row || row.state === "disconnected") throw new ChatError("not_found");
+    if (row.provider !== "knowledgebase") throw new ChatError("invalid_request");
+    if (row.revision !== revision3) throw new ChatError("stale_revision");
+    if (row.assistant_write_scope !== scope2) {
+      const result2 = await this.db.run(
+        "UPDATE account_connections SET assistant_write_scope = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND revision = ?",
+        [scope2, this.timestamp(), id2, revision3]
+      );
+      if (!result2.changes) throw new ChatError("stale_revision");
+    }
+    return connectionDto(await this.row(owner, id2));
+  }
+  async disconnect(owner, id2) {
+    await this.access(owner);
+    const row = await this.row(owner, id2);
+    if (!row || row.state === "disconnected") throw new ChatError("not_found");
+    let credentials = null;
+    try {
+      const key = row.credential_key_id ? knowledgebaseKeyById(this.options.config.keyRing, row.credential_key_id) : null;
+      credentials = key ? this.open(row, key) : null;
+    } catch {
+      credentials = null;
+    }
+    await this.db.transaction(async (tx) => {
+      const now2 = this.timestamp();
+      await eraseCredential(tx, id2, now2, { onlyIfLive: false });
+    });
+    if (credentials) await this.revokeUpstream(credentials);
+    await this.options.onAccessLost?.(id2);
+    return connectionDto(await this.row(owner, id2));
+  }
+  /**
+   * A current access token for the caller's connection. Refresh is serialized
+   * per connection by a database lease; the rotated credential is persisted
+   * before it is returned. Pass `staleRevision` after the provider rejected a
+   * token so concurrent callers coalesce on one refresh.
+   */
+  async accessToken(owner, id2, options = {}) {
+    let ready;
+    try {
+      ready = this.ready();
+    } catch {
+      throw new ConnectionAccessError("unavailable");
+    }
+    return withRefreshLease(
+      this.db,
+      this.lockOwner,
+      {
+        now: () => this.now(),
+        timestamp: (offset) => this.timestamp(offset),
+        sleep: (ms) => this.sleep(ms),
+        staleRevision: options.staleRevision,
+        signal: options.signal,
+        read: async () => {
+          const row = await this.row(owner, id2);
+          if (!row || row.state === "disconnected") throw new ConnectionAccessError("not_found");
+          if (row.state !== "connected")
+            throw new ConnectionAccessError("reauthorization_required");
+          const key = row.credential_key_id ? knowledgebaseKeyById(this.options.config.keyRing, row.credential_key_id) : null;
+          if (!key && row.credential_key_id && missingKeyIsConfiguration(
+            this.options.config.keyRing,
+            row.credential_key_id,
+            row.credential_format,
+            "organization"
+          ))
+            throw new ConnectionAccessError("unavailable");
+          let credentials;
+          try {
+            if (!key) throw new SecretEnvelopeError();
+            credentials = this.open(row, key);
+          } catch {
+            await this.requireReauthorization(id2, "credential_unreadable");
+            throw new ConnectionAccessError("reauthorization_required");
+          }
+          if (key.id !== ready.encryption.keyId) {
+            await this.reseal(row, credentials, ready.encryption);
+            return null;
+          }
+          return { row, credential: credentials };
+        },
+        requireReauthorization: (row, code) => this.requireReauthorization(row.id, code)
+      },
+      (row, token) => this.refreshLeased(row, token, ready)
+    );
+  }
+  async refreshLeased(row, refreshToken2, ready) {
+    await refreshLeased(this.db, row, this.lockOwner, {
+      exchange: () => ready.oauth.refresh(refreshToken2),
+      invalidGrant: (error64) => error64 instanceof OAuthError && error64.code === "invalid_grant",
+      requireReauthorization: (code) => this.requireReauthorization(row.id, code, this.lockOwner),
+      persist: async (tokens) => {
+        await storeConnectionGrant(
+          this.db,
+          row,
+          {
+            ciphertext: this.seal(row, {
+              accessToken: tokens.accessToken,
+              refreshToken: tokens.refreshToken ?? refreshToken2
+            }),
+            keyId: ready.encryption.keyId,
+            accessExpiresAt: tokens.expiresIn ? this.timestamp(tokens.expiresIn * 1e3) : null,
+            refreshExpiresAt: tokens.refreshExpiresIn ? this.timestamp(tokens.refreshExpiresIn * 1e3) : null
+          },
+          { now: this.timestamp(), leaseOwner: this.lockOwner }
+        );
+      }
+    });
+  }
+  /** Marks the connection unusable until the owner signs in again and erases its credential. */
+  async requireReauthorization(id2, code, lockOwner) {
+    const result2 = await requireReauthorization(this.db, id2, code, this.timestamp(), lockOwner);
+    if (result2.changes === 1) await this.options.onAccessLost?.(id2);
+  }
+  async setAuthorizedWorkspaces(id2, workspaces) {
+    await this.db.run(
+      `UPDATE account_connections SET authorized_workspaces_json = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'connected' AND authorized_workspaces_json <> ?`,
+      [JSON.stringify(workspaces), this.timestamp(), id2, JSON.stringify(workspaces)]
+    );
+  }
+  async recordError(id2, code) {
+    await recordError(this.db, id2, code, this.timestamp());
+  }
+  seal(row, credentials) {
+    const { encryption } = this.ready();
+    return sealSecret({
+      plaintext: JSON.stringify(credentials),
+      key: encryption.key,
+      aad: credentialAad(row)
+    });
+  }
+  /** Re-seal the same credential under the write key; the token itself is unchanged. */
+  async reseal(row, credentials, key) {
+    await this.db.run(
+      `UPDATE account_connections SET credential_ciphertext = ?, credential_key_id = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'connected' AND credential_key_id = ? AND credential_revision = ?`,
+      [
+        sealSecret({
+          plaintext: JSON.stringify(credentials),
+          key: key.key,
+          aad: credentialAad(row)
+        }),
+        key.keyId,
+        this.timestamp(),
+        row.id,
+        row.credential_key_id,
+        row.credential_revision
+      ]
+    );
+  }
+  open(row, key) {
+    if (!row.credential_ciphertext) throw new SecretEnvelopeError();
+    const value2 = JSON.parse(
+      openSecret({
+        envelope: row.credential_ciphertext,
+        key: key.key,
+        aad: credentialAad(row)
+      })
+    );
+    if (typeof value2.accessToken !== "string") throw new SecretEnvelopeError();
+    return {
+      accessToken: value2.accessToken,
+      refreshToken: typeof value2.refreshToken === "string" ? value2.refreshToken : null
+    };
+  }
+  async revokeUpstream(credentials) {
+    const oauth = this.options.oauth;
+    if (!oauth) return;
+    if (credentials.refreshToken) await oauth.revoke(credentials.refreshToken, "refresh_token");
+    await oauth.revoke(credentials.accessToken, "access_token");
+  }
+};
 
 // connections/mcp-client.ts
 var KNOWLEDGEBASE_BOUNDS = {
@@ -181997,6 +181923,553 @@ function provenance(text, connectionId, workspace2, maxSources) {
   return [...out.values()];
 }
 
+// connections/profile.ts
+var import_node_crypto37 = require("node:crypto");
+var ProviderOAuthError = class extends Error {
+  constructor(code) {
+    super(code);
+    this.code = code;
+  }
+  code;
+};
+var ProviderCredentialError = class extends Error {
+  constructor(code, upstreamStatus2, upstreamMessage) {
+    super(code);
+    this.code = code;
+    this.upstreamStatus = upstreamStatus2;
+    this.upstreamMessage = upstreamMessage;
+  }
+  code;
+  upstreamStatus;
+  upstreamMessage;
+};
+var MAX_API_KEY_LENGTH = 512;
+var MAX_RETURN_PATH_LENGTH = 512;
+function isSafeReturnPath(value2) {
+  return typeof value2 === "string" && value2.length <= MAX_RETURN_PATH_LENGTH && value2.startsWith("/") && !value2.startsWith("//") && !value2.includes("\\") && ![...value2].some((ch) => ch.charCodeAt(0) < 32 || ch.charCodeAt(0) === 127);
+}
+var ProfileConnections = class {
+  constructor(db, ring, providers = [], options = {}) {
+    this.db = db;
+    this.ring = ring;
+    this.options = options;
+    this.adapters = new Map(providers.map((adapter2) => [adapter2.provider, adapter2]));
+  }
+  db;
+  ring;
+  options;
+  lockOwner = (0, import_node_crypto37.randomUUID)();
+  adapters;
+  provider(provider) {
+    return this.adapters.get(provider) ?? null;
+  }
+  now() {
+    return this.options.now?.() ?? Date.now();
+  }
+  timestamp(offsetMs = 0) {
+    return new Date(this.now() + offsetMs).toISOString();
+  }
+  sleep(ms) {
+    return this.options.sleep?.(ms) ?? new Promise((resolve) => setTimeout(resolve, ms));
+  }
+  /** Every supplied provider, with whether a connection can be stored on this server. */
+  providers() {
+    return [...this.adapters.values()].map((adapter2) => {
+      const reason = adapter2.oauth && !adapter2.oauth.configured() ? "not_configured" : writeKey(this.ring, adapter2.provider) === null ? "encryption_not_configured" : null;
+      return {
+        provider: adapter2.provider,
+        scope: "profile",
+        credentialKind: adapter2.credentialKind,
+        available: reason === null,
+        reason
+      };
+    });
+  }
+  /** Whether a connection for `provider` can be made on this server right now. */
+  available(provider) {
+    return this.providers().find((entry) => entry.provider === provider)?.available === true;
+  }
+  /** The caller's live profile-scoped connections, adopting legacy rows first. */
+  async list(profileId) {
+    const items = [];
+    for (const adapter2 of this.adapters.values()) {
+      const row = await this.find(profileId, adapter2.provider);
+      if (row) items.push(connectionDto(row));
+    }
+    return items;
+  }
+  /** The caller's row by id, in any state, or null. Never another profile's row. */
+  async row(profileId, id2) {
+    return await this.db.get(
+      "SELECT * FROM account_connections WHERE id = ? AND owner_profile_id = ? AND organization_id IS NULL",
+      [id2, profileId]
+    ) ?? null;
+  }
+  /**
+   * The caller's live connection for a provider, or null. When the profile has no
+   * row for the provider in any state, a live legacy row is adopted verbatim first
+   * (lazy adoption for one release, for rows an older instance wrote after the
+   * migration ran). A disconnected profile is never resurrected.
+   */
+  async find(profileId, provider) {
+    const live = await this.liveRow(profileId, provider);
+    if (live) return live;
+    const adapter2 = this.adapters.get(provider);
+    if (!adapter2?.legacy) return null;
+    const legacy = await adapter2.legacy.find(this.db, profileId);
+    if (!legacy) return null;
+    await this.db.transaction(async (tx) => {
+      const any2 = await tx.get(
+        "SELECT 1 AS present FROM account_connections WHERE owner_profile_id = ? AND provider = ?",
+        [profileId, provider]
+      );
+      if (any2) return;
+      if (adapter2.uniqueExternalAccount && legacy.account.id !== null && await tx.get(
+        `SELECT 1 AS present FROM account_connections WHERE provider = ? AND external_account_id = ? AND state <> 'disconnected'`,
+        [provider, legacy.account.id]
+      ))
+        return;
+      await tx.run(
+        `INSERT INTO account_connections (id, owner_profile_id, organization_id, provider, server_url, state, credential_kind, credential_format, credential_ciphertext, credential_key_id, credential_revision, access_expires_at, refresh_expires_at, external_account_id, external_account_label, external_account_avatar_url, granted_scopes_json, last_validated_at, connected_at, created_at, updated_at, revision) VALUES (?, ?, NULL, ?, ?, 'connected', ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1) ON CONFLICT (id) DO NOTHING`,
+        [
+          legacy.id,
+          profileId,
+          provider,
+          adapter2.serverUrl,
+          adapter2.credentialKind,
+          legacy.format,
+          legacy.ciphertext,
+          legacy.keyId,
+          legacy.accessExpiresAt ?? null,
+          legacy.refreshExpiresAt ?? null,
+          legacy.account.id,
+          legacy.account.label,
+          legacy.account.avatarUrl ?? null,
+          JSON.stringify(legacy.scopes ?? []),
+          legacy.lastValidatedAt,
+          legacy.createdAt,
+          legacy.createdAt,
+          legacy.updatedAt
+        ]
+      );
+    });
+    return this.liveRow(profileId, provider);
+  }
+  async liveRow(profileId, provider) {
+    return await this.db.get(
+      `SELECT * FROM account_connections WHERE owner_profile_id = ? AND organization_id IS NULL AND provider = ? AND state <> 'disconnected'`,
+      [profileId, provider]
+    ) ?? null;
+  }
+  /**
+   * Store (or rotate) an API key the caller already validated upstream. Answers
+   * `provider_not_ready` when no key can seal it; nothing is stored in plaintext.
+   */
+  async storeApiKey(profileId, provider, apiKey, account) {
+    const adapter2 = this.adapters.get(provider);
+    if (!adapter2 || adapter2.credentialKind !== "api_key")
+      throw new ChatError("provider_not_available");
+    const key = writeKey(this.ring, provider);
+    if (!key) throw new ChatError("provider_not_ready");
+    const existing = await this.find(profileId, provider);
+    const now2 = this.timestamp();
+    const credential = { kind: "api_key", apiKey };
+    if (existing) {
+      await this.db.run(
+        `UPDATE account_connections SET state = 'connected', credential_kind = 'api_key', credential_format = 'connection-v1', credential_ciphertext = ?, credential_key_id = ?, credential_revision = credential_revision + 1, external_account_id = ?, external_account_label = ?, external_account_avatar_url = ?, last_validated_at = ?, last_error_code = NULL, connected_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND owner_profile_id = ? AND state <> 'disconnected'`,
+        [
+          this.seal(existing, credential, key),
+          key.id,
+          account.id,
+          account.label,
+          account.avatarUrl ?? null,
+          now2,
+          now2,
+          now2,
+          existing.id,
+          profileId
+        ]
+      );
+      return connectionDto(await this.row(profileId, existing.id));
+    }
+    const id2 = (0, import_node_crypto37.randomUUID)();
+    const draft = { id: id2, owner_profile_id: profileId, organization_id: null, provider };
+    await this.db.run(
+      `INSERT INTO account_connections (id, owner_profile_id, organization_id, provider, server_url, state, credential_kind, credential_format, credential_ciphertext, credential_key_id, credential_revision, external_account_id, external_account_label, external_account_avatar_url, last_validated_at, connected_at, created_at, updated_at, revision) VALUES (?, ?, NULL, ?, ?, 'connected', 'api_key', 'connection-v1', ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      [
+        id2,
+        profileId,
+        provider,
+        adapter2.serverUrl,
+        this.seal(draft, credential, key),
+        key.id,
+        account.id,
+        account.label,
+        account.avatarUrl ?? null,
+        now2,
+        now2,
+        now2,
+        now2
+      ]
+    );
+    return connectionDto(await this.row(profileId, id2));
+  }
+  /** `POST /api/connections/api-keys`: validate upstream through the adapter, then store. */
+  async setApiKey(profileId, body) {
+    const input2 = body;
+    const adapter2 = this.provider(input2?.provider);
+    if (!adapter2 || adapter2.credentialKind !== "api_key" || !adapter2.validateApiKey)
+      throw new ChatError("provider_not_available");
+    const apiKey = typeof input2?.apiKey === "string" ? input2.apiKey.trim() : "";
+    if (!apiKey || apiKey.length > MAX_API_KEY_LENGTH) throw new ChatError("invalid_request");
+    if (!writeKey(this.ring, adapter2.provider)) throw new ChatError("provider_not_ready");
+    let account;
+    try {
+      account = await adapter2.validateApiKey(apiKey);
+    } catch (error64) {
+      if (error64 instanceof ProviderCredentialError && error64.code === "rejected")
+        throw new ChatError("credential_rejected");
+      throw new ChatError("provider_unavailable");
+    }
+    return this.storeApiKey(profileId, adapter2.provider, apiKey, account);
+  }
+  /**
+   * The caller's plaintext credential for a provider, or null when there is no
+   * connected row. Throws `ConnectionAccessError('unavailable')` when the key it
+   * was sealed with is not configured (nothing is erased), and
+   * `ConnectionAccessError('reauthorization_required')` when the envelope is
+   * unreadable (it is erased). Re-seals legacy and fallback-key envelopes under
+   * the current key after a successful read.
+   */
+  async credential(profileId, provider) {
+    const row = await this.find(profileId, provider);
+    if (!row || row.state !== "connected" || !row.credential_ciphertext || !row.credential_key_id)
+      return null;
+    if (row.credential_format !== "connection-v1") {
+      const legacy = this.adapters.get(provider)?.legacy;
+      if (legacy && !await legacy.isLive(this.db, row.id)) {
+        await this.erase(row);
+        return null;
+      }
+    }
+    const key = keyById(this.ring, row.credential_key_id);
+    if (!key) {
+      if (missingKeyIsConfiguration(this.ring, row.credential_key_id, row.credential_format))
+        throw new ConnectionAccessError("unavailable");
+      await this.requireReauthorization(row, "credential_unreadable");
+      throw new ConnectionAccessError("reauthorization_required");
+    }
+    let credential;
+    try {
+      credential = openCredential(
+        { ...row, credential_ciphertext: row.credential_ciphertext },
+        key.key
+      );
+    } catch (error64) {
+      if (!(error64 instanceof SecretEnvelopeError)) throw error64;
+      await this.requireReauthorization(row, "credential_unreadable");
+      throw new ConnectionAccessError("reauthorization_required");
+    }
+    const current = this.ring.current;
+    if (current && (row.credential_key_id !== current.id || row.credential_format !== "connection-v1")) {
+      await this.reseal(row, credential, current);
+      const resealed = await this.row(profileId, row.id);
+      if (resealed?.state === "connected") return { credential, row: resealed };
+    }
+    return { credential, row };
+  }
+  /**
+   * `DELETE /api/connections/:id` for a profile-scoped row: erase first, then revoke
+   * an OAuth token upstream (best-effort), then tombstone the legacy row.
+   */
+  async disconnect(profileId, id2) {
+    const row = await this.row(profileId, id2);
+    if (!row || row.state === "disconnected") throw new ChatError("not_found");
+    await this.disconnectRow(profileId, row.provider, row);
+    return connectionDto(await this.row(profileId, id2));
+  }
+  /** Disconnect the caller's connection for a provider, if any (legacy alias routes). */
+  async disconnectProvider(profileId, provider) {
+    await this.disconnectRow(profileId, provider, await this.find(profileId, provider));
+  }
+  async disconnectRow(profileId, provider, row) {
+    const adapter2 = this.adapters.get(provider);
+    const credential = row ? this.peek(row) : null;
+    if (row) await this.erase(row);
+    if (credential?.kind === "oauth" && adapter2?.oauth)
+      await adapter2.oauth.revoke(credential.accessToken).catch(() => void 0);
+    await adapter2?.legacy?.tombstone(this.db, profileId, this.timestamp());
+  }
+  // ---- OAuth (profile-scoped, confidential client) --------------------------
+  /** `POST /api/connections` for a profile-scoped OAuth provider. */
+  async startOAuth(profileId, body) {
+    const input2 = body;
+    const adapter2 = this.provider(input2?.provider);
+    if (!adapter2?.oauth) throw new ChatError("provider_not_available");
+    if (input2?.returnTo !== "mobile" && input2?.returnTo !== "web")
+      throw new ChatError("invalid_request");
+    let returnUrl = null;
+    if (input2.returnPath !== void 0 && input2.returnPath !== null) {
+      if (input2.returnTo !== "web" || !isSafeReturnPath(input2.returnPath))
+        throw new ChatError("invalid_request");
+      returnUrl = input2.returnPath;
+    }
+    return this.beginOAuth(profileId, adapter2.provider, { returnTo: input2.returnTo, returnUrl });
+  }
+  /**
+   * Begin a sign-in: hashed single-use state bound to the caller's connection (a live
+   * one is reused for a reconnect; otherwise a `pending` row is created), and a PKCE
+   * verifier sealed under the provider's write key. `returnUrl` is either a relative
+   * web path or an absolute target a legacy alias already validated.
+   */
+  async beginOAuth(profileId, provider, target) {
+    const adapter2 = this.adapters.get(provider);
+    const oauth = adapter2?.oauth;
+    if (!adapter2 || !oauth) throw new ChatError("provider_not_available");
+    const key = writeKey(this.ring, provider);
+    if (!key || !oauth.configured()) throw new ChatError("provider_not_ready");
+    await this.find(profileId, provider);
+    return beginConnectionOAuth(this.db, {
+      timestamp: (offset) => this.timestamp(offset),
+      key: key.key,
+      returnTo: target.returnTo,
+      returnUrl: target.returnUrl,
+      authorizeUrl: (state2, codeChallenge) => oauth.authorizeUrl({ state: state2, codeChallenge }),
+      findLiveRow: (tx) => tx.get(
+        `SELECT * FROM account_connections WHERE owner_profile_id = ? AND organization_id IS NULL AND provider = ? AND state <> 'disconnected'`,
+        [profileId, provider]
+      ),
+      insertPendingRow: (tx, id2, now2) => tx.run(
+        `INSERT INTO account_connections (id, owner_profile_id, organization_id, provider, server_url, state, credential_kind, created_at, updated_at) VALUES (?, ?, NULL, ?, ?, 'pending', ?, ?, ?)`,
+        [id2, profileId, provider, adapter2.serverUrl, adapter2.credentialKind, now2, now2]
+      )
+    });
+  }
+  /**
+   * The provider's public callback. Consumes the single-use state (bound to this
+   * provider), exchanges the code, checks the required scopes and the account, then
+   * seals the grant. Never throws for user-facing input; stores nothing on failure.
+   */
+  async completeOAuth(provider, query) {
+    const adapter2 = this.adapters.get(provider);
+    const oauth = adapter2?.oauth;
+    if (!adapter2 || !oauth)
+      return {
+        status: "expired",
+        returnTo: null,
+        returnUrl: null,
+        connectionId: null,
+        errorCode: null
+      };
+    const key = writeKey(this.ring, provider);
+    return completeConnectionOAuth(this.db, query, {
+      timestamp: () => this.timestamp(),
+      providerFilter: provider,
+      verifierKey: () => {
+        if (!key || !oauth.configured()) throw new ProviderOAuthError("unavailable");
+        return key.key;
+      },
+      exchange: (code, codeVerifier) => oauth.exchangeCode({ code, codeVerifier }),
+      exchangeErrorCode: (error64) => error64 instanceof ProviderOAuthError ? `token_${error64.code}` : "token_exchange_failed",
+      persist: async (row, grant) => {
+        if (!oauth.requiredScopes.every((scope2) => grant.scopes.includes(scope2)))
+          return { errorCode: "insufficient_scope" };
+        let account;
+        try {
+          account = await oauth.describeAccount(grant.accessToken);
+        } catch {
+          return { errorCode: "account_lookup_failed" };
+        }
+        if (adapter2.uniqueExternalAccount && await this.db.get(
+          `SELECT 1 AS present FROM account_connections WHERE provider = ? AND external_account_id = ? AND owner_profile_id <> ? AND state <> 'disconnected'`,
+          [provider, account.id, row.owner_profile_id]
+        ))
+          return { errorCode: "account_in_use" };
+        const at = this.timestamp();
+        try {
+          const result2 = await storeConnectionGrant(
+            this.db,
+            row,
+            {
+              ciphertext: this.seal(
+                row,
+                { kind: "oauth", accessToken: grant.accessToken, refreshToken: grant.refreshToken },
+                key
+              ),
+              keyId: key.id,
+              accessExpiresAt: grant.expiresIn ? this.timestamp(grant.expiresIn * 1e3) : null,
+              refreshExpiresAt: grant.refreshExpiresIn ? this.timestamp(grant.refreshExpiresIn * 1e3) : null,
+              columns: {
+                credential_kind: "oauth",
+                credential_format: "connection-v1",
+                external_account_id: account.id,
+                external_account_label: account.label,
+                external_account_avatar_url: account.avatarUrl ?? null,
+                granted_scopes_json: JSON.stringify(grant.scopes),
+                last_validated_at: at
+              }
+            },
+            { now: at }
+          );
+          return result2.changes === 1 ? "stored" : "disconnected";
+        } catch {
+          return { errorCode: "account_in_use" };
+        }
+      },
+      revoke: (grant) => oauth.revoke(grant.accessToken).catch(() => void 0)
+    });
+  }
+  /**
+   * A current OAuth access token for the caller's connection. An expiring token is
+   * refreshed under a per-connection database lease, so concurrent callers share one
+   * upstream refresh, and the rotated credential is persisted before it is returned.
+   * Pass `staleRevision` after the provider rejected a token to force that refresh.
+   */
+  async oauthAccessToken(profileId, provider, options = {}) {
+    const oauth = this.adapters.get(provider)?.oauth;
+    if (!oauth) throw new ConnectionAccessError("not_found");
+    return withRefreshLease(
+      this.db,
+      this.lockOwner,
+      {
+        now: () => this.now(),
+        timestamp: (offset) => this.timestamp(offset),
+        sleep: (ms) => this.sleep(ms),
+        staleRevision: options.staleRevision,
+        read: async () => {
+          const found = await this.credential(profileId, provider);
+          if (!found || found.credential.kind !== "oauth") {
+            const live = await this.liveRow(profileId, provider);
+            throw new ConnectionAccessError(
+              live?.state === "reauthorization_required" ? "reauthorization_required" : "not_found"
+            );
+          }
+          const { row } = found;
+          const credential = found.credential;
+          return { row, credential };
+        },
+        requireReauthorization: (row, code) => this.requireReauthorization(row, code)
+      },
+      (row, token) => this.refreshLeased(row, provider, oauth, token)
+    );
+  }
+  async refreshLeased(row, provider, oauth, refreshToken2) {
+    const key = writeKey(this.ring, provider);
+    await refreshLeased(this.db, row, this.lockOwner, {
+      available: () => key !== null && oauth.configured(),
+      exchange: () => oauth.refresh(refreshToken2),
+      invalidGrant: (error64) => error64 instanceof ProviderOAuthError && error64.code === "invalid_grant",
+      requireReauthorization: (code) => this.requireReauthorization(row, code, this.lockOwner),
+      persist: async (grant) => {
+        if (!oauth.requiredScopes.every((scope2) => grant.scopes.includes(scope2))) {
+          await this.requireReauthorization(row, "insufficient_scope", this.lockOwner);
+          throw new ConnectionAccessError("reauthorization_required");
+        }
+        await storeConnectionGrant(
+          this.db,
+          row,
+          {
+            ciphertext: this.seal(
+              row,
+              {
+                kind: "oauth",
+                accessToken: grant.accessToken,
+                refreshToken: grant.refreshToken ?? refreshToken2
+              },
+              key
+            ),
+            keyId: key.id,
+            accessExpiresAt: grant.expiresIn ? this.timestamp(grant.expiresIn * 1e3) : null,
+            refreshExpiresAt: grant.refreshExpiresIn ? this.timestamp(grant.refreshExpiresIn * 1e3) : null,
+            columns: {
+              credential_format: "connection-v1",
+              granted_scopes_json: JSON.stringify(grant.scopes)
+            }
+          },
+          { now: this.timestamp(), leaseOwner: this.lockOwner }
+        );
+      }
+    });
+  }
+  /** Record a re-validated upstream account for the caller's connected row. */
+  async recordAccount(profileId, provider, account) {
+    const now2 = this.timestamp();
+    await this.db.run(
+      `UPDATE account_connections SET external_account_label = ?, external_account_avatar_url = ?, last_validated_at = ?, updated_at = ?, revision = revision + 1 WHERE owner_profile_id = ? AND organization_id IS NULL AND provider = ? AND state = 'connected'`,
+      [account.label, account.avatarUrl ?? null, now2, now2, profileId, provider]
+    );
+  }
+  /** Mark the caller's connection unusable until they sign in again (erases the credential). */
+  async requireReauthorizationFor(profileId, provider, code) {
+    const row = await this.liveRow(profileId, provider);
+    if (row) await this.requireReauthorization(row, code);
+  }
+  /**
+   * Re-seal connected profile-scoped rows still under a legacy format or a
+   * fallback key. Bounded and idempotent; logs counts only.
+   */
+  async resealSweep(limit2 = 500) {
+    const current = this.ring.current;
+    if (!current) return { resealed: 0, remaining: await this.legacyKeyedCount() };
+    const rows = await this.db.all(
+      `SELECT * FROM account_connections WHERE organization_id IS NULL AND state = 'connected' AND (credential_format <> 'connection-v1' OR credential_key_id <> ?) ORDER BY created_at, id LIMIT ?`,
+      [current.id, limit2]
+    );
+    let resealed = 0;
+    for (const row of rows) {
+      try {
+        if (await this.credential(row.owner_profile_id, row.provider))
+          resealed += 1;
+      } catch {
+      }
+    }
+    return { resealed, remaining: await this.legacyKeyedCount() };
+  }
+  async legacyKeyedCount() {
+    const row = await this.db.get(
+      `SELECT COUNT(*) AS n FROM account_connections WHERE organization_id IS NULL AND credential_ciphertext IS NOT NULL AND (credential_format <> 'connection-v1' OR credential_key_id <> ?)`,
+      [this.ring.current?.id ?? ""]
+    );
+    return Number(row?.n ?? 0);
+  }
+  seal(row, credential, key) {
+    return sealSecret({
+      plaintext: credentialPlaintext(credential),
+      key: key.key,
+      aad: connectionCredentialAad(row)
+    });
+  }
+  async reseal(row, credential, key) {
+    await this.db.run(
+      `UPDATE account_connections SET credential_ciphertext = ?, credential_key_id = ?, credential_format = 'connection-v1', credential_revision = credential_revision + 1, updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'connected' AND credential_revision = ?`,
+      [this.seal(row, credential, key), key.id, this.timestamp(), row.id, row.credential_revision]
+    );
+  }
+  /** Open a row's credential without side effects (disconnect's upstream revocation). */
+  peek(row) {
+    if (!row.credential_ciphertext || !row.credential_key_id) return null;
+    const key = keyById(this.ring, row.credential_key_id);
+    if (!key) return null;
+    try {
+      return openCredential({ ...row, credential_ciphertext: row.credential_ciphertext }, key.key);
+    } catch {
+      return null;
+    }
+  }
+  async erase(row) {
+    const now2 = this.timestamp();
+    await this.db.transaction(async (tx) => {
+      await eraseCredential(tx, row.id, now2, { onlyIfLive: true });
+    });
+  }
+  async requireReauthorization(row, code, lockOwner) {
+    await requireReauthorization(this.db, row.id, code, this.timestamp(), lockOwner);
+  }
+  async recordError(id2, code) {
+    await recordError(this.db, id2, code, this.timestamp());
+  }
+};
+
 // connections/source-check.ts
 function composeSourceCheckers(checkers) {
   return async (owner, source, signal) => {
@@ -182346,13 +182819,13 @@ async function countQueuedRequestsForTargets({
   executionTargetIds
 }) {
   if (executionTargetIds.length === 0) return 0;
-  const placeholders4 = executionTargetIds.map(() => "?").join(", ");
+  const placeholders = executionTargetIds.map(() => "?").join(", ");
   const row = await ctx.db.get(
     `SELECT COUNT(*) AS count
        FROM execution_requests
       WHERE workspace_id = ?
         AND deleted_at IS NULL
-        AND execution_target_id IN (${placeholders4})
+        AND execution_target_id IN (${placeholders})
         AND status IN (${STALE_QUEUE_STATUSES.map(() => "?").join(", ")})`,
     [ctx.workspace.id, ...executionTargetIds, ...STALE_QUEUE_STATUSES]
   );
@@ -182413,16 +182886,16 @@ function resolveLocalTargetServerCapability({
 
 // execution/local-target-invoke.ts
 var import_node_os12 = __toESM(require("node:os"), 1);
-var import_node_path32 = __toESM(require("node:path"), 1);
+var import_node_path33 = __toESM(require("node:path"), 1);
 init_desktop_bridge();
 init_in_process_provider();
 init_resource_status();
 init_result();
 function resolveServerWorktreeRoot() {
   const override = process.env.OVERLORD_WORKTREE_ROOT?.trim();
-  if (override) return import_node_path32.default.resolve(override);
+  if (override) return import_node_path33.default.resolve(override);
   const home = process.env.OVLD_HOME?.trim() || process.env.OVERLORD_HOME?.trim();
-  return import_node_path32.default.join(home ? import_node_path32.default.resolve(home) : import_node_path32.default.join(import_node_os12.default.homedir(), ".ovld"), "worktrees");
+  return import_node_path33.default.join(home ? import_node_path33.default.resolve(home) : import_node_path33.default.join(import_node_os12.default.homedir(), ".ovld"), "worktrees");
 }
 function withServerDefaults(call) {
   if (call.capability !== "listWorktrees") return call;
@@ -182651,73 +183124,26 @@ function runnerRegistrationFromBody(value2) {
 }
 
 // execution/runner-queue-notify.ts
+init_pg_listen();
 var QUEUE_CHANNEL = "overlord_execution_request_queue";
 var RUNNER_CLAIM_LONG_POLL_MS = 25e3;
 var RUNNER_QUEUE_LISTEN_CONNECT_TIMEOUT_MS = 3e3;
-async function connectWithTimeout2({
-  client,
-  timeoutMs
-}) {
-  let timer;
-  const connectPromise = Promise.resolve(client.connect());
-  try {
-    await Promise.race([
-      connectPromise,
-      new Promise((_, reject) => {
-        timer = setTimeout(() => {
-          reject(new Error(`LISTEN connect timed out after ${timeoutMs}ms`));
-        }, timeoutMs);
-      })
-    ]);
-  } finally {
-    if (timer !== void 0) clearTimeout(timer);
-    void connectPromise.catch(() => void 0);
-  }
-}
 async function createRunnerQueueListener({
   connectionString = process.env.DATABASE_URL,
   timeoutMs = RUNNER_CLAIM_LONG_POLL_MS,
   connectTimeoutMs = RUNNER_QUEUE_LISTEN_CONNECT_TIMEOUT_MS,
   createClient
 } = {}) {
-  if (!connectionString) return null;
-  const client = createClient ? await createClient(connectionString) : await (async () => {
-    const pg2 = await Promise.resolve().then(() => (init_esm(), esm_exports));
-    const Client3 = (pg2.default ?? pg2).Client;
-    return new Client3({
-      connectionString,
-      connectionTimeoutMillis: connectTimeoutMs
-    });
-  })();
-  try {
-    await connectWithTimeout2({ client, timeoutMs: connectTimeoutMs });
-    await client.query(`LISTEN ${QUEUE_CHANNEL}`);
-  } catch {
-    await client.end().catch(() => void 0);
-    return null;
-  }
-  let settled = false;
-  let resolveWait = null;
-  const finish = () => {
-    if (settled) return;
-    settled = true;
-    resolveWait?.();
-  };
-  client.on("notification", finish);
-  client.on("error", finish);
+  const listener = await armPostgresListener({
+    connectionString,
+    channel: QUEUE_CHANNEL,
+    connectTimeoutMs,
+    createClient
+  });
+  if (!listener) return null;
   return {
-    wait: () => new Promise((resolve) => {
-      const timer = setTimeout(finish, timeoutMs);
-      resolveWait = () => {
-        clearTimeout(timer);
-        resolve();
-      };
-      if (settled) resolveWait();
-    }),
-    close: async () => {
-      settled = true;
-      await client.end().catch(() => void 0);
-    }
+    wait: () => listener.wait(timeoutMs),
+    close: listener.close
   };
 }
 async function longPollRunnerClaim({
@@ -183149,12 +183575,12 @@ async function recordBranchPrepared({
 }) {
   const scopes = await callerWorkspaceMemberships();
   if (scopes.length === 0) throw new ApiError(404, "Mission not found");
-  const placeholders4 = scopes.map(() => "?").join(", ");
+  const placeholders = scopes.map(() => "?").join(", ");
   const mission = await requireDatabaseClient().get(
     `SELECT workspace_id FROM missions
       WHERE (id = ? OR display_id = ?)
         AND deleted_at IS NULL
-        AND workspace_id IN (${placeholders4})`,
+        AND workspace_id IN (${placeholders})`,
     [missionId, missionId, ...scopes.map((scope2) => scope2.workspaceId)]
   );
   if (!mission) throw new ApiError(404, "Mission not found");
@@ -183505,7 +183931,7 @@ function createEverhourService(connections) {
       throw accessErrorToApiError(err);
     }
   }
-  async function getEverhourIntegration2() {
+  async function getEverhourIntegration() {
     const connection = await readActorUserConnection();
     if (!connection || connection.state !== "connected")
       return { connected: false, accountName: null };
@@ -183527,7 +183953,7 @@ function createEverhourService(connections) {
       return { connected: true, accountName: connection.external_account_label };
     }
   }
-  async function setEverhourApiKey2(rawKey2) {
+  async function setEverhourApiKey(rawKey2) {
     const apiKey = rawKey2.trim();
     if (!apiKey) throw new ApiError(400, "Enter an Everhour API key.");
     const user = await everhourFetch(apiKey, "/users/me");
@@ -183541,7 +183967,7 @@ function createEverhourService(connections) {
     }
     return { connected: true, accountName: user?.name ?? null };
   }
-  async function clearEverhourApiKey2() {
+  async function clearEverhourApiKey() {
     const profileId = await requireActorProfileId();
     await connections().disconnectProvider(profileId, "everhour");
     return { connected: false, accountName: null };
@@ -183591,7 +184017,7 @@ function createEverhourService(connections) {
       );
     });
   }
-  async function getProjectEverhourLink2(projectId) {
+  async function getProjectEverhourLink(projectId) {
     const workspaceId2 = await assertProjectExists(projectId);
     const link = await readProjectLink2(projectId, workspaceId2);
     return {
@@ -183749,7 +184175,7 @@ function createEverhourService(connections) {
     );
     return created?.id !== void 0 && created.id !== null ? String(created.id) : null;
   }
-  async function linkProjectEverhour2(projectId, rawName) {
+  async function linkProjectEverhour(projectId, rawName) {
     const name2 = rawName?.trim() ?? "";
     if (!name2) {
       await clearProjectLink(projectId);
@@ -184009,7 +184435,7 @@ function createEverhourService(connections) {
     );
     return unwrapArray(payload).map(normalizeRecord).filter((r5) => r5.id).sort((a5, b5) => a5.date < b5.date ? 1 : a5.date > b5.date ? -1 : 0);
   }
-  async function getMissionEverhourState2(missionId) {
+  async function getMissionEverhourState(missionId) {
     const mission = await getMissionRow2(missionId);
     const apiKey = await readEverhourApiKey();
     const { everhourProjectId } = await getProjectEverhour(mission.project_id);
@@ -184034,14 +184460,14 @@ function createEverhourService(connections) {
       runningTimer: runningDto && runningDto.taskId === mission.everhourTaskId ? runningDto : null
     };
   }
-  async function startMissionTimer2(missionId) {
+  async function startMissionTimer(missionId) {
     await getMissionRow2(missionId);
     const apiKey = await requireApiKey();
     const taskId = await ensureMissionTask(apiKey, missionId);
     await everhourFetch(apiKey, "/timers", { method: "POST", body: { task: taskId } });
-    return getMissionEverhourState2(missionId);
+    return getMissionEverhourState(missionId);
   }
-  async function stopMissionTimer2(missionId) {
+  async function stopMissionTimer(missionId) {
     await getMissionRow2(missionId);
     const apiKey = await requireApiKey();
     try {
@@ -184049,9 +184475,9 @@ function createEverhourService(connections) {
     } catch (err) {
       if (!(err instanceof ApiError) || err.status !== 404 && err.status !== 400) throw err;
     }
-    return getMissionEverhourState2(missionId);
+    return getMissionEverhourState(missionId);
   }
-  async function getProjectEverhourState2(projectId) {
+  async function getProjectEverhourState(projectId) {
     const workspaceId2 = await assertProjectExists(projectId);
     const apiKey = await readEverhourApiKey();
     const link = await readProjectLink2(projectId, workspaceId2);
@@ -184081,14 +184507,14 @@ function createEverhourService(connections) {
       hasRunningTimerInProject
     };
   }
-  async function startProjectTimer2(projectId) {
+  async function startProjectTimer(projectId) {
     await assertProjectExists(projectId);
     const apiKey = await requireApiKey();
     const taskId = await ensureProjectGeneralTask(apiKey, projectId);
     await everhourFetch(apiKey, "/timers", { method: "POST", body: { task: taskId } });
-    return getProjectEverhourState2(projectId);
+    return getProjectEverhourState(projectId);
   }
-  async function stopProjectTimer2(projectId) {
+  async function stopProjectTimer(projectId) {
     await assertProjectExists(projectId);
     const apiKey = await requireApiKey();
     try {
@@ -184096,9 +184522,9 @@ function createEverhourService(connections) {
     } catch (err) {
       if (!(err instanceof ApiError) || err.status !== 404 && err.status !== 400) throw err;
     }
-    return getProjectEverhourState2(projectId);
+    return getProjectEverhourState(projectId);
   }
-  async function addProjectTime2(projectId, body) {
+  async function addProjectTime(projectId, body) {
     await assertProjectExists(projectId);
     const apiKey = await requireApiKey();
     if (!Number.isFinite(body.timeSeconds) || body.timeSeconds <= 0) {
@@ -184114,9 +184540,9 @@ function createEverhourService(connections) {
         ...body.comment?.trim() ? { comment: body.comment.trim() } : {}
       }
     });
-    return getProjectEverhourState2(projectId);
+    return getProjectEverhourState(projectId);
   }
-  async function updateProjectTime2(projectId, recordId, body) {
+  async function updateProjectTime(projectId, recordId, body) {
     await assertProjectExists(projectId);
     const apiKey = await requireApiKey();
     if (!Number.isFinite(body.timeSeconds) || body.timeSeconds <= 0) {
@@ -184129,15 +184555,15 @@ function createEverhourService(connections) {
         ...body.comment !== void 0 ? { comment: body.comment?.trim() ?? "" } : {}
       }
     });
-    return getProjectEverhourState2(projectId);
+    return getProjectEverhourState(projectId);
   }
-  async function deleteProjectTime2(projectId, recordId) {
+  async function deleteProjectTime(projectId, recordId) {
     await assertProjectExists(projectId);
     const apiKey = await requireApiKey();
     await everhourFetch(apiKey, `/time/${encodeURIComponent(recordId)}`, { method: "DELETE" });
-    return getProjectEverhourState2(projectId);
+    return getProjectEverhourState(projectId);
   }
-  async function addMissionTime2(missionId, body) {
+  async function addMissionTime(missionId, body) {
     await getMissionRow2(missionId);
     const apiKey = await requireApiKey();
     if (!Number.isFinite(body.timeSeconds) || body.timeSeconds <= 0) {
@@ -184153,9 +184579,9 @@ function createEverhourService(connections) {
         ...body.comment?.trim() ? { comment: body.comment.trim() } : {}
       }
     });
-    return getMissionEverhourState2(missionId);
+    return getMissionEverhourState(missionId);
   }
-  async function updateMissionTime2(missionId, recordId, body) {
+  async function updateMissionTime(missionId, recordId, body) {
     await getMissionRow2(missionId);
     const apiKey = await requireApiKey();
     if (!Number.isFinite(body.timeSeconds) || body.timeSeconds <= 0) {
@@ -184168,76 +184594,55 @@ function createEverhourService(connections) {
         ...body.comment !== void 0 ? { comment: body.comment?.trim() ?? "" } : {}
       }
     });
-    return getMissionEverhourState2(missionId);
+    return getMissionEverhourState(missionId);
   }
-  async function deleteMissionTime2(missionId, recordId) {
+  async function deleteMissionTime(missionId, recordId) {
     await getMissionRow2(missionId);
     const apiKey = await requireApiKey();
     await everhourFetch(apiKey, `/time/${encodeURIComponent(recordId)}`, { method: "DELETE" });
-    return getMissionEverhourState2(missionId);
+    return getMissionEverhourState(missionId);
   }
   return {
-    getEverhourIntegration: getEverhourIntegration2,
-    setEverhourApiKey: setEverhourApiKey2,
-    clearEverhourApiKey: clearEverhourApiKey2,
-    getProjectEverhourLink: getProjectEverhourLink2,
-    linkProjectEverhour: linkProjectEverhour2,
-    getMissionEverhourState: getMissionEverhourState2,
-    startMissionTimer: startMissionTimer2,
-    stopMissionTimer: stopMissionTimer2,
-    getProjectEverhourState: getProjectEverhourState2,
-    startProjectTimer: startProjectTimer2,
-    stopProjectTimer: stopProjectTimer2,
-    addProjectTime: addProjectTime2,
-    updateProjectTime: updateProjectTime2,
-    deleteProjectTime: deleteProjectTime2,
-    addMissionTime: addMissionTime2,
-    updateMissionTime: updateMissionTime2,
-    deleteMissionTime: deleteMissionTime2
+    getEverhourIntegration,
+    setEverhourApiKey,
+    clearEverhourApiKey,
+    getProjectEverhourLink,
+    linkProjectEverhour,
+    getMissionEverhourState,
+    startMissionTimer,
+    stopMissionTimer,
+    getProjectEverhourState,
+    startProjectTimer,
+    stopProjectTimer,
+    addProjectTime,
+    updateProjectTime,
+    deleteProjectTime,
+    addMissionTime,
+    updateMissionTime,
+    deleteMissionTime
   };
 }
-var {
-  getEverhourIntegration,
-  setEverhourApiKey,
-  clearEverhourApiKey,
-  getProjectEverhourLink,
-  linkProjectEverhour,
-  getMissionEverhourState,
-  startMissionTimer,
-  stopMissionTimer,
-  getProjectEverhourState,
-  startProjectTimer,
-  stopProjectTimer,
-  addProjectTime,
-  updateProjectTime,
-  deleteProjectTime,
-  addMissionTime,
-  updateMissionTime,
-  deleteMissionTime
-} = createEverhourService(
-  () => profileConnections(requireDatabaseClient(), [everhourConnectionProvider(validateEverhourApiKey)])
-);
 
 // ext/everhour/routes.ts
 function createEverhourExtensionRouter(handle4, connections) {
   const {
-    addMissionTime: addMissionTime2,
-    addProjectTime: addProjectTime2,
-    clearEverhourApiKey: clearEverhourApiKey2,
-    deleteMissionTime: deleteMissionTime2,
-    deleteProjectTime: deleteProjectTime2,
-    getEverhourIntegration: getEverhourIntegration2,
-    getMissionEverhourState: getMissionEverhourState2,
-    getProjectEverhourLink: getProjectEverhourLink2,
-    getProjectEverhourState: getProjectEverhourState2,
-    linkProjectEverhour: linkProjectEverhour2,
-    setEverhourApiKey: setEverhourApiKey2,
-    startMissionTimer: startMissionTimer2,
-    startProjectTimer: startProjectTimer2,
-    stopMissionTimer: stopMissionTimer2,
-    stopProjectTimer: stopProjectTimer2,
-    updateMissionTime: updateMissionTime2,
-    updateProjectTime: updateProjectTime2
+    addMissionTime,
+    addProjectTime,
+    clearEverhourApiKey,
+    deleteMissionTime,
+    deleteProjectTime,
+    getEverhourIntegration,
+    getMissionEverhourState,
+    getProjectEverhourLink,
+    getProjectEverhourState,
+    linkProjectEverhour,
+    setEverhourApiKey,
+    startMissionTimer,
+    startProjectTimer,
+    stopMissionTimer,
+    stopProjectTimer,
+    updateMissionTime,
+    updateProjectTime
   } = createEverhourService(connections);
   const router2 = (0, import_express2.Router)();
   for (const path30 of ["/user-connection", "/integration"]) {
@@ -184246,7 +184651,7 @@ function createEverhourExtensionRouter(handle4, connections) {
       path30,
       handle4((req) => {
         alias(req);
-        return getEverhourIntegration2();
+        return getEverhourIntegration();
       })
     );
     router2.put(
@@ -184254,7 +184659,7 @@ function createEverhourExtensionRouter(handle4, connections) {
       handle4(
         (req) => {
           alias(req);
-          return setEverhourApiKey2(String(req.body?.apiKey ?? ""));
+          return setEverhourApiKey(String(req.body?.apiKey ?? ""));
         },
         { mutates: true }
       )
@@ -184264,7 +184669,7 @@ function createEverhourExtensionRouter(handle4, connections) {
       handle4(
         (req) => {
           alias(req);
-          return clearEverhourApiKey2();
+          return clearEverhourApiKey();
         },
         { mutates: true }
       )
@@ -184275,7 +184680,7 @@ function createEverhourExtensionRouter(handle4, connections) {
     handle4(
       projectRoute(
         PERMISSIONS.PROJECT_UPDATE,
-        (req) => linkProjectEverhour2(req.params.projectId, req.body?.everhourProjectName ?? null)
+        (req) => linkProjectEverhour(req.params.projectId, req.body?.everhourProjectName ?? null)
       ),
       { mutates: true }
     )
@@ -184283,19 +184688,19 @@ function createEverhourExtensionRouter(handle4, connections) {
   router2.get(
     "/projects/:projectId/link",
     handle4(
-      projectRoute(PERMISSIONS.PROJECT_READ, (req) => getProjectEverhourLink2(req.params.projectId))
+      projectRoute(PERMISSIONS.PROJECT_READ, (req) => getProjectEverhourLink(req.params.projectId))
     )
   );
   router2.get(
     "/projects/:projectId",
     handle4(
-      projectRoute(PERMISSIONS.PROJECT_READ, (req) => getProjectEverhourState2(req.params.projectId))
+      projectRoute(PERMISSIONS.PROJECT_READ, (req) => getProjectEverhourState(req.params.projectId))
     )
   );
   router2.post(
     "/projects/:projectId/timer/start",
     handle4(
-      projectRoute(PERMISSIONS.PROJECT_UPDATE, (req) => startProjectTimer2(req.params.projectId)),
+      projectRoute(PERMISSIONS.PROJECT_UPDATE, (req) => startProjectTimer(req.params.projectId)),
       {
         mutates: true
       }
@@ -184304,7 +184709,7 @@ function createEverhourExtensionRouter(handle4, connections) {
   router2.post(
     "/projects/:projectId/timer/stop",
     handle4(
-      projectRoute(PERMISSIONS.PROJECT_UPDATE, (req) => stopProjectTimer2(req.params.projectId)),
+      projectRoute(PERMISSIONS.PROJECT_UPDATE, (req) => stopProjectTimer(req.params.projectId)),
       {
         mutates: true
       }
@@ -184315,7 +184720,7 @@ function createEverhourExtensionRouter(handle4, connections) {
     handle4(
       projectRoute(
         PERMISSIONS.PROJECT_UPDATE,
-        (req) => addProjectTime2(req.params.projectId, req.body)
+        (req) => addProjectTime(req.params.projectId, req.body)
       ),
       {
         mutates: true
@@ -184327,7 +184732,7 @@ function createEverhourExtensionRouter(handle4, connections) {
     handle4(
       projectRoute(
         PERMISSIONS.PROJECT_UPDATE,
-        (req) => updateProjectTime2(req.params.projectId, req.params.recordId, req.body)
+        (req) => updateProjectTime(req.params.projectId, req.params.recordId, req.body)
       ),
       { mutates: true }
     )
@@ -184337,7 +184742,7 @@ function createEverhourExtensionRouter(handle4, connections) {
     handle4(
       projectRoute(
         PERMISSIONS.PROJECT_UPDATE,
-        (req) => deleteProjectTime2(req.params.projectId, req.params.recordId)
+        (req) => deleteProjectTime(req.params.projectId, req.params.recordId)
       ),
       { mutates: true }
     )
@@ -184345,13 +184750,13 @@ function createEverhourExtensionRouter(handle4, connections) {
   router2.get(
     "/missions/:missionId",
     handle4(
-      missionRoute(PERMISSIONS.MISSION_READ, (req) => getMissionEverhourState2(req.params.missionId))
+      missionRoute(PERMISSIONS.MISSION_READ, (req) => getMissionEverhourState(req.params.missionId))
     )
   );
   router2.post(
     "/missions/:missionId/timer/start",
     handle4(
-      missionRoute(PERMISSIONS.MISSION_UPDATE, (req) => startMissionTimer2(req.params.missionId)),
+      missionRoute(PERMISSIONS.MISSION_UPDATE, (req) => startMissionTimer(req.params.missionId)),
       {
         mutates: true
       }
@@ -184360,7 +184765,7 @@ function createEverhourExtensionRouter(handle4, connections) {
   router2.post(
     "/missions/:missionId/timer/stop",
     handle4(
-      missionRoute(PERMISSIONS.MISSION_UPDATE, (req) => stopMissionTimer2(req.params.missionId)),
+      missionRoute(PERMISSIONS.MISSION_UPDATE, (req) => stopMissionTimer(req.params.missionId)),
       {
         mutates: true
       }
@@ -184371,7 +184776,7 @@ function createEverhourExtensionRouter(handle4, connections) {
     handle4(
       missionRoute(
         PERMISSIONS.MISSION_UPDATE,
-        (req) => addMissionTime2(req.params.missionId, req.body)
+        (req) => addMissionTime(req.params.missionId, req.body)
       ),
       {
         mutates: true
@@ -184383,7 +184788,7 @@ function createEverhourExtensionRouter(handle4, connections) {
     handle4(
       missionRoute(
         PERMISSIONS.MISSION_UPDATE,
-        (req) => updateMissionTime2(req.params.missionId, req.params.recordId, req.body)
+        (req) => updateMissionTime(req.params.missionId, req.params.recordId, req.body)
       ),
       { mutates: true }
     )
@@ -184393,7 +184798,7 @@ function createEverhourExtensionRouter(handle4, connections) {
     handle4(
       missionRoute(
         PERMISSIONS.MISSION_UPDATE,
-        (req) => deleteMissionTime2(req.params.missionId, req.params.recordId)
+        (req) => deleteMissionTime(req.params.missionId, req.params.recordId)
       ),
       { mutates: true }
     )
@@ -184401,8 +184806,503 @@ function createEverhourExtensionRouter(handle4, connections) {
   return router2;
 }
 
+// http/public-backend-url.ts
+var PUBLIC_BACKEND_URL_ENV_KEYS = [
+  "BETTER_AUTH_URL",
+  "BACKEND_URL",
+  "OVERLORD_BACKEND_URL"
+];
+function normalizeOriginUrl(value2) {
+  const trimmed9 = value2.trim().replace(/\/+$/, "");
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed9) ? trimmed9 : `http://${trimmed9}`;
+  return new URL(withScheme).origin;
+}
+function readConfiguredPublicBackendUrls() {
+  const origins = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const key of PUBLIC_BACKEND_URL_ENV_KEYS) {
+    const raw = process.env[key]?.trim();
+    if (!raw) continue;
+    const origin = normalizeOriginUrl(raw);
+    if (seen.has(origin)) continue;
+    seen.add(origin);
+    origins.push(origin);
+  }
+  return origins;
+}
+function resolveLoopbackAuthBaseUrl() {
+  const authBaseHost = process.env.OVERLORD_WEB_HOST && process.env.OVERLORD_WEB_HOST !== "0.0.0.0" ? process.env.OVERLORD_WEB_HOST : "127.0.0.1";
+  const authBasePort = process.env.OVERLORD_WEB_PORT ?? "4310";
+  return `http://${authBaseHost}:${authBasePort}`;
+}
+function resolveAuthBaseUrl() {
+  const configured = readConfiguredPublicBackendUrls();
+  if (configured.length > 0) return configured[0];
+  return resolveLoopbackAuthBaseUrl();
+}
+
+// ext/github/connection-provider.ts
+var GITHUB_SERVER_URL = "https://github.com";
+var GITHUB_REPOSITORY_CALLBACK_PATH = "/api/auth/callback/github/repository";
+var GITHUB_REPOSITORY_SCOPES = ["repo", "read:org"];
+var GITHUB_API2 = "https://api.github.com";
+var GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize";
+var GITHUB_ACCESS_TOKEN_URL = "https://github.com/login/oauth/access_token";
+function redirectUri() {
+  return new URL(GITHUB_REPOSITORY_CALLBACK_PATH, resolveAuthBaseUrl()).toString();
+}
+function requireClient() {
+  const client = githubOAuthConfigFromEnv();
+  if (!client) throw new ProviderOAuthError("unavailable");
+  return client;
+}
+function seconds(value2) {
+  return typeof value2 === "number" && Number.isFinite(value2) && value2 > 0 ? value2 : null;
+}
+function parseGitHubScopes(value2) {
+  let parsed = value2;
+  if (typeof value2 === "string") {
+    try {
+      parsed = JSON.parse(value2);
+    } catch {
+      return [];
+    }
+  }
+  return Array.isArray(parsed) ? parsed.filter((scope2) => typeof scope2 === "string") : [];
+}
+async function tokenRequest(body) {
+  let response;
+  try {
+    response = await fetch(GITHUB_ACCESS_TOKEN_URL, {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+  } catch {
+    throw new ProviderOAuthError("unavailable");
+  }
+  let result2;
+  try {
+    result2 = await response.json();
+  } catch {
+    throw new ProviderOAuthError("unavailable");
+  }
+  if (result2.error === "bad_verification_code" || result2.error === "bad_refresh_token")
+    throw new ProviderOAuthError("invalid_grant");
+  if (!response.ok || typeof result2.access_token !== "string" || !result2.access_token)
+    throw new ProviderOAuthError("unavailable");
+  return {
+    accessToken: result2.access_token,
+    refreshToken: typeof result2.refresh_token === "string" && result2.refresh_token ? result2.refresh_token : null,
+    expiresIn: seconds(result2.expires_in),
+    refreshExpiresIn: seconds(result2.refresh_token_expires_in),
+    scopes: typeof result2.scope === "string" ? result2.scope.split(/[,\s]+/).map((scope2) => scope2.trim()).filter(Boolean) : []
+  };
+}
+async function describeAccount(accessToken) {
+  const response = await fetch(`${GITHUB_API2}/user`, {
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${accessToken}`,
+      "X-GitHub-Api-Version": "2022-11-28"
+    }
+  });
+  if (!response.ok) throw new Error("GitHub account lookup failed");
+  const user = await response.json();
+  const id2 = typeof user.id === "number" || typeof user.id === "string" ? String(user.id) : "";
+  const login = typeof user.login === "string" ? user.login.trim() : "";
+  if (!id2 || !login) throw new Error("GitHub returned incomplete account metadata");
+  return {
+    id: id2,
+    label: login,
+    avatarUrl: typeof user.avatar_url === "string" ? user.avatar_url : null
+  };
+}
+async function revoke(accessToken) {
+  const client = githubOAuthConfigFromEnv();
+  if (!client) return;
+  try {
+    await fetch(`${GITHUB_API2}/applications/${encodeURIComponent(client.clientId)}/token`, {
+      method: "DELETE",
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Basic ${Buffer.from(`${client.clientId}:${client.clientSecret}`).toString("base64")}`,
+        "Content-Type": "application/json",
+        "X-GitHub-Api-Version": "2022-11-28"
+      },
+      body: JSON.stringify({ access_token: accessToken })
+    });
+  } catch {
+  }
+}
+function githubConnectionProvider() {
+  return {
+    provider: "github",
+    label: "GitHub",
+    serverUrl: GITHUB_SERVER_URL,
+    credentialKind: "oauth",
+    uniqueExternalAccount: true,
+    oauth: {
+      callbackPath: GITHUB_REPOSITORY_CALLBACK_PATH,
+      requiredScopes: GITHUB_REPOSITORY_SCOPES,
+      configured: () => githubOAuthConfigFromEnv() !== null,
+      authorizeUrl({ state: state2, codeChallenge }) {
+        const url2 = new URL(GITHUB_AUTHORIZE_URL);
+        url2.searchParams.set("client_id", requireClient().clientId);
+        url2.searchParams.set("redirect_uri", redirectUri());
+        url2.searchParams.set("scope", GITHUB_REPOSITORY_SCOPES.join(" "));
+        url2.searchParams.set("state", state2);
+        url2.searchParams.set("allow_signup", "false");
+        url2.searchParams.set("code_challenge", codeChallenge);
+        url2.searchParams.set("code_challenge_method", "S256");
+        return url2.toString();
+      },
+      exchangeCode({ code, codeVerifier }) {
+        const client = requireClient();
+        return tokenRequest({
+          client_id: client.clientId,
+          client_secret: client.clientSecret,
+          code,
+          redirect_uri: redirectUri(),
+          code_verifier: codeVerifier
+        });
+      },
+      refresh(refreshToken2) {
+        const client = requireClient();
+        return tokenRequest({
+          client_id: client.clientId,
+          client_secret: client.clientSecret,
+          grant_type: "refresh_token",
+          refresh_token: refreshToken2
+        });
+      },
+      revoke,
+      describeAccount
+    },
+    legacy: {
+      async find(db, profileId) {
+        const row = await db.get(
+          `SELECT id, github_user_id, github_login, avatar_url, scopes_json,
+                  access_token_ciphertext, refresh_token_ciphertext,
+                  access_token_expires_at, refresh_token_expires_at,
+                  last_validated_at, created_at, updated_at
+             FROM ext_github_user_connections
+            WHERE profile_id = ? AND deleted_at IS NULL AND access_token_ciphertext <> 'revoked:v1'`,
+          [profileId]
+        );
+        if (!row) return null;
+        return {
+          id: row.id,
+          ciphertext: JSON.stringify({
+            access: row.access_token_ciphertext,
+            refresh: row.refresh_token_ciphertext
+          }),
+          format: "github-user-oauth-v1",
+          keyId: GITHUB_USER_ENV_KEY_ID,
+          account: { id: row.github_user_id, label: row.github_login, avatarUrl: row.avatar_url },
+          scopes: parseGitHubScopes(row.scopes_json),
+          accessExpiresAt: row.access_token_expires_at,
+          refreshExpiresAt: row.refresh_token_expires_at,
+          lastValidatedAt: row.last_validated_at,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at
+        };
+      },
+      async isLive(db, legacyId) {
+        return Boolean(
+          await db.get(
+            "SELECT 1 AS present FROM ext_github_user_connections WHERE id = ? AND deleted_at IS NULL",
+            [legacyId]
+          )
+        );
+      },
+      async tombstone(db, profileId, at) {
+        await db.run(
+          `UPDATE ext_github_user_connections
+              SET deleted_at = ?, updated_at = ?, access_token_ciphertext = 'revoked:v1',
+                  refresh_token_ciphertext = NULL, access_token_expires_at = NULL,
+                  refresh_token_expires_at = NULL, revision = revision + 1
+            WHERE profile_id = ? AND deleted_at IS NULL`,
+          [at, at, profileId]
+        );
+      }
+    }
+  };
+}
+
 // ext/github/routes.ts
 var import_express3 = __toESM(require_express2(), 1);
+
+// ext/github/user-oauth.ts
+init_db();
+var GITHUB_API3 = "https://api.github.com";
+var NOT_CONFIGURED = "GitHub repository authorization is not configured on this Overlord server.";
+var RECONNECT = "Reconnect GitHub to refresh repository access.";
+function createGitHubUserOAuth(connections) {
+  function githubUserOAuthConfigured() {
+    return connections().available("github");
+  }
+  async function activeProfileId(client = requireDatabaseClient()) {
+    const profileId = await resolveActiveProfileId(client);
+    if (!profileId) throw new ApiError(401, "Authentication required.");
+    return profileId;
+  }
+  function connectionDto2(row) {
+    const connected = row?.state === "connected";
+    return {
+      configured: githubUserOAuthConfigured(),
+      connected,
+      account: connected && row.external_account_id && row.external_account_label ? {
+        id: row.external_account_id,
+        login: row.external_account_label,
+        avatarUrl: row.external_account_avatar_url
+      } : null,
+      scopes: connected ? parseGitHubScopes(row.granted_scopes_json) : []
+    };
+  }
+  async function getGitHubUserConnection() {
+    const client = requireDatabaseClient();
+    const profileId = await activeProfileId(client);
+    return connectionDto2(await connections().find(profileId, "github"));
+  }
+  function validatedReturnUrl(value2, allowedBrowserOrigins2) {
+    if (value2 === void 0 || value2 === null || value2 === "") return null;
+    if (typeof value2 !== "string") throw new ApiError(400, "GitHub return URL is invalid.");
+    let url2;
+    try {
+      url2 = new URL(value2);
+    } catch {
+      throw new ApiError(400, "GitHub return URL is invalid.");
+    }
+    if (url2.protocol === "overlord:" && url2.hostname === "github" && url2.pathname === "/callback" && !url2.username && !url2.password) {
+      return url2.toString();
+    }
+    if ((url2.protocol === "https:" || url2.protocol === "http:") && allowedBrowserOrigins2.includes(url2.origin)) {
+      return url2.toString();
+    }
+    throw new ApiError(400, "GitHub return URL is not an allowed Overlord destination.");
+  }
+  async function beginGitHubUserAuthorization(body, allowedBrowserOrigins2) {
+    const client = requireDatabaseClient();
+    const store = connections();
+    if (!store.available("github")) throw new ApiError(503, NOT_CONFIGURED);
+    const profileId = await activeProfileId(client);
+    const returnUrl = validatedReturnUrl(body.returnTo, allowedBrowserOrigins2);
+    try {
+      const started = await store.beginOAuth(profileId, "github", {
+        returnTo: returnUrl?.startsWith("overlord:") ? "mobile" : "web",
+        returnUrl
+      });
+      return { authorizationUrl: started.authorizeUrl };
+    } catch (error64) {
+      if (error64 instanceof ChatError && error64.code === "provider_not_ready")
+        throw new ApiError(503, NOT_CONFIGURED);
+      if (error64 instanceof ChatError && error64.code === "limit_exceeded")
+        throw new ApiError(429, "Too many GitHub sign-ins are open; try again in a few minutes.");
+      throw error64;
+    }
+  }
+  async function completeGitHubUserAuthorization(input2) {
+    const client = requireDatabaseClient();
+    const outcome = await connections().completeOAuth("github", input2);
+    if (outcome.status === "expired")
+      throw new ApiError(400, "GitHub authorization state has expired or was already used.");
+    if (outcome.status !== "connected") {
+      if (outcome.errorCode === "insufficient_scope")
+        throw new ApiError(
+          403,
+          "GitHub authorization did not grant private-repository and organization access."
+        );
+      if (outcome.errorCode === "account_in_use")
+        throw new ApiError(409, "This GitHub account is already connected to another user.");
+      throw new ApiError(502, "GitHub did not complete repository authorization.");
+    }
+    const row = await client.get("SELECT * FROM account_connections WHERE id = ?", [
+      outcome.connectionId
+    ]);
+    return { connection: connectionDto2(row ?? null), returnUrl: outcome.returnUrl };
+  }
+  function accessError(error64, notConnected) {
+    if (!(error64 instanceof ConnectionAccessError)) return error64;
+    if (error64.code === "not_found") return new ApiError(409, notConnected);
+    if (error64.code === "reauthorization_required") return new ApiError(401, RECONNECT);
+    return githubUserOAuthConfigured() ? new ApiError(502, "Could not reach GitHub.") : new ApiError(503, NOT_CONFIGURED);
+  }
+  async function connectedToken(profileId, notConnected, staleRevision) {
+    try {
+      return await connections().oauthAccessToken(profileId, "github", { staleRevision });
+    } catch (error64) {
+      throw accessError(error64, notConnected);
+    }
+  }
+  async function githubUserFetchUrl(url2, token, init2 = {}) {
+    const target = new URL(url2, GITHUB_API3);
+    if (target.origin !== GITHUB_API3)
+      throw new ApiError(502, "GitHub returned an invalid page link.");
+    let response;
+    try {
+      response = await fetch(target, {
+        method: init2.method ?? "GET",
+        headers: {
+          Accept: "application/vnd.github+json",
+          Authorization: `Bearer ${token}`,
+          "X-GitHub-Api-Version": "2022-11-28",
+          ...init2.body === void 0 ? {} : { "Content-Type": "application/json" }
+        },
+        body: init2.body === void 0 ? void 0 : JSON.stringify(init2.body)
+      });
+    } catch {
+      throw new ApiError(502, "Could not reach GitHub.");
+    }
+    if (!response.ok) {
+      const status = response.status === 401 ? 401 : response.status === 403 ? 403 : 502;
+      throw new ApiError(
+        status,
+        `GitHub rejected the connected account request (${response.status}).`
+      );
+    }
+    const nextMatch = response.headers.get("link")?.split(",").map((part) => part.trim()).find((part) => part.endsWith('rel="next"'))?.match(/^<([^>]+)>/);
+    return {
+      data: await response.json(),
+      nextUrl: nextMatch?.[1] ?? null
+    };
+  }
+  async function githubUserFetch(path30, token, init2 = {}) {
+    return (await githubUserFetchUrl(path30, token, init2)).data;
+  }
+  async function githubUserFetchAll(path30, token) {
+    const rows = [];
+    let nextUrl = path30;
+    const visited = /* @__PURE__ */ new Set();
+    while (nextUrl) {
+      const canonical2 = new URL(nextUrl, GITHUB_API3).toString();
+      if (visited.has(canonical2)) throw new ApiError(502, "GitHub returned a repeated page link.");
+      visited.add(canonical2);
+      const page = await githubUserFetchUrl(
+        nextUrl,
+        token
+      );
+      rows.push(...page.data);
+      nextUrl = page.nextUrl;
+    }
+    return rows;
+  }
+  async function listGitHubRepositoryOwners() {
+    const client = requireDatabaseClient();
+    const profileId = await activeProfileId(client);
+    const store = connections();
+    const notConnected = "Connect GitHub before choosing a repository owner.";
+    let access = await connectedToken(profileId, notConnected);
+    let user;
+    try {
+      user = await githubUserFetch("/user", access.accessToken);
+    } catch (error64) {
+      if (!(error64 instanceof ApiError) || error64.status !== 401) throw error64;
+      access = await connectedToken(profileId, notConnected, access.credentialRevision);
+      try {
+        user = await githubUserFetch("/user", access.accessToken);
+      } catch (retryError) {
+        if (retryError instanceof ApiError && retryError.status === 401) {
+          await store.requireReauthorizationFor(profileId, "github", "invalid_grant");
+          throw new ApiError(401, RECONNECT);
+        }
+        throw retryError;
+      }
+    }
+    const token = access.accessToken;
+    if (String(user.id) !== access.row.external_account_id) {
+      await store.requireReauthorizationFor(profileId, "github", "identity_changed");
+      throw new ApiError(401, "The connected GitHub identity changed; reconnect GitHub.");
+    }
+    const memberships = await githubUserFetchAll(
+      "/user/memberships/orgs?state=active&per_page=100",
+      token
+    );
+    const organizations = await Promise.all(
+      memberships.filter((membership) => membership.state === "active" && membership.organization?.login).map(async (membership) => {
+        const login = membership.organization.login.trim();
+        const policy = await githubUserFetch(`/orgs/${encodeURIComponent(login)}`, token);
+        const canCreate = membership.role === "admin" || Boolean(
+          policy.members_can_create_private_repositories ?? policy.members_can_create_repositories
+        );
+        return canCreate ? {
+          login,
+          type: "organization",
+          avatarUrl: membership.organization?.avatar_url ?? null,
+          canCreateRepositories: true
+        } : null;
+      })
+    );
+    await store.recordAccount(profileId, "github", {
+      id: String(user.id),
+      label: user.login,
+      avatarUrl: user.avatar_url ?? null
+    });
+    return [
+      {
+        login: user.login,
+        type: "personal",
+        avatarUrl: user.avatar_url ?? null,
+        canCreateRepositories: true
+      },
+      ...organizations.filter((owner) => owner !== null).sort((left, right) => left.login.localeCompare(right.login))
+    ];
+  }
+  async function createPrivateGitHubRepository2({
+    ownerLogin,
+    name: name2
+  }) {
+    const normalizedOwner = ownerLogin.trim();
+    const normalizedName = name2.trim();
+    if (!/^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,99})$/.test(normalizedName)) {
+      throw new ApiError(400, "GitHub repository name is invalid.");
+    }
+    const owners = await listGitHubRepositoryOwners();
+    const owner = owners.find(
+      (candidate) => candidate.login.toLowerCase() === normalizedOwner.toLowerCase()
+    );
+    if (!owner)
+      throw new ApiError(403, "The selected GitHub owner cannot create private repositories.");
+    const client = requireDatabaseClient();
+    const profileId = await activeProfileId(client);
+    const { accessToken: token } = await connectedToken(
+      profileId,
+      "Connect GitHub before creating a repository."
+    );
+    const endpoint = owner.type === "personal" ? "/user/repos" : `/orgs/${encodeURIComponent(owner.login)}/repos`;
+    const response = await githubUserFetch(endpoint, token, {
+      method: "POST",
+      body: { name: normalizedName, private: true, auto_init: false }
+    });
+    if (!response.id || !response.full_name || !response.clone_url || !response.private || response.owner?.login?.toLowerCase() !== owner.login.toLowerCase()) {
+      throw new ApiError(502, "GitHub returned an invalid private repository response.");
+    }
+    return {
+      id: String(response.id),
+      fullName: response.full_name,
+      defaultBranch: response.default_branch ?? "main",
+      private: true,
+      cloneUrl: response.clone_url
+    };
+  }
+  async function disconnectGitHubUser() {
+    const client = requireDatabaseClient();
+    const profileId = await activeProfileId(client);
+    await connections().disconnectProvider(profileId, "github");
+    return connectionDto2(null);
+  }
+  return {
+    githubUserOAuthConfigured,
+    getGitHubUserConnection,
+    beginGitHubUserAuthorization,
+    completeGitHubUserAuthorization,
+    listGitHubRepositoryOwners,
+    createPrivateGitHubRepository: createPrivateGitHubRepository2,
+    disconnectGitHubUser
+  };
+}
+
+// ext/github/routes.ts
 function workspaceId(req) {
   const value2 = typeof req.query.workspaceId === "string" ? req.query.workspaceId.trim() : "";
   if (!value2) throw new ApiError(400, "workspaceId query parameter is required");
@@ -184410,10 +185310,10 @@ function workspaceId(req) {
 }
 function createGitHubExtensionRouter(handle4, options) {
   const {
-    beginGitHubUserAuthorization: beginGitHubUserAuthorization2,
-    disconnectGitHubUser: disconnectGitHubUser2,
-    getGitHubUserConnection: getGitHubUserConnection2,
-    listGitHubRepositoryOwners: listGitHubRepositoryOwners2
+    beginGitHubUserAuthorization,
+    disconnectGitHubUser,
+    getGitHubUserConnection,
+    listGitHubRepositoryOwners
   } = createGitHubUserOAuth(options.connections);
   const router2 = (0, import_express3.Router)();
   const alias = (path30, req) => recordConnectionAliasHit(`/ext/github${path30}`, req);
@@ -184421,7 +185321,7 @@ function createGitHubExtensionRouter(handle4, options) {
     "/user-connection",
     handle4((req) => {
       alias("/user-connection", req);
-      return getGitHubUserConnection2();
+      return getGitHubUserConnection();
     })
   );
   router2.post(
@@ -184429,7 +185329,7 @@ function createGitHubExtensionRouter(handle4, options) {
     handle4(
       (req) => {
         alias("/user-connection/authorize", req);
-        return beginGitHubUserAuthorization2(
+        return beginGitHubUserAuthorization(
           {
             returnTo: typeof req.body?.returnTo === "string" ? req.body.returnTo : void 0
           },
@@ -184444,14 +185344,14 @@ function createGitHubExtensionRouter(handle4, options) {
     handle4(
       (req) => {
         alias("/user-connection", req);
-        return disconnectGitHubUser2();
+        return disconnectGitHubUser();
       },
       { mutates: true }
     )
   );
   router2.get(
     "/repository-owners",
-    handle4(() => listGitHubRepositoryOwners2())
+    handle4(() => listGitHubRepositoryOwners())
   );
   router2.get(
     "/integration",
@@ -184613,9 +185513,6 @@ function compactHarnessMarkup(value2) {
     }
   );
 }
-function placeholders2(count) {
-  return new Array(count).fill("?").join(", ");
-}
 function resolveAgentIdentifier(...candidates) {
   for (const candidate of candidates) {
     const trimmed9 = candidate?.trim();
@@ -184624,9 +185521,6 @@ function resolveAgentIdentifier(...candidates) {
     return trimmed9;
   }
   return null;
-}
-function toCreatedByKind2(value2) {
-  return value2 === "agent" || value2 === "automation" ? value2 : "human";
 }
 function baseFields(row) {
   return {
@@ -184638,7 +185532,7 @@ function baseFields(row) {
     missionId: row.mission_id,
     missionDisplayId: row.mission_display_id,
     missionTitle: row.mission_title,
-    createdByKind: toCreatedByKind2(row.created_by_kind),
+    createdByKind: toCreatedByKind(row.created_by_kind),
     createdByAgent: row.created_by_agent ?? null
   };
 }
@@ -184693,8 +185587,8 @@ async function loadRuns(workspaceIds) {
               ORDER BY r.created_at DESC, r.id DESC LIMIT 1) AS request_created_at
        FROM objectives o${CONTEXT_JOIN}
       WHERE o.deleted_at IS NULL
-        AND o.state IN (${placeholders2(RUNNING_STATES.length)})
-        AND o.workspace_id IN (${placeholders2(workspaceIds.length)})
+        AND o.state IN (${sqlPlaceholders(RUNNING_STATES.length)})
+        AND o.workspace_id IN (${sqlPlaceholders(workspaceIds.length)})
       ORDER BY o.updated_at DESC, o.id ASC`,
     [...RUNNING_STATES, ...workspaceIds]
   );
@@ -184716,7 +185610,7 @@ async function loadMissionObjectives(missionIds) {
        FROM objectives o
        JOIN missions m ON m.id = o.mission_id AND m.deleted_at IS NULL
       WHERE o.deleted_at IS NULL
-        AND o.mission_id IN (${placeholders2(missionIds.length)})
+        AND o.mission_id IN (${sqlPlaceholders(missionIds.length)})
       ORDER BY o.mission_id ASC, o.position ASC`,
     missionIds
   );
@@ -184733,7 +185627,7 @@ async function loadLatestEvents(objectiveIds) {
   const rows = await requireDatabaseClient().all(
     `SELECT e.objective_id, e.summary, e.created_at
        FROM mission_events e
-      WHERE e.objective_id IN (${placeholders2(objectiveIds.length)})
+      WHERE e.objective_id IN (${sqlPlaceholders(objectiveIds.length)})
         AND e.created_at = (SELECT MAX(x.created_at) FROM mission_events x
                              WHERE x.objective_id = e.objective_id)`,
     objectiveIds
@@ -184771,7 +185665,7 @@ async function loadQuestions(workspaceIds) {
        LEFT JOIN agent_sessions s ON s.id = e.session_id AND s.deleted_at IS NULL
        LEFT JOIN agent_requests ar ON ar.id = ${askRequestId} AND ar.deleted_at IS NULL
       WHERE e.type = 'ask'
-        AND e.workspace_id IN (${placeholders2(workspaceIds.length)})
+        AND e.workspace_id IN (${sqlPlaceholders(workspaceIds.length)})
         AND e.created_at >= ?
         AND (
           NOT EXISTS (SELECT 1 FROM mission_status_seen mss
@@ -184821,7 +185715,7 @@ async function loadDelivered({
        ${CONTEXT_JOIN}
        LEFT JOIN agent_sessions s ON s.id = d.session_id AND s.deleted_at IS NULL
       WHERE d.deleted_at IS NULL
-        AND d.workspace_id IN (${placeholders2(workspaceIds.length)})
+        AND d.workspace_id IN (${sqlPlaceholders(workspaceIds.length)})
         AND d.delivered_at > ?
         AND d.delivered_at <= ?
         AND d.id = (
@@ -184835,7 +185729,7 @@ async function loadDelivered({
           SELECT 1 FROM objectives live
            WHERE live.mission_id = d.mission_id
              AND live.deleted_at IS NULL
-             AND live.state IN (${placeholders2(RUNNING_STATES.length)})
+             AND live.state IN (${sqlPlaceholders(RUNNING_STATES.length)})
         )
       ORDER BY d.delivered_at DESC, d.id DESC`,
     [...workspaceIds, windowStart, windowEnd, ...RUNNING_STATES]
@@ -184849,7 +185743,7 @@ async function latestDeliveredAtOnOrBefore({
     `SELECT MAX(d.delivered_at) AS latest
        FROM deliveries d
       WHERE d.deleted_at IS NULL
-        AND d.workspace_id IN (${placeholders2(workspaceIds.length)})
+        AND d.workspace_id IN (${sqlPlaceholders(workspaceIds.length)})
         AND d.delivered_at <= ?
         AND d.id = (
           SELECT x.id FROM deliveries x
@@ -184862,7 +185756,7 @@ async function latestDeliveredAtOnOrBefore({
           SELECT 1 FROM objectives live
            WHERE live.mission_id = d.mission_id
              AND live.deleted_at IS NULL
-             AND live.state IN (${placeholders2(RUNNING_STATES.length)})
+             AND live.state IN (${sqlPlaceholders(RUNNING_STATES.length)})
         )`,
     [...workspaceIds, onOrBefore, ...RUNNING_STATES]
   );
@@ -185902,11 +186796,11 @@ async function missionScopedRequests(client, missionRef, objectiveRef = null) {
   const memberships = await callerWorkspaceMemberships(client);
   if (memberships.length === 0)
     throw new ServiceError("Mission not found", "mission_not_found", 404);
-  const placeholders4 = memberships.map(() => "?").join(", ");
+  const placeholders = memberships.map(() => "?").join(", ");
   const mission = await client.get(
     `SELECT id, workspace_id FROM missions
        WHERE (id = ? OR display_id = ?) AND deleted_at IS NULL
-         AND workspace_id IN (${placeholders4})`,
+         AND workspace_id IN (${placeholders})`,
     [missionRef, missionRef, ...memberships.map((entry) => entry.workspaceId)]
   );
   if (!mission) throw new ServiceError("Mission not found", "mission_not_found", 404);
@@ -185965,10 +186859,10 @@ function createAgentRequestHumanRouter() {
         }
       }
       if (authorized.length === 0) return { requests: [] };
-      const placeholders4 = authorized.map(() => "?").join(", ");
+      const placeholders = authorized.map(() => "?").join(", ");
       const rows = await client.all(
         `SELECT ${REQUEST_COLUMNS_FOR_ROUTE} FROM agent_requests
-          WHERE workspace_id IN (${placeholders4}) AND deleted_at IS NULL
+          WHERE workspace_id IN (${placeholders}) AND deleted_at IS NULL
           ORDER BY created_at DESC LIMIT 200`,
         authorized.map((entry) => entry.workspaceId)
       );
@@ -186097,11 +186991,11 @@ function createAgentSessionInputHumanRouter() {
       const client = requireDatabaseClient();
       const memberships = await callerWorkspaceMemberships(client);
       if (memberships.length === 0) return { inputs: [] };
-      const placeholders4 = memberships.map(() => "?").join(", ");
+      const placeholders = memberships.map(() => "?").join(", ");
       const mission = await client.get(
         `SELECT id, workspace_id FROM missions
            WHERE (id = ? OR display_id = ?) AND deleted_at IS NULL
-             AND workspace_id IN (${placeholders4})`,
+             AND workspace_id IN (${placeholders})`,
         [missionId, missionId, ...memberships.map((entry) => entry.workspaceId)]
       );
       if (!mission) throw new ServiceError("Mission not found", "mission_not_found", 404);
@@ -186379,10 +187273,10 @@ async function resolveSessionFromBrowserRequest({
 }
 
 // account-deletion.ts
-var import_node_path33 = __toESM(require("node:path"), 1);
-var import_node_url6 = require("node:url");
+var import_node_path34 = __toESM(require("node:path"), 1);
+var import_node_url7 = require("node:url");
 init_db();
-var repoRoot2 = import_node_path33.default.resolve(import_node_path33.default.dirname((0, import_node_url6.fileURLToPath)(__overlord_import_meta_url)), "..");
+var repoRoot3 = import_node_path34.default.resolve(import_node_path34.default.dirname((0, import_node_url7.fileURLToPath)(__overlord_import_meta_url)), "..");
 async function cascadeDeleteAccount(profileId) {
   const cleanupImages = await requireDatabaseClient().transaction(async (tx) => {
     const profile = await tx.get(`SELECT id FROM profiles WHERE id = ?`, [
@@ -186460,6 +187354,7 @@ async function cascadeDeleteAccount(profileId) {
         }
       });
     }
+    cleanup.push(...await tombstoneInboxItemAttachmentsTx(tx, { profileId }));
     for (const membership of memberships) {
       await tx.run(`DELETE FROM workspace_users WHERE id = ?`, [membership.id]);
       await recordChange2(
@@ -186477,7 +187372,7 @@ async function cascadeDeleteAccount(profileId) {
   });
   for (const image of cleanupImages) {
     if (image.bucket.storage_backend === "s3" || image.bucket.storage_backend === "railway_volume") {
-      const backend = createStorageBackend({ bucket: image.bucket, repoRoot: repoRoot2 });
+      const backend = createStorageBackend({ bucket: image.bucket, repoRoot: repoRoot3 });
       await backend.deleteObject?.({ key: image.key });
     }
   }
@@ -186489,18 +187384,13 @@ init_db();
 // email-verification.ts
 var FROM_ADDRESS2 = "Overlord <verify@notifications.cooperativ.io>";
 var SITE_URL2 = process.env.OVERLORD_SITE_URL ?? "https://app.ovld.ai";
-var resendClient2 = null;
-function requireResendClient2() {
-  resendClient2 ??= new Resend(process.env.RESEND_API_KEY);
-  return resendClient2;
-}
 async function sendVerificationEmailViaResend({
   user,
   url: url2,
   token,
   otp
 }) {
-  const { error: error64 } = await requireResendClient2().emails.send({
+  const { error: error64 } = await requireResendClient().emails.send({
     from: FROM_ADDRESS2,
     to: user.email,
     subject: confirmEmailSubject(),
@@ -186519,7 +187409,7 @@ async function sendEmailOTPViaResend({
   type
 }) {
   const { subject, html: html2 } = renderEmailOTP({ email: email3, otp, type });
-  const { error: error64 } = await requireResendClient2().emails.send({
+  const { error: error64 } = await requireResendClient().emails.send({
     from: FROM_ADDRESS2,
     to: email3,
     subject,
@@ -186619,7 +187509,6 @@ var auth = createAuth2({
   sendVerificationEmail: verificationEmailSenderFromEnv(),
   sendEmailOTP: emailOTPSenderFromEnv()
 });
-var authNodeHandler = toNodeHandler2(auth);
 function extractBearerToken(req) {
   const header = req.headers.authorization;
   if (!header?.startsWith("Bearer ")) return null;
@@ -187187,7 +188076,7 @@ function createChatRouter(options) {
 
 // chat-notification-dispatcher.ts
 init_dist();
-var import_node_crypto38 = require("node:crypto");
+var import_node_crypto40 = require("node:crypto");
 
 // ../packages/core/service/notifications/catalog.ts
 init_dist();
@@ -187210,7 +188099,7 @@ function isPushNotificationMode(value2) {
 init_util3();
 
 // apns-client.ts
-var import_node_crypto36 = require("node:crypto");
+var import_node_crypto38 = require("node:crypto");
 var import_node_http2 = __toESM(require("node:http2"), 1);
 var SANDBOX_HOST = "https://api.sandbox.push.apple.com";
 var PRODUCTION_HOST = "https://api.push.apple.com";
@@ -187239,7 +188128,7 @@ function apnsJwt(config4) {
   const signingInput = `${b64url(JSON.stringify({ alg: "ES256", kid: config4.keyId }))}.${b64url(
     JSON.stringify({ iss: config4.teamId, iat: now2 })
   )}`;
-  const signer = (0, import_node_crypto36.createSign)("SHA256");
+  const signer = (0, import_node_crypto38.createSign)("SHA256");
   signer.update(signingInput);
   signer.end();
   const signature = signer.sign({ key: config4.privateKey, dsaEncoding: "ieee-p1363" });
@@ -187303,7 +188192,7 @@ init_db();
 
 // live-activities.ts
 init_dist2();
-var import_node_crypto37 = require("node:crypto");
+var import_node_crypto39 = require("node:crypto");
 init_live_activity_jobs();
 init_util3();
 init_db();
@@ -187395,12 +188284,6 @@ async function toCompletionSnapshot(db, row) {
     objectiveId: objective.id
   };
 }
-function requiredString3(value2, field, max) {
-  const normalized = typeof value2 === "string" ? value2.trim() : "";
-  if (!normalized) throw new ApiError(400, `${field} is required`);
-  if (normalized.length > max) throw new ApiError(400, `${field} is too long`);
-  return normalized;
-}
 async function requireOwnWorkspaceId(db, profileId) {
   const workspace2 = await db.get(
     `SELECT w.id FROM workspace_users wu JOIN workspaces w ON w.id = wu.workspace_id
@@ -187425,7 +188308,7 @@ async function registerLiveActivityPushToken(activityId, body) {
   if (normalizedActivityId.length > 255 || pushToken.length > 4096) {
     throw new ApiError(400, "Live Activity registration is too large");
   }
-  const bundleId = requiredString3(body.bundleId, "bundleId", BUNDLE_ID_MAX_LENGTH);
+  const bundleId = requiredString(body.bundleId, "bundleId", BUNDLE_ID_MAX_LENGTH);
   const environmentRaw = typeof body.environment === "string" ? body.environment.trim() : "";
   if (environmentRaw !== "sandbox" && environmentRaw !== "production") {
     throw new ApiError(400, "environment must be sandbox or production");
@@ -187480,8 +188363,8 @@ async function registerLiveActivityPushToken(activityId, body) {
   });
 }
 async function registerLiveActivityStartToken(body) {
-  const startToken = requiredString3(body.startToken, "startToken", START_TOKEN_MAX_LENGTH);
-  const bundleId = requiredString3(body.bundleId, "bundleId", BUNDLE_ID_MAX_LENGTH);
+  const startToken = requiredString(body.startToken, "startToken", START_TOKEN_MAX_LENGTH);
+  const bundleId = requiredString(body.bundleId, "bundleId", BUNDLE_ID_MAX_LENGTH);
   const environmentRaw = typeof body.environment === "string" ? body.environment.trim() : "";
   if (environmentRaw !== "sandbox" && environmentRaw !== "production") {
     throw new ApiError(400, "environment must be sandbox or production");
@@ -187536,7 +188419,7 @@ async function registerLiveActivityStartToken(body) {
   });
 }
 async function revokeLiveActivityStartToken(body) {
-  const startToken = requiredString3(body.startToken, "startToken", START_TOKEN_MAX_LENGTH);
+  const startToken = requiredString(body.startToken, "startToken", START_TOKEN_MAX_LENGTH);
   const db = requireDatabaseClient();
   const profileId = await requireOwnProfileId(db);
   await db.run(`DELETE FROM live_activity_start_tokens WHERE profile_id = ? AND start_token = ?`, [
@@ -187645,7 +188528,7 @@ async function buildLiveActivityContentState(db, profileId, now2 = /* @__PURE__ 
   };
 }
 function liveActivityContentHash(state2) {
-  return (0, import_node_crypto37.createHash)("sha256").update(
+  return (0, import_node_crypto39.createHash)("sha256").update(
     JSON.stringify(
       state2 && {
         running: state2.running,
@@ -187693,15 +188576,9 @@ var PREFERENCE_CATALOG = { ...NOTIFICATION_CATALOG, ...CHAT_NOTIFICATION_CATALOG
 var CATEGORY_VERBS = Object.fromEntries(
   PUSH_NOTIFICATION_CATEGORIES.map((category) => [category, NOTIFICATION_CATALOG[category].verb])
 );
-function requiredString4(value2, field, max) {
-  const normalized = typeof value2 === "string" ? value2.trim() : "";
-  if (!normalized) throw new ApiError(400, `${field} is required`);
-  if (normalized.length > max) throw new ApiError(400, `${field} is too long`);
-  return normalized;
-}
 async function registerDevicePushToken(body) {
-  const deviceToken = requiredString4(body.deviceToken, "deviceToken", DEVICE_TOKEN_MAX_LENGTH);
-  const bundleId = requiredString4(body.bundleId, "bundleId", BUNDLE_ID_MAX_LENGTH2);
+  const deviceToken = requiredString(body.deviceToken, "deviceToken", DEVICE_TOKEN_MAX_LENGTH);
+  const bundleId = requiredString(body.bundleId, "bundleId", BUNDLE_ID_MAX_LENGTH2);
   const environmentRaw = typeof body.environment === "string" ? body.environment.trim() : "";
   if (environmentRaw !== "sandbox" && environmentRaw !== "production") {
     throw new ApiError(400, "environment must be sandbox or production");
@@ -187741,7 +188618,7 @@ async function registerDevicePushToken(body) {
   });
 }
 async function revokeDevicePushToken(body) {
-  const deviceToken = requiredString4(body.deviceToken, "deviceToken", DEVICE_TOKEN_MAX_LENGTH);
+  const deviceToken = requiredString(body.deviceToken, "deviceToken", DEVICE_TOKEN_MAX_LENGTH);
   const db = requireDatabaseClient();
   const profileId = await resolveActiveProfileId(db);
   if (!profileId) throw new ApiError(401, "Authentication required");
@@ -188184,7 +189061,7 @@ var ChatNotificationDispatcher = class extends PollLoop {
   db;
   options;
   send;
-  workerId = `chat-notifications:${(0, import_node_crypto38.randomUUID)()}`;
+  workerId = `chat-notifications:${(0, import_node_crypto40.randomUUID)()}`;
   /** One claim/deliver pass. Returns how many candidates it processed. */
   async tick() {
     return await this.poll() ?? 0;
@@ -188393,8 +189270,119 @@ async function reopenDeferredWork(deliveryId, actionId) {
   return currentItem(row, entry);
 }
 
-// delivery-compose-worker.ts
+// ../packages/core/service/delivery-presentation.ts
+init_change_feed();
 init_util3();
+init_worker_jobs();
+async function readDeliveryComposeContext(db, deliveryId) {
+  const delivery = await db.get(
+    `SELECT id, workspace_id, project_id, mission_id, objective_id, summary,
+            verification_summary, follow_up_notes, payload_json, revision
+       FROM deliveries
+      WHERE id = ? AND deleted_at IS NULL`,
+    [deliveryId]
+  );
+  if (!delivery) return null;
+  let report = null;
+  try {
+    const payload = JSON.parse(delivery.payload_json);
+    if (payload.deliveryReport?.schemaVersion === 1 && payload.deliveryReport.agentReport) {
+      report = payload.deliveryReport;
+    }
+  } catch {
+    report = null;
+  }
+  if (!report) return null;
+  const filePathRows = await db.all(
+    `SELECT file_path FROM changed_files
+      WHERE objective_id = ? AND deleted_at IS NULL
+      ORDER BY last_observed_at DESC, id DESC
+      LIMIT 40`,
+    [delivery.objective_id]
+  );
+  const objective = await db.get(
+    "SELECT title, instruction_text FROM objectives WHERE id = ?",
+    [delivery.objective_id]
+  );
+  const siblingObjectives = await db.all(
+    `SELECT title, instruction_text, state
+       FROM objectives
+      WHERE mission_id = ? AND id != ? AND deleted_at IS NULL`,
+    [delivery.mission_id, delivery.objective_id]
+  );
+  const recentEvents = await db.all(
+    `SELECT type, summary FROM mission_events
+      WHERE objective_id = ?
+      ORDER BY created_at DESC
+      LIMIT 12`,
+    [delivery.objective_id]
+  );
+  return {
+    delivery,
+    report,
+    filePaths: filePathRows.map((row) => row.file_path),
+    objective: {
+      title: objective?.title ?? null,
+      instruction: objective?.instruction_text ?? null
+    },
+    plannedObjectives: siblingObjectives.filter((row) => row.state !== "complete" && Boolean(row.instruction_text?.trim())).map((row) => ({ title: row.title, instruction: row.instruction_text })),
+    recentEvents: recentEvents.map((event) => ({ type: event.type, summary: event.summary }))
+  };
+}
+async function persistDeliveryPresentation({
+  db,
+  delivery,
+  nextReport,
+  changedFields,
+  resolveChangeAttribution
+}) {
+  const now2 = nowIso();
+  let payload;
+  try {
+    payload = JSON.parse(delivery.payload_json);
+  } catch {
+    payload = {};
+  }
+  payload.deliveryReport = nextReport;
+  await db.transaction(async (tx) => {
+    const updated = await tx.run(
+      `UPDATE deliveries
+           SET payload_json = ?, updated_at = ?, revision = revision + 1
+         WHERE id = ? AND revision = ? AND deleted_at IS NULL`,
+      [JSON.stringify(payload), now2, delivery.id, delivery.revision]
+    );
+    if (updated.changes === 0) return;
+    await insertEntityChange(tx, {
+      entityType: "delivery",
+      entityId: delivery.id,
+      operation: "update",
+      entityRevision: delivery.revision + 1,
+      projectId: delivery.project_id,
+      missionId: delivery.mission_id,
+      objectiveId: delivery.objective_id,
+      changedFields,
+      workspaceId: delivery.workspace_id,
+      ...await resolveChangeAttribution(tx)
+    });
+    const status = nextReport.presentation.status;
+    if (status === "composed" || status === "fallback") {
+      await enqueueMissionSummaryComposeJob({
+        ctx: {
+          db: tx,
+          workspaceId: delivery.workspace_id,
+          actorWorkspaceUserId: null,
+          source: "runner"
+        },
+        missionId: delivery.mission_id,
+        reason: "delivery_presented",
+        sourceDeliveryId: delivery.id,
+        now: now2
+      });
+    }
+  });
+}
+
+// delivery-compose-worker.ts
 init_worker_jobs();
 init_db();
 var CLAIM_BATCH_SIZE = 5;
@@ -188490,7 +189478,7 @@ var DeliveryComposeWorker = class extends WorkerJobPoller {
     }
   }
   async composeAndPersist(client, deliveryId) {
-    const context = await loadComposeContext(client, deliveryId);
+    const context = await readDeliveryComposeContext(client, deliveryId);
     if (!context) return { kind: "missing" };
     const { delivery, report, filePaths, objective, plannedObjectives, recentEvents } = context;
     const candidates = deriveDeterministicActionCandidates({ filePaths });
@@ -188527,11 +189515,12 @@ var DeliveryComposeWorker = class extends WorkerJobPoller {
       presentation.generatedBy = "deterministic";
     }
     const nextReport = applyDeliveryPresentation({ report, presentation });
-    await persistDeliveryReport({
-      client,
+    await persistDeliveryPresentation({
+      db: client,
       delivery,
       nextReport,
-      changedFields: ["payload_json", "presentation"]
+      changedFields: ["payload_json", "presentation"],
+      resolveChangeAttribution: (tx) => deliveryChangeAttribution(tx, delivery.workspace_id)
     });
     return {
       kind: "updated",
@@ -188542,8 +189531,8 @@ var DeliveryComposeWorker = class extends WorkerJobPoller {
     };
   }
 };
-async function persistFallbackPresentation(client, deliveryId, lastError) {
-  const context = await loadComposeContext(client, deliveryId);
+async function persistFallbackPresentation(client, deliveryId, _lastError) {
+  const context = await readDeliveryComposeContext(client, deliveryId);
   if (!context) return;
   const presentation = reconcileDeliveryComposeDraft({
     report: context.report,
@@ -188558,128 +189547,20 @@ async function persistFallbackPresentation(client, deliveryId, lastError) {
     report: context.report,
     presentation
   });
-  await persistDeliveryReport({
-    client,
+  await persistDeliveryPresentation({
+    db: client,
     delivery: context.delivery,
     nextReport,
-    changedFields: ["payload_json", "presentation"]
+    changedFields: ["payload_json", "presentation"],
+    resolveChangeAttribution: (tx) => deliveryChangeAttribution(tx, context.delivery.workspace_id)
   });
 }
-async function persistDeliveryReport({
-  client,
-  delivery,
-  nextReport,
-  changedFields
-}) {
-  const now2 = nowIso();
-  let payload;
-  try {
-    payload = JSON.parse(delivery.payload_json);
-  } catch {
-    payload = {};
-  }
-  payload.deliveryReport = nextReport;
-  await client.transaction(async (tx) => {
-    const updated = await tx.run(
-      `UPDATE deliveries
-           SET payload_json = ?, updated_at = ?, revision = revision + 1
-         WHERE id = ? AND revision = ? AND deleted_at IS NULL`,
-      [JSON.stringify(payload), now2, delivery.id, delivery.revision]
-    );
-    if (updated.changes === 0) {
-      return;
-    }
-    await recordChange2(
-      {
-        entityType: "delivery",
-        entityId: delivery.id,
-        operation: "update",
-        entityRevision: delivery.revision + 1,
-        projectId: delivery.project_id,
-        missionId: delivery.mission_id,
-        objectiveId: delivery.objective_id,
-        changedFields,
-        workspaceId: delivery.workspace_id
-      },
-      tx
-    );
-    const status = nextReport.presentation.status;
-    if (status === "composed" || status === "fallback") {
-      await enqueueMissionSummaryComposeJob({
-        ctx: {
-          db: tx,
-          workspaceId: delivery.workspace_id,
-          actorWorkspaceUserId: null,
-          source: "runner"
-        },
-        missionId: delivery.mission_id,
-        reason: "delivery_presented",
-        sourceDeliveryId: delivery.id,
-        now: now2
-      });
-    }
-  });
-}
-async function loadComposeContext(client, deliveryId) {
-  const delivery = await client.get(
-    `SELECT id, workspace_id, project_id, mission_id, objective_id, summary,
-            verification_summary, follow_up_notes, payload_json, revision
-       FROM deliveries
-      WHERE id = ? AND deleted_at IS NULL`,
-    [deliveryId]
-  );
-  if (!delivery) return null;
-  let report = null;
-  try {
-    const payload = JSON.parse(delivery.payload_json);
-    if (payload.deliveryReport?.schemaVersion === 1 && payload.deliveryReport.agentReport) {
-      report = payload.deliveryReport;
-    }
-  } catch {
-    report = null;
-  }
-  if (!report) return null;
-  const filePathRows = await client.all(
-    `SELECT file_path FROM changed_files
-      WHERE objective_id = ? AND deleted_at IS NULL
-      ORDER BY last_observed_at DESC, id DESC
-      LIMIT 40`,
-    [delivery.objective_id]
-  );
-  const filePaths = filePathRows.map((row) => row.file_path);
-  const objective = await client.get(
-    `SELECT title, instruction_text FROM objectives WHERE id = ?`,
-    [delivery.objective_id]
-  );
-  const siblingObjectives = await client.all(
-    `SELECT title, instruction_text, state
-       FROM objectives
-      WHERE mission_id = ? AND id != ? AND deleted_at IS NULL`,
-    [delivery.mission_id, delivery.objective_id]
-  );
-  const recentEvents = await client.all(
-    `SELECT type, summary FROM mission_events
-      WHERE objective_id = ?
-      ORDER BY created_at DESC
-      LIMIT 12`,
-    [delivery.objective_id]
-  );
+async function deliveryChangeAttribution(db, workspaceId2) {
+  const profileId = await resolveActiveProfileId(db);
   return {
-    delivery,
-    report,
-    filePaths,
-    objective: {
-      title: objective?.title ?? null,
-      instruction: objective?.instruction_text ?? null
-    },
-    plannedObjectives: siblingObjectives.filter((row) => row.state !== "complete" && Boolean(row.instruction_text?.trim())).map((row) => ({
-      title: row.title,
-      instruction: row.instruction_text
-    })),
-    recentEvents: recentEvents.map((event) => ({
-      type: event.type,
-      summary: event.summary
-    }))
+    actorWorkspaceUserId: profileId ? await findActiveMembershipId(workspaceId2, profileId, db) : null,
+    actorTokenId: getActiveTokenId(),
+    source: "webapp"
   };
 }
 function toComposeInput({
@@ -188742,7 +189623,7 @@ function boundComposeText(value2, maxChars) {
 var deliveryComposeWorker = new DeliveryComposeWorker();
 
 // desktop-oauth-handoff.ts
-var import_node_crypto39 = require("node:crypto");
+var import_node_crypto41 = require("node:crypto");
 var HANDOFF_TTL_MS = 6e4;
 var TICKET_PATTERN = /^[A-Za-z0-9_-]{32,128}$/;
 var handoffs = /* @__PURE__ */ new Map();
@@ -188753,7 +189634,7 @@ function discardExpiredHandoffs(now2 = Date.now()) {
 }
 function createOAuthHandoff(sessionToken, audience) {
   discardExpiredHandoffs();
-  const ticket = (0, import_node_crypto39.randomBytes)(32).toString("base64url");
+  const ticket = (0, import_node_crypto41.randomBytes)(32).toString("base64url");
   handoffs.set(ticket, { audience, sessionToken, expiresAt: Date.now() + HANDOFF_TTL_MS });
   return ticket;
 }
@@ -188791,7 +189672,8 @@ function beginDesktopGitHubOAuth(auth2, authBaseUrl2) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         provider: "github",
-        callbackURL: new URL("/api/auth/desktop/callback", authBaseUrl2).toString()
+        callbackURL: new URL("/api/auth/desktop/callback", authBaseUrl2).toString(),
+        errorCallbackURL: new URL("/api/auth/desktop/callback", authBaseUrl2).toString()
       })
     })
   );
@@ -189017,295 +189899,9 @@ var LiveActivityDispatcher = class extends WorkerJobPoller {
 var liveActivityDispatcher = new LiveActivityDispatcher();
 
 // mission-summary.ts
-init_db();
-var CURRENT_RUN_PREDICATE = `d.mission_id = ? AND d.workspace_id = ? AND d.deleted_at IS NULL
-      AND (o.reopened_at IS NULL OR d.delivered_at >= o.reopened_at)`;
-function placeholders3(count) {
-  return new Array(count).fill("?").join(", ");
-}
-async function resolveMissionScope(missionRef) {
-  const scope2 = await requireMissionPermission({
-    missionRef,
-    permission: PERMISSIONS.MISSION_READ
-  });
-  const row = await requireDatabaseClient().get(
-    `SELECT summary_enabled FROM missions WHERE id = ? AND workspace_id = ?`,
-    [scope2.missionId, scope2.workspaceId]
-  );
-  if (!row) throw new ApiError(404, "Mission not found");
-  return {
-    missionId: scope2.missionId,
-    workspaceId: scope2.workspaceId,
-    workspaceUserId: scope2.workspaceUserId,
-    // SQLite stores 0/1; PostgreSQL returns a boolean.
-    eligible: row.summary_enabled === true || Number(row.summary_enabled) === 1
-  };
-}
-async function loadSourceDeliveries(scope2) {
-  return await requireDatabaseClient().all(
-    `SELECT ranked.id, ranked.objective_id, ranked.delivered_at, ranked.summary, ranked.payload_json
-       FROM (
-         SELECT d.id, d.objective_id, d.delivered_at, d.summary, d.payload_json,
-                ROW_NUMBER() OVER (
-                  PARTITION BY d.objective_id ORDER BY d.delivered_at DESC, d.id DESC
-                ) AS run_rank
-           FROM deliveries d
-           LEFT JOIN objectives o ON o.id = d.objective_id
-          WHERE ${CURRENT_RUN_PREDICATE}
-       ) ranked
-      WHERE ranked.run_rank = 1
-      ORDER BY ranked.delivered_at DESC, ranked.id DESC`,
-    [scope2.missionId, scope2.workspaceId]
-  );
-}
-async function countCurrentRunDeliveries(scope2) {
-  const row = await requireDatabaseClient().get(
-    `SELECT COUNT(*) AS total
-       FROM deliveries d
-       LEFT JOIN objectives o ON o.id = d.objective_id
-      WHERE ${CURRENT_RUN_PREDICATE}`,
-    [scope2.missionId, scope2.workspaceId]
-  );
-  return Number(row?.total ?? 0);
-}
-async function loadCurrentRunDeliveries(scope2, deliveryIds) {
-  if (deliveryIds.length === 0) return /* @__PURE__ */ new Map();
-  const rows = await requireDatabaseClient().all(
-    `SELECT d.id, d.objective_id, d.delivered_at, d.summary, d.payload_json
-       FROM deliveries d
-       LEFT JOIN objectives o ON o.id = d.objective_id
-      WHERE ${CURRENT_RUN_PREDICATE}
-        AND d.id IN (${placeholders3(deliveryIds.length)})`,
-    [scope2.missionId, scope2.workspaceId, ...deliveryIds]
-  );
-  return new Map(rows.map((row) => [row.id, row]));
-}
-async function latestOpenQuestionAt(scope2) {
-  const row = await requireDatabaseClient().get(
-    `SELECT created_at FROM agent_requests
-      WHERE mission_id = ? AND deleted_at IS NULL AND status = 'open'
-        AND kind IN ('question', 'choice')
-      ORDER BY created_at DESC
-      LIMIT 1`,
-    [scope2.missionId]
-  );
-  return row?.created_at ?? null;
-}
-function latestTimestamp(...values) {
-  let latest = null;
-  for (const value2 of values) {
-    if (!value2) continue;
-    if (latest === null || Date.parse(value2) > Date.parse(latest)) latest = value2;
-  }
-  return latest === null ? null : new Date(latest).toISOString();
-}
-function buildEvidence(sources, currentRunDeliveries) {
-  const actions = [];
-  for (const source of sources) {
-    const report = deliveryReportFromPayload(source.payload_json, source.summary);
-    report.presentation.humanActions.forEach((action) => {
-      const { id: id2, ...fields } = action;
-      actions.push({
-        ...fields,
-        deliveryId: source.id,
-        objectiveId: source.objective_id,
-        actionId: id2,
-        deliveredAt: source.delivered_at,
-        order: actions.length
-      });
-    });
-  }
-  actions.sort(
-    (left, right) => Number(right.blocking === true) - Number(left.blocking === true) || left.order - right.order
-  );
-  const sourceDtos = sources.map((source) => ({
-    objectiveId: source.objective_id,
-    deliveryId: source.id,
-    deliveredAt: source.delivered_at
-  }));
-  const evidence = {
-    actions: actions.slice(0, MISSION_SUMMARY_EVIDENCE_LIMIT).map(({ order: _order, ...action }) => action),
-    sources: sourceDtos.slice(0, MISSION_SUMMARY_EVIDENCE_LIMIT),
-    totals: {
-      actions: actions.length,
-      sources: sourceDtos.length,
-      currentRunDeliveries
-    },
-    truncated: {
-      actions: actions.length > MISSION_SUMMARY_EVIDENCE_LIMIT,
-      sources: sourceDtos.length > MISSION_SUMMARY_EVIDENCE_LIMIT
-    }
-  };
-  return evidence;
-}
-function parseJsonArray2(value2) {
-  if (Array.isArray(value2)) return value2;
-  if (typeof value2 !== "string") return [];
-  try {
-    const parsed = JSON.parse(value2);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-function isNonEmptyString2(value2) {
-  return typeof value2 === "string" && value2.length > 0;
-}
-function parseRiskRefs(value2) {
-  return parseJsonArray2(value2).flatMap((item) => {
-    if (typeof item !== "object" || item === null) return [];
-    const { deliveryId, objectiveId, text } = item;
-    return isNonEmptyString2(deliveryId) && isNonEmptyString2(objectiveId) && isNonEmptyString2(text) ? [{ deliveryId, objectiveId, text }] : [];
-  });
-}
-function parseSuggestionRefs(value2) {
-  return parseJsonArray2(value2).flatMap((item) => {
-    if (typeof item !== "object" || item === null) return [];
-    const { deliveryId, objectiveId, actionId } = item;
-    return isNonEmptyString2(deliveryId) && isNonEmptyString2(objectiveId) && isNonEmptyString2(actionId) ? [{ deliveryId, objectiveId, actionId }] : [];
-  });
-}
-async function projectSummary(scope2, row) {
-  const riskRefs = parseRiskRefs(row.risks_json);
-  const suggestionRefs = parseSuggestionRefs(row.suggestions_json);
-  const deliveries = await loadCurrentRunDeliveries(scope2, [
-    ...new Set([...riskRefs, ...suggestionRefs].map((ref) => ref.deliveryId))
-  ]);
-  const resolutions = await loadResolutions([
-    ...new Set(suggestionRefs.map((ref) => ref.deliveryId).filter((id2) => deliveries.has(id2)))
-  ]);
-  const risks = riskRefs.filter((ref) => deliveries.get(ref.deliveryId)?.objective_id === ref.objectiveId).map(({ deliveryId, objectiveId, text }) => ({
-    deliveryId,
-    objectiveId,
-    deliveredAt: deliveries.get(deliveryId).delivered_at,
-    text
-  }));
-  const suggestions = [];
-  for (const ref of suggestionRefs) {
-    const delivery = deliveries.get(ref.deliveryId);
-    if (!delivery || delivery.objective_id !== ref.objectiveId) continue;
-    const report = deliveryReportFromPayload(delivery.payload_json, delivery.summary);
-    const entry = deferredWorkEntries(report).find((candidate) => candidate.id === ref.actionId);
-    if (!entry) continue;
-    const resolution = toResolution(findResolution(resolutions, delivery.id, entry));
-    if (resolution?.status === "dismissed") continue;
-    const identity = {
-      deliveryId: delivery.id,
-      objectiveId: delivery.objective_id,
-      deliveredAt: delivery.delivered_at,
-      actionId: entry.id,
-      title: entry.title
-    };
-    suggestions.push(
-      resolution ? { ...identity, state: "resolved", resolution } : {
-        ...identity,
-        state: "open",
-        change: entry.change,
-        location: entry.location,
-        doneWhen: entry.doneWhen,
-        resolution: null
-      }
-    );
-  }
-  return {
-    missionId: row.mission_id,
-    revision: Number(row.revision),
-    status: row.status,
-    headline: row.headline,
-    summary: row.summary_markdown,
-    risks,
-    suggestions,
-    sourceDeliveryId: row.source_delivery_id,
-    generatedBy: row.generated_by === "gemini" ? "gemini" : "deterministic",
-    generatedAt: row.generated_at,
-    model: row.model
-  };
-}
-async function loadSeenAt(scope2) {
-  const row = await requireDatabaseClient().get(
-    `SELECT seen_at FROM mission_summary_seen WHERE mission_id = ? AND workspace_user_id = ?`,
-    [scope2.missionId, scope2.workspaceUserId]
-  );
-  return row?.seen_at ?? null;
-}
-async function getMissionSummary2(missionRef) {
-  const scope2 = await resolveMissionScope(missionRef);
-  if (!scope2.eligible) {
-    return { eligible: false, summary: null, evidence: null, watermark: null, seenAt: null };
-  }
-  const db = requireDatabaseClient();
-  const [sources, currentRunDeliveries, openQuestionAt, summaryRow, seenAt] = await Promise.all([
-    loadSourceDeliveries(scope2),
-    countCurrentRunDeliveries(scope2),
-    latestOpenQuestionAt(scope2),
-    db.get(
-      `SELECT mission_id, revision, status, headline, summary_markdown, risks_json,
-              suggestions_json, source_delivery_id, generated_by, generated_at, model
-         FROM mission_summaries
-        WHERE mission_id = ? AND workspace_id = ?`,
-      [scope2.missionId, scope2.workspaceId]
-    ),
-    loadSeenAt(scope2)
-  ]);
-  return {
-    eligible: true,
-    summary: summaryRow ? await projectSummary(scope2, summaryRow) : null,
-    evidence: buildEvidence(sources, currentRunDeliveries),
-    // Every current-run delivery the response draws on is no newer than the
-    // newest source, which is always the first (uncapped) source row.
-    watermark: latestTimestamp(sources[0]?.delivered_at, openQuestionAt),
-    seenAt
-  };
-}
-async function evidenceUpperBound(scope2) {
-  const db = requireDatabaseClient();
-  const delivery = await db.get(
-    `SELECT delivered_at FROM deliveries
-      WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
-      ORDER BY delivered_at DESC
-      LIMIT 1`,
-    [scope2.missionId, scope2.workspaceId]
-  );
-  const request = await db.get(
-    `SELECT created_at FROM agent_requests
-      WHERE mission_id = ? AND deleted_at IS NULL AND kind IN ('question', 'choice')
-      ORDER BY created_at DESC
-      LIMIT 1`,
-    [scope2.missionId]
-  );
-  return latestTimestamp(delivery?.delivered_at, request?.created_at);
-}
-function invalidInput(message2) {
-  return new ApiError(400, message2, void 0, "invalid_input");
-}
-async function markMissionSummarySeen(missionRef, body) {
-  const scope2 = await resolveMissionScope(missionRef);
-  const watermark = body && typeof body === "object" ? body.watermark : void 0;
-  if (typeof watermark !== "string" || !Number.isFinite(Date.parse(watermark))) {
-    throw invalidInput("watermark must be an ISO-8601 timestamp");
-  }
-  if (!scope2.eligible) throw invalidInput("This mission has no summary");
-  const seenAt = new Date(watermark).toISOString();
-  const upperBound = await evidenceUpperBound(scope2);
-  if (upperBound === null || Date.parse(seenAt) > Date.parse(upperBound)) {
-    throw invalidInput("watermark is later than the newest mission evidence");
-  }
-  const db = requireDatabaseClient();
-  await db.run(
-    `INSERT INTO mission_summary_seen (mission_id, workspace_user_id, seen_at)
-     VALUES (?, ?, ?)
-     ON CONFLICT (mission_id, workspace_user_id) DO UPDATE SET
-       seen_at = CASE
-         WHEN excluded.seen_at > mission_summary_seen.seen_at THEN excluded.seen_at
-         ELSE mission_summary_seen.seen_at
-       END`,
-    [scope2.missionId, scope2.workspaceUserId, seenAt]
-  );
-  const stored = await loadSeenAt(scope2);
-  return { seenAt: stored ?? seenAt };
-}
+init_dist();
 
-// mission-summary-compose-worker.ts
+// ../packages/core/service/mission-summary-evidence.ts
 init_dist();
 init_delivery_report();
 
@@ -189329,6 +189925,9 @@ function newestFirst2(left, right) {
   const byTime = Date.parse(right.deliveredAt) - Date.parse(left.deliveredAt);
   if (byTime !== 0) return byTime;
   return left.id < right.id ? 1 : left.id > right.id ? -1 : 0;
+}
+function currentRunDeliveryPredicateSql(delivery = "d", objective = "o") {
+  return `(${objective}.reopened_at IS NULL OR ${delivery}.delivered_at >= ${objective}.reopened_at)`;
 }
 function splitMissionSummaryRuns({
   objectives,
@@ -189537,16 +190136,53 @@ function buildDeterministicMissionSummary({
   };
 }
 
-// mission-summary-compose-worker.ts
+// ../packages/core/service/mission-summary-evidence.ts
 init_worker_jobs();
-init_db();
-var CLAIM_BATCH_SIZE2 = 5;
-var MAX_PASSES_PER_JOB = 3;
-function logSummaryMetric(event, fields) {
-  console.info("[mission-summary-compose-worker]", JSON.stringify({ event, ...fields }));
+function readObjectiveRows(db, missionId) {
+  return db.all(
+    `SELECT id, display_key, title, state, reopened_at, deleted_at
+       FROM objectives WHERE mission_id = ?`,
+    [missionId]
+  );
 }
-async function loadMissionSummaryEvidence(client, missionId) {
-  return client.transaction(async (tx) => {
+function reportFromPayload(payloadJson, summary) {
+  let deliveryReport;
+  try {
+    deliveryReport = payloadJson ? JSON.parse(payloadJson).deliveryReport : void 0;
+  } catch {
+    deliveryReport = void 0;
+  }
+  return readDeliveryReport({ summary, deliveryReport });
+}
+async function readRuns(db, missionId, objectives, workspaceId2) {
+  const workspaceGuard = workspaceId2 === void 0 ? "" : " AND d.workspace_id = ?";
+  const deliveryRows = await db.all(
+    `SELECT d.id, d.objective_id, d.delivered_at, d.summary, d.payload_json
+       FROM deliveries d
+       LEFT JOIN objectives o ON o.id = d.objective_id
+      WHERE d.mission_id = ?${workspaceGuard} AND d.deleted_at IS NULL
+        AND ${currentRunDeliveryPredicateSql()}
+      ORDER BY d.delivered_at DESC, d.id DESC`,
+    workspaceId2 === void 0 ? [missionId] : [missionId, workspaceId2]
+  );
+  const deliveries = deliveryRows.map((row) => ({
+    id: row.id,
+    objectiveId: row.objective_id,
+    deliveredAt: row.delivered_at,
+    summary: row.summary,
+    report: reportFromPayload(row.payload_json, row.summary)
+  }));
+  return splitMissionSummaryRuns({ objectives, deliveries });
+}
+async function readMissionSummaryRuns(db, missionId, { workspaceId: workspaceId2 } = {}) {
+  const objectives = (await readObjectiveRows(db, missionId)).map((row) => ({
+    id: row.id,
+    reopenedAt: row.reopened_at
+  }));
+  return readRuns(db, missionId, objectives, workspaceId2);
+}
+async function readMissionSummaryEvidence(db, missionId, { workspaceId: workspaceId2 } = {}) {
+  return db.transaction(async (tx) => {
     const generation = await readMissionSummaryGeneration(tx, missionId);
     if (!generation) return null;
     const mission = await tx.get(
@@ -189555,12 +190191,7 @@ async function loadMissionSummaryEvidence(client, missionId) {
       [missionId]
     );
     if (!mission) return null;
-    const objectiveRows = await tx.all(
-      `SELECT id, display_key, title, state, reopened_at, deleted_at
-         FROM objectives WHERE mission_id = ?`,
-      [missionId]
-    );
-    const objectives = objectiveRows.map((row) => ({
+    const objectives = (await readObjectiveRows(tx, missionId)).map((row) => ({
       id: row.id,
       key: formatObjectiveDisplayId({
         missionDisplayId: mission.display_id,
@@ -189571,23 +190202,7 @@ async function loadMissionSummaryEvidence(client, missionId) {
       reopenedAt: row.reopened_at,
       deleted: row.deleted_at !== null
     }));
-    const deliveryRows = await tx.all(
-      `SELECT d.id, d.objective_id, d.delivered_at, d.summary, d.payload_json
-         FROM deliveries d
-         LEFT JOIN objectives o ON o.id = d.objective_id
-        WHERE d.mission_id = ? AND d.deleted_at IS NULL
-          AND (o.reopened_at IS NULL OR d.delivered_at >= o.reopened_at)
-        ORDER BY d.delivered_at DESC, d.id DESC`,
-      [missionId]
-    );
-    const deliveries = deliveryRows.map((row) => ({
-      id: row.id,
-      objectiveId: row.objective_id,
-      deliveredAt: row.delivered_at,
-      summary: row.summary,
-      report: reportFromPayload(row.payload_json, row.summary)
-    }));
-    const runs = splitMissionSummaryRuns({ objectives, deliveries });
+    const runs = await readRuns(tx, missionId, objectives, workspaceId2);
     const resolutionRows = runs.currentRun.length === 0 ? [] : await tx.all(
       `SELECT delivery_id, action_id, status FROM human_action_resolutions
               WHERE mission_id = ?`,
@@ -189634,14 +190249,259 @@ async function loadMissionSummaryEvidence(client, missionId) {
     };
   });
 }
-function reportFromPayload(payloadJson, summary) {
-  let deliveryReport;
-  try {
-    deliveryReport = payloadJson ? JSON.parse(payloadJson).deliveryReport : void 0;
-  } catch {
-    deliveryReport = void 0;
+
+// mission-summary.ts
+init_db();
+async function resolveMissionScope(missionRef) {
+  const scope2 = await requireMissionPermission({
+    missionRef,
+    permission: PERMISSIONS.MISSION_READ
+  });
+  const row = await requireDatabaseClient().get(
+    `SELECT summary_enabled FROM missions WHERE id = ? AND workspace_id = ?`,
+    [scope2.missionId, scope2.workspaceId]
+  );
+  if (!row) throw new ApiError(404, "Mission not found");
+  return {
+    missionId: scope2.missionId,
+    workspaceId: scope2.workspaceId,
+    workspaceUserId: scope2.workspaceUserId,
+    // SQLite stores 0/1; PostgreSQL returns a boolean.
+    eligible: row.summary_enabled === true || Number(row.summary_enabled) === 1
+  };
+}
+async function latestOpenQuestionAt(scope2) {
+  const row = await requireDatabaseClient().get(
+    `SELECT created_at FROM agent_requests
+      WHERE mission_id = ? AND deleted_at IS NULL AND status = 'open'
+        AND kind IN ('question', 'choice')
+      ORDER BY created_at DESC
+      LIMIT 1`,
+    [scope2.missionId]
+  );
+  return row?.created_at ?? null;
+}
+function latestTimestamp(...values) {
+  let latest = null;
+  for (const value2 of values) {
+    if (!value2) continue;
+    if (latest === null || Date.parse(value2) > Date.parse(latest)) latest = value2;
   }
-  return readDeliveryReport({ summary, deliveryReport });
+  return latest === null ? null : new Date(latest).toISOString();
+}
+function buildEvidence(runs) {
+  const sources = runs.latestByObjective;
+  const actions = [];
+  for (const source of sources) {
+    source.report.presentation.humanActions.forEach((action) => {
+      const { id: id2, ...fields } = action;
+      actions.push({
+        ...fields,
+        deliveryId: source.id,
+        objectiveId: source.objectiveId,
+        actionId: id2,
+        deliveredAt: source.deliveredAt,
+        order: actions.length
+      });
+    });
+  }
+  actions.sort(
+    (left, right) => Number(right.blocking === true) - Number(left.blocking === true) || left.order - right.order
+  );
+  const sourceDtos = sources.map((source) => ({
+    objectiveId: source.objectiveId,
+    deliveryId: source.id,
+    deliveredAt: source.deliveredAt
+  }));
+  const evidence = {
+    actions: actions.slice(0, MISSION_SUMMARY_EVIDENCE_LIMIT).map(({ order: _order, ...action }) => action),
+    sources: sourceDtos.slice(0, MISSION_SUMMARY_EVIDENCE_LIMIT),
+    totals: {
+      actions: actions.length,
+      sources: sourceDtos.length,
+      currentRunDeliveries: runs.currentRun.length
+    },
+    truncated: {
+      actions: actions.length > MISSION_SUMMARY_EVIDENCE_LIMIT,
+      sources: sourceDtos.length > MISSION_SUMMARY_EVIDENCE_LIMIT
+    }
+  };
+  return evidence;
+}
+function parseJsonArray2(value2) {
+  if (Array.isArray(value2)) return value2;
+  if (typeof value2 !== "string") return [];
+  try {
+    const parsed = JSON.parse(value2);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+function isNonEmptyString2(value2) {
+  return typeof value2 === "string" && value2.length > 0;
+}
+function parseRiskRefs(value2) {
+  return parseJsonArray2(value2).flatMap((item) => {
+    if (typeof item !== "object" || item === null) return [];
+    const { deliveryId, objectiveId, text } = item;
+    return isNonEmptyString2(deliveryId) && isNonEmptyString2(objectiveId) && isNonEmptyString2(text) ? [{ deliveryId, objectiveId, text }] : [];
+  });
+}
+function parseSuggestionRefs(value2) {
+  return parseJsonArray2(value2).flatMap((item) => {
+    if (typeof item !== "object" || item === null) return [];
+    const { deliveryId, objectiveId, actionId } = item;
+    return isNonEmptyString2(deliveryId) && isNonEmptyString2(objectiveId) && isNonEmptyString2(actionId) ? [{ deliveryId, objectiveId, actionId }] : [];
+  });
+}
+async function projectSummary(row, runs) {
+  const riskRefs = parseRiskRefs(row.risks_json);
+  const suggestionRefs = parseSuggestionRefs(row.suggestions_json);
+  const deliveries = new Map(
+    runs.currentRun.map((delivery) => [delivery.id, delivery])
+  );
+  const resolutions = await loadResolutions([
+    ...new Set(suggestionRefs.map((ref) => ref.deliveryId).filter((id2) => deliveries.has(id2)))
+  ]);
+  const risks = riskRefs.filter((ref) => deliveries.get(ref.deliveryId)?.objectiveId === ref.objectiveId).map(({ deliveryId, objectiveId, text }) => ({
+    deliveryId,
+    objectiveId,
+    deliveredAt: deliveries.get(deliveryId).deliveredAt,
+    text
+  }));
+  const suggestions = [];
+  for (const ref of suggestionRefs) {
+    const delivery = deliveries.get(ref.deliveryId);
+    if (!delivery || delivery.objectiveId !== ref.objectiveId) continue;
+    const entry = deferredWorkEntries(delivery.report).find(
+      (candidate) => candidate.id === ref.actionId
+    );
+    if (!entry) continue;
+    const resolution = toResolution(findResolution(resolutions, delivery.id, entry));
+    if (resolution?.status === "dismissed") continue;
+    const identity = {
+      deliveryId: delivery.id,
+      objectiveId: delivery.objectiveId,
+      deliveredAt: delivery.deliveredAt,
+      actionId: entry.id,
+      title: entry.title
+    };
+    suggestions.push(
+      resolution ? { ...identity, state: "resolved", resolution } : {
+        ...identity,
+        state: "open",
+        change: entry.change,
+        location: entry.location,
+        doneWhen: entry.doneWhen,
+        resolution: null
+      }
+    );
+  }
+  return {
+    missionId: row.mission_id,
+    revision: Number(row.revision),
+    status: row.status,
+    headline: row.headline,
+    summary: row.summary_markdown,
+    risks,
+    suggestions,
+    sourceDeliveryId: row.source_delivery_id,
+    generatedBy: row.generated_by === "gemini" ? "gemini" : "deterministic",
+    generatedAt: row.generated_at,
+    model: row.model
+  };
+}
+async function loadSeenAt(scope2) {
+  const row = await requireDatabaseClient().get(
+    `SELECT seen_at FROM mission_summary_seen WHERE mission_id = ? AND workspace_user_id = ?`,
+    [scope2.missionId, scope2.workspaceUserId]
+  );
+  return row?.seen_at ?? null;
+}
+async function getMissionSummary2(missionRef) {
+  const scope2 = await resolveMissionScope(missionRef);
+  if (!scope2.eligible) {
+    return { eligible: false, summary: null, evidence: null, watermark: null, seenAt: null };
+  }
+  const db = requireDatabaseClient();
+  const [runs, openQuestionAt, summaryRow, seenAt] = await Promise.all([
+    readMissionSummaryRuns(db, scope2.missionId, { workspaceId: scope2.workspaceId }),
+    latestOpenQuestionAt(scope2),
+    db.get(
+      `SELECT mission_id, revision, status, headline, summary_markdown, risks_json,
+              suggestions_json, source_delivery_id, generated_by, generated_at, model
+         FROM mission_summaries
+        WHERE mission_id = ? AND workspace_id = ?`,
+      [scope2.missionId, scope2.workspaceId]
+    ),
+    loadSeenAt(scope2)
+  ]);
+  return {
+    eligible: true,
+    summary: summaryRow ? await projectSummary(summaryRow, runs) : null,
+    evidence: buildEvidence(runs),
+    // Every current-run delivery the response draws on is no newer than the
+    // newest source, which is always the first (uncapped) source row.
+    watermark: latestTimestamp(runs.latestByObjective[0]?.deliveredAt, openQuestionAt),
+    seenAt
+  };
+}
+async function evidenceUpperBound(scope2) {
+  const db = requireDatabaseClient();
+  const delivery = await db.get(
+    `SELECT delivered_at FROM deliveries
+      WHERE mission_id = ? AND workspace_id = ? AND deleted_at IS NULL
+      ORDER BY delivered_at DESC
+      LIMIT 1`,
+    [scope2.missionId, scope2.workspaceId]
+  );
+  const request = await db.get(
+    `SELECT created_at FROM agent_requests
+      WHERE mission_id = ? AND deleted_at IS NULL AND kind IN ('question', 'choice')
+      ORDER BY created_at DESC
+      LIMIT 1`,
+    [scope2.missionId]
+  );
+  return latestTimestamp(delivery?.delivered_at, request?.created_at);
+}
+function invalidInput(message2) {
+  return new ApiError(400, message2, void 0, "invalid_input");
+}
+async function markMissionSummarySeen(missionRef, body) {
+  const scope2 = await resolveMissionScope(missionRef);
+  const watermark = body && typeof body === "object" ? body.watermark : void 0;
+  if (typeof watermark !== "string" || !Number.isFinite(Date.parse(watermark))) {
+    throw invalidInput("watermark must be an ISO-8601 timestamp");
+  }
+  if (!scope2.eligible) throw invalidInput("This mission has no summary");
+  const seenAt = new Date(watermark).toISOString();
+  const upperBound = await evidenceUpperBound(scope2);
+  if (upperBound === null || Date.parse(seenAt) > Date.parse(upperBound)) {
+    throw invalidInput("watermark is later than the newest mission evidence");
+  }
+  const db = requireDatabaseClient();
+  await db.run(
+    `INSERT INTO mission_summary_seen (mission_id, workspace_user_id, seen_at)
+     VALUES (?, ?, ?)
+     ON CONFLICT (mission_id, workspace_user_id) DO UPDATE SET
+       seen_at = CASE
+         WHEN excluded.seen_at > mission_summary_seen.seen_at THEN excluded.seen_at
+         ELSE mission_summary_seen.seen_at
+       END`,
+    [scope2.missionId, scope2.workspaceUserId, seenAt]
+  );
+  const stored = await loadSeenAt(scope2);
+  return { seenAt: stored ?? seenAt };
+}
+
+// mission-summary-compose-worker.ts
+init_worker_jobs();
+init_db();
+var CLAIM_BATCH_SIZE2 = 5;
+var MAX_PASSES_PER_JOB = 3;
+function logSummaryMetric(event, fields) {
+  console.info("[mission-summary-compose-worker]", JSON.stringify({ event, ...fields }));
 }
 function bound2(value2, maxChars) {
   return value2.length <= maxChars ? value2 : value2.slice(0, maxChars);
@@ -189820,7 +190680,7 @@ var MissionSummaryComposeWorker = class extends WorkerJobPoller {
     }
   }
   async composePass(client, missionId, forceFallback) {
-    const evidence = await loadMissionSummaryEvidence(client, missionId);
+    const evidence = await readMissionSummaryEvidence(client, missionId);
     if (!evidence) return { kind: "missing" };
     const suggestions = selectMissionSummarySuggestions({
       currentRun: evidence.runs.currentRun,
@@ -189875,95 +190735,166 @@ var MissionSummaryComposeWorker = class extends WorkerJobPoller {
 };
 var missionSummaryComposeWorker = new MissionSummaryComposeWorker();
 
+// native-github-oauth.ts
+var import_node_crypto42 = require("node:crypto");
+var FLOW_TTL_MS = 10 * 6e4;
+var RECOVERY_TTL_MS = 6e4;
+var MAX_FLOWS = 256;
+var digest4 = (value2) => (0, import_node_crypto42.createHash)("sha256").update(value2).digest("hex");
+function cookieValue(request, name2) {
+  const values = (request.headers.get("cookie") ?? "").split(";").map((value2) => value2.trim()).filter((value2) => value2.startsWith(`${name2}=`));
+  return values.length === 1 ? values[0].slice(name2.length + 1) : void 0;
+}
+function nativeOAuthErrorCode(value2) {
+  switch (value2) {
+    case "access_denied":
+      return "access_denied";
+    case "state_mismatch":
+    case "state_not_found":
+    case "state_invalid":
+      return "state_mismatch";
+    default:
+      return "sign_in_failed";
+  }
+}
+function createNativeGitHubOAuth(auth2, baseUrl, options = {}) {
+  const now2 = options.now ?? Date.now;
+  const log = options.log ?? ((event, correlation, durationMs) => (
+    // eslint-disable-next-line no-console -- Bounded OAuth lifecycle diagnostics without credentials.
+    console.info("[native-github-oauth]", { event, correlation, durationMs })
+  ));
+  const secure = new URL(baseUrl).protocol === "https:";
+  const cookieName = `${secure ? "__Secure-" : ""}overlord.native_oauth`;
+  const flows = /* @__PURE__ */ new Map();
+  const prune = () => {
+    for (const [key, flow] of flows) {
+      if (flow.expiresAt <= now2()) flows.delete(key);
+      else if (flow.recoveryExpiresAt !== void 0 && flow.recoveryExpiresAt <= now2()) {
+        flow.response = void 0;
+      }
+    }
+  };
+  const errorResponse = (request, error64) => {
+    const marker = cookieValue(request, cookieName);
+    const flow = marker ? flows.get(digest4(marker)) : void 0;
+    const headers = new Headers({ "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
+    if (flow) {
+      headers.set("Location", `overlord://auth/callback?error=${nativeOAuthErrorCode(error64)}`);
+      headers.append(
+        "Set-Cookie",
+        `${cookieName}=; Path=/api/auth; HttpOnly; SameSite=Lax; Max-Age=0${secure ? "; Secure" : ""}`
+      );
+      return new Response(null, { status: 302, headers });
+    }
+    headers.set("Content-Type", "text/plain; charset=utf-8");
+    return new Response(
+      "GitHub sign-in could not be completed. Return to Overlord and start sign-in again.",
+      { status: 400, headers }
+    );
+  };
+  return {
+    async handler(request) {
+      prune();
+      const url2 = new URL(request.url);
+      if (request.method === "GET" && url2.pathname === "/api/auth/desktop/github") {
+        if (flows.size >= MAX_FLOWS) {
+          return new Response("Too many sign-ins are open. Wait a few minutes and try again.", {
+            status: 503,
+            headers: { "Cache-Control": "no-store" }
+          });
+        }
+        const response = await beginDesktopGitHubOAuth(auth2, baseUrl);
+        if (!response.ok) return response;
+        const payload = await response.json();
+        if (typeof payload.url !== "string") throw new Error("Missing GitHub authorization URL");
+        const state2 = new URL(payload.url).searchParams.get("state");
+        if (!state2) throw new Error("Missing GitHub OAuth state");
+        const marker = (0, import_node_crypto42.randomBytes)(32).toString("base64url");
+        const stateCookie = response.headers.getSetCookie().map((value2) => /^((?:__Secure-)?better-auth\.state)=([^;]+)/.exec(value2)).find(Boolean);
+        const flow = {
+          expiresAt: now2() + FLOW_TTL_MS,
+          stateHash: digest4(state2),
+          stateCookieName: stateCookie?.[1],
+          stateCookieHash: stateCookie ? digest4(stateCookie[2]) : void 0
+        };
+        if (flows.size >= MAX_FLOWS)
+          return new Response("Too many sign-ins are open. Try again shortly.", {
+            status: 503,
+            headers: { "Cache-Control": "no-store" }
+          });
+        flows.set(digest4(marker), flow);
+        const headers = new Headers({
+          Location: payload.url,
+          "Cache-Control": "no-store",
+          "Referrer-Policy": "no-referrer"
+        });
+        for (const cookie of response.headers.getSetCookie()) headers.append("Set-Cookie", cookie);
+        headers.append(
+          "Set-Cookie",
+          `${cookieName}=${marker}; Path=/api/auth; HttpOnly; SameSite=Lax; Max-Age=600${secure ? "; Secure" : ""}`
+        );
+        log("started", flow.stateHash.slice(0, 12));
+        return new Response(null, { status: 302, headers });
+      }
+      if (request.method === "GET" && (url2.pathname === "/api/auth/error" || url2.pathname === "/api/auth/desktop/callback" && url2.searchParams.has("error"))) {
+        return errorResponse(request, url2.searchParams.get("error"));
+      }
+      if (request.method === "GET" && url2.pathname === "/api/auth/callback/github") {
+        const marker = cookieValue(request, cookieName);
+        const flow = marker ? flows.get(digest4(marker)) : void 0;
+        const state2 = url2.searchParams.get("state");
+        const stateCookie = flow?.stateCookieName ? cookieValue(request, flow.stateCookieName) : void 0;
+        if (flow && state2 && digest4(state2) === flow.stateHash && stateCookie && digest4(stateCookie) === flow.stateCookieHash) {
+          const callbackHash = digest4(url2.search);
+          if (flow.callbackHash !== void 0 && flow.callbackHash !== callbackHash)
+            return errorResponse(request, "state_mismatch");
+          if (flow.callbackHash !== void 0 && !flow.response)
+            return errorResponse(request, "state_mismatch");
+          if (flow.response) {
+            log("callback_recovered", flow.stateHash.slice(0, 12));
+          } else {
+            flow.callbackHash = callbackHash;
+            flow.recoveryExpiresAt = now2() + RECOVERY_TTL_MS;
+            const startedAt = now2();
+            const navigationAborted = () => log("navigation_aborted", flow.stateHash.slice(0, 12), now2() - startedAt);
+            request.signal.addEventListener("abort", navigationAborted, { once: true });
+            log("callback_started", flow.stateHash.slice(0, 12));
+            flow.response = auth2.handler(new Request(request, { signal: new AbortController().signal })).then((response) => {
+              log("callback_completed", flow.stateHash.slice(0, 12), now2() - startedAt);
+              const headers = new Headers(response.headers);
+              headers.set("Cache-Control", "no-store");
+              headers.set("Referrer-Policy", "no-referrer");
+              return new Response(response.body, {
+                status: response.status,
+                statusText: response.statusText,
+                headers
+              });
+            }).catch(() => {
+              log("callback_failed", flow.stateHash.slice(0, 12), now2() - startedAt);
+              return errorResponse(request, "sign_in_failed");
+            }).finally(() => request.signal.removeEventListener("abort", navigationAborted));
+          }
+          return (await flow.response).clone();
+        }
+      }
+      return auth2.handler(request);
+    }
+  };
+}
+
 // notification-dispatcher.ts
 init_change_feed();
 init_db();
-function isNotificationType(value2) {
-  return typeof value2 === "string" && NOTIFICATION_TYPES.includes(value2);
-}
-function parseJob2(payloadJson) {
-  try {
-    const payload = JSON.parse(payloadJson);
-    return typeof payload.notificationId === "string" && payload.notificationId ? { notificationId: payload.notificationId } : null;
-  } catch {
-    return null;
-  }
-}
-var REALTIME_NOTIFICATION_TYPES = new Set(notificationTypesForTransport("realtime"));
-var NotificationDispatcher = class extends WorkerJobPoller {
-  constructor() {
-    super({
-      workerIdPrefix: "notification",
-      jobTypes: [NOTIFICATION_DISPATCH_JOB_TYPE],
-      logPrefix: "notification-dispatcher"
-    });
-  }
-  databaseClient() {
-    return requireDatabaseClient();
-  }
-  async processJob(db, job) {
-    const payload = parseJob2(job.payload_json);
-    if (!payload) {
-      await this.finishJob(db, job, "failed", "Malformed notification dispatch payload");
-      return;
-    }
-    const row = await db.get(
-      `SELECT n.id, n.workspace_id, n.recipient_profile_id, n.type, n.mission_id, n.objective_id,
-              n.revision, m.project_id
-         FROM notifications n
-         JOIN missions m ON m.id = n.mission_id
-        WHERE n.id = ? AND n.deleted_at IS NULL`,
-      [payload.notificationId]
-    );
-    if (!row) {
-      await this.finishJob(db, job);
-      return;
-    }
-    if (!isNotificationType(row.type)) {
-      await this.finishJob(db, job, "failed", "Invalid notification type");
-      return;
-    }
-    if (isPushNotificationCategory(row.type)) {
-      const mode = await resolveNotificationMode(db, row.recipient_profile_id, row.type, "apns");
-      if (mode !== "off") {
-        await deliverStandardPush({
-          db,
-          profileId: row.recipient_profile_id,
-          missionId: row.mission_id,
-          category: row.type,
-          mode
-        });
-      }
-    }
-    if (REALTIME_NOTIFICATION_TYPES.has(row.type) && await resolveNotificationMode(db, row.recipient_profile_id, row.type, "realtime") !== "off") {
-      await insertEntityChange(db, {
-        workspaceId: row.workspace_id,
-        projectId: row.project_id,
-        missionId: row.mission_id,
-        objectiveId: row.objective_id,
-        entityType: "notification",
-        entityId: row.id,
-        operation: "insert",
-        entityRevision: row.revision,
-        changedFields: [],
-        actorWorkspaceUserId: null,
-        source: "notification_dispatcher"
-      });
-    }
-    await this.finishJob(db, job);
-  }
-};
-var notificationDispatcher = new NotificationDispatcher();
 
 // notifications.ts
 init_change_feed();
 init_util3();
 init_db();
-function isNotificationType2(value2) {
-  return NOTIFICATION_TYPES.includes(value2);
+function isNotificationType(value2) {
+  return typeof value2 === "string" && NOTIFICATION_TYPES.includes(value2);
 }
 function toNotificationDto(row) {
-  if (!isNotificationType2(row.type))
+  if (!isNotificationType(row.type))
     throw new Error(`Invalid stored notification type: ${row.type}`);
   return {
     id: row.id,
@@ -190092,8 +191023,83 @@ async function dismissNotification(id2, body) {
   });
 }
 
+// notification-dispatcher.ts
+function parseJob2(payloadJson) {
+  try {
+    const payload = JSON.parse(payloadJson);
+    return typeof payload.notificationId === "string" && payload.notificationId ? { notificationId: payload.notificationId } : null;
+  } catch {
+    return null;
+  }
+}
+var REALTIME_NOTIFICATION_TYPES = new Set(notificationTypesForTransport("realtime"));
+var NotificationDispatcher = class extends WorkerJobPoller {
+  constructor() {
+    super({
+      workerIdPrefix: "notification",
+      jobTypes: [NOTIFICATION_DISPATCH_JOB_TYPE],
+      logPrefix: "notification-dispatcher"
+    });
+  }
+  databaseClient() {
+    return requireDatabaseClient();
+  }
+  async processJob(db, job) {
+    const payload = parseJob2(job.payload_json);
+    if (!payload) {
+      await this.finishJob(db, job, "failed", "Malformed notification dispatch payload");
+      return;
+    }
+    const row = await db.get(
+      `SELECT n.id, n.workspace_id, n.recipient_profile_id, n.type, n.mission_id, n.objective_id,
+              n.revision, m.project_id
+         FROM notifications n
+         JOIN missions m ON m.id = n.mission_id
+        WHERE n.id = ? AND n.deleted_at IS NULL`,
+      [payload.notificationId]
+    );
+    if (!row) {
+      await this.finishJob(db, job);
+      return;
+    }
+    if (!isNotificationType(row.type)) {
+      await this.finishJob(db, job, "failed", "Invalid notification type");
+      return;
+    }
+    if (isPushNotificationCategory(row.type)) {
+      const mode = await resolveNotificationMode(db, row.recipient_profile_id, row.type, "apns");
+      if (mode !== "off") {
+        await deliverStandardPush({
+          db,
+          profileId: row.recipient_profile_id,
+          missionId: row.mission_id,
+          category: row.type,
+          mode
+        });
+      }
+    }
+    if (REALTIME_NOTIFICATION_TYPES.has(row.type) && await resolveNotificationMode(db, row.recipient_profile_id, row.type, "realtime") !== "off") {
+      await insertEntityChange(db, {
+        workspaceId: row.workspace_id,
+        projectId: row.project_id,
+        missionId: row.mission_id,
+        objectiveId: row.objective_id,
+        entityType: "notification",
+        entityId: row.id,
+        operation: "insert",
+        entityRevision: row.revision,
+        changedFields: [],
+        actorWorkspaceUserId: null,
+        source: "notification_dispatcher"
+      });
+    }
+    await this.finishJob(db, job);
+  }
+};
+var notificationDispatcher = new NotificationDispatcher();
+
 // oauth.ts
-var import_node_crypto40 = require("node:crypto");
+var import_node_crypto43 = require("node:crypto");
 init_db();
 var CLIENT_ID_PREFIX = "ovlc_";
 var AUTH_CODE_PREFIX = "ovla_";
@@ -190128,12 +191134,12 @@ function oauthSigningSecret() {
   return process.env.OVERLORD_OAUTH_SIGNING_SECRET?.trim() || process.env.BETTER_AUTH_SECRET?.trim() || "overlord-local-oauth-development-secret";
 }
 function signPayload(payload) {
-  return (0, import_node_crypto40.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
+  return (0, import_node_crypto43.createHmac)("sha256", oauthSigningSecret()).update(payload).digest("base64url");
 }
 function fixedTimeEqual(a5, b5) {
   const left = Buffer.from(a5);
   const right = Buffer.from(b5);
-  return left.length === right.length && (0, import_node_crypto40.timingSafeEqual)(left, right);
+  return left.length === right.length && (0, import_node_crypto43.timingSafeEqual)(left, right);
 }
 function jsonError(res, status, error64, description) {
   res.status(status).json({ error: error64, error_description: description });
@@ -190454,7 +191460,7 @@ async function handleOAuthApprove(req, res) {
       issuanceWorkspaceUserId: consent.issuanceWorkspace.workspaceUserId
     }
   );
-  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto40.randomBytes)(32).toString("base64url")}`;
+  const code = `${AUTH_CODE_PREFIX}${(0, import_node_crypto43.randomBytes)(32).toString("base64url")}`;
   authorizationCodes.set(code, {
     clientId: parsed.clientId,
     redirectUri: parsed.redirectUri,
@@ -190498,7 +191504,7 @@ async function handleOAuthToken(req, res) {
     jsonError(res, 400, "invalid_target", "OAuth resource does not match the authorization code.");
     return;
   }
-  const challenge = (0, import_node_crypto40.createHash)("sha256").update(codeVerifier).digest("base64url");
+  const challenge = (0, import_node_crypto43.createHash)("sha256").update(codeVerifier).digest("base64url");
   if (!codeVerifier || challenge !== entry.codeChallenge) {
     await revokeOrphanedAccessToken(entry.accessToken);
     jsonError(res, 400, "invalid_grant", "PKCE verification failed.");
@@ -191060,582 +192066,6 @@ var RunQueueDispatchWorker = class extends WorkerJobPoller {
 };
 var runQueueDispatchWorker = new RunQueueDispatchWorker();
 
-// storage.ts
-var import_node_crypto41 = require("node:crypto");
-var import_node_fs20 = require("node:fs");
-var import_node_path34 = __toESM(require("node:path"), 1);
-var import_node_url7 = require("node:url");
-init_db();
-var repoRoot3 = import_node_path34.default.resolve(import_node_path34.default.dirname((0, import_node_url7.fileURLToPath)(__overlord_import_meta_url)), "..");
-var MAX_IMAGE_BYTES = 8 * 1024 * 1024;
-var MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
-var MAX_ATTACHMENT_LABEL = "25 MB";
-var IMAGE_EXTENSIONS = {
-  "image/png": ".png",
-  "image/jpeg": ".jpg",
-  "image/gif": ".gif",
-  "image/webp": ".webp"
-};
-async function resolveBucket(bucketKey, workspaceId2) {
-  const row = await requireDatabaseClient().get(
-    `SELECT id, bucket_key, storage_backend, base_url, local_path, settings_json
-       FROM storage_buckets
-      WHERE workspace_id = ? AND bucket_key = ? AND deleted_at IS NULL`,
-    [workspaceId2, bucketKey]
-  );
-  if (!row) throw new ApiError(404, `Unknown storage bucket '${bucketKey}'`);
-  return row;
-}
-async function requireActiveOrganizationId() {
-  const organizationId = await getActiveOrganizationIdOrNull();
-  if (!organizationId) throw new ApiError(404, "No active organization");
-  return organizationId;
-}
-async function resolveOrganizationBucket(organizationId, bucketKey) {
-  const row = await requireDatabaseClient().get(
-    `SELECT id, bucket_key, storage_backend, base_url, local_path, settings_json
-       FROM storage_buckets
-      WHERE organization_id = ? AND bucket_key = ? AND deleted_at IS NULL`,
-    [organizationId, bucketKey]
-  );
-  if (!row) throw new ApiError(404, `Unknown storage bucket '${bucketKey}'`);
-  return row;
-}
-function extensionForImage(contentType) {
-  const ext = IMAGE_EXTENSIONS[contentType.toLowerCase()];
-  if (!ext) {
-    throw new ApiError(415, "Unsupported image type. Upload a PNG, JPEG, GIF, or WebP image.");
-  }
-  return ext;
-}
-function publicUrlFor(bucketKey, storageKey) {
-  return `/api/storage/${encodeURIComponent(bucketKey)}/${encodeURIComponent(storageKey)}`;
-}
-function userImageObjectKey(userId, imageId, ext) {
-  return `user-images/${userId}/${imageId}${ext}`;
-}
-function workspaceImageObjectKey(workspaceId2, imageId, ext) {
-  return `workspace-files/${workspaceId2}/images/${imageId}${ext}`;
-}
-function organizationImageObjectKey(organizationId, imageId, ext) {
-  return `organization-files/${organizationId}/images/${imageId}${ext}`;
-}
-function attachmentObjectKey(workspaceId2, attachmentId, ext) {
-  return `workspace-files/${workspaceId2}/attachments/${attachmentId}${ext}`;
-}
-function escapeSqlLike(value2) {
-  return value2.replace(/[\\%_]/g, (match) => `\\${match}`);
-}
-async function writeImageObject(bucket, input2, storageKeyFor) {
-  if (!input2.bytes || input2.bytes.length === 0) {
-    throw new ApiError(400, "No image data received");
-  }
-  if (input2.bytes.length > MAX_IMAGE_BYTES) {
-    throw new ApiError(413, "Image is too large. The maximum size is 8 MB.");
-  }
-  const contentType = input2.contentType.split(";")[0].trim().toLowerCase();
-  const ext = extensionForImage(contentType);
-  const id2 = newId2();
-  const storageKey = storageKeyFor(id2, ext);
-  const backend = createStorageBackend({ bucket, repoRoot: repoRoot3 });
-  await backend.put({ key: storageKey, bytes: input2.bytes, contentType });
-  return {
-    id: id2,
-    storageKey,
-    sizeBytes: input2.bytes.length,
-    contentType,
-    checksum: (0, import_node_crypto41.createHash)("sha256").update(input2.bytes).digest("hex"),
-    publicUrl: publicUrlFor(bucket.bucket_key, storageKey)
-  };
-}
-async function operatorUserId() {
-  const client = requireDatabaseClient();
-  if (getActorWorkspaceUserId()) {
-    const row = await client.get(
-      `SELECT profile_id FROM workspace_users WHERE id = ?`,
-      [getActorWorkspaceUserId()]
-    );
-    if (row) return row.profile_id;
-  }
-  const fallback2 = await client.get(
-    `SELECT id FROM profiles
-      WHERE kind = 'human' AND status = 'active' AND deleted_at IS NULL
-      ORDER BY created_at ASC LIMIT 1`
-  );
-  if (!fallback2) throw new ApiError(409, "No local user profile exists");
-  return fallback2.id;
-}
-function uploadWorkspaceId(explicitWorkspaceId) {
-  const workspaceId2 = explicitWorkspaceId?.trim() || getImplicitWorkspaceIdOrNull();
-  if (!workspaceId2) throw new ApiError(400, "workspaceId is required");
-  return workspaceId2;
-}
-async function uploadUserImage(input2, explicitWorkspaceId) {
-  const workspaceId2 = uploadWorkspaceId(explicitWorkspaceId);
-  const bucket = await resolveBucket("user-images", workspaceId2);
-  const userId = await operatorUserId();
-  const written = await writeImageObject(
-    bucket,
-    input2,
-    (id2, ext) => userImageObjectKey(userId, id2, ext)
-  );
-  const now2 = nowIso2();
-  const filename = input2.filename.trim() || `image${import_node_path34.default.extname(written.storageKey)}`;
-  return requireDatabaseClient().transaction(async (tx) => {
-    await tx.run(
-      `INSERT INTO user_images (
-         id, workspace_id, profile_id, storage_bucket_id, storage_key,
-         filename, content_type, size_bytes, checksum_sha256, public_url, metadata_json,
-         created_by_workspace_user_id, created_at, updated_at, revision
-       ) VALUES (
-         ?, ?, ?, ?, ?,
-         ?, ?, ?, ?, ?, '{}',
-         ?, ?, ?, 1
-       )`,
-      [
-        written.id,
-        workspaceId2,
-        userId,
-        bucket.id,
-        written.storageKey,
-        filename,
-        written.contentType,
-        written.sizeBytes,
-        written.checksum,
-        written.publicUrl,
-        getActorWorkspaceUserId(),
-        now2,
-        now2
-      ]
-    );
-    await recordChange2(
-      {
-        entityType: "user_image",
-        entityId: written.id,
-        operation: "insert",
-        entityRevision: 1,
-        workspaceId: workspaceId2
-      },
-      tx
-    );
-    return {
-      id: written.id,
-      bucketKey: bucket.bucket_key,
-      storageKey: written.storageKey,
-      filename,
-      contentType: written.contentType,
-      sizeBytes: written.sizeBytes,
-      url: written.publicUrl,
-      createdAt: now2
-    };
-  });
-}
-async function uploadWorkspaceImage(input2, explicitWorkspaceId) {
-  const workspaceId2 = uploadWorkspaceId(explicitWorkspaceId);
-  const bucket = await resolveBucket("workspace-images", workspaceId2);
-  const written = await writeImageObject(
-    bucket,
-    input2,
-    (id2, ext) => workspaceImageObjectKey(workspaceId2, id2, ext)
-  );
-  const now2 = nowIso2();
-  const filename = input2.filename.trim() || `image${import_node_path34.default.extname(written.storageKey)}`;
-  return requireDatabaseClient().transaction(async (tx) => {
-    await tx.run(
-      `INSERT INTO workspace_images (
-         id, workspace_id, storage_bucket_id, storage_key,
-         filename, content_type, size_bytes, checksum_sha256, public_url, metadata_json,
-         created_by_workspace_user_id, created_at, updated_at, revision
-       ) VALUES (
-         ?, ?, ?, ?,
-         ?, ?, ?, ?, ?, '{}',
-         ?, ?, ?, 1
-       )`,
-      [
-        written.id,
-        workspaceId2,
-        bucket.id,
-        written.storageKey,
-        filename,
-        written.contentType,
-        written.sizeBytes,
-        written.checksum,
-        written.publicUrl,
-        getActorWorkspaceUserId(),
-        now2,
-        now2
-      ]
-    );
-    await recordChange2(
-      {
-        entityType: "workspace_image",
-        entityId: written.id,
-        operation: "insert",
-        entityRevision: 1,
-        workspaceId: workspaceId2
-      },
-      tx
-    );
-    return {
-      id: written.id,
-      bucketKey: bucket.bucket_key,
-      storageKey: written.storageKey,
-      filename,
-      contentType: written.contentType,
-      sizeBytes: written.sizeBytes,
-      url: written.publicUrl,
-      createdAt: now2
-    };
-  });
-}
-async function uploadOrganizationImage(input2) {
-  const organizationId = await requireActiveOrganizationId();
-  const profileId = await resolveActiveProfileId();
-  if (!profileId || !await isOrganizationAdmin(profileId, organizationId)) {
-    throw new ApiError(403, "Organization admin required");
-  }
-  const bucket = await resolveOrganizationBucket(organizationId, "organization-images");
-  const written = await writeImageObject(
-    bucket,
-    input2,
-    (id2, ext) => organizationImageObjectKey(organizationId, id2, ext)
-  );
-  const filename = input2.filename.trim() || `image${import_node_path34.default.extname(written.storageKey)}`;
-  return {
-    id: written.id,
-    bucketKey: bucket.bucket_key,
-    storageKey: written.storageKey,
-    filename,
-    contentType: written.contentType,
-    sizeBytes: written.sizeBytes,
-    url: written.publicUrl,
-    createdAt: nowIso2()
-  };
-}
-var ATTACHMENTS_BUCKET_KEY = "attachments";
-async function resolveObjectiveScope(objectiveRef, client = requireDatabaseClient(), permission = PERMISSIONS.ATTACHMENT_READ) {
-  const resolved = await resolveObjectiveIdForRest({ ref: objectiveRef, db: client });
-  const row = await client.get(
-    `SELECT id, workspace_id, project_id, mission_id FROM objectives
-      WHERE id = ? AND deleted_at IS NULL`,
-    [resolved.id]
-  );
-  if (!row) throw new ApiError(404, "Objective not found");
-  await requireWorkspacePermission({
-    workspaceId: row.workspace_id,
-    permission,
-    db: client,
-    notFoundMessage: "Objective not found"
-  });
-  return row;
-}
-function attachmentExtension(filename) {
-  const ext = import_node_path34.default.extname(filename).toLowerCase();
-  return /^\.[a-z0-9]{1,12}$/.test(ext) ? ext : "";
-}
-function toObjectiveAttachmentDto(row) {
-  return {
-    id: row.id,
-    workspaceId: row.workspace_id,
-    projectId: row.project_id,
-    missionId: row.mission_id,
-    objectiveId: row.objective_id,
-    bucketKey: ATTACHMENTS_BUCKET_KEY,
-    storageKey: row.storage_key,
-    filename: row.filename,
-    contentType: row.content_type,
-    sizeBytes: row.size_bytes,
-    uploadStatus: row.upload_status,
-    url: publicUrlFor(ATTACHMENTS_BUCKET_KEY, row.storage_key),
-    createdAt: row.created_at
-  };
-}
-var ATTACHMENT_COLUMNS = `id, workspace_id, project_id, mission_id, objective_id,
-  storage_key, filename, content_type, size_bytes, upload_status, created_at`;
-async function uploadObjectiveAttachment(input2) {
-  if (!input2.bytes || input2.bytes.length === 0) {
-    throw new ApiError(400, "No file data received");
-  }
-  if (input2.bytes.length > MAX_ATTACHMENT_BYTES) {
-    throw new ApiError(
-      413,
-      `File too large. Attachments can be no longer than ${MAX_ATTACHMENT_LABEL}.`
-    );
-  }
-  const scope2 = await resolveObjectiveScope(
-    input2.objectiveId,
-    void 0,
-    PERMISSIONS.ATTACHMENT_CREATE
-  );
-  const bucket = await resolveBucket(ATTACHMENTS_BUCKET_KEY, scope2.workspace_id);
-  const id2 = newId2();
-  const storageKey = attachmentObjectKey(
-    scope2.workspace_id,
-    id2,
-    attachmentExtension(input2.filename)
-  );
-  const now2 = nowIso2();
-  const contentType = input2.contentType.split(";")[0].trim().toLowerCase() || null;
-  const backend = createStorageBackend({ bucket, repoRoot: repoRoot3 });
-  await backend.put({
-    key: storageKey,
-    bytes: input2.bytes,
-    contentType: contentType ?? "application/octet-stream"
-  });
-  const filename = input2.filename.trim() || `attachment${import_node_path34.default.extname(storageKey)}`;
-  const checksum = (0, import_node_crypto41.createHash)("sha256").update(input2.bytes).digest("hex");
-  return requireDatabaseClient().transaction(async (tx) => {
-    await tx.run(
-      `INSERT INTO attachments (
-         id, workspace_id, project_id, mission_id, objective_id, storage_bucket_id,
-         storage_key, filename, content_type, size_bytes, checksum_sha256, upload_status,
-         metadata_json, created_by_workspace_user_id, created_at, updated_at, revision
-       ) VALUES (
-         ?, ?, ?, ?, ?, ?,
-         ?, ?, ?, ?, ?, 'available',
-         '{}', ?, ?, ?, 1
-       )`,
-      [
-        id2,
-        scope2.workspace_id,
-        scope2.project_id,
-        scope2.mission_id,
-        scope2.id,
-        bucket.id,
-        storageKey,
-        filename,
-        contentType,
-        input2.bytes.length,
-        checksum,
-        getActorWorkspaceUserId(),
-        now2,
-        now2
-      ]
-    );
-    await recordChange2(
-      {
-        entityType: "attachment",
-        entityId: id2,
-        operation: "insert",
-        entityRevision: 1,
-        projectId: scope2.project_id,
-        missionId: scope2.mission_id,
-        objectiveId: scope2.id,
-        workspaceId: scope2.workspace_id
-      },
-      tx
-    );
-    return toObjectiveAttachmentDto({
-      id: id2,
-      workspace_id: scope2.workspace_id,
-      project_id: scope2.project_id,
-      mission_id: scope2.mission_id,
-      objective_id: scope2.id,
-      storage_key: storageKey,
-      filename,
-      content_type: contentType,
-      size_bytes: input2.bytes.length,
-      upload_status: "available",
-      created_at: now2
-    });
-  });
-}
-async function listObjectiveAttachments(objectiveId) {
-  const scope2 = await resolveObjectiveScope(objectiveId);
-  const rows = await requireDatabaseClient().all(
-    `SELECT ${ATTACHMENT_COLUMNS} FROM attachments
-      WHERE objective_id = ? AND workspace_id = ? AND deleted_at IS NULL
-      ORDER BY created_at ASC`,
-    [scope2.id, scope2.workspace_id]
-  );
-  return rows.map(toObjectiveAttachmentDto);
-}
-async function deleteObjectiveAttachment(objectiveId, attachmentId) {
-  const { remaining, cleanup } = await requireDatabaseClient().transaction(async (tx) => {
-    const scope2 = await resolveObjectiveScope(objectiveId, tx, PERMISSIONS.ATTACHMENT_DELETE);
-    const row = await tx.get(
-      `SELECT a.id, a.revision, a.storage_key,
-              b.id AS bucket_id, b.bucket_key, b.storage_backend, b.local_path, b.settings_json
-         FROM attachments a
-         JOIN storage_buckets b ON b.id = a.storage_bucket_id
-        WHERE a.id = ? AND a.objective_id = ? AND a.workspace_id = ?
-          AND a.deleted_at IS NULL AND b.deleted_at IS NULL`,
-      [attachmentId, scope2.id, scope2.workspace_id]
-    );
-    if (!row) throw new ApiError(404, "Attachment not found");
-    const now2 = nowIso2();
-    await tx.run(
-      `UPDATE attachments
-          SET deleted_at = ?, upload_status = 'deleted', updated_at = ?,
-              revision = revision + 1
-        WHERE id = ?`,
-      [now2, now2, attachmentId]
-    );
-    await recordChange2(
-      {
-        entityType: "attachment",
-        entityId: attachmentId,
-        operation: "delete",
-        entityRevision: row.revision + 1,
-        projectId: scope2.project_id,
-        missionId: scope2.mission_id,
-        objectiveId: scope2.id,
-        workspaceId: scope2.workspace_id
-      },
-      tx
-    );
-    const rows = await tx.all(
-      `SELECT ${ATTACHMENT_COLUMNS} FROM attachments
-        WHERE objective_id = ? AND workspace_id = ? AND deleted_at IS NULL
-        ORDER BY created_at ASC`,
-      [scope2.id, scope2.workspace_id]
-    );
-    return {
-      remaining: rows.map(toObjectiveAttachmentDto),
-      cleanup: {
-        key: row.storage_key,
-        bucket: {
-          id: row.bucket_id,
-          bucket_key: row.bucket_key,
-          storage_backend: row.storage_backend,
-          local_path: row.local_path,
-          settings_json: row.settings_json
-        }
-      }
-    };
-  });
-  if (cleanup.bucket.storage_backend === "s3" || cleanup.bucket.storage_backend === "railway_volume") {
-    const backend = createStorageBackend({ bucket: cleanup.bucket, repoRoot: repoRoot3 });
-    await backend.deleteObject?.({ key: cleanup.key });
-  }
-  return remaining;
-}
-var SERVABLE_OBJECT_TABLES = {
-  "user-images": "user_images",
-  "workspace-images": "workspace_images",
-  attachments: "attachments"
-};
-var CONTENT_TYPE_BY_EXTENSION = {
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".gif": "image/gif",
-  ".webp": "image/webp"
-};
-async function finalizeStoredObject({
-  bucket,
-  storageKey,
-  contentType,
-  filename,
-  forceDownload
-}) {
-  const backend = createStorageBackend({ bucket, repoRoot: repoRoot3 });
-  const readSettings = readStorageReadSettings(bucket.settings_json);
-  if (readSettings.presignReads && backend.presignGet) {
-    const responseContentDisposition = forceDownload ? `attachment; filename="${filename.replace(/"/g, '\\"')}"` : void 0;
-    return {
-      contentType,
-      filename,
-      forceDownload,
-      presignedRedirectUrl: await backend.presignGet({
-        key: storageKey,
-        ttlSeconds: readSettings.presignTtlSeconds,
-        responseContentDisposition
-      })
-    };
-  }
-  if (bucket.storage_backend === "local_fs") {
-    if (!bucket.local_path) {
-      throw new ApiError(500, `Bucket '${bucket.bucket_key}' is missing a local_path`);
-    }
-    const root5 = import_node_path34.default.isAbsolute(bucket.local_path) ? bucket.local_path : import_node_path34.default.resolve(repoRoot3, bucket.local_path);
-    const absolutePath = import_node_path34.default.join(root5, storageKey);
-    if (!(0, import_node_fs20.existsSync)(absolutePath)) throw new ApiError(404, "File not found");
-    return { absolutePath, contentType, filename, forceDownload };
-  }
-  return {
-    bodyStream: await backend.getStream({ key: storageKey }),
-    contentType,
-    filename,
-    forceDownload
-  };
-}
-async function resolveStoredObject(bucketKey, storageKey, permission) {
-  if (bucketKey === "organization-images") {
-    const organizationId = await requireActiveOrganizationId();
-    await requireAnyWorkspacePermission(permission);
-    const bucket2 = await resolveOrganizationBucket(organizationId, bucketKey);
-    const ext = import_node_path34.default.extname(storageKey).toLowerCase();
-    return finalizeStoredObject({
-      bucket: bucket2,
-      storageKey,
-      contentType: CONTENT_TYPE_BY_EXTENSION[ext] ?? "application/octet-stream",
-      filename: `logo${ext}`,
-      forceDownload: false
-    });
-  }
-  const table2 = SERVABLE_OBJECT_TABLES[bucketKey];
-  if (!table2) throw new ApiError(404, `Serving is not configured for bucket '${bucketKey}'`);
-  if (bucketKey === "attachments" && getActiveTokenProjectIds() !== null) {
-    const attachment = await requireDatabaseClient().get(
-      `SELECT project_id FROM attachments WHERE storage_key = ? AND deleted_at IS NULL`,
-      [storageKey]
-    );
-    if (!attachment?.project_id || !projectInTokenScope(attachment.project_id)) {
-      throw new ApiError(404, "File not found");
-    }
-  }
-  let row = await requireDatabaseClient().get(
-    `SELECT workspace_id, storage_bucket_id, storage_key, content_type, filename FROM ${table2}
-      WHERE storage_key = ? AND deleted_at IS NULL`,
-    [storageKey]
-  );
-  if (!row && bucketKey === "user-images" && !storageKey.includes("/")) {
-    const legacyStorageKeyLike = `%/${escapeSqlLike(storageKey)}`;
-    row = await requireDatabaseClient().get(
-      `SELECT workspace_id, storage_bucket_id, storage_key, content_type, filename FROM user_images
-        WHERE deleted_at IS NULL
-          AND (
-            public_url = ?
-            OR storage_key = ?
-            OR storage_key LIKE ? ESCAPE '\\'
-          )
-        ORDER BY created_at DESC
-        LIMIT 1`,
-      [publicUrlFor(bucketKey, storageKey), storageKey, legacyStorageKeyLike]
-    );
-  }
-  if (!row) throw new ApiError(404, "File not found");
-  await requireWorkspacePermission({
-    workspaceId: row.workspace_id,
-    permission,
-    notFoundMessage: "File not found"
-  });
-  const bucket = await resolveBucket(bucketKey, row.workspace_id);
-  if (bucket.id !== row.storage_bucket_id) throw new ApiError(404, "File not found");
-  return finalizeStoredObject({
-    bucket,
-    storageKey: row.storage_key,
-    contentType: row.content_type ?? "application/octet-stream",
-    filename: row.filename,
-    forceDownload: bucketKey === ATTACHMENTS_BUCKET_KEY
-  });
-}
-function serveStoredObject(res, resolved) {
-  if (resolved.presignedRedirectUrl) {
-    res.redirect(302, resolved.presignedRedirectUrl);
-    return;
-  }
-  if (resolved.absolutePath) {
-    res.sendFile(resolved.absolutePath);
-    return;
-  }
-  if (resolved.bodyStream) {
-    resolved.bodyStream.pipe(res);
-    return;
-  }
-  throw new ApiError(500, "Stored object has no byte source");
-}
-
 // webhook-dispatcher.ts
 init_dist2();
 init_util3();
@@ -191643,13 +192073,13 @@ init_webhook_events();
 init_db();
 
 // webhook-security.ts
-var import_node_crypto42 = require("node:crypto");
+var import_node_crypto44 = require("node:crypto");
 var import_promises6 = __toESM(require("node:dns/promises"), 1);
 var import_node_net = require("node:net");
 init_db();
 function signWebhookPayload(secret, rawBody) {
   const timestamp2 = Math.floor(Date.now() / 1e3);
-  const signature = (0, import_node_crypto42.createHmac)("sha256", secret).update(`${timestamp2}.${rawBody}`).digest("hex");
+  const signature = (0, import_node_crypto44.createHmac)("sha256", secret).update(`${timestamp2}.${rawBody}`).digest("hex");
   return { header: `t=${timestamp2},v1=${signature}`, timestamp: timestamp2 };
 }
 function internalHostPatterns() {
@@ -191969,7 +192399,7 @@ var webhookDispatcher = new WebhookDispatcher();
 
 // webhooks.ts
 init_dist2();
-var import_node_crypto43 = require("node:crypto");
+var import_node_crypto45 = require("node:crypto");
 init_webhook_events();
 init_db();
 var WEBHOOK_SECRET_SCHEME = "whsec";
@@ -192004,7 +192434,7 @@ function toSubscriptionDto(row) {
   };
 }
 function generateWebhookSecret() {
-  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto43.randomBytes)(24).toString("hex")}` };
+  return { secret: `${WEBHOOK_SECRET_SCHEME}_${(0, import_node_crypto45.randomBytes)(24).toString("hex")}` };
 }
 function normalizeEventTypes(input2) {
   if (!Array.isArray(input2) || input2.length === 0) {
@@ -192506,29 +192936,18 @@ app.use(
     exposedHeaders: ["set-auth-token"]
   })
 );
-app.get("/api/auth/desktop/github", async (_req, res, next) => {
-  try {
-    const oauthResponse = await beginDesktopGitHubOAuth(auth, resolveAuthBaseUrl());
-    if (!oauthResponse.ok) {
-      const body = await oauthResponse.text();
-      res.status(oauthResponse.status).type("application/json").send(body);
-      return;
-    }
-    const payload = await oauthResponse.json();
-    if (typeof payload.url !== "string" || !payload.url) {
-      throw new Error("Better Auth did not return a GitHub authorization URL");
-    }
-    for (const cookie of oauthResponse.headers.getSetCookie()) res.append("Set-Cookie", cookie);
-    res.redirect(302, payload.url);
-  } catch (error64) {
-    next(error64);
-  }
-});
+var nativeOAuthHandler = toNodeHandler2(createNativeGitHubOAuth(auth, resolveAuthBaseUrl()));
+app.get("/api/auth/desktop/github", nativeOAuthHandler);
 app.get("/api/auth/desktop/callback", async (req, res, next) => {
   try {
+    if ("error" in req.query) {
+      await nativeOAuthHandler(req, res);
+      return;
+    }
+    res.set("Cache-Control", "no-store").set("Referrer-Policy", "no-referrer");
     const browserSession = await auth.api.getSession({ headers: fromNodeHeaders(req.headers) });
     if (!browserSession?.session.token) {
-      res.status(401).send("Your sign-in session is missing or expired. Return to Overlord and try again.");
+      res.redirect(302, "/api/auth/desktop/callback?error=state_mismatch");
       return;
     }
     res.redirect(
@@ -192590,13 +193009,13 @@ app.get(
   GITHUB_REPOSITORY_CALLBACK_PATH,
   createProfileConnectionCallbackHandler({ provider: "github", runtime: connectionsModule })
 );
-app.all("/api/auth/*", authNodeHandler);
+app.all("/api/auth/*", nativeOAuthHandler);
 var jsonBody = import_express6.default.json();
 var urlEncodedBody = import_express6.default.urlencoded({ extended: false });
 function isRawUploadRequest(req) {
   if (req.method !== "POST") return false;
   if (req.path.startsWith("/api/uploads/")) return true;
-  return /^\/api\/objectives\/[^/]+\/attachments$/.test(req.path);
+  return /^\/api\/(?:objectives|inbox)\/[^/]+\/attachments$/.test(req.path);
 }
 var runnerCompletionJsonBody = import_express6.default.json({ limit: "1mb" });
 function isRunnerCompletionRequest(req) {
@@ -192706,6 +193125,9 @@ function connectionsModule() {
   }
   return connectionsRuntime;
 }
+var createPrivateGitHubRepository = createGitHubUserOAuth(
+  () => connectionsModule().profiles
+).createPrivateGitHubRepository;
 var chatEngineInstance = null;
 var chatEngine = () => chatEngineInstance ??= createChatEngine({
   db: requireDatabaseClient(),
@@ -193263,7 +193685,7 @@ app.post(
 );
 app.post(
   "/api/projects/initialize",
-  handle3((req) => initializeProject(req.body), { mutates: true })
+  handle3((req) => initializeProject(req.body, { createPrivateGitHubRepository }), { mutates: true })
 );
 app.patch(
   "/api/projects/reorder",
@@ -193857,6 +194279,33 @@ app.post(
 app.delete(
   "/api/objectives/:id/attachments/:attachmentId",
   handle3((req) => deleteObjectiveAttachment(req.params.id, req.params.attachmentId), {
+    mutates: true
+  })
+);
+app.get(
+  "/api/inbox/:id/attachments",
+  handle3((req) => listInboxItemAttachments(req.params.id))
+);
+app.post(
+  "/api/inbox/:id/attachments",
+  rawAttachmentBody,
+  handle3(
+    (req) => {
+      const headerName = req.header("x-upload-filename");
+      const filename = headerName ? decodeURIComponent(headerName) : "attachment";
+      return uploadInboxItemAttachment({
+        inboxItemId: req.params.id,
+        bytes: Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0),
+        filename,
+        contentType: req.header("content-type") ?? ""
+      });
+    },
+    { mutates: true }
+  )
+);
+app.delete(
+  "/api/inbox/:id/attachments/:attachmentId",
+  handle3((req) => deleteInboxItemAttachment(req.params.id, req.params.attachmentId), {
     mutates: true
   })
 );
