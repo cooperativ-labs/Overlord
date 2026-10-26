@@ -1,8 +1,19 @@
-import { AlertTriangle, ArrowUp, Check, ChevronDown, Loader2, Play, Trash2 } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowUp,
+  Check,
+  ChevronDown,
+  Loader2,
+  Play,
+  Plus,
+  Trash2
+} from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import { AgentModelChooserButton } from '@/components/objectives/AgentModelChooserButton.tsx';
 import type { AgentModelSelection } from '@/components/objectives/AgentModelSelector.tsx';
+import { AttachmentThumbnails } from '@/components/objectives/AttachmentThumbnails.tsx';
+import type { AttachmentUploadState } from '@/components/objectives/ObjectiveAttachments.tsx';
 import { ObjectiveResourcePicker } from '@/components/objectives/ObjectiveResourcePicker.tsx';
 import { RepositoryMentionTextarea } from '@/components/RepositoryMentionTextarea.tsx';
 import { DueDatePickerButton } from '@/components/scheduling/DueDatePickerButton.tsx';
@@ -15,6 +26,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu.tsx';
+import { FileDropZone } from '@/components/ui/file-drop-zone.tsx';
 import type {
   executionTargetAvailability,
   objectiveResourceConnection
@@ -68,11 +80,20 @@ export type InboxCardShellProps = {
   onDelete?: () => void;
   showDelete: boolean;
   assignedBanner: ReactNode;
+  /**
+   * Stored files for the capture (or, once promoted, its first objective).
+   * When present the whole card is a drop target and the toolbar gains a +
+   * button; omit it to render the card without attachment controls.
+   */
+  attachments?: AttachmentUploadState;
 };
 
+const noopDrop = () => {};
+
 /**
- * Presentational Inbox card: instruction body over a project / resource / due
- * date / agent toolbar. Shared by the unassigned and promoted variants.
+ * Presentational Inbox card: instruction body, attachment thumbnails, then a
+ * project / resource / due date / agent toolbar. Shared by the unassigned and
+ * promoted variants.
  */
 export function InboxCardShell({
   instruction,
@@ -108,13 +129,20 @@ export function InboxCardShell({
   onRun,
   onDelete,
   showDelete,
-  assignedBanner
+  assignedBanner,
+  attachments
 }: InboxCardShellProps) {
   const hasProject = Boolean(projectId);
 
   return (
     <article className="space-y-1">
-      <div className="w-full overflow-hidden rounded-xl border border-muted-foreground/20 transition-all focus-within:shadow-md dark:focus-within:ring-1 focus-within:ring-ring/50 bg-background">
+      <FileDropZone
+        onDrop={attachments?.handleFiles ?? noopDrop}
+        disabled={!attachments || isBusy}
+        dragState={attachments?.dragState}
+        label="Drop to attach"
+        className="w-full overflow-hidden rounded-xl border border-muted-foreground/20 transition-all focus-within:shadow-md dark:focus-within:ring-1 focus-within:ring-ring/50 bg-background"
+      >
         {assignedBanner}
 
         <RepositoryMentionTextarea
@@ -136,8 +164,46 @@ export function InboxCardShell({
           }}
         />
 
+        {attachments ? (
+          <>
+            <AttachmentThumbnails
+              attachments={attachments.attachments}
+              removingId={attachments.removingId}
+              onRemoveAttachment={attachments.handleRemove}
+              isUploading={attachments.isUploading}
+              disabled={isBusy}
+            />
+            {attachments.error ? (
+              <p className="px-3 pb-1 text-xs text-destructive">{attachments.error}</p>
+            ) : null}
+          </>
+        ) : null}
+
         <div className="flex flex-nowrap items-center justify-between gap-2 border-t border-border/40 px-3 py-2">
           <div className="flex min-w-0 flex-nowrap items-center gap-1.5">
+            {attachments ? (
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-8 w-8 shrink-0 p-0"
+                  disabled={isBusy}
+                  onClick={() => attachments.inputRef.current?.click()}
+                  aria-label="Attach files"
+                  title="Attach files"
+                >
+                  <Plus size={18} />
+                </Button>
+                <input
+                  ref={attachments.inputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={attachments.handleInputChange}
+                />
+              </>
+            ) : null}
+
             <DropdownMenu>
               <DropdownMenuTrigger
                 className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2 text-xs text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-60"
@@ -289,7 +355,7 @@ export function InboxCardShell({
             ) : null}
           </div>
         </div>
-      </div>
+      </FileDropZone>
 
       {submitError ? <p className="text-xs text-red-400">{submitError}</p> : null}
       {!primaryConnection.connected && selectionLoaded && hasProject ? (

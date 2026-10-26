@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 
+import { useObjectiveAttachmentState } from '@/components/objectives/ObjectiveAttachments.tsx';
 import {
   useLaunchObjective,
   useMission,
@@ -29,6 +30,12 @@ export function usePromotedInboxCard(initialMission: MissionDetailDto) {
   const [resourceKey, setResourceKey] = useState<string | null>(objective?.resourceKey ?? null);
   const [pendingAction, setPendingAction] = useState<'save' | 'run' | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Promotion moved the capture's files onto the first objective, so the card
+  // keeps showing (and editing) them there.
+  const attachments = useObjectiveAttachmentState(objective?.id ?? '', {
+    dropDisabled: pendingAction !== null,
+    enabled: Boolean(objective)
+  });
 
   useEffect(() => {
     if (!objective) return;
@@ -41,7 +48,7 @@ export function usePromotedInboxCard(initialMission: MissionDetailDto) {
     workspaceId: mission.workspaceId,
     resourceKey,
     instruction,
-    isBusy: pendingAction !== null,
+    isBusy: pendingAction !== null || attachments.isUploading,
     isActionable: Boolean(objective),
     assignedSelection: objective
       ? {
@@ -106,7 +113,8 @@ export function usePromotedInboxCard(initialMission: MissionDetailDto) {
       pendingAction,
       submitError,
       onSave: () => void submit(false),
-      onRun: () => void submit(true)
+      onRun: () => void submit(true),
+      attachments: objective ? attachments : undefined
     }
   };
 }

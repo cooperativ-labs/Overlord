@@ -3,7 +3,10 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 
-import type { MissionDetailDto } from '../../../shared/contract.ts';
+import type { AttachmentUploadState } from '@/components/objectives/ObjectiveAttachments.tsx';
+import { useFileDropZone } from '@/components/ui/file-drop-zone.tsx';
+
+import type { MissionDetailDto, ObjectiveAttachmentDto } from '../../../shared/contract.ts';
 
 import {
   type InboxCardLaunchGate,
@@ -265,9 +268,11 @@ describe('promoted Inbox card actions', () => {
 });
 
 describe('InboxCardShell rendering', () => {
-  function renderShell(overrides: Partial<InboxCardShellProps>) {
-    const counts = { save: 0, run: 0, delete: 0 };
-    const props: InboxCardShellProps = {
+  function shellProps(
+    overrides: Partial<InboxCardShellProps>,
+    counts = { save: 0, run: 0, delete: 0 }
+  ): InboxCardShellProps {
+    return {
       instruction: 'Ship it',
       onInstructionChange: () => {},
       projectId: '',
@@ -303,6 +308,11 @@ describe('InboxCardShell rendering', () => {
       assignedBanner: null,
       ...overrides
     };
+  }
+
+  function renderShell(overrides: Partial<InboxCardShellProps>) {
+    const counts = { save: 0, run: 0, delete: 0 };
+    const props = shellProps(overrides, counts);
     // Queries stay idle so the mention textarea never reaches for the network.
     // Infinite gcTime avoids cache timers keeping the test process alive after cleanup.
     const client = new QueryClient({
@@ -316,6 +326,72 @@ describe('InboxCardShell rendering', () => {
     );
     return counts;
   }
+
+  function AttachmentShell({
+    attachments,
+    onRemove
+  }: {
+    attachments: ObjectiveAttachmentDto[];
+    onRemove: (id: string) => void;
+  }) {
+    const dragState = useFileDropZone({ onDrop: () => {} });
+    const state: AttachmentUploadState = {
+      attachments,
+      isLoading: false,
+      error: null,
+      removingId: null,
+      isUploading: false,
+      inputRef: { current: null },
+      handleFiles: async () => {},
+      handleInputChange: () => {},
+      handleRemove: onRemove,
+      dragState
+    };
+    return <InboxCardShell {...shellProps({ attachments: state })} />;
+  }
+
+  it('lists the capture files with an attach button and removes them by id', () => {
+    const removed: string[] = [];
+    const client = new QueryClient({
+      defaultOptions: { queries: { enabled: false, gcTime: Infinity } }
+    });
+    queryClient = client;
+    render(
+      <QueryClientProvider client={client}>
+        <AttachmentShell
+          attachments={[
+            {
+              id: 'att-1',
+              workspaceId: 'workspace-1',
+              projectId: null,
+              missionId: null,
+              objectiveId: null,
+              inboxItemId: 'item-1',
+              bucketKey: 'attachments',
+              storageKey: 'key-1',
+              filename: 'brief.pdf',
+              contentType: 'application/pdf',
+              sizeBytes: 512,
+              uploadStatus: 'uploaded',
+              url: '/api/storage/attachments/key-1',
+              createdAt: '2026-10-26T00:00:00.000Z'
+            }
+          ]}
+          onRemove={id => removed.push(id)}
+        />
+      </QueryClientProvider>
+    );
+
+    assert.ok(screen.getByRole('button', { name: 'Attach files' }));
+    assert.ok(screen.getByText('brief.pdf'));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove brief.pdf' }));
+    assert.deepEqual(removed, ['att-1']);
+  });
+
+  it('omits attachment controls when no attachment state is given', () => {
+    renderShell({});
+    assert.equal(screen.queryByRole('button', { name: 'Attach files' }), null);
+  });
 
   it('offers Save and Delete but not Run for an unassigned capture', () => {
     const counts = renderShell({});

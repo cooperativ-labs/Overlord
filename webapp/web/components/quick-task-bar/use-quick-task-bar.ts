@@ -1,9 +1,11 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   type AgentModelSelection,
   MANUAL_AGENT_KEY
 } from '@/components/objectives/AgentModelSelector.tsx';
+import { uploadPendingInboxAttachments } from '@/components/objectives/ObjectiveAttachments.tsx';
 import { api } from '@/lib/api.ts';
 import { getAgentIcon } from '@/lib/helpers/agent-icons.ts';
 import {
@@ -49,6 +51,7 @@ export function useQuickTaskBar(defaultProjectId: string | null = null) {
   const workspaces = useAccessibleWorkspaces();
   const createMission = useCreateMission();
   const createInboxItem = useCreateInboxItem();
+  const queryClient = useQueryClient();
   const launchObjective = useLaunchObjective();
   const updateObjective = useUpdateObjective();
 
@@ -348,8 +351,18 @@ export function useQuickTaskBar(defaultProjectId: string | null = null) {
     try {
       if (!selectedProject) {
         if (shouldLaunch) throw new Error('Assign a project before running this task');
-        await createInboxItem.mutateAsync({ title: trimmed, objectives: [trimmed] });
+        const item = await createInboxItem.mutateAsync({ title: trimmed, objectives: [trimmed] });
+        if (filesToUpload.length > 0) {
+          void uploadPendingInboxAttachments(
+            item.id,
+            filesToUpload.map(({ file }) => file),
+            queryClient
+          ).catch(error => {
+            console.error('Failed to upload quick-task attachments:', error);
+          });
+        }
         setObjective('');
+        setStagedFiles([]);
         handleClose();
         return;
       }

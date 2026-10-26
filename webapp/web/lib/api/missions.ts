@@ -30,6 +30,7 @@ import type {
   MissionScheduleDto,
   MissionSummaryResponse,
   MissionSummarySeenResponse,
+  ObjectiveAttachmentDto,
   ObjectiveFileChangesDto,
   PreviewScheduleBody,
   PurgeMergedWorktreesBody,
@@ -137,6 +138,23 @@ export const missionsApi = {
   deleteInboxItem: (id: string) => request<{ ok: true }>('DELETE', `/api/inbox/${id}`),
   promoteInboxItem: (id: string, projectId: string) =>
     request<MissionDetailDto>('POST', `/api/inbox/${id}/promote`, { projectId }),
+  listInboxItemAttachments: (inboxItemId: string) =>
+    request<ObjectiveAttachmentDto[]>('GET', `/api/inbox/${inboxItemId}/attachments`),
+  /**
+   * Upload a single File to a private Inbox capture. Same raw-body shape as
+   * `uploadObjectiveAttachment`; promotion later moves the file onto the
+   * created mission's first objective.
+   */
+  uploadInboxItemAttachment: (inboxItemId: string, file: File) =>
+    request<ObjectiveAttachmentDto>('POST', `/api/inbox/${inboxItemId}/attachments`, file, {
+      'Content-Type': file.type || 'application/octet-stream',
+      'X-Upload-Filename': encodeURIComponent(file.name)
+    }),
+  deleteInboxItemAttachment: (inboxItemId: string, attachmentId: string) =>
+    request<ObjectiveAttachmentDto[]>(
+      'DELETE',
+      `/api/inbox/${inboxItemId}/attachments/${attachmentId}`
+    ),
   updateMission: (id: string, body: UpdateMissionBody) =>
     request<MissionDetailDto>('PATCH', `/api/missions/${id}`, body),
   getMissionSchedule: (id: string) =>

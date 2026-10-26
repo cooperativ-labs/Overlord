@@ -128,3 +128,57 @@ describe('useQuickTaskBar submit errors', () => {
     assert.equal(requests.filter(request => request.method === 'POST').length, 0);
   });
 });
+
+describe('useQuickTaskBar inbox attachments', () => {
+  it('uploads staged files to the new Inbox capture', async () => {
+    const uploads: Array<{ url: string; filename: string | null; contentType: string | null }> = [];
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      const json = (body: unknown, status = 200) =>
+        new Response(JSON.stringify(body), {
+          status,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      if (method === 'POST' && url.endsWith('/api/inbox')) {
+        return json({
+          id: 'item-1',
+          title: 'Capture this',
+          objectives: ['Capture this'],
+          dueDatetime: null,
+          priority: null,
+          attachmentCount: 0,
+          createdAt: '2026-10-26T00:00:00.000Z',
+          updatedAt: '2026-10-26T00:00:00.000Z'
+        });
+      }
+      if (method === 'POST' && url.endsWith('/api/inbox/item-1/attachments')) {
+        const headers = new Headers(init?.headers);
+        uploads.push({
+          url,
+          filename: headers.get('X-Upload-Filename'),
+          contentType: headers.get('Content-Type')
+        });
+        return json({ id: `att-${uploads.length}` });
+      }
+      return json({ error: 'unavailable' }, 500);
+    }) as typeof fetch;
+
+    const { result } = renderQuickTaskBar();
+    await waitFor(() => assert.equal(result.current.isLoadingProjects, false));
+
+    act(() => {
+      result.current.setObjective('Capture this');
+      result.current.handleFilesSelected([
+        new File(['x'], 'design notes.txt', { type: 'text/plain' })
+      ] as unknown as FileList);
+    });
+    await act(() => result.current.handleSubmit());
+
+    assert.equal(result.current.submitError, null);
+    assert.equal(result.current.stagedFiles.length, 0);
+    await waitFor(() => assert.equal(uploads.length, 1));
+    assert.equal(uploads[0]?.filename, 'design%20notes.txt');
+    assert.equal(uploads[0]?.contentType, 'text/plain');
+  });
+});

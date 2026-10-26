@@ -19,6 +19,12 @@ export const keys = {
   organizationAdmins: (id: string) => ['organization', id, 'admins'] as const,
   defaultProject: ['profile', 'default-project'] as const,
   inbox: ['inbox'] as const,
+  /**
+   * Files on one private Inbox capture. Deliberately outside the `inbox` prefix
+   * so refreshing the capture list does not refetch every open card's files.
+   */
+  inboxItemAttachments: (inboxItemId: string) =>
+    ['inbox-item', inboxItemId, 'attachments'] as const,
   /** Cross-workspace recent + agent-Next missions shown in the Inbox column. */
   inboxMissions: ['inbox-missions'] as const,
   /** Cross-workspace objective activity feed rendered on the Feed page. */

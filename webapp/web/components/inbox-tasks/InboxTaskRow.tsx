@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Trash2, Undo2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Paperclip, Trash2, Undo2 } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 
 import { InboxMissionCard } from '@/components/InboxMissionCard.tsx';
@@ -93,6 +93,16 @@ export function InboxTaskRow({
           >
             {title}
           </span>
+          {item.attachmentCount > 0 ? (
+            <span
+              className="inline-flex shrink-0 items-center gap-0.5 text-[11px] tabular-nums text-muted-foreground"
+              aria-label={`${item.attachmentCount} ${item.attachmentCount === 1 ? 'attachment' : 'attachments'}`}
+              title={`${item.attachmentCount} ${item.attachmentCount === 1 ? 'attachment' : 'attachments'}`}
+            >
+              <Paperclip className="h-3 w-3" />
+              {item.attachmentCount}
+            </span>
+          ) : null}
           {detail && !isExpanded ? (
             <span className="hidden min-w-0 truncate text-xs text-muted-foreground sm:inline">
               {detail}

@@ -1,5 +1,6 @@
 import {
   keepPreviousData,
+  type QueryClient,
   useInfiniteQuery,
   useMutation,
   useQuery,
@@ -17,6 +18,7 @@ import type {
   MissionDetailDto,
   MissionScheduleDto,
   MissionSummaryResponse,
+  ObjectiveAttachmentDto,
   PreviewScheduleBody,
   RemoveWorktreeBody,
   ScheduleInput,
@@ -396,6 +398,48 @@ export function usePromoteInboxItem() {
       // without waiting for a follow-up fetch.
       qc.setQueryData(keys.mission(mission.id), mission);
       invalidateAll(qc);
+    }
+  });
+}
+
+// ---- Inbox item attachments ----------------------------------------------
+
+export const useInboxItemAttachments = (
+  inboxItemId: string,
+  { enabled = true }: { enabled?: boolean } = {}
+) =>
+  useQuery({
+    queryKey: keys.inboxItemAttachments(inboxItemId),
+    queryFn: () => api.listInboxItemAttachments(inboxItemId),
+    enabled
+  });
+
+/** Refresh one capture's files plus the list, whose rows carry `attachmentCount`. */
+export function invalidateInboxItemAttachments(qc: QueryClient, inboxItemId: string) {
+  void qc.invalidateQueries({ queryKey: keys.inboxItemAttachments(inboxItemId) });
+  void qc.invalidateQueries({ queryKey: keys.inbox });
+}
+
+export function useUploadInboxItemAttachment(inboxItemId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => api.uploadInboxItemAttachment(inboxItemId, file),
+    onSuccess: attachment => {
+      qc.setQueryData<ObjectiveAttachmentDto[]>(keys.inboxItemAttachments(inboxItemId), prev =>
+        prev ? [...prev, attachment] : [attachment]
+      );
+      invalidateInboxItemAttachments(qc, inboxItemId);
+    }
+  });
+}
+
+export function useDeleteInboxItemAttachment(inboxItemId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (attachmentId: string) => api.deleteInboxItemAttachment(inboxItemId, attachmentId),
+    onSuccess: remaining => {
+      qc.setQueryData(keys.inboxItemAttachments(inboxItemId), remaining);
+      invalidateInboxItemAttachments(qc, inboxItemId);
     }
   });
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 
+import { useInboxItemAttachmentState } from '@/components/objectives/ObjectiveAttachments.tsx';
 import {
   useDeleteInboxItem,
   useLaunchObjective,
@@ -38,6 +39,11 @@ export function useUnassignedInboxCard({
   const [resourceKey, setResourceKey] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<InboxCardPendingAction | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Files upload to the capture as soon as they are picked or dropped, like a
+  // draft objective; promotion carries them onto the mission's first objective.
+  const attachments = useInboxItemAttachmentState(item.id, {
+    dropDisabled: pendingAction !== null
+  });
 
   useEffect(() => {
     setInstruction(item.objectives[0] ?? item.title);
@@ -49,7 +55,8 @@ export function useUnassignedInboxCard({
     workspaceId: undefined,
     resourceKey,
     instruction,
-    isBusy: pendingAction !== null
+    // An in-flight upload holds Save/Run so promotion cannot outrun the file.
+    isBusy: pendingAction !== null || attachments.isUploading
   });
 
   /**
@@ -134,6 +141,7 @@ export function useUnassignedInboxCard({
     submitError,
     onSave: () => void submit(false),
     onRun: () => void submit(true),
-    onDelete: () => void handleDelete()
+    onDelete: () => void handleDelete(),
+    attachments
   };
 }

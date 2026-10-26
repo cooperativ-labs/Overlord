@@ -6,10 +6,8 @@ import {
   type AgentModelSelection,
   MANUAL_AGENT_KEY
 } from '@/components/objectives/AgentModelSelector.tsx';
-import {
-  PendingAttachmentList,
-  usePendingAttachments
-} from '@/components/objectives/ObjectiveAttachments.tsx';
+import { AttachmentThumbnails } from '@/components/objectives/AttachmentThumbnails.tsx';
+import { usePendingAttachments } from '@/components/objectives/ObjectiveAttachments.tsx';
 import { ObjectiveResourcePicker } from '@/components/objectives/ObjectiveResourcePicker.tsx';
 import { RepositoryMentionTextarea } from '@/components/RepositoryMentionTextarea.tsx';
 import { DueDatePickerButton } from '@/components/scheduling/DueDatePickerButton.tsx';
@@ -272,14 +270,23 @@ export function NewMissionModal({
       // the same workspace as the surface that supplied it.
       if (!selectedProjectId) {
         if (shouldLaunch) throw new Error('Assign a project before running this task');
-        if (pending.files.length > 0) {
-          throw new Error('Assign a project to attach files to this task');
-        }
-        await createInboxItem.mutateAsync({
+        const item = await createInboxItem.mutateAsync({
           title: text,
           objectives: [text],
           dueDatetime
         });
+        // Files stay on the private capture and move to the mission on promotion.
+        try {
+          await pending.uploadToInboxItem(item.id);
+        } catch (error) {
+          // The capture exists; clear the draft so dismissing cannot save it twice.
+          setInstruction('');
+          clearPendingAttachments();
+          const reason = error instanceof Error ? error.message : 'Upload failed.';
+          throw new Error(
+            `Saved to Inbox, but a file failed to upload (${reason}). Open the task to attach it again.`
+          );
+        }
         onClose();
         return;
       }
@@ -410,11 +417,10 @@ export function NewMissionModal({
 
           {/* Pending attachments + footer toolbar */}
           <div className="border-t border-border/40">
-            <PendingAttachmentList
+            <AttachmentThumbnails
               files={pending.files}
-              onRemove={pending.removeAt}
+              onRemoveFile={pending.removeAt}
               disabled={isBusy}
-              toolbar
             />
             {pending.error ? (
               <p className="px-3 pb-1 pt-1 text-xs text-destructive">{pending.error}</p>

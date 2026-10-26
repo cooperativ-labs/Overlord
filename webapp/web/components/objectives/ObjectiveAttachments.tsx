@@ -2,6 +2,7 @@ import { type QueryClient, useQueryClient } from '@tanstack/react-query';
 import { FileText, ImageIcon, Loader2, Plus, Trash2, X } from 'lucide-react';
 import {
   type ChangeEvent,
+  type MouseEvent,
   type ReactNode,
   type RefObject,
   useCallback,
@@ -12,9 +13,13 @@ import {
 import type { ObjectiveAttachmentDto } from '../../../shared/contract.ts';
 import { api } from '../../lib/api.ts';
 import {
+  invalidateInboxItemAttachments,
   keys,
+  useDeleteInboxItemAttachment,
   useDeleteObjectiveAttachment,
+  useInboxItemAttachments,
   useObjectiveAttachments,
+  useUploadInboxItemAttachment,
   useUploadObjectiveAttachment
 } from '../../lib/queries.ts';
 import { downloadStorageObject } from '../../lib/storage-download.ts';
@@ -31,7 +36,7 @@ import { type FileDropZoneDragState, useFileDropZone } from '../ui/file-drop-zon
 export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 export const MAX_ATTACHMENT_LABEL = '25 MB';
 
-function formatFileSize(bytes: number | null): string {
+export function formatFileSize(bytes: number | null): string {
   if (bytes === null) return '';
   if (bytes < 1024) return `${bytes} B`;
   const kb = bytes / 1024;
@@ -48,11 +53,51 @@ function formatFileSize(bytes: number | null): string {
  */
 export function useObjectiveAttachmentState(
   objectiveId: string,
-  { dropDisabled = false }: { dropDisabled?: boolean } = {}
+  { dropDisabled = false, enabled = true }: { dropDisabled?: boolean; enabled?: boolean } = {}
 ) {
-  const { data: attachments = [], isLoading } = useObjectiveAttachments(objectiveId);
+  const { data: attachments = [], isLoading } = useObjectiveAttachments(objectiveId, { enabled });
   const upload = useUploadObjectiveAttachment(objectiveId);
   const remove = useDeleteObjectiveAttachment(objectiveId);
+  return useAttachmentUploadState({ attachments, isLoading, upload, remove, dropDisabled });
+}
+
+/**
+ * {@link useObjectiveAttachmentState} for a private Inbox capture: files
+ * upload straight to `/api/inbox/:id/attachments` and ride along when the
+ * capture is promoted to a mission.
+ */
+export function useInboxItemAttachmentState(
+  inboxItemId: string,
+  { dropDisabled = false }: { dropDisabled?: boolean } = {}
+) {
+  const { data: attachments = [], isLoading } = useInboxItemAttachments(inboxItemId);
+  const upload = useUploadInboxItemAttachment(inboxItemId);
+  const remove = useDeleteInboxItemAttachment(inboxItemId);
+  return useAttachmentUploadState({ attachments, isLoading, upload, remove, dropDisabled });
+}
+
+/** The slice of the upload/delete mutations the shared state hook drives. */
+type AttachmentMutations = {
+  upload: { mutateAsync: (file: File) => Promise<unknown>; isPending: boolean };
+  remove: {
+    mutate: (
+      id: string,
+      options: { onError: (err: unknown) => void; onSettled: () => void }
+    ) => void;
+  };
+};
+
+function useAttachmentUploadState({
+  attachments,
+  isLoading,
+  upload,
+  remove,
+  dropDisabled
+}: AttachmentMutations & {
+  attachments: ObjectiveAttachmentDto[];
+  isLoading: boolean;
+  dropDisabled: boolean;
+}) {
   const [error, setError] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -119,7 +164,9 @@ export function useObjectiveAttachmentState(
   };
 }
 
-export type ObjectiveAttachmentState = ReturnType<typeof useObjectiveAttachmentState>;
+/** Upload/remove state for one owner's stored files — an objective or an Inbox capture. */
+export type AttachmentUploadState = ReturnType<typeof useAttachmentUploadState>;
+export type ObjectiveAttachmentState = AttachmentUploadState;
 export type { FileDropZoneDragState };
 
 /**
@@ -136,12 +183,36 @@ export async function uploadPendingAttachments(
 ): Promise<void> {
   if (files.length === 0) return;
   try {
-    for (const file of files) {
-      if (file.size > MAX_ATTACHMENT_BYTES) continue;
-      await api.uploadObjectiveAttachment(objectiveId, file);
-    }
+    await uploadEachWithinLimit(files, file => api.uploadObjectiveAttachment(objectiveId, file));
   } finally {
     void qc?.invalidateQueries({ queryKey: keys.objectiveAttachments(objectiveId) });
+  }
+}
+
+/**
+ * {@link uploadPendingAttachments} for a capture that was just saved to the
+ * Inbox rather than to a project.
+ */
+export async function uploadPendingInboxAttachments(
+  inboxItemId: string,
+  files: File[],
+  qc?: QueryClient
+): Promise<void> {
+  if (files.length === 0) return;
+  try {
+    await uploadEachWithinLimit(files, file => api.uploadInboxItemAttachment(inboxItemId, file));
+  } finally {
+    if (qc) invalidateInboxItemAttachments(qc, inboxItemId);
+  }
+}
+
+async function uploadEachWithinLimit(
+  files: File[],
+  uploadOne: (file: File) => Promise<unknown>
+): Promise<void> {
+  for (const file of files) {
+    if (file.size > MAX_ATTACHMENT_BYTES) continue;
+    await uploadOne(file);
   }
 }
 
@@ -200,6 +271,12 @@ export function usePendingAttachments({ dropDisabled = false }: { dropDisabled?:
     [files, qc]
   );
 
+  const uploadToInboxItem = useCallback(
+    (inboxItemId: string, pending: File[] = files) =>
+      uploadPendingInboxAttachments(inboxItemId, pending, qc),
+    [files, qc]
+  );
+
   return {
     files,
     error,
@@ -209,6 +286,7 @@ export function usePendingAttachments({ dropDisabled = false }: { dropDisabled?:
     clear,
     handleInputChange,
     upload,
+    uploadToInboxItem,
     dragState
   };
 }
@@ -268,11 +346,27 @@ export function PendingAttachmentList({
   );
 }
 
-function AttachmentIcon({ contentType }: { contentType: string | null }) {
+export function AttachmentIcon({ contentType }: { contentType: string | null }) {
   if (contentType?.startsWith('image/')) {
     return <ImageIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
   }
   return <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
+}
+
+/**
+ * `<a download>` click handler for a stored attachment. Same-origin shells let
+ * the browser follow the link; a remote API base needs an authenticated fetch.
+ */
+export function handleAttachmentDownloadClick(
+  event: MouseEvent<HTMLAnchorElement>,
+  attachment: Pick<ObjectiveAttachmentDto, 'url' | 'filename'>
+) {
+  if (!storageUrlNeedsAuthenticatedFetch({ url: attachment.url })) return;
+  event.preventDefault();
+  void downloadStorageObject({
+    url: attachment.url,
+    filename: attachment.filename
+  }).catch(() => undefined);
 }
 
 type ObjectiveAttachmentListProps = {
@@ -311,14 +405,7 @@ export function ObjectiveAttachmentList({
           <a
             href={attachment.url}
             download={attachment.filename}
-            onClick={event => {
-              if (!storageUrlNeedsAuthenticatedFetch({ url: attachment.url })) return;
-              event.preventDefault();
-              void downloadStorageObject({
-                url: attachment.url,
-                filename: attachment.filename
-              }).catch(() => undefined);
-            }}
+            onClick={event => handleAttachmentDownloadClick(event, attachment)}
             className="min-w-0 flex-1 truncate text-left text-xs hover:underline"
             title={attachment.filename}
           >
