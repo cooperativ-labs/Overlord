@@ -36,6 +36,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { recordChange, requireDatabaseClient } from './db.ts';
+import { tombstoneInboxItemAttachmentsTx } from './storage.ts';
 import { createStorageBackend } from './storage-backends.ts';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -140,6 +141,10 @@ export async function cascadeDeleteAccount(profileId: string): Promise<void> {
         }
       });
     }
+
+    // Inbox captures cascade away with the profile; their attachments never
+    // entered a workspace feed, so they are tombstoned without entity changes.
+    cleanup.push(...(await tombstoneInboxItemAttachmentsTx(tx, { profileId })));
 
     for (const membership of memberships) {
       await tx.run(`DELETE FROM workspace_users WHERE id = ?`, [membership.id]);

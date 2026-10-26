@@ -241,6 +241,12 @@ import {
   requireProjectPermission,
   requireWorkspacePermission
 } from './rbac.ts';
+import {
+  copyInboxAttachmentsToWorkspace,
+  removeInboxAttachmentObjects,
+  repointInboxAttachmentsTx,
+  tombstoneInboxItemAttachmentsTx
+} from './storage.ts';
 
 export { ApiError };
 
@@ -5306,9 +5312,15 @@ type InboxItemRow = {
   objectives_json: string;
   due_datetime: string | null;
   priority: InboxItemDto['priority'];
+  attachment_count: number;
   created_at: string;
   updated_at: string;
 };
+
+const INBOX_ITEM_COLUMNS = `id, title, objectives_json, due_datetime, priority,
+  (SELECT COUNT(*) FROM attachments a
+    WHERE a.inbox_item_id = inbox_items.id AND a.deleted_at IS NULL) AS attachment_count,
+  created_at, updated_at`;
 
 function validateInboxBody(body: {
   title?: unknown;
@@ -5356,6 +5368,7 @@ function toInboxItemDto(row: InboxItemRow): InboxItemDto {
     objectives,
     dueDatetime: row.due_datetime,
     priority: row.priority,
+    attachmentCount: Number(row.attachment_count),
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -5373,7 +5386,7 @@ async function ownedInboxRow(
   id: string
 ): Promise<InboxItemRow> {
   const row = await db.get<InboxItemRow>(
-    `SELECT id, title, objectives_json, due_datetime, priority, created_at, updated_at
+    `SELECT ${INBOX_ITEM_COLUMNS}
        FROM inbox_items WHERE id = ? AND profile_id = ?`,
     [id, profileId]
   );
@@ -5385,7 +5398,7 @@ export async function listInboxItems(): Promise<InboxItemDto[]> {
   const db = requireDatabaseClient();
   const profileId = await activeInboxProfileId(db);
   const rows = await db.all<InboxItemRow>(
-    `SELECT id, title, objectives_json, due_datetime, priority, created_at, updated_at
+    `SELECT ${INBOX_ITEM_COLUMNS}
        FROM inbox_items WHERE profile_id = ? ORDER BY created_at DESC`,
     [profileId]
   );
@@ -5408,6 +5421,7 @@ export async function createInboxItem(body: CreateInboxItemBody): Promise<InboxI
     objectives_json: JSON.stringify(input.objectives),
     due_datetime: input.dueDatetime,
     priority: input.priority,
+    attachment_count: 0,
     created_at: now,
     updated_at: now
   };
@@ -5452,6 +5466,7 @@ export async function updateInboxItem(
     objectives: input.objectives,
     dueDatetime: input.dueDatetime,
     priority: input.priority,
+    attachmentCount: Number(existing.attachment_count),
     createdAt: existing.created_at,
     updatedAt: now
   };
@@ -5460,30 +5475,59 @@ export async function updateInboxItem(
 export async function deleteInboxItem(id: string): Promise<void> {
   const db = requireDatabaseClient();
   const profileId = await activeInboxProfileId(db);
-  await ownedInboxRow(db, profileId, id);
-  await db.run(`DELETE FROM inbox_items WHERE id = ? AND profile_id = ?`, [id, profileId]);
+  const cleanup = await db.transaction(async tx => {
+    await ownedInboxRow(tx, profileId, id);
+    const objects = await tombstoneInboxItemAttachmentsTx(tx, { inboxItemId: id });
+    await tx.run(`DELETE FROM inbox_items WHERE id = ? AND profile_id = ?`, [id, profileId]);
+    return objects;
+  });
+  await removeInboxAttachmentObjects(cleanup);
 }
 
 export async function promoteInboxItem(id: string, projectId: string): Promise<MissionDetailDto> {
   const db = requireDatabaseClient();
   const profileId = await activeInboxProfileId(db);
-  const missionId = await db.transaction(async tx => {
-    const item = await ownedInboxRow(tx, profileId, id);
-    const objectives = JSON.parse(item.objectives_json) as string[];
-    const created = await createMissionTx(
-      {
-        projectId,
-        title: item.title,
-        objectives: objectives.map(objective => ({ objective })),
-        dueDatetime: item.due_datetime,
-        ...(item.priority ? { priority: item.priority } : {})
-      },
-      tx,
-      true
-    );
-    await tx.run(`DELETE FROM inbox_items WHERE id = ? AND profile_id = ?`, [id, profileId]);
-    return created.missionId;
+  await ownedInboxRow(db, profileId, id);
+  // Attachment bytes stored in another workspace are copied into the
+  // destination workspace's bucket before the transaction; the row re-point
+  // below is atomic with mission creation and the capture's consumption.
+  const { workspaceId } = await requireProjectPermission({
+    projectId,
+    permission: PERMISSIONS.MISSION_CREATE,
+    db
   });
+  const copies = await copyInboxAttachmentsToWorkspace(id, workspaceId);
+  const missionId = await db
+    .transaction(async tx => {
+      const item = await ownedInboxRow(tx, profileId, id);
+      const objectives = JSON.parse(item.objectives_json) as string[];
+      const created = await createMissionTx(
+        {
+          projectId,
+          title: item.title,
+          objectives: objectives.map(objective => ({ objective })),
+          dueDatetime: item.due_datetime,
+          ...(item.priority ? { priority: item.priority } : {})
+        },
+        tx,
+        true
+      );
+      await repointInboxAttachmentsTx(tx, {
+        inboxItemId: id,
+        workspaceId,
+        projectId,
+        missionId: created.missionId,
+        objectiveId: created.objectiveIds[0],
+        copies
+      });
+      await tx.run(`DELETE FROM inbox_items WHERE id = ? AND profile_id = ?`, [id, profileId]);
+      return created.missionId;
+    })
+    .catch(async (error: unknown) => {
+      await removeInboxAttachmentObjects(copies.map(copy => copy.target));
+      throw error;
+    });
+  await removeInboxAttachmentObjects(copies.map(copy => copy.source));
   return getMissionDetail(missionId);
 }
 

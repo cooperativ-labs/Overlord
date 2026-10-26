@@ -34,13 +34,57 @@ where a surface differs by edition this document calls it out explicitly.
 
 ## Contract Version
 
-Current version: `167`
+Current version: `168`
 
 This `Current version` line is the **sole authoritative** statement of the contract
 version in this document. Automated checks and agents MUST read it (and
 `contract/components.yaml`) — never a header duplicate. The contract version is
 incremented when any stable interface changes. All conformance manifests must
 declare the contract version they were validated against.
+
+### Version 168 Change Summary
+
+Inbox item attachments (coo:1197). Profile-owned Inbox captures can carry files
+before they become missions. Additive only; no existing route or field changes
+meaning.
+
+- **Database.** `attachments` gains nullable `inbox_item_id` (FK to
+  `inbox_items`, `ON DELETE SET NULL`) and the partial index
+  `idx_attachments_inbox_item_created` on both editions (migration
+  `20261026100000_inbox_item_attachments`). An Inbox attachment keeps NOT NULL
+  `workspace_id`/`storage_bucket_id` — its bytes live in the owner's storage
+  workspace: the workspace of the item's earlier attachments, else the request's
+  active workspace, else the owner's oldest membership granting
+  `attachment:create` (409 when the owner belongs to no workspace) — with null
+  project, mission, and objective.
+- **REST.** `GET/POST /api/inbox/:id/attachments` and
+  `DELETE /api/inbox/:id/attachments/:attachmentId` mirror the objective
+  attachment routes (raw body, percent-encoded `x-upload-filename`,
+  `MAX_ATTACHMENT_BYTES`; DELETE returns the remaining list) but are authorized by
+  Inbox item ownership (`404` for another profile) plus `attachment:create` on
+  the storage workspace for uploads. `GET /api/storage/attachments/:storageKey`
+  serves an unpromoted Inbox file only to the item's owner. Workspace-scoped
+  attachment service reads/writes exclude rows with `inbox_item_id`. Like Inbox
+  items, Inbox-stage attachment writes emit no `entity_changes`.
+- **Promotion.** `POST /api/inbox/:id/promote` re-points every active attachment
+  to the created mission's first objective (sets project, mission, objective,
+  clears `inbox_item_id`, bumps revision, records an `attachment` update change)
+  in the same transaction that creates the mission and consumes the item. Files
+  stored in another workspace are first copied into the destination workspace's
+  `attachments` bucket under its canonical key; the source object is removed
+  after commit, and copies are discarded if promotion fails. An attachment added
+  between the copy and the transaction makes promotion return `409` (retry).
+- **Deletion.** `DELETE /api/inbox/:id` and account deletion tombstone the
+  capture's attachments and remove remote stored objects after commit (local
+  buckets keep historical on-disk behavior, as for objective attachments).
+- **Contract package.** `InboxItemDto.attachmentCount` (active files) and
+  `ObjectiveAttachmentDto.inboxItemId` (null outside the Inbox) are additive.
+
+Impact: backend, database (both editions), the contract package, and the web
+Inbox fixtures change together. Mobile (OverlordMobile) and the web composer
+adopt the routes in follow-up objectives; existing clients ignore the additive
+fields. CLI, MCP, protocol, connectors, automations, auth, runner, and webhooks
+are unchanged.
 
 ### Version 167 Change Summary
 
@@ -3254,7 +3298,7 @@ Owns:
 - Creation-provenance projection: `MissionDto` and `ObjectiveDto` carry `createdByKind` (`human` \| `agent` \| `automation`; non-optional, with a `human` fallback in the mapper so no client writes a null branch), `createdByAgent` (connector/agent identifier or null), and `createdByWorkspaceUserId` (the workspace member the authoring actor acted as, or on behalf of). `MissionDetailDto` additionally carries `createdFrom` — `{ sessionId, missionId, missionDisplayId, agentIdentifier }` or null — resolved from the soft `created_by_session_id` reference by a `LEFT JOIN` that tolerates a missing session; it is paid once per mission page and is deliberately absent from the board/list projections. Provenance is a permanent row attribute, never seen-tracked mission state, and REST exposes no filter or sort on it.
 - Objective display ids: `ObjectiveDto` additively carries `displayKey` and computed `displayId` (`{mission.displayId}.{displayKey}`). `/api/objectives/:id` (and launch/prompt/attachment routes that take an objective id) accept an objective UUID or a full display id. UUID lookup stays globally unique; display ids resolve within the selected organization's `authorizedWorkspaces` set, return `404` outside that set, and return `409` on genuine ambiguity.
 - Opt-in parallel objectives: `MissionDto` and `UpdateMissionBody` additively carry `allowParallelObjectives` (default false). `POST /api/objectives/:id/launch` 409s an active sibling only while this flag is false; when it is true a sibling never blocks the launch, on the same `resource_key` or a different one. `POST /api/missions/:id/branch-prepared` accepts an additive `branchAutomation.isolated` boolean: an isolated per-objective branch is recorded on `objectives.branch` and audited as a mission event, but must not move `missions.active_branch` or the mission-level branch observation off the shared mission branch.
-- Profile-owned inbox capture: authenticated `/api/inbox` CRUD and `/api/inbox/:id/promote`. Every item route resolves the caller's profile and returns `404` for an item owned by another profile. Promotion checks `mission:create` only on the destination project, calls the ordinary mission-create transaction with the capture fields, and consumes the item atomically. Account-owned inbox mutations are intentionally absent from workspace `entity_changes`; promotion retains normal mission realtime behavior.
+- Profile-owned inbox capture: authenticated `/api/inbox` CRUD, `/api/inbox/:id/promote`, and (v168) Inbox attachments at `GET/POST /api/inbox/:id/attachments` and `DELETE /api/inbox/:id/attachments/:attachmentId`, which promotion re-points onto the created mission's first objective. Every item route resolves the caller's profile and returns `404` for an item owned by another profile. Promotion checks `mission:create` only on the destination project, calls the ordinary mission-create transaction with the capture fields, and consumes the item atomically. Account-owned inbox mutations are intentionally absent from workspace `entity_changes`; promotion retains normal mission realtime behavior.
 - Cross-workspace inbox missions: authenticated `GET /api/inbox/missions` returns a bounded `InboxMissionsResponse` unioning agent-authored missions in status type `next` with missions of any creator that are past due or due today or tomorrow (UTC day boundaries; `complete` and `cancelled` status types excluded from both due slices), across every workspace the caller actively belongs to in the active organization and may `mission:read`. Only active projects contribute Inbox cards; archived projects are excluded regardless of inclusion reason. Human-created missions appear only through the overdue and due-soon windows. Each row is an `InboxMissionDto` (`MissionDto` plus project name/color and inclusion `reasons` of `agent_next`, `overdue`, `due_soon`, and/or `recent`); a mission qualifying several ways is one card carrying every reason, and `overdue` and `due_soon` are mutually exclusive. Overdue rows lead, most recently overdue first (due date descending), then due-soon rows soonest first, then agent-Next rows newest-first, each slice capped independently. The additive `recent` reason labels rows created within the past 7 days. Distinct from profile-owned `/api/inbox` capture.
 - Cross-workspace activity feed: authenticated `GET /api/activity-feed` returns a bounded, mission-anchored `ActivityFeedDto` across every workspace the caller actively belongs to in the active organization, authorized with `mission:read` per workspace. Its kinds are `mission_run`, `mission_delivered`, and `blocking_question`. A mission with at least one `launching` / `executing` / `pending_delivery` objective is a single `ActivityFeedMissionItemDto` keyed `mission:<missionId>` — never one card per objective — carrying `runState` (`launching` \| `executing`), every objective of that mission as `ActivityFeedMissionObjectiveDto` in mission-panel display order, and `activeObjectiveIds` for the objectives that are live. Its chrome fields describe the mission's _primary_ running objective: the launching one when there is one, else the oldest active one. `pending_delivery` counts as live work, so a re-attached objective keeps its mission on the feed instead of dropping out between its last update and delivery. A mission whose most recent live delivery falls in the requested two-week window and that has no live objective is a `mission_delivered` card of the same DTO shape with `runState: 'delivered'` and empty `activeObjectiveIds`. Optional `before` (ISO-8601 UTC) selects the next older two-week delivered window and omits live runs and questions; `nextBefore` is that window's start when older delivered missions exist, else null. `blocking_question` items remain unseen `ask` mission events from the past 3 days. `items` is grouped rather than purely time-descending — launching missions, then executing ones, then questions, then delivered, newest-first within each group. `createdByKind` / `createdByAgent` describe the item's subject: the mission for `mission_run` and `mission_delivered`, the objective behind the ask for `blocking_question`. Agent identity treats the protocol session sentinel `unknown` as absent and falls back to the objective's `assigned_agent`. Truncation is reported through `counts` rather than implied, and no raw payload JSON is exposed.
 - Deferred-work resolutions: authenticated `PUT /api/deliveries/:deliveryId/deferred-work/:actionId/resolution` with `{ status, outcome?, outcomeRef? }` (`status` is `done` \| `dismissed`; `outcome` is `mission_created` \| `objective_added` and only with `status: 'done'`, else 400) upserts a `human_action_resolutions` row and `DELETE` on the same path removes it; both require `mission:update` on the delivery's workspace, return the refreshed `DeliveryDeferredWorkItemDto`, 404 an unknown delivery or an action id that is not one of the delivery's deferred-work ids (reported human actions have no resolution since v150), and emit a `human_action_resolution` entity-change row carrying the mission and objective ids. The webapp may promote deferred work through the existing `POST /api/missions` surface (`title` as the first objective's title and `change`, `Location: {location}`, `Done when: {doneWhen}` separated by blank lines as its instruction, `statusId` omitted so the project default applies) or `POST /api/objectives` as a future objective on the delivering mission with the same title and instruction (v166), then record the matching outcome. No raw payload JSON is exposed.

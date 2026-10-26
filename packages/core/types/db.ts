@@ -256,6 +256,7 @@ export interface Attachments {
   deleted_at: string | null;
   filename: string;
   id: string | null;
+  inbox_item_id: string | null;
   metadata_json: Generated<string>;
   mission_id: string | null;
   objective_id: string | null;

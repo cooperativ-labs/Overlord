@@ -1081,6 +1081,8 @@ describe('denied surfaces', () => {
       ['POST', `/api/inbox`, { title: 'Denied', objectives: ['Denied'] }],
       ['GET', `/api/inbox`],
       ['GET', `/api/inbox/missions`],
+      ['GET', `/api/inbox/denied-item/attachments`],
+      ['DELETE', `/api/inbox/denied-item/attachments/denied-attachment`],
       ['GET', `/api/activity-feed`],
       ['GET', `/api/missions/search?q=feedback`],
       ['GET', `/api/missions/search/v2?q=feedback`],

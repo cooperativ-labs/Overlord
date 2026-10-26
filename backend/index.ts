@@ -263,13 +263,16 @@ import {
 } from './run-queue.ts';
 import { runQueueDispatchWorker } from './run-queue-dispatch-worker.ts';
 import {
+  deleteInboxItemAttachment,
   deleteObjectiveAttachment,
+  listInboxItemAttachments,
   listObjectiveAttachments,
   MAX_ATTACHMENT_BYTES,
   MAX_IMAGE_BYTES,
   resolveStoredObject,
   serveStoredObject,
   type UploadImageInput,
+  uploadInboxItemAttachment,
   uploadObjectiveAttachment,
   uploadOrganizationImage,
   uploadUserImage,
@@ -497,7 +500,7 @@ const urlEncodedBody = express.urlencoded({ extended: false });
 function isRawUploadRequest(req: Request): boolean {
   if (req.method !== 'POST') return false;
   if (req.path.startsWith('/api/uploads/')) return true;
-  return /^\/api\/objectives\/[^/]+\/attachments$/.test(req.path);
+  return /^\/api\/(?:objectives|inbox)\/[^/]+\/attachments$/.test(req.path);
 }
 
 // A runner's completion report carries the capability result envelope; bounded
@@ -2032,6 +2035,37 @@ app.post(
 app.delete(
   '/api/objectives/:id/attachments/:attachmentId',
   handle(req => deleteObjectiveAttachment(req.params.id, req.params.attachmentId), {
+    mutates: true
+  })
+);
+
+// Inbox item attachments mirror the objective routes but are authorized by
+// ownership of the profile-owned capture; promotion moves them onto the
+// created mission's first objective.
+app.get(
+  '/api/inbox/:id/attachments',
+  handle(req => listInboxItemAttachments(req.params.id))
+);
+app.post(
+  '/api/inbox/:id/attachments',
+  rawAttachmentBody,
+  handle(
+    req => {
+      const headerName = req.header('x-upload-filename');
+      const filename = headerName ? decodeURIComponent(headerName) : 'attachment';
+      return uploadInboxItemAttachment({
+        inboxItemId: req.params.id,
+        bytes: Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0),
+        filename,
+        contentType: req.header('content-type') ?? ''
+      });
+    },
+    { mutates: true }
+  )
+);
+app.delete(
+  '/api/inbox/:id/attachments/:attachmentId',
+  handle(req => deleteInboxItemAttachment(req.params.id, req.params.attachmentId), {
     mutates: true
   })
 );

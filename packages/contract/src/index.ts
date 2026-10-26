@@ -2622,6 +2622,8 @@ export interface InboxItemDto {
   objectives: string[];
   dueDatetime: string | null;
   priority: MissionPriority | null;
+  /** Active files attached to the capture (`GET /api/inbox/:id/attachments`). */
+  attachmentCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -3088,7 +3090,9 @@ export type AttachmentUploadStatus = 'prepared' | 'uploaded' | 'available' | 'fa
  * A file attached to an objective, stored in the `attachments` bucket. Bytes
  * live behind the bucket; this descriptor carries metadata plus the
  * server-relative `url` the SPA loads (which serves the bytes as a download).
- * Derived from the `attachments` table, scoped to a single objective.
+ * Derived from the `attachments` table, scoped to a single objective — or, for
+ * `/api/inbox/:id/attachments`, to a profile-owned inbox item (`inboxItemId`
+ * set; project, mission, and objective null until promotion re-points it).
  */
 export interface ObjectiveAttachmentDto {
   /** `attachments.id` of the recorded object. */
@@ -3097,6 +3101,8 @@ export interface ObjectiveAttachmentDto {
   projectId: string | null;
   missionId: string | null;
   objectiveId: string | null;
+  /** Owning `inbox_items.id` while the file belongs to an unpromoted Inbox capture. */
+  inboxItemId: string | null;
   /** Logical bucket the file was stored in (e.g. `attachments`). */
   bucketKey: string;
   /** Backend key/path within the bucket. */

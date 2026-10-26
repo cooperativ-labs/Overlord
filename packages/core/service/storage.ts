@@ -622,7 +622,7 @@ export async function listAttachments({
   let sql = `SELECT id, workspace_id, storage_bucket_id, storage_key, filename, content_type,
                     size_bytes, checksum_sha256, upload_status, revision
              FROM attachments
-             WHERE workspace_id = ? AND deleted_at IS NULL`;
+             WHERE workspace_id = ? AND deleted_at IS NULL AND inbox_item_id IS NULL`;
   if (projectId) {
     sql += ' AND project_id = ?';
     params.push(projectId);
@@ -659,7 +659,8 @@ export async function updateAttachment({
   const existing = assertFound(
     (await ctx.db.get(
       `SELECT project_id, mission_id, objective_id
-         FROM attachments WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+         FROM attachments
+        WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL AND inbox_item_id IS NULL`,
       [attachmentId, ctx.workspace.id]
     )) as StorageRow | undefined,
     'Attachment not found'
@@ -668,7 +669,8 @@ export async function updateAttachment({
   const result = await ctx.db.run(
     `UPDATE attachments
        SET filename = ?, upload_status = ?, metadata_json = ?, updated_at = ?, revision = revision + 1
-       WHERE id = ? AND workspace_id = ? AND revision = ? AND deleted_at IS NULL`,
+       WHERE id = ? AND workspace_id = ? AND revision = ? AND deleted_at IS NULL
+         AND inbox_item_id IS NULL`,
     [filename, uploadStatus, metadataJson(metadata), now, attachmentId, ctx.workspace.id, revision]
   );
   if (result.changes === 0) throw new ServiceError('Attachment update conflict', 'conflict', 409);
@@ -703,7 +705,8 @@ export async function deleteAttachment({
   const existing = assertFound(
     (await ctx.db.get(
       `SELECT project_id, mission_id, objective_id
-         FROM attachments WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+         FROM attachments
+        WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL AND inbox_item_id IS NULL`,
       [attachmentId, ctx.workspace.id]
     )) as StorageRow | undefined,
     'Attachment not found'
@@ -712,7 +715,8 @@ export async function deleteAttachment({
   const result = await ctx.db.run(
     `UPDATE attachments
        SET deleted_at = ?, updated_at = ?, revision = revision + 1
-       WHERE id = ? AND workspace_id = ? AND revision = ? AND deleted_at IS NULL`,
+       WHERE id = ? AND workspace_id = ? AND revision = ? AND deleted_at IS NULL
+         AND inbox_item_id IS NULL`,
     [now, now, attachmentId, ctx.workspace.id, revision]
   );
   if (result.changes === 0) throw new ServiceError('Attachment delete conflict', 'conflict', 409);

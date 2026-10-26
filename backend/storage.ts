@@ -32,6 +32,7 @@ import {
   getActiveTokenProjectIds,
   getActorWorkspaceUserId,
   getImplicitWorkspaceIdOrNull,
+  getResourceLookupWorkspaceIds,
   newId,
   nowIso,
   projectInTokenScope,
@@ -439,6 +440,18 @@ async function resolveObjectiveScope(
   return row;
 }
 
+function assertAttachmentBytes(bytes: Buffer): void {
+  if (!bytes || bytes.length === 0) {
+    throw new ApiError(400, 'No file data received');
+  }
+  if (bytes.length > MAX_ATTACHMENT_BYTES) {
+    throw new ApiError(
+      413,
+      `File too large. Attachments can be no longer than ${MAX_ATTACHMENT_LABEL}.`
+    );
+  }
+}
+
 /** Preserve the uploaded file's extension for the stored object's backend key. */
 function attachmentExtension(filename: string): string {
   const ext = path.extname(filename).toLowerCase();
@@ -452,6 +465,7 @@ interface AttachmentRow {
   project_id: string | null;
   mission_id: string | null;
   objective_id: string | null;
+  inbox_item_id: string | null;
   storage_key: string;
   filename: string;
   content_type: string | null;
@@ -467,6 +481,7 @@ function toObjectiveAttachmentDto(row: AttachmentRow): ObjectiveAttachmentDto {
     projectId: row.project_id,
     missionId: row.mission_id,
     objectiveId: row.objective_id,
+    inboxItemId: row.inbox_item_id,
     bucketKey: ATTACHMENTS_BUCKET_KEY,
     storageKey: row.storage_key,
     filename: row.filename,
@@ -478,7 +493,7 @@ function toObjectiveAttachmentDto(row: AttachmentRow): ObjectiveAttachmentDto {
   };
 }
 
-const ATTACHMENT_COLUMNS = `id, workspace_id, project_id, mission_id, objective_id,
+const ATTACHMENT_COLUMNS = `id, workspace_id, project_id, mission_id, objective_id, inbox_item_id,
   storage_key, filename, content_type, size_bytes, upload_status, created_at`;
 
 export interface UploadAttachmentInput {
@@ -496,15 +511,7 @@ export interface UploadAttachmentInput {
 export async function uploadObjectiveAttachment(
   input: UploadAttachmentInput
 ): Promise<ObjectiveAttachmentDto> {
-  if (!input.bytes || input.bytes.length === 0) {
-    throw new ApiError(400, 'No file data received');
-  }
-  if (input.bytes.length > MAX_ATTACHMENT_BYTES) {
-    throw new ApiError(
-      413,
-      `File too large. Attachments can be no longer than ${MAX_ATTACHMENT_LABEL}.`
-    );
-  }
+  assertAttachmentBytes(input.bytes);
 
   const scope = await resolveObjectiveScope(
     input.objectiveId,
@@ -579,6 +586,7 @@ export async function uploadObjectiveAttachment(
       project_id: scope.project_id,
       mission_id: scope.mission_id,
       objective_id: scope.id,
+      inbox_item_id: null,
       storage_key: storageKey,
       filename,
       content_type: contentType,
@@ -679,14 +687,445 @@ export async function deleteObjectiveAttachment(
     };
   });
 
-  if (
-    cleanup.bucket.storage_backend === 's3' ||
-    cleanup.bucket.storage_backend === 'railway_volume'
-  ) {
-    const backend = createStorageBackend({ bucket: cleanup.bucket, repoRoot });
-    await backend.deleteObject?.({ key: cleanup.key });
-  }
+  await removeStoredObjects([cleanup]);
   return remaining;
+}
+
+interface StoredObjectRef {
+  key: string;
+  bucket: {
+    id: string;
+    bucket_key: string;
+    storage_backend: string;
+    local_path: string | null;
+    settings_json: string;
+  };
+}
+
+/**
+ * Remove stored bytes after their metadata change has committed. Remote
+ * backends delete the object; local buckets keep historical on-disk behavior.
+ */
+async function removeStoredObjects(objects: StoredObjectRef[]): Promise<void> {
+  for (const object of objects) {
+    if (
+      object.bucket.storage_backend === 's3' ||
+      object.bucket.storage_backend === 'railway_volume'
+    ) {
+      const backend = createStorageBackend({ bucket: object.bucket, repoRoot });
+      await backend.deleteObject?.({ key: object.key });
+    }
+  }
+}
+
+// ---- Inbox item attachments ------------------------------------------------
+//
+// A profile-owned inbox item has no workspace, so its files are stored in the
+// owner's storage workspace: the workspace of the item's earlier attachments,
+// else the request's active workspace, else the owner's oldest membership that
+// grants `attachment:create`. Rows carry `inbox_item_id` with no project,
+// mission, or objective, and are authorized by item ownership. Like inbox
+// items themselves they stay outside workspace realtime: no entity change is
+// recorded until promotion re-points them at the created mission's first
+// objective.
+
+async function ownedInboxItemId(
+  inboxItemId: string,
+  client: DatabaseClient = requireDatabaseClient()
+): Promise<string> {
+  const profileId = await resolveActiveProfileId(client);
+  if (!profileId) throw new ApiError(401, 'Authentication required');
+  const row = await client.get<{ id: string }>(
+    `SELECT id FROM inbox_items WHERE id = ? AND profile_id = ?`,
+    [inboxItemId, profileId]
+  );
+  if (!row) throw new ApiError(404, 'Inbox item not found');
+  return row.id;
+}
+
+async function inboxAttachmentWorkspace(
+  inboxItemId: string
+): Promise<{ workspaceId: string; workspaceUserId: string }> {
+  const client = requireDatabaseClient();
+  const existing = await client.get<{ workspace_id: string }>(
+    `SELECT workspace_id FROM attachments
+      WHERE inbox_item_id = ? AND deleted_at IS NULL
+      ORDER BY created_at ASC LIMIT 1`,
+    [inboxItemId]
+  );
+  const memberships = await getResourceLookupWorkspaceIds(client);
+  const implicit = getImplicitWorkspaceIdOrNull();
+  const candidates = [
+    ...(existing ? [existing.workspace_id] : []),
+    ...(implicit && memberships.includes(implicit) ? [implicit] : []),
+    ...memberships
+  ];
+  let denied: unknown = null;
+  for (const workspaceId of new Set(candidates)) {
+    try {
+      const workspaceUserId = await requireWorkspacePermission({
+        workspaceId,
+        permission: PERMISSIONS.ATTACHMENT_CREATE,
+        db: client
+      });
+      return { workspaceId, workspaceUserId };
+    } catch (error) {
+      if (!(error instanceof ApiError) || (error.status !== 403 && error.status !== 404)) {
+        throw error;
+      }
+      denied ??= error;
+    }
+  }
+  if (denied) throw denied;
+  throw new ApiError(409, 'Join a workspace before attaching files to Inbox items');
+}
+
+async function listInboxAttachmentRows(
+  inboxItemId: string,
+  client: DatabaseClient
+): Promise<AttachmentRow[]> {
+  return client.all<AttachmentRow>(
+    `SELECT ${ATTACHMENT_COLUMNS} FROM attachments
+      WHERE inbox_item_id = ? AND deleted_at IS NULL
+      ORDER BY created_at ASC`,
+    [inboxItemId]
+  );
+}
+
+export interface UploadInboxAttachmentInput {
+  inboxItemId: string;
+  bytes: Buffer;
+  filename: string;
+  contentType: string;
+}
+
+/** Store an uploaded file against one of the caller's inbox items. */
+export async function uploadInboxItemAttachment(
+  input: UploadInboxAttachmentInput
+): Promise<ObjectiveAttachmentDto> {
+  assertAttachmentBytes(input.bytes);
+  const inboxItemId = await ownedInboxItemId(input.inboxItemId);
+  const { workspaceId, workspaceUserId } = await inboxAttachmentWorkspace(inboxItemId);
+  const bucket = await resolveBucket(ATTACHMENTS_BUCKET_KEY, workspaceId);
+
+  const id = newId();
+  const storageKey = attachmentObjectKey(workspaceId, id, attachmentExtension(input.filename));
+  const now = nowIso();
+  const contentType = input.contentType.split(';')[0].trim().toLowerCase() || null;
+  const backend = createStorageBackend({ bucket, repoRoot });
+  await backend.put({
+    key: storageKey,
+    bytes: input.bytes,
+    contentType: contentType ?? 'application/octet-stream'
+  });
+  const filename = input.filename.trim() || `attachment${path.extname(storageKey)}`;
+  const checksum = createHash('sha256').update(input.bytes).digest('hex');
+
+  try {
+    await requireDatabaseClient().transaction(async tx => {
+      // Re-check inside the write so a concurrent delete/promotion of the item
+      // cannot leave a row pointing at a consumed capture.
+      await ownedInboxItemId(inboxItemId, tx);
+      await tx.run(
+        `INSERT INTO attachments (
+           id, workspace_id, inbox_item_id, storage_bucket_id,
+           storage_key, filename, content_type, size_bytes, checksum_sha256, upload_status,
+           metadata_json, created_by_workspace_user_id, created_at, updated_at, revision
+         ) VALUES (
+           ?, ?, ?, ?,
+           ?, ?, ?, ?, ?, 'available',
+           '{}', ?, ?, ?, 1
+         )`,
+        [
+          id,
+          workspaceId,
+          inboxItemId,
+          bucket.id,
+          storageKey,
+          filename,
+          contentType,
+          input.bytes.length,
+          checksum,
+          workspaceUserId,
+          now,
+          now
+        ]
+      );
+    });
+  } catch (error) {
+    await removeStoredObjects([{ key: storageKey, bucket }]);
+    throw error;
+  }
+
+  return toObjectiveAttachmentDto({
+    id,
+    workspace_id: workspaceId,
+    project_id: null,
+    mission_id: null,
+    objective_id: null,
+    inbox_item_id: inboxItemId,
+    storage_key: storageKey,
+    filename,
+    content_type: contentType,
+    size_bytes: input.bytes.length,
+    upload_status: 'available',
+    created_at: now
+  });
+}
+
+/** List an owned inbox item's active attachments, oldest first. */
+export async function listInboxItemAttachments(
+  inboxItemId: string
+): Promise<ObjectiveAttachmentDto[]> {
+  const client = requireDatabaseClient();
+  const id = await ownedInboxItemId(inboxItemId, client);
+  return (await listInboxAttachmentRows(id, client)).map(toObjectiveAttachmentDto);
+}
+
+interface InboxAttachmentStorageRow {
+  id: string;
+  workspace_id: string;
+  storage_key: string;
+  bucket_id: string;
+  bucket_key: string;
+  storage_backend: string;
+  local_path: string | null;
+  settings_json: string;
+}
+
+const INBOX_ATTACHMENT_STORAGE_SELECT = `SELECT a.id, a.workspace_id, a.storage_key,
+         b.id AS bucket_id, b.bucket_key, b.storage_backend, b.local_path, b.settings_json
+    FROM attachments a
+    JOIN storage_buckets b ON b.id = a.storage_bucket_id`;
+
+function storedObjectRef(row: InboxAttachmentStorageRow): StoredObjectRef {
+  return {
+    key: row.storage_key,
+    bucket: {
+      id: row.bucket_id,
+      bucket_key: row.bucket_key,
+      storage_backend: row.storage_backend,
+      local_path: row.local_path,
+      settings_json: row.settings_json
+    }
+  };
+}
+
+/**
+ * Tombstone attachment rows that never entered a workspace feed. Returns the
+ * stored objects to remove once the caller's transaction commits.
+ */
+async function tombstoneInboxAttachmentRows(
+  rows: InboxAttachmentStorageRow[],
+  tx: DatabaseClient
+): Promise<StoredObjectRef[]> {
+  const now = nowIso();
+  for (const row of rows) {
+    await tx.run(
+      `UPDATE attachments
+          SET deleted_at = ?, upload_status = 'deleted', updated_at = ?,
+              revision = revision + 1
+        WHERE id = ?`,
+      [now, now, row.id]
+    );
+  }
+  return rows.map(storedObjectRef);
+}
+
+/** Soft-delete one inbox attachment and return the item's remaining attachments. */
+export async function deleteInboxItemAttachment(
+  inboxItemId: string,
+  attachmentId: string
+): Promise<ObjectiveAttachmentDto[]> {
+  const { remaining, cleanup } = await requireDatabaseClient().transaction(async tx => {
+    const id = await ownedInboxItemId(inboxItemId, tx);
+    const rows = await tx.all<InboxAttachmentStorageRow>(
+      `${INBOX_ATTACHMENT_STORAGE_SELECT}
+        WHERE a.id = ? AND a.inbox_item_id = ? AND a.deleted_at IS NULL`,
+      [attachmentId, id]
+    );
+    if (rows.length === 0) throw new ApiError(404, 'Attachment not found');
+    const cleanup = await tombstoneInboxAttachmentRows(rows, tx);
+    const remaining = (await listInboxAttachmentRows(id, tx)).map(toObjectiveAttachmentDto);
+    return { remaining, cleanup };
+  });
+  await removeStoredObjects(cleanup);
+  return remaining;
+}
+
+/**
+ * Tombstone every active attachment of an inbox item inside the caller's
+ * transaction (item deletion, account deletion). The caller passes the
+ * returned objects to {@link removeInboxAttachmentObjects} after commit.
+ */
+export async function tombstoneInboxItemAttachmentsTx(
+  tx: DatabaseClient,
+  where: { inboxItemId: string } | { profileId: string }
+): Promise<StoredObjectRef[]> {
+  const rows =
+    'inboxItemId' in where
+      ? await tx.all<InboxAttachmentStorageRow>(
+          `${INBOX_ATTACHMENT_STORAGE_SELECT}
+            WHERE a.inbox_item_id = ? AND a.deleted_at IS NULL`,
+          [where.inboxItemId]
+        )
+      : await tx.all<InboxAttachmentStorageRow>(
+          `${INBOX_ATTACHMENT_STORAGE_SELECT}
+            JOIN inbox_items i ON i.id = a.inbox_item_id
+           WHERE i.profile_id = ? AND a.deleted_at IS NULL`,
+          [where.profileId]
+        );
+  return tombstoneInboxAttachmentRows(rows, tx);
+}
+
+export const removeInboxAttachmentObjects = removeStoredObjects;
+
+/** Bytes copied into the destination workspace ahead of a cross-workspace promotion. */
+export interface InboxAttachmentCopy {
+  attachmentId: string;
+  storageBucketId: string;
+  storageKey: string;
+  source: StoredObjectRef;
+  target: StoredObjectRef;
+}
+
+async function readStoredBytes(object: StoredObjectRef): Promise<Buffer> {
+  const stream = await createStorageBackend({ bucket: object.bucket, repoRoot }).getStream({
+    key: object.key
+  });
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array));
+  }
+  return Buffer.concat(chunks);
+}
+
+/**
+ * Copy an inbox item's attachments that live outside `targetWorkspaceId` into
+ * that workspace's `attachments` bucket, before the promotion transaction. The
+ * copies keep their attachment ids under the target workspace's canonical key.
+ * If promotion then fails, discard them with {@link removeInboxAttachmentObjects}.
+ */
+export async function copyInboxAttachmentsToWorkspace(
+  inboxItemId: string,
+  targetWorkspaceId: string
+): Promise<InboxAttachmentCopy[]> {
+  const client = requireDatabaseClient();
+  const rows = await client.all<InboxAttachmentStorageRow & { content_type: string | null }>(
+    `SELECT a.id, a.workspace_id, a.storage_key, a.content_type,
+            b.id AS bucket_id, b.bucket_key, b.storage_backend, b.local_path, b.settings_json
+       FROM attachments a
+       JOIN storage_buckets b ON b.id = a.storage_bucket_id
+      WHERE a.inbox_item_id = ? AND a.deleted_at IS NULL AND a.workspace_id <> ?`,
+    [inboxItemId, targetWorkspaceId]
+  );
+  if (rows.length === 0) return [];
+  const bucket = await resolveBucket(ATTACHMENTS_BUCKET_KEY, targetWorkspaceId);
+  const backend = createStorageBackend({ bucket, repoRoot });
+  const copies: InboxAttachmentCopy[] = [];
+  try {
+    for (const row of rows) {
+      const source = storedObjectRef(row);
+      const storageKey = attachmentObjectKey(
+        targetWorkspaceId,
+        row.id,
+        path.extname(row.storage_key)
+      );
+      await backend.put({
+        key: storageKey,
+        bytes: await readStoredBytes(source),
+        contentType: row.content_type ?? 'application/octet-stream'
+      });
+      copies.push({
+        attachmentId: row.id,
+        storageBucketId: bucket.id,
+        storageKey,
+        source,
+        target: { key: storageKey, bucket }
+      });
+    }
+  } catch (error) {
+    await removeStoredObjects(copies.map(copy => copy.target));
+    throw error;
+  }
+  return copies;
+}
+
+/**
+ * Inside the promotion transaction, re-point every active attachment of the
+ * inbox item at the created mission's first objective and clear
+ * `inbox_item_id`. Rows outside the destination workspace must have a copy from
+ * {@link copyInboxAttachmentsToWorkspace}; one added after the copy step makes
+ * the promotion retryable (409) rather than leave bytes in a foreign bucket.
+ */
+export async function repointInboxAttachmentsTx(
+  tx: DatabaseClient,
+  input: {
+    inboxItemId: string;
+    workspaceId: string;
+    projectId: string;
+    missionId: string;
+    objectiveId: string;
+    copies: InboxAttachmentCopy[];
+  }
+): Promise<void> {
+  const rows = await tx.all<{ id: string; workspace_id: string; revision: number }>(
+    `SELECT id, workspace_id, revision FROM attachments
+      WHERE inbox_item_id = ? AND deleted_at IS NULL
+      ORDER BY created_at ASC`,
+    [input.inboxItemId]
+  );
+  const copies = new Map(input.copies.map(copy => [copy.attachmentId, copy]));
+  const now = nowIso();
+  for (const row of rows) {
+    const changedFields = ['project_id', 'mission_id', 'objective_id', 'inbox_item_id'];
+    if (row.workspace_id === input.workspaceId) {
+      await tx.run(
+        `UPDATE attachments
+            SET project_id = ?, mission_id = ?, objective_id = ?, inbox_item_id = NULL,
+                updated_at = ?, revision = revision + 1
+          WHERE id = ?`,
+        [input.projectId, input.missionId, input.objectiveId, now, row.id]
+      );
+    } else {
+      const copy = copies.get(row.id);
+      if (!copy) {
+        throw new ApiError(409, 'Inbox attachments changed during promotion. Try again.');
+      }
+      await tx.run(
+        `UPDATE attachments
+            SET workspace_id = ?, storage_bucket_id = ?, storage_key = ?,
+                project_id = ?, mission_id = ?, objective_id = ?, inbox_item_id = NULL,
+                updated_at = ?, revision = revision + 1
+          WHERE id = ?`,
+        [
+          input.workspaceId,
+          copy.storageBucketId,
+          copy.storageKey,
+          input.projectId,
+          input.missionId,
+          input.objectiveId,
+          now,
+          row.id
+        ]
+      );
+      changedFields.unshift('workspace_id', 'storage_bucket_id', 'storage_key');
+    }
+    await recordChange(
+      {
+        entityType: 'attachment',
+        entityId: row.id,
+        operation: 'update',
+        entityRevision: row.revision + 1,
+        projectId: input.projectId,
+        missionId: input.missionId,
+        objectiveId: input.objectiveId,
+        workspaceId: input.workspaceId,
+        changedFields
+      },
+      tx
+    );
+  }
 }
 
 export interface ResolvedStoredObject {
@@ -813,6 +1252,20 @@ export async function resolveStoredObject(
     );
     if (!attachment?.project_id || !projectInTokenScope(attachment.project_id)) {
       throw new ApiError(404, 'File not found');
+    }
+  }
+
+  if (bucketKey === ATTACHMENTS_BUCKET_KEY) {
+    // An unpromoted Inbox capture's files are private to the item's owner, not
+    // readable by every member of the workspace that stores their bytes.
+    const attachment = await requireDatabaseClient().get<{ inbox_item_id: string | null }>(
+      `SELECT inbox_item_id FROM attachments WHERE storage_key = ? AND deleted_at IS NULL`,
+      [storageKey]
+    );
+    if (attachment?.inbox_item_id) {
+      await ownedInboxItemId(attachment.inbox_item_id).catch(() => {
+        throw new ApiError(404, 'File not found');
+      });
     }
   }
 
