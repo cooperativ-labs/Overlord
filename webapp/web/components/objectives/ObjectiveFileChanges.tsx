@@ -17,11 +17,6 @@ import {
 
 export const OBJECTIVE_FILE_CHANGES_LABEL = 'Files changed during this objective';
 
-/** Shown under every list, empty or not, so nobody reads it as a Git diff. */
-const CUMULATIVE_NOTE =
-  'Cumulative for this objective, including edits later reverted. Paths still waiting to ' +
-  'sync from the agent’s machine appear once they arrive.';
-
 function CaptureWarnings({ warnings }: { warnings: readonly string[] }) {
   if (warnings.length === 0) return null;
   return (
@@ -99,7 +94,6 @@ export function ObjectiveFileChangesBody({
         </ObjectiveEvidenceTruncationNotice>
       ) : null}
       <CaptureWarnings warnings={summary.warnings} />
-      <p className="text-[11px] text-[var(--color-ink-dim)]">{CUMULATIVE_NOTE}</p>
       <CaptureDetails sessions={data.capture.sessions} />
     </>
   );

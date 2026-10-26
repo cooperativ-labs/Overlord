@@ -305,10 +305,6 @@ function TerminalSessionCard({
         <EndSessionButton session={session} name={name} disabled={!canStop} />
       </div>
 
-      <p className="mt-2 text-[11px] text-muted-foreground">
-        The attach command is a developer path. For another device, SSH to{' '}
-        {session.deviceLabel ?? 'the host'} using your own SSH access, then run it there.
-      </p>
       {inspection.isError || openSession.isError ? (
         <p className="mt-2 text-xs text-destructive">
           {(inspection.error ?? openSession.error)?.message ?? 'Latch session action failed.'}
