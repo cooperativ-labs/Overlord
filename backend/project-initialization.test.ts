@@ -10,10 +10,13 @@ const { db } = await bootstrapIntegrationTestDb({
   sqlitePath: path.join(tempDir, 'project-initialization.sqlite')
 });
 const { createTestWorkspaceContext } = await import('./test-helpers.ts');
-const { getActiveWorkspaceId } = createTestWorkspaceContext(await import('./db.ts'));
+const dbModule = await import('./db.ts');
+const { getActiveWorkspaceId } = createTestWorkspaceContext(dbModule);
+const { requireDatabaseClient } = dbModule;
 const { initializeProject } = await import('./repository.ts');
-const { beginGitHubUserAuthorization, completeGitHubUserAuthorization } =
-  await import('./ext/github/user-oauth.ts');
+const { profileConnections } = await import('./connections/profile.ts');
+const { githubConnectionProvider } = await import('./ext/github/connection-provider.ts');
+const { createGitHubUserOAuth } = await import('./ext/github/user-oauth.ts');
 const originalFetch = globalThis.fetch;
 const originalGithubEnv = {
   clientId: process.env.GITHUB_CLIENT_ID,
@@ -45,7 +48,9 @@ test('provisions one private repository and one read-only git resource on retry'
   process.env.GITHUB_CLIENT_SECRET = 'initialization-secret';
   process.env.GITHUB_USER_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 3).toString('base64url');
   process.env.BETTER_AUTH_URL = 'https://overlord.example';
-  const authorization = await beginGitHubUserAuthorization({}, []);
+  const githubProfiles = profileConnections(requireDatabaseClient(), [githubConnectionProvider()]);
+  const githubUserOAuth = createGitHubUserOAuth(() => githubProfiles);
+  const authorization = await githubUserOAuth.beginGitHubUserAuthorization({}, []);
   const state = new URL(authorization.authorizationUrl).searchParams.get('state');
   assert.ok(state);
   globalThis.fetch = async input => {
@@ -58,7 +63,7 @@ test('provisions one private repository and one read-only git resource on retry'
     }
     throw new Error(`Unexpected GitHub request: ${url}`);
   };
-  await completeGitHubUserAuthorization({ code: 'code', state });
+  await githubUserOAuth.completeGitHubUserAuthorization({ code: 'code', state });
 
   let createCalls = 0;
   globalThis.fetch = async (input, init) => {
@@ -94,8 +99,11 @@ test('provisions one private repository and one read-only git resource on retry'
     createGitHubRepository: true,
     githubOwnerLogin: 'octocat'
   };
-  const created = await initializeProject(body);
-  const retried = await initializeProject(body);
+  const deps = {
+    createPrivateGitHubRepository: githubUserOAuth.createPrivateGitHubRepository
+  };
+  const created = await initializeProject(body, deps);
+  const retried = await initializeProject(body, deps);
   assert.equal(createCalls, 1);
   assert.equal(created.repositoryProvisioning.status, 'succeeded');
   assert.equal(retried.repositoryProvisioning.status, 'succeeded');
@@ -117,8 +125,11 @@ test('initializes a project and its first mission atomically and idempotently', 
     description: 'Capture the first idea before it is lost.',
     createGitHubRepository: false
   };
-  const created = await initializeProject(body);
-  const retried = await initializeProject(body);
+  const deps = {
+    createPrivateGitHubRepository: async () => assert.fail('unexpected repository call')
+  };
+  const created = await initializeProject(body, deps);
+  const retried = await initializeProject(body, deps);
 
   assert.equal(created.project.id, retried.project.id);
   assert.equal(created.mission.id, retried.mission.id);

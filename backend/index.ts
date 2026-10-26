@@ -76,6 +76,7 @@ import {
   githubConnectionProvider
 } from './ext/github/connection-provider.ts';
 import { createGitHubExtensionRouter } from './ext/github/routes.ts';
+import { createGitHubUserOAuth } from './ext/github/user-oauth.ts';
 import { isAllowedBrowserOrigin } from './http/browser-origins.ts';
 import { runnerRegistrationFromBody } from './http/client-device.ts';
 import { buildMeta } from './http/meta.ts';
@@ -656,6 +657,10 @@ function connectionsModule(): ConnectionsRuntime {
   }
   return connectionsRuntime;
 }
+
+const createPrivateGitHubRepository = createGitHubUserOAuth(
+  () => connectionsModule().profiles
+).createPrivateGitHubRepository;
 let chatEngineInstance: ChatEngine | null = null;
 const chatEngine = (): ChatEngine =>
   (chatEngineInstance ??= createChatEngine({
@@ -1348,7 +1353,7 @@ app.post(
 );
 app.post(
   '/api/projects/initialize',
-  handle(req => initializeProject(req.body), { mutates: true })
+  handle(req => initializeProject(req.body, { createPrivateGitHubRepository }), { mutates: true })
 );
 app.patch(
   '/api/projects/reorder',

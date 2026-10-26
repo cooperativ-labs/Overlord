@@ -210,7 +210,6 @@ import {
   recordProvisioningFailure,
   recordProvisioningSuccess
 } from './ext/github/service.ts';
-import { createPrivateGitHubRepository } from './ext/github/user-oauth.ts';
 import { missionWorktreePath, previewMissionBranch } from './branch-planning.ts';
 import {
   buildWebappServiceContextForWorkspace,
@@ -3377,7 +3376,13 @@ function initializationProvisioning(
  * afterwards using the same caller idempotency key.
  */
 export async function initializeProject(
-  body: InitializeProjectBody
+  body: InitializeProjectBody,
+  deps: {
+    createPrivateGitHubRepository: (input: {
+      ownerLogin: string;
+      name: string;
+    }) => Promise<CreatedGitHubRepositoryDto>;
+  }
 ): Promise<InitializeProjectResultDto> {
   const db = requireDatabaseClient();
   const workspaceId = body.workspaceId?.trim();
@@ -3465,7 +3470,7 @@ export async function initializeProject(
     initialization.provisioning_status !== 'succeeded'
   ) {
     try {
-      const repo = await createPrivateGitHubRepository({
+      const repo = await deps.createPrivateGitHubRepository({
         ownerLogin: ownerLogin!,
         name: slugify(name)
       });

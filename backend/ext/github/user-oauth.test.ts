@@ -13,28 +13,30 @@ await bootstrapIntegrationTestDb({
 
 const { requireDatabaseClient, setActiveProfileId, withRequestContextAsync } =
   await import('../../db.ts');
-const {
-  beginGitHubUserAuthorization,
-  completeGitHubUserAuthorization,
-  disconnectGitHubUser,
-  getGitHubUserConnection,
-  listGitHubRepositoryOwners
-} = await import('./user-oauth.ts');
-
-const originalFetch = globalThis.fetch;
 const originalEnv = {
   clientId: process.env.GITHUB_CLIENT_ID,
   clientSecret: process.env.GITHUB_CLIENT_SECRET,
   encryptionKey: process.env.GITHUB_USER_TOKEN_ENCRYPTION_KEY,
   authUrl: process.env.BETTER_AUTH_URL
 };
+process.env.GITHUB_CLIENT_ID = 'shared-oauth-client';
+process.env.GITHUB_CLIENT_SECRET = 'shared-oauth-secret';
+process.env.GITHUB_USER_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64url');
+process.env.BETTER_AUTH_URL = 'https://overlord.example';
+const { profileConnections } = await import('../../connections/profile.ts');
+const { githubConnectionProvider } = await import('./connection-provider.ts');
+const { createGitHubUserOAuth } = await import('./user-oauth.ts');
+const githubProfiles = profileConnections(requireDatabaseClient(), [githubConnectionProvider()]);
+const githubUserOAuth = createGitHubUserOAuth(() => githubProfiles);
+const {
+  beginGitHubUserAuthorization,
+  completeGitHubUserAuthorization,
+  disconnectGitHubUser,
+  getGitHubUserConnection,
+  listGitHubRepositoryOwners
+} = githubUserOAuth;
 
-test.before(() => {
-  process.env.GITHUB_CLIENT_ID = 'shared-oauth-client';
-  process.env.GITHUB_CLIENT_SECRET = 'shared-oauth-secret';
-  process.env.GITHUB_USER_TOKEN_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString('base64url');
-  process.env.BETTER_AUTH_URL = 'https://overlord.example';
-});
+const originalFetch = globalThis.fetch;
 
 test.after(() => {
   globalThis.fetch = originalFetch;

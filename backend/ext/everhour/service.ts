@@ -14,7 +14,6 @@ import { ChatError } from '../../../packages/core/service/chat/store.ts';
 import {
   type ExternalAccount,
   type ProfileConnections,
-  profileConnections,
   ProviderCredentialError
 } from '../../connections/profile.ts';
 import { ConnectionAccessError, type ConnectionRow } from '../../connections/service.ts';
@@ -26,8 +25,6 @@ import {
   resolveActiveProfileId
 } from '../../db.ts';
 import { ApiError } from '../../errors.ts';
-
-import { everhourConnectionProvider } from './connection-provider.ts';
 
 const EVERHOUR_BASE_URL = 'https://api.everhour.com';
 
@@ -1276,26 +1273,3 @@ export function createEverhourService(connections: () => ProfileConnections) {
     deleteMissionTime
   };
 }
-
-// Standalone in-process callers compose their own adapter explicitly.
-export const {
-  getEverhourIntegration,
-  setEverhourApiKey,
-  clearEverhourApiKey,
-  getProjectEverhourLink,
-  linkProjectEverhour,
-  getMissionEverhourState,
-  startMissionTimer,
-  stopMissionTimer,
-  getProjectEverhourState,
-  startProjectTimer,
-  stopProjectTimer,
-  addProjectTime,
-  updateProjectTime,
-  deleteProjectTime,
-  addMissionTime,
-  updateMissionTime,
-  deleteMissionTime
-} = createEverhourService(() =>
-  profileConnections(requireDatabaseClient(), [everhourConnectionProvider(validateEverhourApiKey)])
-);

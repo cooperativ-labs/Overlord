@@ -8,12 +8,12 @@ import type {
 import type { DatabaseClient } from '@overlord/database';
 
 import { ChatError } from '../../../packages/core/service/chat/store.ts';
-import { type ProfileConnections, profileConnections } from '../../connections/profile.ts';
+import type { ProfileConnections } from '../../connections/profile.ts';
 import { ConnectionAccessError, type ConnectionRow } from '../../connections/service.ts';
 import { requireDatabaseClient, resolveActiveProfileId } from '../../db.ts';
 import { ApiError } from '../../errors.ts';
 
-import { githubConnectionProvider, parseGitHubScopes } from './connection-provider.ts';
+import { parseGitHubScopes } from './connection-provider.ts';
 
 // The personal repository authorization lives in the shared account-connections
 // module (contract v153): it owns the OAuth state, PKCE verifier, token storage and
@@ -402,16 +402,3 @@ export function createGitHubUserOAuth(connections: () => ProfileConnections) {
     disconnectGitHubUser
   };
 }
-
-// Standalone in-process callers compose their own adapter explicitly.
-export const {
-  githubUserOAuthConfigured,
-  getGitHubUserConnection,
-  beginGitHubUserAuthorization,
-  completeGitHubUserAuthorization,
-  listGitHubRepositoryOwners,
-  createPrivateGitHubRepository,
-  disconnectGitHubUser
-} = createGitHubUserOAuth(() =>
-  profileConnections(requireDatabaseClient(), [githubConnectionProvider()])
-);

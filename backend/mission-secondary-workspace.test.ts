@@ -686,8 +686,15 @@ describe('workspace-scoped operations resolve against the resource workspace, no
 
   it('reads an Everhour project link from the project workspace while workspace A is active (Phase 2)', async () => {
     const fixture = await setupSecondaryWorkspaceFixture({ namePrefix: 'Everhour Link' });
-    const { db, nowIso } = await import('./db.ts');
-    const { getProjectEverhourLink } = await import('./ext/everhour/service.ts');
+    const { db, nowIso, requireDatabaseClient } = await import('./db.ts');
+    const { profileConnections } = await import('./connections/profile.ts');
+    const { everhourConnectionProvider } = await import('./ext/everhour/connection-provider.ts');
+    const { createEverhourService, validateEverhourApiKey } =
+      await import('./ext/everhour/service.ts');
+    const everhourProfiles = profileConnections(requireDatabaseClient(), [
+      everhourConnectionProvider(validateEverhourApiKey)
+    ]);
+    const { getProjectEverhourLink } = createEverhourService(() => everhourProfiles);
 
     db.prepare(
       `INSERT INTO ext_everhour_project_links

@@ -17,8 +17,14 @@ const { ApiError } = await import('../../errors.ts');
 const { ProfileConnections } = await import('../../connections/profile.ts');
 const { keyRingFromEnv } = await import('../../connections/keyring.ts');
 const { everhourConnectionProvider } = await import('./connection-provider.ts');
-const { validateEverhourApiKey } = await import('./service.ts');
+const { createEverhourService, validateEverhourApiKey } = await import('./service.ts');
 const { requireDatabaseClient } = await import('../../db.ts');
+const everhourServiceStore = new ProfileConnections(
+  requireDatabaseClient(),
+  keyRingFromEnv(process.env),
+  [everhourConnectionProvider(validateEverhourApiKey)]
+);
+const everhourService = createEverhourService(() => everhourServiceStore);
 const {
   addMissionTime,
   clearEverhourApiKey,
@@ -30,7 +36,7 @@ const {
   setEverhourApiKey,
   startMissionTimer,
   startProjectTimer
-} = await import('./service.ts');
+} = everhourService;
 
 const originalFetch = globalThis.fetch;
 
