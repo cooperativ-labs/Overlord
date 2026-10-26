@@ -1,12 +1,12 @@
 import { PERMISSIONS } from '@overlord/auth';
-
-import { enqueueMissionSummaryComposeJob } from '../packages/core/service/worker-jobs.ts';
 import type {
   DeliveryDeferredWorkItemDto,
   HumanActionResolutionOutcome,
   HumanActionResolutionStatus,
   ResolveHumanActionBody
-} from '../webapp/shared/contract.ts';
+} from '@overlord/contract';
+
+import { enqueueMissionSummaryComposeJob } from '../packages/core/service/worker-jobs.ts';
 
 import {
   findActiveMembershipId,

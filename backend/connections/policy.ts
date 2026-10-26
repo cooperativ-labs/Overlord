@@ -396,9 +396,6 @@ export function parseToolId(id: string): { connectionPrefix: string; tool: strin
   return match ? { connectionPrefix: match[1]!, tool: match[2]! } : null;
 }
 
-/** Default serialized argument bound (reads); writes carry their own. */
-export const MAX_ARGUMENT_BYTES = 4 * 1024;
-
 /** Validates arguments against a reviewed schema. Returns an error label or null. */
 export function validateArguments(
   schema: JsonSchema,

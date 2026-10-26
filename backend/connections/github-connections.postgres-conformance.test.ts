@@ -438,7 +438,22 @@ for (const adapter of adapters) {
         assert.ok(exchange?.body?.code_verifier);
         assert.equal(exchange?.body?.code, 'code-1');
         // The token attaches to the profile that started the sign-in, never another.
-        assert.equal((await githubRow(db))?.state, 'connected');
+        const connected = (await githubRow(db))!;
+        assert.equal(connected.state, 'connected');
+        assert.equal(connected.credential_kind, 'oauth');
+        assert.equal(connected.credential_format, 'connection-v1');
+        assert.equal(connected.credential_revision, 1);
+        assert.equal(connected.credential_key_id, 'github-user-env');
+        assert.equal(connected.external_account_id, '42');
+        assert.equal(connected.external_account_label, 'octocat');
+        assert.equal(connected.external_account_avatar_url, 'https://avatars.test/octocat');
+        assert.deepEqual(JSON.parse(String(connected.granted_scopes_json)), ['repo', 'read:org']);
+        assert.ok(connected.last_validated_at);
+        assert.equal(connected.connected_at, connected.last_validated_at);
+        assert.equal(connected.last_refreshed_at, connected.last_validated_at);
+        assert.equal(connected.refresh_lock_owner, null);
+        assert.equal(connected.refresh_lock_until, null);
+        assert.equal(connected.last_error_code, null);
         assert.equal(await githubRow(db, 'other'), undefined);
         // Replay: expired, and nothing is exchanged.
         const before = fake.calls.length;

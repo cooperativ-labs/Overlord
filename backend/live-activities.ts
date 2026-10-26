@@ -6,7 +6,7 @@ import { enqueueLiveActivityDispatchJob } from '../packages/core/service/live-ac
 import { jsonTextFieldSql, newId, nowIso } from '../packages/core/service/util.ts';
 
 import { requireDatabaseClient, resolveActiveProfileId } from './db.ts';
-import { ApiError } from './errors.ts';
+import { ApiError, requiredString } from './errors.ts';
 import { bounded, presentationText, presentationTitle } from './text-presentation.ts';
 
 // Re-exported so existing importers (push notifications, tests) keep one source
@@ -199,13 +199,6 @@ async function toCompletionSnapshot(
     }),
     objectiveId: objective.id
   };
-}
-
-function requiredString(value: unknown, field: string, max: number): string {
-  const normalized = typeof value === 'string' ? value.trim() : '';
-  if (!normalized) throw new ApiError(400, `${field} is required`);
-  if (normalized.length > max) throw new ApiError(400, `${field} is too long`);
-  return normalized;
 }
 
 /** The caller's oldest active membership, used only to address the durable job. */

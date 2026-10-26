@@ -2,6 +2,7 @@ import './bootstrap-env.ts';
 
 import { githubOAuthConfigFromEnv, type Permission, PERMISSIONS } from '@overlord/auth';
 import { loadExternalAutomations } from '@overlord/automations';
+import type { ProjectListLifecycle, StoredImageDto } from '@overlord/contract';
 import { fromNodeHeaders, toNodeHandler } from 'better-auth/node';
 import cors from 'cors';
 import express, { type NextFunction, type Request, type Response } from 'express';
@@ -16,7 +17,6 @@ import { Conversations } from '../packages/core/service/chat/conversations.ts';
 import { ChatRuns } from '../packages/core/service/chat/runs.ts';
 import type { LocalTargetBridgeCall } from '../packages/core/service/local-target/desktop-bridge.ts';
 import { parseMissionSearchOptions } from '../packages/core/service/mission-search.ts';
-import type { ProjectListLifecycle, StoredImageDto } from '../webapp/shared/contract.ts';
 
 import { postMissionBranchObservations } from './branching/mission-branch-observations.ts';
 import { postExecutionTargetObservations } from './branching/target-resource-observations.ts';

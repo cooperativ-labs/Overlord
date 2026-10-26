@@ -3,12 +3,12 @@
  * provider mapping after Latch reports that the session is absent.
  */
 import { PERMISSIONS } from '@overlord/auth';
+import type { TerminalSessionDto } from '@overlord/contract';
 import { launchSessionSnapshotFromMetadata } from '@overlord/core/service/terminal-profile-types';
 
 import { asRecord, parseMetadataJson } from '../../packages/core/service/execution-requests.ts';
 import { providerSessionFromMetadata } from '../../packages/core/service/latch-launch.ts';
 import { forgetLatchProviderSession } from '../../packages/core/service/latch-provider-session.ts';
-import type { TerminalSessionDto } from '../../webapp/shared/contract.ts';
 import { buildWebappServiceContextForWorkspace, requireDatabaseClient } from '../db.ts';
 import { ApiError } from '../errors.ts';
 import { requireMissionPermission } from '../rbac.ts';

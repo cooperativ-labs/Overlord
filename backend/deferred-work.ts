@@ -5,7 +5,9 @@ import type {
   HumanActionResolutionDto,
   HumanActionResolutionOutcome,
   HumanActionResolutionStatus
-} from '../webapp/shared/contract.ts';
+} from '@overlord/contract';
+
+import { sqlPlaceholders } from '../packages/core/service/util.ts';
 
 import { requireDatabaseClient } from './db.ts';
 
@@ -40,10 +42,6 @@ export function deferredWorkEntries(report: DeliveryReportPayloadV1): DeferredWo
   return report.presentation.deferredWork;
 }
 
-function placeholders(count: number): string {
-  return new Array(count).fill('?').join(', ');
-}
-
 /** Resolutions of the given deliveries, keyed `<deliveryId>:<actionId>`. */
 export async function loadResolutions(deliveryIds: string[]): Promise<Map<string, ResolutionRow>> {
   if (deliveryIds.length === 0) return new Map();
@@ -51,7 +49,7 @@ export async function loadResolutions(deliveryIds: string[]): Promise<Map<string
     `SELECT delivery_id, action_id, status, outcome, outcome_ref, resolved_at,
             resolved_by_workspace_user_id
        FROM human_action_resolutions
-      WHERE delivery_id IN (${placeholders(deliveryIds.length)})`,
+      WHERE delivery_id IN (${sqlPlaceholders(deliveryIds.length)})`,
     deliveryIds
   )) as ResolutionRow[];
   return new Map(rows.map(row => [`${row.delivery_id}:${row.action_id}`, row]));

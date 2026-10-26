@@ -1,3 +1,5 @@
+import { armPostgresListener } from './pg-listen.ts';
+
 /** Postgres-only wake primitive for runner claim long-polls. */
 const QUEUE_CHANNEL = 'overlord_execution_request_queue';
 
@@ -5,41 +7,9 @@ export const RUNNER_CLAIM_LONG_POLL_MS = 25_000;
 /** Bound LISTEN `connect()` so a hung Postgres handshake cannot sit until a proxy 502. */
 export const RUNNER_QUEUE_LISTEN_CONNECT_TIMEOUT_MS = 3_000;
 
-type NotificationClient = {
-  connect(): Promise<unknown>;
-  query(sql: string): Promise<unknown>;
-  end(): Promise<void>;
-  on(event: 'notification' | 'error', listener: (value: unknown) => void): void;
-};
-
 export interface RunnerQueueListener {
   wait(): Promise<void>;
   close(): Promise<void>;
-}
-
-async function connectWithTimeout({
-  client,
-  timeoutMs
-}: {
-  client: NotificationClient;
-  timeoutMs: number;
-}): Promise<void> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const connectPromise = Promise.resolve(client.connect());
-  try {
-    await Promise.race([
-      connectPromise,
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(() => {
-          reject(new Error(`LISTEN connect timed out after ${timeoutMs}ms`));
-        }, timeoutMs);
-      })
-    ]);
-  } finally {
-    if (timer !== undefined) clearTimeout(timer);
-    // If the race lost to the timeout, a later connect rejection must not become unhandled.
-    void connectPromise.catch(() => undefined);
-  }
 }
 
 /** Create and arm a dedicated non-pooled listener. Resolves after LISTEN is active. */
@@ -52,50 +22,18 @@ export async function createRunnerQueueListener({
   connectionString?: string;
   timeoutMs?: number;
   connectTimeoutMs?: number;
-  createClient?: (connectionString: string) => Promise<NotificationClient>;
+  createClient?: Parameters<typeof armPostgresListener>[0]['createClient'];
 } = {}): Promise<RunnerQueueListener | null> {
-  if (!connectionString) return null;
-  const client = createClient
-    ? await createClient(connectionString)
-    : await (async () => {
-        const pg = await import('pg');
-        const Client = (pg.default ?? pg).Client;
-        return new Client({
-          connectionString,
-          connectionTimeoutMillis: connectTimeoutMs
-        }) as NotificationClient;
-      })();
-  try {
-    await connectWithTimeout({ client, timeoutMs: connectTimeoutMs });
-    await client.query(`LISTEN ${QUEUE_CHANNEL}`);
-  } catch {
-    await client.end().catch(() => undefined);
-    return null;
-  }
-
-  let settled = false;
-  let resolveWait: (() => void) | null = null;
-  const finish = () => {
-    if (settled) return;
-    settled = true;
-    resolveWait?.();
-  };
-  client.on('notification', finish);
-  client.on('error', finish);
+  const listener = await armPostgresListener({
+    connectionString,
+    channel: QUEUE_CHANNEL,
+    connectTimeoutMs,
+    createClient
+  });
+  if (!listener) return null;
   return {
-    wait: () =>
-      new Promise<void>(resolve => {
-        const timer = setTimeout(finish, timeoutMs);
-        resolveWait = () => {
-          clearTimeout(timer);
-          resolve();
-        };
-        if (settled) resolveWait();
-      }),
-    close: async () => {
-      settled = true;
-      await client.end().catch(() => undefined);
-    }
+    wait: () => listener.wait(timeoutMs),
+    close: listener.close
   };
 }
 

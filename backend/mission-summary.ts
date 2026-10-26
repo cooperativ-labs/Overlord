@@ -1,5 +1,4 @@
 import { PERMISSIONS } from '@overlord/auth';
-
 import {
   type HumanActionV1,
   type MarkMissionSummarySeenBody,
@@ -13,7 +12,13 @@ import {
   type MissionSummarySourceDto,
   type MissionSummaryStatus,
   type MissionSummarySuggestionDto
-} from '../webapp/shared/contract.ts';
+} from '@overlord/contract';
+
+import {
+  type MissionSummaryDeliveryEvidence,
+  type MissionSummaryRuns
+} from '../packages/core/service/mission-summary-compose.ts';
+import { readMissionSummaryRuns } from '../packages/core/service/mission-summary-evidence.ts';
 
 import { requireDatabaseClient } from './db.ts';
 import {
@@ -24,7 +29,6 @@ import {
 } from './deferred-work.ts';
 import { ApiError } from './errors.ts';
 import { requireMissionPermission } from './rbac.ts';
-import { deliveryReportFromPayload } from './repository.ts';
 
 /**
  * Read side of the mission summary (coo:1202, contract v166): the summary row,
@@ -35,31 +39,22 @@ import { deliveryReportFromPayload } from './repository.ts';
  * exempt from MCP parity for that reason.
  *
  * A delivery is *current-run* when it is live and was delivered at or after its
- * objective's `reopened_at`. Evidence is selected in the database before any
- * limit: the latest current-run delivery of every objective (including deleted
- * objectives, whose deliveries clients render as the unassigned row), so a busy
- * objective can never push another objective's current delivery out of view.
+ * objective's `reopened_at`; core's mission summary evidence reader owns that
+ * rule for the worker and this route alike. Evidence is selected in the
+ * database before any limit: the latest current-run delivery of every objective
+ * (including deleted objectives, whose deliveries clients render as the
+ * unassigned row), so a busy objective can never push another objective's
+ * current delivery out of view.
  * Risks and suggestions stored on the summary row are references; they are
  * projected here from current-run deliveries only, so a reference whose source
  * stopped being current disappears even while a recompose is pending.
  */
-
-const CURRENT_RUN_PREDICATE = `d.mission_id = ? AND d.workspace_id = ? AND d.deleted_at IS NULL
-      AND (o.reopened_at IS NULL OR d.delivered_at >= o.reopened_at)`;
 
 interface MissionScope {
   missionId: string;
   workspaceId: string;
   workspaceUserId: string;
   eligible: boolean;
-}
-
-interface EvidenceDeliveryRow {
-  id: string;
-  objective_id: string;
-  delivered_at: string;
-  summary: string;
-  payload_json: string | null;
 }
 
 interface MissionSummaryRow {
@@ -88,10 +83,6 @@ interface SuggestionRef {
   actionId: string;
 }
 
-function placeholders(count: number): string {
-  return new Array(count).fill('?').join(', ');
-}
-
 async function resolveMissionScope(missionRef: string): Promise<MissionScope> {
   const scope = await requireMissionPermission({
     missionRef,
@@ -109,53 +100,6 @@ async function resolveMissionScope(missionRef: string): Promise<MissionScope> {
     // SQLite stores 0/1; PostgreSQL returns a boolean.
     eligible: row.summary_enabled === true || Number(row.summary_enabled) === 1
   };
-}
-
-/** The latest current-run delivery of every objective, newest first, selected before any limit. */
-async function loadSourceDeliveries(scope: MissionScope): Promise<EvidenceDeliveryRow[]> {
-  return (await requireDatabaseClient().all(
-    `SELECT ranked.id, ranked.objective_id, ranked.delivered_at, ranked.summary, ranked.payload_json
-       FROM (
-         SELECT d.id, d.objective_id, d.delivered_at, d.summary, d.payload_json,
-                ROW_NUMBER() OVER (
-                  PARTITION BY d.objective_id ORDER BY d.delivered_at DESC, d.id DESC
-                ) AS run_rank
-           FROM deliveries d
-           LEFT JOIN objectives o ON o.id = d.objective_id
-          WHERE ${CURRENT_RUN_PREDICATE}
-       ) ranked
-      WHERE ranked.run_rank = 1
-      ORDER BY ranked.delivered_at DESC, ranked.id DESC`,
-    [scope.missionId, scope.workspaceId]
-  )) as EvidenceDeliveryRow[];
-}
-
-async function countCurrentRunDeliveries(scope: MissionScope): Promise<number> {
-  const row = (await requireDatabaseClient().get(
-    `SELECT COUNT(*) AS total
-       FROM deliveries d
-       LEFT JOIN objectives o ON o.id = d.objective_id
-      WHERE ${CURRENT_RUN_PREDICATE}`,
-    [scope.missionId, scope.workspaceId]
-  )) as { total: number | string } | undefined;
-  return Number(row?.total ?? 0);
-}
-
-/** The given deliveries that are still current-run on this mission. */
-async function loadCurrentRunDeliveries(
-  scope: MissionScope,
-  deliveryIds: string[]
-): Promise<Map<string, EvidenceDeliveryRow>> {
-  if (deliveryIds.length === 0) return new Map();
-  const rows = (await requireDatabaseClient().all(
-    `SELECT d.id, d.objective_id, d.delivered_at, d.summary, d.payload_json
-       FROM deliveries d
-       LEFT JOIN objectives o ON o.id = d.objective_id
-      WHERE ${CURRENT_RUN_PREDICATE}
-        AND d.id IN (${placeholders(deliveryIds.length)})`,
-    [scope.missionId, scope.workspaceId, ...deliveryIds]
-  )) as EvidenceDeliveryRow[];
-  return new Map(rows.map(row => [row.id, row]));
 }
 
 /** Newest `created_at` of the mission's open question and choice requests. */
@@ -180,18 +124,19 @@ function latestTimestamp(...values: Array<string | null | undefined>): string | 
   return latest === null ? null : new Date(latest).toISOString();
 }
 
-function buildEvidence(sources: EvidenceDeliveryRow[], currentRunDeliveries: number) {
+/** Sources are the latest current-run delivery of every objective, newest first. */
+function buildEvidence(runs: MissionSummaryRuns) {
+  const sources = runs.latestByObjective;
   const actions: Array<MissionSummaryActionDto & { order: number }> = [];
   for (const source of sources) {
-    const report = deliveryReportFromPayload(source.payload_json, source.summary);
-    report.presentation.humanActions.forEach((action: HumanActionV1) => {
+    source.report.presentation.humanActions.forEach((action: HumanActionV1) => {
       const { id, ...fields } = action;
       actions.push({
         ...fields,
         deliveryId: source.id,
-        objectiveId: source.objective_id,
+        objectiveId: source.objectiveId,
         actionId: id,
-        deliveredAt: source.delivered_at,
+        deliveredAt: source.deliveredAt,
         order: actions.length
       });
     });
@@ -202,9 +147,9 @@ function buildEvidence(sources: EvidenceDeliveryRow[], currentRunDeliveries: num
       Number(right.blocking === true) - Number(left.blocking === true) || left.order - right.order
   );
   const sourceDtos: MissionSummarySourceDto[] = sources.map(source => ({
-    objectiveId: source.objective_id,
+    objectiveId: source.objectiveId,
     deliveryId: source.id,
-    deliveredAt: source.delivered_at
+    deliveredAt: source.deliveredAt
   }));
   const evidence: MissionSummaryEvidenceDto = {
     actions: actions
@@ -214,7 +159,7 @@ function buildEvidence(sources: EvidenceDeliveryRow[], currentRunDeliveries: num
     totals: {
       actions: actions.length,
       sources: sourceDtos.length,
-      currentRunDeliveries
+      currentRunDeliveries: runs.currentRun.length
     },
     truncated: {
       actions: actions.length > MISSION_SUMMARY_EVIDENCE_LIMIT,
@@ -267,40 +212,41 @@ function parseSuggestionRefs(value: unknown): SuggestionRef[] {
  * identity, title, and resolution.
  */
 async function projectSummary(
-  scope: MissionScope,
-  row: MissionSummaryRow
+  row: MissionSummaryRow,
+  runs: MissionSummaryRuns
 ): Promise<MissionSummaryDto> {
   const riskRefs = parseRiskRefs(row.risks_json);
   const suggestionRefs = parseSuggestionRefs(row.suggestions_json);
-  const deliveries = await loadCurrentRunDeliveries(scope, [
-    ...new Set([...riskRefs, ...suggestionRefs].map(ref => ref.deliveryId))
-  ]);
+  const deliveries = new Map<string, MissionSummaryDeliveryEvidence>(
+    runs.currentRun.map(delivery => [delivery.id, delivery])
+  );
   const resolutions = await loadResolutions([
     ...new Set(suggestionRefs.map(ref => ref.deliveryId).filter(id => deliveries.has(id)))
   ]);
 
   const risks: MissionSummaryRiskDto[] = riskRefs
-    .filter(ref => deliveries.get(ref.deliveryId)?.objective_id === ref.objectiveId)
+    .filter(ref => deliveries.get(ref.deliveryId)?.objectiveId === ref.objectiveId)
     .map(({ deliveryId, objectiveId, text }) => ({
       deliveryId,
       objectiveId,
-      deliveredAt: deliveries.get(deliveryId)!.delivered_at,
+      deliveredAt: deliveries.get(deliveryId)!.deliveredAt,
       text
     }));
 
   const suggestions: MissionSummarySuggestionDto[] = [];
   for (const ref of suggestionRefs) {
     const delivery = deliveries.get(ref.deliveryId);
-    if (!delivery || delivery.objective_id !== ref.objectiveId) continue;
-    const report = deliveryReportFromPayload(delivery.payload_json, delivery.summary);
-    const entry = deferredWorkEntries(report).find(candidate => candidate.id === ref.actionId);
+    if (!delivery || delivery.objectiveId !== ref.objectiveId) continue;
+    const entry = deferredWorkEntries(delivery.report).find(
+      candidate => candidate.id === ref.actionId
+    );
     if (!entry) continue;
     const resolution = toResolution(findResolution(resolutions, delivery.id, entry));
     if (resolution?.status === 'dismissed') continue;
     const identity = {
       deliveryId: delivery.id,
-      objectiveId: delivery.objective_id,
-      deliveredAt: delivery.delivered_at,
+      objectiveId: delivery.objectiveId,
+      deliveredAt: delivery.deliveredAt,
       actionId: entry.id,
       title: entry.title
     };
@@ -348,9 +294,8 @@ export async function getMissionSummary(missionRef: string): Promise<MissionSumm
     return { eligible: false, summary: null, evidence: null, watermark: null, seenAt: null };
   }
   const db = requireDatabaseClient();
-  const [sources, currentRunDeliveries, openQuestionAt, summaryRow, seenAt] = await Promise.all([
-    loadSourceDeliveries(scope),
-    countCurrentRunDeliveries(scope),
+  const [runs, openQuestionAt, summaryRow, seenAt] = await Promise.all([
+    readMissionSummaryRuns(db, scope.missionId, { workspaceId: scope.workspaceId }),
     latestOpenQuestionAt(scope),
     db.get(
       `SELECT mission_id, revision, status, headline, summary_markdown, risks_json,
@@ -363,11 +308,11 @@ export async function getMissionSummary(missionRef: string): Promise<MissionSumm
   ]);
   return {
     eligible: true,
-    summary: summaryRow ? await projectSummary(scope, summaryRow) : null,
-    evidence: buildEvidence(sources, currentRunDeliveries),
+    summary: summaryRow ? await projectSummary(summaryRow, runs) : null,
+    evidence: buildEvidence(runs),
     // Every current-run delivery the response draws on is no newer than the
     // newest source, which is always the first (uncapped) source row.
-    watermark: latestTimestamp(sources[0]?.delivered_at, openQuestionAt),
+    watermark: latestTimestamp(runs.latestByObjective[0]?.deliveredAt, openQuestionAt),
     seenAt
   };
 }

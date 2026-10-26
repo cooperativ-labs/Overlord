@@ -49,6 +49,78 @@ export async function eraseCredential(
   await tx.run('DELETE FROM account_connection_authorizations WHERE connection_id = ?', [id]);
 }
 
+/** A sealed grant and the scope's own columns (scopes, account, workspaces, format). */
+export interface StoredGrant {
+  ciphertext: string;
+  keyId: string;
+  accessExpiresAt: string | null;
+  refreshExpiresAt: string | null;
+  /** Scope-specific columns; values are bound and shared grant fields cannot be overridden. */
+  columns?: Partial<
+    Pick<
+      ConnectionRow,
+      | 'credential_kind'
+      | 'credential_format'
+      | 'external_account_id'
+      | 'external_account_label'
+      | 'external_account_avatar_url'
+      | 'granted_scopes_json'
+      | 'last_validated_at'
+      | 'authorized_workspaces_json'
+      | 'tool_policy_version'
+    >
+  >;
+}
+
+/**
+ * Persist a freshly sealed grant. Without `leaseOwner` this is the sign-in callback:
+ * the row becomes `connected` unless it was disconnected meanwhile. With it, this is
+ * a refresh by the lease holder: only a connected row still at the credential
+ * revision that was read changes, and a missing refresh expiry keeps the stored one.
+ * `changes === 0` means nothing was stored.
+ */
+export function storeConnectionGrant(
+  db: DatabaseClient,
+  row: Pick<ConnectionRow, 'id' | 'credential_revision'>,
+  grant: StoredGrant,
+  options: { now: string; leaseOwner?: string }
+) {
+  const { now, leaseOwner } = options;
+  const columns = Object.entries(grant.columns ?? {});
+  const assignments = columns.map(([name]) => `${name} = ?, `).join('');
+  const values = columns.map(([, value]) => value);
+  if (leaseOwner === undefined)
+    return db.run(
+      `UPDATE account_connections SET state = 'connected', credential_ciphertext = ?, credential_key_id = ?, credential_revision = credential_revision + 1, access_expires_at = ?, refresh_expires_at = ?, ${assignments}refresh_lock_owner = NULL, refresh_lock_until = NULL, last_refreshed_at = ?, last_error_code = NULL, connected_at = ?, updated_at = ?, revision = revision + 1 WHERE id = ? AND state <> 'disconnected'`,
+      [
+        grant.ciphertext,
+        grant.keyId,
+        grant.accessExpiresAt,
+        grant.refreshExpiresAt,
+        ...values,
+        now,
+        now,
+        now,
+        row.id
+      ]
+    );
+  return db.run(
+    `UPDATE account_connections SET credential_ciphertext = ?, credential_key_id = ?, credential_revision = credential_revision + 1, access_expires_at = ?, refresh_expires_at = COALESCE(?, refresh_expires_at), ${assignments}last_refreshed_at = ?, last_error_code = NULL, refresh_lock_owner = NULL, refresh_lock_until = NULL, updated_at = ?, revision = revision + 1 WHERE id = ? AND state = 'connected' AND refresh_lock_owner = ? AND credential_revision = ?`,
+    [
+      grant.ciphertext,
+      grant.keyId,
+      grant.accessExpiresAt,
+      grant.refreshExpiresAt,
+      ...values,
+      now,
+      now,
+      row.id,
+      leaseOwner,
+      row.credential_revision
+    ]
+  );
+}
+
 export function acquireRefreshLease(
   db: DatabaseClient,
   row: ConnectionRow,

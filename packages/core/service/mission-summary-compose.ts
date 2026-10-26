@@ -98,12 +98,23 @@ function newestFirst(
   return left.id < right.id ? 1 : left.id > right.id ? -1 : 0;
 }
 
+/**
+ * SQL form of the reopenedAt rule, for selecting current-run deliveries in the
+ * database before any limit. `delivery` and `objective` are the aliases of
+ * `deliveries` and its LEFT JOINed objective; they are interpolated verbatim
+ * and must be trusted identifiers. A delivery whose objective row is gone has
+ * no boundary. {@link splitMissionSummaryRuns} applies the same rule in memory.
+ */
+export function currentRunDeliveryPredicateSql(delivery = 'd', objective = 'o'): string {
+  return `(${objective}.reopened_at IS NULL OR ${delivery}.delivered_at >= ${objective}.reopened_at)`;
+}
+
 /** Splits deliveries into current-run and superseded per the reopenedAt rule. */
 export function splitMissionSummaryRuns({
   objectives,
   deliveries
 }: {
-  objectives: MissionSummaryObjectiveEvidence[];
+  objectives: Array<Pick<MissionSummaryObjectiveEvidence, 'id' | 'reopenedAt'>>;
   deliveries: MissionSummaryDeliveryEvidence[];
 }): MissionSummaryRuns {
   const reopenedAt = new Map(objectives.map(objective => [objective.id, objective.reopenedAt]));

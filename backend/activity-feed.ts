@@ -1,17 +1,20 @@
 import { PERMISSIONS } from '@overlord/auth';
 import { sortObjectivesForMissionDisplay } from '@overlord/automations';
-import { formatObjectiveDisplayId } from '@overlord/database';
-
-import { jsonTextFieldSql } from '../packages/core/service/util.ts';
 import type {
   ActivityFeedDto,
   ActivityFeedItemDto,
   ActivityFeedMissionItemDto,
   ActivityFeedMissionObjectiveDto,
   ActivityFeedQuestionItemDto,
-  CreatedByKind,
   ObjectiveState
-} from '../webapp/shared/contract.ts';
+} from '@overlord/contract';
+import { formatObjectiveDisplayId } from '@overlord/database';
+
+import {
+  jsonTextFieldSql,
+  sqlPlaceholders,
+  toCreatedByKind
+} from '../packages/core/service/util.ts';
 
 import { getActiveTokenProjectIds, requireDatabaseClient } from './db.ts';
 import { ApiError } from './errors.ts';
@@ -57,10 +60,6 @@ function compactHarnessMarkup(value: string | null | undefined): string {
         : block;
     }
   );
-}
-
-function placeholders(count: number): string {
-  return new Array(count).fill('?').join(', ');
 }
 
 interface FeedContextRow {
@@ -166,10 +165,6 @@ function resolveAgentIdentifier(...candidates: Array<string | null | undefined>)
   return null;
 }
 
-function toCreatedByKind(value: string | null | undefined): CreatedByKind {
-  return value === 'agent' || value === 'automation' ? value : 'human';
-}
-
 function baseFields(row: FeedContextRow) {
   return {
     workspaceId: row.workspace_id,
@@ -262,8 +257,8 @@ async function loadRuns(workspaceIds: string[]): Promise<RunRow[]> {
               ORDER BY r.created_at DESC, r.id DESC LIMIT 1) AS request_created_at
        FROM objectives o${CONTEXT_JOIN}
       WHERE o.deleted_at IS NULL
-        AND o.state IN (${placeholders(RUNNING_STATES.length)})
-        AND o.workspace_id IN (${placeholders(workspaceIds.length)})
+        AND o.state IN (${sqlPlaceholders(RUNNING_STATES.length)})
+        AND o.workspace_id IN (${sqlPlaceholders(workspaceIds.length)})
       ORDER BY o.updated_at DESC, o.id ASC`,
     [...RUNNING_STATES, ...workspaceIds]
   )) as RunRow[];
@@ -296,7 +291,7 @@ async function loadMissionObjectives(
        FROM objectives o
        JOIN missions m ON m.id = o.mission_id AND m.deleted_at IS NULL
       WHERE o.deleted_at IS NULL
-        AND o.mission_id IN (${placeholders(missionIds.length)})
+        AND o.mission_id IN (${sqlPlaceholders(missionIds.length)})
       ORDER BY o.mission_id ASC, o.position ASC`,
     missionIds
   )) as MissionObjectiveRow[];
@@ -319,7 +314,7 @@ async function loadLatestEvents(objectiveIds: string[]): Promise<Map<string, Lat
   const rows = (await requireDatabaseClient().all(
     `SELECT e.objective_id, e.summary, e.created_at
        FROM mission_events e
-      WHERE e.objective_id IN (${placeholders(objectiveIds.length)})
+      WHERE e.objective_id IN (${sqlPlaceholders(objectiveIds.length)})
         AND e.created_at = (SELECT MAX(x.created_at) FROM mission_events x
                              WHERE x.objective_id = e.objective_id)`,
     objectiveIds
@@ -371,7 +366,7 @@ async function loadQuestions(workspaceIds: string[]): Promise<QuestionRow[]> {
        LEFT JOIN agent_sessions s ON s.id = e.session_id AND s.deleted_at IS NULL
        LEFT JOIN agent_requests ar ON ar.id = ${askRequestId} AND ar.deleted_at IS NULL
       WHERE e.type = 'ask'
-        AND e.workspace_id IN (${placeholders(workspaceIds.length)})
+        AND e.workspace_id IN (${sqlPlaceholders(workspaceIds.length)})
         AND e.created_at >= ?
         AND (
           NOT EXISTS (SELECT 1 FROM mission_status_seen mss
@@ -433,7 +428,7 @@ async function loadDelivered({
        ${CONTEXT_JOIN}
        LEFT JOIN agent_sessions s ON s.id = d.session_id AND s.deleted_at IS NULL
       WHERE d.deleted_at IS NULL
-        AND d.workspace_id IN (${placeholders(workspaceIds.length)})
+        AND d.workspace_id IN (${sqlPlaceholders(workspaceIds.length)})
         AND d.delivered_at > ?
         AND d.delivered_at <= ?
         AND d.id = (
@@ -447,7 +442,7 @@ async function loadDelivered({
           SELECT 1 FROM objectives live
            WHERE live.mission_id = d.mission_id
              AND live.deleted_at IS NULL
-             AND live.state IN (${placeholders(RUNNING_STATES.length)})
+             AND live.state IN (${sqlPlaceholders(RUNNING_STATES.length)})
         )
       ORDER BY d.delivered_at DESC, d.id DESC`,
     [...workspaceIds, windowStart, windowEnd, ...RUNNING_STATES]
@@ -465,7 +460,7 @@ async function latestDeliveredAtOnOrBefore({
     `SELECT MAX(d.delivered_at) AS latest
        FROM deliveries d
       WHERE d.deleted_at IS NULL
-        AND d.workspace_id IN (${placeholders(workspaceIds.length)})
+        AND d.workspace_id IN (${sqlPlaceholders(workspaceIds.length)})
         AND d.delivered_at <= ?
         AND d.id = (
           SELECT x.id FROM deliveries x
@@ -478,7 +473,7 @@ async function latestDeliveredAtOnOrBefore({
           SELECT 1 FROM objectives live
            WHERE live.mission_id = d.mission_id
              AND live.deleted_at IS NULL
-             AND live.state IN (${placeholders(RUNNING_STATES.length)})
+             AND live.state IN (${sqlPlaceholders(RUNNING_STATES.length)})
         )`,
     [...workspaceIds, onOrBefore, ...RUNNING_STATES]
   )) as { latest: string | null } | undefined;

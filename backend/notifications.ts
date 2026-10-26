@@ -31,8 +31,8 @@ type NotificationRow = {
   objective_title: string | null;
 };
 
-function isNotificationType(value: string): value is NotificationType {
-  return (NOTIFICATION_TYPES as readonly string[]).includes(value);
+export function isNotificationType(value: unknown): value is NotificationType {
+  return typeof value === 'string' && (NOTIFICATION_TYPES as readonly string[]).includes(value);
 }
 
 function toNotificationDto(row: NotificationRow): NotificationDto {

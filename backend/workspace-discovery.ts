@@ -4,10 +4,7 @@
  * workspace selector: it never changes request scope or token consent.
  */
 
-import type {
-  AuthorizedWorkspaceDiscoveryDto,
-  AuthorizedWorkspaceDto
-} from '../webapp/shared/contract.ts';
+import type { AuthorizedWorkspaceDiscoveryDto, AuthorizedWorkspaceDto } from '@overlord/contract';
 
 import { listWorkspaceConsentOrganizations } from './auth.ts';
 import {

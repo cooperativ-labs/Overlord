@@ -1,3 +1,4 @@
+import type { CreatedByKind } from '@overlord/contract';
 import type { SqlDialect } from '@overlord/database';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 
@@ -56,4 +57,18 @@ export function jsonTextFieldSql(column: string, field: string, dialect: SqlDial
   return dialect === 'postgres'
     ? `${column}->>'${field}'`
     : `json_extract(${column}, '$.${field}')`;
+}
+
+// `created_by_kind` is NOT NULL in both tables, so the null branch only fires
+// for a projection that did not select the column. Falling back to 'human'
+// keeps `createdByKind` non-optional on the wire, which is what lets every
+// client render provenance without a null branch. Biasing an unknown value to
+// 'human' is also the safe direction: it under-claims rather than misattributes.
+export function toCreatedByKind(value: string | null | undefined): CreatedByKind {
+  return value === 'agent' || value === 'automation' ? value : 'human';
+}
+
+/** `?, ?, ...` list for an `IN (...)` clause of `count` bound values. */
+export function sqlPlaceholders(count: number): string {
+  return new Array(count).fill('?').join(', ');
 }

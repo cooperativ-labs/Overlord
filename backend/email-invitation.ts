@@ -7,21 +7,13 @@
  * matching the offline/local-edition behavior of verification email.
  */
 
-import { Resend } from 'resend';
-
 import { inviteUserHtml, inviteUserSubject } from './email-templates/index.ts';
+import { requireResendClient } from './email-client.ts';
 
 const FROM_ADDRESS = 'Overlord <verify@notifications.cooperativ.io>';
 
 /** Public site URL used for branded links in transactional emails. */
 const SITE_URL = process.env.OVERLORD_SITE_URL ?? 'https://app.ovld.ai';
-
-let resendClient: Resend | null = null;
-
-function requireResendClient(): Resend {
-  resendClient ??= new Resend(process.env.RESEND_API_KEY);
-  return resendClient;
-}
 
 export async function sendInviteEmailViaResend({
   email,

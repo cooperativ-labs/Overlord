@@ -1,4 +1,9 @@
 import { type Permission, PERMISSIONS } from '@overlord/auth';
+import type {
+  ProjectExecutionTargetDto,
+  UpdateProjectExecutionTargetBody,
+  WorkspaceExecutionTargetDto
+} from '@overlord/contract';
 import type { DatabaseClient } from '@overlord/database';
 
 import { ServiceError } from '../../packages/core/service/errors.ts';
@@ -11,11 +16,6 @@ import {
   updateProjectExecutionTargetSelection,
   updateWorkspaceExecutionTargetStatus
 } from '../../packages/core/service/project-execution-target.ts';
-import type {
-  ProjectExecutionTargetDto,
-  UpdateProjectExecutionTargetBody,
-  WorkspaceExecutionTargetDto
-} from '../../webapp/shared/contract.ts';
 import { buildWebappServiceContextForWorkspace, requireDatabaseClient } from '../db.ts';
 import { ApiError } from '../errors.ts';
 import { requireProjectPermission, requireWorkspacePermission } from '../rbac.ts';

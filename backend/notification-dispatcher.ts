@@ -1,11 +1,7 @@
 import type { DatabaseClient } from '@overlord/database';
 
 import { insertEntityChange } from '../packages/core/service/change-feed.ts';
-import {
-  NOTIFICATION_TYPES,
-  type NotificationType,
-  notificationTypesForTransport
-} from '../packages/core/service/notifications/catalog.ts';
+import { notificationTypesForTransport } from '../packages/core/service/notifications/catalog.ts';
 import {
   NOTIFICATION_DISPATCH_JOB_TYPE,
   type NotificationDispatchJobPayload
@@ -14,6 +10,7 @@ import { isPushNotificationCategory } from '../packages/core/service/push-notifi
 import type { ClaimedWorkerJob } from '../packages/core/service/worker-jobs.ts';
 
 import { requireDatabaseClient } from './db.ts';
+import { isNotificationType } from './notifications.ts';
 import { deliverStandardPush } from './push-notification-dispatcher.ts';
 import { resolveNotificationMode } from './push-notifications.ts';
 import { WorkerJobPoller } from './worker-job-poller.ts';
@@ -28,10 +25,6 @@ type NotificationRow = {
   revision: number;
   project_id: string;
 };
-
-function isNotificationType(value: unknown): value is NotificationType {
-  return typeof value === 'string' && (NOTIFICATION_TYPES as readonly string[]).includes(value);
-}
 
 function parseJob(payloadJson: string): NotificationDispatchJobPayload | null {
   try {

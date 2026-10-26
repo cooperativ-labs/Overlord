@@ -25,7 +25,7 @@ import {
 import { newId, nowIso } from '../packages/core/service/util.ts';
 
 import { requireDatabaseClient, resolveActiveProfileId } from './db.ts';
-import { ApiError } from './errors.ts';
+import { ApiError, requiredString } from './errors.ts';
 import { bounded } from './live-activities.ts';
 import { notificationBody, notificationSubject } from './notification-presentation.ts';
 
@@ -85,13 +85,6 @@ type RegistrationBody = {
   bundleId?: unknown;
   appVersion?: unknown;
 };
-
-function requiredString(value: unknown, field: string, max: number): string {
-  const normalized = typeof value === 'string' ? value.trim() : '';
-  if (!normalized) throw new ApiError(400, `${field} is required`);
-  if (normalized.length > max) throw new ApiError(400, `${field} is too long`);
-  return normalized;
-}
 
 /**
  * Registers or rotates the caller's standard APNs **device** token.

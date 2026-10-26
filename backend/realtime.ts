@@ -1,7 +1,6 @@
 import { PERMISSIONS } from '@overlord/auth';
+import type { EntityChangeDto, SyncChangesDto } from '@overlord/contract';
 import type { Response } from 'express';
-
-import type { EntityChangeDto, SyncChangesDto } from '../webapp/shared/contract.ts';
 
 import {
   currentMaxSeq,

@@ -9,6 +9,79 @@ import {
   USER_TOKEN_HASH_ALGORITHM,
   USER_TOKEN_PREFIX
 } from '@overlord/auth';
+import type {
+  ArtifactDto,
+  CreateArtifactBody,
+  CreateInboxItemBody,
+  CreateMissionBody,
+  CreateObjectiveBody,
+  CreateProjectBody,
+  CreateProjectResourceBody,
+  CreateProjectStatusBody,
+  CreateProjectTagBody,
+  CreateUserTokenBody,
+  CreateUserTokenResultDto,
+  DefaultProjectPreferenceDto,
+  DeliveryReportPayloadV1,
+  GenerateCommitMessageResultDto,
+  InboxItemDto,
+  InboxMissionDto,
+  InboxMissionReason,
+  InboxMissionsResponse,
+  InitializeProjectBody,
+  InitializeProjectResultDto,
+  MissionBranchDto,
+  MissionBranchListDto,
+  MissionCreatedFromDto,
+  MissionDeliveriesDto,
+  MissionDetailDto,
+  MissionDto,
+  MissionEventDto,
+  MissionFileChangesDto,
+  MissionReferenceSearchResponse,
+  MissionScheduleDto,
+  MissionSearchDateField,
+  MissionWorktreePreference,
+  ObjectiveDto,
+  ObjectiveFileChangesDto,
+  PreviewScheduleBody,
+  ProfileDto,
+  ProjectDto,
+  ProjectListLifecycle,
+  ProjectRepositoryDto,
+  ProjectResourceDto,
+  ProjectStatusDto,
+  ProjectTagDto,
+  PurgeWorktreesResultDto,
+  RemoveWorktreeBody,
+  ReorderBoardColumnBody,
+  ReorderFutureObjectivesBody,
+  ReorderProjectsBody,
+  ReorderProjectStatusesBody,
+  RunQueueWaitingReason,
+  ScheduleDto,
+  ScheduleInput,
+  SearchMissionsResponseV2,
+  SearchResponseV3,
+  SharedContextEntryDto,
+  StatusType,
+  TokenScope,
+  UpdateArtifactBody,
+  UpdateInboxItemBody,
+  UpdateMissionBody,
+  UpdateObjectiveBody,
+  UpdateProfileBody,
+  UpdateProjectBody,
+  UpdateProjectResourceBody,
+  UpdateProjectResourceSourceBody,
+  UpdateProjectStatusBody,
+  UpdateProjectTagBody,
+  UpdateUserTokenBody,
+  UpsertSharedContextBody,
+  UserTokenDto,
+  WorktreeDto
+} from '@overlord/contract';
+import { MISSION_EVIDENCE_LIST_LIMIT, normalizeAgentLaunchFlags } from '@overlord/contract';
 import type { CreatedGitHubRepositoryDto } from '@overlord/contract/ext/github';
 import {
   OBJECTIVE_COMPLETED_AT_ASSIGNMENT,
@@ -106,86 +179,10 @@ import {
   hashSessionKey,
   isTruthyFlag,
   jsonTextFieldSql,
-  slugify
+  slugify,
+  toCreatedByKind
 } from '../packages/core/service/util.ts';
 import { enqueueMissionSummaryComposeJob } from '../packages/core/service/worker-jobs.ts';
-import type {
-  ArtifactDto,
-  CreateArtifactBody,
-  CreatedByKind,
-  CreateInboxItemBody,
-  CreateMissionBody,
-  CreateObjectiveBody,
-  CreateProjectBody,
-  CreateProjectResourceBody,
-  CreateProjectStatusBody,
-  CreateProjectTagBody,
-  CreateUserTokenBody,
-  CreateUserTokenResultDto,
-  DefaultProjectPreferenceDto,
-  DeliveryReportPayloadV1,
-  GenerateCommitMessageResultDto,
-  InboxItemDto,
-  InboxMissionDto,
-  InboxMissionReason,
-  InboxMissionsResponse,
-  InitializeProjectBody,
-  InitializeProjectResultDto,
-  MissionBranchDto,
-  MissionBranchListDto,
-  MissionCreatedFromDto,
-  MissionDeliveriesDto,
-  MissionDetailDto,
-  MissionDto,
-  MissionEventDto,
-  MissionFileChangesDto,
-  MissionReferenceSearchResponse,
-  MissionScheduleDto,
-  MissionSearchDateField,
-  MissionWorktreePreference,
-  ObjectiveDto,
-  ObjectiveFileChangesDto,
-  PreviewScheduleBody,
-  ProfileDto,
-  ProjectDto,
-  ProjectListLifecycle,
-  ProjectRepositoryDto,
-  ProjectResourceDto,
-  ProjectStatusDto,
-  ProjectTagDto,
-  PurgeWorktreesResultDto,
-  RemoveWorktreeBody,
-  ReorderBoardColumnBody,
-  ReorderFutureObjectivesBody,
-  ReorderProjectsBody,
-  ReorderProjectStatusesBody,
-  RunQueueWaitingReason,
-  ScheduleDto,
-  ScheduleInput,
-  SearchMissionsResponseV2,
-  SearchResponseV3,
-  SharedContextEntryDto,
-  StatusType,
-  TokenScope,
-  UpdateArtifactBody,
-  UpdateInboxItemBody,
-  UpdateMissionBody,
-  UpdateObjectiveBody,
-  UpdateProfileBody,
-  UpdateProjectBody,
-  UpdateProjectResourceBody,
-  UpdateProjectResourceSourceBody,
-  UpdateProjectStatusBody,
-  UpdateProjectTagBody,
-  UpdateUserTokenBody,
-  UpsertSharedContextBody,
-  UserTokenDto,
-  WorktreeDto
-} from '../webapp/shared/contract.ts';
-import {
-  MISSION_EVIDENCE_LIST_LIMIT,
-  normalizeAgentLaunchFlags
-} from '../webapp/shared/contract.ts';
 
 import { generateCommitMessageFromDiff } from './automation/commit-message-automation.ts';
 import {
@@ -941,15 +938,6 @@ async function promoteFallbackPrimary(
       WHERE id = ?`,
     [bindBool(DATABASE_DIALECT, true), now, fallback.id]
   );
-}
-
-// `created_by_kind` is NOT NULL in both tables, so the null branch only fires
-// for a projection that did not select the column. Falling back to 'human'
-// keeps `createdByKind` non-optional on the wire, which is what lets every
-// client render provenance without a null branch. Biasing an unknown value to
-// 'human' is also the safe direction: it under-claims rather than misattributes.
-function toCreatedByKind(value: string | null | undefined): CreatedByKind {
-  return value === 'agent' || value === 'automation' ? value : 'human';
 }
 
 function toMissionDto(r: MissionRow, tags: ProjectTagDto[] = []): MissionDto {

@@ -10,7 +10,8 @@
  * than living in either) so neither service module needs to import the other.
  */
 
-import type { MetaDto } from '../../webapp/shared/contract.ts';
+import type { MetaDto } from '@overlord/contract';
+
 import { getActiveProfileId, getImplicitWorkspaceIdOrNull } from '../db.ts';
 import { getActiveOrganizationIdOrNull, listOrganizationsForUser } from '../organizations.ts';
 import { getDefaultProjectPreference } from '../repository.ts';

@@ -14,14 +14,22 @@ import {
   deriveDeterministicActionCandidates,
   reconcileDeliveryComposeDraft
 } from '../packages/core/service/delivery-compose.ts';
-import { nowIso } from '../packages/core/service/util.ts';
+import {
+  type DeliveryComposeContext,
+  persistDeliveryPresentation,
+  readDeliveryComposeContext
+} from '../packages/core/service/delivery-presentation.ts';
 import {
   type ClaimedWorkerJob,
-  DELIVERY_COMPOSE_JOB_TYPE,
-  enqueueMissionSummaryComposeJob
+  DELIVERY_COMPOSE_JOB_TYPE
 } from '../packages/core/service/worker-jobs.ts';
 
-import { recordChange, requireDatabaseClient } from './db.ts';
+import {
+  findActiveMembershipId,
+  getActiveTokenId,
+  requireDatabaseClient,
+  resolveActiveProfileId
+} from './db.ts';
 import { WorkerJobPoller } from './worker-job-poller.ts';
 
 const CLAIM_BATCH_SIZE = 5;
@@ -31,18 +39,7 @@ const MAX_COMPOSE_EVENT_CHARS = 1_000;
 
 type WorkerJobRow = ClaimedWorkerJob;
 
-type DeliveryRow = {
-  id: string;
-  workspace_id: string;
-  project_id: string;
-  mission_id: string;
-  objective_id: string;
-  summary: string;
-  verification_summary: string | null;
-  follow_up_notes: string | null;
-  payload_json: string;
-  revision: number;
-};
+type DeliveryRow = DeliveryComposeContext['delivery'];
 
 type ComposeGenerator = (args: {
   prompt: string;
@@ -170,7 +167,7 @@ class DeliveryComposeWorker extends WorkerJobPoller {
     client: DatabaseClient,
     deliveryId: string
   ): Promise<ComposeResult> {
-    const context = await loadComposeContext(client, deliveryId);
+    const context = await readDeliveryComposeContext(client, deliveryId);
     if (!context) return { kind: 'missing' };
 
     const { delivery, report, filePaths, objective, plannedObjectives, recentEvents } = context;
@@ -216,11 +213,12 @@ class DeliveryComposeWorker extends WorkerJobPoller {
     }
 
     const nextReport = applyDeliveryPresentation({ report, presentation });
-    await persistDeliveryReport({
-      client,
+    await persistDeliveryPresentation({
+      db: client,
       delivery,
       nextReport,
-      changedFields: ['payload_json', 'presentation']
+      changedFields: ['payload_json', 'presentation'],
+      resolveChangeAttribution: tx => deliveryChangeAttribution(tx, delivery.workspace_id)
     });
     return {
       kind: 'updated',
@@ -235,9 +233,9 @@ class DeliveryComposeWorker extends WorkerJobPoller {
 async function persistFallbackPresentation(
   client: DatabaseClient,
   deliveryId: string,
-  lastError: string
+  _lastError: string
 ): Promise<void> {
-  const context = await loadComposeContext(client, deliveryId);
+  const context = await readDeliveryComposeContext(client, deliveryId);
   if (!context) return;
   const presentation = reconcileDeliveryComposeDraft({
     report: context.report,
@@ -252,165 +250,23 @@ async function persistFallbackPresentation(
     report: context.report,
     presentation
   });
-  await persistDeliveryReport({
-    client,
+  await persistDeliveryPresentation({
+    db: client,
     delivery: context.delivery,
     nextReport,
-    changedFields: ['payload_json', 'presentation']
+    changedFields: ['payload_json', 'presentation'],
+    resolveChangeAttribution: tx => deliveryChangeAttribution(tx, context.delivery.workspace_id)
   });
 }
 
-async function persistDeliveryReport({
-  client,
-  delivery,
-  nextReport,
-  changedFields
-}: {
-  client: DatabaseClient;
-  delivery: DeliveryRow;
-  nextReport: DeliveryReportPayloadV1;
-  changedFields: string[];
-}): Promise<void> {
-  const now = nowIso();
-  let payload: Record<string, unknown>;
-  try {
-    payload = JSON.parse(delivery.payload_json) as Record<string, unknown>;
-  } catch {
-    payload = {};
-  }
-  payload.deliveryReport = nextReport;
-
-  // The presentation write, its change, and the mission summary trigger share
-  // one transaction, so the summary always reads composed (or fallback)
-  // markdown and a crash cannot leave a presented delivery untriggered.
-  await client.transaction(async tx => {
-    const updated = await tx.run(
-      `UPDATE deliveries
-           SET payload_json = ?, updated_at = ?, revision = revision + 1
-         WHERE id = ? AND revision = ? AND deleted_at IS NULL`,
-      [JSON.stringify(payload), now, delivery.id, delivery.revision]
-    );
-    if (updated.changes === 0) {
-      // Another writer won the CAS; treat as success for idempotent workers.
-      return;
-    }
-
-    await recordChange(
-      {
-        entityType: 'delivery',
-        entityId: delivery.id,
-        operation: 'update',
-        entityRevision: delivery.revision + 1,
-        projectId: delivery.project_id,
-        missionId: delivery.mission_id,
-        objectiveId: delivery.objective_id,
-        changedFields,
-        workspaceId: delivery.workspace_id
-      },
-      tx
-    );
-
-    // Only composed or fallback presentations trigger the summary, never pending.
-    const status = nextReport.presentation.status;
-    if (status === 'composed' || status === 'fallback') {
-      await enqueueMissionSummaryComposeJob({
-        ctx: {
-          db: tx,
-          workspaceId: delivery.workspace_id,
-          actorWorkspaceUserId: null,
-          source: 'runner'
-        },
-        missionId: delivery.mission_id,
-        reason: 'delivery_presented',
-        sourceDeliveryId: delivery.id,
-        now
-      });
-    }
-  });
-}
-
-async function loadComposeContext(
-  client: DatabaseClient,
-  deliveryId: string
-): Promise<{
-  delivery: DeliveryRow;
-  report: DeliveryReportPayloadV1;
-  filePaths: string[];
-  objective: DeferredWorkObjectiveRef;
-  plannedObjectives: DeferredWorkObjectiveRef[];
-  recentEvents: Array<{ type: string; summary: string }>;
-} | null> {
-  const delivery = (await client.get(
-    `SELECT id, workspace_id, project_id, mission_id, objective_id, summary,
-            verification_summary, follow_up_notes, payload_json, revision
-       FROM deliveries
-      WHERE id = ? AND deleted_at IS NULL`,
-    [deliveryId]
-  )) as DeliveryRow | undefined;
-  if (!delivery) return null;
-
-  let report: DeliveryReportPayloadV1 | null = null;
-  try {
-    const payload = JSON.parse(delivery.payload_json) as {
-      deliveryReport?: DeliveryReportPayloadV1;
-    };
-    if (payload.deliveryReport?.schemaVersion === 1 && payload.deliveryReport.agentReport) {
-      report = payload.deliveryReport;
-    }
-  } catch {
-    report = null;
-  }
-  if (!report) return null;
-
-  // Cumulative objective path evidence feeds only the deterministic operator
-  // action rules; paths are never sent to the model as per-file explanations.
-  const filePathRows = (await client.all(
-    `SELECT file_path FROM changed_files
-      WHERE objective_id = ? AND deleted_at IS NULL
-      ORDER BY last_observed_at DESC, id DESC
-      LIMIT 40`,
-    [delivery.objective_id]
-  )) as Array<{ file_path: string }>;
-  const filePaths = filePathRows.map(row => row.file_path);
-
-  const objective = (await client.get(
-    `SELECT title, instruction_text FROM objectives WHERE id = ?`,
-    [delivery.objective_id]
-  )) as { title: string | null; instruction_text: string | null } | undefined;
-
-  const siblingObjectives = (await client.all(
-    `SELECT title, instruction_text, state
-       FROM objectives
-      WHERE mission_id = ? AND id != ? AND deleted_at IS NULL`,
-    [delivery.mission_id, delivery.objective_id]
-  )) as Array<{ title: string | null; instruction_text: string | null; state: string }>;
-
-  const recentEvents = (await client.all(
-    `SELECT type, summary FROM mission_events
-      WHERE objective_id = ?
-      ORDER BY created_at DESC
-      LIMIT 12`,
-    [delivery.objective_id]
-  )) as Array<{ type: string; summary: string }>;
-
+async function deliveryChangeAttribution(db: DatabaseClient, workspaceId: string) {
+  const profileId = await resolveActiveProfileId(db);
   return {
-    delivery,
-    report,
-    filePaths,
-    objective: {
-      title: objective?.title ?? null,
-      instruction: objective?.instruction_text ?? null
-    },
-    plannedObjectives: siblingObjectives
-      .filter(row => row.state !== 'complete' && Boolean(row.instruction_text?.trim()))
-      .map(row => ({
-        title: row.title,
-        instruction: row.instruction_text
-      })),
-    recentEvents: recentEvents.map(event => ({
-      type: event.type,
-      summary: event.summary
-    }))
+    actorWorkspaceUserId: profileId
+      ? await findActiveMembershipId(workspaceId, profileId, db)
+      : null,
+    actorTokenId: getActiveTokenId(),
+    source: 'webapp'
   };
 }
 

@@ -15,6 +15,14 @@ export class ApiError extends Error {
   }
 }
 
+/** Trimmed non-empty string body field no longer than `max`, else a 400. */
+export function requiredString(value: unknown, field: string, max: number): string {
+  const normalized = typeof value === 'string' ? value.trim() : '';
+  if (!normalized) throw new ApiError(400, `${field} is required`);
+  if (normalized.length > max) throw new ApiError(400, `${field} is too long`);
+  return normalized;
+}
+
 type SqliteErrorLike = {
   code?: string;
   message?: string;

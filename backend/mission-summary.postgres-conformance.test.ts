@@ -132,7 +132,8 @@ for (const adapter of conformanceAdapters()) {
         const { createProject, createMission, createObjective, updateObjective } =
           await import('./repository.ts');
         const { getMissionSummary, markMissionSummarySeen } = await import('./mission-summary.ts');
-        const { loadMissionSummaryEvidence } = await import('./mission-summary-compose-worker.ts');
+        const { readMissionSummaryEvidence } =
+          await import('../packages/core/service/mission-summary-evidence.ts');
         const { buildWebappServiceContext, setActiveWorkspaceUser } = await import('./db.ts');
         const { resolveDeferredWork, reopenDeferredWork } =
           await import('./deferred-work-resolutions.ts');
@@ -204,7 +205,7 @@ for (const adapter of conformanceAdapters()) {
             reason: 'delivery_presented'
           })
         );
-        const evidence = await loadMissionSummaryEvidence(db, mission.id);
+        const evidence = await readMissionSummaryEvidence(db, mission.id);
         assert.equal(evidence?.runs.currentRun.length, 206);
         assert.ok(evidence?.runs.currentRun.some(delivery => delivery.id === quietDelivery));
         // Supersede the old delivery in sources; its suggestion still belongs
@@ -312,6 +313,57 @@ for (const adapter of conformanceAdapters()) {
             source => source.objectiveId === quiet.id
           )
         );
+      } finally {
+        await cleanup();
+      }
+    });
+
+    it('orders latest-per-objective by delivered_at then id and keeps reopen-boundary deliveries', async () => {
+      const { db, cleanup } = await createConformanceDatabase(adapter, 'ovld_summary_ties');
+      try {
+        await bindWebappDatabaseClient({ client: db });
+        const { createProject, createMission, createObjective } = await import('./repository.ts');
+        const { getMissionSummary } = await import('./mission-summary.ts');
+        const project = await createProject({ name: 'Summary ties' });
+        const mission = await createMission({ projectId: project.id, firstObjective: 'Tied' });
+        const tied = mission.objectives[0]!;
+        const reopened = await createObjective({
+          missionId: mission.id,
+          instructionText: 'Reopened'
+        });
+        const insert = async (id: string, objectiveId: string, timestamp: string) => {
+          await db.run(
+            `INSERT INTO deliveries (id, workspace_id, project_id, mission_id, objective_id, summary, payload_json, delivered_at, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 'Done.', ?, ?, ?, ?)`,
+            [
+              id,
+              mission.workspaceId,
+              project.id,
+              mission.id,
+              objectiveId,
+              JSON.stringify({}),
+              timestamp,
+              timestamp,
+              timestamp
+            ]
+          );
+        };
+        const tie = '2026-10-05T00:00:00.000Z';
+        await insert('tie-a', tied.id, tie);
+        await insert('tie-c', tied.id, tie);
+        await insert('tie-b', tied.id, tie);
+        const boundary = '2026-10-05T00:00:00.000Z';
+        await db.run('UPDATE objectives SET reopened_at = ? WHERE id = ?', [boundary, reopened.id]);
+        await insert('before-reopen', reopened.id, '2026-10-04T23:59:59.999Z');
+        await insert('at-reopen', reopened.id, boundary);
+
+        const evidence = (await getMissionSummary(mission.id)).evidence!;
+        assert.deepEqual(
+          evidence.sources.map(source => source.deliveryId),
+          ['tie-c', 'at-reopen'],
+          'ties break on id descending, within and across objectives'
+        );
+        assert.equal(evidence.totals.currentRunDeliveries, 4);
       } finally {
         await cleanup();
       }

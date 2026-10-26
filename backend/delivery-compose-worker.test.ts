@@ -156,13 +156,24 @@ test('compose worker updates presentation from a fake provider and emits deliver
     assert.deepEqual(summary, { status: 'pending', source_delivery_id: delivered.deliveryId });
 
     const change = (await ctx.db.get(
-      `SELECT entity_type, changed_fields_json FROM entity_changes
+      `SELECT entity_type, changed_fields_json, actor_workspace_user_id, actor_token_id, source FROM entity_changes
          WHERE entity_type = 'delivery' AND entity_id = ?
          ORDER BY seq DESC LIMIT 1`,
       [delivered.deliveryId]
-    )) as { entity_type: string; changed_fields_json: string } | undefined;
+    )) as
+      | {
+          entity_type: string;
+          changed_fields_json: string;
+          actor_workspace_user_id: string | null;
+          actor_token_id: string | null;
+          source: string;
+        }
+      | undefined;
     assert.ok(change);
     assert.deepEqual(JSON.parse(change.changed_fields_json), ['payload_json', 'presentation']);
+    assert.equal(change.source, 'webapp');
+    assert.equal(change.actor_workspace_user_id, 'operator-workspace-user');
+    assert.equal(change.actor_token_id, null);
   } finally {
     deliveryComposeWorker.setGenerateOverride(null);
   }

@@ -4,32 +4,28 @@ import {
   isGeminiConfigured,
   readGeminiConfigFromEnv
 } from '@overlord/automations';
-import { formatObjectiveDisplayId } from '@overlord/contract';
 import type { DatabaseClient } from '@overlord/database';
 
-import { readDeliveryReport } from '../packages/core/service/delivery-report.ts';
 import {
   buildDeterministicMissionSummary,
   collectMissionSummaryOpenActions,
   collectMissionSummaryRiskCandidates,
   deliveryFirstParagraph,
   MISSION_SUMMARY_LIMITS,
-  type MissionSummaryDeliveryEvidence,
-  type MissionSummaryObjectiveEvidence,
-  type MissionSummaryQuestionEvidence,
   type MissionSummaryResult,
   missionSummaryRiskRef,
-  type MissionSummaryRuns,
   reconcileMissionSummaryDraft,
-  selectMissionSummarySuggestions,
-  splitMissionSummaryRuns
+  selectMissionSummarySuggestions
 } from '../packages/core/service/mission-summary-compose.ts';
+import {
+  type MissionSummaryEvidence,
+  readMissionSummaryEvidence
+} from '../packages/core/service/mission-summary-evidence.ts';
 import {
   type ClaimedWorkerJob,
   completeMissionSummaryComposeJob,
   MISSION_SUMMARY_COMPOSE_JOB_TYPE,
-  publishMissionSummary,
-  readMissionSummaryGeneration
+  publishMissionSummary
 } from '../packages/core/service/worker-jobs.ts';
 
 import { requireDatabaseClient } from './db.ts';
@@ -50,163 +46,6 @@ function logSummaryMetric(
   fields: Record<string, string | number | boolean | null | undefined>
 ): void {
   console.info('[mission-summary-compose-worker]', JSON.stringify({ event, ...fields }));
-}
-
-/** Evidence for one compose pass, read together with the generation it serves. */
-export type MissionSummaryEvidence = {
-  generation: number;
-  sourceDeliveryId: string | null;
-  previous: { headline: string; summary: string } | null;
-  mission: { title: string; statusType: string; displayId: string };
-  objectives: MissionSummaryObjectiveEvidence[];
-  runs: MissionSummaryRuns;
-  openQuestions: MissionSummaryQuestionEvidence[];
-  resolutionStatus: Map<string, string>;
-  counts: { deliveries: number; filePaths: number };
-};
-
-/**
- * Loads the evidence for one pass in a single transaction, so the generation
- * and the evidence form one consistent snapshot. Deliveries are selected in the
- * database by current-run eligibility before any limit (plan §4.4a): every
- * current-run delivery of the mission, whose count is bounded by the run
- * boundaries rather than by a presentation page.
- */
-export async function loadMissionSummaryEvidence(
-  client: DatabaseClient,
-  missionId: string
-): Promise<MissionSummaryEvidence | null> {
-  return client.transaction(async tx => {
-    const generation = await readMissionSummaryGeneration(tx, missionId);
-    if (!generation) return null;
-    const mission = await tx.get<{
-      title: string;
-      status_type: string;
-      display_id: string;
-      summary_enabled: unknown;
-    }>(
-      `SELECT title, status_type, display_id, summary_enabled FROM missions
-        WHERE id = ? AND deleted_at IS NULL`,
-      [missionId]
-    );
-    if (!mission) return null;
-
-    const objectiveRows = await tx.all<{
-      id: string;
-      display_key: string;
-      title: string | null;
-      state: string;
-      reopened_at: string | null;
-      deleted_at: string | null;
-    }>(
-      `SELECT id, display_key, title, state, reopened_at, deleted_at
-         FROM objectives WHERE mission_id = ?`,
-      [missionId]
-    );
-    const objectives: MissionSummaryObjectiveEvidence[] = objectiveRows.map(row => ({
-      id: row.id,
-      key: formatObjectiveDisplayId({
-        missionDisplayId: mission.display_id,
-        displayKey: row.display_key
-      }),
-      title: row.title?.trim() || 'Untitled objective',
-      state: row.state,
-      reopenedAt: row.reopened_at,
-      deleted: row.deleted_at !== null
-    }));
-
-    const deliveryRows = await tx.all<{
-      id: string;
-      objective_id: string;
-      delivered_at: string;
-      summary: string;
-      payload_json: string | null;
-    }>(
-      `SELECT d.id, d.objective_id, d.delivered_at, d.summary, d.payload_json
-         FROM deliveries d
-         LEFT JOIN objectives o ON o.id = d.objective_id
-        WHERE d.mission_id = ? AND d.deleted_at IS NULL
-          AND (o.reopened_at IS NULL OR d.delivered_at >= o.reopened_at)
-        ORDER BY d.delivered_at DESC, d.id DESC`,
-      [missionId]
-    );
-    const deliveries: MissionSummaryDeliveryEvidence[] = deliveryRows.map(row => ({
-      id: row.id,
-      objectiveId: row.objective_id,
-      deliveredAt: row.delivered_at,
-      summary: row.summary,
-      report: reportFromPayload(row.payload_json, row.summary)
-    }));
-    const runs = splitMissionSummaryRuns({ objectives, deliveries });
-
-    const resolutionRows =
-      runs.currentRun.length === 0
-        ? []
-        : await tx.all<{ delivery_id: string; action_id: string; status: string }>(
-            `SELECT delivery_id, action_id, status FROM human_action_resolutions
-              WHERE mission_id = ?`,
-            [missionId]
-          );
-    const resolutionStatus = new Map(
-      resolutionRows.map(row => [`${row.delivery_id}:${row.action_id}`, row.status])
-    );
-
-    const questionRows = await tx.all<{
-      id: string;
-      objective_id: string | null;
-      summary: string;
-      created_at: string;
-    }>(
-      `SELECT id, objective_id, summary, created_at FROM agent_requests
-        WHERE mission_id = ? AND deleted_at IS NULL AND status = 'open'
-          AND kind IN ('question', 'choice')
-        ORDER BY created_at DESC
-        LIMIT 20`,
-      [missionId]
-    );
-
-    const filePathCount = await tx.get<{ total: number | string }>(
-      `SELECT COUNT(DISTINCT file_path) AS total FROM changed_files
-        WHERE mission_id = ? AND deleted_at IS NULL`,
-      [missionId]
-    );
-
-    return {
-      generation: generation.requestedGeneration,
-      sourceDeliveryId: generation.sourceDeliveryId,
-      previous: generation.previous,
-      mission: {
-        title: mission.title,
-        statusType: mission.status_type,
-        displayId: mission.display_id
-      },
-      objectives,
-      runs,
-      openQuestions: questionRows.map(row => ({
-        requestId: row.id,
-        objectiveId: row.objective_id,
-        prompt: row.summary,
-        createdAt: row.created_at
-      })),
-      resolutionStatus,
-      counts: {
-        deliveries: runs.currentRun.length,
-        filePaths: Number(filePathCount?.total ?? 0)
-      }
-    };
-  });
-}
-
-function reportFromPayload(payloadJson: string | null, summary: string) {
-  let deliveryReport: unknown;
-  try {
-    deliveryReport = payloadJson
-      ? (JSON.parse(payloadJson) as { deliveryReport?: unknown }).deliveryReport
-      : undefined;
-  } catch {
-    deliveryReport = undefined;
-  }
-  return readDeliveryReport({ summary, deliveryReport });
 }
 
 function bound(value: string, maxChars: number): string {
@@ -443,7 +282,7 @@ class MissionSummaryComposeWorker extends WorkerJobPoller {
     missionId: string,
     forceFallback: boolean
   ): Promise<PassOutcome> {
-    const evidence = await loadMissionSummaryEvidence(client, missionId);
+    const evidence = await readMissionSummaryEvidence(client, missionId);
     if (!evidence) return { kind: 'missing' };
 
     const suggestions = selectMissionSummarySuggestions({

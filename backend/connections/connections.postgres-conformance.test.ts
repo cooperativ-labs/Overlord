@@ -162,6 +162,21 @@ for (const adapter of adapters)
         assert.equal(dto!.state, 'connected');
         assert.deepEqual(dto!.authorizedWorkspaces, ['main', 'overlord']);
         assert.equal(dto!.toolPolicyVersion, 2);
+        const stored = (await rt.connections.row(owner, started.connectionId))!;
+        assert.equal(stored.credential_kind, 'oauth');
+        assert.equal(stored.credential_format, 'connection-v1');
+        assert.equal(stored.credential_revision, 1);
+        assert.equal(stored.credential_key_id, 'k1');
+        assert.equal(stored.connected_at, new Date(kb.now).toISOString());
+        assert.equal(stored.last_refreshed_at, stored.connected_at);
+        assert.equal(
+          stored.access_expires_at,
+          new Date(kb.now + kb.accessTtlSeconds * 1000).toISOString()
+        );
+        assert.equal(stored.refresh_expires_at, null);
+        assert.equal(stored.refresh_lock_owner, null);
+        assert.equal(stored.refresh_lock_until, null);
+        assert.equal(stored.last_error_code, null);
         const everything =
           JSON.stringify(await db.all('SELECT * FROM account_connections')) + JSON.stringify(dto);
         assert.ok(!kb.leaks(everything), 'no raw token or code in rows or DTOs');

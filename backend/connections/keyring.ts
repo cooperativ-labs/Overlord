@@ -161,7 +161,7 @@ export interface ConnectionCredentialRow {
   owner_profile_id: string;
   organization_id: string | null;
   provider: string;
-  credential_format: string;
+  credential_format: AccountConnectionCredentialFormat;
 }
 
 /** AAD for `connection-v1`: owner, organization (`-` when profile-scoped), provider, id. */
@@ -186,7 +186,7 @@ export function openCredential(
   row: ConnectionCredentialRow & { credential_ciphertext: string },
   key: Buffer
 ): OpenedCredential {
-  const format = row.credential_format as AccountConnectionCredentialFormat;
+  const format = row.credential_format;
   if (format === 'everhour-user-key-v1') {
     const apiKey = openSecret({
       envelope: row.credential_ciphertext,

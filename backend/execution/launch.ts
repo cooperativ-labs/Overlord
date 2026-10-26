@@ -17,6 +17,27 @@
  *   `execution_requests.launch_flags_json` for the runner to consume verbatim.
  */
 import { type Permission, PERMISSIONS } from '@overlord/auth';
+import type {
+  AgentCatalogAgentDto,
+  AgentCatalogDto,
+  AgentLaunchConfigDto,
+  ExecutionRequestDto,
+  ExecutionRequestStatus,
+  LaunchObjectiveBody,
+  LaunchPreferenceDto,
+  LaunchSessionDefaultsDto,
+  LaunchSettingsDto,
+  ObjectiveEffectiveLaunchConfigDto,
+  ObjectiveLaunchCommandDto,
+  ObjectivePromptDto,
+  TerminalProfileDto,
+  UpdateAgentCatalogBody,
+  UpdateAgentLaunchConfigBody,
+  UpdateLaunchPreferenceBody,
+  UpdateLaunchSessionDefaultsBody,
+  UpdateTerminalProfileBody,
+  UpdateWorktreeBranchAutomationBody
+} from '@overlord/contract';
 import { formatOvldLaunchCommand, normalizeAgentLaunchFlags } from '@overlord/contract';
 import type { ServiceContext } from '@overlord/core/service/context';
 import { OBJECTIVE_LAUNCHED_AT_ASSIGNMENT } from '@overlord/core/service/objective-lifecycle-timestamps';
@@ -71,27 +92,6 @@ import {
   removeRunQueueEntryForObjective,
   resumeRunQueueForObjective
 } from '../../packages/core/service/run-queue.ts';
-import type {
-  AgentCatalogAgentDto,
-  AgentCatalogDto,
-  AgentLaunchConfigDto,
-  ExecutionRequestDto,
-  ExecutionRequestStatus,
-  LaunchObjectiveBody,
-  LaunchPreferenceDto,
-  LaunchSessionDefaultsDto,
-  LaunchSettingsDto,
-  ObjectiveEffectiveLaunchConfigDto,
-  ObjectiveLaunchCommandDto,
-  ObjectivePromptDto,
-  TerminalProfileDto,
-  UpdateAgentCatalogBody,
-  UpdateAgentLaunchConfigBody,
-  UpdateLaunchPreferenceBody,
-  UpdateLaunchSessionDefaultsBody,
-  UpdateTerminalProfileBody,
-  UpdateWorktreeBranchAutomationBody
-} from '../../webapp/shared/contract.ts';
 import { instanceAgentCatalog, resolveWorkspaceAgentCatalog } from '../agent-catalog.ts';
 import {
   buildWebappServiceContextForWorkspace,

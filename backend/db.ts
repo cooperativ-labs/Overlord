@@ -1,4 +1,5 @@
 import type { AuthDomainDatabase } from '@overlord/auth';
+import type { ChangeOperation } from '@overlord/contract';
 import {
   applyHostedS3StorageBackend,
   createSqliteClient,
@@ -31,7 +32,6 @@ import {
   type WebhookEventType
 } from '../packages/core/service/webhook-events.ts';
 import type { MissionSummaryTriggerContext } from '../packages/core/service/worker-jobs.ts';
-import type { ChangeOperation } from '../webapp/shared/contract.ts';
 
 import { ENV_PROFILE, REPO_ROOT } from './env-profile.ts';
 

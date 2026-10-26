@@ -1,6 +1,3 @@
-import { bindBool, type DatabaseClient } from '@overlord/database';
-import { createHash, randomBytes } from 'node:crypto';
-
 import type {
   AcceptWorkspaceInvitationBody,
   CreateOrganizationOnboardingBody,
@@ -12,7 +9,9 @@ import type {
   WorkspaceDto,
   WorkspaceInvitationDto,
   WorkspaceMemberDto
-} from '../webapp/shared/contract.ts';
+} from '@overlord/contract';
+import { bindBool, type DatabaseClient } from '@overlord/database';
+import { createHash, randomBytes } from 'node:crypto';
 
 import { syncSqlStudioForWorkspace } from './sql-studio/sql-studio-manager.ts';
 import {

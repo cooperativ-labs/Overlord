@@ -5,7 +5,6 @@ import {
   verifyUserToken
 } from '@overlord/auth';
 import { resolveAdapter } from '@overlord/database';
-import { toNodeHandler } from 'better-auth/node';
 import type { NextFunction, Request, Response } from 'express';
 
 import { createAuth } from '../auth/src/auth/config.ts';
@@ -120,7 +119,6 @@ export const auth = createAuth({
   sendVerificationEmail: verificationEmailSenderFromEnv(),
   sendEmailOTP: emailOTPSenderFromEnv()
 });
-export const authNodeHandler = toNodeHandler(auth);
 
 function extractBearerToken(req: Request): string | null {
   const header = req.headers.authorization;

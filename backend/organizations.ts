@@ -11,17 +11,16 @@
  * client watching any of the org's workspaces observes the change.
  */
 
-import { type DatabaseClient } from '@overlord/database';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import type {
   AddOrganizationAdminBody,
   OrganizationAdminDto,
   OrganizationDto,
   RemoveOrganizationAdminBody,
   UpdateOrganizationBody
-} from '../webapp/shared/contract.ts';
+} from '@overlord/contract';
+import { type DatabaseClient } from '@overlord/database';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import {
   getAuthorizedWorkspacesContext,

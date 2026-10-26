@@ -19,6 +19,7 @@
  */
 
 import { type Permission, PERMISSIONS } from '@overlord/auth';
+import type { ObjectiveAttachmentDto, StoredImageDto } from '@overlord/contract';
 import type { DatabaseClient } from '@overlord/database';
 import type { Response } from 'express';
 import { createHash } from 'node:crypto';
@@ -26,8 +27,6 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import type { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
-
-import type { ObjectiveAttachmentDto, StoredImageDto } from '../webapp/shared/contract.ts';
 
 import {
   getActiveTokenProjectIds,

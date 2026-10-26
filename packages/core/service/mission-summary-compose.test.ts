@@ -76,6 +76,29 @@ describe('splitMissionSummaryRuns', () => {
     assert.deepEqual(runs.superseded.map(item => item.id).sort(), ['a-before-reopen', 'b-old']);
   });
 
+  it('keeps a delivery made exactly at the reopen boundary and breaks time ties by id', () => {
+    const boundary = '2026-10-20T12:00:00.000Z';
+    const runs = splitMissionSummaryRuns({
+      objectives: [objective('a', { reopenedAt: boundary }), objective('b')],
+      deliveries: [
+        delivery('a-just-before', 'a', '2026-10-20T11:59:59.999Z'),
+        delivery('a-at-boundary', 'a', boundary),
+        delivery('b-1', 'b', boundary),
+        delivery('b-3', 'b', boundary),
+        delivery('b-2', 'b', boundary)
+      ]
+    });
+    assert.deepEqual(
+      runs.currentRun.map(item => item.id),
+      ['b-3', 'b-2', 'b-1', 'a-at-boundary']
+    );
+    assert.deepEqual(
+      runs.latestByObjective.map(item => item.id),
+      ['b-3', 'a-at-boundary']
+    );
+    assert.deepEqual(runs.superseded.map(item => item.id).sort(), ['a-just-before', 'b-1', 'b-2']);
+  });
+
   it('keeps suggestions and risks across every current-run delivery, newest first', () => {
     const objectives = [objective('a')];
     const older = delivery('older', 'a', '2026-10-20T09:00:00.000Z', {
