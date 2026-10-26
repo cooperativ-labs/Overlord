@@ -65,8 +65,10 @@ mac:
   icon: build/icon.png
   category: public.app-category.developer-tools
   target:
-      - dmg
-      - zip
+    - target: dmg
+      arch: [arm64]
+    - target: zip
+      arch: [arm64]
   hardenedRuntime: true
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist

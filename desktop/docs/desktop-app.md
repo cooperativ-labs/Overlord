@@ -275,7 +275,10 @@ terminal configuration of its own.
 `scripts/build-desktop.ts` (`yarn desktop:package:prod`) stages the server bundle, SPA,
 CLI, and a runtime-only `.env.prod`, then runs electron-builder:
 
-- Targets: `dmg` + `zip` (mac, arm64 + x64), `AppImage` + `deb` (linux).
+- Targets: `dmg` + `zip` (macOS arm64 only). The standalone CLI is published as
+  platform-neutral JavaScript through npm; the copy bundled in the desktop app
+  runs under Electron and therefore follows the arm64 app architecture. Keep x86
+  builds for Linux and Windows release targets.
 - Before electron-builder runs, the script deletes and recreates `desktop/release`
   so each package build starts from a clean release directory.
 - `appId: io.cooperativ.openoverlord` (the stable macOS update identity), hardened runtime + entitlements
@@ -310,8 +313,8 @@ packaging, so the build machine needs:
   Python.
 - Xcode Command Line Tools (the C++ toolchain) for the compile.
 
-A verified `--no-sign` arm64 + x64 build with Electron 42.4.0 produces
-`Overlord-<version>-arm64.dmg` / `Overlord-<version>.dmg` (and matching `.zip`s).
+A verified `--no-sign` arm64 build with Electron 42.4.0 produces
+`Overlord-<version>-arm64.dmg` and the matching `.zip`.
 
 ## 9. Deferred (later phases)
 

@@ -78,7 +78,7 @@ Maps to the `desktop` contract component (`desktop/docs/desktop-app.md`).
 yarn desktop:build:prod    # build the SPA + server bundle + Electron main/preload
 yarn desktop:dev           # connect-only: wraps a running `ovld serve` / `yarn start`
 yarn desktop:typecheck     # typecheck the shell against the Electron type defs
-yarn desktop:package:prod [--out <dir>] [--arch arm64|x64|universal] [--no-sign] [--notarize]
+yarn desktop:package:prod [--out <dir>] [--no-sign] [--notarize]  # macOS arm64 only
 yarn desktop:publish       # publish desktop/release artifacts to GitHub Releases via gh
 ```
 

@@ -9,7 +9,7 @@
  *
  * Flags:
  *   --out <dir>            where the .dmg/.zip are copied (default: desktop/release)
- *   --arch <arm64|x64|universal>   (default: host arch)
+ *   macOS target: arm64 (Apple Silicon only)
  *   --no-sign              ad-hoc build (Gatekeeper warns; fine for local testing)
  *   --sign                 sign with the Developer ID Application identity (default)
  *   --notarize             implies --sign; notarize + staple via notarytool
@@ -46,7 +46,6 @@ const defaultOutDir = path.join(desktopDir, 'release');
 
 type Args = {
   out: string | null;
-  arch: 'arm64' | 'x64' | 'universal';
   sign: boolean;
   notarize: boolean;
 };
@@ -65,7 +64,6 @@ const PACKAGED_RUNTIME_ENV_KEYS = [
 function parseArgs(argv: string[]): Args {
   const args: Args = {
     out: null,
-    arch: (process.arch === 'arm64' ? 'arm64' : 'x64') as Args['arch'],
     sign: true,
     notarize: false
   };
@@ -75,14 +73,8 @@ function parseArgs(argv: string[]): Args {
       case '--out':
         args.out = argv[(i += 1)] ?? fail('Missing value for --out.');
         break;
-      case '--arch': {
-        const value = argv[(i += 1)];
-        if (value !== 'arm64' && value !== 'x64' && value !== 'universal') {
-          fail(`--arch must be arm64, x64, or universal (got ${value ?? '<missing>'})`);
-        }
-        args.arch = value;
-        break;
-      }
+      case '--arch':
+        fail('macOS desktop packages are Apple Silicon only; the target architecture is arm64.');
       case '--no-sign':
         args.sign = false;
         break;
@@ -255,7 +247,7 @@ function main(): void {
 
   // 2b. Rebuild the lone native dependency (better-sqlite3) against the Electron
   // ABI so the packed addon loads at runtime instead of throwing ERR_DLOPEN_FAILED.
-  stageNativeAddon(args.arch);
+  stageNativeAddon('arm64');
 
   // 3. Run electron-builder.
   runElectronBuilder(args);
@@ -343,15 +335,7 @@ function stageProductionEnv(): void {
  * and the staged copy: leaving them in place makes node-gyp skip the compile
  * (`prebuild_exists`) and makes the packed app ignore the Electron addon.
  */
-function stageNativeAddon(arch: Args['arch']): void {
-  if (arch === 'universal') {
-    fail(
-      'Universal native rebuild is not wired up: better-sqlite3 must be built per ' +
-        'arch (arm64 + x64) and lipo-merged. Build --arch arm64 and --arch x64 ' +
-        'separately, or build for a single arch.'
-    );
-  }
-
+function stageNativeAddon(arch: 'arm64'): void {
   const electronVersion = installedElectronVersion();
   if (!electronVersion) {
     fail('Could not determine the installed Electron version for the native rebuild.');
@@ -502,9 +486,7 @@ function electronExecutable(): string {
 
 function runElectronBuilder(args: Args): void {
   const builder = resolveBin('electron-builder');
-  const builderArgs = ['--mac'];
-  if (args.arch === 'universal') builderArgs.push('--universal');
-  else builderArgs.push(`--${args.arch}`);
+  const builderArgs = ['--mac', '--arm64'];
 
   // electron-builder reads the Electron version from the installed binary; when
   // the binary download was skipped (or the version is a range), pin it
