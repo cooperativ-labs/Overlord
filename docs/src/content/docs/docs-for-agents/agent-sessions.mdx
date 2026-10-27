@@ -38,7 +38,8 @@ not be edited.
 
 ## Claude Code
 
-**Shape:** callback plugin. **Observe:** `UserPromptSubmit`, `PostToolUse`, `SessionStart`.
+**Shape:** callback plugin. **Observe (supported):** `UserPromptSubmit` and `PostToolUse` file edits;
+`PreToolUse`, tool results, and `SessionStart` lifecycle are `not-implemented`.
 **Decide (not-implemented — target shape):** `PermissionRequest`. **Inject
 (not-implemented — target shape):** `asyncRewake` during a turn plus a Stop boundary.
 
@@ -71,7 +72,8 @@ relying on either path.
 
 ## Codex
 
-**Shape:** callback plugin using documented hooks. **Observe:** prompt, pre/post tool, lifecycle.
+**Shape:** callback plugin using documented hooks. **Observe (supported):** `UserPromptSubmit`
+and `PostToolUse` file edits; pre-tool, tool-result, and `SessionStart` lifecycle are `not-implemented`.
 **Decide (not-implemented — target shape):** `PermissionRequest`. **Inject
 (not-implemented — target shape):** Stop-boundary delivery.
 
@@ -94,7 +96,8 @@ design to build against, not live behavior.
 
 ## Cursor
 
-**Shape:** callback scripts. **Observe:** `postToolUse` tool results and file edits. **Decide
+**Shape:** callback scripts. **Observe (supported):** `beforeSubmitPrompt`, `postToolUse` tool results
+and file edits; pre-tool and `sessionStart` are `not-implemented`. **Decide
 (not-implemented — target shape):** per-tool shell, MCP, and generic pre-tool events.
 **Inject (supported):** `stop` returning `followup_message`.
 
@@ -120,7 +123,8 @@ none of the Decide paths below are live yet. `inject.turnBoundary` and
 
 ## Pi
 
-**Shape:** in-process TypeScript extension. **Observe:** input, tool call, agent start.
+**Shape:** in-process TypeScript extension. **Observe:** only `input` (prompt) is supported; tool call,
+tool result, file edit, and agent start are `not-implemented`.
 **Decide (not-implemented — target shape):** optional async `tool_call` interceptor.
 **Inject (not-implemented — target shape):** `sendUserMessage` with confirmation.
 
@@ -142,7 +146,11 @@ design to build against, not live behavior.
 
 ## OpenCode
 
-**Shape:** supervised control-plane sidecar. There are no callback scripts.
+**Shape:** supervised control-plane sidecar. There are no callback scripts. Per
+`connectors/adapters/opencode/CAPABILITIES.md` (capability tier 3), tool results, session idle
+lifecycle, `decide.shell`/`decide.mcp`/`decide.anyTool` via `/permission`, all three `inject.*`
+paths via `prompt_async`, and concurrent terminal answers are `supported`; prompt, tool-call,
+file-edit, structured-question, and persistent-allow are `not-implemented`.
 
 - A supervised launch must start `ovld agent-session sidecar --agent opencode --port <port>`,
   bind OpenCode to loopback, and protect the control port with a per-launch password. The bundled
@@ -157,7 +165,8 @@ design to build against, not live behavior.
 
 ## Antigravity
 
-**Shape:** callback compatibility plugin, currently fixture-proven only at tier 0.
+**Shape:** callback compatibility plugin, currently fixture-proven only at tier 0. No observe,
+decide, or inject capability is `supported`; `PreInvocation` prompt observation is `unsupported`.
 
 - Mission lifecycle capture may work while agent-session observe/decide/inject remains
   unverified. Do not promote UI controls based on the agent name or resemblance to Gemini.
