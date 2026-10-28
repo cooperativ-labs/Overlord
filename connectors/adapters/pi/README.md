@@ -26,11 +26,10 @@ Re-running setup is idempotent. `ovld doctor` reports missing or modified manage
 
 PI accepts provider-qualified models with `--model` and an independent `--thinking` level. The built-in catalog includes:
 
-| Display name    | PI model ID                  |
-| --------------- | ---------------------------- |
-| GLM 5.2         | `zai/glm-5.2`                |
-| Claude Opus 4.8 | `anthropic/claude-opus-4-8`  |
-| GPT-5.6 Terra   | `openai-codex/gpt-5.6-terra` |
+| Display name    | PI model ID                 |
+| --------------- | --------------------------- |
+| GLM 5.2         | `zai/glm-5.2`               |
+| Claude Opus 4.8 | `anthropic/claude-opus-4-8` |
 
 Authenticate the matching PI provider through PI's login/configuration flow or its supported environment variables. Use `pi --list-models` to inspect the models available to the current PI configuration.
 

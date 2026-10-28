@@ -26,6 +26,7 @@ import type {
 import { missionDraftResourceBadgeKey, projectResourceLabel } from '../../lib/project-resources.ts';
 import {
   useAgentCatalog,
+  useEnqueueRunQueueEntry,
   useObjectiveAttachments,
   useObjectiveFileChanges,
   useProject,
@@ -111,6 +112,7 @@ export function ObjectiveCollapsibleItem({
   onOpenForRequest?: () => void;
 }) {
   const update = useUpdateObjective();
+  const enqueue = useEnqueueRunQueueEntry(objective.projectId);
   const { copied, copy } = useCopyToClipboard();
   const [forceDisconnectOpen, setForceDisconnectOpen] = useState(false);
   /** Request ids the user waved away; a new id is never in here, so it re-arms the badge. */
@@ -468,7 +470,18 @@ export function ObjectiveCollapsibleItem({
                 state={objective.state}
                 resumeCommand={resumeCommand}
                 sessionId={objective.externalSessionId}
+                onAddToQueue={
+                  inFlight && !objective.queueEntry
+                    ? () => enqueue.mutate({ objectiveId: objective.id })
+                    : undefined
+                }
+                addingToQueue={enqueue.isPending}
               />
+              {enqueue.isError ? (
+                <span role="alert" className="text-xs text-destructive">
+                  Could not add to queue.
+                </span>
+              ) : null}
             </div>
           </div>
         </div>

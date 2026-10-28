@@ -576,7 +576,7 @@ add-objectives:
         --objective-model requires --objective-agent.
   Notes:
     Each item is { "objective": "...", "title": "...", "agent": "codex",
-    "model": "gpt-5.6-terra", "autoAdvance": true|false, "resourceKey": "..." }.
+    "model": "gpt-6.1-terra", "autoAdvance": true|false, "resourceKey": "..." }.
     model requires agent. Per-item autoAdvance and agent win over the flags.
 
 update-objective:

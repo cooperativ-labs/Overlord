@@ -35,6 +35,7 @@ type ActiveSessionManifest = {
   entries: ActiveSessionEntry[];
 };
 
+/** Bound retained retry sessions of one objective, not a checkout lifetime. */
 export const MAX_ACTIVE_OBJECTIVE_SESSION_BINDINGS = 64;
 const MAX_OBJECTIVE_ALIASES = 16;
 const MAX_ID_LENGTH = 200;
@@ -120,8 +121,7 @@ function readManifest(workingDirectory: string): ActiveSessionManifest | null {
     if (
       value.schemaVersion !== 3 ||
       value.workingDirectory !== expected.workingDirectory ||
-      !Array.isArray(value.entries) ||
-      value.entries.length > MAX_ACTIVE_OBJECTIVE_SESSION_BINDINGS
+      !Array.isArray(value.entries)
     ) {
       return null;
     }
@@ -139,7 +139,11 @@ function readManifest(workingDirectory: string): ActiveSessionManifest | null {
 
 function writeManifest(workingDirectory: string, entries: ActiveSessionEntry[]): void {
   const manifest = { ...emptyManifest(workingDirectory), entries };
-  writeOwnerOnlyFileAtomically(manifestPath(workingDirectory), JSON.stringify(manifest));
+  const contents = JSON.stringify(manifest);
+  if (Buffer.byteLength(contents) > MAX_ACTIVE_SESSION_MANIFEST_BYTES) {
+    throw new Error('Local binding manifest exceeds its storage limit.');
+  }
+  writeOwnerOnlyFileAtomically(manifestPath(workingDirectory), contents);
 }
 
 function resolveEntry(
@@ -217,7 +221,10 @@ export function writeActiveSession({
         });
         if (!removed) entries.push({ ...prior, deliveryPendingSync: true });
       }
-      if (entries.length >= MAX_ACTIVE_OBJECTIVE_SESSION_BINDINGS) {
+      if (
+        entries.filter(entry => entry.objectiveId === trimmedObjective).length >=
+        MAX_ACTIVE_OBJECTIVE_SESSION_BINDINGS
+      ) {
         if (prior && prior.sessionKey !== trimmedKey) writeManifest(workingDirectory, entries);
         return false;
       }
@@ -441,4 +448,17 @@ export function finalizeActiveSession({
   } catch {
     return false;
   }
+}
+
+/** Local-only diagnosis; never includes credentials or selects another objective. */
+export function diagnoseObjectiveBinding(workingDirectory: string, objectiveId: string): string {
+  const target = manifestPath(workingDirectory);
+  if (!existsSync(target)) return 'binding_file_missing';
+  const manifest = readManifest(workingDirectory);
+  if (!manifest) return 'binding_file_unreadable_or_invalid';
+  const matches = manifest.entries.filter(entry => entryMatchesObjective(entry, objectiveId));
+  if (matches.length >= MAX_ACTIVE_OBJECTIVE_SESSION_BINDINGS)
+    return 'objective_binding_capacity_reached';
+  if (matches.length === 0) return 'objective_binding_missing_in_working_directory';
+  return 'binding_or_ledger_storage_unavailable';
 }

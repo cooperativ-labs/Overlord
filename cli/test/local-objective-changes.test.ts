@@ -80,7 +80,8 @@ test('local read without a matching session is unavailable coverage', () => {
   });
   assert.equal(local.coverage, 'unavailable');
   assert.equal(local.total, 0);
-  assert.deepEqual(local.warnings, []);
+  assert.deepEqual(local.warnings, ['unknown_binding']);
+  assert.deepEqual(local.capture.healthCodes, ['objective_binding_missing_in_working_directory']);
 });
 
 test('bound session without a callback and failed sync are reported', () => {

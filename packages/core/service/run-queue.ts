@@ -756,8 +756,9 @@ export async function enqueueRunQueueEntry(
       workspace_id: string;
       mission_id: string;
       position: number;
+      state: string;
     }>(
-      'SELECT id, project_id, workspace_id, mission_id, position FROM objectives WHERE id = ? AND deleted_at IS NULL',
+      'SELECT id, project_id, workspace_id, mission_id, position, state FROM objectives WHERE id = ? AND deleted_at IS NULL',
       [objectiveId]
     );
     if (!objective || objective.project_id !== projectId)
@@ -818,8 +819,16 @@ export async function enqueueRunQueueEntry(
     }
     const id = newId();
     const now = nowIso();
+    const alreadyRunning =
+      objective.state === 'executing' || objective.state === 'pending_delivery';
+    const request = alreadyRunning
+      ? await tx.get<{ id: string }>(
+          'SELECT id FROM execution_requests WHERE objective_id = ? AND deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 1',
+          [objectiveId]
+        )
+      : undefined;
     await tx.run(
-      `INSERT INTO run_queue_entries (id, queue_id, project_id, workspace_id, mission_id, objective_id, position, state, enqueued_by_workspace_user_id, enqueued_at, created_at, updated_at, revision) VALUES (?, ?, ?, ?, ?, ?, ?, 'waiting', ?, ?, ?, ?, 1)`,
+      `INSERT INTO run_queue_entries (id, queue_id, project_id, workspace_id, mission_id, objective_id, position, state, execution_request_id, dispatched_at, enqueued_by_workspace_user_id, enqueued_at, created_at, updated_at, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
       [
         id,
         queue.id,
@@ -828,12 +837,21 @@ export async function enqueueRunQueueEntry(
         objective.mission_id,
         objectiveId,
         position,
+        alreadyRunning ? 'running' : 'waiting',
+        request?.id ?? null,
+        alreadyRunning ? now : null,
         options.actorId ?? null,
         now,
         now,
         now
       ]
     );
+    if (alreadyRunning && resolved.created) {
+      await tx.run(
+        'UPDATE run_queues SET paused = ?, updated_at = ?, revision = revision + 1 WHERE id = ?',
+        [tx.dialect === 'postgres' ? false : 0, now, queue.id]
+      );
+    }
     await tx.run(
       'UPDATE objectives SET auto_advance = ?, updated_at = ?, revision = revision + 1 WHERE id = ?',
       [tx.dialect === 'postgres' ? true : 1, now, objectiveId]

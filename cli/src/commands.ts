@@ -20,6 +20,7 @@ import path from 'node:path';
 import { readBoundedStdin } from './agent-session/event.js';
 import { clearActiveMissionPointer, writeActiveMissionPointer } from './active-mission.js';
 import {
+  diagnoseObjectiveBinding,
   finalizeActiveSession,
   readActiveSessions,
   readObjectiveSessions,
@@ -42,6 +43,7 @@ import {
   type LedgerEvidence,
   markChangeEvidenceSynced,
   markChangeLedgerCaptureSynced,
+  prepareDeclaredChangeEvidence,
   readChangeLedgerSnapshot,
   readUnsyncedChangeEvidence,
   recordChangeLedgerBinding
@@ -789,39 +791,99 @@ function declaredOutputPathInputs({
  * native capture could not name (shell/script/generator outputs, deletes, both
  * rename endpoints). They are recorded locally as `agent_declared` before the
  * normal ledger drain, so no raw list crosses the lifecycle request and the
- * local read shows them immediately. This is not VCS reconciliation. Rejected
+ * local read shows them immediately. When local state is unavailable, the same
+ * path policy feeds the existing authenticated sync endpoint directly. This is
+ * not VCS reconciliation. Rejected
  * paths are reported and never block the lifecycle call.
  */
-function appendDeclaredOutputPaths({
+async function appendDeclaredOutputPaths({
   flags,
   fileInputs,
   active,
+  runtime,
+  missionId,
+  objectiveRef,
+  sessionKey,
   workingDirectory
 }: {
+  runtime: CliRuntime;
+  missionId: string;
+  objectiveRef: string | undefined;
+  sessionKey: string | null;
   flags: Record<string, string | true>;
   fileInputs: Record<string, string>;
   active: { objectiveId: string; sessionKey: string } | undefined;
   workingDirectory: string;
-}): void {
+}): Promise<void> {
   const paths = declaredOutputPathInputs({ flags, fileInputs });
   delete flags['--paths'];
   delete flags['--paths-file'];
   delete fileInputs['--paths-file'];
   if (paths === null) return;
-  if (!active) {
+  if (!sessionKey || (!active && !objectiveRef)) {
     throw new CliError({
       message:
-        '--paths/--paths-file requires the attached objective session in this working directory.'
+        '--paths/--paths-file requires --session-key and --objective-id (or a cached attached session). Run protocol attach from this checkout.'
     });
   }
-  const result = declareChangePaths({
+  const identity = {
     workingDirectory,
-    objectiveId: active.objectiveId,
-    sessionKey: active.sessionKey,
-    filePaths: paths
-  });
-  if (!result.recorded) {
-    console.error('[overlord] Declared paths could not be recorded in the local change ledger.');
+    objectiveId: active?.objectiveId ?? objectiveRef!,
+    sessionKey
+  };
+  const result = active ? declareChangePaths({ ...identity, filePaths: paths }) : null;
+  if (!result?.recorded) {
+    const prepared = prepareDeclaredChangeEvidence({ ...identity, filePaths: paths });
+    console.error(
+      `[overlord] ${diagnoseObjectiveBinding(workingDirectory, identity.objectiveId)}. Submitting declared paths directly through the authenticated session. Re-run protocol attach in this checkout; check OVLD_HOME permissions if capture remains unavailable.`
+    );
+    for (const rejected of prepared.rejected.slice(0, 20)) {
+      console.error(
+        `[overlord] Ignored declared path ${JSON.stringify(rejected.path)}: ${rejected.reason}`
+      );
+    }
+    for (let offset = 0; offset < prepared.evidence.length; offset += 25) {
+      const batch = prepared.evidence.slice(offset, offset + 25);
+      try {
+        const response = asRecord(
+          await runtime.backend.post<unknown>({
+            path: '/api/protocol/sync-changes',
+            body: {
+              args: [],
+              positional: [],
+              fileInputs: {},
+              externalSessionId: null,
+              flags: {
+                '--mission-id': missionId,
+                '--objective-id': identity.objectiveId,
+                '--session-key': sessionKey,
+                '--changes-json': JSON.stringify(batch)
+              }
+            }
+          })
+        );
+        const outcomes = Array.isArray(response.outcomes) ? response.outcomes.map(asRecord) : [];
+        if (
+          batch.some(
+            entry =>
+              !outcomes.some(
+                outcome =>
+                  outcome.idempotencyKey === entry.idempotencyKey &&
+                  outcome.filePath === entry.filePath &&
+                  (outcome.status === 'accepted' || outcome.status === 'ignored')
+              )
+          )
+        ) {
+          console.error(
+            '[overlord] Some declared paths were not accepted. Retry --paths on update/deliver; no local retry copy is available.'
+          );
+        }
+      } catch {
+        console.error(
+          '[overlord] Declared path synchronization failed. Retry --paths on update/deliver; no local retry copy is available.'
+        );
+      }
+    }
     return;
   }
   for (const rejected of result.rejected.slice(0, 20)) {
@@ -1121,8 +1183,14 @@ export async function runProtocolCommand({
     const local = buildLocalObjectiveChanges({
       objectiveId: objectiveSessions[0]?.objectiveId ?? objectiveRef,
       snapshots,
-      syncFailed
+      syncFailed,
+      unavailableDiagnosis: diagnoseObjectiveBinding(workingDirectory, objectiveRef)
     });
+    if (local.coverage === 'unavailable') {
+      console.error(
+        `[overlord] ${local.capture.healthCodes[0]}. Run protocol attach for this objective in this checkout and check OVLD_HOME permissions. Explicit --paths with a valid session key can still synchronize declarations.`
+      );
+    }
     for (const entry of objectiveSessions.filter(candidate => candidate.deliveryPendingSync)) {
       const stillUnsynced = readUnsyncedChangeEvidence({
         workingDirectory,
@@ -1217,7 +1285,16 @@ export async function runProtocolCommand({
       ? readActiveSessions(workingDirectory).find(entry => entry.sessionKey === sessionKey)
       : undefined;
     lifecycleActive = active;
-    appendDeclaredOutputPaths({ flags, fileInputs, active, workingDirectory });
+    await appendDeclaredOutputPaths({
+      flags,
+      fileInputs,
+      active,
+      workingDirectory,
+      runtime,
+      missionId,
+      objectiveRef,
+      sessionKey
+    });
     if (sessionKey && active) {
       await syncObjectiveLedger({ runtime, workingDirectory, missionId, sessionKey, active });
     }
@@ -1386,6 +1463,11 @@ export async function runProtocolCommand({
           objectiveAliases: [...objectiveAliases],
           sessionKey: resultRecord.sessionKey
         });
+        if (!bound) {
+          console.error(
+            `[overlord] Attach succeeded, but native file capture is unavailable: ${diagnoseObjectiveBinding(workingDirectory, objectiveIdentity)}. Check OVLD_HOME storage/permissions and re-run attach in this checkout. Explicit --paths can still synchronize through the session key.`
+          );
+        }
         if (bound) {
           recordChangeLedgerBinding({
             workingDirectory,

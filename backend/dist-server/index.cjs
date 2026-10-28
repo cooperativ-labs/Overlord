@@ -76764,11 +76764,6 @@ var init_agent_catalog_defaults = __esm({
             id: "anthropic/claude-opus-4-8",
             displayName: "Claude Opus 4.8",
             reasoningOptions: ["low", "medium", "high", "xhigh", "max"]
-          },
-          {
-            id: "openai-codex/gpt-5.6-terra",
-            displayName: "GPT-5.6 Terra",
-            reasoningOptions: ["off", "low", "medium", "high", "xhigh", "max"]
           }
         ],
         defaultModel: null,
@@ -76782,6 +76777,11 @@ var init_agent_catalog_defaults = __esm({
           {
             id: "gpt-6.1-sol",
             displayName: "GPT-6.1-Sol",
+            reasoningOptions: ["low", "medium", "high", "xhigh", "max"]
+          },
+          {
+            id: "gpt-6.1-terra",
+            displayName: "GPT-6.1 Terra",
             reasoningOptions: ["low", "medium", "high", "xhigh", "max"]
           },
           {
@@ -85026,7 +85026,7 @@ async function reorderProjectRunQueues(db, projectId, orderedQueueIds) {
 async function enqueueRunQueueEntry(db, projectId, objectiveId, options = {}) {
   return db.transaction(async (tx) => {
     const objective = await tx.get(
-      "SELECT id, project_id, workspace_id, mission_id, position FROM objectives WHERE id = ? AND deleted_at IS NULL",
+      "SELECT id, project_id, workspace_id, mission_id, position, state FROM objectives WHERE id = ? AND deleted_at IS NULL",
       [objectiveId]
     );
     if (!objective || objective.project_id !== projectId)
@@ -85077,8 +85077,13 @@ async function enqueueRunQueueEntry(db, projectId, objectiveId, options = {}) {
     }
     const id2 = newId();
     const now2 = nowIso();
+    const alreadyRunning = objective.state === "executing" || objective.state === "pending_delivery";
+    const request = alreadyRunning ? await tx.get(
+      "SELECT id FROM execution_requests WHERE objective_id = ? AND deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT 1",
+      [objectiveId]
+    ) : void 0;
     await tx.run(
-      `INSERT INTO run_queue_entries (id, queue_id, project_id, workspace_id, mission_id, objective_id, position, state, enqueued_by_workspace_user_id, enqueued_at, created_at, updated_at, revision) VALUES (?, ?, ?, ?, ?, ?, ?, 'waiting', ?, ?, ?, ?, 1)`,
+      `INSERT INTO run_queue_entries (id, queue_id, project_id, workspace_id, mission_id, objective_id, position, state, execution_request_id, dispatched_at, enqueued_by_workspace_user_id, enqueued_at, created_at, updated_at, revision) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
       [
         id2,
         queue.id,
@@ -85087,12 +85092,21 @@ async function enqueueRunQueueEntry(db, projectId, objectiveId, options = {}) {
         objective.mission_id,
         objectiveId,
         position,
+        alreadyRunning ? "running" : "waiting",
+        request?.id ?? null,
+        alreadyRunning ? now2 : null,
         options.actorId ?? null,
         now2,
         now2,
         now2
       ]
     );
+    if (alreadyRunning && resolved.created) {
+      await tx.run(
+        "UPDATE run_queues SET paused = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
+        [tx.dialect === "postgres" ? false : 0, now2, queue.id]
+      );
+    }
     await tx.run(
       "UPDATE objectives SET auto_advance = ?, updated_at = ?, revision = revision + 1 WHERE id = ?",
       [tx.dialect === "postgres" ? true : 1, now2, objectiveId]

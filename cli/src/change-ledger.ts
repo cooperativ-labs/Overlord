@@ -804,3 +804,14 @@ export function removeChangeLedger(input: LedgerIdentity): boolean {
     return false;
   }
 }
+
+/** Same path policy as durable declarations, for unavailable local storage. */
+export function prepareDeclaredChangeEvidence(input: LedgerIdentity & { filePaths: string[] }) {
+  const ledger = emptyLedger(input);
+  const result = appendEvidenceToLedger(ledger, {
+    filePaths: input.filePaths,
+    source: 'agent_declared',
+    hookHealth: AGENT_DECLARED_HEALTH
+  });
+  return { evidence: ledger.evidence, rejected: result.rejected };
+}

@@ -947,3 +947,157 @@ test('attach records an honest capture binding from the explicit launch objectiv
     local: { bindingState: 'unbound' }
   });
 });
+
+for (const mode of ['no-callback', 'claude-edit', 'unavailable-storage', 'sync-failure'] as const) {
+  test(`attach then deliver declared paths after 64 objectives: ${mode}`, async () => {
+    process.env.OVLD_HOME = mkdtempSync(path.join(os.tmpdir(), 'ovld-declaration-home-'));
+    const workspace = mkdtempSync(path.join(os.tmpdir(), 'Tough Leaf declaration '));
+    // Reproduce the real checkout's accumulated bindings, without evicting them.
+    for (let index = 0; index < 64; index++) {
+      assert.equal(
+        writeActiveSession({
+          workingDirectory: workspace,
+          missionId: MISSION_ID,
+          objectiveId: `prior-${index}`,
+          objectiveAliases: [],
+          sessionKey: `sess_prior_${index}`
+        }),
+        true
+      );
+    }
+    if (mode === 'unavailable-storage' || mode === 'sync-failure') {
+      const directory = path.join(process.env.OVLD_HOME, 'active-objective-sessions');
+      for (const file of readdirSync(directory).filter(file => file.endsWith('.json'))) {
+        writeFileSync(path.join(directory, file), '{invalid manifest');
+      }
+    }
+    const requests: Array<{ path: string; body: { flags: Record<string, string> } }> = [];
+    const runtime = {
+      backend: {
+        baseUrl: 'http://example.test',
+        health: async () => ({ ok: true }),
+        get: async () => ({}),
+        post: async ({ path: requestPath, body }: { path: string; body: unknown }) => {
+          const typed = body as { flags: Record<string, string> };
+          requests.push({ path: requestPath, body: typed });
+          if (requestPath === '/api/protocol/attach')
+            return {
+              sessionKey: SESSION_KEY,
+              mission: { id: 'mission-uuid', displayId: MISSION_ID },
+              objective: { id: OBJECTIVE_ID, displayId: OBJECTIVE_DISPLAY_ID }
+            };
+          if (mode === 'sync-failure' && requestPath === '/api/protocol/sync-changes')
+            throw new Error('offline');
+          if (requestPath === '/api/protocol/sync-changes')
+            return {
+              capture: { status: 'accepted' },
+              outcomes: (
+                JSON.parse(typed.flags['--changes-json'] ?? '[]') as Array<Record<string, unknown>>
+              ).map(entry => ({ ...entry, status: 'accepted' }))
+            };
+          return {};
+        },
+        patch: async () => ({}),
+        delete: async () => ({})
+      },
+      close: () => {}
+    } satisfies CliRuntime;
+    const priorCwd = process.cwd();
+    const priorObjective = process.env.OVERLORD_OBJECTIVE_ID;
+    process.env.OVERLORD_OBJECTIVE_ID = OBJECTIVE_DISPLAY_ID;
+    process.chdir(workspace);
+    try {
+      await captureStdoutText(() =>
+        runProtocolCommand({
+          runtime,
+          subcommand: 'attach',
+          args: ['--objective-id', OBJECTIVE_DISPLAY_ID]
+        })
+      );
+      if (mode !== 'unavailable-storage' && mode !== 'sync-failure')
+        assert.equal(readActiveSessions(workspace).length, 65);
+      if (mode === 'claude-edit') {
+        captureChangeFromPayload({
+          agent: 'claude',
+          objectiveOverride: OBJECTIVE_DISPLAY_ID,
+          fallbackCwd: workspace,
+          rawPayload: JSON.stringify({
+            cwd: workspace,
+            hook_event_name: 'PostToolUse',
+            tool_name: 'Edit',
+            tool_input: { file_path: path.join(workspace, 'native edit.ts') },
+            tool_response: { success: true }
+          })
+        });
+      }
+      const changes = (await captureStdout(() =>
+        runProtocolCommand({
+          runtime,
+          subcommand: 'changes',
+          args: ['--objective-id', OBJECTIVE_DISPLAY_ID]
+        })
+      )) as {
+        coverage: string;
+        capture: { callbackObserved: boolean; healthCodes: string[] };
+        warnings: string[];
+      };
+      assert.equal(changes.capture.callbackObserved, mode === 'claude-edit');
+      if (mode === 'unavailable-storage' || mode === 'sync-failure') {
+        assert.equal(changes.coverage, 'unavailable');
+        assert.deepEqual(changes.capture.healthCodes, ['binding_file_unreadable_or_invalid']);
+      }
+      if (mode === 'no-callback') assert.ok(changes.warnings.includes('bound_no_callback'));
+      writeFileSync(path.join(workspace, '.overlordignore'), 'ignored.ts\n');
+      const pathsFile = path.join(workspace, 'paths.json');
+      writeFileSync(
+        pathsFile,
+        JSON.stringify([
+          ...Array.from({ length: 27 }, (_, index) => `generated/file ${index}.ts`),
+          '../escape.ts',
+          'ignored.ts',
+          '.overlord/project.json'
+        ])
+      );
+      await captureStdoutText(() =>
+        runProtocolCommand({
+          runtime,
+          subcommand: 'deliver',
+          args: [
+            '--objective-id',
+            OBJECTIVE_DISPLAY_ID,
+            '--session-key',
+            SESSION_KEY,
+            '--summary',
+            'Done',
+            '--paths',
+            'inline.ts',
+            '--paths-file',
+            pathsFile
+          ]
+        })
+      );
+      const evidence = requests
+        .filter(request => request.path === '/api/protocol/sync-changes')
+        .flatMap(request => JSON.parse(request.body.flags['--changes-json'] ?? '[]')) as Array<{
+        filePath: string;
+        source: string;
+      }>;
+      assert.equal(evidence.filter(entry => entry.source === 'agent_declared').length, 28);
+      assert.equal(
+        evidence.filter(entry => entry.source === 'declared_edit').length,
+        mode === 'claude-edit' ? 1 : 0
+      );
+      assert.ok(
+        !evidence.some(entry =>
+          ['../escape.ts', 'ignored.ts', '.overlord/project.json'].includes(entry.filePath)
+        )
+      );
+      assert.equal(requests.at(-1)?.path, '/api/protocol/deliver');
+      assert.equal(requests.at(-1)?.body.flags['--paths'], undefined);
+    } finally {
+      process.chdir(priorCwd);
+      if (priorObjective === undefined) delete process.env.OVERLORD_OBJECTIVE_ID;
+      else process.env.OVERLORD_OBJECTIVE_ID = priorObjective;
+    }
+  });
+}

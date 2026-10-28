@@ -104,6 +104,12 @@ changed:
   missed are declared with `--paths a,b` or `--paths-file <path|->` (a JSON string array) on
   `update` or `deliver`, and record `source=agent_declared` (shown as Declared). A later
   declaration never downgrades native evidence.
+- Declarations also work with an explicit session key and objective when the local binding
+  or ledger is unavailable. The CLI applies the same path/ignore policy in memory and sends
+  batches through authenticated `sync-changes`; the server session determines the objective
+  and resource. These fallback rows appear in `objective-changes`, not the local ledger.
+  If synchronization fails, delivery continues with a warning to repeat the declarations;
+  there is no durable local retry copy in this fallback.
 - The owner-only ledger (schema v3) stores normalized workspace-relative paths with source,
   observation time, bounded hook health, sync state, and per-session capture binding/callback
   state. It never stores or transmits file content, diffs, commands, transcripts, environment
@@ -117,8 +123,15 @@ changed:
 - Run `ovld protocol changes --objective-id <id>` to drain the ledger and read this checkout's
   evidence (`LocalObjectiveChangesDto`, `scope: local_objective_sessions`): synced and pending
   paths deduplicated by path, a 200-row cap with pre-cap `total` and `truncated`, sync counts,
-  capture binding, and warnings. `coverage: unavailable` means no local session matched, not
-  that nothing changed.
+  capture binding, and warnings. `coverage: unavailable` means no local session/ledger could
+  be read, not that nothing changed. `capture.healthCodes` and stderr distinguish a missing
+  binding file, unreadable/invalid storage, or an objective missing from this working directory.
+  Re-run `protocol attach` in the intended checkout with the same `OVLD_HOME`, and check its
+  storage permissions. A `bound_no_callback` warning means the binding exists but no native
+  callback has arrived; check that the connector is installed and the launched process has
+  `OVERLORD_OBJECTIVE_ID`. Attach warns if it cannot persist its binding. The 64-session
+  retention limit applies per objective, not across all objectives ever run in a checkout;
+  the manifest remains bounded to 512 KiB and never evicts another objective to make room.
 - `ovld protocol objective-changes --objective-id <id>` (hosted MCP `overlord_changes`, REST
   `GET /api/missions/:id/file-changes?objectiveId=`) reads the objective's synchronized evidence
   across every session, resource, and device (`scope: server_objective`). It cannot see

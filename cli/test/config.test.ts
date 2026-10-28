@@ -380,7 +380,7 @@ test('bundled PI catalog keeps provider-qualified models and no forced default',
   assert.equal(pi.defaultReasoningEffort, null);
   assert.deepEqual(
     pi.models.map(model => model.id),
-    ['zai/glm-5.2', 'anthropic/claude-opus-4-8', 'openai-codex/gpt-5.6-terra']
+    ['zai/glm-5.2', 'anthropic/claude-opus-4-8']
   );
 });
 

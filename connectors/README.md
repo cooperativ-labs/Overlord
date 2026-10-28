@@ -9,6 +9,7 @@ OpenCode, Antigravity, and others). A connector is what lets an agent speak the
 - [For Users](#for-users)
   - [Setting up connectors](#setting-up-connectors)
   - [Connector bundles](#connector-bundles)
+  - [Plugin marketplace](#plugin-marketplace)
   - [Extension point](#extension-point)
 - [For Developers](#for-developers)
   - [Contract Component](#contract-component)
@@ -40,6 +41,19 @@ connector contract version changes.
 - [PI](adapters/pi/README.md): PI Agent skill and extension with follow-up capture and native-session resume.
 - [Antigravity](adapters/antigravity/README.md): Antigravity plugin exposing the local mission workflow to Antigravity CLI/IDE sessions.
 - [OpenCode](adapters/opencode/README.md): control-plane connector (Shape C) driven by `ovld agent-session sidecar` — no hook scripts.
+
+### Plugin marketplace
+
+The dedicated [Overlord ecosystem marketplace](https://github.com/cooperativ-labs/overlord-marketplace#readme)
+is intended to distribute the optional Knowledgebase plugin for Codex CLI and
+Claude Code. Publication and public first-install verification are pending; consult
+its README for the current status and installation and refresh instructions. Knowledgebase
+also supports MCP-only use; its onboarding changes are tracked in per:214.
+
+Continue to install and refresh Overlord itself with `ovld agent-setup <agent>`.
+That setup owns its existing hooks and, for Codex, rules and permission profile.
+The new marketplace's v1 scope does not include Overlord or Scribe and does not
+migrate existing installations.
 
 ### Extension point
 

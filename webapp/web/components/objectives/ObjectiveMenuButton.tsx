@@ -2,6 +2,7 @@ import {
   Check,
   CheckCircle2,
   Copy,
+  ListOrdered,
   MessageSquare,
   MoreVertical,
   Pencil,
@@ -45,6 +46,8 @@ type ObjectiveMenuButtonProps = {
   resumeCommand?: string | null;
   /** Agent's native session id; when present the menu offers a copy action. */
   sessionId?: string | null;
+  onAddToQueue?: () => void;
+  addingToQueue?: boolean;
 };
 
 /**
@@ -59,7 +62,9 @@ export function ObjectiveMenuButton({
   state,
   onEditTitle,
   resumeCommand = null,
-  sessionId = null
+  sessionId = null,
+  onAddToQueue,
+  addingToQueue = false
 }: ObjectiveMenuButtonProps) {
   const update = useUpdateObjective();
   const remove = useDeleteObjective();
@@ -166,6 +171,16 @@ export function ObjectiveMenuButton({
             </DropdownMenuItem>
           ) : null}
           {onEditTitle ? <DropdownMenuSeparator /> : null}
+          {onAddToQueue ? (
+            <DropdownMenuItem
+              className="gap-2 text-xs"
+              disabled={addingToQueue}
+              onClick={onAddToQueue}
+            >
+              <ListOrdered className="h-3.5 w-3.5" />
+              {addingToQueue ? 'Adding to queue…' : 'Add to queue'}
+            </DropdownMenuItem>
+          ) : null}
           {canShowMarkComplete ? (
             <DropdownMenuItem
               className="gap-2 text-xs"

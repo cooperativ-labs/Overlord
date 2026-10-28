@@ -22,11 +22,6 @@ export const BUNDLED_AGENT_CATALOG: Record<string, CatalogAgent> = {
         id: 'anthropic/claude-opus-4-8',
         displayName: 'Claude Opus 4.8',
         reasoningOptions: ['low', 'medium', 'high', 'xhigh', 'max']
-      },
-      {
-        id: 'openai-codex/gpt-5.6-terra',
-        displayName: 'GPT-5.6 Terra',
-        reasoningOptions: ['off', 'low', 'medium', 'high', 'xhigh', 'max']
       }
     ],
     defaultModel: null,
@@ -40,6 +35,11 @@ export const BUNDLED_AGENT_CATALOG: Record<string, CatalogAgent> = {
       {
         id: 'gpt-6.1-sol',
         displayName: 'GPT-6.1-Sol',
+        reasoningOptions: ['low', 'medium', 'high', 'xhigh', 'max']
+      },
+      {
+        id: 'gpt-6.1-terra',
+        displayName: 'GPT-6.1 Terra',
         reasoningOptions: ['low', 'medium', 'high', 'xhigh', 'max']
       },
       {

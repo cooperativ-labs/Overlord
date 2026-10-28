@@ -188,7 +188,7 @@ ovld protocol create --project-id <project-id> --agent <agent-identifier> --obje
 # One call: a draft mission whose first objective is already assigned to Codex.
 ovld protocol create --agent <agent-identifier> \
   --project-id <project-id> \
-  --objectives-json '[{"objective":"Implement the API","agent":"codex","model":"gpt-5.6-terra"},{"objective":"Add CLI docs","agent":"claude"}]'
+  --objectives-json '[{"objective":"Implement the API","agent":"codex","model":"gpt-6.1-terra"},{"objective":"Add CLI docs","agent":"claude"}]'
 ```
 
 ```bash

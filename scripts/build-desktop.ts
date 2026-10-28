@@ -75,6 +75,7 @@ function parseArgs(argv: string[]): Args {
         break;
       case '--arch':
         fail('macOS desktop packages are Apple Silicon only; the target architecture is arm64.');
+        break;
       case '--no-sign':
         args.sign = false;
         break;

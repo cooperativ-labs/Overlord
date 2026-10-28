@@ -292,7 +292,17 @@ VCS status, current-diff state, and window/quality/overlap metadata are removed.
   health. `update`/`deliver` `--paths` (comma list) and `--paths-file` (JSON
   string array) append `agent_declared` rows normalized against the session
   checkout before the drain; rejected paths are reported on stderr and never
-  block. CLI `attach` sends `--capture-binding bound` only when
+  block. Local binding/storage failure must not reject explicit declarations:
+  the CLI can normalize them in memory and submit `agent_declared` batches via
+  the existing authenticated `sync-changes` surface, whose session determines
+  objective and resource. It reports failures without blocking delivery. Local
+  binding retention limits apply per objective, not to the lifetime number of
+  objectives in a checkout; manifests remain byte-bounded. Attach and local
+  changes reads diagnose unavailable binding/storage on stderr; unavailable
+  reads include `unknown_binding` and a diagnostic health code in the existing
+  fields. This CLI repair changes no stable interface or contract version;
+  backend, database, connectors, and other clients are unchanged.
+  CLI `attach` sends `--capture-binding bound` only when
   `OVERLORD_OBJECTIVE_ID` names the attached objective and `unbound` when it is
   absent (any caller-supplied value is replaced); differently spelled ids are
   resolved against the attach response locally and synced as capture input. The
@@ -3646,6 +3656,7 @@ answering a decision it is blocked on, and injecting an instruction into it.
 - **Endpoints**: `GET /api/runner/status`, `POST /api/runner/claim`, `POST /api/runner/clear`, `POST /api/runner/requests/:id/launching`, `POST /api/runner/requests/:id/launched` (additive optional `providerSession` body), `POST /api/runner/requests/:id/failed`, and `POST /api/missions/:id/branch-prepared`
 - **Claiming**: Backend performs an atomic compare-and-set claim on `execution_requests`; verifies launchable state
 - **Run Queue boundary**: project Run Queues are upstream planning state and are invisible to runners and virtual-target gateways. A dispatcher resolves target/config at dispatch and creates an ordinary `execution_requests` row with additive open `requested_source = run_queue` and an entry-scoped idempotency key; claiming and all runner DTO/state semantics remain unchanged. A serial mission (`allowParallelObjectives = false`) has at most one dispatched/running Run Queue entry across all queues in the project; a parallel mission has no such limit. Entry `blocked` means a human must act and `waiting` means eligible or held on a self-clearing condition (`waitingReason`); the dispatcher re-evaluates both states every tick, so no queue mutation is needed to release a hold whose cause is gone.
+- Enqueueing an already executing or pending-delivery objective records it as a running entry without launching it again. When that operation creates its mission queue, the queue is resumed so subsequently queued work can follow its delivery; an existing queue retains its pause state. The existing enqueue authorization and response shape apply to all queue surfaces.
 - **Long poll**: On Postgres, an otherwise-empty `POST /api/runner/claim` waits up to 25 seconds on a dedicated (non-pooled) `LISTEN` connection for queue notifications, then retries the same scoped atomic claim. After LISTEN is armed, the handler flushes HTTP status and headers with no body bytes until the final `{ request, longPoll }` JSON, so proxies and client header timeouts do not see 25 seconds of silence. Connecting the LISTEN client is bounded (~3 seconds); a connect failure or timeout returns an empty claim with `longPoll: false` so the runner uses its jittered fallback instead of hanging. Its additive `longPoll` response flag is `true` when the wait capability was used; the runner immediately reconnects after an empty long-poll response. Notifications are wake hints only and never replace authorization or claiming. SQLite returns immediately with `longPoll: false` and retains the portable fallback cadence.
 - **Side effects**: Backend claim and state transitions append `mission_events` and `entity_changes` in the same transaction
 - **Claimant resolution**: A claim resolves an **already declared** non-deleted `local` execution target and never creates a device or execution target. An explicit `executionTargetId` in the claim body is resolved and authorized (existing, non-deleted, type `local`, `status = 'active'`, and an active `workspace_user_execution_targets` row for the authenticated member); otherwise the acting machine is resolved from the process host on a co-located Local backend or from the `x-overlord-device-*` hint. When no such target exists — or an explicit target id does not resolve in that workspace — the claim fails with `409 no_execution_target_registered` and an actionable message naming `ovld add-et`, so a machine with a runner but no declaration is visibly unconfigured rather than silently minting a target. A runner polling several workspaces reports this only when **no** workspace in its scope resolves a target

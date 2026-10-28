@@ -1,5 +1,11 @@
 # Keeping the Cooperativ plugin marketplace in sync
 
+> **Superseded for current marketplace work:** [coo:1232's Git-backed plugin
+> marketplace plan](coo-1232-git-plugin-marketplace.md) is authoritative. Its
+> v1 scope is Knowledgebase for Codex and Claude Code; it does not replace or
+> retire Scribe, or distribute Overlord itself. The proposal and implementation
+> notes below are historical and do not describe the current release workflow.
+
 > **Status (2026-09-27): Overlord retired from the marketplace.** The marketplace
 > Overlord plugin needs the `ovld` CLI on `PATH`, so it only duplicated
 > `ovld agent-setup codex` (minus the Codex rules and permission profile), and a
@@ -11,7 +17,7 @@
 > kept for the Scribe sync design.
 
 Mission: coo:1080 (objective coo:1080.r2zx)
-Marketplace repo: https://github.com/cooperativ-labs/overlord-marketplace (public)
+Marketplace repo: https://github.com/cooperativ-labs/overlord-marketplace (publication of the new catalog remains pending)
 Catalog: `.agents/plugins/marketplace.json` (OpenAI ChatGPT/Codex repo format)
 
 ## Question

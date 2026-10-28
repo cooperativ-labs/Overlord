@@ -29,11 +29,13 @@ function bareHealthCode(code: string): string {
 export function buildLocalObjectiveChanges({
   objectiveId,
   snapshots,
-  syncFailed
+  syncFailed,
+  unavailableDiagnosis = 'objective_binding_missing_in_working_directory'
 }: {
   objectiveId: string;
   snapshots: ChangeLedgerSnapshot[];
   syncFailed: boolean;
+  unavailableDiagnosis?: string;
 }): LocalObjectiveChangesDto {
   if (snapshots.length === 0) {
     return {
@@ -45,8 +47,12 @@ export function buildLocalObjectiveChanges({
       limit: OBJECTIVE_FILE_CHANGES_LIMIT,
       truncated: false,
       sync: { synced: 0, pending: 0, failed: syncFailed },
-      capture: { bindingState: 'unknown', callbackObserved: false, healthCodes: [] },
-      warnings: []
+      capture: {
+        bindingState: 'unknown',
+        callbackObserved: false,
+        healthCodes: [unavailableDiagnosis]
+      },
+      warnings: ['unknown_binding']
     };
   }
 
