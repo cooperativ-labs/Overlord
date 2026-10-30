@@ -41,6 +41,7 @@ Required content:
 - Deliver last with a summary written by behavior or component, plus artifacts when they add review value.
 - Never revert, restore, or delete concurrent work from other agents or missions to deliver; ask instead.
 - Declare only known shell/script/generator outputs, deletes, and rename endpoints that capture missed (`--paths` / `--paths-file`); there is no per-file explanation input.
+- Quote inline path lists containing spaces; use a JSON string array with `--paths-file <path|->` for commas or long lists. If local binding/storage is unavailable, retain the explicit session key, objective id, and path flags: the CLI warns and submits Declared evidence through the authenticated session. Read it with `objective-changes`; local `changes` explains the coverage gap. Failed fallback sync requires repeating the declarations because it has no local retry copy.
 - Use stdin/file flags for shell-special content.
 - Use stdin/file flags for oversized JSON payloads (`--*-json` values above ~8 KB are rejected; use `--*-file -`).
 - Do not continue implementation after delivery unless follow-up execution is explicitly requested.

@@ -250,6 +250,8 @@ attach:
     The CLI records the session's capture binding: bound when OVERLORD_OBJECTIVE_ID
     names the attached objective, unbound otherwise. Bound is configuration evidence
     only; it never claims the capture hook is installed or has run.
+    Attach warns on stderr if its local binding cannot be saved. Check OVLD_HOME
+    permissions and re-run attach in this checkout to restore native capture.
   Returns:
     Full JSON including session.sessionKey, mission, history, artifacts, sharedState,
     and agentInstructions with required workflow instructions and structured-field pointers.
@@ -793,6 +795,13 @@ deliver:
     out-of-checkout symlinks, ignored and Overlord-managed paths are rejected with a
     reason on stderr), and absent targets are valid. Never enumerate opened files or a
     shared-worktree diff; when unsure, describe the coverage limitation instead.
+    Quote the whole --paths value when a path contains spaces. Use --paths-file -
+    with a JSON string array on stdin for paths containing commas or a long list.
+    If the local binding or ledger is missing, keep --session-key and --objective-id:
+    declarations still synchronize through the authenticated session as Declared.
+    A warning explains the local capture gap. Failed fallback sync has no local retry
+    copy: repeat those declarations on update/deliver. objective-changes reads the
+    synchronized server evidence; changes reads only this checkout's ledgers.
     Inline --*-json values larger than ~8 KB are rejected; use --payload-file - and
     stream JSON on stdin. Keep --summary inline.
 
@@ -830,6 +839,8 @@ changes:
     syncState synced | pending } sorted by path and capped at 200; total counts distinct
     local paths. coverage "unavailable" means no local session matched, not "no files
     changed". This is not complete cross-device history: use objective-changes.
+    capture.healthCodes and stderr explain missing bindings or unreadable local storage.
+    Re-run attach in the intended checkout with the same OVLD_HOME to restore capture.
 
 sync-changes:
   Purpose:

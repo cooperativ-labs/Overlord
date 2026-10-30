@@ -151278,7 +151278,12 @@ Changed files:
   partial tool activity, declare only the files you know you changed that it missed (script and
   generator outputs, deletes, both rename endpoints) with \`--paths a,b\` or \`--paths-file\`
   (a JSON string array) on the same update or deliver call; they are labelled Declared. When
-  unsure, state the coverage gap in the summary instead of guessing.
+  unsure, state the coverage gap in the summary instead of guessing. Quote inline path lists
+  containing spaces. If the local binding or ledger is unavailable, keep the path flags and
+  pass --session-key and --objective-id explicitly: the CLI warns and submits Declared evidence
+  through the authenticated session. Use objective-changes to read that synchronized evidence.
+  Failed fallback sync needs the declarations repeated on a later update/deliver because no
+  local retry copy exists. Re-run attach in this checkout to restore native capture.
 
 Delivery evidence:
   Every delivery should also provide a \`deliveryReport.agentReport\` in \`--payload-json\` or

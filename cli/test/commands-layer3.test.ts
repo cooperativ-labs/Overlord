@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -948,7 +948,13 @@ test('attach records an honest capture binding from the explicit launch objectiv
   });
 });
 
-for (const mode of ['no-callback', 'claude-edit', 'unavailable-storage', 'sync-failure'] as const) {
+for (const mode of [
+  'no-callback',
+  'claude-edit',
+  'missing-binding',
+  'unavailable-storage',
+  'sync-failure'
+] as const) {
   test(`attach then deliver declared paths after 64 objectives: ${mode}`, async () => {
     process.env.OVLD_HOME = mkdtempSync(path.join(os.tmpdir(), 'ovld-declaration-home-'));
     const workspace = mkdtempSync(path.join(os.tmpdir(), 'Tough Leaf declaration '));
@@ -1004,6 +1010,8 @@ for (const mode of ['no-callback', 'claude-edit', 'unavailable-storage', 'sync-f
     } satisfies CliRuntime;
     const priorCwd = process.cwd();
     const priorObjective = process.env.OVERLORD_OBJECTIVE_ID;
+    const priorTmpdir = process.env.OVERLORD_TMPDIR;
+    process.env.OVERLORD_TMPDIR = path.join(workspace, '.overlord/tmp/sessions/missing-launch');
     process.env.OVERLORD_OBJECTIVE_ID = OBJECTIVE_DISPLAY_ID;
     process.chdir(workspace);
     try {
@@ -1016,6 +1024,12 @@ for (const mode of ['no-callback', 'claude-edit', 'unavailable-storage', 'sync-f
       );
       if (mode !== 'unavailable-storage' && mode !== 'sync-failure')
         assert.equal(readActiveSessions(workspace).length, 65);
+      if (mode === 'missing-binding') {
+        const directory = path.join(process.env.OVLD_HOME!, 'active-objective-sessions');
+        for (const file of readdirSync(directory).filter(file => file.endsWith('.json'))) {
+          unlinkSync(path.join(directory, file));
+        }
+      }
       if (mode === 'claude-edit') {
         captureChangeFromPayload({
           agent: 'claude',
@@ -1045,6 +1059,10 @@ for (const mode of ['no-callback', 'claude-edit', 'unavailable-storage', 'sync-f
       if (mode === 'unavailable-storage' || mode === 'sync-failure') {
         assert.equal(changes.coverage, 'unavailable');
         assert.deepEqual(changes.capture.healthCodes, ['binding_file_unreadable_or_invalid']);
+      }
+      if (mode === 'missing-binding') {
+        assert.equal(changes.coverage, 'unavailable');
+        assert.deepEqual(changes.capture.healthCodes, ['binding_file_missing']);
       }
       if (mode === 'no-callback') assert.ok(changes.warnings.includes('bound_no_callback'));
       writeFileSync(path.join(workspace, '.overlordignore'), 'ignored.ts\n');
@@ -1098,6 +1116,8 @@ for (const mode of ['no-callback', 'claude-edit', 'unavailable-storage', 'sync-f
       process.chdir(priorCwd);
       if (priorObjective === undefined) delete process.env.OVERLORD_OBJECTIVE_ID;
       else process.env.OVERLORD_OBJECTIVE_ID = priorObjective;
+      if (priorTmpdir === undefined) delete process.env.OVERLORD_TMPDIR;
+      else process.env.OVERLORD_TMPDIR = priorTmpdir;
     }
   });
 }

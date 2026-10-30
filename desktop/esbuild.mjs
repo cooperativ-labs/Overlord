@@ -36,4 +36,9 @@ await build({
 // server is reachable.
 copyFileSync(path.join(root, 'src', 'splash.html'), path.join(outdir, 'splash.html'));
 
-console.log('Built desktop/dist-electron (main.cjs, preload.cjs, splash.html)');
+// Menu bar (tray) glyph, loaded from next to main.cjs.
+for (const name of ['trayTemplate.png', 'trayTemplate@2x.png']) {
+  copyFileSync(path.join(root, 'src', 'assets', name), path.join(outdir, name));
+}
+
+console.log('Built desktop/dist-electron (main.cjs, preload.cjs, splash.html, tray icons)');

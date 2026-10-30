@@ -279,6 +279,7 @@ sessionLifecycle:
     clientCapture:
       - 'The client CLI drains every pending bounded batch from the attached objective ledger through sync-changes before delivery. It never derives or injects file paths from a worktree delta.'
       - 'Optional bounded --paths (comma list) and --paths-file (JSON string array; commas are path characters) append agent-known shell/script/generator outputs, deletes, and both rename endpoints to the attached objective ledger as agent_declared before the drain. They are normalized against the session checkout (absent targets valid; traversal, out-of-checkout symlinks, ignored and Overlord-managed paths rejected with a reason) and are not a changed-file reconciliation input.'
+      - 'If local binding/ledger storage is unavailable, explicit --session-key and --objective-id retain the same declarations and path policy via authenticated sync-changes. The CLI warns; server objective-changes exposes accepted fallback evidence, while local changes diagnoses the capture gap. Failed fallback sync has no durable retry copy and requires repeating declarations; delivery remains advisory and non-blocking.'
       - 'The drain also sends bounded session capture diagnostics (binding recorded at attach, first accepted callback, health codes) through sync-changes capture once per drain when they changed since last accepted.'
     validationRules:
       - 'Objective-ledger changed files and declared paths are review metadata and cannot reject a delivery. No per-file rationale exists.'
@@ -314,7 +315,7 @@ missionDiscovery:
     rules:
       - 'Supply --project-id to create a mission, or --unassigned-to-project to deliberately create an account-owned inbox item. --inbox remains a compatibility alias for the latter. Omitting both is rejected; the Protocol never discovers a project for agent-created work.'
       - '--agent names the connector/agent identifier authoring the row and is recorded as creation provenance (missions.created_by_agent / objectives.created_by_agent); it does not select the agent that will run the work'
-      - 'Each --objectives-json / --objectives-file item may set agent and model. agent persists as the created objective''s assignedAgent; model requires a non-empty agent. When both are omitted, existing project launch-preference defaults apply.'
+      - "Each --objectives-json / --objectives-file item may set agent and model. agent persists as the created objective's assignedAgent; model requires a non-empty agent. When both are omitted, existing project launch-preference defaults apply."
       - '--objective-agent / --objective-model supply the launch selection for items that name no agent of their own; a per-item agent wins, and --objective-model without --objective-agent is rejected. These are distinct from --agent, which is creation provenance only.'
       - '--assigned-to resolves one workspace member by workspace_users.id, profile UUID, orgid:username, bare username, or email; an unresolvable member is rejected with the same "Assignee is not a member of this workspace" error REST uses and is never silently left unassigned'
       - '--session-key additionally attributes the created row to the calling agent session (created_by_session_id) and lets an omitted --assigned-to inherit the session mission assignee'
@@ -375,7 +376,7 @@ missionDiscovery:
       - creates-session-key
 
   listDeliveries:
-    description: 'List one addressed mission''s newest-first normalized delivery records'
+    description: "List one addressed mission's newest-first normalized delivery records"
     readOnly: true
     optionalFlags:
       - --mission-id
@@ -403,7 +404,7 @@ missionDiscovery:
       - may-transition-draft-objective-to-launching
 
   reorderFutureObjectives:
-    description: 'Reorder one mission UUID''s future objectives without changing non-future positions'
+    description: "Reorder one mission UUID's future objectives without changing non-future positions"
     requiredFlags:
       - --mission-id
       - --ordered-objective-ids-json
@@ -429,7 +430,7 @@ missionDiscovery:
     responseShape: RunQueueEntryDto
     rules:
       - 'Objective UUIDs and display ids are accepted. --project-id accepts the normal project UUID, slug, or name reference and, when supplied, must own the objective.'
-      - '--queue accepts a queue UUID or an unambiguous queue name in the addressed project. --after accepts a queued entry id, objective UUID, or objective display id; without --queue it selects that predecessor''s queue.'
+      - "--queue accepts a queue UUID or an unambiguous queue name in the addressed project. --after accepts a queued entry id, objective UUID, or objective display id; without --queue it selects that predecessor's queue."
       - '--front and --position are mutually exclusive with --after. --position is one-based and bounded to the insertion range. Existing membership is idempotent unless a queue or placement option requests a move.'
       - 'Uses execution_request:create and the Run Queue service; entries remain target-neutral.'
     sideEffects:
@@ -451,7 +452,7 @@ missionDiscovery:
       - rewrites-affected-mission-objective-positions
 
   runQueue:
-    description: 'Read the addressed project''s live Run Queue projection'
+    description: "Read the addressed project's live Run Queue projection"
     readOnly: true
     optionalFlags:
       - --project-id
@@ -465,7 +466,7 @@ missionDiscovery:
       - 'Uses objective:read authorization.'
 
   reorderRunQueue:
-    description: 'Atomically replace one Run Queue''s complete live entry order'
+    description: "Atomically replace one Run Queue's complete live entry order"
     requiredFlags:
       - --queue
       - --ordered-entries-json | --ordered-entries-file
@@ -535,7 +536,7 @@ missionDiscovery:
       - optionally-moves-run-queue-entries
 
   reorderProjectRunQueues:
-    description: 'Atomically replace a project''s complete Run Queue definition order'
+    description: "Atomically replace a project's complete Run Queue definition order"
     requiredFlags:
       - --ordered-queues-json | --ordered-queues-file
     optionalFlags:
@@ -610,7 +611,7 @@ missionDiscovery:
       - --objective-model
     rules:
       - 'Each --objectives-json / --objectives-file item may set autoAdvance; --auto-advance / --no-auto-advance supply the default when an item omits it; omitted defaults to false'
-      - 'Each item may set agent and model. agent persists as the new objective''s assignedAgent; model requires a non-empty agent. When both are omitted, existing project launch-preference defaults apply.'
+      - "Each item may set agent and model. agent persists as the new objective's assignedAgent; model requires a non-empty agent. When both are omitted, existing project launch-preference defaults apply."
       - 'Denied for a project_automation USER_TOKEN before any write (contract v151): that preset creates objectives only as the initial objectives of a mission it creates and never edits an existing mission'
       - '--objective-agent / --objective-model supply the launch selection for items that name no agent of their own; a per-item agent wins, and --objective-model without --objective-agent is rejected'
     sideEffects:

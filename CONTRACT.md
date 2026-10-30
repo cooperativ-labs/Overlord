@@ -116,7 +116,7 @@ dual acceptance, or legacy decoders.
   stable delivery-local `id`: `deferred-work-<index>-<digest>`, where `index` is
   the zero-based position in the normalized agent report and `digest` is the
   first 16 hex characters of the SHA-256 of the UTF-8 JSON text of `[title,
-  change, location, doneWhen]` with each field trimmed.
+change, location, doneWhen]` with each field trimmed.
   `contract/delivery-report-v1-fixtures.json` pins the derivation. `deliver`
   and `record-work` (Protocol, CLI `--payload-json|file`, hosted and local MCP)
   reject a string item, an over-long or missing field, or an unknown key with
@@ -130,10 +130,10 @@ dual acceptance, or legacy decoders.
   restate planned objectives or human follow-up, comparing `title` + `change`,
   and never edits an item. The index-marked composed id is retired.
 - **`DeliveryDeferredWorkItemDto`** is `{ actionId, title, change, location,
-  doneWhen, resolution }`; `action` is removed. `actionId` equals the item's
+doneWhen, resolution }`; `action` is removed. `actionId` equals the item's
   `DeferredWorkV1.id`. The deferred-work resolution routes keep their paths,
   bodies, and authorization. Promotion through `POST /api/objectives` or `POST
-  /api/missions` uses `title` as the title and, as the instruction, `change`, a
+/api/missions` uses `title` as the title and, as the instruction, `change`, a
   blank line, `Location: {location}`, a blank line, `Done when: {doneWhen}`.
 - **Historical deferred work is dropped.** Migrations in both editions clear
   historical `agentReport.deferredWork` and `presentation.deferredWork` arrays,
@@ -170,9 +170,9 @@ dual acceptance, or legacy decoders.
   the captured generation, so a trigger during generation causes a fresh pass.
 - **REST.** `GET /api/missions/:id/summary` (mission read authorization)
   returns `MissionSummaryResponse`: `{ eligible: false, summary: null,
-  evidence: null, watermark: null, seenAt: null }` for an ineligible mission,
+evidence: null, watermark: null, seenAt: null }` for an ineligible mission,
   else `{ eligible: true, summary: MissionSummaryDto | null, evidence:
-  MissionSummaryEvidenceDto, watermark, seenAt }`. Evidence (latest current-run
+MissionSummaryEvidenceDto, watermark, seenAt }`. Evidence (latest current-run
   delivery per objective, its human actions, and source rows, deleted
   objectives included) is selected in the database before any limit, capped at
   `MISSION_SUMMARY_EVIDENCE_LIMIT` with pre-cap `totals` and `truncated` flags.
@@ -241,7 +241,7 @@ VCS status, current-diff state, and window/quality/overlap metadata are removed.
   (`vcsStatus`)/`--changed-files-*` are retired and rejected with `invalid_input`.
 - **Capture diagnostics** are persisted on the session
   (`agent_sessions.capture_binding_state | capture_callback_observed_at |
-  capture_health_json`): `bound | unbound | unknown` binding (configuration
+capture_health_json`): `bound | unbound | unknown` binding (configuration
   evidence only, set by `attach --capture-binding` or `sync-changes` capture
   input), the earliest accepted callback (even a harmless read), and bounded
   per-code first/last health aggregates. Known gap codes
@@ -250,14 +250,14 @@ VCS status, current-diff state, and window/quality/overlap metadata are removed.
   Objective warnings (`CaptureWarningCode`) are derived across all sessions so a
   newer healthy session never hides an earlier gap.
 - **Two distinct reads, no collision.** CLI-local `ovld protocol changes
-  --objective-id …` returns `LocalObjectiveChangesDto` (scope
+--objective-id …` returns `LocalObjectiveChangesDto` (scope
   `local_objective_sessions`, this directory's ledgers, synced and pending rows,
   200-row cap, `coverage: unavailable` when no local session matches). It is
   never sent to the backend. The server read is Protocol `objective-changes`
   (`POST /api/protocol/objective-changes`), hosted MCP `overlord_changes`, and
   REST `GET /api/missions/:id/file-changes?objectiveId=`, returning
   `ObjectiveFileChangesDto` (scope `server_objective`, `{ items, total, limit,
-  truncated, capture }`). The objective is validated against the addressed
+truncated, capture }`). The objective is validated against the addressed
   mission before SQL and filters before count and limit. It needs no attach and
   cannot see unsynchronized local evidence. `objective-changes` is a mission-read
   Protocol subcommand on the `project_automation` allowlist alongside
@@ -297,7 +297,11 @@ VCS status, current-diff state, and window/quality/overlap metadata are removed.
   the existing authenticated `sync-changes` surface, whose session determines
   objective and resource. It reports failures without blocking delivery. Local
   binding retention limits apply per objective, not to the lifetime number of
-  objectives in a checkout; manifests remain byte-bounded. Attach and local
+  objectives in a checkout; manifests remain byte-bounded. Under retention or
+  byte pressure, attach prunes oldest delivered retry bindings only after their
+  ledgers can be removed without losing unsynchronized evidence. Live bindings
+  for other objectives and unsynchronized retries are retained; exhausted storage
+  produces an explicit warning rather than a silent capture failure. Attach and local
   changes reads diagnose unavailable binding/storage on stderr; unavailable
   reads include `unknown_binding` and a diagnostic health code in the existing
   fields. This CLI repair changes no stable interface or contract version;
@@ -312,9 +316,9 @@ VCS status, current-diff state, and window/quality/overlap metadata are removed.
   snapshots, then finalizes, and prints exactly `LocalObjectiveChangesDto`; a
   foreign mission/objective pair or a `--session-key` that is not a local
   session of the objective is rejected. Top-level `ovld changes status
-  --objective-id` uses REST `file-changes?objectiveId=` (server filters before the
+--objective-id` uses REST `file-changes?objectiveId=` (server filters before the
   cap); `ovld changes rationales`, `ovld mission rationales` (now `ovld mission
-  file-changes`), and the `rationales` JSON alias are removed, and
+file-changes`), and the `rationales` JSON alias are removed, and
   `--change-rationales-*`/`--changed-files-*` are rejected client-side on
   `update`, `deliver`, and `record-work`.
 
@@ -575,7 +579,7 @@ no interface/schema change. The open diagnostic kind/payload vocabulary is uncha
 no contract version bump or migration is required.
 
 Summary coverage and context budgets (coo:1127.158y) refine the Gemini runtime's
-*Summaries* and *Limits* below: summary-covered messages are replaced by the summary in
+_Summaries_ and _Limits_ below: summary-covered messages are replaced by the summary in
 new provider requests, summary generation uses its own bounded instruction/output,
 coverage names the last message actually summarized, and a token-counted input budget
 with model headroom ends gathering through the existing `allowance_exhausted` path.
@@ -627,7 +631,7 @@ any workspace in the connection's `authorizedWorkspaces` without a per-message
   `20261006120000_account_connections_assistant_write_scope` on both editions.
   Existing rows become `per_request`, so nobody's access widens on upgrade.
 - **DTO.** `AccountConnectionDto.assistantWriteScope:
-  AccountConnectionAssistantWriteScope` (always `per_request` for providers other than
+AccountConnectionAssistantWriteScope` (always `per_request` for providers other than
   `knowledgebase`). New `ACCOUNT_CONNECTION_ASSISTANT_WRITE_SCOPES` and
   `UpdateAccountConnectionBody` (`{ expectedRevision, assistantWriteScope }`).
 - **Route.** `PATCH /api/connections/:id` (Cloud-only, like the rest of the
@@ -757,6 +761,7 @@ reasons and their wire values are unchanged:
   - a retry when the listing fails.
 
   Callback notices say what happened and what to do next.
+
 - Mobile (OverlordMobile): no change required. Its rows read the same availability.
 - Operators: `.env.*.example` and the public Integrations guide document the
   zero-setup default and the optional overrides.
@@ -814,6 +819,7 @@ read, and refused when that mission carries a different Feature's canonical refe
 `Checking Feature missions`.
 
 **Impact.**
+
 - Protocol/CLI: additive `--reference`/`--cursor` on `search`; help and
   `contract/protocol-commands.yaml` updated. Existing ranked responses are unchanged.
 - hosted MCP Server and connectors: additive `reference`/`cursor` on
@@ -885,6 +891,7 @@ retries, rereading after uncertainty, inline linking, and reporting changes.
 `tool.updated.label` adds `Updating notes`; `query` reports `Searching notes`.
 
 **Impact.**
+
 - REST/backend: connections module, outbound MCP client and policy, chat runtime, and
   submission check (`ChatOptions.authorizeKnowledgebaseWrite`).
 - Core: conversations/runs/tool gateway as above; Overlord missions are still never
@@ -1301,7 +1308,7 @@ a revision still being prepared by the cancelled attempt is never published. Cre
 a published revision therefore succeeds or fails on its own checks regardless of a
 concurrent Cancel, and a later Cancel never removes created drafts.
 
-*Proposal implementation (coo:1108.k0tc).* The internal `prepare_proposal` tool
+_Proposal implementation (coo:1108.k0tc)._ The internal `prepare_proposal` tool
 publishes or revises a card and cannot create domain work. Preparation validates
 registered resource keys and the destination workspace agent catalog, resolves the
 acting member's project launch preference, and freezes model/reasoning values.
@@ -1314,7 +1321,7 @@ one outer transaction. A request key already used by another proposal returns
 `invalid_request`; an existing receipt for the same proposal returns its original
 IDs. No new public DTO, schema, or route is introduced by this implementation.
 
-*Web and desktop client (coo:1108.r2b0).* The shared SPA consumes these routes only.
+_Web and desktop client (coo:1108.r2b0)._ The shared SPA consumes these routes only.
 It creates a thread empty and then submits the first message, so every content-bearing
 write is idempotent; each action's `clientRequestId` is minted once and reused by every
 retry (Create ids persist across reloads, scoped to backend, profile, and organization),
@@ -1325,8 +1332,8 @@ held only while the tab is visible and focused (`platform` `web` or `desktop`, o
 client id per page load), and acknowledgements are sent only for events already
 committed to the rendered transcript. The Knowledgebase callback's web return path
 `/settings/connections` is an SPA route that reloads connection state and returns to
-Chat. *(Since v153 it is the Connected accounts page; a sign-in started from Chat still
-returns to Chat.)*
+Chat. _(Since v153 it is the Connected accounts page; a sign-in started from Chat still
+returns to Chat.)_
 
 **Continue.** When the latest run of a thread completed with
 `allowance_exhausted`, `POST /api/chat/runs/:id/continue` creates one new run with
@@ -1406,10 +1413,10 @@ status. Credentials, verifiers, codes, and state never appear in DTOs, logs, rea
 change rows, or errors; the only client-visible URL carrying `state` is `authorizeUrl`
 itself, where OAuth requires it (stored only as a hash, single use, 10-minute expiry).
 The Everhour and GitHub credential stores are unchanged (coo:1110); they share only
-the AES-256-GCM envelope primitive (`v1` format, their own AAD and keys). *(Superseded
-by v153: both personal integrations move onto this module.)*
+the AES-256-GCM envelope primitive (`v1` format, their own AAD and keys). _(Superseded
+by v153: both personal integrations move onto this module.)_
 
-*Client integration (web and mobile, coo:1108.zb9x).* `POST /api/connections` reuses
+_Client integration (web and mobile, coo:1108.zb9x)._ `POST /api/connections` reuses
 the caller's live connection for reauthorization (same `connectionId`) and allows at
 most five open sign-ins per connection (`limit_exceeded`). It answers 503
 `provider_not_ready` when the Knowledgebase or credential key is not configured, 400
@@ -1429,9 +1436,9 @@ rechecks every thread that cited the connection, so that content is replaced by
 `unavailable` blocks and live generations are fenced with `source_access_lost`.
 Reconnecting never restores invalidated content. Server configuration:
 `KNOWLEDGEBASE_MCP_URL`, `KNOWLEDGEBASE_EGRESS_ORIGINS`,
-`ACCOUNT_CONNECTIONS_ENCRYPTION_KEY`, `ACCOUNT_CONNECTIONS_ENCRYPTION_KEY_ID`. *(Since v156 every one of these is optional: the
+`ACCOUNT_CONNECTIONS_ENCRYPTION_KEY`, `ACCOUNT_CONNECTIONS_ENCRYPTION_KEY_ID`. _(Since v156 every one of these is optional: the
 standard server is the default and the platform key derived from `BETTER_AUTH_SECRET`
-seals credentials when no explicit key is set.)*
+seals credentials when no explicit key is set.)_
 
 **Outbound MCP and repository-read seams.** The backend's outbound MCP client
 reaches only the configured Knowledgebase origin over HTTPS with server-side egress
@@ -1456,7 +1463,7 @@ shares or is replaced by it.
 
 **Repository-read implementation details (coo:1108.zg8m, refines v152).**
 
-- *Local-target interface.* `readCurrentDiff` is replaced in place by the
+- _Local-target interface._ `readCurrentDiff` is replaced in place by the
   resource-addressed form `{ resourceId, repoPath, scope, relativePaths?, maxBytes? }`
   (the mission-keyed form had no implementation and no caller). Three capabilities are
   added: `readGitStatus`, `readRepositoryFile`, and `searchRepositoryText`. All four
@@ -1464,7 +1471,7 @@ shares or is replaced by it.
   the desktop bridge. The commit-message diff (`generateCommitMessageFromLocalDiff`)
   builds its `git diff` from the same argument builder and hardened Git configuration,
   so there is one diff definition.
-- *Target-side hardening.* Every inspection Git call runs without a shell, with
+- _Target-side hardening._ Every inspection Git call runs without a shell, with
   `GIT_OPTIONAL_LOCKS=0` (no index refresh write), `core.fsmonitor=false`,
   `core.hooksPath` pointed at the null device, `diff.external` empty plus
   `--no-ext-diff --no-textconv`, every configured `filter.<driver>` neutralized,
@@ -1474,7 +1481,7 @@ shares or is replaced by it.
   call has its own timeout (20 s on the target), is killed on timeout, cancellation,
   or when captured output passes its byte bound, and never retries. Worktree dirtiness
   checks used by `listWorktrees` use the same hardened configuration.
-- *Paths.* Inputs are repository-relative POSIX paths: absolute paths, drive or UNC
+- _Paths._ Inputs are repository-relative POSIX paths: absolute paths, drive or UNC
   prefixes, NUL bytes, `..` escapes, and any `.git` segment are rejected by the
   backend and again by the target. The target resolves the real path of both the
   resource root and the candidate and requires containment, so a symlink that leaves
@@ -1489,7 +1496,7 @@ shares or is replaced by it.
   answers `denied`, `diff` withholds their sections and lists them in
   `excludedPaths`, and `search_text` drops their hits. Their names may still appear in
   status and tree listings.
-- *Results.* `RepositoryReadResult.data` is operation-specific and typed in
+- _Results._ `RepositoryReadResult.data` is operation-specific and typed in
   `packages/contract/src/chat.ts` (`RepositoryGitStatusData`, `RepositoryDiffData`,
   `RepositoryFileData`, `RepositorySearchData`; existing reads keep their capability
   payloads, with tree entries capped at `maxEntries`, default 500, maximum 2000, and
@@ -1501,7 +1508,7 @@ shares or is replaced by it.
   and untracked, non-ignored text files (binary files skipped). `diff` covers tracked
   files only (`unstaged`: worktree against index; `staged`: index against HEAD; `all`:
   worktree against HEAD, or against the empty tree before the first commit).
-- *Route.* `POST /api/projects/:id/repository-reads` takes a `RepositoryReadRequest`
+- _Route._ `POST /api/projects/:id/repository-reads` takes a `RepositoryReadRequest`
   body (the path `:id` must equal `projectId`) and answers 200 with a
   `RepositoryReadResult` for every target-side outcome, including `target_offline`,
   `timeout`, `unavailable`, `denied`, `binary`, `oversized`, and `not_found`. It answers
@@ -1515,14 +1522,14 @@ shares or is replaced by it.
   caller for the route) are in flight; further reads wait for a slot within their
   deadline. A runner that predates these capabilities fails the job, which is reported
   as `unavailable`.
-- *Runner completion.* `POST /api/runner/requests/:id/completed` accepts a JSON body of
+- _Runner completion._ `POST /api/runner/requests/:id/completed` accepts a JSON body of
   up to 1 MiB (every other JSON route keeps the 100 KB default), so a bounded read result
   and its envelope always fit. Tree reads are scoped (`subPath`) and capped
   (`maxEntries`) on the target before they cross the queue.
 
 **Gemini research runtime and tool gateway (coo:1108.vx29, refines v152).**
 
-- *Runtime adapter.* `backend/chat/` implements the worker's `ChatRuntime` with Gemini
+- _Runtime adapter._ `backend/chat/` implements the worker's `ChatRuntime` with Gemini
   through `@google/genai` `models.generateContentStream` (function declarations as
   `parametersJsonSchema`). Configuration: `CHAT_GEMINI_API_KEY` (falls back to
   `GEMINI_API_KEY`), `CHAT_GEMINI_MODEL` (default `gemini-3.8-flash`), and
@@ -1535,13 +1542,13 @@ shares or is replaced by it.
   `gemini` readiness entry (`ready`, `not_configured`, `rate_limited` for 60 s after a
   429, or `unavailable` after a transport failure) and the caller's live account
   connections.
-- *Checkpoint payload (schema 2).* The private checkpoint holds only this run's provider
+- _Checkpoint payload (schema 2)._ The private checkpoint holds only this run's provider
   turns, verbatim and unmerged (thought signatures, call ids, empty parts), the pending
   call batch (`turn`, per-call order, operation id `chat.<runId>.t<turn>.c<order>`,
   provider call id or a synthetic `t<turn>.c<order>` when the provider omits one), and
   the run's streaming message id. The conversation prefix (latest authorized summary
   and the messages it does not cover, with withheld content rendered as a marker; see
-  *Summaries*) is rebuilt from storage on every provider request. The config digest
+  _Summaries_) is rebuilt from storage on every provider request. The config digest
   covers the model, the versioned system prompt, context policy and relevance policy.
   Schema 2 also stores the selected family set and a manifest of the exact declarations
   offered for the pending signed turn (SHA-256 identity over canonical object keys and
@@ -1551,7 +1558,7 @@ shares or is replaced by it.
   by the live gateway on the next call. Schema-1/digest-incompatible checkpoints take
   existing fresh-generation recovery; no signed turn is rewritten. Fresh-generation recovery sends no function-call parts; it adds this run's
   completed, still-authorized tool observations as untrusted text.
-- *Tool catalog (fixed), relevance manifests (expandable).* `overlord_list_projects`, `overlord_list_execution_targets`,
+- _Tool catalog (fixed), relevance manifests (expandable)._ `overlord_list_projects`, `overlord_list_execution_targets`,
   `overlord_search_missions`, `overlord_get_mission`, `repository_read` (the eight
   `RepositoryReadOperation`s through the same core service as the REST route, scope
   `chat-run:<runId>`), the reviewed Knowledgebase reads of the owner's live connections,
@@ -1594,27 +1601,28 @@ shares or is replaced by it.
   extensions have no interface change. The outbound MCP client's live allowlist/scope policy
   is unchanged. This is an internal provider-policy refinement at contract v159; no stable
   public interface or closed storage vocabulary changes and no contract version bump.
-- *Static-prefix cache (coo:1127.0904).* Backend may place a tool-enabled request's exact
+
+- _Static-prefix cache (coo:1127.0904)._ Backend may place a tool-enabled request's exact
   static prefix in a Gemini explicit cache (`caches.create`, same Generate Content API
   family) and reference it with `cachedContent`. The prefix is only the exact system
   instruction, the request's exact function declarations and `functionCallingConfig.mode
-  = AUTO`; never conversation, summaries, tool results, source content, proposals,
+= AUTO`; never conversation, summaries, tool results, source content, proposals,
   credentials or connection secrets. A `cachedContent` request carries no system
   instruction, tools or tool config (the provider rejects them), so tool-free closing
   (`NONE`) requests and summary generation are always sent inline.
-  - *Hybrid use.* Only while the attempt's previous reported `promptTokenCount` (before
+  - _Hybrid use._ Only while the attempt's previous reported `promptTokenCount` (before
     any report: request bytes / 4) is below 16,000 tokens; larger requests go inline so
     implicit caching can cover the growing conversation. A cached request reports only
     the cache's tokens as cached and gains no implicit hits, so caching every request
     would raise cost on long runs. The cache never removes prompt tokens or context
     occupancy: the context budget still counts the cached declarations.
-  - *Key and isolation.* SHA-256 over the owner's profile and organization, the model and
+  - _Key and isolation._ SHA-256 over the owner's profile and organization, the model and
     the canonical static config. Caches are never shared across owners, even for
     identical manifests. A changed prompt, grant, connection, family or schema yields a
     different key; a cache is never used for a different manifest, and a cache reference
     never authorizes anything (every call still faces the live gateway checks; schema-2
     checkpoint manifests are unchanged).
-  - *Lifecycle.* TTL 600 s; reuse only with at least 60 s remaining. A process-local,
+  - _Lifecycle._ TTL 600 s; reuse only with at least 60 s remaining. A process-local,
     in-memory registry (no database state) holds at most 64 entries and 4 per owner.
     Creation is single-flight per key, never blocks a request (that request goes inline),
     is bounded to 15 s and is awaited by the creating attempt before it finishes, so its
@@ -1622,15 +1630,15 @@ shares or is replaced by it.
     owner exceeds 4 entries, the oldest of that owner's caches is deleted from that
     owner's attempt. A full registry skips creation. Caches left by a restart expire by
     TTL; a restart starts cold.
-  - *Fallback.* A cached request refused at stream open with 400, 403 or 404, before any
+  - _Fallback._ A cached request refused at stream open with 400, 403 or 404, before any
     chunk arrives, invalidates the entry and is sent once inline with identical contents.
     Nothing is retried after a chunk arrives; transient-retry and rate-limit rules are
     unchanged, so no turn or tool call is duplicated.
-  - *Digest, checkpoint and recovery.* The effective model input is identical with or
+  - _Digest, checkpoint and recovery._ The effective model input is identical with or
     without the cache, so the config digest, checkpoint schema 2 and fresh-generation
     rules are unchanged. The cache name is never stored in checkpoints, snapshots or
     events; a resumed attempt recomputes the key and reuses or recreates the cache.
-  - *Diagnostics.* Owner-private and captured only in the triggering owner's thread:
+  - _Diagnostics._ Owner-private and captured only in the triggering owner's thread:
     `provider.cache_create` (complete create config including the instruction and
     declarations, then the provider response metadata or original error),
     `provider.cache_delete` and `provider.cache_fallback`. A cached `provider.request`
@@ -1638,7 +1646,7 @@ shares or is replaced by it.
     and the effective system instruction, declarations and tool config, so the effective
     input stays inspectable. `performance.attempt` adds cached-request and fallback
     counts. These are open diagnostic kinds.
-  - *Configuration.* On by default with a configured key; `CHAT_GEMINI_STATIC_CACHE=off`
+  - _Configuration._ On by default with a configured key; `CHAT_GEMINI_STATIC_CACHE=off`
     disables it (any other value keeps the default). Explicit caches incur provider
     storage charges for their TTL.
 
@@ -1652,12 +1660,12 @@ shares or is replaced by it.
   configuration. This is an internal provider-policy refinement at contract v159; no
   contract version bump.
 
-- *Questions.* `ask_user` is a checkpointed call: reads in the same turn run first, the
+- _Questions._ `ask_user` is a checkpointed call: reads in the same turn run first, the
   question opens through the existing question path (run `waiting_user`, notification
   candidate), and the answer becomes that call's recorded result when the run resumes
   from its checkpoint. One question per turn; extra `ask_user` calls answer
   `invalid_arguments`.
-- *Evidence and citations.* Each tool result's sources become `chat_source_refs`
+- _Evidence and citations._ Each tool result's sources become `chat_source_refs`
   (scope keys: `overlord:<entity>:<id>`, `repository:<target>:<project>:<resource>:<path>@<head>`,
   `knowledgebase:<connection>:<workspace>:<node>`), are checked live, and get one
   `chat_evidence` row each with a thread-local citation ref (`E<n>`) returned to the
@@ -1669,18 +1677,18 @@ shares or is replaced by it.
   dependency set includes the cited sources. Streamed text, questions, checkpoints and
   summaries use the conservative union of every authorized dependency set in the
   thread.
-- *Summaries.* Once at least eight messages are not covered by the latest summary, the
+- _Summaries._ Once at least eight messages are not covered by the latest summary, the
   runtime writes a compact `chat_thread_summaries` row (goal text, decisions, open
   questions, evidence refs) from a plain-text transcript of authorized content; a failed
   summary never fails the run. Refined by coo:1127.158y:
-  - *Coverage.* `covers_through_message_id` names the last message the generation
+  - _Coverage._ `covers_through_message_id` names the last message the generation
     actually read; the transcript is the previous usable summary plus the messages
     after its boundary, oldest first, cut at a message boundary when it reaches its
     size bound, so coverage never claims an unread message. Core resolves the boundary's
     position by storage order `(created_at, id)` even when it lies outside the latest
     100-message page; a boundary that cannot be resolved, or an absent, invalidated or
     unauthorized summary, means no coverage and the full authorized page is sent.
-  - *Prefix selection.* With usable coverage, covered messages are replaced by the
+  - _Prefix selection._ With usable coverage, covered messages are replaced by the
     summary, except the run's trigger message, every message of the current run, and
     the four most recent messages, which stay verbatim. Proposal cards and creation
     receipts are supplied separately and never compacted; the current run's signed
@@ -1688,25 +1696,25 @@ shares or is replaced by it.
     narrows dependencies: summaries, checkpoints, messages and questions keep the
     conservative thread union, and revocation invalidates the summary (falling back
     to authorized messages with `unavailable` markers) and fences as before.
-  - *Generation.* A dedicated compact instruction (not the research prompt) treats
+  - _Generation._ A dedicated compact instruction (not the research prompt) treats
     the transcript as untrusted data and returns only the four fields under a bounded
     output (`maxOutputTokens` 2048, low thinking) with no tools. A response that is not
     complete (`finishReason` other than `STOP`), not valid JSON, or outside the field
     bounds (text 6,000 chars, 20 decisions, 20 open questions, 50 `E<n>` refs, items 500
     chars) is a failed optional summary: it is recorded privately, never stored and
     never replaces the last valid summary. The eight-message cadence is unchanged.
-- *Source checkers.* `overlord` sources are `authorized` while the entity exists and the
+- _Source checkers._ `overlord` sources are `authorized` while the entity exists and the
   owner keeps the read permission on its project's workspace, else `revoked`;
   `repository` sources while the owner keeps `project:read` and the execution target
   stays eligible for that project (reachability is not access). Both are registered
   with the Knowledgebase checker through the connections module's composed
   `checkSource`.
-- *Limits.* Before each provider request the runtime stops at the per-run tool-call
+- _Limits._ Before each provider request the runtime stops at the per-run tool-call
   limit, the gathered-content budget, or within one minute of the active-time limit; a
   function-call turn that would exceed the tool-call limit is discarded unexecuted (never
   checkpointed) and one tool-free request (`functionCallingConfig.mode = NONE`) writes the
   closing summary before the run completes `allowance_exhausted`.
-- *Context budget (coo:1127.158y).* Token budgets are counted in provider tokens, never
+- _Context budget (coo:1127.158y)._ Token budgets are counted in provider tokens, never
   characters. Before each tool-enabled request after the first of an attempt, the
   runtime projects its input as the previous exchange's reported `promptTokenCount`
   plus one token per two bytes of request growth. If the projection exceeds the model
@@ -1721,7 +1729,7 @@ shares or is replaced by it.
 **Verification and hardening (coo:1108.z77k, refines v152).** Found by the live
 acceptance run (`planning/feature-plans/chat-agent-request-routing-acceptance.md`).
 
-- *Operator limits.* Each is a whole number in its range; an unset, malformed, or
+- _Operator limits._ Each is a whole number in its range; an unset, malformed, or
   out-of-range value keeps the default. A run records the limits in force when it was
   submitted, so a change applies to new runs only. `CHAT_MAX_TOOL_CALLS_PER_RUN`
   (default 60, 1–500), `CHAT_MAX_ACTIVE_MS_PER_RUN` (600000, 120000–3600000; the last
@@ -1731,31 +1739,31 @@ acceptance run (`planning/feature-plans/chat-agent-request-routing-acceptance.md
   `CHAT_NOTIFICATION_GRACE_MS` (5000), `CHAT_PRESENCE_TTL_MS` (30000),
   `CHAT_EVENT_RETENTION_MS` (604800000) and `CHAT_EVENT_RETENTION_COUNT` (5000), alongside
   the existing `CHAT_MAX_GATHERED_BYTES_PER_RUN` (1048576).
-- *Knowledgebase tool ids* are `kb_<12 hex>_<tool>` (see Backend → Outbound MCP). The
+- _Knowledgebase tool ids_ are `kb_<12 hex>_<tool>` (see Backend → Outbound MCP). The
   dotted form was rewritten by the provider (`kb.<id>:<tool>`) and then refused as an
   unknown tool.
-- *Progress labels.* `tool.updated.label` is one of a fixed set of display strings
+- _Progress labels._ `tool.updated.label` is one of a fixed set of display strings
   (`Listing projects`, `Checking machines`, `Searching missions`, `Reading a mission`,
   `Inspecting a repository`, `Preparing a proposal`, `Asking a question`,
   `Searching notes`, `Reading a note`, `Browsing notes`, `Unavailable tool`). A tool name
   chosen by the model is never echoed to clients. Clients treat the label as opaque text.
-- *Project list tool.* `overlord_list_projects` returns the agent catalog once per
+- _Project list tool._ `overlord_list_projects` returns the agent catalog once per
   workspace (`assignmentCatalogs`), not on every project. This is model-facing tool
   content, not a DTO.
-- *Proposal preparation.* A refused `prepare_proposal` call carries a specific reason
+- _Proposal preparation._ A refused `prepare_proposal` call carries a specific reason
   for the model (for example an unregistered resource key, an unsupported model, or a
   project with no registered resource). The reason is never part of an HTTP error body,
   and it never names a project the owner cannot use. A project without a registered
   resource cannot receive drafts from the assistant.
-- *Transient provider failures.* A 500, 502, 503, or 504, or a transport failure with no
+- _Transient provider failures._ A 500, 502, 503, or 504, or a transport failure with no
   status, is retried at most twice (after 0.4 s and 1.5 s) before any part of that turn
   has arrived, so nothing is persisted twice. Rate limits, configuration errors
   (401/403/404), and failures in the middle of a stream are not retried and fail the
   run with its closed code.
-- *Termination.* On `SIGTERM` or `SIGINT` the backend stops its chat worker and
+- _Termination._ On `SIGTERM` or `SIGINT` the backend stops its chat worker and
   conversation-notification dispatcher and then terminates with that signal. An
   interrupted attempt is reclaimed by another worker when its lease lapses.
-- *Archived projects.* Create follows the existing mission-creation rule, which accepts
+- _Archived projects._ Create follows the existing mission-creation rule, which accepts
   an archived project; the assistant only lists active projects when preparing.
 
 **Account deletion.** Every chat, connection, presence, acknowledgement, receipt, and
@@ -2324,7 +2332,7 @@ from `LATCH_GATEWAY_TOKEN` or `latch serve`'s token file
 (`LATCH_SERVE_TOKEN_FILE`, else `$LATCH_HOME/serve.token`) — because that token
 carries the `control` grant. Overlord never takes the session's terminal surface:
 the conversation channel is not an attach. A reachable gateway that declines is a
-*successful* call carrying `refused` (with Latch's `state.sendMessage.reason`); a
+_successful_ call carrying `refused` (with Latch's `state.sendMessage.reason`); a
 busy `starting`/`working` session is waited out for `waitForIdleMs` (default 30s)
 and then refused; anything unconfirmed after the send is `ambiguous` and is never
 resent. Only an unreachable, unauthenticated, or conversation-less gateway is a
@@ -2855,10 +2863,10 @@ objective positions directly.
 
 | Version | Changes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `135`   | Agent assignment on the objectives a mission is created with (coo:959). Protocol `create` and `prompt` persist per-item `agent` / `model` from `--objectives-json` / `--objectives-file` exactly as `add-objectives` has since Version 111, and REST `CreateMissionBody.objectives[]` gains the same two optional fields. `create`, `prompt`, and `add-objectives` also accept `--objective-agent` / `--objective-model`, seeding only items with no `agent` of their own; `--objective-model` without an agent is rejected, mirroring the service-layer rule that a `model` requires a non-empty `agent`. These are distinct from `--agent`, which records creation provenance (and the attaching agent on `prompt`). Hosted MCP `overlord_create_mission` and the connector shim expose additive `agent` / `model` inputs. Omitted fields preserve the existing project launch-preference defaulting. |
-| `134`   | Mission evidence list reads report truncation (coo:955). `GET /api/missions/:id/deliveries` and `GET /api/missions/:id/file-changes` keep the newest-first 200-row cap but return `{ items, total, limit }` instead of a bare array, so clients can render "showing 200 of N". Protocol `list-deliveries` / MCP `overlord_list_deliveries` use the same `MissionDeliveriesDto` envelope. Row DTOs, authorization, and ordering are unchanged. |
-| `133`   | Explicit objective run boundary (coo:879). `objectives.reopened_at` is a nullable last-wins timestamp stamped when an `executing`, `pending_delivery`, or `complete` objective is set back to `draft`; `ObjectiveDto` additively exposes it as `reopenedAt`. Clients split an objective's deliveries, terminal sessions, and file changes into runs at that moment and fall back to delivery-order inference only when it is null. A post-delivery re-attach is not a reopen. No other column, table, or route changes. |
-| `132`   | Bounded finished-mission history on the board surfaces (coo:941). `GET /api/projects/:id/missions` and `GET /api/workspace/my-missions` return `complete` and `cancelled` missions only when `updated_at` falls inside a rolling 21-day window, and both accept an additive `includeAllCompleted` query flag that returns the whole archive. Missions of every other status type are unaffected, as are response shape, ordering, and authorization. The status-change response that returns one whole column stays unwindowed. Existing clients that send no flag now receive fewer terminal missions per board request. |
+| `135`   | Agent assignment on the objectives a mission is created with (coo:959). Protocol `create` and `prompt` persist per-item `agent` / `model` from `--objectives-json` / `--objectives-file` exactly as `add-objectives` has since Version 111, and REST `CreateMissionBody.objectives[]` gains the same two optional fields. `create`, `prompt`, and `add-objectives` also accept `--objective-agent` / `--objective-model`, seeding only items with no `agent` of their own; `--objective-model` without an agent is rejected, mirroring the service-layer rule that a `model` requires a non-empty `agent`. These are distinct from `--agent`, which records creation provenance (and the attaching agent on `prompt`). Hosted MCP `overlord_create_mission` and the connector shim expose additive `agent` / `model` inputs. Omitted fields preserve the existing project launch-preference defaulting.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `134`   | Mission evidence list reads report truncation (coo:955). `GET /api/missions/:id/deliveries` and `GET /api/missions/:id/file-changes` keep the newest-first 200-row cap but return `{ items, total, limit }` instead of a bare array, so clients can render "showing 200 of N". Protocol `list-deliveries` / MCP `overlord_list_deliveries` use the same `MissionDeliveriesDto` envelope. Row DTOs, authorization, and ordering are unchanged.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `133`   | Explicit objective run boundary (coo:879). `objectives.reopened_at` is a nullable last-wins timestamp stamped when an `executing`, `pending_delivery`, or `complete` objective is set back to `draft`; `ObjectiveDto` additively exposes it as `reopenedAt`. Clients split an objective's deliveries, terminal sessions, and file changes into runs at that moment and fall back to delivery-order inference only when it is null. A post-delivery re-attach is not a reopen. No other column, table, or route changes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `132`   | Bounded finished-mission history on the board surfaces (coo:941). `GET /api/projects/:id/missions` and `GET /api/workspace/my-missions` return `complete` and `cancelled` missions only when `updated_at` falls inside a rolling 21-day window, and both accept an additive `includeAllCompleted` query flag that returns the whole archive. Missions of every other status type are unaffected, as are response shape, ordering, and authorization. The status-change response that returns one whole column stays unwindowed. Existing clients that send no flag now receive fewer terminal missions per board request.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `108`   | Latch protocol-major-2 boundary (coo:815). Overlord retains Latch discovery and persistent-terminal create/inspect/open/attach/stop, updates discovery compatibility to require protocol version 2, and removes the retired v1 conversation integration: no `latch events`, `latch send`, session-level interaction capabilities, harness-event REST ingest, pending-input resolution, event cursor, harness ledger, or `TerminalSessionDto.observation`. A future conversation UI must be a native Latch v2 Conversation Hub client; protocol lifecycle remains independent of Latch.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `107`   | Pending-delivery objectives read as live execution (coo:812). `ActivityFeedRunItemDto.state` additively accepts `pending_delivery` and `GET /api/activity-feed` includes `pending_delivery` objectives in its run projection alongside `launching`/`executing`. The mission aggregate `MissionDto.hasExecutingObjective` and the Live Activity running/completion projections now count an objective as executing while it is `executing` **or** `pending_delivery`, so a mission whose agent re-attached after finishing a turn keeps its executing presentation until it delivers. Field names, DTO shapes, authorization, and truncation semantics are unchanged; clients that only check `state === 'executing'` see one additional state value in an already open-ended union.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `106`   | Mission-scoped, lazily created Run Queues. `run_queues.mission_id` (nullable, unique among live rows) binds a queue to one mission; `RunQueueDto` adds `missionId`/`missionDisplayId`. An enqueue without an explicit queue resolves the objective's own mission queue and creates it on demand, and emptying a mission queue retires it, so queues exist only where work was actually queued. `DELETE /api/run-queues/entries/:entryId` accepts an additive `{ force?: boolean }` body that drops an in-flight entry, clears the objective's active execution requests, and resets a stuck `launching` objective to `draft`; authorization and unforced behavior are unchanged. The existing Run Queue service is also exposed through five additive Protocol subcommands and three MCP tools: entry operations require `execution_request:create`, while queue-definition operations require `project:update`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
@@ -3916,17 +3924,17 @@ A few pure, deterministic computations must produce **identical** results in mor
 
 The only sanctioned ways to extend Overlord:
 
-| Extension Point        | Mechanism                                                                | Boundary                |
-| ---------------------- | ------------------------------------------------------------------------ | ----------------------- |
-| Custom agent connector | New adapter + `conformance-manifest.yaml` + `harness-capabilities.yaml`  | Connector Layer         |
-| Custom harness         | `user_harness_extensions` + workspace promotion                          | Extension System        |
-| Custom automation      | Module(s) via `OVERLORD_AUTOMATIONS_MODULE` calling `registerAutomation` | Automations Layer       |
-| Database adapter       | Implement full logical schema + pass conformance tests                   | Database Layer          |
-| Database extension     | `ext_<name>_` tables + `schema_migrations.component`                     | Database Layer          |
-| Auth/RBAC provider     | Auth Layer service boundary                                              | Auth Layer              |
-| REST extension         | Namespaced endpoint prefix (`/ext/<name>/`)                              | REST API Layer          |
-| Account-connection provider | Provider adapter registered with the connections module (v153)      | Extension System        |
-| Open vocabulary values | Namespaced values declared in manifest                                   | Database/Protocol Layer |
+| Extension Point             | Mechanism                                                                | Boundary                |
+| --------------------------- | ------------------------------------------------------------------------ | ----------------------- |
+| Custom agent connector      | New adapter + `conformance-manifest.yaml` + `harness-capabilities.yaml`  | Connector Layer         |
+| Custom harness              | `user_harness_extensions` + workspace promotion                          | Extension System        |
+| Custom automation           | Module(s) via `OVERLORD_AUTOMATIONS_MODULE` calling `registerAutomation` | Automations Layer       |
+| Database adapter            | Implement full logical schema + pass conformance tests                   | Database Layer          |
+| Database extension          | `ext_<name>_` tables + `schema_migrations.component`                     | Database Layer          |
+| Auth/RBAC provider          | Auth Layer service boundary                                              | Auth Layer              |
+| REST extension              | Namespaced endpoint prefix (`/ext/<name>/`)                              | REST API Layer          |
+| Account-connection provider | Provider adapter registered with the connections module (v153)           | Extension System        |
+| Open vocabulary values      | Namespaced values declared in manifest                                   | Database/Protocol Layer |
 
 Attempting to extend Overlord through any other path — patching core tables directly, adding undeclared hook types, using closed vocabulary values — is a contract violation that must be resolved before the component ships.
 

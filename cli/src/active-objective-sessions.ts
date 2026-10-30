@@ -146,6 +146,13 @@ function writeManifest(workingDirectory: string, entries: ActiveSessionEntry[]):
   writeOwnerOnlyFileAtomically(manifestPath(workingDirectory), contents);
 }
 
+function manifestFits(workingDirectory: string, entries: ActiveSessionEntry[]): boolean {
+  return (
+    Buffer.byteLength(JSON.stringify({ ...emptyManifest(workingDirectory), entries })) <=
+    MAX_ACTIVE_SESSION_MANIFEST_BYTES
+  );
+}
+
 function resolveEntry(
   entries: ActiveSessionEntry[],
   requestedObjectiveId: string
@@ -210,7 +217,7 @@ export function writeActiveSession({
       const prior = current.find(
         entry => entry.objectiveId === trimmedObjective && !entry.deliveryPendingSync
       );
-      const entries = current.filter(
+      let entries = current.filter(
         entry => entry.objectiveId !== trimmedObjective || entry.deliveryPendingSync
       );
       if (prior && prior.sessionKey !== trimmedKey) {
@@ -221,13 +228,6 @@ export function writeActiveSession({
         });
         if (!removed) entries.push({ ...prior, deliveryPendingSync: true });
       }
-      if (
-        entries.filter(entry => entry.objectiveId === trimmedObjective).length >=
-        MAX_ACTIVE_OBJECTIVE_SESSION_BINDINGS
-      ) {
-        if (prior && prior.sessionKey !== trimmedKey) writeManifest(workingDirectory, entries);
-        return false;
-      }
       const next = {
         missionId: trimmedMission,
         objectiveId: trimmedObjective,
@@ -236,6 +236,35 @@ export function writeActiveSession({
         attachedAt: new Date().toISOString(),
         deliveryPendingSync: false
       };
+      const hasCapacity = () =>
+        entries.filter(entry => entry.objectiveId === trimmedObjective).length <
+          MAX_ACTIVE_OBJECTIVE_SESSION_BINDINGS &&
+        manifestFits(workingDirectory, [...entries, next]);
+      // Delivered retry bindings can outlive a successful sync (or a failed
+      // cleanup). Reclaim them under pressure, never a peer's live session or
+      // evidence that still needs synchronization. Hold manifest -> ledger locks
+      // in the same order as capture/finalization.
+      if (!hasCapacity()) {
+        const retries = entries
+          .filter(entry => entry.deliveryPendingSync)
+          .sort((left, right) => Date.parse(left.attachedAt) - Date.parse(right.attachedAt));
+        for (const entry of retries) {
+          if (hasCapacity()) break;
+          if (
+            removeChangeLedger({
+              workingDirectory,
+              objectiveId: entry.objectiveId,
+              sessionKey: entry.sessionKey
+            })
+          ) {
+            entries = entries.filter(candidate => candidate !== entry);
+          }
+        }
+      }
+      if (!hasCapacity()) {
+        if (prior && prior.sessionKey !== trimmedKey) writeManifest(workingDirectory, entries);
+        return false;
+      }
       if (prior?.sessionKey !== trimmedKey) {
         resetChangeLedger({
           workingDirectory,

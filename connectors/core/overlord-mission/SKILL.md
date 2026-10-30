@@ -186,6 +186,16 @@ with a JSON string array when a path contains a comma or the list is long. They 
 Declared, never as native capture. Never use it to enumerate every changed or opened file, and
 never make a separate call just to declare paths.
 
+If attach warns that its local binding or ledger is unavailable, keep the explicit
+`--session-key` and `--objective-id` on `update` / `deliver` and include the known missed
+paths normally. The CLI still submits them through the authenticated session as Declared;
+do not omit paths or replace the file evidence with a list in the summary. Check stderr for
+acceptance/sync warnings. If fallback synchronization fails, repeat those declarations on a
+later update/deliver because no local retry copy exists. Re-run attach in the intended checkout
+with the same `OVLD_HOME` to restore native capture. `changes` reports the local coverage gap
+in `capture.healthCodes`; `objective-changes` reads synchronized evidence, including fallback
+declarations, from the server.
+
 Artifacts and a delivery report remain optional annotations when they add review value. There
 is no per-file explanation input. Use `--payload-json` when the full delivery object fits comfortably inline
 (roughly under 8 KB). Larger inline `--*-json` values are rejected; stream them through the
@@ -233,12 +243,12 @@ human implementation follow-up such as deploy, secrets, or migrations (those bel
 
 #### Writing a deferred-work item
 
-| Field      | Limit     | What to write                                                       |
-| ---------- | --------- | ------------------------------------------------------------------- |
-| `title`    | 80 chars  | The work, as an imperative phrase. Shown as the row title.          |
-| `change`   | 400 chars | The specific change that is needed, in one or two sentences.        |
-| `location` | 200 chars | Where to find it: the file, function, component, or command.        |
-| `doneWhen` | 200 chars | The observable result, in one sentence.                             |
+| Field      | Limit     | What to write                                                |
+| ---------- | --------- | ------------------------------------------------------------ |
+| `title`    | 80 chars  | The work, as an imperative phrase. Shown as the row title.   |
+| `change`   | 400 chars | The specific change that is needed, in one or two sentences. |
+| `location` | 200 chars | Where to find it: the file, function, component, or command. |
+| `doneWhen` | 200 chars | The observable result, in one sentence.                      |
 
 All four fields are required. A plain string item is rejected with `invalid_input`.
 
@@ -360,6 +370,9 @@ ovld protocol deliver --session-key <sessionKey> --objective-id $OBJECTIVE_ID \
 ["src/generated/schema.ts", "fixtures/a,b.json"]
 EOF
 ```
+
+For spaces, quote the whole inline value, for example
+`--paths "planning/demo environment.md,src/generated.ts"`, or use the JSON array form.
 
 Paths are normalized against the checkout. Traversal, symlinks that leave the checkout, ignored
 paths, and Overlord-managed paths are rejected with a reason on stderr and never fail the call.

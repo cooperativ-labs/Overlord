@@ -626,6 +626,108 @@ test('pending retry bindings are bounded without deleting their ledgers', () => 
     }).map(entry => entry.filePath),
     ['pending-0.ts']
   );
+
+  // A delivered retry whose evidence subsequently synchronized must no longer
+  // prevent a fresh attach. Other retries still own their pending evidence.
+  const syncedIdentity = {
+    workingDirectory: workspace,
+    objectiveId: 'objective-capacity-uuid',
+    sessionKey: 'sess_pending_0'
+  };
+  markChangeEvidenceSynced({
+    ...syncedIdentity,
+    evidence: readUnsyncedChangeEvidence(syncedIdentity)
+  });
+  assert.equal(
+    writeActiveSession({
+      workingDirectory: workspace,
+      missionId: 'coo:825',
+      objectiveId: syncedIdentity.objectiveId,
+      objectiveAliases: ['coo:825.capacity'],
+      sessionKey: 'sess_after_retry_sync'
+    }),
+    true
+  );
+  assert.equal(readActiveSessions(workspace).length, MAX_ACTIVE_OBJECTIVE_SESSION_BINDINGS);
+  assert.equal(
+    resolveBoundSession(workspace, 'coo:825.capacity')?.sessionKey,
+    'sess_after_retry_sync'
+  );
+  assert.ok(
+    !readActiveSessions(workspace).some(entry => entry.sessionKey === syncedIdentity.sessionKey)
+  );
+  assert.deepEqual(readUnsyncedChangeEvidence(syncedIdentity), []);
+  assert.deepEqual(
+    readUnsyncedChangeEvidence({ ...syncedIdentity, sessionKey: 'sess_pending_1' }).map(
+      entry => entry.filePath
+    ),
+    ['pending-1.ts']
+  );
+});
+
+test('a byte-full manifest prunes synchronized retries and preserves live peers and pending evidence', () => {
+  const { home, workspace } = isolatedWorkspace('Tough Leaf byte capacity');
+  const protectedRetry = {
+    workingDirectory: workspace,
+    objectiveId: 'protected-objective',
+    sessionKey: 'sess_protected'
+  };
+  assert.equal(
+    writeActiveSession({ ...protectedRetry, missionId: 'coo:825', objectiveAliases: [] }),
+    true
+  );
+  appendChangeEvidence({ ...protectedRetry, filePaths: ['unsynced.ts'], source: 'declared_edit' });
+  assert.equal(finalizeActiveSession(protectedRetry), false);
+  const directory = path.join(home, 'active-objective-sessions');
+  const manifestPath = path.join(
+    directory,
+    readdirSync(directory).find(name => name.endsWith('.json'))!
+  );
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+    entries: ReturnType<typeof readActiveSessions>;
+  };
+  const aliases = Array.from({ length: 16 }, (_, index) => `${index}-${'a'.repeat(190)}`);
+  for (let index = 0; ; index++) {
+    manifest.entries.push({
+      missionId: 'coo:825',
+      objectiveId: `peer-${index}`,
+      sessionKey: `sess_peer_${index}`,
+      objectiveAliases: aliases,
+      attachedAt: '2026-01-01T00:00:00.000Z',
+      deliveryPendingSync: index === 0
+    });
+    if (Buffer.byteLength(JSON.stringify(manifest)) > 512 * 1024) {
+      manifest.entries.pop();
+      break;
+    }
+  }
+  writeFileSync(manifestPath, JSON.stringify(manifest));
+  const livePeers = manifest.entries
+    .filter(entry => !entry.deliveryPendingSync)
+    .map(entry => entry.sessionKey);
+  assert.equal(
+    writeActiveSession({
+      workingDirectory: workspace,
+      missionId: 'coo:825',
+      objectiveId: 'objective-after-byte-capacity',
+      objectiveAliases: aliases,
+      sessionKey: 'sess_new_capacity'
+    }),
+    true
+  );
+  const retained = readActiveSessions(workspace);
+  assert.ok(livePeers.every(key => retained.some(entry => entry.sessionKey === key)));
+  assert.ok(retained.some(entry => entry.sessionKey === protectedRetry.sessionKey));
+  assert.ok(!retained.some(entry => entry.sessionKey === 'sess_peer_0'));
+  assert.equal(
+    resolveBoundSession(workspace, 'objective-after-byte-capacity')?.sessionKey,
+    'sess_new_capacity'
+  );
+  assert.ok(statSync(manifestPath).size <= 512 * 1024);
+  assert.deepEqual(
+    readUnsyncedChangeEvidence(protectedRetry).map(entry => entry.filePath),
+    ['unsynced.ts']
+  );
 });
 
 test('an old session cannot remove a newer binding for the same objective', () => {

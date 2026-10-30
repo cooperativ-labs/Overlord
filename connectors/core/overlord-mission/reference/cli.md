@@ -143,6 +143,15 @@ paths, and Overlord-managed paths are rejected with a reason on stderr and never
 Absent targets (deleted or renamed-away files) are valid. Never enumerate every changed or
 opened file, and when unsure, describe the coverage gap in the summary instead of guessing.
 
+Quote an inline value containing spaces: `--paths "planning/demo environment.md,src/generated.ts"`.
+If the local binding or ledger is unavailable, pass `--session-key` and `--objective-id`
+explicitly and keep the path flags. The CLI warns and submits normalized paths through the
+authenticated session as Declared; do not drop the paths from delivery. Fallback sync failures
+warn and need the declarations repeated on a later update/deliver (no local retry copy).
+Use `objective-changes` to read synchronized fallback evidence. Local `changes` instead reports
+the missing/invalid binding in `capture.healthCodes` and stderr. Restore native capture by
+re-running attach in the intended checkout with the same `OVLD_HOME` and writable storage.
+
 ### Shared worktree safety (critical)
 
 The working tree may contain file changes from **other agents, missions, or objectives** running concurrently in the same checkout or worktree. Those changes are **not yours to undo**.

@@ -40,6 +40,7 @@ import {
   setQuickTaskBackend,
   unregisterQuickTaskHotkey
 } from './quick-task-window.js';
+import { destroyTray, installTray } from './tray.js';
 import { DesktopUpdater } from './updater.js';
 import { applyCsp, createWindow, guardNavigation } from './window.js';
 
@@ -113,6 +114,15 @@ async function boot(): Promise<void> {
   );
   cliUpdater = new CliUpdater(() => mainWindow);
   installApplicationMenu(updater);
+  installTray({
+    showWindow: () => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    },
+    quit: () => quitApp({ relaunch: false })
+  });
   registerIpc({
     getWindow: () => mainWindow,
     updater,
@@ -443,6 +453,7 @@ app.on('before-quit', event => {
   updater?.stopAutomaticChecks();
   cliUpdater?.stopAutomaticChecks();
   unregisterQuickTaskHotkey();
+  destroyTray();
   hideQuickTaskWindow();
   stopProcessInventorySampling?.();
   stopProcessInventorySampling = null;

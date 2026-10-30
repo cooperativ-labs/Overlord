@@ -131,7 +131,11 @@ changed:
   callback has arrived; check that the connector is installed and the launched process has
   `OVERLORD_OBJECTIVE_ID`. Attach warns if it cannot persist its binding. The 64-session
   retention limit applies per objective, not across all objectives ever run in a checkout;
-  the manifest remains bounded to 512 KiB and never evicts another objective to make room.
+  the manifest remains bounded to 512 KiB. At either limit attach prunes oldest delivered
+  retry bindings whose ledgers are fully synchronized or already removed. It retains
+  unsynchronized retries and other objectives' live bindings, and warns if none can safely
+  make room. Quote inline path lists containing spaces, for example
+  `--paths "planning/demo environment.md,src/generated.ts"`; use the JSON array form for commas.
 - `ovld protocol objective-changes --objective-id <id>` (hosted MCP `overlord_changes`, REST
   `GET /api/missions/:id/file-changes?objectiveId=`) reads the objective's synchronized evidence
   across every session, resource, and device (`scope: server_objective`). It cannot see
