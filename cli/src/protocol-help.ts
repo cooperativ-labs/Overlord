@@ -127,7 +127,7 @@ Subcommands:
   statuses                List one project's ordered board columns
   discuss-objective      Mark a draft objective as submitted (does not start execution)
   add-objectives         Append ordered objectives to an existing mission
-  update-objective       Set title, auto-advance, and/or instruction text on an objective
+  update-objective       Set title, auto-advance, instruction text, and/or agent on an objective
   delete-missions        Confirmed bulk soft-delete of missions
   delete-objectives      Confirmed bulk soft-delete of objectives
   create                 Create a draft mission without attaching
@@ -580,18 +580,29 @@ add-objectives:
     Each item is { "objective": "...", "title": "...", "agent": "codex",
     "model": "gpt-6.1-terra", "autoAdvance": true|false, "resourceKey": "..." }.
     model requires agent. Per-item autoAdvance and agent win over the flags.
+    Use agent "manual" (alias "human") to assign an objective to a person; it
+    takes no model and is never launched.
 
 update-objective:
   Purpose:
     Rewrite an objective title, queue or dequeue compatibility auto-advance,
-    and/or edit instruction text on an existing objective.
+    edit instruction text, and/or reassign the agent on an existing objective.
   Required:
     --objective-id <id>
     At least one of:
       --title <text>
       --auto-advance or --no-auto-advance
       --instruction-text <text> or --instruction-text-file <path|->
+      --objective-agent <id>
+  Optional:
+    --objective-model <id> / --objective-reasoning-effort <value>
+        Model and reasoning effort for the agent named by --objective-agent
+        (required with either). Omitted ones are cleared, since a model chosen
+        for the previous agent rarely exists for the next.
   Rules:
+    --objective-agent manual (alias human) assigns the objective to a person:
+    it takes no model or reasoning effort, launch-objective rejects it, and the
+    Run Queue holds it as blocked until an agent is assigned.
     Title edits are allowed in any objective state. An empty title clears the
     custom title and restores instruction-derived presentation.
     Instruction text may be edited only when the objective is in draft or future state.

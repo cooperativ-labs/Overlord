@@ -77,6 +77,7 @@ import {
   LOCAL_TARGET_MUTATION_REQUESTED_SOURCE,
   parseLocalTargetMutation
 } from '../../packages/core/service/local-target-mutations.ts';
+import { isManualAgentKey } from '../../packages/core/service/manual-agent.ts';
 import {
   findConflictingActiveSibling,
   missionAllowsParallelObjectives
@@ -1053,6 +1054,16 @@ export async function launchObjective(
   return db.transaction(async tx => {
     const agentKey = (body.agent ?? '').trim();
     if (!agentKey) throw new ApiError(400, 'agent is required');
+    // Clients hide Run for Manual objectives; this keeps MCP, CLI, and stale
+    // clients from queueing an execution request no runner can serve.
+    if (isManualAgentKey(agentKey)) {
+      throw new ApiError(
+        400,
+        'Manual objectives are done by a person and cannot be launched',
+        'Assign an agent to launch this objective, or mark it complete when the work is done.',
+        'manual_agent_not_launchable'
+      );
+    }
 
     const { id: objectiveId } = await resolveObjectiveIdForRest({ ref: objectiveRef, db: tx });
 

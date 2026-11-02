@@ -19,8 +19,6 @@ import type {
   UpdateOrganizationBody
 } from '@overlord/contract';
 import { type DatabaseClient } from '@overlord/database';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import {
   getAuthorizedWorkspacesContext,
@@ -37,10 +35,8 @@ import {
   listOrganizationAdminProfileIds,
   liveOrganizationWorkspaceIds
 } from './rbac.ts';
-import { createStorageBackend } from './storage-backends.ts';
-
-// backend/organizations.ts -> repo root is one level up from backend/.
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+import { removeStoredObjects } from './storage.ts';
+import type { StorageBucketRef } from './storage-backends.ts';
 
 interface OrganizationRow {
   id: string;
@@ -516,13 +512,7 @@ async function purgeOrganizationLogoObject(
   const match = logoUrl.match(/^\/api\/storage\/organization-images\/(.+)$/);
   if (!match) return;
 
-  const bucket = await client.get<{
-    id: string;
-    bucket_key: string;
-    storage_backend: string;
-    local_path: string | null;
-    settings_json: string;
-  }>(
+  const bucket = await client.get<StorageBucketRef>(
     `SELECT id, bucket_key, storage_backend, local_path, settings_json
        FROM storage_buckets
       WHERE organization_id = ? AND bucket_key = 'organization-images' AND deleted_at IS NULL`,
@@ -531,8 +521,7 @@ async function purgeOrganizationLogoObject(
   if (!bucket) return;
 
   try {
-    const backend = createStorageBackend({ bucket, repoRoot });
-    await backend.deleteObject?.({ key: decodeURIComponent(match[1]) });
+    await removeStoredObjects([{ key: decodeURIComponent(match[1]), bucket }]);
   } catch {
     // Best-effort only — a storage cleanup failure must never block deleting
     // the last workspace of an organization.

@@ -19,6 +19,7 @@ import {
   resolveProjectId
 } from './context.js';
 import { ServiceError } from './errors.js';
+import { isManualAgentKey, normalizeAgentKey } from './manual-agent.js';
 import {
   searchWorkspaceMissions,
   searchWorkspaceMissionsV3,
@@ -437,10 +438,17 @@ export async function insertObjective({
   // Editable slots (draft/future) default to the project's last-used selection so
   // the agent is always recorded in the db; an explicit agent passed by the caller
   // still wins. Executed/complete states are created with whatever the caller set.
-  const explicitAgent = assignedAgent?.trim() || null;
+  // `human` folds onto the canonical `manual` key every client reads.
+  const explicitAgent = normalizeAgentKey(assignedAgent);
   const explicitModel = model?.trim() || null;
   if ((explicitModel || reasoningEffort?.trim()) && !explicitAgent) {
     throw new ServiceError('An objective model requires an assigned agent', 'validation_error');
+  }
+  if ((explicitModel || reasoningEffort?.trim()) && isManualAgentKey(explicitAgent)) {
+    throw new ServiceError(
+      'A Manual objective is done by a person and takes no model or reasoning effort',
+      'validation_error'
+    );
   }
   const launchSelection =
     !explicitAgent && (resolvedState === 'draft' || resolvedState === 'future')
@@ -517,7 +525,7 @@ export async function insertObjective({
     title: resolvedTitle,
     instruction_text: instruction,
     state: resolvedState,
-    assigned_agent: assignedAgent ?? null,
+    assigned_agent: explicitAgent,
     model: model ?? null,
     reasoning_effort: reasoningEffort ?? null,
     auto_advance: autoAdvance ? 1 : 0,

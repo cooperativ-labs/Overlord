@@ -232,6 +232,11 @@ import {
   loadResolutions
 } from './deferred-work.ts';
 import { ApiError } from './errors.ts';
+import {
+  copyInboxAttachmentsToWorkspace,
+  repointInboxAttachmentsTx,
+  tombstoneInboxItemAttachmentsTx
+} from './inbox-attachments.ts';
 import { resolveObjectiveIdForRest } from './objective-ref.ts';
 import { getActiveOrganizationIdOrNull } from './organizations.ts';
 import {
@@ -241,12 +246,7 @@ import {
   requireProjectPermission,
   requireWorkspacePermission
 } from './rbac.ts';
-import {
-  copyInboxAttachmentsToWorkspace,
-  removeInboxAttachmentObjects,
-  repointInboxAttachmentsTx,
-  tombstoneInboxItemAttachmentsTx
-} from './storage.ts';
+import { removeStoredObjects } from './storage.ts';
 
 export { ApiError };
 
@@ -5481,7 +5481,7 @@ export async function deleteInboxItem(id: string): Promise<void> {
     await tx.run(`DELETE FROM inbox_items WHERE id = ? AND profile_id = ?`, [id, profileId]);
     return objects;
   });
-  await removeInboxAttachmentObjects(cleanup);
+  await removeStoredObjects(cleanup);
 }
 
 export async function promoteInboxItem(id: string, projectId: string): Promise<MissionDetailDto> {
@@ -5524,10 +5524,10 @@ export async function promoteInboxItem(id: string, projectId: string): Promise<M
       return created.missionId;
     })
     .catch(async (error: unknown) => {
-      await removeInboxAttachmentObjects(copies.map(copy => copy.target));
+      await removeStoredObjects(copies.map(copy => copy.target));
       throw error;
     });
-  await removeInboxAttachmentObjects(copies.map(copy => copy.source));
+  await removeStoredObjects(copies.map(copy => copy.source));
   return getMissionDetail(missionId);
 }
 

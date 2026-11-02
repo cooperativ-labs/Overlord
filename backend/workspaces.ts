@@ -38,6 +38,7 @@ import {
   canViewOrganizationSettings,
   listOrganizationAdminProfileIds
 } from './rbac.ts';
+import { WORKSPACE_BUCKET_KEYS } from './storage-buckets.ts';
 import {
   readSqlStudioEnabled,
   sqlStudioEnabledFromSettingsJson,
@@ -304,7 +305,7 @@ async function seedWorkspaceStorageBuckets({
   now: string;
   client: DatabaseClient;
 }): Promise<void> {
-  for (const bucketKey of ['workspace-images', 'user-images', 'attachments']) {
+  for (const bucketKey of WORKSPACE_BUCKET_KEYS) {
     await client.run(
       `INSERT INTO storage_buckets (
          id, workspace_id, bucket_key, storage_backend, base_url, local_path, settings_json,

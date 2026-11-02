@@ -337,7 +337,7 @@ const tools = [
         agent: {
           type: 'string',
           description:
-            'Optional agent identifier to assign to the initial objective, such as codex or claude. Omitted leaves the project launch-preference default; set it here instead of appending a second objective just to name an agent.'
+            'Optional agent identifier to assign to the initial objective, such as codex or claude, or manual (alias human) when a person will do it: manual takes no model and is never launched. Omitted leaves the project launch-preference default; set it here instead of appending a second objective just to name an agent.'
         },
         model: {
           type: 'string',
@@ -482,7 +482,7 @@ const tools = [
     name: 'overlord_launch_objective',
     title: 'Launch objective execution',
     description:
-      'Use this only when the user explicitly asks to start a particular objective. It queues the normal Overlord execution request; it does not attach this MCP agent to perform the work. The objective must be launchable, its workspace must authorize execution, and an existing active request is returned instead of duplicated.',
+      'Use this only when the user explicitly asks to start a particular objective. It queues the normal Overlord execution request; it does not attach this MCP agent to perform the work. The objective must be launchable, its workspace must authorize execution, and an existing active request is returned instead of duplicated. Manual (human) objectives cannot be launched; reassign an agent with overlord_update_objective first.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -492,7 +492,8 @@ const tools = [
         },
         agent: {
           type: 'string',
-          description: 'Agent identifier to launch, such as codex or claude.'
+          description:
+            'Agent identifier to launch, such as codex or claude. manual/human is rejected: a person does those objectives.'
         },
         model: {
           type: 'string',
@@ -584,7 +585,7 @@ const tools = [
               agent: {
                 type: 'string',
                 description:
-                  'Optional agent identifier to assign to this objective, such as codex or claude.'
+                  'Optional agent identifier to assign to this objective, such as codex or claude, or manual (alias human) when a person will do it: manual takes no model and is never launched.'
               },
               model: {
                 type: 'string',
@@ -618,7 +619,7 @@ const tools = [
     name: 'overlord_update_objective',
     title: 'Update objective',
     description:
-      'Use this to rewrite an objective title in any state, turn auto-advance on or off, and/or edit instruction text on a draft or future objective.',
+      'Use this to rewrite an objective title in any state, turn auto-advance on or off, edit instruction text on a draft or future objective, and/or reassign the objective to another agent or to a person (agent manual, alias human).',
     inputSchema: {
       type: 'object',
       properties: {
@@ -640,6 +641,21 @@ const tools = [
           type: 'string',
           description:
             'Replacement instruction text. Allowed only when the objective is in draft or future state; blank clears the text in those states.'
+        },
+        agent: {
+          type: 'string',
+          description:
+            'Agent to assign, such as codex or claude, or manual (alias human) so a person does the objective instead of an agent. Manual objectives are never launched and the Run Queue holds them until an agent is assigned. Changing agent clears any model or reasoning effort not passed alongside it.'
+        },
+        model: {
+          type: 'string',
+          description:
+            'Optional model identifier for the agent named in agent. Requires agent; rejected for manual.'
+        },
+        reasoningEffort: {
+          type: 'string',
+          description:
+            'Optional reasoning-effort setting for the agent named in agent. Requires agent; rejected for manual.'
         }
       },
       required: ['objectiveId'],
@@ -1555,8 +1571,9 @@ async function callOverlordTool(name, args) {
     const hasTitle = typeof args.title === 'string';
     const hasAutoAdvance = typeof args.autoAdvance === 'boolean';
     const hasInstructionText = typeof args.instructionText === 'string';
-    if (!hasTitle && !hasAutoAdvance && !hasInstructionText) {
-      throw new Error('Provide title, autoAdvance, and/or instructionText');
+    const hasAgent = typeof args.agent === 'string';
+    if (!hasTitle && !hasAutoAdvance && !hasInstructionText && !hasAgent) {
+      throw new Error('Provide title, autoAdvance, instructionText, and/or agent');
     }
     return runProtocol('update-objective', {
       'objective-id': requiredString(args, 'objectiveId'),
@@ -1566,7 +1583,15 @@ async function callOverlordTool(name, args) {
           ? { 'auto-advance': true }
           : { 'no-auto-advance': true }
         : {}),
-      ...(hasInstructionText ? { 'instruction-text': requiredString(args, 'instructionText') } : {})
+      ...(hasInstructionText
+        ? { 'instruction-text': requiredString(args, 'instructionText') }
+        : {}),
+      // Validated by the protocol handler (model requires agent; manual takes none).
+      ...(hasAgent ? { 'objective-agent': args.agent } : {}),
+      ...(typeof args.model === 'string' ? { 'objective-model': args.model } : {}),
+      ...(typeof args.reasoningEffort === 'string'
+        ? { 'objective-reasoning-effort': args.reasoningEffort }
+        : {})
     });
   }
   if (name === 'overlord_delete_missions') {

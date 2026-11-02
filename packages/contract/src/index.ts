@@ -3058,6 +3058,18 @@ export interface UpdateProfileBody {
 // ---- Uploads (core upload service) ----
 
 /**
+ * Logical `storage_buckets.bucket_key`. The vocabulary is closed
+ * (database/docs/09-database-schema-contract.md, `storage_buckets`):
+ * `organization-images` is organization-scoped; the other three are seeded per
+ * workspace.
+ */
+export type StorageBucketKey =
+  | 'user-images'
+  | 'workspace-images'
+  | 'organization-images'
+  | 'attachments';
+
+/**
  * A stored image returned by the core upload service. Bytes live in the storage
  * backend behind the bucket; this descriptor carries the metadata plus the
  * server-relative `url` the SPA loads. Used today by the avatar uploader against
@@ -3067,7 +3079,7 @@ export interface StoredImageDto {
   /** `user_images.id` of the recorded object. */
   id: string;
   /** Logical bucket the image was stored in (e.g. `user-images`). */
-  bucketKey: string;
+  bucketKey: StorageBucketKey;
   /** Backend key/path within the bucket. */
   storageKey: string;
   /** Original/display filename. */
@@ -3104,7 +3116,7 @@ export interface ObjectiveAttachmentDto {
   /** Owning `inbox_items.id` while the file belongs to an unpromoted Inbox capture. */
   inboxItemId: string | null;
   /** Logical bucket the file was stored in (e.g. `attachments`). */
-  bucketKey: string;
+  bucketKey: StorageBucketKey;
   /** Backend key/path within the bucket. */
   storageKey: string;
   /** Original/display filename. */

@@ -127,6 +127,17 @@ export type RunQueuePlannerEntry = {
    */
   failureKind?: 'dispatch_failed' | 'request_failed';
 };
+/**
+ * True when no agent can run the objective: none assigned, or the Manual
+ * executor (`manual`, alias `human`), which means a person does the work.
+ * Mirrors packages/core/service/manual-agent.ts; this package stays
+ * dependency-free, so the two keys are repeated here.
+ */
+function hasNoLaunchableAgent(assignedAgent: string | null | undefined): boolean {
+  const key = (assignedAgent ?? '').trim().toLowerCase();
+  return !key || key === 'manual' || key === 'human';
+}
+
 export type RunQueuePlannerObjective = {
   id: string;
   missionId: string;
@@ -231,8 +242,8 @@ export function planRunQueueDispatch(input: {
         continue;
       }
       // `undefined` means the caller did not supply the field; only an
-      // explicitly blank/null agent is a block.
-      if (objective.assignedAgent !== undefined && !objective.assignedAgent?.trim()) {
+      // explicitly blank/null (or Manual) agent is a block.
+      if (objective.assignedAgent !== undefined && hasNoLaunchableAgent(objective.assignedAgent)) {
         actions.push({ action: 'block', entryId: entry.id, reason: 'no_agent' });
         continue;
       }
@@ -658,11 +669,13 @@ export function decideAutoAdvanceAfterDelivery(
       reason: options.defaultApprovalReason ?? 'Next objective is waiting for approval.'
     };
   }
-  if (!nextDraft.assignedAgent) {
+  if (hasNoLaunchableAgent(nextDraft.assignedAgent)) {
     return {
       action: 'await_approval',
       objectiveId: nextDraft.id,
-      reason: 'Queue launch requires an assigned agent.'
+      reason: nextDraft.assignedAgent?.trim()
+        ? 'Next objective is assigned to Manual; a person does it.'
+        : 'Queue launch requires an assigned agent.'
     };
   }
 

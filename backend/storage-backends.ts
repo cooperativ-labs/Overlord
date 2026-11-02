@@ -5,9 +5,12 @@ import {
   S3Client
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import type { Selectable } from 'kysely';
 import { createReadStream, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Readable } from 'node:stream';
+
+import type { StorageBuckets } from '../packages/core/types/db.ts';
 
 import { ApiError } from './errors.ts';
 
@@ -34,13 +37,16 @@ export interface StorageBackend {
   }): Promise<string>;
 }
 
-interface StorageBucketConfig {
-  id: string;
-  bucket_key: string;
-  storage_backend: string;
-  local_path: string | null;
-  settings_json: unknown;
-}
+/**
+ * The `storage_buckets` columns needed to build a backend and address an
+ * object. `id` is narrowed from the generated nullable key type. `settings_json`
+ * is a string on SQLite and an object on Postgres; {@link parseSettingsJson}
+ * accepts both.
+ */
+export type StorageBucketRef = Pick<
+  Selectable<StorageBuckets>,
+  'bucket_key' | 'storage_backend' | 'local_path'
+> & { id: string; settings_json: string | Record<string, unknown> };
 
 interface S3BucketSettings {
   bucketName?: string;
@@ -114,7 +120,8 @@ function objectKeyFor({
   return normalizedPrefix ? `${normalizedPrefix}/${storageKey}` : storageKey;
 }
 
-function isS3CompatibleBackend(storageBackend: string): boolean {
+/** True for backends whose bytes live outside the database host (S3-compatible). */
+export function isRemoteStorageBackend(storageBackend: string): boolean {
   return storageBackend === 's3' || storageBackend === 'railway_volume';
 }
 
@@ -122,7 +129,7 @@ function createLocalFsBackend({
   bucket,
   repoRoot
 }: {
-  bucket: StorageBucketConfig;
+  bucket: StorageBucketRef;
   repoRoot: string;
 }): StorageBackend {
   if (!bucket.local_path) {
@@ -151,7 +158,7 @@ function createS3Backend({
   bucket,
   settings
 }: {
-  bucket: StorageBucketConfig;
+  bucket: StorageBucketRef;
   settings: S3BucketSettings;
 }): StorageBackend {
   const accessKeyId = process.env.S3_ACCESS_KEY_ID?.trim();
@@ -243,13 +250,13 @@ export function createStorageBackend({
   bucket,
   repoRoot
 }: {
-  bucket: StorageBucketConfig;
+  bucket: StorageBucketRef;
   repoRoot: string;
 }): StorageBackend {
   if (bucket.storage_backend === 'local_fs') {
     return createLocalFsBackend({ bucket, repoRoot });
   }
-  if (isS3CompatibleBackend(bucket.storage_backend)) {
+  if (isRemoteStorageBackend(bucket.storage_backend)) {
     return createS3Backend({ bucket, settings: readS3BucketSettings(bucket.settings_json) });
   }
   throw new ApiError(

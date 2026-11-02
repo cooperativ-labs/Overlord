@@ -32,25 +32,9 @@
  * `entity_changes`' FK the instant that row is purged below.
  */
 
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import { recordChange, requireDatabaseClient } from './db.ts';
-import { tombstoneInboxItemAttachmentsTx } from './storage.ts';
-import { createStorageBackend } from './storage-backends.ts';
-
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-
-interface ImageCleanup {
-  key: string;
-  bucket: {
-    id: string;
-    bucket_key: string;
-    storage_backend: string;
-    local_path: string | null;
-    settings_json: string;
-  };
-}
+import { tombstoneInboxItemAttachmentsTx } from './inbox-attachments.ts';
+import { removeStoredObjects, type StoredObjectRef } from './storage.ts';
 
 export async function cascadeDeleteAccount(profileId: string): Promise<void> {
   const cleanupImages = await requireDatabaseClient().transaction(async tx => {
@@ -117,7 +101,7 @@ export async function cascadeDeleteAccount(profileId: string): Promise<void> {
         WHERE i.profile_id = ?`,
       [profileId]
     );
-    const cleanup: ImageCleanup[] = [];
+    const cleanup: StoredObjectRef[] = [];
     for (const image of images) {
       await tx.run(`DELETE FROM user_images WHERE id = ?`, [image.id]);
       await recordChange(
@@ -164,14 +148,6 @@ export async function cascadeDeleteAccount(profileId: string): Promise<void> {
   });
 
   // Remote-backed image bytes live outside the database; local_fs bytes are
-  // left on disk, mirroring backend/storage.ts's deleteObjectiveAttachment.
-  for (const image of cleanupImages) {
-    if (
-      image.bucket.storage_backend === 's3' ||
-      image.bucket.storage_backend === 'railway_volume'
-    ) {
-      const backend = createStorageBackend({ bucket: image.bucket, repoRoot });
-      await backend.deleteObject?.({ key: image.key });
-    }
-  }
+  // left on disk (removeStoredObjects applies that rule).
+  await removeStoredObjects(cleanupImages);
 }

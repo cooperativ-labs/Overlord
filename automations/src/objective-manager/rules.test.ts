@@ -311,6 +311,26 @@ describe('objective lifecycle rules', () => {
     );
   });
 
+  it('never auto-advances into a Manual objective', () => {
+    assert.deepEqual(
+      decideAutoAdvanceAfterDelivery([
+        objective({ id: 'done', position: 0, state: 'complete' }),
+        objective({
+          id: 'next',
+          position: 1,
+          state: 'draft',
+          autoAdvance: true,
+          assignedAgent: 'manual'
+        })
+      ]),
+      {
+        action: 'await_approval',
+        objectiveId: 'next',
+        reason: 'Next objective is assigned to Manual; a person does it.'
+      }
+    );
+  });
+
   it('exposes a registry-friendly automation output', () => {
     const output = manageObjectiveLifecycle({
       objectives: [
@@ -591,6 +611,33 @@ describe('objective lifecycle rules', () => {
         idempotencyKey: 'run_queue:terminal:attempt:2'
       }
     ]);
+  });
+  it('blocks a Manual objective as no_agent instead of dispatching it', () => {
+    for (const assignedAgent of ['manual', 'Human']) {
+      const actions = planRunQueueDispatch({
+        queues: [{ id: 'queue', paused: false }],
+        entries: [
+          {
+            id: 'entry',
+            queueId: 'queue',
+            objectiveId: 'objective',
+            position: 1,
+            state: 'waiting',
+            attemptCount: 0
+          }
+        ],
+        objectives: {
+          objective: {
+            id: 'objective',
+            missionId: 'mission',
+            state: 'draft',
+            instructionText: 'done by a person',
+            assignedAgent
+          }
+        }
+      });
+      assert.deepEqual(actions, [{ action: 'block', entryId: 'entry', reason: 'no_agent' }]);
+    }
   });
   it('names the failure that spent the attempts when it blocks at the ceiling', () => {
     // A runner that keeps dying before it attaches and a dispatch that throws

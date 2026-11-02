@@ -1,10 +1,11 @@
 import { PERMISSIONS } from '@overlord/auth';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { createServer, type IncomingMessage } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
+
+import { startFakeS3, useS3Bucket, withS3Credentials } from './storage-test-fixture.ts';
 
 const tempDir = mkdtempSync(path.join(tmpdir(), 'overlord-inbox-attachments-'));
 const { bootstrapIntegrationTestDb, DEFAULT_TEST_ORGANIZATION_ID, seedAuthenticatedOperator } =
@@ -24,53 +25,14 @@ const {
   listInboxItems,
   promoteInboxItem
 } = await import('./repository.ts');
-const {
-  deleteInboxItemAttachment,
-  listInboxItemAttachments,
-  listObjectiveAttachments,
-  resolveStoredObject,
-  uploadInboxItemAttachment
-} = await import('./storage.ts');
+const { deleteInboxItemAttachment, listInboxItemAttachments, uploadInboxItemAttachment } =
+  await import('./inbox-attachments.ts');
+const { listObjectiveAttachments, resolveStoredObject } = await import('./storage.ts');
 const { createWorkspace } = await import('./workspaces.ts');
 
 const OWNER_WORKSPACE_ID = 'local-workspace';
-const objects = new Map<string, Buffer>();
-const server = createServer((req, res) => {
-  void (async () => {
-    const key = req.url?.split('?')[0] ?? '/';
-    if (req.method === 'PUT') {
-      objects.set(key, await readRequestBody(req));
-      res.statusCode = 200;
-    } else if (req.method === 'GET') {
-      const body = objects.get(key);
-      res.statusCode = body ? 200 : 404;
-      res.end(body);
-      return;
-    } else if (req.method === 'DELETE') {
-      objects.delete(key);
-      res.statusCode = 204;
-    } else {
-      res.statusCode = 405;
-    }
-    res.end();
-  })().catch(error => {
-    res.statusCode = 500;
-    res.end(String(error));
-  });
-});
-const previousEnv = {
-  accessKeyId: process.env.S3_ACCESS_KEY_ID,
-  secretAccessKey: process.env.S3_SECRET_ACCESS_KEY
-};
-
-function readRequestBody(req: IncomingMessage): Promise<Buffer> {
-  const chunks: Buffer[] = [];
-  return new Promise((resolve, reject) => {
-    req.on('data', chunk => chunks.push(Buffer.from(chunk)));
-    req.on('end', () => resolve(Buffer.concat(chunks)));
-    req.on('error', reject);
-  });
-}
+let fakeS3: Awaited<ReturnType<typeof startFakeS3>>;
+let restoreCredentials: (() => void) | undefined;
 
 function storedPath(storageKey: string): string {
   return `/overlord-storage/hosted/${storageKey}`;
@@ -121,26 +83,14 @@ async function captureWithFile(title: string, contents = `${title} bytes`) {
 }
 
 before(async () => {
-  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
-  const address = server.address();
-  assert.ok(address && typeof address === 'object');
-  process.env.S3_ACCESS_KEY_ID = 'test-access-key';
-  process.env.S3_SECRET_ACCESS_KEY = 'test-secret-key';
-  // The owner's storage workspace is S3-backed so byte removal is observable;
-  // the secondary workspace created below keeps the default local_fs bucket.
-  db.prepare(
-    `UPDATE storage_buckets
-        SET storage_backend = 's3', local_path = NULL, settings_json = ?
-      WHERE workspace_id = ? AND bucket_key = 'attachments'`
-  ).run(
-    JSON.stringify({
-      bucketName: 'overlord-storage',
-      endpoint: `http://127.0.0.1:${address.port}`,
-      region: 'us-east-1',
-      pathPrefix: 'hosted'
-    }),
-    OWNER_WORKSPACE_ID
-  );
+  fakeS3 = await startFakeS3();
+  restoreCredentials = withS3Credentials();
+  // The secondary workspace keeps its default local_fs bucket.
+  useS3Bucket(db, {
+    workspaceId: OWNER_WORKSPACE_ID,
+    bucketKey: 'attachments',
+    endpoint: fakeS3.endpoint
+  });
   seedAuthenticatedOperator({
     db,
     workspaceId: OWNER_WORKSPACE_ID,
@@ -150,9 +100,8 @@ before(async () => {
 });
 
 after(async () => {
-  await new Promise<void>(resolve => server.close(() => resolve()));
-  process.env.S3_ACCESS_KEY_ID = previousEnv.accessKeyId;
-  process.env.S3_SECRET_ACCESS_KEY = previousEnv.secretAccessKey;
+  restoreCredentials?.();
+  await fakeS3?.close();
   rmSync(tempDir, { recursive: true, force: true });
 });
 
@@ -169,7 +118,7 @@ describe('inbox item attachments', () => {
       new RegExp(`^workspace-files/${OWNER_WORKSPACE_ID}/attachments/[a-z0-9-]+\\.txt$`)
     );
     assert.deepEqual(
-      objects.get(storedPath(attachment.storageKey)),
+      fakeS3.objects.get(storedPath(attachment.storageKey)),
       Buffer.from('upload-list-delete bytes')
     );
 
@@ -191,7 +140,7 @@ describe('inbox item attachments', () => {
       remaining.map(row => row.id),
       [second.id]
     );
-    assert.equal(objects.has(storedPath(attachment.storageKey)), false);
+    assert.equal(fakeS3.objects.has(storedPath(attachment.storageKey)), false);
     assert.equal(attachmentRow(attachment.id).upload_status, 'deleted');
     assert.equal((await getInboxItem(item.id)).attachmentCount, 1);
 
@@ -261,7 +210,7 @@ describe('inbox item attachments', () => {
     const row = attachmentRow(attachment.id);
     assert.ok(row.deleted_at);
     assert.equal(row.upload_status, 'deleted');
-    assert.equal(objects.has(storedPath(attachment.storageKey)), false);
+    assert.equal(fakeS3.objects.has(storedPath(attachment.storageKey)), false);
     await assert.rejects(listInboxItemAttachments(item.id), isNotFound);
   });
 
@@ -279,7 +228,7 @@ describe('inbox item attachments', () => {
     assert.equal(row.inbox_item_id, null);
     assert.equal(row.storage_key, attachment.storageKey);
     assert.equal(row.revision, 2);
-    assert.ok(objects.has(storedPath(attachment.storageKey)));
+    assert.ok(fakeS3.objects.has(storedPath(attachment.storageKey)));
 
     assert.deepEqual(
       (await listObjectiveAttachments(objectiveId)).map(entry => entry.id),
@@ -331,7 +280,7 @@ describe('inbox item attachments', () => {
       row.storage_key,
       `workspace-files/${secondary.id}/attachments/${attachment.id}.txt`
     );
-    assert.equal(objects.has(storedPath(attachment.storageKey)), false);
+    assert.equal(fakeS3.objects.has(storedPath(attachment.storageKey)), false);
 
     const resolved = await resolveStoredObject(
       'attachments',
@@ -349,7 +298,7 @@ describe('inbox item attachments', () => {
     const row = attachmentRow(attachment.id);
     assert.equal(row.inbox_item_id, item.id);
     assert.equal(row.objective_id, null);
-    assert.ok(objects.has(storedPath(attachment.storageKey)));
+    assert.ok(fakeS3.objects.has(storedPath(attachment.storageKey)));
     assert.equal((await getInboxItem(item.id)).attachmentCount, 1);
   });
 });

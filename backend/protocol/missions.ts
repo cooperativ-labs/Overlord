@@ -3,6 +3,7 @@ import { type UpdateObjectiveBody } from '@overlord/contract';
 
 import { listObjectiveFileChanges } from '../../packages/core/service/changes.ts';
 import { resolveProjectId, type ServiceContext } from '../../packages/core/service/context.ts';
+import { isManualAgentKey, normalizeAgentKey } from '../../packages/core/service/manual-agent.ts';
 import { parseMissionSearchOptions } from '../../packages/core/service/mission-search.ts';
 import {
   addObjectivesToMission,
@@ -170,6 +171,47 @@ async function assertInstructionEditableOnProtocolSurface(objectiveRef: string):
       'Objective instruction text can only be edited in draft or future state'
     );
   }
+}
+
+/**
+ * Read the `--objective-agent` / `--objective-model` /
+ * `--objective-reasoning-effort` assignment flags of `update-objective`.
+ *
+ * Switching agent always rewrites model and reasoning effort — values chosen
+ * for the previous agent rarely exist for the next one — so omitted ones are
+ * cleared, the same rule the web and iOS selectors follow. `human` is accepted
+ * for the Manual executor and stored as `manual`, which takes neither.
+ */
+function objectiveAssignmentUpdate(
+  body: ProtocolRequestBody
+): Pick<UpdateObjectiveBody, 'assignedAgent' | 'model' | 'reasoningEffort'> {
+  const hasAgent = hasFlag(body, '--objective-agent');
+  const hasModel = hasFlag(body, '--objective-model');
+  const hasEffort = hasFlag(body, '--objective-reasoning-effort');
+  if (!hasAgent && !hasModel && !hasEffort) return {};
+  if (!hasAgent) {
+    throw new ApiError(
+      400,
+      '--objective-model and --objective-reasoning-effort require --objective-agent',
+      undefined,
+      'invalid_input'
+    );
+  }
+  const agent = normalizeAgentKey(strFlag(body, '--objective-agent'));
+  if (!agent) {
+    throw new ApiError(400, '--objective-agent cannot be blank', undefined, 'invalid_input');
+  }
+  const model = strFlag(body, '--objective-model')?.trim() || null;
+  const reasoningEffort = strFlag(body, '--objective-reasoning-effort')?.trim() || null;
+  if (isManualAgentKey(agent) && (model || reasoningEffort)) {
+    throw new ApiError(
+      400,
+      'A Manual objective is done by a person and takes no model or reasoning effort',
+      undefined,
+      'invalid_input'
+    );
+  }
+  return { assignedAgent: agent, model, reasoningEffort };
 }
 
 /**
@@ -610,14 +652,16 @@ export const missionSubcommands: SubcommandTable = {
         update.instructionText =
           resolveInput(body, '--instruction-text', '--instruction-text-file') ?? '';
       }
+      Object.assign(update, objectiveAssignmentUpdate(body));
       if (
         autoAdvance === undefined &&
         update.instructionText === undefined &&
-        update.title === undefined
+        update.title === undefined &&
+        update.assignedAgent === undefined
       ) {
         throw new ApiError(
           400,
-          'Provide at least one of --title, --auto-advance/--no-auto-advance, or --instruction-text/--instruction-text-file'
+          'Provide at least one of --title, --auto-advance/--no-auto-advance, --instruction-text/--instruction-text-file, or --objective-agent'
         );
       }
       return updateObjectiveRecord(objectiveId, update);

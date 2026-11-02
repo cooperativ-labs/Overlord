@@ -4,20 +4,11 @@ import {
   type RunResult
 } from '@overlord/database';
 import assert from 'node:assert/strict';
-import { createServer, type IncomingMessage } from 'node:http';
 import { type Readable } from 'node:stream';
 import test from 'node:test';
 
 import { createStorageBackend, readStorageReadSettings } from './storage-backends.ts';
-
-function readRequestBody(req: IncomingMessage): Promise<Buffer> {
-  const chunks: Buffer[] = [];
-  return new Promise((resolve, reject) => {
-    req.on('data', chunk => chunks.push(Buffer.from(chunk)));
-    req.on('end', () => resolve(Buffer.concat(chunks)));
-    req.on('error', reject);
-  });
-}
+import { startFakeS3, withS3Credentials } from './storage-test-fixture.ts';
 
 async function readStream(stream: Readable): Promise<Buffer> {
   const chunks: Buffer[] = [];
@@ -28,49 +19,8 @@ async function readStream(stream: Readable): Promise<Buffer> {
 }
 
 test('s3 storage backend accepts Postgres jsonb settings objects', async () => {
-  const objects = new Map<string, Buffer>();
-  const server = createServer((req, res) => {
-    void (async () => {
-      const key = req.url?.split('?')[0] ?? '/';
-      if (req.method === 'PUT') {
-        objects.set(key, await readRequestBody(req));
-        res.statusCode = 200;
-        res.end();
-        return;
-      }
-      if (req.method === 'GET') {
-        const body = objects.get(key);
-        if (!body) {
-          res.statusCode = 404;
-          res.end();
-          return;
-        }
-        res.statusCode = 200;
-        res.end(body);
-        return;
-      }
-      if (req.method === 'DELETE') {
-        objects.delete(key);
-        res.statusCode = 204;
-        res.end();
-        return;
-      }
-      res.statusCode = 405;
-      res.end();
-    })().catch(error => {
-      res.statusCode = 500;
-      res.end(String(error));
-    });
-  });
-
-  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
-  const address = server.address();
-  assert.ok(address && typeof address === 'object');
-
-  const previousAccessKeyId = process.env.S3_ACCESS_KEY_ID;
-  const previousSecretAccessKey = process.env.S3_SECRET_ACCESS_KEY;
-  process.env.S3_ACCESS_KEY_ID = 'test-access-key';
-  process.env.S3_SECRET_ACCESS_KEY = 'test-secret-key';
+  const { endpoint, objects, close } = await startFakeS3();
+  const restoreCredentials = withS3Credentials();
 
   try {
     const backend = createStorageBackend({
@@ -82,7 +32,7 @@ test('s3 storage backend accepts Postgres jsonb settings objects', async () => {
         local_path: null,
         settings_json: {
           bucketName: 'overlord-storage',
-          endpoint: `http://127.0.0.1:${address.port}`,
+          endpoint,
           region: 'us-east-1',
           pathPrefix: 'hosted/user-images'
         }
@@ -116,13 +66,8 @@ test('s3 storage backend accepts Postgres jsonb settings objects', async () => {
     assert.match(signedUrl, /\/overlord-storage\/hosted\/user-images\/avatar\.png\?/);
     assert.match(signedUrl, /X-Amz-Expires=120/);
   } finally {
-    if (previousAccessKeyId === undefined) delete process.env.S3_ACCESS_KEY_ID;
-    else process.env.S3_ACCESS_KEY_ID = previousAccessKeyId;
-    if (previousSecretAccessKey === undefined) delete process.env.S3_SECRET_ACCESS_KEY;
-    else process.env.S3_SECRET_ACCESS_KEY = previousSecretAccessKey;
-    await new Promise<void>((resolve, reject) =>
-      server.close(error => (error ? reject(error) : resolve()))
-    );
+    restoreCredentials();
+    await close();
   }
 });
 

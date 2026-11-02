@@ -529,8 +529,9 @@ const toolHandlers: Record<string, ToolHandler> = {
     const hasTitle = typeof args.title === 'string';
     const hasAutoAdvance = typeof args.autoAdvance === 'boolean';
     const hasInstructionText = typeof args.instructionText === 'string';
-    if (!hasTitle && !hasAutoAdvance && !hasInstructionText) {
-      throw new Error('Provide title, autoAdvance, and/or instructionText');
+    const hasAgent = typeof args.agent === 'string';
+    if (!hasTitle && !hasAutoAdvance && !hasInstructionText && !hasAgent) {
+      throw new Error('Provide title, autoAdvance, instructionText, and/or agent');
     }
     return runProtocolSubcommand(
       'update-objective',
@@ -540,6 +541,13 @@ const toolHandlers: Record<string, ToolHandler> = {
         ...(hasAutoAdvance ? autoAdvanceFlags(args) : {}),
         ...(hasInstructionText
           ? { '--instruction-text': requiredString(args, 'instructionText') }
+          : {}),
+        // The protocol handler validates the selection (model requires agent,
+        // manual takes none), so pass whatever was supplied straight through.
+        ...(hasAgent ? { '--objective-agent': args.agent as string } : {}),
+        ...(typeof args.model === 'string' ? { '--objective-model': args.model } : {}),
+        ...(typeof args.reasoningEffort === 'string'
+          ? { '--objective-reasoning-effort': args.reasoningEffort }
           : {})
       })
     );

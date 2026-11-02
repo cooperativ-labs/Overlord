@@ -2,7 +2,7 @@ import './bootstrap-env.ts';
 
 import { githubOAuthConfigFromEnv, type Permission, PERMISSIONS } from '@overlord/auth';
 import { loadExternalAutomations } from '@overlord/automations';
-import type { ProjectListLifecycle, StoredImageDto } from '@overlord/contract';
+import type { ProjectListLifecycle, StorageBucketKey, StoredImageDto } from '@overlord/contract';
 import { fromNodeHeaders, toNodeHandler } from 'better-auth/node';
 import cors from 'cors';
 import express, { type NextFunction, type Request, type Response } from 'express';
@@ -81,6 +81,13 @@ import { isAllowedBrowserOrigin } from './http/browser-origins.ts';
 import { runnerRegistrationFromBody } from './http/client-device.ts';
 import { buildMeta } from './http/meta.ts';
 import { resolveAuthBaseUrl } from './http/public-backend-url.ts';
+import {
+  ATTACHMENT_UPLOAD_ROUTE,
+  IMAGE_UPLOAD_ROUTE,
+  isRawUploadRequest,
+  rawUploadBody,
+  readRawUpload
+} from './http/raw-upload.ts';
 import { resolveServeSpa } from './http/serve-spa.ts';
 import {
   getSqlStudioState,
@@ -123,6 +130,11 @@ import {
 } from './desktop-oauth-handoff.ts';
 import { ENV_PROFILE } from './env-profile.ts';
 import { apiErrorHandler } from './errors.ts';
+import {
+  deleteInboxItemAttachment,
+  listInboxItemAttachments,
+  uploadInboxItemAttachment
+} from './inbox-attachments.ts';
 import {
   registerLiveActivityPushToken,
   registerLiveActivityStartToken,
@@ -263,21 +275,17 @@ import {
 } from './run-queue.ts';
 import { runQueueDispatchWorker } from './run-queue-dispatch-worker.ts';
 import {
-  deleteInboxItemAttachment,
   deleteObjectiveAttachment,
-  listInboxItemAttachments,
   listObjectiveAttachments,
-  MAX_ATTACHMENT_BYTES,
-  MAX_IMAGE_BYTES,
   resolveStoredObject,
   serveStoredObject,
   type UploadImageInput,
-  uploadInboxItemAttachment,
   uploadObjectiveAttachment,
   uploadOrganizationImage,
   uploadUserImage,
   uploadWorkspaceImage
 } from './storage.ts';
+import { isStorageBucketKey, STORAGE_BUCKETS } from './storage-buckets.ts';
 import { webhookDispatcher } from './webhook-dispatcher.ts';
 import {
   createWebhookSubscription,
@@ -497,11 +505,6 @@ app.all('/api/auth/*', nativeOAuthHandler);
 
 const jsonBody = express.json();
 const urlEncodedBody = express.urlencoded({ extended: false });
-function isRawUploadRequest(req: Request): boolean {
-  if (req.method !== 'POST') return false;
-  if (req.path.startsWith('/api/uploads/')) return true;
-  return /^\/api\/(?:objectives|inbox)\/[^/]+\/attachments$/.test(req.path);
-}
 
 // A runner's completion report carries the capability result envelope; bounded
 // repository reads (128 KiB of diff or search text plus JSON escaping and the
@@ -1151,31 +1154,21 @@ app.post(
 // The body is parsed as a raw Buffer here (overriding the global JSON parser for
 // this route) with the same ceiling the service enforces.
 
-const rawImageBody = express.raw({ type: () => true, limit: MAX_IMAGE_BYTES });
+const rawImageBody = rawUploadBody(IMAGE_UPLOAD_ROUTE);
 
-const UPLOAD_HANDLERS: Record<
-  string,
-  {
-    permission: Permission;
-    upload: (input: UploadImageInput, workspaceId?: string) => Promise<StoredImageDto>;
-  }
+// Permissions per bucket key come from the STORAGE_BUCKETS descriptor
+// (backend/storage-buckets.ts); this map only wires each uploadable key to its
+// writer. A key is uploadable here only when it has both a writer and an
+// `uploadPermission`.
+const IMAGE_UPLOADERS: Partial<
+  Record<
+    StorageBucketKey,
+    (input: UploadImageInput, workspaceId?: string) => Promise<StoredImageDto>
+  >
 > = {
-  'user-images': { permission: PERMISSIONS.USER_IMAGE_SELF_CREATE, upload: uploadUserImage },
-  'workspace-images': {
-    permission: PERMISSIONS.WORKSPACE_IMAGE_CREATE,
-    upload: uploadWorkspaceImage
-  },
-  'organization-images': {
-    permission: PERMISSIONS.ORGANIZATION_IMAGE_CREATE,
-    upload: uploadOrganizationImage
-  }
-};
-
-const STORAGE_READ_PERMISSIONS: Record<string, Permission> = {
-  'user-images': PERMISSIONS.USER_IMAGE_READ,
-  'workspace-images': PERMISSIONS.WORKSPACE_IMAGE_READ,
-  'organization-images': PERMISSIONS.ORGANIZATION_IMAGE_READ,
-  attachments: PERMISSIONS.ATTACHMENT_READ
+  'user-images': uploadUserImage,
+  'workspace-images': uploadWorkspaceImage,
+  'organization-images': uploadOrganizationImage
 };
 
 app.post(
@@ -1183,41 +1176,36 @@ app.post(
   rawImageBody,
   handle(
     async req => {
-      const uploadHandler = UPLOAD_HANDLERS[req.params.bucketKey];
-      if (!uploadHandler) {
-        throw new ApiError(404, `Uploads are not configured for bucket '${req.params.bucketKey}'`);
+      const bucketKey = req.params.bucketKey;
+      const upload = isStorageBucketKey(bucketKey) ? IMAGE_UPLOADERS[bucketKey] : undefined;
+      const uploadPermission = isStorageBucketKey(bucketKey)
+        ? STORAGE_BUCKETS[bucketKey].uploadPermission
+        : undefined;
+      if (!upload || !uploadPermission) {
+        throw new ApiError(404, `Uploads are not configured for bucket '${bucketKey}'`);
       }
       const workspaceId =
         typeof req.query.workspaceId === 'string' && req.query.workspaceId.trim()
           ? req.query.workspaceId.trim()
           : null;
-      if (req.params.bucketKey === 'workspace-images' && !workspaceId) {
+      if (bucketKey === 'workspace-images' && !workspaceId) {
         throw new ApiError(400, 'workspaceId query parameter is required for this upload');
       }
       let resolvedWorkspaceId = workspaceId;
       if (workspaceId) {
         await requireWorkspacePermission({
           workspaceId,
-          permission: uploadHandler.permission,
+          permission: uploadPermission,
           notFoundMessage: 'Workspace not found'
         });
       } else {
-        const scope = await requireAnyWorkspacePermission(uploadHandler.permission);
+        const scope = await requireAnyWorkspacePermission(uploadPermission);
         // Account-owned images still need a physical workspace bucket in the
         // current schema. This deterministic authorized scope is storage/audit
         // placement only; it never narrows account ownership.
-        if (req.params.bucketKey === 'user-images') resolvedWorkspaceId = scope.workspaceId;
+        if (bucketKey === 'user-images') resolvedWorkspaceId = scope.workspaceId;
       }
-      const headerName = req.header('x-upload-filename');
-      const filename = headerName ? decodeURIComponent(headerName) : 'upload';
-      return uploadHandler.upload(
-        {
-          bytes: Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0),
-          filename,
-          contentType: req.header('content-type') ?? ''
-        },
-        resolvedWorkspaceId ?? undefined
-      );
+      return upload(readRawUpload(req, 'upload'), resolvedWorkspaceId ?? undefined);
     },
     { mutates: true }
   )
@@ -1233,14 +1221,14 @@ app.get(
   (req: Request, res: Response, next: NextFunction) => {
     void (async () => {
       try {
-        const permission = STORAGE_READ_PERMISSIONS[req.params.bucketKey];
-        if (!permission) {
-          throw new ApiError(404, `Serving is not configured for bucket '${req.params.bucketKey}'`);
+        const bucketKey = req.params.bucketKey;
+        if (!isStorageBucketKey(bucketKey)) {
+          throw new ApiError(404, `Serving is not configured for bucket '${bucketKey}'`);
         }
         const resolved = await resolveStoredObject(
-          req.params.bucketKey,
+          bucketKey,
           req.params.storageKey,
-          permission
+          STORAGE_BUCKETS[bucketKey].readPermission
         );
         res.type(resolved.contentType);
         if (resolved.presignedRedirectUrl) {
@@ -2009,7 +1997,7 @@ app.get(
 // service, the SPA streams a single File as the raw request body (filename in a
 // header) so the server records it without multipart parsing.
 
-const rawAttachmentBody = express.raw({ type: () => true, limit: MAX_ATTACHMENT_BYTES });
+const rawAttachmentBody = rawUploadBody(ATTACHMENT_UPLOAD_ROUTE);
 
 app.get(
   '/api/objectives/:id/attachments',
@@ -2020,13 +2008,9 @@ app.post(
   rawAttachmentBody,
   handle(
     req => {
-      const headerName = req.header('x-upload-filename');
-      const filename = headerName ? decodeURIComponent(headerName) : 'attachment';
       return uploadObjectiveAttachment({
         objectiveId: req.params.id,
-        bytes: Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0),
-        filename,
-        contentType: req.header('content-type') ?? ''
+        ...readRawUpload(req, 'attachment')
       });
     },
     { mutates: true }
@@ -2051,13 +2035,9 @@ app.post(
   rawAttachmentBody,
   handle(
     req => {
-      const headerName = req.header('x-upload-filename');
-      const filename = headerName ? decodeURIComponent(headerName) : 'attachment';
       return uploadInboxItemAttachment({
         inboxItemId: req.params.id,
-        bytes: Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0),
-        filename,
-        contentType: req.header('content-type') ?? ''
+        ...readRawUpload(req, 'attachment')
       });
     },
     { mutates: true }

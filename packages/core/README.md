@@ -3,7 +3,8 @@
 `@overlord/core` contains the shared protocol/service core:
 
 - `service/` — mission, objective, protocol-session, execution-request, profile,
-  project, storage, device, and change-feed service functions.
+  project, device, and change-feed service functions. Uploaded-object storage
+  is owned by `backend/storage.ts`, not by a core service.
 - `repository/` — host-side repository helpers used by REST surfaces.
 - `types/` — generated database types from `yarn db:codegen` plus local type
   aliases.

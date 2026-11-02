@@ -5,6 +5,8 @@ This file tells agents how to extend the **REST API Layer** (`rest`) — the Exp
 The React SPA that consumes this surface lives in [`webapp/`](../webapp/AGENTS.md). Typed DTOs live in `@overlord/contract` (`packages/contract/`); `webapp/shared/contract.ts` is a re-export shim for SPA imports.
 
 > **Temporary deviation:** some landed `backend/` paths still read/write SQLite/Postgres tables directly instead of going through the shared service layer in `packages/core/service/`. The rule below (REST handlers call the service layer, never tables directly) still holds — move direct-table writers onto the shared service layer as those areas are touched. Do not add new direct-table writers without recording the same caveat.
+>
+> **Recorded owner — storage:** `backend/storage.ts` owns uploaded objects: bucket resolution, byte I/O against the storage backends (`backend/storage-backends.ts`), image uploads (user, workspace, organization), the `user_images` / `workspace_images` / `attachments` metadata writers, and the authenticated serve path. Attachments go through one set of primitives there (`writeAttachmentObject`, `insertAttachmentRow`, `attachmentStoredObjects`, `tombstoneAttachmentRows`); `storage.ts` owns objective attachments and `backend/inbox-attachments.ts` owns Inbox attachments (ownership gate, storage-workspace selection, cross-workspace copy, re-point on promotion) on top of those primitives. `inbox-attachments.ts` imports `storage.ts`, never the reverse. The bucket-key vocabulary (`StorageBucketKey` in `@overlord/contract`) has one descriptor, `STORAGE_BUCKETS` in `backend/storage-buckets.ts`: each key's scope, metadata table, read and upload permissions, and download flag. The upload and serve routes, `resolveStoredObject`, and the workspace bucket seeds read it; add a bucket there, not as another key map. The only other writers are account purge (`backend/account-deletion.ts` deletes `user_images` rows and their bytes) and the organization-logo byte purge in `backend/organizations.ts`. There is no core storage service; do not move these writers onto `packages/core/service/` and do not add new writers for these tables outside `backend/storage.ts`. Protocol's only attachment read is `listAttachments` in `packages/core/service/missions.ts`. A core storage service becomes worth building only when a non-REST surface (Protocol, CLI) needs to write these tables, and it must first support (1) resource-scoped authorization — authorize against the workspace that owns the object (as `requireWorkspacePermission` does here), never the ambient `ctx.workspace` — and (2) profile-owned rows with no workspace (user images, Inbox attachments). The earlier `packages/core/service/storage.ts` met neither and had no production callers, so it was deleted (refactor review 2026-11-01, F1).
 
 ---
 
@@ -99,6 +101,12 @@ backend/
   repository.ts         ← core per-resource reads/mutations
   realtime.ts           ← SSE emitter driven by the entity_changes feed
   rbac.ts               ← REST-side permission helpers
+  storage.ts            ← storage owner: buckets, bytes, image uploads,
+                          attachment primitives + objective attachments,
+                          serve path (see "Recorded owner — storage" above)
+  inbox-attachments.ts  ← Inbox attachment owner over storage.ts's primitives
+  storage-backends.ts   ← local_fs / s3 / railway_volume byte backends
+  storage-buckets.ts    ← STORAGE_BUCKETS: the one descriptor per bucket key
   <domain>.ts           ← top-level domain modules (webhooks, organizations, …)
   <domain>.test.ts      ← colocated tests
   http/                 ← request helpers (meta, origins, SPA serving, device hints)

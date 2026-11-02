@@ -234,7 +234,7 @@ export function overlordMcpToolDefinitions({
           title: stringProperty('Optional mission title.'),
           resourceKey: stringProperty('Optional logical project resource key for the objective.'),
           agent: stringProperty(
-            'Optional agent identifier to assign to the initial objective, such as codex or claude. Omitted leaves the project launch-preference default; set it here instead of appending a second objective just to name an agent.'
+            'Optional agent identifier to assign to the initial objective, such as codex or claude, or manual (alias human) when a person will do it: manual takes no model and is never launched. Omitted leaves the project launch-preference default; set it here instead of appending a second objective just to name an agent.'
           ),
           model: stringProperty(
             'Optional model identifier for the assigned agent. Requires agent; rejected without it.'
@@ -328,11 +328,13 @@ export function overlordMcpToolDefinitions({
       name: 'overlord_launch_objective',
       title: 'Launch objective execution',
       description:
-        'Use this only when the user explicitly asks to start a particular objective. It queues the normal Overlord execution request; it does not attach this MCP agent to perform the work. The objective must be launchable, its workspace must authorize execution, and an existing active request is returned instead of duplicated.',
+        'Use this only when the user explicitly asks to start a particular objective. It queues the normal Overlord execution request; it does not attach this MCP agent to perform the work. The objective must be launchable, its workspace must authorize execution, and an existing active request is returned instead of duplicated. Manual (human) objectives cannot be launched; reassign an agent with overlord_update_objective first.',
       inputSchema: objectSchema(
         {
           objectiveId: stringProperty('Objective UUID or display id such as coo:756.k7xm.'),
-          agent: stringProperty('Agent identifier to launch, such as codex or claude.'),
+          agent: stringProperty(
+            'Agent identifier to launch, such as codex or claude. manual/human is rejected: a person does those objectives.'
+          ),
           model: stringProperty(
             'Optional model identifier to snapshot onto the execution request.'
           ),
@@ -389,7 +391,7 @@ export function overlordMcpToolDefinitions({
               objective: stringProperty('Objective text.'),
               title: stringProperty('Optional objective title.'),
               agent: stringProperty(
-                'Optional agent identifier to assign to this objective, such as codex or claude.'
+                'Optional agent identifier to assign to this objective, such as codex or claude, or manual (alias human) when a person will do it: manual takes no model and is never launched.'
               ),
               model: stringProperty(
                 'Optional model identifier for this objective. Requires agent.'
@@ -412,7 +414,7 @@ export function overlordMcpToolDefinitions({
       name: 'overlord_update_objective',
       title: 'Update objective',
       description:
-        'Use this to rewrite an objective title in any state, turn auto-advance on or off, and/or edit instruction text on a draft or future objective.',
+        'Use this to rewrite an objective title in any state, turn auto-advance on or off, edit instruction text on a draft or future objective, and/or reassign the objective to another agent or to a person (agent manual, alias human).',
       inputSchema: objectSchema(
         {
           objectiveId: stringProperty('Objective UUID or display id.'),
@@ -424,6 +426,15 @@ export function overlordMcpToolDefinitions({
           ),
           instructionText: stringProperty(
             'Replacement instruction text. Allowed only when the objective is in draft or future state; blank clears the text in those states.'
+          ),
+          agent: stringProperty(
+            'Agent to assign, such as codex or claude, or manual (alias human) so a person does the objective instead of an agent. Manual objectives are never launched and the Run Queue holds them until an agent is assigned. Changing agent clears any model or reasoning effort not passed alongside it.'
+          ),
+          model: stringProperty(
+            'Optional model identifier for the agent named in agent. Requires agent; rejected for manual.'
+          ),
+          reasoningEffort: stringProperty(
+            'Optional reasoning-effort setting for the agent named in agent. Requires agent; rejected for manual.'
           )
         },
         ['objectiveId']

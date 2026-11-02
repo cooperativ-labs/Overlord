@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import type * as DbModule from './db.ts';
+import { WORKSPACE_BUCKET_KEYS } from './storage-buckets.ts';
 
 /** Legacy ambient workspace reads for integration tests only. */
 export function createTestWorkspaceContext(dbModule: typeof DbModule) {
@@ -95,7 +96,7 @@ export function seedAuthenticatedOperator({
      ) VALUES (?, ?, ?, ?, 'local', '{}', ?, ?, 1)`
   ).run(workspaceId, organizationId, workspaceId, workspaceId, now, now);
 
-  for (const bucketKey of ['workspace-images', 'user-images', 'attachments']) {
+  for (const bucketKey of WORKSPACE_BUCKET_KEYS) {
     db.prepare(
       `INSERT OR IGNORE INTO storage_buckets (
          id, workspace_id, bucket_key, storage_backend, base_url, local_path, settings_json,
@@ -168,7 +169,7 @@ export async function seedAuthenticatedOperatorClient({
        ) VALUES (?, ?, ?, ?, 'local', '{}', ?, ?, 1)`,
       [workspaceId, organizationId, workspaceId, workspaceId, now, now]
     );
-    for (const bucketKey of ['workspace-images', 'user-images', 'attachments']) {
+    for (const bucketKey of WORKSPACE_BUCKET_KEYS) {
       await client.run(
         `INSERT INTO storage_buckets (
            id, workspace_id, bucket_key, storage_backend, base_url, local_path, settings_json,
