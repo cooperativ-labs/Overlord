@@ -333,6 +333,15 @@ checkout, ignored files, or Overlord-managed files — are rejected with a reaso
 and never fail the call; deleted targets are valid. You don't need exhaustive
 enumeration: declare known misses, not every file.
 
+Quote an inline `--paths` value that contains spaces. If attach warned that its
+local binding or ledger is unavailable, keep the explicit `--session-key` and
+`--objective-id` and still pass the path flags: the CLI warns and submits the
+paths through the authenticated session as **Declared**. A failed fallback sync
+has no local retry copy, so repeat the declarations on a later `update` or
+`deliver`. `objective-changes` reads that synchronized evidence; local
+`changes` reports the gap in `capture.healthCodes`. Re-run attach in the
+intended checkout with the same `OVLD_HOME` to restore native capture.
+
 ### Preflight before delivering
 
 Run the local-only preflight first. It reads this checkout's sessions for the
@@ -496,7 +505,7 @@ This is distinct from `--agent`, which records who created the mission (and, on
 | `discuss-objective`              | Submit a draft objective for discussion (no session). `--objective-id` names which draft.         |
 | `create` / `prompt`              | Create a draft / create-and-attach a mission. The response returns the persisted mission and objectives so you can verify agent, model, resource, and queue/auto-advance settings. |
 | `add-objectives`                 | Append ordered objectives to a mission; returns each persisted objective's launch settings.        |
-| `update-objective`               | Turn auto-advance on or off, or edit instruction text. Requires `--objective-id`.                 |
+| `update-objective`               | Turn auto-advance on or off, edit instruction text, or reassign with `--objective-agent` (`manual`/`human` for a person). Requires `--objective-id`.|
 | `update`                         | Post progress and decisions; optionally declare uncaptured paths.                                 |
 | `heartbeat`                      | Liveness ping, no feed event.                                                                     |
 | `ask`                            | Post a blocking question and stop.                                                                |
