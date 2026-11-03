@@ -83,7 +83,7 @@ The tool catalog is mission-first:
 - `overlord_launch_objective` — queue the normal execution request for one objective; requires `objectiveId` (UUID or display id) and `agent`; does not attach this MCP agent
 - `overlord_reorder_future_objectives` — replace one mission's complete future-objective UUID order
 - `overlord_add_objectives`
-- `overlord_update_objective` — turn auto-advance on or off and/or edit instruction text; requires `objectiveId`
+- `overlord_update_objective` — turn auto-advance on or off, edit instruction text, and/or reassign the objective with `agent` (plus optional `model` / `reasoningEffort`); `agent: manual` (alias `human`) assigns it to a person, is never launched, and is held blocked in the Run Queue; requires `objectiveId`
 - `overlord_delete_missions` — bulk soft-delete one to 100 missions (UUID or display id) atomically, also deleting their live objectives; requires `confirm: true` after the resolved list is shown to and approved by the user
 - `overlord_delete_objectives` — bulk soft-delete one to 100 objectives (UUID or display id) atomically, also removing their live Run Queue membership; requires `confirm: true` after the resolved list is shown to and approved by the user
 - `overlord_list_run_queues` — read compact or full Run Queue state before changing it
