@@ -87,7 +87,7 @@ Environment variables (see [`.env.local.example`](../../.env.local.example) and 
 | Variable                      | Required | Default                 | Purpose                                                                                                                |
 | ----------------------------- | -------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `GEMINI_API_KEY`              | No       | —                       | Enables Gemini-backed automations when set                                                                             |
-| `GEMINI_MODEL`                | No       | `gemini-2.5-flash-lite` | Model identifier for summarization calls                                                                               |
+| `GEMINI_MODEL`                | No       | `gemini-3.5-flash-lite` | Model identifier for summarization calls                                                                               |
 | `OVERLORD_AUTOMATIONS_MODULE` | No       | —                       | Comma-separated downstream automation bundle(s) loaded at boot (see [Downstream Automations](#downstream-automations)) |
 
 ## Layout

@@ -146,7 +146,7 @@ async function generateMissionSummaryJson(params: {
 
   try {
     const response = await client.models.generateContent({
-      model: 'gemini-3.1-flash-lite',
+      model: 'gemini-3.5-flash-lite',
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       config: {
         systemInstruction: MISSION_SUMMARY_SYSTEM_INSTRUCTION,
