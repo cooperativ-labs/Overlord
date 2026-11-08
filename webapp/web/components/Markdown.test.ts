@@ -21,6 +21,21 @@ describe('Markdown', () => {
     assert.match(html, /ordinary continuation/);
   });
 
+  it('keeps one ordered list when items are separated by blank lines', () => {
+    const html = renderToStaticMarkup(
+      createElement(Markdown, { text: '1. one\n\n2. two\n\n3. three' })
+    );
+
+    assert.equal((html.match(/<ol/g) ?? []).length, 1);
+    assert.equal((html.match(/<li/g) ?? []).length, 3);
+  });
+
+  it('honors the starting number of an ordered list', () => {
+    const html = renderToStaticMarkup(createElement(Markdown, { text: '3. three\n4. four' }));
+
+    assert.match(html, /<ol[^>]*start="3"/);
+  });
+
   it('still renders valid markdown tables', () => {
     const html = renderToStaticMarkup(
       createElement(Markdown, { text: '| Name | Value |\n| --- | --- |\n| one | two |' })

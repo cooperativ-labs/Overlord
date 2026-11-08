@@ -124,7 +124,7 @@ type Block =
   | { type: 'heading'; level: number; text: string }
   | { type: 'code'; text: string }
   | { type: 'ul'; items: string[] }
-  | { type: 'ol'; items: string[] }
+  | { type: 'ol'; items: string[]; start: number }
   | { type: 'quote'; text: string }
   | { type: 'hr' }
   | { type: 'table'; headers: string[]; rows: string[][] }
@@ -197,12 +197,24 @@ function parseBlocks(source: string): Block[] {
 
     // Ordered list.
     if (/^\s*\d+[.)]\s+/.test(line)) {
+      const start = Number.parseInt(/^\s*(\d+)/.exec(line)![1], 10);
       const items: string[] = [];
-      while (i < lines.length && /^\s*\d+[.)]\s+/.test(lines[i])) {
-        items.push(lines[i].replace(/^\s*\d+[.)]\s+/, ''));
-        i += 1;
+      while (i < lines.length) {
+        if (/^\s*\d+[.)]\s+/.test(lines[i])) {
+          items.push(lines[i].replace(/^\s*\d+[.)]\s+/, ''));
+          i += 1;
+          continue;
+        }
+        // A blank line between items ("loose" list) must not restart numbering.
+        let j = i;
+        while (j < lines.length && lines[j].trim() === '') j += 1;
+        if (j > i && j < lines.length && /^\s*\d+[.)]\s+/.test(lines[j])) {
+          i = j;
+          continue;
+        }
+        break;
       }
-      blocks.push({ type: 'ol', items });
+      blocks.push({ type: 'ol', items, start });
       continue;
     }
 
@@ -306,7 +318,7 @@ export function Markdown({ text }: { text: string }) {
             );
           case 'ol':
             return (
-              <ol key={key} className="ml-4 list-decimal space-y-0.5 wrap-anywhere">
+              <ol key={key} start={block.start} className="ml-4 list-decimal space-y-0.5 wrap-anywhere">
                 {block.items.map((item, j) => (
                   <li key={`${key}-${j}`}>{renderInline(item, `${key}-${j}`)}</li>
                 ))}
