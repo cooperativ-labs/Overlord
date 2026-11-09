@@ -24,7 +24,7 @@ describe('workspace-scoped agent catalog', () => {
     const { setActiveWorkspace } = await import('./db.ts');
     const { createWorkspace } = await import('./workspaces.ts');
     const { getAgentCatalog, updateAgentCatalog, refreshAgentCatalog } =
-      await import('./execution/launch.ts');
+      await import('./agent-catalog.ts');
     const { ApiError } = await import('./errors.ts');
 
     // A second workspace in the same org; the operator (org admin) is

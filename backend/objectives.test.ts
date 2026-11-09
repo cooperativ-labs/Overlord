@@ -22,12 +22,9 @@ const {
   reorderFutureObjectives,
   updateObjective
 } = await import('./repository.ts');
-const {
-  getObjectiveEffectiveLaunchConfig,
-  getObjectiveLaunchCommand,
-  getObjectivePrompt,
-  updateLaunchPreference
-} = await import('./execution/launch.ts');
+const { getObjectiveEffectiveLaunchConfig, getObjectiveLaunchCommand, getObjectivePrompt } =
+  await import('./execution/launch.ts');
+const { updateLaunchPreference } = await import('./execution/launch-settings.ts');
 const { ApiError } = await import('./errors.ts');
 
 const OBJECTIVE_DISPLAY_ID_RE = /^[a-z0-9-]+:\d+\.[0-9a-hjkmnp-tv-z]{4}$/;

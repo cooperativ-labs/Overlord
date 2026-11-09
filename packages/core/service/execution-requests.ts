@@ -1,6 +1,7 @@
 import {
   type AgentLaunchFlagDto,
   formatAgentLaunchFlagText,
+  type ObjectiveState,
   parseObjectiveRef
 } from '@overlord/contract';
 import type { DatabaseClient } from '@overlord/database';
@@ -40,7 +41,11 @@ export const ACTIVE_EXECUTION_REQUEST_STATUSES = ['queued', 'claimed', 'launchin
 // Objective states from which a run may still proceed (create a request, claim a
 // queued request, or remain a candidate for stale-launch expiry). One concept,
 // one list — referenced directly in the SQL below so it never drifts.
-const LAUNCHABLE_OBJECTIVE_STATES = ['draft', 'submitted', 'launching'] as const;
+export const LAUNCHABLE_OBJECTIVE_STATES: readonly ObjectiveState[] = [
+  'draft',
+  'submitted',
+  'launching'
+];
 const CLAIM_TTL_MS = 15 * 60 * 1000;
 const LAUNCH_ATTACH_TTL_MS = 15 * 60 * 1000;
 // How long a request may sit in `launching` before expiry reclaims it. The window
@@ -252,6 +257,40 @@ function rowToSummary(row: {
   };
 }
 
+/**
+ * The one `execution_requests` summary read: every row joined to its mission
+ * display id and objective title/state (LEFT JOIN, so a mission-less capability
+ * call is still readable), mapped through `rowToSummary`. Callers own scoping:
+ * `where` must be written against the `er` alias and include its own
+ * `deleted_at` and workspace/mission guards. `db` may be a transaction.
+ */
+export async function selectExecutionRequestSummaries(
+  db: Pick<DatabaseClient, 'all'>,
+  {
+    where,
+    params,
+    orderBy,
+    limit
+  }: {
+    where: string;
+    params: ReadonlyArray<string | number>;
+    orderBy?: string;
+    limit?: number;
+  }
+): Promise<ExecutionRequestSummary[]> {
+  const orderClause = orderBy ? ` ORDER BY ${orderBy}` : '';
+  const limitClause = limit === undefined ? '' : ' LIMIT ?';
+  const rows = (await db.all(
+    `SELECT er.*, t.display_id, o.title, o.state
+       FROM execution_requests er
+       LEFT JOIN missions t ON t.id = er.mission_id
+       LEFT JOIN objectives o ON o.id = er.objective_id
+       WHERE ${where}${orderClause}${limitClause}`,
+    limit === undefined ? params : [...params, limit]
+  )) as Array<Parameters<typeof rowToSummary>[0]>;
+  return rows.map(rowToSummary);
+}
+
 type ExecutionRequestStateRow = {
   id: string;
   workspace_id: string;
@@ -413,20 +452,14 @@ export async function getExecutionRequest({
   ctx: ServiceContext;
   id: string;
 }): Promise<ExecutionRequestSummary> {
-  const row = (await ctx.db.get(
-    // LEFT JOIN: a mission-less capability call still has to be readable.
-    `SELECT er.*, t.display_id, o.title, o.state
-       FROM execution_requests er
-       LEFT JOIN missions t ON t.id = er.mission_id
-       LEFT JOIN objectives o ON o.id = er.objective_id
-       WHERE er.id = ? AND er.workspace_id = ? AND er.deleted_at IS NULL`,
-    [id, ctx.workspace.id]
-  )) as Parameters<typeof rowToSummary>[0] | undefined;
-
-  if (!row) {
+  const [summary] = await selectExecutionRequestSummaries(ctx.db, {
+    where: 'er.id = ? AND er.workspace_id = ? AND er.deleted_at IS NULL',
+    params: [id, ctx.workspace.id]
+  });
+  if (!summary) {
     throw new ServiceError('Execution request not found', 'execution_request_not_found', 404);
   }
-  return rowToSummary(row);
+  return summary;
 }
 
 async function resolveWorkingDirectory({
@@ -669,19 +702,12 @@ export async function listExecutionRequests({
     conditions.push('er.project_id = ?');
     params.push(await resolveProjectId(ctx, projectId));
   }
-  params.push(limit);
-
-  const rows = (await ctx.db.all(
-    `SELECT er.*, t.display_id, o.title, o.state
-       FROM execution_requests er
-       LEFT JOIN missions t ON t.id = er.mission_id
-       LEFT JOIN objectives o ON o.id = er.objective_id
-       WHERE ${conditions.join(' AND ')}
-       ORDER BY er.created_at ASC
-       LIMIT ?`,
-    params
-  )) as Array<Parameters<typeof rowToSummary>[0]>;
-  return rows.map(rowToSummary);
+  return await selectExecutionRequestSummaries(ctx.db, {
+    where: conditions.join(' AND '),
+    params,
+    orderBy: 'er.created_at ASC',
+    limit
+  });
 }
 
 export async function claimNextExecutionRequest({

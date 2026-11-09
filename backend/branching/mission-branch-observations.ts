@@ -1,9 +1,6 @@
 import { recordMissionBranchObservations } from '../../packages/core/service/mission-branch-observations.ts';
 
-import {
-  requireExecutionTargetObservationContext,
-  throwObservationServiceError
-} from './execution-target-observation-scope.ts';
+import { requireExecutionTargetObservationContext } from './execution-target-observation-scope.ts';
 
 export async function postMissionBranchObservations({
   executionTargetId,
@@ -13,16 +10,12 @@ export async function postMissionBranchObservations({
   body: unknown;
 }): Promise<{ recorded: number }> {
   const payload = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
-  try {
-    return await recordMissionBranchObservations({
-      ctx: await requireExecutionTargetObservationContext(
-        executionTargetId,
-        'Not allowed to report mission branch observations.'
-      ),
+  return recordMissionBranchObservations({
+    ctx: await requireExecutionTargetObservationContext(
       executionTargetId,
-      observations: payload.observations
-    });
-  } catch (error) {
-    throwObservationServiceError(error);
-  }
+      'Not allowed to report mission branch observations.'
+    ),
+    executionTargetId,
+    observations: payload.observations
+  });
 }

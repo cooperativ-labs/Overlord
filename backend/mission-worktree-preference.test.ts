@@ -16,7 +16,7 @@ describe('per-mission worktree preference', () => {
 
     const { createProject, createMission, getMissionDetail, updateMission } =
       await import('./repository.ts');
-    const { updateWorktreeBranchAutomation } = await import('./execution/launch.ts');
+    const { updateWorktreeBranchAutomation } = await import('./execution/launch-settings.ts');
 
     const project = await createProject({ name: 'Worktree Preference Test' });
 

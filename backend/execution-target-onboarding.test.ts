@@ -16,7 +16,7 @@ describe('intentional execution-target onboarding', () => {
       sqlitePath: path.join(dir, 'Overlord.sqlite')
     });
     const { updateAgentLaunchConfig, updateTerminalProfile } =
-      await import('./execution/launch.ts');
+      await import('./execution/launch-settings.ts');
     const { registerWorkspaceExecutionTarget } =
       await import('./execution/project-execution-target.ts');
     const { requireDatabaseClient } = await import('./db.ts');

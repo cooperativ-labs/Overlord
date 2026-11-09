@@ -1,9 +1,6 @@
 import { recordTargetResourceObservations } from '../../packages/core/service/target-resource-observations.ts';
 
-import {
-  requireExecutionTargetObservationContext,
-  throwObservationServiceError
-} from './execution-target-observation-scope.ts';
+import { requireExecutionTargetObservationContext } from './execution-target-observation-scope.ts';
 
 export async function postExecutionTargetObservations({
   executionTargetId,
@@ -13,16 +10,12 @@ export async function postExecutionTargetObservations({
   body: unknown;
 }): Promise<{ recorded: number }> {
   const payload = body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
-  try {
-    return await recordTargetResourceObservations({
-      ctx: await requireExecutionTargetObservationContext(
-        executionTargetId,
-        'Not allowed to report resource observations.'
-      ),
+  return recordTargetResourceObservations({
+    ctx: await requireExecutionTargetObservationContext(
       executionTargetId,
-      observations: payload.observations
-    });
-  } catch (error) {
-    throwObservationServiceError(error);
-  }
+      'Not allowed to report resource observations.'
+    ),
+    executionTargetId,
+    observations: payload.observations
+  });
 }

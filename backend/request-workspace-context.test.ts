@@ -22,7 +22,7 @@ const {
 const { getActiveWorkspace, getActiveWorkspaceIdOrNull } = createTestWorkspaceContext(dbModule);
 
 const { resolveAuthorizedWorkspaces } = await import('./auth.ts');
-const { getAgentCatalog } = await import('./execution/launch.ts');
+const { getAgentCatalog } = await import('./agent-catalog.ts');
 const { buildMeta } = await import('./http/meta.ts');
 const { getActiveOrganizationIdOrNull } = await import('./organizations.ts');
 const { requireAnyWorkspacePermission } = await import('./rbac.ts');

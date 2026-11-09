@@ -14,8 +14,8 @@ const {
   updateMission,
   updateObjective
 } = await import('./repository.ts');
-const { launchObjective, getAgentCatalog, updateAgentCatalog } =
-  await import('./execution/launch.ts');
+const { launchObjective } = await import('./execution/launch.ts');
+const { getAgentCatalog, updateAgentCatalog } = await import('./agent-catalog.ts');
 const { getProjectRunQueues, postRunQueueEntry } = await import('./run-queue.ts');
 
 after(() => {

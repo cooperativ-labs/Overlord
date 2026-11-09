@@ -110,6 +110,8 @@ backend/
   <domain>.ts           ← top-level domain modules (webhooks, organizations, …)
   <domain>.test.ts      ← colocated tests
   http/                 ← request helpers (meta, origins, SPA serving, device hints)
+  agent-catalog.ts      ← workspace agent catalog defaults and CRUD
+  execution/launch-settings.ts ← per-user launch settings and project preferences
   execution/            ← runner / launch / local-target helpers
   connections/          ← account connections (sole credential store for external
                           accounts), shared AES-256-GCM envelopes, outbound

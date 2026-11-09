@@ -6,7 +6,6 @@ import type {
 } from '@overlord/contract';
 import type { DatabaseClient } from '@overlord/database';
 
-import { ServiceError } from '../../packages/core/service/errors.ts';
 import {
   deleteWorkspaceExecutionTarget,
   getProjectExecutionTargetSelection,
@@ -17,7 +16,7 @@ import {
   updateWorkspaceExecutionTargetStatus
 } from '../../packages/core/service/project-execution-target.ts';
 import { buildWebappServiceContextForWorkspace, requireDatabaseClient } from '../db.ts';
-import { ApiError } from '../errors.ts';
+import { ApiError, rethrowNotFoundAs } from '../errors.ts';
 import { requireProjectPermission, requireWorkspacePermission } from '../rbac.ts';
 
 /**
@@ -63,10 +62,7 @@ export async function getProjectExecutionTarget(
     const ctx = await projectServiceContext(projectId, PERMISSIONS.LAUNCH_READ, client);
     return toDto(await getProjectExecutionTargetSelection({ ctx, projectId }));
   } catch (error) {
-    if (error instanceof ServiceError && error.status === 404) {
-      throw new ApiError(404, 'Project not found');
-    }
-    throw error;
+    rethrowNotFoundAs(error, 'Project not found');
   }
 }
 
@@ -106,15 +102,7 @@ export async function registerWorkspaceExecutionTarget(
     notFoundMessage: 'Workspace not found or no active membership'
   });
   const ctx = await buildWebappServiceContextForWorkspace(workspaceId, client, workspaceUserId);
-  let registered: Awaited<ReturnType<typeof registerActingExecutionTarget>>;
-  try {
-    registered = await registerActingExecutionTarget({ ctx, label: label || null });
-  } catch (error) {
-    if (error instanceof ServiceError) {
-      throw new ApiError(error.status, error.message, undefined, error.code);
-    }
-    throw error;
-  }
+  const registered = await registerActingExecutionTarget({ ctx, label: label || null });
   const targets = await listWorkspaceExecutionTargets({ ctx });
   const dto = targets.find(target => target.id === registered.executionTargetId);
   if (!dto) throw new ApiError(500, 'Execution target was registered but could not be read back');
@@ -135,11 +123,7 @@ export async function removeWorkspaceExecutionTarget(
   try {
     await deleteWorkspaceExecutionTarget({ ctx, executionTargetId });
   } catch (error) {
-    if (error instanceof ServiceError) {
-      if (error.status === 404) throw new ApiError(404, 'Execution target not found');
-      if (error.status === 409) throw new ApiError(409, error.message, undefined, error.code);
-    }
-    throw error;
+    rethrowNotFoundAs(error, 'Execution target not found');
   }
 }
 
@@ -167,17 +151,13 @@ export async function updateWorkspaceExecutionTarget(
     if (status !== null) {
       return await updateWorkspaceExecutionTargetStatus({ ctx, executionTargetId, status });
     }
-    const targets = await listWorkspaceExecutionTargets({ ctx });
-    const target = targets.find(entry => entry.id === executionTargetId);
-    if (!target) throw new ServiceError('Execution target not found', 'not_found', 404);
-    return target;
   } catch (error) {
-    if (error instanceof ServiceError) {
-      if (error.status === 404) throw new ApiError(404, 'Execution target not found');
-      if (error.status === 400) throw new ApiError(400, error.message, undefined, error.code);
-    }
-    throw error;
+    rethrowNotFoundAs(error, 'Execution target not found');
   }
+  const targets = await listWorkspaceExecutionTargets({ ctx });
+  const target = targets.find(entry => entry.id === executionTargetId);
+  if (!target) throw new ApiError(404, 'Execution target not found');
+  return target;
 }
 
 export async function updateProjectExecutionTarget(
@@ -200,13 +180,6 @@ export async function updateProjectExecutionTarget(
       })
     );
   } catch (error) {
-    if (error instanceof ServiceError) {
-      if (error.status === 404) throw new ApiError(404, 'Project not found');
-      if (error.status === 409) throw new ApiError(409, error.message);
-      if (error.status === 400 && error.code === 'execution_target_not_eligible') {
-        throw new ApiError(400, error.message, undefined, error.code);
-      }
-    }
-    throw error;
+    rethrowNotFoundAs(error, 'Project not found');
   }
 }

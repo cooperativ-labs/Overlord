@@ -2308,6 +2308,37 @@ export interface ExecutionRequestDto {
   updatedAt: string;
 }
 
+/**
+ * An execution request as the runner queue surface (`GET /api/runner/status`,
+ * `POST /api/runner/requests/:id/*`) returns it. Unlike `ExecutionRequestDto`,
+ * `executionTargetId` is the target that won the claim once claimed
+ * (`claimed_by_execution_target_id`, falling back to the queue-time target),
+ * because the runner launches and observes on that target.
+ */
+export interface RunnerExecutionRequestDto extends ExecutionRequestDto {
+  metadata: Record<string, unknown>;
+  /** `execution_requests.resolved_working_directory`; null until resolved. */
+  workingDirectory: string | null;
+}
+
+/**
+ * The request `POST /api/runner/claim` hands the runner: `launchConfig` is
+ * re-resolved against the claiming target, plus the project's launch preparation.
+ */
+export interface RunnerClaimedRequestDto extends RunnerExecutionRequestDto {
+  /** Project `overlord.preLaunchCommands`, in order. */
+  preLaunchCommands: string[];
+  /** Project `overlord.launchEnvVars`. */
+  launchEnvVars: Record<string, string>;
+}
+
+/** `POST /api/runner/claim` response body. */
+export interface RunnerClaimResponse {
+  request: RunnerClaimedRequestDto | null;
+  /** True when the Postgres long-poll wait was available for this claim. */
+  longPoll: boolean;
+}
+
 /** Copyable prompt for running an objective through an agent manually. */
 export interface ObjectivePromptDto {
   objectiveId: string;

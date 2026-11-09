@@ -1,9 +1,8 @@
+import type { RunnerClaimResponse } from '@overlord/contract';
 import type { Response } from 'express';
 
-export type RunnerClaimResult = {
-  request: Record<string, unknown> | null;
-  longPoll: boolean;
-};
+/** `POST /api/runner/claim` body; the shape is owned by `@overlord/contract`. */
+export type RunnerClaimResult = RunnerClaimResponse;
 
 type ClaimResponse = Pick<Response, 'headersSent' | 'writableEnded' | 'flushHeaders' | 'write'> & {
   status(code: number): unknown;

@@ -243,6 +243,7 @@ import {
   actorCan,
   loadActorRoles,
   requireMissionPermission,
+  requireObjectivePermission,
   requireProjectPermission,
   requireWorkspacePermission
 } from './rbac.ts';
@@ -7057,34 +7058,6 @@ async function ensureDraftSlotAfterObjectiveLeavesQueue(
       db
     );
   }
-}
-
-/**
- * Resolves an objective to its owning workspace and checks permission there
- * (coo:135). UUIDs are globally unique and unscoped by the caller's active
- * workspace; display ids (`coo:756.k7xm`) resolve in the active workspace.
- */
-async function requireObjectivePermission({
-  objectiveId,
-  permission,
-  db = requireDatabaseClient()
-}: {
-  objectiveId: string;
-  permission: Permission;
-  db?: DatabaseClient;
-}): Promise<{ workspaceId: string; workspaceUserId: string; objectiveId: string }> {
-  const resolved = await resolveObjectiveIdForRest({ ref: objectiveId, db });
-  const workspaceUserId = await requireWorkspacePermission({
-    workspaceId: resolved.workspaceId,
-    permission,
-    db,
-    notFoundMessage: 'Objective not found'
-  });
-  return {
-    workspaceId: resolved.workspaceId,
-    workspaceUserId,
-    objectiveId: resolved.id
-  };
 }
 
 async function updateObjectiveTx(

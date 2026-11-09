@@ -1,4 +1,4 @@
-import { bindBool } from '@overlord/database';
+import { bindBool, type DatabaseClient } from '@overlord/database';
 
 import type { ServiceContext } from './context.js';
 import { ServiceError } from './errors.js';
@@ -137,6 +137,73 @@ async function assertMissionsBelongToWorkspace({
 }
 
 /**
+ * Upsert one `mission_branch_observations` row keyed by
+ * (execution target, mission, resource key). The single writer for that table:
+ * client-reported observations (`recordMissionBranchObservations`) and the
+ * runner's branch-prepared record both go through here, so the column list and
+ * the dialect-correct `dirty` bind (`boolean` on Postgres, `0 | 1` on SQLite)
+ * cannot drift. Callers own authorization and run it inside their transaction.
+ */
+export async function upsertMissionBranchObservationTx(
+  tx: DatabaseClient,
+  {
+    workspaceId,
+    executionTargetId,
+    missionId,
+    resourceKey,
+    status,
+    dirty,
+    worktreePath,
+    observedAt,
+    now
+  }: {
+    workspaceId: string;
+    executionTargetId: string;
+    missionId: string;
+    resourceKey: string;
+    status: ObservedMissionBranchStatus;
+    dirty: boolean;
+    worktreePath: string | null;
+    observedAt: string;
+    now: string;
+  }
+): Promise<void> {
+  const existing = await tx.get<{ id: string }>(
+    `SELECT id FROM mission_branch_observations
+      WHERE execution_target_id = ? AND mission_id = ? AND resource_key = ?`,
+    [executionTargetId, missionId, resourceKey]
+  );
+  if (existing) {
+    await tx.run(
+      `UPDATE mission_branch_observations
+          SET status = ?, dirty = ?, worktree_path = ?, observed_at = ?, updated_at = ?
+        WHERE id = ?`,
+      [status, bindBool(tx.dialect, dirty), worktreePath, observedAt, now, existing.id]
+    );
+    return;
+  }
+  await tx.run(
+    `INSERT INTO mission_branch_observations
+       (id, workspace_id, execution_target_id, mission_id, resource_key, status, dirty,
+        worktree_path, observed_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      newId(),
+      workspaceId,
+      executionTargetId,
+      missionId,
+      resourceKey,
+      status,
+      bindBool(tx.dialect, dirty),
+      worktreePath,
+      observedAt,
+      now,
+      now
+    ]
+  );
+}
+
+/**
  * Upsert client-observed branch state for missions on an execution target. The
  * caller must be acting as the same local execution target it reports for.
  */
@@ -175,46 +242,17 @@ export async function recordMissionBranchObservations({
   const now = nowIso();
   await ctx.db.transaction(async tx => {
     for (const observation of observations) {
-      const existing = await tx.get<{ id: string }>(
-        `SELECT id FROM mission_branch_observations
-          WHERE execution_target_id = ? AND mission_id = ? AND resource_key = ?`,
-        [targetId, observation.missionId, observation.resourceKey]
-      );
-      if (existing) {
-        await tx.run(
-          `UPDATE mission_branch_observations
-              SET status = ?, dirty = ?, worktree_path = ?, observed_at = ?, updated_at = ?
-            WHERE id = ?`,
-          [
-            observation.status,
-            bindBool(ctx.db.dialect, observation.dirty),
-            observation.worktreePath,
-            observation.observedAt,
-            now,
-            existing.id
-          ]
-        );
-      } else {
-        await tx.run(
-          `INSERT INTO mission_branch_observations
-             (id, workspace_id, execution_target_id, mission_id, resource_key, status, dirty,
-              worktree_path, observed_at, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            newId(),
-            ctx.workspace.id,
-            targetId,
-            observation.missionId,
-            observation.resourceKey,
-            observation.status,
-            bindBool(ctx.db.dialect, observation.dirty),
-            observation.worktreePath,
-            observation.observedAt,
-            now,
-            now
-          ]
-        );
-      }
+      await upsertMissionBranchObservationTx(tx, {
+        workspaceId: ctx.workspace.id,
+        executionTargetId: targetId,
+        missionId: observation.missionId,
+        resourceKey: observation.resourceKey,
+        status: observation.status,
+        dirty: observation.dirty,
+        worktreePath: observation.worktreePath ?? null,
+        observedAt: observation.observedAt,
+        now
+      });
     }
   });
 

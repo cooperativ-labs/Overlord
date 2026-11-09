@@ -15,6 +15,17 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Re-label a service-layer 404 with a route-specific message (keeping its code);
+ * every other error is rethrown untouched so the handler renders it.
+ */
+export function rethrowNotFoundAs(error: unknown, message: string): never {
+  if (error instanceof ServiceError && error.status === 404) {
+    throw new ApiError(404, message, undefined, error.code);
+  }
+  throw error;
+}
+
 /** Trimmed non-empty string body field no longer than `max`, else a 400. */
 export function requiredString(value: unknown, field: string, max: number): string {
   const normalized = typeof value === 'string' ? value.trim() : '';

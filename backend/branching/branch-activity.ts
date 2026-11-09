@@ -27,7 +27,7 @@ export async function recordRunnerBranchEvent(
     missionId: string;
     objectiveId?: string | null;
     summary: string;
-    payload: Record<string, unknown>;
+    payload: object;
     now?: string;
   }
 ): Promise<void> {

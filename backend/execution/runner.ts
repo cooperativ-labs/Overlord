@@ -1,5 +1,12 @@
 import { PERMISSIONS } from '@overlord/auth';
-import { type AgentLaunchFlagDto, normalizeAgentLaunchFlags } from '@overlord/contract';
+import {
+  type AgentLaunchConfigDto,
+  type ExecutionRequestStatus,
+  normalizeAgentLaunchFlags,
+  type RunnerClaimedRequestDto,
+  type RunnerClaimResponse,
+  type RunnerExecutionRequestDto
+} from '@overlord/contract';
 import type { DatabaseClient } from '@overlord/database';
 
 import type { ServiceContext } from '../../packages/core/service/context.ts';
@@ -24,13 +31,14 @@ import {
 } from '../../packages/core/service/latch-launch.ts';
 import type { CapabilityResult } from '../../packages/core/service/local-target/types.ts';
 import { completeLocalTargetMutationRequest } from '../../packages/core/service/local-target-mutations.ts';
+import { upsertMissionBranchObservationTx } from '../../packages/core/service/mission-branch-observations.ts';
 import { resolveClaimLaunchConfig } from '../../packages/core/service/project-execution-target.ts';
+import type { BranchAutomationAction } from '../branch-planning.ts';
 import { recordRunnerBranchEvent } from '../branching/branch-activity.ts';
 import {
   buildWebappServiceContextForWorkspace,
   DATABASE_DIALECT,
   getClientDeviceIdentity,
-  newId,
   nowIso,
   recordChange,
   requireDatabaseClient
@@ -44,6 +52,7 @@ import {
   readProjectPreLaunchCommands
 } from '../repository.ts';
 
+import { recordBranchActionActivityFromMutation } from './local-target-mutation-queue.ts';
 import { longPollRunnerClaim } from './runner-queue-notify.ts';
 
 type ClientDeviceBody = {
@@ -155,7 +164,7 @@ type BranchPreparedPayload = {
   baseBranch: string;
   worktreePath: string;
   resourceKey: string;
-  action: 'create' | 'reuse' | 'new_cycle';
+  action: BranchAutomationAction;
   cycle: number;
   /**
    * The branch belongs to one objective running in parallel with a sibling on the
@@ -184,7 +193,7 @@ function parseLaunchFlagsObject(json: string): Record<string, unknown> {
   }
 }
 
-function serviceSummaryToDto(row: ExecutionRequestSummary): Record<string, unknown> {
+function serviceSummaryToDto(row: ExecutionRequestSummary): RunnerExecutionRequestDto {
   return {
     id: row.id,
     workspaceId: row.workspaceId,
@@ -206,7 +215,7 @@ function serviceSummaryToDto(row: ExecutionRequestSummary): Record<string, unkno
       flags: normalizeAgentLaunchFlags(row.launchFlags.flags)
     },
     metadata: row.metadata,
-    status: row.status,
+    status: row.status as ExecutionRequestStatus,
     requestedSource: row.requestedSource,
     workingDirectory: row.resolvedWorkingDirectory,
     lastError: row.lastError,
@@ -215,9 +224,11 @@ function serviceSummaryToDto(row: ExecutionRequestSummary): Record<string, unkno
   };
 }
 
-export async function runnerStatus(projectId?: string | null): Promise<Record<string, unknown>> {
+export async function runnerStatus(
+  projectId?: string | null
+): Promise<{ queue: RunnerExecutionRequestDto[]; activeCount: number }> {
   const scopes = await resolveRunnerScopes(projectId);
-  const queue: Record<string, unknown>[] = [];
+  const queue: RunnerExecutionRequestDto[] = [];
   for (const scope of scopes) {
     const ctx = await workspaceServiceContext(scope.workspaceId, scope.workspaceUserId);
     await expireStaleExecutionRequests({ ctx });
@@ -244,11 +255,8 @@ export async function claimRunnerRequest({
   clientDevice?: ClientDeviceBody;
   runner?: RunnerRegistrationInput | null;
   onListenArmed?: () => void;
-} = {}): Promise<{
-  request: Record<string, unknown> | null;
-  longPoll: boolean;
-}> {
-  const claimNow = async (): Promise<Record<string, unknown> | null> => {
+} = {}): Promise<RunnerClaimResponse> {
+  const claimNow = async (): Promise<RunnerClaimedRequestDto | null> => {
     // Claim across every workspace the caller belongs to across organizations.
     // Iterate in membership order and return the first workspace that yields a
     // claimable request; subsequent polls drain the remaining workspaces.
@@ -287,13 +295,7 @@ export async function claimRunnerRequest({
         // in any config that a queue-time ambiguous target could not capture, so
         // launch mechanics resolve at the same point as the pre-launch commands and
         // env vars below (best-effort: fall back to the queue-time snapshot).
-        let launchConfig: { preCommand: string; flags: AgentLaunchFlagDto[] } = {
-          preCommand:
-            typeof request.launchFlags.preCommand === 'string'
-              ? request.launchFlags.preCommand
-              : '',
-          flags: normalizeAgentLaunchFlags(request.launchFlags.flags)
-        };
+        let launchConfig: AgentLaunchConfigDto = dto.launchConfig;
         try {
           launchConfig = await resolveClaimLaunchConfig({
             ctx,
@@ -305,7 +307,6 @@ export async function claimRunnerRequest({
         } catch {
           // Keep the snapshot `serviceSummaryToDto` already produced.
         }
-        dto.launchConfig = launchConfig;
         // Record the exact params handed to the runner so the injected launch config
         // is always visible on the mission timeline (best-effort — never fail a claim).
         try {
@@ -314,9 +315,12 @@ export async function claimRunnerRequest({
           // Audit event is best-effort; a claim must still succeed without it.
         }
         const settings = await claimProjectLaunchSettings(ctx.db, request.projectId);
-        dto.preLaunchCommands = settings.preLaunchCommands;
-        dto.launchEnvVars = settings.launchEnvVars;
-        return dto;
+        return {
+          ...dto,
+          launchConfig,
+          preLaunchCommands: settings.preLaunchCommands,
+          launchEnvVars: settings.launchEnvVars
+        };
       }
     }
     if (undeclaredEverywhere && !declaredSomewhere) throw undeclaredEverywhere;
@@ -366,7 +370,7 @@ export async function updateRunnerRequestStatus({
   status: 'launching' | 'launched' | 'failed';
   error?: string | null;
   providerSession?: ExecutionProviderSession | null;
-}): Promise<Record<string, unknown>> {
+}): Promise<RunnerExecutionRequestDto> {
   const ctx = await requestRunnerContext(requestId);
   const request =
     status === 'launching'
@@ -390,7 +394,7 @@ export async function completeRunnerMutationRequest({
 }: {
   requestId: string;
   mutationResult: unknown;
-}): Promise<Record<string, unknown>> {
+}): Promise<RunnerExecutionRequestDto> {
   if (
     !mutationResult ||
     typeof mutationResult !== 'object' ||
@@ -414,8 +418,6 @@ export async function completeRunnerMutationRequest({
     result.value !== null &&
     typeof (result.value as { summary?: unknown }).summary === 'string'
   ) {
-    const { recordBranchActionActivityFromMutation } =
-      await import('./local-target-mutation-queue.ts');
     await recordBranchActionActivityFromMutation({
       ctx,
       requestId,
@@ -424,6 +426,17 @@ export async function completeRunnerMutationRequest({
   }
   const request = await getExecutionRequest({ ctx, id: requestId });
   return serviceSummaryToDto(request);
+}
+
+/** Every `BranchAutomationAction`; the `Record` keeps this exhaustive at compile time. */
+const BRANCH_AUTOMATION_ACTIONS: Readonly<Record<BranchAutomationAction, true>> = {
+  create: true,
+  reuse: true,
+  new_cycle: true
+};
+
+function isBranchAutomationAction(value: unknown): value is BranchAutomationAction {
+  return typeof value === 'string' && Object.hasOwn(BRANCH_AUTOMATION_ACTIONS, value);
 }
 
 function requireBranchPayload(value: unknown): BranchPreparedPayload {
@@ -438,7 +451,7 @@ function requireBranchPayload(value: unknown): BranchPreparedPayload {
   if (!branchName || !baseBranch || !worktreePath || !resourceKey) {
     throw new ApiError(400, 'branchName, baseBranch, worktreePath, and resourceKey are required');
   }
-  if (action !== 'create' && action !== 'reuse' && action !== 'new_cycle') {
+  if (!isBranchAutomationAction(action)) {
     throw new ApiError(400, 'Invalid branch preparation action');
   }
   return { branchName, baseBranch, worktreePath, resourceKey, action, cycle, isolated };
@@ -462,6 +475,141 @@ async function resolveBranchResourceKey({
   return row?.resource_key?.trim() || 'project';
 }
 
+type BranchPreparedMission = { id: string; project_id: string; revision: number };
+
+/**
+ * Stamp the prepared branch onto the execution request it was prepared for:
+ * `launch_flags_json.branchAutomation` and the resolved working directory.
+ */
+async function stampRequestBranchTx(
+  tx: DatabaseClient,
+  {
+    workspaceId,
+    requestId,
+    branch
+  }: { workspaceId: string; requestId: string; branch: BranchPreparedPayload }
+): Promise<ExecutionRequestRow> {
+  const requestRow = await tx.get<ExecutionRequestRow>(
+    `SELECT ${EXECUTION_REQUEST_COLUMNS} FROM execution_requests
+       WHERE id = ? AND workspace_id = ?`,
+    [requestId, workspaceId]
+  );
+  if (!requestRow) throw new ApiError(404, 'Execution request not found');
+  const flags = parseLaunchFlagsObject(requestRow.launch_flags_json);
+  flags.branchAutomation = branch;
+  const revision = requestRow.revision + 1;
+  await tx.run(
+    `UPDATE execution_requests
+        SET launch_flags_json = ?,
+            resolved_working_directory = ?,
+            updated_at = ?,
+            revision = ?
+      WHERE id = ?`,
+    [JSON.stringify(flags), branch.worktreePath, nowIso(), revision, requestRow.id]
+  );
+  await recordChange(
+    {
+      workspaceId,
+      entityType: 'execution_request',
+      entityId: requestRow.id,
+      operation: 'update',
+      entityRevision: revision,
+      projectId: requestRow.project_id,
+      missionId: requestRow.mission_id,
+      objectiveId: requestRow.objective_id,
+      changedFields: ['launch_flags_json', 'resolved_working_directory']
+    },
+    tx
+  );
+  return requestRow;
+}
+
+/** Record the prepared branch on the objective the execution request runs. */
+async function recordObjectiveBranchTx(
+  tx: DatabaseClient,
+  {
+    workspaceId,
+    mission,
+    objectiveId,
+    branchName,
+    now
+  }: {
+    workspaceId: string;
+    mission: BranchPreparedMission;
+    objectiveId: string;
+    branchName: string;
+    now: string;
+  }
+): Promise<void> {
+  const objective = await tx.get<{ revision: number }>(
+    `SELECT revision FROM objectives WHERE id = ?`,
+    [objectiveId]
+  );
+  if (!objective) return;
+  const objectiveRevision = objective.revision + 1;
+  await tx.run(
+    `UPDATE objectives
+        SET branch = ?, updated_at = ?, revision = ?
+      WHERE id = ?`,
+    [branchName, now, objectiveRevision, objectiveId]
+  );
+  await recordChange(
+    {
+      workspaceId,
+      entityType: 'objective',
+      entityId: objectiveId,
+      operation: 'update',
+      entityRevision: objectiveRevision,
+      projectId: mission.project_id,
+      missionId: mission.id,
+      objectiveId,
+      changedFields: ['branch']
+    },
+    tx
+  );
+}
+
+/** Move `missions.active_branch` to the prepared branch and clear any override. */
+async function recordMissionBranchTx(
+  tx: DatabaseClient,
+  {
+    workspaceId,
+    mission,
+    objectiveId,
+    branchName,
+    now
+  }: {
+    workspaceId: string;
+    mission: BranchPreparedMission;
+    objectiveId: string | null;
+    branchName: string;
+    now: string;
+  }
+): Promise<void> {
+  const missionRevision = mission.revision + 1;
+  await tx.run(
+    `UPDATE missions
+        SET active_branch = ?, branch_override = NULL,
+            updated_at = ?, revision = ?
+      WHERE id = ?`,
+    [branchName, now, missionRevision, mission.id]
+  );
+  await recordChange(
+    {
+      workspaceId,
+      entityType: 'mission',
+      entityId: mission.id,
+      operation: 'update',
+      entityRevision: missionRevision,
+      projectId: mission.project_id,
+      missionId: mission.id,
+      objectiveId,
+      changedFields: ['active_branch', 'branch_override']
+    },
+    tx
+  );
+}
+
 async function recordBranchPreparedTx(
   tx: DatabaseClient,
   {
@@ -477,7 +625,7 @@ async function recordBranchPreparedTx(
   }
 ): Promise<{ ok: true }> {
   const branch = requireBranchPayload(payload);
-  const mission = await tx.get<{ id: string; project_id: string; revision: number }>(
+  const mission = await tx.get<BranchPreparedMission>(
     `SELECT id, project_id, revision FROM missions
       WHERE workspace_id = ?
         AND deleted_at IS NULL
@@ -486,74 +634,20 @@ async function recordBranchPreparedTx(
   );
   if (!mission) throw new ApiError(404, 'Mission not found');
 
-  let objectiveId: string | null = null;
-  let requestRow: ExecutionRequestRow | undefined;
-  if (requestId) {
-    requestRow = await tx.get<ExecutionRequestRow>(
-      `SELECT ${EXECUTION_REQUEST_COLUMNS} FROM execution_requests
-         WHERE id = ? AND workspace_id = ?`,
-      [requestId, workspaceId]
-    );
-    if (!requestRow) throw new ApiError(404, 'Execution request not found');
-    objectiveId = requestRow.objective_id;
-    const flags = parseLaunchFlagsObject(requestRow.launch_flags_json);
-    flags.branchAutomation = branch;
-    const revision = requestRow.revision + 1;
-    await tx.run(
-      `UPDATE execution_requests
-          SET launch_flags_json = ?,
-              resolved_working_directory = ?,
-              updated_at = ?,
-              revision = ?
-        WHERE id = ?`,
-      [JSON.stringify(flags), branch.worktreePath, nowIso(), revision, requestRow.id]
-    );
-    await recordChange(
-      {
-        workspaceId,
-        entityType: 'execution_request',
-        entityId: requestRow.id,
-        operation: 'update',
-        entityRevision: revision,
-        projectId: requestRow.project_id,
-        missionId: requestRow.mission_id,
-        objectiveId: requestRow.objective_id,
-        changedFields: ['launch_flags_json', 'resolved_working_directory']
-      },
-      tx
-    );
-  }
-
+  const requestRow = requestId
+    ? await stampRequestBranchTx(tx, { workspaceId, requestId, branch })
+    : undefined;
+  const objectiveId = requestRow?.objective_id ?? null;
   const now = nowIso();
 
   if (objectiveId) {
-    const objective = await tx.get<{ revision: number }>(
-      `SELECT revision FROM objectives WHERE id = ?`,
-      [objectiveId]
-    );
-    if (objective) {
-      const objectiveRevision = objective.revision + 1;
-      await tx.run(
-        `UPDATE objectives
-            SET branch = ?, updated_at = ?, revision = ?
-          WHERE id = ?`,
-        [branch.branchName, now, objectiveRevision, objectiveId]
-      );
-      await recordChange(
-        {
-          workspaceId,
-          entityType: 'objective',
-          entityId: objectiveId,
-          operation: 'update',
-          entityRevision: objectiveRevision,
-          projectId: mission.project_id,
-          missionId: mission.id,
-          objectiveId,
-          changedFields: ['branch']
-        },
-        tx
-      );
-    }
+    await recordObjectiveBranchTx(tx, {
+      workspaceId,
+      mission,
+      objectiveId,
+      branchName: branch.branchName,
+      now
+    });
   }
 
   // A per-objective isolated branch is that objective's checkout, not the
@@ -562,28 +656,13 @@ async function recordBranchPreparedTx(
   // sequential objective still continues the mission's work instead of a sibling's
   // isolated cycle, and so the mission panel keeps showing mission-level git state.
   if (!branch.isolated) {
-    const missionRevision = mission.revision + 1;
-    await tx.run(
-      `UPDATE missions
-          SET active_branch = ?, branch_override = NULL,
-              updated_at = ?, revision = ?
-        WHERE id = ?`,
-      [branch.branchName, now, missionRevision, mission.id]
-    );
-    await recordChange(
-      {
-        workspaceId,
-        entityType: 'mission',
-        entityId: mission.id,
-        operation: 'update',
-        entityRevision: missionRevision,
-        projectId: mission.project_id,
-        missionId: mission.id,
-        objectiveId,
-        changedFields: ['active_branch', 'branch_override']
-      },
-      tx
-    );
+    await recordMissionBranchTx(tx, {
+      workspaceId,
+      mission,
+      objectiveId,
+      branchName: branch.branchName,
+      now
+    });
   }
 
   await recordRunnerBranchEvent(tx, {
@@ -594,7 +673,7 @@ async function recordBranchPreparedTx(
     summary: branch.isolated
       ? `Prepared isolated objective branch ${branch.branchName} in worktree ${branch.worktreePath}.`
       : `Prepared branch ${branch.branchName} in worktree ${branch.worktreePath}.`,
-    payload: branch as unknown as Record<string, unknown>,
+    payload: branch,
     now
   });
 
@@ -603,40 +682,17 @@ async function recordBranchPreparedTx(
     requestRow?.execution_target_id?.trim() ||
     null;
   if (executionTargetId && !branch.isolated) {
-    const resourceKey = await resolveBranchResourceKey({ tx, branch, requestRow });
-    const existing = await tx.get<{ id: string }>(
-      `SELECT id FROM mission_branch_observations
-        WHERE execution_target_id = ? AND mission_id = ? AND resource_key = ?`,
-      [executionTargetId, mission.id, resourceKey]
-    );
-    if (existing) {
-      await tx.run(
-        `UPDATE mission_branch_observations
-            SET status = ?, dirty = ?, worktree_path = ?, observed_at = ?, updated_at = ?
-          WHERE id = ?`,
-        ['created', 0, branch.worktreePath, now, now, existing.id]
-      );
-    } else {
-      await tx.run(
-        `INSERT INTO mission_branch_observations
-           (id, workspace_id, execution_target_id, mission_id, resource_key, status, dirty,
-            worktree_path, observed_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          newId(),
-          workspaceId,
-          executionTargetId,
-          mission.id,
-          resourceKey,
-          'created',
-          0,
-          branch.worktreePath,
-          now,
-          now,
-          now
-        ]
-      );
-    }
+    await upsertMissionBranchObservationTx(tx, {
+      workspaceId,
+      executionTargetId,
+      missionId: mission.id,
+      resourceKey: await resolveBranchResourceKey({ tx, branch, requestRow }),
+      status: 'created',
+      dirty: false,
+      worktreePath: branch.worktreePath,
+      observedAt: now,
+      now
+    });
   }
 
   return { ok: true };

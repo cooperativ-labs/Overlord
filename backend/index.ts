@@ -33,21 +33,20 @@ import {
 import { getExecutionTargetMigrationDiagnostics } from './execution/execution-target-migration.ts';
 import { forgetMissionLatchSession } from './execution/latch-sessions.ts';
 import {
-  getAgentCatalog,
-  getLaunchPreference,
-  getLaunchSettings,
   getObjectiveEffectiveLaunchConfig,
   getObjectiveLaunchCommand,
   getObjectivePrompt,
-  launchObjective,
-  refreshAgentCatalog,
-  updateAgentCatalog,
+  launchObjective
+} from './execution/launch.ts';
+import {
+  getLaunchPreference,
+  getLaunchSettings,
   updateAgentLaunchConfig,
   updateLaunchPreference,
   updateLaunchSessionDefaults,
   updateTerminalProfile,
   updateWorktreeBranchAutomation
-} from './execution/launch.ts';
+} from './execution/launch-settings.ts';
 import { resolveLocalTargetServerCapability } from './execution/local-target-capability.ts';
 import { invokeLocalTargetOnServer } from './execution/local-target-invoke.ts';
 import {
@@ -95,6 +94,7 @@ import {
   syncSqlStudioForWorkspace
 } from './sql-studio/sql-studio-manager.ts';
 import { listActivityFeed } from './activity-feed.ts';
+import { getAgentCatalog, refreshAgentCatalog, updateAgentCatalog } from './agent-catalog.ts';
 import {
   AGENT_SESSION_CHANNEL_ROUTE_PREFIX,
   createAgentRequestHumanRouter,

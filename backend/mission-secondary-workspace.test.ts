@@ -577,7 +577,7 @@ describe('workspace-scoped operations resolve against the resource workspace, no
   it('stores worktree-branch automation per user, visible from every workspace (Phase 0)', async () => {
     const fixture = await setupSecondaryWorkspaceFixture({ namePrefix: 'Launch Settings' });
     const { getLaunchSettings, updateWorktreeBranchAutomation } =
-      await import('./execution/launch.ts');
+      await import('./execution/launch-settings.ts');
 
     const saved = await updateWorktreeBranchAutomation({ enabled: true }, fixture.secondary.id);
     assert.equal(saved.worktreeBranchAutomationEnabled, true);
@@ -600,8 +600,9 @@ describe('workspace-scoped operations resolve against the resource workspace, no
   // launched with an empty config.
   it('surfaces the objective-workspace launch config to launchObjective (Phase 0)', async () => {
     const fixture = await setupSecondaryWorkspaceFixture({ namePrefix: 'Launch Config' });
-    const { getLaunchSettings, updateAgentLaunchConfig, launchObjective } =
-      await import('./execution/launch.ts');
+    const { getLaunchSettings, updateAgentLaunchConfig } =
+      await import('./execution/launch-settings.ts');
+    const { launchObjective } = await import('./execution/launch.ts');
 
     const expectedConfig = {
       preCommand: 'echo secondary',

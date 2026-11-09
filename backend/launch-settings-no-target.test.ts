@@ -12,7 +12,7 @@ describe('launch settings without a declared execution target', () => {
     const dir = mkdtempSync(path.join('/tmp', 'ovld-launch-no-target-'));
     const { bootstrapIntegrationTestDb } = await import('./test-helpers.ts');
     await bootstrapIntegrationTestDb({ sqlitePath: path.join(dir, 'Overlord.sqlite') });
-    const { getLaunchSettings } = await import('./execution/launch.ts');
+    const { getLaunchSettings } = await import('./execution/launch-settings.ts');
     const { requireDatabaseClient } = await import('./db.ts');
 
     const db = requireDatabaseClient();

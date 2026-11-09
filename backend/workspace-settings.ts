@@ -26,7 +26,7 @@ async function readSettingsJson(workspaceId: string, client: DatabaseClient): Pr
 }
 
 /** Set (or delete, when `value === undefined`) one key in a workspace's `settings_json`. */
-async function writeWorkspaceSetting({
+export async function writeWorkspaceSetting({
   workspaceId,
   key,
   value,

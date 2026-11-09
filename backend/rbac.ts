@@ -24,6 +24,7 @@ import {
   type WorkspaceActorScope
 } from './db.ts';
 import { ApiError } from './errors.ts';
+import { resolveObjectiveIdForRest } from './objective-ref.ts';
 
 export async function loadActorRoles({
   workspaceId,
@@ -113,27 +114,38 @@ export async function requirePermission(
  * active — and hold `permission` there. Returns the caller's membership id in
  * that workspace. Non-membership reads as `notFoundMessage` (404) so foreign
  * workspace/resource ids don't leak existence; permission denial inside a real
- * membership is an honest 403.
+ * membership is an honest 403 (`deniedMessage` when given).
+ *
+ * `permission` may be a list, in which case holding any one of them suffices.
  */
 export async function requireWorkspacePermission({
   workspaceId,
   permission,
   db = requireDatabaseClient(),
-  notFoundMessage = 'Workspace not found'
+  notFoundMessage = 'Workspace not found',
+  deniedMessage
 }: {
   workspaceId: string;
-  permission: Permission;
+  permission: Permission | readonly Permission[];
   db?: DatabaseClient;
   notFoundMessage?: string;
+  deniedMessage?: string;
 }): Promise<string> {
+  const permissions: readonly Permission[] =
+    typeof permission === 'string' ? [permission] : permission;
+  const denied = () =>
+    new ApiError(403, deniedMessage ?? `Permission denied: ${permissions.join(' | ')}`);
+  const canAny = async (workspaceUserId: string): Promise<boolean> => {
+    for (const candidate of permissions) {
+      if (await actorCan(candidate, { workspaceId, workspaceUserId })) return true;
+    }
+    return false;
+  };
+
   const authorized = getAuthorizedWorkspace(workspaceId);
   if (getAuthorizedWorkspacesContext()) {
     if (!authorized) throw new ApiError(404, notFoundMessage);
-    if (
-      !(await actorCan(permission, { workspaceId, workspaceUserId: authorized.workspaceUserId }))
-    ) {
-      throw new ApiError(403, `Permission denied: ${permission}`);
-    }
+    if (!(await canAny(authorized.workspaceUserId))) throw denied();
     setResolvedWorkspaceId(workspaceId);
     return authorized.workspaceUserId;
   }
@@ -141,11 +153,39 @@ export async function requireWorkspacePermission({
   if (!profileId) throw new ApiError(401, 'Authentication required');
   const membershipId = await findActiveMembershipId(workspaceId, profileId, db);
   if (!membershipId) throw new ApiError(404, notFoundMessage);
-  if (!(await actorCan(permission, { workspaceId, workspaceUserId: membershipId }))) {
-    throw new ApiError(403, `Permission denied: ${permission}`);
-  }
+  if (!(await canAny(membershipId))) throw denied();
   setResolvedWorkspaceId(workspaceId);
   return membershipId;
+}
+
+/**
+ * Resolves an objective to its owning workspace and checks permission there
+ * (coo:135). UUIDs are globally unique and unscoped by the caller's active
+ * workspace; display ids (`coo:756.k7xm`) resolve in the active workspace.
+ * Non-membership reads as 404 'Objective not found'; a member lacking
+ * `permission` gets 403. Pass `db: tx` to run inside a transaction.
+ */
+export async function requireObjectivePermission({
+  objectiveId,
+  permission,
+  db = requireDatabaseClient()
+}: {
+  objectiveId: string;
+  permission: Permission;
+  db?: DatabaseClient;
+}): Promise<{ workspaceId: string; workspaceUserId: string; objectiveId: string }> {
+  const resolved = await resolveObjectiveIdForRest({ ref: objectiveId, db });
+  const workspaceUserId = await requireWorkspacePermission({
+    workspaceId: resolved.workspaceId,
+    permission,
+    db,
+    notFoundMessage: 'Objective not found'
+  });
+  return {
+    workspaceId: resolved.workspaceId,
+    workspaceUserId,
+    objectiveId: resolved.id
+  };
 }
 
 export type AuthorizedWorkspaceScope = WorkspaceActorScope & { workspaceUserId: string };
