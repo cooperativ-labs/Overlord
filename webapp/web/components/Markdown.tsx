@@ -318,7 +318,11 @@ export function Markdown({ text }: { text: string }) {
             );
           case 'ol':
             return (
-              <ol key={key} start={block.start} className="ml-4 list-decimal space-y-0.5 wrap-anywhere">
+              <ol
+                key={key}
+                start={block.start}
+                className="ml-4 list-decimal space-y-0.5 wrap-anywhere"
+              >
                 {block.items.map((item, j) => (
                   <li key={`${key}-${j}`}>{renderInline(item, `${key}-${j}`)}</li>
                 ))}
