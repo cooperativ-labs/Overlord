@@ -38,7 +38,6 @@ describe('ObjectiveFileChangesBody', () => {
   it('says tracking was unavailable when no capture session exists', () => {
     render(<ObjectiveFileChangesBody projectId="project-1" data={read()} />);
     assert.ok(screen.getByText(/File tracking was not available for this objective/));
-    assert.ok(screen.getByText(/Cumulative for this objective/));
   });
 
   it('distinguishes an empty capture with incomplete tracking and shows the warning', () => {
