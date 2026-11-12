@@ -42,12 +42,12 @@ Owns:
 - The virtual execution target core tables (`execution_target_registrations`, `project_environment_definitions`, `project_resource_sources`, `execution_request_snapshots`, `execution_request_grants`, `execution_request_observations`, `mission_target_resources`) and the additive `execution_requests` snapshot/failure/gateway columns — these are **core** (not `ext_` extension) because they drive queue status, audit, authorization, and UI. The immutable `execution_request_snapshots` row (canonical `payload_json` + SHA-256 `payload_digest`) is created in the same transaction as its `queued` request and is never updated; retrying only increments `attempt_count`. Grant records store hashes/opaque IDs, never bearer values
 - Optional per-agent `launchDefaults` in each `project_resource_sources.descriptor_json`; these source-owned pre-commands and normalized flags are project configuration and contain no credentials
 - The **Agent Session Exchange** core tables — `agent_session_channels`, `agent_session_events`, `agent_requests`, and `agent_session_inputs` — declared by this contract and migrated with the channel bootstrap. They are core rather than `ext_` because they drive authorization, audit, presence, and UI gating. The scoped channel credential is stored hash-only and scoped to exactly one channel; `native_session_id` is a correlation alias and never an authorization key; raw native payloads are never persisted (no transcripts or transcript paths, no raw tool input or output, no file contents, no environment variables), and stored summaries are bounded, redacted, and carry a `formatter_version`. No derived capability tier is persisted — a connector's static tier is derived from fixtures at build time and a session's effective capabilities live in `capabilities_json` on its channel. The documented-but-never-migrated `hook_events` and `permission_requests` designs are **superseded** by them: sanitized hook events become normalized `agent_session_events`, and a permission becomes one kind of `agent_requests`. The closed `permission_requests.status` vocabulary and the `mission_events.type = permission_request` value remain valid; only the dedicated tables are retired, and no component may begin writing them
-- `human_action_resolutions`: operator decisions on the deferred-work items of a delivery (the reported-human-action resolutions it also held before v150 were deleted by migration). Primary key `(delivery_id, action_id)` where `action_id` is the stable delivery-local `DeferredWorkV1.id` (agent-report index plus the digest of the canonical deferred-work object, v166; historical string-item rows were deleted with their items by the v166 migration); denormalized `workspace_id`, `mission_id`, `objective_id`; closed `status` (`done` \| `dismissed`); nullable closed `outcome` (`mission_created` \| `objective_added`) and `outcome_ref` recording a promotion (v147); `resolved_by_workspace_user_id`; `resolved_at`. Rows cascade with their delivery, are never soft-deleted (reopening deletes the row), and never duplicate the item text — the delivery report stays the sole source of what the item says.
-- `missions.summary_enabled` (v166): Bool, NOT NULL, default true; false for every mission that existed at the v166 migration. It is the only source of mission-summary eligibility and is never inferred from a summary row.
-- `mission_summaries` (v166): one row per eligible mission, primary key `mission_id` (FK cascade), denormalized `workspace_id` and `project_id`, `revision`, `requested_generation`, `completed_generation`, closed `status` (`pending` \| `composed` \| `fallback`), `headline`, `summary_markdown`, `risks_json` (`{ deliveryId, objectiveId, index, text }[]`), `suggestions_json` (`{ deliveryId, objectiveId, actionId }[]` references only; item text is read from the delivery report at projection time), nullable `source_delivery_id`, closed `generated_by` (`deterministic` \| `gemini`), nullable `generated_at` and `model`, `created_at`, `updated_at`. Replaced in place; every write appends a `mission_summary` entity change.
-- `mission_summary_seen` (v166): `mission_id`, `workspace_user_id` (both FK cascade, primary key on the pair) and `seen_at`, the monotonic per-user evidence watermark. Writes append no entity change.
+- `human_action_resolutions`: operator decisions on the deferred-work items of a delivery (the reported-human-action resolutions it also held before v150 were deleted by migration). Primary key `(delivery_id, action_id)` where `action_id` is the stable delivery-local `DeferredWorkV1.id` (agent-report index plus the digest of the canonical deferred-work object; historical string-item rows were deleted with their items by the v166 migration); denormalized `workspace_id`, `mission_id`, `objective_id`; closed `status` (`done` \| `dismissed`); nullable closed `outcome` (`mission_created` \| `objective_added`) and `outcome_ref` recording a promotion; `resolved_by_workspace_user_id`; `resolved_at`. Rows cascade with their delivery, are never soft-deleted (reopening deletes the row), and never duplicate the item text — the delivery report stays the sole source of what the item says.
+- `missions.summary_enabled`: Bool, NOT NULL, default true; false for every mission that existed at the v166 migration. It is the only source of mission-summary eligibility and is never inferred from a summary row.
+- `mission_summaries`: one row per eligible mission, primary key `mission_id` (FK cascade), denormalized `workspace_id` and `project_id`, `revision`, `requested_generation`, `completed_generation`, closed `status` (`pending` \| `composed` \| `fallback`), `headline`, `summary_markdown`, `risks_json` (`{ deliveryId, objectiveId, index, text }[]`), `suggestions_json` (`{ deliveryId, objectiveId, actionId }[]` references only; item text is read from the delivery report at projection time), nullable `source_delivery_id`, closed `generated_by` (`deterministic` \| `gemini`), nullable `generated_at` and `model`, `created_at`, `updated_at`. Replaced in place; every write appends a `mission_summary` entity change.
+- `mission_summary_seen`: `mission_id`, `workspace_user_id` (both FK cascade, primary key on the pair) and `seen_at`, the monotonic per-user evidence watermark. Writes append no entity change.
 - Controlled vocabularies (closed and open sets)
-- The **assistant conversation** core tables (contract v152): `chat_threads`, `chat_messages`, `chat_runs`, `chat_run_attempts`, `chat_provider_checkpoints`, `chat_tool_calls`, `chat_source_refs`, `chat_dependency_sets`, `chat_dependency_set_members`, `chat_evidence`, `chat_thread_summaries`, `chat_questions`, `chat_events`, `chat_work_proposals`, `chat_work_proposal_revisions`, `chat_work_receipts`, `chat_work_receipt_missions`, `chat_presence`, `chat_event_acks`, and `chat_notifications`, plus `account_connections`, `account_connection_authorizations`, and `missions.created_from_chat_thread_id` (soft reference, no FK). Both editions enforce the same invariants: one unfinished run per thread, one leased attempt per run, attempt/checkpoint/tool-call/event writes only at the run's current fence, gap-free append-only per-thread event sequences, one open question per run, frozen proposal revisions, one creation receipt per proposal and per `(owner, client request id)`, monotonic acknowledgements, one conversation notification per `(owner, thread, run, type, transition)` addressed to the thread owner, and one live account connection per `(owner, organization, provider, server)`. Every row cascades from `profiles`/`organizations`. Checkpoint payloads, tool results, and credential envelopes are private server state
+- The **assistant conversation** core tables: `chat_threads`, `chat_messages`, `chat_runs`, `chat_run_attempts`, `chat_provider_checkpoints`, `chat_tool_calls`, `chat_source_refs`, `chat_dependency_sets`, `chat_dependency_set_members`, `chat_evidence`, `chat_thread_summaries`, `chat_questions`, `chat_events`, `chat_work_proposals`, `chat_work_proposal_revisions`, `chat_work_receipts`, `chat_work_receipt_missions`, `chat_presence`, `chat_event_acks`, and `chat_notifications`, plus `account_connections`, `account_connection_authorizations`, and `missions.created_from_chat_thread_id` (soft reference, no FK). Both editions enforce the same invariants: one unfinished run per thread, one leased attempt per run, attempt/checkpoint/tool-call/event writes only at the run's current fence, gap-free append-only per-thread event sequences, one open question per run, frozen proposal revisions, one creation receipt per proposal and per `(owner, client request id)`, monotonic acknowledgements, one conversation notification per `(owner, thread, run, type, transition)` addressed to the thread owner, and one live account connection per `(owner, organization, provider, server)`. Every row cascades from `profiles`/`organizations`. Checkpoint payloads, tool results, and credential envelopes are private server state
 - Soft-delete and revision semantics
 - Migration versioning via `schema_migrations`
 - Extension table naming rules (`ext_<name>_`)
@@ -116,7 +116,7 @@ Does NOT own:
 Owns:
 
 - `execution_requests` queue claiming and launch
-- Agent-facing repository read capabilities (contract v152): `git_status`, resource-addressed `diff`, bounded `read_file`, and literal `search_text`, alongside the existing `observe`/`tree`/`branches`/`worktrees`, executed for mission-less capability calls with the requested `resource_key` (never silently the primary resource), path containment including symlinks, credential/sensitive-path exclusion, disabled external diff/textconv/hooks, and explicit bounds and truncation
+- Agent-facing repository read capabilities: `git_status`, resource-addressed `diff`, bounded `read_file`, and literal `search_text`, alongside the existing `observe`/`tree`/`branches`/`worktrees`, executed for mission-less capability calls with the requested `resource_key` (never silently the primary resource), path containment including symlinks, credential/sensitive-path exclusion, disabled external diff/textconv/hooks, and explicit bounds and truncation
 - Working directory resolution, ordered as explicit `workingDirectory`, objective `resource_key` on the claiming execution target, primary project resource for the target, then matching cwd `.overlord/project.json` fallback (the link whose `projectId` matches the mission project, among any number of projects recorded in that file); a missing objective-bound resource fails with `objective_resource_not_connected`
 - Launch-config resolution for manual, auto-advance, and claim-time launches: an explicit objective override wins, then per-agent defaults on the selected `project_resource_sources` descriptor, then user execution-target and workspace defaults
 - Per-mission branch/worktree preparation before local agent spawn when enabled, including the deterministic branch/worktree **planning** algorithm (`cli/src/branch-planning.ts`) — co-owned with the service layer and pinned to `contract/branch-planning-vectors.json` (see "Shared Deterministic Algorithms")
@@ -156,17 +156,17 @@ Owns:
 - Creation-provenance projection: `MissionDto` and `ObjectiveDto` carry `createdByKind` (`human` \| `agent` \| `automation`; non-optional, with a `human` fallback in the mapper so no client writes a null branch), `createdByAgent` (connector/agent identifier or null), and `createdByWorkspaceUserId` (the workspace member the authoring actor acted as, or on behalf of). `MissionDetailDto` additionally carries `createdFrom` — `{ sessionId, missionId, missionDisplayId, agentIdentifier }` or null — resolved from the soft `created_by_session_id` reference by a `LEFT JOIN` that tolerates a missing session; it is paid once per mission page and is deliberately absent from the board/list projections. Provenance is a permanent row attribute, never seen-tracked mission state, and REST exposes no filter or sort on it.
 - Objective display ids: `ObjectiveDto` additively carries `displayKey` and computed `displayId` (`{mission.displayId}.{displayKey}`). `/api/objectives/:id` (and launch/prompt/attachment routes that take an objective id) accept an objective UUID or a full display id. UUID lookup stays globally unique; display ids resolve within the selected organization's `authorizedWorkspaces` set, return `404` outside that set, and return `409` on genuine ambiguity.
 - Opt-in parallel objectives: `MissionDto` and `UpdateMissionBody` additively carry `allowParallelObjectives` (default false). `POST /api/objectives/:id/launch` 409s an active sibling only while this flag is false; when it is true a sibling never blocks the launch, on the same `resource_key` or a different one. `POST /api/missions/:id/branch-prepared` accepts an additive `branchAutomation.isolated` boolean: an isolated per-objective branch is recorded on `objectives.branch` and audited as a mission event, but must not move `missions.active_branch` or the mission-level branch observation off the shared mission branch.
-- Profile-owned inbox capture: authenticated `/api/inbox` CRUD, `/api/inbox/:id/promote`, and (v168) Inbox attachments at `GET/POST /api/inbox/:id/attachments` and `DELETE /api/inbox/:id/attachments/:attachmentId`, which promotion re-points onto the created mission's first objective. Every item route resolves the caller's profile and returns `404` for an item owned by another profile. Promotion checks `mission:create` only on the destination project, calls the ordinary mission-create transaction with the capture fields, and consumes the item atomically. Account-owned inbox mutations are intentionally absent from workspace `entity_changes`; promotion retains normal mission realtime behavior.
+- Profile-owned inbox capture: authenticated `/api/inbox` CRUD, `/api/inbox/:id/promote`, and Inbox attachments at `GET/POST /api/inbox/:id/attachments` and `DELETE /api/inbox/:id/attachments/:attachmentId`, which promotion re-points onto the created mission's first objective. Every item route resolves the caller's profile and returns `404` for an item owned by another profile. Promotion checks `mission:create` only on the destination project, calls the ordinary mission-create transaction with the capture fields, and consumes the item atomically. Account-owned inbox mutations are intentionally absent from workspace `entity_changes`; promotion retains normal mission realtime behavior.
 - Cross-workspace inbox missions: authenticated `GET /api/inbox/missions` returns a bounded `InboxMissionsResponse` unioning agent-authored missions in status type `next` with missions of any creator that are past due or due today or tomorrow (UTC day boundaries; `complete` and `cancelled` status types excluded from both due slices), across every workspace the caller actively belongs to in the active organization and may `mission:read`. Only active projects contribute Inbox cards; archived projects are excluded regardless of inclusion reason. Human-created missions appear only through the overdue and due-soon windows. Each row is an `InboxMissionDto` (`MissionDto` plus project name/color and inclusion `reasons` of `agent_next`, `overdue`, `due_soon`, and/or `recent`); a mission qualifying several ways is one card carrying every reason, and `overdue` and `due_soon` are mutually exclusive. Overdue rows lead, most recently overdue first (due date descending), then due-soon rows soonest first, then agent-Next rows newest-first, each slice capped independently. The additive `recent` reason labels rows created within the past 7 days. Distinct from profile-owned `/api/inbox` capture.
 - Cross-workspace activity feed: authenticated `GET /api/activity-feed` returns a bounded, mission-anchored `ActivityFeedDto` across every workspace the caller actively belongs to in the active organization, authorized with `mission:read` per workspace. Its kinds are `mission_run`, `mission_delivered`, and `blocking_question`. A mission with at least one `launching` / `executing` / `pending_delivery` objective is a single `ActivityFeedMissionItemDto` keyed `mission:<missionId>` — never one card per objective — carrying `runState` (`launching` \| `executing`), every objective of that mission as `ActivityFeedMissionObjectiveDto` in mission-panel display order, and `activeObjectiveIds` for the objectives that are live. Its chrome fields describe the mission's _primary_ running objective: the launching one when there is one, else the oldest active one. `pending_delivery` counts as live work, so a re-attached objective keeps its mission on the feed instead of dropping out between its last update and delivery. A mission whose most recent live delivery falls in the requested two-week window and that has no live objective is a `mission_delivered` card of the same DTO shape with `runState: 'delivered'` and empty `activeObjectiveIds`. Optional `before` (ISO-8601 UTC) selects the next older two-week delivered window and omits live runs and questions; `nextBefore` is that window's start when older delivered missions exist, else null. `blocking_question` items remain unseen `ask` mission events from the past 3 days. `items` is grouped rather than purely time-descending — launching missions, then executing ones, then questions, then delivered, newest-first within each group. `createdByKind` / `createdByAgent` describe the item's subject: the mission for `mission_run` and `mission_delivered`, the objective behind the ask for `blocking_question`. Agent identity treats the protocol session sentinel `unknown` as absent and falls back to the objective's `assigned_agent`. Truncation is reported through `counts` rather than implied, and no raw payload JSON is exposed.
-- Deferred-work resolutions: authenticated `PUT /api/deliveries/:deliveryId/deferred-work/:actionId/resolution` with `{ status, outcome?, outcomeRef? }` (`status` is `done` \| `dismissed`; `outcome` is `mission_created` \| `objective_added` and only with `status: 'done'`, else 400) upserts a `human_action_resolutions` row and `DELETE` on the same path removes it; both require `mission:update` on the delivery's workspace, return the refreshed `DeliveryDeferredWorkItemDto`, 404 an unknown delivery or an action id that is not one of the delivery's deferred-work ids (reported human actions have no resolution since v150), and emit a `human_action_resolution` entity-change row carrying the mission and objective ids. The webapp may promote deferred work through the existing `POST /api/missions` surface (`title` as the first objective's title and `change`, `Location: {location}`, `Done when: {doneWhen}` separated by blank lines as its instruction, `statusId` omitted so the project default applies) or `POST /api/objectives` as a future objective on the delivering mission with the same title and instruction (v166), then record the matching outcome. No raw payload JSON is exposed.
-- Mission summary (v166, operator surface only, exempt from MCP parity): `GET /api/missions/:id/summary` with mission read authorization returns `MissionSummaryResponse` (`{ eligible, summary, evidence, watermark, seenAt }`; all null except `eligible: false` for an ineligible mission). Evidence is selected in the database before limits and capped at `MISSION_SUMMARY_EVIDENCE_LIMIT` with pre-cap totals and truncation flags; suggestions are projected at read time from current-run delivery deferred work and resolutions (dismissed and no-longer-current items omitted, promoted items reduced to identity, title, and resolution). `PUT /api/missions/:id/summary/seen` takes `{ watermark }`, rejects a value later than the caller's current evidence maximum or any value on an ineligible mission with `invalid_input`, upserts `max(existing, watermark)` for the calling workspace user, returns `{ seenAt }`, and records no entity change. Neither route has a Protocol, CLI, or MCP counterpart.
-- Delivery read projection: `GET /api/missions/:id/deliveries` returns a bounded `MissionDeliveriesDto` page (`items`, `total`, `limit`) of authorized `DeliveryDto` records with a normalized versioned report, while delivery mission events expose their additive `deliveryId` without exposing raw event or delivery payload JSON. `items` is newest-first and capped at 200; `total` is the matching row count before that cap. Each `DeliveryDto` carries `deferredWorkItems` — `{ actionId, title, change, location, doneWhen, resolution }` (v166) per presentation deferred-work entry, addressed with the same stable ids as the deferred-work resolution routes (v147).
+- Deferred-work resolutions: authenticated `PUT /api/deliveries/:deliveryId/deferred-work/:actionId/resolution` with `{ status, outcome?, outcomeRef? }` (`status` is `done` \| `dismissed`; `outcome` is `mission_created` \| `objective_added` and only with `status: 'done'`, else 400) upserts a `human_action_resolutions` row and `DELETE` on the same path removes it; both require `mission:update` on the delivery's workspace, return the refreshed `DeliveryDeferredWorkItemDto`, 404 an unknown delivery or an action id that is not one of the delivery's deferred-work ids (reported human actions have no resolution since v150), and emit a `human_action_resolution` entity-change row carrying the mission and objective ids. The webapp may promote deferred work through the existing `POST /api/missions` surface (`title` as the first objective's title and `change`, `Location: {location}`, `Done when: {doneWhen}` separated by blank lines as its instruction, `statusId` omitted so the project default applies) or `POST /api/objectives` as a future objective on the delivering mission with the same title and instruction, then record the matching outcome. No raw payload JSON is exposed.
+- Mission summary (operator surface only, exempt from MCP parity): `GET /api/missions/:id/summary` with mission read authorization returns `MissionSummaryResponse` (`{ eligible, summary, evidence, watermark, seenAt }`; all null except `eligible: false` for an ineligible mission). Evidence is selected in the database before limits and capped at `MISSION_SUMMARY_EVIDENCE_LIMIT` with pre-cap totals and truncation flags; suggestions are projected at read time from current-run delivery deferred work and resolutions (dismissed and no-longer-current items omitted, promoted items reduced to identity, title, and resolution). `PUT /api/missions/:id/summary/seen` takes `{ watermark }`, rejects a value later than the caller's current evidence maximum or any value on an ineligible mission with `invalid_input`, upserts `max(existing, watermark)` for the calling workspace user, returns `{ seenAt }`, and records no entity change. Neither route has a Protocol, CLI, or MCP counterpart.
+- Delivery read projection: `GET /api/missions/:id/deliveries` returns a bounded `MissionDeliveriesDto` page (`items`, `total`, `limit`) of authorized `DeliveryDto` records with a normalized versioned report, while delivery mission events expose their additive `deliveryId` without exposing raw event or delivery payload JSON. `items` is newest-first and capped at 200; `total` is the matching row count before that cap. Each `DeliveryDto` carries `deferredWorkItems` — `{ actionId, title, change, location, doneWhen, resolution }` per presentation deferred-work entry, addressed with the same stable ids as the deferred-work resolution routes.
 - Editable mission artifacts: authenticated `PATCH /api/missions/:id/artifacts/:artifactId` accepts `expectedRevision` plus a non-empty subset of `{ label, contentText, externalUrl }`, requires `mission:update` on the named mission, retains delivery/session/objective provenance and `contentJson`, rejects stale edits with `409` and non-HTTP(S) external URLs, and emits an `artifact` entity-change row in the write transaction. The client renders `contentText` as safe Markdown and edits these human-facing fields in place. The same mutation is also reachable through Protocol `update-artifact` and MCP `overlord_update_artifact` (see Protocol / MCP ownership).
 - Mid-turn mission artifact creation: authenticated `POST /api/missions/:id/artifacts` accepts `{ type, label }` plus at least one of `{ contentText, externalUrl }`, requires `artifact:create` on the named mission, optionally stamps `objectiveId` / `sessionId` provenance, leaves `delivery_id` null, rejects non-HTTP(S) external URLs, and emits an `artifact` entity-change insert in the same transaction. The same mutation is reachable through Protocol `add-artifact` and MCP `overlord_add_artifact`.
 - Mission shared context: authenticated `GET /api/missions/:id/context` returns `SharedContextEntryDto` records (`key`, `value`, `valueKind`, `tags`, `updatedAt`, `revision`) authorized with `mission:read`; authenticated `PUT /api/missions/:id/context` upserts one entry by `{ key, value }` with `mission:update`, mirrors Protocol `write-context`/`read-context`, and emits a `shared_context_entry` entity-change in the same transaction. The web client renders these entries in a collapsed Shared State mission footer and supports in-place edits.
-- User-scoped Everhour identity: authenticated `GET /ext/everhour/user-connection` reports non-secret connection metadata for the caller's profile; authenticated `PUT /ext/everhour/user-connection` validates the personal API key against Everhour then stores it only as AES-256-GCM ciphertext under a server-held key; authenticated `DELETE /ext/everhour/user-connection` revokes/soft-deletes only the caller's credential. These account-wide routes do not use an ambient workspace or a `workspace:*` permission. Existing `GET`/`PUT`/`DELETE /ext/everhour/integration` are a deprecated alias of the same profile-scoped surface. Timer, time-entry, and project-link writes use the acting user's key. DTOs, logs, browser/mobile storage, realtime, entity changes, and errors never contain an Everhour API key or server encryption key. Workspace-scoped GitHub App installation and Everhour/GitHub resource links are unchanged. Since v153 these routes are compatibility aliases over the shared account-connections module (`ProfileConnections`, provider `everhour`, profile scope): the key is stored in `account_connections` under the module's key ring, never in an extension-held key, and the response shapes and error text are unchanged.
-- User-scoped GitHub repository authorization: authenticated `GET /ext/github/user-connection` reports configuration and non-secret connected-account metadata; `POST /ext/github/user-connection/authorize` creates a profile-bound, hashed, short-lived OAuth state and returns the GitHub authorization URL; public `GET /api/auth/callback/github/repository` consumes that state once, exchanges the code server-to-server, encrypts the access and optional refresh credentials with AES-256-GCM, and stores one active connection for the profile; authenticated `DELETE /ext/github/user-connection` revokes/soft-deletes only the caller's credential; authenticated `GET /ext/github/repository-owners` returns the personal owner plus only active organizations whose policy permits the caller to create private repositories. Repository authorization reuses the Better Auth GitHub OAuth App client registration (`GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`) but remains a distinct, explicit grant and token lifecycle requesting `repo read:org`; the callback is a subpath of the registered `/api/auth/callback/github` login callback and runs before the Better Auth wildcard. These account-wide routes do not use an ambient workspace or alter the existing workspace GitHub App installation. DTOs, logs, browser/mobile storage, realtime, entity changes, redirects, and errors never contain a GitHub credential, raw OAuth state, or server encryption key. Since v153 `GET`/`DELETE /user-connection` and `POST /user-connection/authorize` are compatibility aliases over the shared account-connections module (`ProfileConnections`, provider `github`, profile scope), with unchanged shapes; the module serves the callback at the same path, stores the token in `account_connections` under its key ring, and serialises refresh; `POST /api/connections` with `provider: 'github'` is the canonical start route.
+- User-scoped Everhour identity: authenticated `GET /ext/everhour/user-connection` reports non-secret connection metadata for the caller's profile; authenticated `PUT /ext/everhour/user-connection` validates the personal API key against Everhour then stores it only as AES-256-GCM ciphertext under a server-held key; authenticated `DELETE /ext/everhour/user-connection` revokes/soft-deletes only the caller's credential. These account-wide routes do not use an ambient workspace or a `workspace:*` permission. Existing `GET`/`PUT`/`DELETE /ext/everhour/integration` are a deprecated alias of the same profile-scoped surface. Timer, time-entry, and project-link writes use the acting user's key. DTOs, logs, browser/mobile storage, realtime, entity changes, and errors never contain an Everhour API key or server encryption key. Workspace-scoped GitHub App installation and Everhour/GitHub resource links are unchanged. These routes are compatibility aliases over the shared account-connections module (`ProfileConnections`, provider `everhour`, profile scope): the key is stored in `account_connections` under the module's key ring, never in an extension-held key, and the response shapes and error text are unchanged.
+- User-scoped GitHub repository authorization: authenticated `GET /ext/github/user-connection` reports configuration and non-secret connected-account metadata; `POST /ext/github/user-connection/authorize` creates a profile-bound, hashed, short-lived OAuth state and returns the GitHub authorization URL; public `GET /api/auth/callback/github/repository` consumes that state once, exchanges the code server-to-server, encrypts the access and optional refresh credentials with AES-256-GCM, and stores one active connection for the profile; authenticated `DELETE /ext/github/user-connection` revokes/soft-deletes only the caller's credential; authenticated `GET /ext/github/repository-owners` returns the personal owner plus only active organizations whose policy permits the caller to create private repositories. Repository authorization reuses the Better Auth GitHub OAuth App client registration (`GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET`) but remains a distinct, explicit grant and token lifecycle requesting `repo read:org`; the callback is a subpath of the registered `/api/auth/callback/github` login callback and runs before the Better Auth wildcard. These account-wide routes do not use an ambient workspace or alter the existing workspace GitHub App installation. DTOs, logs, browser/mobile storage, realtime, entity changes, redirects, and errors never contain a GitHub credential, raw OAuth state, or server encryption key. `GET`/`DELETE /user-connection` and `POST /user-connection/authorize` are compatibility aliases over the shared account-connections module (`ProfileConnections`, provider `github`, profile scope), with unchanged shapes; the module serves the callback at the same path, stores the token in `account_connections` under its key ring, and serialises refresh; `POST /api/connections` with `provider: 'github'` is the canonical start route.
 - Composite project initialization: authenticated `POST /api/projects/initialize` names its target workspace and requires `project:create` there. The caller-provided idempotency key creates the project, first mission, and initial draft objective atomically; optional private GitHub provisioning runs outside that transaction through the already connected user OAuth credential and is retryable with the same key. A failure never rolls back the created idea. On success the extension records one GitHub project link and the core service records one non-primary read-only `git` resource for the HTTPS clone URL. The selected owner must be eligible for the connected account, and this flow never reads, changes, or depends on the workspace GitHub App installation.
 - Realtime `EntityChangeDto` projections from `entity_changes`, including `changedFields` parsed from `changed_fields_json` and additive `workspaceId`; streams and catch-up scans aggregate only the caller's current readable memberships, filter before projection, and advance the global cursor past filtered rows
 - Read-only derived mission branch metadata (`MissionBranchDto`) from `missions.active_branch`, predicted via the service layer's copy of the shared branch/worktree planning algorithm (`backend/branch-planning.ts`) — co-owned with the Runner Layer and pinned to `contract/branch-planning-vectors.json` (see "Shared Deterministic Algorithms")
@@ -201,10 +201,10 @@ Owns:
 - In-process Live Activity dispatcher (`backend/live-activity-dispatcher.ts`), which claims durable `overlord.live_activity.dispatch.v1` and `overlord.live_activity.start.v1` worker jobs, recomputes the bounded account presentation snapshot, and sends APNs `liveactivity` start/update/end events.
 - Standard push-notification routes: authenticated `PUT /api/mobile/push/device-token` and `POST /api/mobile/push/device-token/revoke` for opaque APNs device tokens (body-carried, private to the caller's profile, no read surface), plus authenticated `GET`/`PUT /api/profile/notification-preferences` for the caller's own per-category preferences.
 - In-process standard push dispatcher (`backend/push-notification-dispatcher.ts`), which claims durable `overlord.push_notification.dispatch.v1` worker jobs, recomputes the alert presentation snapshot, and sends APNs `alert`/`background` pushes on the plain bundle-id topic. It shares the APNs signing/transport helpers with the Live Activity dispatcher but never shares tokens, topics, or push types with it.
-- The private **assistant conversation** route family (contract v152; DTOs in `packages/contract/src/chat.ts`): `/api/chat/threads*`, `/api/chat/runs/:id/{cancel,continue}`, `/api/chat/questions/:id/answer`, `/api/chat/proposals/:id/create`, `/api/chat/providers`, and `/api/chat/notifications*`, all owner- and organization-scoped with existence-hiding 404s and Cloud-only (`chat_unavailable` on Local); idempotent submission/Create keyed by client request ids; atomic snapshot plus `eventCursor`; the owner-scoped SSE event channel with replay from storage, bounded retention, and `snapshot_required` — the one sanctioned realtime channel that does not derive from `entity_changes`; expiring foreground presence and monotonic rendered-event acknowledgements separate from replay cursors; backend run scheduling with leased, fenced attempts; the Gemini runtime adapter and private checkpoint persistence; the in-process conversation-notification dispatcher over `chat_notifications`
-- Account-connection routes (contract v152): `GET`/`POST /api/connections`, `DELETE /api/connections/:id`, public `GET /api/connections/knowledgebase/callback`, and public Client ID Metadata Document `GET /oauth/clients/knowledgebase.json`; the backend outbound MCP client for the configured Knowledgebase with a reviewed read-only allowlist; and the authenticated mission-less `POST /api/projects/:id/repository-reads` route over the runner capability queue
-- Knowledgebase connection settings (contract v158): `PATCH /api/connections/:id` with `{ expectedRevision, assistantWriteScope }` for the caller's live Knowledgebase connection (Cloud-only)
-- Profile-scoped account connections (contract v153): `GET /api/connections?scope=all` (organization-scoped plus profile-scoped connections and per-provider `providers` availability), `POST /api/connections/api-keys` (`{ provider, apiKey }`, validated upstream, then sealed), and `DELETE /api/connections/:id` for profile-scoped rows, and `POST /api/connections` for `github` (profile-scoped OAuth, callback `/api/auth/callback/github/repository`), served on both editions; the default `GET /api/connections` listing and Knowledgebase stay Cloud-only and unchanged
+- The private **assistant conversation** route family (DTOs in `packages/contract/src/chat.ts`): `/api/chat/threads*`, `/api/chat/runs/:id/{cancel,continue}`, `/api/chat/questions/:id/answer`, `/api/chat/proposals/:id/create`, `/api/chat/providers`, and `/api/chat/notifications*`, all owner- and organization-scoped with existence-hiding 404s and Cloud-only (`chat_unavailable` on Local); idempotent submission/Create keyed by client request ids; atomic snapshot plus `eventCursor`; the owner-scoped SSE event channel with replay from storage, bounded retention, and `snapshot_required` — the one sanctioned realtime channel that does not derive from `entity_changes`; expiring foreground presence and monotonic rendered-event acknowledgements separate from replay cursors; backend run scheduling with leased, fenced attempts; the Gemini runtime adapter and private checkpoint persistence; the in-process conversation-notification dispatcher over `chat_notifications`
+- Account-connection routes: `GET`/`POST /api/connections`, `DELETE /api/connections/:id`, public `GET /api/connections/knowledgebase/callback`, and public Client ID Metadata Document `GET /oauth/clients/knowledgebase.json`; the backend outbound MCP client for the configured Knowledgebase with a reviewed read-only allowlist; and the authenticated mission-less `POST /api/projects/:id/repository-reads` route over the runner capability queue
+- Knowledgebase connection settings: `PATCH /api/connections/:id` with `{ expectedRevision, assistantWriteScope }` for the caller's live Knowledgebase connection (Cloud-only)
+- Profile-scoped account connections: `GET /api/connections?scope=all` (organization-scoped plus profile-scoped connections and per-provider `providers` availability), `POST /api/connections/api-keys` (`{ provider, apiKey }`, validated upstream, then sealed), and `DELETE /api/connections/:id` for profile-scoped rows, and `POST /api/connections` for `github` (profile-scoped OAuth, callback `/api/auth/callback/github/repository`), served on both editions; the default `GET /api/connections` listing and Knowledgebase stay Cloud-only and unchanged
 
 Does NOT own:
 
@@ -311,7 +311,7 @@ Owns:
 - The account-level ActivityKit activity identifier and `pushTokenUpdates` lifecycle
 - Registration/rotation/revocation calls on the Mobile → REST surface
 - Ending local activities before sign-out and ensuring the corresponding registration is revoked
-- The assistant chat journey (contract v152): the shared `OverlordCore` stream client (incremental SSE parsing, ordered delivery, resume cursor, dedupe, reconnect/backoff, `snapshot_required` recovery, polling fallback, state scoped to backend/account/thread), foreground presence and rendered-event acknowledgements, conversation notification routing to `overlord://chat/threads/:threadId` including cold start, and Knowledgebase sign-in through `ASWebAuthenticationSession`
+- The assistant chat journey: the shared `OverlordCore` stream client (incremental SSE parsing, ordered delivery, resume cursor, dedupe, reconnect/backoff, `snapshot_required` recovery, polling fallback, state scoped to backend/account/thread), foreground presence and rendered-event acknowledgements, conversation notification routing to `overlord://chat/threads/:threadId` including cold start, and Knowledgebase sign-in through `ASWebAuthenticationSession`
 - Presentation of the additive creation-provenance fields it decodes from `MissionDto` / `ObjectiveDto` (`createdByKind`, `createdByAgent`, `createdByWorkspaceUserId`). The mobile mirror in `OverlordCore/Contract.swift` decodes them as optionals defaulting to `human`, per the existing additive-decode convention, so an older server response still decodes. Where the mission chat feed reads objectives back as messages the operator sent, an `agent`-authored objective must be attributed rather than presented as the operator's own text, and the attribution must also lead the VoiceOver label — a client that renders provenance only as a fill or glyph misattributes it for assistive technology.
 
 Does NOT own:
@@ -436,21 +436,66 @@ Specified in [protocol.md](protocol.md).
   service context for the resource's workspace (with the authorized
   `workspaceUserId` as actor, inside the handler's transaction when it has
   one), calls the service, and maps the result onto its DTO. It must not carry
-  a second copy of service SQL or rules (Version 164).
+  a second copy of service SQL or rules.
 - **Delivery reads**: `GET /api/missions/:id/deliveries` authorizes against the named mission's owning workspace with the existing `mission:read` permission. It returns a bounded `MissionDeliveriesDto` page: newest-first `DeliveryDto` `items` capped at 200, plus `total` (matching rows before the cap) and `limit` (the applied page size). It synthesizes the deterministic V1 report for legacy payloads; neither `deliveries.payload_json` nor `mission_events.payload_json` are exposed verbatim.
-- **File-change reads**: `GET /api/missions/:id/file-changes` authorizes against the named mission and returns a bounded `MissionFileChangesDto` page with the same `{ items, total, limit }` shape: newest-first compact `FileChangeDto` `items` capped at 200, plus the pre-cap `total`. A truncated mission-wide page is incomplete evidence; clients must never partition it by objective. Per-objective views use the validated objective-scoped read (`objectiveId` query parameter / Protocol `objective-changes` / MCP `overlord_changes`), whose `ObjectiveFileChangesDto` filters in SQL before count and the 200-row cap and carries persisted capture diagnostics (version 165).
+- **File-change reads**: `GET /api/missions/:id/file-changes` authorizes against the named mission and returns a bounded `MissionFileChangesDto` page with the same `{ items, total, limit }` shape: newest-first compact `FileChangeDto` `items` capped at 200, plus the pre-cap `total`. A truncated mission-wide page is incomplete evidence; clients must never partition it by objective. Per-objective views use the validated objective-scoped read (`objectiveId` query parameter / Protocol `objective-changes` / MCP `overlord_changes`), whose `ObjectiveFileChangesDto` filters in SQL before count and the 200-row cap and carries persisted capture diagnostics.
 - **Account-owned inbox**: Inbox CRUD resolves the authenticated `profiles.id` rather than an ambient workspace. Reads and mutations are scoped to that profile; promotion derives authorization and tenancy solely from its destination project. Inbox CRUD writes do not append workspace `entity_changes`, because those records have no workspace; promotion appends the ordinary mission change in the destination workspace.
 - **Workspace resolution taxonomy**: Entity-addressed reads and writes derive a workspace from their operand and require it in the immutable request `authorizedWorkspaces` set. Single-workspace UI reads require an explicit `workspaceId` and return `400` when omitted. Aggregate parentless reads fan out only across the selected organization's authorized set; when a session holder belongs to multiple organizations, selection is explicit. Parentless writes use `resolveParentlessWorkspace` only for `create-project` and `register-target`; mission writes derive tenancy from their named project and inbox operations are profile-owned. No route may select the oldest membership.
 - **Authorized workspace shape**: Auth resolves once per request `{ organizationId, workspaces: [{ workspaceId, workspaceUserId, roleKeys }] }`, where workspaces are active live memberships intersected with token consent (when present). Services may retain one operation-local `resolvedWorkspaceId`, but must not reinterpret the set from request headers or persistence.
-- **Mission search versioning**: `GET /api/missions/search` is frozen as its v1 array-shaped response. `GET /api/missions/search/v2` returns `SearchMissionsResponseV2`: `{ version: 2, results, appliedFilters, totalMatchedBeforeLimit, workspaceCounts }`. Each result includes project/workspace labels, `dueDatetime`, `relevance` (deterministic fused score with exact display-id / exact-title precedence), `snippet`, `matchedTerms`, and `matchedIn`. Ranking is portable across adapters: display-id short-circuit, meaningful-term coverage floor `min(3, max(1, ceil(termCount / 2)))`, `max(documentScore)` plus bounded corroboration, and recency as rank fusion rather than an eligibility gate. Empty or stop-word-only queries use an explicit `fallback` mode. Complete and cancelled missions stay eligible by default. The REST route accepts only stable `projectIds`, plus `resourceKeys`, status types, `dateField` (`createdAt`, `updatedAt`, or `dueDatetime`), inclusive `from`, exclusive `to`, and global `limit`; it applies no implicit date window. The Protocol, CLI, and MCP v2 surfaces additionally resolve a human project reference and answer an ambiguous one with `project_selection_required` (Version 97). A `dueDatetime` range excludes missions with no due date, because the column is nullable and a due-date window asks about scheduled work. Fan-out is one organization only, with `floor(limit / workspaceCount)` per workspace and UUID-ordered remainder slots; unused quota is not redistributed. V1 and v2 search only the mission, objective, and event index corpus even after delivery indexing ships. Additive `GET /api/search/v3` returns `SearchResponseV3`: mission-anchored groups with `anchorOnly`, ranked `matches[]` (`objective` | `delivery`, each with id, display id, snippet, and score), `matchCounts` before `matchesPerResult` capping, envelope `entityCounts`, and `truncatedCandidates`. `event` is corroboration-only and never appears in `matches`. `matches` is matched-only. Child relevance is `docScore + 0.15 * missionScore`; the coverage floor stays at the group's concatenated haystack. Per-workspace candidate fetch is bounded at 500 documents — above that cap, counts are lower bounds. `entityTypes` defaults to mission, objective, and delivery (`event` is rejected); `objectiveStates` filters returnable children; `matchesPerResult` defaults to 3 and maxes at 10 and is not divided across workspaces. The mission row always anchors the group, including when `anchorOnly` is true. An objective display-id query returns that objective as the group's single match. REST v3 accepts only stable `projectIds`. Protocol `search-missions --response-version 3` returns the same envelope with v3 defaults. Artifacts are not indexed. Protocol `search --reference` (v155) is a separate exhaustive exact-token lookup in one project with continuation (`MissionReferenceSearchResponse`); see the Version 155 summary.
+- **Mission search versioning**: `GET /api/missions/search` is frozen as its v1 array-shaped response. `GET /api/missions/search/v2` returns `SearchMissionsResponseV2`: `{ version: 2, results, appliedFilters, totalMatchedBeforeLimit, workspaceCounts }`. Each result includes project/workspace labels, `dueDatetime`, `relevance` (deterministic fused score with exact display-id / exact-title precedence), `snippet`, `matchedTerms`, and `matchedIn`. Ranking is portable across adapters: display-id short-circuit, meaningful-term coverage floor `min(3, max(1, ceil(termCount / 2)))`, `max(documentScore)` plus bounded corroboration, and recency as rank fusion rather than an eligibility gate. Empty or stop-word-only queries use an explicit `fallback` mode. Complete and cancelled missions stay eligible by default. The REST route accepts only stable `projectIds`, plus `resourceKeys`, status types, `dateField` (`createdAt`, `updatedAt`, or `dueDatetime`), inclusive `from`, exclusive `to`, and global `limit`; it applies no implicit date window. The Protocol, CLI, and MCP v2 surfaces additionally resolve a human project reference and answer an ambiguous one with `project_selection_required`. A `dueDatetime` range excludes missions with no due date, because the column is nullable and a due-date window asks about scheduled work. Fan-out is one organization only, with `floor(limit / workspaceCount)` per workspace and UUID-ordered remainder slots; unused quota is not redistributed. V1 and v2 search only the mission, objective, and event index corpus even after delivery indexing ships. Additive `GET /api/search/v3` returns `SearchResponseV3`: mission-anchored groups with `anchorOnly`, ranked `matches[]` (`objective` | `delivery`, each with id, display id, snippet, and score), `matchCounts` before `matchesPerResult` capping, envelope `entityCounts`, and `truncatedCandidates`. `event` is corroboration-only and never appears in `matches`. `matches` is matched-only. Child relevance is `docScore + 0.15 * missionScore`; the coverage floor stays at the group's concatenated haystack. Per-workspace candidate fetch is bounded at 500 documents — above that cap, counts are lower bounds. `entityTypes` defaults to mission, objective, and delivery (`event` is rejected); `objectiveStates` filters returnable children; `matchesPerResult` defaults to 3 and maxes at 10 and is not divided across workspaces. The mission row always anchors the group, including when `anchorOnly` is true. An objective display-id query returns that objective as the group's single match. REST v3 accepts only stable `projectIds`. Protocol `search-missions --response-version 3` returns the same envelope with v3 defaults. Artifacts are not indexed. Protocol `search --reference` is a separate exhaustive exact-token lookup in one project with continuation: `search --reference <token> --project-id <ref> [--workspace-id] [--limit 1-100, default 50] [--cursor]` returns `MissionReferenceSearchResponse` (`packages/contract/src/mission-reference.ts`): `{ kind: 'mission_reference_search', version: 1, reference, projectId, workspaceId, results, nextCursor, complete }`. It is exhaustive, not ranked: every live mission in the one readable project whose live objective instruction text contains the token case-sensitively as a whole token (not adjacent to a letter, digit, or underscore), in mission-id order, each with `statusType`, `statusId`, and its matching objectives (`id`, `displayId`, `title`, `state`, `position`). Pages are over candidate missions, so a page may hold fewer than `limit` results; `complete` is true only on the last page and the cursor is bound to its reference and project. Tokens are 8–512 characters without whitespace; `%` and `_` are literal. Ranked filters (`--query`, `--status`, `--resource-key`, date flags, `--response-version`, v3 flags) are rejected with it, and `--cursor` without `--reference` is rejected. Authorization matches v2/v3 search: the project resolves across the caller's organization memberships, `mission:read` is checked on that project, and a project_automation token must have selected it. Ranked search (any version) remains candidate discovery and never proves absence. Hosted MCP `overlord_search_missions` and the local shim add `reference` and `cursor` and forward this mode unchanged (never compacted).
 
 ### Mobile → REST (Objective Transcript Surface)
 
 - **Transport**: authenticated HTTPS/JSON; `GET /api/objective-transcript`.
-- **Contract**: `ObjectiveTranscriptPageDto`, contract v162 above and
-  `docs/objective-transcript.md`; 1–100 full-text objective rows with before/after
-  keyset paging or bounded ID revalidation across readable active-organization
-  workspaces. Private Inbox captures remain on their independent owner-only API.
+- **Contract**: `ObjectiveTranscriptPageDto` (`packages/contract/src/index.ts`);
+  1–100 full-text objective rows with before/after keyset paging or bounded ID
+  revalidation across readable active-organization workspaces. Private Inbox
+  captures remain on their independent owner-only API.
+- **Selection**: authenticated `GET /api/objective-transcript` returns
+  `ObjectiveTranscriptPageDto` across the caller's active-organization
+  memberships with both `mission:read` and `objective:read`, restricted by token
+  project scope before selection. Live objectives of live missions in live,
+  active projects qualify, including old completed missions. Private profile
+  Inbox captures are never included. Responses are `Cache-Control: no-store`.
+- **Paging**: `limit` defaults to 50, accepts 1–100. History is newest first by
+  immutable `(created_at, id)`; opaque versioned `before` cursors select strictly
+  older rows. `after` selects strictly newer rows, oldest first, with `nextAfter`
+  for draining new creates without skipping an intervening page. `nextBefore` is
+  present only when another older page exists; `newestCursor` is the newest
+  returned key (null for an empty page). For `after`, `nextAfter` always carries
+  the last returned position, or the input cursor when empty; `hasMore` tells
+  whether to immediately continue draining. Cursors are positions, never
+  authorization grants or snapshots. `before`, `after` and `ids` are mutually
+  exclusive. Invalid inputs return 400: unknown, duplicate/array-valued,
+  malformed and oversized query values. `ids` is a comma-separated set of 1–100
+  objective UUIDs, at most 3,699 characters and without `limit`: revalidate just
+  those rows, no pagination; omitted IDs mean absent or no longer authorized and
+  must be removed locally, without disclosing why. Cursors are opaque, canonical
+  base64url of a versioned position, at most 256 characters; clients store them
+  verbatim and must not synthesize them. No count query or per-objective
+  hydration is performed. Full instruction text is retained; the bound is rows,
+  not bytes, and a single instruction can still be large.
+- **Items and refresh**: Every item includes objective identity/revision,
+  creation provenance, assignment, instruction/title/state/resource key, and
+  current mission/project presentation metadata. Consumers deduplicate by
+  objective ID and sort chronologically for display. Use `after` for creates and
+  bounded `ids` revalidation for loaded rows after notices/reconnect, including
+  late edits, deletions, mission/project moves and authorization changes. A
+  permission expansion needs a fresh history walk; an
+  access/account/organization change discards prior cursors and cached rows. The
+  existing sequence-based `/sync/changes`/realtime feed remains authoritative for
+  changed IDs, including same-timestamp or backdated creates which may precede an
+  `after` position. Buffer/replay it around initial loading and revalidate its
+  named IDs; a transcript cursor alone is not a change-log cursor. The existing
+  owner-only `/api/inbox` stays separate: re-read its authoritative capture set
+  after local mutations/reconnect; promotion removes its capture ID and
+  introduces the created objective ID. Reconcile optimistic mission creates
+  against returned objective IDs, never text.
+- **Compatibility**: Use the supported backend contract/capability to select
+  compatibility behavior; do not fall back to all-project objective fan-out on
+  ordinary HTTP, decoding, authentication or cancellation errors. If pre-162
+  servers remain supported, keep an explicitly selected and tested legacy path
+  limited to that declared version.
 - **Consumer**: Mobile may adopt this additive surface; current consumers of
   project mission lists are unchanged. The project-automation route allowlist
   remains closed to this new route.
@@ -460,12 +505,12 @@ Specified in [protocol.md](protocol.md).
 - **Transport**: Authenticated HTTPS/JSON with the existing Better Auth session or `out_…` bearer token; no ambient workspace input is accepted.
 - **Registration**: `PUT /api/mobile/live-activities/:activityId/push-token` accepts `{ pushToken, environment, bundleId, startedByPush? }`, upserts the caller's private `(profile, activityId)` registration, and replaces a rotated token. `environment` is `sandbox` or `production` and selects the APNs host per registration; `bundleId` forms the `…push-type.liveactivity` topic. `activityId` and `pushToken` are opaque values and are never returned or exposed through realtime, logs, or read APIs.
 - **Revocation**: `DELETE /api/mobile/live-activities/:activityId/push-token` deletes only the caller's registration and returns `204`; it is safe to retry after a local activity has already ended.
-- **Delivery**: Server lifecycle mutations enqueue coalesced `overlord.live_activity.dispatch.v1` jobs. The dispatcher recomputes the caller's two-running-objectives-plus-one-recent-completion snapshot and delivers APNs `liveactivity` update/end events on each registration's own `<bundleId>.push-type.liveactivity` topic and environment host (not the process-wide `OVERLORD_APNS_ENV` default). Running rows are **objective-grain**: `title` and `displayId` name the executing objective (`coo:756.k7xm`), `id` stays the parent mission id so ActivityKit attributes need not change, and additive `objectiveId` / `missionDisplayId` / `missionTitle` carry the mission as secondary context. Completing one objective does not end the activity while another objective for the same account is still executing. `content-state.updatedAt` is Unix epoch seconds (JSON number), never an ISO-8601 string — ActivityKit's push decoder cannot parse ISO timestamps into `Date`. `content-state.pendingAsk` (Version 149) is the newest unanswered, unseen ask on a still-executing objective of the account's missions, or `null`; asking, answering, and marking the question seen are transitions. State transitions are sent promptly; progress that leaves visible content unchanged is suppressed for at least five minutes. Invalid APNs tokens are retired.
+- **Delivery**: Server lifecycle mutations enqueue coalesced `overlord.live_activity.dispatch.v1` jobs. The dispatcher recomputes the caller's two-running-objectives-plus-one-recent-completion snapshot and delivers APNs `liveactivity` update/end events on each registration's own `<bundleId>.push-type.liveactivity` topic and environment host (not the process-wide `OVERLORD_APNS_ENV` default). Running rows are **objective-grain**: `title` and `displayId` name the executing objective (`coo:756.k7xm`), `id` stays the parent mission id so ActivityKit attributes need not change, and additive `objectiveId` / `missionDisplayId` / `missionTitle` carry the mission as secondary context. Completing one objective does not end the activity while another objective for the same account is still executing. `content-state.updatedAt` is Unix epoch seconds (JSON number), never an ISO-8601 string — ActivityKit's push decoder cannot parse ISO timestamps into `Date`. `content-state.pendingAsk` is the newest unanswered, unseen ask on a still-executing objective of the account's missions, or `null`; asking, answering, and marking the question seen are transitions. State transitions are sent promptly; progress that leaves visible content unchanged is suppressed for at least five minutes. Invalid APNs tokens are retired.
 - **Push-to-start registration**: `PUT /api/mobile/live-activities/start-token` accepts `{ startToken, environment, bundleId, activityType?, appVersion? }` and upserts the caller's private push-to-start registration, rotating an existing token in place. `environment` is `sandbox` or `production` and selects the APNs host per registration; `activityType` defaults to the account-level mission activity attributes type. A start token is globally unique and bound to exactly one profile, so registering a token held by another profile reassigns it. Like a device token it is opaque, travels in the request body rather than the URL, and is never returned or exposed through realtime, logs, entity changes, or read APIs.
 - **Push-to-start consent and revocation**: Holding a `live_activity_start_tokens` row **is** the account's consent to desktop-initiated Live Activities; with no row the server can never remotely start one. `POST /api/mobile/live-activities/start-token/revoke` accepts `{ startToken }`, deletes only the caller's registration, returns `204`, is safe to retry, and is how that consent is withdrawn. Clients must revoke before clearing credentials on sign-out.
 - **Push-to-start delivery**: A mission entering execution enqueues a coalesced `overlord.live_activity.start.v1` job for the mission's assigned profile only — never broadcast to a workspace — alongside the ordinary refresh job. The payload carries only the target profile and triggering mission ids; the worker recomputes the bounded snapshot at delivery time and sends an APNs `liveactivity` payload with `event: "start"`, `attributes-type`, `attributes`, `content-state`, a stale date, and a bounded alert, at `apns-priority: 10` on the registration's own `<bundleId>.push-type.liveactivity` topic and environment host. A start is suppressed when the account already holds any `live_activity_push_tokens` registration, when no mission is running, and for five minutes after a start was sent to that token. Delivery is durable and retried with backoff; `410 Unregistered` and `400 BadDeviceToken` retire the start registration. With no APNs credentials configured, enqueueing still succeeds and dispatch no-ops.
 - **Update-token handoff**: after APNs remotely starts an activity, the client registers the per-activity **update** token through `PUT /api/mobile/live-activities/:activityId/push-token` with the additive optional `startedByPush: true`, recorded as `live_activity_push_tokens.origin = 'push_to_start'` (default `local`). From that point the ordinary dispatch job owns every update and the end for that activity. A push-to-start token, a per-activity update token, and a standard device token are three distinct credentials with distinct lifetimes and are never interchangeable: separate tables, routes, and payload events. Local starts from the app remain supported and unchanged.
-- **Privacy**: APNs payloads include only the bounded display snapshot, the epoch-seconds `updatedAt` timestamp, and — for a start — the static account label attribute and an alert built from that same bounded snapshot. The snapshot may include one pending ask's question as a markdown-stripped single line capped at 140 characters (Version 149). They never include bearer tokens, ActivityKit tokens, objective instructions, agent prompts, answer options, event payloads, or full mission detail.
+- **Privacy**: APNs payloads include only the bounded display snapshot, the epoch-seconds `updatedAt` timestamp, and — for a start — the static account label attribute and an alert built from that same bounded snapshot. The snapshot may include one pending ask's question as a markdown-stripped single line capped at 140 characters. They never include bearer tokens, ActivityKit tokens, objective instructions, agent prompts, answer options, event payloads, or full mission detail.
 
 ### Mobile → REST (Standard Push Notification Surface)
 
@@ -473,7 +518,7 @@ Specified in [protocol.md](protocol.md).
 - **Separation from Live Activities**: standard APNs **device** tokens and ActivityKit tokens are distinct credentials with distinct lifetimes and are never interchangeable. They use separate tables (`device_push_tokens` vs `live_activity_push_tokens`), separate routes, separate APNs topics (`<bundleId>` vs `<bundleId>.push-type.liveactivity`), and separate `apns-push-type` values (`alert`/`background` vs `liveactivity`). Passing one where the other is expected is a contract violation.
 - **Registration**: `PUT /api/mobile/push/device-token` accepts `{ deviceToken, environment, bundleId, appVersion? }` and upserts the caller's registration, rotating an existing token in place. `environment` is `sandbox` or `production` and selects the APNs host per registration. A device token is unique globally and bound to exactly one profile; registering a token held by another profile reassigns it. Tokens are opaque, are carried in the request body rather than the URL, and are never returned or exposed through realtime, logs, entity changes, or read APIs.
 - **Revocation**: `POST /api/mobile/push/device-token/revoke` accepts `{ deviceToken }`, deletes only the caller's registration, returns `204`, and is safe to retry. Clients must revoke before clearing credentials on sign-out.
-- **Preferences**: `GET`/`PUT /api/profile/notification-preferences` read and merge the caller's own preferences as `{ enabled, preferences: { type, transport, mode }[] }`. `type` is exactly a shared notification-catalog id (the mission catalog or, since v152, `chat_needs_answer`/`chat_finished`), `transport` is exactly a catalog-declared eligible transport, and `mode` is `alert`, `silent`, or `off`; absent rows default to the catalog's `defaultMode`. The reserved `(type: all, transport: all)` master row powers `enabled` and suppresses notification transports without affecting Live Activity delivery. Unknown types, transports, type/transport pairs, and modes are rejected `400`. For additive mobile compatibility, responses also project APNs-capable types as `{ categories: { category, mode }[] }`, and requests may use that legacy field as an APNs-only update alias; new clients use `preferences`.
+- **Preferences**: `GET`/`PUT /api/profile/notification-preferences` read and merge the caller's own preferences as `{ enabled, preferences: { type, transport, mode }[] }`. `type` is exactly a shared notification-catalog id (the mission catalog or `chat_needs_answer`/`chat_finished`), `transport` is exactly a catalog-declared eligible transport, and `mode` is `alert`, `silent`, or `off`; absent rows default to the catalog's `defaultMode`. The reserved `(type: all, transport: all)` master row powers `enabled` and suppresses notification transports without affecting Live Activity delivery. Unknown types, transports, type/transport pairs, and modes are rejected `400`. For additive mobile compatibility, responses also project APNs-capable types as `{ categories: { category, mode }[] }`, and requests may use that legacy field as an APNs-only update alias; new clients use `preferences`.
 - **Delivery**: The same lifecycle mutations that refresh Live Activities enqueue deduplicated `overlord.push_notification.dispatch.v1` worker jobs addressed to the mission's assigned profile only — never broadcast to a workspace. Job payloads carry ids alone; the dispatcher recomputes presentation content at delivery time. Alerts are `apns-push-type: alert`, `apns-priority: 10`, expiring after one hour; `silent` categories are `apns-push-type: background`, `apns-priority: 5`, `content-available: 1`, with no alert body. Notifications collapse per `(objectiveId ?? missionId, category)`. Delivery is durable and retried with backoff; `410 Unregistered` and `400 BadDeviceToken` retire the registration. With no APNs credentials configured, enqueueing still succeeds and dispatch no-ops so local development is unaffected.
 - **Privacy**: Payloads contain only the bounded project name, the sanitized bounded title and display id of the objective when the row has an `objective_id` (otherwise the mission), a badge count, the mission id, optional objective id/display id, the category, and a deep link (`overlord://objectives/<displayId>` when an objective is known, else `overlord://missions/<missionId>`). They never contain bearer tokens, session keys, ActivityKit tokens, objective instructions, agent prompts, delivery summaries, change rationales, file paths, diffs, question text, or any `mission_events.payload_json` content. User-authored text reaches a payload only through the shared markdown-stripping bounded-title sanitizer.
 
@@ -485,13 +530,574 @@ Specified in [protocol.md](protocol.md).
 - **Writes**: message submission, answers, cancel, continue, and Create carry stable client request ids reused across retries; revision-checked actions carry `expectedRevision`. Create is the only path from a conversation to missions and objectives.
 - **Privacy**: no provider checkpoint, raw tool result, credential, or OAuth material is ever returned; content whose sources are no longer authorized is returned as `unavailable` blocks.
 
+### Assistant Conversation Behaviour
+
+The behavioural contract for the private assistant conversation surface above, the
+`/api/chat/*` and account-connection routes, and the "Assistant Conversations" tables in
+[data/README.md](data/README.md). DTOs live in `packages/contract/src/chat.ts`.
+
+**Scope and privacy.** A chat thread is private to one owner profile inside one
+organization; it may reference any workspace of that organization the owner can
+currently access. Every `/api/chat/*` route resolves the caller's profile and active
+organization and returns 404 `not_found` for another owner's or organization's
+thread, run, question, proposal, notification, or connection, without revealing
+existence. Chat is Cloud-only: a Local backend answers every `/api/chat/*` route and
+every organization-scoped `/api/connections` route with 404 `chat_unavailable`, and
+clients show chat as unavailable; the profile-scoped account-connection routes are
+served on both editions (REST API Layer). The tables exist and are tested on both
+editions. A `project_automation` token reaches none of these routes.
+
+**REST.** `POST /api/chat/threads` (optional first message), `GET /api/chat/threads`
+(owner-only, newest activity first, archived excluded unless `archived=1`, cursor
+paging), `GET /api/chat/threads/:id` (atomic snapshot), `PATCH /api/chat/threads/:id`
+(`expectedRevision` plus `title` and/or `archived`), `POST /api/chat/threads/:id/messages`,
+`GET /api/chat/threads/:id/events?after=<seq>` (SSE replay then live; `?poll=1` returns one
+bounded `ChatEventPageDto` for polling), `PUT /api/chat/threads/:id/presence`,
+`POST /api/chat/threads/:id/ack`, `POST /api/chat/runs/:id/cancel`,
+`POST /api/chat/runs/:id/continue`, `POST /api/chat/questions/:id/answer`,
+`POST /api/chat/proposals/:id/create`, `GET /api/chat/providers`,
+`GET /api/chat/notifications`, `POST /api/chat/notifications/:id/read`, the
+account-connection routes below, and `POST /api/projects/:id/repository-reads`. Error
+bodies are `{ error, code }` with the closed `ChatErrorCode` set.
+
+**Submission and runs.** A message submission writes the user message and its run in
+one transaction and returns their ids; `(thread, clientRequestId)` is unique, so a
+repeated request returns the original message and run with `replayed: true`. Run
+states are closed: `queued`, `running`, `waiting_user`, `completed`, `failed`,
+`cancelled`; a thread has at most one unfinished (`queued`/`running`/`waiting_user`)
+run, enforced by a partial unique index. While a run is `queued` or `running` a new
+message returns 409 `run_in_progress`. While it is `waiting_user` any message is the
+answer to its single open question and resumes the same run; tapping an option and
+typing text are the same action. `POST /api/chat/questions/:id/answer` is the
+card form of the same action and requires `expectedRevision` (409 `stale_revision`
+once answered, superseded, or cancelled). A `completed` run carries outcome `answered`
+or `allowance_exhausted`; a `failed` run carries one closed failure code
+(`provider_unavailable`, `rate_limited`, `context_limit`, `unsupported_capability`,
+`interrupted`, `provider_error`, `source_access_lost`). Tool failures are recorded per
+tool call and never fail a run by themselves.
+
+**Leases and fences.** Backend workers claim a run by inserting a `chat_run_attempts`
+row whose `fence` equals the run's freshly incremented `current_fence`; at most one
+attempt per run is `leased`, with a renewable lease (default 30 s). Every event, tool
+call, and checkpoint write carries the attempt's fence, and both editions reject a
+write whose fence is not the run's current fence (SQLite triggers and Postgres
+trigger functions with identical semantics), so a worker that lost its lease cannot
+publish, invoke, or checkpoint. `waiting_user` releases the lease. Cancellation sets
+`cancel_requested_at`, is authoritative at the tool gateway, is idempotent, and ends
+the run `cancelled`; a cancelled tool call is the one fence-free transition.
+
+**Checkpoints and recovery.** `chat_provider_checkpoints` holds one private,
+versioned provider checkpoint per run (Gemini response parts verbatim with thought
+signatures, call ids, and call order; schema version, model, and config digest). It is
+never an ordinary DTO, realtime payload, change row, or global log field; the
+owner-only diagnostics endpoint exposes exchange observations. A provider tool
+request is checkpointed before its tool executes, and its results are recorded and joined in
+call order before the next provider request; Overlord, not the provider, enforces
+completeness, order, and call-id matching. A checkpoint is reused only when version,
+model, and digest match and its dependencies reauthorize; otherwise the attempt
+records `recovery_mode = fresh_generation`, rebuilds from authorized messages and
+recorded observations, and marks partial text `interrupted`. A read whose receipt is
+still `requested` is re-executed under its original `operation_id` (unique); writes
+are out of scope. A completed exchange needs no checkpoint and the row is deleted.
+
+**Snapshot and cursor handoff.** `GET /api/chat/threads/:id` reads the thread, the
+latest message page, the active and latest runs, the open question, open proposals,
+`referencedProposals` (every created or cancelled proposal named by a proposal block in
+the returned page, so receipts render after a reload), `eventCursor` (`chat_threads.last_event_seq`), and `retainedFromSeq` in one database
+transaction, so `events?after=eventCursor` neither misses nor double-applies an
+event. Event sequences are allocated by advancing `last_event_seq` and inserting
+exactly that value in the same transaction (storage is gap-free, `(thread, seq)` is
+unique, and events are append-only). Events are persisted before they are sent;
+replay always comes from storage and live delivery follows replay on one ordered
+stream. Text deltas are coalesced. Retention is bounded (defaults: 7 days or 5,000
+events per thread, whichever comes first) by deleting rows below
+`chat_threads.retained_from_seq`; `after < retainedFromSeq - 1` yields 409
+`snapshot_required` (or a `snapshot_required` frame on an open stream) and the
+client reloads the snapshot. Messages, runs, questions, proposals, and receipts are
+not subject to event retention. A closed stream never implies completion.
+
+**Private event channel (exception).** Chat events are owner-scoped and do not
+derive from `entity_changes`; they are private to one person and too frequent for the
+change log. This is the sole exception to the REST/backend rule that realtime events
+derive from `entity_changes`, and it is recorded in `backend/AGENTS.md`. Chat writes
+emit no `entity_changes`, webhooks, or search documents; missions created from chat
+emit their normal change, webhook, and search rows.
+
+**Source dependencies and invalidation.** Every source an answer, summary, proposal
+revision, checkpoint, question, tool call, or content-bearing event used is a
+`chat_source_refs` row (kind `knowledgebase` \| `overlord` \| `repository`, stable
+`scope_key`, last access check). Each derived row points at an immutable
+`chat_dependency_sets` row whose members are the conservative union of every source
+supplied to that generation, including those inherited from earlier summaries and
+messages. Snapshots, replay, live publication, provider input, checkpoint reuse, and
+Create recheck the dependency set; anything not currently `authorized` fails closed.
+Revocation increments `chat_threads.authorization_revision`, marks affected sets,
+messages, summaries, checkpoints, and proposal revisions invalidated, replaces whole
+affected blocks with an `unavailable` block, emits `content.invalidated`, and fences a
+live attempt using that context (restart from remaining authorized content or fail
+`source_access_lost`). Raw stored events never bypass this projection: replay of an
+event whose dependency set is invalidated sends `content.invalidated` instead.
+
+**Proposals, frozen assignments, and Create.** A proposal is versioned:
+`chat_work_proposal_revisions` rows are frozen once written (spec, responsible profile,
+revision number cannot change), each naming explicit project ids, titles, ordered
+objectives, resource keys, acceptance criteria, evidence, dependencies, and a concrete
+agent/model/reasoning selection with its source. Omitted or null agents never reach
+Create; a revision without a justified selection is not creatable.
+`POST /api/chat/proposals/:id/create` with `{ clientRequestId, expectedRevision }` is
+the only creation path; no tool can create, change, or launch work. It rechecks
+membership, `mission:create` on every destination project, source dependencies and
+the thread `authorization_revision`, the expected revision, and the frozen
+assignments, then in one transaction calls the existing mission-creation service once
+per mission with that mission's workspace context, verifies the saved assignments,
+stamps `created_by_kind = agent`, `created_by_agent = overlord-assistant`, the acting
+user as responsible person, and `missions.created_from_chat_thread_id` (soft reference,
+no foreign key), forces draft-only/no-queue, and writes one `chat_work_receipts` row
+(unique per proposal and per `(owner, clientRequestId)`) with its
+`chat_work_receipt_missions`. Any failure creates nothing. Duplicate, concurrent, or
+crash-after-commit calls return the identical receipt (`replayed: true`). A stale
+revision returns 409 `stale_revision`; an invalidated or non-open revision returns 409
+`proposal_not_creatable`. **Cancel/Create outcome:** cancelling a run never cancels or
+blocks Create of a revision that was already published (`proposal.revised` committed);
+a revision still being prepared by the cancelled attempt is never published. Create of
+a published revision therefore succeeds or fails on its own checks regardless of a
+concurrent Cancel, and a later Cancel never removes created drafts.
+
+_Proposal preparation (coo:1108.k0tc)._ The internal `prepare_proposal` tool
+publishes or revises a card and cannot create domain work. Preparation validates
+registered resource keys and the destination workspace agent catalog, resolves the
+acting member's project launch preference, and freezes model/reasoning values.
+Missing or invalid preferences require `ask_user` or an explicit supported selection;
+Create never reapplies defaults. Shared mission creation accepts explicit reasoning
+effort and preserves it alongside agent/model. Create selects a concrete draft
+status even if the project default is Next, serializes owner receipt keys and
+workspace mission sequences, and commits domain rows, receipt and private event in
+one outer transaction. A request key already used by another proposal returns
+`invalid_request`; an existing receipt for the same proposal returns its original
+IDs.
+
+_Web and desktop client (coo:1108.r2b0)._ The shared SPA consumes these routes only.
+It creates a thread empty and then submits the first message, so every content-bearing
+write is idempotent; each action's `clientRequestId` is minted once and reused by every
+retry (Create ids persist across reloads, scoped to backend, profile, and organization),
+so a lost Create response is recovered as the original receipt. It renders a proposal
+block whose revision is older than the proposal's current revision as superseded, and
+never offers Create for an invalidated, superseded, or non-open revision. Presence is
+held only while the tab is visible and focused (`platform` `web` or `desktop`, one
+client id per page load), and acknowledgements are sent only for events already
+committed to the rendered transcript. The Knowledgebase callback's web return path
+`/settings/connections` is the Connected accounts page; a sign-in started from Chat
+returns to Chat.
+
+**Continue.** When the latest run of a thread completed with
+`allowance_exhausted`, `POST /api/chat/runs/:id/continue` creates one new run with
+`continued_from_run_id` set and a fresh allowance, reusing recorded evidence and
+summaries; a run can be continued at most once (unique index), so a repeated request
+returns the same run. Any other run returns 409 `continue_not_available`. Defaults
+(configurable, see _Operator limits_ below): 60 tool calls and ten minutes of
+active processing per run, excluding `waiting_user`; three concurrent runs per owner;
+four concurrent target reads per run.
+
+**Conversation notifications.** Two catalog types join `notification_preferences.type`:
+`chat_needs_answer` (a run entered `waiting_user`) and `chat_finished` (a run completed
+or failed). They are addressed by owner profile, organization, thread, run, and
+question, never by a fabricated mission or an arbitrary workspace, and they never appear
+in the mission-only `GET /api/notifications` list, whose `NotificationDto` is
+unchanged. Each qualifying transition writes one `chat_notifications` row in the same
+transaction as the transition: it is the durable candidate, its dispatch job state
+(`pending` → `dispatching` → `dispatched`/`failed`, or `suppressed`/`cancelled`), and
+once dispatched its history entry. The row is unique on `(owner, thread, run, type,
+transition_key)` where the key is `question:<ordinal>` or `terminal:<state>`, so a new
+question never collapses into an earlier one and dispatcher retries cannot duplicate.
+`due_at` is the transition time plus a grace period (default 5 s). **Presence and
+acknowledgement:** `PUT /api/chat/threads/:id/presence` renews (default 30 s TTL) or
+releases one client's foreground presence; `POST /api/chat/threads/:id/ack` records
+that a foreground client rendered events through `seq` (monotonic per client,
+idempotent, separate from any replay cursor). A pending candidate is suppressed only
+when a client that is foreground on that thread at acknowledgement time acknowledges a
+`seq` at or after the candidate's `event_seq`; a connection or open socket alone never
+suppresses. Otherwise it dispatches after `due_at`, including when a dead connection
+still appears open. Before dispatch the dispatcher rechecks ownership, organization
+access, preferences (including the master switch), and for `chat_needs_answer` that
+the question is still open; a failed recheck cancels the candidate. Dispatch reuses
+device registrations and APNs transport; the payload carries only the type, the
+bounded sanitized thread title (≤ 80 characters), thread/run ids, an unread badge
+count, and the deep link `overlord://chat/threads/:threadId`, never question,
+answer, transcript, Knowledgebase, or repository content. `GET /api/chat/notifications`
+returns the newest 100 dispatched, non-dismissed entries for the caller in the caller's
+organization plus `unreadCount`; `POST /api/chat/notifications/:id/read` is
+revision-checked (`stale_revision` on mismatch; repeating it at the current revision is a
+no-op). Delivery acknowledgement never changes mission notification read semantics.
+Acknowledgement details: a `seq` beyond the thread's last published event is
+`invalid_request`; a lower `seq` keeps the stored value; an acknowledgement from a client
+without live presence is recorded but suppresses nothing; `ChatAckDto` lists the ids it
+suppressed. Presence and acknowledgement recheck live membership but run no upstream
+source checks, since they publish no content. Dispatch details: the conversation types
+join `GET`/`PUT /api/profile/notification-preferences` `preferences[]` on `apns`,
+`realtime`, and `in_app` (the legacy `categories` alias stays mission-only); with the
+master switch off, or both `apns` and `in_app` off, the candidate is `cancelled`; with
+`apns` off but `in_app` on it is `dispatched` to history without a push; `silent` sends
+a background push with no alert. Delivery is at-least-once: a claim holds a 60-second
+lease, the APNs collapse id is `chat:<notificationId>` so a retried send replaces
+rather than duplicates, a transient failure returns the row to `pending` with backoff,
+and after `max_attempts` (5) it becomes `failed`. The home-screen badge on both mission
+and conversation pushes is unread mission notifications plus unread dispatched
+conversation notifications for the profile. The grace period and presence TTL are
+operator-configurable through `CHAT_NOTIFICATION_GRACE_MS` and `CHAT_PRESENCE_TTL_MS`.
+
+**Account connections.** `account_connections` is the single store for external
+account connections, recording server, authorized provider workspaces, tool-policy
+version, state (`pending`, `connected`, `reauthorization_required`, `disconnected`),
+and an AES-256-GCM credential envelope bound to the owner with a key id from server
+configuration. Refresh is serialized per connection by a lease
+(`refresh_lock_owner`/`refresh_lock_until`) and the rotated credential is persisted
+before use. For the organization-scoped `knowledgebase` provider, one live connection
+exists per `(owner, organization, provider, server_url)`, profile-owned within the
+organization; `GET /api/connections`, `POST /api/connections` (`{ provider, returnTo }` →
+`{ connectionId, authorizeUrl, expiresAt }`), `DELETE /api/connections/:id`
+(disconnect: revoke upstream best-effort, erase the envelope), and the public
+`GET /api/connections/knowledgebase/callback` implement authorization code with PKCE
+S256 and the RFC 8707 `resource` parameter; `account_connection_authorizations`
+stores a hashed single-use `state` and an encrypted PKCE verifier bound to the
+connection and an expiry. The client id is a Client ID Metadata Document served at
+public `GET /oauth/clients/knowledgebase.json` (≤ 5 KB, no redirects, redirect URI is
+the backend callback). The phone opens `authorizeUrl` in `ASWebAuthenticationSession`;
+the callback redirects to a universal link (or the web return URL) carrying only a
+status. Credentials, verifiers, codes, and state never appear in DTOs, logs, realtime,
+change rows, or errors; the only client-visible URL carrying `state` is `authorizeUrl`
+itself, where OAuth requires it (stored only as a hash, single use, 10-minute expiry).
+
+_Knowledgebase client integration (web and mobile, coo:1108.zb9x)._ `POST /api/connections` reuses
+the caller's live connection for reauthorization (same `connectionId`) and allows at
+most five open sign-ins per connection (`limit_exceeded`). It answers 503
+`provider_not_ready` when the Knowledgebase or credential key is not configured, 400
+`invalid_request` for another provider or `returnTo`, and 404 `chat_unavailable` on
+Local. The callback finishes with a redirect carrying only `provider=knowledgebase`
+and `status` (`connected`, `denied`, `expired`, or `failed`): mobile goes to
+`overlord://connections/callback?…` (the `ASWebAuthenticationSession` callback
+scheme), web goes to `<OVERLORD_WEBAPP_PUBLIC_URL origin>/settings/connections?…`, and
+an unknown or replayed state gets a no-store status page. Clients treat the status as
+a hint and reload `GET /api/connections`, which lists live (non-disconnected)
+connections. `pending` means sign-in never completed. `reauthorization_required`
+carries `lastErrorCode` (`invalid_grant`, `upstream_unauthorized`, `grant_expired`, or
+`credential_unreadable`) and its credential is already erased; clients offer sign-in
+again with `POST /api/connections`. `DELETE /api/connections/:id` returns the
+`disconnected` DTO. Losing access by disconnect or reauthorization immediately
+rechecks every thread that cited the connection, so that content is replaced by
+`unavailable` blocks and live generations are fenced with `source_access_lost`.
+Reconnecting never restores invalidated content. Server configuration:
+`KNOWLEDGEBASE_MCP_URL`, `KNOWLEDGEBASE_EGRESS_ORIGINS`,
+`ACCOUNT_CONNECTIONS_ENCRYPTION_KEY`, `ACCOUNT_CONNECTIONS_ENCRYPTION_KEY_ID`; every one
+of these is optional: the standard server is the default and the platform key derived
+from `BETTER_AUTH_SECRET` seals credentials when no explicit key is set.
+
+**Repository reads.** Agent-facing repository reads (`observe`, `tree`, `branches`,
+`worktrees`, `git_status`, `diff`, `read_file`, `search_text`; `RepositoryReadRequest` /
+`RepositoryReadResult`) are local-target capabilities executed by the runner over the
+existing mission-less capability-call queue with `operation_id` as the idempotency key.
+`POST /api/projects/:id/repository-reads` is the authenticated mission-less route
+(requires `project:read` and the caller's access to the named execution target) and
+the in-process chat gateway calls the same service. Inputs are `executionTargetId`,
+`projectId`, `resourceKey`, and repository-relative paths only; the capability call
+carries the requested `resourceKey` to the claim, which resolves that resource instead
+of the primary one. The target enforces containment including symlinks, excludes
+credential and configured sensitive paths, disables external diff/textconv and hooks,
+and never fetches, checks out, builds, or takes write intent. Defaults: 64 KiB file
+reads, 128 KiB diff and search output, 100 search hits, 30 s timeout. The current diff
+is one implementation co-located with `readCurrentDiff`.
+
+_Repository-read implementation details (coo:1108.zg8m)._
+
+- _Local-target interface._ `readCurrentDiff` takes the resource-addressed form
+  `{ resourceId, repoPath, scope, relativePaths?, maxBytes? }`. Three capabilities
+  accompany it: `readGitStatus`, `readRepositoryFile`, and `searchRepositoryText`. All four
+  are read capabilities on the runner queue (30 s deadline) and are not exposed through
+  the desktop bridge. The commit-message diff (`generateCommitMessageFromLocalDiff`)
+  builds its `git diff` from the same argument builder and hardened Git configuration,
+  so there is one diff definition.
+- _Target-side hardening._ Every inspection Git call runs without a shell, with
+  `GIT_OPTIONAL_LOCKS=0` (no index refresh write), `core.fsmonitor=false`,
+  `core.hooksPath` pointed at the null device, `diff.external` empty plus
+  `--no-ext-diff --no-textconv`, every configured `filter.<driver>` neutralized,
+  `protocol.allow=never` and `GIT_NO_LAZY_FETCH=1` (no fetch, including partial-clone
+  lazy fetch), submodules ignored, and repository-steering environment variables
+  (`GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`, `GIT_EXTERNAL_DIFF`, …) removed. Each
+  call has its own timeout (20 s on the target), is killed on timeout, cancellation,
+  or when captured output passes its byte bound, and never retries. Worktree dirtiness
+  checks used by `listWorktrees` use the same hardened configuration.
+- _Paths._ Inputs are repository-relative POSIX paths: absolute paths, drive or UNC
+  prefixes, NUL bytes, `..` escapes, and any `.git` segment are rejected by the
+  backend and again by the target. The target resolves the real path of both the
+  resource root and the candidate and requires containment, so a symlink that leaves
+  the resource is `denied`. Credential and sensitive paths (`.env` and `.env.*` except
+  `*.example`/`*.sample`/`*.template`, `.envrc`, `.npmrc`, `.pypirc`, `.netrc`,
+  `.pgpass`, `.git-credentials`, `.dockercfg`, private keys and key stores such as
+  `id_rsa*`/`id_ed25519*` (not `.pub`), `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.jks`,
+  `*.keystore`, `*.kdbx`, `*.ppk`, `credentials*.json`, `service-account*.json`,
+  `secrets.{json,yaml,yml,toml}`, `*.tfstate*`, anything under `.ssh/`, `.aws/`,
+  `.gnupg/`, `.kube/`, or `.overlord/tmp/`) plus the target's comma-separated
+  `OVERLORD_REPOSITORY_READ_EXCLUDE` globs are never returned as content: `read_file`
+  answers `denied`, `diff` withholds their sections and lists them in
+  `excludedPaths`, and `search_text` drops their hits. Their names may still appear in
+  status and tree listings.
+- _Results._ `RepositoryReadResult.data` is operation-specific and typed in
+  `packages/contract/src/chat.ts` (`RepositoryGitStatusData`, `RepositoryDiffData`,
+  `RepositoryFileData`, `RepositorySearchData`; existing reads keep their capability
+  payloads, with tree entries capped at `maxEntries`, default 500, maximum 2000, and
+  filtered to `relativePath`). Status lists at most 1000 entries per class; search lines
+  are cut at 400 characters. `read_file` returns `binary` (NUL byte or invalid UTF-8)
+  or `oversized` (more than 8 MiB) with size metadata only; within that ceiling it
+  returns the requested 1-based inclusive line range bounded to `maxBytes`, cut at a
+  line boundary, with `truncated`. Search is `git grep --fixed-strings` over tracked
+  and untracked, non-ignored text files (binary files skipped). `diff` covers tracked
+  files only (`unstaged`: worktree against index; `staged`: index against HEAD; `all`:
+  worktree against HEAD, or against the empty tree before the first commit).
+- _Route._ `POST /api/projects/:id/repository-reads` takes a `RepositoryReadRequest`
+  body (the path `:id` must equal `projectId`) and answers 200 with a
+  `RepositoryReadResult` for every target-side outcome, including `target_offline`,
+  `timeout`, `unavailable`, `denied`, `binary`, `oversized`, and `not_found`. It answers
+  400 `invalid_request` for a malformed body, 404 when the project is not readable or
+  the execution target is not one the caller may use for it, and 409
+  `operation_conflict` when an `operationId` is reused with a different request. The
+  operation id must match `^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$`; the queue key is
+  derived from the acting workspace user and the operation id, so a retry waits on the
+  original job and never re-queues it. A target whose runner is not live answers
+  `target_offline` without queueing. At most four reads per scope (a chat run, or a
+  caller for the route) are in flight; further reads wait for a slot within their
+  deadline. A runner that predates these capabilities fails the job, which is reported
+  as `unavailable`.
+- _Runner completion._ `POST /api/runner/requests/:id/completed` accepts a JSON body of
+  up to 1 MiB (every other JSON route keeps the 100 KB default), so a bounded read result
+  and its envelope always fit. Tree reads are scoped (`subPath`) and capped
+  (`maxEntries`) on the target before they cross the queue.
+
+**Gemini research runtime and tool gateway (coo:1108.vx29).**
+
+- _Runtime adapter._ `backend/chat/` implements the worker's `ChatRuntime` with Gemini
+  through `@google/genai` `models.generateContentStream` (function declarations as
+  `parametersJsonSchema`). Configuration: `CHAT_GEMINI_API_KEY` (falls back to
+  `GEMINI_API_KEY`), `CHAT_GEMINI_MODEL` (default `gemini-3.8-flash`), and
+  `CHAT_MAX_GATHERED_BYTES_PER_RUN` (default 1 MiB of recorded tool results per run).
+  Without a key the runtime reports `not_configured` and runs fail
+  `provider_unavailable`; it never answers with fixed text. Provider errors map to the
+  closed failure codes (429 `rate_limited`; 400 naming tokens/context `context_limit`;
+  401/403/404/5xx and transport failures `provider_unavailable`; anything else
+  `provider_error`). `GET /api/chat/providers` returns `ChatProvidersResponse`: one
+  `gemini` readiness entry (`ready`, `not_configured`, `rate_limited` for 60 s after a
+  429, or `unavailable` after a transport failure) and the caller's live account
+  connections.
+- _Checkpoint payload (schema 2)._ The private checkpoint holds only this run's provider
+  turns, verbatim and unmerged (thought signatures, call ids, empty parts), the pending
+  call batch (`turn`, per-call order, operation id `chat.<runId>.t<turn>.c<order>`,
+  provider call id or a synthetic `t<turn>.c<order>` when the provider omits one), and
+  the run's streaming message id. The conversation prefix (latest authorized summary
+  and the messages it does not cover, with withheld content rendered as a marker; see
+  _Summaries_) is rebuilt from storage on every provider request. The config digest
+  covers the model, the versioned system prompt, context policy and relevance policy.
+  Schema 2 also stores the selected family set and a manifest of the exact declarations
+  offered for the pending signed turn (SHA-256 identity over canonical object keys and
+  ordered declaration/schema arrays, including names, descriptions and effects). Resume validates this manifest and uses it for historical call
+  validation and read/write scheduling, never as authority. Before each new request the
+  authorized catalog is rebuilt from live connections; removed grants are still refused
+  by the live gateway on the next call. Schema-1/digest-incompatible checkpoints take
+  existing fresh-generation recovery; no signed turn is rewritten. Fresh-generation recovery sends no function-call parts; it adds this run's
+  completed, still-authorized tool observations as untrusted text.
+- _Tool catalog (fixed), relevance manifests (expandable)._ `overlord_list_projects`, `overlord_list_execution_targets`,
+  `overlord_search_missions`, `overlord_get_mission`, `repository_read` (the eight
+  `RepositoryReadOperation`s through the same core service as the REST route, scope
+  `chat-run:<runId>`), the reviewed Knowledgebase reads of the owner's live connections,
+  and `ask_user`. Declarations and descriptions are Overlord's; no tool creates,
+  changes, launches, or queues work. A call
+  to an undeclared name answers `unknown_tool`; arguments are validated against the
+  declared closed schema (`invalid_arguments`); every Overlord and repository read
+  resolves the thread owner's live organization memberships and role grants at call
+  time (`project:read` for projects, resources, targets and repository reads;
+  `mission:read` for missions, objectives and deliveries) and answers `not_found`
+  without revealing existence. Tool results reach the model wrapped as untrusted data.
+  Results are bounded to 96 KiB of provider input.
+  Backend may initially declare a deterministic subset of this fixed authorized catalog:
+  stable families `status` (mission search/detail), `repository` (target discovery and
+  repository reads), `knowledgebase` (reviewed connection reads and live-authorized
+  writes), and `feature` (Knowledgebase plus exhaustive Feature lookup and mission detail).
+  Project discovery, question and proposal preparation remain available in every manifest;
+  connection workspace discovery remains available when authorized. No routing-model call
+  is added. Unrecognized, ambiguous or referential requests use the full authorized catalog;
+  cross-family requests take the union. A stored per-message write grant selects Knowledgebase.
+  Always-available reviewed reads means available through expansion, not necessarily declared
+  in every request. `expand_capabilities` accepts optional `families` from the four names
+  plus `all`; empty/omitted lists discover current authorized capabilities and tool names.
+  Expansion only widens relevance, never permission, and takes effect on the next request.
+  Its complete signed call and receipt use the normal checkpoint-before-execute path, tool
+  allowance, ordered join and raw diagnostics. Successful expansion receipts restore the
+  family union even after a crash between receipt and join; duplicate execution is harmless.
+  A call not in its historical manifest still returns `unknown_tool`, even when an expansion
+  appears earlier in the same turn. Failed live catalog discovery contributes no connection
+  tools. A per-message grant naming a workspace no longer in the connection's live
+  authorized-workspace list contributes no write declarations; an all-workspaces connection
+  with an empty authorized list contributes none either. Call-time checks remain unchanged.
+  Full fallback means all currently authorized tools, never all possible permissions.
+- _Static-prefix cache (coo:1127.0904)._ Backend may place a tool-enabled request's exact
+  static prefix in a Gemini explicit cache (`caches.create`, same Generate Content API
+  family) and reference it with `cachedContent`. The prefix is only the exact system
+  instruction, the request's exact function declarations and `functionCallingConfig.mode
+  = AUTO`; never conversation, summaries, tool results, source content, proposals,
+  credentials or connection secrets. A `cachedContent` request carries no system
+  instruction, tools or tool config (the provider rejects them), so tool-free closing
+  (`NONE`) requests and summary generation are always sent inline.
+  - _Hybrid use._ Only while the attempt's previous reported `promptTokenCount` (before
+    any report: request bytes / 4) is below 16,000 tokens; larger requests go inline so
+    implicit caching can cover the growing conversation. A cached request reports only
+    the cache's tokens as cached and gains no implicit hits, so caching every request
+    would raise cost on long runs. The cache never removes prompt tokens or context
+    occupancy: the context budget still counts the cached declarations.
+  - _Key and isolation._ SHA-256 over the owner's profile and organization, the model and
+    the canonical static config. Caches are never shared across owners, even for
+    identical manifests. A changed prompt, grant, connection, family or schema yields a
+    different key; a cache is never used for a different manifest, and a cache reference
+    never authorizes anything (every call still faces the live gateway checks; schema-2
+    checkpoint manifests are unchanged).
+  - _Lifecycle._ TTL 600 s; reuse only with at least 60 s remaining. A process-local,
+    in-memory registry (no database state) holds at most 64 entries and 4 per owner.
+    Creation is single-flight per key, never blocks a request (that request goes inline),
+    is bounded to 15 s and is awaited by the creating attempt before it finishes, so its
+    observation is durable. A failed creation suppresses that key for the TTL. When an
+    owner exceeds 4 entries, the oldest of that owner's caches is deleted from that
+    owner's attempt. A full registry skips creation. Caches left by a restart expire by
+    TTL; a restart starts cold.
+  - _Fallback._ A cached request refused at stream open with 400, 403 or 404, before any
+    chunk arrives, invalidates the entry and is sent once inline with identical contents.
+    Nothing is retried after a chunk arrives; transient-retry and rate-limit rules are
+    unchanged, so no turn or tool call is duplicated.
+  - _Digest, checkpoint and recovery._ The effective model input is identical with or
+    without the cache, so the config digest, checkpoint schema 2 and fresh-generation
+    rules are unchanged. The cache name is never stored in checkpoints, snapshots or
+    events; a resumed attempt recomputes the key and reuses or recreates the cache.
+  - _Diagnostics._ Owner-private and captured only in the triggering owner's thread:
+    `provider.cache_create` (complete create config including the instruction and
+    declarations, then the provider response metadata or original error),
+    `provider.cache_delete` and `provider.cache_fallback`. A cached `provider.request`
+    records the SDK request actually sent plus `staticCache` holding the cache name, key
+    and the effective system instruction, declarations and tool config, so the effective
+    input stays inspectable. `performance.attempt` adds cached-request and fallback
+    counts. These are open diagnostic kinds.
+  - _Configuration._ On by default with a configured key; `CHAT_GEMINI_STATIC_CACHE=off`
+    disables it (any other value keeps the default). Explicit caches incur provider
+    storage charges for their TTL.
+- _Questions._ `ask_user` is a checkpointed call: reads in the same turn run first, the
+  question opens through the existing question path (run `waiting_user`, notification
+  candidate), and the answer becomes that call's recorded result when the run resumes
+  from its checkpoint. One question per turn; extra `ask_user` calls answer
+  `invalid_arguments`.
+- _Evidence and citations._ Each tool result's sources become `chat_source_refs`
+  (scope keys: `overlord:<entity>:<id>`, `repository:<target>:<project>:<resource>:<path>@<head>`,
+  `knowledgebase:<connection>:<workspace>:<node>`), are checked live, and get one
+  `chat_evidence` row each with a thread-local citation ref (`E<n>`) returned to the
+  model. A source that does not check `authorized` withholds that result's content
+  (`source_unverified`). The tool call's dependency set becomes the union of its
+  request context and its sources. The answer's `[E<n>]` or `[E<n>, E<m>]` citations
+  become the text block's `evidenceIds` and one `evidence` block (one entry per source,
+  `stale` when observed more than 15 minutes before attachment); the message's
+  dependency set includes the cited sources. Streamed text, questions, checkpoints and
+  summaries use the conservative union of every authorized dependency set in the
+  thread.
+- _Summaries._ Once at least eight messages are not covered by the latest summary, the
+  runtime writes a compact `chat_thread_summaries` row (goal text, decisions, open
+  questions, evidence refs) from a plain-text transcript of authorized content; a failed
+  summary never fails the run.
+  - _Coverage._ `covers_through_message_id` names the last message the generation
+    actually read; the transcript is the previous usable summary plus the messages
+    after its boundary, oldest first, cut at a message boundary when it reaches its
+    size bound, so coverage never claims an unread message. Core resolves the boundary's
+    position by storage order `(created_at, id)` even when it lies outside the latest
+    100-message page; a boundary that cannot be resolved, or an absent, invalidated or
+    unauthorized summary, means no coverage and the full authorized page is sent.
+  - _Prefix selection._ With usable coverage, covered messages are replaced by the
+    summary, except the run's trigger message, every message of the current run, and
+    the four most recent messages, which stay verbatim. Proposal cards and creation
+    receipts are supplied separately and never compacted; the current run's signed
+    provider turns are never summarized or compacted. Omitting covered text never
+    narrows dependencies: summaries, checkpoints, messages and questions keep the
+    conservative thread union, and revocation invalidates the summary (falling back
+    to authorized messages with `unavailable` markers) and fences as before.
+  - _Generation._ A dedicated compact instruction (not the research prompt) treats
+    the transcript as untrusted data and returns only the four fields under a bounded
+    output (`maxOutputTokens` 2048, low thinking) with no tools. A response that is not
+    complete (`finishReason` other than `STOP`), not valid JSON, or outside the field
+    bounds (text 6,000 chars, 20 decisions, 20 open questions, 50 `E<n>` refs, items 500
+    chars) is a failed optional summary: it is recorded privately, never stored and
+    never replaces the last valid summary. The eight-message cadence is unchanged.
+- _Source checkers._ `overlord` sources are `authorized` while the entity exists and the
+  owner keeps the read permission on its project's workspace, else `revoked`;
+  `repository` sources while the owner keeps `project:read` and the execution target
+  stays eligible for that project (reachability is not access). Both are registered
+  with the Knowledgebase checker through the connections module's composed
+  `checkSource`.
+- _Limits._ Before each provider request the runtime stops at the per-run tool-call
+  limit, the gathered-content budget, or within one minute of the active-time limit; a
+  function-call turn that would exceed the tool-call limit is discarded unexecuted (never
+  checkpointed) and one tool-free request (`functionCallingConfig.mode = NONE`) writes the
+  closing summary before the run completes `allowance_exhausted`.
+- _Context budget (coo:1127.158y)._ Token budgets are counted in provider tokens, never
+  characters. Before each tool-enabled request after the first of an attempt, the
+  runtime projects its input as the previous exchange's reported `promptTokenCount`
+  plus one token per two bytes of request growth. If the projection exceeds the model
+  input limit minus a 65,536-token headroom, it stops gathering and ends through the
+  same tool-free closing request and `allowance_exhausted` outcome (Continue starts a
+  fresh run whose prefix uses the summary). The limit is `CHAT_GEMINI_INPUT_TOKEN_LIMIT`
+  (default 1,048,576, the verified `gemini-3.8-flash` input limit; whole number
+  131,072–2,097,152, otherwise the default). Without a reported usage the runtime sends
+  the request and a provider rejection keeps the existing `context_limit` code. Context
+  is never silently dropped to force a request through, and no new failure code exists.
+
+**Verification and hardening (coo:1108.z77k).**
+
+- _Operator limits._ Each is a whole number in its range; an unset, malformed, or
+  out-of-range value keeps the default. A run records the limits in force when it was
+  submitted, so a change applies to new runs only. `CHAT_MAX_TOOL_CALLS_PER_RUN`
+  (default 60, 1–500), `CHAT_MAX_ACTIVE_MS_PER_RUN` (600000, 120000–3600000; the last
+  minute is reserved for the closing summary), `CHAT_MAX_CONCURRENT_RUNS_PER_OWNER` (3,
+  1–50), `CHAT_MAX_TARGET_READS_PER_RUN` (4, 1–4; the repository-read service admits four
+  per run regardless), `CHAT_ATTEMPT_LEASE_MS` (30000, 5000–600000),
+  `CHAT_NOTIFICATION_GRACE_MS` (5000), `CHAT_PRESENCE_TTL_MS` (30000),
+  `CHAT_EVENT_RETENTION_MS` (604800000) and `CHAT_EVENT_RETENTION_COUNT` (5000), alongside
+  the existing `CHAT_MAX_GATHERED_BYTES_PER_RUN` (1048576).
+- _Progress labels._ `tool.updated.label` is one of a fixed set of display strings
+  (`Listing projects`, `Checking machines`, `Searching missions`, `Reading a mission`,
+  `Inspecting a repository`, `Preparing a proposal`, `Asking a question`,
+  `Searching notes`, `Reading a note`, `Browsing notes`, `Unavailable tool`). A tool name
+  chosen by the model is never echoed to clients. Clients treat the label as opaque text.
+- _Project list tool._ `overlord_list_projects` returns the agent catalog once per
+  workspace (`assignmentCatalogs`), not on every project. This is model-facing tool
+  content, not a DTO.
+- _Proposal preparation._ A refused `prepare_proposal` call carries a specific reason
+  for the model (for example an unregistered resource key, an unsupported model, or a
+  project with no registered resource). The reason is never part of an HTTP error body,
+  and it never names a project the owner cannot use. A project without a registered
+  resource cannot receive drafts from the assistant.
+- _Transient provider failures._ A 500, 502, 503, or 504, or a transport failure with no
+  status, is retried at most twice (after 0.4 s and 1.5 s) before any part of that turn
+  has arrived, so nothing is persisted twice. Rate limits, configuration errors
+  (401/403/404), and failures in the middle of a stream are not retried and fail the
+  run with its closed code.
+- _Termination._ On `SIGTERM` or `SIGINT` the backend stops its chat worker and
+  conversation-notification dispatcher and then terminates with that signal. An
+  interrupted attempt is reclaimed by another worker when its lease lapses.
+- _Archived projects._ Create follows the existing mission-creation rule, which accepts
+  an archived project; the assistant only lists active projects when preparing.
+
+**Account deletion.** Every chat, connection, presence, acknowledgement, receipt, and
+conversation-notification row cascades from `profiles` (and `organizations`), so the
+existing account-deletion cascade removes them with the identity and no new
+`RESTRICT` child is introduced. Missions created from chat survive; their
+`created_from_chat_thread_id` soft reference may dangle.
+
 ### Backend → Outbound MCP (Account Connection Surface)
 
 - **Transport**: HTTPS JSON-RPC (MCP streamable HTTP) from the backend to the configured Knowledgebase origin only, with the connection's access token; egress is restricted server-side.
-- **Policy**: only a reviewed tool allowlist, namespaced per connection, is exposed to the assistant. Reviewed reads are always available through relevance expansion/full-catalog fallback; reviewed writes only for the connection and workspace of the run's user-authorized `knowledgebaseWrite` grant (v154), or for any authorized workspace of a connection whose live `assistant_write_scope` is `all_workspaces` (v158), and refused otherwise before any request; unreviewed tools are rejected regardless of annotations; every call has argument, output-size, and time bounds; the per-source access check fails closed.
-- **Tool policy version 2** (v154): reads `list_workspaces`, `search`, `read_file`, `get_related`, `list_children`, `get_links`, `read_resource`, `list_entities`, `query`, `get_registries`; writes `create_node`, `edit_file`, `set_properties`, `add_relation`, `update_relation`, `remove_relation` with required revision guards and bounded nested JSON (`null` removes a property). Each has Overlord-reviewed descriptions and closed input schemas (server descriptions and schemas are never shown to the model). Server annotations can only withhold a reviewed tool (a read not annotated `readOnlyHint: true` or annotated destructive; a write annotated destructive unless reviewed destructive, which only `remove_relation` is). A guard refusal (409/412) is `conflict`; a write sent without a usable response is `uncertain` and never retried. `query`, `get_related`, and `get_registries` are refused rather than truncated when over the text bound. Tool ids are `kb_<first 12 hex of the connection id>_<tool>` (≤ 64 characters; letters, digits, and underscores only, because the provider rewrote the earlier dotted form and the gateway then rejected the call as an unknown tool). Workspace-scoped calls must name a workspace in the connection's `authorizedWorkspaces` (refreshed from `list_workspaces` once when unknown).
+- **Policy**: only a reviewed tool allowlist, namespaced per connection, is exposed to the assistant. Reviewed reads are always available through relevance expansion/full-catalog fallback; reviewed writes only for the connection and workspace of the run's user-authorized `knowledgebaseWrite` grant, or for any authorized workspace of a connection whose live `assistant_write_scope` is `all_workspaces`, and refused otherwise before any request; unreviewed tools are rejected regardless of annotations; every call has argument, output-size, and time bounds; the per-source access check fails closed.
+- **Tool policy version 2**: reads `list_workspaces`, `search`, `read_file`, `get_related`, `list_children`, `get_links`, `read_resource`, `list_entities`, `query`, `get_registries`; writes `create_node`, `edit_file`, `set_properties`, `add_relation`, `update_relation`, `remove_relation` with required revision guards and bounded nested JSON (`null` removes a property). Each has Overlord-reviewed descriptions and closed input schemas (server descriptions and schemas are never shown to the model). Server annotations can only withhold a reviewed tool (a read not annotated `readOnlyHint: true` or annotated destructive; a write annotated destructive unless reviewed destructive, which only `remove_relation` is). A guard refusal (409/412) is `conflict`; a write sent without a usable response is `uncertain` and never retried. `query`, `get_related`, and `get_registries` are refused rather than truncated when over the text bound. Tool ids are `kb_<first 12 hex of the connection id>_<tool>` (≤ 64 characters; letters, digits, and underscores only, because the provider rewrote the earlier dotted form and the gateway then rejected the call as an unknown tool). Workspace-scoped calls must name a workspace in the connection's `authorizedWorkspaces` (refreshed from `list_workspaces` once when unknown).
 - **Bounds**: 4 KiB arguments for reads and per-tool limits for writes (up to 56 KiB), 1 MiB response read from the network (beyond that the call fails), 64 KiB text returned per call with a `truncated` flag, 15 s per call, redirects never followed. Results carry the namespaced tool, connection, workspace, observation time, and provenance (node id, path, provider revision, and update time for every node in the full response, at most 50).
-- **Access checks**: a source check consults the owner's connection row on every call (`disconnected` or foreign → `revoked`; not connected → `unknown`), then `get_related` (403/404 → `revoked`). Only positive answers are cached, per owner, for 30 s (v157), so an upstream node revocation is observed within that window. Any other result is `unknown`; both fail closed.
+- **Access checks**: a source check consults the owner's connection row on every call (`disconnected` or foreign → `revoked`; not connected → `unknown`), then `get_related` (403/404 → `revoked`). Only positive answers are cached, per owner, for 30 s, so an upstream node revocation is observed within that window. Any other result is `unknown`; both fail closed.
 - **Token use**: a 401 triggers one refresh shared by concurrent callers through the refresh lease (15 s, shorter than the provider's 30 s reuse grace). A second 401 or `invalid_grant` marks the connection `reauthorization_required` and erases its credential.
 - **Credentials**: obtained and refreshed only by the connections module (serialized refresh, rotated token persisted before use) and never logged or returned.
 
@@ -500,7 +1106,7 @@ Specified in [protocol.md](protocol.md).
 - **Transport**: in-process. The backend composition root passes REST extension account-connection provider adapters to `createConnectionsRuntime({ providers })` and shares its `ProfileConnections` instance with the extension routers. Each adapter supplies provider-specific behaviour only: upstream credential validation (API keys), or for OAuth the authorize URL, code exchange, refresh, revoke, and account description; plus legacy-store adoption and the legacy tombstone on disconnect.
 - **Ownership**: the connections module owns storage, encryption, the key ring, re-sealing, OAuth state, the refresh lease, state, and DTOs. An extension obtains a credential only through `ProfileConnections.credential(profileId, provider)` (API keys) or `ProfileConnections.oauthAccessToken(profileId, provider, { staleRevision? })` (OAuth: refreshed under the lease, rotated credential persisted first), and never reads `account_connections.credential_*` or holds an encryption key. An extension may record a re-validated account (`recordAccount`) or require reauthorization with a provider error code (`requireReauthorization`).
 - **Errors**: `ConnectionAccessError` with `not_found` (no connected row), `unavailable` (key or OAuth client not configured, or the upstream is unreachable; nothing erased) or `reauthorization_required` (unreadable, refresh rejected, or identity changed; erased). The extension maps them to its own legacy error text.
-- **Providers (v153)**: `everhour` (API key) and `github` (OAuth, confidential client, callback `/api/auth/callback/github/repository`).
+- **Providers**: `everhour` (API key) and `github` (OAuth, confidential client, callback `/api/auth/callback/github/repository`).
 
 ### MCP Server → Auth (Hosted Agent Auth Surface)
 
@@ -516,7 +1122,7 @@ Specified in [authorization.md](authorization.md).
 - **Tool catalog**: Both MCP surfaces publish the one catalog in
   `@overlord/contract/mcp-tools`. Hosted MCP adds only widget `_meta`; the
   local connector shim's `tools` array is generated from the catalog without
-  `outputSchema` and must never be edited by hand (Version 164).
+  `outputSchema` and must never be edited by hand.
 - **Project context**: Hosted MCP cannot observe a cloud agent's current working
   directory. A caller that supplies `projectId` creates a normal mission after
   resolving that resource; an omitted project for the explicit inbox-capable
@@ -563,7 +1169,7 @@ Specified in [authorization.md](authorization.md).
 - **Credential**: For spawned CLI that needs a network credential (remote/shared deployments), the shell passes a `USER_TOKEN` via `Overlord_USER_TOKEN`; pure-loopback execution talks to the local service layer and needs none
 - **Persistent runner control**: The `runnerService.*` preload ops spawn `ovld runner service <install|start|stop|restart|status|uninstall> --json` in the shell's main process, injecting the active backend URL and (remote mode) token so an install captures the right credential; the parsed JSON status is returned to the renderer. The shell never claims runner queue work, supervises the loop, or generates service files itself — those stay CLI/Runner-owned
 - **Rule**: The shell triggers existing CLI/runner behavior; it must not reimplement launch, terminal, or config logic the CLI/Runner Layers own
-- **Shared paths and helpers**: The shell locates `~/.ovld` (or `OVLD_HOME`) only through the Database package's `local-paths` and normalizes backend URLs with the Contract package helper; it bundles those modules rather than re-deriving them (Version 164)
+- **Shared paths and helpers**: The shell locates `~/.ovld` (or `OVLD_HOME`) only through the Database package's `local-paths` and normalizes backend URLs with the Contract package helper; it bundles those modules rather than re-deriving them
 
 ---
 
@@ -593,7 +1199,7 @@ The only sanctioned ways to extend Overlord:
 | Database extension          | `ext_<name>_` tables + `schema_migrations.component`                     | Database Layer          |
 | Auth/RBAC provider          | Auth Layer service boundary                                              | Auth Layer              |
 | REST extension              | Namespaced endpoint prefix (`/ext/<name>/`)                              | REST API Layer          |
-| Account-connection provider | Provider adapter registered with the connections module (v153)           | Extension System        |
+| Account-connection provider | Provider adapter registered with the connections module                  | Extension System        |
 | Open vocabulary values      | Namespaced values declared in manifest                                   | Database/Protocol Layer |
 
 Attempting to extend Overlord through any other path — patching core tables directly, adding undeclared hook types, using closed vocabulary values — is a contract violation that must be resolved before the component ships.

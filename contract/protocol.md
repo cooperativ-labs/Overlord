@@ -39,7 +39,7 @@ Owns:
 - Versioned delivery-report evidence and deterministic/pending presentation in `deliveries.payload_json`, with optional asynchronous Gemini composition of `presentation` only
 - Objective/session-ledger changed-file synchronization, optional update,
   delivery, and record-work declared paths, and bounded session capture
-  diagnostics (version 165). Accepted changed-file and capture-diagnostic writes
+  diagnostics. Accepted changed-file and capture-diagnostic writes
   emit scoped `entity_changes` in the same transaction so the changed-file-first
   REST projection refreshes without scanning a worktree
 - Idempotency key scope naming for protocol operations (`protocol.*`)
@@ -78,7 +78,7 @@ Does NOT own:
 - **Response format**: JSON on stdout; non-zero exit on error
 - **Inbox capture**: `ovld protocol create --inbox` creates an account-owned unassigned capture. Ordinary non-executing `create` uses an explicit project first, then discovered project, then this inbox fallback; `prompt` and `record-work` continue to fail without a project because they imply executable work.
 - **Shell-special content**: Must use `--summary-file -` / `--payload-file -` with stdin heredoc
-- **Delivery evidence**: `deliver` accepts an optional versioned `deliveryReport.agentReport` object. Its `humanActions`, `tradeoffsMade`, `knownRisks`, `deferredWork`, and `assumptions` fields are advisory agent evidence, normalized to empty arrays when absent. Malformed advisory items are discarded independently with bounded warnings; evidence, change tracking, and model availability never delay delivery. Human actions must exclude Git operations and routine review/testing; the protocol applies this exclusion before persistence. Each human action carries a required `action`, expected `reason` and `category`, optional `blocking`, and optional `command`, `verify`, and `link` (HTTP(S) URL or repository-relative path only) that are preserved verbatim through normalization and composition. Deferred work is recommended new work outside the current mission, written by the agent as `DeferredWorkInputV1` objects (`title`, `change`, `location`, `doneWhen`; v166); a string item, an over-long or missing field, or an unknown key is rejected with `invalid_input`. Nothing rewrites an item: `presentation.deferredWork` is the eligible subset of the agent objects, with their ids, after dropping items that restate planned sibling objectives, leftover current-objective work, or human follow-up. The stored `deliveryReport.presentation` begins as an immediate deterministic fallback and is marked `pending` when a compose job is enqueued; a background worker may later replace only `presentation` with a Gemini-composed or `fallback` result, and in every outcome it appends the deterministic path-derived `deterministic_rule` actions (migrations, env examples, deployment configs, dependency manifests, CI workflow files) that the agent and model did not already cover. The original delivery summary remains immutable.
+- **Delivery evidence**: `deliver` accepts an optional versioned `deliveryReport.agentReport` object. Its `humanActions`, `tradeoffsMade`, `knownRisks`, `deferredWork`, and `assumptions` fields are advisory agent evidence, normalized to empty arrays when absent. Malformed advisory items are discarded independently with bounded warnings; evidence, change tracking, and model availability never delay delivery. Human actions must exclude Git operations and routine review/testing; the protocol applies this exclusion before persistence. Each human action carries a required `action`, expected `reason` and `category`, optional `blocking`, and optional `command`, `verify`, and `link` (HTTP(S) URL or repository-relative path only) that are preserved verbatim through normalization and composition. Deferred work is recommended new work outside the current mission, written by the agent as `DeferredWorkInputV1` objects (`title`, `change`, `location`, `doneWhen`); a string item, an over-long or missing field, or an unknown key is rejected with `invalid_input`. Nothing rewrites an item: `presentation.deferredWork` is the eligible subset of the agent objects, with their ids, after dropping items that restate planned sibling objectives, leftover current-objective work, or human follow-up. The stored `deliveryReport.presentation` begins as an immediate deterministic fallback and is marked `pending` when a compose job is enqueued; a background worker may later replace only `presentation` with a Gemini-composed or `fallback` result, and in every outcome it appends the deterministic path-derived `deterministic_rule` actions (migrations, env examples, deployment configs, dependency manifests, CI workflow files) that the agent and model did not already cover. The original delivery summary remains immutable.
 
 ### Protocol → Database (Service Layer)
 
@@ -152,3 +152,21 @@ answering a decision it is blocked on, and injecting an instruction into it.
 - **Human surfaces are a separate auth family.** Listing, answering, and enqueuing use ordinary
   authenticated session/token auth plus resource-derived RBAC. A channel credential can never
   present itself as a human actor, and a human credential can never impersonate an adapter
+- **Answerable questions and answer delivery**: `ovld protocol ask` creates an answerable
+  `agent_requests` row when the attached session has a bound channel, links its id from the
+  `ask` event payload, and supports bounded structured options plus an explicit no-free-text
+  choice mode. `AgentRequestDto.delivery` is the sole answerability projection: `latch` when
+  a live Latch provider session on a reachable target can receive the answer, otherwise
+  `read_only` with one of `no_latch_session`, `latch_session_exited`, `target_offline`, or
+  `request_closed`; it also projects the application state and observation time. Human
+  `POST /api/agent-requests/:id/resolve` is available only for `question` and `choice`,
+  retains revision CAS and native permission/retry retirement, validates text/options
+  against the request, and fails `409 request_not_deliverable` unless delivery mode is
+  `latch`. Resolving a deliverable question records an `answer` mission event, returns its
+  agent session to `execute`, clears the blocking-question seen marker, enqueues
+  `mission.unblocked`, marks delivery `emitted`, and uses `sendLatchMessage` on the resolved
+  target. Answer delivery queues it with `operationId = agent_requests.id`, which is both
+  Latch's idempotency key and the row a completion post-hook records against
+  (`accepted → applied`, `refused → not_applied`, `ambiguous → unknown`; a timeout leaves
+  `emitted`). Feed question items additively expose `agentRequestId` and delivery mode; an
+  ask with a later matching answer is no longer unseen.

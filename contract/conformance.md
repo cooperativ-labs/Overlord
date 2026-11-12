@@ -80,7 +80,7 @@ See [`contract/conformance-manifest.schema.yaml`](conformance-manifest.schema.ya
 - `chat_events.kind`: `thread.updated`, `message.created`, `message.delta`, `message.completed`, `run.updated`, `tool.updated`, `question.opened`, `question.closed`, `proposal.revised`, `proposal.created`, `content.invalidated`
 - `chat_source_refs.source_kind`: `knowledgebase`, `overlord`, `repository`; `chat_source_refs.access_state`: `authorized`, `revoked`, `unknown`
 - `chat_notifications.type`: `chat_needs_answer`, `chat_finished` (also admitted by `notification_preferences.type`); `chat_notifications.state`: `pending`, `suppressed`, `dispatching`, `dispatched`, `cancelled`, `failed`
-- `account_connections.provider`: `knowledgebase`, `everhour`, `github` (v153); `account_connections.state`: `pending`, `connected`, `reauthorization_required`, `disconnected`; `account_connections.credential_kind`: `oauth`, `api_key` (v153); `account_connections.credential_format`: `connection-v1`, `everhour-user-key-v1`, `github-user-oauth-v1` (v153); `account_connections.assistant_write_scope`: `per_request`, `all_workspaces` (v158)
+- `account_connections.provider`: `knowledgebase`, `everhour`, `github`; `account_connections.state`: `pending`, `connected`, `reauthorization_required`, `disconnected`; `account_connections.credential_kind`: `oauth`, `api_key`; `account_connections.credential_format`: `connection-v1`, `everhour-user-key-v1`, `github-user-oauth-v1`; `account_connections.assistant_write_scope`: `per_request`, `all_workspaces`
 - RBAC role names (`role_assignments.role_key` core, non-extension values; enumerated in `auth/src/rbac/types.ts`'s `Role` enum and `overlord.rbac.toml`): `ADMIN`, `MANAGER`, `MEMBER`, `PUBLIC`
 
 ### Open (extensions may add namespaced values)

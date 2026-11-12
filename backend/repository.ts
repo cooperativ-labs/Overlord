@@ -1000,7 +1000,7 @@ function toMissionDto(r: MissionRow, tags: ProjectTagDto[] = []): MissionDto {
 // flow uses a `--no-ff` merge commit on the parent precisely so the parent tip
 // diverges from the branch tip, keeping this derivation unambiguous (a plain
 // fast-forward would leave parent and branch tips identical and indistinguishable
-// from a freshly-cut branch — see the contract/CHANGELOG.md branch status derivation).
+// from a freshly-cut branch — see contract/data/README.md `mission_branch_observations`).
 async function deriveBranchStatus(_input: {
   projectId: string;
   branchName: string;

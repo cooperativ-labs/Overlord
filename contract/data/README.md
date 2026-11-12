@@ -1,6 +1,6 @@
 # Database Schema Contract
 
-Contract Version: `1`
+Schema contract version (`schema_migrations.contract_version`): `1`
 
 ## Goal
 
@@ -59,7 +59,7 @@ This choice does not change the logical schema. It does affect implementation de
 - Stable IDs should be UUIDv7 or ULID strings. Integer primary keys are not part of the portable contract.
 - `revision` starts at `1` for inserted mutable rows and increments by exactly one for each service-layer mutation.
 - `metadata_json` and `settings_json` are extension space, but extension keys must be namespaced. Use reverse-DNS or package-style keys such as `com.example.plugin`, with a nested `schemaVersion` where the extension stores structured data.
-- Tables without `created_at`, `updated_at`, `deleted_at`, and `revision` are intentional operational or append-only tables. Current exemptions are `mission_sequences`, `mission_events`, `shared_context_tags`, `entity_changes`, `sync_cursors`, `outbox_messages`, `search_documents`, `audit_log`, `schema_migrations`, `webhook_delivery_attempts`, and the v152 assistant operational and append-only tables `account_connection_authorizations`, `chat_run_attempts`, `chat_tool_calls`, `chat_dependency_sets`, `chat_dependency_set_members`, `chat_evidence`, `chat_thread_summaries`, `chat_events`, `chat_work_proposal_revisions`, `chat_work_receipts`, `chat_work_receipt_missions`, `chat_presence`, and `chat_event_acks`.
+- Tables without `created_at`, `updated_at`, `deleted_at`, and `revision` are intentional operational or append-only tables. Current exemptions are `mission_sequences`, `mission_events`, `shared_context_tags`, `entity_changes`, `sync_cursors`, `outbox_messages`, `search_documents`, `audit_log`, `schema_migrations`, `webhook_delivery_attempts`, and the assistant operational and append-only tables `account_connection_authorizations`, `chat_run_attempts`, `chat_tool_calls`, `chat_dependency_sets`, `chat_dependency_set_members`, `chat_evidence`, `chat_thread_summaries`, `chat_events`, `chat_work_proposal_revisions`, `chat_work_receipts`, `chat_work_receipt_missions`, `chat_presence`, and `chat_event_acks`.
 - Columns named `position` (and the mission board ordering column `board_position`) must use a reorder strategy that does not violate active uniqueness mid-transaction. Services should use gap-based integer positions by default, for example `100`, `200`, `300`; compacting positions is a maintenance operation. `board_position` is not uniqueness-constrained, so services may renumber a whole board column densely on each reorder.
 
 ## Logical Types
@@ -791,6 +791,20 @@ Indexes:
 - Unique `(execution_target_id, mission_id, resource_key)`.
 - `(mission_id)` for mission detail branch DTO merges.
 
+Branch status derivation. A prepared branch (`missions.active_branch` set) is `created`
+at minimum. It is `published` once `origin/<branch>` exists, `merged_unpushed` once the
+branch has landed in the *local* base branch but the base has not been pushed, and `merged`
+once it has landed in the *remote* base (`origin/<base>`). A branch has landed in a base
+when the base contains the branch tip through a non-fast-forward merge: the base tip differs
+from the branch tip, the branch has no commits the base lacks, and the branch tip is not on
+the base's first-parent history. The merge-with-parent branch action therefore merges with
+`--no-ff`, so the parent tip diverges from the branch tip and the derivation stays
+unambiguous (a plain fast-forward would leave parent and branch tips identical and
+indistinguishable from a freshly cut branch). The status is derived from live git refs on the execution target that holds
+the checkout and written here as an observation; the control plane does not read git, so the
+mission branch DTO reports `created` for a prepared branch until a target observation exists,
+and the observation wins once it does.
+
 ### `project_user_preferences`
 
 Stores user-specific project preferences without overloading project resource directory rows.
@@ -904,7 +918,7 @@ Durable work unit and review record.
 | `branch_override`              | text         | no       | User-pinned branch chosen in the mission panel to override the planner's default; consumed (and cleared) by the runner at the next branch preparation. Null means automatic selection.                                                                                                                                                                                                                                                                                                                                                          |
 | `worktree_preference`          | text         | no       | Per-mission override of the user's `worktreeBranchAutomationEnabled` launch default (stored in `profiles.metadata_json`, not on the workspace). `null` inherits the user default; `'worktree'` forces a branch + worktree for this mission even when automation is off; `'branch'` forces a branch without a dedicated worktree (checked out in the project's primary repo). Persistent (not cleared by the runner). App-validated open set (no DB CHECK).                                                                                                                                                |
 | `allow_parallel_objectives`    | Bool         | yes      | Opt-in permission for two objectives on this mission to execute at once, on the same `resource_key` or different ones. Default `false` (serial sibling 409). Checkout safety is the Runner Layer's job: with worktrees on, a concurrently launched same-resource objective is planned onto `<mission branch>-<objectives.display_key>` in its own worktree; with worktrees off, the mission has one checkout that concurrent objectives share deliberately. Not a unique index; enforced in `launchObjective` and `validateObjectiveLifecycle`. |
-| `summary_enabled`              | Bool         | yes      | Mission-summary eligibility (contract v166). Default `true`, so every creation path (REST, protocol `create` / `prompt`, `record-work`, MCP, inbox promotion, scheduled duplicates) is eligible with no per-path code; the v166 migration sets every existing row to `false`. Never inferred from a `mission_summaries` row; an ineligible mission never gets a summary row or compose job.                                                                                                                                                     |
+| `summary_enabled`              | Bool         | yes      | Mission-summary eligibility. Default `true`, so every creation path (REST, protocol `create` / `prompt`, `record-work`, MCP, inbox promotion, scheduled duplicates) is eligible with no per-path code; the v166 migration sets every existing row to `false`. Never inferred from a `mission_summaries` row; an ineligible mission never gets a summary row or compose job.                                                                                                                                                     |
 | `schedule_id`                  | Id           | no       | FK to `schedules`. Null means the mission does not repeat. On SQLite this is a plain (non-composite) FK added via `ALTER TABLE`, since SQLite cannot add a table-level composite FK without a full table rebuild; Postgres adds the org-scoped composite `(workspace_id, schedule_id)` FK. Every read/write path still scopes by `workspace_id` in application code regardless of dialect.                                                                                                                                                      |
 | `due_datetime`                 | TimestampUTC | no       | Computed next occurrence for a scheduled mission; null when unscheduled. Recomputed by the SchedulingEngine (`@overlord/automations`) whenever the schedule is created/updated, and again for the duplicate mission spawned when a scheduled mission reaches a `complete`-type status (see `createScheduledDuplicateIfNeeded` in `backend/repository.ts`).                                                                                                                                                                                      |
 | `created_by_workspace_user_id` | Id           | no       | FK to `workspace_users`. For an agent-authored mission this is the human behind the authenticating token — the member the agent acted as, or on behalf of.                                                                                                                                                                                                                                                                                                                                                                                      |
@@ -913,7 +927,7 @@ Durable work unit and review record.
 | `created_by_session_id`        | Id           | no       | Agent session the creating call ran inside. This is a **deliberate soft reference** to `agent_sessions.id` with **no foreign key**: sessions are mission-scoped and restricted on delete elsewhere in the schema, and a dangling provenance pointer must never block a delete. Resolve it with a `LEFT JOIN` and tolerate a miss.                                                                                                                                                                                                               |
 | `created_by_token_id`          | Id           | no       | `USER_TOKEN` whose direct `out_` bearer request created the mission (REST, protocol `create`, hosted MCP). A **deliberate soft reference** to `user_tokens.id` with **no foreign key**, so revoking, soft-deleting, or hard-purging the token never blocks or erases mission history. Null for browser sessions, loopback, `sess_` session calls, scheduled duplicates, and every other system-generated row; never copied from a source mission and never accepted from a request body. Written only by `createMissionWithObjectives`.          |
 | `created_by_token_label`       | text         | no       | Snapshot of `user_tokens.label` at creation, the "Created via token" display. Stable after a later token rename, revoke, or soft-delete; set alongside `created_by_token_id` and null otherwise. Account deletion clears it under the same policy that erases the owner's other identifying text, so erasure leaves no label behind.                                                                                                                                                                                                             |
-| `created_from_chat_thread_id`  | Id           | no       | Assistant thread whose proposal Create produced this draft (contract v152). A **deliberate soft reference** to `chat_threads.id` with **no foreign key**: threads are private and cascade with their owner's account, and mission history must survive that. Written only by the chat Create service; never accepted from a request body and never exposed to anyone but the thread owner.                                                                                                                                                                 |
+| `created_from_chat_thread_id`  | Id           | no       | Assistant thread whose proposal Create produced this draft. A **deliberate soft reference** to `chat_threads.id` with **no foreign key**: threads are private and cascade with their owner's account, and mission history must survive that. Written only by the chat Create service; never accepted from a request body and never exposed to anyone but the thread owner.                                                                                                                                                                 |
 | `assigned_workspace_user_id`   | Id           | no       | FK to `workspace_users`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `created_at`                   | TimestampUTC | yes      |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `updated_at`                   | TimestampUTC | yes      |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -987,7 +1001,7 @@ One ordered agent pass inside a mission.
 | `launched_at`                  | TimestampUTC | no       | When the objective first entered `launching`. First-wins (`COALESCE`): a re-launch never rewrites it.                                                                                                                                                                                                                                                                                                                                       |
 | `started_at`                   | TimestampUTC | no       | When the objective first entered `executing`. First-wins: a post-delivery re-attach keeps the original.                                                                                                                                                                                                                                                                                                                                     |
 | `completed_at`                 | TimestampUTC | no       | Set when state enters `complete`; cleared if reopened.                                                                                                                                                                                                                                                                                                                                                                                      |
-| `reopened_at`                  | TimestampUTC | no       | Last-wins run boundary (contract v133). Stamped when an objective in `executing`, `pending_delivery`, or `complete` is set back to `draft`; rows of its deliveries, terminal sessions, and file changes at or after this moment belong to the latest run. Not stamped by a post-delivery re-attach, a `future → draft` promotion, or a `launching → draft` reset. Null until the first reopen.                                              |
+| `reopened_at`                  | TimestampUTC | no       | Last-wins run boundary. Stamped when an objective in `executing`, `pending_delivery`, or `complete` is set back to `draft`; rows of its deliveries, terminal sessions, and file changes at or after this moment belong to the latest run. Not stamped by a post-delivery re-attach, a `future → draft` promotion, or a `launching → draft` reset. Null until the first reopen.                                              |
 | `execution_metadata_json`      | Json         | yes      | Runtime details, no secrets.                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `branch`                       | text         | no       | Git branch this objective actually ran on, recorded by the runner at branch-prepared time; null until the objective is launched with a prepared branch.                                                                                                                                                                                                                                                                                     |
 | `created_by_workspace_user_id` | Id           | no       | FK to `workspace_users`. For an agent-authored objective this is the human behind the authenticating token.                                                                                                                                                                                                                                                                                                                                 |
@@ -1314,7 +1328,7 @@ Workspace attachment metadata for files that are not limited to a single objecti
 | `project_id`                   | Id           | no       | FK to `projects` for project-scoped attachments.                                                                                          |
 | `mission_id`                   | Id           | no       | FK to `missions` for mission-scoped attachments.                                                                                          |
 | `objective_id`                 | Id           | no       | FK to `objectives` for objective-scoped attachments.                                                                                      |
-| `inbox_item_id`                | Id           | no       | FK to `inbox_items`, `ON DELETE SET NULL` (v168). Set only while the file belongs to an unpromoted Inbox capture (project, mission, and objective null). |
+| `inbox_item_id`                | Id           | no       | FK to `inbox_items`, `ON DELETE SET NULL`. Set only while the file belongs to an unpromoted Inbox capture (project, mission, and objective null). |
 | `storage_bucket_id`            | Id           | yes      | FK to `storage_buckets`.                                                                                                                  |
 | `storage_key`                  | text         | yes      | Canonical backend key/path: `workspace-files/<workspace-id>/attachments/<attachment-id>.<ext>`, unique within the bucket for active rows. |
 | `filename`                     | text         | yes      | Original/display filename.                                                                                                                |
@@ -1338,7 +1352,7 @@ Indexes:
 - `(objective_id, created_at)` where `objective_id` is present.
 - `(inbox_item_id, created_at)` where `inbox_item_id` is present.
 
-Inbox attachments (v168) are stored in the owner's storage workspace and are authorized by `inbox_items.profile_id`, not by workspace membership alone; workspace-scoped attachment services ignore rows with `inbox_item_id`. Promotion re-points them to the created mission's first objective (copying bytes to the destination workspace's bucket when it differs) and clears `inbox_item_id`; deleting the item tombstones them first. Inbox-stage writes emit no `entity_changes`.
+Inbox attachments are stored in the owner's storage workspace and are authorized by `inbox_items.profile_id`, not by workspace membership alone; workspace-scoped attachment services ignore rows with `inbox_item_id`. Promotion re-points them to the created mission's first objective (copying bytes to the destination workspace's bucket when it differs) and clears `inbox_item_id`; deleting the item tombstones them first. Inbox-stage writes emit no `entity_changes`.
 
 Storage object deletes are soft deletes. Services should enqueue provider cleanup through `outbox_messages` after the metadata tombstone commits.
 
@@ -1383,7 +1397,7 @@ history.
 Operator decisions on the deferred-work items an agent reports in a delivery (coo:971,
 coo:1045). The item text is never copied here: `action_id` names the stable delivery-local
 `DeferredWorkV1.id` (`deferred-work-<index>-<digest>`, the agent-report index plus the digest
-of the canonical `[title, change, location, doneWhen]` object, contract v166), which
+of the canonical `[title, change, location, doneWhen]` object), which
 `presentation.deferredWork` carries unchanged because nothing rewrites an item. The v166
 migration deleted the rows of every historical string item together with the items. Reopening an item deletes
 its row; there is no soft delete or revision. The table was introduced for reported human
@@ -1398,7 +1412,7 @@ was removed (coo:1098, contract v150), and only `deferred-work-*` ids are writte
 | `mission_id`                    | Id           | yes      | FK to `missions`; denormalized from the delivery.                     |
 | `objective_id`                  | Id           | yes      | FK to `objectives`; denormalized from the delivery.                   |
 | `status`                        | text         | yes      | Closed: `done`, `dismissed`.                                          |
-| `outcome`                       | text         | no       | Closed: `mission_created`, `objective_added`. Promotion recorded with `status = 'done'` (coo:1045, contract v147). |
+| `outcome`                       | text         | no       | Closed: `mission_created`, `objective_added`. Promotion recorded with `status = 'done'` (coo:1045). |
 | `outcome_ref`                   | text         | no       | Display id of the mission or objective the promotion created.         |
 | `resolved_by_workspace_user_id` | Id           | no       | FK to `workspace_users`, set null on delete.                          |
 | `resolved_at`                   | TimestampUTC | yes      |                                                                       |
@@ -1411,11 +1425,11 @@ Indexes:
 Mutations emit `entity_changes` rows with `entity_type = 'human_action_resolution'`,
 `entity_id = '<delivery_id>:<action_id>'`, and the mission and objective ids, so the webapp
 can refresh the mission's delivery cards. Creating or deleting a row on a summary-eligible
-mission also triggers `overlord.mission.summary.compose.v1` in the same transaction (v166).
+mission also triggers `overlord.mission.summary.compose.v1` in the same transaction.
 
 ### `mission_summaries`
 
-The agent-maintained mission summary (coo:1202, contract v166): one row per mission whose
+The agent-maintained mission summary (coo:1202): one row per mission whose
 `missions.summary_enabled` is true, replaced in place. It is an operator surface only and is
 never part of `load-context`, the mission packet, MCP, or CLI protocol output. Not indexed in
 `search_documents`.
@@ -1454,7 +1468,7 @@ the generation it captured, then sets `completed_generation`. Every write append
 
 ### `mission_summary_seen`
 
-Per-user acknowledgement of displayed mission-summary evidence (contract v166), used for the
+Per-user acknowledgement of displayed mission-summary evidence, used for the
 new-since-last-visit marker.
 
 | Column              | Type         | Required | Notes                                                                 |
@@ -1673,7 +1687,7 @@ only. Protocol delivery (`deliverSession` / `recordWork`) enqueues one job in th
 transaction as the delivery insert; the backend composition worker claims, retries with
 lock expiry, and updates only `deliveries.payload_json.deliveryReport.presentation`.
 Delivery success never waits on the worker or Gemini. Core type
-`overlord.mission.summary.compose.v1` (contract v166) carries `{ "missionId": "<id>" }` only;
+`overlord.mission.summary.compose.v1` carries `{ "missionId": "<id>" }` only;
 it is enqueued for summary-eligible missions in the transaction of each trigger write (see
 `mission_summaries`), coalesced by mission, and never loses a trigger because the counter lives
 on the summary row rather than in the job. The core
@@ -2059,7 +2073,7 @@ Indexes:
 - `(mission_id, created_at)`.
 - `(status, created_at)`.
 
-## Agent Session Exchange (migrated, contract 47)
+## Agent Session Exchange
 
 The Agent Session Exchange is the durable state behind session observation, answerable
 requests, and inbound instructions. Four core tables were **declared by contract 45 and
@@ -2216,7 +2230,7 @@ Indexes:
 - `(workspace_id, status, available_at)`.
 - `(topic, created_at)`.
 
-Implemented as of contract version `1`. `topic = 'webhook.deliver.v1'` is the first consumer: one row per `(event × matching webhook_subscription)`, `payload_json = { subscriptionId, eventType, envelope }`.
+`topic = 'webhook.deliver.v1'` is the first consumer: one row per `(event × matching webhook_subscription)`, `payload_json = { subscriptionId, eventType, envelope }`.
 
 ### `live_activity_push_tokens`
 
@@ -2331,7 +2345,7 @@ catalog-eligible transport, preserving the user's chosen mode rather than narrow
 | ------------ | ------------ | -------- | ------------------------------------------------------------------------------------------------- |
 | `id`         | Id           | yes      |                                                                                                   |
 | `profile_id` | Id           | yes      | FK to `profiles`.                                                                                 |
-| `type`       | text         | yes      | `all`, or a shared notification-catalog id, including the conversation types `chat_needs_answer` and `chat_finished` (v152). |
+| `type`       | text         | yes      | `all`, or a shared notification-catalog id, including the conversation types `chat_needs_answer` and `chat_finished`. |
 | `transport`  | text         | yes      | `all` for the master row, otherwise a catalog-eligible `apns`, `realtime`, or `in_app` transport. |
 | `mode`       | text         | yes      | Closed set: `alert`, `silent`, `off`. The `(all, all)` row uses only `alert`/`off`.               |
 | `created_at` | TimestampUTC | yes      |                                                                                                   |
@@ -2435,12 +2449,12 @@ Indexes:
 - `(subscription_id, attempted_at)`.
 - `(outbox_message_id)`.
 
-## Assistant Conversations (contract 152)
+## Assistant Conversations
 
 Private Overlord assistant conversations (coo:1108). Migration pair:
 `20261004120000_chat_conversations.sql` (SQLite and Postgres). DTOs live in
-`packages/contract/src/chat.ts`; the behavioral contract is contract/CHANGELOG.md "Version 152
-Change Summary".
+`packages/contract/src/chat.ts`; the behavioral contract is
+[architecture.md](../architecture.md) "Assistant Conversation Behaviour".
 
 Shared rules for every table in this section:
 
@@ -2471,7 +2485,7 @@ Shared rules for every table in this section:
 ### `account_connections`
 
 One external account connection. The connections module is the only writer and
-the only reader of credentials. Since v153 a connection is **organization-scoped**
+the only reader of credentials. A connection is **organization-scoped**
 (`knowledgebase`: owned by a profile inside one organization) or **profile-scoped**
 (`everhour`, `github`: owned by the profile across organizations, `organization_id`
 NULL); `CHECK ((provider = 'knowledgebase') = (organization_id IS NOT NULL))`.
@@ -2480,22 +2494,22 @@ NULL); `CHECK ((provider = 'knowledgebase') = (organization_id IS NOT NULL))`.
 | ---------------------------- | ------------ | -------- | ------------------------------------------------------------------------------------------------------- |
 | `id`                         | Id           | yes      |                                                                                                         |
 | `owner_profile_id`           | Id           | yes      | FK `profiles`, cascade.                                                                                 |
-| `organization_id`            | Id           | no       | FK `organizations`, cascade. Null exactly for profile-scoped providers (v153).                          |
-| `provider`                   | text         | yes      | Closed: `knowledgebase`, `everhour`, `github` (v153).                                                   |
+| `organization_id`            | Id           | no       | FK `organizations`, cascade. Null exactly for profile-scoped providers.                                 |
+| `provider`                   | text         | yes      | Closed: `knowledgebase`, `everhour`, `github`.                                                          |
 | `server_url`                 | text         | yes      | `https://` only; the configured MCP resource URL, `https://api.everhour.com`, or `https://github.com`.  |
-| `credential_kind`            | text         | yes      | Closed: `oauth`, `api_key` (v153). Default `oauth`.                                                     |
-| `credential_format`          | text         | yes      | Closed: `connection-v1`, `everhour-user-key-v1`, `github-user-oauth-v1` (v153). Default `connection-v1`. |
-| `external_account_id`        | text         | no       | Upstream account identifier (Everhour user id, GitHub user id) (v153).                                  |
-| `external_account_label`     | text         | no       | Upstream display name or login (v153).                                                                  |
-| `external_account_avatar_url`| text         | no       | Upstream avatar URL (v153).                                                                             |
-| `granted_scopes_json`        | Json         | yes      | Granted OAuth scopes. Default `[]` (v153).                                                              |
-| `last_validated_at`          | TimestampUTC | no       | Last successful upstream validation of the credential (v153).                                           |
+| `credential_kind`            | text         | yes      | Closed: `oauth`, `api_key`. Default `oauth`.                                                            |
+| `credential_format`          | text         | yes      | Closed: `connection-v1`, `everhour-user-key-v1`, `github-user-oauth-v1`. Default `connection-v1`. |
+| `external_account_id`        | text         | no       | Upstream account identifier (Everhour user id, GitHub user id).                                         |
+| `external_account_label`     | text         | no       | Upstream display name or login.                                                                         |
+| `external_account_avatar_url`| text         | no       | Upstream avatar URL.                                                                                    |
+| `granted_scopes_json`        | Json         | yes      | Granted OAuth scopes. Default `[]`.                                                                     |
+| `last_validated_at`          | TimestampUTC | no       | Last successful upstream validation of the credential.                                                  |
 | `state`                      | text         | yes      | Closed: `pending`, `connected`, `reauthorization_required`, `disconnected`.                             |
 | `authorized_workspaces_json` | Json         | yes      | Provider workspace identifiers the grant can read. Default `[]`.                                        |
 | `tool_policy_version`        | integer      | yes      | Reviewed read-allowlist version the connection was checked against.                                     |
-| `assistant_write_scope`      | text         | yes      | v158. Closed: `per_request` (default; writes only under a run's `knowledgebase_write_json` grant), `all_workspaces` (the assistant may write any authorized workspace of this Knowledgebase connection). Re-read on every write. |
+| `assistant_write_scope`      | text         | yes      | Closed: `per_request` (default; writes only under a run's `knowledgebase_write_json` grant), `all_workspaces` (the assistant may write any authorized workspace of this Knowledgebase connection). Re-read on every write. |
 | `credential_ciphertext`      | text         | no       | AES-256-GCM envelope; AAD and plaintext per `credential_format`. Required when `connected`; null when `disconnected`. |
-| `credential_key_id`          | text         | no       | Key-ring id (current key id, reserved `everhour-env` / `github-user-env`, or since v156 a reserved `platform-<fingerprint>` id for the key derived from `BETTER_AUTH_SECRET`); null exactly when the ciphertext is null. |
+| `credential_key_id`          | text         | no       | Key-ring id (current key id, reserved `everhour-env` / `github-user-env`, or a reserved `platform-<fingerprint>` id for the key derived from `BETTER_AUTH_SECRET`); null exactly when the ciphertext is null. |
 | `credential_revision`        | integer      | yes      | Increments on every stored rotation.                                                                    |
 | `access_expires_at`          | TimestampUTC | no       |                                                                                                         |
 | `refresh_expires_at`         | TimestampUTC | no       |                                                                                                         |
@@ -2508,16 +2522,16 @@ NULL); `CHECK ((provider = 'knowledgebase') = (organization_id IS NOT NULL))`.
 | `created_at` / `updated_at`  | TimestampUTC | yes      |                                                                                                         |
 | `revision`                   | integer      | yes      |                                                                                                         |
 
-Indexes: unique `(owner_profile_id, organization_id, provider, server_url) WHERE state <> 'disconnected'`; unique `(owner_profile_id, provider, server_url) WHERE state <> 'disconnected' AND organization_id IS NULL` (v153; NULLs are distinct in the first index); unique `(provider, external_account_id) WHERE provider = 'github' AND state <> 'disconnected' AND external_account_id IS NOT NULL` (v153); `(refresh_lock_until) WHERE refresh_lock_owner IS NOT NULL`.
+Indexes: unique `(owner_profile_id, organization_id, provider, server_url) WHERE state <> 'disconnected'`; unique `(owner_profile_id, provider, server_url) WHERE state <> 'disconnected' AND organization_id IS NULL` (NULLs are distinct in the first index); unique `(provider, external_account_id) WHERE provider = 'github' AND state <> 'disconnected' AND external_account_id IS NOT NULL`; `(refresh_lock_until) WHERE refresh_lock_owner IS NOT NULL`.
 
-Credential formats (v153): `connection-v1` binds `overlord:account-connection:v1:<owner>:<organization or ->:<provider>:<id>` over `{accessToken, refreshToken}` (OAuth) or `{apiKey}` (API key) and is the only format written. `everhour-user-key-v1` is an envelope adopted verbatim from `ext_everhour_user_connections` (AAD `overlord:everhour-user-key:v1:<owner>:api-key`, plaintext the key). `github-user-oauth-v1` holds `{"access": <envelope>, "refresh": <envelope or null>}` adopted verbatim from `ext_github_user_connections` by migration `20261005130000_account_connections_github_adoption` (AAD `overlord:github-user-oauth:v1:<owner>:access|refresh`, plaintext each token). Legacy-format rows are re-sealed to `connection-v1` under the current key on first successful use and by a startup sweep.
+Credential formats: `connection-v1` binds `overlord:account-connection:v1:<owner>:<organization or ->:<provider>:<id>` over `{accessToken, refreshToken}` (OAuth) or `{apiKey}` (API key) and is the only format written. `everhour-user-key-v1` is an envelope adopted verbatim from `ext_everhour_user_connections` (AAD `overlord:everhour-user-key:v1:<owner>:api-key`, plaintext the key). `github-user-oauth-v1` holds `{"access": <envelope>, "refresh": <envelope or null>}` adopted verbatim from `ext_github_user_connections` by migration `20261005130000_account_connections_github_adoption` (AAD `overlord:github-user-oauth:v1:<owner>:access|refresh`, plaintext each token). Legacy-format rows are re-sealed to `connection-v1` under the current key on first successful use and by a startup sweep.
 
 ### `account_connection_authorizations`
 
 Pending OAuth authorization-code attempts. `state_hash` is unique and single-use
 (`consumed_at`); `pkce_verifier_ciphertext` is encrypted; `return_to` is closed
 (`mobile`, `web`); `expires_at` bounds the attempt. FK `connection_id` →
-`account_connections`, cascade. Expired rows may be purged. Nullable `return_url` (v153) holds a
+`account_connections`, cascade. Expired rows may be purged. Nullable `return_url` holds a
 return target validated when the attempt started: an absolute URL set only by a legacy compatibility alias (GitHub: an allowed browser origin or `overlord://github/callback`), or a relative web `returnPath` (starts with `/`, not `//`). Profile-scoped attempts (GitHub) seal the PKCE verifier under the provider's write key with AAD `overlord:account-connection-authorization:v1:<owner>:-:<connection>:<attempt>`.
 
 ### `chat_threads`
@@ -2551,7 +2565,7 @@ thread. Index `(thread_id, created_at, id)`.
 
 ### `chat_diagnostics`
 
-v159: `thread_id` (text, required, FK chat_threads cascade), `seq` (positive
+`thread_id` (text, required, FK chat_threads cascade), `seq` (positive
 integer), composite primary key `(thread_id, seq)`; nullable soft `run_id` and
 `attempt_id`; required `kind` (open text), `payload_json` (JSON; SQLite text,
 Postgres jsonb), `created_at` (TimestampUTC). Index `(run_id, seq)`.
@@ -2581,7 +2595,7 @@ per attempt and independent of the browser display setting.
 | `active_attempt_id`      | Id           | no       | Soft pointer to the leased attempt; null unless `running`.                                                   |
 | `tool_call_count`, `active_processing_ms`, `gathered_content_bytes` | integer | yes | Usage against the run allowance (`active_processing_ms` excludes `waiting_user`).        |
 | `limits_json`            | Json         | yes      | Effective limits snapshot.                                                                                   |
-| `knowledgebase_write_json` | Json       | no       | v154: `{connectionId, workspace}` the user authorized this run to write to; null for a research-only run. Copied to a Continue run. |
+| `knowledgebase_write_json` | Json       | no       | `{connectionId, workspace}` the user authorized this run to write to; null for a research-only run. Copied to a Continue run. |
 | `cancel_requested_at`    | TimestampUTC | no       |                                                                                                              |
 | `completed_at`           | TimestampUTC | no       | Present exactly for `completed`, `failed`, `cancelled`.                                                      |
 | `created_at` / `updated_at` | TimestampUTC | yes   |                                                                                                              |
@@ -2784,7 +2798,7 @@ V3 retrieval selects `entity_id` so matching objectives and deliveries are ident
 
 The index is maintained by adapter triggers, not application writes: insert/update/delete on `missions`, `objectives`, `mission_events`, and `deliveries` keep `search_documents` (and the adapter full-text index) in sync, and a soft delete of a mission removes every document for that mission so deleted missions never surface. Workspace moves first remove the old workspace's document and then upsert the new one. Delivery rows are omitted once soft-deleted. `content_hash` and `source_revision` allow incremental reindexing instead of blind rebuilds.
 
-Mission document bodies concatenate the title/display ID with `constraints_text`, `output_format_text`, and `notes_text`. `notes_text` remains excluded from attach/load context and prompt assembly, but is searchable by every authorized caller, including agents. Delivery document bodies concatenate `summary`, `verification_summary`, `follow_up_notes`, and only `deliveryReport.agentReport.humanActions`, `knownRisks`, `deferredWork` (each item's `title`, `change`, `location`, and `doneWhen` since v166; the `20261024140100_deferred_work_structured_cutover` migration recreated the delivery triggers and cleared historical string items), `assumptions`, and each `tradeoffsMade[].decision`; adapters cap that resulting body at 20,000 characters. Text beyond that cap is not searchable. Artifacts are not indexed.
+Mission document bodies concatenate the title/display ID with `constraints_text`, `output_format_text`, and `notes_text`. `notes_text` remains excluded from attach/load context and prompt assembly, but is searchable by every authorized caller, including agents. Delivery document bodies concatenate `summary`, `verification_summary`, `follow_up_notes`, and only `deliveryReport.agentReport.humanActions`, `knownRisks`, `deferredWork` (each item's `title`, `change`, `location`, and `doneWhen`; the `20261024140100_deferred_work_structured_cutover` migration recreated the delivery triggers and cleared historical string items), `assumptions`, and each `tradeoffsMade[].decision`; adapters cap that resulting body at 20,000 characters. Text beyond that cap is not searchable. Artifacts are not indexed.
 
 - **SQLite** implements the full-text index as an external-content FTS5 virtual table (`search_documents_fts`) over `search_documents`, with `mission_id`/`entity_type` carried as `UNINDEXED` columns so a single `bm25()`-ranked query can return and weight missions. V3 child identity comes from joining `search_documents` on `rowid`, not from adding `entity_id` to the virtual table.
 - **Postgres** implements it as a generated `tsvector` column with a GIN index and `plpgsql` sync triggers; trigram indexes and a stable search RPC may be added as adapter details.
@@ -2860,7 +2874,7 @@ Closed values:
 - `idempotency_keys.status`: `in_progress`, `completed`, `failed`.
 - `audit_log.result`: `allowed`, `denied`, `failed`.
 - `workspace_invitations.status`: `pending`, `accepted`, `revoked`, `expired`.
-- Assistant conversation vocabularies (v152): `chat_runs.state`, `chat_runs.outcome`, `chat_runs.failure_code`, `chat_run_attempts.state`, `chat_run_attempts.recovery_mode`, `chat_messages.role`, `chat_messages.state`, `chat_questions.state`, `chat_tool_calls.state`, `chat_events.kind`, `chat_work_proposals.state`, `chat_source_refs.source_kind`, `chat_source_refs.access_state`, `chat_presence.platform`, `chat_notifications.type`, `chat_notifications.state`, `account_connections.provider`, `account_connections.state`, and (v153) `account_connections.credential_kind` and `account_connections.credential_format`, with the values in the "Assistant Conversations" section and CONTRACT.md "Controlled Vocabularies".
+- Assistant conversation vocabularies: `chat_runs.state`, `chat_runs.outcome`, `chat_runs.failure_code`, `chat_run_attempts.state`, `chat_run_attempts.recovery_mode`, `chat_messages.role`, `chat_messages.state`, `chat_questions.state`, `chat_tool_calls.state`, `chat_events.kind`, `chat_work_proposals.state`, `chat_source_refs.source_kind`, `chat_source_refs.access_state`, `chat_presence.platform`, `chat_notifications.type`, `chat_notifications.state`, `account_connections.provider`, `account_connections.state`, `account_connections.credential_kind` and `account_connections.credential_format`, with the values in the "Assistant Conversations" section and [conformance.md](../conformance.md) "Controlled Vocabularies".
 - `role_assignments.role_key` (core, non-extension values; see `auth/src/rbac/types.ts` `Role` enum and `overlord.rbac.toml`): `ADMIN`, `MANAGER`, `MEMBER`, `PUBLIC`. `MANAGER` grants everything `MEMBER` does plus `workspace:update` and project management, and may invite/remove/promote other members up to (but not including) `ADMIN`; only `ADMIN` may grant or revoke `ADMIN` itself.
 
 Open extension values:
@@ -2964,7 +2978,7 @@ Deprecated workspace-scoped Everhour connection retained only as a migration
 source. New writes go to `ext_everhour_user_connections`. A workspace row is
 adopted onto a profile only when `entity_changes` attribution uniquely
 identifies that profile as the connector; otherwise it stays readable until
-the connector reconnects personally. Since v153 an adopted key is stored through the
+the connector reconnects personally. An adopted key is stored through the
 connections module, and the adopted workspace row's `api_key_secret` is overwritten
 with `revoked:v1` when it is soft-deleted. The v153 migration scrubs rows that were
 already soft-deleted. Services must never return
@@ -3208,7 +3222,7 @@ erDiagram
 
 ## REST API Boundary
 
-`GET /api/objective-transcript` (contract v162) projects full-text objective
+`GET /api/objective-transcript` projects full-text objective
 history across active-organization memberships with both `mission:read` and
 `objective:read`, restricted by token project scope before paging. It returns at
 most 100 rows using immutable `(created_at, id)` cursors (`before` descending
@@ -3216,7 +3230,7 @@ history, `after` ascending new creates), or revalidates at most 100 named
 objective UUIDs with `ids`. One statement limits each workspace's indexed walk
 before merging the candidates; no count or per-objective hydration. The DTO,
 cursor/refresh rules, owner-only Inbox boundary and compatibility guidance are
-documented in `docs/objective-transcript.md`. No existing mutation, instruction
+specified in [architecture.md](../architecture.md) "Mobile → REST (Objective Transcript Surface)". No existing mutation, instruction
 text or ownership is changed.
 
 The REST API should be the primary remote access path. It should expose domain resources and protocol commands, not raw tables.
@@ -3226,7 +3240,7 @@ Recommended boundary:
 - `/projects`, `/projects/:id/resources`, `/projects/:id/repository`, `/missions`, `/missions/:id/objectives`, `/missions/:id/events`, `/missions/:id/context`, `/missions/:id/deliveries`, `/workspaces/:id/objectives.csv`. Project resource create/update bodies accept additive `resourceKey`; objective DTOs and create/update bodies expose additive `resourceKey`. `ObjectiveDto` additively carries `displayKey` and computed `displayId` (`{mission.displayId}.{displayKey}`). `/api/objectives/:id` accepts an objective UUID or a full display id.
 - `/api/projects/:id/run-queues` is the project-scoped Run Queue projection and definition surface. `GET` requires objective read; `POST`, `PATCH /api/projects/:id/run-queues/order`, `PATCH /api/run-queues/:queueId`, and `DELETE /api/run-queues/:queueId` require project update. Queue-order writes supply every live queue ID exactly once and only rewrite `run_queues.position`; entry membership/order remains exclusively in the Run Queue service. Entry enqueue, move, reorder, and dequeue retain `execution_request:create` authorization.
 - `GET /api/missions/:id` additively projects `terminalSessions` from bounded `execution_requests.metadata_json.providerSession` mappings across all objective states. Each item includes the provider/session, execution request/objective/target, target/device label, stored session name, claim-time executable/viewer, creation time, and last observed `running` / `exited` / `stopping` / `lost` state. Reachability is a client-side local-target capability condition, not a persisted session state. The projection never includes launch environment, terminal output, credentials, socket tokens, or attachment grants.
-- `/api/inbox` is the account-owned unassigned-capture surface: `GET` lists the caller's newest-first items, `POST` creates one, and `GET/PATCH/DELETE /api/inbox/:id` reads, edits, or removes only an owned item. `POST /api/inbox/:id/promote` accepts `{ projectId }`, authorizes `mission:create` on that project's workspace, creates an ordinary mission from the item fields, and consumes the item in the same transaction. `InboxItemDto` is `{ id, title, objectives, dueDatetime, priority, attachmentCount, createdAt, updatedAt }`. `GET/POST /api/inbox/:id/attachments` and `DELETE /api/inbox/:id/attachments/:attachmentId` (v168) manage an owned item's files; promotion moves them onto the created mission's first objective. Inbox changes do not enter workspace `entity_changes`; clients refetch their own list, while promotion uses normal mission realtime.
+- `/api/inbox` is the account-owned unassigned-capture surface: `GET` lists the caller's newest-first items, `POST` creates one, and `GET/PATCH/DELETE /api/inbox/:id` reads, edits, or removes only an owned item. `POST /api/inbox/:id/promote` accepts `{ projectId }`, authorizes `mission:create` on that project's workspace, creates an ordinary mission from the item fields, and consumes the item in the same transaction. `InboxItemDto` is `{ id, title, objectives, dueDatetime, priority, attachmentCount, createdAt, updatedAt }`. `GET/POST /api/inbox/:id/attachments` and `DELETE /api/inbox/:id/attachments/:attachmentId` manage an owned item's files; promotion moves them onto the created mission's first objective. Inbox changes do not enter workspace `entity_changes`; clients refetch their own list, while promotion uses normal mission realtime.
 - `PATCH /api/missions/:id/artifacts/:artifactId` edits an existing artifact's human-facing `label`, `contentText`, and/or `externalUrl` with `mission:update` permission on its mission. The caller supplies `expectedRevision`; stale writes return `409`, and external URLs must use HTTP(S). Its delivery/session/objective provenance and structured `contentJson` are immutable through this surface; the resulting artifact must retain at least one text, JSON, or URL content field. The transaction increments the artifact revision and appends an `artifact` entity change. The same mutation is also exposed as Protocol `POST /api/protocol/update-artifact` (`ovld protocol update-artifact`) and MCP `overlord_update_artifact`.
 - `POST /api/missions/:id/artifacts` creates a mission artifact without a delivery (`delivery_id` null) with `artifact:create` permission on its mission. The body supplies `{ type, label }` plus at least one of `{ contentText, externalUrl }`; optional `objectiveId` / `sessionId` stamp provenance, and Protocol/MCP may pass a live `sessionKey` instead. Non-HTTP(S) external URLs are rejected. The transaction appends an `artifact` entity-change create. The same mutation is exposed as Protocol `POST /api/protocol/add-artifact` (`ovld protocol add-artifact`) and MCP `overlord_add_artifact`. Delivery remains optional for artifacts and may still attach additional ones later.
 - `/protocol/*` endpoints mirroring `ovld protocol`.
