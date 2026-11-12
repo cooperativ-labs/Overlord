@@ -9,7 +9,7 @@
 # See contract/conformance.md → "Virtual Target Gateway conformance" and the Virtual Target
 # Queue Surface interaction surface.
 
-contractVersion: "169.0.0"
+contractVersion: "169.2.1"
 componentType: rest-consumer
 componentKey: racecar
 label: "Racecar Virtual Target Gateway"

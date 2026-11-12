@@ -45,6 +45,7 @@ agents.
 | `api/openapi.yaml` | OpenAPI 3.1 description of every registered REST route, with route exclusions and operation extensions (ADR 0048); validated at the route boundary and checked against every response in the backend tests (ADR 0051) |
 | `api/openapi-ratchet.json` | Schema-stub ratchet for `api/openapi.yaml` |
 | `decisions/` | Architecture Decision Records, indexed in `decisions/README.md` |
+| `releases/` | The release procedure (`releases/README.md`), the first release's range start and one record per baseline; evidence, not contract text |
 | `components.yaml` | Component registry — capabilities, ownership, interaction surface declarations |
 | `protocol-commands.yaml` | Protocol command names, required flags, and response shape versions |
 | `extension-points.yaml` | Sanctioned extension points, approved capability flags, open/closed vocabularies |

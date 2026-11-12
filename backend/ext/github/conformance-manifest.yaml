@@ -1,4 +1,4 @@
-contractVersion: '169.0.0'
+contractVersion: '169.2.1'
 componentType: rest-module
 componentKey: github
 label: 'GitHub REST Extension'

@@ -22,6 +22,7 @@ override it.
 | `contract/api/openapi.yaml` | The REST surface: one operation per registered route with permission, edition, consumers and extension (ADR 0048); `info.version` moves with every change; requests are validated against it at the boundary and backend tests check every response against it (ADR 0051) |
 | `contract/*.yaml`, `*.schema.yaml` | Machine-readable registry, protocol commands, extension points, manifest schemas |
 | `contract/decisions/` | ADRs |
+| `contract/releases/` | Release procedure, first-release range start, baseline records (evidence, not contract text) |
 | `contract/VERSION`, `contract/CHANGELOG.md` | Current version and history (entries at or below `168` are non-normative provenance) |
 
 ---
@@ -97,7 +98,10 @@ in the same change as the implementation:
   version. Amend with a new version and changelog entry.
 - A change to `architecture.md`, `protocol.md`, `authorization.md`,
   `data/README.md` or a migration needs a new ADR; the release range check
-  refuses the range otherwise (introduced in phase 5).
+  (`yarn release:preflight`, ADR 0052) refuses the range otherwise.
+- Releases go through the release gate: `yarn release:preflight <impact>`, the
+  gated publish steps, then `yarn release:finish` (`contract/releases/README.md`).
+  Never bypass it with `--skip-release-gate` unless the owner asks.
 - Treat changes to authentication, authorization, workspace or organization
   isolation, roles, public APIs, persistent data meaning, migrations, security
   guarantees, foundational technology, or service boundaries as contract
@@ -179,4 +183,4 @@ changes, not documentation noise. If a contract file was written from a shell
 command rather than a native edit tool, declare it with `--paths` so it appears
 among the objective's changed files.
 
-<!-- version: 2.0.3 -->
+<!-- version: 2.0.4 -->

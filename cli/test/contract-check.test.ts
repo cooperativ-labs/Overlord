@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -28,6 +28,28 @@ test('extension example manifest conforms to the schema', () => {
 test('rest-consumer example manifest conforms to the schema', () => {
   const errors = validateManifest(loadExample('rest-consumer-racecar-conformance-manifest.yaml'));
   assert.deepEqual(errors, []);
+});
+
+function findManifests(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+    if (entry.isDirectory()) {
+      return ['.git', '.yarn', 'dist', 'node_modules'].includes(entry.name)
+        ? []
+        : findManifests(path.join(directory, entry.name));
+    }
+    return entry.name.endsWith('conformance-manifest.yaml')
+      ? [path.join(directory, entry.name)]
+      : [];
+  });
+}
+
+test('every conformance manifest in the repository conforms to the schema', () => {
+  const manifests = findManifests(repoRoot);
+  assert.ok(manifests.length >= 15, `found ${manifests.length} manifests`);
+  for (const manifest of manifests) {
+    const errors = validateManifest(parseYaml(readFileSync(manifest, 'utf8')));
+    assert.deepEqual(errors, [], path.relative(repoRoot, manifest));
+  }
 });
 
 test('a manifest missing a required field fails with a message naming it', () => {

@@ -5,7 +5,7 @@
 # IMPORTANT: Update this file and those documents together when adding components or surfaces.
 # contractVersion is written only by `yarn version:contract` and must equal contract/VERSION.
 
-contractVersion: '169.2.0'
+contractVersion: '169.2.1'
 
 components:
   protocol:

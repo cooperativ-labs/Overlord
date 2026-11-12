@@ -1,6 +1,8 @@
 # Overlord contract
 
-> Contract version: **169.2.0**
+> Contract version: **169.2.1**
+>
+> Status: **production baseline**; approvals are recorded under [releases/](releases/README.md) (section 7)
 
 This directory is the normative, versioned specification of how Overlord's
 components interact. It defines what each component owns, the only sanctioned
@@ -59,7 +61,9 @@ The contract consists of:
 
 [CHANGELOG.md](CHANGELOG.md) records every version. Its entries at or below
 `168` are provenance carried over verbatim from the former single-file contract
-and are not normative.
+and are not normative. [releases/](releases/README.md) holds the release
+procedure and the release records (baseline statement, verification evidence,
+approvals); they are evidence about releases, not contract text.
 
 The keywords **MUST**, **MUST NOT**, **REQUIRED**, **SHOULD**, **SHOULD NOT**,
 and **MAY** express requirement strength. Unqualified declarative statements in
@@ -115,7 +119,9 @@ of truth for the contract version. The header of this document, the current
 MUST equal it.
 
 The number line continues from the former integer versions: `168.0.0` is
-version 168, and the next major version is `169.0.0` (ADR 0002).
+version 168, and the next major version after it was `169.0.0` (ADR 0002). The
+production baseline is the version in force when phase 5 of the migration
+finished, `169.2.1`, not a separate major increment (ADR 0053).
 
 The next version is computed from the current one by
 `yarn version:contract patch|minor|major`, which classifies compatibility under
@@ -201,23 +207,34 @@ test suite, which holds the request-validation tests and checks every response i
 produces against its OpenAPI operation (`yarn test:backend`, ADR 0051), through
 `.github/workflows/contract.yml`.
 
-### Release gate (introduced in phase 5; not yet enforced)
+### Release gate
 
 Overlord has no staging promotion. Releases are manual: publish the CLI,
-publish the desktop app, deploy the backend, then push, which deploys the web
-app. Phase 5 of the migration plan adds a release gate around those steps; until
-it exists, the rules below are the intended gate and are not enforced.
+publish the desktop app, deploy the backend, then publish the web app. The
+release gate wraps those steps with one command before and one after (ADR 0052;
+the procedure is [releases/README.md](releases/README.md)):
 
-1. A release is always of a committed SHA with a clean tree.
-2. `yarn release:preflight <none|patch|minor|major>` runs `contract:check`, the
-   generated API check, and `scripts/contract-impact.mjs` over the range from
-   the `production` tag to `HEAD` with the declared impact, and on success
-   writes an untracked stamp (SHA, impact, contract version).
-3. The CLI publish, desktop publish and `yarn server:deploy` steps refuse to run
-   unless the tree is clean and the stamp's SHA equals `HEAD`.
-4. `yarn release:finish` moves the `production` tag to the released SHA,
-   fast-forwards a `prod` branch to it, and pushes both; the web app's
-   production branch becomes `prod`.
+1. A release is always of a committed SHA with a clean tree (no modified,
+   staged or untracked files).
+2. `yarn release:preflight <none|patch|minor|major>` runs `yarn contract:check`,
+   `yarn api:generate:check`, `yarn check:conformance-versions`, and
+   `scripts/contract-impact.mjs` over the range from the `production` tag on
+   `origin` to `HEAD` with the declared impact. Before that tag exists, the
+   range starts at the SHA recorded in
+   [releases/baseline.json](releases/baseline.json). On success it writes the
+   untracked stamp `.release/preflight.json`: the SHA, the declared impact, the
+   contract version, OpenAPI `info.version`, the range start and a timestamp.
+3. `yarn cli:publish`, `yarn desktop:publish` and `yarn server:deploy` (the
+   supported wrapper around `railway up`) refuse to run unless the tree is
+   clean and the stamp's SHA equals `HEAD`. A dry run of each reports the
+   refusal without failing. `--skip-release-gate` (or
+   `OVERLORD_SKIP_RELEASE_GATE=1`) bypasses the check for an emergency and says
+   so loudly; a bare `railway up` cannot be blocked.
+4. `yarn release:finish` requires the stamp to match `HEAD` and the `production`
+   tag to be where preflight found it, pushes `HEAD` to the `prod` branch as a
+   fast-forward and moves the `production` tag to it in one atomic push, and
+   refuses anything that is not a fast-forward of `prod`. The web app's
+   production branch is `prod`, so the web app ships with the release.
 
 The range check refuses a release unless:
 
@@ -228,8 +245,9 @@ The range check refuses a release unless:
    combined delta;
 2. the contract version does not decrease, and every `VERSION` value in the
    range is strict Semantic Versioning;
-3. under `none`, nothing under `contract/` changed; otherwise `CHANGELOG.md`
-   has a current heading for the released `VERSION`;
+3. under `none`, nothing under `contract/` changed other than release records
+   under `releases/`; otherwise `CHANGELOG.md` has a current heading for the
+   released `VERSION`;
 4. when [architecture.md](architecture.md), [protocol.md](protocol.md),
    [authorization.md](authorization.md), [data/README.md](data/README.md), or a
    migration under `database/sqlite/migrations/`,
@@ -259,3 +277,22 @@ A change is complete only when:
 The contract validator is a minimum structural gate, not proof of semantic
 conformance. Reviewers remain responsible for evaluating the declared impact.
 Component conformance requirements are in [conformance.md](conformance.md).
+
+## 7. Approval state
+
+`169.2.1` is Overlord's production contract baseline: the first contract
+version released through the release gate, and the version against which every
+later release range is measured (ADR 0053). The numbering continues the former
+integer line (ADR 0002); the baseline is the version in force when phase 5 of
+the migration finished rather than a separate major increment. The baseline
+statement, the candidate SHA the first range starts at
+(`9a71cf44214ab0ea85d655df5139221e91ca2c4b`, contract `169.2.0`), the open
+disagreements carried forward, the verification status and the approvals are
+recorded in [releases/169.2.1/](releases/169.2.1/README.md). The baseline
+commit's own SHA is recorded by the `production` tag that the first
+`yarn release:finish` places, because a commit cannot name its own SHA.
+
+The approvals are signed in that record, not here, so signing them is not a
+contract change; until the owner signs, the record says they are pending. Each later
+major increment is an explicit product and compatibility decision that
+requires the owner's approval.

@@ -4,6 +4,7 @@
 - Status: accepted
 - Contract version: 168.0.0
 - Supersedes: none
+- Amended by: [ADR 0053](0053-baseline-is-the-version-in-force.md) (the baseline is `169.2.1`, not a separate major increment)
 
 ## Context
 

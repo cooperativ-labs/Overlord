@@ -13,7 +13,9 @@ never reused. It starts with `# ADR NNNN: Title` and a header list:
 - `Status:` one of `proposed`, `accepted`, `superseded`, or `rejected`;
 - `Contract version:` the contract version current when it was accepted;
 - `Supersedes:` the ADRs it replaces, or `none`; a superseded ADR gains
-  `Superseded by:`; and
+  `Superseded by:`. An ADR that changes part of an accepted one without
+  replacing it says `Amends:`, and the amended ADR gains an `Amended by:` line;
+  its text is otherwise left as accepted; and
 - `Origin:` for a backfilled record only, the contract version and ticket it
   records and when it was backfilled, for example
   `Origin: contract v153 (coo:1042), backfilled 2026-11` (ADR 0005).
@@ -84,3 +86,5 @@ record and the index disagree.
 - [0049 — Token bounds apply to every route, including management routes](0049-token-bounds-on-every-route.md)
 - [0050 — Generated REST types replace hand-written DTOs; formats are lenient by default](0050-generated-rest-types.md)
 - [0051 — The OpenAPI description is enforced at the route boundary and in the backend tests](0051-rest-boundary-validation.md)
+- [0052 — A release gate around the manual release checks the contract range](0052-manual-release-gate.md)
+- [0053 — The production baseline is the version in force when phase 5 finished](0053-baseline-is-the-version-in-force.md)

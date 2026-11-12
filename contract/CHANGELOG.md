@@ -5,6 +5,60 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [169.2.1] - 2026-11-12
+
+Phase 5 of the contract migration: the release gate around the manual release
+([ADR 0052](decisions/0052-manual-release-gate.md)) and the production baseline
+([ADR 0053](decisions/0053-baseline-is-the-version-in-force.md)). Nothing on the wire, in
+authorization, in stored data or in runtime behaviour changed.
+
+### Version
+
+- Patch contract version 169.2.1, from 169.2.0. Contract impact: patch. The change is to
+  process and documentation: the range check that [CONTRACT.md](CONTRACT.md) section 5
+  already specified is now enforced by release tooling, and the baseline is declared.
+  No component, interface, route, field, access rule, vocabulary, data meaning or
+  migration changes, so it is not minor; it cannot be `none` because contract documents
+  change. OpenAPI `info.version` stays 2.2.0 (only `x-overlord-contract-version` moved).
+- This version is the production baseline (ADR 0053), recorded in
+  [releases/169.2.1/](releases/169.2.1/README.md). No major increment marks it.
+
+### Added
+
+- Release gate (ADR 0052): `yarn release:preflight <none|patch|minor|major>` (clean
+  tree, committed `HEAD`, `contract:check`, `api:generate:check`,
+  `check:conformance-versions`, the range check from the `production` tag, then the
+  untracked stamp `.release/preflight.json`); `yarn cli:publish`, `yarn desktop:publish`
+  and the new `yarn server:deploy` (wrapper around `railway up`) refuse without a clean
+  tree and a stamp for `HEAD`, with the `--skip-release-gate` /
+  `OVERLORD_SKIP_RELEASE_GATE=1` emergency bypass; `yarn release:finish` moves the
+  `production` tag and fast-forwards `prod` in one atomic push. Shared logic in
+  `scripts/release-gate.mjs`, tested by `yarn contract:test`.
+- [releases/README.md](releases/README.md): the release procedure, including the first
+  release. [releases/baseline.json](releases/baseline.json): the first release's range
+  start, `9a71cf44214ab0ea85d655df5139221e91ca2c4b` (contract 169.2.0).
+- [releases/169.2.1/README.md](releases/169.2.1/README.md): the baseline record.
+- [CONTRACT.md](CONTRACT.md) section 7, "Approval state", and a status line.
+- ADRs [0052](decisions/0052-manual-release-gate.md) and
+  [0053](decisions/0053-baseline-is-the-version-in-force.md); ADR 0002 gains an
+  `Amended by:` line and [decisions/README.md](decisions/README.md) defines
+  `Amends:` / `Amended by:`.
+
+### Changed
+
+- [CONTRACT.md](CONTRACT.md) section 4: the baseline is 169.2.1. Section 5: the release
+  gate is enforced (no longer "introduced in phase 5; not yet enforced"), and the range
+  check's rule 3 does not count release records under `releases/` as a contract change
+  (`scripts/contract-impact.mjs`).
+- Every conformance manifest is restamped to 169.2.1: the hand-maintained ones by edit,
+  the generated connector manifests by `yarn connectors:capabilities`; `OverlordMobile`'s
+  manifest moves from `'168'` to `'169.2.1'`.
+
+### Impact on modules
+
+- Release tooling and the owner's release procedure only. CLI, desktop, backend, web
+  app, MCP, connectors, extensions and mobile: no behaviour change; manifests restamped.
+
 ## [169.2.0] - 2026-11-12
 
 Phase 4d of the contract migration: the backend validates every request against

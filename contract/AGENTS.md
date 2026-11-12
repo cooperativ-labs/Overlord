@@ -37,6 +37,7 @@ Every plan and material change summary declares exactly one of `Contract impact:
 | `api/openapi.yaml`, `api/openapi-ratchet.json` | The REST surface: one operation per registered route, with `x-overlord-permission`, `-edition`, `-consumers`, `-extension` and `-schema-status`; the stub ratchet (ADR 0048) | Any REST route added, removed or changed; move `info.version` with every change to the description; `yarn contract:parity` enforces route parity |
 | `VERSION`, `CHANGELOG.md` | Contract version and its history | Every version increment, through `yarn version:contract` |
 | `decisions/` | ADRs | Architecture, security, isolation, data-meaning, migration or service-boundary decisions |
+| `releases/` | Release procedure, first-release range start (`baseline.json`), baseline records | A new baseline, or recording a release; release records are not contract changes |
 | `components.yaml` | Component registry: capabilities, ownership, interaction surfaces, contract version (written by `yarn version:contract`) | New component, new surface, new capability |
 | `protocol-commands.yaml` | `ovld protocol` subcommand names, required/optional flags, response shape versions | New protocol command, changed command flag |
 | `extension-points.yaml` | Sanctioned extension points and open/closed vocabularies, including agent-session capability ids, integration shapes, and fixture kinds | New extension point or vocabulary value |
