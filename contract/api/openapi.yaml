@@ -156,6 +156,7 @@ paths:
           content:
             text/plain:
               schema: { type: string }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/auth/desktop/callback:
     get:
       operationId: getAuthDesktopCallback
@@ -351,6 +352,7 @@ paths:
           content:
             text/html:
               schema: { type: string }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/auth-providers:
     get:
       operationId: getAuthProviders
@@ -369,6 +371,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AuthProvidersDto' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/health:
     get:
       operationId: getHealth
@@ -385,6 +388,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OkResponse' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /.well-known/oauth-protected-resource:
     get:
       operationId: getWellKnownOauthProtectedResource
@@ -404,6 +408,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OAuthProtectedResourceMetadata' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /.well-known/oauth-protected-resource/mcp:
     get:
       operationId: getWellKnownOauthProtectedResourceMcp
@@ -420,6 +425,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OAuthProtectedResourceMetadata' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /.well-known/oauth-authorization-server:
     get:
       operationId: getWellKnownOauthAuthorizationServer
@@ -439,6 +445,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OAuthAuthorizationServerMetadata' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /oauth/authorize:
     get:
       operationId: getOauthAuthorize
@@ -458,6 +465,7 @@ paths:
             Location:
               required: true
               schema: { type: string }
+        '500': { $ref: '#/components/responses/InternalError' }
   /oauth/register:
     post:
       operationId: postOauthRegister
@@ -1290,6 +1298,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/KnowledgebaseClientMetadataDto' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/connections/knowledgebase/callback:
     get:
       operationId: getConnectionsKnowledgebaseCallback
@@ -1341,6 +1350,7 @@ paths:
           content:
             text/html:
               schema: { type: string }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/chat/providers:
     get:
       operationId: getChatProviders
@@ -1493,14 +1503,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorEnvelope' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
-        '429':
-          description: >-
-            The caller already has the maximum number of unfinished runs across all of their threads
-            (`concurrentRunsPerOwner`, default 3, `CHAT_MAX_CONCURRENT_RUNS_PER_OWNER`): `{ error: 'limit
-            exceeded', code: 'limit_exceeded' }`.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '500':
           description: >-
             `{ error: 'Chat request failed' }` (no `detail`) for any failure that is not a service error;
@@ -1702,23 +1705,26 @@ paths:
       summary: Submit a message
       description: >-
         Owner-scoped and Cloud-only; no RBAC action. The owner is the authenticated profile in the
-        request's selected organization (a token's organization, or a session's only organization) and
-        must be an active member of a live workspace there. On a Local backend every `/api/chat/*` route
-        answers 404 `{ error: 'chat unavailable', code: 'chat_unavailable' }` after authentication. Errors
-        are `{ error, code }` with `code` from the closed ChatErrorCode set and `error` the code with
-        spaces. Idempotent per `(thread, clientRequestId)`: a repeated `clientRequestId` (a non-blank
-        string of at most 200 characters, 400 otherwise) answers the original message and run with
-        `replayed: true` without validating the rest of the body. Otherwise `text` must be a non-blank
-        string of at most 16,000 characters (400). `knowledgebaseWrite`, when present and not null, must
-        be exactly `{ connectionId, workspace }` naming one of the caller's connected Knowledgebase
-        connections and one of its authorized workspaces (400 `invalid_request` otherwise, 409
-        `connection_reauthorization_required` when the connection needs signing in again). While the
-        thread's run is `queued` or `running` the message answers 409 `run_in_progress`. While it is
-        `waiting_user` the message answers its open question and resumes the same run: `optionId` must
-        name an option of the question (400), a question without free text requires one (400), a question
-        that is no longer open or authorized answers 409 `stale_revision`, and a `knowledgebaseWrite`
-        different from the run's existing grant answers 400. Otherwise a new run is queued, subject to the
-        per-owner limit (429). The first message also titles a `pending` thread.
+        request's selected organization (a token's organization, or a session's only organization)
+        and must be an active member of a live workspace there. On a Local backend every
+        `/api/chat/*` route answers 404 `{ error: 'chat unavailable', code: 'chat_unavailable' }`
+        after authentication. Errors are `{ error, code }` with `code` from the closed ChatErrorCode
+        set and `error` the code with spaces. Idempotent per `(thread, clientRequestId)`: a repeated
+        `clientRequestId` (a non-blank string of at most 200 characters, 400 otherwise) answers the
+        original message and run with `replayed: true` without validating the rest of the body.
+        Otherwise `text` must be a non-blank string of at most 16,000 characters (400).
+        `knowledgebaseWrite`, when present and not null, must be exactly `{ connectionId, workspace
+        }` naming one of the caller's connected Knowledgebase connections and one of its authorized
+        workspaces (400 `invalid_request` otherwise, 409 `connection_reauthorization_required` when
+        the connection needs signing in again). While the thread's run is `queued` or `running` the
+        message answers 409 `run_in_progress`. While it is `waiting_user` the message answers its
+        open question and resumes the same run: `optionId` must name an option of the question
+        (400), a question without free text requires one (400), a question that is no longer open or
+        authorized answers 409 `stale_revision`, and a `knowledgebaseWrite` different from the run's
+        existing grant answers 400. Otherwise a new run is queued, subject to the per-owner limit on
+        unfinished runs across all of the caller's threads (default 3,
+        `CHAT_MAX_CONCURRENT_RUNS_PER_OWNER`; 429 `limit_exceeded`). The first message also titles a
+        `pending` thread.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       requestBody:
         required: true
@@ -1751,14 +1757,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorEnvelope' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
-        '429':
-          description: >-
-            The caller already has the maximum number of unfinished runs across all of their threads
-            (`concurrentRunsPerOwner`, default 3, `CHAT_MAX_CONCURRENT_RUNS_PER_OWNER`): `{ error: 'limit
-            exceeded', code: 'limit_exceeded' }`.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '500':
           description: >-
             `{ error: 'Chat request failed' }` (no `detail`) for any failure that is not a service error;
@@ -2200,15 +2199,17 @@ paths:
       summary: Continue a run whose allowance ran out
       description: >-
         Owner-scoped and Cloud-only; no RBAC action. The owner is the authenticated profile in the
-        request's selected organization (a token's organization, or a session's only organization) and
-        must be an active member of a live workspace there. On a Local backend every `/api/chat/*` route
-        answers 404 `{ error: 'chat unavailable', code: 'chat_unavailable' }` after authentication. Errors
-        are `{ error, code }` with `code` from the closed ChatErrorCode set and `error` the code with
-        spaces. `clientRequestId` must be a non-blank string of at most 200 characters (400); it is not
-        stored. Idempotent per source run: when a run already continues this one it is answered with
-        `replayed: true`. Otherwise the run must be the thread's latest run, `completed` with outcome
-        `allowance_exhausted` (409 `continue_not_available`), and the per-owner limit applies (429). The
-        new run keeps the source run's trigger message and Knowledgebase write grant.
+        request's selected organization (a token's organization, or a session's only organization)
+        and must be an active member of a live workspace there. On a Local backend every
+        `/api/chat/*` route answers 404 `{ error: 'chat unavailable', code: 'chat_unavailable' }`
+        after authentication. Errors are `{ error, code }` with `code` from the closed ChatErrorCode
+        set and `error` the code with spaces. `clientRequestId` must be a non-blank string of at
+        most 200 characters (400); it is not stored. Idempotent per source run: when a run already
+        continues this one it is answered with `replayed: true`. Otherwise the run must be the
+        thread's latest run, `completed` with outcome `allowance_exhausted` (409
+        `continue_not_available`), and the per-owner limit on unfinished runs applies (429
+        `limit_exceeded`). The new run keeps the source run's trigger message and Knowledgebase
+        write grant.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       requestBody:
         required: true
@@ -2239,14 +2240,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/ErrorEnvelope' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
-        '429':
-          description: >-
-            The caller already has the maximum number of unfinished runs across all of their threads
-            (`concurrentRunsPerOwner`, default 3, `CHAT_MAX_CONCURRENT_RUNS_PER_OWNER`): `{ error: 'limit
-            exceeded', code: 'limit_exceeded' }`.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '500':
           description: >-
             `{ error: 'Chat request failed' }` (no `detail`) for any failure that is not a service error;
@@ -14631,7 +14625,7 @@ components:
             Whether this is the request's ambient workspace. Authenticated REST requests carry none, so
             it is `false` for every session and token caller.
         projectCount: { type: integer, minimum: 0, description: Non-deleted projects (archived included). }
-        memberCount: { type: integer, minimum: 0, description: Active, non-deleted memberships. }
+        memberCount: { type: integer, minimum: 0, description: 'Active, non-deleted memberships.' }
         sqlStudioEnabled:
           type: boolean
           description: The workspace's stored boolean setting, else the server's configured default.
@@ -15573,7 +15567,7 @@ components:
         access_token: { type: string, description: 'An `out_…` user token.' }
         token_type: { const: Bearer }
         expires_in: { const: 7776000 }
-        scope: { type: string, description: The granted scopes, space-separated. }
+        scope: { type: string, description: 'The granted scopes, space-separated.' }
     OAuthRevokeBody:
       type: object
       properties:
@@ -15630,7 +15624,7 @@ components:
         scopes:
           type: array
           items: { $ref: '#/components/schemas/OAuthScope' }
-        state: { type: string, description: The request's `state`, or empty. }
+        state: { type: string, description: 'The request''s `state`, or empty.' }
         organizations:
           type: array
           description: Every organization and workspace in which the profile has an active membership.
@@ -16378,7 +16372,7 @@ components:
             type: object
             required: [ resourceId, state, observedAt ]
             properties:
-              resourceId: { type: string, description: Project resource UUID, trimmed; blank answers 400. }
+              resourceId: { type: string, description: 'Project resource UUID, trimmed; blank answers 400.' }
               state:
                 $ref: '#/components/schemas/TargetObservationState'
                 description: Trimmed; any other value answers 400.
@@ -16400,7 +16394,7 @@ components:
             type: object
             required: [ missionId, resourceKey, status, dirty, observedAt ]
             properties:
-              missionId: { type: string, description: Mission UUID, trimmed; blank answers 400. }
+              missionId: { type: string, description: 'Mission UUID, trimmed; blank answers 400.' }
               resourceKey: { type: string, description: Trimmed; blank answers 400. }
               status:
                 type: string
@@ -17172,11 +17166,8 @@ components:
       required: [ eventId, kind ]
       properties:
         eventId:
-          {
-            type: string,
-            description: Producer event id,
-            unique per channel and adapter; at most 200 characters.
-          }
+          type: string
+          description: Producer event id, unique per channel and adapter; at most 200 characters.
         kind: { type: string, description: At most 200 characters. }
         producerSequence: { type: number }
         occurredAt: { type: string, description: Parsed as a date; unparseable or future values use the server time. }
