@@ -4562,7 +4562,35 @@ paths:
       x-overlord-permission: project:read
       x-overlord-edition: local
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Run a checkout-local capability on the backend host (development proxy)
+      description: >-
+        Requires `project:read` in at least one workspace the caller is a member of; the call names no
+        project or workspace and is not scoped further. A development-only proxy that lets a plain browser
+        run local-target capabilities in the backend process. It runs only on a co-located Local (SQLite)
+        backend started with `OVERLORD_DEV_IN_PROCESS_LOCAL_TARGET=true`; otherwise every call answers 200
+        with a failure result `LOCAL_TARGET_REQUIRED`. Capability failures (an unknown capability is
+        `CAPABILITY_NOT_IMPLEMENTED`) are 200 failure results, not HTTP errors. For `listWorktrees`
+        without a `worktreeRoot`, the server's managed worktree root is used (`OVERLORD_WORKTREE_ROOT`,
+        else `<OVLD_HOME or ~/.ovld>/worktrees`). This route has no loopback local-operator fallback.
+        Per-capability inputs and values are the `LocalTargetBridgeCall` and `CapabilityResult` types in
+        packages/core/service/local-target.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LocalTargetBridgeCallBody' }
+      responses:
+        '200':
+          description: The capability result, success or failure.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CapabilityResultDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/projects/{id}/missions":
     parameters:
       - name: id
@@ -7714,7 +7742,20 @@ paths:
       x-overlord-permission: project:read
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: List Overlord-managed worktrees
+      description: >-
+        Requires `project:read` in at least one workspace the caller is a member of. Worktree listing runs
+        on the client through the local-target bridge; this route always answers an empty list.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: Always empty.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorktreeList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/worktrees/remove:
     post:
       operationId: postWorktreesRemove
@@ -7722,7 +7763,37 @@ paths:
       x-overlord-permission: project:update
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Remove one managed worktree
+      description: >-
+        Requires `project:update` in at least one workspace the caller is a member of. `path` is required
+        (400) and resolved to an absolute path on the server. With `clientExecuted: true` the removal
+        already ran on the client: `primaryRepoPath` is then required (400) and the route only
+        acknowledges, answering `removed: [path]`. Otherwise `projectId` is required: without it the route
+        answers 409 `LOCAL_FILESYSTEM_UNAVAILABLE`. With it, `project:update` is also checked in the
+        project's workspace (404 for an unknown or foreign project) and the removal is queued to the
+        execution target that serves the project (`executionTargetId`, else the caller's selection); no
+        target able to serve it answers 409 `LOCAL_FILESYSTEM_UNAVAILABLE`, a missing `primaryRepoPath`
+        400, and a capability failure 409 with the failure's code. The route waits up to 15 seconds; a
+        call still running then answers empty lists. A dirty worktree is refused unless `force`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RemoveWorktreeBody' }
+      responses:
+        '200':
+          description: What was removed and skipped; `worktrees` is always empty.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PurgeWorktreesResultDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/worktrees/purge-merged:
     post:
       operationId: postWorktreesPurgeMerged
@@ -7730,7 +7801,35 @@ paths:
       x-overlord-permission: project:update
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Remove every clean, merged managed worktree of a project
+      description: >-
+        Requires `project:update` in at least one workspace the caller is a member of, and, with a
+        `projectId`, in the project's workspace. Without `projectId` the route answers 409
+        `LOCAL_FILESYSTEM_UNAVAILABLE`. With it, the purge is queued to the execution target that serves
+        the project, which discovers the managed worktrees of `primaryRepoPath` (under `worktreeRoot` when
+        given) and removes the merged, clean ones; dirty worktrees are skipped, never forced. No target
+        able to serve it answers 409 `LOCAL_FILESYSTEM_UNAVAILABLE`, a missing `primaryRepoPath` 400, and
+        a capability failure 409 with the failure's code. A call still running after 15 seconds answers
+        empty lists. Takes an optional body.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PurgeMergedWorktreesBody' }
+      responses:
+        '200':
+          description: What was removed and skipped; `worktrees` is always empty.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PurgeWorktreesResultDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
 components:
   securitySchemes:
     sessionCookie:
@@ -13489,3 +13588,180 @@ components:
           oneOf:
             - type: string
             - type: 'null'
+    LocalTargetBridgeCallBody:
+      type: object
+      description: >-
+        One capability call. `capability` and `input` must both be present and truthy (400 `A
+        local-target capability call is required.`).
+      required: [ capability, input ]
+      properties:
+        capability:
+          type: string
+          description: >-
+            `readRepositoryTree`, `listBranches`, `observeResource`, `listWorktrees`,
+            `deriveBranchStatus`, `performBranchAction`, `removeWorktree`, `purgeMergedWorktrees`,
+            `generateCommitMessageFromLocalDiff`, `writeProjectMetadata`, `discoverLatch`,
+            `inspectLatchSession`, `openLatchSession`, `stopLatchSession` or `sendLatchMessage`.
+        input:
+          $ref: '#/components/schemas/JsonValue'
+          description: The capability's input object.
+    CapabilityTargetMetadataDto:
+      type: object
+      required: [ executionTargetId, deviceLabel, transport ]
+      properties:
+        executionTargetId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        deviceLabel:
+          oneOf:
+            - type: string
+            - type: 'null'
+        transport:
+          type: string
+          enum: [ in_process, desktop_bridge, runner_queue, fake ]
+    LocalTargetErrorCode:
+      type: string
+      enum:
+        [
+          LOCAL_TARGET_REQUIRED,
+          LOCAL_TARGET_UNREACHABLE,
+          RESOURCE_MISSING,
+          NOT_GIT_REPOSITORY,
+          PERMISSION_DENIED,
+          GIT_COMMAND_FAILED,
+          CAPABILITY_NOT_IMPLEMENTED,
+          LOCAL_TARGET_TIMEOUT,
+          LOCAL_TARGET_UNSUPPORTED,
+          TARGET_OPERATION_FAILED,
+          LATCH_SESSION_ABSENT,
+          UNKNOWN
+        ]
+    CapabilityResultDto:
+      description: A local-target capability result (packages/core/service/local-target/types.ts
+        `CapabilityResult`).
+      oneOf:
+        - type: object
+          required: [ ok, value, target ]
+          properties:
+            ok: { const: true }
+            value:
+              $ref: '#/components/schemas/JsonValue'
+              description: The capability's value.
+            target: { $ref: '#/components/schemas/CapabilityTargetMetadataDto' }
+        - type: object
+          required: [ ok, code, message, target ]
+          properties:
+            ok: { const: false }
+            code: { $ref: '#/components/schemas/LocalTargetErrorCode' }
+            message: { type: string }
+            details:
+              $ref: '#/components/schemas/JsonValue'
+              description: Present when the failure carries details.
+            target: { $ref: '#/components/schemas/CapabilityTargetMetadataDto' }
+    WorktreeDto:
+      type: object
+      description: A managed worktree as the local-target bridge reports it (packages/contract `WorktreeDto`).
+      required:
+        [
+          path,
+          branch,
+          projectId,
+          projectName,
+          missionId,
+          missionDisplayId,
+          status,
+          merged,
+          dirty,
+          sizeBytes,
+          lastModifiedAt
+        ]
+      properties:
+        path: { type: string }
+        branch:
+          oneOf:
+            - type: string
+            - type: 'null'
+        projectId: { type: string }
+        projectName: { type: string }
+        missionId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        missionDisplayId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        status:
+          oneOf:
+            - { $ref: '#/components/schemas/MissionBranchStatus' }
+            - type: 'null'
+        merged: { type: boolean }
+        dirty: { type: boolean }
+        sizeBytes:
+          oneOf:
+            - type: integer
+              minimum: 0
+            - type: 'null'
+        lastModifiedAt:
+          oneOf:
+            - { $ref: '#/components/schemas/DateTime' }
+            - type: 'null'
+    WorktreeList:
+      type: array
+      maxItems: 0
+      items: { $ref: '#/components/schemas/WorktreeDto' }
+    RemoveWorktreeBody:
+      type: object
+      required: [ path ]
+      properties:
+        path:
+          type: string
+          description: Worktree path, trimmed and resolved; blank or non-string answers 400.
+        force:
+          type: boolean
+          description: Only `true` removes a dirty worktree.
+        primaryRepoPath:
+          type: string
+          description: Primary repository path; required with `clientExecuted` and on a target.
+        clientExecuted:
+          type: boolean
+          description: '`true` acknowledges a removal the client already ran.'
+        projectId:
+          type: string
+          description: Project UUID that owns the worktree; selects the target the removal is queued to.
+        executionTargetId:
+          oneOf:
+            - type: string
+            - type: 'null'
+    PurgeMergedWorktreesBody:
+      type: object
+      properties:
+        projectId: { type: string }
+        executionTargetId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        primaryRepoPath: { type: string }
+        worktreeRoot:
+          type: string
+          description: Where the target looks for managed worktrees; the target's default when absent or blank.
+    PurgeWorktreesResultDto:
+      type: object
+      required: [ removed, skipped, worktrees ]
+      properties:
+        removed:
+          type: array
+          items: { type: string }
+        skipped:
+          type: array
+          items:
+            type: object
+            required: [ path, reason ]
+            properties:
+              path: { type: string }
+              reason: { type: string }
+        worktrees:
+          type: array
+          maxItems: 0
+          items: { $ref: '#/components/schemas/WorktreeDto' }

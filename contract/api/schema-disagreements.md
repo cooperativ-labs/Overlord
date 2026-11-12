@@ -265,6 +265,22 @@ the code does not do.
   `x-overlord-consumers: [unverified]`: no caller exists in webapp, cli, desktop, mcp or
   OverlordMobile (the web settings page writes the flag through `session-defaults`).
 
+### Worktrees and the local-target proxy (batch 3)
+
+- **J1** (open). `GET /api/worktrees` always answers `[]` and `PurgeWorktreesResultDto.worktrees`
+  is always empty (`listWorktrees`, `removeWorktree`, `purgeMergedWorktrees`,
+  `backend/repository.ts`); listing runs on the client through the local-target bridge. The
+  comment on the routes in `backend/app.ts` calls them "local-backend-only host-side git
+  operations"; removal and purge are queued to the execution target serving the project, and
+  without a `projectId` they answer 409 `LOCAL_FILESYSTEM_UNAVAILABLE` on every backend.
+  `getWorktrees`, `postWorktreesRemove`, `postWorktreesPurgeMerged`.
+- **J2** (open). `POST /api/local-target/invoke` answers capability failures, including the
+  default `LOCAL_TARGET_REQUIRED` when the development proxy is off, as 200 results
+  (`invokeLocalTargetOnServer`, `backend/execution/local-target-invoke.ts`). Unlike the runner
+  routes it has no loopback local-operator fallback (only `/api/protocol/*`, `/api/runner/*` and
+  `/mcp` do, `usesNonBrowserAuthSurface` in `backend/auth.ts`).
+  `postLocalTargetInvoke`.
+
 ## 2. Non-conforming error shapes
 
 Every route in `backend/app.ts` that forwards errors through `handle()` or `next(err)`
