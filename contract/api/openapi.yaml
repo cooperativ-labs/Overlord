@@ -3195,3 +3195,961 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
       x-overlord-schema-status: stub
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: better-auth.session_token
+      description: >-
+        Better Auth browser session cookie (`__Secure-` prefixed over HTTPS). Resolves the signed-in
+        profile and its organization-bounded workspace memberships; it never selects an ambient
+        workspace (backend/auth.ts `requireAuthenticatedSession`).
+    sessionBearer:
+      type: http
+      scheme: bearer
+      description: >-
+        The same Better Auth session token sent as `Authorization: Bearer <session token>` by
+        cross-origin clients (desktop remote mode, hosted web, mobile). Any bearer value that does not
+        start with `out_` is tried as a session token first.
+    userToken:
+      type: http
+      scheme: bearer
+      bearerFormat: out_
+      description: >-
+        A USER_TOKEN, `Authorization: Bearer out_…`. Personal tokens, `mission_lifecycle` tokens,
+        `project_automation` tokens and the access tokens hosted MCP OAuth issues are all user tokens.
+        A token authenticates its owning profile; every request intersects its consent and scope
+        grants with live membership and per-workspace RBAC. An invalid, expired or revoked token
+        answers 401 `{ error: 'Invalid or expired USER_TOKEN' }`. A `project_automation` token reaches
+        only the routes listed in backend/project-automation-routes.ts; every other route answers 404
+        `{ error: 'Not found' }`, and resources outside its selected projects read as 404.
+    channelCredential:
+      type: http
+      scheme: bearer
+      bearerFormat: osc_
+      description: >-
+        An agent-session channel credential, `Authorization: Bearer osc_…`, accepted only by the
+        `/api/agent-session-channels/v1/*` family and refused (401) everywhere else.
+  responses:
+    BadRequest:
+      description: >-
+        The request failed validation (hand-written checks in the handler or the service layer, a
+        ServiceError with status 400, or a SQLite foreign-key failure). See ErrorEnvelope.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Unauthorized:
+      description: >-
+        No session or token, or an invalid USER_TOKEN (`{ error }` only, written by the authentication
+        middleware), or a handler found no authenticated profile.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Forbidden:
+      description: >-
+        The caller is an active member of the owning workspace but lacks the RBAC action, or the
+        token's scope grants exclude it (`error` is `Permission denied: <action>`).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    NotFound:
+      description: >-
+        The resource does not exist, is soft-deleted, belongs to a workspace the caller is not an
+        active member of, or lies outside a project_automation token's projects. Existence is not
+        disclosed. A project_automation token on a route outside its allowlist also gets 404.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    Conflict:
+      description: >-
+        The request conflicts with current state (lifecycle, uniqueness, stale revision, ambiguous
+        display id). SQLite unique and check constraint failures also answer 409 with only `error` and
+        `detail`.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    PayloadTooLarge:
+      description: >-
+        The body exceeded the parser limit (100 KB for JSON, the route's ceiling for raw uploads): `{
+        error: 'Request body is too large.', code: 'body_too_large' }`.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    TooManyRequests:
+      description: >-
+        A route-specific limit was reached. Overlord has no global rate limit; only the routes that
+        document this response produce it.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    BadGateway:
+      description: An upstream dependency (a model provider or external service) failed.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    InternalError:
+      description: >-
+        Any unexpected failure: `{ error, detail }` with both set to the exception message. This
+        includes a malformed JSON body, a CORS-rejected origin and, on Postgres, constraint violations
+        (see contract/api/schema-disagreements.md).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+  schemas:
+    ErrorEnvelope:
+      type: object
+      description: >-
+        The one JSON error body of every route that forwards errors to `apiErrorHandler`
+        (backend/errors.ts), and of the authentication middleware and the project-automation route
+        guard. `error` is always present. Which other members appear depends on the error's origin: an
+        ApiError writes `detail` and `code` when set; a service-layer ServiceError writes `code` and,
+        when present, `details`; the body parser's 413 writes `code: body_too_large`; a SQLite
+        constraint failure writes `detail` (the driver message) and no `code`; an unexpected failure
+        (500) writes `detail` equal to `error`. Clients branch on `code` and HTTP status, never on
+        `error` text.
+      required: [ error ]
+      properties:
+        error:
+          type: string
+          description: Human-readable message.
+        code:
+          type: string
+          description: >-
+            Machine-readable code when the error carries one (open vocabulary, for example
+            `validation_error`, `not_found`, `invalid_input`, `body_too_large`,
+            `no_execution_target_registered`, `BRANCH_NOT_PREPARED`).
+        detail:
+          type: string
+          description: Additional human-readable detail (ApiError detail, driver message, or the 500 message).
+        details:
+          $ref: '#/components/schemas/JsonValue'
+    JsonValue:
+      description: >-
+        Any JSON value. Used where the code passes through arbitrary JSON (artifact `contentJson`,
+        shared-context values, ServiceError `details`, repository-read `data`).
+    OkResponse:
+      type: object
+      description: Acknowledgement written by `handle()` when a handler returns nothing, or returned explicitly.
+      required: [ ok ]
+      properties:
+        ok:
+          const: true
+    DateTime:
+      type: string
+      format: date-time
+      description: ISO-8601 timestamp. Postgres values are normalized to UTC `…Z`; SQLite values are
+        stored as written (`nowIso()` writes UTC `…Z`).
+    StatusType:
+      type: string
+      enum: [ draft, next, execute, review, complete, blocked, cancelled ]
+    MissionPriority:
+      type: string
+      enum: [ low, normal, high, urgent ]
+    ObjectiveState:
+      type: string
+      enum: [ future, draft, submitted, launching, executing, pending_delivery, complete ]
+    CreatedByKind:
+      type: string
+      enum: [ human, agent, automation ]
+      description: Rows predating creation provenance report `human`.
+    ProjectLifecycle:
+      type: string
+      enum: [ active, archived ]
+    ProjectListLifecycle:
+      type: string
+      enum: [ active, archived, all ]
+    AgentLaunchFlagDto:
+      type: object
+      required: [ name ]
+      properties:
+        name:
+          type: string
+          description: CLI flag token, usually starting with `--`.
+        value:
+          description: Positional value after the flag; absent or null for a boolean flag.
+          oneOf:
+            - type: string
+            - type: 'null'
+    AgentLaunchFlagInput:
+      description: >-
+        A launch flag as accepted on input: a structured flag, or flag text (`--x`, `--x v`, `--x=v`)
+        that the server parses. Entries without a non-blank name are dropped.
+      oneOf:
+        - type: string
+        - type: object
+          required: [ name ]
+          properties:
+            name: { type: string }
+            value:
+              oneOf:
+                - type: string
+                - type: 'null'
+    AgentLaunchConfigDto:
+      type: object
+      required: [ preCommand, flags ]
+      properties:
+        preCommand:
+          type: string
+        flags:
+          type: array
+          items: { $ref: '#/components/schemas/AgentLaunchFlagDto' }
+    AgentLaunchConfigInput:
+      type: object
+      description: Launch mechanics as accepted on input; omitted members default to empty.
+      properties:
+        preCommand:
+          type: string
+        flags:
+          type: array
+          items: { $ref: '#/components/schemas/AgentLaunchFlagInput' }
+    ProjectDto:
+      type: object
+      required:
+        [
+          id,
+          workspaceId,
+          slug,
+          name,
+          description,
+          color,
+          defaultBranch,
+          status,
+          createdAt,
+          updatedAt,
+          revision,
+          missionCount,
+          position,
+          preLaunchCommands,
+          launchEnvVars
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        workspaceId: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        description:
+          oneOf:
+            - type: string
+            - type: 'null'
+        color:
+          description: Lower-case `#rrggbb` from project settings, or null.
+          oneOf:
+            - type: string
+            - type: 'null'
+        defaultBranch:
+          description: Configured base branch for mission branches; null falls back to `main`.
+          oneOf:
+            - type: string
+            - type: 'null'
+        status: { $ref: '#/components/schemas/ProjectLifecycle' }
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+        revision: { type: integer, minimum: 1 }
+        missionCount: { type: integer, minimum: 0 }
+        position:
+          type: integer
+          minimum: 0
+          description: 1-based sidebar order within the workspace; 0 for a legacy row without one.
+        preLaunchCommands:
+          type: array
+          items: { type: string }
+        launchEnvVars:
+          type: object
+          additionalProperties: { type: string }
+    ProjectStatusDto:
+      type: object
+      required: [ id, workspaceId, projectId, key, name, type, position, isDefault, isTerminal ]
+      properties:
+        id: { type: string, format: uuid }
+        workspaceId: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        key: { type: string }
+        name: { type: string }
+        type: { $ref: '#/components/schemas/StatusType' }
+        position: { type: integer, minimum: 0 }
+        isDefault: { type: boolean }
+        isTerminal: { type: boolean }
+    ProjectTagDto:
+      type: object
+      required: [ id, projectId, label, color, active ]
+      properties:
+        id: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        label: { type: string }
+        color:
+          description: Free-form trimmed color text (not validated), or null.
+          oneOf:
+            - type: string
+            - type: 'null'
+        active: { type: boolean }
+    ProjectResourceAccessMode:
+      type: string
+      enum: [ read, read_write ]
+    ProjectResourceSourceDto:
+      type: object
+      required:
+        [
+          id,
+          executionTargetId,
+          sourceKind,
+          descriptor,
+          launchDefaults,
+          observedRevision,
+          observedContentDigest
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        executionTargetId:
+          description: The target this source materializes on; null for a project-global source.
+          oneOf:
+            - type: string
+            - type: 'null'
+        sourceKind:
+          type: string
+          description: Open vocabulary; the REST surface writes `local_checkout` and `git`.
+        descriptor:
+          type: object
+          additionalProperties: true
+          description: >-
+            The stored descriptor object (`path` for a checkout, `url` for git, plus `launchDefaults`
+            when set); `{}` when the stored JSON is not an object.
+        launchDefaults:
+          type: object
+          additionalProperties: { $ref: '#/components/schemas/AgentLaunchConfigDto' }
+          description: Per-agent launch defaults; `{}` when none.
+        observedRevision:
+          oneOf:
+            - type: string
+            - type: 'null'
+        observedContentDigest:
+          oneOf:
+            - type: string
+            - type: 'null'
+    ProjectResourceDto:
+      type: object
+      required:
+        [
+          id,
+          workspaceId,
+          projectId,
+          executionTargetId,
+          resourceKey,
+          type,
+          label,
+          path,
+          isPrimary,
+          accessMode,
+          status,
+          observedAt,
+          observationSource,
+          createdAt,
+          updatedAt,
+          revision,
+          sources
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        workspaceId: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        executionTargetId:
+          description: Target of the representative source (the first `local_checkout` source, else the first
+            source); null when none.
+          oneOf:
+            - type: string
+            - type: 'null'
+        resourceKey: { type: string }
+        type:
+          type: string
+          description: >-
+            `local_directory` when the representative source is `local_checkout`, otherwise that
+            source's kind (`git`, …), or `remote_directory` when the resource has no source. The
+            TypeScript type lists `local_directory`, `remote_directory`, `git`, `source_bundle`.
+        label:
+          oneOf:
+            - type: string
+            - type: 'null'
+        path:
+          type: string
+          description: The checkout path of a `local_checkout` representative source, else empty.
+        isPrimary: { type: boolean }
+        accessMode:
+          $ref: '#/components/schemas/ProjectResourceAccessMode'
+        status:
+          type: string
+          enum: [ active, missing, archived ]
+        observedAt:
+          description: When the representative source's target last reported this resource; null otherwise.
+          oneOf:
+            - $ref: '#/components/schemas/DateTime'
+            - type: 'null'
+        observationSource:
+          description: '`client` when `observedAt` is set, else null.'
+          oneOf:
+            - const: client
+            - type: 'null'
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+        revision: { type: integer, minimum: 1 }
+        sources:
+          type: array
+          items: { $ref: '#/components/schemas/ProjectResourceSourceDto' }
+    MissionCreatorTokenDto:
+      type: object
+      required: [ tokenId, label ]
+      properties:
+        tokenId: { type: string, format: uuid }
+        label: { type: string }
+    MissionDto:
+      type: object
+      required:
+        [
+          id,
+          workspaceId,
+          projectId,
+          displayId,
+          sequenceNumber,
+          title,
+          statusId,
+          statusType,
+          boardPosition,
+          priority,
+          assignedWorkspaceUserId,
+          notes,
+          scheduleId,
+          dueDatetime,
+          createdAt,
+          updatedAt,
+          revision,
+          objectiveCount,
+          completedObjectiveCount,
+          hasExecutingObjective,
+          hasCompletedObjective,
+          hasPendingObjectiveWithInstructions,
+          hasUnseenBlockingQuestion,
+          hasUnseenReturnedToExecute,
+          allowParallelObjectives,
+          draftObjectiveResourceKey,
+          tags,
+          createdByKind,
+          createdByAgent,
+          createdByWorkspaceUserId,
+          createdByToken
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        workspaceId: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        displayId:
+          type: string
+          description: Human-readable id, `<workspace prefix>:<sequence>` (for example `coo:756`).
+        sequenceNumber: { type: integer, minimum: 1 }
+        title: { type: string }
+        statusId: { type: string, format: uuid }
+        statusType: { $ref: '#/components/schemas/StatusType' }
+        boardPosition: { type: integer }
+        priority:
+          oneOf:
+            - $ref: '#/components/schemas/MissionPriority'
+            - type: 'null'
+        assignedWorkspaceUserId:
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        notes:
+          description: Human-only notes; never sent to agents.
+          oneOf:
+            - type: string
+            - type: 'null'
+        scheduleId:
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        dueDatetime:
+          oneOf:
+            - $ref: '#/components/schemas/DateTime'
+            - type: 'null'
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+        revision: { type: integer, minimum: 1 }
+        objectiveCount: { type: integer, minimum: 0 }
+        completedObjectiveCount: { type: integer, minimum: 0 }
+        hasExecutingObjective:
+          type: boolean
+          description: True while an objective is `executing` or `pending_delivery`.
+        hasCompletedObjective: { type: boolean }
+        hasPendingObjectiveWithInstructions: { type: boolean }
+        hasUnseenBlockingQuestion: { type: boolean }
+        hasUnseenReturnedToExecute: { type: boolean }
+        allowParallelObjectives: { type: boolean }
+        draftObjectiveResourceKey:
+          oneOf:
+            - type: string
+            - type: 'null'
+        tags:
+          type: array
+          items: { $ref: '#/components/schemas/ProjectTagDto' }
+        createdByKind: { $ref: '#/components/schemas/CreatedByKind' }
+        createdByAgent:
+          oneOf:
+            - type: string
+            - type: 'null'
+        createdByWorkspaceUserId:
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        createdByToken:
+          oneOf:
+            - $ref: '#/components/schemas/MissionCreatorTokenDto'
+            - type: 'null'
+        objectives:
+          type: array
+          description: Present only on `GET /api/projects/{id}/missions?includeObjectives=1`.
+          items: { $ref: '#/components/schemas/ObjectiveDto' }
+    ObjectiveRunQueueEntryDto:
+      type: object
+      required:
+        [
+          id,
+          queueId,
+          queueName,
+          position,
+          state,
+          blockedReason,
+          waitingReason,
+          waitingOnObjectiveId,
+          waitingOnObjectiveDisplayId,
+          attemptCount,
+          precededBy
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        queueId: { type: string, format: uuid }
+        queueName: { type: string }
+        position: { type: integer, minimum: 1 }
+        state:
+          type: string
+          enum: [ waiting, blocked, dispatched, running ]
+        blockedReason:
+          oneOf:
+            - type: string
+            - type: 'null'
+        waitingReason:
+          oneOf:
+            - type: string
+              enum: [ mission_busy, resource_disconnected, retry_pending ]
+            - type: 'null'
+        waitingOnObjectiveId:
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        waitingOnObjectiveDisplayId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        attemptCount: { type: integer, minimum: 0 }
+        precededBy:
+          description: Always null in objective projections.
+          type: 'null'
+    ObjectiveDto:
+      type: object
+      required:
+        [
+          id,
+          workspaceId,
+          projectId,
+          missionId,
+          position,
+          title,
+          instructionText,
+          state,
+          autoAdvance,
+          queueEntry,
+          assignedAgent,
+          model,
+          reasoningEffort,
+          createdAt,
+          updatedAt,
+          launchedAt,
+          startedAt,
+          completedAt,
+          reopenedAt,
+          revision,
+          externalSessionId,
+          branch,
+          resourceKey,
+          displayKey,
+          displayId,
+          createdByKind,
+          createdByAgent,
+          createdByWorkspaceUserId,
+          launchConfigOverrides
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        workspaceId: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        missionId: { type: string, format: uuid }
+        position: { type: integer, minimum: 0 }
+        title:
+          oneOf:
+            - type: string
+            - type: 'null'
+        instructionText: { type: string }
+        state: { $ref: '#/components/schemas/ObjectiveState' }
+        autoAdvance:
+          type: boolean
+          description: Deprecated; derived from live queue membership when the read joins it.
+        queueEntry:
+          description: Live Run Queue membership; null when not queued or when the read does not join queue
+            state (create and update responses).
+          oneOf:
+            - $ref: '#/components/schemas/ObjectiveRunQueueEntryDto'
+            - type: 'null'
+        assignedAgent:
+          oneOf:
+            - type: string
+            - type: 'null'
+        model:
+          oneOf:
+            - type: string
+            - type: 'null'
+        reasoningEffort:
+          oneOf:
+            - type: string
+            - type: 'null'
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+        launchedAt:
+          oneOf:
+            - $ref: '#/components/schemas/DateTime'
+            - type: 'null'
+        startedAt:
+          oneOf:
+            - $ref: '#/components/schemas/DateTime'
+            - type: 'null'
+        completedAt:
+          oneOf:
+            - $ref: '#/components/schemas/DateTime'
+            - type: 'null'
+        reopenedAt:
+          oneOf:
+            - $ref: '#/components/schemas/DateTime'
+            - type: 'null'
+        revision: { type: integer, minimum: 1 }
+        externalSessionId:
+          description: Native harness session id of the latest agent session; null where the read does not
+            join sessions.
+          oneOf:
+            - type: string
+            - type: 'null'
+        branch:
+          oneOf:
+            - type: string
+            - type: 'null'
+        resourceKey:
+          oneOf:
+            - type: string
+            - type: 'null'
+        displayKey: { type: string }
+        displayId:
+          type: string
+          description: '`{mission.displayId}.{displayKey}`, for example `coo:756.k7xm`.'
+        createdByKind: { $ref: '#/components/schemas/CreatedByKind' }
+        createdByAgent:
+          oneOf:
+            - type: string
+            - type: 'null'
+        createdByWorkspaceUserId:
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        launchConfigOverrides:
+          type: object
+          description: Explicit overrides keyed by execution target id (`*` = any target), then agent key;
+            `{}` when none.
+          additionalProperties:
+            type: object
+            additionalProperties: { $ref: '#/components/schemas/AgentLaunchConfigDto' }
+    ExecutionRequestDto:
+      type: object
+      required:
+        [
+          id,
+          workspaceId,
+          projectId,
+          missionId,
+          objectiveId,
+          executionTargetId,
+          requestedAgent,
+          requestedModel,
+          requestedReasoningEffort,
+          launchConfig,
+          status,
+          requestedSource,
+          localTargetMutationKind,
+          lastError,
+          createdAt,
+          updatedAt
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        workspaceId: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        missionId:
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        objectiveId:
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        executionTargetId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        requestedAgent:
+          oneOf:
+            - type: string
+            - type: 'null'
+        requestedModel:
+          oneOf:
+            - type: string
+            - type: 'null'
+        requestedReasoningEffort:
+          oneOf:
+            - type: string
+            - type: 'null'
+        launchConfig: { $ref: '#/components/schemas/AgentLaunchConfigDto' }
+        status:
+          type: string
+          enum: [ queued, claimed, launching, launched, failed, cleared, cancelled, expired ]
+        requestedSource: { type: string }
+        localTargetMutationKind:
+          oneOf:
+            - type: string
+              enum: [ branch_action, worktree_purge, capability_call ]
+            - type: 'null'
+        lastError:
+          oneOf:
+            - type: string
+            - type: 'null'
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+    TerminalSessionDto:
+      type: object
+      required:
+        [
+          executionRequestId,
+          objectiveId,
+          provider,
+          providerSessionId,
+          sessionName,
+          executionTargetId,
+          deviceLabel,
+          agentSessionId,
+          executable,
+          viewerKind,
+          viewerOpenAs,
+          createdAt,
+          lastObservedState
+        ]
+      properties:
+        executionRequestId: { type: string, format: uuid }
+        objectiveId:
+          type: string
+          format: uuid
+        provider:
+          const: latch
+        providerSessionId: { type: string }
+        sessionName: { type: string }
+        executionTargetId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        deviceLabel:
+          oneOf:
+            - type: string
+            - type: 'null'
+        agentSessionId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        executable: { type: string }
+        viewerKind: { type: string }
+        viewerOpenAs:
+          type: string
+          enum: [ window, tab ]
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        lastObservedState:
+          type: string
+          enum: [ running, exited, stopping, lost ]
+    MissionBranchStatus:
+      type: string
+      enum: [ pending, created, published, merged_unpushed, merged ]
+    MissionWorktreePreference:
+      type: string
+      enum: [ worktree, branch ]
+    MissionBranchDto:
+      type: object
+      required:
+        [
+          name,
+          baseBranch,
+          worktreePath,
+          status,
+          dirty,
+          overrideBranch,
+          worktreeAutomationEnabled,
+          worktreePreference,
+          willPrepareBranch,
+          willUseWorktree
+        ]
+      properties:
+        name: { type: string }
+        baseBranch:
+          oneOf:
+            - type: string
+            - type: 'null'
+        worktreePath:
+          oneOf:
+            - type: string
+            - type: 'null'
+        status: { $ref: '#/components/schemas/MissionBranchStatus' }
+        dirty: { type: boolean }
+        hasUnpushedCommits:
+          type: boolean
+          description: Never written by the REST read today (see schema-disagreements.md).
+        overrideBranch:
+          oneOf:
+            - type: string
+            - type: 'null'
+        worktreeAutomationEnabled: { type: boolean }
+        worktreePreference:
+          oneOf:
+            - $ref: '#/components/schemas/MissionWorktreePreference'
+            - type: 'null'
+        willPrepareBranch: { type: boolean }
+        willUseWorktree: { type: boolean }
+        observedAt:
+          description: Present only once a local target observed the branch.
+          $ref: '#/components/schemas/DateTime'
+        observationSource:
+          description: Present (`client`) only together with `observedAt`.
+          const: client
+    MissionCreatedFromDto:
+      type: object
+      required: [ sessionId, missionId, missionDisplayId, agentIdentifier ]
+      properties:
+        sessionId: { type: string, format: uuid }
+        missionId: { type: string, format: uuid }
+        missionDisplayId: { type: string }
+        agentIdentifier: { type: string }
+    MissionDetailDto:
+      description: '`MissionDto` (without `objectives` as an opt-in) plus the mission page projections.'
+      allOf:
+        - $ref: '#/components/schemas/MissionDto'
+        - type: object
+          required: [ objectives, statuses, executionRequests, terminalSessions, branch, createdFrom ]
+          properties:
+            objectives:
+              type: array
+              items: { $ref: '#/components/schemas/ObjectiveDto' }
+            statuses:
+              type: array
+              items: { $ref: '#/components/schemas/ProjectStatusDto' }
+            executionRequests:
+              type: array
+              description: Active (queued, claimed, launching) requests, newest first.
+              items: { $ref: '#/components/schemas/ExecutionRequestDto' }
+            terminalSessions:
+              type: array
+              items: { $ref: '#/components/schemas/TerminalSessionDto' }
+            branch:
+              description: Always an object from this read; nullable in the TypeScript type.
+              oneOf:
+                - $ref: '#/components/schemas/MissionBranchDto'
+                - type: 'null'
+            createdFrom:
+              oneOf:
+                - $ref: '#/components/schemas/MissionCreatedFromDto'
+                - type: 'null'
+    ObjectiveAttachmentDto:
+      type: object
+      required:
+        [
+          id,
+          workspaceId,
+          projectId,
+          missionId,
+          objectiveId,
+          inboxItemId,
+          bucketKey,
+          storageKey,
+          filename,
+          contentType,
+          sizeBytes,
+          uploadStatus,
+          url,
+          createdAt
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        workspaceId: { type: string, format: uuid }
+        projectId:
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        missionId:
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        objectiveId:
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        inboxItemId:
+          description: Set while the file belongs to an unpromoted Inbox item; null otherwise.
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        bucketKey:
+          const: attachments
+        storageKey: { type: string }
+        filename: { type: string }
+        contentType:
+          oneOf:
+            - type: string
+            - type: 'null'
+        sizeBytes:
+          oneOf:
+            - type: integer
+              minimum: 1
+            - type: 'null'
+        uploadStatus:
+          type: string
+          enum: [ prepared, uploaded, available, failed, deleted ]
+        url:
+          type: string
+          description: Server-relative URL serving the bytes (`/api/storage/attachments/<storageKey>`).
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+    ObjectiveAttachmentList:
+      type: array
+      items: { $ref: '#/components/schemas/ObjectiveAttachmentDto' }
+    RawUploadBody:
+      type: string
+      contentMediaType: application/octet-stream
+      description: >-
+        The file's raw bytes as the request body (no multipart). Any Content-Type is accepted and
+        recorded as the attachment's media type. An empty body is refused (400).
