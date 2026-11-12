@@ -304,6 +304,28 @@ the code does not do.
   loopback with no bootstrap workspace member, a subcommand that needs a workspace answers 500
   `No active workspace for this request…` (reproduced).
 
+### Agent requests, session inputs and the adapter channel family (batch 3)
+
+- **X1** (open). No route mints an agent-session channel credential any more:
+  `POST /api/missions/{id}/session-channel` answers 410 `session_controls_gone`
+  (`prepareMissionSessionChannel`, `backend/agent-session-routes.ts`) and nothing else calls
+  `createSessionChannel`. The `/api/agent-session-channels/v1/*` family therefore serves only
+  channels created before that change (a credential lives at most 24 hours), and no route
+  enqueues session inputs (`enqueueSessionInput` has no caller). The schemas were validated
+  against channels and inputs created directly in a scratch database.
+- **X2** (open). `postMissionsByIdSessionChannel`, `postAgentRequestsByIdRelease`,
+  `postAgentSessionInputs` and `postAgentSessionInputsByIdCancel` answer 410 for every
+  authenticated caller without reading the request; their permission is now `authenticated`
+  (bootstrap: `unknown`). The web app still calls the last three and the CLI calls
+  `POST /api/agent-session-inputs`. `getAgentSessionChannelsV1Self` and
+  `postMissionsByIdSessionChannel` keep `x-overlord-consumers: [unverified]`: the CLI channel
+  client never calls `/self`, and no client calls the retired mint.
+- **X3** (open). `GET /api/agent-session-inputs` answers `{ inputs: [] }` without
+  `liveChannelId` and `liveChannel` when the caller has no active membership, and the full
+  object otherwise. The routers in
+  `backend/agent-session-routes.ts` write service errors as `{ error, code }` themselves (never
+  `details`); other failures reach `apiErrorHandler`.
+
 ## 2. Non-conforming error shapes
 
 Every route in `backend/app.ts` that forwards errors through `handle()` or `next(err)`
@@ -412,6 +434,15 @@ schema must change.
 - **G12** also covers the optional JSON bodies of `deleteRunQueuesByQueueId` (`moveEntriesTo`)
   and `deleteRunQueuesEntriesByEntryId` (`force`) (batch 3).
 
+- **G14** Error-only operations with no success response: `postMissionsByIdSessionChannel`,
+  `postAgentRequestsByIdRelease`, `postAgentSessionInputs` and
+  `postAgentSessionInputsByIdCancel` always answer 410 (batch 3).
+- **G5** also covers `RunnerClaimedRequestDto` (`RunnerExecutionRequestDto` plus launch
+  preparation) and `HumanAgentRequestDto` (`AgentRequestDto` plus `delivery`). **G3** also covers
+  the `X-Overlord-Device-Fingerprint` header parameter on the execution-target, launch-settings
+  and observation operations, and `postRunnerClaim`'s Postgres long poll, whose headers are
+  flushed before the body is written (batch 3).
+
 ## 5. Operations left as stubs
 
 None from batch 1: every operation tagged missions, objectives, deliveries, activity,
@@ -420,3 +451,7 @@ inbox, projects, project-statuses and project-resources (81) has schemas.
 None from batch 2: every operation tagged workspaces, organizations, profile, user-tokens,
 notifications, auth, oauth, meta, mcp, storage, realtime, mobile, webhooks and connections
 (81) has schemas.
+
+None from batch 3: every operation tagged run-queues, execution-targets, runner,
+launch-settings, agent-catalog, agent-requests, agent-session-channels, agent-session-inputs,
+worktrees, local-target and protocol (68) has schemas.

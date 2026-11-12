@@ -713,7 +713,26 @@ paths:
       x-overlord-permission: channel-credential
       x-overlord-edition: both
       x-overlord-consumers: [unverified]
-      x-overlord-schema-status: stub
+      summary: Read the calling channel
+      description: >-
+        Lets an adapter check at startup that its credential is still good. Channel-credential only.
+      security: [ { channelCredential: [] } ]
+      responses:
+        '200':
+          description: The channel.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentSessionChannelSelfDto' }
+        '401':
+          description: >-
+            No `Authorization: Bearer` value, or one that is not a live channel credential (unknown,
+            revoked, expired, or a channel that ended or was lost; session tokens and user tokens are not
+            accepted here): `{ error: 'Session channel credential required' }`. The reasons are
+            deliberately not distinguished.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/agent-session-channels/v1/heartbeat:
     post:
       operationId: postAgentSessionChannelsV1Heartbeat
@@ -721,7 +740,38 @@ paths:
       x-overlord-permission: channel-credential
       x-overlord-edition: both
       x-overlord-consumers: [cli]
-      x-overlord-schema-status: stub
+      summary: Renew the channel lease
+      description: >-
+        Sets the channel `online` (or `degraded` when `state` is `degraded`) and renews its lease and
+        credential expiry (the lease is 180 seconds; a credential never outlives 24 hours from the
+        channel's creation). Non-null `capabilities`, `nativeSessionId` and `adapterVersion` replace the
+        stored values. A channel that is no longer live answers 409 `channel_not_live`. Channel-credential
+        only: the route acts on the channel the credential belongs to; no channel id is accepted in the
+        path or body.
+      security: [ { channelCredential: [] } ]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AgentSessionHeartbeatBody' }
+      responses:
+        '200':
+          description: The renewed lease.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentSessionHeartbeatDto' }
+        '401':
+          description: >-
+            No `Authorization: Bearer` value, or one that is not a live channel credential (unknown,
+            revoked, expired, or a channel that ended or was lost; session tokens and user tokens are not
+            accepted here): `{ error: 'Session channel credential required' }`. The reasons are
+            deliberately not distinguished.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/agent-session-channels/v1/events:
     post:
       operationId: postAgentSessionChannelsV1Events
@@ -729,7 +779,40 @@ paths:
       x-overlord-permission: channel-credential
       x-overlord-edition: both
       x-overlord-consumers: [cli]
-      x-overlord-schema-status: stub
+      summary: Append normalized session events
+      description: >-
+        Appends one event (the body itself) or a batch (`events`, at most 100; more answers 413
+        `event_batch_too_large`, and an empty batch answers `{ accepted: [] }`). Each event needs a
+        non-blank `eventId` and `kind` (400 `invalid_event`); a payload over 8 KiB answers 413
+        `event_payload_too_large`. An event whose `eventId` the channel already sent is reported as a
+        duplicate and not stored again. Events are appended one at a time, so a failing event leaves the
+        events before it stored. Summaries over 2000 characters are truncated and timestamps later than
+        the server clock are clamped to it. Channel-credential only: the route acts on the channel the
+        credential belongs to; no channel id is accepted in the path or body.
+      security: [ { channelCredential: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AppendAgentSessionEventsBody' }
+      responses:
+        '200':
+          description: One entry per event, in order.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AppendAgentSessionEventsDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: >-
+            No `Authorization: Bearer` value, or one that is not a live channel credential (unknown,
+            revoked, expired, or a channel that ended or was lost; session tokens and user tokens are not
+            accepted here): `{ error: 'Session channel credential required' }`. The reasons are
+            deliberately not distinguished.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/agent-session-channels/v1/requests:
     post:
       operationId: postAgentSessionChannelsV1Requests
@@ -737,77 +820,249 @@ paths:
       x-overlord-permission: channel-credential
       x-overlord-edition: both
       x-overlord-consumers: [cli]
-      x-overlord-schema-status: stub
+      summary: Open an agent request on the channel
+      description: >-
+        Opens a human-facing request (question, permission, choice or retry) on the channel's mission and
+        session; an unknown `kind` answers 400 `invalid_request`. Replaying a `nativeRequestId` the
+        channel already used answers the existing request. The summary is bounded to 2000 characters and
+        the options to 12. Records a change and may trigger a mission summary. Channel-credential only:
+        the route acts on the channel the credential belongs to; no channel id is accepted in the path or
+        body.
+      security: [ { channelCredential: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAgentRequestBody' }
+      responses:
+        '200':
+          description: The request.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreatedAgentRequestDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: >-
+            No `Authorization: Bearer` value, or one that is not a live channel credential (unknown,
+            revoked, expired, or a channel that ended or was lost; session tokens and user tokens are not
+            accepted here): `{ error: 'Session channel credential required' }`. The reasons are
+            deliberately not distinguished.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/agent-session-channels/v1/requests/{id}":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Agent request UUID. A request of another channel, or an unknown one, answers 404
+          `request_not_found`.
+        schema: { type: string }
     get:
       operationId: getAgentSessionChannelsV1RequestsById
       tags: [agent-session-channels]
       x-overlord-permission: channel-credential
       x-overlord-edition: both
       x-overlord-consumers: [cli]
-      x-overlord-schema-status: stub
+      summary: Read one of the channel's requests
+      description: 'Channel-credential only: the route acts on the channel the credential belongs to; no
+        channel id is accepted in the path or body.'
+      security: [ { channelCredential: [] } ]
+      responses:
+        '200':
+          description: The request.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentRequestDto' }
+        '401':
+          description: >-
+            No `Authorization: Bearer` value, or one that is not a live channel credential (unknown,
+            revoked, expired, or a channel that ended or was lost; session tokens and user tokens are not
+            accepted here): `{ error: 'Session channel credential required' }`. The reasons are
+            deliberately not distinguished.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/agent-session-channels/v1/requests/{id}/lease":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Agent request UUID. A request of another channel, or an unknown one, answers 404
+          `request_not_found`.
+        schema: { type: string }
     post:
       operationId: postAgentSessionChannelsV1RequestsByIdLease
       tags: [agent-session-channels]
       x-overlord-permission: channel-credential
       x-overlord-edition: both
       x-overlord-consumers: [cli]
-      x-overlord-schema-status: stub
+      summary: Acquire or renew the waiter lease on a request
+      description: >-
+        Held while the adapter blocks on a decision; renewed with the `leaseId` the first call returned
+        (20-second lease). When the lease lapses the server releases the request to the terminal. A
+        request that is no longer open, or a lease held by another waiter, answers 409. Renewal does not
+        change the request's `revision`. Channel-credential only: the route acts on the channel the
+        credential belongs to; no channel id is accepted in the path or body.
+      security: [ { channelCredential: [] } ]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AgentRequestLeaseBody' }
+      responses:
+        '200':
+          description: The lease and the request's current state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentRequestLeaseDto' }
+        '401':
+          description: >-
+            No `Authorization: Bearer` value, or one that is not a live channel credential (unknown,
+            revoked, expired, or a channel that ended or was lost; session tokens and user tokens are not
+            accepted here): `{ error: 'Session channel credential required' }`. The reasons are
+            deliberately not distinguished.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/agent-session-channels/v1/requests/{id}/release":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Agent request UUID. A request of another channel, or an unknown one, answers 404
+          `request_not_found`.
+        schema: { type: string }
     post:
       operationId: postAgentSessionChannelsV1RequestsByIdRelease
       tags: [agent-session-channels]
       x-overlord-permission: channel-credential
       x-overlord-edition: both
       x-overlord-consumers: [cli]
-      x-overlord-schema-status: stub
+      summary: Release a request to the terminal
+      description: >-
+        Hands the decision back to the native prompt with `reason` (`timeout`, `local_activity`, `policy`
+        or `interrupt`; anything else, including `channel_ended`, reads as `timeout`). A request a human
+        already resolved is not released: `released` is false and the response carries the human's
+        resolution for the adapter to emit instead. Channel-credential only: the route acts on the channel
+        the credential belongs to; no channel id is accepted in the path or body.
+      security: [ { channelCredential: [] } ]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReleaseAgentRequestBody' }
+      responses:
+        '200':
+          description: Whether this call released the request, and its state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReleasedAgentRequestDto' }
+        '401':
+          description: >-
+            No `Authorization: Bearer` value, or one that is not a live channel credential (unknown,
+            revoked, expired, or a channel that ended or was lost; session tokens and user tokens are not
+            accepted here): `{ error: 'Session channel credential required' }`. The reasons are
+            deliberately not distinguished.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/agent-session-channels/v1/requests/{id}/application":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Agent request UUID. A request of another channel, or an unknown one, answers 404
+          `request_not_found`.
+        schema: { type: string }
     post:
       operationId: postAgentSessionChannelsV1RequestsByIdApplication
       tags: [agent-session-channels]
       x-overlord-permission: channel-credential
       x-overlord-edition: both
       x-overlord-consumers: [cli]
-      x-overlord-schema-status: stub
+      summary: Record whether a resolution was applied
+      description: >-
+        Records the request's `applicationState` (`emitted`, `applied`, `not_applied` or `unknown`; any
+        other value reads as `unknown`). Channel-credential only: the route acts on the channel the
+        credential belongs to; no channel id is accepted in the path or body.
+      security: [ { channelCredential: [] } ]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RecordAgentRequestApplicationBody' }
+      responses:
+        '200':
+          description: Recorded.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401':
+          description: >-
+            No `Authorization: Bearer` value, or one that is not a live channel credential (unknown,
+            revoked, expired, or a channel that ended or was lost; session tokens and user tokens are not
+            accepted here): `{ error: 'Session channel credential required' }`. The reasons are
+            deliberately not distinguished.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/agent-session-channels/v1/requests/{id}/resolved-elsewhere":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Agent request UUID. A request of another channel, or an unknown one, answers 404
+          `request_not_found`.
+        schema: { type: string }
     post:
       operationId: postAgentSessionChannelsV1RequestsByIdResolvedElsewhere
       tags: [agent-session-channels]
       x-overlord-permission: channel-credential
       x-overlord-edition: both
       x-overlord-consumers: [cli]
-      x-overlord-schema-status: stub
+      summary: Report that a request was answered in the terminal
+      description: >-
+        Releases an open request with reason `local_activity`; `changed` is false when it was no longer
+        open. Takes no body. Channel-credential only: the route acts on the channel the credential belongs
+        to; no channel id is accepted in the path or body.
+      security: [ { channelCredential: [] } ]
+      responses:
+        '200':
+          description: The outcome.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentRequestResolvedElsewhereDto' }
+        '401':
+          description: >-
+            No `Authorization: Bearer` value, or one that is not a live channel credential (unknown,
+            revoked, expired, or a channel that ended or was lost; session tokens and user tokens are not
+            accepted here): `{ error: 'Session channel credential required' }`. The reasons are
+            deliberately not distinguished.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/agent-session-channels/v1/inputs/claim:
     post:
       operationId: postAgentSessionChannelsV1InputsClaim
@@ -815,49 +1070,169 @@ paths:
       x-overlord-permission: channel-credential
       x-overlord-edition: both
       x-overlord-consumers: [cli]
-      x-overlord-schema-status: stub
+      summary: Lease the channel's next queued input
+      description: >-
+        Leases the oldest `queued` input of the channel, or one whose lease expired, for 60 seconds and
+        counts the attempt; `input` is null when there is none. Takes no body. Channel-credential only:
+        the route acts on the channel the credential belongs to; no channel id is accepted in the path or
+        body.
+      security: [ { channelCredential: [] } ]
+      responses:
+        '200':
+          description: The leased input, or none.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClaimedAgentSessionInputDto' }
+        '401':
+          description: >-
+            No `Authorization: Bearer` value, or one that is not a live channel credential (unknown,
+            revoked, expired, or a channel that ended or was lost; session tokens and user tokens are not
+            accepted here): `{ error: 'Session channel credential required' }`. The reasons are
+            deliberately not distinguished.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/agent-session-channels/v1/inputs/{id}/emitted":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Session input UUID. An input of another channel, or an unknown one, answers 404
+          `input_not_found`.
+        schema: { type: string }
     post:
       operationId: postAgentSessionChannelsV1InputsByIdEmitted
       tags: [agent-session-channels]
       x-overlord-permission: channel-credential
       x-overlord-edition: both
       x-overlord-consumers: [cli]
-      x-overlord-schema-status: stub
+      summary: Mark a leased input emitted
+      description: >-
+        Requires the `leaseId` of the current lease (400 `invalid_input` when blank). `emitted` is false
+        when the input is not leased under that lease. An unknown `deliveryOutcome` is stored as null.
+        Channel-credential only: the route acts on the channel the credential belongs to; no channel id is
+        accepted in the path or body.
+      security: [ { channelCredential: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MarkAgentSessionInputEmittedBody' }
+      responses:
+        '200':
+          description: Whether the input moved to `emitted`.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ emitted ]
+                properties:
+                  emitted: { type: boolean }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: >-
+            No `Authorization: Bearer` value, or one that is not a live channel credential (unknown,
+            revoked, expired, or a channel that ended or was lost; session tokens and user tokens are not
+            accepted here): `{ error: 'Session channel credential required' }`. The reasons are
+            deliberately not distinguished.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/agent-session-channels/v1/inputs/{id}/acknowledged":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Session input UUID. An input of another channel, or an unknown one, answers 404
+          `input_not_found`.
+        schema: { type: string }
     post:
       operationId: postAgentSessionChannelsV1InputsByIdAcknowledged
       tags: [agent-session-channels]
       x-overlord-permission: channel-credential
       x-overlord-edition: both
       x-overlord-consumers: [cli]
-      x-overlord-schema-status: stub
+      summary: Mark an emitted input acknowledged
+      description: >-
+        Moves an `emitted` input to `acknowledged` with delivery outcome `delivered`; `acknowledged` is
+        false otherwise. Takes no body. Channel-credential only: the route acts on the channel the
+        credential belongs to; no channel id is accepted in the path or body.
+      security: [ { channelCredential: [] } ]
+      responses:
+        '200':
+          description: Whether the input moved to `acknowledged`.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ acknowledged ]
+                properties:
+                  acknowledged: { type: boolean }
+        '401':
+          description: >-
+            No `Authorization: Bearer` value, or one that is not a live channel credential (unknown,
+            revoked, expired, or a channel that ended or was lost; session tokens and user tokens are not
+            accepted here): `{ error: 'Session channel credential required' }`. The reasons are
+            deliberately not distinguished.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/agent-session-channels/v1/inputs/{id}/failed":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Session input UUID. An input of another channel, or an unknown one, answers 404
+          `input_not_found`.
+        schema: { type: string }
     post:
       operationId: postAgentSessionChannelsV1InputsByIdFailed
       tags: [agent-session-channels]
       x-overlord-permission: channel-credential
       x-overlord-edition: both
       x-overlord-consumers: [cli]
-      x-overlord-schema-status: stub
+      summary: Mark a queued or leased input failed
+      description: >-
+        Moves a `queued` or `leased` input to `failed` with `errorCode` (default `adapter_error`);
+        `failed` is false otherwise. Channel-credential only: the route acts on the channel the credential
+        belongs to; no channel id is accepted in the path or body.
+      security: [ { channelCredential: [] } ]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MarkAgentSessionInputFailedBody' }
+      responses:
+        '200':
+          description: Whether the input moved to `failed`.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ failed ]
+                properties:
+                  failed: { type: boolean }
+        '401':
+          description: >-
+            No `Authorization: Bearer` value, or one that is not a live channel credential (unknown,
+            revoked, expired, or a channel that ended or was lost; session tokens and user tokens are not
+            accepted here): `{ error: 'Session channel credential required' }`. The reasons are
+            deliberately not distinguished.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/agent-session-channels/v1/end:
     post:
       operationId: postAgentSessionChannelsV1End
@@ -865,7 +1240,36 @@ paths:
       x-overlord-permission: channel-credential
       x-overlord-edition: both
       x-overlord-consumers: [cli]
-      x-overlord-schema-status: stub
+      summary: End the channel
+      description: >-
+        Ends a live channel with `reason` (default `session_ended`) and an optional numeric `exitCode`,
+        revokes its credential and releases every open request to the terminal (`channel_ended`). A
+        channel that is no longer live is left unchanged and answers `{ ok: true }`. Channel-credential
+        only: the route acts on the channel the credential belongs to; no channel id is accepted in the
+        path or body.
+      security: [ { channelCredential: [] } ]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EndAgentSessionChannelBody' }
+      responses:
+        '200':
+          description: Ended.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401':
+          description: >-
+            No `Authorization: Bearer` value, or one that is not a live channel credential (unknown,
+            revoked, expired, or a channel that ended or was lost; session tokens and user tokens are not
+            accepted here): `{ error: 'Session channel credential required' }`. The reasons are
+            deliberately not distinguished.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /oauth/clients/knowledgebase.json:
     get:
       operationId: getOauthClientsKnowledgebaseJson
@@ -5687,15 +6091,31 @@ paths:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Mission reference; not read (the route always answers 410).
+        schema: { type: string }
     post:
       operationId: postMissionsByIdSessionChannel
       tags: [agent-session-channels]
-      x-overlord-permission: unknown
+      x-overlord-permission: authenticated
       x-overlord-edition: both
       x-overlord-consumers: [unverified]
-      x-overlord-schema-status: stub
+      summary: Prepare a session channel (retired)
+      description: >-
+        Retired: launches no longer mint Agent Session Exchange credentials. The route stays mounted so
+        older CLIs get 410 instead of creating a channel. Any authenticated caller gets the same 410;
+        nothing is read or written.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '410':
+          description: >-
+            Always: `{ error: 'There are no active session-input controls. Permission and question prompts
+            remain with the native agent harness.', code: 'session_controls_gone' }`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/missions/{id}/terminal-sessions/forget":
     parameters:
       - name: id
@@ -5742,35 +6162,118 @@ paths:
       x-overlord-permission: session:read
       x-overlord-edition: both
       x-overlord-consumers: [cli, mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: List agent requests
+      description: >-
+        With `missionId` (or an objective display id in `objectiveId`, which names its mission): the
+        mission's requests, optionally only the objective's. The mission is resolved by UUID or display id
+        among the caller's active memberships (404 `mission_not_found`) and `session:read` is required in
+        its workspace (403 without it). An objective UUID without `missionId` answers 400 `invalid_input`.
+        Without either: the requests of every workspace where the caller holds `session:read`, silently
+        skipping the others. Newest first, at most 200. Each request carries its `delivery` mode: `latch`
+        when it is open and its Latch session is alive on a reachable eligible target, else `read_only`
+        with the reason.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: missionId
+          in: query
+          required: false
+          description: Mission UUID or display id.
+          schema: { type: string }
+        - name: objectiveId
+          in: query
+          required: false
+          description: Objective UUID (with `missionId`) or full display id.
+          schema: { type: string }
+      responses:
+        '200':
+          description: The requests.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentRequestListResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/agent-requests/{id}/resolve":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Agent request UUID; an unknown or deleted request, or one in a workspace the caller is not an
+          active member of, answers 404.
+        schema: { type: string }
     post:
       operationId: postAgentRequestsByIdResolve
       tags: [agent-requests]
       x-overlord-permission: session:attach
       x-overlord-edition: both
       x-overlord-consumers: [cli, mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Answer an agent question
+      description: >-
+        Requires `session:attach` in the request's workspace. Only `question` and `choice` requests can be
+        answered here; other kinds answer 410 `session_controls_gone`. The request must be deliverable
+        (delivery mode `latch`, else 409 `request_not_deliverable`), `expectedRevision` must be a number
+        (409 `agent_request_conflict` otherwise, and when the request changed since), and the resolution
+        needs a `text` (only when free text is allowed) or a known `optionId` (400 `invalid_resolution`).
+        A resolved answer is sent to the agent's Latch session (the text, else the option label);
+        `resolved` is false when the request was no longer open.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResolveAgentRequestBody' }
+      responses:
+        '200':
+          description: The outcome and the request.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ResolveAgentRequestResultDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '410':
+          description: >-
+            Always: `{ error: 'There are no active session-input controls. Permission and question prompts
+            remain with the native agent harness.', code: 'session_controls_gone' }`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/agent-requests/{id}/release":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Agent request id; not read (the route always answers 410).
+        schema: { type: string }
     post:
       operationId: postAgentRequestsByIdRelease
       tags: [agent-requests]
-      x-overlord-permission: unknown
+      x-overlord-permission: authenticated
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Release an agent request to the terminal (retired)
+      description: >-
+        Retired "respond in terminal" control. Any authenticated caller gets 410; nothing is read or
+        written.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '410':
+          description: >-
+            Always: `{ error: 'There are no active session-input controls. Permission and question prompts
+            remain with the native agent harness.', code: 'session_controls_gone' }`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/agent-session-inputs:
     get:
       operationId: getAgentSessionInputs
@@ -5778,28 +6281,85 @@ paths:
       x-overlord-permission: session:read
       x-overlord-edition: both
       x-overlord-consumers: [cli, webapp]
-      x-overlord-schema-status: stub
+      summary: List a mission's session inputs and its latest channel
+      description: >-
+        `missionId` (or an objective display id in `objectiveId`) is required (400 `invalid_input`). The
+        mission is resolved by UUID or display id among the caller's active memberships (404
+        `mission_not_found`; a caller with no membership gets an empty result) and `session:read` is
+        required in its workspace. Lists the mission's (or objective's) inputs except `queued` and
+        `leased` ones, with a snapshot of its most recent channel, live or not, for clients to gate their
+        controls on.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: missionId
+          in: query
+          required: false
+          description: Mission UUID or display id; required unless `objectiveId` is a display id.
+          schema: { type: string }
+        - name: objectiveId
+          in: query
+          required: false
+          description: Objective UUID (with `missionId`) or full display id.
+          schema: { type: string }
+      responses:
+        '200':
+          description: The inputs and the latest channel.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentSessionInputListResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
     post:
       operationId: postAgentSessionInputs
       tags: [agent-session-inputs]
-      x-overlord-permission: unknown
+      x-overlord-permission: authenticated
       x-overlord-edition: both
       x-overlord-consumers: [cli, webapp]
-      x-overlord-schema-status: stub
+      summary: Queue a session input (retired)
+      description: Retired. Any authenticated caller gets 410; nothing is read or written.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '410':
+          description: >-
+            Always: `{ error: 'There are no active session-input controls. Permission and question prompts
+            remain with the native agent harness.', code: 'session_controls_gone' }`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/agent-session-inputs/{id}/cancel":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Session input id; not read (the route always answers 410).
+        schema: { type: string }
     post:
       operationId: postAgentSessionInputsByIdCancel
       tags: [agent-session-inputs]
-      x-overlord-permission: unknown
+      x-overlord-permission: authenticated
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Cancel a session input (retired)
+      description: Retired. Any authenticated caller gets 410; nothing is read or written.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '410':
+          description: >-
+            Always: `{ error: 'There are no active session-input controls. Permission and question prompts
+            remain with the native agent harness.', code: 'session_controls_gone' }`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/missions/{id}/events":
     parameters:
       - name: id
@@ -14213,3 +14773,448 @@ components:
           oneOf:
             - type: string
             - type: 'null'
+    AgentSessionChannelState:
+      type: string
+      enum: [ preparing, online, degraded, ended, lost ]
+    AgentRequestKind:
+      type: string
+      enum: [ question, permission, choice, retry ]
+    AgentRequestStatus:
+      type: string
+      enum: [ open, resolved, released_to_terminal, expired, cancelled ]
+    AgentSessionChannelSelfDto:
+      type: object
+      required: [ channelId, state, bound, missionId, adapterKey, capabilities, leaseExpiresAt ]
+      properties:
+        channelId: { type: string, format: uuid }
+        state: { $ref: '#/components/schemas/AgentSessionChannelState' }
+        bound:
+          type: boolean
+          description: Whether the channel is bound to an agent session.
+        missionId: { type: string, format: uuid }
+        adapterKey:
+          oneOf:
+            - type: string
+            - type: 'null'
+        capabilities: { $ref: '#/components/schemas/JsonValue' }
+        leaseExpiresAt:
+          oneOf:
+            - { $ref: '#/components/schemas/DateTime' }
+            - type: 'null'
+    AgentSessionHeartbeatBody:
+      type: object
+      properties:
+        state:
+          type: string
+          enum: [ online, degraded ]
+          description: Only `degraded` is honoured; anything else is `online`.
+        capabilities:
+          type: object
+          description: Replaces the stored capabilities when present and truthy.
+          additionalProperties: { $ref: '#/components/schemas/JsonValue' }
+        nativeSessionId: { type: string }
+        adapterVersion: { type: string }
+    AgentSessionHeartbeatDto:
+      type: object
+      required: [ ok, leaseExpiresAt, credentialExpiresAt ]
+      properties:
+        ok: { const: true }
+        leaseExpiresAt: { $ref: '#/components/schemas/DateTime' }
+        credentialExpiresAt: { $ref: '#/components/schemas/DateTime' }
+    AgentSessionEventInput:
+      type: object
+      required: [ eventId, kind ]
+      properties:
+        eventId:
+          {
+            type: string,
+            description: Producer event id,
+            unique per channel and adapter; at most 200 characters.
+          }
+        kind: { type: string, description: At most 200 characters. }
+        producerSequence: { type: number }
+        occurredAt: { type: string, description: Parsed as a date; unparseable or future values use the server time. }
+        severity: { type: string }
+        actionability: { type: string }
+        nativeEvent: { type: string }
+        nativeTurnId: { type: string }
+        nativeCallId: { type: string }
+        subagentId: { type: string }
+        correlationId: { type: string }
+        origin: { type: string }
+        summary: '{ type: string }'
+        payload:
+          type: object
+          description: At most 8 KiB serialized.
+          additionalProperties: { $ref: '#/components/schemas/JsonValue' }
+    AppendAgentSessionEventsBody:
+      description: One event, or a batch in `events`.
+      oneOf:
+        - type: object
+          required: [ events ]
+          properties:
+            events:
+              type: array
+              maxItems: 100
+              items: { $ref: '#/components/schemas/AgentSessionEventInput' }
+        - { $ref: '#/components/schemas/AgentSessionEventInput' }
+    AppendAgentSessionEventsDto:
+      type: object
+      required: [ accepted ]
+      properties:
+        accepted:
+          type: array
+          items:
+            type: object
+            required: [ id, channelSequence, duplicate ]
+            properties:
+              id: { type: string, format: uuid }
+              channelSequence: { type: integer, minimum: 1 }
+              duplicate: { type: boolean }
+    AgentRequestOption:
+      type: object
+      required: [ optionId, label, kind ]
+      properties:
+        optionId: { type: string }
+        label: { type: string }
+        kind: { type: string }
+    CreateAgentRequestBody:
+      type: object
+      properties:
+        kind:
+          $ref: '#/components/schemas/AgentRequestKind'
+          description: Defaults to `question`.
+        summary: '{ type: string }'
+        details:
+          type: object
+          additionalProperties: { $ref: '#/components/schemas/JsonValue' }
+        options:
+          type: array
+          description: At most 12 are kept.
+          items: { $ref: '#/components/schemas/AgentRequestOption' }
+        allowsFreeText: { type: boolean, description: Only `true` allows a free-text answer. }
+        nativeRequestId: { type: string }
+        nativeCallId: { type: string }
+        windowExpiresAt: { type: string }
+        windowBasis: { type: string }
+    CreatedAgentRequestDto:
+      type: object
+      required: [ requestId, status, revision, windowExpiresAt ]
+      properties:
+        requestId: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/AgentRequestStatus' }
+        revision: { type: integer, minimum: 1 }
+        windowExpiresAt:
+          oneOf:
+            - type: string
+            - type: 'null'
+    AgentRequestDto:
+      type: object
+      description: An agent request (backend/agent-session-routes.ts `requestDto`).
+      required:
+        [
+          id,
+          channelId,
+          missionId,
+          objectiveId,
+          kind,
+          summary,
+          options,
+          allowsFreeText,
+          status,
+          resolution,
+          revision,
+          windowExpiresAt,
+          releasedReason,
+          applicationState,
+          resolvedAt,
+          createdAt
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        channelId: { type: string, format: uuid }
+        missionId:
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        objectiveId:
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        kind: { $ref: '#/components/schemas/AgentRequestKind' }
+        summary: '{ type: string }'
+        options:
+          type: array
+          description: The stored options as written.
+          items: { $ref: '#/components/schemas/JsonValue' }
+        allowsFreeText: { type: boolean }
+        status: { $ref: '#/components/schemas/AgentRequestStatus' }
+        resolution:
+          description: The stored resolution object; null while unresolved.
+          $ref: '#/components/schemas/JsonValue'
+        revision: { type: integer, minimum: 1 }
+        windowExpiresAt:
+          oneOf:
+            - type: string
+            - type: 'null'
+        releasedReason:
+          description: '`timeout`, `local_activity`, `policy`, `interrupt`, `channel_ended` or `channel_lost`.'
+          oneOf:
+            - type: string
+            - type: 'null'
+        applicationState:
+          type: string
+          description: '`pending` until recorded, then `emitted`, `applied`, `not_applied` or `unknown`.'
+        resolvedAt:
+          oneOf:
+            - { $ref: '#/components/schemas/DateTime' }
+            - type: 'null'
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+    AgentRequestDeliveryDto:
+      type: object
+      required: [ mode, reason, state, observedAt ]
+      properties:
+        mode:
+          type: string
+          enum: [ latch, read_only ]
+        reason:
+          oneOf:
+            - type: string
+              enum: [ no_latch_session, latch_session_exited, target_offline, request_closed ]
+            - type: 'null'
+        state:
+          oneOf:
+            - type: string
+              enum: [ emitted, applied, not_applied, unknown ]
+            - type: 'null'
+        observedAt:
+          oneOf:
+            - { $ref: '#/components/schemas/DateTime' }
+            - type: 'null'
+    HumanAgentRequestDto:
+      description: A request with its delivery mode, as the human routes return it.
+      allOf:
+        - { $ref: '#/components/schemas/AgentRequestDto' }
+        - type: object
+          required: [ delivery ]
+          properties:
+            delivery: { $ref: '#/components/schemas/AgentRequestDeliveryDto' }
+    AgentRequestListResponse:
+      type: object
+      required: [ requests ]
+      properties:
+        requests:
+          type: array
+          items: { $ref: '#/components/schemas/HumanAgentRequestDto' }
+    AgentRequestLeaseBody:
+      type: object
+      properties:
+        leaseId: { type: string, description: The lease to renew; blank or absent acquires a new one. }
+    AgentRequestLeaseDto:
+      type: object
+      required: [ leaseId, leaseExpiresAt, status, revision, resolution ]
+      properties:
+        leaseId: { type: string }
+        leaseExpiresAt: { $ref: '#/components/schemas/DateTime' }
+        status: { $ref: '#/components/schemas/AgentRequestStatus' }
+        revision: { type: integer, minimum: 1 }
+        resolution: { $ref: '#/components/schemas/JsonValue' }
+    ReleaseAgentRequestBody:
+      type: object
+      properties:
+        reason:
+          type: string
+          enum: [ timeout, local_activity, policy, interrupt ]
+    ReleasedAgentRequestDto:
+      type: object
+      required: [ released, status, resolution ]
+      properties:
+        released: { type: boolean }
+        status: { $ref: '#/components/schemas/AgentRequestStatus' }
+        resolution: { $ref: '#/components/schemas/JsonValue' }
+    RecordAgentRequestApplicationBody:
+      type: object
+      properties:
+        applicationState:
+          type: string
+          enum: [ emitted, applied, not_applied, unknown ]
+    AgentRequestResolvedElsewhereDto:
+      type: object
+      required: [ changed, status, releasedReason ]
+      properties:
+        changed: { type: boolean }
+        status: { $ref: '#/components/schemas/AgentRequestStatus' }
+        releasedReason:
+          oneOf:
+            - type: string
+            - type: 'null'
+    AgentSessionInputKind:
+      type: string
+      enum: [ instruction, retry, continue ]
+    AgentSessionInputStatus:
+      type: string
+      enum: [ queued, leased, emitted, acknowledged, failed, expired, cancelled ]
+    ClaimedAgentSessionInputDto:
+      type: object
+      required: [ input ]
+      properties:
+        input:
+          oneOf:
+            - type: object
+              required: [ id, kind, body, leaseId, leaseExpiresAt ]
+              properties:
+                id: { type: string, format: uuid }
+                kind: { $ref: '#/components/schemas/AgentSessionInputKind' }
+                body: { type: string }
+                leaseId: { type: string }
+                leaseExpiresAt: { $ref: '#/components/schemas/DateTime' }
+            - type: 'null'
+    MarkAgentSessionInputEmittedBody:
+      type: object
+      required: [ leaseId ]
+      properties:
+        leaseId: { type: string }
+        deliveryOutcome:
+          type: string
+          enum: [ delivered, queued_turn_boundary, queued_next_turn, unsupported ]
+    MarkAgentSessionInputFailedBody:
+      type: object
+      properties:
+        errorCode: { type: string, description: Defaults to `adapter_error`. }
+    EndAgentSessionChannelBody:
+      type: object
+      properties:
+        reason: { type: string, description: Defaults to `session_ended`. }
+        exitCode: { type: number, description: A non-number is stored as null. }
+    ResolveAgentRequestBody:
+      type: object
+      required: [ expectedRevision, resolution ]
+      properties:
+        expectedRevision: { type: integer, description: The request revision the answer was made against. }
+        resolution:
+          type: object
+          description: '`text` and/or `optionId`; stored as given.'
+          properties:
+            text: { type: string, description: Trimmed; refused unless the request allows free text. }
+            optionId: { type: string, description: Trimmed; must name one of the request's options. }
+          additionalProperties: { $ref: '#/components/schemas/JsonValue' }
+    ResolveAgentRequestResultDto:
+      type: object
+      required: [ resolved, request ]
+      properties:
+        resolved: { type: boolean }
+        request: { $ref: '#/components/schemas/HumanAgentRequestDto' }
+    AgentSessionInputDto:
+      type: object
+      required:
+        [
+          id,
+          channelId,
+          missionId,
+          objectiveId,
+          sessionId,
+          kind,
+          body,
+          status,
+          deliveryOutcome,
+          deliveryLabel,
+          attemptCount,
+          lastErrorCode,
+          emittedAt,
+          acknowledgedAt,
+          createdAt,
+          revision
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        channelId: { type: string, format: uuid }
+        missionId:
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        objectiveId:
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        sessionId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        kind: { $ref: '#/components/schemas/AgentSessionInputKind' }
+        body: { type: string }
+        status: { $ref: '#/components/schemas/AgentSessionInputStatus' }
+        deliveryOutcome:
+          oneOf:
+            - type: string
+              enum: [ delivered, queued_turn_boundary, queued_next_turn, unsupported ]
+            - type: 'null'
+        deliveryLabel:
+          type: string
+          description: Display label, for example `Delivered`, `Queued (turn boundary)`, `Sent to harness`.
+        attemptCount: { type: integer, minimum: 0 }
+        lastErrorCode:
+          oneOf:
+            - type: string
+            - type: 'null'
+        emittedAt:
+          oneOf:
+            - { $ref: '#/components/schemas/DateTime' }
+            - type: 'null'
+        acknowledgedAt:
+          oneOf:
+            - { $ref: '#/components/schemas/DateTime' }
+            - type: 'null'
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        revision: { type: integer, minimum: 1 }
+    AgentSessionChannelSnapshotDto:
+      type: object
+      required: [ id, state, agentIdentifier, adapterKey, capabilities, lastHeartbeatAt, endedAt, endReason ]
+      properties:
+        id: { type: string, format: uuid }
+        state: { $ref: '#/components/schemas/AgentSessionChannelState' }
+        agentIdentifier:
+          oneOf:
+            - type: string
+            - type: 'null'
+        adapterKey:
+          oneOf:
+            - type: string
+            - type: 'null'
+        capabilities: { $ref: '#/components/schemas/JsonValue' }
+        lastHeartbeatAt:
+          oneOf:
+            - { $ref: '#/components/schemas/DateTime' }
+            - type: 'null'
+        endedAt:
+          oneOf:
+            - { $ref: '#/components/schemas/DateTime' }
+            - type: 'null'
+        endReason:
+          oneOf:
+            - type: string
+            - type: 'null'
+    AgentSessionInputListResponse:
+      type: object
+      description: >-
+        `liveChannelId` and `liveChannel` are absent (not null) when the caller has no active workspace
+        membership, which answers `{ inputs: [] }`.
+      required: [ inputs ]
+      properties:
+        liveChannelId:
+          description: The latest channel's id while it is `preparing`, `online` or `degraded`; null otherwise.
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        liveChannel:
+          description: The mission's (or objective's) most recent channel, live or not; null when it never had one.
+          oneOf:
+            - { $ref: '#/components/schemas/AgentSessionChannelSnapshotDto' }
+            - type: 'null'
+        inputs:
+          type: array
+          items: { $ref: '#/components/schemas/AgentSessionInputDto' }
