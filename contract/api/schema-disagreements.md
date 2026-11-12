@@ -122,6 +122,18 @@ the code does not do.
   workspace, then an `ADMIN` role in the target workspace (`requireWorkspaceAdmin`). The
   permission stays `workspace:read` with the role gate in the description.
 
+### Meta and sign-in handoffs (batch 2)
+
+- **H1** (open). `GET /api/meta` answers `MetaDto` plus `databasePath`, `backendMode`, `web`,
+  `sqlStudio`, `authProviders` and `capabilities` (`backend/app.ts`); no type in
+  packages/contract declares those members. The schema is `ServerMetaDto`. `databasePath`
+  discloses the server's SQLite file path to every authenticated caller and is also written
+  on Postgres, where it means nothing. `getMeta`.
+- **H2** (open). rest-notes.md says the desktop callback "redirects only to
+  `overlord://auth/callback`". Without a browser session `getAuthDesktopCallback` redirects
+  to itself with `error=state_mismatch`, and that request (lacking the native flow marker)
+  answers a plain-text 400 page (reproduced).
+
 ## 2. Non-conforming error shapes
 
 Every route in `backend/app.ts` that forwards errors through `handle()` or `next(err)`
@@ -143,6 +155,19 @@ project-automation route guard (404).
 - **E4** (open, probably intended). The OAuth endpoints answer RFC 6749 errors
   `{ error, error_description }` (`backend/oauth.ts` `jsonError`), where `error` is an
   OAuth code, not a message.
+
+- **E3 correction** (batch 2, reproduced). The 400 and 401 bodies of
+  `getAuthBrowserCallback` are `text/html; charset=utf-8` (Express `res.send` of a string),
+  not `text/plain`.
+- **E5** (open). `GET /api/auth/desktop/github` (`getAuthDesktopGithub`) passes Better
+  Auth's error responses through unchanged, `{ message, code }`; with GitHub sign-in not
+  configured that is 404 `{ message: 'Provider not found', code: 'PROVIDER_NOT_FOUND' }`
+  (reproduced). Its 503 (too many open flows) and the desktop callback's error page are
+  `text/plain`. Described with `MessageErrorBody`.
+- **E6** (open, probably intended). The OAuth connection callbacks
+  (`getAuthCallbackGithubRepository`, `getConnectionsKnowledgebaseCallback`) answer an HTML
+  status page (200 connected, 400 otherwise) when the flow has no return target; they never
+  answer JSON.
 
 ## 3. Suspected code defects
 
@@ -186,6 +211,15 @@ schema must change.
 - **G9** A `204` success with no body, written by `handle()` callers that end the response
   with `res.status(204).end()`: `deleteUserTokensById`. The Clear Comply generator reads
   only JSON success responses.
+
+- **G10** Redirect (`302`) success responses with `Location`/`Set-Cookie` response headers,
+  and `text/plain` / `text/html` error bodies: the sign-in handoffs and OAuth callbacks
+  (`getAuthDesktopGithub`, `getAuthDesktopCallback`, `getAuthBrowserCallback`,
+  `getAuthCallbackGithubRepository`). Express's `res.redirect` also writes a short notice
+  body that the description does not model.
+- **G11** An optional security requirement (`{}` alongside the session schemes) on
+  `getAuthDesktopCallback` and `getAuthBrowserCallback`, which read a browser session when
+  present and redirect or answer a page without one instead of 401.
 
 ## 5. Operations left as stubs
 

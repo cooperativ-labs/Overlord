@@ -124,7 +124,38 @@ paths:
       x-overlord-permission: public
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Start native GitHub sign-in in the system browser
+      description: >-
+        Opened in the system browser by the desktop shell and the mobile app. Starts Better Auth's GitHub
+        sign-in with the fixed callback `/api/auth/desktop/callback`, sets Better Auth's state cookie and
+        an `overlord.native_oauth` flow marker (`__Secure-` prefixed over HTTPS; path `/api/auth`, 10
+        minutes) and redirects to GitHub. Better Auth's own errors are passed through unchanged as `{
+        message, code }`. Not an API call; nothing here is a credential the caller keeps.
+      security: []
+      responses:
+        '302':
+          description: Redirect to GitHub's authorization page.
+          headers:
+            Location:
+              required: true
+              description: The GitHub authorization URL (with Better Auth's `state`).
+              schema: { type: string }
+            Set-Cookie:
+              required: true
+              description: Better Auth's OAuth state cookie and the native flow marker.
+              schema: { type: string }
+        '404':
+          description: >-
+            GitHub sign-in is not configured on this server (`{ message: 'Provider not found', code:
+            'PROVIDER_NOT_FOUND' }`, written by Better Auth).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageErrorBody' }
+        '503':
+          description: Too many sign-ins are open (256 flows in this process); plain text.
+          content:
+            text/plain:
+              schema: { type: string }
   /api/auth/desktop/callback:
     get:
       operationId: getAuthDesktopCallback
@@ -132,7 +163,38 @@ paths:
       x-overlord-permission: authenticated
       x-overlord-edition: both
       x-overlord-consumers: [external]
-      x-overlord-schema-status: stub
+      summary: Finish native GitHub sign-in and hand off to the app
+      description: >-
+        Better Auth's GitHub callback lands here in the system browser. With a browser session it mints a
+        one-time handoff ticket (60 seconds, single use, process-local) and redirects to
+        `overlord://auth/callback?ticket=…`. Without a session it redirects to itself with
+        `error=state_mismatch`. With an `error` query parameter it redirects to
+        `overlord://auth/callback?error=<access_denied|state_mismatch|sign_in_failed>` when the native
+        flow marker cookie is present, and otherwise answers a plain-text 400 page. Responses carry
+        `Cache-Control: no-store` and `Referrer-Policy: no-referrer`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, {} ]
+      parameters:
+        - name: error
+          in: query
+          required: false
+          description: An OAuth error code from Better Auth or GitHub; its presence selects the error path.
+          schema: { type: string }
+      responses:
+        '302':
+          description: >-
+            `overlord://auth/callback?ticket=<ticket>`, `overlord://auth/callback?error=<code>`, or
+            `/api/auth/desktop/callback?error=state_mismatch` when there is no session. Except for the
+            `error` path, the body is Express's short redirect notice.
+          headers:
+            Location:
+              required: true
+              schema: { type: string }
+        '400':
+          description: An `error` callback without the native flow marker; a plain-text page.
+          content:
+            text/plain:
+              schema: { type: string }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/auth/browser/callback:
     get:
       operationId: getAuthBrowserCallback
@@ -140,7 +202,41 @@ paths:
       x-overlord-permission: authenticated
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Finish hosted-web sign-in and hand off to the web client
+      description: >-
+        Reached in the browser after Better Auth sign-in for a hosted web client on another origin. The
+        origin of `returnTo` must be an allowed browser origin. With a browser session it mints a one-time
+        handoff ticket (60 seconds, single use) and redirects to that origin with `overlord_oauth_ticket`.
+        Errors are short text pages, not JSON.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, {} ]
+      parameters:
+        - name: returnTo
+          in: query
+          required: true
+          description: >-
+            An absolute URL; only its origin is used, and it must be one of the server's allowed browser
+            origins (400 otherwise).
+          schema: { type: string }
+      responses:
+        '302':
+          description: >-
+            Redirect to `<returnTo origin>/?overlord_oauth_ticket=<ticket>`; the body is Express's short
+            redirect notice.
+          headers:
+            Location:
+              required: true
+              schema: { type: string }
+        '400':
+          description: The return origin is missing or not allowed (`text/html` body with a plain sentence).
+          content:
+            text/html:
+              schema: { type: string }
+        '401':
+          description: No browser session (`text/html` body with a plain sentence).
+          content:
+            text/html:
+              schema: { type: string }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/auth/desktop/exchange:
     post:
       operationId: postAuthDesktopExchange
@@ -148,7 +244,30 @@ paths:
       x-overlord-permission: public
       x-overlord-edition: both
       x-overlord-consumers: [desktop, mobile]
-      x-overlord-schema-status: stub
+      summary: Exchange a native sign-in ticket for a session token
+      description: >-
+        Unauthenticated; the one-time ticket from `/api/auth/desktop/callback` is the credential. A ticket
+        is consumed by its first use, valid or not for this audience; an unknown, expired, reused or
+        browser-audience ticket answers 401 `{ message }`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OAuthHandoffExchangeBody' }
+      responses:
+        '200':
+          description: The Better Auth session token.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OAuthHandoffExchangeResultDto' }
+        '401':
+          description: '`{ message: ''This desktop sign-in link has expired or was already used.'' }`.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageErrorBody' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/auth/browser/exchange:
     post:
       operationId: postAuthBrowserExchange
@@ -156,7 +275,29 @@ paths:
       x-overlord-permission: public
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Exchange a hosted-web sign-in ticket for a session token
+      description: >-
+        Unauthenticated; the one-time ticket from `/api/auth/browser/callback` is the credential. An
+        unknown, expired, reused or desktop-audience ticket answers 401 `{ message }`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OAuthHandoffExchangeBody' }
+      responses:
+        '200':
+          description: The Better Auth session token.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OAuthHandoffExchangeResultDto' }
+        '401':
+          description: '`{ message: ''This browser sign-in link has expired or was already used.'' }`.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageErrorBody' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/auth/callback/github/repository:
     get:
       operationId: getAuthCallbackGithubRepository
@@ -164,7 +305,52 @@ paths:
       x-overlord-permission: public
       x-overlord-edition: both
       x-overlord-consumers: [external]
-      x-overlord-schema-status: stub
+      summary: GitHub repository-access OAuth callback
+      description: >-
+        GitHub redirects here after the repository consent started by `POST /api/connections` (or the
+        `/ext/github/user-connection/authorize` alias). The account-connections module consumes the hashed
+        state once, exchanges the code server-to-server and stores the encrypted credential. Every failure
+        becomes the status `failed`; nothing but a status leaves the server. Responses carry
+        `Cache-Control: no-store` and `Referrer-Policy: no-referrer`.
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: false
+          description: The authorization code GitHub issued.
+          schema: { type: string }
+        - name: state
+          in: query
+          required: false
+          description: The state minted when the connection started; unknown, used or expired answers `expired`.
+          schema: { type: string }
+        - name: error
+          in: query
+          required: false
+          description: GitHub's error code (`access_denied` reports `denied`).
+          schema: { type: string }
+      responses:
+        '302':
+          description: >-
+            When the flow named a return target: `overlord://connections/callback` (mobile) or the web
+            origin plus the requested path, default `/settings/connections` (web), each with
+            `provider=github&status=<connected|denied|expired|failed>`; or, for a flow a legacy alias
+            started, its validated return URL with `githubConnection=<status>`. The body is Express's
+            short redirect notice.
+          headers:
+            Location:
+              required: true
+              schema: { type: string }
+        '200':
+          description: Connected, and the flow named no return target; a short HTML status page.
+          content:
+            text/html:
+              schema: { type: string }
+        '400':
+          description: Denied, expired or failed, and no return target; a short HTML status page.
+          content:
+            text/html:
+              schema: { type: string }
   /api/auth-providers:
     get:
       operationId: getAuthProviders
@@ -172,7 +358,17 @@ paths:
       x-overlord-permission: public
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Login providers this server offers
+      description: >-
+        Unauthenticated, for the login screen. `email` is always true; `github` is true when GitHub OAuth
+        client credentials are configured.
+      security: []
+      responses:
+        '200':
+          description: The providers.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthProvidersDto' }
   /api/health:
     get:
       operationId: getHealth
@@ -180,7 +376,15 @@ paths:
       x-overlord-permission: public
       x-overlord-edition: both
       x-overlord-consumers: [cli, desktop]
-      x-overlord-schema-status: stub
+      summary: Liveness probe
+      description: 'Unauthenticated; always `{ ok: true }` while the process serves requests.'
+      security: []
+      responses:
+        '200':
+          description: The server is up.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
   /.well-known/oauth-protected-resource:
     get:
       operationId: getWellKnownOauthProtectedResource
@@ -684,18 +888,46 @@ paths:
     get:
       operationId: getMeta
       tags: [meta]
-      x-overlord-permission: unknown
+      x-overlord-permission: authenticated
       x-overlord-edition: both
       x-overlord-consumers: [cli, mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Caller and server metadata
+      description: >-
+        Any authenticated caller; no RBAC action is evaluated (a profile with no membership gets empty
+        lists). Combines `MetaDto` with server configuration: database path, edition, bind address, SQL
+        Studio state, login providers and capabilities.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The metadata.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ServerMetaDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/authorized-workspaces:
     get:
       operationId: getAuthorizedWorkspaces
       tags: [meta]
-      x-overlord-permission: unknown
+      x-overlord-permission: authenticated
       x-overlord-edition: both
       x-overlord-consumers: [mobile]
-      x-overlord-schema-status: stub
+      summary: The caller's authorization snapshot
+      description: >-
+        Read-only projection of the request's organization and workspace authorization; it never changes
+        scope. With a selected organization (a token's, or a session's only organization) it lists that
+        organization and its authorized (for a token, consent-narrowed) workspaces with
+        `selectionRequired: false`. A session whose profile belongs to several organizations gets
+        `organizationId: null`, every organization, every membership, and `selectionRequired: true`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The snapshot.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthorizedWorkspaceDiscoveryDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/diagnostics/execution-target-migration:
     get:
       operationId: getDiagnosticsExecutionTargetMigration
@@ -703,7 +935,30 @@ paths:
       x-overlord-permission: workspace:read
       x-overlord-edition: both
       x-overlord-consumers: [cli]
-      x-overlord-schema-status: stub
+      summary: Execution targets stamped with the backend host
+      description: >-
+        Requires `workspace:read` on the named workspace. On a co-located backend (loopback SQLite) it
+        answers `hostedBackend: false` with empty results; on a hosted backend it lists the workspace's
+        execution targets whose device fingerprint is the backend host's and counts their queued, claimed
+        or launching requests.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: workspaceId
+          in: query
+          required: true
+          description: Workspace UUID, trimmed; blank or absent answers 400.
+          schema: { type: string }
+      responses:
+        '200':
+          description: The diagnostics.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExecutionTargetMigrationDiagnosticsDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/onboarding:
     post:
       operationId: postOnboarding
@@ -9340,3 +9595,142 @@ components:
         token:
           type: string
           description: The raw `inv_…` token, trimmed; blank or absent answers 400.
+    ServerMetaDto:
+      description: '`GET /api/meta`: `MetaDto` plus server configuration.'
+      allOf:
+        - $ref: '#/components/schemas/MetaDto'
+        - type: object
+          required: [ databasePath, backendMode, web, sqlStudio, authProviders, capabilities ]
+          properties:
+            databasePath:
+              type: string
+              description: The resolved SQLite file path (also present, and meaningless, on Postgres).
+            backendMode:
+              type: string
+              enum: [ local, cloud ]
+              description: '`cloud` on Postgres; otherwise `backend_mode` from overlord.toml (default `local`).'
+            web:
+              type: object
+              required: [ host, port, url ]
+              properties:
+                host: { type: string, description: The bind host. }
+                port: { type: integer, minimum: 0, maximum: 65535 }
+                url: { type: string, description: '`http://<host>:<port>`, with `0.0.0.0` shown as `127.0.0.1`.' }
+            sqlStudio:
+              type: object
+              required: [ enabled, url ]
+              properties:
+                enabled: { type: boolean, description: Whether this process is serving SQL Studio. }
+                url:
+                  oneOf: [ { type: string }, { type: 'null' } ]
+            authProviders: { $ref: '#/components/schemas/AuthProvidersDto' }
+            capabilities:
+              type: object
+              required:
+                [
+                  projects,
+                  missions,
+                  objectives,
+                  realtime,
+                  sqlStudio,
+                  launchAgents,
+                  executionTargets,
+                  localTarget,
+                  mcp
+                ]
+              properties:
+                projects: { const: true }
+                missions: { const: true }
+                objectives: { const: true }
+                realtime: { const: true }
+                sqlStudio: { type: boolean }
+                launchAgents: { const: true }
+                executionTargets: { const: false }
+                localTarget:
+                  type: string
+                  enum: [ in_process_server, unavailable ]
+                  description: '`in_process_server` only on SQLite with `OVERLORD_DEV_IN_PROCESS_LOCAL_TARGET=true`.'
+                mcp: { type: boolean, description: Whether `/mcp` is registered (`OVERLORD_MCP_ENABLED=true`). }
+    AuthProvidersDto:
+      type: object
+      required: [ email, github ]
+      properties:
+        email: { const: true }
+        github: { type: boolean }
+    AuthorizedWorkspaceDto:
+      type: object
+      required: [ workspaceId, workspaceUserId, organizationId, slug, name, kind, roleKeys ]
+      properties:
+        workspaceId: { type: string, format: uuid }
+        workspaceUserId: { type: string }
+        organizationId: { type: string, format: uuid }
+        slug: { type: string }
+        name: { type: string }
+        kind: { type: string }
+        roleKeys:
+          type: array
+          description: Active role keys in that workspace, sorted.
+          items: { type: string }
+    AuthorizedWorkspaceDiscoveryDto:
+      type: object
+      required: [ organizationId, organizations, workspaces, selectionRequired ]
+      properties:
+        organizationId:
+          oneOf: [ { type: string, format: uuid }, { type: 'null' } ]
+        organizations:
+          type: array
+          items: { $ref: '#/components/schemas/OrganizationDto' }
+        workspaces:
+          type: array
+          items: { $ref: '#/components/schemas/AuthorizedWorkspaceDto' }
+        selectionRequired:
+          type: boolean
+          description: True only for a session whose profile belongs to more than one organization.
+    StaleBackendHostExecutionTargetDto:
+      type: object
+      required: [ executionTargetId, label, deviceLabel, deviceFingerprint ]
+      properties:
+        executionTargetId: { type: string }
+        label: { type: string }
+        deviceLabel:
+          oneOf: [ { type: string }, { type: 'null' } ]
+        deviceFingerprint: { type: string }
+    ExecutionTargetMigrationDiagnosticsDto:
+      type: object
+      required:
+        [
+          hostedBackend,
+          backendHostFingerprint,
+          staleBackendHostTargets,
+          staleQueuedExecutionRequestCount
+        ]
+      properties:
+        hostedBackend: { type: boolean }
+        backendHostFingerprint: { type: string }
+        staleBackendHostTargets:
+          type: array
+          items: { $ref: '#/components/schemas/StaleBackendHostExecutionTargetDto' }
+        staleQueuedExecutionRequestCount: { type: integer, minimum: 0 }
+    MessageErrorBody:
+      type: object
+      description: >-
+        The `{ message }` error body of the sign-in handoff exchanges, and Better Auth's `{ message,
+        code }` passed through by `/api/auth/desktop/github`. Not an `ErrorEnvelope`.
+      required: [ message ]
+      properties:
+        message: { type: string }
+        code: { type: string }
+    OAuthHandoffExchangeBody:
+      type: object
+      required: [ ticket ]
+      properties:
+        ticket:
+          type: string
+          description: >-
+            The one-time ticket (32–128 characters of `[A-Za-z0-9_-]`). A missing, non-string or
+            malformed value answers 401, not 400.
+    OAuthHandoffExchangeResultDto:
+      type: object
+      required: [ token ]
+      properties:
+        token: { type: string, description: 'The Better Auth session token, for `Authorization: Bearer`.' }
