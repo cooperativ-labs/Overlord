@@ -5,6 +5,55 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [169.1.0] - 2026-11-12
+
+Phase 4b of the contract migration is complete: every one of the 279 operations in
+[api/openapi.yaml](api/openapi.yaml) has request, response and error schemas describing the
+behaviour the backend already ships, and the schema-stub ratchet is 0.
+
+### Version
+
+- Minor contract version 169.1.0, from 169.0.0. Contract impact: minor. The schemas add
+  normative, backwards-compatible obligations: request and response shapes, optionality,
+  nullability, enumerations and error statuses that the description did not state before and
+  that phase 4c will generate validators from. No route, field, status, access rule or data
+  meaning changes, so no existing valid consumer, connector or stored row is affected; that is
+  more than a correction of existing prose (patch) and less than a breaking change (major).
+  No ADR is required: the change records existing behaviour and takes no architecture,
+  security, isolation, data-meaning, migration or service-boundary decision. OpenAPI
+  `info.version` 2.1.0.
+
+### Added
+
+- [api/openapi.yaml](api/openapi.yaml): request bodies, query, path and header parameters,
+  success responses and error responses, with shared components named after the
+  `@overlord/contract` types they describe, for every operation, in four batches: missions,
+  objectives, deliveries, activity, inbox, projects, project statuses and project resources
+  (81); workspaces, organizations, profile, user tokens, notifications, sign-in handoffs, hosted
+  MCP OAuth, meta, MCP, storage, realtime, mobile registrations, webhooks and account
+  connections (81); Run Queues, execution targets, runner, launch settings, agent catalog,
+  agent requests, the agent-session channel and input families, worktrees, the local-target
+  proxy and the protocol transport (68); assistant chat, and the Everhour and GitHub extension
+  routes (49). Streams, raw uploads, downloads, redirects and HTML pages are described with
+  their real media types. Operations served on one edition say how they answer on the other,
+  and the extension compatibility aliases are described as aliases (the older
+  `/ext/everhour/integration` is marked deprecated).
+- [api/schema-disagreements.md](api/schema-disagreements.md): the working record for phase
+  4d of where other documents or TypeScript types disagree with the code, error bodies that
+  depart from `ErrorEnvelope`, and the schema constructs the phase 4c generator must
+  translate, with a summary table. Suspected defects are reported privately, not there.
+
+### Changed
+
+- [api/openapi.yaml](api/openapi.yaml): `x-overlord-permission` is settled from the code where
+  the bootstrap recorded `unknown` (operations needing two RBAC actions keep `unknown` with
+  `x-overlord-permission-candidates`), and `x-overlord-consumers` is settled where a caller
+  exists; the operations that remain `[unverified]` have no caller in the web app, CLI,
+  desktop app, MCP server or mobile app. Every public operation lists 500, which the CORS and
+  body-parser middleware can answer on any route. The document description states that the
+  stub ratchet is 0.
+- [api/openapi-ratchet.json](api/openapi-ratchet.json): `stubOperations` 279 to 0.
+
 ## [169.0.0] - 2026-11-12
 
 Authorization, storage addressing and webhook targets are brought into line with
