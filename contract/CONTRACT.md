@@ -1,6 +1,6 @@
 # Overlord contract
 
-> Contract version: **168.1.0**
+> Contract version: **169.0.0**
 
 This directory is the normative, versioned specification of how Overlord's
 components interact. It defines what each component owns, the only sanctioned

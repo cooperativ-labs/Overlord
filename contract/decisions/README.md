@@ -81,3 +81,4 @@ record and the index disagree.
 - [0046 — Mission summaries are an operator-only surface with explicit eligibility](0046-operator-only-mission-summary.md)
 - [0047 — Inbox attachments live in the owner's storage workspace](0047-inbox-attachment-storage.md)
 - [0048 — The OpenAPI description covers every registered route, with explicit exclusions and operation extensions](0048-openapi-route-inventory.md)
+- [0049 — Token bounds apply to every route, including management routes](0049-token-bounds-on-every-route.md)

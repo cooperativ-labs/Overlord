@@ -103,6 +103,21 @@ Does NOT own:
   caller; `prompt`, `record-work`, `add-objectives`, inbox capture, and all session,
   launch, queue, token, webhook, and administration commands are denied for this preset
   before any write.
+- **No route is exempt.** The bounds above apply to every route a token reaches,
+  including those whose role requirement is derived rather than a single grant. Workspace
+  management (rename, delete, members, roles, invitations, objective export) needs the
+  target workspace in the token's consent (404 otherwise) and the operation's permission
+  in its scope (403); organization administration and organization image upload need the
+  token bound to that organization (404) and consenting to every live workspace of it
+  (403); workspace creation needs the token's own organization and `ADMIN` in a consented
+  workspace. Workspace, organization and notification lists narrow to the token's
+  organization and consented workspaces, as `GET /api/authorized-workspaces` does. A token
+  accepts a workspace invitation only when its scope is unrestricted, it is bound to the
+  invited workspace's organization and it consents to every workspace of it. A route that
+  changes stored state requires the write action, not only read access. Sessions keep the
+  membership-derived checks; the loopback local operator alone may fall back to the oldest
+  active human profile, and an authenticated caller whose profile is missing or deleted is
+  refused rather than given another identity.
 - **Creator-token attribution.** Every mission a direct `out_` bearer creates is stamped
   with `missions.created_by_token_id` (a soft reference, no foreign key) and
   `missions.created_by_token_label` (a label snapshot), exposed read-only as

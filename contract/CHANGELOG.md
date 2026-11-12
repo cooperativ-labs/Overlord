@@ -5,6 +5,68 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [169.0.0] - 2026-11-12
+
+Authorization, storage addressing and webhook targets are brought into line with
+[authorization.md](authorization.md) on every route ([ADR 0049](decisions/0049-token-bounds-on-every-route.md)).
+
+### Version
+
+- Major contract version 169.0.0, from 168.1.0. Per route: stored-object key
+  validation, awaited project tag and resource deletion, caller profile resolution,
+  user-image attribution and notification narrowing correct behaviour without
+  narrowing any valid use and would each be a patch; the workspace and organization
+  management bounds, branch-prepared authorization, the write actions on title
+  regeneration and terminal-session forgetting, and the save-time refusal of literal
+  private webhook addresses narrow access the description documented, which section 5
+  classifies as major. Every conformance manifest is restamped. OpenAPI `info.version`
+  2.0.0.
+
+### Changed
+
+- [authorization.md](authorization.md) "User tokens": token bounds apply to every
+  route, including derived-role management routes, lists, invitation acceptance and
+  state-changing routes; profile resolution never substitutes another account.
+- [api/openapi.yaml](api/openapi.yaml): workspace, member, invitation and organization
+  operations, `GET /api/workspaces`, `GET /api/organizations`, `POST /api/workspaces`
+  and `POST /api/invitations/accept` describe the token bounds; the storage serve and
+  upload operations describe key validation, organization-image addressing and
+  uploader attribution; webhook create, update and test describe the private-network
+  check (test gains 400); `POST /api/missions/{id}/branch-prepared` requires
+  `execution_request:claim` and gains 403 and 409; `generate-title` requires
+  `mission:update` and `terminal-sessions/forget` requires `session:attach`; the
+  notification operations, the profile operations (gain 404) and the project tag and
+  resource deletions (gain 403, 404 and 500) describe their behaviour.
+- [api/README.md](api/README.md): suspected defects are reported privately, not in
+  `schema-disagreements.md`.
+
+### Added
+
+- [ADR 0049](decisions/0049-token-bounds-on-every-route.md).
+
+### Migration and compatibility
+
+- Token clients managing workspaces, members, invitations or organizations need a
+  `full`-scope token consenting to the target workspaces (all of them for
+  organization administration). The CLI, desktop, web app and hosted MCP make no such
+  calls with scoped tokens; the web app uses sessions, which are unchanged.
+- Custom roles need `mission:update` to regenerate titles and `session:attach` to
+  forget terminal sessions; the default roles already hold both.
+- Webhook subscriptions to literal private addresses must be moved to a public or
+  internal (`OVERLORD_WEBHOOK_INTERNAL_HOSTS`) host; deliveries to them were already
+  refused at dispatch.
+
+### Impact on modules
+
+- Backend: `backend/rbac.ts` gains the token-bound helpers; workspaces,
+  organizations, storage, webhooks, notifications, runner and profile resolution use
+  them. Backend sources lint with `@typescript-eslint/no-floating-promises`.
+- CLI and runner: unchanged requests; `branch-prepared` needs `execution_request:claim`,
+  which every default role and the `mission_lifecycle` scope hold.
+- Web app, desktop, mobile: none (sessions).
+- MCP: none; hosted OAuth tokens are bounded as their scope already stated.
+- Connectors and extensions: manifests restamped to 169.0.0; no behaviour change.
+
 ## [168.1.0] - 2026-11-12
 
 Phase 4a of `planning/feature-plans/contract-adr-openapi-migration.md`: the REST surface

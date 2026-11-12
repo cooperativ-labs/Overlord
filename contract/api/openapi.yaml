@@ -3,10 +3,10 @@ info:
   title: Overlord API
   # info.version is the API description's own Semantic Version; it changes when
   # this document changes and is never compared with the contract version.
-  version: 1.0.0
+  version: 2.0.0
   # The contract version (contract/VERSION) this document belongs to. Written
   # only by `yarn version:contract`.
-  x-overlord-contract-version: 168.1.0
+  x-overlord-contract-version: 169.0.0
   description: >-
     Normative description of Overlord's REST surface (ADR 0006): one operation for every
     method and path the backend registers, at the path it is served (ADR 0007), excluding

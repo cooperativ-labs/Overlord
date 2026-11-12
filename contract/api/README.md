@@ -122,7 +122,8 @@ Where `rest-notes.md`, a TypeScript type or another document disagrees with the 
 the description follows the code (ADR 0006). Append an entry to
 `schema-disagreements.md` in the matching section, naming the operationId, what each
 side says, and the file and function that ship the behaviour. Suspected defects found
-while reading handlers go there too; do not change runtime code in a schema change.
+while reading handlers are not recorded there (see below); do not change runtime code in
+a schema change.
 
 ## Suspected defects are not recorded here
 
