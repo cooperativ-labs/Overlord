@@ -21,7 +21,7 @@ Owns:
 - Opt-in objective parallelism: `missions.allow_parallel_objectives` (default false). When true, two objectives on the same mission may execute concurrently on any resource, including the same one — the Runner Layer separates same-resource pairs with per-objective branch/worktree isolation, and a mission that runs without worktrees shares its single checkout by design. Deliver does not move the mission to `review` while any objective is still `launching` / `executing` / `pending_delivery`.
 - Context assembly format returned by `attach`, including additive `displayKey` / `displayId` on `ObjectiveSummary`
 - Objective context summaries returned by `attach` and `load-context` include `assignedAgent`, `model`, `reasoningEffort`, and `resourceKey` so agents can verify execution assignment
-- `update-objective` accepts optional `--title` to replace or clear a custom objective title independently of instruction text; title edits are allowed in any objective state
+- `update-objective` accepts optional `--title` to replace or clear a custom objective title independently of instruction text; title edits are allowed in any objective state. `update-objective` and hosted MCP `overlord_update_objective` use the existing `objective:update` authorization and the shared objective service
 - `create`, `prompt`, and `add-objectives` return the persisted mission/objective DTOs so callers can verify each objective's assigned agent, model, resource, and queue/auto-advance settings. CLI human-readable creation output echoes those settings; JSON and MCP responses retain their existing structured shapes.
 - CLI read selector precedence: `load-context`, `read-context`, `attachment-list`
   and `attachment-download-url` inherit a launch objective only when no mission
