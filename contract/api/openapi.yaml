@@ -1784,27 +1784,65 @@ paths:
       - name: deliveryId
         in: path
         required: true
-        schema:
-          type: string
+        description: Delivery UUID.
+        schema: { type: string }
       - name: actionId
         in: path
         required: true
-        schema:
-          type: string
+        description: A deferred-work id of that delivery (`DeferredWorkV1.id`, `deferred-work-<index>-<digest>`).
+        schema: { type: string }
     put:
       operationId: putDeliveriesByDeliveryIdDeferredWorkByActionIdResolution
       tags: [deliveries]
       x-overlord-permission: mission:update
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Record the operator's decision on a deferred-work item
+      description: >-
+        Requires `mission:update` on the delivery's workspace; a non-member, an unknown delivery and an
+        action id that is not one of the delivery's deferred-work ids all answer 404. Upserts the
+        resolution (re-resolving overwrites it) and records a `human_action_resolution` change carrying
+        the mission and objective ids.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResolveHumanActionBody' }
+      responses:
+        '200':
+          description: The item with its new resolution.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeliveryDeferredWorkItemDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
     delete:
       operationId: deleteDeliveriesByDeliveryIdDeferredWorkByActionIdResolution
       tags: [deliveries]
       x-overlord-permission: mission:update
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Reopen a deferred-work item
+      description: >-
+        Requires `mission:update` on the delivery's workspace (404 rules as for the PUT). Removes the
+        resolution and records a `human_action_resolution` change; an item without one is returned
+        unchanged.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The item, now unresolved.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeliveryDeferredWorkItemDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/inbox/missions:
     get:
       operationId: getInboxMissions
@@ -6431,8 +6469,10 @@ components:
           $ref: '#/components/schemas/MissionPriority'
           description: Defaults to `normal`.
         dueDatetime:
-          description: Any `Date.parse`-able text (400 otherwise), stored as given; null or omitted leaves it
-            unset.
+          description: >-
+            Checked only with `Date.parse` (400 when unparsable). SQLite stores only the canonical
+            `YYYY-MM-DDTHH:mm:ss.sssZ` form (other text answers 409 `Database constraint violation.`);
+            Postgres normalizes it. Null or omitted leaves it unset.
           oneOf:
             - type: string
             - type: 'null'
@@ -6534,7 +6574,9 @@ components:
             `[]` clears them.
           items: { type: string }
         dueDatetime:
-          description: Any `Date.parse`-able text (400 otherwise); null clears it. The linked schedule is
+          description: >-
+            Checked only with `Date.parse` (400 when unparsable); SQLite accepts only the canonical
+            `YYYY-MM-DDTHH:mm:ss.sssZ` form (409 otherwise). Null clears it. The linked schedule is
             unchanged.
           oneOf:
             - type: string
@@ -7656,3 +7698,19 @@ components:
         source:
           type: string
           enum: [ objective, resource_source, user_target, workspace, none ]
+    ResolveHumanActionBody:
+      type: object
+      required: [ status ]
+      properties:
+        status:
+          type: string
+          enum: [ done, dismissed ]
+        outcome:
+          type: string
+          enum: [ mission_created, objective_added ]
+          description: Only with `status` `done` (400 otherwise).
+        outcomeRef:
+          type: string
+          maxLength: 64
+          description: Display id of the created mission or objective; requires `outcome` and must not be
+            blank (400).
