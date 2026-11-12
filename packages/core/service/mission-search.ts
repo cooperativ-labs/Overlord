@@ -3,6 +3,7 @@ import type {
   MissionSearchDateField,
   MissionSearchMatchKind,
   MissionSearchResultV2,
+  ObjectiveState,
   SearchAppliedFiltersV3,
   SearchEntityCounts,
   SearchMatch,
@@ -918,7 +919,7 @@ type ObjectiveSearchMeta = {
   displayKey: string;
   title: string | null;
   instructionText: string;
-  state: string;
+  state: ObjectiveState;
   createdAt: string;
   updatedAt: string;
 };
@@ -1320,7 +1321,7 @@ async function loadMatchMetadata({
       display_key: string;
       title: string | null;
       instruction_text: string;
-      state: string;
+      state: ObjectiveState;
       created_at: string;
       updated_at: string;
     }>;
@@ -1400,7 +1401,7 @@ async function lookupObjectiveByDisplayKey({
         display_key: string;
         title: string | null;
         instruction_text: string;
-        state: string;
+        state: ObjectiveState;
         created_at: string;
         updated_at: string;
       }

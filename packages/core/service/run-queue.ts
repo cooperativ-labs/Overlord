@@ -1,4 +1,9 @@
-import type { ProjectRunQueuesDto, RunQueueDto, RunQueueEntryDto } from '@overlord/contract';
+import type {
+  ExecutionRequestStatus,
+  ProjectRunQueuesDto,
+  RunQueueDto,
+  RunQueueEntryDto
+} from '@overlord/contract';
 import type { DatabaseClient } from '@overlord/database';
 
 import { runQueueDiagnosticCode } from './dispatch-diagnostics.js';
@@ -41,7 +46,7 @@ type EntryRow = {
   resource_key: string | null;
   mission_display_id: string;
   mission_title: string;
-  request_status: string | null;
+  request_status: ExecutionRequestStatus | null;
   request_last_error: string | null;
   request_claimed_by_device_id: string | null;
   request_claimed_by_execution_target_id: string | null;

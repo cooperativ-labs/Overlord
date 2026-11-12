@@ -1,4 +1,8 @@
-import { type AgentLaunchFlagDto, normalizeAgentLaunchFlags } from '@overlord/contract';
+import {
+  type AgentLaunchFlagDto,
+  normalizeAgentLaunchFlags,
+  type WorkspaceExecutionTargetDto
+} from '@overlord/contract';
 import { bindBool, type DatabaseClient } from '@overlord/database';
 
 import { isCoLocatedBackend } from './local-target/index.js';
@@ -66,7 +70,8 @@ export type WorkspaceExecutionTarget = {
   id: string;
   type: string;
   label: string;
-  status: string;
+  /** The `execution_targets.status` CHECK admits exactly these values. */
+  status: WorkspaceExecutionTargetDto['status'];
   ownerDisplayName: string | null;
   reachable: boolean;
   lastSeenAt: string | null;
@@ -238,7 +243,7 @@ export async function listWorkspaceExecutionTargets({
     id: string;
     type: string;
     label: string;
-    status: string;
+    status: WorkspaceExecutionTargetDto['status'];
     owner_display_name: string | null;
     device_last_seen_at: string | null;
     virtual_health: string | null;

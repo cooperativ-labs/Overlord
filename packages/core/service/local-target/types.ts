@@ -13,49 +13,10 @@
 // Payload types are defined natively here (not as REST DTOs from
 // `webapp/shared/contract.ts`) to keep the boundary clean; the backend
 // in-process provider adapts between these payloads and its DTOs.
+import type { LocalTargetErrorCode, TargetObservationState } from '@overlord/contract';
 
-/**
- * Stable, typed error codes a capability may return. These cross the REST
- * boundary (so the UI can branch on them) and must never leak raw
- * filesystem/Git error text. Extend deliberately and keep messages short.
- */
-export type LocalTargetErrorCode =
-  /** No selected/eligible target can serve this capability (the generalized
-   *  successor to the host-side `LOCAL_FILESYSTEM_UNAVAILABLE` guard). */
-  | 'LOCAL_TARGET_REQUIRED'
-  /** A target is selected but not reachable right now (offline runner, etc.). */
-  | 'LOCAL_TARGET_UNREACHABLE'
-  /** The linked directory does not exist on the target. */
-  | 'RESOURCE_MISSING'
-  /** The path exists but is not a Git repository. */
-  | 'NOT_GIT_REPOSITORY'
-  /** The target cannot access the path (filesystem permissions). */
-  | 'PERMISSION_DENIED'
-  /** A git/worktree command failed on the target. */
-  | 'GIT_COMMAND_FAILED'
-  /** The resolved provider transport does not implement this capability yet. */
-  | 'CAPABILITY_NOT_IMPLEMENTED'
-  /**
-   * The queued capability call was accepted but no result arrived before the
-   * caller's deadline. The job is still live on the target — callers show
-   * "still running", they never re-queue the same operation.
-   */
-  | 'LOCAL_TARGET_TIMEOUT'
-  /**
-   * The named capability is not one the runner will execute off-device
-   * (an unknown name, or `launchAgent`, which owns its own launch path). The
-   * generic dispatcher fails closed with this rather than guessing.
-   */
-  | 'LOCAL_TARGET_UNSUPPORTED'
-  /** Generic capability failure with no more specific code. */
-  | 'TARGET_OPERATION_FAILED'
-  /**
-   * Latch has no metadata for this session id (pruned or removed). The device
-   * is reachable and the CLI ran; the session is gone. Distinct from
-   * reachability / `TARGET_OPERATION_FAILED`.
-   */
-  | 'LATCH_SESSION_ABSENT'
-  | 'UNKNOWN';
+// REST DTOs generated from contract/api/openapi.yaml (ADR 0006).
+export type { LocalTargetErrorCode, TargetObservationState } from '@overlord/contract';
 
 /**
  * The error codes at runtime, for rehydrating a stored failure envelope that
@@ -84,20 +45,6 @@ export function toLocalTargetErrorCode(value: unknown): LocalTargetErrorCode {
     ? (value as LocalTargetErrorCode)
     : 'UNKNOWN';
 }
-
-/**
- * Per-target resource availability (§5 "Target Observation"). This is
- * target-scoped and time-sensitive — distinct from the backend-owned resource
- * *lifecycle* (`active`/`archived`). The backend must not infer it from its own
- * filesystem unless it is itself acting as a local target through this interface.
- */
-export type TargetObservationState =
-  | 'available'
-  | 'missing'
-  | 'unreachable'
-  | 'permission_denied'
-  | 'not_git_repository'
-  | 'unknown';
 
 /** Which transport actually served a capability call. */
 export type CapabilityTransport = 'in_process' | 'desktop_bridge' | 'runner_queue' | 'fake';

@@ -1,3 +1,6 @@
+import type { AgentRequestKind, AgentRequestOption, AgentRequestStatus } from '@overlord/contract';
+import { vocabulary } from '@overlord/contract';
+
 import { recordChange } from '../change-feed.js';
 import type { ServiceContext } from '../context.js';
 import { ServiceError } from '../errors.js';
@@ -9,6 +12,9 @@ import { enqueueMissionSummaryComposeJob } from '../worker-jobs.js';
 import { sizeDecisionWindow } from './pure/window.js';
 import type { AgentSessionChannelRow } from './channels.js';
 import { addSeconds } from './credential.js';
+
+// REST DTOs generated from contract/api/openapi.yaml (ADR 0006).
+export type { AgentRequestKind, AgentRequestOption, AgentRequestStatus } from '@overlord/contract';
 
 /**
  * Answerable requests — permissions, blocking questions, structured choices, retries.
@@ -48,9 +54,12 @@ export const REMOTE_WINDOW_AWAY_SECONDS = 30 * 60;
 export const MAX_REQUEST_SUMMARY_LENGTH = 2000;
 export const MAX_REQUEST_OPTIONS = 12;
 
-export const AGENT_REQUEST_KINDS = ['question', 'permission', 'choice', 'retry'] as const;
-export type AgentRequestKind = (typeof AGENT_REQUEST_KINDS)[number];
-
+export const AGENT_REQUEST_KINDS = vocabulary<AgentRequestKind>()([
+  'question',
+  'permission',
+  'choice',
+  'retry'
+]);
 export const RELEASE_REASONS = [
   'timeout',
   'local_activity',
@@ -62,13 +71,6 @@ export type ReleaseReason = (typeof RELEASE_REASONS)[number];
 
 export const APPLICATION_STATES = ['emitted', 'applied', 'not_applied', 'unknown'] as const;
 export type ApplicationState = (typeof APPLICATION_STATES)[number];
-
-export type AgentRequestStatus =
-  | 'open'
-  | 'resolved'
-  | 'released_to_terminal'
-  | 'expired'
-  | 'cancelled';
 
 export type AgentRequestRow = {
   id: string;
@@ -101,12 +103,6 @@ export type AgentRequestRow = {
   created_at: string;
   updated_at: string;
   revision: number;
-};
-
-export type AgentRequestOption = {
-  optionId: string;
-  label: string;
-  kind: string;
 };
 
 const REQUEST_COLUMNS = `

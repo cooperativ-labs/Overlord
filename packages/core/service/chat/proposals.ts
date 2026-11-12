@@ -113,7 +113,10 @@ export class ChatProposals extends ChatStore {
       return assignmentCatalogProjection(await this.options.assignmentCatalog(workspaceId));
     return assignmentCatalogProjection(await readStoredWorkspaceAgentCatalog(this.db, workspaceId));
   }
-  private async validateAssignment(workspaceId: string, assignment: ChatAssignmentDto) {
+  private async validateAssignment(
+    workspaceId: string,
+    assignment: Omit<ChatAssignmentDto, 'model'> & { model: string | null }
+  ) {
     const catalog = await this.catalog(workspaceId);
     const agent = catalog.agents[assignment.agent];
     if (!agent)
@@ -184,7 +187,8 @@ export class ChatProposals extends ChatStore {
               ? `Resource key "${resourceKey}" is not registered for project ${scope.project.name}. Registered keys: ${registered.map(r => r.resource_key).join(', ')}.`
               : `Project ${scope.project.name} has no registered resource, so drafts cannot be prepared for it yet. Tell the user a resource must be registered first; do not retry.`
           );
-        let assignment: ChatAssignmentDto;
+        // `model` may still be null here; validateAssignment refuses that.
+        let assignment: Omit<ChatAssignmentDto, 'model'> & { model: string | null };
         if (item.assignment === undefined || item.assignment === null) {
           const pref = await readProjectLaunchSelection(scope.ctx, projectId);
           if (!pref.agent)
@@ -243,7 +247,7 @@ export class ChatProposals extends ChatStore {
           objective: requiredText(item.objective, 20000),
           acceptanceCriteria: this.strings(item.acceptanceCriteria, 50, 2000),
           resourceKey,
-          assignment,
+          assignment: assignment as ChatAssignmentDto,
           evidenceIds
         });
       }

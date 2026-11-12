@@ -3,7 +3,6 @@ import {
   type CaptureBindingState,
   type CaptureHealthEntryDto,
   type CaptureSessionDto,
-  type CaptureWarningCode,
   type FileChangeDto,
   type FileChangeSource,
   OBJECTIVE_FILE_CHANGES_LIMIT,
@@ -71,8 +70,11 @@ function readHealth(value: CaptureSessionRow['capture_health_json']): CaptureHea
  * hides an earlier gap. Sync warnings are local-only and never produced here.
  * An objective with no session (sessionless record-work) has nothing to warn about.
  */
-export function deriveCaptureWarnings(sessions: CaptureSessionDto[]): CaptureWarningCode[] {
-  const warnings = new Set<CaptureWarningCode>();
+/** The server-side warnings; `sync_pending` and `sync_failed` are local-only. */
+type ServerCaptureWarningCode = ObjectiveFileChangesDto['capture']['warnings'][number];
+
+export function deriveCaptureWarnings(sessions: CaptureSessionDto[]): ServerCaptureWarningCode[] {
+  const warnings = new Set<ServerCaptureWarningCode>();
   for (const session of sessions) {
     if (session.bindingState === 'unbound') warnings.add('unbound');
     else if (session.bindingState === 'unknown') warnings.add('unknown_binding');

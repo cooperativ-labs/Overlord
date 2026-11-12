@@ -5,7 +5,6 @@ import {
   PERMISSIONS,
   type Role
 } from '@overlord/auth';
-import type { ChatSourceLocatorDto } from '@overlord/contract';
 import type { DatabaseClient } from '@overlord/database';
 
 import type { ServiceContext } from '../context.js';
@@ -98,10 +97,14 @@ export class ChatAccess {
   }
 }
 
-const ENTITY_PROJECT_SQL: Record<
-  Extract<ChatSourceLocatorDto, { kind: 'overlord' }>['entityType'],
-  string
-> = {
+/**
+ * Every Overlord entity type a stored locator may name. The writers produce
+ * `project`, `mission` and `delivery` (ChatSourceLocatorDto); stored locators are
+ * read as written, so the lookup also covers `resource` and `objective`.
+ */
+type OverlordSourceEntityType = 'project' | 'resource' | 'mission' | 'objective' | 'delivery';
+
+const ENTITY_PROJECT_SQL: Record<OverlordSourceEntityType, string> = {
   project: 'SELECT id AS project_id FROM projects WHERE id = ? AND deleted_at IS NULL',
   resource: 'SELECT project_id FROM project_resources WHERE id = ? AND deleted_at IS NULL',
   mission: 'SELECT project_id FROM missions WHERE id = ? AND deleted_at IS NULL',
@@ -118,12 +121,13 @@ export function overlordSourceChecker(db: DatabaseClient): SourceChecker {
   const access = new ChatAccess(db);
   return async (owner, source) => {
     if (source.kind !== 'overlord') return 'unknown';
-    const sql = ENTITY_PROJECT_SQL[source.entityType];
+    const entityType = source.entityType as OverlordSourceEntityType;
+    const sql = ENTITY_PROJECT_SQL[entityType];
     if (!sql) return 'unknown';
     const row = await db.get<{ project_id: string }>(sql, [source.entityId]);
     if (!row || (source.projectId && row.project_id !== source.projectId)) return 'revoked';
     const permission =
-      source.entityType === 'project' || source.entityType === 'resource'
+      entityType === 'project' || entityType === 'resource'
         ? PERMISSIONS.PROJECT_READ
         : PERMISSIONS.MISSION_READ;
     return (await access.projectGrant(owner, row.project_id, permission))

@@ -1,13 +1,16 @@
+import type { PushNotificationCategory } from '@overlord/contract';
 import type { DatabaseClient } from '@overlord/database';
 
 import {
   NOTIFICATION_MODES,
   type NotificationMode,
-  type NotificationTypeForTransport,
   notificationTypesForTransport
 } from './notifications/catalog.js';
 import { nowIso } from './util.js';
 import { enqueueWorkerJob, missionOwnerProfileId } from './worker-jobs.js';
+
+// REST DTOs generated from contract/api/openapi.yaml (ADR 0006).
+export type { PushNotificationCategory } from '@overlord/contract';
 
 /**
  * Durable backend job that sends one standard APNs alert/background push.
@@ -21,8 +24,6 @@ export const PUSH_NOTIFICATION_DISPATCH_JOB_TYPE = 'overlord.push_notification.d
 
 /** Lifecycle-only categories eligible for the existing standard APNs transport. */
 export const PUSH_NOTIFICATION_CATEGORIES = notificationTypesForTransport('apns');
-
-export type PushNotificationCategory = NotificationTypeForTransport<'apns'>;
 
 /** Reserved master-switch category stored alongside the real ones. */
 export const PUSH_NOTIFICATION_MASTER_CATEGORY = 'all';

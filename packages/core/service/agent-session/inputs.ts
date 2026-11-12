@@ -1,3 +1,5 @@
+import type { AgentSessionInputStatus } from '@overlord/contract';
+
 import { recordChange } from '../change-feed.js';
 import type { ServiceContext } from '../context.js';
 import { ServiceError } from '../errors.js';
@@ -6,6 +8,9 @@ import { newId, nowIso } from '../util.js';
 import { DELIVERY_OUTCOMES, type DeliveryOutcome, describeDeliveryOutcome } from './pure/inject.js';
 import type { AgentSessionChannelRow } from './channels.js';
 import { addSeconds } from './credential.js';
+
+// REST DTOs generated from contract/api/openapi.yaml (ADR 0006).
+export type { AgentSessionInputStatus } from '@overlord/contract';
 
 export { DELIVERY_OUTCOMES, type DeliveryOutcome, describeDeliveryOutcome };
 
@@ -33,15 +38,6 @@ export { DELIVERY_OUTCOMES, type DeliveryOutcome, describeDeliveryOutcome };
 export const INPUT_LEASE_SECONDS = 60;
 
 export const MAX_INPUT_BODY_LENGTH = 16000;
-
-export type AgentSessionInputStatus =
-  | 'queued'
-  | 'leased'
-  | 'emitted'
-  | 'acknowledged'
-  | 'failed'
-  | 'expired'
-  | 'cancelled';
 
 export type AgentSessionInputRow = {
   id: string;

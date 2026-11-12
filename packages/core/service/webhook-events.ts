@@ -1,9 +1,14 @@
 import type { DeliveryReportPayloadV1 } from '@overlord/contract';
+import type { WebhookEventType, WebhookPayloadMode } from '@overlord/contract';
+import { vocabulary } from '@overlord/contract';
 import { bindBool, formatObjectiveDisplayId } from '@overlord/database';
 
 import type { ServiceContext } from './context.js';
 import { readDeliveryReport } from './delivery-report.js';
 import { newId, nowIso } from './util.js';
+
+// REST DTOs generated from contract/api/openapi.yaml (ADR 0006).
+export type { WebhookEventType, WebhookPayloadMode } from '@overlord/contract';
 
 /**
  * Namespaced, versioned webhook event vocabulary. Deliberately separate from
@@ -11,15 +16,13 @@ import { newId, nowIso } from './util.js';
  * Controlled Vocabularies -> "Webhook event catalog") so new event types never
  * require a contract version bump.
  */
-export const WEBHOOK_EVENT_TYPES = [
+export const WEBHOOK_EVENT_TYPES = vocabulary<WebhookEventType>()([
   'mission.delivered',
   'mission.status_changed',
   'objective.completed',
   'mission.blocked',
   'mission.unblocked'
-] as const;
-
-export type WebhookEventType = (typeof WEBHOOK_EVENT_TYPES)[number];
+]);
 
 export function isWebhookEventType(value: string): value is WebhookEventType {
   return (WEBHOOK_EVENT_TYPES as readonly string[]).includes(value);
@@ -30,8 +33,6 @@ export const WEBHOOK_OUTBOX_TOPIC = 'webhook.deliver.v1';
 
 /** Envelope schema version carried on every delivered payload (see developer-instructions/webhooks.md). */
 export const WEBHOOK_API_VERSION = '2026-07-01';
-
-export type WebhookPayloadMode = 'thin' | 'full';
 
 /** The entity references a webhook event fires with. Every event carries a mission; the rest are optional depending on event type. */
 export interface WebhookEntityRefs {

@@ -1,8 +1,11 @@
+import type { ProjectResourceAccessMode } from '@overlord/contract';
+
 import type { ServiceContext } from './context.js';
 import { resolveProjectId } from './context.js';
 import { loadTargetResourceObservations } from './target-resource-observations.js';
 
-export type ProjectResourceAccessMode = 'read' | 'read_write';
+// REST DTOs generated from contract/api/openapi.yaml (ADR 0006).
+export type { ProjectResourceAccessMode } from '@overlord/contract';
 
 export type ProjectResourceManifestEntry = {
   resourceKey: string;

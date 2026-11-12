@@ -1,3 +1,4 @@
+import type { AgentSessionChannelState } from '@overlord/contract';
 import type { DatabaseClient } from '@overlord/database';
 
 import { recordChange } from '../change-feed.js';
@@ -12,6 +13,9 @@ import {
   SESSION_CHANNEL_LEASE_SECONDS
 } from './credential.js';
 import { triggerMissionSummaryForRequest } from './requests.js';
+
+// REST DTOs generated from contract/api/openapi.yaml (ADR 0006).
+export type { AgentSessionChannelState } from '@overlord/contract';
 
 /**
  * Session channels — the durable identity that carries agent-session traffic.
@@ -29,8 +33,6 @@ import { triggerMissionSummaryForRequest } from './requests.js';
  * treating the two as interchangeable is how an unrelated session in a shared checkout ends up
  * publishing into someone else's mission.
  */
-
-export type AgentSessionChannelState = 'preparing' | 'online' | 'degraded' | 'ended' | 'lost';
 
 export type AgentSessionChannelRow = {
   id: string;

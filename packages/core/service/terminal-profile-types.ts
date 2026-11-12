@@ -1,3 +1,7 @@
+import type { LaunchSessionSource } from '@overlord/contract';
+
+// REST DTOs generated from contract/api/openapi.yaml (ADR 0006).
+export type { LaunchSessionSource } from '@overlord/contract';
 export type TerminalLaunchPlacement = 'window' | 'tab' | 'chord';
 
 /**
@@ -139,9 +143,6 @@ export const DEFAULT_LAUNCH_SESSION_DEFAULTS: LaunchSessionDefaults = {
   openViewerOnLaunch: DEFAULT_OPEN_VIEWER_ON_LAUNCH,
   worktreeBranchAutomationEnabled: false
 };
-
-/** Where an effective value came from, so settings can say "your default" honestly. */
-export type LaunchSessionSource = 'target' | 'user_default';
 
 /** The effective provider + viewer for one user on one execution target. */
 export type ResolvedLaunchSession = {

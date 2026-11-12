@@ -1,3 +1,4 @@
+import type { ProjectResourceAccessMode } from '@overlord/contract';
 import { bindBool, type DatabaseClient, DEFAULT_STATUSES } from '@overlord/database';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -20,7 +21,9 @@ import {
 import { deriveProjectResourceKey } from './project-resource-key.js';
 import { isTruthyFlag, jsonTextFieldSql, newId, nowIso, slugify } from './util.js';
 
+// REST DTOs generated from contract/api/openapi.yaml (ADR 0006).
 export { deriveProjectResourceKey } from './project-resource-key.js';
+export type { ProjectResourceAccessMode } from '@overlord/contract';
 
 export type ProjectSummary = {
   id: string;
@@ -31,8 +34,6 @@ export type ProjectSummary = {
   createdAt: string;
   updatedAt: string;
 };
-
-export type ProjectResourceAccessMode = 'read' | 'read_write';
 
 /**
  * Insert the default board statuses for a new project. Takes a bare client so
