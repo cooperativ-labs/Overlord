@@ -772,6 +772,7 @@ sharedContext:
     optionalFlags:
       - --mission-id
       - --objective-id
+      - --output
 
   attachmentUploadFile:
     description: 'One-command local attachment upload (prepare + upload + finalize)'

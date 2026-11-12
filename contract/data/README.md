@@ -1352,7 +1352,7 @@ Indexes:
 - `(objective_id, created_at)` where `objective_id` is present.
 - `(inbox_item_id, created_at)` where `inbox_item_id` is present.
 
-Inbox attachments are stored in the owner's storage workspace and are authorized by `inbox_items.profile_id`, not by workspace membership alone; workspace-scoped attachment services ignore rows with `inbox_item_id`. Promotion re-points them to the created mission's first objective (copying bytes to the destination workspace's bucket when it differs) and clears `inbox_item_id`; deleting the item tombstones them first. Inbox-stage writes emit no `entity_changes`.
+Inbox attachments are stored in the owner's storage workspace (the workspace of the item's earlier attachments, else the request's active workspace, else the owner's oldest membership granting `attachment:create`; `409` when the owner belongs to no workspace), keep NOT NULL `workspace_id`/`storage_bucket_id`, and are authorized by `inbox_items.profile_id`, not by workspace membership alone; workspace-scoped attachment services ignore rows with `inbox_item_id`. Promotion re-points them to the created mission's first objective (copying bytes to the destination workspace's bucket when it differs) and clears `inbox_item_id`; deleting the item tombstones them first. Inbox-stage writes emit no `entity_changes`.
 
 Storage object deletes are soft deletes. Services should enqueue provider cleanup through `outbox_messages` after the metadata tombstone commits.
 
@@ -1461,7 +1461,9 @@ Indexes:
 
 A trigger increments `requested_generation`, sets `status = 'pending'`, bumps `revision`,
 and keeps the previous content in the transaction of the write it follows; the first trigger
-inserts a pending shell. The worker publishes only while `requested_generation` still equals
+inserts a pending shell. Triggers: a delivery presentation persisted as `composed` or
+`fallback`; a deferred-work resolution create or delete; an agent request of kind `question`
+or `choice` on creation and on every transition out of `open`; an objective reopening. The worker publishes only while `requested_generation` still equals
 the generation it captured, then sets `completed_generation`. Every write appends an
 `entity_changes` row with `entity_type = 'mission_summary'`, `entity_id = mission_id`, and
 `mission_id` set.
