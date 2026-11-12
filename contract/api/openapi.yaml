@@ -929,29 +929,65 @@ paths:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Workspace UUID.
+        schema: { type: string }
     get:
       operationId: getWorkspacesByIdProjects
       tags: [projects]
       x-overlord-permission: project:read
       x-overlord-edition: both
       x-overlord-consumers: [cli, mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: List one workspace's projects
+      description: >-
+        Requires `project:read` in the named workspace; non-membership answers 404 `Workspace not found or
+        no active membership`. A project_automation token sees only its projects.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: lifecycle
+          in: query
+          required: false
+          description: Lifecycle filter; the first value is used when repeated. Defaults to `active`.
+          schema: { $ref: '#/components/schemas/ProjectListLifecycle' }
+      responses:
+        '200':
+          description: The workspace's projects, by status, position and creation time.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/workspaces/{id}/project-statuses":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Workspace UUID.
+        schema: { type: string }
     get:
       operationId: getWorkspacesByIdProjectStatuses
       tags: [project-statuses]
       x-overlord-permission: workspace:read
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: List every project status of a workspace
+      description: >-
+        Requires `workspace:read` in the named workspace (404 for a non-member). Covers every live
+        project, active and archived, ordered by project position then status position. Not narrowed by a
+        project_automation token's projects (that token cannot reach the route).
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The statuses.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectStatusList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/workspaces/{id}/execution-targets":
     parameters:
       - name: id
@@ -1282,14 +1318,56 @@ paths:
       x-overlord-permission: project:read
       x-overlord-edition: both
       x-overlord-consumers: [cli, mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: List readable projects across the caller's workspaces
+      description: >-
+        Aggregates every workspace of the active organization where the caller holds `project:read` (a
+        project_automation token sees only its projects). Ordered by status, position, then creation time.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: lifecycle
+          in: query
+          required: false
+          description: Lifecycle filter; the first value is used when repeated. Defaults to `active`.
+          schema: { $ref: '#/components/schemas/ProjectListLifecycle' }
+      responses:
+        '200':
+          description: The projects.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
     post:
       operationId: postProjects
       tags: [projects]
       x-overlord-permission: project:create
       x-overlord-edition: both
       x-overlord-consumers: [cli, webapp]
-      x-overlord-schema-status: stub
+      summary: Create a project
+      description: >-
+        Requires `project:create` in the target workspace. Seeds the default statuses and, when
+        `primaryResource.directoryPath` is given, the primary `local_checkout` resource in the same
+        transaction. Answers 200, not 201.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateProjectBody' }
+      responses:
+        '200':
+          description: The created project.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/projects/initialize:
     post:
       operationId: postProjectsInitialize
@@ -1297,7 +1375,32 @@ paths:
       x-overlord-permission: project:create
       x-overlord-edition: both
       x-overlord-consumers: [mobile]
-      x-overlord-schema-status: stub
+      summary: Create a project, its first mission and optionally a private GitHub repository
+      description: >-
+        Requires `project:create` in `workspaceId`. The project, its default statuses, the first mission
+        and its draft objective are created in one transaction keyed by the caller's idempotency key.
+        Private GitHub provisioning runs afterwards through the caller's connected GitHub account; its
+        failure is reported in `repositoryProvisioning` (never as an error) and never rolls back the
+        project.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InitializeProjectBody' }
+      responses:
+        '200':
+          description: The initialization, new or replayed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InitializeProjectResultDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/projects/reorder:
     patch:
       operationId: patchProjectsReorder
@@ -1305,35 +1408,103 @@ paths:
       x-overlord-permission: project:update
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Reorder a workspace's projects
+      description: >-
+        Requires `project:update` in the projects' workspace. All ids must name live projects of one
+        workspace and the list must include every one of them, archived included (400 otherwise).
+        Positions become 1, 2, 3, …. The response lists only the workspace's active projects.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReorderProjectsBody' }
+      responses:
+        '200':
+          description: The workspace's active projects in their new order.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/projects/{id}":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Project UUID (display names and slugs are not accepted).
+        schema: { type: string }
     get:
       operationId: getProjectsById
       tags: [projects]
       x-overlord-permission: project:read
       x-overlord-edition: both
       x-overlord-consumers: [cli, webapp]
-      x-overlord-schema-status: stub
+      summary: Read a project
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The project.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
     patch:
       operationId: patchProjectsById
       tags: [projects]
       x-overlord-permission: project:update
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Update a project
+      description: >-
+        Requires `project:update` on the project's workspace. A body with no recognized member returns the
+        project unchanged. `color`, `defaultBranch`, `preLaunchCommands` and `launchEnvVars` merge into
+        the project settings together.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateProjectBody' }
+      responses:
+        '200':
+          description: The updated project.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
     delete:
       operationId: deleteProjectsById
       tags: [projects]
       x-overlord-permission: project:delete
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Soft-delete a project
+      description: Requires `project:delete`. Soft-deletes the project and cascades to its missions and
+        their objectives.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/projects/{id}/run-queues":
     parameters:
       - name: id
@@ -1444,62 +1615,153 @@ paths:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Project UUID (display names and slugs are not accepted).
+        schema: { type: string }
     get:
       operationId: getProjectsByIdStatuses
       tags: [project-statuses]
       x-overlord-permission: project:read
       x-overlord-edition: both
       x-overlord-consumers: [cli, webapp]
-      x-overlord-schema-status: stub
+      summary: List a project's statuses
+      description: Requires `project:read`. Live statuses ordered by position.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The statuses.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectStatusList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
     post:
       operationId: postProjectsByIdStatuses
       tags: [project-statuses]
       x-overlord-permission: project:update
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Create a project status
+      description: >-
+        Requires `project:update`. A project holds at most one live `next`, `execute` and `review` status
+        (409). The key is derived from the name and made unique; the status is appended last. `complete`
+        and `cancelled` statuses are terminal.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateProjectStatusBody' }
+      responses:
+        '200':
+          description: The created status.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectStatusDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/projects/{id}/statuses/reorder":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Project UUID (display names and slugs are not accepted).
+        schema: { type: string }
     patch:
       operationId: patchProjectsByIdStatusesReorder
       tags: [project-statuses]
       x-overlord-permission: project:update
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Reorder a project's statuses
+      description: >-
+        Requires `project:update`. The list must have exactly as many ids as the project has live statuses
+        and every id must be one of them (400). Duplicates are not rejected.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReorderProjectStatusesBody' }
+      responses:
+        '200':
+          description: The statuses in their new order.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectStatusList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/projects/{id}/statuses/{statusId}":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Project UUID (display names and slugs are not accepted).
+        schema: { type: string }
       - name: statusId
         in: path
         required: true
-        schema:
-          type: string
+        description: Project status UUID.
+        schema: { type: string }
     patch:
       operationId: patchProjectsByIdStatusesByStatusId
       tags: [project-statuses]
       x-overlord-permission: project:update
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Rename a status or make it the default
+      description: Requires `project:update`. A body with no recognized member returns the status unchanged.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateProjectStatusBody' }
+      responses:
+        '200':
+          description: The status.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectStatusDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
     delete:
       operationId: deleteProjectsByIdStatusesByStatusId
       tags: [project-statuses]
       x-overlord-permission: project:update
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Delete a project status
+      description: >-
+        Requires `project:update`. Refused with 409 for the `execute` or `review` status, for the default
+        status, and for a status any live mission uses.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/activity-feed:
     get:
       operationId: getActivityFeed
@@ -1660,154 +1922,381 @@ paths:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Project UUID (display names and slugs are not accepted).
+        schema: { type: string }
     get:
       operationId: getProjectsByIdTags
       tags: [projects]
       x-overlord-permission: project:read
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: List a project's tags
+      description: Requires `project:read`. Live tags, active and inactive, ordered by label (case-insensitive).
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The tags.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectTagList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
     post:
       operationId: postProjectsByIdTags
       tags: [projects]
       x-overlord-permission: project:update
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Create a project tag
+      description: Requires `project:update`. A duplicate live label answers 409.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateProjectTagBody' }
+      responses:
+        '200':
+          description: The created tag.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectTagDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/projects/{id}/tags/{tagId}":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Project UUID (display names and slugs are not accepted).
+        schema: { type: string }
       - name: tagId
         in: path
         required: true
-        schema:
-          type: string
+        description: Project tag UUID.
+        schema: { type: string }
     patch:
       operationId: patchProjectsByIdTagsByTagId
       tags: [projects]
       x-overlord-permission: project:update
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Update a project tag
+      description: Requires `project:update`. A body with no recognized member returns the tag unchanged.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateProjectTagBody' }
+      responses:
+        '200':
+          description: The updated tag.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectTagDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
     delete:
       operationId: deleteProjectsByIdTagsByTagId
       tags: [projects]
       x-overlord-permission: project:update
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Delete a project tag
+      description: >-
+        Intended: requires `project:update`, soft-deletes the tag and removes it from every mission. As
+        implemented the handler does not await the deletion, so the route always answers 200 `{ ok: true
+        }` before authorization runs; a not-found or forbidden tag is never reported to the client and
+        surfaces as an unhandled promise rejection (recorded in contract/api/schema-disagreements.md).
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: Always, whatever the deletion's outcome (see description).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
   "/api/projects/{id}/resources":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Project UUID (display names and slugs are not accepted).
+        schema: { type: string }
     get:
       operationId: getProjectsByIdResources
       tags: [project-resources]
       x-overlord-permission: project:read
       x-overlord-edition: both
       x-overlord-consumers: [cli, mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: List a project's resources
+      description: >-
+        Requires `project:read`. Every live resource with all its sources, ordered by status, primary
+        first, then label and key; `status` and `observedAt` merge the latest target observation of the
+        representative source.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The resources.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectResourceList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
     post:
       operationId: postProjectsByIdResources
       tags: [project-resources]
       x-overlord-permission: project:update
       x-overlord-edition: both
       x-overlord-consumers: [cli, webapp]
-      x-overlord-schema-status: stub
+      summary: Link a project resource or add a source to one
+      description: >-
+        Requires `project:update`. Writes a `local_checkout` source for `directoryPath` on the named, null
+        (global) or calling execution target, or a `git` source for `sourceUrl`. This and project creation
+        are the only REST paths that may declare a `local` execution target (rest-notes.md
+        "Project-resource source declaration semantics").
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateProjectResourceBody' }
+      responses:
+        '200':
+          description: The resource with its sources (no observation merged).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectResourceDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/projects/{id}/resources/{resourceId}":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Project UUID (display names and slugs are not accepted).
+        schema: { type: string }
       - name: resourceId
         in: path
         required: true
-        schema:
-          type: string
+        description: Project resource UUID.
+        schema: { type: string }
     patch:
       operationId: patchProjectsByIdResourcesByResourceId
       tags: [project-resources]
       x-overlord-permission: project:update
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Update a project resource
+      description: Requires `project:update`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateProjectResourceBody' }
+      responses:
+        '200':
+          description: The resource (no observation merged).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectResourceDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
     delete:
       operationId: deleteProjectsByIdResourcesByResourceId
       tags: [project-resources]
       x-overlord-permission: project:update
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Delete a project resource
+      description: >-
+        Intended: requires `project:update`, soft-deletes the resource and promotes the oldest remaining
+        resource to primary when none is left. As implemented the handler does not await the deletion, so
+        the route always answers 200 `{ ok: true }` before authorization runs; a not-found or forbidden
+        resource is never reported and surfaces as an unhandled promise rejection (recorded in
+        contract/api/schema-disagreements.md).
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: Always, whatever the deletion's outcome (see description).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
   "/api/projects/{id}/resources/{resourceId}/sources/{sourceId}":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Project UUID (display names and slugs are not accepted).
+        schema: { type: string }
       - name: resourceId
         in: path
         required: true
-        schema:
-          type: string
+        description: Project resource UUID.
+        schema: { type: string }
       - name: sourceId
         in: path
         required: true
-        schema:
-          type: string
+        description: Project resource source UUID.
+        schema: { type: string }
     delete:
       operationId: deleteProjectsByIdResourcesByResourceIdSourcesBySourceId
       tags: [project-resources]
       x-overlord-permission: project:update
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Disconnect one source from a project resource
+      description: >-
+        Requires `project:update`. Soft-deletes the source and keeps the logical resource, which may then
+        have no source.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: Disconnected.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
     patch:
       operationId: patchProjectsByIdResourcesByResourceIdSourcesBySourceId
       tags: [project-resources]
       x-overlord-permission: project:update
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Replace a resource source's launch defaults
+      description: >-
+        Requires `project:update`. Replaces only `descriptor.launchDefaults`; the materialization
+        descriptor (path or URL) is preserved.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateProjectResourceSourceBody' }
+      responses:
+        '200':
+          description: The resource with its sources (no observation merged).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectResourceDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/projects/{id}/repository-reads":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Project UUID (display names and slugs are not accepted).
+        schema: { type: string }
     post:
       operationId: postProjectsByIdRepositoryReads
       tags: [projects]
       x-overlord-permission: project:read
       x-overlord-edition: both
       x-overlord-consumers: [unverified]
-      x-overlord-schema-status: stub
+      summary: Run a bounded read-only repository read on an execution target
+      description: >-
+        Requires `project:read`, and the caller must have access to the named execution target for this
+        project (404 `Execution target not found` otherwise). `projectId` in the body must equal the path
+        id (400 `invalid_request`). The read is queued for the target's runner and the request waits up to
+        30 seconds; an offline target, an unlinked resource, a timeout or a target-side refusal is a 200
+        with the matching `outcome`, not an error. Reusing an `operationId` for a different read answers
+        409 `operation_conflict`; at most four reads run per caller at once. A client disconnect stops the
+        wait, never the queued read.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RepositoryReadRequest' }
+      responses:
+        '200':
+          description: The read's result.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RepositoryReadResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/projects/{id}/repository":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Project UUID (display names and slugs are not accepted).
+        schema: { type: string }
     get:
       operationId: getProjectsByIdRepository
       tags: [projects]
       x-overlord-permission: project:read
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Describe the project's repository resource
+      description: >-
+        Requires `project:read`. Picks the active resource matching `resourceKey`, else the primary, and
+        reports why the tree cannot be read when it cannot. The control-plane backend does not read local
+        checkouts: a linked local directory reports `unsupported_resource` unless the backend itself is a
+        local target.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: executionTargetId
+          in: query
+          required: false
+          description: Target whose source is preferred; blank is treated as absent.
+          schema: { type: string }
+        - name: resourceKey
+          in: query
+          required: false
+          description: Resource to describe; blank or unknown falls back to the primary.
+          schema: { type: string }
+      responses:
+        '200':
+          description: The repository projection.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectRepositoryDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/local-target/invoke:
     post:
       operationId: postLocalTargetInvoke
@@ -2210,15 +2699,39 @@ paths:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Project UUID (display names and slugs are not accepted).
+        schema: { type: string }
     patch:
       operationId: patchProjectsByIdBoardReorder
       tags: [projects]
       x-overlord-permission: mission:update
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Reorder (and move missions into) one board column
+      description: >-
+        Requires `mission:update` on the project's workspace. Missions are renumbered 100, 200, 300, … in
+        the given order; a mission from another column takes this column's status (entering an `execute`
+        status from another type stamps the returned-to-execute indicator). The response is the whole
+        destination column, ignoring the board's 21-day window on completed missions.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReorderBoardColumnBody' }
+      responses:
+        '200':
+          description: The column's missions in board order.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MissionList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/inbox:
     get:
       operationId: getInbox
@@ -4153,3 +4666,508 @@ components:
       description: >-
         The file's raw bytes as the request body (no multipart). Any Content-Type is accepted and
         recorded as the attachment's media type. An empty body is refused (400).
+    CreateProjectBody:
+      type: object
+      required: [ name ]
+      properties:
+        name:
+          type: string
+          description: Trimmed; must not be blank.
+        workspaceId:
+          type: string
+          description: >-
+            Target workspace. Required in practice: a session or token request has no implicit
+            workspace, so omitting it answers 400 `workspaceId is required when creating a project`.
+        slug:
+          type: string
+          description: Slugified; derived from `name` when omitted or blank.
+        description:
+          oneOf:
+            - type: string
+            - type: 'null'
+        color:
+          type: string
+          description: Six hex digits with or without `#`; stored lower-case with `#`. Other text answers 400.
+        primaryResource:
+          oneOf:
+            - type: object
+              required: [ directoryPath ]
+              properties:
+                directoryPath:
+                  type: string
+                  description: A blank path skips resource creation.
+                executionTargetId:
+                  description: >-
+                    An existing target in the workspace (404 otherwise); null for a project-global
+                    source; omitted to declare the calling machine, which needs a machine-local
+                    identity or answers 409 `no_execution_target_registered`.
+                  oneOf:
+                    - type: string
+                    - type: 'null'
+            - type: 'null'
+    InitializeProjectBody:
+      type: object
+      required: [ workspaceId, idempotencyKey, name, description ]
+      properties:
+        workspaceId: { type: string }
+        idempotencyKey:
+          type: string
+          maxLength: 200
+          description: >-
+            Generated once by the client and reused on retry (at most 200 characters after trimming).
+            A repeat with the same key for the same profile returns the first initialization and only
+            retries pending or failed GitHub provisioning.
+        name: { type: string, description: Project name and first mission title; must not be blank. }
+        description: { type: string, description: Project description and first objective; must not be blank. }
+        createGitHubRepository:
+          type: boolean
+          description: Only `true` requests provisioning.
+        githubOwnerLogin:
+          type: string
+          description: Required exactly when `createGitHubRepository` is true (400 otherwise).
+    InitializeProjectResultDto:
+      type: object
+      required: [ project, mission, repositoryProvisioning ]
+      properties:
+        project: { $ref: '#/components/schemas/ProjectDto' }
+        mission: { $ref: '#/components/schemas/MissionDetailDto' }
+        repositoryProvisioning:
+          type: object
+          required: [ status, retryable, ownerLogin, repository, resource, error ]
+          properties:
+            status:
+              type: string
+              enum: [ not_requested, pending, failed, succeeded ]
+            retryable:
+              type: boolean
+              description: True while `status` is `pending` or `failed`; retry with the same idempotency key.
+            ownerLogin:
+              oneOf:
+                - type: string
+                - type: 'null'
+            repository:
+              oneOf:
+                - type: object
+                  required: [ id, fullName, defaultBranch, private, cloneUrl ]
+                  properties:
+                    id: { type: string }
+                    fullName: { type: string }
+                    defaultBranch: { type: string }
+                    private: { const: true }
+                    cloneUrl: { type: string }
+                - type: 'null'
+            resource:
+              description: The read-only `git` resource recorded for the clone URL, once provisioning succeeded.
+              oneOf:
+                - $ref: '#/components/schemas/ProjectResourceDto'
+                - type: 'null'
+            error:
+              description: The provisioning failure message (generic unless the provider raised an ApiError).
+              oneOf:
+                - type: string
+                - type: 'null'
+    ReorderProjectsBody:
+      type: object
+      required: [ orderedProjectIds ]
+      properties:
+        orderedProjectIds:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          description: Every non-deleted project of one workspace (active and archived), top to bottom.
+          items: { type: string }
+    UpdateProjectBody:
+      type: object
+      description: Partial update; omitted members are unchanged.
+      properties:
+        name:
+          type: string
+          description: Trimmed; must not be blank.
+        description:
+          description: Blank or null clears it.
+          oneOf:
+            - type: string
+            - type: 'null'
+        status: { $ref: '#/components/schemas/ProjectLifecycle' }
+        color:
+          description: Six hex digits with or without `#`; an empty string or null clears it.
+          oneOf:
+            - type: string
+            - type: 'null'
+        defaultBranch:
+          description: A valid git branch name; blank or null clears it (falls back to `main`).
+          oneOf:
+            - type: string
+            - type: 'null'
+        preLaunchCommands:
+          type: array
+          description: Replaces the stored list; blank lines are dropped.
+          items: { type: string }
+        launchEnvVars:
+          type: object
+          description: Replaces the stored map; entries with a blank name are dropped.
+          additionalProperties: { type: string }
+    RepositoryEntryDto:
+      type: object
+      required: [ path, name, type, parentPath, depth ]
+      properties:
+        path: { type: string }
+        name: { type: string }
+        type:
+          type: string
+          enum: [ file, directory ]
+        parentPath:
+          oneOf:
+            - type: string
+            - type: 'null'
+        depth: { type: integer, minimum: 0 }
+    ProjectRepositoryDto:
+      type: object
+      required:
+        [
+          projectId,
+          executionTargetId,
+          resource,
+          status,
+          rootPath,
+          gitRoot,
+          branch,
+          commit,
+          entries,
+          truncated,
+          scannedAt,
+          message
+        ]
+      properties:
+        projectId: { type: string }
+        executionTargetId:
+          description: The `executionTargetId` query parameter echoed back, or null.
+          oneOf:
+            - type: string
+            - type: 'null'
+        resource:
+          oneOf:
+            - $ref: '#/components/schemas/ProjectResourceDto'
+            - type: 'null'
+        status:
+          type: string
+          enum: [ ready, no_resource, not_git_repository, unsupported_resource, unreadable ]
+        rootPath:
+          oneOf:
+            - type: string
+            - type: 'null'
+        gitRoot:
+          oneOf:
+            - type: string
+            - type: 'null'
+        branch:
+          oneOf:
+            - type: string
+            - type: 'null'
+        commit:
+          oneOf:
+            - type: string
+            - type: 'null'
+        entries:
+          type: array
+          items: { $ref: '#/components/schemas/RepositoryEntryDto' }
+        truncated: { type: boolean }
+        scannedAt: { $ref: '#/components/schemas/DateTime' }
+        message:
+          oneOf:
+            - type: string
+            - type: 'null'
+    CreateProjectTagBody:
+      type: object
+      required: [ label ]
+      properties:
+        label:
+          type: string
+          description: Trimmed; must not be blank and must be unique among the project's live tags.
+        color:
+          description: Free-form; blank or null stores null.
+          oneOf:
+            - type: string
+            - type: 'null'
+    UpdateProjectTagBody:
+      type: object
+      description: Partial update; omitted members are unchanged.
+      properties:
+        label:
+          type: string
+          description: Trimmed; must not be blank and must stay unique among the project's live tags.
+        color:
+          oneOf:
+            - type: string
+            - type: 'null'
+        active:
+          type: boolean
+          description: Inactive tags stay on missions but are hidden from the create picker.
+    ReorderBoardColumnBody:
+      type: object
+      required: [ statusId, orderedMissionIds ]
+      properties:
+        statusId:
+          type: string
+          description: A live status of this project (409 otherwise).
+        orderedMissionIds:
+          type: array
+          uniqueItems: true
+          description: >-
+            Mission UUIDs that should occupy the column, top to bottom. A mission from another column
+            moves into it (its status changes). Each must be a live mission of this project (404
+            otherwise).
+          items: { type: string }
+    RepositoryReadOperation:
+      type: string
+      enum: [ observe, tree, branches, worktrees, git_status, diff, read_file, search_text ]
+    RepositoryReadRequest:
+      description: >-
+        One bounded, read-only repository read on a registered resource binding. Every variant carries
+        the binding (`executionTargetId`, `projectId`, `resourceKey`) and an `operationId` matching
+        `^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$`, reused on retry. Paths are repository-relative;
+        absolute or escaping paths answer 400.
+      oneOf:
+        - type: object
+          required: [ operation, operationId, executionTargetId, projectId, resourceKey ]
+          properties:
+            operation:
+              type: string
+              enum: [ observe, branches, worktrees, git_status ]
+            operationId: { type: string, minLength: 8, maxLength: 128 }
+            executionTargetId: { type: string }
+            projectId: { type: string }
+            resourceKey: { type: string }
+        - type: object
+          required: [ operation, operationId, executionTargetId, projectId, resourceKey ]
+          properties:
+            operation: { const: tree }
+            operationId: { type: string, minLength: 8, maxLength: 128 }
+            executionTargetId: { type: string }
+            projectId: { type: string }
+            resourceKey: { type: string }
+            relativePath:
+              oneOf:
+                - type: string
+                - type: 'null'
+            maxEntries:
+              oneOf:
+                - type: integer
+                  minimum: 1
+                - type: 'null'
+        - type: object
+          required: [ operation, operationId, executionTargetId, projectId, resourceKey, scope ]
+          properties:
+            operation: { const: diff }
+            operationId: { type: string, minLength: 8, maxLength: 128 }
+            executionTargetId: { type: string }
+            projectId: { type: string }
+            resourceKey: { type: string }
+            scope:
+              type: string
+              enum: [ unstaged, staged, all ]
+            relativePaths:
+              oneOf:
+                - type: array
+                  maxItems: 50
+                  items: { type: string }
+                - type: 'null'
+        - type: object
+          required: [ operation, operationId, executionTargetId, projectId, resourceKey, relativePath ]
+          properties:
+            operation: { const: read_file }
+            operationId: { type: string, minLength: 8, maxLength: 128 }
+            executionTargetId: { type: string }
+            projectId: { type: string }
+            resourceKey: { type: string }
+            relativePath: { type: string }
+            startLine:
+              oneOf:
+                - type: integer
+                  minimum: 1
+                - type: 'null'
+            endLine:
+              description: Must not precede `startLine`.
+              oneOf:
+                - type: integer
+                  minimum: 1
+                - type: 'null'
+        - type: object
+          required: [ operation, operationId, executionTargetId, projectId, resourceKey, query ]
+          properties:
+            operation: { const: search_text }
+            operationId: { type: string, minLength: 8, maxLength: 128 }
+            executionTargetId: { type: string }
+            projectId: { type: string }
+            resourceKey: { type: string }
+            query:
+              type: string
+              minLength: 1
+              maxLength: 256
+              description: One line; no NUL, CR or LF.
+            relativePath:
+              oneOf:
+                - type: string
+                - type: 'null'
+            caseSensitive: { type: boolean }
+    RepositoryReadResult:
+      type: object
+      required:
+        [
+          operationId,
+          operation,
+          binding,
+          outcome,
+          head,
+          branch,
+          observedAt,
+          bytes,
+          truncated,
+          data
+        ]
+      properties:
+        operationId: { type: string }
+        operation: { $ref: '#/components/schemas/RepositoryReadOperation' }
+        binding:
+          type: object
+          required: [ executionTargetId, projectId, resourceKey ]
+          properties:
+            executionTargetId: { type: string }
+            projectId: { type: string }
+            resourceKey: { type: string }
+        outcome:
+          type: string
+          enum: [ ok, unavailable, target_offline, timeout, denied, binary, oversized, not_found ]
+        head:
+          oneOf:
+            - type: string
+            - type: 'null'
+        branch:
+          oneOf:
+            - type: string
+            - type: 'null'
+        observedAt: { $ref: '#/components/schemas/DateTime' }
+        bytes: { type: integer, minimum: 0 }
+        truncated: { type: boolean }
+        data:
+          description: >-
+            Operation-specific bounded payload (packages/contract/src/chat.ts
+            `RepositoryGitStatusData`, `RepositoryDiffData`, `RepositoryFileData`,
+            `RepositorySearchData`, or the capability payload); non-`ok` outcomes carry `{ message }`.
+          $ref: '#/components/schemas/JsonValue'
+    CreateProjectStatusBody:
+      type: object
+      required: [ name, type ]
+      properties:
+        name:
+          type: string
+          description: Trimmed; must not be blank and must be unique among the project's live statuses (409).
+        type: { $ref: '#/components/schemas/StatusType' }
+        isDefault:
+          type: boolean
+          description: Only a `draft` or `next` status may be the default (400); setting it clears the
+            previous default.
+    UpdateProjectStatusBody:
+      type: object
+      description: Partial update; a status's type cannot change.
+      properties:
+        name:
+          type: string
+          description: Trimmed; must not be blank and must stay unique (409).
+        isDefault:
+          type: boolean
+          description: >-
+            `true` makes a `draft` or `next` status the default (400 for other types); `false` on the
+            current default answers 409 (choose another default instead).
+    ReorderProjectStatusesBody:
+      type: object
+      required: [ orderedStatusIds ]
+      properties:
+        orderedStatusIds:
+          type: array
+          minItems: 1
+          description: Every live status of the project, top to bottom; positions become 0, 1, 2, ….
+          items: { type: string }
+    ProjectStatusList:
+      type: array
+      items: { $ref: '#/components/schemas/ProjectStatusDto' }
+    ProjectList:
+      type: array
+      items: { $ref: '#/components/schemas/ProjectDto' }
+    ProjectTagList:
+      type: array
+      items: { $ref: '#/components/schemas/ProjectTagDto' }
+    MissionList:
+      type: array
+      items: { $ref: '#/components/schemas/MissionDto' }
+    ProjectResourceList:
+      type: array
+      items: { $ref: '#/components/schemas/ProjectResourceDto' }
+    CreateProjectResourceBody:
+      type: object
+      description: >-
+        Exactly one source: `directoryPath` (or its alias `path`) for a `local_checkout` source, or
+        `sourceUrl` for a `git` source; when both are given `sourceUrl` wins. A resource with the
+        derived `resourceKey` that already exists gains or updates the source instead of a new
+        resource being created.
+      properties:
+        directoryPath:
+          type: string
+          description: Checkout path on the execution target.
+        path:
+          type: string
+          description: Alias of `directoryPath` read when `directoryPath` is absent.
+        sourceUrl:
+          type: string
+          description: An `http(s)://` or `git@host:path` Git URL (400 otherwise).
+        resourceKey:
+          description: Slugified; derived from `label`, then from the path's basename, when blank.
+          oneOf:
+            - type: string
+            - type: 'null'
+        label:
+          oneOf:
+            - type: string
+            - type: 'null'
+        isPrimary:
+          type: boolean
+          description: Defaults to true (only an explicit `false` creates a non-primary resource); a new
+            primary clears the previous one.
+        executionTargetId:
+          description: >-
+            For a checkout: an existing target of the workspace (404 otherwise), null for a pathless
+            global source, or omitted to declare the calling machine (409
+            `no_execution_target_registered` without a machine-local identity). For a `sourceUrl` it
+            is stored as given without validation.
+          oneOf:
+            - type: string
+            - type: 'null'
+        accessMode:
+          $ref: '#/components/schemas/ProjectResourceAccessMode'
+          description: A primary resource is always `read_write`; a non-primary one defaults to `read`.
+    UpdateProjectResourceBody:
+      type: object
+      description: Partial update; omitted members are unchanged.
+      properties:
+        resourceKey:
+          description: Slugified; a blank or null value re-derives the key from the label or the current key.
+          oneOf:
+            - type: string
+            - type: 'null'
+        isPrimary:
+          type: boolean
+          description: Only `true` has an effect (it promotes the resource and forces `read_write`); `false`
+            is ignored.
+        accessMode:
+          $ref: '#/components/schemas/ProjectResourceAccessMode'
+          description: Ignored for a primary resource.
+    UpdateProjectResourceSourceBody:
+      type: object
+      required: [ launchDefaults ]
+      properties:
+        launchDefaults:
+          type: object
+          description: >-
+            Replaces the per-agent defaults keyed by agent key. Entries with a blank key, a non-object
+            value, or neither a pre-command nor flags are dropped; `{}` clears them.
+          additionalProperties: { $ref: '#/components/schemas/AgentLaunchConfigInput' }
