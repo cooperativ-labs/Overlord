@@ -81,6 +81,19 @@ the code does not do.
   emits only `mission_run`, `mission_delivered` and `blocking_question`, and the schema
   is closed to those three. Adding a kind is therefore a description change.
 
+### Profile and user tokens (batch 2)
+
+- **U1** (open). `ProfileDto.authProvider` is typed `string | null` ("when the account is
+  externally federated"); `toProfileDto` (`backend/repository.ts`) always writes
+  `'better-auth'`. The schema keeps the nullable type and says so. `getProfile`,
+  `patchProfile`.
+- **U2** (open). `UserTokenStatus` (and the `user_tokens.status` CHECK) admit `expired` and
+  `rotated`; no route writes either. Expiry is evaluated when the token authenticates, so a
+  token past `expiresAt` still lists as `active`. `getUserTokens`.
+- **U3** (open). `CreateUserTokenBody.expiresAt` is typed `string | null`; `createUserToken`
+  passes any non-null value through `new Date(...)`, so a number is accepted as epoch
+  milliseconds (reproduced). `postUserTokens`.
+
 ## 2. Non-conforming error shapes
 
 Every route in `backend/app.ts` that forwards errors through `handle()` or `next(err)`
@@ -141,6 +154,10 @@ schema must change.
   their key sets (`getMissionsByIdFileChanges`: `MissionFileChangesDto` is
   `additionalProperties: false` so it cannot also match `ObjectiveFileChangesDto`).
   Needs `.strict()` on that member, which the generator already emits.
+
+- **G9** A `204` success with no body, written by `handle()` callers that end the response
+  with `res.status(204).end()`: `deleteUserTokensById`. The Clear Comply generator reads
+  only JSON success responses.
 
 ## 5. Operations left as stubs
 

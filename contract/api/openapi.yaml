@@ -1077,14 +1077,51 @@ paths:
       x-overlord-permission: profile:self:read
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Read the caller's own profile
+      description: >-
+        Requires `profile:self:read` in at least one workspace of the caller's selected organization (a
+        profile with no membership, or a token whose scope grants omit it, answers 403). The profile is
+        the authenticated one; `roles` is the sorted set of role keys across the selected organization's
+        authorized workspaces.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The profile.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProfileDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
     patch:
       operationId: patchProfile
       tags: [profile]
       x-overlord-permission: profile:self:update
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Edit the caller's own profile
+      description: >-
+        Requires `profile:self:update` in at least one workspace of the selected organization. Omitted
+        members are left unchanged; `handle` and `email` mirror the Better Auth account and are not
+        editable here (unknown members are ignored). A change records a `profile` entity change in every
+        authorized workspace. Answers the refreshed profile.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateProfileBody' }
+      responses:
+        '200':
+          description: The updated profile.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProfileDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/profile/default-project:
     get:
       operationId: getProfileDefaultProject
@@ -1092,21 +1129,72 @@ paths:
       x-overlord-permission: profile:self:read
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Read the caller's default project preference
+      description: >-
+        Navigation state only; it grants no access. A marked project that is archived, deleted or no
+        longer readable through an active membership reads as `{ projectId: null }` without changing the
+        stored marker.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The preference.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DefaultProjectPreferenceDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
     put:
       operationId: putProfileDefaultProject
       tags: [profile]
-      x-overlord-permission: profile:self:update
+      x-overlord-permission: unknown
+      x-overlord-permission-candidates: [profile:self:update, project:read]
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Set the caller's default project
+      description: >-
+        Requires `profile:self:update` in some workspace of the selected organization and `project:read`
+        on the named project's workspace. The project must be active (an archived project answers 404).
+        Atomically clears the marker from every other project preference of the profile and marks this
+        one. Answers the stored preference.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SetDefaultProjectBody' }
+      responses:
+        '200':
+          description: The new preference.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DefaultProjectPreferenceDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
     delete:
       operationId: deleteProfileDefaultProject
       tags: [profile]
       x-overlord-permission: profile:self:update
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Clear the caller's default project
+      description: >-
+        Clears the marker from every project preference of the profile. Always answers `{ projectId: null
+        }`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The cleared preference.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DefaultProjectPreferenceDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/user-tokens:
     get:
       operationId: getUserTokens
@@ -1114,49 +1202,142 @@ paths:
       x-overlord-permission: user_token:self:list
       x-overlord-edition: both
       x-overlord-consumers: [cli, webapp]
-      x-overlord-schema-status: stub
+      summary: List the caller's personal tokens
+      description: >-
+        Requires `user_token:self:list` in some workspace of the selected organization. Lists every
+        non-deleted token the authenticated profile owns (in every organization), newest first. Never
+        includes a secret or hash.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The tokens.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserTokenList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/InternalError' }
     post:
       operationId: postUserTokens
       tags: [user-tokens]
       x-overlord-permission: user_token:self:create
       x-overlord-edition: both
       x-overlord-consumers: [cli, webapp]
-      x-overlord-schema-status: stub
+      summary: Mint a personal token
+      description: >-
+        Requires `user_token:self:create` in some workspace of the selected organization. A `full` or
+        `mission_lifecycle` token consents to every current and future workspace of the caller's selected
+        organization (`all_workspaces`); the issuance workspace (the lowest authorized workspace id) is
+        audit attribution only. A `project_automation` token additionally requires `project:read` and
+        `mission:create` on every selected project and consents to exactly their workspaces. A caller with
+        no authorized workspace (no selected organization) answers 409. The raw `secret` is returned only
+        here.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateUserTokenBody' }
+      responses:
+        '200':
+          description: The token and its one-time secret.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreateUserTokenResultDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/user-tokens/{id}":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Token id (any string); a token another profile owns, or a deleted one, answers 404.
+        schema: { type: string }
     patch:
       operationId: patchUserTokensById
       tags: [user-tokens]
       x-overlord-permission: user_token:self:rotate
       x-overlord-edition: both
       x-overlord-consumers: [cli, webapp]
-      x-overlord-schema-status: stub
+      summary: Rename a personal token
+      description: >-
+        Requires `user_token:self:rotate` in some workspace of the selected organization. Changes only the
+        label; the secret is not rotated. Works on a revoked token too. A token of another profile answers
+        404.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateUserTokenBody' }
+      responses:
+        '200':
+          description: The renamed token.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserTokenDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
     delete:
       operationId: deleteUserTokensById
       tags: [user-tokens]
       x-overlord-permission: user_token:self:revoke
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Delete a revoked personal token
+      description: >-
+        Requires `user_token:self:revoke` in some workspace of the selected organization. Only an
+        already-revoked token may be deleted (409 otherwise); the row becomes a soft-delete tombstone and
+        an `entity_changes` delete is recorded. A concurrent change answers 409.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '204':
+          description: Deleted; no body.
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/user-tokens/{id}/revoke":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Token id (any string); a token another profile owns, or a deleted one, answers 404.
+        schema: { type: string }
     post:
       operationId: postUserTokensByIdRevoke
       tags: [user-tokens]
       x-overlord-permission: user_token:self:revoke
       x-overlord-edition: both
       x-overlord-consumers: [cli, webapp]
-      x-overlord-schema-status: stub
+      summary: Revoke a personal token
+      description: >-
+        Requires `user_token:self:revoke` in some workspace of the selected organization. Idempotent:
+        revoking an already-revoked token answers it unchanged. A token of another profile answers 404.
+        Takes no body.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The revoked token.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserTokenDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/webhooks:
     get:
       operationId: getWebhooks
@@ -8380,3 +8561,181 @@ components:
           description: Overdue (latest due first), then due soon (soonest first), then agent Next (newest
             first); each slice capped at 60.
           items: { $ref: '#/components/schemas/InboxMissionDto' }
+    ProfileDto:
+      type: object
+      description: The caller's profile (`profiles` row plus metadata projections).
+      additionalProperties: false
+      required:
+        [
+          userId,
+          displayName,
+          handle,
+          email,
+          avatarUrl,
+          agentInstructions,
+          editorScheme,
+          kind,
+          authProvider,
+          roles,
+          createdAt
+        ]
+      properties:
+        userId: { type: string, description: '`profiles.id` (Better Auth user id, not a UUID).' }
+        displayName: { type: string }
+        handle:
+          description: Mirrors the Better Auth account name; read-only here.
+          oneOf: [ { type: string }, { type: 'null' } ]
+        email:
+          description: Mirrors the Better Auth account email; read-only here.
+          oneOf: [ { type: string }, { type: 'null' } ]
+        avatarUrl:
+          description: '`metadata_json.avatarUrl` when a non-blank string (returned as stored), else null.'
+          oneOf: [ { type: string }, { type: 'null' } ]
+        agentInstructions:
+          description: '`metadata_json.agentInstructions`, trimmed, when non-blank; else null.'
+          oneOf: [ { type: string }, { type: 'null' } ]
+        editorScheme:
+          description: '`metadata_json.editorScheme`, trimmed, when non-blank; else null (clients default to
+            VS Code).'
+          oneOf: [ { type: string }, { type: 'null' } ]
+        kind: { type: string, description: 'Open vocabulary (`human`, `service`).' }
+        authProvider:
+          description: Always `better-auth` from this route (typed nullable in packages/contract).
+          oneOf: [ { type: string }, { type: 'null' } ]
+        roles:
+          type: array
+          description: Distinct role keys across the selected organization's authorized workspaces, sorted.
+          items: { type: string }
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+    UpdateProfileBody:
+      type: object
+      description: Partial update; omitted members are unchanged.
+      properties:
+        displayName:
+          type: string
+          description: Trimmed; blank answers 400.
+        avatarUrl:
+          description: >-
+            Trimmed; blank or null clears it. Otherwise must start with `http://`, `https://` or `/` (an
+            uploaded image path such as `/api/storage/user-images/…`), else 400.
+          oneOf: [ { type: string }, { type: 'null' } ]
+        agentInstructions:
+          description: Trimmed; blank or null clears it.
+          oneOf: [ { type: string }, { type: 'null' } ]
+        editorScheme:
+          description: Trimmed; blank or null clears it. Not validated against a vocabulary.
+          oneOf: [ { type: string }, { type: 'null' } ]
+    DefaultProjectPreferenceDto:
+      type: object
+      additionalProperties: false
+      required: [ projectId ]
+      properties:
+        projectId:
+          oneOf: [ { type: string, format: uuid }, { type: 'null' } ]
+    SetDefaultProjectBody:
+      type: object
+      description: >-
+        `projectId` is read as `String(projectId ?? '')` and trimmed; blank or absent answers 400
+        `projectId is required`. An unknown, foreign or archived project answers 404.
+      required: [ projectId ]
+      properties:
+        projectId: { type: string }
+    UserTokenStatus:
+      type: string
+      enum: [ active, revoked, expired, rotated ]
+      description: >-
+        The `user_tokens.status` CHECK vocabulary. Lifecycle routes write only `active` and `revoked`;
+        an expired token keeps `active` with a past `expiresAt`.
+    TokenScope:
+      type: string
+      enum: [ full, mission_lifecycle, project_automation ]
+    UserTokenProjectDto:
+      type: object
+      additionalProperties: false
+      required: [ id, name ]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, description: The project's current name. }
+    UserTokenDto:
+      type: object
+      description: A personal token as listed to its owner; never the secret or its hash.
+      additionalProperties: false
+      required:
+        [
+          id,
+          label,
+          tokenPrefix,
+          status,
+          scope,
+          scopeGrants,
+          projects,
+          expiresAt,
+          lastUsedAt,
+          revokedAt,
+          createdAt
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        label: { type: string }
+        tokenPrefix: { type: string, description: 'Non-secret display prefix, `out_…`.' }
+        status: { $ref: '#/components/schemas/UserTokenStatus' }
+        scope: { $ref: '#/components/schemas/TokenScope' }
+        scopeGrants:
+          type: array
+          description: Active scope grant patterns (RBAC actions); empty for a `full` token.
+          items: { type: string }
+        projects:
+          type: array
+          description: >-
+            The live projects a `project_automation` token was issued for, by name; empty for other
+            scopes and once every selected project is deleted.
+          items: { $ref: '#/components/schemas/UserTokenProjectDto' }
+        expiresAt:
+          oneOf: [ { $ref: '#/components/schemas/DateTime' }, { type: 'null' } ]
+        lastUsedAt:
+          oneOf: [ { $ref: '#/components/schemas/DateTime' }, { type: 'null' } ]
+        revokedAt:
+          oneOf: [ { $ref: '#/components/schemas/DateTime' }, { type: 'null' } ]
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+    UserTokenList:
+      type: array
+      items: { $ref: '#/components/schemas/UserTokenDto' }
+    CreateUserTokenBody:
+      type: object
+      required: [ label ]
+      properties:
+        label:
+          type: string
+          description: Trimmed; blank or absent answers 400.
+        expiresAt:
+          description: >-
+            Absent: 90 days from now. `null` or blank: never expires. Otherwise parsed with `new Date()`
+            (a number is read as epoch milliseconds); unparseable or not in the future answers 400.
+            Stored normalized to ISO-8601 UTC.
+          oneOf: [ { type: string }, { type: 'null' } ]
+        scope:
+          description: Defaults to `full` when absent or null; any other value answers 400.
+          oneOf: [ { $ref: '#/components/schemas/TokenScope' }, { type: 'null' } ]
+        projectIds:
+          type: array
+          description: >-
+            Required, non-empty and unique when `scope` is `project_automation` (each a 36-character
+            hex-and-dash id; 400 otherwise); present with any other scope answers 400. Every project
+            must exist (404) and grant the caller `project:read` and `mission:create` (403/404).
+          minItems: 1
+          uniqueItems: true
+          items: { type: string, format: uuid }
+    CreateUserTokenResultDto:
+      type: object
+      additionalProperties: false
+      required: [ token, secret ]
+      properties:
+        token: { $ref: '#/components/schemas/UserTokenDto' }
+        secret: { type: string, description: 'The raw `out_…` secret; returned only once.' }
+    UpdateUserTokenBody:
+      type: object
+      required: [ label ]
+      properties:
+        label:
+          type: string
+          description: Trimmed; blank or absent answers 400.
