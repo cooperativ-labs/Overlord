@@ -94,6 +94,34 @@ the code does not do.
   passes any non-null value through `new Date(...)`, so a number is accepted as epoch
   milliseconds (reproduced). `postUserTokens`.
 
+### Organizations and workspaces (batch 2)
+
+- **W1** (open). rest-notes.md says `POST /api/onboarding` "returns `/api/meta`". It returns
+  `buildMeta()` evaluated against the request's pre-onboarding authorization snapshot, so
+  over HTTP `organization` and `workspace` are null and `workspaces` is empty, while
+  `organizations` lists the new organization with `isActive: false` (reproduced).
+  `postOnboarding`.
+- **W2** (open). `WorkspaceDto.isActive` ("the web server's currently active workspace") and
+  `MetaDto.workspace` ("the server's default-scope workspace") describe an ambient workspace
+  that authenticated requests never have: `isActive` is always `false` and `workspace`
+  always null for session and token callers (reproduced). `getMeta`, `getWorkspaces`,
+  `postWorkspaces`, `patchWorkspacesById`, `postInvitationsAccept`.
+- **W3** (open). `UpdateWorkspaceBody.sqlStudioEnabled` is documented "Admin-only";
+  `updateWorkspace` (`backend/workspaces.ts`) lets a `MANAGER` set it, and stores any JSON
+  value without a type check (a non-boolean then reads back as the server default).
+  `patchWorkspacesById`.
+- **W4** (open). `WorkspaceMemberDto.isOperator` says "belongs to the local operator"; it
+  marks the authenticated caller's membership. `OrganizationDto.isActive` is optional in
+  packages/contract but always written. `getWorkspacesByIdMembers`, `getOrganizations`.
+- **W5** (open). The bootstrap recorded `postWorkspaces` as `workspace:create`. The route
+  evaluates it only when the request has an attributed workspace member, which session and
+  token requests never have; the effective gate is `canViewOrganizationSettings` (an active
+  `ADMIN` role in any live workspace of the organization). The permission is now
+  `workspace-admin`.
+- **W6** (open). `getWorkspacesByIdObjectivesCsv` checks `workspace:read` in any authorized
+  workspace, then an `ADMIN` role in the target workspace (`requireWorkspaceAdmin`). The
+  permission stays `workspace:read` with the role gate in the description.
+
 ## 2. Non-conforming error shapes
 
 Every route in `backend/app.ts` that forwards errors through `handle()` or `next(err)`
