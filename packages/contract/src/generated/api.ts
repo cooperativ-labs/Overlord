@@ -5,7 +5,7 @@
 import { z } from 'zod';
 
 /** The contract version (contract/VERSION) this API description belongs to. */
-export const contractVersion = "169.1.0";
+export const contractVersion = "169.1.1";
 
 /** The API description's own version (OpenAPI `info.version`). */
 export const apiVersion = "2.1.1";

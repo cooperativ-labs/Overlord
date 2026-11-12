@@ -1,8 +1,8 @@
 # contract/api conventions
 
 `openapi.yaml` is the hand-authored source of truth for REST (ADR 0006, 0048). These
-rules keep the request and response schemas added in phase 4b uniform, and keep them
-inside what the phase 4c Zod generator can translate. Read them before adding schemas.
+rules keep the request and response schemas uniform and inside what the Zod generator
+(phase 4c) translates. Read them before adding schemas.
 
 ## Layout
 
@@ -40,16 +40,58 @@ inside what the phase 4c Zod generator can translate. Read them before adding sc
   blank handling, defaults and bounds the handler applies go in `description` (and in
   `minLength`/`maxLength`/`minimum`/`maximum`/`maxItems` where they are exact).
 
+## Generated types and validators
+
+`yarn api:generate` (`scripts/generate-api-contract.mjs`) writes
+`packages/contract/src/generated/api.ts` from this file; never edit it by hand.
+`yarn api:generate:check` regenerates it, fails on any difference and typechecks the contract
+package (CI and `yarn check`). After `yarn version:contract` or any change here, run
+`yarn api:generate` and commit the result. The module holds:
+
+- for every `components.schemas` entry, a type with the schema's name and a Zod v4 schema
+  `<name>Schema` annotated `z.ZodType<Name>`, so the compiler proves the two agree;
+- `apiOperations`, keyed by operationId: method, path, tags, `deprecated`, permission and
+  candidates, edition, consumers, extension, security, parameter schemas by location (`path`,
+  `query`, `header`; header names lower case), the request body and every response by status
+  and media type, each a descriptor `{ kind, schema }` (`json`, `form`, `text`, `binary`) or
+  `{ kind: 'event-stream', event }`; a response without a body (204, a redirect) has empty
+  `content` and lists its header names;
+- `contractVersion` (`info.x-overlord-contract-version`) and `apiVersion` (`info.version`).
+
+`@overlord/contract` re-exports every component type, and `@overlord/contract/api` exports the
+schemas and the operation table (ADR 0050). Rendering rules (ADR 0050):
+
+- A property not in `required` is optional and, when present, never `undefined`
+  (`z.exactOptional`). An object without `additionalProperties` drops unknown members when
+  parsed; `false` refuses them; `true` or a schema keeps them.
+- `format: uuid` and `format: date-time` accept any string by default, because backend
+  fixtures use readable ids and SQLite timestamps are stored as written.
+  `node scripts/generate-api-contract.mjs --strict-formats --out <file>` writes a variant that
+  validates them, without changing the committed module.
+- A `oneOf` must be provably exclusive: members of different JSON types, disjoint `const` or
+  `enum` values, a required member whose literal values differ, or a closed member that cannot
+  hold a member the other requires. The generator refuses any other `oneOf`. When members can
+  overlap and the code takes the first that applies, use `anyOf`, ordered as the code tries them.
+- A string with `contentMediaType` is raw bytes (`BinaryBody`), carried by `*/*` or
+  `application/octet-stream` bodies.
+
 ## Generator subset
 
-Use only: `$ref` to `#/components/schemas/*`, `type` `string`/`integer`/`number`/
-`boolean`/`null`/`array`/`object`, `enum`, `const`, `oneOf`, `required`,
-`properties`, `additionalProperties` (`false` or a schema), `items`, `minimum`/`maximum`
-on integers, `minItems`/`maxItems`/`uniqueItems`, and `format` `uuid`/`date-time`.
-Anything else (`allOf`, a schema-less `JsonValue`, `additionalProperties: true`, string
-bounds, non-JSON bodies, 204 or non-200 success codes) is allowed when the code needs it,
-and every use is listed under "Generator constructs needed" in
-`schema-disagreements.md` so phase 4c ports it deliberately.
+The generator understands exactly these constructs and fails, naming the location, on anything
+else; it never renders an unknown construct as an unchecked schema. Schemas: `$ref` to
+`#/components/schemas/*` (with annotation siblings only), `type` `string`/`integer`/`number`/
+`boolean`/`null`/`array`/`object`, `enum`, `const`, `oneOf`, `anyOf`, `allOf` of open objects
+(a referenced base or an inline object), `required`, `properties`, `additionalProperties`
+(`false`, `true` or a schema), `items`, `minimum`/`maximum`, `minLength`/`maxLength`,
+`minItems`/`maxItems`/`uniqueItems`, `format` `uuid`/`date-time`, `contentMediaType`, and a
+schema with annotations only (any JSON value, `JsonValue`). Annotations: `description`,
+`title`, `deprecated`, `example`, `examples`. An object must have `properties` or say what
+`additionalProperties` it accepts. Operations: path, query and header parameters; request
+bodies in `application/json`, `application/x-www-form-urlencoded` and `*/*`; responses in
+`application/json`, `text/plain`, `text/html`, `text/csv`, `text/event-stream` and `*/*`, any
+status from 100 to 599, with or without content; `components.responses` references; and the
+`x-overlord-*` operation extensions. `schema-disagreements.md` section 4 lists how each
+construct the description needed is rendered.
 
 ## Values
 

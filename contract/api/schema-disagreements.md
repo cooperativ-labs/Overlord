@@ -1,7 +1,7 @@
-# OpenAPI schema disagreements (phase 4b working file)
+# OpenAPI schema disagreements (phase 4b and 4c working file)
 
-Running record kept while phase 4b adds request and response schemas to
-`openapi.yaml`. The description follows the code (ADR 0006); everything here is where
+Running record kept while phase 4b added request and response schemas to
+`openapi.yaml` and phase 4c generated types from them. The description follows the code (ADR 0006); everything here is where
 another source disagrees with the code, an error shape departs from `ErrorEnvelope`, or the
 description needs a construct the generator does not yet translate. Phase 4d consumes this
 file: it resolves each entry by a contract change, a code change, or an explicit decision to
@@ -10,10 +10,10 @@ never reuse one.
 
 | Section | Entries | Ids |
 | --- | --- | --- |
-| 1. Prose and type disagreements | 70 | P1–P5, M1–M6, A1–A3 (batch 1); U1–U3, W1–W6, H1–H2, N1–N2, S1–S2, R1–R3, O1–O5, C1–C3 (batch 2); Q1, T1–T3, L1–L5, J1–J2, K1–K3, V1, X1–X3 (batch 3); Y1–Y6, B1–B3, D1–D3 (batch 4) |
+| 1. Prose and type disagreements | 77 | P1–P5, M1–M6, A1–A3 (batch 1); U1–U3, W1–W6, H1–H2, N1–N2, S1–S2, R1–R3, O1–O5, C1–C3 (batch 2); Q1, T1–T3, L1–L5, J1–J2, K1–K3, V1, X1–X3 (batch 3); Y1–Y6, B1–B3, D1–D3 (batch 4); Z1–Z7 (phase 4c) |
 | 2. Non-conforming error shapes | 9 | E1–E9 |
 | 3. Suspected code defects | 0 | tracked privately |
-| 4. Generator constructs needed | 17 | G1–G17 |
+| 4. Generator constructs | 17 | G1–G17, all supported (phase 4c) |
 | 5. Operations left as stubs | 0 | 279 operations described |
 
 Each entry names the operationIds affected and the file and function that ship the
@@ -402,6 +402,40 @@ the code does not do.
   rather than redirecting it on; its permission stays `workspace:update`, checked first in any of the
   caller's workspaces (`handle(…, { requires })`) and then in the workspace the state names.
 
+### Generated-type adoption (phase 4c)
+
+Found while replacing the hand-written DTOs with the generated types. Z1 to Z3 corrected the
+description (info.version 2.1.1); Z4 to Z6 record consumers that handle members the server
+never sends; Z7 lists the corrections the generator needed.
+
+- **Z1** (corrected). `AgentRequestDto.options` was described as any JSON; `boundedOptions`
+  (packages/core/service/agent-session/requests.ts) normalizes every stored option to string
+  `optionId`, `label` and `kind`, so the items are `AgentRequestOption`.
+- **Z2** (corrected). `CreateWebhookSubscriptionBody.projectId` was a string; the web app sends
+  null for a workspace-wide subscription and `createWebhookSubscription` (backend/webhooks.ts)
+  treats null as absent. It is now nullable. `postWebhooks`.
+- **Z3** (corrected). The observation bodies' `gitRoot`, `branch`, `commit` and `worktreePath` were
+  strings; the web app sends null and the handlers store any non-string as null
+  (`recordTargetResourceObservations`). They are now nullable. `postExecutionTargetsByIdObservations`,
+  `postExecutionTargetsByIdMissionBranchObservations`.
+- **Z4** (open). `ObjectiveRunQueueEntryDto.precededBy` is always null in objective projections
+  (`backend/repository.ts`); the web app's queue popover rendered a "After …" line for a non-null
+  value that never arrives, which phase 4c removed (`DraftObjectiveActions.tsx`).
+- **Z5** (open). The web app renders `question` and `mission` chat blocks and labels a
+  `user_preference` assignment source, none of which the server writes (Y1). It keeps that handling
+  for stored messages under a client-side block type (`webapp/web/lib/chat/thread-state.ts`), with
+  the two block shapes kept hand-written in `packages/contract/src/chat.ts`.
+- **Z6** (open). The web app withholds invalidated chat content with its own placeholder block
+  (`id` `<message>:unavailable`, `regenerable: false`), which differs from the server's
+  `ChatUnavailableBlockDto` (`id` `unavailable`, `regenerable: true`); the client block type covers it.
+- **Z7** (corrected). The generator refused four constructs, which phase 4c corrected without
+  changing what they describe: `summary` in `AgentSessionEventInput`, `CreateAgentRequestBody` and
+  `AgentRequestDto` was a quoted string rather than a schema; the two `JsonRpcResponse` members
+  (`mcp/server.ts` writes exactly `{ jsonrpc, id, result }` or `{ jsonrpc, id, error }`) and the
+  `{ ok: true }` member of `getExtGithubMissionsByMissionIdPullRequest` are closed, so each `oneOf`
+  is exclusive; and `AppendAgentSessionEventsBody` is `anyOf`, because a body with an `events` array
+  is a batch whatever else it carries (`backend/agent-session-routes.ts`).
+
 ## 2. Non-conforming error shapes
 
 Every route in `backend/app.ts` that forwards errors through `handle()` or `next(err)`
@@ -458,19 +492,23 @@ E8 and E9 batch 4.
 Suspected code defects found while writing the schemas are tracked privately by the
 maintainers, not in this public file.
 
-## 4. Generator constructs needed
+## 4. Generator constructs
 
 Constructs used beyond the subset Clear Comply's generator
-(`scripts/generate-api-contract.mjs`) translates. Phase 4c must support each or the
-schema must change. Each construct has one entry listing every operation or schema that
-uses it; the batch that introduced a use is in parentheses.
+(`scripts/generate-api-contract.mjs`) translates. Each construct has one entry listing every
+operation or schema that uses it; the batch that introduced a use is in parentheses. Phase 4c
+supports all of them in `scripts/generate-api-contract.mjs`; the **Rendered** line of each says
+how, and `scripts/generate-api-contract.test.mjs` covers each one. The generator refuses any
+construct outside its subset (contract/api/README.md "Generator subset").
 
 - **G1** `JsonValue` (a schema with no `type`, any JSON value): artifact `contentJson`,
   shared-context `value`, ServiceError `details`, repository-read `data` (batch 1), chat
   diagnostic `payload` (batch 4). Needs `z.unknown()`.
+  Rendered as `z.unknown()` and `unknown`.
 - **G2** `additionalProperties: true` (an open object): `ProjectResourceSourceDto.descriptor`
   (batch 1). Clear Comply's generator renders it as a plain `z.object({})`, which strips unknown
   keys; it needs `z.record(z.string(), z.unknown())`.
+  Rendered as `z.record(z.string(), z.unknown())`; with properties, `z.looseObject`. A typed `additionalProperties` is `z.record` or `.catchall`.
 - **G3** Non-JSON transports. Request bodies: `'*/*'` raw uploads (`RawUploadBody`,
   `RawImageUploadBody`, strings with `contentMediaType`) (batches 1 and 2). Responses:
   `text/event-stream` (`getRealtime`, `getStream`, `getChatThreadsByIdEvents`), file downloads
@@ -480,61 +518,76 @@ uses it; the batch that introduced a use is in parentheses.
   observation operations) (batches 1 to 3), and `postRunnerClaim`'s Postgres long poll, whose
   headers are flushed before the body is written (batch 3). The Clear Comply generator reads only
   JSON bodies and JSON success responses.
+  Rendered: Request and response bodies are descriptors by media type: `binary` (`BinaryBody`, raw bytes) for `*/*` and `contentMediaType` strings, `text` for `text/plain`, `text/html` and `text/csv`, `event-stream` with the event schema. Header parameters are a lower-case `header` schema. The long poll needs nothing extra: it is the same JSON response.
 - **G4** String bounds (`minLength`, `maxLength`) are ignored by the Clear Comply generator; they
   are documentation until 4c renders them (batches 1 to 4).
+  Rendered as `.min()`/`.max()` on strings.
 - **G5** `allOf` for a DTO that extends another: `MissionDetailDto` (`MissionDto` plus detail
   projections), `SearchResultV3`, `SearchAppliedFiltersV3` (batch 1), `ServerMetaDto` (`MetaDto`
   plus server fields) and `OAuthApproveBody` (the authorization request plus the decision) (batch
   2), `RunnerClaimedRequestDto` (`RunnerExecutionRequestDto` plus launch preparation) and
   `HumanAgentRequestDto` (`AgentRequestDto` plus `delivery`) (batch 3). Needs
   `.extend()`/`z.intersection`; the alternative is repeating every base property.
+  Rendered: Rendered by spreading the base's shape into a new object (`z.object({ ...baseShape, ... })`) and as `Base & { ... }`; bases are declared first. An `allOf` member that restricts `additionalProperties` is refused.
 - **G6** `$ref` with sibling keywords (`description`) on a property (batches 1 to 4). Valid
   OpenAPI 3.1; the Clear Comply generator ignores the siblings, which is harmless.
+  Rendered: Annotation siblings (`description`, `title`, `deprecated`, examples) become doc comments; any other sibling is refused.
 - **G7** `format: uuid` on server-minted ids (batches 1 to 4). The Clear Comply generator renders
   it as `z.string().uuid()`, but the backend test fixtures use readable ids (`local-workspace`,
   `operator-workspace-user`, `test-organization`), so validating responses in backend tests (ADR
   0006) will reject them unless the fixtures move to UUIDs or 4c renders the format leniently.
   The phase 4b response checks accepted any string for `uuid` for this reason.
+  Rendered: Lenient by default: any string (ADR 0050). `--strict-formats --out <file>` writes a variant with `z.uuid()` and `z.iso.datetime({ offset: true })`.
 - **G8** A JSON response that is a `oneOf` of object schemas distinguished only by their key
   sets: `getMissionsByIdFileChanges` (`MissionFileChangesDto` is `additionalProperties: false` so
   it cannot also match `ObjectiveFileChangesDto`) (batch 1); `getExtGithubMissionsByMissionIdPullRequest`
   (`GitHubPullRequestDto` or `OkResponse`) (batch 4). Needs `.strict()` on the members, which the
   generator already emits.
+  Rendered as `z.union`; the generator proves the members exclusive (closed members, here) and refuses a `oneOf` it cannot. Phase 4c closed the `{ ok: true }` member of the GitHub pull-request read and both `JsonRpcResponse` members, and described `AppendAgentSessionEventsBody` as `anyOf` (Z7).
 - **G9** A `204` success with no body, written by handlers that end the response with
   `res.status(204).end()`: `deleteUserTokensById`, `deleteMobileLiveActivitiesByActivityIdPushToken`,
   `putMobileLiveActivitiesStartToken`, `postMobileLiveActivitiesStartTokenRevoke`,
   `putMobilePushDeviceToken` and `postMobilePushDeviceTokenRevoke` (batch 2). The Clear Comply
   generator reads only JSON success responses.
+  Rendered: A response descriptor with empty `content`.
 - **G10** Redirect (`302`) success responses with `Location`/`Set-Cookie` response headers, and
   `text/plain` / `text/html` bodies: the sign-in handoffs and OAuth callbacks
   (`getAuthDesktopGithub`, `getAuthDesktopCallback`, `getAuthBrowserCallback`,
   `getAuthCallbackGithubRepository`, `getConnectionsKnowledgebaseCallback`, `getOauthAuthorize`,
   and the storage serve route `getStorageByBucketKeyByStorageKey`) (batch 2). Express's `res.redirect` also writes a short notice body that the description does
   not model.
+  Rendered: A response descriptor listing its header names (`Location`, `Set-Cookie`) with empty `content`; text pages are `text` descriptors.
 - **G11** An optional security requirement (`{}` alongside the session schemes) on
   `getAuthDesktopCallback` and `getAuthBrowserCallback`, which read a browser session when present
   and redirect or answer a page without one instead of 401 (batch 2).
+  Rendered: Kept as an empty security requirement in the operation's `security`.
 - **G12** A JSON request body on `DELETE`: `deleteNotificationsById` (`expectedRevision`) (batch
   2), and the optional bodies of `deleteRunQueuesByQueueId` (`moveEntriesTo`) and
   `deleteRunQueuesEntriesByEntryId` (`force`) (batch 3).
+  Rendered: A request body on any method.
 - **G13** A `201` success (`postOauthRegister`), form-encoded request bodies
   (`application/x-www-form-urlencoded`) offered alongside JSON (`postOauthRegister`,
   `postOauthToken`, `postOauthRevoke`), and request or response bodies that are a `oneOf` of an
   object and an array of it (`postMcp`, JSON-RPC batches) (batch 2).
+  Rendered: Any status code; a body may list `application/json` and `application/x-www-form-urlencoded` (`form`) descriptors; an object-or-array `oneOf` is exclusive by JSON type.
 - **G14** Error-only operations with no success response: `postMissionsByIdSessionChannel`,
   `postAgentRequestsByIdRelease`, `postAgentSessionInputs` and
   `postAgentSessionInputsByIdCancel` always answer 410 (batch 3).
+  Rendered: An operation's `responses` hold only its error statuses.
 - **G15** One success status with two media types chosen by a query parameter:
   `getChatThreadsByIdEvents` answers `application/json` (`ChatEventPageDto`) with `poll=1` and
   `text/event-stream` (frames of `ChatStreamFrameDto`) otherwise (batch 4).
+  Rendered: Responses are keyed by status, then media type.
 - **G16** Unions discriminated only by a `const` member and no OpenAPI `discriminator`:
   `ChatBlockDto` (`kind`), `ChatSourceLocatorDto` (`kind`), `ChatEventDto` (`kind`, eleven
   variants) and `ChatStreamFrameDto` (`type`) (batch 4), and `RealtimeStreamEvent` (`type`)
   (batch 2). The activity feed items (batch 1) are told apart by `kind`, which is an enum on one
   member and a `const` on the other. Needs `z.discriminatedUnion` (or `z.union`).
+  Rendered as `z.union` after proving the members exclusive by their `const` (or `enum`) member.
 - **G17** The operation-level `deprecated: true` flag on `getExtEverhourIntegration`,
   `putExtEverhourIntegration` and `deleteExtEverhourIntegration` (batch 4); generated clients
   should carry it as a deprecation marker.
+  Rendered: `deprecated: true` in the operation table and `@deprecated` on its doc comment.
 
 ## 5. Operations left as stubs
 

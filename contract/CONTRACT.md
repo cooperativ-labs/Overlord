@@ -1,6 +1,6 @@
 # Overlord contract
 
-> Contract version: **169.1.0**
+> Contract version: **169.1.1**
 
 This directory is the normative, versioned specification of how Overlord's
 components interact. It defines what each component owns, the only sanctioned
@@ -193,8 +193,11 @@ Pushes and pull requests run only mechanical alignment checks, none of which
 requires a declaration: `scripts/check-contract.sh` (`yarn contract:check`,
 including the OpenAPI structural check and schema-stub ratchet), the unit
 tests of the contract tooling and the OpenAPI 3.1 validation
-(`yarn contract:test`), `yarn check:conformance-versions`, and the REST route
-parity test (`yarn contract:parity`), through `.github/workflows/contract.yml`.
+(`yarn contract:test`), `yarn check:conformance-versions`, the generated API
+check (`yarn api:generate:check`: the types, validators and operation table
+generated from [api/openapi.yaml](api/openapi.yaml) are current and typecheck,
+ADR 0050), and the REST route parity test (`yarn contract:parity`), through
+`.github/workflows/contract.yml`.
 
 ### Release gate (introduced in phase 5; not yet enforced)
 

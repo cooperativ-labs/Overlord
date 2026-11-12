@@ -5,6 +5,47 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [169.1.1] - 2026-11-12
+
+Phase 4c of the contract migration: REST types, Zod validators and an operation table are
+generated from [api/openapi.yaml](api/openapi.yaml), and the generated types replace the
+hand-written REST DTOs ([ADR 0050](decisions/0050-generated-rest-types.md)).
+
+### Version
+
+- Patch contract version 169.1.1, from 169.1.0. Contract impact: patch. The description
+  changes correct it to what the code already does, and the generator and its check add tooling
+  and a mechanical CI check, not an obligation on any component: no route, field, status,
+  access rule, vocabulary or data meaning changes, and every existing valid consumer, connector
+  and stored row keeps working. ADR 0050 records the generator's rendering choices (lenient
+  formats, exact optional members, typed descriptors for bodies that are not JSON) and that the
+  generated types are the only definition of a REST DTO. OpenAPI `info.version` 2.1.1.
+
+### Added
+
+- `scripts/generate-api-contract.mjs` (`yarn api:generate`) writes
+  `packages/contract/src/generated/api.ts`, exported as `@overlord/contract/api`; `yarn
+  api:generate:check` fails on a stale module and runs in CI and `yarn check` (section 5).
+  [api/README.md](api/README.md) documents the module, its rendering rules and the generator
+  subset; [api/schema-disagreements.md](api/schema-disagreements.md) section 4 says how each of
+  G1 to G17 is rendered.
+- [ADR 0050](decisions/0050-generated-rest-types.md). `@overlord/contract` and `packages/core`
+  re-export the generated types where they declared hand-written REST DTOs, and runtime lists of
+  closed vocabularies are checked against the generated types at compile time.
+
+### Changed
+
+- [api/openapi.yaml](api/openapi.yaml), corrected to the shipped behaviour
+  ([api/schema-disagreements.md](api/schema-disagreements.md) Z1 to Z3 and Z7):
+  `AgentRequestDto.options` items are `AgentRequestOption`; `CreateWebhookSubscriptionBody.projectId`
+  and the observation bodies' `gitRoot`, `branch`, `commit` and `worktreePath` accept null; three
+  `summary` members written as quoted strings are schemas; the `JsonRpcResponse` members and the
+  `{ ok: true }` member of the GitHub pull-request read are closed; `AppendAgentSessionEventsBody`
+  is `anyOf`. `LocalTargetErrorCode`, `TargetObservationState`, `MissionBranchStatus` and
+  `MissionWorktreePreference` carry the descriptions their hand-written types had.
+- [CONTRACT.md](CONTRACT.md) section 5 lists the generated API check among the mechanical
+  checks run on every push.
+
 ## [169.1.0] - 2026-11-12
 
 Phase 4b of the contract migration is complete: every one of the 279 operations in
