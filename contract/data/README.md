@@ -1587,7 +1587,7 @@ objective, so a newer healthy session never hides an earlier gap.
 
 ### `run_queues`
 
-Project-scoped named execution sequences. Exactly one live row per project may have `is_default`; each queue owns its display `position`, `paused` state, name, revision, creation actor, and soft-delete lifecycle. Queues do not select targets or constrain project-wide concurrency.
+Project-scoped named execution sequences. Exactly one live row per project may have `is_default`; nullable `mission_id` makes a queue mission-scoped and is unique among live rows; each queue owns its display `position`, `paused` state, name, revision, creation actor, and soft-delete lifecycle. Queues do not select targets or constrain project-wide concurrency.
 
 ### `run_queue_entries`
 
@@ -2809,7 +2809,7 @@ redistributed. The versioned response reports `appliedFilters`,
 
 Ranking aggregates per-document relevance into one score per mission with `max(documentScore)` plus a bounded corroboration bonus, never an unbounded sum. The reference implementation weights the title column above the body and weights source kinds by importance (mission title > objective > delivery > event), fuses text rank with recency, and sorts exact display-id and exact-title matches ahead of the fused ranking, so a query that hits a mission's title outranks chatter in its events.
 
-V3 retrieval selects `entity_id` so matching objectives and deliveries are identifiable. SQLite joins `search_documents` from `search_documents_fts.rowid` rather than adding `entity_id` to the FTS virtual table. Each workspace fetch is `ORDER BY doc_score DESC LIMIT 500`; when that cap is hit, `truncatedCandidates` is true and envelope counts are lower bounds. Child matches inside a group are ranked `docScore + 0.15 * missionScore` and capped by `matchesPerResult`. Events remain corroboration-only.
+V3 retrieval selects `entity_id` so matching objectives and deliveries are identifiable. SQLite joins `search_documents` from `search_documents_fts.rowid` rather than adding `entity_id` to the FTS virtual table. Each workspace fetch is `ORDER BY doc_score DESC LIMIT 500`; when that cap is hit, `truncatedCandidates` is true and envelope counts are lower bounds. Entity weights are mission 3.0, objective 2.0, delivery 1.5, event 1.0. Child matches inside a group are ranked `docScore + 0.15 * missionScore` and capped by `matchesPerResult`. Events remain corroboration-only.
 
 The index is maintained by adapter triggers, not application writes: insert/update/delete on `missions`, `objectives`, `mission_events`, and `deliveries` keep `search_documents` (and the adapter full-text index) in sync, and a soft delete of a mission removes every document for that mission so deleted missions never surface. Workspace moves first remove the old workspace's document and then upsert the new one. Delivery rows are omitted once soft-deleted. `content_hash` and `source_revision` allow incremental reindexing instead of blind rebuilds.
 
