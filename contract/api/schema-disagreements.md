@@ -94,6 +94,34 @@ the code does not do.
   passes any non-null value through `new Date(...)`, so a number is accepted as epoch
   milliseconds (reproduced). `postUserTokens`.
 
+### Organizations and workspaces (batch 2)
+
+- **W1** (open). rest-notes.md says `POST /api/onboarding` "returns `/api/meta`". It returns
+  `buildMeta()` evaluated against the request's pre-onboarding authorization snapshot, so
+  over HTTP `organization` and `workspace` are null and `workspaces` is empty, while
+  `organizations` lists the new organization with `isActive: false` (reproduced).
+  `postOnboarding`.
+- **W2** (open). `WorkspaceDto.isActive` ("the web server's currently active workspace") and
+  `MetaDto.workspace` ("the server's default-scope workspace") describe an ambient workspace
+  that authenticated requests never have: `isActive` is always `false` and `workspace`
+  always null for session and token callers (reproduced). `getMeta`, `getWorkspaces`,
+  `postWorkspaces`, `patchWorkspacesById`, `postInvitationsAccept`.
+- **W3** (open). `UpdateWorkspaceBody.sqlStudioEnabled` is documented "Admin-only";
+  `updateWorkspace` (`backend/workspaces.ts`) lets a `MANAGER` set it, and stores any JSON
+  value without a type check (a non-boolean then reads back as the server default).
+  `patchWorkspacesById`.
+- **W4** (open). `WorkspaceMemberDto.isOperator` says "belongs to the local operator"; it
+  marks the authenticated caller's membership. `OrganizationDto.isActive` is optional in
+  packages/contract but always written. `getWorkspacesByIdMembers`, `getOrganizations`.
+- **W5** (open). The bootstrap recorded `postWorkspaces` as `workspace:create`. The route
+  evaluates it only when the request has an attributed workspace member, which session and
+  token requests never have; the effective gate is `canViewOrganizationSettings` (an active
+  `ADMIN` role in any live workspace of the organization). The permission is now
+  `workspace-admin`.
+- **W6** (open). `getWorkspacesByIdObjectivesCsv` checks `workspace:read` in any authorized
+  workspace, then an `ADMIN` role in the target workspace (`requireWorkspaceAdmin`). The
+  permission stays `workspace:read` with the role gate in the description.
+
 ## 2. Non-conforming error shapes
 
 Every route in `backend/app.ts` that forwards errors through `handle()` or `next(err)`
@@ -211,6 +239,38 @@ decision and, if confirmed, a fix with its own contract impact.
   `patchUserTokensById`, `postUserTokensByIdRevoke`, `deleteUserTokensById`.
 - **X6** also covers `patchProfile` (`displayName`) and `postUserTokens` /
   `patchUserTokensById` (`label`): a non-string answers 500.
+
+- **X20** (open, high, authorization and isolation; reproduced). Every workspace and
+  organization management route authorizes against the profile's memberships alone
+  (`requireWorkspaceMember` / `requireWorkspaceManager` / `requireWorkspaceAdmin` in
+  `backend/workspaces.ts`, `requireOrganizationAdmin` in `backend/organizations.ts`,
+  `canViewOrganizationSettings` for create) and never consults the request's authorization
+  snapshot: neither the token's scope grants nor its organization binding and workspace
+  consent apply. Reproduced: a `mission_lifecycle` token (no workspace or member grants)
+  renamed a workspace and its organization, invited an `ADMIN`, created a workspace and
+  exported the objectives CSV; a full token bound to organization B renamed a workspace in
+  organization A after its owner joined A. Affects `postWorkspaces`, `patchWorkspacesById`,
+  `deleteWorkspacesById`, `getWorkspacesByIdMembers`,
+  `deleteWorkspacesByIdMembersByWorkspaceUserId`,
+  `patchWorkspacesByIdMembersByWorkspaceUserIdRole`, `getWorkspacesByIdInvitations`,
+  `postWorkspacesByIdInvitations`, `deleteWorkspacesByIdInvitationsByInvitationId`,
+  `getWorkspacesByIdObjectivesCsv` (its target check), `patchOrganizationsById`,
+  `getOrganizationsByIdAdmins`, `postOrganizationsByIdAdmins`,
+  `deleteOrganizationsByIdAdminsByUserId`. OAuth access tokens are user tokens, so a
+  third-party MCP client consented to one workspace has the same reach.
+- **X21** (open, isolation; reproduced). `GET /api/workspaces`, `GET /api/organizations` and
+  the `DELETE /api/workspaces/{id}` response list every organization and workspace the
+  profile belongs to, not only the token's organization and consented workspaces
+  (`listWorkspaces`, `listOrganizationsForUser`). `GET /api/authorized-workspaces` narrows to
+  the token; these do not. `getWorkspaces`, `getOrganizations`, `deleteWorkspacesById`.
+- **X22** (open, read only). `POST /api/invitations/accept` (`acceptWorkspaceInvitation`)
+  binds the caller to the invitation's workspace regardless of the request's organization
+  or token consent, so a token bound to another organization can accept (reproduced as the
+  setup of X20) and the joined workspace then answers to that token through X20.
+  `postInvitationsAccept`.
+- **X6** also covers onboarding (`organizationName`, `workspaceName`), workspace create and
+  rename (`name`, `slug`), organization rename (`name`) and invitations (`email`,
+  `roleKey`, `token`).
 
 ## 4. Generator constructs needed
 

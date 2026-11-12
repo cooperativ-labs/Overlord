@@ -708,222 +708,569 @@ paths:
     post:
       operationId: postOnboarding
       tags: [organizations]
-      x-overlord-permission: unknown
+      x-overlord-permission: authenticated
       x-overlord-edition: both
       x-overlord-consumers: [cli, webapp]
-      x-overlord-schema-status: stub
+      summary: Create the caller's first organization and workspace
+      description: >-
+        For an authenticated profile with no active workspace membership anywhere (409 otherwise). In one
+        transaction creates an organization, a workspace (default name `general`), the caller's membership
+        with the `ADMIN` role, the workspace storage buckets and the organization's `organization-images`
+        bucket. No RBAC action is evaluated: this grants the first membership. Answers `MetaDto` computed
+        from the request's pre-onboarding authorization snapshot, so over HTTP `organization` and
+        `workspace` are null and `workspaces` is empty while `organizations` lists the new organization
+        with `isActive: false`; clients re-read `GET /api/meta`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateOrganizationOnboardingBody' }
+      responses:
+        '200':
+          description: Metadata for the caller (see the description for what it reflects).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MetaDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/organizations:
     get:
       operationId: getOrganizations
       tags: [organizations]
-      x-overlord-permission: unknown
+      x-overlord-permission: authenticated
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: List the caller's organizations
+      description: >-
+        Every live organization in which the authenticated profile has at least one active workspace
+        membership, oldest first. The list is not narrowed to a token's organization or workspace consent.
+        `isActive` marks the request's selected organization.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The organizations.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganizationList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/organizations/{id}":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Organization UUID; an unknown or deleted organization answers 404.
+        schema: { type: string }
     patch:
       operationId: patchOrganizationsById
       tags: [organizations]
       x-overlord-permission: organization-admin
       x-overlord-edition: both
       x-overlord-consumers: [cli, webapp]
-      x-overlord-schema-status: stub
+      summary: Rename an organization or set its logo
+      description: >-
+        Organization admin only (an active `ADMIN` role in every live workspace of the organization),
+        checked against the profile's memberships; no RBAC action or token scope grant is evaluated. An
+        unknown or deleted organization answers 404, a non-admin 403. A change records one `organization`
+        entity change per live workspace of the organization.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateOrganizationBody' }
+      responses:
+        '200':
+          description: The organization.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganizationDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/organizations/{id}/admins":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Organization UUID; an unknown or deleted organization answers 404.
+        schema: { type: string }
     get:
       operationId: getOrganizationsByIdAdmins
       tags: [organizations]
       x-overlord-permission: organization-admin
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: List an organization's admins
+      description: >-
+        Organization admin only. Organization admins are derived: profiles with an active `ADMIN` role in
+        every live workspace of the organization. Ordered by display name.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The admins.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganizationAdminList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
     post:
       operationId: postOrganizationsByIdAdmins
       tags: [organizations]
       x-overlord-permission: organization-admin
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Make a member an organization admin
+      description: >-
+        Organization admin only. Makes `ADMIN` the target's sole role in every live workspace of the
+        organization, joining it to workspaces it is not yet a member of. The target must already be an
+        active member of at least one of them (400 otherwise); an unknown profile answers 404. Answers the
+        refreshed admin list.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AddOrganizationAdminBody' }
+      responses:
+        '200':
+          description: The admins.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganizationAdminList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/organizations/{id}/admins/{userId}":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Organization UUID; an unknown or deleted organization answers 404.
+        schema: { type: string }
       - name: userId
         in: path
         required: true
-        schema:
-          type: string
+        description: Profile id of the admin to remove; a profile that is not an organization admin answers 404.
+        schema: { type: string }
     delete:
       operationId: deleteOrganizationsByIdAdminsByUserId
       tags: [organizations]
       x-overlord-permission: organization-admin
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Remove an organization admin
+      description: >-
+        Organization admin only. Makes `MEMBER` the target's sole role in every live workspace of the
+        organization it belongs to. A profile that is not an organization admin answers 404; removing the
+        last organization admin answers 409. Answers the refreshed admin list.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The admins.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganizationAdminList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/workspaces:
     get:
       operationId: getWorkspaces
       tags: [workspaces]
-      x-overlord-permission: unknown
+      x-overlord-permission: authenticated
       x-overlord-edition: both
       x-overlord-consumers: [cli, webapp]
-      x-overlord-schema-status: stub
+      summary: List the caller's workspaces
+      description: >-
+        Every live workspace, in every organization, in which the authenticated profile is an active
+        member, oldest first. The list is not narrowed to a token's organization or workspace consent.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The workspaces.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkspaceList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
     post:
       operationId: postWorkspaces
       tags: [workspaces]
-      x-overlord-permission: workspace:create
+      x-overlord-permission: workspace-admin
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Create a workspace in an organization
+      description: >-
+        The caller must hold an active `ADMIN` role in at least one live workspace of the named
+        organization (403 otherwise, including for an unknown organization). `workspace:create` is
+        evaluated only for a caller with an attributed workspace member, which authenticated session and
+        token requests never have, so token scope grants do not apply. The caller becomes the new
+        workspace's `ADMIN`, and every other organization admin is joined as `ADMIN`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateWorkspaceBody' }
+      responses:
+        '200':
+          description: The new workspace.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkspaceDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/workspaces/{id}":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Workspace UUID; a workspace the caller is not an active member of answers 404.
+        schema: { type: string }
     patch:
       operationId: patchWorkspacesById
       tags: [workspaces]
       x-overlord-permission: workspace-manager
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Rename a workspace or toggle SQL Studio
+      description: >-
+        Active `ADMIN` or `MANAGER` of the target workspace, checked against the profile's memberships
+        (not the token's consent or scope grants). A non-member answers 404, a member without either role
+        403. Omitted members are unchanged; a change records a `workspace` entity change.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateWorkspaceBody' }
+      responses:
+        '200':
+          description: The workspace.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkspaceDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
     delete:
       operationId: deleteWorkspacesById
       tags: [workspaces]
       x-overlord-permission: workspace-admin
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Delete a workspace
+      description: >-
+        Active `ADMIN` of the target workspace (a non-member answers 404, a non-admin 403), checked
+        against the profile's memberships. Soft-deletes the workspace; its projects and missions are kept
+        but unreachable. Deleting the organization's last live workspace also tombstones the organization,
+        purging its logo object and buckets. Answers the caller's remaining workspaces in every
+        organization (as `GET /api/workspaces`).
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The caller's remaining workspaces.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkspaceList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/workspaces/{id}/members":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Workspace UUID; a workspace the caller is not an active member of answers 404.
+        schema: { type: string }
     get:
       operationId: getWorkspacesByIdMembers
       tags: [workspaces]
       x-overlord-permission: workspace-member
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: List a workspace's members
+      description: >-
+        Any active member of the target workspace (a non-member answers 404); no RBAC action is evaluated.
+        Active memberships whose profile is live, oldest first. `isOperator` marks the caller.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The members.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkspaceMemberList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/workspaces/{id}/members/{workspaceUserId}":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Workspace UUID; a workspace the caller is not an active member of answers 404.
+        schema: { type: string }
       - name: workspaceUserId
         in: path
         required: true
-        schema:
-          type: string
+        description: The member's `workspace_users` id in that workspace; an unknown or inactive one answers 404.
+        schema: { type: string }
     delete:
       operationId: deleteWorkspacesByIdMembersByWorkspaceUserId
       tags: [workspaces]
       x-overlord-permission: workspace-manager
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Remove a member from a workspace
+      description: >-
+        Active `ADMIN` or `MANAGER` of the target workspace; a `MANAGER` may not remove an `ADMIN` (403).
+        Disables and soft-deletes the membership and its role rows. Removing the last `ADMIN` or the only
+        member answers 409. A caller may remove itself.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: Removed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/workspaces/{id}/members/{workspaceUserId}/role":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Workspace UUID; a workspace the caller is not an active member of answers 404.
+        schema: { type: string }
       - name: workspaceUserId
         in: path
         required: true
-        schema:
-          type: string
+        description: The member's `workspace_users` id in that workspace; an unknown or inactive one answers 404.
+        schema: { type: string }
     patch:
       operationId: patchWorkspacesByIdMembersByWorkspaceUserIdRole
       tags: [workspaces]
       x-overlord-permission: workspace-manager
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Set a member's workspace role
+      description: >-
+        Active `ADMIN` or `MANAGER` of the target workspace. A `MANAGER` may neither grant `ADMIN` nor
+        change an `ADMIN`'s role (403). Replaces the member's active role rows with exactly the requested
+        role; demoting the last `ADMIN` answers 409. Answers the member.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateWorkspaceMemberRoleBody' }
+      responses:
+        '200':
+          description: The member.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkspaceMemberDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/workspaces/{id}/invitations":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Workspace UUID; a workspace the caller is not an active member of answers 404.
+        schema: { type: string }
     get:
       operationId: getWorkspacesByIdInvitations
       tags: [workspaces]
       x-overlord-permission: workspace-manager
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: List a workspace's invitations
+      description: Active `ADMIN` or `MANAGER` of the target workspace. Every non-deleted invitation, newest first.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The invitations.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkspaceInvitationList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
     post:
       operationId: postWorkspacesByIdInvitations
       tags: [workspaces]
       x-overlord-permission: workspace-manager
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Invite an email address to a workspace
+      description: >-
+        Active `ADMIN` or `MANAGER` of the target workspace; a `MANAGER` may not invite an `ADMIN` (403).
+        An email that already belongs to an active member answers 409. A pending invitation for the same
+        email is revoked and replaced. The invitation expires after 14 days. When an email provider is
+        configured (`RESEND_API_KEY`) the link is emailed and `acceptUrl` is omitted; otherwise
+        `acceptUrl` carries the raw token for the inviter to share.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InviteWorkspaceMemberBody' }
+      responses:
+        '200':
+          description: The invitation.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InviteWorkspaceMemberResultDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/workspaces/{id}/invitations/{invitationId}":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Workspace UUID; a workspace the caller is not an active member of answers 404.
+        schema: { type: string }
       - name: invitationId
         in: path
         required: true
-        schema:
-          type: string
+        description: Invitation UUID in that workspace; an unknown or deleted one answers 404.
+        schema: { type: string }
     delete:
       operationId: deleteWorkspacesByIdInvitationsByInvitationId
       tags: [workspaces]
       x-overlord-permission: workspace-manager
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Revoke an invitation
+      description: >-
+        Active `ADMIN` or `MANAGER` of the target workspace. Revokes a pending invitation; an invitation
+        that is already accepted, revoked or expired is left unchanged and still answers 200.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: Revoked (or already resolved).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/invitations/accept:
     post:
       operationId: postInvitationsAccept
       tags: [workspaces]
-      x-overlord-permission: unknown
+      x-overlord-permission: authenticated
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Accept a workspace invitation
+      description: >-
+        The invitation token is the credential; no RBAC action is evaluated. The token is matched by hash
+        (404 when unknown); a non-pending invitation answers 409 and an expired one is marked `expired`
+        and answers 410. The authenticated profile's email must equal the invited email, ignoring case
+        (403 otherwise). Joins the caller (or reuses an existing membership) and grants the invited role
+        only when the membership has no role yet. Answers the joined workspace.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AcceptWorkspaceInvitationBody' }
+      responses:
+        '200':
+          description: The joined workspace.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkspaceDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '410':
+          description: 'The invitation has expired (`{ error: ''Invitation has expired'' }`); it is now `expired`.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/workspaces/{id}/objectives.csv":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Workspace UUID; an unknown workspace, or one the caller is not an active member of, answers 404.
+        schema: { type: string }
     get:
       operationId: getWorkspacesByIdObjectivesCsv
       tags: [workspaces]
       x-overlord-permission: workspace:read
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Export a workspace's objectives as CSV
+      description: >-
+        Requires `workspace:read` in some workspace of the selected organization, then an active `ADMIN`
+        role in the target workspace (checked against the profile's memberships; a non-member answers 404,
+        a non-admin 403). One row per live objective of a live mission and project, ordered by project
+        name, mission title (case-insensitive), position and creation time.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: >-
+            A UTF-8 CSV attachment with five columns headed `Mission name`, `Objective instructions`,
+            `Date created`, `Project name` and `Mission status`. Every cell, header included, is
+            double-quoted with embedded quotes doubled; rows end with `\n`; the mission status is the
+            status name or, without one, its type.
+          headers:
+            Content-Disposition:
+              required: true
+              description: '`attachment; filename="<workspace slug>-objectives-<YYYY-MM-DD>.csv"`.'
+              schema: { type: string }
+          content:
+            text/csv:
+              schema: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/workspaces/{id}/projects":
     parameters:
       - name: id
@@ -1229,9 +1576,9 @@ paths:
         `mission_lifecycle` token consents to every current and future workspace of the caller's selected
         organization (`all_workspaces`); the issuance workspace (the lowest authorized workspace id) is
         audit attribution only. A `project_automation` token additionally requires `project:read` and
-        `mission:create` on every selected project and consents to exactly their workspaces. A caller with
-        no authorized workspace (no selected organization) answers 409. The raw `secret` is returned only
-        here.
+        `mission:create` on every selected project and consents to exactly their workspaces. A session
+        whose profile belongs to several organizations has no selected organization and answers 403. The
+        raw `secret` is returned only here.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       requestBody:
         required: true
@@ -8570,7 +8917,6 @@ components:
     ProfileDto:
       type: object
       description: The caller's profile (`profiles` row plus metadata projections).
-      additionalProperties: false
       required:
         [
           userId,
@@ -8633,7 +8979,6 @@ components:
           oneOf: [ { type: string }, { type: 'null' } ]
     DefaultProjectPreferenceDto:
       type: object
-      additionalProperties: false
       required: [ projectId ]
       properties:
         projectId:
@@ -8657,7 +9002,6 @@ components:
       enum: [ full, mission_lifecycle, project_automation ]
     UserTokenProjectDto:
       type: object
-      additionalProperties: false
       required: [ id, name ]
       properties:
         id: { type: string, format: uuid }
@@ -8665,7 +9009,6 @@ components:
     UserTokenDto:
       type: object
       description: A personal token as listed to its owner; never the secret or its hash.
-      additionalProperties: false
       required:
         [
           id,
@@ -8733,7 +9076,6 @@ components:
           items: { type: string, format: uuid }
     CreateUserTokenResultDto:
       type: object
-      additionalProperties: false
       required: [ token, secret ]
       properties:
         token: { $ref: '#/components/schemas/UserTokenDto' }
@@ -8745,3 +9087,262 @@ components:
         label:
           type: string
           description: Trimmed; blank or absent answers 400.
+    OrganizationDto:
+      type: object
+      required: [ id, name, logoUrl, workspaceCount, isActive, createdAt ]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        logoUrl:
+          description: '`settings_json.logoUrl`, trimmed, when non-blank; else null.'
+          oneOf: [ { type: string }, { type: 'null' } ]
+        workspaceCount: { type: integer, minimum: 0, description: Live workspaces in the organization. }
+        isActive:
+          type: boolean
+          description: >-
+            Whether this is the request's selected organization (the token's organization, or a
+            session's only organization). Always written although optional in packages/contract.
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+    OrganizationList:
+      type: array
+      items: { $ref: '#/components/schemas/OrganizationDto' }
+    WorkspaceDto:
+      type: object
+      required:
+        [
+          id,
+          organizationId,
+          slug,
+          name,
+          kind,
+          isActive,
+          projectCount,
+          memberCount,
+          sqlStudioEnabled,
+          createdAt
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        organizationId: { type: string, format: uuid }
+        slug:
+          {
+            type: string,
+            description: 'Unique within the organization; `[a-z0-9-]`, at most 48 characters.'
+          }
+        name: { type: string }
+        kind: { type: string, description: 'Open vocabulary; workspaces created through REST are `local`.' }
+        isActive:
+          type: boolean
+          description: >-
+            Whether this is the request's ambient workspace. Authenticated REST requests carry none, so
+            it is `false` for every session and token caller.
+        projectCount: { type: integer, minimum: 0, description: Non-deleted projects (archived included). }
+        memberCount: { type: integer, minimum: 0, description: Active, non-deleted memberships. }
+        sqlStudioEnabled:
+          type: boolean
+          description: The workspace's stored boolean setting, else the server's configured default.
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+    WorkspaceList:
+      type: array
+      items: { $ref: '#/components/schemas/WorkspaceDto' }
+    MetaDto:
+      type: object
+      description: >-
+        The caller's organizations and the selected organization's workspaces (`buildMeta`,
+        backend/http/meta.ts). Shared by `GET /api/meta`, which adds server metadata, and `POST
+        /api/onboarding`.
+      required: [ organization, organizations, workspaces, workspace, defaultProjectId ]
+      properties:
+        organization:
+          description: The selected organization; null when none is selected (several organizations, or none).
+          oneOf: [ { $ref: '#/components/schemas/OrganizationDto' }, { type: 'null' } ]
+        organizations:
+          type: array
+          description: Every organization the profile has an active membership in (as `GET /api/organizations`).
+          items: { $ref: '#/components/schemas/OrganizationDto' }
+        workspaces:
+          type: array
+          description: The profile's active workspaces in the selected organization; empty when none is selected.
+          items: { $ref: '#/components/schemas/WorkspaceDto' }
+        workspace:
+          description: The ambient workspace; always null for authenticated REST callers.
+          oneOf: [ { $ref: '#/components/schemas/WorkspaceDto' }, { type: 'null' } ]
+        defaultProjectId:
+          description: As `GET /api/profile/default-project`.
+          oneOf: [ { type: string, format: uuid }, { type: 'null' } ]
+    CreateOrganizationOnboardingBody:
+      type: object
+      required: [ organizationName ]
+      properties:
+        organizationName:
+          type: string
+          description: Trimmed; blank or absent answers 400.
+        workspaceName:
+          type: string
+          description: Trimmed; blank or absent becomes `general`.
+        workspaceSlug:
+          type: string
+          description: >-
+            Lowercased, runs of other characters become `-`, trimmed of `-`, cut to 48 characters
+            (`workspace` if nothing remains). Absent or blank derives the first three letters and digits
+            of the workspace name. A taken slug gets a `-2`, `-3`, … suffix.
+    UpdateOrganizationBody:
+      type: object
+      description: Partial update; omitted members are unchanged.
+      properties:
+        name:
+          type: string
+          description: Trimmed; blank answers 400.
+        logoUrl:
+          description: >-
+            Trimmed; blank or null clears it. Otherwise must start with `http://`, `https://` or `/` (an
+            uploaded `/api/storage/organization-images/…` path), else 400.
+          oneOf: [ { type: string }, { type: 'null' } ]
+    OrganizationAdminDto:
+      type: object
+      required: [ userId, displayName, handle, email, avatarUrl ]
+      properties:
+        userId: { type: string, description: '`profiles.id`.' }
+        displayName: { type: string }
+        handle:
+          oneOf: [ { type: string }, { type: 'null' } ]
+        email:
+          oneOf: [ { type: string }, { type: 'null' } ]
+        avatarUrl:
+          description: '`metadata_json.avatarUrl`, trimmed, when non-blank; else null.'
+          oneOf: [ { type: string }, { type: 'null' } ]
+    OrganizationAdminList:
+      type: array
+      items: { $ref: '#/components/schemas/OrganizationAdminDto' }
+    AddOrganizationAdminBody:
+      type: object
+      required: [ userId ]
+      properties:
+        userId:
+          type: string
+          description: Profile id, trimmed; blank or absent answers 400, an unknown profile 404.
+    CreateWorkspaceBody:
+      type: object
+      required: [ organizationId, name ]
+      properties:
+        organizationId:
+          type: string
+          description: Trimmed; blank or absent answers 400.
+        name:
+          type: string
+          description: Trimmed; blank or absent answers 400.
+        slug:
+          type: string
+          description: >-
+            Normalized as `CreateOrganizationOnboardingBody.workspaceSlug`; absent or blank derives the
+            first three letters and digits of the name. Uniquified within the organization.
+    UpdateWorkspaceBody:
+      type: object
+      description: Partial update; omitted members are unchanged. A `MANAGER` may set either member.
+      properties:
+        name:
+          type: string
+          description: Trimmed; blank answers 400.
+        sqlStudioEnabled:
+          type: boolean
+          description: >-
+            Stored as given without a type check; a non-boolean value is stored and then reads back as
+            the server default. Changing it on the server's bootstrap workspace starts or stops SQL
+            Studio.
+    WorkspaceRoleKey:
+      type: string
+      enum: [ ADMIN, MANAGER, MEMBER ]
+    WorkspaceMemberDto:
+      type: object
+      required:
+        [
+          workspaceUserId,
+          userId,
+          displayName,
+          handle,
+          email,
+          kind,
+          roleKeys,
+          isAdmin,
+          isOperator,
+          joinedAt,
+          avatarUrl
+        ]
+      properties:
+        workspaceUserId: { type: string, description: '`workspace_users.id`.' }
+        userId: { type: string, description: '`profiles.id`.' }
+        displayName: { type: string }
+        handle:
+          oneOf: [ { type: string }, { type: 'null' } ]
+        email:
+          oneOf: [ { type: string }, { type: 'null' } ]
+        kind: { type: string, description: 'Open vocabulary (`human`, `service`).' }
+        roleKeys:
+          type: array
+          description: Active workspace-level role keys, sorted.
+          items: { type: string }
+        isAdmin: { type: boolean, description: Whether `roleKeys` contains `ADMIN`. }
+        isOperator: { type: boolean, description: Whether the membership belongs to the caller. }
+        joinedAt: { $ref: '#/components/schemas/DateTime' }
+        avatarUrl:
+          description: '`metadata_json.avatarUrl`, trimmed, when non-blank; else null.'
+          oneOf: [ { type: string }, { type: 'null' } ]
+    WorkspaceMemberList:
+      type: array
+      items: { $ref: '#/components/schemas/WorkspaceMemberDto' }
+    UpdateWorkspaceMemberRoleBody:
+      type: object
+      required: [ roleKey ]
+      properties:
+        roleKey:
+          type: string
+          description: >-
+            Trimmed and uppercased, then one of `ADMIN`, `MANAGER`, `MEMBER`; anything else (or absent)
+            answers 400.
+    WorkspaceInvitationStatus:
+      type: string
+      enum: [ pending, accepted, revoked, expired ]
+    WorkspaceInvitationDto:
+      type: object
+      required: [ id, workspaceId, email, roleKey, status, tokenPrefix, expiresAt, createdAt ]
+      properties:
+        id: { type: string, format: uuid }
+        workspaceId: { type: string, format: uuid }
+        email: { type: string, description: Lowercased. }
+        roleKey: { $ref: '#/components/schemas/WorkspaceRoleKey' }
+        status: { $ref: '#/components/schemas/WorkspaceInvitationStatus' }
+        tokenPrefix: { type: string, description: 'Non-secret display prefix, `inv_…`.' }
+        expiresAt: { $ref: '#/components/schemas/DateTime' }
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+    WorkspaceInvitationList:
+      type: array
+      items: { $ref: '#/components/schemas/WorkspaceInvitationDto' }
+    InviteWorkspaceMemberBody:
+      type: object
+      required: [ email ]
+      properties:
+        email:
+          type: string
+          description: Trimmed and lowercased; must contain `@` (400 otherwise).
+        roleKey:
+          type: string
+          description: >-
+            Trimmed and uppercased; defaults to `MEMBER`. Must be `ADMIN`, `MANAGER` or `MEMBER` (400
+            otherwise).
+    InviteWorkspaceMemberResultDto:
+      type: object
+      required: [ invitation ]
+      properties:
+        invitation: { $ref: '#/components/schemas/WorkspaceInvitationDto' }
+        acceptUrl:
+          type: string
+          description: >-
+            Present only when no email provider is configured: the web accept page with the raw token,
+            `<site>/accept-invite?token=…`.
+    AcceptWorkspaceInvitationBody:
+      type: object
+      required: [ token ]
+      properties:
+        token:
+          type: string
+          description: The raw `inv_…` token, trimmed; blank or absent answers 400.
