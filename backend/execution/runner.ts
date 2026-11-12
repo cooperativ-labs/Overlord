@@ -45,7 +45,7 @@ import {
 } from '../db.ts';
 import { ApiError } from '../errors.ts';
 import { clientDeviceFromBody } from '../http/client-device.ts';
-import { requireWorkspacePermission } from '../rbac.ts';
+import { requireMissionPermission, requireWorkspacePermission } from '../rbac.ts';
 import {
   callerWorkspaceMemberships,
   readProjectLaunchEnvVars,
@@ -707,23 +707,21 @@ export async function recordBranchPrepared({
   requestId?: string | null;
   payload: unknown;
 }): Promise<{ ok: true }> {
-  // Resolve the mission's own workspace across all of the caller's
-  // memberships — `missionId` may be a display_id (unique per workspace), so a
-  // runner driving a secondary-workspace mission still resolves it (coo:135).
-  const scopes = await callerWorkspaceMemberships();
-  if (scopes.length === 0) throw new ApiError(404, 'Mission not found');
-  const placeholders = scopes.map(() => '?').join(', ');
-  const mission = (await requireDatabaseClient().get(
-    `SELECT workspace_id FROM missions
-      WHERE (id = ? OR display_id = ?)
-        AND deleted_at IS NULL
-        AND workspace_id IN (${placeholders})`,
-    [missionId, missionId, ...scopes.map(scope => scope.workspaceId)]
-  )) as { workspace_id: string } | undefined;
-  if (!mission) throw new ApiError(404, 'Mission not found');
+  // Resolve the mission within the request's organization-bounded, consented
+  // workspaces (an ambiguous display id answers 409) and authorize the runner
+  // action there, as the other runner routes do.
+  const scope = await requireMissionPermission({
+    missionRef: missionId,
+    permission: PERMISSIONS.EXECUTION_REQUEST_CLAIM
+  });
 
   return requireDatabaseClient().transaction(async tx =>
-    recordBranchPreparedTx(tx, { workspaceId: mission.workspace_id, missionId, requestId, payload })
+    recordBranchPreparedTx(tx, {
+      workspaceId: scope.workspaceId,
+      missionId: scope.missionId,
+      requestId,
+      payload
+    })
   );
 }
 

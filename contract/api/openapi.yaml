@@ -6585,19 +6585,20 @@ paths:
         in: path
         required: true
         description: >-
-          Mission UUID or display id, matched in any workspace the caller is an active member of (not
-          organization-bounded; the first match wins).
+          Mission UUID, or display id (`coo:756`) resolved within the caller's organization; an unknown or
+          foreign reference answers 404 and an ambiguous display id 409.
         schema: { type: string }
     post:
       operationId: postMissionsByIdBranchPrepared
       tags: [missions]
-      x-overlord-permission: workspace-member
+      x-overlord-permission: execution_request:claim
       x-overlord-edition: both
       x-overlord-consumers: [runner]
       summary: Record a runner-prepared branch
       description: >-
-        Called by the runner after preparing a mission branch. Checks only that the caller is an active
-        member of the mission's workspace; no RBAC action is evaluated. Moves the mission's active branch
+        Called by the runner after preparing a mission branch. Requires `execution_request:claim` in the
+        mission's workspace, as the other runner routes do (a token also needs that workspace in its
+        consent). Moves the mission's active branch
         (unless `isolated`), stamps the execution request and its objective when `requestId` is given, and
         records a branch event and observation.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
@@ -6614,7 +6615,9 @@ paths:
               schema: { $ref: '#/components/schemas/OkResponse' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '500': { $ref: '#/components/responses/InternalError' }
   "/api/missions/{id}/branch/action":
