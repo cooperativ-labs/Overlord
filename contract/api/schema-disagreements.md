@@ -146,6 +146,17 @@ the code does not do.
   active workspace membership (403 `No active workspace membership` without one, to address
   the dispatch job). `putMobileLiveActivitiesByActivityIdPushToken`.
 
+### Storage (batch 2)
+
+- **S1** (open). rest-notes.md and the comment on the serve route (`backend/app.ts`) say
+  `/storage/:bucketKey/:storageKey` serves bytes "only after an exact active metadata lookup
+  for `(storage_bucket_id, storage_key)`". The `organization-images` branch of
+  `resolveStoredObject` (`backend/storage.ts`) has no metadata table and reads the key as
+  given from the selected organization's bucket. `getStorageByBucketKeyByStorageKey`.
+- **S2** (open). An `organization-images` upload writes bytes only: no metadata row, no
+  entity change, and the returned `id` names no row (`uploadOrganizationImage`).
+  `postUploadsByBucketKey`.
+
 ## 2. Non-conforming error shapes
 
 Every route in `backend/app.ts` that forwards errors through `handle()` or `next(err)`

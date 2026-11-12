@@ -2201,34 +2201,132 @@ paths:
       - name: bucketKey
         in: path
         required: true
-        schema:
-          type: string
+        description: '`user-images`, `workspace-images` or `organization-images`; any other value answers 404.'
+        schema: { type: string }
     post:
       operationId: postUploadsByBucketKey
       tags: [storage]
       x-overlord-permission: unknown
+      x-overlord-permission-candidates: [user_image:self:create, workspace_image:create, organization_image:create]
       x-overlord-edition: both
       x-overlord-consumers: [cli, webapp]
-      x-overlord-schema-status: stub
+      summary: Upload an image
+      description: >-
+        The request body is the image's raw bytes (no JSON, no multipart). The permission depends on the
+        bucket: `user-images` needs `user_image:self:create` in some authorized workspace (the image is
+        stored in the lowest-id such workspace's bucket unless `workspaceId` names one);
+        `workspace-images` needs `workspace_image:create` on the required `workspaceId`;
+        `organization-images` needs `organization_image:create` and organization-admin status in the
+        request's selected organization (404 when none is selected). `attachments` and unknown keys answer
+        404. Only PNG, JPEG, GIF and WebP (by the request's `Content-Type`) are accepted (415 otherwise);
+        SVG is refused. At most 8 MiB, refused by the parser with 413 `body_too_large`. User and workspace
+        images are recorded in their metadata table with an entity change; an organization image is only
+        written to storage (its URL is then set with `PATCH /api/organizations/{id}`).
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: workspaceId
+          in: query
+          required: false
+          description: >-
+            Workspace UUID, trimmed. Required for `workspace-images` (400 without it); optional for
+            `user-images`; ignored for `organization-images`. Authorized as above (404 outside the
+            caller's authorized workspaces).
+          schema: { type: string }
+        - name: x-upload-filename
+          in: header
+          required: false
+          description: >-
+            The original filename, percent-encoded; defaults to `upload`, and a blank value to
+            `image<ext>`. A malformed encoding answers 500.
+          schema: { type: string }
+      requestBody:
+        required: true
+        description: The image bytes; the request `Content-Type` selects the image type.
+        content:
+          '*/*':
+            schema: { $ref: '#/components/schemas/RawImageUploadBody' }
+      responses:
+        '200':
+          description: The stored image.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StoredImageDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/storage/{bucketKey}/{storageKey}":
     parameters:
       - name: bucketKey
         in: path
         required: true
-        schema:
-          type: string
+        description: '`user-images`, `workspace-images`, `organization-images` or `attachments`; any other
+          value answers 404.'
+        schema: { type: string }
       - name: storageKey
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          The object's backend key, percent-encoded as one segment (its `/` as `%2F`), exactly as in a
+          stored object's `url`.
+        schema: { type: string }
     get:
       operationId: getStorageByBucketKeyByStorageKey
       tags: [storage]
       x-overlord-permission: unknown
+      x-overlord-permission-candidates: [user_image:read, workspace_image:read, organization_image:read, attachment:read]
       x-overlord-edition: both
       x-overlord-consumers: [cli, mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Download a stored object
+      description: >-
+        Serves the bytes of a stored object. For `user-images`, `workspace-images` and `attachments` the
+        key must match a live metadata row exactly (the newest `user-images` row whose key ends with a
+        bare legacy key also matches) and the caller needs the bucket's read action on that row's
+        workspace; a `project_automation` token reads only attachments of its projects, and an unpromoted
+        Inbox attachment only its owner. For `organization-images` there is no metadata row: the caller
+        needs `organization_image:read` in some authorized workspace and the object is read from the
+        selected organization's bucket by the key as given, with the content type taken from its
+        extension. Every miss answers 404 `File not found`. When the bucket presigns reads the response is
+        a redirect to the storage provider instead of the bytes.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: >-
+            The object's bytes with its recorded content type (`application/octet-stream` when none).
+            Attachments are served with `X-Content-Type-Options: nosniff` and `Content-Disposition:
+            attachment` (the filename percent-encoded). Images use `Cache-Control: private,
+            max-age=31536000, immutable`.
+          headers:
+            Cache-Control:
+              required: true
+              schema: { type: string }
+            Content-Disposition:
+              required: false
+              description: '`attachment; filename="<percent-encoded name>"` on `attachments` only.'
+              schema: { type: string }
+            X-Content-Type-Options:
+              required: false
+              description: '`nosniff` on `attachments` only.'
+              schema: { type: string }
+          content:
+            '*/*':
+              schema: { $ref: '#/components/schemas/BinaryDownload' }
+        '302':
+          description: >-
+            A presigned URL at the storage provider (S3-compatible buckets configured to presign reads),
+            with `Cache-Control: private, no-store`; for attachments the URL carries the download
+            disposition.
+          headers:
+            Location:
+              required: true
+              schema: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/stream:
     get:
       operationId: getStream
@@ -6181,6 +6279,11 @@ components:
         Any unexpected failure: `{ error, detail }` with both set to the exception message. This
         includes a malformed JSON body, a CORS-rejected origin and, on Postgres, constraint violations
         (see contract/api/schema-disagreements.md).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    UnsupportedMediaType:
+      description: The request body's media type is not accepted (for images, anything but PNG, JPEG, GIF or WebP).
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorEnvelope' }
@@ -10426,3 +10529,38 @@ components:
           type: array
           items: { $ref: '#/components/schemas/WebhookDeliveryAttemptDto' }
         hasMore: { type: boolean }
+    StorageBucketKey:
+      type: string
+      enum: [ user-images, workspace-images, organization-images, attachments ]
+    RawImageUploadBody:
+      type: string
+      contentMediaType: application/octet-stream
+      description: >-
+        The image's raw bytes as the request body. The request `Content-Type` (parameters ignored, case
+        insensitive) must be `image/png`, `image/jpeg`, `image/gif` or `image/webp`. An empty body
+        answers 400.
+    BinaryDownload:
+      type: string
+      contentMediaType: application/octet-stream
+      description: The stored object's raw bytes.
+    StoredImageDto:
+      type: object
+      required: [ id, bucketKey, storageKey, filename, contentType, sizeBytes, url, createdAt ]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The metadata row id (for an organization image, an id with no row).
+        bucketKey: { $ref: '#/components/schemas/StorageBucketKey' }
+        storageKey:
+          type: string
+          description: >-
+            The backend key: `user-images/<profile id>/<id><ext>`, `workspace-files/<workspace
+            id>/images/<id><ext>` or `organization-files/<organization id>/images/<id><ext>`.
+        filename: { type: string }
+        contentType:
+          type: string
+          enum: [ image/png, image/jpeg, image/gif, image/webp ]
+        sizeBytes: { type: integer, minimum: 1, maximum: 8388608 }
+        url: { type: string, description: 'Server-relative `/api/storage/<bucket>/<percent-encoded key>`.' }
+        createdAt: { $ref: '#/components/schemas/DateTime' }
