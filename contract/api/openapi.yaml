@@ -6768,29 +6768,155 @@ paths:
       x-overlord-permission: launch:read
       x-overlord-edition: both
       x-overlord-consumers: [cli, webapp]
-      x-overlord-schema-status: stub
+      summary: Read the caller's launch settings (workspace in the query)
+      description: The query-addressed form of `GET /api/workspaces/{id}/launch-settings`, with the same rules.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        [
+          {
+              name: workspaceId,
+              in: query,
+              required: false,
+              description: "Workspace UUID the operation is authorized and stored through (404 `Workspace not
+                found or no active membership` for a workspace the caller is not an active member of).
+                Authenticated requests carry no ambient workspace, so without it the route answers 400
+                `workspaceId is required`; it is required in practice.",
+              schema: { type: string }
+            },
+          {
+              name: X-Overlord-Device-Fingerprint,
+              in: header,
+              required: false,
+              description: "The calling machine's fingerprint, which selects the execution target the settings
+                belong to on a hosted (Postgres) backend. A co-located Local (SQLite) backend ignores it
+                and uses its own host. A browser pseudo-device or the backend host's fingerprint resolves
+                to no target.",
+              schema: { type: string }
+            }
+        ]
+      responses:
+        '200':
+          description: The caller's launch settings for the acting machine.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LaunchSettingsDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/launch-settings/agents/{agentKey}":
     parameters:
       - name: agentKey
         in: path
         required: true
-        schema:
-          type: string
+        description: Agent key (`claude`, `codex`, …), trimmed; blank answers 400. Not checked against the catalog.
+        schema: { type: string }
     patch:
       operationId: patchLaunchSettingsAgentsByAgentKey
       tags: [launch-settings]
       x-overlord-permission: launch:configure
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Set the caller's launch mechanics for one agent (workspace in the query)
+      description: >-
+        The query-addressed form of `PATCH /api/workspaces/{id}/launch-settings/agents/{agentKey}`, with
+        the same rules.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        [
+          {
+              name: workspaceId,
+              in: query,
+              required: false,
+              description: "Workspace UUID the operation is authorized and stored through (404 `Workspace not
+                found or no active membership` for a workspace the caller is not an active member of).
+                Authenticated requests carry no ambient workspace, so without it the route answers 400
+                `workspaceId is required`; it is required in practice.",
+              schema: { type: string }
+            },
+          {
+              name: X-Overlord-Device-Fingerprint,
+              in: header,
+              required: false,
+              description: "The calling machine's fingerprint, which selects the execution target the settings
+                belong to on a hosted (Postgres) backend. A co-located Local (SQLite) backend ignores it
+                and uses its own host. A browser pseudo-device or the backend host's fingerprint resolves
+                to no target.",
+              schema: { type: string }
+            }
+        ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateAgentLaunchConfigBody' }
+      responses:
+        '200':
+          description: The caller's launch settings for the acting machine.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LaunchSettingsDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/launch-settings/terminal-profile:
     patch:
       operationId: patchLaunchSettingsTerminalProfile
       tags: [launch-settings]
       x-overlord-permission: launch:configure
       x-overlord-edition: both
-      x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      x-overlord-consumers: [cli, webapp]
+      summary: Set the caller's terminal profile (workspace in the query)
+      description: >-
+        The query-addressed form of `PATCH /api/workspaces/{id}/launch-settings/terminal-profile`, with
+        the same rules.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        [
+          {
+              name: workspaceId,
+              in: query,
+              required: false,
+              description: "Workspace UUID the operation is authorized and stored through (404 `Workspace not
+                found or no active membership` for a workspace the caller is not an active member of).
+                Authenticated requests carry no ambient workspace, so without it the route answers 400
+                `workspaceId is required`; it is required in practice.",
+              schema: { type: string }
+            },
+          {
+              name: X-Overlord-Device-Fingerprint,
+              in: header,
+              required: false,
+              description: "The calling machine's fingerprint, which selects the execution target the settings
+                belong to on a hosted (Postgres) backend. A co-located Local (SQLite) backend ignores it
+                and uses its own host. A browser pseudo-device or the backend host's fingerprint resolves
+                to no target.",
+              schema: { type: string }
+            }
+        ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateTerminalProfileBody' }
+      responses:
+        '200':
+          description: The caller's launch settings for the acting machine.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LaunchSettingsDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/launch-settings/session-defaults:
     patch:
       operationId: patchLaunchSettingsSessionDefaults
@@ -6798,7 +6924,51 @@ paths:
       x-overlord-permission: launch:configure
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Set the caller's launch-session defaults (workspace in the query)
+      description: >-
+        The query-addressed form of `PATCH /api/workspaces/{id}/launch-settings/session-defaults`, with
+        the same rules.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        [
+          {
+              name: workspaceId,
+              in: query,
+              required: false,
+              description: "Workspace UUID the operation is authorized and stored through (404 `Workspace not
+                found or no active membership` for a workspace the caller is not an active member of).
+                Authenticated requests carry no ambient workspace, so without it the route answers 400
+                `workspaceId is required`; it is required in practice.",
+              schema: { type: string }
+            },
+          {
+              name: X-Overlord-Device-Fingerprint,
+              in: header,
+              required: false,
+              description: "The calling machine's fingerprint, which selects the execution target the settings
+                belong to on a hosted (Postgres) backend. A co-located Local (SQLite) backend ignores it
+                and uses its own host. A browser pseudo-device or the backend host's fingerprint resolves
+                to no target.",
+              schema: { type: string }
+            }
+        ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateLaunchSessionDefaultsBody' }
+      responses:
+        '200':
+          description: The caller's launch settings for the acting machine.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LaunchSettingsDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/launch-settings/worktree-branch-automation:
     patch:
       operationId: patchLaunchSettingsWorktreeBranchAutomation
@@ -6806,103 +6976,348 @@ paths:
       x-overlord-permission: launch:configure
       x-overlord-edition: both
       x-overlord-consumers: [unverified]
-      x-overlord-schema-status: stub
+      summary: Turn worktree and branch automation on or off (workspace in the query)
+      description: >-
+        The query-addressed form of `PATCH
+        /api/workspaces/{id}/launch-settings/worktree-branch-automation`, with the same rules.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        [
+          {
+              name: workspaceId,
+              in: query,
+              required: false,
+              description: "Workspace UUID the operation is authorized and stored through (404 `Workspace not
+                found or no active membership` for a workspace the caller is not an active member of).
+                Authenticated requests carry no ambient workspace, so without it the route answers 400
+                `workspaceId is required`; it is required in practice.",
+              schema: { type: string }
+            },
+          {
+              name: X-Overlord-Device-Fingerprint,
+              in: header,
+              required: false,
+              description: "The calling machine's fingerprint, which selects the execution target the settings
+                belong to on a hosted (Postgres) backend. A co-located Local (SQLite) backend ignores it
+                and uses its own host. A browser pseudo-device or the backend host's fingerprint resolves
+                to no target.",
+              schema: { type: string }
+            }
+        ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateWorktreeBranchAutomationBody' }
+      responses:
+        '200':
+          description: The caller's launch settings for the acting machine.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LaunchSettingsDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/workspaces/{id}/launch-settings":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Workspace UUID the operation is authorized and stored through; a workspace the caller is not an
+          active member of answers 404.
+        schema: { type: string }
     get:
       operationId: getWorkspacesByIdLaunchSettings
       tags: [launch-settings]
       x-overlord-permission: launch:read
       x-overlord-edition: both
       x-overlord-consumers: [cli, mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Read the caller's launch settings
+      description: >-
+        Requires `launch:read` in the workspace. Returns the caller's per-machine settings stored against
+        the acting machine's execution target in this workspace (agent launch configs and terminal
+        profile) and the caller's profile-wide launch-session defaults. Reading never declares a target:
+        when the acting machine has none, `executionTargetId`, `deviceLabel` and `resolvedLaunchSession`
+        are null, `agentConfigs` is empty and `terminalProfile` is the default profile.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: X-Overlord-Device-Fingerprint
+          in: header
+          required: false
+          description: >-
+            The calling machine's fingerprint, which selects the execution target the settings belong to
+            on a hosted (Postgres) backend. A co-located Local (SQLite) backend ignores it and uses its
+            own host. A browser pseudo-device or the backend host's fingerprint resolves to no target.
+          schema: { type: string }
+      responses:
+        '200':
+          description: The caller's launch settings for the acting machine.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LaunchSettingsDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/workspaces/{id}/launch-settings/agents/{agentKey}":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Workspace UUID the operation is authorized and stored through; a workspace the caller is not an
+          active member of answers 404.
+        schema: { type: string }
       - name: agentKey
         in: path
         required: true
-        schema:
-          type: string
+        description: Agent key (`claude`, `codex`, …), trimmed; blank answers 400. Not checked against the catalog.
+        schema: { type: string }
     patch:
       operationId: patchWorkspacesByIdLaunchSettingsAgentsByAgentKey
       tags: [launch-settings]
       x-overlord-permission: launch:configure
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Set the caller's launch mechanics for one agent
+      description: >-
+        Requires `launch:configure` in the workspace. Stores the pre-command and flags for the agent
+        against the acting machine's execution target; omitted members keep their stored value. The acting
+        machine must already be a registered target (409 `no_execution_target_registered`).
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: X-Overlord-Device-Fingerprint
+          in: header
+          required: false
+          description: >-
+            The calling machine's fingerprint, which selects the execution target the settings belong to
+            on a hosted (Postgres) backend. A co-located Local (SQLite) backend ignores it and uses its
+            own host. A browser pseudo-device or the backend host's fingerprint resolves to no target.
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateAgentLaunchConfigBody' }
+      responses:
+        '200':
+          description: The caller's launch settings for the acting machine.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LaunchSettingsDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/workspaces/{id}/launch-settings/terminal-profile":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Workspace UUID the operation is authorized and stored through; a workspace the caller is not an
+          active member of answers 404.
+        schema: { type: string }
     patch:
       operationId: patchWorkspacesByIdLaunchSettingsTerminalProfile
       tags: [launch-settings]
       x-overlord-permission: launch:configure
       x-overlord-edition: both
-      x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      x-overlord-consumers: [cli, webapp]
+      summary: Set the caller's terminal profile for the acting machine
+      description: >-
+        Requires `launch:configure` in the workspace. Replaces the terminal profile stored against the
+        acting machine's execution target (409 `no_execution_target_registered` when it has none) and
+        records a `user_execution_target_preference` change. `launcher`, `placement`, `chord` and
+        `background` are replaced (absent means null, `window`, null and false; `chord` is kept only with
+        placement `chord`). `executionProvider` and `openViewerOnLaunch` are tri-state: absent keeps the
+        stored override, null clears it, a value sets it. Values are not otherwise validated: the response
+        echoes them as submitted, and a later read normalizes an unknown `placement` to `window` and a
+        non-`true` `background` to false.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: X-Overlord-Device-Fingerprint
+          in: header
+          required: false
+          description: >-
+            The calling machine's fingerprint, which selects the execution target the settings belong to
+            on a hosted (Postgres) backend. A co-located Local (SQLite) backend ignores it and uses its
+            own host. A browser pseudo-device or the backend host's fingerprint resolves to no target.
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateTerminalProfileBody' }
+      responses:
+        '200':
+          description: The caller's launch settings for the acting machine.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LaunchSettingsDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/workspaces/{id}/launch-settings/session-defaults":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Workspace UUID the operation is authorized and stored through; a workspace the caller is not an
+          active member of answers 404.
+        schema: { type: string }
     patch:
       operationId: patchWorkspacesByIdLaunchSettingsSessionDefaults
       tags: [launch-settings]
       x-overlord-permission: launch:configure
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Set the caller's launch-session defaults
+      description: >-
+        Requires `launch:configure` in the workspace, which only selects the membership the write is
+        authorized through: the defaults are stored on the caller's profile and apply in every workspace
+        and on every machine whose target does not override them. Omitted or null members keep their
+        stored value, except `executionProvider: null`, which resets it to the default (`direct`). Records
+        a `profile` change. Works without a registered execution target.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: X-Overlord-Device-Fingerprint
+          in: header
+          required: false
+          description: >-
+            The calling machine's fingerprint, which selects the execution target the settings belong to
+            on a hosted (Postgres) backend. A co-located Local (SQLite) backend ignores it and uses its
+            own host. A browser pseudo-device or the backend host's fingerprint resolves to no target.
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateLaunchSessionDefaultsBody' }
+      responses:
+        '200':
+          description: The caller's launch settings for the acting machine.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LaunchSettingsDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/workspaces/{id}/launch-settings/worktree-branch-automation":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Workspace UUID the operation is authorized and stored through; a workspace the caller is not an
+          active member of answers 404.
+        schema: { type: string }
     patch:
       operationId: patchWorkspacesByIdLaunchSettingsWorktreeBranchAutomation
       tags: [launch-settings]
       x-overlord-permission: launch:configure
       x-overlord-edition: both
       x-overlord-consumers: [unverified]
-      x-overlord-schema-status: stub
+      summary: Turn the caller's worktree and branch automation on or off
+      description: >-
+        Requires `launch:configure` in the workspace. Shorthand for the session-defaults update of
+        `worktreeBranchAutomationEnabled`: `enabled: true` turns it on and any other value, including an
+        absent member, turns it off.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: X-Overlord-Device-Fingerprint
+          in: header
+          required: false
+          description: >-
+            The calling machine's fingerprint, which selects the execution target the settings belong to
+            on a hosted (Postgres) backend. A co-located Local (SQLite) backend ignores it and uses its
+            own host. A browser pseudo-device or the backend host's fingerprint resolves to no target.
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateWorktreeBranchAutomationBody' }
+      responses:
+        '200':
+          description: The caller's launch settings for the acting machine.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LaunchSettingsDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/projects/{id}/launch-preference":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Project UUID; an unknown, deleted or foreign project answers 404.
+        schema: { type: string }
     get:
       operationId: getProjectsByIdLaunchPreference
       tags: [launch-settings]
       x-overlord-permission: launch:read
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Read the caller's launch preference for a project
+      description: >-
+        Requires `launch:read` in the project's workspace. The caller's last agent, model and reasoning
+        choice for the project; each is null until set.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The preference.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LaunchPreferenceDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
     put:
       operationId: putProjectsByIdLaunchPreference
       tags: [launch-settings]
       x-overlord-permission: launch:configure
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Update the caller's launch preference for a project
+      description: >-
+        Requires `launch:configure` in the project's workspace. A partial merge despite the method:
+        omitted members keep their stored value and null clears one. Values are stored as given, without
+        checking them against the agent catalog or their type.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateLaunchPreferenceBody' }
+      responses:
+        '200':
+          description: The stored preference.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LaunchPreferenceDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/projects/{id}/execution-target":
     parameters:
       - name: id
@@ -12864,3 +13279,213 @@ components:
                   - type: string
                   - type: 'null'
               reasoningLabel: { type: string, description: Trimmed; blank defaults to `Thinking`. }
+    ExecutionProviderDto:
+      type: object
+      required: [ kind, executable ]
+      properties:
+        kind:
+          type: string
+          enum: [ direct, latch ]
+        executable:
+          type: string
+          description: Latch CLI to invoke; kept while `direct` so switching back is lossless.
+    TerminalProfileDto:
+      type: object
+      required: [ launcher, placement, chord, background, executionProvider, openViewerOnLaunch ]
+      properties:
+        launcher:
+          description: Built-in launcher (`iTerm2`, `Terminal`) or a prefix command; null runs inline.
+          oneOf:
+            - type: string
+            - type: 'null'
+        placement:
+          type: string
+          description: >-
+            `window`, `tab` or `chord` on a read; the terminal-profile update echoes the submitted value.
+        chord:
+          description: Typed shortcut such as `cmd+d` when placement is `chord`.
+          oneOf:
+            - type: string
+            - type: 'null'
+        background:
+          type: boolean
+          description: Open the terminal without taking keyboard focus (macOS; ignored for `chord`).
+        executionProvider:
+          description: This target's provider override; null inherits the user default.
+          oneOf:
+            - { $ref: '#/components/schemas/ExecutionProviderDto' }
+            - type: 'null'
+        openViewerOnLaunch:
+          description: This target's viewer-on-launch override; null inherits the user default.
+          oneOf:
+            - type: boolean
+            - type: 'null'
+    LaunchSessionDefaultsDto:
+      type: object
+      required: [ executionProvider, openViewerOnLaunch, worktreeBranchAutomationEnabled ]
+      properties:
+        executionProvider: { $ref: '#/components/schemas/ExecutionProviderDto' }
+        openViewerOnLaunch: { type: boolean }
+        worktreeBranchAutomationEnabled:
+          type: boolean
+          description: Whether launches prepare a per-mission branch and worktree before spawn.
+    LaunchSessionSource:
+      type: string
+      description: Whether an effective value came from the target override or the user default.
+      enum: [ target, user_default ]
+    ResolvedLaunchSessionDto:
+      type: object
+      required: [ version, executionProvider, viewer, executionProviderSource, viewerOpenSource ]
+      properties:
+        version: { const: 1 }
+        executionProvider: { $ref: '#/components/schemas/ExecutionProviderDto' }
+        viewer:
+          type: object
+          required: [ kind, launcher, openOnLaunch, openAs, background ]
+          properties:
+            kind:
+              type: string
+              enum: [ iterm, terminal, inline, custom ]
+            launcher:
+              oneOf:
+                - type: string
+                - type: 'null'
+            openOnLaunch: { type: boolean }
+            openAs:
+              type: string
+              enum: [ window, tab ]
+              description: Projected from the profile's placement.
+            background: { type: boolean }
+        executionProviderSource: { $ref: '#/components/schemas/LaunchSessionSource' }
+        viewerOpenSource: { $ref: '#/components/schemas/LaunchSessionSource' }
+    LaunchSettingsDto:
+      type: object
+      required:
+        [
+          executionTargetId,
+          deviceLabel,
+          agentConfigs,
+          terminalProfile,
+          launchSessionDefaults,
+          resolvedLaunchSession,
+          worktreeBranchAutomationEnabled
+        ]
+      properties:
+        executionTargetId:
+          description: The acting machine's execution target in this workspace, or null when it has none.
+          oneOf:
+            - type: string
+            - type: 'null'
+        deviceLabel:
+          oneOf:
+            - type: string
+            - type: 'null'
+        agentConfigs:
+          type: object
+          description: The caller's launch mechanics for this target, keyed by agent key.
+          additionalProperties: { $ref: '#/components/schemas/AgentLaunchConfigDto' }
+        terminalProfile: { $ref: '#/components/schemas/TerminalProfileDto' }
+        launchSessionDefaults: { $ref: '#/components/schemas/LaunchSessionDefaultsDto' }
+        resolvedLaunchSession:
+          description: The effective provider and viewer for this machine; null when it has no target.
+          oneOf:
+            - { $ref: '#/components/schemas/ResolvedLaunchSessionDto' }
+            - type: 'null'
+        worktreeBranchAutomationEnabled:
+          type: boolean
+          description: Mirrors `launchSessionDefaults.worktreeBranchAutomationEnabled`.
+    UpdateAgentLaunchConfigBody:
+      type: object
+      properties:
+        preCommand:
+          type: string
+          description: Trimmed. A non-string answers 500.
+        flags:
+          type: array
+          description: Normalized; a non-array value stores an empty list.
+          items: { $ref: '#/components/schemas/AgentLaunchFlagInput' }
+    UpdateTerminalProfileBody:
+      type: object
+      properties:
+        launcher:
+          oneOf:
+            - type: string
+            - type: 'null'
+        placement:
+          type: string
+          enum: [ window, tab, chord ]
+        chord:
+          oneOf:
+            - type: string
+            - type: 'null'
+        background: { type: boolean }
+        executionProvider:
+          description: >-
+            Absent keeps the stored override, null clears it. An object sets it: `kind` other than
+            `latch` reads as `direct`, and a blank `executable` defaults to the Latch CLI; a non-object
+            clears it.
+          oneOf:
+            - { $ref: '#/components/schemas/ExecutionProviderDto' }
+            - type: 'null'
+        openViewerOnLaunch:
+          description: Absent keeps the stored override, null clears it; a non-boolean clears it.
+          oneOf:
+            - type: boolean
+            - type: 'null'
+    UpdateLaunchSessionDefaultsBody:
+      type: object
+      properties:
+        executionProvider:
+          description: >-
+            Null resets to the default `direct` provider; an object is normalized as for the terminal
+            profile, and a non-object also resets to the default.
+          oneOf:
+            - { $ref: '#/components/schemas/ExecutionProviderDto' }
+            - type: 'null'
+        openViewerOnLaunch:
+          description: Null keeps the stored value. Not type-checked.
+          oneOf:
+            - type: boolean
+            - type: 'null'
+        worktreeBranchAutomationEnabled:
+          description: Null keeps the stored value. Not type-checked.
+          oneOf:
+            - type: boolean
+            - type: 'null'
+    UpdateWorktreeBranchAutomationBody:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          description: Only `true` turns automation on.
+    LaunchPreferenceDto:
+      type: object
+      required: [ selectedAgent, selectedModel, selectedReasoningEffort ]
+      properties:
+        selectedAgent:
+          oneOf:
+            - type: string
+            - type: 'null'
+        selectedModel:
+          oneOf:
+            - type: string
+            - type: 'null'
+        selectedReasoningEffort:
+          oneOf:
+            - type: string
+            - type: 'null'
+    UpdateLaunchPreferenceBody:
+      type: object
+      properties:
+        selectedAgent:
+          oneOf:
+            - type: string
+            - type: 'null'
+        selectedModel:
+          oneOf:
+            - type: string
+            - type: 'null'
+        selectedReasoningEffort:
+          oneOf:
+            - type: string
+            - type: 'null'

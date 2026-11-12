@@ -248,6 +248,22 @@ the code does not do.
 - **L2** (open). `GET /api/workspaces/{id}/agent-catalog` and `GET /api/agent-catalog` write
   on first read: a workspace without a stored catalog has the instance default persisted as its
   `agentCatalog` setting (`getAgentCatalog`).
+- **L3** (open). `ResolvedLaunchSessionDto.viewer` (packages/contract) declares `kind`,
+  `launcher` and `openOnLaunch`; `resolveLaunchSession`
+  (`packages/core/service/terminal-profile-types.ts`) also writes `openAs` (`window`/`tab`, from
+  the placement) and `background`, which the schema includes. `TerminalProfileDto.executionProvider`
+  and `openViewerOnLaunch` are optional in the type but `toTerminalProfileDto` always writes them
+  (null when inherited). `getLaunchSettings`, `getWorkspacesByIdLaunchSettings` and the
+  launch-settings updates.
+- **L4** (open). The terminal-profile updates store `launcher`, `placement`, `chord` and
+  `background` without validating them and answer the submitted values, while a later read
+  normalizes them (`terminalProfileFromBody`, `parseTerminalProfileJson`); the session-defaults
+  update stores `openViewerOnLaunch` and `worktreeBranchAutomationEnabled` without a type check.
+  `PUT /api/projects/{id}/launch-preference` is a partial merge, not a replacement.
+- **L5** (open). `patchLaunchSettingsWorktreeBranchAutomation` and
+  `patchWorkspacesByIdLaunchSettingsWorktreeBranchAutomation` keep
+  `x-overlord-consumers: [unverified]`: no caller exists in webapp, cli, desktop, mcp or
+  OverlordMobile (the web settings page writes the flag through `session-defaults`).
 
 ## 2. Non-conforming error shapes
 
