@@ -1,6 +1,6 @@
 # Move Overlord's contract to the Clear Comply model (ADRs, changelog, versioned OpenAPI)
 
-Status: proposed, 2026-11-12
+Status: approved in principle 2026-11-12 (section 3 decisions accepted; versions 1–94 stay in git only)
 Contract impact of this plan document: none. The migration it describes ends in a
 baseline version cut (section 4) with no wire or behaviour change.
 
@@ -102,7 +102,7 @@ notes. Schemas win over prose on wire shape.
 
 ## 3. Decisions this plan recommends
 
-These are recommendations, each recorded as an ADR in phase 1 once approved.
+Accepted 2026-11-12. Each is recorded as an ADR in phase 1.
 
 1. **Continue the number line: the baseline is `169.0.0`.** The code, commit
    history and tickets say "contract v153" in hundreds of places; restarting at
@@ -229,14 +229,39 @@ deleted; REST prose in other documents reduced to what OpenAPI cannot express.
 - Update all 15 manifests, the generated harness capability artifacts, and
   `OverlordMobile` (`conformance-manifest.yaml`,
   `scripts/check-contract-conformance.mjs`).
-- Wire `contract-impact.mjs` into the release path: a `production` tag marks the
-  last released SHA, and the range check runs before `cli:publish`,
-  `desktop:publish` and the cloud deploy.
+- Build the release gate in section 5a.
 - Tag the baseline and record the register and approvals under
   `contract/releases/169.0.0/`.
 
 Exit, and the condition for pushing to production: `CONTRACT.md` at the root is
 gone, phases 1–4 exits hold, and the range check passes from the baseline tag.
+
+## 5a. Release gate for the manual deploy
+
+Today a release is four manual steps in this order: publish the CLI to npm, publish
+the desktop app to GitHub, `railway up`, then commit and push, which deploys the web
+app through Vercel. Two consequences matter here: production can run code that is
+not yet committed, so there is no SHA to check a range against, and the web app
+ships on every push to `main` whether or not the backend was released.
+
+The gate keeps the release manual and adds one command before and one after.
+
+1. **Commit first.** A release is always of a committed SHA with a clean tree.
+2. **`yarn release:preflight <none|patch|minor|major>`** runs `contract:check`,
+   `api:generate:check`, and `contract-impact.mjs` over the range from the
+   `production` tag to `HEAD` with the declared impact. On success it writes an
+   untracked stamp (`.release/preflight.json`: SHA, impact, contract version).
+3. **Publish steps refuse without a matching stamp.** `scripts/publish-cli.ts`,
+   `scripts/publish-desktop-release.ts` and a new `yarn server:deploy` (a wrapper
+   around `railway up`) each check that the tree is clean and the stamp SHA equals
+   `HEAD`. A bare `railway up` cannot be blocked; the wrapper is the supported path.
+4. **`yarn release:finish`** moves the `production` tag to the released SHA,
+   fast-forwards a `prod` branch to it, and pushes both.
+5. **Vercel's production branch becomes `prod`.** The web app then ships with the
+   release, not with every push to `main`. This is a setting in the Vercel project
+   and is the only step that cannot be done from the repository.
+
+The first `production` tag is placed on the `169.0.0` baseline commit.
 
 ## 5. Impact on modules
 
@@ -276,11 +301,8 @@ generated code.
   Overlord's DTOs may need constructs it lacks (discriminated unions, records);
   extend the generator and contribute the change back so the two stay the same.
 
-## 7. Open questions
+## 7. Resolved questions
 
-1. How does a cloud production deploy start today (Railway from `main`, or by
-   hand)? The range check in phase 5 needs one place to run.
-2. Is `169.0.0` acceptable, or is a restart at `1.0.0` preferred despite the
-   existing "contract vNNN" references?
-3. Should versions 1–94 be recovered from git history into the changelog, or left
-   in git? The plan leaves them in git.
+1. Production deploy is manual; the gate is section 5a.
+2. The baseline is `169.0.0`.
+3. Versions 1–94 are not recovered; they remain in git history.
