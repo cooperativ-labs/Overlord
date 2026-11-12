@@ -7,7 +7,7 @@ import { isStorageBucketKey, STORAGE_BUCKETS, WORKSPACE_BUCKET_KEYS } from './st
 
 const KNOWN_PERMISSIONS = new Set<string>(Object.values(PERMISSIONS));
 
-// The closed vocabulary from database/docs/09-database-schema-contract.md
+// The closed vocabulary from contract/data/README.md
 // (`storage_buckets.bucket_key`). `satisfies` fails to compile if the contract
 // union gains or loses a key without this list following.
 const VOCABULARY = [

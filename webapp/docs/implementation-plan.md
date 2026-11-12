@@ -9,8 +9,8 @@ It is grounded in, and should be read alongside:
 - [Framework Recommendation](framework-recommendation.md) — the stack (Vite + React + TypeScript + TanStack Router/Query + Serwist + shadcn/Tailwind) and *why*.
 - [Web App Requirements](web-app.md) — the MVP scope, deferred scope, data/API boundary rules, and acceptance criteria.
 - [UI Design Documents](ui/README.md) — the structure/IA doc (`ui/00`) and one detailed spec per page (`ui/01`–`ui/10`).
-- [`CONTRACT.md`](../../CONTRACT.md) — this module is the **REST API Layer** (`rest`); the React client is a pure consumer of it.
-- The [REST API Boundary](../../database/docs/09-database-schema-contract.md#rest-api-boundary) and Realtime Strategy in the schema contract.
+- [`contract/architecture.md`](../../contract/architecture.md) — this module is the **REST API Layer** (`rest`); the React client is a pure consumer of it.
+- The [REST API Boundary](../../contract/data/README.md#rest-api-boundary) and Realtime Strategy in the schema contract.
 
 This plan is documentation. It does not write application code or change the
 contract; it specifies the order in which that work should happen and the
@@ -124,7 +124,7 @@ Pick one of: an OpenAPI document, or a hand-authored shared TS types package in
 `ui/00` §4.1 calls out reads the designs depend on that are **not yet enumerated**
 in the REST API Boundary. They are owned by the `rest` module and expose domain
 resources (not raw tables), so they fit the existing boundary. Ratify them in the
-[REST API Boundary](../../database/docs/09-database-schema-contract.md#rest-api-boundary)
+[REST API Boundary](../../contract/data/README.md#rest-api-boundary)
 **before** building the pages that need them:
 
 | Endpoint | Feeds | Page docs |
@@ -135,8 +135,8 @@ resources (not raw tables), so they fit the existing boundary. Ratify them in th
 | `GET /capabilities` | which à-la-carte groups / REST features are installed | all (gating, `ui/00` §5) |
 | `GET /connectors` | connector install/doctor state + permission inbox | `ui/07` |
 
-Procedure per the contract: update `09-database-schema-contract.md` (REST API
-Boundary) and `CONTRACT.md` (REST API Layer), bump the contract version only if a
+Procedure per the contract: update `contract/data/README.md` (REST API
+Boundary) and `contract/architecture.md` (REST API Layer), bump the contract version only if a
 previously-stable response schema changes (these are additive reads, so likely no
 bump), then implement. `GET /capabilities` is the keystone — capability gating
 (§3.5) is unbuildable without it.
@@ -397,7 +397,7 @@ product-level criteria in [web-app.md](web-app.md):
 
 - Follow the [component-contract skill](../../.claude/skills/component-contract/SKILL.md)
   for every cross-module change; the contract update lands **before** the code.
-- Ratify the §3.3 reads in the schema contract + `CONTRACT.md` first.
+- Ratify the §3.3 reads in the schema contract + `contract/architecture.md` in the same change.
 - DTOs derive from the logical schema's camelCase field names; validate with zod v4
   (zod-v4-patterns skill).
 - REST handlers call the **shared service layer** only — never write tables directly,

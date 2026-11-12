@@ -34,7 +34,7 @@ Configure the backend target in `overlord.toml` (`backend_url`) or through
 setup details.
 
 The first-pass portable schema proposal is documented in the
-[schema contract](docs/09-database-schema-contract.md). Users can extend or
+[schema contract](../contract/data/README.md). Users can extend or
 customize the schema through component-scoped migrations, namespaced metadata,
 and documented extension points — see [Extension surface](#extension-surface)
 below.
@@ -45,14 +45,14 @@ Extend the schema only through the sanctioned paths: `ext_<name>_`-prefixed
 tables with `schema_migrations.component = 'ext:<name>'`, namespaced JSON
 metadata keys, and reactions via service APIs / `entity_changes` / `outbox_messages`
 — never direct writes to core tables. See the Extension Points section of
-[`CONTRACT.md`](../CONTRACT.md) and [`contract/extension-points.yaml`](../contract/extension-points.yaml).
+[`contract/CONTRACT.md`](../contract/CONTRACT.md) and [`contract/extension-points.yaml`](../contract/extension-points.yaml).
 
 ## For Developers
 
 ### Contract Components
 
 This module is the developer-facing home for two components in
-[`CONTRACT.md`](../CONTRACT.md):
+[`contract/CONTRACT.md`](../contract/CONTRACT.md):
 
 | Component | Stable id | What it owns |
 | --- | --- | --- |
@@ -64,7 +64,7 @@ response shapes (→ [webapp module](../webapp/README.md)).
 
 ### Documentation
 
-- [09 — Database Schema Contract](docs/09-database-schema-contract.md): column/index/FK definitions, default-DB recommendation, core tables, realtime/sync, migration discipline, REST API Boundary, and Extension Points.
+- [09 — Database Schema Contract](../contract/data/README.md): column/index/FK definitions, default-DB recommendation, core tables, realtime/sync, migration discipline, REST API Boundary, and Extension Points.
 - [09 — Schema Contract Review](docs/09-database-schema-contract-review.md): review notes on the schema contract.
 - [10 — Database Table Groups](docs/10-database-table-groups.md): which tables are core vs. à la carte, grouped optional sets, and the agent setup decision tree.
 - [11 — SQLite Vs PostgreSQL For Multi-Agent Use](docs/11-sqlite-vs-postgresql-multi-agent.md): database tradeoffs for local agents, hosted deployments, remote runners, queue claiming, and write concurrency.

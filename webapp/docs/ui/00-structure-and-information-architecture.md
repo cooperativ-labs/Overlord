@@ -125,7 +125,7 @@ cache over the REST boundary** with a **change-feed-driven invalidation layer**.
 
 ### 4.1 Boundary the UI consumes
 
-From the [REST API Boundary](../../../database/docs/09-database-schema-contract.md#rest-api-boundary):
+From the [REST API Boundary](../../../contract/data/README.md#rest-api-boundary):
 
 - `GET /projects`, `GET/POST /missions`, `GET /missions/:id`,
   `GET/POST /missions/:id/objectives`, `GET /missions/:id/events`,
@@ -154,7 +154,7 @@ resources, not raw tables):
 - `GET /connectors` — connector install/doctor state and permission-request inbox
   (doc 07, gated Group 4).
 
-These should be ratified in the [REST API Boundary](../../../database/docs/09-database-schema-contract.md#rest-api-boundary)
+These should be ratified in the [REST API Boundary](../../../contract/data/README.md#rest-api-boundary)
 when the web app is implemented; this UI spec treats them as the intended boundary,
 not as undeclared surface.
 

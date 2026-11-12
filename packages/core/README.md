@@ -12,4 +12,4 @@
 This package gives the former root `src/` tree a named module location. It does
 not define a new contract component or runtime interaction surface; callers
 still use the existing Protocol, REST, CLI, Database, and Auth component
-boundaries described in [`CONTRACT.md`](../../CONTRACT.md).
+boundaries described in [`contract/CONTRACT.md`](../../contract/CONTRACT.md).

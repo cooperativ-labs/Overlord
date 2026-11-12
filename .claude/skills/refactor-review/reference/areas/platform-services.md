@@ -17,9 +17,9 @@ their findings in separate sections of the report.
 
 ## Read first
 
-- `CONTRACT.md` → **Auth Layer** (§7), **Automations Layer** (§8), and the *Auth → Database
-  (Identity Bridge)*, *Service → Automations (Automation Surface)*, and *MCP Server → Auth*
-  interaction surfaces.
+- `contract/authorization.md` → **Auth Layer** (§7) and the *Auth → Database (Identity Bridge)* and
+  *MCP Server → Auth* interaction surfaces; `contract/architecture.md` → **Automations Layer** (§8)
+  and the *Service → Automations (Automation Surface)* interaction surface.
 - `auth/AGENTS.md`, `auth/docs/07-user-token-authentication.md`,
   `auth/docs/08-role-based-access-control.md`.
 - `automations/AGENTS.md`, `automations/docs/01-automations-overview.md`, and the co-located

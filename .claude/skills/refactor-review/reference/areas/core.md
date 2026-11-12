@@ -16,10 +16,11 @@ wrong the finding is about the migration or the codegen invocation).
 
 ## Read first
 
-- `CONTRACT.md` → **Protocol Layer** (§1), plus the *Agent → Protocol*, *Protocol → Database*,
-  *MCP Server → Service Layer*, and *Service → Automations* interaction surfaces.
+- `contract/protocol.md` → **Protocol Layer** (§1) and the *Agent → Protocol* and *Protocol → Database*
+  surfaces; `contract/architecture.md` → the *MCP Server → Service Layer* and *Service → Automations*
+  interaction surfaces.
 - `packages/core/README.md`.
-- The **Closed** vs **Open** enum sections of `CONTRACT.md` — closed values live in
+- The **Closed** vs **Open** enum sections of `contract/conformance.md` — closed values live in
   `@overlord/contract` and adding one requires a version bump.
 
 This is the highest-leverage and highest-risk area: the backend, CLI, MCP server, and runner all
@@ -59,7 +60,7 @@ the move; those side effects are the contract, not incidental.
 - consumers importing from `@overlord/contract` when a narrower entry exists
 - extension types leaking into the root barrel (which makes every consumer depend on every
   extension)
-- a closed enum from `CONTRACT.md` re-declared as a local string union somewhere in `core`,
+- a closed enum from `contract/conformance.md` re-declared as a local string union somewhere in `core`,
   `backend`, `cli`, or `webapp` — this is the single most common type-duplication finding here:
 
 ```bash

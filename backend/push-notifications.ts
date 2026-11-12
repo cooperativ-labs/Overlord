@@ -92,7 +92,7 @@ type RegistrationBody = {
  * A device token is globally unique and bound to exactly one profile: signing in
  * on a shared device must reassign the row rather than leave the previous
  * account receiving that device's notifications. Never pass an ActivityKit token
- * here — the two credentials are not interchangeable (see CONTRACT.md).
+ * here — the two credentials are not interchangeable (see contract/architecture.md).
  */
 export async function registerDevicePushToken(body: RegistrationBody): Promise<void> {
   const deviceToken = requiredString(body.deviceToken, 'deviceToken', DEVICE_TOKEN_MAX_LENGTH);

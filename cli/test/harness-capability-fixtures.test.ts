@@ -58,7 +58,7 @@ test('a source-guard fixture fails when a forbidden marker is present', () => {
     {
       fixtureVersion: 1,
       kind: 'source-guard',
-      path: 'CONTRACT.md',
+      path: 'contract/architecture.md',
       assert: { mustNotContain: ['Component Registry'] }
     },
     fixturePath => {
@@ -116,7 +116,7 @@ test('a script-io adapter render requires an explicit core substitution point', 
     {
       fixtureVersion: 1,
       kind: 'script-io',
-      script: 'CONTRACT.md',
+      script: 'contract/architecture.md',
       adapterKey: 'claude'
     },
     fixturePath => {

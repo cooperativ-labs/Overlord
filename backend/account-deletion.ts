@@ -16,7 +16,7 @@
  * itself being removed), so once the identity is gone none of them have
  * standalone meaning; this hard-deletes them, which is the "service-managed
  * soft cascade for owned mutable children" default
- * (database/docs/09-database-schema-contract.md) applied to a case where the
+ * (contract/data/README.md) applied to a case where the
  * parent's own removal is already a hard purge, not a tombstone. Each removal
  * still emits an `entity_changes` row so realtime/sync clients observe it, per
  * that doc's "a purge... must emit a purge outbox/change notification" rule.

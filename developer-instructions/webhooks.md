@@ -60,7 +60,7 @@ The response's `secret` field is the only time the raw secret is returned.
 | `objective.completed`    | An objective reaches `complete`.                                                     |
 | `mission.blocked`        | An agent posts a blocking question (`ovld protocol ask`) — use this to page a human. |
 
-This is a namespaced, open vocabulary (see `CONTRACT.md`) — forks and extensions may add their own
+This is a namespaced, open vocabulary (see `contract/conformance.md`) — forks and extensions may add their own
 `acme:custom.event` values without a contract change. Namespaced values won't appear in a
 subscription's event-type picker unless you add them yourself.
 

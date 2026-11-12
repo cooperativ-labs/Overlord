@@ -2,7 +2,7 @@
 
 This document categorizes Overlord's database tables into a **core set** that every installation needs and **a la carte groups** that can be added later as requirements grow. The goal is to let a solo developer start with the minimum viable schema and adopt additional capabilities without migration-level rewrites.
 
-The authoritative column and index definitions live in [09-database-schema-contract.md](09-database-schema-contract.md). This document focuses on which tables to install and when.
+The authoritative column and index definitions live in [contract/data/README.md](../../contract/data/README.md). This document focuses on which tables to install and when.
 
 ---
 
@@ -78,7 +78,7 @@ Every Overlord installation needs these. They cover the fundamental workflow: cr
 Core on both editions (migrated everywhere and tested on SQLite and Postgres), but only
 used by Cloud: a Local backend reports chat as unavailable and leaves these tables empty.
 Every row is private to one owner profile in one organization and cascades with the
-account. See `09-database-schema-contract.md` → "Assistant Conversations".
+account. See `contract/data/README.md` → "Assistant Conversations".
 
 | Table                                | Purpose                                                                         |
 | ------------------------------------ | ------------------------------------------------------------------------------- |

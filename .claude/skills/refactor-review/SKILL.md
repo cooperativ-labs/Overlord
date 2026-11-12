@@ -54,8 +54,8 @@ enclosing area and restrict the measurement and findings to that target.
 
 Every run, in this order:
 
-1. `CONTRACT.md` — the area's entry in the Component Registry and any interaction surface it
-   owns. The contract is normative: a refactor that breaks a stable interface needs a contract
+1. `contract/CONTRACT.md`, then the area's entry in the Component Registry and any interaction
+   surface it owns (`contract/architecture.md`, `contract/protocol.md`, `contract/authorization.md`). The contract is normative: a refactor that breaks a stable interface needs a contract
    version bump and an impact list, and that cost belongs in the finding.
 2. The area's `AGENTS.md` (e.g. `backend/AGENTS.md`, `cli/AGENTS.md`) and `README.md`.
 3. The area playbook from Step 0.
@@ -127,7 +127,7 @@ first-class refactor finding.
 Parallel hand-maintained type definitions that should derive from one source (generated DB
 types, `@overlord/contract`); stringly-typed values that have a closed set in the contract;
 optional fields that are actually always present; `as` casts that paper over a real shape
-mismatch. Check whether a closed enum in `CONTRACT.md` is being re-declared locally.
+mismatch. Check whether a closed enum in `contract/conformance.md` is being re-declared locally.
 
 ### 6. Dead and vestigial code
 Unreferenced exports, superseded code paths kept "just in case", feature flags whose branch
@@ -159,7 +159,8 @@ the report.
 - `S` — contained in one file, no signature changes, existing tests cover it
 - `M` — a handful of files, internal signatures change, tests need updating
 - `L` — crosses module boundaries, needs new tests first, or touches many call sites
-- `XL` — changes a stable interface in `CONTRACT.md` (needs a version bump and an impact list),
+- `XL` — changes a stable interface in the contract (needs a `yarn version:contract` increment,
+  a declared `Contract impact:` and an impact list),
   or requires a data migration
 
 Lead with `High`/`S` and `High`/`M`. Explicitly recommend **not** doing `Low`/`L` findings —
@@ -176,7 +177,7 @@ a report for that area and date already exists, append a `-follow-up` suffix.
 ## Metadata
 - Area: <area>
 - Roots reviewed: <paths>
-- Contract version at review: <from CONTRACT.md>
+- Contract version at review: <from contract/VERSION>
 - AI model: <model name>
 - Commit: <git rev-parse --short HEAD>
 

@@ -1,6 +1,6 @@
 # Automations Module — Agent Extension Guide
 
-Read [`CONTRACT.md`](../CONTRACT.md) and the [component-contract skill](../.claude/skills/component-contract/SKILL.md) before adding automations that other modules will call.
+Read [`contract/CONTRACT.md`](../contract/CONTRACT.md) and the [component-contract skill](../.claude/skills/component-contract/SKILL.md) before adding automations that other modules will call.
 
 ---
 
@@ -16,7 +16,7 @@ Read [`CONTRACT.md`](../CONTRACT.md) and the [component-contract skill](../.clau
 
 ## Before You Start
 
-1. Read `CONTRACT.md` — Automations Layer section (`automations`).
+1. Read `contract/architecture.md` — Automations Layer section (`automations`).
 2. Read [`automations/docs/01-automations-overview.md`](docs/01-automations-overview.md).
 3. Confirm your automation does not read or write domain tables directly.
 
@@ -73,7 +73,7 @@ automations/src/
 
 ## Cross-Module Checklist
 
-- [ ] Read `CONTRACT.md` Automations Layer and `serviceToAutomations` surface
+- [ ] Read `contract/architecture.md` Automations Layer and `serviceToAutomations` surface
 - [ ] No direct database access from `automations/src/`
 - [ ] New secrets documented in `.env.local.example` and `.env.prod.example`
 - [ ] Colocated tests for fallback and happy-path behavior

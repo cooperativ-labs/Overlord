@@ -1,6 +1,6 @@
 # MCP Module — Agent Extension Guide
 
-Read [`CONTRACT.md`](../CONTRACT.md) and the
+Read [`contract/CONTRACT.md`](../contract/CONTRACT.md) and the
 [component-contract skill](../.claude/skills/component-contract/SKILL.md) before
 changing this module. MCP is a contract component as of contract version 0.
 
@@ -28,7 +28,7 @@ branch actions.
 3. Let backend auth resolve the caller first, then rely on the corresponding
    service/protocol RBAC gate.
 4. Do not read or write database tables directly.
-5. Update [`README.md`](README.md) and `CONTRACT.md` if the public tool catalog
+5. Update [`README.md`](README.md) and `contract/architecture.md` (MCP Server) if the public tool catalog
    or resource URI contract changes.
 6. Add focused tests for tool catalog shape and dispatch behavior.
 

@@ -17,7 +17,7 @@ them only if the user asks).
 
 ## Read first
 
-- `CONTRACT.md` → the *Desktop Shell → REST (Renderer Surface)* interaction surface (the SPA is
+- `contract/architecture.md` → the *Desktop Shell → REST (Renderer Surface)* interaction surface (the SPA is
   the renderer in Local edition) and the REST API layer it consumes.
 - `webapp/AGENTS.md`, `webapp/README.md`.
 - `.claude/skills/zod-v4-patterns/SKILL.md` before proposing anything about form validation.

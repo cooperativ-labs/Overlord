@@ -250,7 +250,7 @@ resolved project directory. The queue state remains in the backend.
 ### Contract Components
 
 This module is the developer-facing home for three components defined in
-[`CONTRACT.md`](https://github.com/cooperativ-labs/OpenOverlord/blob/main/CONTRACT.md):
+[`contract/CONTRACT.md`](https://github.com/cooperativ-labs/OpenOverlord/blob/main/contract/CONTRACT.md):
 
 | Component      | Stable id  | What it owns                                                                                                                                                                        |
 | -------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -345,5 +345,5 @@ would run untested working-tree code against your real mission data.
 
 Per the contract, the CLI/protocol/runner surfaces reach persistence only
 through the configured **REST/backend API** — never direct table writes.
-See the Interaction Surfaces section of [`CONTRACT.md`](https://github.com/cooperativ-labs/OpenOverlord/blob/main/CONTRACT.md) before
+See the Interaction Surfaces section of [`contract/architecture.md`](https://github.com/cooperativ-labs/OpenOverlord/blob/main/contract/architecture.md) before
 making any cross-module change.

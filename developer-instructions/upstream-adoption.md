@@ -61,7 +61,7 @@ only three categories of change:
 | Core patches | Direct changes to upstream-owned modules or stable interfaces | High, should be rare and either upstreamed or converted into a contracted extension |
 
 If a customization cannot fit one of the sanctioned extension points in
-[`CONTRACT.md`](../CONTRACT.md), do not merge it as a silent local patch. Propose
+[`contract/CONTRACT.md`](../contract/CONTRACT.md), do not merge it as a silent local patch. Propose
 the contract change first, list the impact on the affected modules, and only then
 implement the downstream behavior.
 
@@ -100,7 +100,7 @@ Before pulling upstream, record:
 
 - the current upstream commit or release tag;
 - the downstream distribution commit;
-- the contract version in `CONTRACT.md` and `contract/components.yaml`;
+- the contract version in `contract/VERSION`;
 - the set of downstream conformance manifests;
 - the currently applied core and extension database migrations;
 - the production configuration version for each instance.
@@ -127,7 +127,7 @@ git checkout distribution
 
 Review upstream changes in this order:
 
-1. Contract files: `CONTRACT.md` and `contract/*.yaml`.
+1. Contract files: everything under `contract/` (documents, ADRs, changelog and `*.yaml`).
 2. Database schema and migrations.
 3. Protocol, CLI, runner, REST, auth, connector, and extension surfaces.
 4. Module implementation changes.

@@ -1,7 +1,7 @@
 /**
  * Typed API contract shared between the REST server (`server/`) and the React
  * SPA (`web/`). DTO field names are the camelCase form of the logical schema
- * columns (see database/docs/09-database-schema-contract.md). Most exports are
+ * columns (see contract/data/README.md). Most exports are
  * types only so they can be `import type`-d without a runtime dependency; the
  * launch-variable catalog (`LAUNCH_VARIABLES` and friends) is the intentional
  * runtime exception shared by the CLI substitution engine and the Project
@@ -3090,7 +3090,7 @@ export interface UpdateProfileBody {
 
 /**
  * Logical `storage_buckets.bucket_key`. The vocabulary is closed
- * (database/docs/09-database-schema-contract.md, `storage_buckets`):
+ * (contract/data/README.md, `storage_buckets`):
  * `organization-images` is organization-scoped; the other three are seeded per
  * workspace.
  */
@@ -3173,7 +3173,7 @@ export type UserTokenStatus = 'active' | 'revoked' | 'expired' | 'rotated';
  *    grants `project:read`, `mission:read`, `mission:create`, `objective:read`,
  *    `event:read`, `session:read`, `artifact:read`, `attachment:read`,
  *    `execution_request:read`, bounded by the token's `projects` allowlist and a
- *    default-deny route allowlist (see CONTRACT.md Version 151). It cannot edit
+ *    default-deny route allowlist (see contract/CHANGELOG.md, version 151). It cannot edit
  *    existing work, add objectives, launch or attach agents, capture inbox items,
  *    create projects, manage tokens or webhooks, or administer a workspace.
  *
@@ -3356,7 +3356,7 @@ export interface WebhookDeliveryAttemptsPageDto {
 // request over the documented `/api/virtual-targets/v1/*` REST surface. These
 // DTOs are the stable, versioned contract shared by the REST server, the SPA,
 // and — vendored as a public subset — an external `rest-consumer` gateway. See
-// the Virtual Target Queue Surface in CONTRACT.md and the Virtual Execution
+// the Virtual Target Queue Surface in contract/architecture.md and the Virtual Execution
 // Targets section of the schema contract.
 //
 // Invariants encoded here: the queue payload is immutable and returned only to

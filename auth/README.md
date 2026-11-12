@@ -38,13 +38,13 @@ authentication.
 
 Other components must consume auth only through the Auth Layer service boundary
 (token validation + permission check), never by reading auth tables directly.
-A custom Auth/RBAC provider is a sanctioned [extension point](../CONTRACT.md).
+A custom Auth/RBAC provider is a sanctioned [extension point](../contract/architecture.md).
 
 ## For Developers
 
 ### Contract Component
 
-Maps to the **Auth Layer** (`auth`) in [`CONTRACT.md`](../CONTRACT.md), which owns:
+Maps to the **Auth Layer** (`auth`) in [`contract/authorization.md`](../contract/authorization.md), which owns:
 
 - Token creation, rotation, revocation, and hash storage
 - Role assignment CRUD

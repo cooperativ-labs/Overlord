@@ -1,6 +1,6 @@
 # Auth Module — Agent Extension Guide
 
-This file tells agents how to extend the Auth module to add new capabilities for users. Read [`CONTRACT.md`](../CONTRACT.md) and the [component-contract skill](../.claude/skills/component-contract/SKILL.md) before making any cross-module change.
+This file tells agents how to extend the Auth module to add new capabilities for users. Read [`contract/CONTRACT.md`](../contract/CONTRACT.md) and the [component-contract skill](../.claude/skills/component-contract/SKILL.md) before making any cross-module change.
 
 ---
 
@@ -21,7 +21,7 @@ Each type has a different procedure below.
 
 ## Before You Start
 
-1. Read `CONTRACT.md` — Auth Layer section (stable id: `auth`).
+1. Read `contract/authorization.md` — Auth Layer section (stable id: `auth`).
 2. Read [`auth/docs/07-user-token-authentication.md`](docs/07-user-token-authentication.md) and [`auth/docs/08-role-based-access-control.md`](docs/08-role-based-access-control.md).
 3. Check `auth/src/rbac/` for existing authorization code patterns.
 4. If your change adds a new interaction surface between Auth and another component, update the contract first (see [contract/AGENTS.md](../contract/AGENTS.md)).
@@ -30,7 +30,7 @@ Each type has a different procedure below.
 
 ## Adding a New Auth Provider
 
-An auth provider replaces or supplements the built-in `USER_TOKEN` mechanism. This is a sanctioned [extension point](../CONTRACT.md).
+An auth provider replaces or supplements the built-in `USER_TOKEN` mechanism. This is a sanctioned [extension point](../contract/architecture.md).
 
 **Steps:**
 
@@ -53,7 +53,7 @@ Default roles (`ADMIN`, `MEMBER`) are defined in `auth/src/rbac/roles.ts` and en
 2. Declare the role's default capability grants in `Overlord.rbac.toml`. Follow the existing `[role.ADMIN]` / `[role.MEMBER]` blocks.
 3. Update the RBAC authorizer tests in `auth/src/rbac/authorizer.test.ts` to cover the new role's permissions.
 4. If the new role is meant to be workspace-configurable (not just code-defined), note it in [`auth/docs/08-role-based-access-control.md`](docs/08-role-based-access-control.md).
-5. No contract update needed unless you are adding this role to a closed vocabulary (roles are an open vocabulary — see `CONTRACT.md`).
+5. No contract update needed unless you are adding this role to a closed vocabulary (roles are an open vocabulary — see `contract/conformance.md`).
 
 ---
 
@@ -67,7 +67,7 @@ Permissions are domain-capability strings (e.g. `project:create`, `mission:read`
 2. Add the permission to the relevant role grant blocks in `Overlord.rbac.toml`.
 3. Add a `can(actor, action, resource)` call wherever the permission is enforced in the service layer. **Do not gate access in database queries or CLI handlers directly** — always call through the `AuthorizationProvider` interface.
 4. Write a test in `auth/src/rbac/authorizer.test.ts` covering the new permission for each role that should (and should not) hold it.
-5. If this permission is being promoted from an extension-namespace value to a core value, update the "RBAC permission names" open vocabulary section in `database/docs/09-database-schema-contract.md`.
+5. If this permission is being promoted from an extension-namespace value to a core value, update the "RBAC permission names" open vocabulary section in `contract/data/README.md`.
 
 ---
 
@@ -112,7 +112,7 @@ New auth provider implementations go under `auth/providers/<name>/` or `auth/src
 
 ## Cross-Module Checklist
 
-- [ ] Read `CONTRACT.md` Auth Layer section
+- [ ] Read `contract/authorization.md` Auth Layer section
 - [ ] If adding a new surface between Auth and another component → update contract first
 - [ ] If adding a database column → follow [database extension procedure](../database/AGENTS.md)
 - [ ] If adding a new CLI command for auth → follow [cli extension procedure](../cli/AGENTS.md)

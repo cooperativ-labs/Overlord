@@ -1,6 +1,6 @@
 # Connectors Module — Agent Extension Guide
 
-This file tells agents how to extend the Connectors module to add new agent harness connectors for users. Read [`CONTRACT.md`](../CONTRACT.md) and the [component-contract skill](../.claude/skills/component-contract/SKILL.md) before making any cross-module change.
+This file tells agents how to extend the Connectors module to add new agent harness connectors for users. Read [`contract/CONTRACT.md`](../contract/CONTRACT.md) and the [component-contract skill](../.claude/skills/component-contract/SKILL.md) before making any cross-module change.
 
 ---
 
@@ -21,7 +21,7 @@ Each type has a different procedure below.
 
 ## Before You Start
 
-1. Read `CONTRACT.md` — Connector Layer section (stable id: `connector`).
+1. Read `contract/architecture.md` — Connector Layer section (stable id: `connector`).
 2. Read [`connectors/docs/05-connectors-and-agent-plugins.md`](docs/05-connectors-and-agent-plugins.md) for the four-layer model: connector core, plugins, adapters, and prompt wrappers.
 3. Read [`connectors/docs/agent-harness-configuration-architecture.md`](docs/agent-harness-configuration-architecture.md) for ownership boundaries.
 4. Check the `agentSession` vocabularies in `contract/extension-points.yaml` and the descriptor schema before adding a normalized capability, integration shape, or fixture kind.
@@ -266,7 +266,7 @@ wrong and that is worth raising rather than working around.
 6. **Create `connectors/adapters/<agent-name>/conformance-manifest.yaml`** declaring:
 
    ```yaml
-   contractVersion: '116'
+   contractVersion: '168.0.0'
    componentType: connector
    componentKey: <agent-name>
    label: <human-readable label>
@@ -350,7 +350,7 @@ The Claude and Codex adapters are the reference implementations; Cursor, Pi, Ant
 
 ## Cross-Module Checklist
 
-- [ ] Read `CONTRACT.md` Connector Layer section
+- [ ] Read `contract/architecture.md` Connector Layer section
 - [ ] New capability id, integration shape, or fixture kind → update the contract vocabulary and descriptor schema first
 - [ ] Hook scripts → use `ovld protocol` commands only, no direct DB writes
 - [ ] Conformance manifest created and validated for every new connector

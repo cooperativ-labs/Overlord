@@ -10,9 +10,9 @@ It complements, and must stay consistent with:
 - [`cli/docs/06-core-domain-and-lifecycle.md`](../../../cli/docs/06-core-domain-and-lifecycle.md) — domain concepts and required states.
 - [`cli/docs/03-agent-protocol.md`](../../../cli/docs/03-agent-protocol.md) — the protocol verbs that drive transitions.
 - [`cli/docs/04-runner-and-launch-execution.md`](../../../cli/docs/04-runner-and-launch-execution.md) — the execution-request queue and runner.
-- [`database/docs/09-database-schema-contract.md`](../../../database/docs/09-database-schema-contract.md) — the `objectives` and `execution_requests` tables.
+- [`contract/data/README.md`](../../../contract/data/README.md) — the `objectives` and `execution_requests` tables.
 
-Per `CONTRACT.md`, the database layer owns the schema and constraints, the protocol
+Per `contract/architecture.md`, the database layer owns the schema and constraints, the protocol
 layer owns the transition-triggering verbs, and the CLI/runner owns launch execution.
 This document is the cross-cutting behavioral specification those layers implement
 together; it does not change any stable interface.

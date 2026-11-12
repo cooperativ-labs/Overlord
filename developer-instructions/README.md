@@ -18,7 +18,7 @@ The whole-repo entry points, at the repository root:
 
 - [`README.md`](../README.md) — what Overlord is, core concepts, and the module
   table of contents (human-facing front door).
-- [`CONTRACT.md`](../CONTRACT.md) — the **normative spec** for how modules
+- [`contract/CONTRACT.md`](../contract/CONTRACT.md) — the **normative spec** for how modules
   interact. Read it before any change that crosses a module boundary.
 - [`TEST_PLAN.md`](../TEST_PLAN.md) — the five-layer test strategy and the
   cross-module contract conformance suite.
@@ -89,4 +89,4 @@ home and a rule:
 | Planning / proposals | not-yet-built or under-discussion work | [`planning/feature-plans/`](../planning/feature-plans/) |
 | Security audits | dated external-surface reviews | [`security-audits/`](../security-audits/) |
 | Agent history | per-mission investigation notes | [`ai/history/`](../ai/history/) |
-| Normative spec | the contract | [`CONTRACT.md`](../CONTRACT.md) + [`contract/`](../contract/) |
+| Normative spec | the contract | [`contract/CONTRACT.md`](../contract/CONTRACT.md) + [`contract/`](../contract/) |

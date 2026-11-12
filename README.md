@@ -172,7 +172,7 @@ sequenceDiagram
 | **Connectors** | Agent harness plugins (Claude, Codex, Cursor, PI) — see [connectors/](connectors/README.md) |
 | **Database** | SQLite (local) or Postgres (cloud) behind the backend — see [database/](database/README.md) |
 
-All surfaces share one contract: [`CONTRACT.md`](CONTRACT.md) (version `0`).
+All surfaces share one contract: [`contract/CONTRACT.md`](contract/CONTRACT.md) (version in [`contract/VERSION`](contract/VERSION)).
 
 ## For Developers
 
@@ -255,7 +255,7 @@ dependencies.
 Overlord is organized as **independent modules connected via the contract**.
 Each module owns its code, tests, and documentation; this README is the table of
 contents. The normative spec for how modules interact is
-[`CONTRACT.md`](CONTRACT.md) — read it before any change that crosses a module
+[`contract/CONTRACT.md`](contract/CONTRACT.md) — read it before any change that crosses a module
 boundary.
 
 **Documentation map →** [`developer-instructions/README.md`](developer-instructions/README.md) is the front door to
@@ -274,7 +274,7 @@ planning, and security audits), and records where each kind of doc lives.
 | [connectors/](connectors/README.md) | Agent harness connectors: core, plugins, adapters, hooks | `connector` |
 | [automations/](automations/README.md) | Optional AI automations (Gemini summarization, objective titles) (the `@overlord/automations` workspace package — runtime in `automations/src/`) | `automations` |
 | [desktop/](desktop/README.md) | Optional Electron desktop shell wrapping the webapp (the `@overlord/desktop` workspace package) — **not built by default** | `desktop` |
-| [contract/](contract/README.md) | The connecting spec — machine-readable counterparts to `CONTRACT.md` | _(spec)_ |
+| [contract/](contract/README.md) | The contract: entry point, topic documents, ADRs, changelog and machine-readable files | _(spec)_ |
 
 > Behavior specs live under `<module>/docs/`. Planning notes are in
 > [`planning/feature-plans/`](planning/feature-plans/). **Convention:** colocate
@@ -288,7 +288,7 @@ changes from upstream, use the contract-first workflow in
 
 ### Testing
 
-The master test strategy is [`TEST_PLAN.md`](TEST_PLAN.md): a five-layer test pyramid whose centerpiece is a cross-module **contract conformance suite** that proves every module adheres to [`CONTRACT.md`](CONTRACT.md). Per-module test plans are colocated under each module's `docs/testing.md` (database, cli, auth, connectors, webapp), following the same code-and-tests colocation convention as the rest of the repo.
+The master test strategy is [`TEST_PLAN.md`](TEST_PLAN.md): a five-layer test pyramid whose centerpiece is a cross-module **contract conformance suite** that proves every module adheres to [`contract/CONTRACT.md`](contract/CONTRACT.md). Per-module test plans are colocated under each module's `docs/testing.md` (database, cli, auth, connectors, webapp), following the same code-and-tests colocation convention as the rest of the repo.
 
 ### Planned / Deferred
 

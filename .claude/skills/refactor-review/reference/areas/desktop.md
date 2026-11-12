@@ -17,7 +17,7 @@ script that produces them.
 
 ## Read first
 
-- `CONTRACT.md` → **Desktop Shell** (§10) and the *Desktop Shell → REST (Renderer Surface)* and
+- `contract/architecture.md` → **Desktop Shell** (§10) and the *Desktop Shell → REST (Renderer Surface)* and
   *Desktop Shell → CLI (Process Supervision Surface)* interaction surfaces.
 - `desktop/README.md`, `desktop/docs/desktop-app.md`, `desktop/conformance-manifest.yaml`.
 

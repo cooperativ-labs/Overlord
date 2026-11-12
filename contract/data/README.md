@@ -2439,7 +2439,7 @@ Indexes:
 
 Private Overlord assistant conversations (coo:1108). Migration pair:
 `20261004120000_chat_conversations.sql` (SQLite and Postgres). DTOs live in
-`packages/contract/src/chat.ts`; the behavioral contract is CONTRACT.md "Version 152
+`packages/contract/src/chat.ts`; the behavioral contract is contract/CHANGELOG.md "Version 152
 Change Summary".
 
 Shared rules for every table in this section:

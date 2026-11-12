@@ -2,7 +2,7 @@
 
 Part of the [master test plan](../../TEST_PLAN.md). Covers the `database` and
 `extension` contract components. Normative source:
-[`09-database-schema-contract.md`](09-database-schema-contract.md).
+[`contract/data/README.md`](../../contract/data/README.md).
 
 The database module is the foundation: every other surface (CLI, protocol, REST,
 runner) reaches persistence through its service layer. Its tests therefore carry

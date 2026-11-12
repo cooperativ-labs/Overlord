@@ -3,7 +3,7 @@
 Part of the [master test plan](../../TEST_PLAN.md). Covers the `rest` contract
 component (the REST/realtime API) and the deferred web UI that consumes it.
 Normative sources: the **REST API Boundary** and **Realtime Strategy** sections of
-[`09-database-schema-contract.md`](../../database/docs/09-database-schema-contract.md)
+[`contract/data/README.md`](../../contract/data/README.md)
 and [web-app.md](web-app.md) + the UI specs under [`ui/`](ui/).
 
 > **Status:** the webapp is deferred (Phase 5) and may not use Next.js

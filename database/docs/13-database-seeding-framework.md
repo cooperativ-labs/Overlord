@@ -14,7 +14,7 @@ composes the tools already in the stack:
   so one seed module works across both the SQLite and Postgres adapters.
 - The **service layer** ([`webapp/server/repository.ts`](../../webapp/server/repository.ts))
   for core-domain entities, so `entity_changes`, `revision`, and idempotency stay
-  consistent with [`CONTRACT.md`](../../CONTRACT.md).
+  consistent with [`contract/CONTRACT.md`](../../contract/CONTRACT.md).
 - **`@faker-js/faker`** (one small dev dependency) only as a *data generator* for
   realistic volume — it never touches the database, so it stays adapter-neutral.
   Seed its RNG with a fixed value for reproducible fixtures.
@@ -36,7 +36,7 @@ The constraints that decide this come straight from the existing architecture:
    `kysely-codegen` for types, not Prisma/Drizzle/TypeORM. The schema lives in
    hand-written SQL migrations, not an ORM schema DSL.
 
-3. **Service-layer write discipline.** `CONTRACT.md` → *Protocol → Database* and
+3. **Service-layer write discipline.** `contract/protocol.md` → *Protocol → Database* and
    *REST API → Database* require that core-domain writes go through the service
    layer, which appends `entity_changes` and bumps `revision` in the same
    transaction. A seeder that bulk-inserts raw rows would bypass the change feed

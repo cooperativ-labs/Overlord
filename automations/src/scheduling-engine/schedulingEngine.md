@@ -14,7 +14,7 @@ Missions can carry a repeating schedule:
 The scheduling engine is pure application logic. It does not update the database
 directly. Database writes happen in `packages/core/service/mission-schedules.ts`
 and the equivalent REST handlers in `backend/repository.ts` (this repo's dual
-data layer — see `CONTRACT.md`). See
+data layer — see `contract/architecture.md`). See
 `planning/feature-plans/mission-scheduling-engine.md` for the full mapping of
 this engine onto the mission model.
 
@@ -143,7 +143,7 @@ Scheduling adds:
 The scheduling actions are implemented twice, sharing this engine — once in
 `packages/core/service/mission-schedules.ts` (protocol/CLI data layer) and once
 in `backend/repository.ts` (REST data layer), per this repo's dual-backend
-architecture (`CONTRACT.md`).
+architecture (`contract/architecture.md`).
 
 ### `previewScheduleDueDatetime(input, itemDueDatetime?)`
 

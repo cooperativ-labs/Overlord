@@ -1000,7 +1000,7 @@ function toMissionDto(r: MissionRow, tags: ProjectTagDto[] = []): MissionDto {
 // flow uses a `--no-ff` merge commit on the parent precisely so the parent tip
 // diverges from the branch tip, keeping this derivation unambiguous (a plain
 // fast-forward would leave parent and branch tips identical and indistinguishable
-// from a freshly-cut branch — see CONTRACT.md branch status derivation).
+// from a freshly-cut branch — see the contract/CHANGELOG.md branch status derivation).
 async function deriveBranchStatus(_input: {
   projectId: string;
   branchName: string;
@@ -6903,7 +6903,7 @@ type InternalCreateObjectiveBody = CreateObjectiveBody & { assignedAgent?: strin
 // workspace — coo:135) and the acting member's identity within it.
 //
 // The insert itself lives in the shared service layer so REST, CLI, Protocol and
-// MCP all create objectives through one implementation (CONTRACT.md's "REST API →
+// MCP all create objectives through one implementation (contract/architecture.md's "REST API →
 // Database uses the same service layer as CLI and Protocol"). This wrapper only
 // adapts the REST shapes: a workspace-scoped ctx in, a full `ObjectiveDto` out.
 async function insertObjective(
@@ -7835,7 +7835,7 @@ export async function updateProfile(body: UpdateProfileBody): Promise<ProfileDto
 // non-secret display prefix; the raw secret is returned exactly once at creation
 // and never persisted or shown again. Secret format, hashing, and scope-grant
 // reads live in `@overlord/auth` (the Auth Layer owns token creation and hash
-// storage per CONTRACT.md); this module owns persistence and lifecycle state.
+// storage per contract/authorization.md); this module owns persistence and lifecycle state.
 
 const USER_TOKEN_COLUMNS =
   'id, label, scope, token_prefix, status, expires_at, last_used_at, revoked_at, created_at';

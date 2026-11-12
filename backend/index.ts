@@ -1524,7 +1524,7 @@ app.post(
 
 // ---- Mobile standard push notifications ---------------------------------
 // Standard APNs *device* tokens, deliberately distinct from the ActivityKit
-// tokens above: different table, topic, and push type (see CONTRACT.md). The
+// tokens above: different table, topic, and push type (see contract/architecture.md). The
 // opaque token travels in the body rather than the URL so it stays out of access
 // logs and proxy caches, and there is no read surface for it at all.
 app.put(

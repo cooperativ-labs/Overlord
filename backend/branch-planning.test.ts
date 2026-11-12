@@ -13,7 +13,7 @@ import {
 
 // The service layer's branch-planning algorithm is duplicated in the Runner
 // Layer (cli/src/branch-planning.ts). Both implementations are pinned to the
-// shared conformance fixture so they can never drift apart — see CONTRACT.md
+// shared conformance fixture so they can never drift apart — see contract/architecture.md
 // "Shared Deterministic Algorithms".
 const fixturePath = fileURLToPath(
   new URL('../contract/branch-planning-vectors.json', import.meta.url)

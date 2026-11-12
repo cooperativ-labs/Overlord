@@ -13,9 +13,9 @@ cli/src/connector-core-render.ts  # renders core + adapter overlays into shipped
 
 ## Read first
 
-- `CONTRACT.md` → **MCP Server** (§12), **Connector Layer** (§4), and the *Agent → Protocol*,
-  *Connector → Protocol (Hook Surface)*, *MCP Server → Auth*, and *MCP Server → Service Layer*
-  interaction surfaces.
+- `contract/architecture.md` → **MCP Server** (§12), **Connector Layer** (§4), and the *MCP Server →
+  Service Layer* surface; `contract/protocol.md` → the *Agent → Protocol* and *Connector → Protocol
+  (Hook Surface)* surfaces; `contract/authorization.md` → *MCP Server → Auth*.
 - `mcp/AGENTS.md`, `connectors/AGENTS.md`, `connectors/README.md`,
   `connectors/docs/05-connectors-and-agent-plugins.md`,
   `connectors/docs/agent-harness-configuration-architecture.md`.
@@ -110,7 +110,7 @@ grep -rn "version" connectors/adapters/*/plugin.json connectors/adapters/*/.*-pl
 
 ### Conformance manifests
 Each adapter and `mcp/` carries a `conformance-manifest.yaml` declaring the contract version it
-was validated against. Flag manifests behind the current `CONTRACT.md` version and any adapter
+was validated against. Flag manifests whose major differs from `contract/VERSION` (`yarn check:conformance-versions`) and any adapter
 missing one.
 
 ## Verification for refactors in this area

@@ -926,7 +926,7 @@ export async function enqueueRunQueueEntry(
 
 // ---- Entry state transitions ---------------------------------------------
 //
-// `run_queue_entries.state` is a closed four-value machine (CONTRACT.md) whose
+// `run_queue_entries.state` is a closed four-value machine (contract/conformance.md) whose
 // hold columns — `waiting_reason`, `waiting_on_objective_id`, `blocked_reason`,
 // `execution_request_id`, `attempt_count` — must move together. Each function
 // below owns one transition's column set, so the dispatch worker and the

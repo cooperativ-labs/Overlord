@@ -224,7 +224,7 @@ exactly the owning workspaces and `all_workspaces` stays `false`. Selection is i
 
 At authentication the selected project ids join the request authorization snapshot. Two
 default-deny layers then apply: the `/api` guard admits only the route allowlist published in
-`CONTRACT.md` Version 151 (everything else is `404` before a handler runs), and inside it one
+`contract/CHANGELOG.md` version 151 (everything else is `404` before a handler runs), and inside it one
 project-scope predicate makes any project, mission, objective, attachment storage key, or agent
 request outside the selection read as `404` without revealing existence, while account-wide lists,
 search, `/sync/changes`, and SSE filter by the selection before pagination and totals. Protocol

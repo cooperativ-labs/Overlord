@@ -41,7 +41,7 @@ Key source files, in the order an event flows through them:
 5. `webapp/web/components/settings/WebhooksPage.tsx` — the management UI.
 
 Adding a new webhook event type or touching the tables (`webhook_subscriptions`,
-`webhook_delivery_attempts`, `outbox_messages`) is a cross-module change — read `CONTRACT.md` and
+`webhook_delivery_attempts`, `outbox_messages`) is a cross-module change — read `contract/CONTRACT.md` and
 the database schema contract's "Webhook event catalog" section first, per the `component-contract`
 skill.
 

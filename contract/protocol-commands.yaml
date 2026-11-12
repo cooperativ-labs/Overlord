@@ -5,12 +5,13 @@
 # and declared side effects. Full parameter detail is in the reference spec.
 #
 # IMPORTANT: Any addition, rename, or flag change to a command in this file requires
-# a contract version update in CONTRACT.md and components.yaml.
+# a contract version update (`yarn version:contract`, contract/CONTRACT.md section 5).
 #
 # Local-only `ovld protocol <subcommand>` commands that never cross the CLI -> backend
 # HTTP surface (no POST /api/protocol/<subcommand>, no backend handler, no permission
 # entry) are intentionally not listed here: `capture-change` and `changes`. See
-# CONTRACT.md's contract-version-2 changelog entry for the precedent.
+# the contract-version-2 changelog entry for the precedent (versions before 95 are
+# kept only in git history; see contract/CHANGELOG.md).
 #
 # Routing split (contract v165): the CLI-local `ovld protocol changes` reads this
 # working directory's objective ledgers (LocalObjectiveChangesDto, scope

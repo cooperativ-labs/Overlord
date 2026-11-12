@@ -2,7 +2,7 @@
 
 This file tells agents how to extend the **web SPA** in `webapp/web/`. The REST API Layer (`rest`) that backs it lives in [`backend/`](../backend/AGENTS.md) — do not add Express routes, realtime emitters, or `/ext/` modules under `webapp/`.
 
-Read [`CONTRACT.md`](../CONTRACT.md) and the [component-contract skill](../.claude/skills/component-contract/SKILL.md) before making any cross-module change.
+Read [`contract/CONTRACT.md`](../contract/CONTRACT.md) and the [component-contract skill](../.claude/skills/component-contract/SKILL.md) before making any cross-module change.
 
 ---
 
@@ -20,7 +20,7 @@ If the change touches URL paths, HTTP methods, DTO response shapes, SSE events, 
 
 ## Before You Start
 
-1. Read `CONTRACT.md` — REST API Layer section only when the SPA must match a new or changed API contract; otherwise stay within existing client types.
+1. Read `contract/architecture.md` — REST API Layer section only when the SPA must match a new or changed API contract; otherwise stay within existing client types.
 2. Read [`webapp/docs/web-app.md`](docs/web-app.md) for deferred UI requirements.
 3. Prefer existing `webapp/web/lib/` helpers over inlining host/bridge/clipboard detection in components.
 4. Shared hooks belong in `webapp/web/lib/hooks/` (not a top-level `webapp/web/hooks/` directory).

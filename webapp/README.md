@@ -124,7 +124,7 @@ to full-cache invalidation if catch-up is unavailable.
 ### REST surface (as built)
 
 All under an `/api` prefix so the SPA can own the root path-space. DTO fields are
-camelCase per the [REST API Boundary](../database/docs/09-database-schema-contract.md#rest-api-boundary).
+camelCase per the [REST API Boundary](../contract/data/README.md#rest-api-boundary).
 
 | Method & path | Purpose |
 | --- | --- |
@@ -163,7 +163,7 @@ shared lifecycle vocabulary for cross-project views.
 ### Contract Component
 
 The SPA consumes the **REST API Layer** (`rest`) owned by
-[`backend/`](../backend/AGENTS.md) / [`CONTRACT.md`](../CONTRACT.md), which owns:
+[`backend/`](../backend/AGENTS.md) / [`contract/architecture.md`](../contract/architecture.md), which owns:
 
 - URL paths and HTTP method contracts
 - Request/response DTO shapes (derived from the logical schema's camelCase field names)
@@ -179,7 +179,7 @@ or the protocol CLI surface (→ [CLI module](../cli/README.md)).
 - [Framework Recommendation](docs/framework-recommendation.md): why the first implementation should prefer Vite + React + TanStack Router/Query + Serwist over Next.js.
 - [UI Design Documents](docs/ui/README.md): the detailed design specification for the realtime React interface — a structure/information-architecture document followed by one detailed spec per page (projects, board, mission detail, execution/runner, review, changes, connectors, settings, users/tokens, search).
 - [Implementation Plan](docs/implementation-plan.md): the dependency-ordered build plan that turns the framework recommendation and UI design docs into phased milestones (contract-first API, realtime spine first, vertical slice, then breadth, then gated surfaces).
-- REST API Boundary: see the "REST API Boundary" section of [09 — Database Schema Contract](../database/docs/09-database-schema-contract.md) (owned by the [Database module](../database/README.md)).
+- REST API Boundary: see the "REST API Boundary" section of [09 — Database Schema Contract](../contract/data/README.md) (owned by the [Database module](../database/README.md)).
 - [Test Plan](docs/testing.md): REST API conformance (routing, camelCase DTO shape, auth/authorization, idempotency, realtime/sync) plus the framework-agnostic web-UI test plan. Part of the root [TEST_PLAN.md](../TEST_PLAN.md).
 
 ### Status

@@ -59,14 +59,14 @@ migrate existing installations.
 
 A custom agent connector is a sanctioned extension point: a new adapter plus a
 `conformance-manifest.yaml` validated by `ovld contract check`. See the
-[Conformance Requirements](../CONTRACT.md) and the example manifest at
+[Conformance Requirements](../contract/conformance.md) and the example manifest at
 [`../contract/examples/connector-claude-conformance-manifest.yaml`](../contract/examples/connector-claude-conformance-manifest.yaml).
 
 ## For Developers
 
 ### Contract Component
 
-Maps to the **Connector Layer** (`connector`) in [`CONTRACT.md`](../CONTRACT.md), which owns:
+Maps to the **Connector Layer** (`connector`) in [`contract/architecture.md`](../contract/architecture.md), which owns:
 
 - Connector core workflow instructions
 - Per-agent plugin/adapter files and their managed-file manifests

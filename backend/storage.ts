@@ -5,7 +5,7 @@
  * Bytes live in the storage backend (`local_fs` on disk for local installs, or
  * `s3` / `railway_volume` against an S3-compatible endpoint for hosted
  * deployments); the database holds metadata and backend keys only — see
- * database/docs/09-database-schema-contract.md (`storage_buckets`, `user_images`).
+ * contract/data/README.md (`storage_buckets`, `user_images`).
  *
  * This module holds four responsibilities:
  *

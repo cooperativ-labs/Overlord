@@ -31,7 +31,7 @@ after an immediate local title is set. Title updates stream through the
 
 ### Contract Component
 
-Maps to the **Automations Layer** (`automations`) in [`CONTRACT.md`](../CONTRACT.md), which owns:
+Maps to the **Automations Layer** (`automations`) in [`contract/architecture.md`](../contract/architecture.md), which owns:
 
 - The `Automation` interface and built-in automation registry
 - Gemini provider configuration (`GEMINI_API_KEY`, optional `GEMINI_MODEL`)

@@ -13,7 +13,7 @@ that need ratifying. They assume the stack already recommended for this module â
 **Vite + React + TypeScript + TanStack Router + TanStack Query + Serwist** (see
 [framework-recommendation.md](../framework-recommendation.md)) â€” and they map
 every screen, component, and action back to a real Overlord capability
-defined in the module specs and the [schema contract](../../../database/docs/09-database-schema-contract.md).
+defined in the module specs and the [schema contract](../../../contract/data/README.md).
 
 Once you have read this set, the [Implementation Plan](../implementation-plan.md)
 turns these designs into a dependency-ordered build sequence (contract-first API,
@@ -78,10 +78,10 @@ gating, acceptance criteria).
 ### Source material
 
 These designs were derived from the Overlord specs current in the repo:
-the root [README](../../../README.md) and [CONTRACT](../../../CONTRACT.md);
+the root [README](../../../README.md) and [contract](../../../contract/CONTRACT.md);
 the CLI/protocol/runner/review specs under [`cli/docs/`](../../../cli/docs/);
 the connector spec under [`connectors/docs/`](../../../connectors/docs/);
 the auth/RBAC specs under [`auth/docs/`](../../../auth/docs/);
-the [schema contract](../../../database/docs/09-database-schema-contract.md) and
+the [schema contract](../../../contract/data/README.md) and
 [table groups](../../../database/docs/10-database-table-groups.md);
 and the existing [web-app requirements](../web-app.md).

@@ -1,6 +1,6 @@
 // Deterministic per-mission branch/worktree planning for the service layer (webapp).
 //
-// This is one of Overlord's "Shared Deterministic Algorithms" (see CONTRACT.md):
+// This is one of Overlord's "Shared Deterministic Algorithms" (see contract/architecture.md):
 // the Runner Layer keeps a byte-for-byte-equivalent copy at
 // cli/src/branch-planning.ts. Both are pinned to the shared conformance fixture
 // contract/branch-planning-vectors.json. Do not import the CLI copy across the

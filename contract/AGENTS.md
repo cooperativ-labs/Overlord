@@ -1,6 +1,6 @@
 # Contract Directory — Agent Extension Guide
 
-This file tells agents how to update the contract when extending any Overlord module. The `contract/` directory holds the machine-readable counterparts to [`CONTRACT.md`](../CONTRACT.md). Read `CONTRACT.md` first — it is the authoritative narrative contract.
+This file tells agents how to update the contract when extending any Overlord module. The `contract/` directory is the contract: the entry point [`CONTRACT.md`](CONTRACT.md), the topic documents, the changelog, the ADRs under `decisions/`, and the machine-readable files. Read `CONTRACT.md` first.
 
 ---
 
@@ -23,9 +23,9 @@ You do **not** update the contract for:
 
 ---
 
-## The Contract-First Rule
+## Code and Contract Land Together
 
-**The contract must be updated before any implementation code that extends or conflicts with it.** If you are writing code that would invalidate the current contract, stop and update the contract first.
+Every plan and material change summary declares exactly one of `Contract impact: none`, `patch`, `minor`, or `major` (`CONTRACT.md` section 5). A contract-changing change carries, in the same change set, the contract edits, the `yarn version:contract <patch|minor|major>` increment, a completed `CHANGELOG.md` entry, the implementation, tests, generated artifacts and any required ADR ([ADR 0010](decisions/0010-code-and-contract-land-together.md)). Never implement behavior that contradicts the contract and defer the contract update, and never type a contract version by hand.
 
 ---
 
@@ -33,7 +33,10 @@ You do **not** update the contract for:
 
 | File | What it describes | When to update |
 | --- | --- | --- |
-| `components.yaml` | Component registry: capabilities, ownership, interaction surfaces, contract version | New component, new surface, new capability, any version bump |
+| `CONTRACT.md`, `architecture.md`, `protocol.md`, `authorization.md`, `conformance.md`, `data/README.md` | The normative specification (see `CONTRACT.md` section 2) | Any contract change touching that topic |
+| `VERSION`, `CHANGELOG.md` | Contract version and its history | Every version increment, through `yarn version:contract` |
+| `decisions/` | ADRs | Architecture, security, isolation, data-meaning, migration or service-boundary decisions |
+| `components.yaml` | Component registry: capabilities, ownership, interaction surfaces, contract version (written by `yarn version:contract`) | New component, new surface, new capability |
 | `protocol-commands.yaml` | `ovld protocol` subcommand names, required/optional flags, response shape versions | New protocol command, changed command flag |
 | `extension-points.yaml` | Sanctioned extension points and open/closed vocabularies, including agent-session capability ids, integration shapes, and fixture kinds | New extension point or vocabulary value |
 | `conformance-manifest.schema.yaml` | JSON Schema (YAML) that every shipped component's conformance manifest must validate against | New required manifest field |
@@ -48,10 +51,10 @@ You do **not** update the contract for:
    - `owns`: list of capabilities
    - `doesNotOwn`: list of delegated concerns
    - `interactionSurfaces`: list of surfaces this component participates in
-2. Add the component to the Component Registry section of `CONTRACT.md`.
-3. If the component introduces a new interaction surface, add that surface to both `CONTRACT.md` and `components.yaml`.
-4. Increment `contractVersion` in `components.yaml`.
-5. Add a changelog entry to `CONTRACT.md`.
+2. Add the component to the Component Registry section of `architecture.md`.
+3. If the component introduces a new interaction surface, add that surface to both `architecture.md` and `components.yaml`.
+4. Run `yarn version:contract minor` (or `major` if it changes an existing guarantee) and complete the `CHANGELOG.md` entry.
+5. Add an ADR under `decisions/`: a new component is a service-boundary decision.
 
 ---
 
@@ -64,35 +67,36 @@ You do **not** update the contract for:
      optionalFlags: [--summary, ...]
      responseShapeVersion: "1"
    ```
-2. If the change modifies a required flag or response shape on an existing command, it is **breaking** — increment `contractVersion` in `components.yaml` and add a changelog entry.
-3. Update `CONTRACT.md` Protocol Layer section.
+2. A new command is `minor`. If the change modifies a required flag or response shape on an existing command, it is **breaking** — `major`. Run `yarn version:contract <level>` and complete the `CHANGELOG.md` entry.
+3. Update the Protocol Layer section of `protocol.md`.
 
 ---
 
 ## Procedure: Adding a New Extension Point
 
 1. Add the extension point to `extension-points.yaml` under `extensionPoints:`.
-2. Add it to the Extension Points table in `CONTRACT.md`.
+2. Add it to the Extension Points table in `architecture.md`.
 3. If it requires a new agent-session capability id, add it to `agentSession.capabilityIds` in `extension-points.yaml` and update the descriptor schema.
 
 ---
 
 ## Procedure: Contract Version Bump
 
-A version bump is required for any **breaking** stable-interface change:
+The version in `VERSION` is strict Semantic Versioning (`CONTRACT.md` section 4). A **major** increment is required for any **breaking** stable-interface change:
 - Protocol command name renamed or required flag removed/renamed
 - Database column renamed, type changed, or NOT NULL added without default
 - Closed vocabulary value removed
 - Response shape field removed or renamed
 
+Backwards-compatible additions are **minor**; corrections and clarifications are **patch**.
+
 **Steps:**
 
-1. Increment `contractVersion` in `components.yaml` (e.g. `0` → `0.1` or `1.0` for a stable release).
-2. Add a changelog entry to `CONTRACT.md` under "Contract Version" table:
-   ```markdown
-   | `0.1` | Brief description of the breaking change. |
-   ```
-3. Update all conformance manifests that declare the old version.
+1. Run `yarn version:contract <patch|minor|major>`. It updates `VERSION`, the `CONTRACT.md` header, `contractVersion` in `components.yaml` and a `CHANGELOG.md` skeleton together.
+2. Complete the new `CHANGELOG.md` entry.
+3. Run `yarn connectors:capabilities` to restamp the generated connector manifests.
+4. On a **major** increment, restamp every hand-maintained conformance manifest to the new version ([ADR 0009](decisions/0009-manifests-pin-major-version.md)); `yarn check:conformance-versions` fails otherwise.
+5. Run `yarn contract:check`.
 
 ---
 
@@ -105,7 +109,7 @@ ovld contract check <path-to-conformance-manifest.yaml>
 ```
 
 The manifest schema is in `contract/conformance-manifest.schema.yaml`. Required fields:
-- `contractVersion`: the version validated against
+- `contractVersion`: the contract version validated against, as strict Semantic Versioning with the current major
 - `componentType`: one of `connector`, `extension`, `database-adapter`, `auth-provider`, `rest-module`
 - `componentKey`: stable lowercase identifier
 - The component-specific block required by its `componentType`
@@ -115,7 +119,7 @@ The manifest schema is in `contract/conformance-manifest.schema.yaml`. Required 
 ## Example: Minimal Conformance Manifest
 
 ```yaml
-contractVersion: "116"
+contractVersion: "168.0.0"
 componentType: connector
 componentKey: my-agent
 label: "My Agent Connector"
@@ -134,10 +138,11 @@ connector:
 ## Cross-Module Checklist
 
 - [ ] Read `CONTRACT.md` before touching any contract file
-- [ ] New component → update `components.yaml` + `CONTRACT.md` component registry
-- [ ] New surface → update `components.yaml` + `CONTRACT.md` interaction surfaces
+- [ ] Declare `Contract impact: none|patch|minor|major` in the plan and summary
+- [ ] New component → update `components.yaml` + `architecture.md` component registry
+- [ ] New surface → update `components.yaml` + `architecture.md` interaction surfaces
 - [ ] New protocol command → update `protocol-commands.yaml`
-- [ ] Breaking change → bump `contractVersion` in `components.yaml` + add changelog
-- [ ] New extension point → update `extension-points.yaml` + `CONTRACT.md`
+- [ ] Any contract change → `yarn version:contract <level>` + complete the changelog entry
+- [ ] New extension point → update `extension-points.yaml` + `architecture.md`
 - [ ] New capability id, integration shape, or fixture kind → update `extension-points.yaml` and the descriptor schema
-- [ ] Implementation code does not land before the contract update
+- [ ] Contract and implementation land in the same change; `yarn contract:check` passes

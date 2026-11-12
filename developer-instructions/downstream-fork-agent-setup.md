@@ -11,14 +11,15 @@ module behind those boundaries.
 
 ## Non-Negotiable Rules
 
-1. Read `CONTRACT.md` before any code change.
+1. Read `contract/CONTRACT.md` before any code change.
 2. Keep upstream OpenOverlord as a normal Git remote, not as a submodule.
 3. Put downstream-owned behavior in downstream-owned modules.
 4. Do not edit upstream registries or core tables to add closed behavior unless
    the contract is updated first.
 5. If a change adds a new component, conformance type, interaction surface, CLI
    command, config key, REST route, database table, or closed vocabulary value,
-   update `CONTRACT.md` and the relevant `contract/*.yaml` files before code.
+   update `contract/CONTRACT.md`, the topic documents and the relevant `contract/*.yaml`
+   files in the same change as the code.
 6. Every shipped downstream component must have a `conformance-manifest.yaml`
    validated against `contract/conformance-manifest.schema.yaml`.
 7. Keep Electron optional: a contributor who only works on upstream CLI, webapp,
@@ -31,7 +32,7 @@ This guide is based on OpenOverlord contract version `0`.
 
 Read these files first in the downstream repo:
 
-- `CONTRACT.md`
+- `contract/CONTRACT.md`
 - `contract/components.yaml`
 - `contract/extension-points.yaml`
 - `contract/conformance-manifest.schema.yaml`
@@ -44,7 +45,7 @@ Read these files first in the downstream repo:
 The current upstream preparation that matters for downstream work:
 
 - The repo is contract-first. Component ownership and sanctioned interaction
-  surfaces are in `CONTRACT.md` and `contract/components.yaml`.
+  surfaces are in `contract/architecture.md` and `contract/components.yaml`.
 - Customized downstream repos are expected to track upstream with a normal
   remote. See `developer-instructions/upstream-adoption.md`.
 - Local SQLite now defaults to the per-user global path
@@ -124,7 +125,7 @@ Branch model:
 
 For each upstream adoption, review in this order:
 
-1. `CONTRACT.md` and `contract/*.yaml`
+1. `contract/CONTRACT.md` and `contract/*.yaml`
 2. database migrations and schema docs
 3. CLI, protocol, runner, REST, auth, connector, automations surfaces
 4. downstream modules and conformance manifests
@@ -136,10 +137,11 @@ Before adding `lite/src/*`, update the downstream contract.
 
 Recommended downstream contract changes:
 
-1. Bump the downstream contract version from `0` to a downstream-labeled
-   version such as `0.8-downstream.0` in `CONTRACT.md` and
-   `contract/components.yaml`.
-2. Add a `lite` component to the Component Registry.
+1. Increment the downstream contract version with `yarn version:contract minor`
+   (it writes `contract/VERSION`, `contract/CONTRACT.md` and
+   `contract/components.yaml`; versions are strict Semantic Versioning, so record
+   the downstream label in the `contract/CHANGELOG.md` entry, not the version).
+2. Add a `lite` component to the Component Registry in `contract/architecture.md`.
 3. Add a conformance `componentType` for client shells. Prefer `client-shell`
    over `desktop-shell` because the downstream repo will also have a mobile
    app. If you choose `desktop-shell`, document why it will not fit mobile.
@@ -177,7 +179,7 @@ Uses:
 Suggested `lite/conformance-manifest.yaml`:
 
 ```yaml
-contractVersion: "0.8-downstream.0"
+contractVersion: "168.1.0"
 componentType: client-shell
 componentKey: lite
 label: "Overlord Lite"
@@ -217,7 +219,7 @@ Acceptance:
 
 Files to add or edit:
 
-- `CONTRACT.md`
+- `contract/CONTRACT.md`
 - `contract/components.yaml`
 - `contract/conformance-manifest.schema.yaml`
 - `README.md`
@@ -585,7 +587,7 @@ Use this prompt when handing off the downstream setup:
 
 ```text
 You are working in the closed downstream fork of OpenOverlord. Read
-CONTRACT.md and developer-instructions/downstream-fork-agent-setup.md first. Set up Overlord Lite
+contract/CONTRACT.md and developer-instructions/downstream-fork-agent-setup.md first. Set up Overlord Lite
 as a downstream-owned Electron client shell that wraps the existing webapp and
 ships the CLI. Preserve upstream module boundaries. Start with the contract
 patch and scaffold before writing Electron implementation code. Do not add Lite

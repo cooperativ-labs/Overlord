@@ -1,5 +1,5 @@
 # Overlord Extension Points
-# Machine-readable counterpart to CONTRACT.md "Extension Points" section
+# Machine-readable counterpart to contract/architecture.md "Extension Points" section
 #
 # This file is the source of truth for:
 #   - Sanctioned extension points and their constraints
@@ -7,7 +7,7 @@
 #   - Open and closed controlled vocabulary lists
 #
 # IMPORTANT: Adding a new capability flag, extension point, or vocabulary change
-# requires a contract version update in CONTRACT.md and components.yaml.
+# requires a contract version update (`yarn version:contract`, contract/CONTRACT.md section 5).
 
 contractVersion: '7'
 
@@ -151,7 +151,7 @@ extensionPoints:
       - 'Values must be namespaced (e.g. com.example.my-type or mypackage:custom-source)'
       - 'Cannot add to closed vocabularies — those require a contract version bump'
       - "Declare all new vocabulary values in the component's conformance manifest"
-      - 'Values can be promoted to core by updating CONTRACT.md and the schema contract'
+      - 'Values can be promoted to core by updating contract/conformance.md and the schema contract'
 
 # Agent-session interaction vocabulary — closed sets.
 # The capability id vocabulary is closed so the same id means the same thing across every

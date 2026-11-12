@@ -13,7 +13,7 @@ Excluded from review: `cli/dist/`, `cli/node_modules/`.
 
 ## Read first
 
-- `CONTRACT.md` → **CLI Layer** (§3) and the *CLI → REST (Backend Client Surface)* interaction
+- `contract/architecture.md` → **CLI Layer** (§3) and the *CLI → REST (Backend Client Surface)* interaction
   surface.
 - `cli/AGENTS.md`, `cli/README.md`, `cli/docs/01-command-reference.md`.
 

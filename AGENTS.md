@@ -1,4 +1,6 @@
-Every module should adhere to the contract in CONTRACT.md. Before beginning work, read the contract. Always make a change to any module adhere to contract where possible, and where not possible, propose a change to the contract and list the impact of that change on all other modules.
+Every module should adhere to the contract in `contract/CONTRACT.md`. Before beginning work, read the contract. Always make a change to any module adhere to contract where possible, and where not possible, propose a change to the contract and list the impact of that change on all other modules.
+
+Every plan and material change summary declares `Contract impact: none|patch|minor|major`. Code and contract changes land together; never type a contract version by hand (`yarn version:contract`). See `.claude/skills/component-contract/SKILL.md`.
 
 ## Skills
 

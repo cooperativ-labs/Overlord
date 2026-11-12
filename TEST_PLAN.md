@@ -7,7 +7,7 @@ Targets Contract Version: `0`
 
 This is the master test implementation plan for Overlord. It defines **how every
 module is tested** and — most importantly — **how tests prove that every module
-adheres to [`CONTRACT.md`](CONTRACT.md)** and its machine-readable counterparts in
+adheres to [`contract/CONTRACT.md`](contract/CONTRACT.md)** and its machine-readable counterparts in
 [`contract/`](contract/).
 
 Overlord is built as independent modules connected only through the contract's
@@ -39,7 +39,7 @@ exercise every module against the same normative source.
 
 ## Guiding Principles
 
-1. **Contract-first.** A behavior described in `CONTRACT.md` or a `contract/*.yaml`
+1. **Contract-first.** A behavior described in `contract/CONTRACT.md` or a `contract/*.yaml`
    file is not "done" until a test asserts it. When the contract and the code
    disagree, the test fails and the code is wrong (or the contract must be bumped
    first — see [Drift Guard](#34-contract-drift-guard)).
@@ -138,7 +138,7 @@ introduces a small shared toolkit (no third-party deps):
   `makeMission`, `makeObjective`, `makeSession`, …) that create valid rows through
   the **service layer**, never via raw inserts, so factories themselves exercise
   the sanctioned surface.
-- **`contract/conformance/loaders.ts`** — parse `CONTRACT.md` tables and every
+- **`contract/conformance/loaders.ts`** — parse `contract/CONTRACT.md` tables and every
   `contract/*.yaml` into typed structures so conformance tests assert against the
   contract as data, not hard-coded copies. This is what makes the suite
   self-updating: change the contract YAML and the conformance tests re-derive
@@ -154,7 +154,7 @@ introduces a small shared toolkit (no third-party deps):
 
 > This is the rigorous core the objective demands: tests whose only job is to
 > prove **every module adheres to the contract**. They live in
-> `contract/conformance/` and are derived from `CONTRACT.md` +
+> `contract/conformance/` and are derived from `contract/CONTRACT.md` +
 > `contract/*.yaml` so they stay in lockstep with the normative spec.
 
 ### 3.1 Conformance manifest validation
@@ -165,7 +165,7 @@ For every `conformance-manifest.yaml` in the repo (currently
 
 - Validates against `contract/conformance-manifest.schema.yaml` (required fields,
   `componentKey` pattern, `additionalProperties: false`).
-- `contractVersion` is a known version present in the `CONTRACT.md` version table.
+- `contractVersion` has the same major as `contract/VERSION` and is not newer (`yarn check:conformance-versions`).
 - `componentType`-specific required blocks are present (e.g. `connector` block for
   connectors, `restModule.endpointPrefix` for REST modules).
 - Every connector's `harnessCapabilities` digest matches its generated descriptor output.
@@ -219,7 +219,7 @@ These tests prove components only talk through sanctioned surfaces:
 Protects the maintenance rule "the implementation code must not land before the
 contract update":
 
-- A test loads `contractVersion` from `CONTRACT.md`, `contract/components.yaml`,
+- A test loads `contractVersion` from `contract/VERSION`, `contract/components.yaml`,
   and each `contract/*.yaml`, and asserts they agree (within the documented
   per-file version where applicable).
 - A snapshot/fingerprint test over the closed vocabularies and the protocol
@@ -272,7 +272,7 @@ layer (both adapters):
 
 ### 3.8 Database adapter conformance suite
 
-The schema contract's [Adapter Conformance Suite](database/docs/09-database-schema-contract.md)
+The schema contract's [Adapter Conformance Suite](contract/data/README.md)
 checklist is implemented verbatim as parametrized tests every adapter must pass.
 Detailed in [`database/docs/testing.md`](database/docs/testing.md); summarized in
 the traceability matrix below.
@@ -302,7 +302,7 @@ checklist for "rigorous about contract adherence."
 | schema contract — adapter suite | Full checklist, SQLite + Postgres | L2 | `database/test` |
 | schema contract — security | Raw token/session secrets never persisted | L1+L2 | `auth`, `database/test` |
 | extension-points.yaml `ext_` rules | Extension migrations don't collide with core | L2+L3 | `database/test`, `conformance/drift` |
-| CONTRACT.md maintenance | Version agreement + drift snapshot | L3 | `conformance/drift` |
+| contract/ maintenance | Version agreement (`yarn contract:check`) + drift snapshot | L3 | `conformance/drift` |
 
 ---
 

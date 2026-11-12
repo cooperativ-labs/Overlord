@@ -12,8 +12,8 @@ packages/core/types/db.ts        # generated — read only
 
 ## Read first
 
-- `CONTRACT.md` → **Database Layer** (§2) and the *REST API → Database* interaction surface.
-- `database/AGENTS.md`, `database/docs/09-database-schema-contract.md`,
+- `contract/architecture.md` → **Database Layer** (§2) and the *REST API → Database* interaction surface.
+- `database/AGENTS.md`, `contract/data/README.md`,
   `database/docs/10-database-table-groups.md`.
 - `.claude/skills/kysely-codegen/SKILL.md` — types are generated; never hand-edit
   `packages/core/types/db.ts`.

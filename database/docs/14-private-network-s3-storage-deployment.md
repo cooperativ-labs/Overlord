@@ -88,7 +88,7 @@ safe to run on every deploy.
   bytes live*, not *who may touch them*.
 - **No schema/contract change.** `storage_backend = 's3'` and non-secret
   `settings_json` provider metadata are already specified in
-  [09 — Database Schema Contract](09-database-schema-contract.md) §`storage_buckets`,
+  [09 — Database Schema Contract](../../contract/data/README.md) §`storage_buckets`,
   which also mandates that credentials live in deployment secrets, not the table.
 
 ## Verification

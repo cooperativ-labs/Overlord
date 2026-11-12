@@ -154,8 +154,8 @@ invalidation stays isolated from core project/mission queries.
 Replace `everhour` with your extension key (`myapp`) everywhere:
 
 1. **Design** — document tables, routes, DTOs, and permission gates before
-   coding. Read `CONTRACT.md`, `contract/extension-points.yaml`, and
-   `database/docs/09-database-schema-contract.md`.
+   coding. Read `contract/CONTRACT.md`, `contract/extension-points.yaml`, and
+   `contract/data/README.md`.
 2. **Database** — add `ext_myapp_*` migrations with component `ext:myapp`.
 3. **Manifests** — create `extensions/myapp/conformance-manifest.yaml`
    (`componentType: extension`) and `backend/ext/myapp/conformance-manifest.yaml`

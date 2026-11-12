@@ -1,6 +1,6 @@
 # Database Module — Agent Extension Guide
 
-This file tells agents how to extend the Database module to add new capabilities for users. Read [`CONTRACT.md`](../CONTRACT.md) and the [component-contract skill](../.claude/skills/component-contract/SKILL.md) before making any cross-module change.
+This file tells agents how to extend the Database module to add new capabilities for users. Read [`contract/CONTRACT.md`](../contract/CONTRACT.md) and the [component-contract skill](../.claude/skills/component-contract/SKILL.md) before making any cross-module change.
 
 ---
 
@@ -21,8 +21,8 @@ Each type has a different procedure below.
 
 ## Before You Start
 
-1. Read `CONTRACT.md` — Database Layer and Extension System sections.
-2. Read [`database/docs/09-database-schema-contract.md`](docs/09-database-schema-contract.md) — the authoritative column/index/FK spec.
+1. Read `contract/architecture.md` — Database Layer and Extension System sections.
+2. Read [`contract/data/README.md`](../contract/data/README.md) — the authoritative column/index/FK spec.
 3. Read [`database/docs/10-database-table-groups.md`](docs/10-database-table-groups.md) — which tables are core vs. optional.
 4. Determine whether your change is a **core** change (requires contract update) or an **extension** (uses `ext_<name>_` namespace and needs only a conformance manifest).
 
@@ -34,8 +34,8 @@ Core schema changes modify the shared contract. They require a contract update b
 
 **Steps:**
 
-1. **Update `database/docs/09-database-schema-contract.md`** first — add the table/column definition, including type, nullable, default, FK references, and any CHECK constraints.
-2. **Update `CONTRACT.md`** Database Layer section if the change affects stable interfaces (e.g. a new column that protocol or REST responses must now include).
+1. **Update `contract/data/README.md`** first — add the table/column definition, including type, nullable, default, FK references, and any CHECK constraints.
+2. **Update `contract/architecture.md`** Database Layer section if the change affects stable interfaces (e.g. a new column that protocol or REST responses must now include).
 3. **Increment the contract version** in `contract/components.yaml` if the change is breaking (removes a NOT NULL column, renames a column, changes a type).
 4. **Write the migration** as the next numbered file: `database/sqlite/migrations/<NNN>_<description>.sql`. Migration rules:
    - Enable foreign-key checks: `PRAGMA foreign_keys = ON;`
@@ -87,7 +87,7 @@ Additive migrations that do not change the public contract (new indexes, new opt
 
 1. Confirm the migration number is the next in sequence (`ls database/sqlite/migrations/`).
 2. Write the `.sql` file following the conventions above (foreign-key pragma, `IF NOT EXISTS`, forward-only changes).
-3. If the migration adds a new index that changes query semantics, document it in `database/docs/09-database-schema-contract.md`.
+3. If the migration adds a new index that changes query semantics, document it in `contract/data/README.md`.
 
 ---
 
@@ -95,24 +95,24 @@ Additive migrations that do not change the public contract (new indexes, new opt
 
 ### Closed vocabularies (contract version bump required)
 
-These are listed in `CONTRACT.md` under "Controlled Vocabularies → Closed." Examples: `objectives.state`, `execution_requests.status`.
+These are listed in `contract/conformance.md` under "Controlled Vocabularies → Closed." Examples: `objectives.state`, `execution_requests.status`.
 
 **Steps:**
 
-1. **Propose the new value** in a contract update: edit `CONTRACT.md` Controlled Vocabularies section.
+1. **Propose the new value** in a contract update: edit `contract/conformance.md` Controlled Vocabularies section.
 2. **Increment the contract version** in `contract/components.yaml`.
-3. **Add a changelog entry** to `CONTRACT.md`.
+3. **Increment the contract version** with `yarn version:contract major` and complete the `contract/CHANGELOG.md` entry.
 4. **Add the value** to the `CHECK` constraint in the relevant migration.
 5. **Update any application code** that switches on the closed vocabulary.
 
 ### Open vocabularies (no contract version bump needed)
 
-These are listed in `CONTRACT.md` under "Controlled Vocabularies → Open." Examples: `execution_targets.type`, `artifacts.type`.
+These are listed in `contract/conformance.md` under "Controlled Vocabularies → Open." Examples: `execution_targets.type`, `artifacts.type`.
 
 **Steps:**
 
 1. Add the new value in your service code or migration.
-2. If promoting to a core value (i.e. all deployments should know it), add it to `database/docs/09-database-schema-contract.md` Controlled Vocabularies section.
+2. If promoting to a core value (i.e. all deployments should know it), add it to `contract/data/README.md` Controlled Vocabularies section.
 3. If it remains extension-specific, declare it in your `conformance-manifest.yaml`.
 
 ---
@@ -135,8 +135,8 @@ database/
 
 ## Cross-Module Checklist
 
-- [ ] Read `CONTRACT.md` Database Layer and Extension System sections
-- [ ] Core table/column change → update `database/docs/09-database-schema-contract.md` first
+- [ ] Read `contract/architecture.md` Database Layer and Extension System sections
+- [ ] Core table/column change → update `contract/data/README.md` first
 - [ ] Breaking schema change → bump contract version in `contract/components.yaml`
 - [ ] Closed vocabulary value → contract version bump required
 - [ ] Extension tables → use `ext_<name>_` prefix and `ext:<name>` component key
