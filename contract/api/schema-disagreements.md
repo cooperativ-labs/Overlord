@@ -44,6 +44,30 @@ the code does not do.
   `MissionDetailDto.branch` is nullable in the type but always an object from
   `getMissionDetail`.
 
+### Missions (batch 1)
+
+- **M1** (open). rest-notes.md "Mission search versioning" calls `GET /api/missions/search`
+  "frozen as its v1 array-shaped response"; the handler (`backend/app.ts`) answers an
+  object `{ missions: MissionDto[] }`. `getMissionsSearch`.
+- **M2** (open). `MissionEventDto` (packages/contract) says events are "ordered
+  oldest-first by `createdAt`"; `listMissionEvents` returns them newest first, capped at
+  200. `getMissionsByIdEvents`.
+- **M3** (open). `GenerateCommitMessageResultDto` and `generateCommitMessage`'s comment
+  say the diff is gathered through the local-target provider and that a clean worktree
+  answers `BRANCH_NOTHING_TO_COMMIT`. The handler only accepts a client-supplied `diff`;
+  without one it answers 409 `LOCAL_FILESYSTEM_UNAVAILABLE`, and it never emits
+  `BRANCH_NOTHING_TO_COMMIT`. `postMissionsByIdGenerateCommitMessage`.
+- **M4** (open). `MissionBranchListDto` is documented as "available branches in a mission
+  project's primary repository"; `listMissionBranches` returns at most the mission's
+  current (prepared or pinned) branch. `getMissionsByIdBranches`.
+- **M5** (open). `MissionBranchDto.hasUnpushedCommits` and `observationSource: 'server'`
+  are declared but never produced by `missionBranchDto` /
+  `mergeMissionBranchObservation`; `observedAt` and `observationSource` are absent rather
+  than null before an observation.
+- **M6** (open). rest-notes.md says mission routes accept a mission display id. `PATCH
+  /api/missions/{id}/objectives/reorder` authorizes the display id but then queries by the
+  raw reference and answers 404.
+
 ## 2. Non-conforming error shapes
 
 Every route in `backend/app.ts` that forwards errors through `handle()` or `next(err)`
@@ -89,7 +113,7 @@ schema must change.
 - **G4** String bounds (`minLength`, `maxLength`) are ignored by the Clear Comply
   generator; they are documentation until 4c renders them.
 - **G5** `allOf` for a DTO that extends another (`MissionDetailDto` = `MissionDto` +
-  detail projections). Needs `.extend()`/`z.intersection`; the alternative is
+  detail projections; `SearchResultV3`, `SearchAppliedFiltersV3`). Needs `.extend()`/`z.intersection`; the alternative is
   repeating every `MissionDto` property in each extension.
 - **G6** `$ref` with sibling keywords (`description`) on a property. Valid OpenAPI 3.1;
   the Clear Comply generator ignores the siblings, which is harmless.

@@ -2304,8 +2304,8 @@ paths:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Project UUID.
+        schema: { type: string }
     get:
       operationId: getProjectsByIdMissions
       tags: [missions]
@@ -2313,7 +2313,35 @@ paths:
       x-overlord-permission-candidates: [mission:read, objective:read]
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: List a project's board missions
+      description: >-
+        Requires `mission:read` on the project's workspace, and `objective:read` too with
+        `includeObjectives`. Ordered by board position, newest sequence first on ties. `complete` and
+        `cancelled` missions not updated in the last 21 days are omitted unless `includeAllCompleted` is
+        set.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: includeObjectives
+          in: query
+          required: false
+          description: Present and not `0`/`false` embeds every mission's objectives (a bare
+            `?includeObjectives` counts).
+          schema: { type: string }
+        - name: includeAllCompleted
+          in: query
+          required: false
+          description: Present and not `0`/`false` lifts the 21-day window on completed missions.
+          schema: { type: string }
+      responses:
+        '200':
+          description: The missions.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MissionList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /ext/everhour/user-connection:
     get:
       operationId: getExtEverhourUserConnection
@@ -2790,7 +2818,47 @@ paths:
       x-overlord-permission: mission:read
       x-overlord-edition: both
       x-overlord-consumers: [cli, webapp]
-      x-overlord-schema-status: stub
+      summary: Mission search, version 1 (frozen)
+      description: >-
+        Ranked mission search across the workspaces of the active organization where the caller holds
+        `mission:read`, or within one project. Reads only `q`, `projectId`, `statusTypes` and `limit`.
+        Answers `{ missions }` with full mission DTOs.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: Query text; empty or stop-word-only uses the fallback ordering.
+          schema: { type: string }
+        - name: projectId
+          in: query
+          required: false
+          description: One project id (any string; an unknown or unreadable project answers 404).
+          schema: { type: string }
+        - name: statusTypes
+          in: query
+          required: false
+          description: Comma-separated status types; values are not validated (an unknown type matches nothing).
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          description: >-
+            Integer result cap, default 25. Not bounded above; negative values give no results. Across
+            workspaces it is split `floor(limit / workspaces)` per workspace with the remainder to the
+            lowest workspace ids.
+          schema: { type: string }
+      responses:
+        '200':
+          description: The matching missions, best first.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MissionSearchV1Response' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/missions/search/v2:
     get:
       operationId: getMissionsSearchV2
@@ -2798,7 +2866,80 @@ paths:
       x-overlord-permission: mission:read
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Mission search, version 2
+      description: >-
+        Same authorization and fan-out as version 1. A single project id searches that project's workspace
+        only. Validation failures answer 400 `validation_error`. Complete and cancelled missions stay
+        eligible; there is no implicit date window.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: Query text; a display id short-circuits; empty or stop-word-only uses `fallback` mode.
+          schema: { type: string }
+        - name: projectIds
+          in: query
+          required: false
+          description: Comma-separated project UUIDs (non-UUID values answer 400). `projectId` is read as an
+            alias when `projectIds` is absent.
+          schema: { type: string }
+        - name: projectId
+          in: query
+          required: false
+          description: Alias of `projectIds`.
+          schema: { type: string }
+        - name: statusTypes
+          in: query
+          required: false
+          description: Comma-separated status types; values are not validated (an unknown type matches nothing).
+          schema: { type: string }
+        - name: resourceKeys
+          in: query
+          required: false
+          description: Comma-separated resource keys; missions with an objective on one of them. `resourceKey`
+            (single) is read when absent.
+          schema: { type: string }
+        - name: resourceKey
+          in: query
+          required: false
+          description: Alias for a single resource key.
+          schema: { type: string }
+        - name: dateField
+          in: query
+          required: false
+          description: Column for `from`/`to`; defaults to `updatedAt` when a bound is given. An empty value
+            answers 400. A `dueDatetime` range excludes missions without a due date.
+          schema: { $ref: '#/components/schemas/MissionSearchDateField' }
+        - name: from
+          in: query
+          required: false
+          description: Inclusive ISO-8601 bound with a timezone (`…Z` or `±hh:mm`); must precede `to`.
+          schema: { type: string }
+        - name: to
+          in: query
+          required: false
+          description: Exclusive ISO-8601 bound with a timezone.
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          description: >-
+            Integer result cap, default 25. Not bounded above; negative values give no results. Across
+            workspaces it is split `floor(limit / workspaces)` per workspace with the remainder to the
+            lowest workspace ids.
+          schema: { type: string }
+      responses:
+        '200':
+          description: The search envelope.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SearchMissionsResponseV2' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/search/v3:
     get:
       operationId: getSearchV3
@@ -2806,7 +2947,96 @@ paths:
       x-overlord-permission: mission:read
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Mission-anchored search over missions, objectives and deliveries (version 3)
+      description: >-
+        Version 2's parameters, authorization and fan-out, plus child matches. Events only corroborate and
+        are never returned; the per-workspace candidate fetch is capped at 500 documents. Validation
+        failures answer 400 `validation_error`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: Query text; a display id short-circuits; empty or stop-word-only uses `fallback` mode.
+          schema: { type: string }
+        - name: projectIds
+          in: query
+          required: false
+          description: Comma-separated project UUIDs (non-UUID values answer 400). `projectId` is read as an
+            alias when `projectIds` is absent.
+          schema: { type: string }
+        - name: projectId
+          in: query
+          required: false
+          description: Alias of `projectIds`.
+          schema: { type: string }
+        - name: statusTypes
+          in: query
+          required: false
+          description: Comma-separated status types; values are not validated (an unknown type matches nothing).
+          schema: { type: string }
+        - name: resourceKeys
+          in: query
+          required: false
+          description: Comma-separated resource keys; missions with an objective on one of them. `resourceKey`
+            (single) is read when absent.
+          schema: { type: string }
+        - name: resourceKey
+          in: query
+          required: false
+          description: Alias for a single resource key.
+          schema: { type: string }
+        - name: dateField
+          in: query
+          required: false
+          description: Column for `from`/`to`; defaults to `updatedAt` when a bound is given. An empty value
+            answers 400. A `dueDatetime` range excludes missions without a due date.
+          schema: { $ref: '#/components/schemas/MissionSearchDateField' }
+        - name: from
+          in: query
+          required: false
+          description: Inclusive ISO-8601 bound with a timezone (`…Z` or `±hh:mm`); must precede `to`.
+          schema: { type: string }
+        - name: to
+          in: query
+          required: false
+          description: Exclusive ISO-8601 bound with a timezone.
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          description: >-
+            Integer result cap, default 25. Not bounded above; negative values give no results. Across
+            workspaces it is split `floor(limit / workspaces)` per workspace with the remainder to the
+            lowest workspace ids.
+          schema: { type: string }
+        - name: entityTypes
+          in: query
+          required: false
+          description: Comma-separated subset of `mission`, `objective`, `delivery` (default all three);
+            `event` answers 400.
+          schema: { type: string }
+        - name: objectiveStates
+          in: query
+          required: false
+          description: Comma-separated objective states that returnable objective matches must be in.
+          schema: { type: string }
+        - name: matchesPerResult
+          in: query
+          required: false
+          description: Integer 1-10, default 3; not divided across workspaces.
+          schema: { type: string }
+      responses:
+        '200':
+          description: The search envelope.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SearchResponseV3' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/missions:
     post:
       operationId: postMissions
@@ -2814,14 +3044,39 @@ paths:
       x-overlord-permission: mission:create
       x-overlord-edition: both
       x-overlord-consumers: [cli, mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Create a mission
+      description: >-
+        Requires `mission:create` on the project's workspace. Creates the mission and its objectives in
+        one transaction, allocating the mission number atomically. Title generation for an untitled
+        mission and its first objective runs asynchronously afterwards. Answers 200, not 201.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateMissionBody' }
+      responses:
+        '200':
+          description: The created mission.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MissionDetailDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/missions/{id}":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Mission UUID, or display id (`coo:756`) resolved within the caller's organization; an ambiguous
+          display id answers 409.
+        schema: { type: string }
     get:
       operationId: getMissionsById
       tags: [missions]
@@ -2829,28 +3084,82 @@ paths:
       x-overlord-permission-candidates: [mission:read, objective:read]
       x-overlord-edition: both
       x-overlord-consumers: [cli, mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Read a mission's detail
+      description: >-
+        Requires `mission:read` and `objective:read` on the mission's workspace. Except for a
+        project_automation token, reading also marks the mission's unseen blocking-question and
+        returned-to-execute indicators seen (recording a mission change when any was unseen).
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The mission detail.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MissionDetailDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
     patch:
       operationId: patchMissionsById
       tags: [missions]
       x-overlord-permission: mission:update
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Update or move a mission
+      description: >-
+        Requires `mission:update` on the mission's workspace. Moving into a `complete` status spawns the
+        next scheduled duplicate when the mission has a schedule; entering `execute` from another type
+        marks it returned-to-execute. A move to another project stays inside the mission's workspace.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateMissionBody' }
+      responses:
+        '200':
+          description: The updated mission.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MissionDetailDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
     delete:
       operationId: deleteMissionsById
       tags: [missions]
       x-overlord-permission: mission:delete
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Soft-delete a mission
+      description: Requires `mission:delete`. Soft-deletes the mission and its objectives.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/missions/{id}/generate-title":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Mission UUID, or display id (`coo:756`) resolved within the caller's organization; an ambiguous
+          display id answers 409.
+        schema: { type: string }
     post:
       operationId: postMissionsByIdGenerateTitle
       tags: [missions]
@@ -2858,49 +3167,137 @@ paths:
       x-overlord-permission-candidates: [mission:read, objective:read]
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Regenerate a mission title
+      description: >-
+        Requires `mission:read` and `objective:read` (no update permission is checked, though the title is
+        rewritten). Summarizes the earliest objective with instruction text through the Automations Layer
+        and persists the result.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The mission with its new title.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MissionDetailDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '502': { $ref: '#/components/responses/BadGateway' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/missions/{id}/generate-commit-message":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Mission UUID, or display id (`coo:756`) resolved within the caller's organization; an ambiguous
+          display id answers 409.
+        schema: { type: string }
     post:
       operationId: postMissionsByIdGenerateCommitMessage
       tags: [missions]
       x-overlord-permission: mission:update
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Draft a commit message from a client-supplied diff
+      description: >-
+        Requires `mission:update` and a prepared branch with a connected primary resource (409
+        `BRANCH_NOT_PREPARED`, `BRANCH_NO_PRIMARY`). The diff must come from the client; without one the
+        route answers 409 `LOCAL_FILESYSTEM_UNAVAILABLE`. Nothing is persisted.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GenerateCommitMessageBody' }
+      responses:
+        '200':
+          description: The drafted message.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GenerateCommitMessageResultDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '502':
+          description: The summarizer is unavailable or returned nothing (`code` `COMMIT_MESSAGE_GENERATION_FAILED`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/missions/{id}/objectives":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Mission UUID, or display id (`coo:756`) resolved within the caller's organization; an ambiguous
+          display id answers 409.
+        schema: { type: string }
     get:
       operationId: getMissionsByIdObjectives
       tags: [missions]
       x-overlord-permission: objective:read
       x-overlord-edition: both
       x-overlord-consumers: [unverified]
-      x-overlord-schema-status: stub
+      summary: List a mission's objectives
+      description: Requires `objective:read`. Ordered by position, with live Run Queue membership.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The objectives.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ObjectiveList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/missions/{id}/objectives/reorder":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Mission UUID, or display id (`coo:756`) resolved within the caller's organization; an ambiguous
+          display id answers 409.
+        schema: { type: string }
     patch:
       operationId: patchMissionsByIdObjectivesReorder
       tags: [missions]
       x-overlord-permission: objective:update
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Reorder a mission's future objectives
+      description: >-
+        Requires `objective:update`. Renumbers the listed `future` objectives from the lowest position
+        they hold and carries the order into every Run Queue holding the mission's waiting entries. Only a
+        mission UUID works here: a display id passes authorization but then answers 404 (see
+        schema-disagreements.md).
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReorderFutureObjectivesBody' }
+      responses:
+        '200':
+          description: Every objective of the mission in its new order.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ObjectiveList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/missions/{id}/session-channel":
     parameters:
       - name: id
@@ -2920,15 +3317,40 @@ paths:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Mission UUID, or display id (`coo:756`) resolved within the caller's organization; an ambiguous
+          display id answers 409.
+        schema: { type: string }
     post:
       operationId: postMissionsByIdTerminalSessionsForget
       tags: [missions]
       x-overlord-permission: session:read
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Forget a mission's mapped Latch terminal session
+      description: >-
+        Requires `session:read` (no update permission is checked, though the execution request's metadata
+        is rewritten). Removes the provider-session mapping so the session no longer appears in
+        `terminalSessions`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ForgetTerminalSessionBody' }
+      responses:
+        '200':
+          description: Whether a mapping was removed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ForgetTerminalSessionResultDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/agent-requests:
     get:
       operationId: getAgentRequests
@@ -2999,132 +3421,333 @@ paths:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Mission UUID, or display id (`coo:756`) resolved within the caller's organization; an ambiguous
+          display id answers 409.
+        schema: { type: string }
     get:
       operationId: getMissionsByIdEvents
       tags: [missions]
       x-overlord-permission: event:read
       x-overlord-edition: both
       x-overlord-consumers: [cli, mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: List a mission's workflow events
+      description: Requires `event:read`. Newest first, at most 200; raw payload JSON is never exposed.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The events.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MissionEventList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/missions/{id}/deliveries":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Mission UUID, or display id (`coo:756`) resolved within the caller's organization; an ambiguous
+          display id answers 409.
+        schema: { type: string }
     get:
       operationId: getMissionsByIdDeliveries
       tags: [missions]
       x-overlord-permission: mission:read
       x-overlord-edition: both
       x-overlord-consumers: [cli, mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: List a mission's deliveries
+      description: Requires `mission:read`. A bounded newest-first page with normalized reports.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The deliveries page.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MissionDeliveriesDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/missions/{id}/summary":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Mission UUID, or display id (`coo:756`) resolved within the caller's organization; an ambiguous
+          display id answers 409.
+        schema: { type: string }
     get:
       operationId: getMissionsByIdSummary
       tags: [missions]
       x-overlord-permission: mission:read
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Read the operator mission summary
+      description: >-
+        Requires `mission:read`. Operator surface only: no Protocol, CLI or MCP counterpart. Clients learn
+        eligibility only here.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The summary envelope.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MissionSummaryResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/missions/{id}/summary/seen":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Mission UUID, or display id (`coo:756`) resolved within the caller's organization; an ambiguous
+          display id answers 409.
+        schema: { type: string }
     put:
       operationId: putMissionsByIdSummarySeen
       tags: [missions]
       x-overlord-permission: mission:read
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Acknowledge displayed summary evidence
+      description: >-
+        Requires `mission:read`. Stores `max(existing, watermark)` for the calling workspace user and
+        records no entity change. A watermark later than the mission's newest evidence, an unparsable one,
+        or any call on an ineligible mission answers 400 `invalid_input`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MarkMissionSummarySeenBody' }
+      responses:
+        '200':
+          description: The stored value.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MissionSummarySeenResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/missions/{id}/artifacts":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Mission UUID, or display id (`coo:756`) resolved within the caller's organization; an ambiguous
+          display id answers 409.
+        schema: { type: string }
     get:
       operationId: getMissionsByIdArtifacts
       tags: [missions]
       x-overlord-permission: artifact:read
       x-overlord-edition: both
       x-overlord-consumers: [cli, mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: List a mission's artifacts
+      description: Requires `artifact:read`. Newest first, at most 200 (no total).
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The artifacts.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ArtifactList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
     post:
       operationId: postMissionsByIdArtifacts
       tags: [missions]
       x-overlord-permission: artifact:create
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Create a mission artifact without a delivery
+      description: >-
+        Requires `artifact:create` on the mission's workspace (and, at the route, in at least one of the
+        caller's workspaces). Body validation runs before authorization. The artifact has no delivery;
+        provenance is optional.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateArtifactBody' }
+      responses:
+        '200':
+          description: The created artifact.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ArtifactDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: Not authenticated, or `sessionKey` names no live session of the mission's workspace.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/missions/{id}/context":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Mission UUID, or display id (`coo:756`) resolved within the caller's organization; an ambiguous
+          display id answers 409.
+        schema: { type: string }
     get:
       operationId: getMissionsByIdContext
       tags: [missions]
       x-overlord-permission: mission:read
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: List a mission's shared context
+      description: Requires `mission:read`. Most recently updated first, at most 100.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The entries.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SharedContextEntryList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
     put:
       operationId: putMissionsByIdContext
       tags: [missions]
       x-overlord-permission: mission:update
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Upsert one shared-context entry
+      description: >-
+        Requires `mission:update` on the mission's workspace. Upserts by key (the Protocol `write-context`
+        equivalent) and records a `shared_context_entry` change.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpsertSharedContextBody' }
+      responses:
+        '200':
+          description: The entry.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SharedContextEntryDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/missions/{id}/artifacts/{artifactId}":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Mission UUID or display id.
+        schema: { type: string }
       - name: artifactId
         in: path
         required: true
-        schema:
-          type: string
+        description: Artifact UUID.
+        schema: { type: string }
     patch:
       operationId: patchMissionsByIdArtifactsByArtifactId
       tags: [missions]
       x-overlord-permission: mission:update
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Edit an artifact's human-facing fields
+      description: >-
+        Requires `mission:update`. Compare-and-set on `expectedRevision`; delivery, session and objective
+        provenance and `contentJson` never change here.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateArtifactBody' }
+      responses:
+        '200':
+          description: The updated artifact.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ArtifactDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/missions/{id}/file-changes":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Mission UUID, or display id (`coo:756`) resolved within the caller's organization; an ambiguous
+          display id answers 409.
+        schema: { type: string }
     get:
       operationId: getMissionsByIdFileChanges
       tags: [missions]
       x-overlord-permission: mission:read
       x-overlord-edition: both
       x-overlord-consumers: [cli, mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: List a mission's or one objective's changed files
+      description: >-
+        Requires `mission:read`. Without `objectiveId`: the mission-wide capped page, newest first. With
+        `objectiveId`: the server objective read, filtered in SQL before the count and the 200-row cap,
+        with capture diagnostics.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: objectiveId
+          in: query
+          required: false
+          description: Objective UUID or display id on this mission; blank or repeated answers 400.
+          schema: { type: string }
+      responses:
+        '200':
+          description: '`MissionFileChangesDto` without `objectiveId`, `ObjectiveFileChangesDto` with it.'
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/MissionFileChangesDto'
+                  - $ref: '#/components/schemas/ObjectiveFileChangesDto'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/missions/schedule/preview:
     post:
       operationId: postMissionsSchedulePreview
@@ -3132,35 +3755,106 @@ paths:
       x-overlord-permission: mission:read
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Preview a schedule's next due date
+      description: >-
+        Requires `mission:read` in at least one of the caller's workspaces. Computes only; an invalid rule
+        answers 400 `validation_error`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PreviewScheduleBody' }
+      responses:
+        '200':
+          description: The next due date.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SchedulePreviewDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/missions/{id}/schedule":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Mission UUID, or display id (`coo:756`) resolved within the caller's organization; an ambiguous
+          display id answers 409.
+        schema: { type: string }
     get:
       operationId: getMissionsByIdSchedule
       tags: [missions]
       x-overlord-permission: mission:read
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Read a mission's schedule
+      description: Requires `mission:read`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The due date and schedule (null when unscheduled).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MissionScheduleDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
     put:
       operationId: putMissionsByIdSchedule
       tags: [missions]
       x-overlord-permission: mission:update
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Create or replace a mission's schedule
+      description: >-
+        Requires `mission:update`. Upserts the linked schedule and recomputes `dueDatetime` from the
+        current due date. Schedule validation errors carry `code: validation_error`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ScheduleInput' }
+      responses:
+        '200':
+          description: The new due date and schedule.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MissionScheduleDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
     delete:
       operationId: deleteMissionsByIdSchedule
       tags: [missions]
       x-overlord-permission: mission:update
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Unlink a mission's schedule
+      description: Requires `mission:update`. Unlinks the schedule (deleting it when no other mission uses
+        it); a mission without one is a no-op.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: Unlinked.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/objectives:
     post:
       operationId: postObjectives
@@ -3641,43 +4335,110 @@ paths:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Mission UUID or display id, matched in any workspace the caller is an active member of (not
+          organization-bounded; the first match wins).
+        schema: { type: string }
     post:
       operationId: postMissionsByIdBranchPrepared
       tags: [missions]
-      x-overlord-permission: unknown
+      x-overlord-permission: workspace-member
       x-overlord-edition: both
       x-overlord-consumers: [runner]
-      x-overlord-schema-status: stub
+      summary: Record a runner-prepared branch
+      description: >-
+        Called by the runner after preparing a mission branch. Checks only that the caller is an active
+        member of the mission's workspace; no RBAC action is evaluated. Moves the mission's active branch
+        (unless `isolated`), stamps the execution request and its objective when `requestId` is given, and
+        records a branch event and observation.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BranchPreparedBody' }
+      responses:
+        '200':
+          description: Recorded.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/missions/{id}/branch/action":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Mission UUID, or display id (`coo:756`) resolved within the caller's organization; an ambiguous
+          display id answers 409.
+        schema: { type: string }
     post:
       operationId: postMissionsByIdBranchAction
       tags: [missions]
       x-overlord-permission: mission:update
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Run an on-demand branch action
+      description: >-
+        Requires `mission:update`. Queues `integrate`, `commit`, `push_parent` or `publish` on the
+        project's local target and waits up to 15 seconds; a wait that times out is not an error (the
+        runner records the activity when it finishes). With `clientExecuted` the server only records the
+        summary. Failures answer 409 with a typed `code` (`BRANCH_NOT_PREPARED`, `BRANCH_NO_PRIMARY`,
+        `BRANCH_RESOURCE_NOT_CONNECTED`, `BRANCH_BUSY_EXECUTING`, `LOCAL_FILESYSTEM_UNAVAILABLE`, or the
+        target's branch-action code such as `BRANCH_MERGE_CONFLICT`).
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BranchActionBody' }
+      responses:
+        '200':
+          description: The refreshed mission detail.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MissionDetailDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/missions/{id}/branches":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Mission UUID, or display id (`coo:756`) resolved within the caller's organization; an ambiguous
+          display id answers 409.
+        schema: { type: string }
     get:
       operationId: getMissionsByIdBranches
       tags: [missions]
       x-overlord-permission: mission:read
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: The mission's selectable branches
+      description: Requires `mission:read`. Returns only the mission's current branch from metadata.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The branch list.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MissionBranchListDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/worktrees:
     get:
       operationId: getWorktrees
@@ -5165,3 +5926,1355 @@ components:
             Replaces the per-agent defaults keyed by agent key. Entries with a blank key, a non-object
             value, or neither a pre-command nor flags are dropped; `{}` clears them.
           additionalProperties: { $ref: '#/components/schemas/AgentLaunchConfigInput' }
+    MissionSearchDateField:
+      type: string
+      enum: [ createdAt, updatedAt, dueDatetime ]
+    MissionSearchMatchKind:
+      type: string
+      enum: [ title, displayId, objective, event, delivery, constraints, notes ]
+    MissionSearchAppliedFilters:
+      type: object
+      required: [ query, mode, projectIds, resourceKeys, statusTypes, dateField, from, to, coverageFloor ]
+      properties:
+        query:
+          oneOf:
+            - type: string
+            - type: 'null'
+        mode:
+          type: string
+          enum: [ display_id, any, all, phrase, fallback ]
+        projectIds:
+          type: array
+          items: { type: string }
+        resourceKeys:
+          type: array
+          items: { type: string }
+        statusTypes:
+          type: array
+          items: { type: string }
+        dateField:
+          oneOf:
+            - $ref: '#/components/schemas/MissionSearchDateField'
+            - type: 'null'
+        from:
+          oneOf:
+            - type: string
+            - type: 'null'
+        to:
+          oneOf:
+            - type: string
+            - type: 'null'
+        coverageFloor:
+          oneOf:
+            - type: integer
+              minimum: 1
+            - type: 'null'
+    MissionSearchWorkspaceCount:
+      type: object
+      required: [ workspaceId, matched, returned ]
+      properties:
+        workspaceId: { type: string }
+        matched: { type: integer, minimum: 0 }
+        returned: { type: integer, minimum: 0 }
+    MissionSearchResultV2:
+      type: object
+      required:
+        [
+          id,
+          displayId,
+          title,
+          statusType,
+          statusId,
+          priority,
+          projectId,
+          projectName,
+          workspaceId,
+          workspaceName,
+          workspaceSlug,
+          createdAt,
+          updatedAt,
+          dueDatetime,
+          objectiveCount,
+          relevance,
+          snippet,
+          matchedTerms,
+          matchedIn
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        displayId: { type: string }
+        title: { type: string }
+        statusType: { type: string }
+        statusId: { type: string }
+        priority:
+          oneOf:
+            - type: string
+            - type: 'null'
+        projectId: { type: string }
+        projectName: { type: string }
+        workspaceId: { type: string }
+        workspaceName: { type: string }
+        workspaceSlug: { type: string }
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+        dueDatetime:
+          oneOf:
+            - $ref: '#/components/schemas/DateTime'
+            - type: 'null'
+        objectiveCount: { type: integer, minimum: 0 }
+        relevance:
+          type: number
+          description: Deterministic fused score (text rank fused with recency, exact display id and title
+            first); not a raw engine score.
+        snippet:
+          oneOf:
+            - type: string
+            - type: 'null'
+        matchedTerms:
+          type: array
+          items: { type: string }
+        matchedIn:
+          type: array
+          items: { $ref: '#/components/schemas/MissionSearchMatchKind' }
+    SearchMissionsResponseV2:
+      type: object
+      required: [ version, results, appliedFilters, totalMatchedBeforeLimit, workspaceCounts ]
+      properties:
+        version: { const: 2 }
+        results:
+          type: array
+          items: { $ref: '#/components/schemas/MissionSearchResultV2' }
+        appliedFilters: { $ref: '#/components/schemas/MissionSearchAppliedFilters' }
+        totalMatchedBeforeLimit: { type: integer, minimum: 0 }
+        workspaceCounts:
+          type: array
+          items: { $ref: '#/components/schemas/MissionSearchWorkspaceCount' }
+    MissionSearchV1Response:
+      type: object
+      required: [ missions ]
+      properties:
+        missions:
+          type: array
+          items: { $ref: '#/components/schemas/MissionDto' }
+    SearchMatch:
+      type: object
+      required:
+        [
+          entityType,
+          id,
+          displayId,
+          title,
+          objectiveId,
+          objectiveState,
+          relevance,
+          snippet,
+          matchedTerms,
+          createdAt,
+          updatedAt
+        ]
+      properties:
+        entityType:
+          type: string
+          enum: [ objective, delivery ]
+        id: { type: string }
+        displayId:
+          description: The objective display id; null for a delivery.
+          oneOf:
+            - type: string
+            - type: 'null'
+        title:
+          type: string
+          description: Objective title, or the delivery's first line.
+        objectiveId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        objectiveState:
+          oneOf:
+            - $ref: '#/components/schemas/ObjectiveState'
+            - type: 'null'
+        relevance: { type: number }
+        snippet:
+          oneOf:
+            - type: string
+            - type: 'null'
+        matchedTerms:
+          type: array
+          items: { type: string }
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+    SearchResultV3:
+      allOf:
+        - $ref: '#/components/schemas/MissionSearchResultV2'
+        - type: object
+          required: [ anchorOnly, matches, matchCounts ]
+          properties:
+            anchorOnly:
+              type: boolean
+              description: True when nothing on the mission record itself matched; it only anchors child matches.
+            matches:
+              type: array
+              maxItems: 10
+              items: { $ref: '#/components/schemas/SearchMatch' }
+            matchCounts:
+              type: object
+              description: Matching documents for this mission before `matchesPerResult` capping.
+              required: [ objective, delivery, event ]
+              properties:
+                objective: { type: integer, minimum: 0 }
+                delivery: { type: integer, minimum: 0 }
+                event: { type: integer, minimum: 0 }
+    SearchAppliedFiltersV3:
+      allOf:
+        - $ref: '#/components/schemas/MissionSearchAppliedFilters'
+        - type: object
+          required: [ entityTypes, objectiveStates, matchesPerResult ]
+          properties:
+            entityTypes:
+              type: array
+              items:
+                type: string
+                enum: [ mission, objective, delivery ]
+            objectiveStates:
+              type: array
+              items: { $ref: '#/components/schemas/ObjectiveState' }
+            matchesPerResult: { type: integer, minimum: 1, maximum: 10 }
+    SearchResponseV3:
+      type: object
+      required:
+        [
+          version,
+          results,
+          appliedFilters,
+          totalMatchedBeforeLimit,
+          entityCounts,
+          workspaceCounts,
+          truncatedCandidates
+        ]
+      properties:
+        version: { const: 3 }
+        results:
+          type: array
+          items: { $ref: '#/components/schemas/SearchResultV3' }
+        appliedFilters: { $ref: '#/components/schemas/SearchAppliedFiltersV3' }
+        totalMatchedBeforeLimit: { type: integer, minimum: 0 }
+        entityCounts:
+          type: object
+          required: [ mission, objective, delivery, event ]
+          properties:
+            mission: { type: integer, minimum: 0 }
+            objective: { type: integer, minimum: 0 }
+            delivery: { type: integer, minimum: 0 }
+            event: { type: integer, minimum: 0 }
+        workspaceCounts:
+          type: array
+          items: { $ref: '#/components/schemas/MissionSearchWorkspaceCount' }
+        truncatedCandidates:
+          type: boolean
+          description: True when a workspace hit the 500-document candidate cap; counts are then lower bounds.
+    CreateMissionBody:
+      type: object
+      required: [ projectId ]
+      description: >-
+        At least one of `title`, `firstObjective` and `objectives` must carry text (400 otherwise).
+        `objectives` wins over `firstObjective`; the first objective is created `draft`, the rest
+        `future`.
+      properties:
+        projectId:
+          type: string
+          description: Target project UUID; requires `mission:create` there.
+        title:
+          type: string
+          description: Trimmed. When blank or omitted the mission is titled from the first instruction and a
+            better title is generated asynchronously.
+        priority:
+          $ref: '#/components/schemas/MissionPriority'
+          description: Defaults to `normal`.
+        dueDatetime:
+          description: Any `Date.parse`-able text (400 otherwise), stored as given; null or omitted leaves it
+            unset.
+          oneOf:
+            - type: string
+            - type: 'null'
+        statusId:
+          type: string
+          description: A live status of the project (409 otherwise); omitted uses the project's default status.
+        assignedWorkspaceUserId:
+          description: >-
+            An active member of the project's workspace (400 otherwise), or null for unassigned.
+            Omitted assigns the creator, except for a project_automation token, which leaves the
+            mission unassigned.
+          oneOf:
+            - type: string
+            - type: 'null'
+        firstObjective:
+          type: string
+        objectives:
+          type: array
+          items:
+            type: object
+            required: [ objective ]
+            properties:
+              objective:
+                type: string
+                description: Instruction text; must not be blank.
+              title:
+                oneOf:
+                  - type: string
+                  - type: 'null'
+              autoAdvance:
+                type: boolean
+                description: Deprecated queue hint; defaults to false.
+              agent:
+                description: Explicit launch agent; omitted keeps project launch-preference defaulting.
+                oneOf:
+                  - type: string
+                  - type: 'null'
+              model:
+                description: Requires a non-empty `agent` (400 `validation_error` otherwise).
+                oneOf:
+                  - type: string
+                  - type: 'null'
+              resourceKey:
+                oneOf:
+                  - type: string
+                  - type: 'null'
+        tagIds:
+          type: array
+          description: Live tags of the project (400 otherwise).
+          items: { type: string }
+    UpdateMissionBody:
+      type: object
+      description: Partial update; omitted members are unchanged.
+      properties:
+        title:
+          type: string
+          description: Trimmed; must not be blank.
+        priority:
+          oneOf:
+            - $ref: '#/components/schemas/MissionPriority'
+            - type: 'null'
+        projectId:
+          type: string
+          description: >-
+            Move to another live project of the same workspace (404 otherwise). The status maps to
+            `statusId` if given, else the target's status with the same key, then the same name, then
+            the target's default (409 when none).
+        statusId:
+          type: string
+          description: A live status of the (target) project (409 otherwise). A real change moves the mission
+            to the top of the column.
+        assignedWorkspaceUserId:
+          description: An active member of the mission's workspace (400 otherwise); null or blank unassigns.
+          oneOf:
+            - type: string
+            - type: 'null'
+        notes:
+          description: Blank or null clears them.
+          oneOf:
+            - type: string
+            - type: 'null'
+        branchOverride:
+          description: Pin the next launch's branch; blank or null clears the pin.
+          oneOf:
+            - type: string
+            - type: 'null'
+        worktreePreference:
+          oneOf:
+            - $ref: '#/components/schemas/MissionWorktreePreference'
+            - type: 'null'
+        allowParallelObjectives: { type: boolean }
+        resetActiveBranch:
+          type: boolean
+          description: Only `true` acts; it clears the prepared branch and its observations (400 when none is
+            prepared).
+        tagIds:
+          type: array
+          description: Replaces the mission's tags; each must be a live tag of its project (400 otherwise).
+            `[]` clears them.
+          items: { type: string }
+        dueDatetime:
+          description: Any `Date.parse`-able text (400 otherwise); null clears it. The linked schedule is
+            unchanged.
+          oneOf:
+            - type: string
+            - type: 'null'
+    ObjectiveList:
+      type: array
+      items: { $ref: '#/components/schemas/ObjectiveDto' }
+    ReorderFutureObjectivesBody:
+      type: object
+      required: [ orderedObjectiveIds ]
+      properties:
+        orderedObjectiveIds:
+          type: array
+          uniqueItems: true
+          description: Objective UUIDs, each a `future` objective of the mission (400 otherwise), top to bottom.
+          items: { type: string }
+    MissionEventActorDto:
+      type: object
+      required: [ workspaceUserId, displayName, handle, avatarUrl ]
+      properties:
+        workspaceUserId: { type: string }
+        displayName: { type: string }
+        handle:
+          oneOf:
+            - type: string
+            - type: 'null'
+        avatarUrl:
+          oneOf:
+            - type: string
+            - type: 'null'
+    MissionEventDto:
+      type: object
+      required:
+        [
+          id,
+          missionId,
+          objectiveId,
+          type,
+          phase,
+          summary,
+          source,
+          actorWorkspaceUserId,
+          actor,
+          externalUrl,
+          createdAt
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        missionId: { type: string, format: uuid }
+        objectiveId:
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        type:
+          type: string
+          description: >-
+            `mission_events.type`: update, user_follow_up, alert, discussion_summary, decision, ask,
+            answer, permission_request, delivery, execution_requested, awaiting_approval,
+            status_change. Clients render unknown values neutrally.
+        phase:
+          oneOf:
+            - type: string
+            - type: 'null'
+        summary: { type: string }
+        source: { type: string }
+        actorWorkspaceUserId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        actor:
+          oneOf:
+            - $ref: '#/components/schemas/MissionEventActorDto'
+            - type: 'null'
+        externalUrl:
+          oneOf:
+            - type: string
+            - type: 'null'
+        deliveryId:
+          description: Present only on `delivery` events; null when the payload names no delivery.
+          oneOf:
+            - type: string
+            - type: 'null'
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+    MissionEventList:
+      type: array
+      items: { $ref: '#/components/schemas/MissionEventDto' }
+    HumanActionCategory:
+      type: string
+      enum: [ environment, database, deployment, codegen, packaging, external_service, other ]
+    HumanActionV1:
+      type: object
+      additionalProperties: false
+      required: [ id, action, category, source ]
+      properties:
+        id: { type: string }
+        action: { type: string }
+        reason: { type: string }
+        category: { $ref: '#/components/schemas/HumanActionCategory' }
+        blocking: { type: boolean }
+        command: { type: string }
+        verify: { type: string }
+        link: { type: string }
+        source:
+          type: string
+          enum: [ agent, deterministic_rule ]
+        sourceRef: { type: string }
+    TradeoffMadeV1:
+      type: object
+      additionalProperties: false
+      required: [ id, decision, alternativesConsidered, rationale, source ]
+      properties:
+        id: { type: string }
+        decision: { type: string }
+        alternativesConsidered:
+          type: array
+          maxItems: 6
+          items: { type: string }
+        rationale: { type: string }
+        impact: { type: string }
+        source: { const: agent }
+        sourceRef: { type: string }
+    DeferredWorkV1:
+      type: object
+      additionalProperties: false
+      required: [ id, title, change, location, doneWhen ]
+      properties:
+        id:
+          type: string
+          description: '`deferred-work-<index>-<digest>`, stable per delivery.'
+        title: { type: string, maxLength: 80 }
+        change: { type: string, maxLength: 400 }
+        location: { type: string, maxLength: 200 }
+        doneWhen: { type: string, maxLength: 200 }
+    DeliveryAgentReportV1:
+      type: object
+      additionalProperties: false
+      required: [ humanActions, tradeoffsMade, knownRisks, deferredWork, assumptions ]
+      properties:
+        humanActions:
+          type: array
+          maxItems: 12
+          items: { $ref: '#/components/schemas/HumanActionV1' }
+        tradeoffsMade:
+          type: array
+          maxItems: 12
+          items: { $ref: '#/components/schemas/TradeoffMadeV1' }
+        knownRisks:
+          type: array
+          maxItems: 12
+          items: { type: string }
+        deferredWork:
+          type: array
+          maxItems: 12
+          items: { $ref: '#/components/schemas/DeferredWorkV1' }
+        assumptions:
+          type: array
+          maxItems: 12
+          items: { type: string }
+    DeliveryPresentationV1:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          status,
+          markdown,
+          humanActions,
+          tradeoffsMade,
+          knownRisks,
+          deferredWork,
+          assumptions,
+          generatedBy
+        ]
+      properties:
+        status:
+          type: string
+          enum: [ deterministic, pending, composed, fallback ]
+        markdown: { type: string }
+        humanActions:
+          type: array
+          maxItems: 12
+          items: { $ref: '#/components/schemas/HumanActionV1' }
+        tradeoffsMade:
+          type: array
+          maxItems: 12
+          items: { $ref: '#/components/schemas/TradeoffMadeV1' }
+        knownRisks:
+          type: array
+          maxItems: 12
+          items: { type: string }
+        deferredWork:
+          type: array
+          maxItems: 12
+          items: { $ref: '#/components/schemas/DeferredWorkV1' }
+        assumptions:
+          type: array
+          maxItems: 12
+          items: { type: string }
+        generatedBy:
+          type: string
+          enum: [ deterministic, gemini ]
+        generatedAt: { type: string }
+        model: { type: string }
+    DeliveryReportPayloadV1:
+      type: object
+      additionalProperties: false
+      description: >-
+        The normalized versioned report. A missing or malformed stored report is synthesized
+        deterministically at read time; the raw payload is never exposed.
+      required: [ schemaVersion, agentReport, presentation ]
+      properties:
+        schemaVersion: { const: 1 }
+        agentReport: { $ref: '#/components/schemas/DeliveryAgentReportV1' }
+        warnings:
+          type: array
+          maxItems: 12
+          items: { type: string }
+        presentation: { $ref: '#/components/schemas/DeliveryPresentationV1' }
+    HumanActionResolutionDto:
+      type: object
+      required: [ status, resolvedAt, resolvedByWorkspaceUserId, outcome, outcomeRef ]
+      properties:
+        status:
+          type: string
+          enum: [ done, dismissed ]
+        resolvedAt: { $ref: '#/components/schemas/DateTime' }
+        resolvedByWorkspaceUserId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        outcome:
+          oneOf:
+            - type: string
+              enum: [ mission_created, objective_added ]
+            - type: 'null'
+        outcomeRef:
+          oneOf:
+            - type: string
+            - type: 'null'
+    DeliveryDeferredWorkItemDto:
+      type: object
+      required: [ actionId, title, change, location, doneWhen, resolution ]
+      properties:
+        actionId:
+          type: string
+          description: The item's `DeferredWorkV1.id`, the `actionId` of the resolution routes.
+        title: { type: string }
+        change: { type: string }
+        location: { type: string }
+        doneWhen: { type: string }
+        resolution:
+          oneOf:
+            - $ref: '#/components/schemas/HumanActionResolutionDto'
+            - type: 'null'
+    DeliveryDto:
+      type: object
+      required:
+        [
+          id,
+          missionId,
+          objectiveId,
+          sessionId,
+          summary,
+          verificationSummary,
+          followUpNotes,
+          report,
+          deliveredAt,
+          agentIdentifier,
+          modelIdentifier,
+          deferredWorkItems
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        missionId: { type: string, format: uuid }
+        objectiveId: { type: string, format: uuid }
+        sessionId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        summary: { type: string }
+        verificationSummary:
+          oneOf:
+            - type: string
+            - type: 'null'
+        followUpNotes:
+          oneOf:
+            - type: string
+            - type: 'null'
+        report: { $ref: '#/components/schemas/DeliveryReportPayloadV1' }
+        deliveredAt: { $ref: '#/components/schemas/DateTime' }
+        agentIdentifier:
+          oneOf:
+            - type: string
+            - type: 'null'
+        modelIdentifier:
+          oneOf:
+            - type: string
+            - type: 'null'
+        deferredWorkItems:
+          type: array
+          description: One entry per `report.presentation.deferredWork` item, in order.
+          items: { $ref: '#/components/schemas/DeliveryDeferredWorkItemDto' }
+    MissionDeliveriesDto:
+      type: object
+      required: [ items, total, limit ]
+      properties:
+        items:
+          type: array
+          maxItems: 200
+          description: Newest first.
+          items: { $ref: '#/components/schemas/DeliveryDto' }
+        total:
+          type: integer
+          minimum: 0
+          description: Matching deliveries before the cap.
+        limit:
+          type: integer
+          description: The applied cap (200).
+    MissionSummaryStatus:
+      type: string
+      enum: [ pending, composed, fallback ]
+    MissionSummaryRiskDto:
+      type: object
+      required: [ deliveryId, objectiveId, deliveredAt, text ]
+      properties:
+        deliveryId: { type: string }
+        objectiveId: { type: string }
+        deliveredAt: { $ref: '#/components/schemas/DateTime' }
+        text: { type: string }
+    MissionSummarySuggestionDto:
+      description: A deferred-work suggestion projected at read time; dismissed items are omitted,
+        promoted ones reduced to identity, title and resolution.
+      oneOf:
+        - type: object
+          required:
+            [
+              deliveryId,
+              objectiveId,
+              deliveredAt,
+              actionId,
+              title,
+              state,
+              change,
+              location,
+              doneWhen,
+              resolution
+            ]
+          properties:
+            deliveryId: { type: string }
+            objectiveId: { type: string }
+            deliveredAt: { $ref: '#/components/schemas/DateTime' }
+            actionId: { type: string }
+            title: { type: string }
+            state: { const: open }
+            change: { type: string }
+            location: { type: string }
+            doneWhen: { type: string }
+            resolution: { type: 'null' }
+        - type: object
+          required: [ deliveryId, objectiveId, deliveredAt, actionId, title, state, resolution ]
+          properties:
+            deliveryId: { type: string }
+            objectiveId: { type: string }
+            deliveredAt: { $ref: '#/components/schemas/DateTime' }
+            actionId: { type: string }
+            title: { type: string }
+            state: { const: resolved }
+            resolution: { $ref: '#/components/schemas/HumanActionResolutionDto' }
+    MissionSummaryDto:
+      type: object
+      required:
+        [
+          missionId,
+          revision,
+          status,
+          headline,
+          summary,
+          risks,
+          suggestions,
+          sourceDeliveryId,
+          generatedBy,
+          generatedAt,
+          model
+        ]
+      properties:
+        missionId: { type: string }
+        revision: { type: integer, minimum: 1 }
+        status: { $ref: '#/components/schemas/MissionSummaryStatus' }
+        headline:
+          type: string
+          description: One sentence; empty in the first pending shell.
+        summary:
+          type: string
+          description: Markdown, two to five sentences; empty in the first pending shell.
+        risks:
+          type: array
+          items: { $ref: '#/components/schemas/MissionSummaryRiskDto' }
+        suggestions:
+          type: array
+          items: { $ref: '#/components/schemas/MissionSummarySuggestionDto' }
+        sourceDeliveryId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        generatedBy:
+          type: string
+          enum: [ deterministic, gemini ]
+        generatedAt:
+          oneOf:
+            - $ref: '#/components/schemas/DateTime'
+            - type: 'null'
+        model:
+          oneOf:
+            - type: string
+            - type: 'null'
+    MissionSummaryActionDto:
+      type: object
+      required: [ deliveryId, objectiveId, actionId, deliveredAt, action, category, source ]
+      properties:
+        deliveryId: { type: string }
+        objectiveId:
+          type: string
+          description: May name a deleted objective.
+        actionId: { type: string }
+        deliveredAt: { $ref: '#/components/schemas/DateTime' }
+        action: { type: string }
+        reason: { type: string }
+        category: { $ref: '#/components/schemas/HumanActionCategory' }
+        blocking: { type: boolean }
+        command: { type: string }
+        verify: { type: string }
+        link: { type: string }
+        source:
+          type: string
+          enum: [ agent, deterministic_rule ]
+        sourceRef: { type: string }
+    MissionSummarySourceDto:
+      type: object
+      required: [ objectiveId, deliveryId, deliveredAt ]
+      properties:
+        objectiveId: { type: string }
+        deliveryId: { type: string }
+        deliveredAt: { $ref: '#/components/schemas/DateTime' }
+    MissionSummaryEvidenceDto:
+      type: object
+      required: [ actions, sources, totals, truncated ]
+      properties:
+        actions:
+          type: array
+          maxItems: 100
+          description: Blocking first, then newest delivery first, then report order.
+          items: { $ref: '#/components/schemas/MissionSummaryActionDto' }
+        sources:
+          type: array
+          maxItems: 100
+          description: Newest first, one per objective, deleted objectives included.
+          items: { $ref: '#/components/schemas/MissionSummarySourceDto' }
+        totals:
+          type: object
+          required: [ actions, sources, currentRunDeliveries ]
+          properties:
+            actions: { type: integer, minimum: 0 }
+            sources: { type: integer, minimum: 0 }
+            currentRunDeliveries: { type: integer, minimum: 0 }
+        truncated:
+          type: object
+          required: [ actions, sources ]
+          properties:
+            actions: { type: boolean }
+            sources: { type: boolean }
+    MissionSummaryResponse:
+      oneOf:
+        - type: object
+          required: [ eligible, summary, evidence, watermark, seenAt ]
+          properties:
+            eligible: { const: false }
+            summary: { type: 'null' }
+            evidence: { type: 'null' }
+            watermark: { type: 'null' }
+            seenAt: { type: 'null' }
+        - type: object
+          required: [ eligible, summary, evidence, watermark, seenAt ]
+          properties:
+            eligible: { const: true }
+            summary:
+              oneOf:
+                - $ref: '#/components/schemas/MissionSummaryDto'
+                - type: 'null'
+            evidence: { $ref: '#/components/schemas/MissionSummaryEvidenceDto' }
+            watermark:
+              description: Newest `deliveredAt` of the current-run deliveries drawn on, or `createdAt` of an open
+                question or choice request.
+              oneOf:
+                - $ref: '#/components/schemas/DateTime'
+                - type: 'null'
+            seenAt:
+              oneOf:
+                - $ref: '#/components/schemas/DateTime'
+                - type: 'null'
+    MarkMissionSummarySeenBody:
+      type: object
+      required: [ watermark ]
+      properties:
+        watermark:
+          type: string
+          description: A `watermark` from a summary read; any `Date.parse`-able text, stored normalized to UTC.
+    MissionSummarySeenResponse:
+      type: object
+      required: [ seenAt ]
+      properties:
+        seenAt: { $ref: '#/components/schemas/DateTime' }
+    ArtifactDto:
+      type: object
+      required:
+        [
+          id,
+          workspaceId,
+          projectId,
+          missionId,
+          objectiveId,
+          sessionId,
+          deliveryId,
+          type,
+          label,
+          contentText,
+          contentJson,
+          externalUrl,
+          createdAt,
+          updatedAt,
+          revision
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        workspaceId: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        missionId: { type: string, format: uuid }
+        objectiveId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        sessionId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        deliveryId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        type:
+          type: string
+          description: test_results, next_steps, note, url, decision, migration, or a namespaced (dotted)
+            extension value.
+        label: { type: string }
+        contentText:
+          oneOf:
+            - type: string
+            - type: 'null'
+        contentJson:
+          description: Structured content, null when none.
+          $ref: '#/components/schemas/JsonValue'
+        externalUrl:
+          oneOf:
+            - type: string
+            - type: 'null'
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+        revision: { type: integer, minimum: 1 }
+    ArtifactList:
+      type: array
+      items: { $ref: '#/components/schemas/ArtifactDto' }
+    CreateArtifactBody:
+      type: object
+      required: [ type, label ]
+      description: At least one of `contentText` and `externalUrl` must be non-blank (400).
+      properties:
+        type:
+          type: string
+          description: Trimmed; one of the six core types or a dotted namespaced value (400 otherwise; a
+            namespaced value the deployment's CHECK constraint lacks answers 409).
+        label:
+          type: string
+          description: Trimmed; must not be blank.
+        contentText:
+          description: Stored verbatim; blank stores null.
+          oneOf:
+            - type: string
+            - type: 'null'
+        externalUrl:
+          description: An http(s) URL (400 otherwise); blank stores null.
+          oneOf:
+            - type: string
+            - type: 'null'
+        objectiveId:
+          description: Objective UUID or display id on this mission (404 otherwise). Ignored when `sessionKey`
+            is given.
+          oneOf:
+            - type: string
+            - type: 'null'
+        sessionId:
+          description: Agent session UUID on this mission (404 otherwise); supplies `objectiveId` when that is
+            absent.
+          oneOf:
+            - type: string
+            - type: 'null'
+        sessionKey:
+          description: A live session key of this mission; stamps `sessionId` and `objectiveId`. An unknown or
+            ended key answers 401, another mission's key 400.
+          oneOf:
+            - type: string
+            - type: 'null'
+    UpdateArtifactBody:
+      type: object
+      required: [ expectedRevision ]
+      description: >-
+        At least one of `label`, `contentText` and `externalUrl` (400 otherwise). The artifact must
+        keep text, structured content or a URL (400).
+      properties:
+        expectedRevision:
+          type: integer
+          minimum: 1
+          description: The artifact's current revision; a different value answers 409.
+        label:
+          type: string
+          description: Trimmed; must not be blank.
+        contentText:
+          description: Blank or null clears it.
+          oneOf:
+            - type: string
+            - type: 'null'
+        externalUrl:
+          description: An http(s) URL (400 otherwise); blank or null clears it.
+          oneOf:
+            - type: string
+            - type: 'null'
+    SharedContextEntryDto:
+      type: object
+      required: [ id, missionId, key, value, valueKind, tags, updatedAt, revision ]
+      properties:
+        id: { type: string, format: uuid }
+        missionId: { type: string, format: uuid }
+        key: { type: string }
+        value:
+          description: The parsed JSON object or array when `valueKind` is `json`, else the stored string.
+          $ref: '#/components/schemas/JsonValue'
+        valueKind:
+          type: string
+          enum: [ string, json ]
+        tags:
+          type: array
+          description: Always empty from REST.
+          items: { type: string }
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+        revision: { type: integer, minimum: 1 }
+    SharedContextEntryList:
+      type: array
+      items: { $ref: '#/components/schemas/SharedContextEntryDto' }
+    UpsertSharedContextBody:
+      type: object
+      required: [ key, value ]
+      properties:
+        key:
+          type: string
+          description: Trimmed; must not be blank.
+        value:
+          description: >-
+            Any JSON value. An object or array is stored as JSON; any other value, `null` included, is
+            stored as its string form (`5` reads back as `"5"`, `null` as `"null"`).
+          $ref: '#/components/schemas/JsonValue'
+    FileChangeDto:
+      type: object
+      required: [ id, missionId, objectiveId, resourceKey, filePath, source, observedAt, hookHealth ]
+      properties:
+        id: { type: string }
+        missionId: { type: string }
+        objectiveId: { type: string }
+        resourceKey:
+          oneOf:
+            - type: string
+            - type: 'null'
+        filePath:
+          type: string
+          description: Repository-relative path.
+        source:
+          description: '`declared_edit` (a native observation), `agent_declared` (declaration only), or null
+            (unknown provenance).'
+          oneOf:
+            - type: string
+              enum: [ declared_edit, agent_declared ]
+            - type: 'null'
+        observedAt: { $ref: '#/components/schemas/DateTime' }
+        hookHealth:
+          oneOf:
+            - type: string
+            - type: 'null'
+    MissionFileChangesDto:
+      type: object
+      additionalProperties: false
+      required: [ items, total, limit ]
+      properties:
+        items:
+          type: array
+          maxItems: 200
+          description: Newest observation first. A truncated page must not be partitioned by objective.
+          items: { $ref: '#/components/schemas/FileChangeDto' }
+        total: { type: integer, minimum: 0, description: Matching rows before the cap. }
+        limit: { type: integer, description: The applied cap (200). }
+    CaptureHealthEntryDto:
+      type: object
+      required: [ code, firstAt, lastAt ]
+      properties:
+        code: { type: string }
+        firstAt: { $ref: '#/components/schemas/DateTime' }
+        lastAt: { $ref: '#/components/schemas/DateTime' }
+    CaptureSessionDto:
+      type: object
+      required: [ sessionId, startedAt, bindingState, callbackObservedAt, health ]
+      properties:
+        sessionId: { type: string }
+        startedAt: { $ref: '#/components/schemas/DateTime' }
+        bindingState:
+          type: string
+          enum: [ bound, unbound, unknown ]
+        callbackObservedAt:
+          oneOf:
+            - $ref: '#/components/schemas/DateTime'
+            - type: 'null'
+        health:
+          type: array
+          maxItems: 16
+          items: { $ref: '#/components/schemas/CaptureHealthEntryDto' }
+    ObjectiveFileChangesDto:
+      type: object
+      required: [ scope, missionId, objectiveId, items, total, limit, truncated, capture ]
+      properties:
+        scope: { const: server_objective }
+        missionId: { type: string }
+        objectiveId: { type: string }
+        items:
+          type: array
+          maxItems: 200
+          description: Ordered by resource key then path.
+          items: { $ref: '#/components/schemas/FileChangeDto' }
+        total: { type: integer, minimum: 0 }
+        limit: { type: integer }
+        truncated: { type: boolean }
+        capture:
+          type: object
+          required: [ sessions, warnings ]
+          properties:
+            sessions:
+              type: array
+              items: { $ref: '#/components/schemas/CaptureSessionDto' }
+            warnings:
+              type: array
+              items:
+                type: string
+                enum: [ unbound, bound_no_callback, unknown_binding, tool_activity_uncaptured ]
+    ScheduleWeekDayDto:
+      type: object
+      required: [ dayNum, times ]
+      properties:
+        dayNum: { type: integer, minimum: 0, maximum: 6 }
+        times:
+          type: array
+          description: '`HH:mm` or `HH:mm:ss`, local to the schedule timezone.'
+          items: { type: string }
+    ScheduleDto:
+      type: object
+      required:
+        [
+          id,
+          workspaceId,
+          name,
+          periodType,
+          periodInterval,
+          weeksOfMonth,
+          daysOfMonth,
+          daysOfWeek,
+          timezone,
+          startDate,
+          nextStatusKey,
+          createdAt,
+          updatedAt,
+          revision
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        workspaceId: { type: string, format: uuid }
+        name:
+          oneOf:
+            - type: string
+            - type: 'null'
+        periodType:
+          type: string
+          enum: [ d, w, m ]
+        periodInterval: { type: integer, minimum: 1 }
+        weeksOfMonth:
+          type: array
+          items: { type: integer, minimum: 1, maximum: 5 }
+        daysOfMonth:
+          type: array
+          description: 1-31, or 32 for the last day of the month.
+          items: { type: integer, minimum: 1, maximum: 32 }
+        daysOfWeek:
+          type: array
+          items: { $ref: '#/components/schemas/ScheduleWeekDayDto' }
+        timezone: { type: string }
+        startDate:
+          oneOf:
+            - type: string
+            - type: 'null'
+        nextStatusKey:
+          oneOf:
+            - type: string
+            - type: 'null'
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+        revision: { type: integer, minimum: 1 }
+    ScheduleInput:
+      type: object
+      required: [ periodType, periodInterval, timezone ]
+      description: >-
+        Validated by the scheduling engine; a rule it cannot evaluate answers 400 `validation_error`
+        (for example, daily and weekly schedules require `daysOfWeek`).
+      properties:
+        name:
+          oneOf:
+            - type: string
+            - type: 'null'
+        periodType:
+          type: string
+          enum: [ d, w, m ]
+        periodInterval: { type: integer, minimum: 1 }
+        weeksOfMonth:
+          type: array
+          items: { type: integer }
+        daysOfMonth:
+          type: array
+          items: { type: integer }
+        daysOfWeek:
+          type: array
+          items: { $ref: '#/components/schemas/ScheduleWeekDayDto' }
+        timezone:
+          type: string
+          description: IANA timezone.
+        startDate:
+          oneOf:
+            - type: string
+            - type: 'null'
+        nextStatusKey:
+          description: A live status key of the mission's project (409 `validation_error` otherwise); null
+            uses the project default.
+          oneOf:
+            - type: string
+            - type: 'null'
+    MissionScheduleDto:
+      type: object
+      required: [ dueDatetime, schedule ]
+      properties:
+        dueDatetime:
+          oneOf:
+            - $ref: '#/components/schemas/DateTime'
+            - type: 'null'
+        schedule:
+          oneOf:
+            - $ref: '#/components/schemas/ScheduleDto'
+            - type: 'null'
+    PreviewScheduleBody:
+      type: object
+      required: [ schedule ]
+      properties:
+        schedule: { $ref: '#/components/schemas/ScheduleInput' }
+        itemDueDatetime:
+          description: Current due date used as the recurrence anchor.
+          oneOf:
+            - type: string
+            - type: 'null'
+    SchedulePreviewDto:
+      type: object
+      required: [ dueDatetime ]
+      properties:
+        dueDatetime: { $ref: '#/components/schemas/DateTime' }
+    MissionBranchListDto:
+      type: object
+      required: [ branches, current ]
+      properties:
+        branches:
+          type: array
+          maxItems: 1
+          description: The current branch alone, or empty; full ref lists come from the desktop local-target
+            bridge.
+          items: { type: string }
+        current:
+          description: The prepared branch, else the pinned override, else null.
+          oneOf:
+            - type: string
+            - type: 'null'
+    BranchActionBody:
+      type: object
+      required: [ action ]
+      properties:
+        action:
+          type: string
+          enum: [ integrate, commit, push_parent, publish ]
+        message:
+          type: string
+          description: Commit message for `commit`; the target refuses an empty one
+            (`BRANCH_COMMIT_MESSAGE_REQUIRED`).
+        resourceKey:
+          type: string
+          description: Resource to act on; blank uses the project primary.
+        confirmBusy:
+          type: boolean
+          description: Only `true` proceeds while an objective of the mission is executing.
+        clientExecuted:
+          type: boolean
+          description: Only `true` means git already ran on the client; the server records `summary` only.
+        summary:
+          type: string
+          description: Required (non-blank) when `clientExecuted` is true.
+    GenerateCommitMessageBody:
+      type: object
+      properties:
+        diff:
+          type: string
+          description: Diff text gathered by the client. Required in practice; without it the route answers
+            409 `LOCAL_FILESYSTEM_UNAVAILABLE`.
+    GenerateCommitMessageResultDto:
+      type: object
+      required: [ message ]
+      properties:
+        message: { type: string }
+    BranchPreparedBody:
+      type: object
+      required: [ branchAutomation ]
+      properties:
+        requestId:
+          description: The execution request the branch was prepared for; stamps it and records the branch on
+            its objective (404 when unknown).
+          oneOf:
+            - type: string
+            - type: 'null'
+        branchAutomation:
+          type: object
+          required: [ branchName, baseBranch, worktreePath, resourceKey, action ]
+          properties:
+            branchName: { type: string, description: Must not be blank. }
+            baseBranch: { type: string, description: Must not be blank. }
+            worktreePath: { type: string, description: Must not be blank. }
+            resourceKey: { type: string, description: Must not be blank. }
+            action:
+              type: string
+              enum: [ create, reuse, new_cycle ]
+            cycle:
+              type: number
+              description: Defaults to 1.
+            isolated:
+              type: boolean
+              description: Only `true` marks a per-objective branch, which leaves the mission's active branch
+                alone.
+    ForgetTerminalSessionBody:
+      type: object
+      required: [ providerSessionId ]
+      properties:
+        providerSessionId:
+          type: string
+          description: Must not be blank.
+        executionRequestId:
+          description: Narrows the match to one execution request.
+          oneOf:
+            - type: string
+            - type: 'null'
+    ForgetTerminalSessionResultDto:
+      type: object
+      required: [ forgotten, executionRequestId ]
+      properties:
+        forgotten:
+          type: boolean
+          description: False when no execution request of the mission maps that session.
+        executionRequestId:
+          oneOf:
+            - type: string
+            - type: 'null'
