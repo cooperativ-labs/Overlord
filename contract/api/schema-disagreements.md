@@ -218,6 +218,23 @@ the code does not do.
   packages/contract; `entryDto` (`packages/core/service/run-queue.ts`) always writes them, so
   the schema requires them.
 
+### Execution targets (batch 3)
+
+- **T1** (open). `ExecutionTargetRunnerRegistrationDto` (packages/contract) has no
+  `executionTargetId`; `listRunnerRegistrations` (`packages/core/service/execution-target-runners.ts`)
+  writes it on every registration in `WorkspaceExecutionTargetDto.runnerRegistrations`, so the
+  schema includes it. `WorkspaceExecutionTargetDto.status` is typed `string`; the column admits
+  `active`, `disabled` and `unavailable`, which the schema enumerates.
+  `getWorkspacesByIdExecutionTargets`, `postWorkspacesByIdExecutionTargets`,
+  `patchWorkspacesByIdExecutionTargetsByTargetId`.
+- **T2** (open). `GET /api/workspaces/{id}/execution-targets` writes as it reads: devices with no
+  live execution target are soft-deleted before the list is built (`softDeleteOrphanDevices`).
+- **T3** (open). The two observation routes accept either `launch:configure` or
+  `execution_request:claim` (`requireExecutionTargetObservationContext`,
+  `backend/branching/execution-target-observation-scope.ts`), so their permission stays `unknown`
+  with both as candidates (ADR 0048). `postExecutionTargetsByIdObservations`,
+  `postExecutionTargetsByIdMissionBranchObservations`.
+
 ## 2. Non-conforming error shapes
 
 Every route in `backend/app.ts` that forwards errors through `handle()` or `next(err)`

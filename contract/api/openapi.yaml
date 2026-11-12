@@ -2018,48 +2018,152 @@ paths:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Workspace UUID; a workspace the caller is not an active member of answers 404.
+        schema: { type: string }
     get:
       operationId: getWorkspacesByIdExecutionTargets
       tags: [execution-targets]
       x-overlord-permission: workspace:read
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: List a workspace's execution targets
+      description: >-
+        Requires `workspace:read` in the workspace. Ordered by label, then creation. Local targets of a
+        browser pseudo-device are omitted. Before listing, devices with no live execution target are
+        soft-deleted. `reachable` and `lastSeenAt` come from the gateway registration for `virtual`
+        targets and from runner heartbeats (falling back to the device's last-seen time) for `local` ones;
+        a target without a heartbeat in the last five minutes is unreachable, except the caller's own
+        machine.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The targets.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkspaceExecutionTargetList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
     post:
       operationId: postWorkspacesByIdExecutionTargets
       tags: [execution-targets]
       x-overlord-permission: execution_request:claim
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Register the calling machine as an execution target
+      description: >-
+        Requires `execution_request:claim` in the workspace (404 `Workspace not found or no active
+        membership` without membership). The explicit "this machine runs agents" declaration, the same as
+        `ovld add-et`: idempotent, returning the existing target when the machine is already registered. A
+        co-located Local backend registers its own host. A hosted backend registers the machine named by
+        `X-Overlord-Device-Fingerprint`; without one, or for a browser pseudo-device or the backend host
+        itself, it answers 409 `no_execution_target_registered`. A non-blank `label` renames the target.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: X-Overlord-Device-Fingerprint
+          in: header
+          required: false
+          description: >-
+            The calling machine's fingerprint. On a hosted (Postgres) backend this identifies the acting
+            machine; a co-located Local (SQLite) backend ignores it and acts as its own host. A browser
+            pseudo-device or the backend host's own fingerprint never resolves to a target.
+          schema: { type: string }
+        - name: X-Overlord-Device-Label
+          in: header
+          required: false
+          description: Display label for a machine registered by this request.
+          schema: { type: string }
+        - name: X-Overlord-Device-Platform
+          in: header
+          required: false
+          description: Platform name of the calling machine (`browser` marks a browser pseudo-device).
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterExecutionTargetBody' }
+      responses:
+        '200':
+          description: The registered target.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkspaceExecutionTargetDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/workspaces/{id}/execution-targets/{targetId}":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Workspace UUID; a workspace the caller is not an active member of answers 404.
+        schema: { type: string }
       - name: targetId
         in: path
         required: true
-        schema:
-          type: string
+        description: Execution target id in that workspace; an unknown or deleted target answers 404.
+        schema: { type: string }
     patch:
       operationId: patchWorkspacesByIdExecutionTargetsByTargetId
       tags: [execution-targets]
       x-overlord-permission: workspace:update
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Rename, disable or enable an execution target
+      description: >-
+        Requires `workspace:update` in the workspace. At least one of a string `label` or a `status` of
+        `active`/`disabled` is required (400 `Provide a label or status of active or disabled`); other
+        values are ignored. The label is applied first (trimmed; blank answers 400), then the status.
+        Records an `execution_target` change for each.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateWorkspaceExecutionTargetBody' }
+      responses:
+        '200':
+          description: The target.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkspaceExecutionTargetDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
     delete:
       operationId: deleteWorkspacesByIdExecutionTargetsByTargetId
       tags: [execution-targets]
       x-overlord-permission: workspace:update
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Delete an execution target
+      description: >-
+        Requires `workspace:update` in the workspace. A target with active queued work (an execution
+        request in an active status stamped with or claimed by it) answers 409
+        `execution_target_has_active_queue`. Otherwise soft-deletes the target, its member access rows and
+        the project resource sources on it, clears it from project target preferences, records an
+        `execution_target` change, and soft-deletes its device when no live target remains on it.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/workspaces/{id}/agent-catalog":
     parameters:
       - name: id
@@ -6679,52 +6783,184 @@ paths:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Project UUID; an unknown, deleted or foreign project answers 404.
+        schema: { type: string }
     get:
       operationId: getProjectsByIdExecutionTarget
       tags: [execution-targets]
       x-overlord-permission: launch:read
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Read the caller's execution target selection for a project
+      description: >-
+        Requires `launch:read` in the project's workspace. `eligibleTargets` are the active targets the
+        caller has active access to that hold a primary resource for the project (or a project-wide
+        primary), excluding browser pseudo-devices and, on a hosted backend, the backend host.
+        `selectedExecutionTargetId` is the caller's stored choice when still eligible, else the sole
+        eligible target, else null.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The selection.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectExecutionTargetDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
     put:
       operationId: putProjectsByIdExecutionTarget
       tags: [execution-targets]
       x-overlord-permission: launch:configure
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Set the caller's execution target for a project
+      description: >-
+        Requires `launch:configure` in the project's workspace. Stores the caller's per-project choice in
+        `project_user_preferences`; `null`, an absent member or a blank string clears it. A target that is
+        not in the caller's eligible list answers 400 `execution_target_not_eligible`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateProjectExecutionTargetBody' }
+      responses:
+        '200':
+          description: The selection after the change.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectExecutionTargetDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/execution-targets/{id}/observations":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Execution target id; an unknown or deleted target, or one in a workspace the caller is not an
+          active member of, answers 404.
+        schema: { type: string }
     post:
       operationId: postExecutionTargetsByIdObservations
       tags: [execution-targets]
       x-overlord-permission: unknown
-      x-overlord-permission-candidates: [execution_request:claim, launch:configure]
+      x-overlord-permission-candidates: [launch:configure, execution_request:claim]
       x-overlord-edition: both
       x-overlord-consumers: [runner, webapp]
-      x-overlord-schema-status: stub
+      summary: Report resource observations from an execution target
+      description: >-
+        Requires either `launch:configure` or `execution_request:claim` in the target's workspace (403
+        `Not allowed to report resource observations.` with neither). The caller must be acting as this
+        target: the co-located Local host, or on a hosted backend the machine named by
+        `X-Overlord-Device-Fingerprint` (403 `execution_target_mismatch` otherwise). Each observed
+        resource must be a live project resource of the workspace (404 `resource_not_found`) with a source
+        on this target or a target-agnostic one (409 `resource_target_mismatch`). Upserts one cached
+        observation per (target, resource); the whole list is validated before any write.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: X-Overlord-Device-Fingerprint
+          in: header
+          required: false
+          description: >-
+            The calling machine's fingerprint. On a hosted (Postgres) backend this identifies the acting
+            machine; a co-located Local (SQLite) backend ignores it and acts as its own host. A browser
+            pseudo-device or the backend host's own fingerprint never resolves to a target.
+          schema: { type: string }
+        - name: X-Overlord-Device-Label
+          in: header
+          required: false
+          description: Display label for a machine registered by this request.
+          schema: { type: string }
+        - name: X-Overlord-Device-Platform
+          in: header
+          required: false
+          description: Platform name of the calling machine (`browser` marks a browser pseudo-device).
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReportResourceObservationsBody' }
+      responses:
+        '200':
+          description: How many observations were recorded.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecordedObservationsDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/execution-targets/{id}/mission-branch-observations":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Execution target id; an unknown or deleted target, or one in a workspace the caller is not an
+          active member of, answers 404.
+        schema: { type: string }
     post:
       operationId: postExecutionTargetsByIdMissionBranchObservations
       tags: [execution-targets]
       x-overlord-permission: unknown
-      x-overlord-permission-candidates: [execution_request:claim, launch:configure]
+      x-overlord-permission-candidates: [launch:configure, execution_request:claim]
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Report mission branch observations from an execution target
+      description: >-
+        Requires either `launch:configure` or `execution_request:claim` in the target's workspace (403
+        `Not allowed to report mission branch observations.` with neither). The caller must be acting as
+        this target, as for resource observations (403 `execution_target_mismatch`). Each mission must be
+        a live mission of the target's workspace, addressed by UUID (404 `mission_not_found`). Upserts one
+        observation per (target, mission, resource key); the whole list is validated before any write.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: X-Overlord-Device-Fingerprint
+          in: header
+          required: false
+          description: >-
+            The calling machine's fingerprint. On a hosted (Postgres) backend this identifies the acting
+            machine; a co-located Local (SQLite) backend ignores it and acts as its own host. A browser
+            pseudo-device or the backend host's own fingerprint never resolves to a target.
+          schema: { type: string }
+        - name: X-Overlord-Device-Label
+          in: header
+          required: false
+          description: Display label for a machine registered by this request.
+          schema: { type: string }
+        - name: X-Overlord-Device-Platform
+          in: header
+          required: false
+          description: Platform name of the calling machine (`browser` marks a browser pseudo-device).
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReportMissionBranchObservationsBody' }
+      responses:
+        '200':
+          description: How many observations were recorded.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecordedObservationsDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/protocol/{subcommand}":
     parameters:
       - name: subcommand
@@ -12204,3 +12440,201 @@ components:
             - type: string
               format: uuid
             - type: 'null'
+    ExecutionTargetRunnerRegistrationDto:
+      type: object
+      description: A runner instance registered against an execution target (`listRunnerRegistrations`).
+      required:
+        [
+          id,
+          executionTargetId,
+          runnerInstanceId,
+          relation,
+          label,
+          runnerVersion,
+          supportedAgents,
+          health,
+          lastHeartbeatAt,
+          lastErrorCode
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        executionTargetId: { type: string }
+        runnerInstanceId: { type: string }
+        relation:
+          type: string
+          enum: [ native, adopted ]
+        label:
+          oneOf:
+            - type: string
+            - type: 'null'
+        runnerVersion:
+          oneOf:
+            - type: string
+            - type: 'null'
+        supportedAgents:
+          type: array
+          description: Agent keys from the stored JSON list; non-strings are dropped and malformed JSON reads
+            as empty.
+          items: { type: string }
+        health: { type: string, description: Open vocabulary reported by the runner. }
+        lastHeartbeatAt:
+          oneOf:
+            - { $ref: '#/components/schemas/DateTime' }
+            - type: 'null'
+        lastErrorCode:
+          oneOf:
+            - type: string
+            - type: 'null'
+    WorkspaceExecutionTargetDto:
+      type: object
+      description: Safe workspace-settings projection of an execution target (`listWorkspaceExecutionTargets`).
+      required:
+        [
+          id,
+          type,
+          label,
+          status,
+          ownerDisplayName,
+          reachable,
+          lastSeenAt,
+          activeMemberAccessCount,
+          hasCurrentUserAccess,
+          unavailableReason,
+          runnerRegistrations
+        ]
+      properties:
+        id: { type: string }
+        type: { type: string, description: '`local` or `virtual`.' }
+        label: { type: string }
+        status:
+          type: string
+          enum: [ active, disabled, unavailable ]
+        ownerDisplayName:
+          oneOf:
+            - type: string
+            - type: 'null'
+        reachable: { type: boolean }
+        lastSeenAt:
+          oneOf:
+            - { $ref: '#/components/schemas/DateTime' }
+            - type: 'null'
+        activeMemberAccessCount: { type: integer, minimum: 0 }
+        hasCurrentUserAccess:
+          type: boolean
+          description: Whether the caller has active access and so can select it for project launches.
+        unavailableReason:
+          description: >-
+            Human-readable reason the target cannot run work now (disabled, awaiting its first runner
+            heartbeat, or no healthy runner); null when reachable and active.
+          oneOf:
+            - type: string
+            - type: 'null'
+        runnerRegistrations:
+          type: array
+          items: { $ref: '#/components/schemas/ExecutionTargetRunnerRegistrationDto' }
+    WorkspaceExecutionTargetList:
+      type: array
+      items: { $ref: '#/components/schemas/WorkspaceExecutionTargetDto' }
+    RegisterExecutionTargetBody:
+      type: object
+      properties:
+        label:
+          type: string
+          description: Display name for the target, trimmed; a non-string or blank value keeps the device label.
+    UpdateWorkspaceExecutionTargetBody:
+      type: object
+      properties:
+        label:
+          type: string
+          description: New label, trimmed; blank answers 400. A non-string is ignored.
+        status:
+          type: string
+          enum: [ active, disabled ]
+          description: Any other value is ignored.
+    EligibleExecutionTargetDto:
+      type: object
+      required: [ executionTargetId, type, label, deviceLabel, reachable, primaryResourceConnected ]
+      properties:
+        executionTargetId: { type: string }
+        type: { type: string }
+        label: { type: string }
+        deviceLabel:
+          oneOf:
+            - type: string
+            - type: 'null'
+        reachable: { type: boolean }
+        primaryResourceConnected:
+          type: boolean
+          description: Whether the project's primary resource on this target is not `missing`.
+    ProjectExecutionTargetDto:
+      type: object
+      required: [ selectedExecutionTargetId, eligibleTargets ]
+      properties:
+        selectedExecutionTargetId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        eligibleTargets:
+          type: array
+          items: { $ref: '#/components/schemas/EligibleExecutionTargetDto' }
+    UpdateProjectExecutionTargetBody:
+      type: object
+      properties:
+        executionTargetId:
+          description: Target to select, trimmed; null, absent or blank clears the choice. A non-string answers 500.
+          oneOf:
+            - type: string
+            - type: 'null'
+    TargetObservationState:
+      type: string
+      enum: [ available, missing, unreachable, permission_denied, not_git_repository, unknown ]
+    ReportResourceObservationsBody:
+      type: object
+      required: [ observations ]
+      properties:
+        observations:
+          type: array
+          minItems: 1
+          description: A missing, non-array or empty list answers 400.
+          items:
+            type: object
+            required: [ resourceId, state, observedAt ]
+            properties:
+              resourceId: { type: string, description: Project resource UUID, trimmed; blank answers 400. }
+              state:
+                $ref: '#/components/schemas/TargetObservationState'
+                description: Trimmed; any other value answers 400.
+              gitRoot: { type: string, description: A non-string is stored as null. }
+              branch: { type: string, description: A non-string is stored as null. }
+              commit: { type: string, description: A non-string is stored as null. }
+              observedAt:
+                type: string
+                description: Trimmed and stored as given (not parsed); blank answers 400.
+    ReportMissionBranchObservationsBody:
+      type: object
+      required: [ observations ]
+      properties:
+        observations:
+          type: array
+          minItems: 1
+          description: A missing, non-array or empty list answers 400.
+          items:
+            type: object
+            required: [ missionId, resourceKey, status, dirty, observedAt ]
+            properties:
+              missionId: { type: string, description: Mission UUID, trimmed; blank answers 400. }
+              resourceKey: { type: string, description: Trimmed; blank answers 400. }
+              status:
+                type: string
+                enum: [ created, published, merged_unpushed, merged ]
+                description: Trimmed; any other value answers 400.
+              dirty: { type: boolean, description: A non-boolean answers 400. }
+              worktreePath: { type: string, description: A non-string is stored as null. }
+              observedAt:
+                type: string
+                description: Trimmed and stored as given (not parsed); blank answers 400.
+    RecordedObservationsDto:
+      type: object
+      required: [ recorded ]
+      properties:
+        recorded: { type: integer, minimum: 1 }
