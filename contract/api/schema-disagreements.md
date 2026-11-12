@@ -2,9 +2,19 @@
 
 Running record kept while phase 4b adds request and response schemas to
 `openapi.yaml`. The description follows the code (ADR 0006); everything here is where
-another source, or the code itself, looks wrong. Phase 4d consumes this file: it
-resolves each entry by a contract change, a code fix, or an explicit decision to keep
-the behaviour. Batches append; do not renumber entries.
+another source disagrees with the code, an error shape departs from `ErrorEnvelope`, or the
+description needs a construct the generator does not yet translate. Phase 4d consumes this
+file: it resolves each entry by a contract change, a code change, or an explicit decision to
+keep the behaviour. Entries keep their ids; new entries take the next id of their prefix and
+never reuse one.
+
+| Section | Entries | Ids |
+| --- | --- | --- |
+| 1. Prose and type disagreements | 70 | P1–P5, M1–M6, A1–A3 (batch 1); U1–U3, W1–W6, H1–H2, N1–N2, S1–S2, R1–R3, O1–O5, C1–C3 (batch 2); Q1, T1–T3, L1–L5, J1–J2, K1–K3, V1, X1–X3 (batch 3); Y1–Y6, B1–B3, D1–D3 (batch 4) |
+| 2. Non-conforming error shapes | 9 | E1–E9 |
+| 3. Suspected code defects | 0 | tracked privately |
+| 4. Generator constructs needed | 17 | G1–G17 |
+| 5. Operations left as stubs | 0 | 279 operations described |
 
 Each entry names the operationIds affected and the file and function that ship the
 behaviour. Status is `open` until phase 4d decides.
@@ -400,7 +410,8 @@ one shape with origin-dependent members: `{ error, detail?, code? }` from `ApiEr
 `{ error, code, details? }` from `ServiceError`, `{ error, code: 'body_too_large' }`
 from the body parser, `{ error, detail }` from a SQLite constraint failure and from an
 unexpected exception, and `{ error }` from the authentication middleware (401) and the
-project-automation route guard (404).
+project-automation route guard (404). Entries E1 to E4 are batch 1, E5 to E7 batch 2 and
+E8 and E9 batch 4.
 
 - **E1** (open). The envelope carries both `detail` (string, from `ApiError`) and
   `details` (any JSON, from `ServiceError`). Two near-identical member names with
@@ -408,15 +419,12 @@ project-automation route guard (404).
 - **E2** (open). `POST /api/auth/desktop/exchange` (`postAuthDesktopExchange`) and
   `POST /api/auth/browser/exchange` (`postAuthBrowserExchange`) answer 401 with
   `{ message }` (`backend/app.ts`), not `{ error }`.
-- **E3** (open). `GET /api/auth/browser/callback` (`getAuthBrowserCallback`) answers 400
-  and 401 with `text/plain` bodies (`backend/app.ts`).
+- **E3** (open; corrected in batch 2, reproduced). `GET /api/auth/browser/callback`
+  (`getAuthBrowserCallback`) answers 400 and 401 with `text/html; charset=utf-8` bodies (Express
+  `res.send` of a string, `backend/app.ts`); batch 1 recorded them as `text/plain`.
 - **E4** (open, probably intended). The OAuth endpoints answer RFC 6749 errors
   `{ error, error_description }` (`backend/oauth.ts` `jsonError`), where `error` is an
   OAuth code, not a message.
-
-- **E3 correction** (batch 2, reproduced). The 400 and 401 bodies of
-  `getAuthBrowserCallback` are `text/html; charset=utf-8` (Express `res.send` of a string),
-  not `text/plain`.
 - **E5** (open). `GET /api/auth/desktop/github` (`getAuthDesktopGithub`) passes Better
   Auth's error responses through unchanged, `{ message, code }`; with GitHub sign-in not
   configured that is 404 `{ message: 'Provider not found', code: 'PROVIDER_NOT_FOUND' }`
@@ -426,7 +434,6 @@ project-automation route guard (404).
   (`getAuthCallbackGithubRepository`, `getConnectionsKnowledgebaseCallback`) answer an HTML
   status page (200 connected, 400 otherwise) when the flow has no return target; they never
   answer JSON.
-
 - **E7** (open). `POST /oauth/authorize/request` and `/oauth/authorize/approve` answer
   `ErrorEnvelope` whose `code` is an OAuth error code (`invalid_request`, `invalid_client`,
   `invalid_scope`, `invalid_target`, `unsupported_response_type`), while the other OAuth
@@ -455,96 +462,87 @@ maintainers, not in this public file.
 
 Constructs used beyond the subset Clear Comply's generator
 (`scripts/generate-api-contract.mjs`) translates. Phase 4c must support each or the
-schema must change.
+schema must change. Each construct has one entry listing every operation or schema that
+uses it; the batch that introduced a use is in parentheses.
 
 - **G1** `JsonValue` (a schema with no `type`, any JSON value): artifact `contentJson`,
-  shared-context `value`, ServiceError `details`, repository-read `data`. Needs
-  `z.unknown()`.
-- **G2** `additionalProperties: true` (an open object): `ProjectResourceSourceDto.descriptor`.
-  Clear Comply's generator renders it as a plain `z.object({})`, which strips unknown
+  shared-context `value`, ServiceError `details`, repository-read `data` (batch 1), chat
+  diagnostic `payload` (batch 4). Needs `z.unknown()`.
+- **G2** `additionalProperties: true` (an open object): `ProjectResourceSourceDto.descriptor`
+  (batch 1). Clear Comply's generator renders it as a plain `z.object({})`, which strips unknown
   keys; it needs `z.record(z.string(), z.unknown())`.
-- **G3** Non-JSON request bodies (`'*/*'` raw uploads with `RawUploadBody`, a string
-  with `contentMediaType`), header parameters, and `text/event-stream` or file
-  responses. The Clear Comply generator reads only JSON success responses.
-- **G4** String bounds (`minLength`, `maxLength`) are ignored by the Clear Comply
-  generator; they are documentation until 4c renders them.
-- **G5** `allOf` for a DTO that extends another (`MissionDetailDto` = `MissionDto` +
-  detail projections; `SearchResultV3`, `SearchAppliedFiltersV3`). Needs `.extend()`/`z.intersection`; the alternative is
-  repeating every `MissionDto` property in each extension.
-- **G6** `$ref` with sibling keywords (`description`) on a property. Valid OpenAPI 3.1;
-  the Clear Comply generator ignores the siblings, which is harmless.
-
-- **G7** `format: uuid` on server-minted ids. The Clear Comply generator renders it as
-  `z.string().uuid()`, but the backend test fixtures use readable ids
-  (`local-workspace`, `operator-workspace-user`, `test-organization`), so validating
-  responses in backend tests (ADR 0006) will reject them unless the fixtures move to
-  UUIDs or 4c renders the format leniently. Batch 1's own response check accepted any
-  string for `uuid` for this reason.
-- **G8** A JSON response that is a `oneOf` of two object schemas distinguished only by
-  their key sets (`getMissionsByIdFileChanges`: `MissionFileChangesDto` is
-  `additionalProperties: false` so it cannot also match `ObjectiveFileChangesDto`).
-  Needs `.strict()` on that member, which the generator already emits.
-
-- **G9** A `204` success with no body, written by `handle()` callers that end the response
-  with `res.status(204).end()`: `deleteUserTokensById`. The Clear Comply generator reads
-  only JSON success responses.
-
-- **G10** Redirect (`302`) success responses with `Location`/`Set-Cookie` response headers,
-  and `text/plain` / `text/html` error bodies: the sign-in handoffs and OAuth callbacks
-  (`getAuthDesktopGithub`, `getAuthDesktopCallback`, `getAuthBrowserCallback`,
-  `getAuthCallbackGithubRepository`). Express's `res.redirect` also writes a short notice
-  body that the description does not model.
-- **G11** An optional security requirement (`{}` alongside the session schemes) on
-  `getAuthDesktopCallback` and `getAuthBrowserCallback`, which read a browser session when
-  present and redirect or answer a page without one instead of 401.
-
-- **G12** A JSON request body on `DELETE`: `deleteNotificationsById` (`expectedRevision`).
-  G9's 204 responses also cover `deleteMobileLiveActivitiesByActivityIdPushToken`,
+- **G3** Non-JSON transports. Request bodies: `'*/*'` raw uploads (`RawUploadBody`,
+  `RawImageUploadBody`, strings with `contentMediaType`) (batches 1 and 2). Responses:
+  `text/event-stream` (`getRealtime`, `getStream`, `getChatThreadsByIdEvents`), file downloads
+  (`'*/*'` `BinaryDownload` from `getStorageByBucketKeyByStorageKey`, `text/csv` from
+  `getWorkspacesByIdObjectivesCsv`) (batches 1, 2 and 4). Header parameters
+  (`x-upload-filename`; `X-Overlord-Device-Fingerprint` on the execution-target, launch-settings and
+  observation operations) (batches 1 to 3), and `postRunnerClaim`'s Postgres long poll, whose
+  headers are flushed before the body is written (batch 3). The Clear Comply generator reads only
+  JSON bodies and JSON success responses.
+- **G4** String bounds (`minLength`, `maxLength`) are ignored by the Clear Comply generator; they
+  are documentation until 4c renders them (batches 1 to 4).
+- **G5** `allOf` for a DTO that extends another: `MissionDetailDto` (`MissionDto` plus detail
+  projections), `SearchResultV3`, `SearchAppliedFiltersV3` (batch 1), `ServerMetaDto` (`MetaDto`
+  plus server fields) and `OAuthApproveBody` (the authorization request plus the decision) (batch
+  2), `RunnerClaimedRequestDto` (`RunnerExecutionRequestDto` plus launch preparation) and
+  `HumanAgentRequestDto` (`AgentRequestDto` plus `delivery`) (batch 3). Needs
+  `.extend()`/`z.intersection`; the alternative is repeating every base property.
+- **G6** `$ref` with sibling keywords (`description`) on a property (batches 1 to 4). Valid
+  OpenAPI 3.1; the Clear Comply generator ignores the siblings, which is harmless.
+- **G7** `format: uuid` on server-minted ids (batches 1 to 4). The Clear Comply generator renders
+  it as `z.string().uuid()`, but the backend test fixtures use readable ids (`local-workspace`,
+  `operator-workspace-user`, `test-organization`), so validating responses in backend tests (ADR
+  0006) will reject them unless the fixtures move to UUIDs or 4c renders the format leniently.
+  The phase 4b response checks accepted any string for `uuid` for this reason.
+- **G8** A JSON response that is a `oneOf` of object schemas distinguished only by their key
+  sets: `getMissionsByIdFileChanges` (`MissionFileChangesDto` is `additionalProperties: false` so
+  it cannot also match `ObjectiveFileChangesDto`) (batch 1); `getExtGithubMissionsByMissionIdPullRequest`
+  (`GitHubPullRequestDto` or `OkResponse`) (batch 4). Needs `.strict()` on the members, which the
+  generator already emits.
+- **G9** A `204` success with no body, written by handlers that end the response with
+  `res.status(204).end()`: `deleteUserTokensById`, `deleteMobileLiveActivitiesByActivityIdPushToken`,
   `putMobileLiveActivitiesStartToken`, `postMobileLiveActivitiesStartTokenRevoke`,
-  `putMobilePushDeviceToken` and `postMobilePushDeviceTokenRevoke`.
-
+  `putMobilePushDeviceToken` and `postMobilePushDeviceTokenRevoke` (batch 2). The Clear Comply
+  generator reads only JSON success responses.
+- **G10** Redirect (`302`) success responses with `Location`/`Set-Cookie` response headers, and
+  `text/plain` / `text/html` bodies: the sign-in handoffs and OAuth callbacks
+  (`getAuthDesktopGithub`, `getAuthDesktopCallback`, `getAuthBrowserCallback`,
+  `getAuthCallbackGithubRepository`, `getConnectionsKnowledgebaseCallback`, `getOauthAuthorize`,
+  and the storage serve route `getStorageByBucketKeyByStorageKey`) (batch 2). Express's `res.redirect` also writes a short notice body that the description does
+  not model.
+- **G11** An optional security requirement (`{}` alongside the session schemes) on
+  `getAuthDesktopCallback` and `getAuthBrowserCallback`, which read a browser session when present
+  and redirect or answer a page without one instead of 401 (batch 2).
+- **G12** A JSON request body on `DELETE`: `deleteNotificationsById` (`expectedRevision`) (batch
+  2), and the optional bodies of `deleteRunQueuesByQueueId` (`moveEntriesTo`) and
+  `deleteRunQueuesEntriesByEntryId` (`force`) (batch 3).
 - **G13** A `201` success (`postOauthRegister`), form-encoded request bodies
   (`application/x-www-form-urlencoded`) offered alongside JSON (`postOauthRegister`,
   `postOauthToken`, `postOauthRevoke`), and request or response bodies that are a `oneOf` of an
-  object and an array of it (`postMcp`, JSON-RPC batches).
-- **G5** also covers `ServerMetaDto` (`MetaDto` plus server fields) and `OAuthApproveBody`
-  (the authorization request plus the decision).
-
-- **G12** also covers the optional JSON bodies of `deleteRunQueuesByQueueId` (`moveEntriesTo`)
-  and `deleteRunQueuesEntriesByEntryId` (`force`) (batch 3).
-
+  object and an array of it (`postMcp`, JSON-RPC batches) (batch 2).
 - **G14** Error-only operations with no success response: `postMissionsByIdSessionChannel`,
   `postAgentRequestsByIdRelease`, `postAgentSessionInputs` and
   `postAgentSessionInputsByIdCancel` always answer 410 (batch 3).
-- **G5** also covers `RunnerClaimedRequestDto` (`RunnerExecutionRequestDto` plus launch
-  preparation) and `HumanAgentRequestDto` (`AgentRequestDto` plus `delivery`). **G3** also covers
-  the `X-Overlord-Device-Fingerprint` header parameter on the execution-target, launch-settings
-  and observation operations, and `postRunnerClaim`'s Postgres long poll, whose headers are
-  flushed before the body is written (batch 3).
-
 - **G15** One success status with two media types chosen by a query parameter:
   `getChatThreadsByIdEvents` answers `application/json` (`ChatEventPageDto`) with `poll=1` and
   `text/event-stream` (frames of `ChatStreamFrameDto`) otherwise (batch 4).
 - **G16** Unions discriminated only by a `const` member and no OpenAPI `discriminator`:
   `ChatBlockDto` (`kind`), `ChatSourceLocatorDto` (`kind`), `ChatEventDto` (`kind`, eleven
-  variants) and `ChatStreamFrameDto` (`type`). Needs `z.discriminatedUnion` (or `z.union`) (batch 4).
+  variants) and `ChatStreamFrameDto` (`type`) (batch 4), and `RealtimeStreamEvent` (`type`)
+  (batch 2). The activity feed items (batch 1) are told apart by `kind`, which is an enum on one
+  member and a `const` on the other. Needs `z.discriminatedUnion` (or `z.union`).
 - **G17** The operation-level `deprecated: true` flag on `getExtEverhourIntegration`,
-  `putExtEverhourIntegration` and `deleteExtEverhourIntegration`; generated clients should carry it
-  as a deprecation marker (batch 4).
-- **G8** also covers `getExtGithubMissionsByMissionIdPullRequest`, whose 200 is a `oneOf` of
-  `GitHubPullRequestDto` and `OkResponse`, told apart only by their keys (batch 4).
+  `putExtEverhourIntegration` and `deleteExtEverhourIntegration` (batch 4); generated clients
+  should carry it as a deprecation marker.
 
 ## 5. Operations left as stubs
 
-None from batch 1: every operation tagged missions, objectives, deliveries, activity,
-inbox, projects, project-statuses and project-resources (81) has schemas.
+None. Every operation has schemas, and `contract/api/openapi-ratchet.json` records 0 stubs:
 
-None from batch 2: every operation tagged workspaces, organizations, profile, user-tokens,
-notifications, auth, oauth, meta, mcp, storage, realtime, mobile, webhooks and connections
-(81) has schemas.
-
-None from batch 3: every operation tagged run-queues, execution-targets, runner,
-launch-settings, agent-catalog, agent-requests, agent-session-channels, agent-session-inputs,
-worktrees, local-target and protocol (68) has schemas.
-
-None from batch 4: every operation tagged chat (16), everhour (20) and github (13) has schemas.
+| Batch | Tags | Operations |
+| --- | --- | --- |
+| 1 | missions, objectives, deliveries, activity, inbox, projects, project-statuses, project-resources | 81 |
+| 2 | workspaces, organizations, profile, user-tokens, notifications, auth, oauth, meta, mcp, storage, realtime, mobile, webhooks, connections | 81 |
+| 3 | run-queues, execution-targets, runner, launch-settings, agent-catalog, agent-requests, agent-session-channels, agent-session-inputs, worktrees, local-target, protocol | 68 |
+| 4 | chat, everhour, github | 49 |
