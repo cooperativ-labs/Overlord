@@ -2169,36 +2169,87 @@ paths:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Workspace UUID; a workspace the caller is not an active member of answers 404.
+        schema: { type: string }
     get:
       operationId: getWorkspacesByIdAgentCatalog
       tags: [agent-catalog]
       x-overlord-permission: launch:read
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Read a workspace's agent catalog
+      description: >-
+        Requires `launch:read` in the workspace (404 `Workspace not found or no active membership` without
+        membership). On first read the catalog is seeded from the bundled default merged with the
+        instance's overlord.toml overrides and stored as the workspace's `agentCatalog` setting.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The catalog with the instance's default agent and model.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentCatalogDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
     put:
       operationId: putWorkspacesByIdAgentCatalog
       tags: [agent-catalog]
       x-overlord-permission: launch:configure
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Replace a workspace's agent catalog
+      description: >-
+        Requires `launch:configure` in the workspace. Replaces the stored catalog with the validated body,
+        keeping each surviving agent's stored launch defaults.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateAgentCatalogBody' }
+      responses:
+        '200':
+          description: The catalog with the instance's default agent and model.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentCatalogDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/workspaces/{id}/agent-catalog/refresh":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Workspace UUID; a workspace the caller is not an active member of answers 404.
+        schema: { type: string }
     post:
       operationId: postWorkspacesByIdAgentCatalogRefresh
       tags: [agent-catalog]
       x-overlord-permission: launch:configure
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Merge newly shipped agents and models into a workspace's catalog
+      description: >-
+        Requires `launch:configure` in the workspace. Adds every bundled (or overlord.toml) agent the
+        catalog lacks and every model an existing agent lacks, keeping workspace customisations, and
+        stores the result. Takes no body.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The catalog with the instance's default agent and model.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentCatalogDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/profile:
     get:
       operationId: getProfile
@@ -6620,14 +6671,66 @@ paths:
       x-overlord-permission: launch:read
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Read an agent catalog (workspace in the query)
+      description: >-
+        The query-addressed form of `GET /api/workspaces/{id}/agent-catalog`, with the same rules,
+        including seeding on first read.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: workspaceId
+          in: query
+          required: false
+          description: >-
+            Target workspace UUID (404 `Workspace not found or no active membership` for a workspace the
+            caller is not an active member of). Authenticated requests carry no ambient workspace, so
+            without it the route answers 400 `workspaceId is required`; it is required in practice.
+          schema: { type: string }
+      responses:
+        '200':
+          description: The catalog with the instance's default agent and model.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentCatalogDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
     put:
       operationId: putAgentCatalog
       tags: [agent-catalog]
       x-overlord-permission: launch:configure
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Replace an agent catalog (workspace in the query)
+      description: The query-addressed form of `PUT /api/workspaces/{id}/agent-catalog`, with the same rules.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: workspaceId
+          in: query
+          required: false
+          description: >-
+            Target workspace UUID (404 `Workspace not found or no active membership` for a workspace the
+            caller is not an active member of). Authenticated requests carry no ambient workspace, so
+            without it the route answers 400 `workspaceId is required`; it is required in practice.
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateAgentCatalogBody' }
+      responses:
+        '200':
+          description: The catalog with the instance's default agent and model.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentCatalogDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/agent-catalog/refresh:
     post:
       operationId: postAgentCatalogRefresh
@@ -6635,7 +6738,29 @@ paths:
       x-overlord-permission: launch:configure
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Merge newly shipped agents and models (workspace in the query)
+      description: The query-addressed form of `POST /api/workspaces/{id}/agent-catalog/refresh`. Takes no body.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: workspaceId
+          in: query
+          required: false
+          description: >-
+            Target workspace UUID (404 `Workspace not found or no active membership` for a workspace the
+            caller is not an active member of). Authenticated requests carry no ambient workspace, so
+            without it the route answers 400 `workspaceId is required`; it is required in practice.
+          schema: { type: string }
+      responses:
+        '200':
+          description: The catalog with the instance's default agent and model.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgentCatalogDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/launch-settings:
     get:
       operationId: getLaunchSettings
@@ -12638,3 +12763,104 @@ components:
       required: [ recorded ]
       properties:
         recorded: { type: integer, minimum: 1 }
+    AgentCatalogModelDto:
+      type: object
+      required: [ id, displayName, reasoningOptions, enabled ]
+      properties:
+        id: { type: string }
+        displayName: { type: string, description: Defaults to the id. }
+        reasoningOptions:
+          type: array
+          description: Reasoning or thinking levels selectable for this model; empty means none.
+          items: { type: string }
+        enabled:
+          type: boolean
+          description: When false the model is kept in the catalog but not offered for selection.
+    AgentCatalogAgentDto:
+      type: object
+      required:
+        [
+          key,
+          label,
+          availableByDefault,
+          models,
+          defaultModel,
+          defaultReasoningEffort,
+          reasoningLabel
+        ]
+      properties:
+        key: { type: string, description: 'Stable connector key (`claude`, `codex`, `cursor`, …).' }
+        label: { type: string }
+        availableByDefault: { type: boolean }
+        models:
+          type: array
+          items: { $ref: '#/components/schemas/AgentCatalogModelDto' }
+        defaultModel:
+          oneOf:
+            - type: string
+            - type: 'null'
+        defaultReasoningEffort:
+          oneOf:
+            - type: string
+            - type: 'null'
+        reasoningLabel:
+          type: string
+          description: Column heading for the reasoning options; defaults to `Thinking`.
+    AgentCatalogDto:
+      type: object
+      required: [ agents, defaultAgent, defaultModel ]
+      properties:
+        agents:
+          type: array
+          items: { $ref: '#/components/schemas/AgentCatalogAgentDto' }
+        defaultAgent:
+          type: string
+          description: The instance default from overlord.toml, used when no preference is stored.
+        defaultModel:
+          oneOf:
+            - type: string
+            - type: 'null'
+    UpdateAgentCatalogBody:
+      type: object
+      description: >-
+        Each agent needs a non-blank `key` and `label` (trimmed) and a non-empty `models` list; each
+        model needs a non-blank `id`, unique within the agent; a non-null `defaultModel` must name one
+        of them; a non-null `defaultReasoningEffort` must be one of the default model's reasoning
+        options when it has any. Each failure answers 400. A non-string `key`, `label`, model `id` or
+        `displayName`, or a non-object agent or model, answers 500. A later agent with the same key
+        replaces an earlier one.
+      required: [ agents ]
+      properties:
+        agents:
+          type: array
+          description: A missing or non-array value answers 400 `agents array is required`.
+          items:
+            type: object
+            required: [ key, label, models ]
+            properties:
+              key: { type: string }
+              label: { type: string }
+              availableByDefault: { type: boolean, description: Only `false` turns it off. }
+              models:
+                type: array
+                minItems: 1
+                items:
+                  type: object
+                  required: [ id ]
+                  properties:
+                    id: { type: string }
+                    displayName: { type: string, description: Trimmed; blank defaults to the id. }
+                    reasoningOptions:
+                      type: array
+                      description: Non-string and blank entries are dropped.
+                      items: { type: string }
+                    enabled: { type: boolean, description: Only `false` disables. }
+              defaultModel:
+                oneOf:
+                  - type: string
+                  - type: 'null'
+              defaultReasoningEffort:
+                oneOf:
+                  - type: string
+                  - type: 'null'
+              reasoningLabel: { type: string, description: Trimmed; blank defaults to `Thinking`. }

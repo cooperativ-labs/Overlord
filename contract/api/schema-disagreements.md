@@ -235,6 +235,20 @@ the code does not do.
   with both as candidates (ADR 0048). `postExecutionTargetsByIdObservations`,
   `postExecutionTargetsByIdMissionBranchObservations`.
 
+### Agent catalog and launch settings (batch 3)
+
+- **L1** (open). The query-addressed agent catalog and launch settings routes
+  (`getAgentCatalog`, `putAgentCatalog`, `postAgentCatalogRefresh`, `getLaunchSettings` and the
+  four `patchLaunchSettings…` operations) treat `workspaceId` as optional and fall back to the
+  request's implicit workspace (`resolveCatalogWorkspaceId`, `backend/agent-catalog.ts`;
+  `resolveLaunchSettingsScope`, `backend/execution/launch-settings.ts`). Session and token
+  requests never have one, so over HTTP the parameter is required in practice and its absence
+  answers 400 `workspaceId is required`. `AgentCatalogModelDto.enabled` is optional in
+  packages/contract but `toCatalogDto` always writes it.
+- **L2** (open). `GET /api/workspaces/{id}/agent-catalog` and `GET /api/agent-catalog` write
+  on first read: a workspace without a stored catalog has the instance default persisted as its
+  `agentCatalog` setting (`getAgentCatalog`).
+
 ## 2. Non-conforming error shapes
 
 Every route in `backend/app.ts` that forwards errors through `handle()` or `next(err)`
