@@ -2106,8 +2106,10 @@ paths:
       description: >-
         Requires `profile:self:read` in at least one workspace of the caller's selected organization (a
         profile with no membership, or a token whose scope grants omit it, answers 403). The profile is
-        the authenticated one; `roles` is the sorted set of role keys across the selected organization's
-        authorized workspaces.
+        the authenticated one, and an authenticated profile whose row is missing or deleted answers 404;
+        only the loopback local operator with no resolvable profile reads the oldest active human
+        profile. `roles` is the sorted set of role keys across the selected organization's authorized
+        workspaces.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       responses:
         '200':
@@ -2117,6 +2119,7 @@ paths:
               schema: { $ref: '#/components/schemas/ProfileDto' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
     patch:
       operationId: patchProfile
@@ -2129,7 +2132,8 @@ paths:
         Requires `profile:self:update` in at least one workspace of the selected organization. Omitted
         members are left unchanged; `handle` and `email` mirror the Better Auth account and are not
         editable here (unknown members are ignored). A change records a `profile` entity change in every
-        authorized workspace. Answers the refreshed profile.
+        authorized workspace. Answers the refreshed profile. The edited profile is the authenticated one;
+        one whose row is missing or deleted answers 404.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       requestBody:
         required: true
@@ -2145,6 +2149,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '413': { $ref: '#/components/responses/PayloadTooLarge' }
         '500': { $ref: '#/components/responses/InternalError' }
   /api/profile/default-project:

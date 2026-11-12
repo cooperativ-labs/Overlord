@@ -7467,8 +7467,10 @@ interface UserRow {
 
 /**
  * Resolve the caller's `profiles` row: the authenticated profile — or the one
- * behind the attributed workspace member — falling back to the oldest active
- * human user so a local operator with neither still resolves an identity.
+ * behind the attributed workspace member. Only a caller with neither, and with
+ * no authenticated request snapshot (the loopback local operator on a fresh
+ * install, or a direct-service caller), falls back to the oldest active human
+ * user. A resolved profile whose row is missing or deleted never falls back.
  */
 async function loadOperatorUserRow(db: DatabaseClient = requireDatabaseClient()): Promise<UserRow> {
   // Session and USER_TOKEN requests authenticate a profile without attributing
@@ -7485,8 +7487,10 @@ async function loadOperatorUserRow(db: DatabaseClient = requireDatabaseClient())
           WHERE p.id = ? AND p.deleted_at IS NULL`,
       [profileId]
     )) as UserRow | undefined;
-    if (row) return row;
+    if (!row) throw new ApiError(404, 'Profile not found');
+    return row;
   }
+  if (getAuthorizedWorkspacesContext()) throw new ApiError(401, 'Authentication required');
   const fallback = (await db.get(
     `SELECT id, kind, display_name, handle, email,
               metadata_json, created_at, revision
