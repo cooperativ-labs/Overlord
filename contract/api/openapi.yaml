@@ -2404,8 +2404,9 @@ paths:
         Requires `webhook:create` on the subscription's workspace: the named project's workspace when
         `projectId` is given (then `workspaceId` is ignored), else `workspaceId`. The endpoint must use
         `https://`, or `http://` for an internal host (`OVERLORD_WEBHOOK_INTERNAL_HOSTS`, plus loopback on
-        Local); private addresses are not refused here, only at dispatch. Records a `webhook_subscription`
-        change. The signing secret (`whsec_…`) is returned only here and by rotation.
+        Local). A host that is a literal private address (loopback, RFC 1918, link-local, unspecified,
+        unique-local or IPv4-mapped forms of these) answers 400 unless it is internal; hostnames are
+        resolved and checked at dispatch and test time. Records a `webhook_subscription` change. The signing secret (`whsec_…`) is returned only here and by rotation.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       requestBody:
         required: true
@@ -2440,7 +2441,8 @@ paths:
       summary: Update a webhook subscription
       description: >-
         Requires `webhook:update` on the subscription's workspace. Omitted members are unchanged; an empty
-        body answers the subscription unchanged. Re-enabling resets `consecutiveFailures` and clears
+        body answers the subscription unchanged. A new `endpointUrl` is validated as on create, including
+        the refusal of a literal private address (400). Re-enabling resets `consecutiveFailures` and clears
         `disabledReason`; disabling sets `disabledReason: manual`. A concurrent change answers 409.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       requestBody:
@@ -2526,8 +2528,9 @@ paths:
         Requires `webhook:update`. Synchronously POSTs a signed `webhook.ping` envelope (no mission data)
         to the endpoint with a 10-second timeout and no redirects, and records the attempt in the delivery
         log. Works on a disabled subscription. A non-2xx answer, a timeout or a network failure answers
-        502 `Test delivery failed: <reason>`. Unlike the dispatcher, it does not refuse private-network
-        addresses. Takes no body.
+        502 `Test delivery failed: <reason>`. Before sending it applies the dispatcher's private-network
+        check: an endpoint that is, or whose hostname resolves to, a private address and is not an
+        internal host answers 400 without any request or attempt record. Takes no body.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       responses:
         '200':
@@ -2535,6 +2538,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/WebhookTestResultDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }

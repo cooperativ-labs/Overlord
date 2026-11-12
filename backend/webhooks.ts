@@ -28,6 +28,7 @@ import {
 import { ApiError } from './errors.ts';
 import { requireWorkspacePermission } from './rbac.ts';
 import {
+  assertPublicWebhookTarget,
   isInternalWebhookHost,
   parseWebhookEndpointUrl,
   signWebhookPayload
@@ -413,6 +414,8 @@ export async function testWebhookSubscription(
   const client = requireDatabaseClient();
   const subscription = await loadSubscriptionForUpdate(client, id, PERMISSIONS.WEBHOOK_UPDATE);
   const url = new URL(subscription.endpoint_url);
+  // The same private-network check the dispatcher applies before every send.
+  await assertPublicWebhookTarget(url);
 
   const envelope = {
     id: newId(),

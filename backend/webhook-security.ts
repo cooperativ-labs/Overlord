@@ -43,7 +43,7 @@ const LOCAL_EDITION_IMPLICIT_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
  * trusts loopback since the backend already runs on the user's own machine.
  */
 export function isInternalWebhookHost(hostname: string): boolean {
-  const host = hostname.toLowerCase();
+  const host = hostname.toLowerCase().replace(/^\[(.*)\]$/, '$1');
   if (DATABASE_DIALECT === 'sqlite' && LOCAL_EDITION_IMPLICIT_HOSTS.has(host)) {
     return true;
   }
@@ -75,14 +75,22 @@ export function parseWebhookEndpointUrl(rawUrl: string): URL {
       'Endpoint URL must use https:// (internal hosts matching OVERLORD_WEBHOOK_INTERNAL_HOSTS may use http://)'
     );
   }
+  // A literal private address is refused at save time too; hostnames are
+  // resolved and checked when a delivery or test is sent.
+  if (!isInternal) assertNotPrivateAddressLiteral(url);
   return url;
+}
+
+/** The URL host as an address: `URL` keeps IPv6 literals in brackets. */
+function urlHostAddress(url: URL): string {
+  return url.hostname.replace(/^\[(.*)\]$/, '$1');
 }
 
 function isPrivateIPv4(ip: string): boolean {
   const parts = ip.split('.').map(Number);
   if (parts.length !== 4 || parts.some(part => Number.isNaN(part))) return false;
   const [a, b] = parts as [number, number, number, number];
-  if (a === 10 || a === 127 || (a === 169 && b === 254)) return true;
+  if (a === 0 || a === 10 || a === 127 || (a === 169 && b === 254)) return true;
   if (a === 192 && b === 168) return true;
   if (a === 172 && b >= 16 && b <= 31) return true;
   return false;
@@ -90,9 +98,37 @@ function isPrivateIPv4(ip: string): boolean {
 
 function isPrivateIPv6(ip: string): boolean {
   const lower = ip.toLowerCase();
+  const mapped = mappedIPv4(lower);
+  if (mapped !== null) return isPrivateIPv4(mapped);
   return (
-    lower === '::1' || lower.startsWith('fc') || lower.startsWith('fd') || lower.startsWith('fe80')
+    lower === '::' ||
+    lower === '::1' ||
+    lower.startsWith('fc') ||
+    lower.startsWith('fd') ||
+    lower.startsWith('fe80')
   );
+}
+
+/** The IPv4 address inside an IPv4-mapped IPv6 address (`::ffff:a.b.c.d` or `::ffff:xxxx:xxxx`). */
+function mappedIPv4(ip: string): string | null {
+  const match = /^::ffff:(.+)$/.exec(ip);
+  if (!match) return null;
+  const rest = match[1]!;
+  if (isIP(rest) === 4) return rest;
+  const hex = /^([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(rest);
+  if (!hex) return null;
+  const high = parseInt(hex[1]!, 16);
+  const low = parseInt(hex[2]!, 16);
+  return `${high >> 8}.${high & 0xff}.${low >> 8}.${low & 0xff}`;
+}
+
+/** Refuse a URL whose host is a literal private address. */
+function assertNotPrivateAddressLiteral(url: URL): void {
+  const address = urlHostAddress(url);
+  const family = isIP(address);
+  if ((family === 4 && isPrivateIPv4(address)) || (family === 6 && isPrivateIPv6(address))) {
+    throw new ApiError(400, `Endpoint resolves to a private address (${address})`);
+  }
 }
 
 /**
@@ -111,15 +147,9 @@ function isPrivateIPv6(ip: string): boolean {
 export async function assertPublicWebhookTarget(url: URL): Promise<void> {
   if (isInternalWebhookHost(url.hostname)) return;
 
-  const hostname = url.hostname;
-  const literalFamily = isIP(hostname);
-  if (literalFamily === 4 && isPrivateIPv4(hostname)) {
-    throw new ApiError(400, `Endpoint resolves to a private address (${hostname})`);
-  }
-  if (literalFamily === 6 && isPrivateIPv6(hostname)) {
-    throw new ApiError(400, `Endpoint resolves to a private address (${hostname})`);
-  }
-  if (literalFamily) return;
+  assertNotPrivateAddressLiteral(url);
+  const hostname = urlHostAddress(url);
+  if (isIP(hostname)) return;
 
   const records = await dns.lookup(hostname, { all: true });
   for (const record of records) {
