@@ -1,4 +1,4 @@
 {
   "$comment": "Schema-stub ratchet for contract/api/openapi.yaml (ADR 0048): the number of operations marked x-overlord-schema-status: stub. scripts/check-openapi.mjs fails when the document has more or fewer; lower it as stubs gain schemas.",
-  "stubOperations": 210
+  "stubOperations": 208
 }

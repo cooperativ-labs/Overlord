@@ -1769,7 +1769,29 @@ paths:
       x-overlord-permission: mission:read
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Cross-workspace, mission-anchored activity feed
+      description: >-
+        Aggregates every workspace of the active organization where the caller is an active member with
+        `mission:read`; no workspace answers an empty feed rather than 403. Mission runs and questions are
+        capped together; truncation is reported through `counts`. No raw payload JSON is exposed.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: before
+          in: query
+          required: false
+          description: >-
+            `YYYY-MM-DDTHH:mm:ss.sssZ` exactly (400 otherwise; blank is ignored). Selects the two-week
+            delivered window ending there and omits live runs and questions.
+          schema: { type: string }
+      responses:
+        '200':
+          description: The feed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ActivityFeedDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/objective-transcript:
     get:
       operationId: getObjectiveTranscript
@@ -1778,7 +1800,49 @@ paths:
       x-overlord-permission-candidates: [mission:read, objective:read]
       x-overlord-edition: both
       x-overlord-consumers: [mobile]
-      x-overlord-schema-status: stub
+      summary: Full-text objective history across workspaces
+      description: >-
+        Projects objectives of active projects across the workspaces of the active organization where the
+        caller holds both `mission:read` and `objective:read` (no workspace answers an empty page),
+        narrowed to a project_automation token's projects. Reads newest first with `before`,
+        oldest-new-first with `after`, or revalidates named ids with `ids`; at most one of the three. Any
+        other query parameter, or a malformed value, answers 400 `invalid_request`. Responses carry
+        `Cache-Control: no-store`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          description: Decimal 1-100 without leading zeros, default 50. Not allowed with `ids`.
+          schema: { type: string }
+        - name: before
+          in: query
+          required: false
+          description: An opaque cursor from `nextBefore` or `newestCursor` (base64url, at most 256 characters).
+          schema: { type: string }
+        - name: after
+          in: query
+          required: false
+          description: An opaque cursor; returns objectives created after it, ascending.
+          schema: { type: string }
+        - name: ids
+          in: query
+          required: false
+          description: Comma-separated distinct objective UUIDs, at most 100 (and 3699 characters).
+          schema: { type: string }
+      responses:
+        '200':
+          description: The page.
+          headers:
+            Cache-Control:
+              description: Always `no-store`.
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ObjectiveTranscriptPageDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/deliveries/{deliveryId}/deferred-work/{actionId}/resolution":
     parameters:
       - name: deliveryId
@@ -7714,3 +7778,341 @@ components:
           maxLength: 64
           description: Display id of the created mission or objective; requires `outcome` and must not be
             blank (400).
+    ActivityFeedMissionObjectiveDto:
+      type: object
+      required: [ objectiveId, displayId, title, state, position, assignedAgent, autoAdvance, blocked ]
+      properties:
+        objectiveId: { type: string, format: uuid }
+        displayId:
+          type: string
+          description: The objective display id (the objective UUID when it has no display key).
+        title:
+          oneOf:
+            - type: string
+            - type: 'null'
+        state: { $ref: '#/components/schemas/ObjectiveState' }
+        position: { type: integer, minimum: 0 }
+        assignedAgent:
+          oneOf:
+            - type: string
+            - type: 'null'
+        autoAdvance: { type: boolean }
+        blocked:
+          type: boolean
+          description: True while an open question or choice request waits on a human for this objective.
+    ActivityFeedMissionItemDto:
+      type: object
+      description: >-
+        A mission card: live work (`mission_run`) or a mission whose most recent live delivery falls
+        in the page's two-week window (`mission_delivered`). Chrome fields describe the primary
+        objective: the launching one, else the oldest active one, else the objective behind the latest
+        delivery.
+      required:
+        [
+          id,
+          kind,
+          occurredAt,
+          workspaceId,
+          workspaceName,
+          projectId,
+          projectName,
+          projectColor,
+          missionId,
+          missionDisplayId,
+          missionTitle,
+          objectiveId,
+          objectiveDisplayId,
+          createdByKind,
+          createdByAgent,
+          runState,
+          objectives,
+          activeObjectiveIds,
+          objectiveTitle,
+          instructionPreview,
+          agentIdentifier,
+          modelIdentifier,
+          branch,
+          resourceKey,
+          startedAt,
+          latestEventSummary,
+          latestEventAt
+        ]
+      properties:
+        id:
+          type: string
+          description: '`mission:<missionId>`.'
+        kind:
+          type: string
+          enum: [ mission_run, mission_delivered ]
+        occurredAt: { $ref: '#/components/schemas/DateTime' }
+        workspaceId: { type: string }
+        workspaceName: { type: string }
+        projectId: { type: string }
+        projectName: { type: string }
+        projectColor:
+          oneOf:
+            - type: string
+            - type: 'null'
+        missionId: { type: string }
+        missionDisplayId: { type: string }
+        missionTitle: { type: string }
+        objectiveId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        objectiveDisplayId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        createdByKind: { $ref: '#/components/schemas/CreatedByKind' }
+        createdByAgent:
+          oneOf:
+            - type: string
+            - type: 'null'
+        runState:
+          type: string
+          enum: [ launching, executing, delivered ]
+        objectives:
+          type: array
+          description: Every objective of the mission, in mission-panel display order.
+          items: { $ref: '#/components/schemas/ActivityFeedMissionObjectiveDto' }
+        activeObjectiveIds:
+          type: array
+          description: Objectives that are launching, executing or pending delivery; empty for `delivered`.
+          items: { type: string }
+        objectiveTitle:
+          oneOf:
+            - type: string
+            - type: 'null'
+        instructionPreview:
+          type: string
+          description: Server-truncated instruction preview of the primary objective.
+        agentIdentifier:
+          oneOf:
+            - type: string
+            - type: 'null'
+        modelIdentifier:
+          oneOf:
+            - type: string
+            - type: 'null'
+        branch:
+          oneOf:
+            - type: string
+            - type: 'null'
+        resourceKey:
+          oneOf:
+            - type: string
+            - type: 'null'
+        startedAt:
+          description: Session start, or the execution request's creation while launching; null for `delivered`.
+          oneOf:
+            - $ref: '#/components/schemas/DateTime'
+            - type: 'null'
+        latestEventSummary:
+          oneOf:
+            - type: string
+            - type: 'null'
+        latestEventAt:
+          oneOf:
+            - $ref: '#/components/schemas/DateTime'
+            - type: 'null'
+    ActivityFeedQuestionItemDto:
+      type: object
+      description: An unseen `ask` mission event from the past three days; the agent is blocked on it.
+      required:
+        [
+          id,
+          kind,
+          occurredAt,
+          workspaceId,
+          workspaceName,
+          projectId,
+          projectName,
+          projectColor,
+          missionId,
+          missionDisplayId,
+          missionTitle,
+          objectiveId,
+          objectiveDisplayId,
+          createdByKind,
+          createdByAgent,
+          eventId,
+          agentRequestId,
+          delivery,
+          question,
+          agentIdentifier,
+          askedAt
+        ]
+      properties:
+        id:
+          type: string
+          description: '`ask:<eventId>`.'
+        kind: { const: blocking_question }
+        occurredAt: { $ref: '#/components/schemas/DateTime' }
+        workspaceId: { type: string }
+        workspaceName: { type: string }
+        projectId: { type: string }
+        projectName: { type: string }
+        projectColor:
+          oneOf:
+            - type: string
+            - type: 'null'
+        missionId: { type: string }
+        missionDisplayId: { type: string }
+        missionTitle: { type: string }
+        objectiveId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        objectiveDisplayId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        createdByKind: { $ref: '#/components/schemas/CreatedByKind' }
+        createdByAgent:
+          oneOf:
+            - type: string
+            - type: 'null'
+        eventId: { type: string }
+        agentRequestId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        delivery:
+          type: object
+          required: [ mode ]
+          properties:
+            mode:
+              type: string
+              enum: [ latch, read_only ]
+        question:
+          type: string
+          description: Server-truncated question text.
+        agentIdentifier:
+          oneOf:
+            - type: string
+            - type: 'null'
+        askedAt: { $ref: '#/components/schemas/DateTime' }
+    ActivityFeedDto:
+      type: object
+      required: [ items, generatedAt, counts, nextBefore ]
+      properties:
+        items:
+          type: array
+          description: >-
+            Grouped: launching mission runs, executing mission runs, blocking questions (those three
+            capped together), then delivered missions; newest first within each group. A page loaded
+            with `before` holds only delivered missions.
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/ActivityFeedMissionItemDto'
+              - $ref: '#/components/schemas/ActivityFeedQuestionItemDto'
+        generatedAt: { $ref: '#/components/schemas/DateTime' }
+        counts:
+          type: object
+          description: Per-kind totals before truncation.
+          required: [ mission_run, blocking_question, mission_delivered ]
+          properties:
+            mission_run: { type: integer, minimum: 0 }
+            blocking_question: { type: integer, minimum: 0 }
+            mission_delivered: { type: integer, minimum: 0 }
+        nextBefore:
+          description: Pass as `before` for the next older two-week delivered window; null when none is older.
+          oneOf:
+            - $ref: '#/components/schemas/DateTime'
+            - type: 'null'
+    ObjectiveTranscriptItemDto:
+      type: object
+      required:
+        [
+          id,
+          workspaceId,
+          projectId,
+          missionId,
+          missionDisplayId,
+          missionTitle,
+          missionRevision,
+          statusType,
+          projectName,
+          projectColor,
+          projectRevision,
+          title,
+          instructionText,
+          state,
+          assignedAgent,
+          resourceKey,
+          createdByKind,
+          createdByAgent,
+          createdByWorkspaceUserId,
+          createdAt,
+          updatedAt,
+          revision
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        workspaceId: { type: string }
+        projectId: { type: string }
+        missionId: { type: string }
+        missionDisplayId: { type: string }
+        missionTitle: { type: string }
+        missionRevision: { type: integer, minimum: 1 }
+        statusType: { $ref: '#/components/schemas/StatusType' }
+        projectName: { type: string }
+        projectColor:
+          oneOf:
+            - type: string
+            - type: 'null'
+        projectRevision: { type: integer, minimum: 1 }
+        title:
+          oneOf:
+            - type: string
+            - type: 'null'
+        instructionText: { type: string }
+        state: { $ref: '#/components/schemas/ObjectiveState' }
+        assignedAgent:
+          oneOf:
+            - type: string
+            - type: 'null'
+        resourceKey:
+          oneOf:
+            - type: string
+            - type: 'null'
+        createdByKind: { $ref: '#/components/schemas/CreatedByKind' }
+        createdByAgent:
+          oneOf:
+            - type: string
+            - type: 'null'
+        createdByWorkspaceUserId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+        revision: { type: integer, minimum: 1 }
+    ObjectiveTranscriptPageDto:
+      type: object
+      required: [ items, nextBefore, nextAfter, newestCursor, hasMore ]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/ObjectiveTranscriptItemDto' }
+        nextBefore:
+          description: Cursor for the next older page; set only on a `before`-style read with more rows.
+          oneOf:
+            - type: string
+            - type: 'null'
+        nextAfter:
+          description: On an `after` read, the cursor to continue from (the last item's, or the given cursor
+            when the page is empty); null otherwise.
+          oneOf:
+            - type: string
+            - type: 'null'
+        newestCursor:
+          description: Cursor of the newest item on the page, or null when it is empty.
+          oneOf:
+            - type: string
+            - type: 'null'
+        hasMore:
+          type: boolean
+          description: Always false for an `ids` read.
