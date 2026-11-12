@@ -162,6 +162,12 @@ decision and, if confirmed, a fix with its own contract impact.
   string form (`writeSharedContext`): `null` reads back as the string `"null"` and `5` as
   `"5"`. `putMissionsByIdContext`.
 
+- **X17** (open). `PATCH /api/objectives/{id}` (`patchObjectivesById`, `updateObjectiveTx`)
+  writes a requested `position` as given; a position another live objective of the
+  mission holds violates the `(mission_id, position)` uniqueness and answers SQLite's
+  generic 409 `Database constraint violation.` (500 on Postgres, X3) instead of
+  renumbering like the reorder route.
+
 ## 4. Generator constructs needed
 
 Constructs used beyond the subset Clear Comply's generator

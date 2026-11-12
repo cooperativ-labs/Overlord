@@ -3868,124 +3868,358 @@ paths:
       x-overlord-permission: objective:update
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Add an objective to a mission
+      description: >-
+        Requires `objective:update` on the mission's workspace. Appended after the mission's last
+        objective; draft and future slots default the agent from the project's last launch selection.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateObjectiveBody' }
+      responses:
+        '200':
+          description: The created objective (no queue join, so `queueEntry` is null).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ObjectiveDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/objectives/{id}":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Objective UUID, or full display id (`coo:756.k7xm`) resolved within the caller's organization;
+          an ambiguous display id answers 409.
+        schema: { type: string }
     patch:
       operationId: patchObjectivesById
       tags: [objectives]
       x-overlord-permission: objective:update
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Update an objective
+      description: >-
+        Requires `objective:update`. State changes stamp the lifecycle timestamps (launch and start
+        first-wins, completion and reopen last-wins), manage Run Queue membership and execution requests,
+        and may refill the mission's draft slot.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateObjectiveBody' }
+      responses:
+        '200':
+          description: The updated objective.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ObjectiveDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
     delete:
       operationId: deleteObjectivesById
       tags: [objectives]
       x-overlord-permission: objective:update
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Soft-delete an objective
+      description: Requires `objective:update`. Also removes it from the runner and Run Queues.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/objectives/{id}/launch":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Objective UUID, or full display id (`coo:756.k7xm`) resolved within the caller's organization;
+          an ambiguous display id answers 409.
+        schema: { type: string }
     post:
       operationId: postObjectivesByIdLaunch
       tags: [objectives]
       x-overlord-permission: execution_request:create
       x-overlord-edition: both
       x-overlord-consumers: [cli, mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Queue an execution request for an objective
+      description: >-
+        Requires `execution_request:create`. Expires stale requests first, persists the agent, model,
+        reasoning effort and any override onto the objective, resolves the launch config (objective
+        override, resource-source default, user target config, workspace default), snapshots it into a
+        queued request, and moves a `draft` objective to `launching`. Refused with 409 when the objective
+        is not `draft`, `submitted` or `launching`, when a sibling objective is active and the mission
+        does not allow parallel objectives, or when its resource is not connected on the target.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LaunchObjectiveBody' }
+      responses:
+        '200':
+          description: The queued (or reused active) execution request.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExecutionRequestDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/objectives/{id}/prompt":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Objective UUID, or full display id (`coo:756.k7xm`) resolved within the caller's organization;
+          an ambiguous display id answers 409.
+        schema: { type: string }
     get:
       operationId: getObjectivesByIdPrompt
       tags: [objectives]
       x-overlord-permission: objective:read
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Copyable prompt for running an objective manually
+      description: Requires `objective:read`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The prompt.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ObjectivePromptDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/objectives/{id}/launch-command":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Objective UUID, or full display id (`coo:756.k7xm`) resolved within the caller's organization;
+          an ambiguous display id answers 409.
+        schema: { type: string }
     get:
       operationId: getObjectivesByIdLaunchCommand
       tags: [objectives]
       x-overlord-permission: objective:read
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Paste-ready ovld launch command
+      description: >-
+        Requires `objective:read`. Uses the same launch-config resolution as the launch route; nothing is
+        persisted.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: agent
+          in: query
+          required: true
+          description: Agent key; missing or blank answers 400.
+          schema: { type: string }
+        - name: model
+          in: query
+          required: false
+          schema: { type: string }
+        - name: reasoningEffort
+          in: query
+          required: false
+          schema: { type: string }
+        - name: executionTargetId
+          in: query
+          required: false
+          description: An eligible target (400 `execution_target_not_eligible` otherwise); omitted uses the
+            project's selected target.
+          schema: { type: string }
+      responses:
+        '200':
+          description: The command.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ObjectiveLaunchCommandDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/objectives/{id}/effective-launch-config":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Objective UUID, or full display id (`coo:756.k7xm`) resolved within the caller's organization;
+          an ambiguous display id answers 409.
+        schema: { type: string }
     get:
       operationId: getObjectivesByIdEffectiveLaunchConfig
       tags: [objectives]
       x-overlord-permission: objective:read
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Resolved launch mechanics for an objective
+      description: Requires `objective:read`. The exact config a direct or queued launch would snapshot,
+        with its precedence layer.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: agent
+          in: query
+          required: true
+          description: Agent key; missing or blank answers 400.
+          schema: { type: string }
+        - name: executionTargetId
+          in: query
+          required: false
+          description: An eligible target (400 `execution_target_not_eligible` otherwise); omitted uses the
+            project's selected target.
+          schema: { type: string }
+      responses:
+        '200':
+          description: The resolved config.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ObjectiveEffectiveLaunchConfigDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/objectives/{id}/attachments":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Objective UUID, or full display id (`coo:756.k7xm`) resolved within the caller's organization;
+          an ambiguous display id answers 409.
+        schema: { type: string }
     get:
       operationId: getObjectivesByIdAttachments
       tags: [objectives]
       x-overlord-permission: attachment:read
       x-overlord-edition: both
       x-overlord-consumers: [cli, mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: List an objective's attachments
+      description: Requires `attachment:read`. Active files, oldest first.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The attachments.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ObjectiveAttachmentList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
     post:
       operationId: postObjectivesByIdAttachments
       tags: [objectives]
       x-overlord-permission: attachment:create
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Upload a file to an objective
+      description: >-
+        Requires `attachment:create`. The request body is the file's raw bytes (no JSON, no multipart);
+        the global JSON parser skips this route. At most 25 MiB: a larger body is refused by the parser
+        with 413 `body_too_large`. Stored in the workspace's `attachments` bucket and recorded with an
+        `attachment` change.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: x-upload-filename
+          in: header
+          required: false
+          description: >-
+            The original filename, percent-encoded (`encodeURIComponent`); defaults to `attachment`. A
+            malformed encoding answers 500 (schema-disagreements.md X4).
+          schema: { type: string }
+      requestBody:
+        required: true
+        description: The file bytes. The request's `Content-Type`, whatever it is, is recorded as the
+          attachment's `contentType`.
+        content:
+          '*/*':
+            schema: { $ref: '#/components/schemas/RawUploadBody' }
+      responses:
+        '200':
+          description: The stored attachment.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ObjectiveAttachmentDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/objectives/{id}/attachments/{attachmentId}":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Objective UUID or full display id.
+        schema: { type: string }
       - name: attachmentId
         in: path
         required: true
-        schema:
-          type: string
+        description: Attachment UUID.
+        schema: { type: string }
     delete:
       operationId: deleteObjectivesByIdAttachmentsByAttachmentId
       tags: [objectives]
       x-overlord-permission: attachment:delete
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Delete an objective attachment
+      description: >-
+        Requires `attachment:delete`. Tombstones the row; remote backends delete the stored object after
+        commit, local buckets keep the file.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The objective's remaining attachments.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ObjectiveAttachmentList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/inbox/{id}/attachments":
     parameters:
       - name: id
@@ -7284,3 +7518,141 @@ components:
           oneOf:
             - type: string
             - type: 'null'
+    CreateObjectiveBody:
+      type: object
+      required: [ missionId, instructionText ]
+      properties:
+        missionId:
+          type: string
+          description: Mission UUID or display id; requires `objective:update` there.
+        instructionText:
+          type: string
+          description: Trimmed; may be blank only for a `draft` or `future` objective.
+        title:
+          description: Blank or omitted derives a title from the instruction and generates a better one
+            asynchronously.
+          oneOf:
+            - type: string
+            - type: 'null'
+        state:
+          $ref: '#/components/schemas/ObjectiveState'
+          description: Defaults to `draft`; a `draft` request becomes `future` when the mission already has a
+            draft.
+        autoAdvance:
+          type: boolean
+          description: Deprecated queue hint; defaults to false.
+        resourceKey:
+          description: A resource key linked to the mission's project (409 `project_resource_key_not_found`
+            otherwise); blank or null inherits the primary.
+          oneOf:
+            - type: string
+            - type: 'null'
+    UpdateObjectiveBody:
+      type: object
+      description: Partial update; a body with no recognized member returns the objective unchanged.
+      properties:
+        instructionText:
+          type: string
+          description: >-
+            Trimmed; may be blank only when the resulting state is `draft` or `future`. Refused (400)
+            once the objective is `executing`, `pending_delivery` or `complete`.
+        title:
+          description: Blank or null clears it.
+          oneOf:
+            - type: string
+            - type: 'null'
+        state:
+          $ref: '#/components/schemas/ObjectiveState'
+          description: >-
+            `complete` cannot move back to `future` (400). Moving an executed objective back to
+            `draft` reopens it (a new run); leaving an active state dequeues it and clears its active
+            execution requests.
+        autoAdvance:
+          type: boolean
+          description: Deprecated; adds the objective to, or removes it from, its mission's Run Queue.
+        position:
+          type: integer
+          minimum: 0
+        assignedAgent:
+          oneOf:
+            - type: string
+            - type: 'null'
+        model:
+          oneOf:
+            - type: string
+            - type: 'null'
+        reasoningEffort:
+          oneOf:
+            - type: string
+            - type: 'null'
+        resourceKey:
+          oneOf:
+            - type: string
+            - type: 'null'
+        launchConfigOverride:
+          description: Saves (or, with null, removes) the any-target override for `launchConfigAgent`.
+          oneOf:
+            - $ref: '#/components/schemas/AgentLaunchConfigInput'
+            - type: 'null'
+        launchConfigAgent:
+          type: string
+          description: Required (non-blank) with `launchConfigOverride` (400 otherwise).
+    LaunchObjectiveBody:
+      type: object
+      required: [ agent ]
+      properties:
+        agent:
+          type: string
+          description: Agent key; must not be blank. `manual` answers 400 `manual_agent_not_launchable`.
+        model:
+          oneOf:
+            - type: string
+            - type: 'null'
+        reasoningEffort:
+          oneOf:
+            - type: string
+            - type: 'null'
+        executionTargetId:
+          description: >-
+            An eligible target of the project for the caller (reachable, primary resource connected;
+            400 `execution_target_not_eligible` otherwise). Omitted or blank uses the project's
+            selected target.
+          oneOf:
+            - type: string
+            - type: 'null'
+        launchConfigOverride:
+          description: Saved onto the objective for this target (or `*`) and agent before the request is queued.
+          oneOf:
+            - $ref: '#/components/schemas/AgentLaunchConfigInput'
+            - type: 'null'
+    ObjectivePromptDto:
+      type: object
+      required: [ objectiveId, missionId, prompt ]
+      properties:
+        objectiveId: { type: string, format: uuid }
+        missionId: { type: string, format: uuid }
+        prompt: { type: string }
+    ObjectiveLaunchCommandDto:
+      type: object
+      required: [ objectiveId, missionId, command ]
+      properties:
+        objectiveId: { type: string, format: uuid }
+        missionId: { type: string, format: uuid }
+        command:
+          type: string
+          description: A paste-ready `ovld launch` command line.
+    ObjectiveEffectiveLaunchConfigDto:
+      type: object
+      required: [ objectiveId, missionId, executionTargetId, launchConfig, source ]
+      properties:
+        objectiveId: { type: string, format: uuid }
+        missionId: { type: string, format: uuid }
+        executionTargetId:
+          description: The target used to resolve target- and resource-scoped defaults.
+          oneOf:
+            - type: string
+            - type: 'null'
+        launchConfig: { $ref: '#/components/schemas/AgentLaunchConfigDto' }
+        source:
+          type: string
+          enum: [ objective, resource_source, user_target, workspace, none ]
