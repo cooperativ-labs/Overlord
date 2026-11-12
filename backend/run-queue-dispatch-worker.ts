@@ -336,7 +336,7 @@ class RunQueueDispatchWorker extends WorkerJobPoller {
     );
     for (const project of projects)
       await enqueueRunQueueDispatch(db, project.project_id, project.workspace_id);
-    this.pollNow();
+    void this.pollNow();
   }
   protected databaseClient(): DatabaseClient {
     return requireDatabaseClient();

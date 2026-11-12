@@ -1600,8 +1600,8 @@ app.patch(
 app.delete(
   '/api/projects/:id/tags/:tagId',
   handle(
-    req => {
-      deleteProjectTag(req.params.id, req.params.tagId);
+    async req => {
+      await deleteProjectTag(req.params.id, req.params.tagId);
       return { ok: true as const };
     },
     { mutates: true }
@@ -1626,8 +1626,8 @@ app.patch(
 app.delete(
   '/api/projects/:id/resources/:resourceId',
   handle(
-    req => {
-      deleteProjectResource(req.params.id, req.params.resourceId);
+    async req => {
+      await deleteProjectResource(req.params.id, req.params.resourceId);
       return { ok: true as const };
     },
     { mutates: true }

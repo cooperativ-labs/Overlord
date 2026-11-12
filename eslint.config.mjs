@@ -136,5 +136,13 @@ export default [
       'simple-import-sort/exports': 'warn',
       'no-console': ['warn', { allow: ['warn', 'error'] }]
     }
+  },
+  {
+    // Backend sources: every promise is awaited or explicitly marked `void`.
+    files: ['backend/**/*.ts'],
+    ignores: ['backend/**/*.test.ts'],
+    rules: {
+      '@typescript-eslint/no-floating-promises': 'error'
+    }
   }
 ];

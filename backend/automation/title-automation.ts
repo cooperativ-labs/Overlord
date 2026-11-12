@@ -111,7 +111,7 @@ async function updateMissionTitle({
 function notifyAfterTitleAutomation(task: Promise<void>): void {
   void task
     .then(() => {
-      realtime.pollNow();
+      void realtime.pollNow();
     })
     .catch((err: unknown) => {
       const message = err instanceof Error ? err.message : String(err);
