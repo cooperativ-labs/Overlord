@@ -92,7 +92,8 @@ Does NOT own:
   `auth-status`. `GET /api/meta`, legacy `GET /api/missions/search` and
   `GET /api/missions/search/v2`, the `/api/agent-requests` and `/api/agent-session-inputs`
   readers, protocol `read-context`, and every `/ext/*` route are deliberately outside the
-  list even where a grant would pass. `GET /api/missions/:id` does not record
+  list even where a grant would pass; they may be added later only with the project
+  predicate in place. No route on the list is widened for any other caller. `GET /api/missions/:id` does not record
   `mission_status_seen` for this preset. Second, one project-scope predicate makes any
   project, mission, objective, attachment storage key, or agent request outside the
   selection read as `404` without revealing existence, for UUID and display-id addressing

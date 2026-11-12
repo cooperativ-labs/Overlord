@@ -1385,7 +1385,9 @@ Indexes:
 - `(objective_id, delivered_at)`.
 - `(session_id)`.
 
-Delivery-report item provenance (`source`) is `agent` or `deterministic_rule`. The
+Delivery-report item provenance (`source`) is `agent` or `deterministic_rule`;
+`TradeoffMadeV1.source` is only `agent`, and composed tradeoffs may cite only agent
+tradeoff ids. The
 version-165 migration `20261024130000_delivery_reports_retire_change_rationale`
 removed persisted presentation items whose provenance was the retired
 `change_rationale` value, keeping every other item in stored order. Legacy
@@ -1399,7 +1401,11 @@ coo:1045). The item text is never copied here: `action_id` names the stable deli
 `DeferredWorkV1.id` (`deferred-work-<index>-<digest>`, the agent-report index plus the digest
 of the canonical `[title, change, location, doneWhen]` object), which
 `presentation.deferredWork` carries unchanged because nothing rewrites an item. The v166
-migration deleted the rows of every historical string item together with the items. Reopening an item deletes
+migration deleted the rows of every historical string item together with the items. The
+v166 migrations in both editions clear historical `agentReport.deferredWork` and
+`presentation.deferredWork` arrays, delete their `human_action_resolutions` rows, preserve
+every other report field and delivery, and refresh the affected delivery search documents.
+Reopening an item deletes
 its row; there is no soft delete or revision. The table was introduced for reported human
 actions (coo:963, contract v136); those resolutions were deleted when the Human Actions feed
 was removed (coo:1098, contract v150), and only `deferred-work-*` ids are written now.
@@ -1521,7 +1527,9 @@ Indexes:
 Objective-ledger file metadata, upserted by objective + resolved resource + path
 through `sync-changes` and by explicit declarations. It persists only bounded
 metadata, never file content, diffs, commands, transcripts, environment values,
-fingerprints, absolute host paths, or per-file explanatory prose.
+fingerprints, absolute host paths, or per-file explanatory prose. The changed-file list is
+not a Git diff, a delivery snapshot, proof of exclusive ownership, or proof that every edit
+was captured.
 
 | Column                   | Type         | Required | Notes                                                                                                                                                                                                                        |
 | ------------------------ | ------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1557,12 +1565,17 @@ Indexes:
 Retired by the version-165 cutover: `vcs_status`, `current_diff_state`,
 `observed_metadata_json` (window/quality/overlap/tool-window metadata) and the
 `change_rationales` table. Rows whose historical provenance was not reliably
-recorded keep their path with `source = NULL`.
+recorded keep their path with `source = NULL`. Migration
+`20261024120000_changed_files_resource_provenance` maps provenance only where reliable:
+the latest native observation → `declared_edit`; a single generator declaration or a
+sessionless record-work → `agent_declared`; everything else, including window evidence,
+→ `null`.
 
 ### `agent_sessions` capture diagnostics
 
 Bounded capture metadata lives on the session so an empty path list still explains
-itself.
+itself. Objective warnings (`CaptureWarningCode`) are derived across all sessions of the
+objective, so a newer healthy session never hides an earlier gap.
 
 | Column                         | Type         | Required | Notes                                                                                                                                                                              |
 | ------------------------------ | ------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1578,7 +1591,7 @@ Project-scoped named execution sequences. Exactly one live row per project may h
 
 ### `run_queue_entries`
 
-Authoritative Run Queue membership. Each live objective appears at most once across its project's queues. Rows carry queue/project/workspace/mission/objective identity, mutable `position`, closed state (`waiting`, `blocked`, `dispatched`, `running`), bounded retry count, visible blocked reason, enqueue actor/time, revision, and optional execution-request linkage. Dispatch resolves target and configuration at run time and uses `run_queue:<entryId>` idempotency. Queue mutation transactionally writes the resulting queued-first order through to `objectives.position`; `objectives.auto_advance` remains a transitional compatibility mirror.
+Authoritative Run Queue membership. Each live objective appears at most once across its project's queues. Rows carry queue/project/workspace/mission/objective identity, mutable `position`, closed state (`waiting`, `blocked`, `dispatched`, `running`), bounded retry count, visible blocked reason, enqueue actor/time, revision, and optional execution-request linkage. Dispatch runs through a project-deduped durable worker job, resolves target and configuration at run time, promotes only the selected future objective, and uses `run_queue:<entryId>` idempotency. Queue mutation transactionally writes the resulting queued-first order through to `objectives.position`; `objectives.auto_advance` remains a transitional compatibility mirror.
 
 ### `execution_requests`
 
@@ -2526,7 +2539,7 @@ NULL); `CHECK ((provider = 'knowledgebase') = (organization_id IS NOT NULL))`.
 
 Indexes: unique `(owner_profile_id, organization_id, provider, server_url) WHERE state <> 'disconnected'`; unique `(owner_profile_id, provider, server_url) WHERE state <> 'disconnected' AND organization_id IS NULL` (NULLs are distinct in the first index); unique `(provider, external_account_id) WHERE provider = 'github' AND state <> 'disconnected' AND external_account_id IS NOT NULL`; `(refresh_lock_until) WHERE refresh_lock_owner IS NOT NULL`.
 
-Credential formats: `connection-v1` binds `overlord:account-connection:v1:<owner>:<organization or ->:<provider>:<id>` over `{accessToken, refreshToken}` (OAuth) or `{apiKey}` (API key) and is the only format written. `everhour-user-key-v1` is an envelope adopted verbatim from `ext_everhour_user_connections` (AAD `overlord:everhour-user-key:v1:<owner>:api-key`, plaintext the key). `github-user-oauth-v1` holds `{"access": <envelope>, "refresh": <envelope or null>}` adopted verbatim from `ext_github_user_connections` by migration `20261005130000_account_connections_github_adoption` (AAD `overlord:github-user-oauth:v1:<owner>:access|refresh`, plaintext each token). Legacy-format rows are re-sealed to `connection-v1` under the current key on first successful use and by a startup sweep.
+Envelopes are in the AES-256-GCM `v1` format. Credential formats: `connection-v1` binds `overlord:account-connection:v1:<owner>:<organization or ->:<provider>:<id>` over `{accessToken, refreshToken}` (OAuth) or `{apiKey}` (API key) and is the only format written. `everhour-user-key-v1` is an envelope adopted verbatim from `ext_everhour_user_connections` (AAD `overlord:everhour-user-key:v1:<owner>:api-key`, plaintext the key). `github-user-oauth-v1` holds `{"access": <envelope>, "refresh": <envelope or null>}` adopted verbatim from `ext_github_user_connections` by migration `20261005130000_account_connections_github_adoption` (AAD `overlord:github-user-oauth:v1:<owner>:access|refresh`, plaintext each token). Legacy-format rows are re-sealed to `connection-v1` under the current key on first successful use and by a startup sweep.
 
 ### `account_connection_authorizations`
 
@@ -2959,8 +2972,11 @@ text. Ciphertext is AES-256-GCM under the server-held
 **Since v153 this table is a read-only migration source.** Migration
 `20261005120000_account_connections_profile_scope` copies every live row verbatim into
 `account_connections` (same id, `provider = 'everhour'`, `credential_format =
-'everhour-user-key-v1'`, `credential_key_id = 'everhour-env'`), and overwrites the
-ciphertext of soft-deleted rows with `revoked:v1`. New connects never write here. A
+'everhour-user-key-v1'`, `credential_key_id = 'everhour-env'`) unless the profile already
+has an Everhour connection in any state, and overwrites the ciphertext of soft-deleted rows
+with `revoked:v1`. No key is needed at migration time and no plaintext is in flight. On
+SQLite the migration rebuilds `account_connections`, preserving rows, foreign keys and
+`chat_source_refs` links. New connects never write here. A
 disconnect through the connections module tombstones the matching live row
 (`deleted_at`, `api_key_ciphertext = 'revoked:v1'`) so that a rollback cannot
 resurrect it.
