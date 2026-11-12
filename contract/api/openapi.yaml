@@ -392,7 +392,18 @@ paths:
       x-overlord-permission: public
       x-overlord-edition: both
       x-overlord-consumers: [external]
-      x-overlord-schema-status: stub
+      summary: OAuth protected-resource metadata (RFC 9728)
+      description: >-
+        Describes `/mcp` as an OAuth-protected resource. The base URL is `OVERLORD_WEBAPP_PUBLIC_URL` or
+        `OVERLORD_PUBLIC_URL` when set; otherwise the request's `Host` (never `X-Forwarded-Host`), with
+        `https` assumed for any host that is not local.
+      security: []
+      responses:
+        '200':
+          description: The metadata.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OAuthProtectedResourceMetadata' }
   /.well-known/oauth-protected-resource/mcp:
     get:
       operationId: getWellKnownOauthProtectedResourceMcp
@@ -400,7 +411,15 @@ paths:
       x-overlord-permission: public
       x-overlord-edition: both
       x-overlord-consumers: [external]
-      x-overlord-schema-status: stub
+      summary: OAuth protected-resource metadata for /mcp (path-inserted form)
+      description: Identical to `/.well-known/oauth-protected-resource`; the `/mcp` 401 points clients here.
+      security: []
+      responses:
+        '200':
+          description: The metadata.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OAuthProtectedResourceMetadata' }
   /.well-known/oauth-authorization-server:
     get:
       operationId: getWellKnownOauthAuthorizationServer
@@ -408,7 +427,18 @@ paths:
       x-overlord-permission: public
       x-overlord-edition: both
       x-overlord-consumers: [external]
-      x-overlord-schema-status: stub
+      summary: OAuth authorization-server metadata (RFC 8414)
+      description: >-
+        The issuer is the same base URL as the resource metadata. `authorization_endpoint` is the web
+        approval page `/oauth/approve`, not `/oauth/authorize`. Only the authorization-code grant with
+        PKCE S256 and public clients (`none`) are offered.
+      security: []
+      responses:
+        '200':
+          description: The metadata.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OAuthAuthorizationServerMetadata' }
   /oauth/authorize:
     get:
       operationId: getOauthAuthorize
@@ -416,7 +446,18 @@ paths:
       x-overlord-permission: public
       x-overlord-edition: both
       x-overlord-consumers: [external]
-      x-overlord-schema-status: stub
+      summary: Redirect an authorization request to the web approval page
+      description: >-
+        Copies every query parameter, unvalidated, onto `<base URL>/oauth/approve` and redirects there;
+        the web app validates the request through `POST /oauth/authorize/request`.
+      security: []
+      responses:
+        '302':
+          description: Redirect to the approval page; the body is Express's short redirect notice.
+          headers:
+            Location:
+              required: true
+              schema: { type: string }
   /oauth/register:
     post:
       operationId: postOauthRegister
@@ -424,7 +465,33 @@ paths:
       x-overlord-permission: public
       x-overlord-edition: both
       x-overlord-consumers: [external]
-      x-overlord-schema-status: stub
+      summary: Dynamic client registration (RFC 7591)
+      description: >-
+        Stateless: the client id is a signed encoding of the client's name and redirect URIs, so nothing
+        is stored and any caller may register. Errors are RFC 6749 `{ error, error_description }`, not
+        `ErrorEnvelope`. A form-encoded body must repeat `redirect_uris`: a single value parses as a string
+        and is refused.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OAuthClientRegistrationBody' }
+          application/x-www-form-urlencoded:
+            schema: { $ref: '#/components/schemas/OAuthClientRegistrationBody' }
+      responses:
+        '201':
+          description: The registered client.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OAuthClientRegistrationDto' }
+        '400':
+          description: '`invalid_redirect_uri`: no acceptable redirect URI.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OAuthErrorBody' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /oauth/token:
     post:
       operationId: postOauthToken
@@ -432,7 +499,37 @@ paths:
       x-overlord-permission: public
       x-overlord-edition: both
       x-overlord-consumers: [external]
-      x-overlord-schema-status: stub
+      summary: Exchange an authorization code for an access token
+      description: >-
+        Public client (no client authentication). The code is single-use and expires after five minutes; a
+        failed exchange consumes it and revokes the token it would have delivered. `client_id`,
+        `redirect_uri` and `resource` must equal those of the authorization, and the SHA-256 of
+        `code_verifier` must equal the `code_challenge`. The access token is a `mission_lifecycle` user
+        token minted at approval, valid 90 days, with no refresh token. Errors are RFC 6749 `{ error,
+        error_description }`; the response sets no `Cache-Control`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema: { $ref: '#/components/schemas/OAuthTokenRequestBody' }
+          application/json:
+            schema: { $ref: '#/components/schemas/OAuthTokenRequestBody' }
+      responses:
+        '200':
+          description: The access token.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OAuthTokenResponseDto' }
+        '400':
+          description: >-
+            `unsupported_grant_type`, `invalid_grant` (unknown, expired or mismatched code, or PKCE
+            failure) or `invalid_target` (resource mismatch).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OAuthErrorBody' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /oauth/revoke:
     post:
       operationId: postOauthRevoke
@@ -440,15 +537,58 @@ paths:
       x-overlord-permission: public
       x-overlord-edition: both
       x-overlord-consumers: [external]
-      x-overlord-schema-status: stub
+      summary: Revoke an access token (RFC 7009)
+      description: >-
+        Unauthenticated; possession of the token is the credential. Revokes any live `out_…` user token
+        whose secret is given (an OAuth access token or any other user token); an unknown, malformed or
+        absent token is not an error. Always answers `{ ok: true }`.
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema: { $ref: '#/components/schemas/OAuthRevokeBody' }
+          application/json:
+            schema: { $ref: '#/components/schemas/OAuthRevokeBody' }
+      responses:
+        '200':
+          description: Revoked, or nothing to revoke.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /oauth/authorize/request:
     post:
       operationId: postOauthAuthorizeRequest
       tags: [oauth]
-      x-overlord-permission: unknown
+      x-overlord-permission: authenticated
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Validate an authorization request for the approval page
+      description: >-
+        Called by the web approval page with the authorization request's parameters, read from the JSON
+        body or else the query string. Validates the client, redirect URI, PKCE, resource and scopes and
+        lists the organizations and workspaces the caller may consent to (every active membership of the
+        profile, whatever the request's token binding). Errors are `ErrorEnvelope` with an OAuth `code`
+        (`unsupported_response_type`, `invalid_client`, `invalid_request`, `invalid_target`,
+        `invalid_scope`), not redirects.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OAuthAuthorizationRequestBody' }
+      responses:
+        '200':
+          description: What the approval page shows.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OAuthAuthorizationRequestInfoDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /oauth/authorize/approve:
     post:
       operationId: postOauthAuthorizeApprove
@@ -456,22 +596,116 @@ paths:
       x-overlord-permission: user_token:self:create
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Approve or deny an authorization request
+      description: >-
+        Validates the request as `POST /oauth/authorize/request` does. `deny` answers the client redirect
+        with `error=access_denied`. `approve` resolves the consent (an organization, required when the
+        profile belongs to several, and either explicit workspaces or all current and future workspaces; a
+        single workspace or organization is chosen implicitly), requires `user_token:self:create` on the
+        issuance workspace (the first selected, else the organization's first) as authorized in the
+        request's snapshot, mints a 90-day `mission_lifecycle` token with that consent, and answers the
+        client redirect carrying a five-minute single-use code. A session whose profile belongs to several
+        organizations has an empty snapshot and is refused with 403.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OAuthApproveBody' }
+      responses:
+        '200':
+          description: Where the approval page sends the browser.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OAuthApproveResultDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /mcp:
     get:
       operationId: getMcp
       tags: [mcp]
-      x-overlord-permission: unknown
+      x-overlord-permission: authenticated
       x-overlord-edition: both
       x-overlord-consumers: [external]
-      x-overlord-schema-status: stub
+      summary: MCP server description
+      description: >-
+        Registered only when `OVERLORD_MCP_ENABLED=true`. Describes the MCP server: protocol version,
+        endpoint, the tool definitions and widget resources (specified by the generated tool catalog, ADR
+        0008, not here) and usage instructions. It is not a Streamable HTTP SSE stream. Accepts a session,
+        a user token (including hosted MCP OAuth access tokens and `project_automation` tokens) or, from
+        loopback, an unauthenticated local operator. An unauthenticated remote call answers 401 with
+        `WWW-Authenticate: Bearer resource_metadata="/.well-known/oauth-protected-resource/mcp"`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The server description.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/McpServerInfoDto' }
+        '401':
+          description: >-
+            Not authenticated (`{ error: 'Authentication required' }`) with the `WWW-Authenticate` header
+            naming the protected-resource metadata; or an invalid user token.
+          headers:
+            WWW-Authenticate:
+              required: false
+              description: Present on the `Authentication required` refusal.
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
     post:
       operationId: postMcp
       tags: [mcp]
-      x-overlord-permission: unknown
+      x-overlord-permission: authenticated
       x-overlord-edition: both
       x-overlord-consumers: [external, mobile]
-      x-overlord-schema-status: stub
+      summary: MCP JSON-RPC transport
+      description: >-
+        Registered only when `OVERLORD_MCP_ENABLED=true`. The transport only: a JSON-RPC 2.0 request, or a
+        batch array, answered as JSON (never an SSE stream). Methods are `initialize`,
+        `notifications/initialized`, `ping`, `tools/list`, `tools/call`, `resources/list` and
+        `resources/read`; the tools, their arguments and their authorization are specified by the
+        generated tool catalog (ADR 0008). JSON-RPC errors are answered with HTTP 200: `-32600` for an
+        invalid request, `-32601` for an unknown method, `-32000` when a tool or resource fails (its
+        message carried). A single notification answers `{ jsonrpc: '2.0', result: null }`; a batch omits
+        notifications. Authentication as `GET /mcp`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/JsonRpcRequest'
+                - type: array
+                  items: { $ref: '#/components/schemas/JsonRpcRequest' }
+      responses:
+        '200':
+          description: The JSON-RPC response, or an array of them for a batch.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/JsonRpcResponse'
+                  - type: array
+                    items: { $ref: '#/components/schemas/JsonRpcResponse' }
+        '401':
+          description: As `GET /mcp`.
+          headers:
+            WWW-Authenticate:
+              required: false
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/agent-session-channels/v1/self:
     get:
       operationId: getAgentSessionChannelsV1Self
@@ -10739,3 +10973,286 @@ components:
           required: [ type ]
           properties:
             type: { const: refresh }
+    OAuthScope:
+      type: string
+      enum:
+        [
+          overlord.workspace.read,
+          overlord.mission.read,
+          overlord.mission.write,
+          overlord.session.write
+        ]
+    OAuthProtectedResourceMetadata:
+      type: object
+      required:
+        [
+          resource,
+          authorization_servers,
+          bearer_methods_supported,
+          resource_documentation,
+          scopes_supported
+        ]
+      properties:
+        resource: { type: string, description: '`<base URL>/mcp`.' }
+        authorization_servers:
+          type: array
+          description: The issuer, `<base URL>`.
+          items: { type: string }
+        bearer_methods_supported:
+          type: array
+          items: { const: header }
+        resource_documentation: { type: string }
+        scopes_supported:
+          type: array
+          items: { $ref: '#/components/schemas/OAuthScope' }
+    OAuthAuthorizationServerMetadata:
+      type: object
+      required:
+        [
+          issuer,
+          authorization_endpoint,
+          token_endpoint,
+          registration_endpoint,
+          revocation_endpoint,
+          response_types_supported,
+          grant_types_supported,
+          code_challenge_methods_supported,
+          token_endpoint_auth_methods_supported,
+          scopes_supported
+        ]
+      properties:
+        issuer: { type: string }
+        authorization_endpoint: { type: string, description: '`<base URL>/oauth/approve` (the web approval page).' }
+        token_endpoint: { type: string }
+        registration_endpoint: { type: string }
+        revocation_endpoint: { type: string }
+        response_types_supported:
+          type: array
+          items: { const: code }
+        grant_types_supported:
+          type: array
+          items: { const: authorization_code }
+        code_challenge_methods_supported:
+          type: array
+          items: { const: S256 }
+        token_endpoint_auth_methods_supported:
+          type: array
+          items: { const: none }
+        scopes_supported:
+          type: array
+          items: { $ref: '#/components/schemas/OAuthScope' }
+    OAuthErrorBody:
+      type: object
+      description: An RFC 6749 error. `error` is an OAuth error code, not a message.
+      required: [ error, error_description ]
+      properties:
+        error: { type: string }
+        error_description: { type: string }
+    OAuthClientRegistrationBody:
+      type: object
+      required: [ redirect_uris ]
+      properties:
+        redirect_uris:
+          type: array
+          description: >-
+            Entries that are not strings, not URLs, or not `https:` (or `http:` to `localhost` /
+            `127.0.0.1`) are dropped; none left answers 400 `invalid_redirect_uri`.
+          items: { type: string }
+        client_name:
+          type: string
+          description: Trimmed and cut to 120 characters; absent or blank becomes `MCP client`.
+    OAuthClientRegistrationDto:
+      type: object
+      required:
+        [
+          client_id,
+          client_name,
+          redirect_uris,
+          grant_types,
+          response_types,
+          token_endpoint_auth_method,
+          client_id_issued_at
+        ]
+      properties:
+        client_id: { type: string, description: '`ovlc_<payload>.<signature>`.' }
+        client_name: { type: string }
+        redirect_uris:
+          type: array
+          items: { type: string }
+        grant_types:
+          type: array
+          items: { const: authorization_code }
+        response_types:
+          type: array
+          items: { const: code }
+        token_endpoint_auth_method: { const: none }
+        client_id_issued_at: { type: integer, description: Unix seconds. }
+    OAuthTokenRequestBody:
+      type: object
+      description: Every value is read as a trimmed string; a missing one is empty.
+      required: [ grant_type, code, client_id, redirect_uri, code_verifier, resource ]
+      properties:
+        grant_type: { const: authorization_code }
+        code: { type: string }
+        client_id: { type: string }
+        redirect_uri: { type: string }
+        code_verifier: { type: string }
+        resource:
+          type: string
+          description: Must equal the authorization's resource (`<base URL>/mcp`); an absent value does not match.
+    OAuthTokenResponseDto:
+      type: object
+      required: [ access_token, token_type, expires_in, scope ]
+      properties:
+        access_token: { type: string, description: 'An `out_…` user token.' }
+        token_type: { const: Bearer }
+        expires_in: { const: 7776000 }
+        scope: { type: string, description: The granted scopes, space-separated. }
+    OAuthRevokeBody:
+      type: object
+      properties:
+        token: { type: string, description: 'The `out_…` token to revoke.' }
+    OAuthAuthorizationRequestBody:
+      type: object
+      description: >-
+        The OAuth authorization request parameters (each read from the body, else the query string, as a
+        trimmed string).
+      properties:
+        response_type:
+          const: code
+          description: Anything else answers 400 `unsupported_response_type`.
+        client_id: { type: string, description: A client id from registration; otherwise 400 `invalid_client`. }
+        redirect_uri: { type: string, description: One of the client's redirect URIs; otherwise 400 `invalid_request`. }
+        code_challenge_method: { const: S256 }
+        code_challenge: { type: string, description: Required (400 `invalid_request`). }
+        resource:
+          type: string
+          description: Defaults to `<base URL>/mcp`; any other value answers 400 `invalid_target`.
+        scope:
+          type: string
+          description: Space-separated; defaults to every scope; an unknown scope answers 400 `invalid_scope`.
+        state: { type: string, description: Echoed back. }
+    OAuthConsentWorkspaceDto:
+      type: object
+      required: [ workspaceId, workspaceUserId, slug, name, kind, roleKeys ]
+      properties:
+        workspaceId: { type: string, format: uuid }
+        workspaceUserId: { type: string }
+        slug: { type: string }
+        name: { type: string }
+        kind: { type: string }
+        roleKeys:
+          type: array
+          items: { type: string }
+    OAuthConsentOrganizationDto:
+      type: object
+      required: [ id, name, workspaces ]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        workspaces:
+          type: array
+          items: { $ref: '#/components/schemas/OAuthConsentWorkspaceDto' }
+    OAuthAuthorizationRequestInfoDto:
+      type: object
+      required: [ clientName, redirectUri, redirectHost, resource, scopes, state, organizations ]
+      properties:
+        clientName: { type: string }
+        redirectUri: { type: string }
+        redirectHost: { type: string }
+        resource: { type: string }
+        scopes:
+          type: array
+          items: { $ref: '#/components/schemas/OAuthScope' }
+        state: { type: string, description: The request's `state`, or empty. }
+        organizations:
+          type: array
+          description: Every organization and workspace in which the profile has an active membership.
+          items: { $ref: '#/components/schemas/OAuthConsentOrganizationDto' }
+    OAuthApproveBody:
+      description: The authorization request parameters plus the decision and consent.
+      allOf:
+        - $ref: '#/components/schemas/OAuthAuthorizationRequestBody'
+        - type: object
+          required: [ decision ]
+          properties:
+            decision:
+              type: string
+              enum: [ approve, deny ]
+              description: Anything else answers 400 `invalid_request`.
+            organizationId:
+              type: string
+              description: Required when the profile belongs to several organizations (400 otherwise).
+            allWorkspaces:
+              type: boolean
+              description: Only `true` selects all current and future workspaces.
+            workspaceIds:
+              type: array
+              description: >-
+                Live workspaces of the organization (400 otherwise); required unless `allWorkspaces` or
+                the organization has one workspace.
+              items: { type: string }
+    OAuthApproveResultDto:
+      type: object
+      required: [ redirectTo ]
+      properties:
+        redirectTo:
+          type: string
+          description: >-
+            The client's redirect URI with `code` and `state`, or with `error=access_denied`,
+            `error_description` and `state`.
+    McpServerInfoDto:
+      type: object
+      required: [ name, protocolVersion, endpoint, capabilities, instructions ]
+      properties:
+        name: { const: overlord }
+        protocolVersion: { type: string, description: 'The MCP protocol revision, currently `2025-11-25`.' }
+        endpoint:
+          type: string
+          description: '`<request protocol>://<Host>/mcp`.'
+        capabilities:
+          type: object
+          required: [ tools, resources ]
+          properties:
+            tools:
+              type: array
+              description: Tool definitions as `tools/list` returns them (generated tool catalog).
+              items: { $ref: '#/components/schemas/JsonValue' }
+            resources:
+              type: array
+              description: Widget resources as `resources/list` returns them.
+              items: { $ref: '#/components/schemas/JsonValue' }
+        instructions: { type: string }
+    JsonRpcId:
+      oneOf: [ { type: string }, { type: number }, { type: 'null' } ]
+    JsonRpcRequest:
+      type: object
+      description: A JSON-RPC 2.0 request or notification. A non-object item is answered `-32600`.
+      required: [ jsonrpc, method ]
+      properties:
+        jsonrpc: { const: '2.0' }
+        id: { $ref: '#/components/schemas/JsonRpcId' }
+        method: { type: string }
+        params: { $ref: '#/components/schemas/JsonValue' }
+    JsonRpcResponse:
+      description: A JSON-RPC 2.0 result or error; `id` is null when the request had none.
+      oneOf:
+        - type: object
+          description: A result. `id` is absent only on the `{ jsonrpc, result null }` answer to a single
+            notification.
+          required: [ jsonrpc, result ]
+          properties:
+            jsonrpc: { const: '2.0' }
+            id: { $ref: '#/components/schemas/JsonRpcId' }
+            result: { $ref: '#/components/schemas/JsonValue' }
+        - type: object
+          required: [ jsonrpc, id, error ]
+          properties:
+            jsonrpc: { const: '2.0' }
+            id: { $ref: '#/components/schemas/JsonRpcId' }
+            error:
+              type: object
+              required: [ code, message ]
+              properties:
+                code: { type: integer, enum: [ -32600, -32601, -32000 ] }
+                message: { type: string }
