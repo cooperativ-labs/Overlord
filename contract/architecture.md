@@ -29,7 +29,7 @@ Specified in [protocol.md](protocol.md).
 ### 2. Database Layer
 
 **Stable identifier**: `database`
-**Reference spec**: [`database/docs/09-database-schema-contract.md`](data/README.md)
+**Reference spec**: [`contract/data/README.md`](data/README.md)
 
 Owns:
 
@@ -144,7 +144,7 @@ Does NOT own:
 ### 6. REST API Layer
 
 **Stable identifier**: `rest`
-**Reference spec**: `database/docs/09-database-schema-contract.md` → REST API Boundary section
+**Reference spec**: `contract/data/README.md` → REST API Boundary section
 
 Owns:
 
@@ -240,7 +240,7 @@ Does NOT own:
 ### 9. Extension System
 
 **Stable identifier**: `extension`
-**Reference specs**: `database/docs/09-database-schema-contract.md` → Extension Points section; [`connectors/docs/agent-harness-configuration-architecture.md`](../connectors/docs/agent-harness-configuration-architecture.md)
+**Reference specs**: `contract/data/README.md` → Extension Points section; [`connectors/docs/agent-harness-configuration-architecture.md`](../connectors/docs/agent-harness-configuration-architecture.md)
 
 Owns:
 
