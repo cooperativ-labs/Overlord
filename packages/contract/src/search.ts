@@ -1,9 +1,12 @@
-import type {
-  MissionSearchAppliedFilters,
-  MissionSearchMatchKind,
-  MissionSearchResultV2,
-  MissionSearchWorkspaceCount
-} from './mission-search.js';
+import type { MissionSearchMatchKind } from './mission-search.js';
+
+// REST DTOs generated from contract/api/openapi.yaml (ADR 0006).
+export type {
+  SearchAppliedFiltersV3,
+  SearchMatch,
+  SearchResponseV3,
+  SearchResultV3
+} from './generated/api.js';
 
 /** Document kinds that can be returned as a child match. `event` is never returnable. */
 export const SEARCH_MATCH_ENTITY_TYPES = ['objective', 'delivery'] as const;
@@ -46,61 +49,11 @@ export const SEARCH_CANDIDATE_FETCH_LIMIT = 500;
 /** Child score = docScore + CONTEXT_WEIGHT * missionScore. */
 export const SEARCH_CHILD_CONTEXT_WEIGHT = 0.15;
 
-export interface SearchMatch {
-  entityType: SearchMatchEntityType;
-  id: string;
-  /** `coo:789.2nnh` for objectives; null for deliveries. */
-  displayId: string | null;
-  /** Objective title, or the delivery's first line. */
-  title: string;
-  /** Owning objective. Set for objectives (self) and for the objective a delivery closed. */
-  objectiveId: string | null;
-  /** ObjectiveState for objectives; null otherwise. */
-  objectiveState: string | null;
-  relevance: number;
-  snippet: string | null;
-  matchedTerms: string[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface SearchResultV3 extends MissionSearchResultV2 {
-  /** True when nothing on the mission record itself matched — it anchors children only. */
-  anchorOnly: boolean;
-  /** Ranked, capped by `matchesPerResult`. */
-  matches: SearchMatch[];
-  /** Matching document counts for this mission, BEFORE `matchesPerResult` capping. */
-  matchCounts: {
-    objective: number;
-    delivery: number;
-    event: number;
-  };
-}
-
-export interface SearchAppliedFiltersV3 extends MissionSearchAppliedFilters {
-  entityTypes: SearchResultEntityType[];
-  objectiveStates: SearchObjectiveState[];
-  matchesPerResult: number;
-}
-
 export interface SearchEntityCounts {
   mission: number;
   objective: number;
   delivery: number;
   event: number;
-}
-
-export interface SearchResponseV3 {
-  version: 3;
-  results: SearchResultV3[];
-  appliedFilters: SearchAppliedFiltersV3;
-  /** Mission groups matched before `limit`. Same meaning as v2. */
-  totalMatchedBeforeLimit: number;
-  /** Matching documents by type across eligible missions, before mission/child caps. */
-  entityCounts: SearchEntityCounts;
-  workspaceCounts: MissionSearchWorkspaceCount[];
-  /** True when the per-workspace candidate cap was hit; counts above are lower bounds. */
-  truncatedCandidates: boolean;
 }
 
 export type SearchParseResult<T> = { ok: true; value: T } | { ok: false; error: string };

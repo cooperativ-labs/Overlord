@@ -402,9 +402,15 @@ export interface TerminalSessionDto {
 }
 export const terminalSessionDtoSchema: z.ZodType<TerminalSessionDto> = z.object({ "executionRequestId": z.string(), "objectiveId": z.string(), "provider": z.literal("latch"), "providerSessionId": z.string(), "sessionName": z.string(), "executionTargetId": z.string().nullable(), "deviceLabel": z.string().nullable(), "agentSessionId": z.string().nullable(), "executable": z.string(), "viewerKind": z.string(), "viewerOpenAs": z.enum(["window", "tab"]), "createdAt": dateTimeSchema, "lastObservedState": z.enum(["running", "exited", "stopping", "lost"]) });
 
+/**
+ * `pending`: no branch prepared yet (the planner-predicted name is shown). `created`: cut from the base, not pushed. `published`: pushed to `origin`, not merged. `merged_unpushed`: merged into the local base, which has not been pushed yet. `merged`: the branch's commits are in the remote base (`origin/<base>`).
+ */
 export type MissionBranchStatus = "pending" | "created" | "published" | "merged_unpushed" | "merged";
 export const missionBranchStatusSchema: z.ZodType<MissionBranchStatus> = z.enum(["pending", "created", "published", "merged_unpushed", "merged"]);
 
+/**
+ * Per-mission override of the workspace worktree-automation setting. `worktree`: prepare a branch and a worktree even when the workspace setting is off. `branch`: prepare a branch without a dedicated worktree (checked out in the project's primary repository). Null (no override) inherits the workspace setting.
+ */
 export type MissionWorktreePreference = "worktree" | "branch";
 export const missionWorktreePreferenceSchema: z.ZodType<MissionWorktreePreference> = z.enum(["worktree", "branch"]);
 
@@ -2948,9 +2954,9 @@ export interface CreateWebhookSubscriptionBody {
    */
   workspaceId?: string;
   /**
-   * Limits the subscription to one project and selects its workspace. An unknown project answers 400; a project outside the caller's authorized workspaces 404.
+   * Limits the subscription to one project and selects its workspace. An unknown project answers 400; a project outside the caller's authorized workspaces 404. Null or absent subscribes the whole workspace.
    */
-  projectId?: string;
+  projectId?: string | null;
   /**
    * Trimmed; blank or absent answers 400.
    */
@@ -2968,7 +2974,7 @@ export interface CreateWebhookSubscriptionBody {
    */
   payloadMode?: WebhookPayloadMode | null;
 }
-export const createWebhookSubscriptionBodySchema: z.ZodType<CreateWebhookSubscriptionBody> = z.object({ "workspaceId": z.exactOptional(z.string()), "projectId": z.exactOptional(z.string()), "name": z.string(), "endpointUrl": z.string(), "eventTypes": z.array(webhookEventTypeSchema).min(1), "payloadMode": z.exactOptional(webhookPayloadModeSchema.nullable()) });
+export const createWebhookSubscriptionBodySchema: z.ZodType<CreateWebhookSubscriptionBody> = z.object({ "workspaceId": z.exactOptional(z.string()), "projectId": z.exactOptional(z.string().nullable()), "name": z.string(), "endpointUrl": z.string(), "eventTypes": z.array(webhookEventTypeSchema).min(1), "payloadMode": z.exactOptional(webhookPayloadModeSchema.nullable()) });
 
 /**
  * Partial update; omitted members are unchanged.
@@ -3849,6 +3855,9 @@ export interface UpdateProjectExecutionTargetBody {
 }
 export const updateProjectExecutionTargetBodySchema: z.ZodType<UpdateProjectExecutionTargetBody> = z.object({ "executionTargetId": z.exactOptional(z.string().nullable()) });
 
+/**
+ * A resource's availability as one execution target last observed it. It is target-scoped and time-sensitive, distinct from the backend-owned resource lifecycle (`active`, `archived`).
+ */
 export type TargetObservationState = "available" | "missing" | "unreachable" | "permission_denied" | "not_git_repository" | "unknown";
 export const targetObservationStateSchema: z.ZodType<TargetObservationState> = z.enum(["available", "missing", "unreachable", "permission_denied", "not_git_repository", "unknown"]);
 
@@ -3866,24 +3875,24 @@ export interface ReportResourceObservationsBody {
      */
     state: TargetObservationState;
     /**
-     * A non-string is stored as null.
+     * Null, absent or any other non-string is stored as null.
      */
-    gitRoot?: string;
+    gitRoot?: string | null;
     /**
-     * A non-string is stored as null.
+     * Null, absent or any other non-string is stored as null.
      */
-    branch?: string;
+    branch?: string | null;
     /**
-     * A non-string is stored as null.
+     * Null, absent or any other non-string is stored as null.
      */
-    commit?: string;
+    commit?: string | null;
     /**
      * Trimmed and stored as given (not parsed); blank answers 400.
      */
     observedAt: string;
   }>;
 }
-export const reportResourceObservationsBodySchema: z.ZodType<ReportResourceObservationsBody> = z.object({ "observations": z.array(z.object({ "resourceId": z.string(), "state": targetObservationStateSchema, "gitRoot": z.exactOptional(z.string()), "branch": z.exactOptional(z.string()), "commit": z.exactOptional(z.string()), "observedAt": z.string() })).min(1) });
+export const reportResourceObservationsBodySchema: z.ZodType<ReportResourceObservationsBody> = z.object({ "observations": z.array(z.object({ "resourceId": z.string(), "state": targetObservationStateSchema, "gitRoot": z.exactOptional(z.string().nullable()), "branch": z.exactOptional(z.string().nullable()), "commit": z.exactOptional(z.string().nullable()), "observedAt": z.string() })).min(1) });
 
 export interface ReportMissionBranchObservationsBody {
   /**
@@ -3907,16 +3916,16 @@ export interface ReportMissionBranchObservationsBody {
      */
     dirty: boolean;
     /**
-     * A non-string is stored as null.
+     * Null, absent or any other non-string is stored as null.
      */
-    worktreePath?: string;
+    worktreePath?: string | null;
     /**
      * Trimmed and stored as given (not parsed); blank answers 400.
      */
     observedAt: string;
   }>;
 }
-export const reportMissionBranchObservationsBodySchema: z.ZodType<ReportMissionBranchObservationsBody> = z.object({ "observations": z.array(z.object({ "missionId": z.string(), "resourceKey": z.string(), "status": z.enum(["created", "published", "merged_unpushed", "merged"]), "dirty": z.boolean(), "worktreePath": z.exactOptional(z.string()), "observedAt": z.string() })).min(1) });
+export const reportMissionBranchObservationsBodySchema: z.ZodType<ReportMissionBranchObservationsBody> = z.object({ "observations": z.array(z.object({ "missionId": z.string(), "resourceKey": z.string(), "status": z.enum(["created", "published", "merged_unpushed", "merged"]), "dirty": z.boolean(), "worktreePath": z.exactOptional(z.string().nullable()), "observedAt": z.string() })).min(1) });
 
 export interface RecordedObservationsDto {
   recorded: number;
@@ -4188,6 +4197,9 @@ export interface CapabilityTargetMetadataDto {
 }
 export const capabilityTargetMetadataDtoSchema: z.ZodType<CapabilityTargetMetadataDto> = z.object({ "executionTargetId": z.string().nullable(), "deviceLabel": z.string().nullable(), "transport": z.enum(["in_process", "desktop_bridge", "runner_queue", "fake"]) });
 
+/**
+ * Stable error code of a local-target capability (packages/core/service/local-target/types.ts); it never carries raw filesystem or Git error text. `LOCAL_TARGET_REQUIRED`: no selected or eligible target can serve the capability. `LOCAL_TARGET_UNREACHABLE`: a target is selected but not reachable now. `RESOURCE_MISSING`: the linked directory does not exist on the target. `NOT_GIT_REPOSITORY`: the path is not a Git repository. `PERMISSION_DENIED`: the target cannot access the path. `GIT_COMMAND_FAILED`: a git or worktree command failed on the target. `CAPABILITY_NOT_IMPLEMENTED`: the resolved transport does not implement the capability. `LOCAL_TARGET_TIMEOUT`: the queued call was accepted but no result arrived before the caller's deadline; the job is still live on the target, so callers show it as running and never re-queue it. `LOCAL_TARGET_UNSUPPORTED`: the runner will not execute the capability off the device (an unknown name, or `launchAgent`). `TARGET_OPERATION_FAILED`: a failure with no more specific code. `LATCH_SESSION_ABSENT`: Latch has no metadata for the session (pruned or removed) although the device is reachable. `UNKNOWN`: anything else.
+ */
 export type LocalTargetErrorCode = "LOCAL_TARGET_REQUIRED" | "LOCAL_TARGET_UNREACHABLE" | "RESOURCE_MISSING" | "NOT_GIT_REPOSITORY" | "PERMISSION_DENIED" | "GIT_COMMAND_FAILED" | "CAPABILITY_NOT_IMPLEMENTED" | "LOCAL_TARGET_TIMEOUT" | "LOCAL_TARGET_UNSUPPORTED" | "TARGET_OPERATION_FAILED" | "LATCH_SESSION_ABSENT" | "UNKNOWN";
 export const localTargetErrorCodeSchema: z.ZodType<LocalTargetErrorCode> = z.enum(["LOCAL_TARGET_REQUIRED", "LOCAL_TARGET_UNREACHABLE", "RESOURCE_MISSING", "NOT_GIT_REPOSITORY", "PERMISSION_DENIED", "GIT_COMMAND_FAILED", "CAPABILITY_NOT_IMPLEMENTED", "LOCAL_TARGET_TIMEOUT", "LOCAL_TARGET_UNSUPPORTED", "TARGET_OPERATION_FAILED", "LATCH_SESSION_ABSENT", "UNKNOWN"]);
 
@@ -4601,9 +4613,9 @@ export interface AgentRequestDto {
   kind: AgentRequestKind;
   summary: string;
   /**
-   * The stored options as written.
+   * The stored options. Every option is normalized on write to string `optionId`, `label` and `kind` (`boundedOptions`, packages/core/service/agent-session/requests.ts).
    */
-  options: JsonValue[];
+  options: AgentRequestOption[];
   allowsFreeText: boolean;
   status: AgentRequestStatus;
   /**
@@ -4623,7 +4635,7 @@ export interface AgentRequestDto {
   resolvedAt: DateTime | null;
   createdAt: DateTime;
 }
-const agentRequestDtoShape = { "id": z.string(), "channelId": z.string(), "missionId": z.string().nullable(), "objectiveId": z.string().nullable(), "kind": agentRequestKindSchema, "summary": z.string(), "options": z.array(jsonValueSchema), "allowsFreeText": z.boolean(), "status": agentRequestStatusSchema, "resolution": jsonValueSchema, "revision": z.int().min(1), "windowExpiresAt": z.string().nullable(), "releasedReason": z.string().nullable(), "applicationState": z.string(), "resolvedAt": dateTimeSchema.nullable(), "createdAt": dateTimeSchema };
+const agentRequestDtoShape = { "id": z.string(), "channelId": z.string(), "missionId": z.string().nullable(), "objectiveId": z.string().nullable(), "kind": agentRequestKindSchema, "summary": z.string(), "options": z.array(agentRequestOptionSchema), "allowsFreeText": z.boolean(), "status": agentRequestStatusSchema, "resolution": jsonValueSchema, "revision": z.int().min(1), "windowExpiresAt": z.string().nullable(), "releasedReason": z.string().nullable(), "applicationState": z.string(), "resolvedAt": dateTimeSchema.nullable(), "createdAt": dateTimeSchema };
 export const agentRequestDtoSchema: z.ZodType<AgentRequestDto> = z.object(agentRequestDtoShape);
 
 export interface AgentRequestDeliveryDto {

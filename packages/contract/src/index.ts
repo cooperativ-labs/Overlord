@@ -14,8 +14,36 @@
  * deliveries remain CLI-only and are intentionally absent here.
  */
 
-import type { AgentLaunchFlagDto } from './agent-launch-flags.js';
-import type { ChatNotificationType } from './chat.js';
+import type {
+  ActivityFeedDto,
+  AgentLaunchConfigDto,
+  AgentRequestOption,
+  AgentSessionInputListResponse,
+  ApnsEnvironment,
+  CaptureSessionDto,
+  CreateWebhookSubscriptionResultDto,
+  EntityChangeOperation,
+  ErrorEnvelope,
+  ExecutionRequestDto,
+  FileChangeDto,
+  HumanActionCategory,
+  HumanActionResolutionDto,
+  InboxMissionDto,
+  InitializeProjectResultDto,
+  LaunchSessionSource,
+  ProjectRepositoryDto,
+  ProjectResourceDto,
+  RealtimeStreamEvent,
+  RecordedObservationsDto,
+  RegisterLiveActivityPushTokenBody,
+  ReportMissionBranchObservationsBody,
+  ReportResourceObservationsBody,
+  RepositoryEntryDto,
+  ResolvedLaunchSessionDto,
+  ScheduleDto,
+  TerminalSessionDto,
+  WorkspaceExecutionTargetDto
+} from './generated/api.js';
 
 export {
   type AgentLaunchFlagDto,
@@ -29,6 +57,332 @@ export {
 } from './agent-launch-flags.js';
 export { normalizeBaseUrl } from './base-url.js';
 export * from './chat.js';
+// Every REST DTO is generated from contract/api/openapi.yaml (ADR 0006). The
+// chat, search and extension DTOs are re-exported from their own modules.
+export type {
+  AcceptWorkspaceInvitationBody,
+  ActivityFeedDto,
+  ActivityFeedMissionItemDto,
+  ActivityFeedMissionObjectiveDto,
+  ActivityFeedQuestionItemDto,
+  AddOrganizationAdminBody,
+  AgentCatalogAgentDto,
+  AgentCatalogDto,
+  AgentCatalogModelDto,
+  AgentLaunchConfigDto,
+  AgentLaunchConfigInput,
+  AgentLaunchFlagInput,
+  AgentRequestDeliveryDto,
+  AgentRequestDto,
+  AgentRequestKind,
+  AgentRequestLeaseBody,
+  AgentRequestLeaseDto,
+  AgentRequestListResponse,
+  AgentRequestOption,
+  AgentRequestResolvedElsewhereDto,
+  AgentRequestStatus,
+  AgentSessionChannelSelfDto,
+  AgentSessionChannelSnapshotDto,
+  AgentSessionChannelState,
+  AgentSessionEventInput,
+  AgentSessionHeartbeatBody,
+  AgentSessionHeartbeatDto,
+  AgentSessionInputDto,
+  AgentSessionInputKind,
+  AgentSessionInputListResponse,
+  AgentSessionInputStatus,
+  ApnsEnvironment,
+  AppendAgentSessionEventsBody,
+  AppendAgentSessionEventsDto,
+  ArtifactDto,
+  ArtifactList,
+  AuthorizedWorkspaceDiscoveryDto,
+  AuthorizedWorkspaceDto,
+  AuthProvidersDto,
+  BinaryDownload,
+  BranchActionBody,
+  BranchPreparedBody,
+  CapabilityResultDto,
+  CapabilityTargetMetadataDto,
+  CaptureHealthEntryDto,
+  CaptureSessionDto,
+  ClaimedAgentSessionInputDto,
+  CreateAgentRequestBody,
+  CreateArtifactBody,
+  CreatedAgentRequestDto,
+  CreatedByKind,
+  CreateInboxItemBody,
+  CreateMissionBody,
+  CreateObjectiveBody,
+  CreateOrganizationOnboardingBody,
+  CreateProjectBody,
+  CreateProjectResourceBody,
+  CreateProjectStatusBody,
+  CreateProjectTagBody,
+  CreateRunQueueBody,
+  CreateUserTokenBody,
+  CreateUserTokenResultDto,
+  CreateWebhookSubscriptionBody,
+  CreateWebhookSubscriptionResultDto,
+  CreateWorkspaceBody,
+  DateTime,
+  DefaultProjectPreferenceDto,
+  DeferredWorkV1,
+  DeleteRunQueueBody,
+  DeleteRunQueueEntryBody,
+  DeliveryAgentReportV1,
+  DeliveryDeferredWorkItemDto,
+  DeliveryDto,
+  DeliveryPresentationV1,
+  DeliveryReportPayloadV1,
+  EligibleExecutionTargetDto,
+  EndAgentSessionChannelBody,
+  EnqueueRunQueueEntryBody,
+  EntityChangeDto,
+  EntityChangeOperation,
+  ErrorEnvelope,
+  ExecutionProviderDto,
+  ExecutionRequestDto,
+  ExecutionRequestStatus,
+  ExecutionTargetMigrationDiagnosticsDto,
+  ExecutionTargetRunnerRegistrationDto,
+  FileChangeDto,
+  ForgetTerminalSessionBody,
+  ForgetTerminalSessionResultDto,
+  GenerateCommitMessageBody,
+  GenerateCommitMessageResultDto,
+  HumanActionCategory,
+  HumanActionResolutionDto,
+  HumanActionV1,
+  HumanAgentRequestDto,
+  InboxItemDto,
+  InboxItemList,
+  InboxMissionDto,
+  InboxMissionsResponse,
+  InitializeProjectBody,
+  InitializeProjectResultDto,
+  InviteWorkspaceMemberBody,
+  InviteWorkspaceMemberResultDto,
+  JsonRpcId,
+  JsonRpcRequest,
+  JsonRpcResponse,
+  JsonValue,
+  KnowledgebaseClientMetadataDto,
+  LaunchObjectiveBody,
+  LaunchPreferenceDto,
+  LaunchSessionDefaultsDto,
+  LaunchSessionSource,
+  LaunchSettingsDto,
+  LocalTargetBridgeCallBody,
+  LocalTargetErrorCode,
+  MarkAgentSessionInputEmittedBody,
+  MarkAgentSessionInputFailedBody,
+  MarkMissionSummarySeenBody,
+  McpServerInfoDto,
+  MessageErrorBody,
+  MetaDto,
+  MissionBranchDto,
+  MissionBranchListDto,
+  MissionBranchStatus,
+  MissionCreatedFromDto,
+  MissionCreatorTokenDto,
+  MissionDeliveriesDto,
+  MissionDetailDto,
+  MissionDto,
+  MissionEventActorDto,
+  MissionEventDto,
+  MissionEventList,
+  MissionFileChangesDto,
+  MissionList,
+  MissionPriority,
+  MissionScheduleDto,
+  MissionSearchV1Response,
+  MissionSummaryActionDto,
+  MissionSummaryDto,
+  MissionSummaryEvidenceDto,
+  MissionSummaryResponse,
+  MissionSummaryRiskDto,
+  MissionSummarySeenResponse,
+  MissionSummarySourceDto,
+  MissionSummaryStatus,
+  MissionSummarySuggestionDto,
+  MissionWorktreePreference,
+  NotificationDto,
+  NotificationList,
+  NotificationPreferenceDto,
+  NotificationPreferencesDto,
+  NotificationPreferenceType,
+  NotificationRevisionBody,
+  OAuthApproveBody,
+  OAuthApproveResultDto,
+  OAuthAuthorizationRequestBody,
+  OAuthAuthorizationRequestInfoDto,
+  OAuthAuthorizationServerMetadata,
+  OAuthClientRegistrationBody,
+  OAuthClientRegistrationDto,
+  OAuthConsentOrganizationDto,
+  OAuthConsentWorkspaceDto,
+  OAuthErrorBody,
+  OAuthHandoffExchangeBody,
+  OAuthHandoffExchangeResultDto,
+  OAuthProtectedResourceMetadata,
+  OAuthRevokeBody,
+  OAuthScope,
+  OAuthTokenRequestBody,
+  OAuthTokenResponseDto,
+  ObjectiveAttachmentDto,
+  ObjectiveAttachmentList,
+  ObjectiveDto,
+  ObjectiveEffectiveLaunchConfigDto,
+  ObjectiveFileChangesDto,
+  ObjectiveLaunchCommandDto,
+  ObjectiveList,
+  ObjectivePromptDto,
+  ObjectiveRunQueueEntryDto,
+  ObjectiveState,
+  ObjectiveTranscriptItemDto,
+  ObjectiveTranscriptPageDto,
+  OkResponse,
+  OrganizationAdminDto,
+  OrganizationAdminList,
+  OrganizationDto,
+  OrganizationList,
+  PreviewScheduleBody,
+  ProfileDto,
+  ProjectDto,
+  ProjectExecutionTargetDto,
+  ProjectLifecycle,
+  ProjectList,
+  ProjectListLifecycle,
+  ProjectRepositoryDto,
+  ProjectResourceAccessMode,
+  ProjectResourceDto,
+  ProjectResourceList,
+  ProjectResourceSourceDto,
+  ProjectRunQueuesDto,
+  ProjectStatusDto,
+  ProjectStatusList,
+  ProjectTagDto,
+  ProjectTagList,
+  PromoteInboxItemBody,
+  ProtocolRequestBody,
+  PurgeMergedWorktreesBody,
+  PurgeWorktreesResultDto,
+  PushNotificationCategory,
+  RawImageUploadBody,
+  RawUploadBody,
+  RealtimeChangeEventDto,
+  RealtimeStreamEvent,
+  RecordAgentRequestApplicationBody,
+  RecordedObservationsDto,
+  RegisterDevicePushTokenBody,
+  RegisterExecutionTargetBody,
+  RegisterLiveActivityPushTokenBody,
+  RegisterLiveActivityStartTokenBody,
+  ReleaseAgentRequestBody,
+  ReleasedAgentRequestDto,
+  RemoveWorktreeBody,
+  ReorderBoardColumnBody,
+  ReorderFutureObjectivesBody,
+  ReorderProjectRunQueuesBody,
+  ReorderProjectsBody,
+  ReorderProjectStatusesBody,
+  ReorderRunQueueBody,
+  ReportMissionBranchObservationsBody,
+  ReportResourceObservationsBody,
+  RepositoryEntryDto,
+  ResolveAgentRequestBody,
+  ResolveAgentRequestResultDto,
+  ResolvedLaunchSessionDto,
+  ResolveHumanActionBody,
+  RevokeDevicePushTokenBody,
+  RevokeLiveActivityStartTokenBody,
+  RunnerClaimBody,
+  RunnerClaimedRequestDto,
+  RunnerClaimResponse,
+  RunnerClearBody,
+  RunnerClearResultDto,
+  RunnerCompletedBody,
+  RunnerExecutionRequestDto,
+  RunnerFailedBody,
+  RunnerLaunchedBody,
+  RunnerStatusDto,
+  RunQueueDto,
+  RunQueueEntryDto,
+  RunQueueEntryRemovalDto,
+  RunQueueEntryState,
+  RunQueueRemovalDto,
+  RunQueueWaitingReason,
+  ScheduleDto,
+  ScheduleInput,
+  SchedulePreviewDto,
+  ScheduleWeekDayDto,
+  ServerMetaDto,
+  SetDefaultProjectBody,
+  SharedContextEntryDto,
+  SharedContextEntryList,
+  StaleBackendHostExecutionTargetDto,
+  StatusType,
+  StorageBucketKey,
+  StoredImageDto,
+  SyncChangesDto,
+  TargetObservationState,
+  TerminalProfileDto,
+  TerminalSessionDto,
+  TokenScope,
+  TradeoffMadeV1,
+  UpdateAgentCatalogBody,
+  UpdateAgentLaunchConfigBody,
+  UpdateArtifactBody,
+  UpdateInboxItemBody,
+  UpdateLaunchPreferenceBody,
+  UpdateLaunchSessionDefaultsBody,
+  UpdateMissionBody,
+  UpdateNotificationPreferencesBody,
+  UpdateObjectiveBody,
+  UpdateOrganizationBody,
+  UpdateProfileBody,
+  UpdateProjectBody,
+  UpdateProjectExecutionTargetBody,
+  UpdateProjectResourceBody,
+  UpdateProjectResourceSourceBody,
+  UpdateProjectStatusBody,
+  UpdateProjectTagBody,
+  UpdateRunQueueBody,
+  UpdateRunQueueEntryBody,
+  UpdateTerminalProfileBody,
+  UpdateUserTokenBody,
+  UpdateWebhookSubscriptionBody,
+  UpdateWorkspaceBody,
+  UpdateWorkspaceExecutionTargetBody,
+  UpdateWorkspaceMemberRoleBody,
+  UpdateWorktreeBranchAutomationBody,
+  UpsertSharedContextBody,
+  UserTokenDto,
+  UserTokenList,
+  UserTokenProjectDto,
+  UserTokenStatus,
+  WebhookDeliveryAttemptDto,
+  WebhookDeliveryAttemptsPageDto,
+  WebhookDisabledReason,
+  WebhookEventType,
+  WebhookPayloadMode,
+  WebhookSubscriptionDto,
+  WebhookSubscriptionList,
+  WebhookTestResultDto,
+  WorkspaceDto,
+  WorkspaceExecutionTargetDto,
+  WorkspaceExecutionTargetList,
+  WorkspaceInvitationDto,
+  WorkspaceInvitationList,
+  WorkspaceInvitationStatus,
+  WorkspaceList,
+  WorkspaceMemberDto,
+  WorkspaceMemberList,
+  WorkspaceRoleKey,
+  WorktreeDto,
+  WorktreeList
+} from './generated/api.js';
 export {
   ATTACH_CONTEXT_FIELDS,
   LAUNCH_VARIABLE_NAMES,
@@ -116,44 +470,14 @@ export {
   type SearchResultEntityType,
   type SearchResultV3
 } from './search.js';
+export { vocabulary } from './vocabulary.js';
 
 // ---- Closed status vocabularies (from the schema CHECK constraints) ----
 
-export type ProjectLifecycle = 'active' | 'archived';
-/** Lifecycle subset accepted by project-list REST endpoints. */
-export type ProjectListLifecycle = ProjectLifecycle | 'all';
-
-export type StatusType =
-  | 'draft'
-  | 'next'
-  | 'execute'
-  | 'review'
-  | 'complete'
-  | 'blocked'
-  | 'cancelled';
-
-export type MissionPriority = 'low' | 'normal' | 'high' | 'urgent';
-
-export type ObjectiveState =
-  | 'future'
-  | 'draft'
-  | 'submitted'
-  | 'launching'
-  | 'executing'
-  | 'pending_delivery'
-  | 'complete';
-
-/**
- * Actor class that authored a mission or objective row (`created_by_kind`).
- * Closed vocabulary — `human` is a filed-by-a-person row, `agent` is one an
- * agent connector authored, `automation` is one Overlord itself generated
- * (scheduled regeneration). Rows predating creation provenance report `human`.
- */
-export type CreatedByKind = 'human' | 'agent' | 'automation';
-
+/** The wire type is wider: `EntityChangeDto.entityType` is a string (generated). */
 export type EntityType = 'project' | 'mission' | 'objective';
 
-export type ChangeOperation = 'insert' | 'update' | 'delete' | 'restore';
+export type ChangeOperation = EntityChangeOperation;
 
 // ---- Organization DTOs ----
 //
@@ -162,60 +486,6 @@ export type ChangeOperation = 'insert' | 'update' | 'delete' | 'restore';
 // an "organization admin" is a derived concept (ADMIN of every constituent
 // workspace), not a new RBAC scope type.
 
-export interface OrganizationDto {
-  id: string;
-  name: string;
-  /** URL of the organization's logo image, or `null` when unset. */
-  logoUrl: string | null;
-  /** Count of non-deleted workspaces in the organization (read-side aggregate). */
-  workspaceCount: number;
-  /** Whether this is the caller's currently active organization. */
-  isActive?: boolean;
-  createdAt: string;
-}
-
-/**
- * Combined organization + first-workspace onboarding, submitted by an
- * authenticated user with zero workspace memberships. No logo field: the
- * organization's storage bucket doesn't exist until the organization does, so
- * the logo is uploaded after creation and patched on via `UpdateOrganizationBody`.
- * Shared verbatim by the web onboarding screen and `ovld org-setup`.
- */
-export interface CreateOrganizationOnboardingBody {
-  organizationName: string;
-  /** Defaults to `"general"` when omitted. */
-  workspaceName?: string;
-  /** Optional; derived from `workspaceName` (and uniquified within the new organization) when omitted. */
-  workspaceSlug?: string;
-}
-
-/** Partial update of an organization. Omitted fields are left unchanged. */
-export interface UpdateOrganizationBody {
-  name?: string;
-  /**
-   * Org-admin-only: set or clear (`null`) the organization logo. Must be an
-   * uploaded image path from the `organization-images` bucket
-   * (`/api/storage/organization-images/…`) or an absolute http(s) URL.
-   */
-  logoUrl?: string | null;
-}
-
-/** An organization admin: a member with an active `ADMIN` role assignment in every constituent workspace. */
-export interface OrganizationAdminDto {
-  /** `profiles.id`. */
-  userId: string;
-  displayName: string;
-  handle: string | null;
-  email: string | null;
-  avatarUrl: string | null;
-}
-
-/** Grants `ADMIN` to `userId` in every constituent workspace of the organization. */
-export interface AddOrganizationAdminBody {
-  /** `profiles.id` of an existing member of at least one constituent workspace. */
-  userId: string;
-}
-
 /** Demotes `userId` to `MEMBER` in every constituent workspace of the organization. */
 export interface RemoveOrganizationAdminBody {
   userId: string;
@@ -223,738 +493,28 @@ export interface RemoveOrganizationAdminBody {
 
 // ---- Resource DTOs ----
 
-export interface WorkspaceDto {
-  id: string;
-  /** FK to the containing organization. */
-  organizationId: string;
-  slug: string;
-  name: string;
-  /** Open vocabulary (`local`, `hosted`, …). Locally created workspaces are `local`. */
-  kind: string;
-  /** Whether this is the web server's currently active workspace. */
-  isActive: boolean;
-  /** Count of non-deleted projects in the workspace (read-side aggregate). */
-  projectCount: number;
-  /** Count of active members in the workspace (read-side aggregate). */
-  memberCount: number;
-  /** Whether SQL Studio is enabled for this workspace (admin-managed). */
-  sqlStudioEnabled: boolean;
-  createdAt: string;
-}
-
-/** A live workspace membership as exposed for explicit scope selection. */
-export interface AuthorizedWorkspaceDto {
-  workspaceId: string;
-  workspaceUserId: string;
-  organizationId: string;
-  slug: string;
-  name: string;
-  kind: string;
-  roleKeys: string[];
-}
-
-/**
- * Read-only scope discovery. A caller selects one organization before a
- * cross-workspace operation; a USER_TOKEN response contains only its bound
- * organization and consent-narrowed workspace set.
- */
-export interface AuthorizedWorkspaceDiscoveryDto {
-  organizationId: string | null;
-  organizations: OrganizationDto[];
-  workspaces: AuthorizedWorkspaceDto[];
-  selectionRequired: boolean;
-}
-
-export interface CreateWorkspaceBody {
-  /** The containing organization. Creation requires admin access to one of its workspaces. */
-  organizationId: string;
-  name: string;
-  /** Optional slug; derived from the name (and uniquified within the organization) when omitted. */
-  slug?: string;
-}
-
-/** Partial update of a workspace. Omitted fields are left unchanged. */
-export interface UpdateWorkspaceBody {
-  name?: string;
-  /** Admin-only: enable or disable SQL Studio for this workspace. */
-  sqlStudioEnabled?: boolean;
-}
-
-/**
- * `GET /api/meta` response shape. Workspaces no longer have a single "active"
- * one from the UI's perspective — the sidebar renders every accessible
- * workspace of the active organization at once (Q6/Q9) — but the server still
- * tracks a default/preference-scoped workspace for protocol and CLI callers
- * that need one implicit scope.
- */
-export interface MetaDto {
-  /** The caller's active organization, or `null` before onboarding. */
-  organization: OrganizationDto | null;
-  /** Every organization the caller has at least one active workspace membership in. */
-  organizations: OrganizationDto[];
-  /** Every workspace of the active organization the caller can access, with project counts. */
-  workspaces: WorkspaceDto[];
-  /** The server's default-scope workspace (preference echo for protocol/CLI); `null` pre-onboarding. */
-  workspace: WorkspaceDto | null;
-  /** Account-wide navigation/create preference; it never scopes authorization. */
-  defaultProjectId: string | null;
-}
-
-/** Authenticated profile's account-wide navigation/create preference. */
-export interface DefaultProjectPreferenceDto {
-  projectId: string | null;
-}
-
-/**
- * A workspace membership (`workspace_users` joined to `profiles`).
- */
-export interface WorkspaceMemberDto {
-  /** `workspace_users.id` — the workspace-scoped identity. */
-  workspaceUserId: string;
-  /** `profiles.id` — the profile behind the membership. */
-  userId: string;
-  /** `profiles.display_name`. */
-  displayName: string;
-  handle: string | null;
-  email: string | null;
-  /** Open vocabulary (`human`, `service`). */
-  kind: string;
-  /** Active workspace-level role keys assigned to this member (`ADMIN`, `MANAGER`, `MEMBER`, …). */
-  roleKeys: string[];
-  /** Whether one of the active role assignments is `ADMIN`. */
-  isAdmin: boolean;
-  /** Whether this membership belongs to the local operator. */
-  isOperator: boolean;
-  /** `workspace_users.created_at`. */
-  joinedAt: string;
-  /** Optional avatar image URL from `profiles.metadata_json.avatarUrl`. */
-  avatarUrl: string | null;
-}
-
-export type WorkspaceInvitationStatus = 'pending' | 'accepted' | 'revoked' | 'expired';
-
-/** A pending or resolved invitation for someone to join a workspace. */
-export interface WorkspaceInvitationDto {
-  id: string;
-  workspaceId: string;
-  email: string;
-  /** Role the invitee is granted on acceptance (default `MEMBER`). */
-  roleKey: string;
-  status: WorkspaceInvitationStatus;
-  /** Display prefix of the invitation token (never the raw secret). */
-  tokenPrefix: string;
-  expiresAt: string;
-  createdAt: string;
-}
-
-export interface InviteWorkspaceMemberBody {
-  email: string;
-  /**
-   * Defaults to `MEMBER` when omitted. Free-form wire type, but a `MANAGER`
-   * actor is server-capped to inviting at most `MANAGER` — it may never grant
-   * `ADMIN`.
-   */
-  roleKey?: string;
-}
-
-/**
- * Result of a successful invite. `acceptUrl` is only present when no email
- * provider is configured (`RESEND_API_KEY` unset — the local/self-hosted
- * default): the admin must share the link manually since no invite email was
- * sent. When an email was sent, `acceptUrl` is omitted — the raw token never
- * otherwise leaves the server.
- */
-export interface InviteWorkspaceMemberResultDto {
-  invitation: WorkspaceInvitationDto;
-  acceptUrl?: string;
-}
-
-export interface AcceptWorkspaceInvitationBody {
-  /** The raw invitation token from the emailed accept link. */
-  token: string;
-}
-
-/**
- * A `MANAGER` actor is server-capped to targets/roles at or below `MANAGER`: it
- * may neither grant `ADMIN` nor demote/remove an existing `ADMIN`.
- */
-export interface UpdateWorkspaceMemberRoleBody {
-  roleKey: 'ADMIN' | 'MANAGER' | 'MEMBER';
-}
-
-export interface ProjectDto {
-  id: string;
-  workspaceId: string;
-  slug: string;
-  name: string;
-  description: string | null;
-  /** Optional hex color stored in project settings for UI display. */
-  color: string | null;
-  /**
-   * Project-configured base/parent branch for mission branches (stored in project
-   * settings). `null` means not configured — callers fall back to `main`. This is
-   * both the branch missions are cut from and the parent that "Merge with parent"
-   * advances.
-   */
-  defaultBranch: string | null;
-  status: ProjectLifecycle;
-  createdAt: string;
-  updatedAt: string;
-  revision: number;
-  /** Count of non-deleted missions (read-side aggregate). */
-  missionCount: number;
-  /**
-   * 1-based sidebar ordering, unique within the workspace. Renumbered
-   * densely (1, 2, 3, …) whenever the workspace's projects are reordered.
-   */
-  position: number;
-  /**
-   * Ordered shell command lines run in the agent's launch environment after the
-   * terminal enters the working directory and exports the launch env, but before
-   * the agent process starts (stored under `overlord.preLaunchCommands` in
-   * project settings; `[]` when none). Each line may reference launch context
-   * with `{VAR_NAME}` placeholders (e.g. `{OVERLORD_PROJECT_RESOURCES_PATHS}`)
-   * that the launch flow substitutes; unknown placeholders are left verbatim.
-   * The generic hook for project-specific launch preparation — e.g. granting an
-   * agent pod extra file access before the agent runs.
-   */
-  preLaunchCommands: string[];
-  /**
-   * User-defined environment variables exported into the agent's launch
-   * environment before the agent (and the pre-launch commands) run (stored under
-   * `overlord.launchEnvVars` in project settings; `{}` when none). Each value may
-   * reference launch context with `{VAR_NAME}` placeholders (e.g.
-   * `AGENT_POD_EXTRA_ALLOWED_PATHS={OVERLORD_PROJECT_RESOURCES_PATHS}`) that the
-   * launch flow substitutes; unknown placeholders are left verbatim.
-   */
-  launchEnvVars: Record<string, string>;
-}
-
-/**
- * Reorders every non-deleted project in the workspace (active and archived
- * alike, so archived projects keep a stable position if reactivated).
- * `orderedProjectIds` lists project ids top-to-bottom after the move and
- * must include every non-deleted project exactly once.
- */
-export interface ReorderProjectsBody {
-  orderedProjectIds: string[];
-}
-
-export interface ProjectStatusDto {
-  id: string;
-  workspaceId: string;
-  projectId: string;
-  key: string;
-  name: string;
-  type: StatusType;
-  position: number;
-  isDefault: boolean;
-  isTerminal: boolean;
-}
-
-export interface CreateProjectStatusBody {
-  name: string;
-  type: StatusType;
-  /** When true, clears the previous default. Only draft-type statuses may be default. */
-  isDefault?: boolean;
-}
-
-export interface UpdateProjectStatusBody {
-  name?: string;
-  /** When true, clears the previous default. Only draft-type statuses may be default. */
-  isDefault?: boolean;
-}
-
-/**
- * Reorders every active status in the project. `orderedStatusIds` lists status ids
- * top-to-bottom after the move and must include every active status exactly once.
- */
-export interface ReorderProjectStatusesBody {
-  orderedStatusIds: string[];
-}
-
+/** The wire type is wider: `ProjectResourceDto.type` is a string (generated; schema-disagreements P4). */
 export type ProjectResourceType = 'local_directory' | 'remote_directory' | 'git' | 'source_bundle';
-export type ProjectResourceStatus = 'active' | 'missing' | 'archived';
+export type ProjectResourceStatus = ProjectResourceDto['status'];
 
-/**
- * Read vs read & write permission for a logical project resource (coo:368).
- *
- * - `read_write` — full functionality (the historical default): offered in the
- *   resource picker, writes `.overlord/project.json` when linked, and included in
- *   the resource paths env. Primary resources are always `read_write`.
- * - `read` — reference resource: NOT offered in the resource picker and does NOT
- *   write `.overlord/project.json`, but IS still included in the resource paths
- *   env (file-path sources only; URL/git sources contribute no path).
- */
-export type ProjectResourceAccessMode = 'read' | 'read_write';
+export type TargetResourceObservationInput = ReportResourceObservationsBody['observations'][number];
 
-/** A target-specific (or global) way to materialize a logical project resource. */
-export interface ProjectResourceSourceDto {
-  id: string;
-  executionTargetId: string | null;
-  sourceKind: string;
-  descriptor: Record<string, unknown>;
-  /** Project-owned per-agent defaults used when an objective has no explicit override. */
-  launchDefaults?: Record<string, AgentLaunchConfigDto>;
-  observedRevision: string | null;
-  observedContentDigest: string | null;
-}
+export type RecordTargetResourceObservationsBody = ReportResourceObservationsBody;
 
-/** Replaces the per-agent launch defaults stored on one resource source. */
-export interface UpdateProjectResourceSourceBody {
-  launchDefaults: Record<string, AgentLaunchConfigDto>;
-}
+export type RecordTargetResourceObservationsResult = RecordedObservationsDto;
 
-export interface CreateProjectResourceBody {
-  directoryPath?: string;
-  /** Git URL used to create a project-global `git` source. */
-  sourceUrl?: string;
-  resourceKey?: string | null;
-  label?: string | null;
-  isPrimary?: boolean;
-  executionTargetId?: string | null;
-  /**
-   * Read vs read & write permission. Omitted defaults to `read_write` for a
-   * primary resource and `read` for a non-primary one. A primary resource is
-   * always coerced to `read_write`.
-   */
-  accessMode?: ProjectResourceAccessMode;
-}
+export type MissionBranchObservationInput =
+  ReportMissionBranchObservationsBody['observations'][number];
 
-export interface UpdateProjectResourceBody {
-  resourceKey?: string | null;
-  isPrimary?: boolean;
-  /** A primary resource is always coerced to `read_write`. */
-  accessMode?: ProjectResourceAccessMode;
-}
-
-export interface ProjectResourceDto {
-  id: string;
-  workspaceId: string;
-  projectId: string;
-  executionTargetId: string | null;
-  resourceKey: string;
-  type: ProjectResourceType;
-  label: string | null;
-  path: string;
-  isPrimary: boolean;
-  /** Read vs read & write permission (coo:368). Primary resources are `read_write`. */
-  accessMode: ProjectResourceAccessMode;
-  status: ProjectResourceStatus;
-  /** When the linked target last reported availability for this resource. */
-  observedAt?: string | null;
-  /** Present when `observedAt` came from a client writeback. */
-  observationSource?: 'client' | null;
-  createdAt: string;
-  updatedAt: string;
-  revision: number;
-  /** All materialization descriptors for this logical resource. */
-  sources: ProjectResourceSourceDto[];
-}
-
-export type TargetObservationState =
-  | 'available'
-  | 'missing'
-  | 'unreachable'
-  | 'permission_denied'
-  | 'not_git_repository'
-  | 'unknown';
-
-export interface TargetResourceObservationInput {
-  resourceId: string;
-  state: TargetObservationState;
-  gitRoot?: string | null;
-  branch?: string | null;
-  commit?: string | null;
-  observedAt: string;
-}
-
-export interface RecordTargetResourceObservationsBody {
-  observations: TargetResourceObservationInput[];
-}
-
-export interface RecordTargetResourceObservationsResult {
-  recorded: number;
-}
-
-export interface MissionBranchObservationInput {
-  missionId: string;
-  resourceKey: string;
-  status: Exclude<MissionBranchStatus, 'pending'>;
-  dirty: boolean;
-  worktreePath?: string | null;
-  observedAt: string;
-}
-
-export interface RecordMissionBranchObservationsBody {
-  observations: MissionBranchObservationInput[];
-}
+export type RecordMissionBranchObservationsBody = ReportMissionBranchObservationsBody;
 
 export type RecordMissionBranchObservationsResult = RecordTargetResourceObservationsResult;
 
-export type RepositoryEntryType = 'file' | 'directory';
+export type RepositoryEntryType = RepositoryEntryDto['type'];
 
-export interface RepositoryEntryDto {
-  path: string;
-  name: string;
-  type: RepositoryEntryType;
-  parentPath: string | null;
-  depth: number;
-}
+export type ProjectRepositoryStatus = ProjectRepositoryDto['status'];
 
-export type ProjectRepositoryStatus =
-  | 'ready'
-  | 'no_resource'
-  | 'not_git_repository'
-  | 'unsupported_resource'
-  | 'unreadable';
-
-export interface ProjectRepositoryDto {
-  projectId: string;
-  executionTargetId: string | null;
-  resource: ProjectResourceDto | null;
-  status: ProjectRepositoryStatus;
-  rootPath: string | null;
-  gitRoot: string | null;
-  branch: string | null;
-  commit: string | null;
-  entries: RepositoryEntryDto[];
-  truncated: boolean;
-  scannedAt: string;
-  message: string | null;
-}
-
-/**
- * Creator-token attribution on a mission (`missions.created_by_token_id` /
- * `created_by_token_label`). `tokenId` is a soft reference: the token row may
- * be revoked, soft-deleted, or gone. The token secret and prefix are never
- * exposed here.
- */
-export interface MissionCreatorTokenDto {
-  tokenId: string;
-  /** `user_tokens.label` as it was when the mission was created. */
-  label: string;
-}
-
-export interface MissionDto {
-  id: string;
-  workspaceId: string;
-  projectId: string;
-  displayId: string;
-  sequenceNumber: number;
-  title: string;
-  statusId: string;
-  statusType: StatusType;
-  /**
-   * Gap-based ordering of the mission within its board column (its
-   * `(projectId, statusId)` group). Lower sorts first. Renumbered densely
-   * (100, 200, 300, …) whenever a column is reordered.
-   */
-  boardPosition: number;
-  priority: MissionPriority | null;
-  /**
-   * `workspace_users.id` of the member this mission is assigned to, or `null`
-   * when unassigned. Matches a `WorkspaceMemberDto.workspaceUserId`.
-   */
-  assignedWorkspaceUserId: string | null;
-  /**
-   * Human-only notes for mission viewers. Never included in agent attach/load
-   * context or protocol prompt assembly.
-   */
-  notes: string | null;
-  /** `schedules.id` this mission repeats on, or `null` when unscheduled. */
-  scheduleId: string | null;
-  /** Computed next due date/time (ISO-8601), or `null` when unscheduled. */
-  dueDatetime: string | null;
-  createdAt: string;
-  updatedAt: string;
-  revision: number;
-  /** Count of non-deleted objectives (read-side aggregate). */
-  objectiveCount: number;
-  /** Count of non-deleted objectives in the `complete` state (read-side aggregate). */
-  completedObjectiveCount: number;
-  /** True when at least one non-deleted objective on this mission is `executing`. */
-  hasExecutingObjective: boolean;
-  /** True when at least one non-deleted objective on this mission is `complete`. */
-  hasCompletedObjective: boolean;
-  /**
-   * True when at least one non-deleted `draft` or `future` objective on this
-   * mission has non-empty instruction text (i.e. work still queued behind a
-   * completed objective).
-   */
-  hasPendingObjectiveWithInstructions: boolean;
-  /**
-   * True when the mission has a blocking question (an `ask` mission event) that
-   * was raised more recently than the mission was last opened. Drives the mission
-   * card's orange blocking-question indicator; clears once the mission is opened
-   * (see `mission_status_seen`).
-   */
-  hasUnseenBlockingQuestion: boolean;
-  /**
-   * True when the mission was moved back into an execute-type status from
-   * review/complete/blocked more recently than the user last opened it. Drives the
-   * mission card's returned-to-execute indicator; clears once the mission is
-   * opened (see `mission_status_seen`).
-   */
-  hasUnseenReturnedToExecute: boolean;
-  /**
-   * When true, two objectives on this mission may execute at once if they use
-   * different `resource_key`s. Default false: launching a sibling 409s until
-   * the active one parks. Same-resource pairs stay serial even when true.
-   */
-  allowParallelObjectives: boolean;
-  /**
-   * `objectives.resource_key` on the mission's current `draft` objective, or
-   * `null` when the draft inherits the project primary resource.
-   */
-  draftObjectiveResourceKey: string | null;
-  /** Tags assigned to this mission, resolved from its project's `project_tags`. */
-  tags: ProjectTagDto[];
-  /**
-   * Actor class that authored this row. Non-optional: rows written before
-   * creation provenance existed report `'human'`, so no client needs a null
-   * branch. See `CreatedByKind`.
-   */
-  createdByKind: CreatedByKind;
-  /**
-   * Connector/agent identifier that authored it (`claude-code`, `hosted-mcp`),
-   * or `null` when a human or automation did.
-   */
-  createdByAgent: string | null;
-  /**
-   * `workspace_users.id` of the member the authoring actor acted as, or on
-   * behalf of — for an agent row, the human behind the token it used.
-   */
-  createdByWorkspaceUserId: string | null;
-  /**
-   * The `USER_TOKEN` whose direct `out_` bearer request created this mission
-   * (REST, protocol `create`, hosted MCP), or `null` for a browser session,
-   * loopback, `sess_` session call, scheduled duplicate, or any other
-   * system-generated row. Read-only and server-stamped (contract v151): never
-   * accepted from a request body, never copied to a duplicate, and `label` is a
-   * snapshot that survives token rename, revoke, and soft-delete. This is the
-   * "Created via token" display; `createdByKind` keeps its existing value.
-   */
-  createdByToken: MissionCreatorTokenDto | null;
-  /**
-   * Every non-deleted objective on this mission, ordered by `position`, present
-   * only when the caller opted in (`GET /api/projects/:id/missions?includeObjectives=1`).
-   * Omitted otherwise — clients that need objective bodies for a whole board
-   * (for example the mobile chat feed, which renders one message per objective)
-   * should ask for them here instead of issuing one
-   * `GET /api/missions/:id/objectives` per mission.
-   */
-  objectives?: ObjectiveDto[];
-}
-
-/** Full-text Compose projection; identity is the objective, never its text or position. */
-export interface ObjectiveTranscriptItemDto {
-  id: string;
-  workspaceId: string;
-  projectId: string;
-  missionId: string;
-  missionDisplayId: string;
-  missionTitle: string;
-  missionRevision: number;
-  statusType: StatusType;
-  projectName: string;
-  projectColor: string | null;
-  projectRevision: number;
-  title: string | null;
-  instructionText: string;
-  state: ObjectiveState;
-  assignedAgent: string | null;
-  resourceKey: string | null;
-  createdByKind: CreatedByKind;
-  createdByAgent: string | null;
-  createdByWorkspaceUserId: string | null;
-  createdAt: string;
-  updatedAt: string;
-  revision: number;
-}
-
-export interface ObjectiveTranscriptPageDto {
-  items: ObjectiveTranscriptItemDto[];
-  nextBefore: string | null;
-  /** Continue ascending new-create reads, including when there is no further page yet. */
-  nextAfter: string | null;
-  newestCursor: string | null;
-  hasMore: boolean;
-}
-
-export interface ObjectiveDto {
-  id: string;
-  workspaceId: string;
-  projectId: string;
-  missionId: string;
-  position: number;
-  title: string | null;
-  instructionText: string;
-  state: ObjectiveState;
-  /**
-   * @deprecated Queue membership is authoritative. Use `queueEntry` to inspect
-   * the objective's live Run Queue state; this compatibility field is derived
-   * from it and legacy storage writes retire in the next release.
-   */
-  autoAdvance: boolean;
-  /** Live Run Queue membership. `autoAdvance` is derived from this for compatibility. */
-  queueEntry?: ObjectiveRunQueueEntryDto | null;
-  assignedAgent: string | null;
-  model: string | null;
-  reasoningEffort: string | null;
-  createdAt: string;
-  updatedAt: string;
-  /**
-   * When the objective first entered `launching`. Null until it has been
-   * launched. First-wins: a re-launch never rewrites it.
-   */
-  launchedAt: string | null;
-  /**
-   * When the objective first entered `executing` (an agent attached).
-   * Null until then. First-wins: re-attaching after delivery keeps the original.
-   */
-  startedAt: string | null;
-  /** When the objective reached `complete`. Null until then. */
-  completedAt: string | null;
-  /**
-   * When the objective was last set back to `draft` after it had already
-   * executed (`executing`, `pending_delivery`, or `complete`). Null until the
-   * first reopen. Last-wins, so it always marks where the latest run begins:
-   * deliveries, terminal sessions, and file changes stamped at or after it
-   * belong to that run, earlier rows to previous runs. A post-delivery
-   * re-attach is not a reopen (contract v133).
-   */
-  reopenedAt: string | null;
-  revision: number;
-  /** Native harness session/resume ID from the objective's latest agent session, when captured. */
-  externalSessionId: string | null;
-  /**
-   * Stable per-mission key; combined with the parent mission display id as
-   * `{mission.displayId}.{displayKey}` (e.g. `coo:756.k7xm`). Never encodes
-   * `position`. Persisted on `objectives.display_key`.
-   */
-  displayKey: string;
-  /**
-   * Computed public id `{mission.displayId}.{displayKey}`. Not stored as its
-   * own column — follows the parent mission display id at read time.
-   */
-  displayId: string;
-  /**
-   * The branch this objective actually ran on, recorded by the runner at
-   * branch-prepared time. `null` until the objective has been launched with a
-   * prepared branch (or when worktree/branch automation is disabled).
-   */
-  branch: string | null;
-  /** Logical project resource this objective runs in; null inherits the primary. */
-  resourceKey: string | null;
-  /**
-   * Actor class that authored this objective. Independent of its mission's:
-   * an agent can add objectives to a mission a human filed, and vice versa.
-   * Non-optional; pre-provenance rows report `'human'`.
-   */
-  createdByKind: CreatedByKind;
-  /** Connector/agent identifier that authored it, or `null`. */
-  createdByAgent: string | null;
-  /** `workspace_users.id` the authoring actor acted as, or on behalf of. */
-  createdByWorkspaceUserId: string | null;
-  /** Explicit per-objective launch overrides keyed by target id (`*` means any target), then agent. */
-  launchConfigOverrides?: Record<string, Record<string, AgentLaunchConfigDto>>;
-}
-
-export type RunQueueEntryState = 'waiting' | 'blocked' | 'dispatched' | 'running';
-/**
- * Why a `waiting` entry is not eligible right now. All three clear on their own
- * and are re-evaluated by the dispatcher every tick — unlike `blockedReason`,
- * which names something a human must fix. `null` on a `waiting` entry means it
- * is simply next in line.
- */
-export type RunQueueWaitingReason = 'mission_busy' | 'resource_disconnected' | 'retry_pending';
-export interface ObjectiveRunQueueEntryDto {
-  id: string;
-  queueId: string;
-  queueName: string;
-  position: number;
-  state: RunQueueEntryState;
-  blockedReason: string | null;
-  /** Set only while `state === 'waiting'`; see {@link RunQueueWaitingReason}. */
-  waitingReason?: RunQueueWaitingReason | null;
-  /** Objective this entry is queued behind when `waitingReason === 'mission_busy'`. */
-  waitingOnObjectiveId?: string | null;
-  /** Display id of {@link waitingOnObjectiveId}, for UI copy that names the sibling. */
-  waitingOnObjectiveDisplayId?: string | null;
-  /** Dispatch attempts already spent on this entry; the ceiling is 3. */
-  attemptCount?: number;
-  precededBy: {
-    objectiveDisplayId: string;
-    objectiveTitle: string | null;
-    missionTitle: string;
-  } | null;
-}
-export interface RunQueueEntryDto {
-  id: string;
-  queueId: string;
-  position: number;
-  state: RunQueueEntryState;
-  blockedReason: string | null;
-  /** Set only while `state === 'waiting'`; see {@link RunQueueWaitingReason}. */
-  waitingReason?: RunQueueWaitingReason | null;
-  /** Objective this entry is queued behind when `waitingReason === 'mission_busy'`. */
-  waitingOnObjectiveId?: string | null;
-  /** Display id of {@link waitingOnObjectiveId}, for UI copy that names the sibling. */
-  waitingOnObjectiveDisplayId?: string | null;
-  /** Dispatch attempts already spent on this entry; the ceiling is 3. */
-  attemptCount?: number;
-  objectiveId: string;
-  objectiveDisplayId: string;
-  objectiveTitle: string | null;
-  missionId: string;
-  missionDisplayId: string;
-  missionTitle: string;
-  assignedAgent: string | null;
-  resourceKey: string | null;
-  enqueuedAt: string;
-  executionRequestId: string | null;
-  /** Safe state diagnostics for the request created by this queue entry. */
-  executionRequest: {
-    status: string;
-    lastError: string | null;
-    claimedByDeviceId: string | null;
-    claimedByExecutionTargetId: string | null;
-    executionTargetId: string | null;
-    createdAt: string;
-    claimedAt: string | null;
-    launchStartedAt: string | null;
-    launchCompletedAt: string | null;
-    updatedAt: string;
-  } | null;
-  /** A detected impossible queue/request state pair, if any. */
-  diagnosticCode: 'terminal_request_dispatched' | 'running_without_live_request' | null;
-}
-export interface RunQueueDto {
-  id: string;
-  projectId: string;
-  name: string;
-  isDefault: boolean;
-  /**
-   * Mission this queue belongs to, or `null` for a free-standing project queue.
-   * A mission queue is created lazily the first time one of that mission's
-   * objectives is queued without an explicit destination. Every non-default
-   * queue, mission-scoped or not, is retired once it has held an entry and its
-   * last live entry leaves; a queue that was never used is kept.
-   */
-  missionId: string | null;
-  /** Display id of {@link missionId}, when the queue is mission-scoped. */
-  missionDisplayId: string | null;
-  paused: boolean;
-  position: number;
-  entries: RunQueueEntryDto[];
-  running: RunQueueEntryDto | null;
-}
-export interface ProjectRunQueuesDto {
-  projectId: string;
-  queues: RunQueueDto[];
-}
-
+/** The wire type is wider: `ArtifactDto.type` is a string (generated). */
 export type ArtifactType =
   | 'test_results'
   | 'next_steps'
@@ -962,107 +522,6 @@ export type ArtifactType =
   | 'url'
   | 'decision'
   | 'migration';
-
-export interface ArtifactDto {
-  id: string;
-  workspaceId: string;
-  projectId: string;
-  missionId: string;
-  objectiveId: string | null;
-  sessionId: string | null;
-  deliveryId: string | null;
-  /** Open vocabulary: `test_results`, `next_steps`, `note`, `url`, `decision`, `migration`. */
-  type: ArtifactType | string;
-  label: string;
-  contentText: string | null;
-  contentJson: unknown | null;
-  externalUrl: string | null;
-  createdAt: string;
-  updatedAt: string;
-  revision: number;
-}
-
-/** Editable human-facing artifact fields. Delivery provenance and structured content remain immutable. */
-export interface UpdateArtifactBody {
-  expectedRevision: number;
-  label?: string;
-  contentText?: string | null;
-  externalUrl?: string | null;
-}
-
-/**
- * One durable shared-context entry for a mission (`shared_context_entries`).
- * Survives across objectives; agents write via Protocol `write-context`, humans
- * via REST `PUT /api/missions/:id/context`.
- */
-export interface SharedContextEntryDto {
-  id: string;
-  missionId: string;
-  key: string;
-  /** Parsed JSON when `valueKind` is `json`, otherwise the raw string. */
-  value: unknown;
-  valueKind: 'string' | 'json';
-  tags: string[];
-  updatedAt: string;
-  revision: number;
-}
-
-/** Upsert one shared-context entry by mission + key (Protocol `write-context` equivalent). */
-export interface UpsertSharedContextBody {
-  key: string;
-  value: unknown;
-}
-
-/** Create a mission artifact without a delivery (mid-turn / agent-published). */
-export interface CreateArtifactBody {
-  type: ArtifactType | string;
-  label: string;
-  contentText?: string | null;
-  externalUrl?: string | null;
-  /** Optional objective provenance when creating outside a live session. */
-  objectiveId?: string | null;
-  /** Optional session provenance (UUID). Protocol may resolve a session key instead. */
-  sessionId?: string | null;
-  /**
-   * Optional live session key. When provided, stamps `sessionId` and `objectiveId`
-   * from that session (overrides explicit ids). Used by Protocol/MCP.
-   */
-  sessionKey?: string | null;
-}
-
-/**
- * The agent session a mission was created from, resolved from the soft
- * `missions.created_by_session_id` reference. Detail-only: it costs a
- * `LEFT JOIN` and is worth paying once per mission page, never per board row.
- *
- * `null` when the mission was not agent-created, or when the referenced session
- * has since been deleted — the reference carries no foreign key precisely so a
- * dangling provenance pointer can never block a delete.
- */
-export interface MissionCreatedFromDto {
-  /** `agent_sessions.id` that authored the mission. */
-  sessionId: string;
-  /** The mission the authoring session was working on. */
-  missionId: string;
-  /** That mission's human-readable identifier, e.g. `coo:668`. */
-  missionDisplayId: string;
-  /** Connector identifier of the authoring session. */
-  agentIdentifier: string;
-}
-
-export interface MissionDetailDto extends MissionDto {
-  objectives: ObjectiveDto[];
-  /** The statuses of this mission's project. */
-  statuses: ProjectStatusDto[];
-  /** Active (queued/claimed/launching) execution requests for this mission's objectives. */
-  executionRequests: ExecutionRequestDto[];
-  /** Persistent terminal sessions are independent from mission and agent-session state. */
-  terminalSessions: TerminalSessionDto[];
-  /** Read-only branch/worktree metadata derived from `missions.active_branch`. */
-  branch: MissionBranchDto | null;
-  /** What the authoring agent was working on when it filed this mission. */
-  createdFrom: MissionCreatedFromDto | null;
-}
 
 // ---- Mission scheduling ----------------------------------------------------
 //
@@ -1072,174 +531,14 @@ export interface MissionDetailDto extends MissionDto {
 // status, the server spawns a duplicate mission with the next occurrence (see
 // `planning/feature-plans/mission-scheduling-engine.md`).
 
-export type SchedulePeriodType = 'd' | 'w' | 'm';
-
-export interface ScheduleWeekDayDto {
-  /** 0 (Sunday) through 6 (Saturday). */
-  dayNum: number;
-  /** `HH:mm` or `HH:mm:ss`, local to `timezone`. */
-  times: string[];
-}
-
-export interface ScheduleDto {
-  id: string;
-  workspaceId: string;
-  name: string | null;
-  periodType: SchedulePeriodType;
-  /** Recur every N periods (days/weeks/months), N >= 1. */
-  periodInterval: number;
-  /** Monthly-by-week rule: 1-5 (used with `daysOfWeek`). */
-  weeksOfMonth: number[];
-  /** Monthly-by-day rule: 1-31, or 32 meaning "last day of month". */
-  daysOfMonth: number[];
-  daysOfWeek: ScheduleWeekDayDto[];
-  /** IANA timezone (e.g. `America/Los_Angeles`); defaults from the browser at creation. */
-  timezone: string;
-  /** Optional recurrence anchor (ISO-8601); becomes the primary anchor when set. */
-  startDate: string | null;
-  /**
-   * Project status key the duplicate mission lands in on regeneration. `null`
-   * falls back to the mission project's default status.
-   */
-  nextStatusKey: string | null;
-  createdAt: string;
-  updatedAt: string;
-  revision: number;
-}
-
-/** Request body for creating/updating a mission's schedule; mirrors `ScheduleDto` minus server-assigned fields. */
-export interface ScheduleInput {
-  name?: string | null;
-  periodType: SchedulePeriodType;
-  periodInterval: number;
-  weeksOfMonth?: number[];
-  daysOfMonth?: number[];
-  daysOfWeek?: ScheduleWeekDayDto[];
-  timezone: string;
-  startDate?: string | null;
-  nextStatusKey?: string | null;
-}
-
-/** `GET /api/missions/:id/schedule` and the `upsert`/`preview` response shape. */
-export interface MissionScheduleDto {
-  dueDatetime: string | null;
-  schedule: ScheduleDto | null;
-}
-
-/** `POST /api/missions/schedule/preview` request body. */
-export interface PreviewScheduleBody {
-  schedule: ScheduleInput;
-  /** Current due date to use as the recurrence anchor, when previewing a re-schedule. */
-  itemDueDatetime?: string | null;
-}
-
-// `pending`         — no branch prepared yet (planner-predicted name shown).
-// `created`         — branch cut from base for use, but not yet pushed to a remote.
-// `published`       — branch pushed to `origin` (a matching remote ref exists), not merged.
-// `merged_unpushed` — branch merged into the *local* base, but that base has not
-//                     been pushed to `origin` yet (the gap between merge Action A
-//                     and the push Action B).
-// `merged`          — branch's commits are contained in the *remote* base (`origin/<base>`).
-export type MissionBranchStatus =
-  | 'pending'
-  | 'created'
-  | 'published'
-  | 'merged_unpushed'
-  | 'merged';
-
-// Per-mission override of the workspace worktree-automation setting.
-// `'worktree'` — prepare a branch + worktree for this mission (full automation
-//   behavior) even when the workspace setting is off.
-// `'branch'`   — prepare a branch for this mission without a dedicated worktree
-//   (the branch is checked out in the project's primary repo).
-// `null` (the absence of an override) means "inherit the workspace setting".
-export type MissionWorktreePreference = 'worktree' | 'branch';
-
-export interface MissionBranchDto {
-  name: string;
-  baseBranch: string | null;
-  /**
-   * Where the branch is checked out. Before any observation this is the
-   * planner's canonical worktree path. Once a local target has observed the
-   * branch (`observedAt` set) it is wherever git actually has it checked out —
-   * the canonical worktree, the primary repo, or another linked worktree — and
-   * `null` means the branch is checked out nowhere on that device. Branch
-   * actions and the Runner Layer resolve the checkout the same way: the
-   * recorded worktree when it still exists, else any existing checkout of the
-   * branch, else (runner only) a fresh checkout.
-   */
-  worktreePath: string | null;
-  status: MissionBranchStatus;
-  /**
-   * Whether the branch's worktree has uncommitted changes (`git status
-   * --porcelain` is non-empty in the worktree). `false` when no worktree exists
-   * or the branch is still `pending`. The mission panel uses this to require a
-   * commit before the "Update from parent & merge" action is offered.
-   */
-  dirty: boolean;
-  /**
-   * Whether the local branch tip is ahead of `origin/<name>`. Populated when git
-   * state is observed through the desktop bridge; used to offer re-publish after
-   * further commits land on an already-published branch.
-   */
-  hasUnpushedCommits?: boolean;
-  /**
-   * A user-pinned branch chosen in the mission panel to override the planner's
-   * default selection. When set, the next launch prepares/uses this branch
-   * instead of `name`. `null` means the system chooses automatically. The
-   * Runner Layer reads this to honor the override at branch-preparation time.
-   */
-  overrideBranch: string | null;
-  /**
-   * Whether the acting user's worktree/branch automation default
-   * (`launchSessionDefaults.worktreeBranchAutomationEnabled`) is on. Surfaced
-   * here so the mission panel and the Runner Layer can resolve the mission's
-   * effective branch behavior without a separate launch-settings read.
-   */
-  worktreeAutomationEnabled: boolean;
-  /**
-   * The mission's per-mission override of the user default, or `null` to
-   * inherit it. See `MissionWorktreePreference`. Lets a user opt an individual
-   * mission into a branch/worktree while automation is globally off (and vice
-   * versa). The Runner Layer reads this to decide branch preparation.
-   */
-  worktreePreference: MissionWorktreePreference | null;
-  /**
-   * Whether the mission's next launch will prepare a branch at all, resolving
-   * `worktreePreference` against `worktreeAutomationEnabled`. `false` means the
-   * mission works directly off `baseBranch`.
-   */
-  willPrepareBranch: boolean;
-  /**
-   * Whether that branch preparation will create a dedicated worktree (vs. a
-   * branch checked out in the primary repo). Only meaningful when
-   * `willPrepareBranch` is true.
-   */
-  willUseWorktree: boolean;
-  /**
-   * When the branch metadata was last observed from a local execution target.
-   * Populated by the web client when git state is read through the desktop bridge.
-   */
-  observedAt?: string | null;
-  /** Whether `observedAt` came from the desktop bridge (`client`) or the REST server (`server`). */
-  observationSource?: 'client' | 'server' | null;
-}
-
-/**
- * Available branches in a mission project's primary repository, for the mission
- * panel's branch selector. `current` is the branch the mission is (or will be)
- * operating on. Returned by `GET /api/missions/:id/branches`.
- */
-export interface MissionBranchListDto {
-  branches: string[];
-  current: string | null;
-}
+export type SchedulePeriodType = ScheduleDto['periodType'];
 
 // ---- Mission activity feed ----
 
 /**
  * Closed vocabulary for `mission_events.type` (see the schema contract). These
  * are the workflow events surfaced in the mission panel's live activity feed.
+ * The wire type is wider: `MissionEventDto.type` is a string (generated).
  */
 export type MissionEventType =
   | 'update'
@@ -1255,139 +554,12 @@ export type MissionEventType =
   | 'awaiting_approval'
   | 'status_change';
 
-export interface MissionEventActorDto {
-  workspaceUserId: string;
-  displayName: string;
-  handle: string | null;
-  avatarUrl: string | null;
-}
-
-/**
- * A single entry in a mission's workflow history (`mission_events`). Append-only;
- * ordered oldest-first by `createdAt`. The SPA renders these as a realtime feed
- * inside the mission panel, refetching whenever the change feed reports activity.
- */
-export interface MissionEventDto {
-  id: string;
-  missionId: string;
-  objectiveId: string | null;
-  /** Closed vocabulary; unknown future values render with a neutral fallback. */
-  type: MissionEventType | string;
-  /** Optional workflow phase recorded with the event (`attach`, `execute`, …). */
-  phase: string | null;
-  summary: string;
-  /** Open vocabulary describing what produced the event (`agent`, `cli`, …). */
-  source: string;
-  actorWorkspaceUserId: string | null;
-  actor: MissionEventActorDto | null;
-  /** Optional external link associated with the event. */
-  externalUrl: string | null;
-  /** Present only for a delivery event; identifies its immutable delivery record. */
-  deliveryId?: string | null;
-  createdAt: string;
-}
-
 // ---- Agent Session Exchange human surfaces (coo:563, contract v53) --------
 
-/**
- * The kinds of answerable request a session can raise. One model rather than one shape per
- * native hook — a permission is a *kind* of request, not its own subsystem.
- */
-export type AgentRequestKind = 'question' | 'permission' | 'choice' | 'retry';
-
-/**
- * Terminal states matter to the UI as much as `open` does: a card that stays answerable after
- * the decision left for the terminal is exactly the failure this vocabulary exists to prevent.
- */
-export type AgentRequestStatus =
-  | 'open'
-  | 'resolved'
-  | 'released_to_terminal'
-  | 'expired'
-  | 'cancelled';
-
 /** A discrete answer a client may return by id. Never rendered when the adapter cannot apply it. */
-export interface AgentRequestOptionDto {
-  optionId: string;
-  label: string;
-  /** Open vocabulary describing what the option means to the harness (`allow_once`, …). */
-  kind: string;
-}
+export type AgentRequestOptionDto = AgentRequestOption;
 
-export interface AgentRequestDto {
-  id: string;
-  channelId: string;
-  missionId: string | null;
-  objectiveId: string | null;
-  kind: AgentRequestKind | string;
-  /** Bounded, redacted card text produced by the pure formatters — never a raw native payload. */
-  summary: string;
-  options: AgentRequestOptionDto[];
-  allowsFreeText: boolean;
-  status: AgentRequestStatus | string;
-  resolution: Record<string, unknown> | null;
-  /** Required by `POST /:id/resolve`; a stale card loses the CAS instead of overwriting. */
-  revision: number;
-  /** End of the presence-sized remote decision window, after which the terminal owns it. */
-  windowExpiresAt: string | null;
-  releasedReason: string | null;
-  /** Whether a resolution was merely emitted or actually observed to apply in the harness. */
-  applicationState: string;
-  /** Whether an answer can be delivered to the session's Latch conversation. */
-  delivery: {
-    mode: 'latch' | 'read_only';
-    reason:
-      | 'no_latch_session'
-      | 'latch_session_exited'
-      | 'target_offline'
-      | 'request_closed'
-      | null;
-    state: 'emitted' | 'applied' | 'not_applied' | 'unknown' | null;
-    observedAt: string | null;
-  };
-  resolvedAt: string | null;
-  createdAt: string;
-}
-
-/** Honest inject states. `emitted` is not `acknowledged`, and neither one is "the agent read it". */
-export interface AgentSessionInputDto {
-  id: string;
-  kind: string;
-  body: string;
-  status: string;
-  deliveryOutcome: string | null;
-  /** Server-authored label; renders "Queued (turn boundary)" where that is the truth. */
-  deliveryLabel: string;
-  attemptCount?: number;
-  lastErrorCode?: string | null;
-  emittedAt?: string | null;
-  acknowledgedAt?: string | null;
-  createdAt: string;
-  revision?: number;
-}
-
-/**
- * The live channel's effective capability snapshot. Clients gate controls on this — never on
- * the static connector catalog and never on the agent identifier.
- */
-export interface AgentSessionChannelSnapshotDto {
-  id: string;
-  /** `preparing` | `online` | `degraded` | `ended` | `lost`. */
-  state: string;
-  agentIdentifier: string | null;
-  adapterKey: string | null;
-  capabilities: Record<string, unknown>;
-  lastHeartbeatAt: string | null;
-  endedAt: string | null;
-  endReason: string | null;
-}
-
-export interface AgentSessionInputsResponse {
-  /** Set only while the channel can still be addressed; null once it ended or was lost. */
-  liveChannelId: string | null;
-  liveChannel: AgentSessionChannelSnapshotDto | null;
-  inputs: AgentSessionInputDto[];
-}
+export type AgentSessionInputsResponse = AgentSessionInputListResponse;
 
 // ---- Delivery reports (coo:364, contract v15) -----------------------------
 
@@ -1397,16 +569,6 @@ export interface AgentSessionInputsResponse {
  * tradeoff.
  */
 export type DeliveryEvidenceSource = 'agent' | 'deterministic_rule';
-
-/** User-facing grouping for a concrete post-delivery action. */
-export type HumanActionCategory =
-  | 'environment'
-  | 'database'
-  | 'deployment'
-  | 'codegen'
-  | 'packaging'
-  | 'external_service'
-  | 'other';
 
 /**
  * Raw agent-provided action evidence accepted in a delivery envelope.
@@ -1439,30 +601,6 @@ export interface TradeoffMadeInputV1 {
   impact?: string;
 }
 
-/** A normalized action with stable provenance for display and later composition. */
-export interface HumanActionV1 extends Required<Pick<HumanActionInputV1, 'action'>> {
-  id: string;
-  reason?: string;
-  category: HumanActionCategory;
-  blocking?: boolean;
-  command?: string;
-  verify?: string;
-  link?: string;
-  source: DeliveryEvidenceSource;
-  sourceRef?: string;
-}
-
-/** A normalized implementation decision with stable provenance. */
-export interface TradeoffMadeV1 {
-  id: string;
-  decision: string;
-  alternativesConsidered: string[];
-  rationale: string;
-  impact?: string;
-  source: Extract<DeliveryEvidenceSource, 'agent'>;
-  sourceRef?: string;
-}
-
 /**
  * Field bounds of an agent-written deferred-work item (contract v166). An item
  * over a bound, a missing or blank field, an unknown key, or a plain string is
@@ -1491,19 +629,6 @@ export interface DeferredWorkInputV1 {
   doneWhen: string;
 }
 
-/**
- * A normalized deferred-work item. `id` is stable and delivery-local:
- * `deferred-work-<index>-<digest>`, where `index` is the zero-based position in
- * the normalized `agentReport.deferredWork` array and `digest` is the first 16
- * hex characters of the SHA-256 of the canonical object, the UTF-8 JSON text of
- * `[title, change, location, doneWhen]` after trimming each field.
- * `presentation.deferredWork` carries a subset of the agent items with the same
- * ids. `contract/delivery-report-v1-fixtures.json` pins the derivation.
- */
-export interface DeferredWorkV1 extends DeferredWorkInputV1 {
-  id: string;
-}
-
 /** Authoritative, agent-supplied delivery facts. Omitted arrays normalize to `[]`. */
 export interface DeliveryAgentReportInputV1 {
   humanActions?: HumanActionInputV1[];
@@ -1513,116 +638,19 @@ export interface DeliveryAgentReportInputV1 {
   assumptions?: string[];
 }
 
-/** Normalized agent evidence persisted with the delivery. */
-export interface DeliveryAgentReportV1 {
-  humanActions: HumanActionV1[];
-  tradeoffsMade: TradeoffMadeV1[];
-  knownRisks: string[];
-  deferredWork: DeferredWorkV1[];
-  assumptions: string[];
-}
-
-/**
- * Read-side delivery presentation. New deliveries start as `pending` (with
- * deterministic content) when a compose job is enqueued; the worker may later
- * set `composed` or `fallback`. Missing or malformed persisted report data is
- * safely synthesized at read time with `deterministic` status.
- */
-export interface DeliveryPresentationV1 {
-  status: 'deterministic' | 'pending' | 'composed' | 'fallback';
-  markdown: string;
-  humanActions: HumanActionV1[];
-  tradeoffsMade: TradeoffMadeV1[];
-  knownRisks: string[];
-  /** The eligible agent deferred-work items, verbatim and in agent order (contract v166). */
-  deferredWork: DeferredWorkV1[];
-  assumptions: string[];
-  generatedBy: 'deterministic' | 'gemini';
-  generatedAt?: string;
-  model?: string;
-}
-
-/** Versioned payload stored below `deliveries.payload_json.deliveryReport`. */
-export interface DeliveryReportPayloadV1 {
-  schemaVersion: 1;
-  agentReport: DeliveryAgentReportV1;
-  /** Bounded non-fatal normalization warnings for advisory agent evidence. */
-  warnings?: string[];
-  presentation: DeliveryPresentationV1;
-}
-
 /** Newest-first page size for mission delivery and file-change evidence reads. */
 export const MISSION_EVIDENCE_LIST_LIMIT = 200;
-
-/**
- * An authorized, normalized delivery record returned from
- * `GET /api/missions/:id/deliveries`. The REST API never exposes the raw
- * persisted payload; missing or malformed report data receives a safe,
- * deterministic V1 projection here.
- */
-export interface DeliveryDto {
-  id: string;
-  missionId: string;
-  objectiveId: string;
-  sessionId: string | null;
-  summary: string;
-  verificationSummary: string | null;
-  followUpNotes: string | null;
-  report: DeliveryReportPayloadV1;
-  deliveredAt: string;
-  agentIdentifier: string | null;
-  modelIdentifier: string | null;
-  /**
-   * One entry per `report.presentation.deferredWork` item, in the same order,
-   * carrying the stable action id the deferred-work resolution routes take and
-   * the operator's current decision (contract v147).
-   */
-  deferredWorkItems: DeliveryDeferredWorkItemDto[];
-}
-
-/**
- * A deferred-work item of one delivery, addressable by the deferred-work
- * resolution routes. `actionId` equals the item's `DeferredWorkV1.id`; the
- * other fields are the agent's text verbatim (contract v166).
- */
-export interface DeliveryDeferredWorkItemDto {
-  actionId: string;
-  title: string;
-  change: string;
-  location: string;
-  doneWhen: string;
-  resolution: HumanActionResolutionDto | null;
-}
 
 // ---- Deferred-work resolutions ----
 
 /** The operator's decision on one deferred-work item of a delivery. */
-export type HumanActionResolutionStatus = 'done' | 'dismissed';
+export type HumanActionResolutionStatus = HumanActionResolutionDto['status'];
 
 /**
  * How a deferred-work item was promoted when it was marked `done` (contract v147):
  * into a new mission, or onto the delivering mission as a future objective.
  */
 export type HumanActionResolutionOutcome = 'mission_created' | 'objective_added';
-
-export interface HumanActionResolutionDto {
-  status: HumanActionResolutionStatus;
-  resolvedAt: string;
-  resolvedByWorkspaceUserId: string | null;
-  /** Set only for a promoted deferred-work item. */
-  outcome: HumanActionResolutionOutcome | null;
-  /** Display id of the mission or objective the promotion created, when known. */
-  outcomeRef: string | null;
-}
-
-/** Body of `PUT /api/deliveries/:deliveryId/deferred-work/:actionId/resolution`. */
-export interface ResolveHumanActionBody {
-  status: HumanActionResolutionStatus;
-  /** Only with `status: 'done'` (contract v147). */
-  outcome?: HumanActionResolutionOutcome;
-  /** Display id of the created mission or objective; requires `outcome`. */
-  outcomeRef?: string;
-}
 
 // ---- Mission summary (contract v166) ----
 //
@@ -1631,147 +659,8 @@ export interface ResolveHumanActionBody {
 // CLI protocol commands do not expose it. The REST routes below are exempt from
 // MCP parity for that reason.
 
-/** Lifecycle of the persisted mission summary row. */
-export type MissionSummaryStatus = 'pending' | 'composed' | 'fallback';
-
 /** Upper bound on `evidence.actions` and on `evidence.sources` in one summary read. */
 export const MISSION_SUMMARY_EVIDENCE_LIMIT = 100;
-
-/** A significant risk kept by the summary composer, attributed to its source delivery. */
-export interface MissionSummaryRiskDto {
-  deliveryId: string;
-  objectiveId: string;
-  /** Original source timestamp; independent of the capped mission delivery feed. */
-  deliveredAt: string;
-  /** The composer's bounded rewrite, or the agent's original risk text. */
-  text: string;
-}
-
-/**
- * A deferred-work suggestion from an eligible current-run delivery, projected
- * at read time from the delivery's `DeferredWorkV1` and its resolution, never
- * copied into the summary row. Dismissed items are omitted. A resolved
- * (promoted) item carries only its identity, title, and resolution.
- */
-export type MissionSummarySuggestionDto = {
-  deliveryId: string;
-  objectiveId: string;
-  /** Original source timestamp, including suggestions from older current-run deliveries. */
-  deliveredAt: string;
-  /** The item's `DeferredWorkV1.id`, accepted by the deferred-work resolution routes. */
-  actionId: string;
-  /** Verbatim agent title in either state. */
-  title: string;
-} & (
-  | { state: 'open'; change: string; location: string; doneWhen: string; resolution: null }
-  | { state: 'resolved'; resolution: HumanActionResolutionDto }
-);
-
-/** The composed mission summary. Model-written parts are `headline`, `summary`, and risk text. */
-export interface MissionSummaryDto {
-  missionId: string;
-  /** Increments on every write of the row, including a pending notification. */
-  revision: number;
-  status: MissionSummaryStatus;
-  /** One sentence. Empty in the first pending shell. */
-  headline: string;
-  /** Markdown, two to five sentences. Empty in the first pending shell. */
-  summary: string;
-  risks: MissionSummaryRiskDto[];
-  /** Display order: newest delivery first, deduped by normalized title. */
-  suggestions: MissionSummarySuggestionDto[];
-  /** The delivery whose compose triggered the current or pending pass; null for any other trigger. */
-  sourceDeliveryId: string | null;
-  generatedBy: 'deterministic' | 'gemini';
-  /** Null in the first pending shell. */
-  generatedAt: string | null;
-  model: string | null;
-}
-
-/**
- * One human action of the latest current-run delivery of an objective. A
- * delivery is current-run when it was delivered at or after its objective's
- * `reopenedAt` and no newer current-run delivery exists for the same objective.
- * Carries every `HumanActionV1` field except `id`, which becomes `actionId`.
- */
-export interface MissionSummaryActionDto extends Omit<HumanActionV1, 'id'> {
-  deliveryId: string;
-  /** May name a deleted objective; clients render it as the unassigned `Delivery` row. */
-  objectiveId: string;
-  actionId: string;
-  deliveredAt: string;
-}
-
-/** The latest current-run delivery of one objective. */
-export interface MissionSummarySourceDto {
-  /** May name a deleted objective; clients render it as the unassigned `Delivery` row. */
-  objectiveId: string;
-  deliveryId: string;
-  deliveredAt: string;
-}
-
-/**
- * Summary evidence selected in the database before any limit, so a busy
- * objective cannot hide another objective's current delivery. Lists are capped
- * at {@link MISSION_SUMMARY_EVIDENCE_LIMIT}; `totals` are pre-cap counts and
- * `truncated` is true when a list was cut. Open agent questions are not here;
- * clients read them from the agent-requests query.
- */
-export interface MissionSummaryEvidenceDto {
-  /** Blocking first, then newest delivery first, then report order. */
-  actions: MissionSummaryActionDto[];
-  /** Newest first, one per objective (including deleted objectives). */
-  sources: MissionSummarySourceDto[];
-  totals: {
-    actions: number;
-    sources: number;
-    /** Every current-run delivery of the mission, for the `from n deliveries` trailer. */
-    currentRunDeliveries: number;
-  };
-  truncated: { actions: boolean; sources: boolean };
-}
-
-/**
- * `GET /api/missions/:id/summary`. `eligible` comes from
- * `missions.summary_enabled`; clients learn eligibility only here, never from
- * `MissionDto`. An eligible mission may have no summary row yet (`summary`
- * null) but always has evidence. `watermark` is the ISO time of the newest
- * evidence item behind this response: the maximum `deliveredAt` of the
- * current-run deliveries it draws on and `createdAt` of the mission's open
- * `question` and `choice` agent requests at read time; null when there is none.
- * `seenAt` is the calling workspace user's stored watermark.
- */
-export type MissionSummaryResponse =
-  | {
-      eligible: false;
-      summary: null;
-      evidence: null;
-      watermark: null;
-      seenAt: null;
-    }
-  | {
-      eligible: true;
-      summary: MissionSummaryDto | null;
-      evidence: MissionSummaryEvidenceDto;
-      watermark: string | null;
-      seenAt: string | null;
-    };
-
-/**
- * Body of `PUT /api/missions/:id/summary/seen`: the `watermark` of a summary
- * response whose evidence the client displayed for two seconds. A value later
- * than the caller's current authorized evidence maximum, or any value on an
- * ineligible mission, is rejected with `invalid_input`. Mission read
- * authorization applies; no entity change is recorded.
- */
-export interface MarkMissionSummarySeenBody {
-  watermark: string;
-}
-
-/** Response of `PUT /api/missions/:id/summary/seen`: the stored value, `max(existing, watermark)`. */
-export interface MissionSummarySeenResponse {
-  seenAt: string;
-}
 
 // ---- Mission file changes ----
 
@@ -1782,32 +671,10 @@ export interface MissionSummarySeenResponse {
  * `null` means historical provenance is unknown and must display as Unknown.
  * Native evidence is never downgraded by a later declaration.
  */
-export type FileChangeSource = 'declared_edit' | 'agent_declared';
-
-/**
- * Compact cumulative objective path evidence. One row per objective + resolved
- * resource + normalized relative path. It is not a Git diff, a delivery-time
- * snapshot, proof of exclusive ownership, or proof that every edit was captured.
- * Clients derive the basename from `filePath`. No per-file prose, VCS status, or
- * window metadata exists on this row.
- */
-export interface FileChangeDto {
-  id: string;
-  missionId: string;
-  objectiveId: string;
-  /** Logical project resource the path belongs to; null when not resolved (e.g. sessionless record-work). */
-  resourceKey: string | null;
-  /** Repository-relative path. */
-  filePath: string;
-  source: FileChangeSource | null;
-  /** Time this path was last observed or declared (`changed_files.last_observed_at`). */
-  observedAt: string;
-  /** Bounded health code of the latest observation, when known. */
-  hookHealth: string | null;
-}
+export type FileChangeSource = NonNullable<FileChangeDto['source']>;
 
 /** Declared binding between a session and the connector's capture hook. Configuration evidence only. */
-export type CaptureBindingState = 'bound' | 'unbound' | 'unknown';
+export type CaptureBindingState = CaptureSessionDto['bindingState'];
 
 /**
  * Bounded sticky capture gap codes that mean "some tool activity could not be
@@ -1823,23 +690,6 @@ export const CAPTURE_GAP_CODES = [
 export type CaptureGapCode = (typeof CAPTURE_GAP_CODES)[number];
 
 export const MAX_CAPTURE_HEALTH_CODES = 16;
-
-/** Per-code first/last aggregate (idempotent under retries); sticky even if finer detail is evicted. */
-export interface CaptureHealthEntryDto {
-  code: string;
-  firstAt: string;
-  lastAt: string;
-}
-
-/** Persisted bounded capture diagnostics for one agent session. */
-export interface CaptureSessionDto {
-  sessionId: string;
-  startedAt: string;
-  bindingState: CaptureBindingState;
-  /** First accepted scoped callback, including harmless reads. Not proof of a successful edit. */
-  callbackObservedAt: string | null;
-  health: CaptureHealthEntryDto[];
-}
 
 /**
  * Objective-level warnings derived across every session of the objective; a
@@ -1866,29 +716,6 @@ export const CAPTURE_WARNING_MESSAGES: Record<CaptureWarningCode, string> = {
 
 /** Hard cap on rows returned by every objective file-change read. */
 export const OBJECTIVE_FILE_CHANGES_LIMIT = 200;
-
-/**
- * Server objective read: Protocol `objective-changes` (`POST
- * /api/protocol/objective-changes`), hosted MCP `overlord_changes`, and REST
- * `GET /api/missions/:id/file-changes?objectiveId=`. Synchronized evidence across
- * every session, resource and device of one objective; it cannot see
- * unsynchronized local rows and never claims to. `total` is the distinct
- * path/resource count before the cap; the objective filter is applied in SQL
- * before count and limit.
- */
-export interface ObjectiveFileChangesDto {
-  scope: 'server_objective';
-  missionId: string;
-  objectiveId: string;
-  items: FileChangeDto[];
-  total: number;
-  limit: number;
-  truncated: boolean;
-  capture: {
-    sessions: CaptureSessionDto[];
-    warnings: CaptureWarningCode[];
-  };
-}
 
 export type LocalFileChangeSyncState = 'synced' | 'pending';
 
@@ -1926,29 +753,6 @@ export interface LocalObjectiveChangesDto {
   warnings: CaptureWarningCode[];
 }
 
-/**
- * Bounded newest-first page for `GET /api/missions/:id/deliveries` and Protocol
- * `list-deliveries`. `items` is capped at {@link MISSION_EVIDENCE_LIST_LIMIT};
- * `total` is the matching row count before that cap.
- */
-export interface MissionDeliveriesDto {
-  items: DeliveryDto[];
-  total: number;
-  limit: number;
-}
-
-/**
- * Bounded newest-first page for the mission-wide `GET /api/missions/:id/file-changes`
- * (no `objectiveId`). `items` is capped at {@link MISSION_EVIDENCE_LIST_LIMIT};
- * `total` is the matching row count before that cap. Objective views must use
- * {@link ObjectiveFileChangesDto} rather than partition this capped list.
- */
-export interface MissionFileChangesDto {
-  items: FileChangeDto[];
-  total: number;
-  limit: number;
-}
-
 // ---- Agent catalog and launch configuration ----
 //
 // Shapes follow connectors/docs/agent-harness-configuration-architecture.md:
@@ -1958,109 +762,14 @@ export interface MissionFileChangesDto {
 // last selection; objectives.launch_config_json holds explicit per-objective
 // overrides keyed by execution target and agent.
 
-export interface AgentCatalogModelDto {
-  id: string;
-  displayName: string;
-  /** Reasoning/thinking levels selectable for this model (empty = none). */
-  reasoningOptions: string[];
-  /** When false, model is saved in the catalog but not offered as a selectable option. Defaults to true. */
-  enabled?: boolean;
-}
-
-export interface AgentCatalogAgentDto {
-  /** Stable connector key (`claude`, `codex`, `cursor`, …). */
-  key: string;
-  label: string;
-  availableByDefault: boolean;
-  models: AgentCatalogModelDto[];
-  defaultModel: string | null;
-  defaultReasoningEffort: string | null;
-  /** Column heading for the reasoning options ("Thinking" vs "Effort"). */
-  reasoningLabel: string;
-}
-
-export interface AgentCatalogDto {
-  agents: AgentCatalogAgentDto[];
-  /** Instance defaults from overlord.toml, used when no preference is stored. */
-  defaultAgent: string;
-  defaultModel: string | null;
-}
-
-/** Replace the workspace agent catalog stored in `workspaces.settings_json.agentCatalog`. */
-export interface UpdateAgentCatalogBody {
-  agents: AgentCatalogAgentDto[];
-}
-
-/** Per-agent launch mechanics: shell pre-command and extra CLI flags. */
-export interface AgentLaunchConfigDto {
-  preCommand: string;
-  flags: AgentLaunchFlagDto[];
-}
-
-export interface TerminalProfileDto {
-  /** Built-in launcher (`iTerm2`, `Terminal`) or prefix command; null runs inline. */
-  launcher: string | null;
-  placement: 'window' | 'tab' | 'chord';
-  /** Typed shortcut such as `cmd+d` when placement is `chord`. */
-  chord: string | null;
-  /**
-   * When true, open the terminal without stealing keyboard focus. macOS only;
-   * ignored for the `chord` placement, which must foreground the app to deliver
-   * its keystroke.
-   */
-  background: boolean;
-  /**
-   * Per-target override of which process host runs the agent. `null`/omitted
-   * inherits {@link LaunchSessionDefaultsDto}. Orthogonal to `launcher`: Latch
-   * creates the session, the launcher still presents it.
-   */
-  executionProvider?: ExecutionProviderDto | null;
-  /**
-   * Per-target override of whether a viewer opens when a run starts. `null`/
-   * omitted inherits the user default. The viewer *kind* is `launcher` itself —
-   * it is never stored twice, so toggling the provider is lossless.
-   */
-  openViewerOnLaunch?: boolean | null;
-}
-
-/** Which process host runs the agent: today's direct spawn, or a Latch session. */
-export interface ExecutionProviderDto {
-  kind: 'direct' | 'latch';
-  /** Latch CLI to invoke; kept while `direct` so toggling back is lossless. */
-  executable: string;
-}
-
-/** Normalized viewer identifier derived from the stored `launcher`. */
+/**
+ * Normalized viewer identifier derived from the stored `launcher`. The wire type is
+ * wider: `TerminalSessionDto.viewerKind` is a string (generated).
+ */
 export type TerminalViewerKindDto = 'iterm' | 'terminal' | 'inline' | 'custom';
 
 /** Whether an effective value came from this target or the user-level default. */
-export type LaunchSessionSourceDto = 'target' | 'user_default';
-
-/** The user-level default new execution targets inherit until they override it. */
-export interface LaunchSessionDefaultsDto {
-  executionProvider: ExecutionProviderDto;
-  openViewerOnLaunch: boolean;
-  /**
-   * Whether launches prepare a per-mission branch and worktree before spawn.
-   * A user preference (worktrees live on the user's machine), so it is the same
-   * in every workspace the profile belongs to (contract v126).
-   */
-  worktreeBranchAutomationEnabled: boolean;
-}
-
-/** The effective provider + viewer for the acting user on this execution target. */
-export interface ResolvedLaunchSessionDto {
-  version: 1;
-  executionProvider: ExecutionProviderDto;
-  viewer: {
-    kind: TerminalViewerKindDto;
-    /** The stored terminal choice itself, so callers never re-derive it. */
-    launcher: string | null;
-    openOnLaunch: boolean;
-  };
-  executionProviderSource: LaunchSessionSourceDto;
-  viewerOpenSource: LaunchSessionSourceDto;
-}
+export type LaunchSessionSourceDto = LaunchSessionSource;
 
 /**
  * The resolved session frozen onto an execution request at claim time, so a later
@@ -2069,42 +778,6 @@ export interface ResolvedLaunchSessionDto {
  */
 export interface LaunchSessionSnapshotDto extends ResolvedLaunchSessionDto {
   resolvedAt: string;
-}
-
-export interface LaunchSettingsDto {
-  /**
-   * The local execution target launches queue against, or `null` when the calling
-   * machine has no declared execution target. Reading launch settings never
-   * declares one — use `ovld add-et` or link a checkout from that machine.
-   */
-  executionTargetId: string | null;
-  /** Display label of that machine, or `null` when no target is declared. */
-  deviceLabel: string | null;
-  /** Per-user launch configs keyed by agent key. */
-  agentConfigs: Record<string, AgentLaunchConfigDto>;
-  /** Per-user terminal profile for this machine's execution target. */
-  terminalProfile: TerminalProfileDto;
-  /** The acting user's default provider/viewer, inherited by targets that never override. */
-  launchSessionDefaults: LaunchSessionDefaultsDto;
-  /**
-   * The effective provider/viewer for this machine, with the origin of each value.
-   * `null` when the calling machine has no declared execution target.
-   */
-  resolvedLaunchSession: ResolvedLaunchSessionDto | null;
-  /** Mirrors `launchSessionDefaults.worktreeBranchAutomationEnabled` for existing readers. */
-  worktreeBranchAutomationEnabled: boolean;
-}
-
-export type UpdateTerminalProfileBody = TerminalProfileDto;
-
-/**
- * Update the user-level session default. Omitted fields keep their stored value,
- * so a caller may set the provider without restating the viewer preference.
- */
-export interface UpdateLaunchSessionDefaultsBody {
-  executionProvider?: ExecutionProviderDto | null;
-  openViewerOnLaunch?: boolean | null;
-  worktreeBranchAutomationEnabled?: boolean | null;
 }
 
 /**
@@ -2182,624 +855,31 @@ export interface ExecutionProviderSessionDto {
   lastObservedState: string;
 }
 
-export type TerminalSessionStateDto = 'running' | 'exited' | 'stopping' | 'lost';
+export type TerminalSessionStateDto = TerminalSessionDto['lastObservedState'];
 
-export interface TerminalSessionDto {
-  executionRequestId: string;
-  objectiveId: string;
-  provider: 'latch';
-  providerSessionId: string;
-  sessionName: string;
-  executionTargetId: string | null;
-  deviceLabel: string | null;
-  agentSessionId: string | null;
-  executable: string;
-  viewerKind: string;
-  /**
-   * Window-or-tab shape this session's launch resolved, frozen at claim time.
-   * Re-opening the session later uses the same shape the launch did. Absent on
-   * a session claimed before the field existed, which means `window`.
-   */
-  viewerOpenAs?: 'window' | 'tab';
-  createdAt: string;
-  lastObservedState: TerminalSessionStateDto;
-}
-
-/** Additive body for `POST /api/runner/requests/:id/launched`. */
-export interface RunnerLaunchedBody {
-  providerSession?: ExecutionProviderSessionDto | null;
-}
-
-export interface UpdateWorktreeBranchAutomationBody {
-  enabled: boolean;
-}
-
-/** Last agent/model/reasoning the user selected within a project. */
-export interface LaunchPreferenceDto {
-  selectedAgent: string | null;
-  selectedModel: string | null;
-  selectedReasoningEffort: string | null;
-}
-
-/** A project execution target the acting user may select for queue-here/run-there (WS-C). */
-export interface EligibleExecutionTargetDto {
-  executionTargetId: string;
-  type: string;
-  label: string;
-  deviceLabel: string | null;
-  reachable: boolean;
-  primaryResourceConnected: boolean;
-}
-
-/** Per-project execution target selection for the acting workspace user. */
-export interface ProjectExecutionTargetDto {
-  selectedExecutionTargetId: string | null;
-  eligibleTargets: EligibleExecutionTargetDto[];
-}
-
-export interface UpdateProjectExecutionTargetBody {
-  executionTargetId: string | null;
-}
-
-/** Safe workspace-settings projection of an execution target. */
-export interface WorkspaceExecutionTargetDto {
-  id: string;
-  type: ExecutionTargetType;
-  label: string;
-  status: string;
-  ownerDisplayName: string | null;
-  reachable: boolean;
-  lastSeenAt: string | null;
-  /** Number of active workspace members granted access to this target. */
-  activeMemberAccessCount: number;
-  /** Whether the caller can select this target for project launch settings. */
-  hasCurrentUserAccess: boolean;
-  unavailableReason: string | null;
-  runnerRegistrations: ExecutionTargetRunnerRegistrationDto[];
-}
-
-export interface ExecutionTargetRunnerRegistrationDto {
-  id: string;
-  runnerInstanceId: string;
-  relation: 'native' | 'adopted';
-  label: string | null;
-  runnerVersion: string | null;
-  supportedAgents: string[];
-  health: string;
-  lastHeartbeatAt: string | null;
-  lastErrorCode: string | null;
-}
-
-export type ExecutionRequestStatus =
-  | 'queued'
-  | 'claimed'
-  | 'launching'
-  | 'launched'
-  | 'failed'
-  | 'cleared'
-  | 'cancelled'
-  | 'expired';
-
-export type LocalTargetMutationKindDto = 'branch_action' | 'worktree_purge' | 'capability_call';
-
-export interface ExecutionRequestDto {
-  id: string;
-  workspaceId: string;
-  projectId: string;
-  /**
-   * Null only for a `local_target_mutation` capability call that has no mission
-   * (a Latch probe, a repository read, `doctor`); such a request is authorized
-   * by project and execution target. Every launch request carries both ids.
-   */
-  missionId: string | null;
-  objectiveId: string | null;
-  executionTargetId: string | null;
-  requestedAgent: string | null;
-  requestedModel: string | null;
-  requestedReasoningEffort: string | null;
-  /** Resolved launch-config snapshot written at queue time. */
-  launchConfig: AgentLaunchConfigDto;
-  status: ExecutionRequestStatus;
-  requestedSource: string;
-  /** Present when `requestedSource` is `local_target_mutation`. */
-  localTargetMutationKind?: LocalTargetMutationKindDto | null;
-  lastError: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/**
- * An execution request as the runner queue surface (`GET /api/runner/status`,
- * `POST /api/runner/requests/:id/*`) returns it. Unlike `ExecutionRequestDto`,
- * `executionTargetId` is the target that won the claim once claimed
- * (`claimed_by_execution_target_id`, falling back to the queue-time target),
- * because the runner launches and observes on that target.
- */
-export interface RunnerExecutionRequestDto extends ExecutionRequestDto {
-  metadata: Record<string, unknown>;
-  /** `execution_requests.resolved_working_directory`; null until resolved. */
-  workingDirectory: string | null;
-}
-
-/**
- * The request `POST /api/runner/claim` hands the runner: `launchConfig` is
- * re-resolved against the claiming target, plus the project's launch preparation.
- */
-export interface RunnerClaimedRequestDto extends RunnerExecutionRequestDto {
-  /** Project `overlord.preLaunchCommands`, in order. */
-  preLaunchCommands: string[];
-  /** Project `overlord.launchEnvVars`. */
-  launchEnvVars: Record<string, string>;
-}
-
-/** `POST /api/runner/claim` response body. */
-export interface RunnerClaimResponse {
-  request: RunnerClaimedRequestDto | null;
-  /** True when the Postgres long-poll wait was available for this claim. */
-  longPoll: boolean;
-}
-
-/** Copyable prompt for running an objective through an agent manually. */
-export interface ObjectivePromptDto {
-  objectiveId: string;
-  missionId: string;
-  prompt: string;
-}
-
-/** Paste-ready `ovld launch` command for the selected agent and launch mechanics. */
-export interface ObjectiveLaunchCommandDto {
-  objectiveId: string;
-  missionId: string;
-  command: string;
-}
-
-/** Authoritative resolved launch mechanics for an objective and selected target. */
-export interface ObjectiveEffectiveLaunchConfigDto {
-  objectiveId: string;
-  missionId: string;
-  /** The target used to resolve target- and resource-scoped defaults, if any. */
-  executionTargetId: string | null;
-  launchConfig: AgentLaunchConfigDto;
-  /** The precedence layer that supplied `launchConfig`. */
-  source: 'objective' | 'resource_source' | 'user_target' | 'workspace' | 'none';
-}
+export type LocalTargetMutationKindDto = NonNullable<
+  ExecutionRequestDto['localTargetMutationKind']
+>;
 
 // ---- Realtime feed ----
 
-/**
- * A compact projection of an `entity_changes` row, ordered by the monotonic
- * `seq`. The SPA uses these to invalidate its query cache so the UI reflects
- * database changes — including writes made by the CLI — in real time.
- * `changedFields` comes from `entity_changes.changed_fields_json`; malformed
- * stored values project as an empty array.
- */
-export interface EntityChangeDto {
-  seq: number;
-  workspaceId: string;
-  entityType: string;
-  entityId: string;
-  operation: ChangeOperation;
-  projectId: string | null;
-  missionId: string | null;
-  objectiveId: string | null;
-  changedFields: string[];
-  occurredAt: string;
-}
-
-/** Response from `GET /sync/changes?after=<seq>` for reconnect catch-up. */
-export interface SyncChangesDto {
-  changes: EntityChangeDto[];
-  cursor: number;
-  hasMore: boolean;
-}
-
 /** Named SSE events emitted by `GET /realtime` and compatibility `GET /api/stream`. */
-export type RealtimeEvent =
-  | { type: 'hello'; cursor: number }
-  | { type: 'change'; changes: EntityChangeDto[]; cursor: number }
-  | { type: 'refresh' };
-
-// ---- Request bodies ----
-
-export interface CreateProjectBody {
-  name: string;
-  /** Optional target workspace. Defaults to the caller's active workspace. */
-  workspaceId?: string;
-  slug?: string;
-  description?: string | null;
-  /** Optional 6-digit hex color (e.g. `#fecdd3`). */
-  color?: string;
-  /** Optional initial primary resource to create with the project. */
-  primaryResource?: {
-    directoryPath: string;
-    executionTargetId?: string | null;
-  } | null;
-}
-
-/**
- * Atomic project + first-mission creation with optional retryable private
- * GitHub provisioning. The key is generated once by the client and reused for
- * retries so a network failure cannot create a second project.
- */
-export interface InitializeProjectBody {
-  workspaceId: string;
-  idempotencyKey: string;
-  name: string;
-  description: string;
-  createGitHubRepository?: boolean;
-  githubOwnerLogin?: string;
-}
+export type RealtimeEvent = RealtimeStreamEvent;
 
 export type GitHubRepositoryProvisioningStatus =
-  | 'not_requested'
-  | 'pending'
-  | 'failed'
-  | 'succeeded';
+  InitializeProjectResultDto['repositoryProvisioning']['status'];
 
-export interface InitializeProjectResultDto {
-  project: ProjectDto;
-  mission: MissionDetailDto;
-  repositoryProvisioning: {
-    status: GitHubRepositoryProvisioningStatus;
-    retryable: boolean;
-    ownerLogin: string | null;
-    repository: {
-      id: string;
-      fullName: string;
-      defaultBranch: string;
-      private: true;
-      cloneUrl: string;
-    } | null;
-    resource: ProjectResourceDto | null;
-    error: string | null;
-  };
-}
-
-/** A per-project tag definition. Authored in project settings, assigned to missions. */
-export interface ProjectTagDto {
-  id: string;
-  projectId: string;
-  label: string;
-  /** Optional display color (e.g. `#fecdd3`), or `null`. */
-  color: string | null;
-  /** Inactive tags are hidden from the create-mission picker but kept for history. */
-  active: boolean;
-}
-
-export interface CreateProjectTagBody {
-  label: string;
-  color?: string | null;
-}
-
-export interface UpdateProjectTagBody {
-  label?: string;
-  color?: string | null;
-  active?: boolean;
-}
-
-export interface UpdateProjectBody {
-  name?: string;
-  description?: string | null;
-  status?: ProjectLifecycle;
-  /** Optional 6-digit hex color (e.g. `#fecdd3`). */
-  color?: string;
-  /**
-   * Project base/parent branch for mission branches. A non-empty value sets it;
-   * `null` or an empty string clears it (falling back to `main`).
-   */
-  defaultBranch?: string | null;
-  /**
-   * Ordered shell command lines run in the launch environment before the agent
-   * starts (see `ProjectDto.preLaunchCommands`). Replaces the stored list; an
-   * empty array clears it. Blank/whitespace-only lines are dropped server-side.
-   */
-  preLaunchCommands?: string[];
-  /**
-   * User-defined launch environment variables (see `ProjectDto.launchEnvVars`).
-   * Replaces the stored map; an empty object clears it. Entries with a
-   * blank/whitespace-only name are dropped server-side.
-   */
-  launchEnvVars?: Record<string, string>;
-}
-
-/**
- * Body for `POST /api/missions/:id/branch/action` — on-demand branch mutations
- * the mission panel triggers (returns the refreshed `MissionDetailDto`).
- *
- * - `integrate`   — Action A: merge the parent into the branch inside its worktree
- *                   (conflicts left there for IDE resolution), then advance the
- *                   parent to the branch via a `--no-ff` merge commit.
- * - `commit`      — stage and commit all changes in the branch's worktree
- *                   (`git add -A` then `git commit -m <message>`). Requires a
- *                   non-empty `message`.
- * - `push_parent` — Action B: push the merged parent to `origin`.
- * - `publish`     — push the branch itself to `origin` (created → published, or
- *                   re-push when further commits are ahead of the remote).
- *
- * On failure the response carries a typed `code` (e.g. `BRANCH_MERGE_CONFLICT`,
- * `BRANCH_BUSY_EXECUTING`, `BRANCH_DIRTY`, `BRANCH_PUSH_FAILED`,
- * `BRANCH_COMMIT_MESSAGE_REQUIRED`, `BRANCH_NOTHING_TO_COMMIT`,
- * `BRANCH_COMMIT_FAILED`).
- */
-export interface BranchActionBody {
-  action: 'integrate' | 'commit' | 'push_parent' | 'publish';
-  /** Commit message for `action: 'commit'` (required and non-empty). */
-  message?: string;
-  /** Logical project resource key to target; defaults to the project primary. */
-  resourceKey?: string;
-  /** Proceed even if an objective is executing on the branch (re-checked server-side). */
-  confirmBusy?: boolean;
-  /** When true, git already ran on the client; the server records `summary` only. */
-  clientExecuted?: boolean;
-  /** Activity summary to record when `clientExecuted` is true. */
-  summary?: string;
-}
-
-/** Optional body for `POST /api/missions/:id/generate-commit-message`. */
-export interface GenerateCommitMessageBody {
-  /** Pre-gathered diff text from the client local-target bridge. */
-  diff?: string;
-}
-
-/**
- * Result of `POST /api/missions/:id/generate-commit-message`: an AI-drafted
- * commit message for the uncommitted changes in the mission branch's worktree.
- * Drafted via the Automations Layer (Gemini) from the worktree diff; the client
- * drops it into the commit-message field for the user to edit before committing.
- *
- * On failure the response carries a typed `code` (e.g. `BRANCH_NOTHING_TO_COMMIT`
- * when the worktree is clean, `COMMIT_MESSAGE_GENERATION_FAILED` when the
- * summarizer is unavailable or returns nothing, plus the shared
- * `BRANCH_NOT_PREPARED` / `BRANCH_NO_PRIMARY` / `BRANCH_NO_WORKTREE` codes).
- */
-export interface GenerateCommitMessageResultDto {
-  /** The drafted commit message (subject line, optionally followed by a body). */
-  message: string;
-}
-
-// ---- Worktrees ----
-
-/**
- * A git worktree managed by Overlord under the worktree root (`~/.ovld/worktrees`).
- * Enumerated from each project's primary repository (`git worktree list`) and
- * filtered to those under the root. Returned by `GET /api/worktrees`.
- */
-export interface WorktreeDto {
-  /** Absolute worktree path (the stable identifier for purge requests). */
-  path: string;
-  /** Branch checked out in the worktree, or `null` for a detached HEAD. */
-  branch: string | null;
-  projectId: string;
-  projectName: string;
-  /** The mission whose `active_branch` matches this worktree's branch, when known. */
-  missionId: string | null;
-  missionDisplayId: string | null;
-  /** Derived branch status (same vocabulary as `MissionBranchDto.status`), when the branch maps to a mission. */
-  status: MissionBranchStatus | null;
-  /** Whether the branch has landed in the project's base branch (locally or remotely). */
-  merged: boolean;
-  /** Whether the worktree has uncommitted changes (purging it would lose work). */
-  dirty: boolean;
-  /** Total size of the worktree directory in bytes (best-effort; `null` if not computed). */
-  sizeBytes: number | null;
-  /** Last filesystem modification time of the worktree directory (ISO), or `null`. */
-  lastModifiedAt: string | null;
-}
-
-/** Body for `POST /api/worktrees/remove` — purge a single worktree by path. */
-export interface RemoveWorktreeBody {
-  path: string;
-  /** Remove even if the worktree has uncommitted changes (re-checked server-side). */
-  force?: boolean;
-  /** Absolute primary repository path — required when `clientExecuted` is true on hosted backends. */
-  primaryRepoPath?: string;
-  /** When true, git removal already ran on the client; the server refreshes its response only. */
-  clientExecuted?: boolean;
-  /** Project that owns the worktree — required to queue removal on a remote execution target. */
-  projectId?: string;
-  /** Optional explicit execution target when queueing on a remote device. */
-  executionTargetId?: string | null;
-}
-
-/** Optional body for `POST /api/worktrees/purge` when queueing on a remote target. */
-export interface PurgeMergedWorktreesBody {
-  projectId?: string;
-  executionTargetId?: string | null;
-  primaryRepoPath?: string;
-  worktreeRoot?: string;
-}
-
-/**
- * Result of a worktree purge. `removed` lists the paths actually removed;
- * `skipped` lists paths that were left in place with a reason (e.g. dirty).
- */
-export interface PurgeWorktreesResultDto {
-  removed: string[];
-  skipped: Array<{ path: string; reason: string }>;
-  worktrees: WorktreeDto[];
-}
-
-export interface CreateMissionBody {
-  projectId: string;
-  /** Optional when `firstObjective` or `objectives` is provided; otherwise required. */
-  title?: string;
-  priority?: MissionPriority;
-  /** Optional one-time due date for a newly created mission. */
-  dueDatetime?: string | null;
-  statusId?: string;
-  /** Assign the mission to a workspace member (`workspace_users.id`), or `null` to create unassigned. Defaults to the creator when omitted. */
-  assignedWorkspaceUserId?: string | null;
-  /** Optional first objective instruction; creates objective #1 when present. */
-  firstObjective?: string;
-  /** Optional ordered objective instructions; creates objective #1 as draft and the rest as future. */
-  objectives?: Array<{
-    objective: string;
-    title?: string | null;
-    autoAdvance?: boolean;
-    /** Explicit launch selection for this objective; omitted keeps project launch-preference defaulting. */
-    agent?: string | null;
-    /** Model for `agent`; rejected without a non-empty agent. */
-    model?: string | null;
-    resourceKey?: string | null;
-  }>;
-  /** Optional `project_tags.id` values to assign to the new mission. Must belong to `projectId`. */
-  tagIds?: string[];
-}
-
-/** Private, account-owned draft that has not yet become a workspace mission. */
-export interface InboxItemDto {
-  id: string;
-  title: string;
-  objectives: string[];
-  dueDatetime: string | null;
-  priority: MissionPriority | null;
-  /** Active files attached to the capture (`GET /api/inbox/:id/attachments`). */
-  attachmentCount: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/** Durable, profile-owned mission notification safe for REST and realtime reads. */
-export interface NotificationDto {
-  id: string;
-  workspaceId: string;
-  type:
-    | 'mission_awaiting_review'
-    | 'agent_question'
-    | 'mission_complete'
-    | 'mission_failed'
-    | 'agent_started'
-    | 'returned_to_execute';
-  missionId: string;
-  objectiveId: string | null;
-  createdAt: string;
-  readAt: string | null;
-  revision: number;
-  /** Bounded presentation recomputed on read; never stored with the notification row. */
-  presentation: {
-    body: string;
-  };
-}
-
-/** One transport-specific notification preference owned by the authenticated profile. */
-export interface NotificationPreferenceDto {
-  /** A mission catalog type, or one of the owner-addressed conversation types (v152). */
-  type: NotificationDto['type'] | ChatNotificationType;
-  transport: 'apns' | 'realtime' | 'in_app';
-  mode: 'alert' | 'silent' | 'off';
-}
-
-/**
- * Canonical notification preference API projection. `categories` is retained
- * only as an additive APNs compatibility projection for older mobile clients.
- */
-export interface NotificationPreferencesDto {
-  enabled: boolean;
-  preferences: NotificationPreferenceDto[];
-  categories: Array<{
-    category: Extract<
-      NotificationDto['type'],
-      'mission_awaiting_review' | 'agent_question' | 'mission_complete' | 'mission_failed'
-    >;
-    mode: 'alert' | 'silent' | 'off';
-  }>;
-}
-
-export interface UpdateNotificationPreferencesBody {
-  enabled?: boolean;
-  preferences?: NotificationPreferenceDto[];
-  /** Deprecated APNs-only compatibility alias for older mobile clients. */
-  categories?: NotificationPreferencesDto['categories'];
-}
+// ---- Mobile push registrations ----
 
 /** APNs delivery environment for device and Live Activity token registrations. */
-export type DevicePushEnvironment = 'sandbox' | 'production';
+export type DevicePushEnvironment = ApnsEnvironment;
 
 /**
  * Body for `PUT /api/mobile/live-activities/:activityId/push-token`.
  * `environment` and `bundleId` select the APNs host and liveactivity topic per
  * registration — the same fields required for push-to-start and device tokens.
  */
-export interface LiveActivityPushTokenBody {
-  pushToken: string;
-  environment: DevicePushEnvironment;
-  bundleId: string;
-  /** True when this update token is the handoff after APNs remotely started the activity. */
-  startedByPush?: boolean;
-}
-
-export interface CreateInboxItemBody {
-  title: string;
-  /** Exactly one non-empty objective in v1. */
-  objectives: string[];
-  dueDatetime?: string | null;
-  priority?: MissionPriority | null;
-}
-
-export interface UpdateInboxItemBody {
-  title?: string;
-  objectives?: string[];
-  dueDatetime?: string | null;
-  priority?: MissionPriority | null;
-}
-
-export interface UpdateMissionBody {
-  title?: string;
-  priority?: MissionPriority | null;
-  /** Move the mission to another workspace project. Status maps by type in the target project. */
-  projectId?: string;
-  statusId?: string;
-  /** Assign the mission to a workspace member (`workspace_users.id`), or `null` to unassign. */
-  assignedWorkspaceUserId?: string | null;
-  /** Human-only mission notes; never sent to agents. */
-  notes?: string | null;
-  /**
-   * Pin the branch the mission's next launch should use (overriding the planner's
-   * default), or `null` to clear the override and return to automatic selection.
-   */
-  branchOverride?: string | null;
-  /**
-   * Set this mission's per-mission worktree/branch mode, overriding the workspace
-   * automation setting (`'worktree'` or `'branch'`), or `null` to clear it and
-   * inherit the workspace setting. See `MissionWorktreePreference`.
-   */
-  worktreePreference?: MissionWorktreePreference | null;
-  /**
-   * Allow two objectives on this mission to execute at once when they use
-   * different `resource_key`s. Default false. Same-resource pairs still 409.
-   */
-  allowParallelObjectives?: boolean;
-  /**
-   * Clear `missions.active_branch` so the mission panel returns to a pending
-   * branch preview. Used when switching a mission to a different branch (paired
-   * with `branchOverride`), whatever the current branch's status; the next
-   * launch prepares the new branch. Clears stored branch observations for the
-   * mission.
-   */
-  resetActiveBranch?: boolean;
-  /**
-   * Replace the mission's assigned tags with this set of `project_tags.id` values.
-   * Every id must belong to the mission's project. Pass `[]` to clear all tags.
-   */
-  tagIds?: string[];
-  /**
-   * Override the computed next due date (ISO-8601) without changing the linked
-   * schedule, or `null` to clear the due date.
-   */
-  dueDatetime?: string | null;
-}
-
-/**
- * Reorders a single board column. `orderedMissionIds` lists every mission that
- * should occupy the `statusId` column, top-to-bottom, after the move. Any
- * mission whose current status differs is moved into this column (its status
- * changes to match). This one call covers both within-column reordering and the
- * destination side of a cross-column drag.
- */
-export interface ReorderBoardColumnBody {
-  statusId: string;
-  orderedMissionIds: string[];
-}
+export type LiveActivityPushTokenBody = RegisterLiveActivityPushTokenBody;
 
 // ---- Inbox missions triage (coo:826 / coo:844 / coo:858, contract v124) ---
 //
@@ -2811,30 +891,7 @@ export interface ReorderBoardColumnBody {
 // Missions and the activity feed.
 
 /** Why a mission appears in `GET /api/inbox/missions`. */
-export type InboxMissionReason = 'recent' | 'agent_next' | 'due_soon' | 'overdue';
-
-/**
- * A mission card on the Inbox page. Extends `MissionDto` with the cross-project
- * chrome the aggregate list needs and the inclusion reasons that selected it.
- */
-export interface InboxMissionDto extends MissionDto {
-  projectName: string;
-  projectColor: string | null;
-  /**
-   * Any of `agent_next` (agent-authored and still in status type `next`),
-   * `overdue` (`dueDatetime` is before today in UTC), `due_soon`
-   * (`dueDatetime` falls on today or tomorrow in UTC), and the label-only
-   * `recent` (created within the rolling window). `overdue` and `due_soon` are
-   * mutually exclusive.
-   */
-  reasons: InboxMissionReason[];
-}
-
-export interface InboxMissionsResponse {
-  missions: InboxMissionDto[];
-  /** Server clock so the client can label the recent window without skew. */
-  generatedAt: string;
-}
+export type InboxMissionReason = InboxMissionDto['reasons'][number];
 
 // ---- Feed page activity (coo:757, coo:826) --------------------------------
 //
@@ -2846,282 +903,11 @@ export interface InboxMissionsResponse {
 // client that does not recognize a `kind` renders nothing for that item rather
 // than failing, so adding a kind stays additive.
 
-export type ActivityFeedItemKind = 'mission_run' | 'mission_delivered' | 'blocking_question';
+export type ActivityFeedItemKind = ActivityFeedItemDto['kind'];
 
-/** Chrome every feed card shares: where the item happened and what it belongs to. */
-export interface ActivityFeedItemBaseDto {
-  /**
-   * Stable, kind-prefixed identity (`mission:<missionId>`, `ask:<eventId>`).
-   * Distinct sources can share an underlying row id, so the prefix is what
-   * makes the merged list safely keyable.
-   */
-  id: string;
-  kind: ActivityFeedItemKind | string;
-  /** Sort key. The merged feed is ordered by this, descending. */
-  occurredAt: string;
-  workspaceId: string;
-  workspaceName: string;
-  projectId: string;
-  projectName: string;
-  /** Hex accent color of the project, when configured. */
-  projectColor: string | null;
-  missionId: string;
-  missionDisplayId: string;
-  missionTitle: string;
-  objectiveId: string | null;
-  /** `{mission.displayId}.{objective.displayKey}` when the item names an objective. */
-  objectiveDisplayId: string | null;
-  /**
-   * Who authored the item's subject — the mission for `mission_run` and
-   * `mission_delivered`, the objective behind the ask for `blocking_question`.
-   * Same closed vocabulary and human fallback as `ObjectiveDto.createdByKind`.
-   */
-  createdByKind: CreatedByKind;
-  /** Connector that authored the subject, when `createdByKind` is `agent`. */
-  createdByAgent: string | null;
-}
-
-/**
- * One objective listed under a feed mission card.
- *
- * The list is every objective of the mission, already sorted into the same
- * display order the mission panel uses (completed by completion time, then
- * active by start time, then launching, then draft/submitted, then future), so
- * a client renders it as-is rather than re-deriving the ordering.
- */
-export interface ActivityFeedMissionObjectiveDto {
-  objectiveId: string;
-  displayId: string;
-  title: string | null;
-  /** Closed lifecycle vocabulary; same values as `ObjectiveDto.state`. */
-  state: ObjectiveState;
-  position: number;
-  assignedAgent: string | null;
-  autoAdvance: boolean;
-  /** True while an open question/choice request is waiting on a human for this objective. */
-  blocked: boolean;
-}
-
-/**
- * A mission card on the feed: live work (`mission_run`) or a recently
- * delivered mission (`mission_delivered`).
- *
- * The card is the mission, so the chrome fields (`objectiveId`,
- * `objectiveDisplayId`, agent, branch, `startedAt`, latest event) describe its
- * *primary* objective: the launching one if the mission has one, else the
- * oldest active one, else the objective behind the most recent delivery.
- * `pending_delivery` counts as live work here, matching every other execution
- * surface. A live mission is never also returned as `mission_delivered`.
- */
-export interface ActivityFeedMissionItemDto extends ActivityFeedItemBaseDto {
-  kind: 'mission_run' | 'mission_delivered';
-  /**
-   * Whether the mission is waiting for an agent to pick up work (`launching`),
-   * has one running (`executing`), or is on the feed because it recently
-   * delivered (`delivered`). Feed order puts every `launching` mission above
-   * every `executing` one, then questions, then `delivered`.
-   */
-  runState: 'launching' | 'executing' | 'delivered';
-  /** Every objective of the mission, in mission-panel display order. */
-  objectives: ActivityFeedMissionObjectiveDto[];
-  /** Objective ids that are launching, executing, or pending delivery. */
-  activeObjectiveIds: string[];
-  objectiveTitle: string | null;
-  /** Server-truncated instruction preview of the primary objective. */
-  instructionPreview: string;
-  agentIdentifier: string | null;
-  modelIdentifier: string | null;
-  branch: string | null;
-  resourceKey: string | null;
-  /** Session start, or the execution request's creation while still launching. */
-  startedAt: string | null;
-  /** Newest mission-event summary for the primary objective, truncated. */
-  latestEventSummary: string | null;
-  latestEventAt: string | null;
-}
-
-/** An `ask` mission event the operator has not yet seen; the agent is blocked on it. */
-export interface ActivityFeedQuestionItemDto extends ActivityFeedItemBaseDto {
-  kind: 'blocking_question';
-  eventId: string;
-  agentRequestId: string | null;
-  delivery: { mode: 'latch' | 'read_only' };
-  question: string;
-  agentIdentifier: string | null;
-  askedAt: string;
-}
-
-export type ActivityFeedItemDto = ActivityFeedMissionItemDto | ActivityFeedQuestionItemDto;
-
-export interface ActivityFeedDto {
-  /**
-   * Grouped, not purely time-descending: every `mission_run` whose `runState` is
-   * `launching`, then every `executing` one, then the blocking questions, then
-   * `mission_delivered`. Each group is newest-first by `occurredAt`. A page
-   * loaded with `before` contains only the delivered group.
-   */
-  items: ActivityFeedItemDto[];
-  /** Server clock, so elapsed-time rendering does not drift with a skewed client. */
-  generatedAt: string;
-  /** Per-kind totals *before* truncation, so the UI can be honest about caps. */
-  counts: Record<string, number>;
-  /**
-   * Pass as `?before=` to load the next older two-week window of delivered
-   * missions. `null` when no delivered mission is older than this page's window.
-   */
-  nextBefore: string | null;
-}
-
-export interface CreateObjectiveBody {
-  missionId: string;
-  instructionText: string;
-  title?: string | null;
-  state?: ObjectiveState;
-  autoAdvance?: boolean;
-  resourceKey?: string | null;
-}
-
-/**
- * Reorders the `future` objectives of a single mission. `orderedObjectiveIds`
- * lists every future objective on the mission, top-to-bottom, after the move.
- * Only objectives currently in the `future` state may be reordered; their
- * `position` is renumbered relative to one another while remaining after any
- * non-future objectives. Returns the mission's full objective list in its new
- * order.
- */
-export interface ReorderFutureObjectivesBody {
-  orderedObjectiveIds: string[];
-}
-
-export interface UpdateObjectiveBody {
-  instructionText?: string;
-  title?: string | null;
-  state?: ObjectiveState;
-  autoAdvance?: boolean;
-  position?: number;
-  assignedAgent?: string | null;
-  model?: string | null;
-  reasoningEffort?: string | null;
-  resourceKey?: string | null;
-  /** Save an explicit any-target launch override for `launchConfigAgent`. */
-  launchConfigOverride?: AgentLaunchConfigDto | null;
-  launchConfigAgent?: string;
-}
-
-/**
- * Queue an execution request for an objective. The server persists the
- * selection onto the objective, resolves the launch config (objective override
- * → resource-source default → user target config → workspace default → empty), snapshots it into the
- * request, and moves a draft objective to `launching`.
- */
-export interface LaunchObjectiveBody {
-  agent: string;
-  model?: string | null;
-  reasoningEffort?: string | null;
-  /** Explicit eligible target for this queued request; omit to use project selection. */
-  executionTargetId?: string | null;
-  /**
-   * Explicit per-objective override stored in `objectives.launch_config_json`
-   * keyed by execution target + agent. Omit to inherit per the resolution order.
-   */
-  launchConfigOverride?: AgentLaunchConfigDto | null;
-}
-
-export interface UpdateAgentLaunchConfigBody {
-  preCommand?: string;
-  flags?: AgentLaunchFlagDto[];
-}
-
-export type UpdateLaunchPreferenceBody = Partial<LaunchPreferenceDto>;
-
-/**
- * The local operator's user-account profile. In this single-trusted-user build
- * the profile maps directly to the operator's `profiles` row. Avatar URL and
- * custom agent instructions are persisted in `profiles.metadata_json`.
- */
-export interface ProfileDto {
-  userId: string;
-  /** `profiles.display_name` — required, non-empty. */
-  displayName: string;
-  /** `profiles.handle` — an optional display handle, mirrored from the Better Auth account name (read-only here). */
-  handle: string | null;
-  /**
-   * `profiles.email` — the account's primary identifier, mirrored from the
-   * Better Auth account email (read-only here; changed through the Auth
-   * surface).
-   */
-  email: string | null;
-  /** Optional avatar image URL stored in `profiles.metadata_json.avatarUrl`. */
-  avatarUrl: string | null;
-  /**
-   * Optional custom agent instructions appended to every protocol `agentInstructions`
-   * field for this user (`profiles.metadata_json.agentInstructions`).
-   */
-  agentInstructions: string | null;
-  /**
-   * The operator's preferred IDE/editor, used to open files Overlord links to
-   * (`profiles.metadata_json.editorScheme`). One of `EDITOR_SCHEME_OPTIONS`
-   * (`webapp/web/lib/helpers/editor-scheme.ts`); `null` defaults to VS Code.
-   */
-  editorScheme: string | null;
-  /** Open vocabulary (`human`, `service`). The local operator is `human`. */
-  kind: string;
-  /** Identity provider, when the account is externally federated. */
-  authProvider: string | null;
-  /** Distinct RBAC role keys across the selected organization's authorized workspaces. */
-  roles: string[];
-  createdAt: string;
-}
-
-/** Partial update of the local operator's profile. Omitted fields are left unchanged. */
-export interface UpdateProfileBody {
-  displayName?: string;
-  // `handle` and `email` are intentionally omitted: both mirror the Better
-  // Auth account (name and email respectively) and are changed through the
-  // Auth surface, not here. `email` is the account's primary identifier.
-  avatarUrl?: string | null;
-  /** Replaces the user's saved custom agent instructions; pass null or "" to clear. */
-  agentInstructions?: string | null;
-  /** Replaces the user's preferred IDE/editor scheme; pass null or "" to clear (defaults to VS Code). */
-  editorScheme?: string | null;
-}
+export type ActivityFeedItemDto = ActivityFeedDto['items'][number];
 
 // ---- Uploads (core upload service) ----
-
-/**
- * Logical `storage_buckets.bucket_key`. The vocabulary is closed
- * (contract/data/README.md, `storage_buckets`):
- * `organization-images` is organization-scoped; the other three are seeded per
- * workspace.
- */
-export type StorageBucketKey =
-  | 'user-images'
-  | 'workspace-images'
-  | 'organization-images'
-  | 'attachments';
-
-/**
- * A stored image returned by the core upload service. Bytes live in the storage
- * backend behind the bucket; this descriptor carries the metadata plus the
- * server-relative `url` the SPA loads. Used today by the avatar uploader against
- * the `user-images` bucket and reusable by other image components.
- */
-export interface StoredImageDto {
-  /** `user_images.id` of the recorded object. */
-  id: string;
-  /** Logical bucket the image was stored in (e.g. `user-images`). */
-  bucketKey: StorageBucketKey;
-  /** Backend key/path within the bucket. */
-  storageKey: string;
-  /** Original/display filename. */
-  filename: string;
-  /** Image media type (e.g. `image/png`). */
-  contentType: string;
-  sizeBytes: number;
-  /** Server-relative URL that serves the bytes (`/api/storage/<bucket>/<key>`). */
-  url: string;
-  createdAt: string;
-}
 
 /**
  * Lifecycle of a stored object's bytes (`attachments.upload_status` /
@@ -3129,225 +915,12 @@ export interface StoredImageDto {
  */
 export type AttachmentUploadStatus = 'prepared' | 'uploaded' | 'available' | 'failed' | 'deleted';
 
-/**
- * A file attached to an objective, stored in the `attachments` bucket. Bytes
- * live behind the bucket; this descriptor carries metadata plus the
- * server-relative `url` the SPA loads (which serves the bytes as a download).
- * Derived from the `attachments` table, scoped to a single objective — or, for
- * `/api/inbox/:id/attachments`, to a profile-owned inbox item (`inboxItemId`
- * set; project, mission, and objective null until promotion re-points it).
- */
-export interface ObjectiveAttachmentDto {
-  /** `attachments.id` of the recorded object. */
-  id: string;
-  workspaceId: string;
-  projectId: string | null;
-  missionId: string | null;
-  objectiveId: string | null;
-  /** Owning `inbox_items.id` while the file belongs to an unpromoted Inbox capture. */
-  inboxItemId: string | null;
-  /** Logical bucket the file was stored in (e.g. `attachments`). */
-  bucketKey: StorageBucketKey;
-  /** Backend key/path within the bucket. */
-  storageKey: string;
-  /** Original/display filename. */
-  filename: string;
-  /** Media type when known (e.g. `application/pdf`); `null` if undetermined. */
-  contentType: string | null;
-  sizeBytes: number | null;
-  uploadStatus: AttachmentUploadStatus;
-  /** Server-relative URL that serves the bytes (`/api/storage/<bucket>/<key>`). */
-  url: string;
-  createdAt: string;
-}
-
-/** Lifecycle state of a `USER_TOKEN` (`user_tokens.status`). */
-export type UserTokenStatus = 'active' | 'revoked' | 'expired' | 'rotated';
-
-/**
- * Permission scope preset a `USER_TOKEN` is minted with.
- *  - `full`: no token-level restriction — inherits the creating user's role grants.
- *  - `mission_lifecycle`: mission/objective/session/runner work only (see `scopeGrants`).
- *  - `project_automation` (contract v151): an external automation's token. Reads
- *    and creates missions in the projects selected at issuance and nothing else:
- *    grants `project:read`, `mission:read`, `mission:create`, `objective:read`,
- *    `event:read`, `session:read`, `artifact:read`, `attachment:read`,
- *    `execution_request:read`, bounded by the token's `projects` allowlist and a
- *    default-deny route allowlist (see contract/CHANGELOG.md, version 151). It cannot edit
- *    existing work, add objectives, launch or attach agents, capture inbox items,
- *    create projects, manage tokens or webhooks, or administer a workspace.
- *
- * A token's effective permissions are always its creating user's role grants
- * intersected with its scope grants, so a scope can only restrict, never widen.
- */
-export type TokenScope = 'full' | 'mission_lifecycle' | 'project_automation';
-
-/**
- * One project a `project_automation` token was issued for. `name` is the
- * project's current name at read time, not a snapshot; a hard-deleted project
- * simply disappears from the list and never widens the token.
- */
-export interface UserTokenProjectDto {
-  id: string;
-  name: string;
-}
-
-/**
- * A `USER_TOKEN` as surfaced to the settings UI. Derived from the `user_tokens`
- * row owned by the local operator; the raw secret and its hash are never
- * included — only the non-secret display prefix.
- */
-export interface UserTokenDto {
-  id: string;
-  /** User-supplied label, e.g. "macbook runner". */
-  label: string;
-  /** Non-secret lookup/display prefix, e.g. `out_ab12cd34`. */
-  tokenPrefix: string;
-  status: UserTokenStatus;
-  /** Permission scope preset; `full` unless the token was minted scoped. */
-  scope: TokenScope;
-  /** Resolved scope grant patterns; empty for a `full` token. */
-  scopeGrants: string[];
-  /**
-   * Projects selected at issuance. Non-empty only for `project_automation`
-   * (always `[]` for `full` and `mission_lifecycle`); an automation token whose
-   * every project was deleted reports `[]` and authorizes nothing.
-   */
-  projects: UserTokenProjectDto[];
-  /** Optional expiry; `null` means the token never expires. */
-  expiresAt: string | null;
-  /** Last time the token successfully authenticated, when recorded. */
-  lastUsedAt: string | null;
-  revokedAt: string | null;
-  createdAt: string;
-}
-
-/** Create a new `USER_TOKEN` for the local operator. */
-export interface CreateUserTokenBody {
-  label: string;
-  /**
-   * Optional ISO-8601 expiry. Omitting the field defaults to a 90-day expiry;
-   * an explicit `null` opts out and mints a non-expiring token.
-   */
-  expiresAt?: string | null;
-  /** Permission scope preset; defaults to `full` when omitted. */
-  scope?: TokenScope;
-  /**
-   * Project ids the token may read and create missions in. Required, non-empty,
-   * and de-duplicated when `scope` is `project_automation`; every id must name a
-   * live project the caller can `project:read` and `mission:create` in, and all
-   * must sit in the caller's active organization. Rejected (400) for any other
-   * `scope`. The selection is immutable: mint a new token to change it. Workspace
-   * consent is derived from these projects (`user_token_workspaces` receives
-   * exactly their owning workspaces); the caller never selects workspaces here.
-   */
-  projectIds?: string[];
-}
-
-/**
- * The result of creating a token. The raw `secret` is returned exactly once and
- * is never persisted (only its hash is stored) or retrievable again afterwards.
- */
-export interface CreateUserTokenResultDto {
-  token: UserTokenDto;
-  secret: string;
-}
-
-/** Rename a token without rotating its secret. */
-export interface UpdateUserTokenBody {
-  label: string;
-}
-
-export interface ApiError {
-  error: string;
-  detail?: string;
-}
+export type ApiError = ErrorEnvelope;
 
 // ---- Webhooks (coo:115) ----------------------------------------------------
 
-export type WebhookPayloadMode = 'thin' | 'full';
-export type WebhookDisabledReason = 'manual' | 'failures' | 'owner_revoked';
-
-/**
- * Namespaced, versioned webhook event vocabulary (open, distinct from the
- * closed `mission_events.type` enum) -- see database schema contract ->
- * Controlled Vocabularies -> "Webhook event catalog".
- */
-export type WebhookEventType =
-  | 'mission.delivered'
-  | 'mission.status_changed'
-  | 'objective.completed'
-  | 'mission.blocked'
-  | 'mission.unblocked';
-
-export interface WebhookSubscriptionDto {
-  id: string;
-  projectId: string | null;
-  name: string;
-  endpointUrl: string;
-  /** Whether `endpointUrl`'s host matches the operator's `OVERLORD_WEBHOOK_INTERNAL_HOSTS` allowlist (or is implicit localhost in Local edition). */
-  isInternal: boolean;
-  eventTypes: WebhookEventType[];
-  payloadMode: WebhookPayloadMode;
-  enabled: boolean;
-  disabledReason: WebhookDisabledReason | null;
-  consecutiveFailures: number;
-  lastSuccessAt: string | null;
-  lastFailureAt: string | null;
-  createdByWorkspaceUserId: string;
-  createdAt: string;
-  updatedAt: string;
-  revision: number;
-}
-
-export interface CreateWebhookSubscriptionBody {
-  name: string;
-  endpointUrl: string;
-  /** Required when projectId is absent; ignored when projectId derives tenancy. */
-  workspaceId?: string | null;
-  projectId?: string | null;
-  eventTypes: WebhookEventType[];
-  /** Defaults to `full` for internal endpoints, `thin` for external ones, when omitted. */
-  payloadMode?: WebhookPayloadMode;
-}
-
-export interface UpdateWebhookSubscriptionBody {
-  name?: string;
-  endpointUrl?: string;
-  projectId?: string | null;
-  eventTypes?: WebhookEventType[];
-  payloadMode?: WebhookPayloadMode;
-  enabled?: boolean;
-}
-
-/** The raw secret (`whsec_...`) is returned exactly once, on creation, and is never retrievable again afterwards. */
-export interface CreateWebhookSubscriptionResultDto {
-  subscription: WebhookSubscriptionDto;
-  secret: string;
-}
-
 /** Returned by rotate-secret; the previous secret stops verifying immediately. */
-export interface RotateWebhookSecretResultDto {
-  subscription: WebhookSubscriptionDto;
-  secret: string;
-}
-
-export interface WebhookDeliveryAttemptDto {
-  id: string;
-  outboxMessageId: string;
-  eventType: string;
-  attemptNumber: number;
-  responseStatus: number | null;
-  responseSnippet: string | null;
-  error: string | null;
-  durationMs: number | null;
-  attemptedAt: string;
-}
-
-export interface WebhookDeliveryAttemptsPageDto {
-  attempts: WebhookDeliveryAttemptDto[];
-  hasMore: boolean;
-}
+export type RotateWebhookSecretResultDto = CreateWebhookSubscriptionResultDto;
 
 // ---- Virtual execution targets (coo:258, contract v3) ----------------------
 //
@@ -3368,7 +941,7 @@ export interface WebhookDeliveryAttemptsPageDto {
  * Documented core `execution_targets.type` values. Open vocabulary — adapters
  * may add namespaced values, so a `string` is always accepted on the wire.
  */
-export type ExecutionTargetType = 'local' | 'virtual' | (string & {});
+export type ExecutionTargetType = WorkspaceExecutionTargetDto['type'];
 
 /** Gateway health as reported through registration/heartbeat. */
 export type VirtualTargetHealth = 'healthy' | 'degraded' | 'unreachable' | 'unknown';

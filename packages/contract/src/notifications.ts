@@ -1,3 +1,8 @@
+import type { NotificationMode, NotificationTransport, NotificationType } from './generated/api.js';
+import { vocabulary } from './vocabulary.js';
+
+// REST DTOs generated from contract/api/openapi.yaml (ADR 0006).
+export type { NotificationMode, NotificationTransport, NotificationType } from './generated/api.js';
 /**
  * The declarative source of truth for every user-facing mission notification.
  *
@@ -5,24 +10,22 @@
  * In particular, `verb` is deliberately fixed here rather than constructed from
  * mission, objective, or agent-provided text.
  */
-export const NOTIFICATION_TYPES = [
+export const NOTIFICATION_TYPES = vocabulary<NotificationType>()([
   'mission_awaiting_review',
   'agent_question',
   'mission_complete',
   'mission_failed',
   'agent_started',
   'returned_to_execute'
-] as const;
+]);
 
-export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
-
-export const NOTIFICATION_MODES = ['alert', 'silent', 'off'] as const;
-export type NotificationMode = (typeof NOTIFICATION_MODES)[number];
-
+export const NOTIFICATION_MODES = vocabulary<NotificationMode>()(['alert', 'silent', 'off']);
 /** Delivery mechanisms a notification type may use as the system evolves. */
-export const NOTIFICATION_TRANSPORTS = ['apns', 'realtime', 'in_app'] as const;
-export type NotificationTransport = (typeof NOTIFICATION_TRANSPORTS)[number];
-
+export const NOTIFICATION_TRANSPORTS = vocabulary<NotificationTransport>()([
+  'apns',
+  'realtime',
+  'in_app'
+]);
 export type NotificationDescriptor = {
   id: NotificationType;
   label: string;

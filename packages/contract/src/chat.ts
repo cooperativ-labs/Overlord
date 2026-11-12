@@ -17,6 +17,84 @@
 // ---------------------------------------------------------------------------
 // Controlled vocabularies (closed; adding a value requires a contract bump)
 // ---------------------------------------------------------------------------
+import type {
+  AccountConnectionAssistantWriteScope,
+  AccountConnectionCredentialKind,
+  AccountConnectionProvider,
+  AccountConnectionScope,
+  AccountConnectionState,
+  AccountConnectionUnavailableReason,
+  RepositoryReadOperation
+} from './generated/api.js';
+import { vocabulary } from './vocabulary.js';
+
+// REST DTOs generated from contract/api/openapi.yaml (ADR 0006).
+export type {
+  AccountConnectionAssistantWriteScope,
+  AccountConnectionCredentialKind,
+  AccountConnectionDto,
+  AccountConnectionListResponse,
+  AccountConnectionProvider,
+  AccountConnectionProviderStatusDto,
+  AccountConnectionScope,
+  AccountConnectionState,
+  AccountConnectionUnavailableReason,
+  AckChatEventsBody,
+  AnswerChatQuestionBody,
+  CancelChatRunBody,
+  ChatAckDto,
+  ChatAssignmentDto,
+  ChatBlockDto,
+  ChatCreatedMissionDto,
+  ChatCreationReceiptDto,
+  ChatDiagnosticDto,
+  ChatDiagnosticPageDto,
+  ChatEventDto,
+  ChatEventPageDto,
+  ChatEvidenceBlockDto,
+  ChatEvidenceDto,
+  ChatKnowledgebaseWriteDto,
+  ChatMessageDto,
+  ChatNotificationDto,
+  ChatNotificationListResponse,
+  ChatPresenceDto,
+  ChatProposalBlockDto,
+  ChatProposalDto,
+  ChatProposalMissionDto,
+  ChatProposalObjectiveDto,
+  ChatProposalRevisionDto,
+  ChatProviderReadinessDto,
+  ChatProvidersResponse,
+  ChatQuestionDto,
+  ChatQuestionOptionDto,
+  ChatRunDto,
+  ChatRunUsageDto,
+  ChatSourceLocatorDto,
+  ChatStreamFrameDto,
+  ChatTextBlockDto,
+  ChatThreadDto,
+  ChatThreadListResponse,
+  ChatThreadSnapshotDto,
+  ChatUnavailableBlockDto,
+  ContinueChatRunBody,
+  ContinueChatRunResponse,
+  CreateChatThreadBody,
+  CreateChatThreadResponse,
+  CreateFromChatProposalBody,
+  CreateFromChatProposalResponse,
+  MarkChatNotificationReadBody,
+  RepositoryReadOperation,
+  RepositoryReadRequest,
+  RepositoryReadResult,
+  SetAccountConnectionApiKeyBody,
+  StartAccountConnectionBody,
+  StartAccountConnectionResponse,
+  SubmitChatMessageBody,
+  SubmitChatMessageResponse,
+  UpdateAccountConnectionBody,
+  UpdateChatPresenceBody,
+  UpdateChatThreadBody
+} from './generated/api.js';
 
 export const CHAT_RUN_STATES = [
   'queued',
@@ -179,22 +257,14 @@ export const CHAT_DEFAULT_LIMITS = {
 /**
  * Every block carries `fallbackText` so a client that does not know a kind can
  * still render something. Unknown kinds must be tolerated and rendered as text.
+ *
+ * The blocks the server writes are `ChatBlockDto` (generated). The `question` and
+ * `mission` kinds below are not written by any current writer (see
+ * contract/api/schema-disagreements.md Y1); they stay for clients that render them.
  */
 interface ChatBlockBase {
   id: string;
   fallbackText: string;
-}
-
-export interface ChatTextBlockDto extends ChatBlockBase {
-  kind: 'text';
-  /** Markdown, rendered as safe Markdown. Citations reference `evidenceIds`. */
-  text: string;
-  evidenceIds: string[];
-}
-
-export interface ChatEvidenceBlockDto extends ChatBlockBase {
-  kind: 'evidence';
-  evidence: ChatEvidenceDto[];
 }
 
 export interface ChatQuestionBlockDto extends ChatBlockBase {
@@ -202,451 +272,11 @@ export interface ChatQuestionBlockDto extends ChatBlockBase {
   questionId: string;
 }
 
-export interface ChatProposalBlockDto extends ChatBlockBase {
-  kind: 'proposal';
-  proposalId: string;
-  revision: number;
-}
-
 /** A live reference to a mission or objective; permissions are rechecked on every read. */
 export interface ChatMissionBlockDto extends ChatBlockBase {
   kind: 'mission';
   missionId: string;
   objectiveId: string | null;
-}
-
-/** Replaces any block whose source dependencies are no longer authorized. */
-export interface ChatUnavailableBlockDto extends ChatBlockBase {
-  kind: 'unavailable';
-  reason: 'source_access_lost';
-  regenerable: boolean;
-}
-
-export type ChatBlockDto =
-  | ChatTextBlockDto
-  | ChatEvidenceBlockDto
-  | ChatQuestionBlockDto
-  | ChatProposalBlockDto
-  | ChatMissionBlockDto
-  | ChatUnavailableBlockDto;
-
-// ---------------------------------------------------------------------------
-// Evidence
-// ---------------------------------------------------------------------------
-
-/** Where an evidence reference came from. Never an absolute path or credential. */
-export type ChatSourceLocatorDto =
-  | {
-      kind: 'knowledgebase';
-      connectionId: string;
-      workspace: string;
-      nodeId: string;
-      path: string | null;
-    }
-  | {
-      kind: 'overlord';
-      entityType: 'project' | 'resource' | 'mission' | 'objective' | 'delivery';
-      entityId: string;
-      projectId: string | null;
-    }
-  | {
-      kind: 'repository';
-      executionTargetId: string;
-      projectId: string;
-      resourceKey: string;
-      /** Repository-relative path, or null for resource-level observations (status, diff). */
-      relativePath: string | null;
-      head: string | null;
-    };
-
-export interface ChatEvidenceDto {
-  id: string;
-  source: ChatSourceLocatorDto;
-  /** Version id, ETag, HEAD, or revision where the source provides one. */
-  sourceRevision: string | null;
-  observedAt: string;
-  label: string;
-  excerpt: string | null;
-  truncated: boolean;
-  /** True when the observation is older than the client should treat as current. */
-  stale: boolean;
-}
-
-// ---------------------------------------------------------------------------
-// Threads, messages, runs
-// ---------------------------------------------------------------------------
-
-export interface ChatThreadDto {
-  id: string;
-  organizationId: string;
-  title: string;
-  titleSource: 'pending' | 'generated' | 'user';
-  archivedAt: string | null;
-  lastActivityAt: string;
-  /** Present when the thread has an unfinished run. */
-  activeRunState: Extract<ChatRunState, 'queued' | 'running' | 'waiting_user'> | null;
-  createdAt: string;
-  updatedAt: string;
-  revision: number;
-}
-
-export interface ChatThreadListResponse {
-  items: ChatThreadDto[];
-  /** Opaque cursor for the next page, or null. */
-  nextCursor: string | null;
-}
-
-export interface ChatMessageDto {
-  id: string;
-  threadId: string;
-  role: ChatMessageRole;
-  state: ChatMessageState;
-  blocks: ChatBlockDto[];
-  runId: string | null;
-  /** Set on a user message that answered a question. */
-  answersQuestionId: string | null;
-  clientRequestId: string | null;
-  createdAt: string;
-  updatedAt: string;
-  revision: number;
-}
-
-export interface ChatRunUsageDto {
-  toolCalls: number;
-  activeProcessingMs: number;
-  gatheredContentBytes: number;
-}
-
-/**
- * An explicit, per-request authorization for the assistant to write to one Knowledgebase
- * workspace through one of the caller's connections (contract v154). Without it a run is
- * research only: no write tool is offered and every write is refused server-side.
- */
-export interface ChatKnowledgebaseWriteDto {
-  connectionId: string;
-  /** Knowledgebase workspace slug; must be in the connection's `authorizedWorkspaces`. */
-  workspace: string;
-}
-
-export interface ChatRunDto {
-  id: string;
-  threadId: string;
-  triggerMessageId: string;
-  state: ChatRunState;
-  outcome: ChatRunOutcome | null;
-  failureCode: ChatRunFailureCode | null;
-  /** Only `allowance_exhausted` completions on the thread's latest run offer Continue. */
-  continueAvailable: boolean;
-  continuedFromRunId: string | null;
-  /** The Knowledgebase write scope the user granted this run (v154); null for research only. */
-  knowledgebaseWrite: ChatKnowledgebaseWriteDto | null;
-  usage: ChatRunUsageDto;
-  cancelRequestedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-  completedAt: string | null;
-  revision: number;
-}
-
-export interface ChatQuestionOptionDto {
-  id: string;
-  label: string;
-}
-
-/** Same shape the existing question and choice cards render. */
-export interface ChatQuestionDto {
-  id: string;
-  threadId: string;
-  runId: string;
-  /** 1-based ordinal of this question within its run; notifications dedupe on it. */
-  ordinal: number;
-  state: ChatQuestionState;
-  prompt: string;
-  options: ChatQuestionOptionDto[];
-  allowFreeText: boolean;
-  answerMessageId: string | null;
-  createdAt: string;
-  answeredAt: string | null;
-  revision: number;
-}
-
-// ---------------------------------------------------------------------------
-// Proposals
-// ---------------------------------------------------------------------------
-
-/** Frozen at proposal preparation; Create passes it verbatim and verifies what was saved. */
-export interface ChatAssignmentDto {
-  agent: string;
-  model: string | null;
-  reasoningEffort: string | null;
-  /** Where the selection came from, shown on the card. */
-  source: 'project_default' | 'user_preference' | 'assistant_selection';
-}
-
-export interface ChatProposalObjectiveDto {
-  title: string;
-  objective: string;
-  acceptanceCriteria: string[];
-  resourceKey: string;
-  assignment: ChatAssignmentDto;
-  evidenceIds: string[];
-}
-
-export interface ChatProposalMissionDto {
-  /** Stable within a proposal across revisions so clients can diff. */
-  key: string;
-  projectId: string;
-  /** Snapshot for display; authorization is by `projectId`. */
-  projectName: string;
-  workspaceId: string;
-  title: string;
-  objectives: ChatProposalObjectiveDto[];
-  dependencies: string[];
-  /** Set when the destination audience is broader than a cited source's audience. */
-  audienceWarning: string | null;
-}
-
-export interface ChatProposalRevisionDto {
-  revision: number;
-  missions: ChatProposalMissionDto[];
-  /** Acting user is the responsible person in every destination workspace. */
-  responsibleProfileId: string;
-  invalidated: boolean;
-  createdAt: string;
-}
-
-export interface ChatProposalDto {
-  id: string;
-  threadId: string;
-  state: ChatProposalState;
-  currentRevision: number;
-  current: ChatProposalRevisionDto;
-  receipt: ChatCreationReceiptDto | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ChatCreatedMissionDto {
-  missionId: string;
-  missionDisplayId: string;
-  projectId: string;
-  objectiveIds: string[];
-}
-
-/** One durable receipt per proposal; every replay of Create returns it unchanged. */
-export interface ChatCreationReceiptDto {
-  id: string;
-  proposalId: string;
-  revision: number;
-  missions: ChatCreatedMissionDto[];
-  createdAt: string;
-}
-
-// ---------------------------------------------------------------------------
-// Snapshot and events
-// ---------------------------------------------------------------------------
-
-/**
- * Atomic snapshot. Everything here and `eventCursor` are read in one database
- * transaction, so subscribing with `after = eventCursor` neither misses nor
- * double-applies an event. Content whose dependencies are not currently
- * authorized is already replaced with `unavailable` blocks.
- */
-export interface ChatThreadSnapshotDto {
-  thread: ChatThreadDto;
-  messages: ChatMessageDto[];
-  /** True when older messages exist; page with `before`. */
-  hasEarlierMessages: boolean;
-  activeRun: ChatRunDto | null;
-  /** The thread's most recent terminal run, for Continue and failure display. */
-  latestRun: ChatRunDto | null;
-  openQuestion: ChatQuestionDto | null;
-  openProposals: ChatProposalDto[];
-  /**
-   * Proposals that are no longer open (created or cancelled) but are referenced by a
-   * proposal block in `messages`, so a client can render their receipt or final state
-   * after a reload. Same authorized projection as `openProposals`.
-   */
-  referencedProposals: ChatProposalDto[];
-  eventCursor: number;
-  /** Oldest sequence still replayable; `after` below `retainedFromSeq - 1` is `snapshot_required`. */
-  retainedFromSeq: number;
-}
-
-interface ChatEventBase {
-  threadId: string;
-  /** Strictly increasing per thread, gap-free in storage. */
-  seq: number;
-  createdAt: string;
-}
-
-export type ChatEventDto =
-  | (ChatEventBase & { kind: 'thread.updated'; thread: ChatThreadDto })
-  | (ChatEventBase & { kind: 'message.created'; message: ChatMessageDto })
-  | (ChatEventBase & {
-      kind: 'message.delta';
-      messageId: string;
-      blockId: string;
-      /** Coalesced text appended to the block. */
-      text: string;
-    })
-  | (ChatEventBase & { kind: 'message.completed'; message: ChatMessageDto })
-  | (ChatEventBase & { kind: 'run.updated'; run: ChatRunDto })
-  | (ChatEventBase & {
-      kind: 'tool.updated';
-      runId: string;
-      toolCallId: string;
-      /** Sanitized, user-facing label such as "Reading OverlordMobile git status". */
-      label: string;
-      state: ChatToolCallState;
-    })
-  | (ChatEventBase & { kind: 'question.opened'; question: ChatQuestionDto })
-  | (ChatEventBase & { kind: 'question.closed'; question: ChatQuestionDto })
-  | (ChatEventBase & { kind: 'proposal.revised'; proposal: ChatProposalDto })
-  | (ChatEventBase & { kind: 'proposal.created'; proposal: ChatProposalDto })
-  | (ChatEventBase & {
-      kind: 'content.invalidated';
-      /** Clients replace these from a fresh authorized snapshot. */
-      messageIds: string[];
-      proposalIds: string[];
-    });
-
-/**
- * Stream frames on `GET /api/chat/threads/:id/events` (SSE). `event` frames carry
- * a `ChatEventDto`; `snapshot_required` means the cursor is older than retention
- * or the projection changed and the client must reload the snapshot; `heartbeat`
- * keeps intermediaries open. A closed stream never implies run completion.
- */
-export type ChatStreamFrameDto =
-  | { type: 'event'; event: ChatEventDto }
-  | { type: 'snapshot_required'; retainedFromSeq: number }
-  | { type: 'heartbeat'; at: string };
-
-/** Polling fallback: same events as the stream, bounded page. */
-export interface ChatEventPageDto {
-  events: ChatEventDto[];
-  /** Cursor to pass as `after` next time. */
-  cursor: number;
-  hasMore: boolean;
-}
-
-// ---------------------------------------------------------------------------
-// Request bodies
-// ---------------------------------------------------------------------------
-
-export interface CreateChatThreadBody {
-  /** Optional first message; when present the response includes the created run. */
-  message?: SubmitChatMessageBody;
-}
-
-export interface CreateChatThreadResponse {
-  thread: ChatThreadDto;
-  message: ChatMessageDto | null;
-  run: ChatRunDto | null;
-}
-
-export interface UpdateChatThreadBody {
-  expectedRevision: number;
-  title?: string;
-  archived?: boolean;
-}
-
-/**
- * Idempotent per `(thread, clientRequestId)`. While a question is open the message
- * is its answer and resumes the same run. While a run is queued or running the
- * request is rejected with `run_in_progress`.
- */
-export interface SubmitChatMessageBody {
-  clientRequestId: string;
-  text: string;
-  /** When answering through a card option. Ignored unless it names an option of the open question. */
-  optionId?: string;
-  /**
-   * Authorizes Knowledgebase writes for the run this message starts (v154). The
-   * connection must be the caller's, connected, and authorized for the workspace
-   * (`invalid_request` otherwise; `connection_reauthorization_required` when it needs
-   * sign-in). An answer may add a grant to a waiting run that has none; a different
-   * grant is `invalid_request`. A continued run inherits its source run's grant.
-   */
-  knowledgebaseWrite?: ChatKnowledgebaseWriteDto | null;
-}
-
-export interface SubmitChatMessageResponse {
-  message: ChatMessageDto;
-  run: ChatRunDto;
-  /** True when this request replayed an earlier submission with the same client request id. */
-  replayed: boolean;
-}
-
-/** Revision-checked answer from a question card. */
-export interface AnswerChatQuestionBody {
-  clientRequestId: string;
-  expectedRevision: number;
-  optionId?: string;
-  text?: string;
-}
-
-export interface CancelChatRunBody {
-  clientRequestId: string;
-}
-
-/** Continue an `allowance_exhausted` run with a fresh allowance and the gathered evidence. */
-export interface ContinueChatRunBody {
-  clientRequestId: string;
-}
-
-/**
- * The sole creation path. Idempotent per `(owner, clientRequestId)` and unique per
- * proposal: every replay, concurrent duplicate, or later call returns the same receipt.
- */
-export interface CreateFromChatProposalBody {
-  clientRequestId: string;
-  expectedRevision: number;
-}
-
-export interface CreateFromChatProposalResponse {
-  proposal: ChatProposalDto;
-  receipt: ChatCreationReceiptDto;
-  replayed: boolean;
-}
-
-/** Renew or release one client's foreground presence on a thread. */
-export interface UpdateChatPresenceBody {
-  clientId: string;
-  platform: 'ios' | 'web' | 'desktop';
-  state: 'foreground' | 'released';
-}
-
-export interface ChatPresenceDto {
-  clientId: string;
-  expiresAt: string | null;
-}
-
-/**
- * Acknowledges that this foreground client rendered every event up to and including
- * `seq`. Idempotent and monotonic per client; it is not a replay cursor.
- */
-export interface AckChatEventsBody {
-  clientId: string;
-  seq: number;
-}
-
-export interface ChatAckDto {
-  clientId: string;
-  ackedSeq: number;
-  suppressedNotificationIds: string[];
-}
-
-export interface ChatProviderReadinessDto {
-  provider: 'gemini';
-  model: string;
-  state: 'ready' | 'not_configured' | 'unavailable' | 'rate_limited';
-  checkedAt: string;
-}
-
-export interface ChatProvidersResponse {
-  providers: ChatProviderReadinessDto[];
-  connections: AccountConnectionDto[];
 }
 
 // ---------------------------------------------------------------------------
@@ -693,31 +323,6 @@ export const CHAT_NOTIFICATION_STATES = [
 ] as const;
 export type ChatNotificationState = (typeof CHAT_NOTIFICATION_STATES)[number];
 
-/** History projection of a dispatched conversation notification. No transcript content. */
-export interface ChatNotificationDto {
-  id: string;
-  type: ChatNotificationType;
-  organizationId: string;
-  threadId: string;
-  runId: string;
-  questionId: string | null;
-  /** Bounded, sanitized thread title captured at dispatch. */
-  threadTitle: string;
-  createdAt: string;
-  dispatchedAt: string;
-  readAt: string | null;
-  revision: number;
-}
-
-export interface ChatNotificationListResponse {
-  items: ChatNotificationDto[];
-  unreadCount: number;
-}
-
-export interface MarkChatNotificationReadBody {
-  expectedRevision: number;
-}
-
 /** Deep link carried by a conversation push; opens the thread, including on cold start. */
 export const CHAT_NOTIFICATION_DEEP_LINK = 'overlord://chat/threads/:threadId' as const;
 
@@ -725,19 +330,23 @@ export const CHAT_NOTIFICATION_DEEP_LINK = 'overlord://chat/threads/:threadId' a
 // Account connections
 // ---------------------------------------------------------------------------
 
-export const ACCOUNT_CONNECTION_PROVIDERS = ['knowledgebase', 'everhour', 'github'] as const;
-export type AccountConnectionProvider = (typeof ACCOUNT_CONNECTION_PROVIDERS)[number];
-
+export const ACCOUNT_CONNECTION_PROVIDERS = vocabulary<AccountConnectionProvider>()([
+  'knowledgebase',
+  'everhour',
+  'github'
+]);
 /**
  * `organization`: owned by a profile inside one organization (Knowledgebase).
  * `profile`: owned by the profile across every organization (Everhour, GitHub).
  */
-export const ACCOUNT_CONNECTION_SCOPES = ['organization', 'profile'] as const;
-export type AccountConnectionScope = (typeof ACCOUNT_CONNECTION_SCOPES)[number];
-
-export const ACCOUNT_CONNECTION_CREDENTIAL_KINDS = ['oauth', 'api_key'] as const;
-export type AccountConnectionCredentialKind = (typeof ACCOUNT_CONNECTION_CREDENTIAL_KINDS)[number];
-
+export const ACCOUNT_CONNECTION_SCOPES = vocabulary<AccountConnectionScope>()([
+  'organization',
+  'profile'
+]);
+export const ACCOUNT_CONNECTION_CREDENTIAL_KINDS = vocabulary<AccountConnectionCredentialKind>()([
+  'oauth',
+  'api_key'
+]);
 /** Server-side envelope formats (never projected); listed for the closed vocabulary. */
 export const ACCOUNT_CONNECTION_CREDENTIAL_FORMATS = [
   'connection-v1',
@@ -747,14 +356,12 @@ export const ACCOUNT_CONNECTION_CREDENTIAL_FORMATS = [
 export type AccountConnectionCredentialFormat =
   (typeof ACCOUNT_CONNECTION_CREDENTIAL_FORMATS)[number];
 
-export const ACCOUNT_CONNECTION_STATES = [
+export const ACCOUNT_CONNECTION_STATES = vocabulary<AccountConnectionState>()([
   'pending',
   'connected',
   'reauthorization_required',
   'disconnected'
-] as const;
-export type AccountConnectionState = (typeof ACCOUNT_CONNECTION_STATES)[number];
-
+]);
 /**
  * How far the assistant may write through a Knowledgebase connection (v158).
  * `per_request` (default): only the one workspace a user allows on a single message
@@ -762,96 +369,14 @@ export type AccountConnectionState = (typeof ACCOUNT_CONNECTION_STATES)[number];
  * in `authorizedWorkspaces`, for every run, without a per-message grant. Always
  * `per_request` for other providers.
  */
-export const ACCOUNT_CONNECTION_ASSISTANT_WRITE_SCOPES = ['per_request', 'all_workspaces'] as const;
-export type AccountConnectionAssistantWriteScope =
-  (typeof ACCOUNT_CONNECTION_ASSISTANT_WRITE_SCOPES)[number];
-
-/** Non-secret connection metadata. Credentials never leave the connections module. */
-export interface AccountConnectionDto {
-  id: string;
-  provider: AccountConnectionProvider;
-  /** Always a string in the default (organization-scoped) listing; null when `scope` is `profile`. */
-  organizationId: string | null;
-  scope: AccountConnectionScope;
-  credentialKind: AccountConnectionCredentialKind;
-  /** The upstream account this credential authenticates as, when known. */
-  account: { id: string | null; label: string | null; avatarUrl: string | null } | null;
-  /** Granted OAuth scopes; empty for API keys. */
-  scopes: string[];
-  lastValidatedAt: string | null;
-  serverUrl: string;
-  state: AccountConnectionState;
-  /** Provider workspaces this grant can read, e.g. Knowledgebase workspace slugs. */
-  authorizedWorkspaces: string[];
-  /** Knowledgebase write scope the owner chose for the assistant (v158). */
-  assistantWriteScope: AccountConnectionAssistantWriteScope;
-  toolPolicyVersion: number;
-  lastErrorCode: string | null;
-  connectedAt: string | null;
-  updatedAt: string;
-  revision: number;
-}
-
-export const ACCOUNT_CONNECTION_UNAVAILABLE_REASONS = [
-  'not_offered_on_edition',
-  'not_configured',
-  'encryption_not_configured'
-] as const;
-export type AccountConnectionUnavailableReason =
-  (typeof ACCOUNT_CONNECTION_UNAVAILABLE_REASONS)[number];
-
-/** One provider this server offers through `/api/connections` (`?scope=all` only). */
-export interface AccountConnectionProviderStatusDto {
-  provider: AccountConnectionProvider;
-  scope: AccountConnectionScope;
-  credentialKind: AccountConnectionCredentialKind;
-  available: boolean;
-  reason: AccountConnectionUnavailableReason | null;
-}
-
-/**
- * `GET /api/connections`: the caller's connections in the active organization.
- * `GET /api/connections?scope=all` (v153) adds profile-scoped connections and `providers`.
- */
-export interface AccountConnectionListResponse {
-  items: AccountConnectionDto[];
-  providers?: AccountConnectionProviderStatusDto[];
-}
-
-/** `POST /api/connections/api-keys` (v153): validated upstream, then sealed. Never echoed. */
-export interface SetAccountConnectionApiKeyBody {
-  provider: AccountConnectionProvider;
-  apiKey: string;
-}
-
-/**
- * `PATCH /api/connections/:id` (v158): change a live Knowledgebase connection's
- * settings. `expectedRevision` must match the connection's `revision`
- * (`stale_revision` otherwise); any other provider is `invalid_request`.
- */
-export interface UpdateAccountConnectionBody {
-  expectedRevision: number;
-  assistantWriteScope: AccountConnectionAssistantWriteScope;
-}
-
-export interface StartAccountConnectionBody {
-  provider: AccountConnectionProvider;
-  /** Where the backend sends the browser after the callback; validated against an allowlist. */
-  returnTo: 'mobile' | 'web';
-  /**
-   * Profile-scoped OAuth providers (`github`, v153), `returnTo: 'web'` only: a relative
-   * path on the web origin to return to (starts with `/`, not `//`; at most 512
-   * characters). Defaults to `/settings/connections`.
-   */
-  returnPath?: string;
-}
-
-/** The client opens `authorizeUrl` (ASWebAuthenticationSession on iOS, a tab on web). */
-export interface StartAccountConnectionResponse {
-  connectionId: string;
-  authorizeUrl: string;
-  expiresAt: string;
-}
+export const ACCOUNT_CONNECTION_ASSISTANT_WRITE_SCOPES =
+  vocabulary<AccountConnectionAssistantWriteScope>()(['per_request', 'all_workspaces']);
+export const ACCOUNT_CONNECTION_UNAVAILABLE_REASONS =
+  vocabulary<AccountConnectionUnavailableReason>()([
+    'not_offered_on_edition',
+    'not_configured',
+    'encryption_not_configured'
+  ]);
 
 // ---------------------------------------------------------------------------
 // Repository reads (local-target interface seam; executed by the runner)
@@ -863,7 +388,7 @@ export interface StartAccountConnectionResponse {
  * symlinks), excludes credential and configured sensitive paths, disables external
  * diff/textconv and hooks, and never fetches, checks out, builds, or takes write intent.
  */
-export const REPOSITORY_READ_OPERATIONS = [
+export const REPOSITORY_READ_OPERATIONS = vocabulary<RepositoryReadOperation>()([
   'observe',
   'tree',
   'branches',
@@ -872,9 +397,7 @@ export const REPOSITORY_READ_OPERATIONS = [
   'diff',
   'read_file',
   'search_text'
-] as const;
-export type RepositoryReadOperation = (typeof REPOSITORY_READ_OPERATIONS)[number];
-
+]);
 export const REPOSITORY_READ_DEFAULT_BOUNDS = {
   readFileBytes: 64 * 1024,
   diffBytes: 128 * 1024,
@@ -906,17 +429,6 @@ export interface RepositoryReadBinding {
   resourceKey: string;
 }
 
-export type RepositoryReadRequest = RepositoryReadBinding & {
-  /** Idempotency key carried to the runner queue; reused on retry, never regenerated. */
-  operationId: string;
-} & (
-    | { operation: 'observe' | 'branches' | 'worktrees' | 'git_status' }
-    | { operation: 'tree'; relativePath?: string; maxEntries?: number }
-    | { operation: 'diff'; scope: RepositoryDiffScope; relativePaths?: string[] }
-    | { operation: 'read_file'; relativePath: string; startLine?: number; endLine?: number }
-    | { operation: 'search_text'; query: string; relativePath?: string; caseSensitive?: boolean }
-  );
-
 export type RepositoryReadOutcome =
   | 'ok'
   | 'unavailable'
@@ -926,26 +438,6 @@ export type RepositoryReadOutcome =
   | 'binary'
   | 'oversized'
   | 'not_found';
-
-export interface RepositoryReadResult {
-  operationId: string;
-  operation: RepositoryReadOperation;
-  binding: RepositoryReadBinding;
-  outcome: RepositoryReadOutcome;
-  head: string | null;
-  branch: string | null;
-  observedAt: string;
-  bytes: number;
-  truncated: boolean;
-  /**
-   * Operation-specific bounded payload; text content is UTF-8. `git_status`:
-   * {@link RepositoryGitStatusData}; `diff`: {@link RepositoryDiffData}; `read_file`:
-   * {@link RepositoryFileData}; `search_text`: {@link RepositorySearchData}; the
-   * existing reads carry their capability payloads. Non-`ok` outcomes carry
-   * `{ message }` plus any size metadata.
-   */
-  data: unknown;
-}
 
 export interface RepositoryGitStatusEntry {
   path: string;
@@ -999,20 +491,4 @@ export interface RepositorySearchData {
   query: string;
   caseSensitive: boolean;
   hits: RepositorySearchHit[];
-}
-
-/** Unredacted observations; only the owner-only diagnostics route returns these. */
-export interface ChatDiagnosticDto {
-  seq: number;
-  threadId: string;
-  runId: string | null;
-  attemptId: string | null;
-  kind: string;
-  createdAt: string;
-  payload: unknown;
-}
-export interface ChatDiagnosticPageDto {
-  entries: ChatDiagnosticDto[];
-  nextCursor: number;
-  hasMore: boolean;
 }

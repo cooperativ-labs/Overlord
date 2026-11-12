@@ -3,13 +3,10 @@
  * agent harness. Many agents now use positional values (`--permission-mode auto`)
  * instead of standalone boolean flags (`--enable-auto-mode`).
  */
+import type { AgentLaunchFlagDto } from './generated/api.js';
 
-export type AgentLaunchFlagDto = {
-  /** CLI flag token, usually starting with `--` (e.g. `--permission-mode`). */
-  name: string;
-  /** Positional value passed after the flag name; omit or null for boolean flags. */
-  value?: string | null;
-};
+// REST DTOs generated from contract/api/openapi.yaml (ADR 0006).
+export type { AgentLaunchFlagDto } from './generated/api.js';
 
 /**
  * Parse a single user-entered flag string into a structured flag. Accepts:

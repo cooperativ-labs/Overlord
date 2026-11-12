@@ -11784,9 +11784,19 @@ components:
           enum: [ running, exited, stopping, lost ]
     MissionBranchStatus:
       type: string
+      description: >-
+        `pending`: no branch prepared yet (the planner-predicted name is shown). `created`: cut from
+        the base, not pushed. `published`: pushed to `origin`, not merged. `merged_unpushed`: merged
+        into the local base, which has not been pushed yet. `merged`: the branch's commits are in the
+        remote base (`origin/<base>`).
       enum: [ pending, created, published, merged_unpushed, merged ]
     MissionWorktreePreference:
       type: string
+      description: >-
+        Per-mission override of the workspace worktree-automation setting. `worktree`: prepare a
+        branch and a worktree even when the workspace setting is off. `branch`: prepare a branch
+        without a dedicated worktree (checked out in the project's primary repository). Null (no
+        override) inherits the workspace setting.
       enum: [ worktree, branch ]
     MissionBranchDto:
       type: object
@@ -15237,10 +15247,13 @@ components:
           type: string
           description: The owning workspace when `projectId` is absent (400 when both are missing).
         projectId:
-          type: string
           description: >-
             Limits the subscription to one project and selects its workspace. An unknown project answers
-            400; a project outside the caller's authorized workspaces 404.
+            400; a project outside the caller's authorized workspaces 404. Null or absent subscribes the
+            whole workspace.
+          oneOf:
+            - type: string
+            - type: 'null'
         name:
           type: string
           description: Trimmed; blank or absent answers 400.
@@ -16367,6 +16380,9 @@ components:
             - type: 'null'
     TargetObservationState:
       type: string
+      description: >-
+        A resource's availability as one execution target last observed it. It is target-scoped and
+        time-sensitive, distinct from the backend-owned resource lifecycle (`active`, `archived`).
       enum: [ available, missing, unreachable, permission_denied, not_git_repository, unknown ]
     ReportResourceObservationsBody:
       type: object
@@ -16384,9 +16400,15 @@ components:
               state:
                 $ref: '#/components/schemas/TargetObservationState'
                 description: Trimmed; any other value answers 400.
-              gitRoot: { type: string, description: A non-string is stored as null. }
-              branch: { type: string, description: A non-string is stored as null. }
-              commit: { type: string, description: A non-string is stored as null. }
+              gitRoot:
+                description: Null, absent or any other non-string is stored as null.
+                oneOf: [ { type: string }, { type: 'null' } ]
+              branch:
+                description: Null, absent or any other non-string is stored as null.
+                oneOf: [ { type: string }, { type: 'null' } ]
+              commit:
+                description: Null, absent or any other non-string is stored as null.
+                oneOf: [ { type: string }, { type: 'null' } ]
               observedAt:
                 type: string
                 description: Trimmed and stored as given (not parsed); blank answers 400.
@@ -16409,7 +16431,9 @@ components:
                 enum: [ created, published, merged_unpushed, merged ]
                 description: Trimmed; any other value answers 400.
               dirty: { type: boolean, description: A non-boolean answers 400. }
-              worktreePath: { type: string, description: A non-string is stored as null. }
+              worktreePath:
+                description: Null, absent or any other non-string is stored as null.
+                oneOf: [ { type: string }, { type: 'null' } ]
               observedAt:
                 type: string
                 description: Trimmed and stored as given (not parsed); blank answers 400.
@@ -16763,6 +16787,20 @@ components:
           enum: [ in_process, desktop_bridge, runner_queue, fake ]
     LocalTargetErrorCode:
       type: string
+      description: >-
+        Stable error code of a local-target capability (packages/core/service/local-target/types.ts);
+        it never carries raw filesystem or Git error text. `LOCAL_TARGET_REQUIRED`: no selected or
+        eligible target can serve the capability. `LOCAL_TARGET_UNREACHABLE`: a target is selected
+        but not reachable now. `RESOURCE_MISSING`: the linked directory does not exist on the target.
+        `NOT_GIT_REPOSITORY`: the path is not a Git repository. `PERMISSION_DENIED`: the target cannot
+        access the path. `GIT_COMMAND_FAILED`: a git or worktree command failed on the target.
+        `CAPABILITY_NOT_IMPLEMENTED`: the resolved transport does not implement the capability.
+        `LOCAL_TARGET_TIMEOUT`: the queued call was accepted but no result arrived before the
+        caller's deadline; the job is still live on the target, so callers show it as running and
+        never re-queue it. `LOCAL_TARGET_UNSUPPORTED`: the runner will not execute the capability off
+        the device (an unknown name, or `launchAgent`). `TARGET_OPERATION_FAILED`: a failure with no
+        more specific code. `LATCH_SESSION_ABSENT`: Latch has no metadata for the session (pruned or
+        removed) although the device is reachable. `UNKNOWN`: anything else.
       enum:
         [
           LOCAL_TARGET_REQUIRED,
@@ -17295,8 +17333,10 @@ components:
         summary: { type: string }
         options:
           type: array
-          description: The stored options as written.
-          items: { $ref: '#/components/schemas/JsonValue' }
+          description: >-
+            The stored options. Every option is normalized on write to string `optionId`, `label` and
+            `kind` (`boundedOptions`, packages/core/service/agent-session/requests.ts).
+          items: { $ref: '#/components/schemas/AgentRequestOption' }
         allowsFreeText: { type: boolean }
         status: { $ref: '#/components/schemas/AgentRequestStatus' }
         resolution:
