@@ -1914,7 +1914,20 @@ paths:
       x-overlord-permission: mission:read
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Cross-workspace Inbox triage missions
+      description: >-
+        Missions of active projects across every workspace of the active organization where the caller
+        holds `mission:read` (none answers an empty list), narrowed to a project_automation token's
+        projects. Distinct from the profile-owned `/api/inbox` captures.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The triage cards.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InboxMissionsResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/mobile/live-activities/{activityId}/push-token":
     parameters:
       - name: activityId
@@ -2869,56 +2882,148 @@ paths:
       x-overlord-permission: owner
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: List the caller's Inbox captures
+      description: Profile-owned, newest first. No workspace permission applies.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The captures.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InboxItemList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
     post:
       operationId: postInbox
       tags: [inbox]
       x-overlord-permission: owner
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Capture an Inbox item
+      description: Profile-owned; no workspace change is recorded (clients refetch their own list).
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateInboxItemBody' }
+      responses:
+        '200':
+          description: The capture.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InboxItemDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/inbox/{id}":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Inbox item UUID; an item owned by another profile answers 404.
+        schema: { type: string }
     get:
       operationId: getInboxById
       tags: [inbox]
       x-overlord-permission: owner
       x-overlord-edition: both
       x-overlord-consumers: [mobile]
-      x-overlord-schema-status: stub
+      summary: Read an owned Inbox item
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The capture.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InboxItemDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
     patch:
       operationId: patchInboxById
       tags: [inbox]
       x-overlord-permission: owner
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Edit an owned Inbox item
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateInboxItemBody' }
+      responses:
+        '200':
+          description: The updated capture.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InboxItemDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
     delete:
       operationId: deleteInboxById
       tags: [inbox]
       x-overlord-permission: owner
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Delete an owned Inbox item
+      description: Deletes the item and tombstones its attachments; remote stored objects are removed after commit.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/inbox/{id}/promote":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Inbox item UUID; an item owned by another profile answers 404.
+        schema: { type: string }
     post:
       operationId: postInboxByIdPromote
       tags: [inbox]
       x-overlord-permission: mission:create
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Promote an Inbox item into a mission
+      description: >-
+        Requires ownership of the item and `mission:create` on the destination project's workspace.
+        Creates an ordinary mission from the item (title, the one objective, due date, priority),
+        re-points its attachments onto the mission's first objective (copying files stored in another
+        workspace first) and consumes the item, atomically. An attachment added during the copy answers
+        409; retry.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PromoteInboxItemBody' }
+      responses:
+        '200':
+          description: The created mission.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MissionDetailDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/missions/search:
     get:
       operationId: getMissionsSearch
@@ -4327,41 +4432,95 @@ paths:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Inbox item UUID; an item owned by another profile answers 404.
+        schema: { type: string }
     get:
       operationId: getInboxByIdAttachments
       tags: [inbox]
       x-overlord-permission: owner
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: List an owned Inbox item's attachments
+      description: Active files, oldest first.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The attachments.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ObjectiveAttachmentList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
     post:
       operationId: postInboxByIdAttachments
       tags: [inbox]
       x-overlord-permission: owner
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Upload a file to an owned Inbox item
+      description: >-
+        Requires ownership and `attachment:create` in the storage workspace: the workspace of the item's
+        earlier attachments, else the caller's implicit workspace, else the first of the caller's
+        memberships that grants it (403 or 404 when none does; 409 with no membership). Raw-body transport
+        as for objective attachments: the body is the file, at most 25 MiB (413 `body_too_large`).
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: x-upload-filename
+          in: header
+          required: false
+          description: >-
+            The original filename, percent-encoded; defaults to `attachment`. A malformed encoding answers
+            500 (schema-disagreements.md X4).
+          schema: { type: string }
+      requestBody:
+        required: true
+        description: The file bytes. The request's `Content-Type` is recorded as the attachment's `contentType`.
+        content:
+          '*/*':
+            schema: { $ref: '#/components/schemas/RawUploadBody' }
+      responses:
+        '200':
+          description: The stored attachment (`inboxItemId` set; project, mission and objective null).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ObjectiveAttachmentDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/inbox/{id}/attachments/{attachmentId}":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Inbox item UUID owned by the caller.
+        schema: { type: string }
       - name: attachmentId
         in: path
         required: true
-        schema:
-          type: string
+        description: Attachment UUID.
+        schema: { type: string }
     delete:
       operationId: deleteInboxByIdAttachmentsByAttachmentId
       tags: [inbox]
       x-overlord-permission: owner
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Delete an owned Inbox item's attachment
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The item's remaining attachments.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ObjectiveAttachmentList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/agent-catalog:
     get:
       operationId: getAgentCatalog
@@ -8116,3 +8275,114 @@ components:
         hasMore:
           type: boolean
           description: Always false for an `ids` read.
+    InboxItemDto:
+      type: object
+      required: [ id, title, objectives, dueDatetime, priority, attachmentCount, createdAt, updatedAt ]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        objectives:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items: { type: string }
+        dueDatetime:
+          description: >-
+            The stored due date, or null. Create and update echo the request's text rather than
+            re-reading the row, so on Postgres (which normalizes the stored value) the response can
+            differ from a later read.
+          oneOf:
+            - type: string
+            - type: 'null'
+        priority:
+          oneOf:
+            - $ref: '#/components/schemas/MissionPriority'
+            - type: 'null'
+        attachmentCount: { type: integer, minimum: 0 }
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+    InboxItemList:
+      type: array
+      items: { $ref: '#/components/schemas/InboxItemDto' }
+    CreateInboxItemBody:
+      type: object
+      required: [ title, objectives ]
+      properties:
+        title:
+          type: string
+          description: Trimmed; must not be blank.
+        objectives:
+          type: array
+          minItems: 1
+          maxItems: 1
+          description: Exactly one non-blank instruction (trimmed); non-string items count as blank.
+          items: { type: string }
+        dueDatetime:
+          description: >-
+            Checked only with `Date.parse` (400 when unparsable); SQLite accepts only the canonical
+            `YYYY-MM-DDTHH:mm:ss.sssZ` form (409 `Database constraint violation.` otherwise). Null
+            leaves it unset.
+          oneOf:
+            - type: string
+            - type: 'null'
+        priority:
+          oneOf:
+            - $ref: '#/components/schemas/MissionPriority'
+            - type: 'null'
+    UpdateInboxItemBody:
+      type: object
+      description: >-
+        Partial update; omitted members keep their stored value and the merged item is validated as on
+        create. `title: null` and `objectives: null` also keep the stored value.
+      properties:
+        title: { type: string }
+        objectives:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items: { type: string }
+        dueDatetime:
+          oneOf:
+            - type: string
+            - type: 'null'
+        priority:
+          oneOf:
+            - $ref: '#/components/schemas/MissionPriority'
+            - type: 'null'
+    PromoteInboxItemBody:
+      type: object
+      required: [ projectId ]
+      properties:
+        projectId:
+          type: string
+          description: Destination project; requires `mission:create` there. Missing or unknown answers 404.
+    InboxMissionDto:
+      allOf:
+        - $ref: '#/components/schemas/MissionDto'
+        - type: object
+          required: [ projectName, projectColor, reasons ]
+          properties:
+            projectName: { type: string }
+            projectColor:
+              oneOf:
+                - type: string
+                - type: 'null'
+            reasons:
+              type: array
+              description: >-
+                Why the mission is listed: `overdue` (due before today, UTC), `due_soon` (due today or
+                tomorrow, UTC; exclusive with `overdue`), `agent_next` (agent-authored, status type
+                `next`), and the label-only `recent` (created in the past seven days).
+              items:
+                type: string
+                enum: [ overdue, due_soon, agent_next, recent ]
+    InboxMissionsResponse:
+      type: object
+      required: [ generatedAt, missions ]
+      properties:
+        generatedAt: { $ref: '#/components/schemas/DateTime' }
+        missions:
+          type: array
+          description: Overdue (latest due first), then due soon (soonest first), then agent Next (newest
+            first); each slice capped at 60.
+          items: { $ref: '#/components/schemas/InboxMissionDto' }
