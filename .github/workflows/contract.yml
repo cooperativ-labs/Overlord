@@ -31,6 +31,10 @@ jobs:
         run: yarn contract:test
       - name: Check conformance manifest versions
         run: yarn check:conformance-versions
+      # Regenerates packages/contract/src/generated/api.ts from the OpenAPI
+      # description, fails on any difference, and typechecks the contract package.
+      - name: Verify the generated API contract
+        run: yarn api:generate:check
       # The route parity test loads the real Express app (backend/app.ts), which
       # imports the built workspace packages.
       - name: Build the workspace packages the backend imports
