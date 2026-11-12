@@ -194,6 +194,23 @@ the code does not do.
   presented, personal tokens included, without client authentication, and always answers 200.
   `postOauthRegister`, `postOauthRevoke`.
 
+### Account connections (batch 2)
+
+- **C1** (open; reproduced). rest-notes.md says `POST /api/connections` with
+  `provider: 'everhour'` answers 400 `invalid_request`. That holds on Cloud only: a non-GitHub
+  provider takes the organization path, whose owner gate runs first, so on Local it answers
+  404 `chat_unavailable` (`createConnectionsRouter`, `backend/connections/routes.ts`).
+  `postConnections`.
+- **C2** (open). The default `GET /api/connections` listing writes as it reads: a connected
+  Knowledgebase grant whose access and refresh have both expired is moved to
+  `reauthorization_required` (`AccountConnections.list`). `getConnections`.
+- **C3** (open). `ChatErrorCode` responses from the connections router (`not_found`,
+  `chat_unavailable`, `invalid_request`, `stale_revision`, `provider_not_available`,
+  `provider_not_ready`, `credential_rejected`, `provider_unavailable`) reach `apiErrorHandler`
+  as `ServiceError`s and conform to `ErrorEnvelope` with `error` set to the code with spaces
+  (`chat unavailable`); any other failure becomes 500 `Connection request failed` with no
+  `detail`, unlike the generic 500.
+
 ## 2. Non-conforming error shapes
 
 Every route in `backend/app.ts` that forwards errors through `handle()` or `next(err)`
@@ -303,3 +320,7 @@ schema must change.
 
 None from batch 1: every operation tagged missions, objectives, deliveries, activity,
 inbox, projects, project-statuses and project-resources (81) has schemas.
+
+None from batch 2: every operation tagged workspaces, organizations, profile, user-tokens,
+notifications, auth, oauth, meta, mcp, storage, realtime, mobile, webhooks and connections
+(81) has schemas.

@@ -873,7 +873,19 @@ paths:
       x-overlord-permission: public
       x-overlord-edition: cloud
       x-overlord-consumers: [external]
-      x-overlord-schema-status: stub
+      summary: Knowledgebase OAuth client metadata document
+      description: >-
+        The Client ID Metadata Document the Knowledgebase authorization server fetches for Overlord's
+        client id. Served only on Cloud with a Knowledgebase configured, with `Cache-Control: public,
+        max-age=300`; otherwise 404 `{ error: 'not found', code: 'not_found' }`.
+      security: []
+      responses:
+        '200':
+          description: The client metadata.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KnowledgebaseClientMetadataDto' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /api/connections/knowledgebase/callback:
     get:
       operationId: getConnectionsKnowledgebaseCallback
@@ -881,7 +893,50 @@ paths:
       x-overlord-permission: public
       x-overlord-edition: cloud
       x-overlord-consumers: [external]
-      x-overlord-schema-status: stub
+      summary: Knowledgebase OAuth callback
+      description: >-
+        The Knowledgebase authorization server redirects here. On Cloud it consumes the single-use state,
+        exchanges the code and stores the encrypted grant; off Cloud, and on any failure, the status is
+        `failed`. Only a status leaves the server. Responses carry `Cache-Control: no-store` and
+        `Referrer-Policy: no-referrer`.
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: false
+          description: The authorization code.
+          schema: { type: string }
+        - name: state
+          in: query
+          required: false
+          description: The state minted by `POST /api/connections`.
+          schema: { type: string }
+        - name: error
+          in: query
+          required: false
+          description: The authorization server's error code.
+          schema: { type: string }
+      responses:
+        '302':
+          description: >-
+            When the flow named a return target: `overlord://connections/callback` (mobile) or the web
+            origin plus `/settings/connections` (web), each with
+            `provider=knowledgebase&status=<connected|denied|expired|failed>`. The body is Express's short
+            redirect notice.
+          headers:
+            Location:
+              required: true
+              schema: { type: string }
+        '200':
+          description: Connected, and no return target; a short HTML status page.
+          content:
+            text/html:
+              schema: { type: string }
+        '400':
+          description: Not connected (or not Cloud), and no return target; a short HTML status page.
+          content:
+            text/html:
+              schema: { type: string }
   /api/chat/providers:
     get:
       operationId: getChatProviders
@@ -1081,14 +1136,62 @@ paths:
       x-overlord-permission: owner
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: List the caller's account connections
+      description: >-
+        Owner-scoped; no RBAC action. Without `scope` it lists the caller's live organization-scoped
+        (Knowledgebase) connections in the request's selected organization; that listing is Cloud-only
+        (404 `chat_unavailable` on Local, 404 `not_found` without a selected organization or membership),
+        and a grant whose refresh has expired is moved to `reauthorization_required` as it is read. With
+        `scope=all`, on both editions, it adds the caller's profile-scoped connections (Everhour, GitHub;
+        legacy rows are adopted first) and `providers`. Responses carry `Cache-Control: no-store`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: scope
+          in: query
+          required: false
+          description: '`all` selects the combined listing; any other value is the default listing.'
+          schema: { type: string }
+      responses:
+        '200':
+          description: The connections.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountConnectionListResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
     post:
       operationId: postConnections
       tags: [connections]
       x-overlord-permission: owner
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Start an OAuth account connection
+      description: >-
+        `provider: github` starts the caller's profile-scoped GitHub repository consent on both editions
+        (reusing a live connection's row for a reconnect); 503 `provider_not_ready` when the GitHub OAuth
+        client or every write key is missing. Any other provider takes the Cloud-only organization path
+        (404 `chat_unavailable` on Local): only `knowledgebase` is accepted there (400 `invalid_request`
+        otherwise, `everhour` included), 503 `provider_not_ready` when Knowledgebase or encryption is not
+        configured. The client opens `authorizeUrl`; the state expires at `expiresAt`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StartAccountConnectionBody' }
+      responses:
+        '200':
+          description: The pending connection and where to authorize it.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StartAccountConnectionResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /api/connections/api-keys:
     post:
       operationId: postConnectionsApiKeys
@@ -1096,28 +1199,93 @@ paths:
       x-overlord-permission: owner
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Connect or rotate an API-key account connection
+      description: >-
+        Profile-scoped, both editions. The key is validated upstream before it is sealed; this is also the
+        reconnect and rotation call. 404 `provider_not_available` for a provider that is not an API-key
+        provider offered here, 400 `invalid_request` for a blank or oversized key, 503
+        `provider_not_ready` without a write key, 422 `credential_rejected` when upstream refuses the key,
+        502 `provider_unavailable` when upstream cannot be reached. The key is never echoed.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SetAccountConnectionApiKeyBody' }
+      responses:
+        '200':
+          description: The connection (`connected`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountConnectionDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '422': { $ref: '#/components/responses/UnprocessableContent' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '502': { $ref: '#/components/responses/BadGateway' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
   "/api/connections/{id}":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: The connection id; another owner's or organization's id answers 404 `not_found`.
+        schema: { type: string }
     patch:
       operationId: patchConnectionsById
       tags: [connections]
       x-overlord-permission: owner
       x-overlord-edition: cloud
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Change a Knowledgebase connection's settings
+      description: >-
+        Cloud-only (404 `chat_unavailable` on Local). Only the caller's live Knowledgebase connection in
+        the selected organization (404 `not_found` otherwise); another provider, an unknown body member or
+        value answers 400 `invalid_request`; `expectedRevision` other than the current `revision` answers
+        409 `stale_revision`. Bumps `revision` when the value changes.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateAccountConnectionBody' }
+      responses:
+        '200':
+          description: The connection.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountConnectionDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
     delete:
       operationId: deleteConnectionsById
       tags: [connections]
       x-overlord-permission: owner
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Disconnect an account connection
+      description: >-
+        A profile-scoped row of the caller is disconnected on both editions: the credential is erased
+        first, then revoked upstream best-effort, then the legacy row is tombstoned. Any other id takes
+        the Cloud-only organization path (404 `chat_unavailable` on Local) for the caller's live
+        Knowledgebase connection. An unknown, foreign or already disconnected id answers 404 `not_found`.
+        Answers the connection in state `disconnected`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The disconnected connection.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountConnectionDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/meta:
     get:
       operationId: getMeta
@@ -6621,6 +6789,18 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    ServiceUnavailable:
+      description: >-
+        A provider or its credential encryption is not configured on this server (`{ error, code:
+        'provider_not_ready' }`).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+    UnprocessableContent:
+      description: The upstream provider rejected the supplied credential (`code` `credential_rejected`).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   schemas:
     ErrorEnvelope:
       type: object
@@ -11256,3 +11436,180 @@ components:
               properties:
                 code: { type: integer, enum: [ -32600, -32601, -32000 ] }
                 message: { type: string }
+    AccountConnectionProvider:
+      type: string
+      enum: [ knowledgebase, everhour, github ]
+    AccountConnectionScope:
+      type: string
+      enum: [ organization, profile ]
+    AccountConnectionCredentialKind:
+      type: string
+      enum: [ oauth, api_key ]
+    AccountConnectionState:
+      type: string
+      enum: [ pending, connected, reauthorization_required, disconnected ]
+    AccountConnectionAssistantWriteScope:
+      type: string
+      enum: [ per_request, all_workspaces ]
+    AccountConnectionUnavailableReason:
+      type: string
+      enum: [ not_offered_on_edition, not_configured, encryption_not_configured ]
+    AccountConnectionDto:
+      type: object
+      description: Non-secret connection metadata; credentials never leave the connections module.
+      required:
+        [
+          id,
+          provider,
+          organizationId,
+          scope,
+          credentialKind,
+          account,
+          scopes,
+          lastValidatedAt,
+          serverUrl,
+          state,
+          authorizedWorkspaces,
+          assistantWriteScope,
+          toolPolicyVersion,
+          lastErrorCode,
+          connectedAt,
+          updatedAt,
+          revision
+        ]
+      properties:
+        id: { type: string }
+        provider: { $ref: '#/components/schemas/AccountConnectionProvider' }
+        organizationId:
+          description: Null exactly when `scope` is `profile`.
+          oneOf: [ { type: string, format: uuid }, { type: 'null' } ]
+        scope: { $ref: '#/components/schemas/AccountConnectionScope' }
+        credentialKind: { $ref: '#/components/schemas/AccountConnectionCredentialKind' }
+        account:
+          description: The upstream account, when any of its fields is known.
+          oneOf:
+            - type: object
+              required: [ id, label, avatarUrl ]
+              properties:
+                id:
+                  oneOf: [ { type: string }, { type: 'null' } ]
+                label:
+                  oneOf: [ { type: string }, { type: 'null' } ]
+                avatarUrl:
+                  oneOf: [ { type: string }, { type: 'null' } ]
+            - type: 'null'
+        scopes:
+          type: array
+          description: Granted OAuth scopes; empty for API keys.
+          items: { type: string }
+        lastValidatedAt:
+          oneOf: [ { $ref: '#/components/schemas/DateTime' }, { type: 'null' } ]
+        serverUrl: { type: string }
+        state: { $ref: '#/components/schemas/AccountConnectionState' }
+        authorizedWorkspaces:
+          type: array
+          description: Provider workspaces the grant can read (Knowledgebase slugs).
+          items: { type: string }
+        assistantWriteScope:
+          $ref: '#/components/schemas/AccountConnectionAssistantWriteScope'
+          description: Always `per_request` for providers other than `knowledgebase`.
+        toolPolicyVersion: { type: integer }
+        lastErrorCode:
+          oneOf: [ { type: string }, { type: 'null' } ]
+        connectedAt:
+          oneOf: [ { $ref: '#/components/schemas/DateTime' }, { type: 'null' } ]
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+        revision: { type: integer, minimum: 1 }
+    AccountConnectionProviderStatusDto:
+      type: object
+      required: [ provider, scope, credentialKind, available, reason ]
+      properties:
+        provider: { $ref: '#/components/schemas/AccountConnectionProvider' }
+        scope: { $ref: '#/components/schemas/AccountConnectionScope' }
+        credentialKind: { $ref: '#/components/schemas/AccountConnectionCredentialKind' }
+        available: { type: boolean }
+        reason:
+          oneOf: [ { $ref: '#/components/schemas/AccountConnectionUnavailableReason' }, { type: 'null' } ]
+    AccountConnectionListResponse:
+      type: object
+      required: [ items ]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AccountConnectionDto' }
+        providers:
+          type: array
+          description: Present only with `scope=all`; Knowledgebase first, then each profile provider.
+          items: { $ref: '#/components/schemas/AccountConnectionProviderStatusDto' }
+    StartAccountConnectionBody:
+      type: object
+      required: [ provider, returnTo ]
+      properties:
+        provider: { $ref: '#/components/schemas/AccountConnectionProvider' }
+        returnTo:
+          type: string
+          enum: [ mobile, web ]
+          description: Where the callback sends the browser; anything else answers 400 `invalid_request`.
+        returnPath:
+          oneOf:
+            - type: string
+              maxLength: 512
+            - type: 'null'
+          description: >-
+            GitHub with `returnTo: web` only (400 otherwise): a relative web path starting with `/`, not
+            `//`, without backslashes or control characters, at most 512 characters. Defaults to
+            `/settings/connections`. Ignored by the Knowledgebase path.
+    StartAccountConnectionResponse:
+      type: object
+      required: [ connectionId, authorizeUrl, expiresAt ]
+      properties:
+        connectionId: { type: string }
+        authorizeUrl: { type: string, description: The provider's authorization URL with state and PKCE challenge. }
+        expiresAt: { $ref: '#/components/schemas/DateTime' }
+    SetAccountConnectionApiKeyBody:
+      type: object
+      required: [ provider, apiKey ]
+      properties:
+        provider:
+          $ref: '#/components/schemas/AccountConnectionProvider'
+          description: An API-key provider offered here (`everhour`); anything else answers 404
+            `provider_not_available`.
+        apiKey:
+          type: string
+          maxLength: 512
+          description: Trimmed; blank or longer than 512 characters answers 400 `invalid_request`.
+    UpdateAccountConnectionBody:
+      type: object
+      required: [ expectedRevision, assistantWriteScope ]
+      additionalProperties: false
+      properties:
+        expectedRevision: { type: integer, minimum: 1 }
+        assistantWriteScope: { $ref: '#/components/schemas/AccountConnectionAssistantWriteScope' }
+    KnowledgebaseClientMetadataDto:
+      type: object
+      required:
+        [
+          client_id,
+          client_name,
+          client_uri,
+          redirect_uris,
+          grant_types,
+          response_types,
+          token_endpoint_auth_method,
+          scope
+        ]
+      properties:
+        client_id: { type: string, description: 'This document''s own URL.' }
+        client_name: { const: Overlord }
+        client_uri: { type: string }
+        redirect_uris:
+          type: array
+          items: { type: string }
+        grant_types:
+          type: array
+          items: { type: string, enum: [ authorization_code, refresh_token ] }
+        response_types:
+          type: array
+          items: { const: code }
+        token_endpoint_auth_method: { const: none }
+        scope: { type: string }
