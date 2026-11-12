@@ -1,3 +1,4 @@
+import { PERMISSIONS } from '@overlord/auth';
 import type { NotificationDto } from '@overlord/contract';
 import type { DatabaseClient } from '@overlord/database';
 
@@ -9,9 +10,18 @@ import {
 } from '../packages/core/service/notifications/catalog.ts';
 import { nowIso } from '../packages/core/service/util.ts';
 
-import { requireDatabaseClient, resolveActiveProfileId } from './db.ts';
+import {
+  findActiveMembershipId,
+  getAuthorizedWorkspace,
+  getAuthorizedWorkspacesContext,
+  getResourceLookupWorkspaceIds,
+  projectInTokenScope,
+  requireDatabaseClient,
+  resolveActiveProfileId
+} from './db.ts';
 import { ApiError } from './errors.ts';
 import { notificationBody, notificationSubject } from './notification-presentation.ts';
+import { actorCan } from './rbac.ts';
 
 type NotificationRow = {
   id: string;
@@ -70,6 +80,36 @@ async function activeNotificationProfileId(db: DatabaseClient): Promise<string> 
   return profileId;
 }
 
+/**
+ * Workspaces whose notifications this request may see: those of the request's
+ * authorization snapshot (live membership, organization and token consent) —
+ * or, for the loopback local operator, its live memberships — where the caller
+ * may read missions, since a notification presents its mission.
+ */
+async function readableNotificationWorkspaceIds(
+  db: DatabaseClient,
+  profileId: string
+): Promise<string[]> {
+  const readable: string[] = [];
+  const snapshot = getAuthorizedWorkspacesContext();
+  for (const workspaceId of await getResourceLookupWorkspaceIds(db)) {
+    const workspaceUserId = snapshot
+      ? getAuthorizedWorkspace(workspaceId)?.workspaceUserId
+      : await findActiveMembershipId(workspaceId, profileId, db);
+    if (
+      workspaceUserId &&
+      (await actorCan(PERMISSIONS.MISSION_READ, { workspaceId, workspaceUserId }))
+    ) {
+      readable.push(workspaceId);
+    }
+  }
+  return readable;
+}
+
+function visibleToRequest(row: NotificationRow, workspaceIds: readonly string[]): boolean {
+  return workspaceIds.includes(row.workspace_id) && projectInTokenScope(row.project_id);
+}
+
 async function ownedNotificationRow(
   db: DatabaseClient,
   profileId: string,
@@ -85,7 +125,9 @@ async function ownedNotificationRow(
       WHERE n.id = ? AND n.recipient_profile_id = ? AND n.deleted_at IS NULL`,
     [id, profileId]
   );
-  if (!row) throw new ApiError(404, 'Notification not found');
+  if (!row || !visibleToRequest(row, await readableNotificationWorkspaceIds(db, profileId))) {
+    throw new ApiError(404, 'Notification not found');
+  }
   return row;
 }
 
@@ -111,7 +153,8 @@ export async function listNotifications(): Promise<NotificationDto[]> {
       ORDER BY n.created_at DESC, n.id DESC`,
     [profileId]
   );
-  return rows.map(toNotificationDto);
+  const workspaceIds = await readableNotificationWorkspaceIds(db, profileId);
+  return rows.filter(row => visibleToRequest(row, workspaceIds)).map(toNotificationDto);
 }
 
 export async function markNotificationRead(id: string, body: unknown): Promise<NotificationDto> {

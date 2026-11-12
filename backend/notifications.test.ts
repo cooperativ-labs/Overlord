@@ -163,3 +163,70 @@ test('realtime off suppresses the renderer transport while keeping durable histo
 });
 
 test.after(() => rmSync(tempDir, { recursive: true, force: true }));
+
+test('notifications are listed only for workspaces the request may read missions in', async () => {
+  const mission = await createAssignedMission();
+  const emitted = await emitNotification({
+    db: requireDatabaseClient(),
+    workspaceId: 'local-workspace',
+    missionId: mission.id,
+    type: 'mission_failed'
+  });
+  assert.ok(emitted.notificationId);
+  const id = emitted.notificationId;
+  const dbModule = await import('./db.ts');
+  const workspace = {
+    id: 'local-workspace',
+    slug: 'local-workspace',
+    name: 'local',
+    kind: 'local'
+  };
+  const asToken = <T>(workspaces: unknown[], fn: () => Promise<T>) =>
+    withRequestContextAsync(async () => {
+      setActiveProfileId('operator-user');
+      dbModule.setAuthorizedWorkspacesContext({
+        organizationId: 'test-organization',
+        workspaces: workspaces as never
+      });
+      dbModule.setActiveTokenAuth({ workspaceUserId: null, tokenId: 'n-token', scopeGrants: null });
+      return fn();
+    });
+
+  const consented = [
+    {
+      workspaceId: 'local-workspace',
+      workspaceUserId: 'operator-workspace-user',
+      roleKeys: ['ADMIN'],
+      workspace
+    }
+  ];
+  await asToken(consented, async () => {
+    assert.ok((await listNotifications()).some(item => item.id === id));
+  });
+  await asToken([], async () => {
+    assert.equal(
+      (await listNotifications()).some(item => item.id === id),
+      false
+    );
+    await assert.rejects(markNotificationRead(id, { expectedRevision: 1 }), { status: 404 });
+    await assert.rejects(dismissNotification(id, { expectedRevision: 1 }), { status: 404 });
+  });
+
+  // After leaving the workspace the recipient no longer sees its notifications.
+  db.prepare(`UPDATE workspace_users SET status = 'disabled' WHERE id = ?`).run(
+    'operator-workspace-user'
+  );
+  try {
+    await withRequestContextAsync(async () => {
+      setActiveProfileId('operator-user');
+      assert.equal(
+        (await listNotifications()).some(item => item.id === id),
+        false
+      );
+    });
+  } finally {
+    db.prepare(`UPDATE workspace_users SET status = 'active' WHERE id = ?`).run(
+      'operator-workspace-user'
+    );
+  }
+});

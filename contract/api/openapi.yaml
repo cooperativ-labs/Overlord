@@ -3702,9 +3702,11 @@ paths:
       x-overlord-consumers: [mobile, webapp]
       summary: List the caller's notifications
       description: >-
-        Every undismissed notification addressed to the authenticated profile, newest first, unbounded.
-        Not narrowed by current membership, a token's organization or consent, or the mission's deletion.
-        `presentation.body` is recomputed from the current mission and objective on every read.
+        Every undismissed notification addressed to the authenticated profile, newest first, unbounded,
+        limited to workspaces the request is authorized for (its authorization snapshot: live membership,
+        organization and token consent; for the loopback local operator, its live memberships) in which
+        the caller holds `mission:read`. Not narrowed by the mission's deletion. `presentation.body` is
+        recomputed from the current mission and objective on every read.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       responses:
         '200':
@@ -3729,7 +3731,9 @@ paths:
       x-overlord-consumers: [mobile, webapp]
       summary: Mark a notification read
       description: >-
-        Only the recipient may mark it (another profile's notification answers 404). Compare-and-set on
+        Only the recipient may mark it, and only while the notification's workspace is one
+        `GET /api/notifications` would list it from (otherwise, as for another profile's notification,
+        404). Compare-and-set on
         `expectedRevision` (409 when stale). Marking an already-read notification sets `readAt` again and
         bumps the revision. Records a `notification` entity change.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
@@ -3765,7 +3769,8 @@ paths:
       x-overlord-consumers: [mobile, webapp]
       summary: Dismiss a notification
       description: >-
-        Only the recipient may dismiss it (404 otherwise). Takes a JSON body on `DELETE`; compare-and-set
+        Only the recipient may dismiss it, and only while the notification's workspace is one
+        `GET /api/notifications` would list it from (404 otherwise). Takes a JSON body on `DELETE`; compare-and-set
         on `expectedRevision` (409 when stale). Soft-deletes the row and records a `notification` delete
         change.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
