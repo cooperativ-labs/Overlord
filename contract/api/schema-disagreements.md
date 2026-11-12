@@ -68,6 +68,19 @@ the code does not do.
   /api/missions/{id}/objectives/reorder` authorizes the display id but then queries by the
   raw reference and answers 404.
 
+### Activity and Inbox (batch 1)
+
+- **A1** (open). rest-notes.md describes the activity feed's `before` as "ISO-8601 UTC";
+  `parseFeedBefore` (`backend/activity-feed.ts`) accepts only
+  `YYYY-MM-DDTHH:mm:ss.sssZ` exactly and answers 400 for any other form.
+  `getActivityFeed`.
+- **A2** (open). `ActivityFeedDto.counts` is typed `Record<string, number>`; the code
+  always writes exactly `mission_run`, `blocking_question` and `mission_delivered`, which
+  the schema requires.
+- **A3** (open). `ActivityFeedItemBaseDto.kind` is typed as an open vocabulary; the server
+  emits only `mission_run`, `mission_delivered` and `blocking_question`, and the schema
+  is closed to those three. Adding a kind is therefore a description change.
+
 ## 2. Non-conforming error shapes
 
 Every route in `backend/app.ts` that forwards errors through `handle()` or `next(err)`
