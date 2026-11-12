@@ -7534,95 +7534,328 @@ paths:
       - name: subcommand
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          A backend protocol subcommand listed in contract/protocol-commands.yaml (`search` is an alias of
+          `search-missions`). An unknown name answers 404 `Unknown protocol subcommand: <name>` with the
+          supported names in `detail`.
+        schema: { type: string }
     post:
       operationId: postProtocolBySubcommand
       tags: [protocol]
       x-overlord-permission: unknown
+      x-overlord-permission-candidates: [artifact:create, artifact:read, event:create, execution_request:claim, execution_request:create, mission:create, mission:read, mission:update, objective:read, objective:submit, objective:update, project:create, project:read, project:update, session:attach]
       x-overlord-edition: both
       x-overlord-consumers: [cli]
-      x-overlord-schema-status: stub
+      summary: Run an agent protocol subcommand
+      description: >-
+        The HTTP transport of `ovld protocol <subcommand>` (ADR 0008). This operation describes the
+        transport envelope only: each subcommand's flags, permission, side effects and response shape are
+        specified by contract/protocol-commands.yaml and contract/protocol.md, not here. Authorization is
+        per subcommand: the dispatch table (`backend/protocol/*.ts`) names the RBAC action checked before
+        dispatch, in the workspace derived from the flags (an execution request, session key, objective,
+        mission, then project reference, each among the caller's active memberships), else in any
+        workspace that grants it; `auth-status`, aggregate searches and a few account-wide commands
+        authorize inside their handler. A mission display id matching in two workspaces answers 409; a
+        project reference matching in two answers 200 with `status: project_selection_required` and the
+        candidate projects, so the caller can retry with `--workspace-id`. A `project_automation` token
+        reaches only `create`, `load-context`, `search-missions`/`search`, `discover-project` (with
+        `--project-id`), `statuses`, `list-deliveries`, `objective-changes`, `attachment-list`,
+        `attachment-download-url` and `auth-status`; any other subcommand answers 404 `Not found`. A
+        handler that returns nothing answers `{ ok: true }`. Loopback local operator: a call from the
+        loopback interface with no session or user token is not refused; it acts as the oldest member of
+        the server's bootstrap workspace, and with no such member a subcommand that needs a workspace
+        answers 500.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProtocolRequestBody' }
+      responses:
+        '200':
+          description: >-
+            The subcommand's result, whose shape protocol-commands.yaml specifies per subcommand. A
+            project reference that matches in several workspaces instead answers `{ status:
+            'project_selection_required', message, projectRef, projects: [{ id, name, slug, workspaceId,
+            workspaceName, workspaceSlug }] }`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JsonValue' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/runner/status:
     get:
       operationId: getRunnerStatus
       tags: [runner]
-      x-overlord-permission: unknown
+      x-overlord-permission: authenticated
       x-overlord-edition: both
       x-overlord-consumers: [runner, webapp]
-      x-overlord-schema-status: stub
+      summary: List active execution requests
+      description: >-
+        Lists the `queued`, `claimed` and `launching` execution requests, oldest first and at most 50 per
+        workspace, in every workspace the caller's profile is an active member of; a caller with no
+        membership gets an empty queue. Stale claims are expired first in each workspace (this read
+        writes). A `projectId` that is a project UUID narrows to that project's workspace; any other value
+        is resolved as a project reference per workspace, and workspaces where it does not resolve are
+        skipped. Loopback local operator: a call from the loopback interface with no session or user token
+        is not refused; it acts as the oldest member of the server's bootstrap workspace (with no identity
+        when there is none).
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: projectId
+          in: query
+          required: false
+          description: Project UUID or reference (slug or name), trimmed; blank is ignored.
+          schema: { type: string }
+      responses:
+        '200':
+          description: The active requests.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunnerStatusDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/runner/claim:
     post:
       operationId: postRunnerClaim
       tags: [runner]
-      x-overlord-permission: unknown
+      x-overlord-permission: authenticated
       x-overlord-edition: both
       x-overlord-consumers: [runner]
-      x-overlord-schema-status: stub
+      summary: Claim the next queued execution request
+      description: >-
+        Claims the oldest claimable `queued` request for the calling machine, trying each workspace the
+        caller's profile is an active member of in membership order (narrowed to the project's workspace
+        when `projectId` is a project UUID). A request is claimable when it is unstamped or stamped with
+        the machine's execution target. The machine is the co-located Local host, or on a hosted backend
+        the one named by `deviceFingerprint` (else `X-Overlord-Device-Fingerprint`); a claim never
+        declares a target, and a machine that is a target in none of the workspaces answers 409
+        `no_execution_target_registered`. The runner fields (contract v40) register a heartbeat for the
+        runner instance; `executionTargetId` with `runnerRelation: adopted` serves another declared
+        target. The claimed request carries the launch config resolved for the winning target, the
+        project's pre-launch commands and launch environment variables, and a launch-session snapshot in
+        `metadata.launchSession`. On Postgres, when nothing is claimable the route long-polls: it flushes
+        200 headers once it is listening and later writes the body; an error after that point answers `{
+        request: null, longPoll: true }`. On SQLite it answers at once with `longPoll: false`. Loopback
+        local operator: a call from the loopback interface with no session or user token is not refused;
+        it acts as the oldest member of the server's bootstrap workspace (with no identity when there is
+        none).
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RunnerClaimBody' }
+      responses:
+        '200':
+          description: The claimed request, or none.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunnerClaimResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/runner/clear:
     post:
       operationId: postRunnerClear
       tags: [runner]
-      x-overlord-permission: unknown
+      x-overlord-permission: authenticated
       x-overlord-edition: both
       x-overlord-consumers: [runner, webapp]
-      x-overlord-schema-status: stub
+      summary: Clear active execution requests
+      description: >-
+        Marks the active (`queued`, `claimed`, `launching`) execution requests `cleared` in every
+        workspace the caller's profile is an active member of (narrowed to the project's workspace when
+        `projectId` is a project UUID), optionally only those of one objective (UUID or display id) or
+        project (UUID or reference). Workspaces where the project reference does not resolve are skipped;
+        an objective display id that does not resolve answers 404. Loopback local operator: a call from
+        the loopback interface with no session or user token is not refused; it acts as the oldest member
+        of the server's bootstrap workspace (with no identity when there is none).
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RunnerClearBody' }
+      responses:
+        '200':
+          description: How many requests were cleared.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunnerClearResultDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/runner/requests/{id}/launching":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Execution request UUID; an unknown or deleted request, or one in a workspace the caller is not
+          an active member of, answers 404 `Execution request not found`.
+        schema: { type: string }
     post:
       operationId: postRunnerRequestsByIdLaunching
       tags: [runner]
       x-overlord-permission: execution_request:claim
       x-overlord-edition: both
       x-overlord-consumers: [runner]
-      x-overlord-schema-status: stub
+      summary: Mark an execution request launching
+      description: >-
+        Requires `execution_request:claim` in the request's workspace. Allowed only from `claimed` (409
+        `invalid_execution_request_transition`); a concurrent change answers 409
+        `execution_request_conflict`. Records the change and a mission event. Takes no body. Loopback
+        local operator: a call from the loopback interface with no session or user token is not refused;
+        it acts as the oldest member of the server's bootstrap workspace (with no identity when there is
+        none).
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The execution request after the transition.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunnerExecutionRequestDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/runner/requests/{id}/launched":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Execution request UUID; an unknown or deleted request, or one in a workspace the caller is not
+          an active member of, answers 404 `Execution request not found`.
+        schema: { type: string }
     post:
       operationId: postRunnerRequestsByIdLaunched
       tags: [runner]
       x-overlord-permission: execution_request:claim
       x-overlord-edition: both
       x-overlord-consumers: [runner]
-      x-overlord-schema-status: stub
+      summary: Mark an execution request launched
+      description: >-
+        Requires `execution_request:claim` in the request's workspace. Allowed only from `launching` (409
+        `invalid_execution_request_transition`); a request that expired after launch started answers 200
+        unchanged with an event recorded. An optional Latch `providerSession` is merged into the request's
+        metadata (`provider` must be `latch` and `providerSessionId` non-blank, otherwise it is ignored).
+        Marks the linked Run Queue entry `running`. Loopback local operator: a call from the loopback
+        interface with no session or user token is not refused; it acts as the oldest member of the
+        server's bootstrap workspace (with no identity when there is none).
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RunnerLaunchedBody' }
+      responses:
+        '200':
+          description: The execution request after the transition.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunnerExecutionRequestDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/runner/requests/{id}/failed":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Execution request UUID; an unknown or deleted request, or one in a workspace the caller is not
+          an active member of, answers 404 `Execution request not found`.
+        schema: { type: string }
     post:
       operationId: postRunnerRequestsByIdFailed
       tags: [runner]
       x-overlord-permission: execution_request:claim
       x-overlord-edition: both
       x-overlord-consumers: [runner]
-      x-overlord-schema-status: stub
+      summary: Mark an execution request failed
+      description: >-
+        Requires `execution_request:claim` in the request's workspace. Allowed from `queued`, `claimed` or
+        `launching` (409 `invalid_execution_request_transition` otherwise). Stores `error` (default
+        `Launch failed`) as `lastError`, records a mission event and notifies. Loopback local operator: a
+        call from the loopback interface with no session or user token is not refused; it acts as the
+        oldest member of the server's bootstrap workspace (with no identity when there is none).
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RunnerFailedBody' }
+      responses:
+        '200':
+          description: The execution request after the transition.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunnerExecutionRequestDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/runner/requests/{id}/completed":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Execution request UUID; an unknown or deleted request, or one in a workspace the caller is not
+          an active member of, answers 404 `Execution request not found`.
+        schema: { type: string }
     post:
       operationId: postRunnerRequestsByIdCompleted
       tags: [runner]
       x-overlord-permission: execution_request:claim
       x-overlord-edition: both
       x-overlord-consumers: [runner]
-      x-overlord-schema-status: stub
+      summary: Report the result of a local-target mutation
+      description: >-
+        Completes a queued local-target mutation (branch action, worktree purge or capability call) with
+        its capability result. The body is checked first: `mutationResult` must be an object with a
+        boolean `ok` (400 otherwise, for any id). Then requires `execution_request:claim` in the request's
+        workspace. The request must be a local-target mutation (409 `not_local_target_mutation`) in
+        `claimed` or `launching` (409 `invalid_execution_request_transition`) with readable mutation
+        metadata (409 `invalid_local_target_mutation`). A successful branch action with a `summary`
+        records branch activity. This route accepts a JSON body of up to 1 MiB. Loopback local operator: a
+        call from the loopback interface with no session or user token is not refused; it acts as the
+        oldest member of the server's bootstrap workspace (with no identity when there is none).
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RunnerCompletedBody' }
+      responses:
+        '200':
+          description: The execution request after the transition.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunnerExecutionRequestDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/missions/{id}/branch-prepared":
     parameters:
       - name: id
@@ -13765,3 +13998,218 @@ components:
           type: array
           maxItems: 0
           items: { $ref: '#/components/schemas/WorktreeDto' }
+    RunnerExecutionRequestDto:
+      type: object
+      description: An execution request as the runner sees it (backend/execution/runner.ts `serviceSummaryToDto`).
+      required:
+        [
+          id,
+          workspaceId,
+          projectId,
+          missionId,
+          objectiveId,
+          executionTargetId,
+          requestedAgent,
+          requestedModel,
+          requestedReasoningEffort,
+          launchConfig,
+          metadata,
+          status,
+          requestedSource,
+          workingDirectory,
+          lastError,
+          createdAt,
+          updatedAt
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        workspaceId: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        missionId:
+          description: Null for a mission-less capability call.
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        objectiveId:
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        executionTargetId:
+          description: The target that claimed the request, else the target it was stamped with.
+          oneOf:
+            - type: string
+            - type: 'null'
+        requestedAgent:
+          oneOf:
+            - type: string
+            - type: 'null'
+        requestedModel:
+          oneOf:
+            - type: string
+            - type: 'null'
+        requestedReasoningEffort:
+          oneOf:
+            - type: string
+            - type: 'null'
+        launchConfig: { $ref: '#/components/schemas/AgentLaunchConfigDto' }
+        metadata:
+          type: object
+          description: >-
+            The request's stored metadata object (malformed JSON reads as empty), for example
+            `launchConfigSource`, `launchSession` (frozen at claim) and `providerSession`.
+          additionalProperties: { $ref: '#/components/schemas/JsonValue' }
+        status: { $ref: '#/components/schemas/ExecutionRequestStatus' }
+        requestedSource: { type: string }
+        workingDirectory:
+          description: The resolved working directory; null until resolved.
+          oneOf:
+            - type: string
+            - type: 'null'
+        lastError:
+          oneOf:
+            - type: string
+            - type: 'null'
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+    RunnerStatusDto:
+      type: object
+      required: [ queue, activeCount ]
+      properties:
+        queue:
+          type: array
+          items: { $ref: '#/components/schemas/RunnerExecutionRequestDto' }
+        activeCount:
+          type: integer
+          minimum: 0
+          description: The length of `queue`.
+    RunnerClaimedRequestDto:
+      description: A claimed request with the project's launch preparation settings.
+      allOf:
+        - { $ref: '#/components/schemas/RunnerExecutionRequestDto' }
+        - type: object
+          required: [ preLaunchCommands, launchEnvVars ]
+          properties:
+            preLaunchCommands:
+              type: array
+              description: The project's pre-launch commands, in order.
+              items: { type: string }
+            launchEnvVars:
+              type: object
+              description: The project's launch environment variables.
+              additionalProperties: { type: string }
+    RunnerClaimResponse:
+      type: object
+      required: [ request, longPoll ]
+      properties:
+        request:
+          oneOf:
+            - { $ref: '#/components/schemas/RunnerClaimedRequestDto' }
+            - type: 'null'
+        longPoll:
+          type: boolean
+          description: >-
+            True on Postgres, where the long-poll wait is available; false on SQLite, where the runner
+            keeps its polling cadence.
+    RunnerClaimBody:
+      type: object
+      description: Every member is optional; non-string values are ignored.
+      properties:
+        projectId:
+          type: string
+          description: Project UUID or reference limiting the claim to one project.
+        deviceFingerprint: { type: string, description: The claiming machine on a hosted backend. }
+        deviceLabel: { type: string }
+        devicePlatform: { type: string }
+        executionTargetId:
+          type: string
+          description: An already-declared target this runner serves (with `runnerRelation`).
+        runnerInstanceId: { type: string, description: Stable runner instance id; registers a heartbeat. }
+        runnerRelation:
+          type: string
+          enum: [ native, adopted ]
+          description: Any other value is ignored.
+        runnerLabel: { type: string }
+        runnerVersion: { type: string }
+        capabilities:
+          type: object
+          description: Runner capability flags (an object; other values are ignored).
+          additionalProperties: { $ref: '#/components/schemas/JsonValue' }
+        supportedAgents:
+          type: array
+          description: Agent keys; non-strings are dropped.
+          items: { type: string }
+    RunnerClearBody:
+      type: object
+      properties:
+        objectiveId:
+          type: string
+          description: Objective UUID or display id; non-strings are ignored.
+        projectId:
+          type: string
+          description: Project UUID or reference; non-strings are ignored.
+    RunnerClearResultDto:
+      type: object
+      required: [ cleared ]
+      properties:
+        cleared: { type: integer, minimum: 0 }
+    RunnerLaunchedBody:
+      type: object
+      properties:
+        providerSession:
+          type: object
+          description: The Latch session the launch opened; ignored unless `provider` is `latch` with a
+            non-blank `providerSessionId`.
+          required: [ provider, providerSessionId ]
+          properties:
+            provider: { const: latch }
+            providerSessionId: { type: string }
+            sessionName: { type: string }
+            executionTargetId: { type: string }
+            agentSessionId: { type: string }
+            createdAt: { type: string }
+            lastObservedState: { type: string, description: Defaults to `running`. }
+    RunnerFailedBody:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Failure message stored as `lastError`; a non-string uses `Launch failed`.
+    RunnerCompletedBody:
+      type: object
+      required: [ mutationResult ]
+      properties:
+        mutationResult: { $ref: '#/components/schemas/CapabilityResultDto' }
+    ProtocolRequestBody:
+      type: object
+      description: >-
+        The envelope `ovld protocol` posts (backend/protocol/flags.ts `ProtocolRequestBody`). Which
+        flags and positionals a subcommand reads is specified by contract/protocol-commands.yaml. An
+        absent body is treated as empty.
+      properties:
+        args:
+          type: array
+          description: The raw command-line arguments after the subcommand.
+          items: { type: string }
+        positional:
+          type: array
+          description: Positional arguments.
+          items: { type: string }
+        flags:
+          type: object
+          description: >-
+            Flags keyed by their long name including the dashes (`--mission-id`); a string value, or
+            `true` for a boolean flag.
+          additionalProperties:
+            oneOf:
+              - type: string
+              - type: boolean
+        fileInputs:
+          type: object
+          description: File payloads keyed by the `--*-file` flag that named them.
+          additionalProperties: { type: string }
+        externalSessionId:
+          oneOf:
+            - type: string
+            - type: 'null'

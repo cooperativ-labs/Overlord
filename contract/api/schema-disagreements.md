@@ -281,6 +281,29 @@ the code does not do.
   `/mcp` do, `usesNonBrowserAuthSurface` in `backend/auth.ts`).
   `postLocalTargetInvoke`.
 
+### Runner and protocol transport (batch 3)
+
+- **K1** (open). `RunnerExecutionRequestDto` extends `ExecutionRequestDto` in packages/contract,
+  but `serviceSummaryToDto` (`backend/execution/runner.ts`) never writes
+  `localTargetMutationKind`; it adds `metadata` and `workingDirectory`. The schema is a separate
+  `RunnerExecutionRequestDto` with exactly the written members, and `RunnerClaimedRequestDto`
+  extends it with `allOf` (G5). `getRunnerStatus`, `postRunnerClaim`, the
+  `postRunnerRequestsById…` transitions.
+- **K2** (open). The bootstrap recorded `getRunnerStatus`, `postRunnerClaim` and `postRunnerClear`
+  as `unknown`. Their handlers resolve scope from the caller's active workspace memberships
+  (`resolveRunnerScopes`, `callerWorkspaceMemberships`) and name no RBAC action, so the permission
+  is now `authenticated`. The four request transitions check `execution_request:claim` in the
+  request's workspace (`requestRunnerContext`).
+- **K3** (open). `GET /api/runner/status` writes as it reads: stale claims are expired in each
+  workspace before listing (`expireStaleExecutionRequests`). `POST /api/runner/claim` on Postgres
+  flushes a 200 status before the body is known, so a failure during the long poll answers
+  `{ request: null, longPoll: true }` rather than an error (`sendRunnerClaimResponse`).
+- **V1** (open). `postProtocolBySubcommand` keeps `x-overlord-permission: unknown` with every
+  action named in the subcommand dispatch table as a candidate (ADR 0048): the action depends on
+  the subcommand, and protocol-commands.yaml (ADR 0008) owns the per-subcommand detail. Over
+  loopback with no bootstrap workspace member, a subcommand that needs a workspace answers 500
+  `No active workspace for this request…` (reproduced).
+
 ## 2. Non-conforming error shapes
 
 Every route in `backend/app.ts` that forwards errors through `handle()` or `next(err)`
