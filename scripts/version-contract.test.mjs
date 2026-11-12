@@ -327,6 +327,7 @@ describe('repository contract check', () => {
     writeFixture(root, { openapi: false });
     mkdirSync(path.join(root, 'scripts'));
     mkdirSync(path.join(root, 'contract/data'), { recursive: true });
+    mkdirSync(path.join(root, 'contract/api'), { recursive: true });
     mkdirSync(path.join(root, 'contract/decisions'), { recursive: true });
     for (const script of ['check-contract.sh', 'version-contract.mjs']) {
       copyFileSync(path.join(repoRoot, 'scripts', script), path.join(root, 'scripts', script));
@@ -337,6 +338,7 @@ describe('repository contract check', () => {
       'authorization.md',
       'conformance.md',
       'data/README.md',
+      'api/rest-notes.md',
       'protocol-commands.yaml',
       'extension-points.yaml',
       'conformance-manifest.schema.yaml',
@@ -363,6 +365,12 @@ describe('repository contract check', () => {
   it('passes a complete fixture', () => {
     const { run } = checkFixture();
     assert.equal(run(), 'contract check passed for 1.4.2\n');
+  });
+
+  it('fails when the REST surface has no specification', () => {
+    const { root, run } = checkFixture();
+    rmSync(path.join(root, 'contract/api/rest-notes.md'));
+    assert.throws(run, /missing contract\/api\/rest-notes\.md/);
   });
 
   it('fails when a root CONTRACT.md reappears', () => {

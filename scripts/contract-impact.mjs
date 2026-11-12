@@ -32,7 +32,10 @@ export const DECISION_TRIGGER_FILES = Object.freeze([
   'contract/architecture.md',
   'contract/protocol.md',
   'contract/authorization.md',
-  'contract/data/README.md'
+  'contract/data/README.md',
+  // REST prose moved out of architecture.md and data/README.md keeps their
+  // ADR requirement while it waits to be replaced by api/openapi.yaml.
+  'contract/api/rest-notes.md'
 ]);
 export const DECISION_TRIGGER_DIRECTORIES = Object.freeze([
   'database/sqlite/migrations/',

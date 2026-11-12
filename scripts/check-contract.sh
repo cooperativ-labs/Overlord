@@ -32,6 +32,12 @@ printf '%s\n' "$required_files" | while IFS= read -r relative_path; do
   [ -s "$contract_dir/$relative_path" ] || fail "empty contract/$relative_path"
 done
 
+# The REST surface is specified by contract/api/openapi.yaml once phase 4 of
+# the migration lands; until then the holding file contract/api/rest-notes.md
+# carries that normative text. One of the two must exist and be non-empty.
+[ -s "$contract_dir/api/rest-notes.md" ] || [ -s "$contract_dir/api/openapi.yaml" ] \
+  || fail "missing contract/api/rest-notes.md (or contract/api/openapi.yaml): the REST surface has no specification"
+
 # The contract has one home. A root CONTRACT.md would be a second authority.
 [ ! -e "$root_dir/CONTRACT.md" ] \
   || fail "CONTRACT.md exists at the repository root; the contract lives in contract/"

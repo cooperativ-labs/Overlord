@@ -42,6 +42,7 @@ agents.
 | `authorization.md` | Auth, RBAC, tokens, native sign-in and hosted MCP OAuth |
 | `conformance.md` | Conformance requirements, manifests and controlled vocabularies |
 | `data/README.md` | Database schema contract |
+| `api/rest-notes.md` | REST API Layer and route detail; normative holding file until `api/openapi.yaml` replaces it |
 | `decisions/` | Architecture Decision Records, indexed in `decisions/README.md` |
 | `components.yaml` | Component registry — capabilities, ownership, interaction surface declarations |
 | `protocol-commands.yaml` | Protocol command names, required flags, and response shape versions |

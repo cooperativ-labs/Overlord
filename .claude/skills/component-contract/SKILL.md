@@ -19,6 +19,7 @@ override it.
 | `contract/authorization.md` | Auth Layer, tokens, RBAC, native sign-in, hosted MCP OAuth |
 | `contract/conformance.md` | Conformance requirements and controlled vocabularies |
 | `contract/data/README.md` | Database schema contract |
+| `contract/api/rest-notes.md` | REST API Layer and REST route detail (holding file until `contract/api/openapi.yaml` replaces it) |
 | `contract/*.yaml`, `*.schema.yaml` | Machine-readable registry, protocol commands, extension points, manifest schemas |
 | `contract/decisions/` | ADRs |
 | `contract/VERSION`, `contract/CHANGELOG.md` | Current version and history (entries at or below `168` are non-normative provenance) |
@@ -95,7 +96,7 @@ in the same change as the implementation:
 - Never edit or reinterpret a provenance changelog entry or a released
   version. Amend with a new version and changelog entry.
 - A change to `architecture.md`, `protocol.md`, `authorization.md`,
-  `data/README.md` or a migration needs a new ADR; the release range check
+  `data/README.md`, `api/rest-notes.md` or a migration needs a new ADR; the release range check
   refuses the range otherwise (introduced in phase 5).
 - Treat changes to authentication, authorization, workspace or organization
   isolation, roles, public APIs, persistent data meaning, migrations, security
@@ -144,7 +145,7 @@ declaring a `contractVersion` with the current major
 | New interaction surface | `contract/components.yaml` + interaction surfaces in `contract/architecture.md` (or `protocol.md` / `authorization.md`) |
 | New protocol command | `contract/protocol-commands.yaml` + `contract/protocol.md` |
 | Changed command flag (breaking) | `contract/protocol-commands.yaml` + `contract/protocol.md` + `major` |
-| New REST endpoint | REST API Layer in `contract/architecture.md` |
+| New REST endpoint | REST API Layer in `contract/api/rest-notes.md` |
 | New database table/column | `contract/data/README.md` |
 | New extension point | `contract/extension-points.yaml` + `contract/architecture.md` |
 | New connector capability flag | `contract/extension-points.yaml` `approvedConnectorCapabilities` list |
@@ -178,4 +179,4 @@ changes, not documentation noise. If a contract file was written from a shell
 command rather than a native edit tool, declare it with `--paths` so it appears
 among the objective's changed files.
 
-<!-- version: 2.0.0 -->
+<!-- version: 2.0.1 -->

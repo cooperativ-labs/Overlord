@@ -3222,55 +3222,7 @@ erDiagram
 
 ## REST API Boundary
 
-`GET /api/objective-transcript` projects full-text objective
-history across active-organization memberships with both `mission:read` and
-`objective:read`, restricted by token project scope before paging. It returns at
-most 100 rows using immutable `(created_at, id)` cursors (`before` descending
-history, `after` ascending new creates), or revalidates at most 100 named
-objective UUIDs with `ids`. One statement limits each workspace's indexed walk
-before merging the candidates; no count or per-objective hydration. The DTO,
-cursor/refresh rules, owner-only Inbox boundary and compatibility guidance are
-specified in [architecture.md](../architecture.md) "Mobile → REST (Objective Transcript Surface)". No existing mutation, instruction
-text or ownership is changed.
-
-The REST API should be the primary remote access path. It should expose domain resources and protocol commands, not raw tables.
-
-Recommended boundary:
-
-- `/projects`, `/projects/:id/resources`, `/projects/:id/repository`, `/missions`, `/missions/:id/objectives`, `/missions/:id/events`, `/missions/:id/context`, `/missions/:id/deliveries`, `/workspaces/:id/objectives.csv`. Project resource create/update bodies accept additive `resourceKey`; objective DTOs and create/update bodies expose additive `resourceKey`. `ObjectiveDto` additively carries `displayKey` and computed `displayId` (`{mission.displayId}.{displayKey}`). `/api/objectives/:id` accepts an objective UUID or a full display id.
-- `/api/projects/:id/run-queues` is the project-scoped Run Queue projection and definition surface. `GET` requires objective read; `POST`, `PATCH /api/projects/:id/run-queues/order`, `PATCH /api/run-queues/:queueId`, and `DELETE /api/run-queues/:queueId` require project update. Queue-order writes supply every live queue ID exactly once and only rewrite `run_queues.position`; entry membership/order remains exclusively in the Run Queue service. Entry enqueue, move, reorder, and dequeue retain `execution_request:create` authorization.
-- `GET /api/missions/:id` additively projects `terminalSessions` from bounded `execution_requests.metadata_json.providerSession` mappings across all objective states. Each item includes the provider/session, execution request/objective/target, target/device label, stored session name, claim-time executable/viewer, creation time, and last observed `running` / `exited` / `stopping` / `lost` state. Reachability is a client-side local-target capability condition, not a persisted session state. The projection never includes launch environment, terminal output, credentials, socket tokens, or attachment grants.
-- `/api/inbox` is the account-owned unassigned-capture surface: `GET` lists the caller's newest-first items, `POST` creates one, and `GET/PATCH/DELETE /api/inbox/:id` reads, edits, or removes only an owned item. `POST /api/inbox/:id/promote` accepts `{ projectId }`, authorizes `mission:create` on that project's workspace, creates an ordinary mission from the item fields, and consumes the item in the same transaction. `InboxItemDto` is `{ id, title, objectives, dueDatetime, priority, attachmentCount, createdAt, updatedAt }`. `GET/POST /api/inbox/:id/attachments` and `DELETE /api/inbox/:id/attachments/:attachmentId` manage an owned item's files; promotion moves them onto the created mission's first objective. Inbox changes do not enter workspace `entity_changes`; clients refetch their own list, while promotion uses normal mission realtime.
-- `PATCH /api/missions/:id/artifacts/:artifactId` edits an existing artifact's human-facing `label`, `contentText`, and/or `externalUrl` with `mission:update` permission on its mission. The caller supplies `expectedRevision`; stale writes return `409`, and external URLs must use HTTP(S). Its delivery/session/objective provenance and structured `contentJson` are immutable through this surface; the resulting artifact must retain at least one text, JSON, or URL content field. The transaction increments the artifact revision and appends an `artifact` entity change. The same mutation is also exposed as Protocol `POST /api/protocol/update-artifact` (`ovld protocol update-artifact`) and MCP `overlord_update_artifact`.
-- `POST /api/missions/:id/artifacts` creates a mission artifact without a delivery (`delivery_id` null) with `artifact:create` permission on its mission. The body supplies `{ type, label }` plus at least one of `{ contentText, externalUrl }`; optional `objectiveId` / `sessionId` stamp provenance, and Protocol/MCP may pass a live `sessionKey` instead. Non-HTTP(S) external URLs are rejected. The transaction appends an `artifact` entity-change create. The same mutation is exposed as Protocol `POST /api/protocol/add-artifact` (`ovld protocol add-artifact`) and MCP `overlord_add_artifact`. Delivery remains optional for artifacts and may still attach additional ones later.
-- `/protocol/*` endpoints mirroring `ovld protocol`.
-- `/execution-requests` for runner queue operations.
-- `/api/virtual-targets/v1/*` — the versioned **Virtual Target Queue Surface** consumed by an external gateway (target-authenticated, never the database):
-  - `PUT /api/virtual-targets/v1/registration` — gateway registers/refreshes one selected virtual target's capabilities, supported agents, supported queue versions, adapter key/version, and heartbeat. Requires target-management authorization or a provisioned gateway credential.
-  - `POST /api/virtual-targets/v1/claim` — atomically claims a request assigned to the caller's target and returns `VirtualExecutionQueueItemV1`, `claimId`, expiry, and only request-scoped launch-grant references. Same gateway/request replay returns the same claim/payload.
-  - `POST /api/virtual-targets/v1/requests/:id/progress` — records a bounded, monotonic V1 preparation observation. Does not transition status.
-  - `POST /api/virtual-targets/v1/requests/:id/launched` — validates request/claim/target/digest, records `VirtualTargetLaunchObservationV1`, then makes the normal `launching → launched` transition atomically. Idempotent by request and observation sequence.
-  - `POST /api/virtual-targets/v1/requests/:id/failed` — records a typed, redacted `VirtualTargetFailureV1` and makes the allowed transition to `failed`. `retryable` informs retry policy but does not itself requeue.
-  - `POST /api/virtual-targets/v1/grants/:id/exchange` — exchanges an authenticated, unexpired opaque grant for narrowly scoped credentials/attachment-download access. Every exchange is audited; never returns the user's Overlord token.
-  - `GET /api/virtual-targets/v1/missions/:id/resources` — returns summarized opaque lifecycle resources and source-compatibility observations to authorized UI/gateway callers.
-  - `POST /api/virtual-targets/v1/missions/:id/actions` — authorizes an explicit `start`/`stop`/`archive`/`delete`/`enqueue`/`retry`/`dequeue` action and delegates it to the target. Target output becomes an observation and cannot change mission completion.
-- `/missions/:id/branch/action` accepts additive `resourceKey`, defaulting to the project's primary resource, so branch actions target the intended repository in multi-resource projects.
-- `/uploads/:bucketKey` (core upload service) accepts raw image bytes, persists them to the `storage_buckets` backend, records the matching object table row (e.g. `user_images`), and returns the stored descriptor; `/storage/:bucketKey/:storageKey` first authorizes by the logical storage location (`user_image:read`, `workspace_image:read`, or `attachment:read`), then serves bytes only after an exact active metadata lookup for `(storage_bucket_id, storage_key)`.
-- `/api/profile/default-project` (`GET`, `PUT { projectId }`, `DELETE`) is the authenticated profile-navigation preference surface. It returns `{ projectId: string | null }`; writes authorize the named project, atomically clear the marker from all profile memberships, then mark the selected row. `/api/meta.defaultProjectId` is additive bootstrap metadata. This preference never scopes a request or grants access.
-- `/sync/changes?after=<seq>` for realtime catch-up and local DB sync, returning `SyncChangesDto { changes, cursor, hasMore }` in ascending `entity_changes.seq` order. The server scans the global sequence in bounded windows, filters to the caller's current readable workspace memberships before projection, and advances `cursor` to the last scanned sequence even if no rows were visible.
-- `/realtime` SSE/WebSocket endpoint backed by `entity_changes` (with compatibility alias `/api/stream`); compact change DTOs include `changedFields: string[]` parsed from `entity_changes.changed_fields_json` and `workspaceId`. Connection admission requires at least one readable membership; navigation state is not transport scope.
-- `/api/webhooks` (list/create), `/api/webhooks/:id` (update/soft-delete), `/api/webhooks/:id/rotate-secret`, `/api/webhooks/:id/test`, `/api/webhooks/:id/deliveries` (paginated attempt log), `/api/webhooks/:id/deliveries/:outboxId/redeliver` — workspace-scoped webhook subscription management, gated by `webhook:*` permissions.
-- `/api/onboarding` (`POST`, zero-membership users only) — creates an organization, a default (`general`) workspace, the caller's membership, and the `ADMIN` role in one transaction; shared verbatim by the web onboarding screen and `ovld org-setup`. `/api/organizations` (list for caller), `/api/organizations/:id` (update, org-admin gated), `/api/organizations/:id/admins` (list/add/remove, org-admin gated) — "org admin" is derived (`ADMIN` in every constituent workspace), not a stored role. `/api/workspaces/:id/projects` (or `?workspaceId=`) for per-workspace project listing now that the sidebar can render several workspaces of one organization at once.
-- `/api/workspaces/:id/execution-targets` (`GET`) — an authenticated workspace-member projection of every non-deleted target in the specified workspace, including target identity/type/status, safe owner display metadata, reachability, and active-member access count. It never returns `connection_json`, credentials, or mutable access information; project launch selection continues to use the acting member's eligible-target surface.
-
-REST handlers should:
-
-- Authenticate to a user/token/session identity.
-- Resolve authorization from an explicit workspace path/body, the named resource's workspace, or each membership in an account-wide operation. They must not read a workspace header or cookie as request scope.
-- Run service-layer state transitions in transactions.
-- Append `mission_events` and `entity_changes`.
-- Use `idempotency_keys` for retried writes.
-- Return entity revisions and the latest change `seq` when useful.
+Specified in [../api/rest-notes.md](../api/rest-notes.md) "REST API Boundary" until `api/openapi.yaml` replaces it.
 
 ## Realtime Strategy
 

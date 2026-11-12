@@ -26,8 +26,8 @@ Each type has a different procedure below.
 
 ## Before You Start
 
-1. Read `contract/architecture.md` — REST API Layer section (stable id: `rest`).
-2. Read the "REST API Boundary" section of [`contract/data/README.md`](../contract/data/README.md) — it defines the DTO shape contract (camelCase field names derived from the logical schema).
+1. Read [`contract/api/rest-notes.md`](../contract/api/rest-notes.md) — the REST API Layer (stable id: `rest`), moved there from `contract/architecture.md` until `contract/api/openapi.yaml` replaces it.
+2. Read the "REST API Boundary" section of [`contract/api/rest-notes.md`](../contract/api/rest-notes.md) — it defines the DTO shape contract (camelCase field names derived from the logical schema).
 3. Confirm the endpoint follows the shared **service layer** pattern: REST handlers must never write to database tables directly — they call the same service layer as the CLI and protocol surfaces.
 4. Prefer matching an existing domain module's shape (`backend/webhooks.ts`, `backend/organizations.ts`, `backend/ext/github/`) over inventing a new directory layout.
 
@@ -40,7 +40,7 @@ REST endpoints are stable interfaces. URL paths and HTTP method contracts, once 
 **Steps:**
 
 1. **Confirm the DTO shape** against `contract/data/README.md`. Response field names are camelCase versions of the logical schema column names. Add or extend types in `@overlord/contract` (`packages/contract/`) when the response is new.
-2. **Update `contract/architecture.md`** REST API Layer section with the new path, method, and response shape, in the same change as the handler.
+2. **Update `contract/api/rest-notes.md`** REST API Layer section with the new path, method, and response shape, in the same change as the handler.
 3. **Increment the contract version** in `contract/components.yaml` if the new endpoint changes a previously-stable response schema or removes/renames an existing path.
 4. **Implement in `backend/`**: put domain logic in a top-level module (e.g. `backend/webhooks.ts`) or an existing subdirectory (`backend/execution/`, `backend/branching/`, `backend/http/`), colocating tests as `backend/<name>.test.ts`. Register the HTTP route in `backend/index.ts` behind `requireAuthenticatedSession` (already applied to `/api` via `app.use('/api', …)` for most routes). Follow the existing `handle(...)` helper for auth-gated handlers.
 5. **Auth before service call**: validate the request token via the Auth Layer, resolve the `Actor`, then call `can(actor, action, resource)` / `requirePermission(...)` before any mutation.
@@ -59,7 +59,7 @@ The SSE/WebSocket realtime endpoint is owned by the REST API Layer. New event ty
 1. **Define the event type name** using a namespaced string if it is extension-specific (e.g. `myapp:mission.updated`), or a plain name if it is core (e.g. `mission.status_changed`).
 2. **Update `contract/data/README.md`** if the event type derives from `entity_changes` — note it in the "Realtime/Sync" section.
 3. **Implement via `backend/realtime.ts`** (and the `recordChange` helpers in `backend/db.ts`). Events must be derived from `entity_changes` rows written in the same transaction as the domain mutation — never computed separately. Canonical stream: `GET /realtime`; catch-up: `GET /sync/changes?after=<seq>`.
-4. **Document the event shape** (type, payload fields) in `contract/architecture.md` REST API Layer section.
+4. **Document the event shape** (type, payload fields) in `contract/api/rest-notes.md` REST API Layer section.
 
 **Sanctioned exception — the private assistant event channel (contract v152).** Chat
 events (`GET /api/chat/threads/:id/events`) do **not** derive from `entity_changes`.
@@ -158,9 +158,9 @@ packages/contract/        ← canonical typed DTO package (@overlord/contract)
 
 ## Cross-Module Checklist
 
-- [ ] Read `contract/architecture.md` REST API Layer section
+- [ ] Read `contract/api/rest-notes.md` REST API Layer section
 - [ ] DTO shapes derived from database logical schema (camelCase field names)
-- [ ] New path/method → update `contract/architecture.md` REST API Layer section
+- [ ] New path/method → update `contract/api/rest-notes.md` REST API Layer section
 - [ ] Breaking response change → bump contract version in `contract/components.yaml`
 - [ ] Auth: resolve token → Actor via Auth Layer before any service call
 - [ ] Persistence: service layer only, never direct table writes from route handlers

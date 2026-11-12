@@ -16,7 +16,7 @@ Excluded from review: `backend/dist-server/`, `backend/node_modules/`.
 
 ## Read first
 
-- `contract/architecture.md` → **REST API Layer** (§6), **Runner Layer** (§5), **Extension System** (§9),
+- `contract/api/rest-notes.md` → **REST API Layer**; `contract/architecture.md` → **Runner Layer** (§5), **Extension System** (§9),
   plus the *REST API → Database*, *Runner → REST*, and *Mobile → REST* interaction surfaces.
 - `backend/AGENTS.md`, `backend/README.md` if present.
 - `scripts/check-workspace-scoping.mjs` — its allowlist is the authoritative record of which

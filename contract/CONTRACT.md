@@ -46,6 +46,8 @@ The contract consists of:
 - [conformance.md](conformance.md): conformance requirements, manifests and
   controlled vocabularies;
 - [data/README.md](data/README.md): the database schema contract;
+- [api/rest-notes.md](api/rest-notes.md): the REST API Layer and REST route
+  detail, a normative holding file until `api/openapi.yaml` replaces it;
 - the machine-readable files listed below; and
 - accepted records in [decisions/](decisions/README.md).
 
@@ -66,9 +68,12 @@ these documents are also normative.
 - [`contract/harness-capabilities.schema.yaml`](harness-capabilities.schema.yaml) — JSON Schema (YAML) for the per-adapter agent-session capability descriptor. Referenced from the connector block of the conformance-manifest schema and from the `agentSession` vocabulary in `contract/extension-points.yaml`
 - [`contract/branch-planning-vectors.json`](branch-planning-vectors.json) — Golden input→output vectors pinning the duplicated per-mission branch/worktree planning algorithm (see "Shared Deterministic Algorithms")
 
-The REST surface will also be described by `api/openapi.yaml`, with its own
+The REST surface will be described by `api/openapi.yaml`, with its own
 `info.version`, from phase 4 of the migration in
 `planning/feature-plans/contract-adr-openapi-migration.md` (ADRs 0006–0008).
+Until then [api/rest-notes.md](api/rest-notes.md) holds that text; phase 4
+moves anything OpenAPI cannot express back into the topic documents before
+deleting it.
 
 ## 3. Precedence and conflicts
 
@@ -210,7 +215,8 @@ The range check refuses a release unless:
 3. under `none`, nothing under `contract/` changed; otherwise `CHANGELOG.md`
    has a current heading for the released `VERSION`;
 4. when [architecture.md](architecture.md), [protocol.md](protocol.md),
-   [authorization.md](authorization.md), [data/README.md](data/README.md), or a
+   [authorization.md](authorization.md), [data/README.md](data/README.md),
+   [api/rest-notes.md](api/rest-notes.md), or a
    migration under `database/sqlite/migrations/`,
    `database/postgres/migrations/` or `backend/postgres/migrations/` changed,
    the range adds at least one new record under `decisions/`; and

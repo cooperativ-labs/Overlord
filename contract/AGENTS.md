@@ -33,7 +33,7 @@ Every plan and material change summary declares exactly one of `Contract impact:
 
 | File | What it describes | When to update |
 | --- | --- | --- |
-| `CONTRACT.md`, `architecture.md`, `protocol.md`, `authorization.md`, `conformance.md`, `data/README.md` | The normative specification (see `CONTRACT.md` section 2) | Any contract change touching that topic |
+| `CONTRACT.md`, `architecture.md`, `protocol.md`, `authorization.md`, `conformance.md`, `data/README.md`, `api/rest-notes.md` | The normative specification (see `CONTRACT.md` section 2) | Any contract change touching that topic |
 | `VERSION`, `CHANGELOG.md` | Contract version and its history | Every version increment, through `yarn version:contract` |
 | `decisions/` | ADRs | Architecture, security, isolation, data-meaning, migration or service-boundary decisions |
 | `components.yaml` | Component registry: capabilities, ownership, interaction surfaces, contract version (written by `yarn version:contract`) | New component, new surface, new capability |
