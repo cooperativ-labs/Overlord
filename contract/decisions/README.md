@@ -83,3 +83,4 @@ record and the index disagree.
 - [0048 — The OpenAPI description covers every registered route, with explicit exclusions and operation extensions](0048-openapi-route-inventory.md)
 - [0049 — Token bounds apply to every route, including management routes](0049-token-bounds-on-every-route.md)
 - [0050 — Generated REST types replace hand-written DTOs; formats are lenient by default](0050-generated-rest-types.md)
+- [0051 — The OpenAPI description is enforced at the route boundary and in the backend tests](0051-rest-boundary-validation.md)

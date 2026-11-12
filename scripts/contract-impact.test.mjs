@@ -246,7 +246,7 @@ describe('contract range checker', () => {
   for (const [file, content] of [
     ['contract/authorization.md', '# Authorization\n\nNarrowed.\n'],
     ['contract/protocol.md', '# Protocol\n\nNew lifecycle step.\n'],
-    ['contract/api/rest-notes.md', '# REST notes\n\nNew route rule.\n'],
+    ['contract/data/README.md', '# Data\n\nNew route rule.\n'],
     ['database/sqlite/migrations/20261113000000_change.sql', 'select 2;\n'],
     ['database/postgres/migrations/20261113000000_change.sql', 'select 2;\n']
   ]) {

@@ -27,19 +27,20 @@ extension-points.yaml
 conformance-manifest.schema.yaml
 harness-capabilities.schema.yaml
 api/openapi.yaml
-api/openapi-ratchet.json
-api/rest-notes.md'
+api/openapi-ratchet.json'
 
 printf '%s\n' "$required_files" | while IFS= read -r relative_path; do
   [ -f "$contract_dir/$relative_path" ] || fail "missing contract/$relative_path"
   [ -s "$contract_dir/$relative_path" ] || fail "empty contract/$relative_path"
 done
 
-# The REST surface is specified by contract/api/openapi.yaml (ADR 0006). Until
-# phase 4d of the migration moves what OpenAPI cannot express into the topic
-# documents, the holding file contract/api/rest-notes.md stays normative too, so
-# both are required above. The OpenAPI structural check (operationIds and the
-# schema-stub ratchet, ADR 0048) is dependency-free like this script.
+# The REST surface is specified by contract/api/openapi.yaml (ADR 0006); the
+# rules it cannot express live in the topic documents (ADR 0051), so the retired
+# holding file contract/api/rest-notes.md must not come back as a second home.
+# The OpenAPI structural check (operationIds and the schema-stub ratchet, ADR 0048)
+# is dependency-free like this script.
+[ ! -e "$contract_dir/api/rest-notes.md" ] \
+  || fail "contract/api/rest-notes.md was retired in phase 4d (ADR 0051); REST rules belong in api/openapi.yaml or the topic documents"
 node "$root_dir/scripts/check-openapi.mjs" >/dev/null \
   || fail "contract/api/openapi.yaml failed its structural check (see above)"
 

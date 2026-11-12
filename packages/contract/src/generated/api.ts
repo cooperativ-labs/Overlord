@@ -5,10 +5,10 @@
 import { z } from 'zod';
 
 /** The contract version (contract/VERSION) this API description belongs to. */
-export const contractVersion = "169.1.1";
+export const contractVersion = "169.2.0";
 
 /** The API description's own version (OpenAPI `info.version`). */
-export const apiVersion = "2.1.1";
+export const apiVersion = "2.2.0";
 
 /** A non-JSON request or response body: raw bytes (G3). */
 export type BinaryBody = Uint8Array | ArrayBuffer | Blob;
@@ -4746,11 +4746,11 @@ export interface EndAgentSessionChannelBody {
    */
   reason?: string;
   /**
-   * A non-number is stored as null.
+   * The agent process's exit code, or null when it is unknown (the CLI sends null by default). Any other non-number is stored as null.
    */
-  exitCode?: number;
+  exitCode?: number | null;
 }
-export const endAgentSessionChannelBodySchema: z.ZodType<EndAgentSessionChannelBody> = z.object({ "reason": z.exactOptional(z.string()), "exitCode": z.exactOptional(z.number()) });
+export const endAgentSessionChannelBodySchema: z.ZodType<EndAgentSessionChannelBody> = z.object({ "reason": z.exactOptional(z.string()), "exitCode": z.exactOptional(z.number().nullable()) });
 
 export interface ResolveAgentRequestBody {
   /**

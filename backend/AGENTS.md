@@ -26,8 +26,8 @@ Each type has a different procedure below.
 
 ## Before You Start
 
-1. Read [`contract/api/rest-notes.md`](../contract/api/rest-notes.md) — the REST API Layer (stable id: `rest`), moved there from `contract/architecture.md` until `contract/api/openapi.yaml` replaces it.
-2. Read the "REST API Boundary" section of [`contract/api/rest-notes.md`](../contract/api/rest-notes.md) — it defines the DTO shape contract (camelCase field names derived from the logical schema).
+1. Read [`contract/api/openapi.yaml`](../contract/api/openapi.yaml) — the REST surface: every path, method, parameter, body, status and permission — and [`contract/api/README.md`](../contract/api/README.md), its conventions.
+2. Read the REST API Layer (stable id: `rest`) and "REST API → Database (HTTP Surface)" sections of [`contract/architecture.md`](../contract/architecture.md) and the "REST API Boundary" section of [`contract/data/README.md`](../contract/data/README.md) — the rules OpenAPI cannot express (cross-route invariants, ordering, side effects, ownership, isolation) and the DTO naming rule (camelCase field names derived from the logical schema).
 3. Confirm the endpoint follows the shared **service layer** pattern: REST handlers must never write to database tables directly — they call the same service layer as the CLI and protocol surfaces.
 4. Prefer matching an existing domain module's shape (`backend/webhooks.ts`, `backend/organizations.ts`, `backend/ext/github/`) over inventing a new directory layout.
 
@@ -39,14 +39,14 @@ REST endpoints are stable interfaces. URL paths and HTTP method contracts, once 
 
 **Steps:**
 
-1. **Confirm the DTO shape** against `contract/data/README.md`. Response field names are camelCase versions of the logical schema column names. Add or extend types in `@overlord/contract` (`packages/contract/`) when the response is new.
-2. **Update `contract/api/rest-notes.md`** REST API Layer section with the new path, method, and response shape, in the same change as the handler.
-3. **Increment the contract version** in `contract/components.yaml` if the new endpoint changes a previously-stable response schema or removes/renames an existing path.
-4. **Implement in `backend/`**: put domain logic in a top-level module (e.g. `backend/webhooks.ts`) or an existing subdirectory (`backend/execution/`, `backend/branching/`, `backend/http/`), colocating tests as `backend/<name>.test.ts`. Register the HTTP route in `backend/app.ts` behind `requireAuthenticatedSession` (already applied to `/api` via `app.use('/api', …)` for most routes). Follow the existing `handle(...)` helper for auth-gated handlers. Add the operation to `contract/api/openapi.yaml` in the same change; `yarn contract:parity` (`backend/openapi-route-parity.test.ts`) fails when a registered route has no operation.
+1. **Confirm the DTO shape** against `contract/data/README.md`. Response field names are camelCase versions of the logical schema column names.
+2. **Describe the operation in `contract/api/openapi.yaml`** — path, method, parameters, request and response schemas, statuses and `x-overlord-*` extensions — in the same change as the handler, move its `info.version`, and run `yarn api:generate`: the DTO types and Zod schemas in `@overlord/contract` are generated from it (ADR 0050), never written by hand. Put any rule OpenAPI cannot express in `contract/architecture.md` "REST API Layer".
+3. **Declare the contract impact and run `yarn version:contract <patch|minor|major>`** (the only writer of the contract version; never edit it by hand in `contract/components.yaml` or anywhere else), then complete the `contract/CHANGELOG.md` entry. A new endpoint is `minor`; changing a previously-stable response schema or removing or renaming a path is `major`.
+4. **Implement in `backend/`**: put domain logic in a top-level module (e.g. `backend/webhooks.ts`) or an existing subdirectory (`backend/execution/`, `backend/branching/`, `backend/http/`), colocating tests as `backend/<name>.test.ts`. Register the HTTP route in `backend/app.ts` behind `requireAuthenticatedSession` (already applied to `/api` via `app.use('/api', …)` for most routes). Follow the existing `handle(...)` helper for auth-gated handlers. `yarn contract:parity` (`backend/openapi-route-parity.test.ts`) fails when a registered route has no operation. The request-validation layer (`backend/http/request-validation.ts`, ADR 0051) is installed on every described route automatically; keep the handler's own checks, which answer first.
 5. **Auth before service call**: validate the request token via the Auth Layer, resolve the `Actor`, then call `can(actor, action, resource)` / `requirePermission(...)` before any mutation.
 6. **Reach persistence only through the service layer** — the same service functions used by `cli/` and protocol surfaces.
 7. **Idempotency**: write-operations that can be retried (e.g. from a client retry on timeout) must use REST-scope idempotency keys in `idempotency_keys`.
-8. **Write integration tests** that cover auth failure, happy path, and conflict (409) cases.
+8. **Write integration tests** that cover auth failure, happy path, and conflict (409) cases. Tests that drive the app over HTTP are response-conformance tests too: `yarn test:backend` checks every response against the operation and fails on an undocumented member or status (ADR 0051); a test app built from a router mounts `apiResponseConformance()` first and calls `installRequestValidation(app)` after its routes.
 
 ---
 
@@ -59,7 +59,7 @@ The SSE/WebSocket realtime endpoint is owned by the REST API Layer. New event ty
 1. **Define the event type name** using a namespaced string if it is extension-specific (e.g. `myapp:mission.updated`), or a plain name if it is core (e.g. `mission.status_changed`).
 2. **Update `contract/data/README.md`** if the event type derives from `entity_changes` — note it in the "Realtime/Sync" section.
 3. **Implement via `backend/realtime.ts`** (and the `recordChange` helpers in `backend/db.ts`). Events must be derived from `entity_changes` rows written in the same transaction as the domain mutation — never computed separately. Canonical stream: `GET /realtime`; catch-up: `GET /sync/changes?after=<seq>`.
-4. **Document the event shape** (type, payload fields) in `contract/api/rest-notes.md` REST API Layer section.
+4. **Document the event shape** (type, payload fields) in the stream operation's description in `contract/api/openapi.yaml` and any rule it cannot express in `contract/architecture.md` "REST API Layer".
 
 **Sanctioned exception — the private assistant event channel (contract v152).** Chat
 events (`GET /api/chat/threads/:id/events`) do **not** derive from `entity_changes`.
@@ -159,10 +159,10 @@ packages/contract/        ← canonical typed DTO package (@overlord/contract)
 
 ## Cross-Module Checklist
 
-- [ ] Read `contract/api/rest-notes.md` REST API Layer section
+- [ ] Read `contract/api/openapi.yaml` and `contract/architecture.md` REST API Layer section
 - [ ] DTO shapes derived from database logical schema (camelCase field names)
-- [ ] New path/method → update `contract/api/rest-notes.md` REST API Layer section
-- [ ] Breaking response change → bump contract version in `contract/components.yaml`
+- [ ] New path/method → operation in `contract/api/openapi.yaml` (+ `info.version`, `yarn api:generate`)
+- [ ] Contract change → `yarn version:contract <level>` (never hand-edit a contract version) + changelog entry
 - [ ] Auth: resolve token → Actor via Auth Layer before any service call
 - [ ] Persistence: service layer only, never direct table writes from route handlers
 - [ ] Write-operations: use idempotency keys for client-retry safety

@@ -5,6 +5,66 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [169.2.0] - 2026-11-12
+
+Phase 4d of the contract migration: the backend validates every request against
+[api/openapi.yaml](api/openapi.yaml) at the route boundary, the backend tests check every
+response they produce against it, and the `api/rest-notes.md` holding file is retired into the
+topic documents ([ADR 0051](decisions/0051-rest-boundary-validation.md)).
+
+### Version
+
+- Minor contract version 169.2.0, from 169.1.1. Contract impact: minor. Error behaviour
+  observable by clients changes for malformed input only: a JSON body that does not parse, and
+  a request the description refuses that a handler failed on, now answer 400 with a stable
+  `code` (`invalid_json`, `invalid_request`) instead of 500, and an unauthenticated request with
+  an unparseable body answers 401 instead of 500. That adds supported behaviour (a boundary
+  obligation, two open-vocabulary error codes and declared statuses) without breaking a
+  guarantee: requests that are valid today behave exactly as before, every 4xx a handler
+  answers is unchanged, and no route, field, access rule, closed vocabulary or data meaning
+  changes, so existing valid consumers, connectors and stored rows keep working. Request
+  schemas only widen to what handlers already accept. OpenAPI `info.version` 2.2.0.
+
+### Added
+
+- Request validation at the route boundary (ADR 0051): one layer per described route,
+  after authentication and immediately before the handler, checking parameters and bodies
+  against the generated schemas. Handlers keep their own answers; a refused request a handler
+  fails on answers 400 `invalid_request` with `details.issues`; a body that does not parse
+  answers 400 `invalid_json`. `OVERLORD_API_REQUEST_VALIDATION` (`enforce`, `warn`, `off`)
+  switches it without a code change.
+- Response conformance in the backend tests: `yarn test:backend` runs under
+  `scripts/api-conformance-report.mjs` and fails on any response whose status, media type or
+  closed JSON body does not match its operation, and on any invalid request a handler
+  accepted; `.github/workflows/contract.yml` runs it, and [CONTRACT.md](CONTRACT.md) section 5
+  lists it among the mechanical checks.
+- [api/openapi.yaml](api/openapi.yaml) declares 400 on every operation served behind the JSON
+  body parser (127 operations gained it) and 404 on every operation behind the
+  project-automation route guard (45 gained it); `ErrorEnvelope` documents `invalid_json` and
+  `invalid_request`.
+
+### Changed
+
+- [api/openapi.yaml](api/openapi.yaml), corrected to what the handlers accept
+  ([api/schema-disagreements.md](api/schema-disagreements.md) F1 to F4): the adapter channel
+  members `reason`, `applicationState` and `deliveryOutcome` are strings documenting their
+  meaningful values, `EndAgentSessionChannelBody.exitCode` is nullable, and the 400 responses of
+  `postOauthRegister`, `postOauthToken` and `getConnectionsKnowledgebaseCallback` also admit
+  `ErrorEnvelope`.
+- [architecture.md](architecture.md) "REST API Layer" and "REST API → Database (HTTP Surface)"
+  and [data/README.md](data/README.md) "REST API Boundary" carry the REST rules OpenAPI cannot
+  express, naming operations by `operationId`; [CONTRACT.md](CONTRACT.md) section 2,
+  [README.md](README.md), [components.yaml](components.yaml) (`rest.referenceSpec`), the agent
+  guides and the component-contract skill point there. Statements the moved text compared with
+  the code are worded as the code behaves.
+- [components.yaml](components.yaml) states without a version qualifier that hosted MCP OAuth
+  issues no refresh tokens, as [authorization.md](authorization.md) does.
+
+### Removed
+
+- `api/rest-notes.md`. `scripts/check-contract.sh` refuses it if it returns, and
+  `scripts/contract-impact.mjs` no longer lists it as an ADR trigger.
+
 ## [169.1.1] - 2026-11-12
 
 Phase 4c of the contract migration: REST types, Zod validators and an operation table are

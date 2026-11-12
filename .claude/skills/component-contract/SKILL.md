@@ -14,13 +14,12 @@ override it.
 | Document | Covers |
 | --- | --- |
 | `contract/CONTRACT.md` | Entry point: scope, normative documents, precedence, versioning, change protocol |
-| `contract/architecture.md` | Editions, component registry, interaction surfaces, shared algorithms, extension points |
+| `contract/architecture.md` | Editions, component registry, interaction surfaces, shared algorithms, extension points; the REST rules OpenAPI cannot express ("REST API Layer", "REST API → Database (HTTP Surface)") |
 | `contract/protocol.md` | `ovld protocol`, session lifecycle, hook and agent-session surfaces |
 | `contract/authorization.md` | Auth Layer, tokens, RBAC, native sign-in, hosted MCP OAuth |
 | `contract/conformance.md` | Conformance requirements and controlled vocabularies |
-| `contract/data/README.md` | Database schema contract |
-| `contract/api/openapi.yaml` | The REST surface: one operation per registered route with permission, edition, consumers and extension (ADR 0048); `info.version` moves with every change |
-| `contract/api/rest-notes.md` | REST API Layer and route detail OpenAPI does not yet express (holding file until phase 4d) |
+| `contract/data/README.md` | Database schema contract, including the "REST API Boundary" data rules |
+| `contract/api/openapi.yaml` | The REST surface: one operation per registered route with permission, edition, consumers and extension (ADR 0048); `info.version` moves with every change; requests are validated against it at the boundary and backend tests check every response against it (ADR 0051) |
 | `contract/*.yaml`, `*.schema.yaml` | Machine-readable registry, protocol commands, extension points, manifest schemas |
 | `contract/decisions/` | ADRs |
 | `contract/VERSION`, `contract/CHANGELOG.md` | Current version and history (entries at or below `168` are non-normative provenance) |
@@ -97,7 +96,7 @@ in the same change as the implementation:
 - Never edit or reinterpret a provenance changelog entry or a released
   version. Amend with a new version and changelog entry.
 - A change to `architecture.md`, `protocol.md`, `authorization.md`,
-  `data/README.md`, `api/rest-notes.md` or a migration needs a new ADR; the release range check
+  `data/README.md` or a migration needs a new ADR; the release range check
   refuses the range otherwise (introduced in phase 5).
 - Treat changes to authentication, authorization, workspace or organization
   isolation, roles, public APIs, persistent data meaning, migrations, security
@@ -146,7 +145,7 @@ declaring a `contractVersion` with the current major
 | New interaction surface | `contract/components.yaml` + interaction surfaces in `contract/architecture.md` (or `protocol.md` / `authorization.md`) |
 | New protocol command | `contract/protocol-commands.yaml` + `contract/protocol.md` |
 | Changed command flag (breaking) | `contract/protocol-commands.yaml` + `contract/protocol.md` + `major` |
-| New REST endpoint | An operation in `contract/api/openapi.yaml` (bump its `info.version`; `yarn contract:parity` fails without it) and any rule it cannot express in `contract/api/rest-notes.md` |
+| New REST endpoint | An operation in `contract/api/openapi.yaml` (bump its `info.version`, run `yarn api:generate`; `yarn contract:parity` fails without it) and any rule it cannot express in `contract/architecture.md` "REST API Layer" |
 | New database table/column | `contract/data/README.md` |
 | New extension point | `contract/extension-points.yaml` + `contract/architecture.md` |
 | New connector capability flag | `contract/extension-points.yaml` `approvedConnectorCapabilities` list |
@@ -180,4 +179,4 @@ changes, not documentation noise. If a contract file was written from a shell
 command rather than a native edit tool, declare it with `--paths` so it appears
 among the objective's changed files.
 
-<!-- version: 2.0.2 -->
+<!-- version: 2.0.3 -->

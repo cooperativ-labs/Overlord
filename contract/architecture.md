@@ -157,7 +157,512 @@ Does NOT own:
 
 ### 6. REST API Layer
 
-Specified in [api/rest-notes.md](api/rest-notes.md) until `api/openapi.yaml` replaces it.
+**Stable identifier**: `rest`
+**Reference spec**: [api/openapi.yaml](api/openapi.yaml)
+
+[api/openapi.yaml](api/openapi.yaml) specifies every path and method the backend serves, with
+its parameters, request and response bodies, statuses, error envelope, permission
+(`x-overlord-permission`), edition and consumers (ADRs 0006, 0048, 0050). Operations are named
+below by `operationId`; their shapes are not repeated here. This section holds what the
+description cannot express: cross-route invariants, ordering, side effects, ownership,
+isolation and privacy rules. Where a rule here and the description disagree, report the
+conflict (CONTRACT.md section 3).
+
+Owns:
+
+- URL paths and HTTP method contracts, and the request and response DTO shapes, as
+  [api/openapi.yaml](api/openapi.yaml) describes them. DTO member names are the logical
+  schema's camelCase column names ([data/README.md](data/README.md)); the TypeScript types and
+  Zod schemas are generated from the description (ADR 0050).
+- **Request validation at the boundary** (ADR 0051). Every route with an operation validates
+  its path, query and header parameters and its body against the operation, after the route's
+  authentication, immediately before its handler. A handler's own answer to an invalid request
+  stands; an invalid request a handler fails on with 500 answers 400 `invalid_request` with the
+  issues instead; a JSON body that does not parse answers 400 `invalid_json` (after
+  authentication, so an unauthenticated caller still gets 401). Unknown body members are
+  ignored unless the schema refuses them. `OVERLORD_API_REQUEST_VALIDATION` (`enforce`, the
+  default; `warn`; `off`) is the operator's switch. The backend test suite checks every
+  response it produces against the operation (status, media type and body with undocumented
+  members refused) and fails on an invalid request a handler accepted.
+- REST auth integration points.
+- **Project Run Queues** (`getProjectsByIdRunQueues`, `postProjectsByIdRunQueues`,
+  `patchProjectsByIdRunQueuesOrder`, `postProjectsByIdRunQueuesEntries`,
+  `patchRunQueuesByQueueId`, `deleteRunQueuesByQueueId`, `patchRunQueuesByQueueIdOrder`,
+  `patchRunQueuesEntriesByEntryId`, `deleteRunQueuesEntriesByEntryId`). Reads require project
+  and objective read access; planning mutations (entry enqueue, move, reorder, dequeue) require
+  `execution_request:create`; queue-definition mutations require `project:update`. Queue-order
+  writes supply every live queue id exactly once and only rewrite `run_queues.position`; entry
+  membership and order remain exclusively in the Run Queue service. The matching Protocol
+  commands are `queue-objective`, `dequeue-objective`, `retry-queue-entry`, `run-queue`,
+  `reorder-run-queue`, `create-run-queue`, `update-run-queue`, `delete-run-queue` and
+  `reorder-project-run-queues`; MCP maps them through `overlord_queue_objective`,
+  `overlord_list_run_queues`, `overlord_reorder_run_queue` and `overlord_manage_run_queue`.
+  Queue entries never select an execution target. `ObjectiveDto.queueEntry` projects live
+  membership and `autoAdvance` is derived from that membership for compatibility. A queue may
+  be mission-scoped; an entry POST without `queueId` targets the objective's own mission queue
+  and creates it only if that mission has none. When adding an objective creates its mission's
+  queue and an earlier sibling in that mission is already running (`executing` or
+  `pending_delivery`, or `launching` with an active execution request) and is not in any queue,
+  that sibling is added ahead of the new objective as a `running` entry linked to its latest
+  execution request, the same shape a direct Run of a queued objective produces, and the new
+  queue is created unpaused. The dispatcher never passes an in-flight entry, and delivery
+  removes the entry and ticks the dispatcher, so the queued objective launches as soon as its
+  predecessor delivers. The default project queue is never auto-created. Any non-default queue
+  that has held an entry retires (soft-deletes) once its last live entry leaves by removal,
+  move, drop or delivery completion; a never-used queue is kept. A forced entry removal (`force`
+  on `deleteRunQueuesEntriesByEntryId`) also drops an entry wedged in `dispatched`/`running`,
+  clears the objective's active execution requests, resets a stuck `launching` objective to
+  `draft`, and pauses the containing queue before its removal tick can dispatch a successor; an
+  objective already `executing` keeps its live session. Moving an active objective back to
+  `draft` or `submitted` likewise pauses its containing queue transactionally. A retry
+  (`retry` on `patchRunQueuesEntriesByEntryId`) returns a held entry to `waiting` with
+  `attemptCount` reset to 0 and enqueues a dispatch tick; it is refused (409) for an entry
+  already `dispatched`/`running` and may not be combined with a move. On every Run Queue
+  surface (REST, Protocol, MCP and the legacy `autoAdvance` input): queueing an objective also
+  queues every later objective of the mission (by position) that has not started (`draft`,
+  `submitted` or `future`, with instruction text, not already queued), directly behind it in
+  mission order, while the response stays the requested objective's single entry (the core
+  service's internal `cascade: false` option is not exposed); a queue reorder or move
+  redistributes the mission's queued objectives, in queue order, across the position slots
+  queued objectives already occupy (unqueued objectives never move), and
+  `reorderFutureObjectives` carries the new objective order into every queue holding that
+  mission's `waiting`/`blocked` entries across the slots they occupy (in-flight entries and
+  other missions' entries never move; a changed queue requests a dispatch tick); removing an
+  entry whose objective has not started (or a forced removal that reset `launching` to `draft`)
+  moves that objective to the end of the mission's objective positions (re-queueing appends it
+  to the queue, so it stays last until a user moves it), while removal on completion,
+  disconnect or deletion leaves positions alone; the dispatch tick sweeps the project for empty
+  queues to retire, the default queue is never retired, and the entry DELETE response reports
+  any retired queue, so clients must tolerate a queue id disappearing from the project's queue
+  projection after any entry mutation or delivery. The queue read projection's bounded
+  `diagnosticCode` names an impossible queue/request pair and never exposes launch commands,
+  environment, credentials, terminal output or provider-session metadata. Dispatch failures use
+  the same shared redaction and bounding policy before they become a queue hold reason, service
+  log detail or response projection. `createExecutionRequest` refuses a
+  `requested_source = run_queue` request that would give a serial mission a second active
+  objective (`objective_sibling_active`, 409).
+- **Project resource-source launch defaults** (`patchProjectsByIdResourcesByResourceIdSourcesBySourceId`)
+  are authorized as a project update and preserve the materialization descriptor fields.
+- **Creation provenance**: `createdByKind` falls back to `human` in the mapper so no client
+  writes a null branch; `MissionDetailDto.createdFrom` is resolved from the soft
+  `created_by_session_id` reference by a `LEFT JOIN` that tolerates a missing session, is paid
+  once per mission page and is deliberately absent from the board and list projections.
+  Provenance is a permanent row attribute, never seen-tracked mission state, and REST exposes
+  no filter or sort on it.
+- **Objective references**: routes that take an objective id (`/api/objectives/{id}` and the
+  launch, prompt and attachment routes) accept an objective UUID or a full display id
+  (`{mission.displayId}.{displayKey}`). UUID lookup stays globally unique; display ids resolve
+  within the selected organization's `authorizedWorkspaces` set, answer 404 outside that set and
+  409 on genuine ambiguity. Mission routes accept a mission UUID or display id;
+  `getMissionsByIdObjectives` addressed by a mission display id returns that mission's
+  objectives.
+- **Mission create launch selection**: each `CreateMissionBody.objectives[]` item carries the
+  same optional `agent` / `model` as Protocol `create` items (a `model` requires a non-empty
+  `agent`).
+- **Parallel objectives**: `postObjectivesByIdLaunch` refuses (409) an active sibling only while
+  the mission's `allowParallelObjectives` is false; when it is true a sibling never blocks the
+  launch, on the same `resource_key` or a different one. An isolated per-objective branch
+  reported through `postMissionsByIdBranchPrepared` (`branchAutomation.isolated`) is recorded on
+  `objectives.branch` and audited as a mission event, but must not move
+  `missions.active_branch` or the mission-level branch observation off the shared mission
+  branch.
+- `MissionDto.hasExecutingObjective` and the Live Activity running and completion projections
+  count an objective as executing while it is `executing` or `pending_delivery`;
+  `pending_delivery` is execution, not a fault.
+- Mission schedule validation errors keep their HTTP status and `error` text and additionally
+  carry `code: validation_error`; the scheduled duplicate allocates its mission number
+  atomically, like every other mission create.
+- **Profile-owned Inbox capture** (`getInbox`, `postInbox`, `getInboxById`, `patchInboxById`,
+  `deleteInboxById`, `postInboxByIdPromote`, `getInboxByIdAttachments`,
+  `postInboxByIdAttachments`, `deleteInboxByIdAttachmentsByAttachmentId`). Every item route
+  resolves the caller's profile and answers 404 for an item owned by another profile. Promotion
+  checks `mission:create` only on the destination project, calls the ordinary mission-create
+  transaction with the capture fields, and consumes the item atomically. Account-owned Inbox
+  mutations are intentionally absent from workspace `entity_changes`; clients refetch their own
+  list, while promotion retains normal mission realtime behaviour. Inbox attachment routes
+  mirror the objective attachment routes (raw body, percent-encoded `x-upload-filename`,
+  `MAX_ATTACHMENT_BYTES`); uploads additionally require `attachment:create` on the storage
+  workspace. `getStorageByBucketKeyByStorageKey` serves an unpromoted Inbox file only to the
+  item's owner. Promotion re-points every active attachment (sets project, mission and first
+  objective, clears `inbox_item_id`, bumps revision, records an `attachment` update change) in
+  the transaction that creates the mission and consumes the item; files stored in another
+  workspace are first copied into the destination workspace's `attachments` bucket under its
+  canonical key, the source object is removed after commit, copies are discarded if promotion
+  fails, and an attachment added between the copy and the transaction makes promotion answer
+  409 (retry). Deleting an item and account deletion tombstone the capture's attachments and
+  remove remote stored objects after commit (local buckets keep historical on-disk behaviour,
+  as for objective attachments).
+- **Cross-workspace Inbox missions** (`getInboxMissions`) union agent-authored missions in
+  status type `next` with missions of any creator that are past due or due today or tomorrow
+  (UTC day boundaries; `complete` and `cancelled` status types excluded from both due slices),
+  across every workspace the caller actively belongs to in the active organization and may
+  `mission:read`. Only active projects contribute cards; archived projects are excluded
+  regardless of inclusion reason. Human-created missions appear only through the overdue and
+  due-soon windows. A mission qualifying several ways is one card carrying every reason;
+  `overdue` and `due_soon` are mutually exclusive; `recent` labels rows created within the past
+  7 days. Overdue rows lead, most recently overdue first (due date descending), then due-soon
+  rows soonest first, then agent-Next rows newest first, each slice capped independently at 60.
+  Distinct from the profile-owned Inbox capture.
+- **Cross-workspace activity feed** (`getActivityFeed`) is mission-anchored across every
+  workspace the caller actively belongs to in the active organization, authorized with
+  `mission:read` per workspace. A mission with at least one `launching` / `executing` /
+  `pending_delivery` objective is a single item keyed `mission:<missionId>`, never one card per
+  objective, carrying every objective of that mission in mission-panel display order and the
+  live ones in `activeObjectiveIds`. Its chrome describes the mission's primary running
+  objective: the launching one when there is one, else the oldest active one.
+  `pending_delivery` counts as live work, so a re-attached objective keeps its mission on the
+  feed between its last update and delivery. A mission whose most recent live delivery falls in
+  the requested two-week window and that has no live objective is a `mission_delivered` card
+  with `runState: 'delivered'` and empty `activeObjectiveIds`. `before` selects the next older
+  two-week delivered window and omits live runs and questions; `nextBefore` is that window's
+  start when older delivered missions exist, else null. `blocking_question` items are unseen
+  `ask` mission events from the past 3 days. Items are grouped rather than purely
+  time-descending: launching missions, then executing ones, then questions, then delivered,
+  newest first within each group. `createdByKind` / `createdByAgent` describe the item's
+  subject: the mission for `mission_run` and `mission_delivered`, the objective behind the ask
+  for `blocking_question`. Agent identity treats the protocol session sentinel `unknown` as
+  absent and falls back to the objective's `assigned_agent`. Truncation is reported through
+  `counts` rather than implied, and no raw payload JSON is exposed.
+- **Deferred-work resolutions** (`putDeliveriesByDeliveryIdDeferredWorkByActionIdResolution`,
+  `deleteDeliveriesByDeliveryIdDeferredWorkByActionIdResolution`) upsert or remove a
+  `human_action_resolutions` row, require `mission:update` on the delivery's workspace, answer
+  404 for an unknown delivery or an action id that is not one of the delivery's deferred-work
+  ids (reported human actions have no resolution since v150), and emit a
+  `human_action_resolution` entity-change row carrying the mission and objective ids. `outcome`
+  is allowed only with `status: 'done'` and `outcomeRef` requires `outcome` (400 otherwise). The
+  web app may promote deferred work through `postMissions` (`title` as the first objective's
+  title and `change`, `Location: {location}`, `Done when: {doneWhen}` separated by blank lines
+  as its instruction, `statusId` omitted so the project default applies) or `postObjectives` as
+  a future objective on the delivering mission with the same title and instruction, then record
+  the matching outcome. No raw payload JSON is exposed.
+- **Mission summary** (`getMissionsByIdSummary`, `putMissionsByIdSummarySeen`; operator surface
+  only, exempt from MCP parity, no Protocol, CLI or MCP counterpart). Evidence is selected in
+  the database before limits and capped at `MISSION_SUMMARY_EVIDENCE_LIMIT` with pre-cap totals
+  and truncation flags; suggestions are projected at read time from current-run delivery
+  deferred work and resolutions (dismissed and no-longer-current items omitted, promoted items
+  reduced to identity, title and resolution). Evidence is the latest current-run delivery per
+  objective, its human actions and source rows, deleted objectives included. `deliveredAt` on
+  risks and suggestions is the source delivery timestamp projected from the delivery row, not
+  model output or persisted summary JSON. Clients learn eligibility only from the summary read
+  envelope; `MissionDto` and `MissionDetailDto` do not carry it. `watermark` is the newest
+  `deliveredAt` of the current-run deliveries the response draws on or `createdAt` of an open
+  `question` or `choice` request. Marking seen refuses (`invalid_input`) a watermark later than
+  the caller's current evidence maximum or any watermark on an ineligible mission, upserts
+  `max(existing, watermark)` for the calling workspace user and records no entity change. The
+  evidence maximum is the newest `delivered_at` of any live delivery or `created_at` of any
+  `question` or `choice` request of the mission, whatever its status, so answering a request or
+  reopening an objective after the read cannot reject the acknowledgement of evidence that was
+  displayed.
+- **Delivery read projection** (`getMissionsByIdDeliveries`): delivery mission events expose
+  their `deliveryId` without exposing raw event or delivery payload JSON; each delivery's
+  deferred-work items are addressed with the same stable ids as the deferred-work resolution
+  routes. Paging is in the HTTP Surface below.
+- **Mission artifacts**: editing (`patchMissionsByIdArtifactsByArtifactId`) requires
+  `mission:update` on the named mission, retains delivery, session and objective provenance and
+  `contentJson`, refuses stale edits with 409 and non-HTTP(S) external URLs, keeps at least one
+  text, JSON or URL content field, increments the artifact revision and emits an `artifact`
+  entity change in the write transaction; the client renders `contentText` as safe Markdown.
+  Creation (`postMissionsByIdArtifacts`) requires `artifact:create` on the named mission,
+  optionally stamps `objectiveId` / `sessionId` provenance (Protocol and MCP may pass a live
+  `sessionKey` instead), leaves `delivery_id` null, refuses non-HTTP(S) external URLs and emits
+  an `artifact` entity-change insert in the same transaction; delivery may still attach further
+  artifacts later. The same mutations are Protocol `update-artifact` / `add-artifact` and MCP
+  `overlord_update_artifact` / `overlord_add_artifact`.
+- **Mission shared context** (`getMissionsByIdContext` with `mission:read`,
+  `putMissionsByIdContext` with `mission:update`) mirrors Protocol `read-context` /
+  `write-context`; a write upserts one entry and emits a `shared_context_entry` entity change in
+  the same transaction.
+- **Personal Everhour identity** (`getExtEverhourUserConnection`, `putExtEverhourUserConnection`,
+  `deleteExtEverhourUserConnection`, and the deprecated `/ext/everhour/integration` alias): a
+  personal API key is validated against Everhour, then stored only as AES-256-GCM ciphertext;
+  delete revokes and soft-deletes only the caller's credential. These account-wide routes use no
+  ambient workspace and no `workspace:*` permission. Timer, time-entry and project-link writes
+  use the acting user's key. DTOs, logs, browser and mobile storage, realtime, entity changes and
+  errors never contain an Everhour API key or a server encryption key. Workspace-scoped GitHub
+  App installation and Everhour/GitHub resource links are unchanged.
+- **Personal GitHub repository authorization** (`getExtGithubUserConnection`,
+  `postExtGithubUserConnectionAuthorize`, `getAuthCallbackGithubRepository`,
+  `deleteExtGithubUserConnection`, `getExtGithubRepositoryOwners`): authorization creates a
+  profile-bound, hashed, short-lived OAuth state; the public callback consumes that state once,
+  exchanges the code server-to-server, encrypts the access and optional refresh credentials with
+  AES-256-GCM, and stores one active connection for the profile; delete revokes and soft-deletes
+  only the caller's credential; repository owners are the personal owner plus only active
+  organizations whose policy permits the caller to create private repositories. Repository
+  authorization reuses the Better Auth GitHub OAuth App client registration (`GITHUB_CLIENT_ID`
+  / `GITHUB_CLIENT_SECRET`) but remains a distinct, explicit grant and token lifecycle
+  requesting `repo read:org`; the callback is a subpath of the registered
+  `/api/auth/callback/github` login callback and runs before the Better Auth wildcard. These
+  account-wide routes use no ambient workspace and do not alter the workspace GitHub App
+  installation. DTOs, logs, browser and mobile storage, realtime, entity changes, redirects and
+  errors never contain a GitHub credential, raw OAuth state or server encryption key.
+  `postConnections` with `provider: 'github'` is the canonical start route.
+- **Personal-connection compatibility aliases**: the Everhour and GitHub user-connection routes
+  above are thin aliases over the shared account-connections module (`ProfileConnections`,
+  profile scope): the credential is stored in `account_connections` under the module's key ring,
+  never in an extension-held key, the module serves the GitHub callback and serialises refresh,
+  and the response shapes and error text are unchanged. The GitHub aliases keep their `returnTo`
+  validation (an allowed browser origin URL or `overlord://github/callback`, stored in
+  `account_connection_authorizations.return_url`; without `returnTo` they return to the web
+  connected-accounts page when a web origin is configured, otherwise to the status page). On
+  every alias `connected` means a live `connected` row and a `reauthorization_required` row
+  reports `connected: false`; the GitHub `configured` means the OAuth client and a write key are
+  both present. Each alias records an in-process hit counter logged hourly with route and client
+  family only. Retirement is a later contract change: `/ext/everhour/integration` goes first,
+  after the web app uses `/api/connections` and the counter reads zero; the GitHub aliases stay
+  until an OverlordMobile release on `/api/connections` has shipped and they record 90 days
+  without hits. `getExtGithubRepositoryOwners` is a feature route, not an alias, and reads its
+  token through the module.
+- **Composite project initialization** (`postProjectsInitialize`) names its target workspace and
+  requires `project:create` there. The caller-provided idempotency key creates the project,
+  first mission and initial draft objective atomically; optional private GitHub provisioning
+  runs outside that transaction through the already connected user OAuth credential and is
+  retryable with the same key. A failure never rolls back the created idea. On success the
+  extension records one GitHub project link and the core service records one non-primary
+  read-only `git` resource for the HTTPS clone URL. The selected owner must be eligible for the
+  connected account, and this flow never reads, changes or depends on the workspace GitHub App
+  installation.
+- **Realtime change projection**: `EntityChangeDto` projections come from `entity_changes`
+  (`changedFields` parsed from `changed_fields_json`); streams and catch-up scans aggregate only
+  the caller's current readable memberships, filter before projection, and advance the global
+  cursor past filtered rows (`getRealtime`, its alias `getStream`, `getSyncChanges`).
+- **Mission branch metadata**: read-only `MissionBranchDto` derived from
+  `missions.active_branch`, predicted via the service layer's copy of the shared branch/worktree
+  planning algorithm (`backend/branch-planning.ts`), co-owned with the Runner Layer and pinned to
+  `contract/branch-planning-vectors.json` (see "Shared Deterministic Algorithms").
+- **On-demand branch actions** (`postMissionsByIdBranchAction`: commit, merge-with-parent,
+  push-parent, publish) run host-side against the project's worktrees under
+  `~/.ovld/worktrees` and the selected project resource (`resourceKey`, defaulting to the
+  primary resource, so branch actions target the intended repository in multi-resource
+  projects). The Runner Layer owns launching the agent into a worktree, not these mutations.
+- **Branch checkout resolution**: branch actions, local-target branch observation
+  (`deriveBranchStatus`) and Runner Layer branch preparation locate a prepared branch
+  identically: the recorded worktree when it still exists on that branch, else whichever
+  checkout git reports for the branch (the primary repository or another linked worktree). Only
+  the runner creates a fresh checkout when none exists. After an observation,
+  `MissionBranchDto.worktreePath` is null when the branch is checked out nowhere on that device.
+  `patchMissionsById` with `branchOverride` plus `resetActiveBranch` retargets a mission with a
+  prepared branch of any status; following objectives run on the new branch. The
+  `BRANCH_WORKTREE_MISMATCH` branch-action error is retired: a worktree on another branch simply
+  is not that branch's checkout.
+- **Client machine identity**: the `x-overlord-device-fingerprint` / `-label` / `-platform`
+  request headers are an optional machine-local lookup hint, never authentication,
+  authorization or audit identity. They exist only so a co-located CLI or desktop-bridge caller
+  can be matched to an execution target already declared for that machine, and the backend
+  still authorizes the resolved target against the authenticated actor's membership and access.
+  A hint must never cause an `execution_targets` row to be created on a read,
+  protocol-lifecycle, observation or runner path. Ordinary browsers and the mobile app send no
+  such headers; only the CLI and the desktop shell bridge do.
+- **Execution-target declaration**: Protocol `register-target` (`ovld add-et`), the equivalent
+  `postWorkspacesByIdExecutionTargets` (the desktop one-click affordance, with the same
+  `execution_request:claim` authorization) and an eligible machine-local project-resource
+  checkout link are the only REST operations that may create a `local` execution target. Every
+  other route, including the per-machine launch-settings mutations, resolves an existing target
+  or reports its absence.
+- **Leased execution targets**: persistent is the default. A human may explicitly create an
+  independent local target with `{ lifecycle: { kind: 'leased', leaseSeconds, graceSeconds } }`
+  through an existing declaration surface; runners, environment variables and adoption never
+  select or mutate this policy. A successful authorized local runner heartbeat renews only that
+  active target's lease. Expiry is derived offline or ineligible state, never deletion or
+  access, resource or preference cleanup; a returning runner can renew during grace. `disabled`
+  suspends cleanup and renewal while retaining the target, and re-enabling starts a fresh lease.
+  The backend's idempotent `overlord.execution_target.lease_cleanup.v1` worker owns post-grace
+  cleanup: it never silently reroutes queued target-bound work, waits for live claims to
+  recover, fails remaining queued work with redacted `execution_target_lease_expired`, then uses
+  the ordinary target deletion cascade. Lifecycle changes and queue transitions emit the normal
+  entity-change and mission-event projections.
+- **Machine-local eligibility for declaration**: a caller may declare the acting machine only
+  when it carries a real machine-local host identity: the process host on a co-located Local
+  backend, otherwise a non-browser, non-backend-host `x-overlord-device-*` hint. A caller with no
+  such identity is refused with 409 `no_execution_target_registered` and an actionable message;
+  it is never given an inferred target.
+- **Project-resource source declaration**: writing a `local_checkout` source with an explicit
+  `executionTargetId` updates that already-declared target's source and creates nothing (this is
+  how an ordinary browser edits a source); writing a `sourceUrl` Git source creates nothing
+  (the source is project-global unless the body names an `executionTargetId`, which is stored as
+  given); writing a `local_checkout` source with no
+  `executionTargetId` declares the acting machine when it is machine-local-eligible, and
+  otherwise fails 409 `no_execution_target_registered` rather than declaring the caller or
+  silently writing a pathless global source.
+- **Worktree/branch automation is a user preference**, not a workspace setting:
+  `worktreeBranchAutomationEnabled` lives in the acting profile's launch-session defaults, and
+  the `…/launch-settings/worktree-branch-automation` routes are aliases for the session-defaults
+  update. `LaunchSettingsDto.worktreeBranchAutomationEnabled` and
+  `MissionBranchDto.worktreeAutomationEnabled` mirror the user default, so the value is
+  identical across every workspace the user belongs to; the workspace id on the launch-settings
+  routes only selects the authorizing membership. Workspace values stored before this rule are
+  not migrated.
+- **Launch-settings mutations** (`…/launch-settings/agents/{agentKey}` and
+  `…/terminal-profile`) require an already-declared acting target and fail 409
+  `no_execution_target_registered` when the machine has none. Configuring settings is not an
+  onboarding trigger. `…/launch-settings/session-defaults` is the exception by construction: the
+  user-level provider and viewer default is stored on the profile, not a target, so it neither
+  requires nor declares one.
+- **Desktop OAuth handoff** (`getAuthDesktopGithub`, `getAuthDesktopCallback`,
+  `postAuthDesktopExchange`): the browser-only start begins only the configured GitHub provider
+  with the fixed desktop callback, so Better Auth's OAuth state cookie is created in the system
+  browser; the callback mints an opaque, short-lived, single-use handoff ticket from that browser
+  session and redirects with it only to `overlord://auth/callback` (without a browser session it
+  answers as the operation describes); the unauthenticated exchange consumes the ticket once and returns the Better Auth session token to the desktop shell's main process.
+  These routes never return GitHub credentials, bearer tokens or reusable OAuth state, and the
+  ticket itself is not an API credential.
+- **Hosted-web OAuth handoff** (`getAuthBrowserCallback`, `postAuthBrowserExchange`): the
+  browser-only callback validates the requested return origin against configured trusted web
+  origins, mints an opaque, short-lived, single-use handoff ticket from the authenticated
+  browser session, and redirects only to that origin; the unauthenticated exchange consumes the
+  ticket once and returns the Better Auth session token to the web client. These routes never
+  put GitHub credentials, bearer tokens or reusable OAuth state in a URL, and the ticket itself
+  is not an API credential.
+- **Agent-session channel route family** (`/api/agent-session-channels/v1/*`): adapter event,
+  request, input and heartbeat operations for exactly one channel, authenticated only by a
+  channel-scoped credential. A normal user or session token is refused there, and a channel
+  credential is refused on every human route. The separate human surfaces (resolving a session's
+  effective capabilities, listing and answering requests, releasing a request back to the
+  terminal so the native prompt owns it, enqueuing or cancelling input) use ordinary session or
+  token auth plus resource-derived RBAC, require the permission-resolution RBAC and workspace
+  policy ceiling to resolve a decision, and apply revision CAS with immutable audit attribution.
+  REST additionally applies a second server-side payload allowlist and bounds every summary,
+  option, id, sequence, timestamp and diagnostic code; formatter output renders as escaped plain
+  text with explicit truncation. Capability projections are diagnostics: a client gates controls
+  on the live channel's effective capability snapshot, never on the static connector catalog and
+  never on the agent identifier.
+- **Objective-scoped agent-session reads** (`getAgentRequests`, `getAgentSessionInputs`): a full
+  objective display id supplies its mission; a UUID requires `missionId`. With `objectiveId`,
+  returned rows and the `liveChannel` projection are restricted to that objective, and a
+  mismatched mission/objective pair is refused.
+- The realtime Server-Sent Events endpoint (`getRealtime`, alias `getStream`).
+- SQL Studio launch metadata in `getMeta` when the optional external SQL Studio process is
+  enabled.
+- **Webhook subscription management** (`/api/webhooks*`, gated by `webhook:*` permissions):
+  parentless list and create require an explicit `workspaceId` (or derive it from the named
+  project); entity-addressed mutations derive and authorize the subscription's owning workspace.
+  The in-process webhook dispatcher (`backend/webhook-dispatcher.ts`, a `RealtimeHub`-style
+  singleton polling loop) claims `outbox_messages` rows and delivers HMAC-signed HTTP POSTs.
+  SSRF guards (HTTPS-only, private-network block) apply to external endpoints; hosts matching the
+  `OVERLORD_WEBHOOK_INTERNAL_HOSTS` allowlist (plus implicit `localhost` in Local edition) are
+  internal: exempt from the SSRF block and the HTTPS requirement, and defaulting to the `full`
+  payload mode. Full `mission.delivered` envelopes expose the authorized normalized
+  `delivery.report` projection (never raw delivery payload JSON); thin envelopes remain
+  identifier and link only. The envelope carries no `changeRationales`; its `changedFiles` items
+  are `{ filePath, resourceKey, source }`.
+- **Organization management** (`getOrganizations`, `patchOrganizationsById`,
+  `getOrganizationsByIdAdmins`, `postOrganizationsByIdAdmins`,
+  `deleteOrganizationsByIdAdminsByUserId`): updates and admin management are org-admin gated;
+  "org admin" is derived, not a stored role, and the transactional invariant is that an org
+  admin is `ADMIN` of every constituent workspace.
+- **Shared onboarding** (`postOnboarding`, zero-membership users only) creates an organization, a
+  workspace (default `general`), the caller's membership and the `ADMIN` role in one
+  transaction, and is used verbatim by both the web onboarding screen and `ovld org-setup` so the
+  two clients cannot drift. `getWorkspacesByIdProjects` lists one workspace's projects now that
+  the sidebar can render several workspaces of one organization at once.
+- **Organization images**: storage routes for the `organization-images` bucket key carry a
+  `PUBLIC organization_image:read` grant, mirroring `workspace_image:read`.
+- **Workspace target projection** (`getWorkspacesByIdExecutionTargets`): members may view every
+  non-deleted, executable target in that workspace (browser-only web sessions are not execution
+  targets and are excluded). Workspace admins may rename a target
+  (`patchWorkspacesByIdExecutionTargetsByTargetId`) and may soft-delete one with no active queued
+  work (`deleteWorkspacesByIdExecutionTargetsByTargetId`); deletion clears target-scoped project
+  resources and project target preferences pointing at it, and soft-deletes the linked `devices`
+  row when it no longer has any live execution target. The projection also soft-deletes any
+  remaining orphan devices (no live execution target) before returning. It never exposes
+  `connection_json`, credentials or mutable access information; project launch selection stays
+  constrained to the acting member's eligible targets.
+- **Workspace agent catalog and launch settings** are managed only through their
+  workspace-scoped routes under `/api/workspaces/{id}/...`, authorized against the target
+  workspace's own membership (`launch:read` to view, `launch:configure` to mutate;
+  non-membership reads as 404). Resource-owned REST and extension operations derive both the
+  workspace and the caller's membership in it before authorization, persistence, provider access
+  and change-feed attribution.
+- **Default-project preference** (`getProfileDefaultProject`, `putProfileDefaultProject`,
+  `deleteProfileDefaultProject`; `defaultProjectId` on `getMeta`) is profile navigation state:
+  it grants no access, never scopes a request, and is ignored when its project is no longer
+  readable. Writes authorize the named project, atomically clear the marker from all profile
+  memberships, then mark the selected row.
+- **User-token lifecycle** (`getUserTokens`, `postUserTokens`, `patchUserTokensById`,
+  `postUserTokensByIdRevoke`, `deleteUserTokensById`): owners manage only their own tokens;
+  delete shares the `user_token:self:revoke` authorization, only soft-deletes an
+  already-revoked token and emits an `entity_changes` delete tombstone. No response exposes a raw
+  secret or hash. Creation takes no workspace or organization selection: a token minted by the
+  signed-in user for themselves consents to all current and future workspaces in that caller's
+  organization, recorded as `all_workspaces` with no narrowing allowlist, and its issuance
+  workspace is audit attribution only. Every request still intersects that consent with live
+  membership and per-workspace RBAC. Explicit workspace consent is the third-party OAuth approval
+  path only. These routes resolve the owning profile from the authenticated caller, never from
+  the instance's oldest account.
+- **Hosted MCP OAuth** (`postOauthRegister`, `postOauthToken`, `postOauthRevoke`,
+  `getOauthAuthorize`, `postOauthAuthorizeRequest`, `postOauthAuthorizeApprove`): the request and
+  approval helpers expose and require an explicit single-organization consent choice when more
+  than one organization is available; approval selects explicit live workspace ids or all current
+  and future workspaces in that organization. `getAuthorizedWorkspaces` is the read-only
+  projection of the caller's organization and workspace authorization snapshot and never changes
+  scope. Token rules are in [authorization.md](authorization.md).
+- **Virtual Target Queue Surface** (`/api/virtual-targets/v1/*`): REST owns the DTO shapes,
+  target-authenticated auth and RBAC enforcement, per-request idempotency, and bounded and
+  redacted output for this surface; the immutable `VirtualExecutionQueueItemV1` payload and its
+  digest are built by the service layer at queue time and returned only to the authenticated
+  claiming gateway; the local `/api/runner/*` routes are unchanged. The surface is specified in
+  "Virtual Gateway → REST (Virtual Target Queue Surface)" below; the backend does not yet
+  register it, so [api/openapi.yaml](api/openapi.yaml) does not describe it (ADR 0048).
+- **Mobile Live Activity and push registrations** (`putMobileLiveActivitiesByActivityIdPushToken`,
+  `deleteMobileLiveActivitiesByActivityIdPushToken`, `putMobileLiveActivitiesStartToken`,
+  `postMobileLiveActivitiesStartTokenRevoke`, `putMobilePushDeviceToken`,
+  `postMobilePushDeviceTokenRevoke`) carry opaque tokens in the body, are private to the
+  caller's profile, and have no read surface. A Live Activity registration carries
+  `environment` and `bundleId` for per-registration APNs routing and an optional
+  `startedByPush` handoff marker. The stored push-to-start registration is the account's consent
+  record for desktop-initiated Live Activities. Notification preferences
+  (`getProfileNotificationPreferences`, `putProfileNotificationPreferences`) are the caller's own.
+- The in-process Live Activity dispatcher (`backend/live-activity-dispatcher.ts`) claims durable
+  `overlord.live_activity.dispatch.v1` and `overlord.live_activity.start.v1` worker jobs,
+  recomputes the bounded account presentation snapshot, and sends APNs `liveactivity`
+  start/update/end events.
+- The in-process standard push dispatcher (`backend/push-notification-dispatcher.ts`) claims
+  durable `overlord.push_notification.dispatch.v1` worker jobs, recomputes the alert
+  presentation snapshot, and sends APNs `alert`/`background` pushes on the plain bundle-id
+  topic. It shares the APNs signing and transport helpers with the Live Activity dispatcher but
+  never shares tokens, topics or push types with it.
+- **Private assistant conversations** (`/api/chat/threads*`, `/api/chat/runs/{id}/{cancel,continue}`,
+  `/api/chat/questions/{id}/answer`, `/api/chat/proposals/{id}/create`, `/api/chat/providers`,
+  `/api/chat/notifications*`): owner- and organization-scoped with existence-hiding 404s and
+  Cloud-only (`chat_unavailable` on Local); idempotent submission and Create keyed by client
+  request ids; atomic snapshot plus `eventCursor`; the owner-scoped SSE event channel with replay
+  from storage, bounded retention and `snapshot_required`, the one sanctioned realtime channel
+  that does not derive from `entity_changes`; expiring foreground presence and monotonic
+  rendered-event acknowledgements separate from replay cursors; backend run scheduling with
+  leased, fenced attempts; the Gemini runtime adapter and private checkpoint persistence; the
+  in-process conversation-notification dispatcher over `chat_notifications`.
+- **Owner-only chat diagnostics** (`getChatThreadsByIdDiagnostics`) use the same live membership,
+  owner and organization gates as chat; foreign callers get 404 and Local gets
+  `chat_unavailable`. Responses are no-store. Diagnostic kinds are open labels, not chat event
+  kinds. Capture and privacy rules are in "Assistant Conversation Behaviour" (Owner-only
+  diagnostics).
+- **Account connections** (`getConnections`, `postConnections`, `postConnectionsApiKeys`,
+  `patchConnectionsById`, `deleteConnectionsById`, `getConnectionsKnowledgebaseCallback`,
+  `getOauthClientsKnowledgebaseJson`); the backend outbound MCP client for the configured
+  Knowledgebase with a reviewed read-only allowlist; and the mission-less
+  `postProjectsByIdRepositoryReads` route over the runner capability queue. Profile-scoped
+  connections (`?scope=all` listing, API-key connections, deleting profile-scoped rows, and
+  `github` OAuth) are served on both editions; the default listing and Knowledgebase stay
+  Cloud-only. Setting an API key validates it upstream before sealing it and is also the
+  reconnect and rotation call. Deleting erases the credential first, then revokes upstream
+  best-effort where the provider supports it, then tombstones the legacy row. Starting a
+  connection stays OAuth-only (a non-GitHub provider is refused, as `postConnections` describes per
+  edition); `github` reuses the
+  caller's live GitHub connection for a reconnect, and its web-only `returnPath` must be a
+  relative path starting with `/`, not `//`. The GitHub callback redirects with only
+  `provider=github` and `status` to `overlord://connections/callback` for `mobile` and to the web
+  origin plus `returnPath` (default `/settings/connections`) for `web`; without a return target
+  it renders a status page, and a sign-in started by a legacy alias returns to its validated
+  legacy URL with `githubConnection=<status>`. On Local, a provider with no write key reports
+  `available: false` with `encryption_not_configured` and connecting answers 503; credentials
+  stored earlier stay listed and answer `unavailable` without being erased; there is never a
+  plaintext fallback. Knowledgebase connection settings (`patchConnectionsById`, Cloud-only)
+  apply to the caller's live Knowledgebase connection only and bump `revision`;
+  `assistantWriteScope` is always `per_request` for other providers.
+
+Does NOT own:
+
+- Database schema (→ Database Layer)
+- Protocol CLI surface (→ Protocol Layer)
 
 ### 7. Auth Layer
 
@@ -367,7 +872,7 @@ Specified in [protocol.md](protocol.md).
 
 - **Transport**: HTTPS/JSON to the configured backend under the versioned `/api/virtual-targets/v1/*` route family
 - **Authentication**: A gateway principal credential scoped to exactly one `execution_targets` row of type `virtual` (target-authenticated, **not** device-authenticated). A gateway cannot enumerate, claim, or observe another target's work; `execution_requests.claimed_by_execution_target_id` is the universal claimant identity and `claimed_by_device_id` stays nullable for virtual claims
-- **Registration**: `PUT /api/virtual-targets/v1/registration` registers/refreshes the target's gateway identity (`gateway_key`, `gateway_instance_id`), advertised capabilities, supported agents, supported queue schema versions, adapter key/version, and heartbeat. Registration **replaces** rather than creates a target when a stable gateway identity matches
+- **Registration**: `PUT /api/virtual-targets/v1/registration` registers/refreshes the target's gateway identity (`gateway_key`, `gateway_instance_id`), advertised capabilities, supported agents, supported queue schema versions, adapter key/version, and heartbeat. Registration **replaces** rather than creates a target when a stable gateway identity matches. Registration requires target-management authorization or a provisioned gateway credential
 - **Claiming**: `POST /api/virtual-targets/v1/claim` atomically claims a queued request assigned to the caller's target and returns the immutable `VirtualExecutionQueueItemV1` snapshot, a `claimId`, an expiry, and only request-scoped opaque launch-grant references — never filesystem paths or raw secrets. Replaying the same gateway + request returns the same claim and payload. `resolveWorkingDirectory` never runs on a virtual claim
 - **Observed state**: `POST …/requests/:id/progress` appends a bounded, monotonic preparation observation and does **not** change status; `POST …/requests/:id/launched` validates request/claim/target/digest, records a `VirtualTargetLaunchObservationV1`, then makes the normal `launching → launched` transition exactly once; `POST …/requests/:id/failed` records a typed, redacted `VirtualTargetFailureV1` and makes the allowed transition to `failed` (its `retryable` flag informs existing retry policy but does not itself requeue). All three are idempotent by request and observation `sequence`
 - **Grants**: `POST …/grants/:id/exchange` swaps an authenticated, unexpired opaque grant for narrowly scoped credentials or attachment-download access, bound to request + target + gateway instance; every exchange is audited and never returns the user's Overlord token
@@ -390,11 +895,63 @@ Specified in [protocol.md](protocol.md).
   reads/merges, default status seeding, and top-of-column board position each
   have one implementation in `packages/core/service`; REST keeps its RBAC check
   and DTO mapping only.
-- **Delivery and file-change reads**: specified in [api/rest-notes.md](api/rest-notes.md) "REST API → Database (HTTP Surface): route detail".
+- **Delivery reads**: `getMissionsByIdDeliveries` authorizes against the named mission's
+  owning workspace with `mission:read`. Items are newest first and capped at 200; `total` counts
+  matching rows before the cap. It synthesizes the deterministic V1 report for legacy payloads;
+  neither `deliveries.payload_json` nor `mission_events.payload_json` is exposed verbatim.
+- **File-change reads**: `getMissionsByIdFileChanges` authorizes against the named mission and
+  pages newest first, capped at 200, with the pre-cap `total`. A truncated mission-wide page is
+  incomplete evidence; clients must never partition it by objective. Per-objective views use the
+  validated objective-scoped read (the `objectiveId` query parameter, Protocol
+  `objective-changes`, MCP `overlord_changes`), which filters in SQL before the count and the
+  200-row cap and carries persisted capture diagnostics; a blank or repeated `objectiveId` is
+  refused with 400. `observedAt` is the last observation. `source` is `declared_edit` (at least
+  one successful native observation), `agent_declared` (declaration only), or null (historical
+  provenance unknown: shown as Unknown, never relabelled native). Clients derive the basename.
 - **Account-owned inbox**: Inbox CRUD resolves the authenticated `profiles.id` rather than an ambient workspace. Reads and mutations are scoped to that profile; promotion derives authorization and tenancy solely from its destination project. Inbox CRUD writes do not append workspace `entity_changes`, because those records have no workspace; promotion appends the ordinary mission change in the destination workspace.
 - **Workspace resolution taxonomy**: Entity-addressed reads and writes derive a workspace from their operand and require it in the immutable request `authorizedWorkspaces` set. Single-workspace UI reads require an explicit `workspaceId` and return `400` when omitted. Aggregate parentless reads fan out only across the selected organization's authorized set; when a session holder belongs to multiple organizations, selection is explicit. Parentless writes use `resolveParentlessWorkspace` only for `create-project` and `register-target`; mission writes derive tenancy from their named project and inbox operations are profile-owned. No route may select the oldest membership.
 - **Authorized workspace shape**: Auth resolves once per request `{ organizationId, workspaces: [{ workspaceId, workspaceUserId, roleKeys }] }`, where workspaces are active live memberships intersected with token consent (when present). Services may retain one operation-local `resolvedWorkspaceId`, but must not reinterpret the set from request headers or persistence.
-- **Mission search versioning**: specified in [api/rest-notes.md](api/rest-notes.md) "REST API → Database (HTTP Surface): route detail".
+- **Mission search versioning**: `getMissionsSearch` is frozen as its v1 response.
+  `getMissionsSearchV2` ranks portably across adapters: display-id short-circuit,
+  meaningful-term coverage floor `min(3, max(1, ceil(termCount / 2)))`, `max(documentScore)` plus
+  bounded corroboration, and recency as rank fusion rather than an eligibility gate; exact
+  display-id and exact-title matches take precedence. Empty or stop-word-only queries use an
+  explicit `fallback` mode. Complete and cancelled missions stay eligible by default. The REST
+  route accepts only stable `projectIds` and applies no implicit date window; the Protocol, CLI
+  and MCP v2 surfaces additionally resolve a human project reference and answer an ambiguous one
+  with `project_selection_required`. A `dueDatetime` range excludes missions with no due date.
+  Fan-out is one organization only, with `floor(limit / workspaceCount)` per workspace and
+  UUID-ordered remainder slots; unused quota is not redistributed. The quota and `limit` allocate
+  mission groups, never individual indexed documents. V1 and v2 search only the mission,
+  objective and event index corpus even after delivery indexing ships. `getSearchV3` returns
+  mission-anchored groups; `event` is corroboration-only and never appears in `matches`, which is
+  the single, matched-only source for child identity. Child relevance is
+  `docScore + 0.15 * missionScore`; the coverage floor stays at the group's concatenated
+  haystack. Per-workspace candidate fetch is bounded at 500 documents; above that cap, counts are
+  lower bounds. `matchesPerResult` is not divided across workspaces. The mission row always
+  anchors the group, including when `anchorOnly` is true. An objective display-id query returns
+  that objective as the group's single match. REST v3 accepts only stable `projectIds`. Protocol
+  `search-missions --response-version 3` returns the same envelope with v3 defaults. Artifacts
+  are not indexed. Ranked search (any version) remains candidate discovery and never proves
+  absence.
+- **Exact reference lookup**: Protocol `search --reference` is a separate exhaustive exact-token
+  lookup in one project with continuation: `search --reference <token> --project-id <ref>
+  [--workspace-id] [--limit 1-100, default 50] [--cursor]` returns
+  `MissionReferenceSearchResponse` (`packages/contract/src/mission-reference.ts`):
+  `{ kind: 'mission_reference_search', version: 1, reference, projectId, workspaceId, results,
+  nextCursor, complete }`. It is exhaustive, not ranked: every live mission in the one readable
+  project whose live objective instruction text contains the token case-sensitively as a whole
+  token (not adjacent to a letter, digit or underscore), in mission-id order, each with
+  `statusType`, `statusId` and its matching objectives (`id`, `displayId`, `title`, `state`,
+  `position`). Pages are over candidate missions, so a page may hold fewer than `limit` results;
+  `complete` is true only on the last page and the cursor is bound to its reference and project.
+  Tokens are 8–512 characters without whitespace; `%` and `_` are literal. Ranked filters
+  (`--query`, `--status`, `--resource-key`, date flags, `--response-version`, v3 flags) are
+  refused with it, and `--cursor` without `--reference` is refused. Authorization matches v2/v3
+  search: the project resolves across the caller's organization memberships, `mission:read` is
+  checked on that project, and a project_automation token must have selected it. Hosted MCP
+  `overlord_search_missions` and the local shim add `reference` and `cursor` and forward this
+  mode unchanged (never compacted).
 
 ### Mobile → REST (Objective Transcript Surface)
 
@@ -1051,7 +1608,7 @@ original errors (including retry and summary failures), private chat events with
 run and attempt state at the transition, worker failures, and thread-associated REST
 request/response/error bodies (excluding the diagnostics poll itself). Capture is
 independent of the display setting. Payloads are neither redacted nor truncated; content is
-rendered as escaped text. The owner-only diagnostics route ([api/rest-notes.md](api/rest-notes.md))
+rendered as escaped text. The owner-only diagnostics route (`getChatThreadsByIdDiagnostics`)
 is the explicit exception to the curated-chat privacy and source projection rules: the owner
 can inspect previously observed content, including thought signatures, tool output and
 subsequently revoked source content. Provider SDK inputs/outputs are captured; transport
@@ -1090,7 +1647,7 @@ completion. With a Knowledgebase configured the assistant gets the read tool
 `overlord_find_feature_missions` (`projectId`, `workspace`, `featureNodeId`, optional
 `knowledgebaseOrigin` when several servers are connected, `cursor`, `limit`), which derives
 the origin from the owner's live connection, runs the exhaustive exact-reference lookup
-([api/rest-notes.md](api/rest-notes.md) "Mission search versioning") with the owner's live
+("REST API → Database (HTTP Surface)", "Exact reference lookup") with the owner's live
 `mission:read` grant, and returns the reference, Feature link, `referenceLines` for a
 handoff objective, results, `nextCursor`, and `complete`. Handoff reuses `prepare_proposal`
 and the user's Create: drafts only, never launched. Run input carries `createdReceipts`, the

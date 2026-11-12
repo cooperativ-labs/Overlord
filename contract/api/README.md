@@ -120,14 +120,41 @@ descriptions. A `project_automation` user token reaches only the routes allowlis
 - List the real success status. `handle()` answers 200 with the handler's value, or
   `{ ok: true }` (`OkResponse`) when it returns nothing; there are no 201s from it.
 - Every JSON error is an `ErrorEnvelope` (`backend/errors.ts`). Use the shared
-  `components.responses` and list only the statuses the handler can produce:
+  `components.responses` and list only the statuses the operation can produce:
   `401` on every authenticated operation; `403` where an RBAC action is checked;
-  `404` where a resource or workspace is resolved; `400` where input is validated;
-  `409`, `502` and others where the code throws them; `413` on operations that take a
-  request body; `500` on every operation.
+  `404` where a resource or workspace is resolved, and on every operation behind the
+  project-automation route guard (a `project_automation` token outside its allowlist);
+  `400` on every operation served behind the JSON body parser, because a body that does
+  not parse and a request the boundary refuses answer 400 (ADR 0051), which today means
+  every operation except the sign-in handoffs registered before the parser
+  (`getAuthDesktopGithub`, `getAuthDesktopCallback`, `getAuthBrowserCallback`,
+  `getAuthCallbackGithubRepository`); where an operation's own 400 has another shape, its
+  400 also admits `ErrorEnvelope`; `409`, `502` and others where the code throws them;
+  `413` on operations that take a request body; `500` on every operation.
 - A handler that writes another error shape (`{ message }`, OAuth `{ error,
   error_description }`, text/plain) is described as it is and listed in
   `schema-disagreements.md` under "Non-conforming error shapes".
+
+## Boundary validation and response conformance (ADR 0051)
+
+The backend validates each request against its operation at the route boundary, after the
+route's authentication and immediately before its handler: path, query and header parameters
+and the body (JSON and form bodies against their schemas; raw bodies only for presence and
+type; streams are never buffered). A handler's own answer to an invalid request stands; a
+request the description refuses and the handler fails on with 500 answers 400
+`invalid_request`; a body that does not parse answers 400 `invalid_json`. So a request schema
+must accept everything its handler accepts: when a handler accepts a value the schema refuses,
+the backend logs it and the backend tests fail, and the schema is corrected to describe the
+handler (the code is what ships), never the reverse in a schema change. Optional members are
+omitted or carry a value; describe `null` wherever a client sends it and the handler accepts
+it. `OVERLORD_API_REQUEST_VALIDATION` (`enforce` by default, `warn`, `off`) switches the
+boundary without a code change.
+
+`yarn test:backend` runs under `scripts/api-conformance-report.mjs`: every response an
+Overlord route writes in the suite is checked against its operation (declared status,
+declared media type, and the JSON body against the schema with every object closed, so an
+undocumented member fails), and the run fails on any mismatch. Lenient formats (ADR 0050) keep
+readable fixture ids valid. `--uncovered` lists the operations no test response reached.
 
 ## Pagination
 
@@ -160,7 +187,7 @@ Downloads declare the real media types and headers.
 
 ## Recording disagreements
 
-Where `rest-notes.md`, a TypeScript type or another document disagrees with the code,
+Where a topic document, a TypeScript type or another document disagrees with the code,
 the description follows the code (ADR 0006). Append an entry to
 `schema-disagreements.md` in the matching section, naming the operationId, what each
 side says, and the file and function that ship the behaviour. Suspected defects found

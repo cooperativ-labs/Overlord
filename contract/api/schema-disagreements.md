@@ -10,19 +10,21 @@ never reuse one.
 
 | Section | Entries | Ids |
 | --- | --- | --- |
-| 1. Prose and type disagreements | 77 | P1–P5, M1–M6, A1–A3 (batch 1); U1–U3, W1–W6, H1–H2, N1–N2, S1–S2, R1–R3, O1–O5, C1–C3 (batch 2); Q1, T1–T3, L1–L5, J1–J2, K1–K3, V1, X1–X3 (batch 3); Y1–Y6, B1–B3, D1–D3 (batch 4); Z1–Z7 (phase 4c) |
+| 1. Prose and type disagreements | 81 | P1–P5, M1–M6, A1–A3 (batch 1); U1–U3, W1–W6, H1–H2, N1–N2, S1–S2, R1–R3, O1–O5, C1–C3 (batch 2); Q1, T1–T3, L1–L5, J1–J2, K1–K3, V1, X1–X3 (batch 3); Y1–Y6, B1–B3, D1–D3 (batch 4); Z1–Z7 (phase 4c); F1–F4 (phase 4d) |
 | 2. Non-conforming error shapes | 9 | E1–E9 |
 | 3. Suspected code defects | 0 | tracked privately |
 | 4. Generator constructs | 17 | G1–G17, all supported (phase 4c) |
 | 5. Operations left as stubs | 0 | 279 operations described |
 
 Each entry names the operationIds affected and the file and function that ship the
-behaviour. Status is `open` until phase 4d decides.
+behaviour. Status is `open` until a phase decides; phase 4d's decisions are listed at the end
+of section 1, and every other entry stays open for a later contract change.
 
 ## 1. Prose and type disagreements
 
-Where `rest-notes.md`, a TypeScript DTO comment, or another document says something
-the code does not do.
+Where `rest-notes.md` (retired in phase 4d; its rules now live in architecture.md and
+data/README.md), a TypeScript DTO comment, or another document says something the code does
+not do.
 
 ### Projects, project statuses, project resources (batch 1)
 
@@ -435,6 +437,44 @@ never sends; Z7 lists the corrections the generator needed.
   `{ ok: true }` member of `getExtGithubMissionsByMissionIdPullRequest` are closed, so each `oneOf`
   is exclusive; and `AppendAgentSessionEventsBody` is `anyOf`, because a body with an `events` array
   is a batch whatever else it carries (`backend/agent-session-routes.ts`).
+
+### Boundary validation and the retirement of rest-notes.md (phase 4d)
+
+Phase 4d enforced the description at the route boundary and in the backend tests (ADR 0051)
+and retired `rest-notes.md`. Decisions:
+
+- **P3, M1, W1, H2, S1, R1, A1, C1, O1** (resolved): the `rest-notes.md` statements these
+  entries compare with the code were moved into architecture.md and data/README.md worded as
+  the code behaves (a `sourceUrl` source stores a given `executionTargetId`; v1 search is
+  described by its operation; onboarding's response is the operation's; the desktop callback
+  without a browser session answers as its operation says; `organization-images` has no
+  metadata lookup; realtime is Server-Sent Events only; the activity feed's `before` format is
+  the operation's; a non-GitHub connection start is refused per edition as `postConnections`
+  says; `/oauth/authorize` is listed without a discovery claim). The behaviour is unchanged.
+- **M6** stays open: the rule that mission routes accept a display id moved to architecture.md
+  unchanged.
+- **F1** (phase 4d, resolved by a schema change). `ReleaseAgentRequestBody.reason`,
+  `RecordAgentRequestApplicationBody.applicationState` and
+  `MarkAgentSessionInputEmittedBody.deliveryOutcome` were closed enums, but the handlers
+  (`backend/agent-session-routes.ts`) accept any string and record an unknown value as
+  `timeout`, `unknown` or null, which their operation descriptions already said and the tests
+  pin. The members are now strings with the meaningful values in their descriptions.
+  `postAgentSessionChannelsV1RequestsByIdRelease`,
+  `postAgentSessionChannelsV1RequestsByIdApplication`,
+  `postAgentSessionChannelsV1InputsByIdEmitted`.
+- **F2** (phase 4d, resolved by a schema change). The CLI's session sentinel sends
+  `exitCode: null` when the exit code is unknown; `EndAgentSessionChannelBody.exitCode` said
+  `number`. The handler stores any non-number as null; the member is now a nullable number.
+  `postAgentSessionChannelsV1End`.
+- **F3** (phase 4d, resolved by a schema change). A body that does not parse answers 400
+  `invalid_json` on every operation served behind the JSON body parser, and a refused request
+  400 `invalid_request`; 127 operations did not declare 400. Every operation except the four
+  sign-in handoffs registered before the parser now declares it, and the three operations
+  whose own 400 has another shape (`postOauthRegister`, `postOauthToken`,
+  `getConnectionsKnowledgebaseCallback`) also admit `ErrorEnvelope`.
+- **F4** (phase 4d, resolved by a schema change). The project-automation route guard answers
+  404 on every operation behind it for a `project_automation` token outside its allowlist; 45
+  such operations did not declare 404 and now do.
 
 ## 2. Non-conforming error shapes
 

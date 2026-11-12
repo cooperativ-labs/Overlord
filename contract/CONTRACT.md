@@ -1,6 +1,6 @@
 # Overlord contract
 
-> Contract version: **169.1.1**
+> Contract version: **169.2.0**
 
 This directory is the normative, versioned specification of how Overlord's
 components interact. It defines what each component owns, the only sanctioned
@@ -48,10 +48,12 @@ The contract consists of:
 - [data/README.md](data/README.md): the database schema contract;
 - [api/openapi.yaml](api/openapi.yaml): the REST surface, one operation for
   every registered route with its permission, edition, consumers and extension
-  (ADRs 0006–0008, 0048), with its own `info.version`;
-- [api/rest-notes.md](api/rest-notes.md): REST API Layer and route detail that
-  `api/openapi.yaml` does not yet express, a normative holding file until phase
-  4d of the migration moves it into the topic documents and the description;
+  (ADRs 0006–0008, 0048), with its own `info.version`; the backend validates
+  requests against it at the route boundary and its tests check every response
+  against it (ADR 0051). REST rules it cannot express (cross-route invariants,
+  ordering, side effects, ownership and isolation) are in architecture.md
+  ("REST API Layer", "REST API → Database (HTTP Surface)") and data/README.md
+  ("REST API Boundary");
 - the machine-readable files listed below; and
 - accepted records in [decisions/](decisions/README.md).
 
@@ -77,12 +79,10 @@ these documents are also normative.
 [api/openapi.yaml](api/openapi.yaml) describes every route the backend
 registers, at the path it is served, except the routes its
 `x-overlord-route-exclusions` lists: Better Auth's provider-owned `/api/auth/*`
-handler and the Local web app fallback (ADR 0048). Request and response schemas
-arrive in phase 4b of the migration in
-`planning/feature-plans/contract-adr-openapi-migration.md`; until then
-operations are marked `x-overlord-schema-status: stub`. Where the description
-cannot yet express a rule, [api/rest-notes.md](api/rest-notes.md) holds it;
-phase 4d moves that text into the topic documents before deleting the file.
+handler and the Local web app fallback (ADR 0048). Every operation has request
+and response schemas; an operation without them would be marked
+`x-overlord-schema-status: stub`, and the ratchet caps how many may be. Types,
+Zod schemas and the operation table are generated from it (ADR 0050).
 
 ## 3. Precedence and conflicts
 
@@ -196,7 +196,9 @@ tests of the contract tooling and the OpenAPI 3.1 validation
 (`yarn contract:test`), `yarn check:conformance-versions`, the generated API
 check (`yarn api:generate:check`: the types, validators and operation table
 generated from [api/openapi.yaml](api/openapi.yaml) are current and typecheck,
-ADR 0050), and the REST route parity test (`yarn contract:parity`), through
+ADR 0050), the REST route parity test (`yarn contract:parity`), and the backend
+test suite, which holds the request-validation tests and checks every response it
+produces against its OpenAPI operation (`yarn test:backend`, ADR 0051), through
 `.github/workflows/contract.yml`.
 
 ### Release gate (introduced in phase 5; not yet enforced)
@@ -229,8 +231,7 @@ The range check refuses a release unless:
 3. under `none`, nothing under `contract/` changed; otherwise `CHANGELOG.md`
    has a current heading for the released `VERSION`;
 4. when [architecture.md](architecture.md), [protocol.md](protocol.md),
-   [authorization.md](authorization.md), [data/README.md](data/README.md),
-   [api/rest-notes.md](api/rest-notes.md), or a
+   [authorization.md](authorization.md), [data/README.md](data/README.md), or a
    migration under `database/sqlite/migrations/`,
    `database/postgres/migrations/` or `backend/postgres/migrations/` changed,
    the range adds at least one new record under `decisions/`; and

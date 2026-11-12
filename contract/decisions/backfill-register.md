@@ -17,7 +17,10 @@ Columns:
 - **Where it now lives**: `arch` = [architecture.md](../architecture.md), `prot` =
   [protocol.md](../protocol.md), `auth` = [authorization.md](../authorization.md),
   `conf` = [conformance.md](../conformance.md), `data` =
-  [data/README.md](../data/README.md), `rest` = [api/rest-notes.md](../api/rest-notes.md),
+  [data/README.md](../data/README.md), `rest` = the REST rules of [architecture.md](../architecture.md) ("REST API Layer",
+  "REST API → Database (HTTP Surface)") and [data/README.md](../data/README.md) ("REST API
+  Boundary"), with shapes in [api/openapi.yaml](../api/openapi.yaml); phase 4d retired the
+  `api/rest-notes.md` holding file that carried them (ADR 0051),
   `comp` = [components.yaml](../components.yaml), `pcmd` =
   [protocol-commands.yaml](../protocol-commands.yaml), `hcs` =
   [harness-capabilities.schema.yaml](../harness-capabilities.schema.yaml). "Hoisted in
@@ -322,7 +325,8 @@ clause and the superseded clause is listed under (c).
   objectives, the wedged-`launching` retry reset, the attempt ceiling (3), the dispatch
   triggers and the 60-second safety sweep (`[122]`, `run_queue_entries`); search entity
   weights 3.0/2.0/1.5/1.0 (`[99]`, `search_documents`).
-- [api/rest-notes.md](../api/rest-notes.md): local buckets keep on-disk Inbox attachment
+- `rest` (formerly `api/rest-notes.md`; the shapes named here are in
+  [api/openapi.yaml](../api/openapi.yaml)): local buckets keep on-disk Inbox attachment
   bytes (`[168]`); summary `deliveredAt` is projected from the delivery row, never model
   output or stored JSON (`[167]`); `GET /api/missions/:id/objectives` by mission display id
   (`[164]`); `UpdateAccountConnectionBody` and `ACCOUNT_CONNECTION_ASSISTANT_WRITE_SCOPES`

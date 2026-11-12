@@ -42,9 +42,8 @@ agents.
 | `authorization.md` | Auth, RBAC, tokens, native sign-in and hosted MCP OAuth |
 | `conformance.md` | Conformance requirements, manifests and controlled vocabularies |
 | `data/README.md` | Database schema contract |
-| `api/openapi.yaml` | OpenAPI 3.1 description of every registered REST route, with route exclusions and operation extensions (ADR 0048) |
+| `api/openapi.yaml` | OpenAPI 3.1 description of every registered REST route, with route exclusions and operation extensions (ADR 0048); validated at the route boundary and checked against every response in the backend tests (ADR 0051) |
 | `api/openapi-ratchet.json` | Schema-stub ratchet for `api/openapi.yaml` |
-| `api/rest-notes.md` | REST API Layer and route detail `api/openapi.yaml` does not yet express; normative holding file until phase 4d |
 | `decisions/` | Architecture Decision Records, indexed in `decisions/README.md` |
 | `components.yaml` | Component registry — capabilities, ownership, interaction surface declarations |
 | `protocol-commands.yaml` | Protocol command names, required flags, and response shape versions |

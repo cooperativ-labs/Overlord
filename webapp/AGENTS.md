@@ -20,7 +20,7 @@ If the change touches URL paths, HTTP methods, DTO response shapes, SSE events, 
 
 ## Before You Start
 
-1. Read `contract/api/rest-notes.md` — REST API Layer section only when the SPA must match a new or changed API contract; otherwise stay within existing client types.
+1. Read `contract/api/openapi.yaml` (and `contract/architecture.md` "REST API Layer" for the rules it cannot express) only when the SPA must match a new or changed API contract; otherwise stay within the generated client types.
 2. Read [`webapp/docs/web-app.md`](docs/web-app.md) for deferred UI requirements.
 3. Prefer existing `webapp/web/lib/` helpers over inlining host/bridge/clipboard detection in components.
 4. Shared hooks belong in `webapp/web/lib/hooks/` (not a top-level `webapp/web/hooks/` directory).

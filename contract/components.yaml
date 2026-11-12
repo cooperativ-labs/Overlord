@@ -5,7 +5,7 @@
 # IMPORTANT: Update this file and those documents together when adding components or surfaces.
 # contractVersion is written only by `yarn version:contract` and must equal contract/VERSION.
 
-contractVersion: '169.1.1'
+contractVersion: '169.2.0'
 
 components:
   protocol:
@@ -195,7 +195,7 @@ components:
   rest:
     label: 'REST API Layer'
     stableIdentifier: rest
-    referenceSpec: 'contract/api/rest-notes.md'
+    referenceSpec: 'contract/api/openapi.yaml'
     owns:
       - 'native GitHub OAuth: browser-bound identical callback recovery for at most 60 seconds; native auth callback returns a one-time ticket or bounded error code; auth error fallback never redirects to backend root'
       - 'GET /api/objective-transcript (v162): full-text objective projection with 1–100-row keyset pages or bounded UUID revalidation, both mission:read and objective:read per active-organization workspace, token project narrowing before selection, and separate private Inbox capture ownership'

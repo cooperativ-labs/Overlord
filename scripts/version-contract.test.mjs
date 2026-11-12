@@ -338,7 +338,6 @@ describe('repository contract check', () => {
       'authorization.md',
       'conformance.md',
       'data/README.md',
-      'api/rest-notes.md',
       'protocol-commands.yaml',
       'extension-points.yaml',
       'conformance-manifest.schema.yaml',
@@ -371,12 +370,18 @@ describe('repository contract check', () => {
     assert.equal(run(), 'contract check passed for 1.4.2\n');
   });
 
-  it('requires the OpenAPI description, its ratchet and, until phase 4d, the REST notes', () => {
-    for (const document of ['api/openapi.yaml', 'api/openapi-ratchet.json', 'api/rest-notes.md']) {
+  it('requires the OpenAPI description and its ratchet', () => {
+    for (const document of ['api/openapi.yaml', 'api/openapi-ratchet.json']) {
       const { root, run } = checkFixture();
       rmSync(path.join(root, 'contract', document));
       assert.throws(run, new RegExp(`missing contract/${document.replace('.', '\\.')}`));
     }
+  });
+
+  it('refuses the retired REST notes holding file', () => {
+    const { root, run } = checkFixture();
+    writeFileSync(path.join(root, 'contract/api/rest-notes.md'), 'normative\n');
+    assert.throws(run, /rest-notes\.md was retired/);
   });
 
   it('fails when the OpenAPI schema-stub count disagrees with the ratchet', () => {

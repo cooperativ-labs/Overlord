@@ -3,10 +3,10 @@ info:
   title: Overlord API
   # info.version is the API description's own Semantic Version; it changes when
   # this document changes and is never compared with the contract version.
-  version: 2.1.1
+  version: 2.2.0
   # The contract version (contract/VERSION) this document belongs to. Written
   # only by `yarn version:contract`.
-  x-overlord-contract-version: 169.1.1
+  x-overlord-contract-version: 169.2.0
   description: >-
     Normative description of Overlord's REST surface (ADR 0006): one operation for every
     method and path the backend registers, at the path it is served (ADR 0007), excluding
@@ -5643,8 +5643,8 @@ paths:
       description: >-
         Requires `project:update`. Writes a `local_checkout` source for `directoryPath` on the named, null
         (global) or calling execution target, or a `git` source for `sourceUrl`. This and project creation
-        are the only REST paths that may declare a `local` execution target (rest-notes.md
-        "Project-resource source declaration semantics").
+        are the only REST paths that may declare a `local` execution target (architecture.md "REST API
+        Layer", "Project-resource source declaration").
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       requestBody:
         required: true
@@ -17675,7 +17675,13 @@ components:
       type: object
       properties:
         reason: { type: string, description: Defaults to `session_ended`. }
-        exitCode: { type: number, description: A non-number is stored as null. }
+        exitCode:
+          description: >-
+            The agent process's exit code, or null when it is unknown (the CLI sends null by default).
+            Any other non-number is stored as null.
+          oneOf:
+            - type: number
+            - type: 'null'
     ResolveAgentRequestBody:
       type: object
       required: [ expectedRevision, resolution ]

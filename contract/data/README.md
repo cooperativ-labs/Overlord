@@ -3240,7 +3240,68 @@ erDiagram
 
 ## REST API Boundary
 
-Specified in [../api/rest-notes.md](../api/rest-notes.md) "REST API Boundary" until `api/openapi.yaml` replaces it.
+The REST API is the primary remote access path. It exposes domain resources and protocol
+commands, not raw tables. Every route, with its parameters and DTO shapes, is described in
+[../api/openapi.yaml](../api/openapi.yaml); DTO member names are this schema's camelCase column
+names. Route rules the description cannot express are in [../architecture.md](../architecture.md)
+"REST API Layer" and "REST API → Database (HTTP Surface)". The rules below bind the data those
+routes read and write.
+
+REST handlers should:
+
+- Authenticate to a user, token or session identity.
+- Resolve authorization from an explicit workspace path or body, the named resource's workspace,
+  or each membership in an account-wide operation. They must not read a workspace header or
+  cookie as request scope.
+- Run service-layer state transitions in transactions.
+- Append `mission_events` and `entity_changes`.
+- Use `idempotency_keys` for retried writes.
+- Return entity revisions and the latest change `seq` when useful.
+
+Data rules of individual routes:
+
+- `/protocol/*` operations mirror `ovld protocol` (`postProtocolBySubcommand`); the runner queue
+  operations live under `/api/runner/*`.
+- `getObjectiveTranscript` projects full-text objective history across active-organization
+  memberships with both `mission:read` and `objective:read`, restricted by token project scope
+  before paging. It pages over immutable `(created_at, id)` cursors, or revalidates named
+  objective UUIDs. One statement limits each workspace's indexed walk before merging the
+  candidates; there is no count or per-objective hydration. The cursor and refresh rules, the
+  owner-only Inbox boundary and compatibility guidance are in
+  [../architecture.md](../architecture.md) "Mobile → REST (Objective Transcript Surface)". It
+  changes no mutation, instruction text or ownership.
+- `getMissionsById` projects `terminalSessions` from bounded
+  `execution_requests.metadata_json.providerSession` mappings across all objective states.
+  Reachability is a client-side local-target capability condition, not a persisted session
+  state. The projection never includes launch environment, terminal output, credentials, socket
+  tokens or attachment grants.
+- The Inbox (`/api/inbox*`) is the account-owned unassigned-capture surface: it reads and writes
+  only items the caller owns, and its changes do not enter workspace `entity_changes`.
+  Promotion creates an ordinary mission from the item fields and consumes the item in the same
+  transaction.
+- Artifact edits (`patchMissionsByIdArtifactsByArtifactId`) keep delivery, session and objective
+  provenance and the structured `contentJson` immutable, and the artifact must retain at least
+  one text, JSON or URL content field. Artifact creation without a delivery
+  (`postMissionsByIdArtifacts`) leaves `delivery_id` null.
+- Uploads (`postUploadsByBucketKey`) persist bytes to the `storage_buckets` backend and record the
+  matching object table row (for example `user_images`); `organization-images` has no metadata
+  table. Serving (`getStorageByBucketKeyByStorageKey`) first authorizes by the logical storage
+  location (`user_image:read`, `workspace_image:read`, `organization_image:read` or
+  `attachment:read`); for buckets with a metadata table it serves bytes only after an exact active
+  metadata lookup for `(storage_bucket_id, storage_key)`, while `organization-images` reads the
+  key from the selected organization's bucket.
+- `putProfileDefaultProject` clears the marker from all of the profile's memberships and marks
+  the selected row atomically; the preference never scopes a request or grants access.
+- `getSyncChanges` returns changes in ascending `entity_changes.seq` order. The server scans the
+  global sequence in bounded windows, filters to the caller's current readable workspace
+  memberships before projection, and advances `cursor` to the last scanned sequence even if no
+  rows were visible.
+- `getRealtime` (compatibility alias `getStream`) is a Server-Sent Events stream backed by
+  `entity_changes`; compact change DTOs carry `changedFields` parsed from
+  `entity_changes.changed_fields_json` and `workspaceId`. Connection admission requires at
+  least one readable membership; navigation state is not transport scope.
+- Project resource create and update bodies and objective DTOs carry `resourceKey`; branch
+  actions take `resourceKey`, defaulting to the project's primary resource.
 
 ## Realtime Strategy
 
