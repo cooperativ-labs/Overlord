@@ -1,13 +1,27 @@
 ---
 name: component-contract
-description: Enforce the Overlord component interaction contract. Invoke before any cross-module implementation or change that touches a component interface.
+description: Enforce the Overlord component interaction contract. Invoke before any cross-module implementation or change that touches a component interface — every plan and material change summary must carry a "Contract impact:" declaration.
 ---
 
 # Component Contract
 
-**You MUST invoke this skill — and read `CONTRACT.md` — before implementing any change that crosses module boundaries or modifies Overlord's component interfaces.**
+`contract/CONTRACT.md` is the normative contract for this repository. **You MUST
+read it, plus every contract document relevant to the work, before planning or
+implementing any change that crosses module boundaries or modifies Overlord's
+component interfaces.** Planning notes and implementation details never
+override it.
 
-This is not optional. The contract is the single source of truth for how components interact. Code follows from the contract, never the other way around.
+| Document | Covers |
+| --- | --- |
+| `contract/CONTRACT.md` | Entry point: scope, normative documents, precedence, versioning, change protocol |
+| `contract/architecture.md` | Editions, component registry, interaction surfaces, shared algorithms, extension points |
+| `contract/protocol.md` | `ovld protocol`, session lifecycle, hook and agent-session surfaces |
+| `contract/authorization.md` | Auth Layer, tokens, RBAC, native sign-in, hosted MCP OAuth |
+| `contract/conformance.md` | Conformance requirements and controlled vocabularies |
+| `contract/data/README.md` | Database schema contract |
+| `contract/*.yaml`, `*.schema.yaml` | Machine-readable registry, protocol commands, extension points, manifest schemas |
+| `contract/decisions/` | ADRs |
+| `contract/VERSION`, `contract/CHANGELOG.md` | Current version and history (entries at or below `168` are non-normative provenance) |
 
 ---
 
@@ -19,65 +33,93 @@ Invoke this skill whenever you are about to:
 - Add or modify a database table, column, index, or constraint
 - Add a new connector (agent harness adapter)
 - Modify connector capabilities or hook types
-- Create or modify a REST API endpoint
+- Create or modify a REST API endpoint or MCP tool
 - Implement an extension that uses Overlord extension points
 - Add a new value to any controlled vocabulary
 - Add a new interaction surface between two components
 - Create a conformance manifest for a shipped component
 
-If you are unsure whether your change crosses a module boundary, read `CONTRACT.md` — the component registry section will tell you.
+If you are unsure whether your change crosses a module boundary, read the
+component registry in `contract/architecture.md`.
 
 ---
 
-## Required Reading
+## Declare Contract Impact
 
-Before writing code that crosses a module boundary, you MUST read:
+Every implementation plan and material change summary must contain exactly
+one of:
 
-1. **`CONTRACT.md`** — the master component interaction contract (project root)
-2. The component registry section for the component(s) your change touches
-3. The interaction surface your change uses or creates
+```text
+Contract impact: none
+Contract impact: patch
+Contract impact: minor
+Contract impact: major
+```
 
-If you have not read `CONTRACT.md` in this session, read it now before proceeding.
+- `none` — explain why the work alters no documented interface, invariant,
+  security property, data meaning, dependency boundary, or observable behavior.
+- `patch` — a correction or clarification of an existing obligation.
+- `minor` — a backwards-compatible addition: a new endpoint, response field,
+  protocol command, capability, or core open-vocabulary value.
+- `major` — a breaking change: a removed or renamed field, flag, command or MCP
+  tool; changed data meaning or migration semantics; narrowed access; a closed
+  vocabulary change; a change to a shared deterministic algorithm or its
+  fixture.
+
+The classification is the bump level (`contract/CONTRACT.md` sections 4 and 5).
+For `patch`, `minor`, or `major`, name the affected contract sections and land,
+in the same change as the implementation:
+
+1. the edits to every affected contract document and `contract/*.yaml` file;
+2. the version increment from `yarn version:contract <patch|minor|major>` and a
+   completed `contract/CHANGELOG.md` entry;
+3. tests, fixtures, migrations and generated artifacts
+   (`yarn connectors:capabilities`, `yarn connectors:mcp-tools`);
+4. on a `major` increment, every conformance manifest restamped to the new
+   version (manifests must share the contract's major and not be newer); and
+5. an ADR under `contract/decisions/` for architecture, security, isolation,
+   data-meaning, migration, foundational technology or service-boundary
+   decisions, and for retiring a surface.
 
 ---
 
-## The Contract-First Rule
+## Rules
 
-**Any change that extends or conflicts with the existing contract MUST update `CONTRACT.md` and the relevant `contract/*.yaml` files BEFORE implementing the change in other code.**
-
-This means: if your implementation would do any of the following, stop and update the contract first:
-
-- Add a new interaction surface between components
-- Change the signature of a protocol command (add, remove, or rename required flags)
-- Add or remove a component from the component registry
-- Restrict or open an extension point
-- Add a new hook type or connector capability flag
-- Add a value to a closed vocabulary
-
-Do not write implementation code that would invalidate the contract. The contract describes what is true; the code implements what the contract says.
+- **Code and contract land together.** Never implement behavior that
+  contradicts the current contract and defer the contract update, and never
+  land a contract change whose implementation follows later. The contract may
+  be drafted first in a plan; it merges with the code.
+- Never type a contract version by hand. `yarn version:contract` is the only
+  writer of `contract/VERSION`, the `CONTRACT.md` header, the changelog
+  skeleton and `contractVersion` in `contract/components.yaml`.
+- Never edit or reinterpret a provenance changelog entry or a released
+  version. Amend with a new version and changelog entry.
+- A change to `architecture.md`, `protocol.md`, `authorization.md`,
+  `data/README.md` or a migration needs a new ADR; the release range check
+  refuses the range otherwise (introduced in phase 5).
+- Treat changes to authentication, authorization, workspace or organization
+  isolation, roles, public APIs, persistent data meaning, migrations, security
+  guarantees, foundational technology, or service boundaries as contract
+  changes unless the contract expressly leaves the behavior unspecified.
 
 ---
 
 ## Pre-Implementation Checklist
 
-Answer these questions before writing code:
-
 **1. Which component does this change belong to?**
-- Check `contract/components.yaml` for the component registry
-- If the change belongs to a component not yet listed, add it to the contract first
+- Check `contract/components.yaml` and the component registry in `contract/architecture.md`.
+- If the change belongs to a component not yet listed, the change adds it (and an ADR).
 
 **2. Which interaction surface does this change use or create?**
-- Is the surface already defined in `CONTRACT.md` "Interaction Surfaces"?
-- If the change creates a NEW surface between components, add it to `CONTRACT.md` and `contract/components.yaml` first
+- Is the surface already defined under "Interaction Surfaces" in `contract/architecture.md` (or `protocol.md` / `authorization.md`)?
+- If the change creates a NEW surface, add it to the document and `contract/components.yaml` in the same change.
 
 **3. Does this change modify a stable interface?**
-These are breaking changes that require a contract version bump:
+These are breaking (`major`):
 - Protocol command names or required flags
 - Database column names, types, or NOT NULL constraints
 - Closed vocabulary values
 - Response shape versioned fields
-
-If yes → update `CONTRACT.md`, increment `contractVersion` in `contract/components.yaml`, add a changelog entry, then implement.
 
 **4. Does this use an extension point?**
 - Is the extension point listed in `contract/extension-points.yaml`?
@@ -86,44 +128,54 @@ If yes → update `CONTRACT.md`, increment `contractVersion` in `contract/compon
 - If using `open-vocabulary-value`: are values namespaced?
 
 **5. Does the shipped component need a conformance manifest?**
-Any connector, extension, database adapter, auth provider, or REST module that ships must have a `conformance-manifest.yaml` in its root, validated against `contract/conformance-manifest.schema.yaml`.
+Any connector, extension, database adapter, auth provider, or REST module that
+ships must have a `conformance-manifest.yaml` in its root, validated against
+`contract/conformance-manifest.schema.yaml` (`ovld contract check`) and
+declaring a `contractVersion` with the current major
+(`yarn check:conformance-versions`).
 
 ---
 
-## When to Update the Contract
+## Where to Update
 
 | Your Change | What to Update |
 | --- | --- |
-| New component | `contract/components.yaml` + `CONTRACT.md` component registry |
-| New interaction surface | `contract/components.yaml` + `CONTRACT.md` interaction surfaces |
-| New protocol command | `contract/protocol-commands.yaml`; update `CONTRACT.md` if stable interface changes |
-| Changed command flag (breaking) | `contract/protocol-commands.yaml` + `CONTRACT.md` + version bump |
-| New database table/column | `planning/feature-plans/09-database-schema-contract.md` |
-| New extension point | `contract/extension-points.yaml` + `CONTRACT.md` |
+| New component | `contract/components.yaml` + `contract/architecture.md` component registry + ADR |
+| New interaction surface | `contract/components.yaml` + interaction surfaces in `contract/architecture.md` (or `protocol.md` / `authorization.md`) |
+| New protocol command | `contract/protocol-commands.yaml` + `contract/protocol.md` |
+| Changed command flag (breaking) | `contract/protocol-commands.yaml` + `contract/protocol.md` + `major` |
+| New REST endpoint | REST API Layer in `contract/architecture.md` |
+| New database table/column | `contract/data/README.md` |
+| New extension point | `contract/extension-points.yaml` + `contract/architecture.md` |
 | New connector capability flag | `contract/extension-points.yaml` `approvedConnectorCapabilities` list |
 | New hook type | `contract/extension-points.yaml` `approvedHookTypes` list |
-| Closed vocabulary change | `contract/extension-points.yaml` + schema contract + version bump |
-| Open vocabulary new core value | `planning/feature-plans/09-database-schema-contract.md` Controlled Vocabularies |
+| Closed vocabulary change | `contract/extension-points.yaml` + `contract/conformance.md` + `contract/data/README.md` + `major` |
+| Open vocabulary new core value | `contract/data/README.md` Controlled Vocabularies + `contract/conformance.md` |
 | New connector shipped | Conformance manifest only (no contract update unless new capabilities needed) |
 | New extension shipped | Conformance manifest only (no contract update unless new extension points needed) |
 
+Every row except the last two also needs `yarn version:contract` and a
+changelog entry.
+
 ---
 
-## Order of Operations
+## Before Completion
 
-1. Read `CONTRACT.md`
-2. Identify which component and surface your change belongs to
-3. **If the change requires a contract update: update `CONTRACT.md` and `contract/*.yaml` files first**
-4. Write the implementation code
-5. If shipping a connector or extension: create or update its `conformance-manifest.yaml`
-6. Verify the manifest validates against `contract/conformance-manifest.schema.yaml`
-
-Do not skip step 3.
+Run `yarn contract:check`, `yarn check:conformance-versions` and the relevant
+test suites. Verify that implementation, tests, schemas, generated artifacts
+and the contract version agree. Report any unresolved divergence explicitly as
+a blocker.
 
 ---
 
 ## Delivery Reminder
 
-When delivering a ticket that involved contract-touching changes, name the contract version and the interface changes (`CONTRACT.md`, any updated `contract/*.yaml`, and the impact on other modules) in the delivery summary. These are first-class behavioral changes, not documentation noise. If `CONTRACT.md` or a contract YAML was written from a shell command rather than a native edit tool, declare it with `--paths` so it appears among the objective's changed files.
+When delivering a ticket that involved contract-touching changes, state the
+`Contract impact:` declaration, the contract version, and the interface changes
+(contract documents, any updated `contract/*.yaml`, ADRs, and the impact on
+other modules) in the delivery summary. These are first-class behavioral
+changes, not documentation noise. If a contract file was written from a shell
+command rather than a native edit tool, declare it with `--paths` so it appears
+among the objective's changed files.
 
-<!-- version: 1.1.0 -->
+<!-- version: 2.0.0 -->
