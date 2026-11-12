@@ -14,6 +14,36 @@ behaviour. Status is `open` until phase 4d decides.
 Where `rest-notes.md`, a TypeScript DTO comment, or another document says something
 the code does not do.
 
+### Projects, project statuses, project resources (batch 1)
+
+- **P1** (open). `CreateProjectStatusBody.isDefault` and `UpdateProjectStatusBody.isDefault`
+  (packages/contract) say only draft-type statuses may be the default; the code
+  (`backend/repository.ts` `createProjectStatus`, `updateProjectStatus`) accepts `draft`
+  or `next`. Affects `postProjectsByIdStatuses`, `patchProjectsByIdStatusesByStatusId`.
+- **P2** (open). `CreateProjectBody.workspaceId` says it "defaults to the caller's active
+  workspace". Authenticated requests carry no ambient workspace (CONTRACT/rest-notes
+  "REST handlers should … not read a workspace header"), so `createProject` answers 400
+  `workspaceId is required when creating a project` when it is omitted; only a
+  context-free in-process caller falls back to the bootstrap workspace. `postProjects`.
+- **P3** (open). rest-notes.md "Project-resource source declaration semantics" says a
+  `sourceUrl` Git source is project-global (`execution_target_id IS NULL`).
+  `insertProjectResource` stores `body.executionTargetId` on a `git` source when one is
+  given, without checking that the target exists or belongs to the workspace.
+  `postProjectsByIdResources`.
+- **P4** (open). `ProjectResourceDto.type` is typed as the closed union
+  `local_directory | remote_directory | git | source_bundle`; the mapper
+  (`toProjectResourceDto`) emits any stored `source_kind` other than `local_checkout`
+  verbatim. The schema says `string`.
+- **P5** (open, TypeScript optionality). Several DTO members are optional in
+  packages/contract but always written by the mappers, so the schemas make them
+  required: `ProjectResourceDto.observedAt`/`observationSource`,
+  `ProjectResourceSourceDto.launchDefaults`, `ObjectiveDto.queueEntry`/
+  `launchConfigOverrides`, `ObjectiveRunQueueEntryDto.waitingReason`/
+  `waitingOnObjectiveId`/`waitingOnObjectiveDisplayId`/`attemptCount`,
+  `ExecutionRequestDto.localTargetMutationKind`. Conversely
+  `MissionDetailDto.branch` is nullable in the type but always an object from
+  `getMissionDetail`.
+
 ## 2. Non-conforming error shapes
 
 Every route in `backend/app.ts` that forwards errors through `handle()` or `next(err)`
