@@ -7,7 +7,9 @@ import test from 'node:test';
 
 import { managedFileSourceExists } from '../dist/connector-core-render.js';
 import {
+  contractMajorVersion,
   inspectConnector,
+  isStaleContractVersion,
   listAvailableConnectors,
   mergeCodexConfig,
   parseConnectorManifestYaml,
@@ -403,6 +405,37 @@ test('doctor detects a stale contract version', () => {
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
+});
+
+test('doctor does not report an install stale within the same contract major', () => {
+  const home = tempHome();
+  try {
+    setupConnector({ agentKey: 'claude', home });
+    const statePath = path.join(home, '.ovld', 'connectors', 'claude.json');
+    const state = JSON.parse(readFileSync(statePath, 'utf8'));
+    const declaredMajor = contractMajorVersion(state.contractVersion);
+    assert.ok(declaredMajor, `unexpected manifest contractVersion ${state.contractVersion}`);
+    // An install recorded before Semantic Versioning stored the bare major.
+    state.contractVersion = declaredMajor;
+    writeFileSync(statePath, JSON.stringify(state, null, 2));
+
+    const report = inspectConnector({ agentKey: 'claude', home });
+    assert.equal(report.staleContractVersion, false);
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('contract version staleness compares the major version', () => {
+  assert.equal(contractMajorVersion('168.2.1'), '168');
+  assert.equal(contractMajorVersion('168'), '168');
+  assert.equal(contractMajorVersion('0.0-ancient'), undefined);
+  assert.equal(isStaleContractVersion({ installed: '168', declared: '168.0.0' }), false);
+  assert.equal(isStaleContractVersion({ installed: '168.0.0', declared: '168.4.2' }), false);
+  assert.equal(isStaleContractVersion({ installed: '168.4.2', declared: '169.0.0' }), true);
+  assert.equal(isStaleContractVersion({ installed: '167', declared: '168.0.0' }), true);
+  assert.equal(isStaleContractVersion({ installed: '0.0-ancient', declared: '168.0.0' }), true);
+  assert.equal(isStaleContractVersion({ installed: 'custom', declared: 'custom' }), false);
 });
 
 test('inspect reports not-installed connectors', () => {

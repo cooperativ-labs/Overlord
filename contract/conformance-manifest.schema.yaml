@@ -28,9 +28,15 @@ properties:
 
   contractVersion:
     type: string
-    description: "The Overlord contract version this component was validated against (e.g. '0')"
+    # Strict MAJOR.MINOR.PATCH (contract/VERSION). A bare integer N is the former
+    # integer form, read as N.0.0, and stays valid for manifests outside this
+    # repository until they are restamped; `yarn check:conformance-versions`
+    # requires the strict form, the same major as contract/VERSION and a version
+    # not newer than it (contract/decisions/0009-manifests-pin-major-version.md).
+    pattern: "^(0|[1-9][0-9]*)([.](0|[1-9][0-9]*)[.](0|[1-9][0-9]*))?$"
+    description: "The Overlord contract version this component was validated against, as strict Semantic Versioning (e.g. '168.0.0')"
     examples:
-      - "0"
+      - "168.0.0"
 
   componentType:
     type: string
@@ -177,7 +183,7 @@ properties:
           - postgres
       schemaContractVersion:
         type: string
-        description: "Database schema contract version this adapter implements (from 09-database-schema-contract.md)"
+        description: "Database schema contract version this adapter implements (from contract/data/README.md)"
       conformanceTestStatus:
         type: string
         enum:

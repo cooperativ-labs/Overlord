@@ -50,6 +50,28 @@ test('a manifest with a bad enum value fails with a message naming the allowed v
   assert.ok(errors.some(error => error.includes('componentType') && error.includes('connector')));
 });
 
+test('contractVersion accepts strict Semantic Versioning and the former integer form only', () => {
+  const manifest = (contractVersion: string) => ({
+    contractVersion,
+    componentType: 'extension',
+    componentKey: 'demo',
+    label: 'Demo'
+  });
+  for (const valid of ['168.0.0', '169.2.10', '168', '0']) {
+    assert.deepEqual(
+      validateManifest(manifest(valid)).filter(error => error.includes('contractVersion')),
+      [],
+      valid
+    );
+  }
+  for (const invalid of ['168.0', 'v168.0.0', '168.0.0-rc.1', '01.0.0', '0.8-downstream.0']) {
+    assert.ok(
+      validateManifest(manifest(invalid)).some(error => error.includes('contractVersion')),
+      invalid
+    );
+  }
+});
+
 test('packaged CLI validates a manifest without node_modules', () => {
   const packageRoot = path.resolve(import.meta.dirname, '..');
   const packagedRoot = mkdtempSync(path.join(tmpdir(), 'ovld-contract-check-'));

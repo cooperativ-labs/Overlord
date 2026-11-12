@@ -21,8 +21,8 @@ import { managedFileSourceExists, resolveManagedFileContents } from './connector
 import { CliError } from './errors.js';
 
 /**
- * Connector setup/doctor for the Connector Layer (see CONTRACT.md → Connector
- * Layer). `ovld agent-setup <agent>` materializes a connector adapter's declared
+ * Connector setup/doctor for the Connector Layer (see contract/architecture.md →
+ * Connector Layer). `ovld agent-setup <agent>` materializes a connector adapter's declared
  * `managedFiles` into the agent's native plugin install path. Adapter skill templates,
  * core references, and shared connector scripts are rendered from `connectors/core/`
  * at install time. Setup records a local
@@ -930,6 +930,36 @@ function readInstallState(agentKey: string, home: string): InstallState | null {
   }
 }
 
+/**
+ * Major component of a contract version as a connector manifest or install
+ * record declares it: `N.M.P` gives `N`, and a former integer version `N` is
+ * read as `N.0.0`. Anything else gives `undefined`.
+ */
+export function contractMajorVersion(version: string): string | undefined {
+  const match = /^(0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))?$/.exec(version.trim());
+  return match ? match[1] : undefined;
+}
+
+/**
+ * An install is stale against a connector manifest when the two contract
+ * versions have different majors (contract/decisions/0009-manifests-pin-major-version.md).
+ * Patch and minor contract changes do not require re-running setup; changed
+ * managed files are detected separately. Versions that cannot be read as a
+ * contract version are compared as strings, as before.
+ */
+export function isStaleContractVersion({
+  installed,
+  declared
+}: {
+  installed: string;
+  declared: string;
+}): boolean {
+  const installedMajor = contractMajorVersion(installed);
+  const declaredMajor = contractMajorVersion(declared);
+  if (installedMajor === undefined || declaredMajor === undefined) return installed !== declared;
+  return installedMajor !== declaredMajor;
+}
+
 /** Inspect one connector's local install for `ovld doctor`. */
 export function inspectConnector({
   agentKey,
@@ -958,7 +988,10 @@ export function inspectConnector({
   }
 
   const problems: string[] = [];
-  const staleContractVersion = state.contractVersion !== manifest.contractVersion;
+  const staleContractVersion = isStaleContractVersion({
+    installed: state.contractVersion,
+    declared: manifest.contractVersion
+  });
   if (staleContractVersion) {
     problems.push(
       `Installed against contract ${state.contractVersion}; connector now declares ` +

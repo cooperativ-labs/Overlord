@@ -1,0 +1,33 @@
+name: Contract
+
+# Mechanical contract alignment on every push and pull request
+# (contract/CONTRACT.md sections 5 and 6). The contract-impact declaration is
+# checked against a release range by scripts/contract-impact.mjs from the
+# release gate introduced in phase 5 of the contract migration, not here.
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+      - run: corepack enable
+      - run: yarn install --immutable
+      - name: Validate contract structure and version agreement
+        run: yarn contract:check
+      - name: Unit-test the contract tooling
+        run: yarn contract:test
+      - name: Check conformance manifest versions
+        run: yarn check:conformance-versions
