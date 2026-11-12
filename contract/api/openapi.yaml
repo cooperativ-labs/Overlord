@@ -2716,22 +2716,54 @@ paths:
       - name: activityId
         in: path
         required: true
-        schema:
-          type: string
+        description: The ActivityKit activity id, trimmed; blank answers 400, longer than 255 characters 400
+          (on `PUT`).
+        schema: { type: string }
     put:
       operationId: putMobileLiveActivitiesByActivityIdPushToken
       tags: [mobile]
       x-overlord-permission: owner
       x-overlord-edition: both
       x-overlord-consumers: [mobile]
-      x-overlord-schema-status: stub
+      summary: Register a Live Activity update token
+      description: >-
+        Profile-private; there is no read surface. Upserts the caller's ActivityKit push token for this
+        activity (clearing its last-sent state) and enqueues a Live Activity dispatch job addressed to the
+        caller's oldest active workspace; a profile with no active membership answers 403. Unlike the
+        other mobile token routes this answers 200 `{ ok: true }`, not 204.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterLiveActivityPushTokenBody' }
+      responses:
+        '200':
+          description: Registered.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
     delete:
       operationId: deleteMobileLiveActivitiesByActivityIdPushToken
       tags: [mobile]
       x-overlord-permission: owner
       x-overlord-edition: both
       x-overlord-consumers: [mobile]
-      x-overlord-schema-status: stub
+      summary: Remove a Live Activity update token
+      description: Idempotently deletes only the caller's registration for this activity; an unknown
+        activity still answers 204.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '204':
+          description: Removed (or absent); no body.
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/mobile/live-activities/start-token:
     put:
       operationId: putMobileLiveActivitiesStartToken
@@ -2739,7 +2771,24 @@ paths:
       x-overlord-permission: owner
       x-overlord-edition: both
       x-overlord-consumers: [mobile]
-      x-overlord-schema-status: stub
+      summary: Register a Live Activity push-to-start token
+      description: >-
+        Profile-private, body-carried, no read surface. The stored row is the account's consent to
+        desktop-initiated Live Activities. A start token belongs to one profile at a time: registering a
+        token another profile holds reassigns it to the caller.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterLiveActivityStartTokenBody' }
+      responses:
+        '204':
+          description: Registered; no body.
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/mobile/live-activities/start-token/revoke:
     post:
       operationId: postMobileLiveActivitiesStartTokenRevoke
@@ -2747,7 +2796,21 @@ paths:
       x-overlord-permission: owner
       x-overlord-edition: both
       x-overlord-consumers: [mobile]
-      x-overlord-schema-status: stub
+      summary: Withdraw a Live Activity push-to-start token
+      description: Idempotently deletes only the caller's own registration of this token.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RevokeLiveActivityStartTokenBody' }
+      responses:
+        '204':
+          description: Removed (or absent); no body.
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/mobile/push/device-token:
     put:
       operationId: putMobilePushDeviceToken
@@ -2755,7 +2818,23 @@ paths:
       x-overlord-permission: owner
       x-overlord-edition: both
       x-overlord-consumers: [mobile]
-      x-overlord-schema-status: stub
+      summary: Register an APNs device token
+      description: >-
+        Profile-private, body-carried, no read surface. A device token belongs to one profile at a time:
+        registering a token another profile holds reassigns it to the caller.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterDevicePushTokenBody' }
+      responses:
+        '204':
+          description: Registered; no body.
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/mobile/push/device-token/revoke:
     post:
       operationId: postMobilePushDeviceTokenRevoke
@@ -2763,7 +2842,21 @@ paths:
       x-overlord-permission: owner
       x-overlord-edition: both
       x-overlord-consumers: [mobile]
-      x-overlord-schema-status: stub
+      summary: Remove an APNs device token
+      description: Idempotently deletes only the caller's own registration of this device token.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RevokeDevicePushTokenBody' }
+      responses:
+        '204':
+          description: Removed (or absent); no body.
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/profile/notification-preferences:
     get:
       operationId: getProfileNotificationPreferences
@@ -2771,14 +2864,47 @@ paths:
       x-overlord-permission: owner
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Read the caller's notification preferences
+      description: >-
+        Profile-owned; no RBAC action is evaluated. Every eligible type and transport pair is listed,
+        absent rows reading as the type's default mode. `categories` is the APNs-only projection kept for
+        released iOS builds.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The preferences.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationPreferencesDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
     put:
       operationId: putProfileNotificationPreferences
       tags: [notifications]
       x-overlord-permission: owner
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Update the caller's notification preferences
+      description: >-
+        Profile-owned. A partial merge despite the method: omitted pairs keep their stored mode. Every
+        entry is validated before anything is written; an unknown type, transport, mode or ineligible type
+        and transport pair answers 400. An empty body answers the current preferences.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateNotificationPreferencesBody' }
+      responses:
+        '200':
+          description: The preferences after the update.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationPreferencesDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /api/notifications:
     get:
       operationId: getNotifications
@@ -2786,35 +2912,92 @@ paths:
       x-overlord-permission: owner
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: List the caller's notifications
+      description: >-
+        Every undismissed notification addressed to the authenticated profile, newest first, unbounded.
+        Not narrowed by current membership, a token's organization or consent, or the mission's deletion.
+        `presentation.body` is recomputed from the current mission and objective on every read.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The notifications.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationList' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/notifications/{id}/read":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Notification id; one addressed to another profile, or dismissed, answers 404.
+        schema: { type: string }
     patch:
       operationId: patchNotificationsByIdRead
       tags: [notifications]
       x-overlord-permission: owner
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Mark a notification read
+      description: >-
+        Only the recipient may mark it (another profile's notification answers 404). Compare-and-set on
+        `expectedRevision` (409 when stale). Marking an already-read notification sets `readAt` again and
+        bumps the revision. Records a `notification` entity change.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NotificationRevisionBody' }
+      responses:
+        '200':
+          description: The notification.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/notifications/{id}":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Notification id; one addressed to another profile, or dismissed, answers 404.
+        schema: { type: string }
     delete:
       operationId: deleteNotificationsById
       tags: [notifications]
       x-overlord-permission: owner
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Dismiss a notification
+      description: >-
+        Only the recipient may dismiss it (404 otherwise). Takes a JSON body on `DELETE`; compare-and-set
+        on `expectedRevision` (409 when stale). Soft-deletes the row and records a `notification` delete
+        change.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NotificationRevisionBody' }
+      responses:
+        '200':
+          description: Dismissed.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OkResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/projects/{id}/tags":
     parameters:
       - name: id
@@ -9740,3 +9923,188 @@ components:
       required: [ token ]
       properties:
         token: { type: string, description: 'The Better Auth session token, for `Authorization: Bearer`.' }
+    NotificationType:
+      type: string
+      enum:
+        [
+          mission_awaiting_review,
+          agent_question,
+          mission_complete,
+          mission_failed,
+          agent_started,
+          returned_to_execute
+        ]
+    NotificationPreferenceType:
+      type: string
+      description: A mission notification type or one of the two assistant conversation types.
+      enum:
+        [
+          mission_awaiting_review,
+          agent_question,
+          mission_complete,
+          mission_failed,
+          agent_started,
+          returned_to_execute,
+          chat_needs_answer,
+          chat_finished
+        ]
+    NotificationTransport:
+      type: string
+      enum: [ apns, realtime, in_app ]
+      description: '`agent_started` and `returned_to_execute` are not eligible for `apns`.'
+    NotificationMode:
+      type: string
+      enum: [ alert, silent, off ]
+    PushNotificationCategory:
+      type: string
+      description: The APNs-eligible mission notification types.
+      enum: [ mission_awaiting_review, agent_question, mission_complete, mission_failed ]
+    NotificationDto:
+      type: object
+      required: [ id, workspaceId, type, missionId, objectiveId, createdAt, readAt, revision, presentation ]
+      properties:
+        id: { type: string, format: uuid }
+        workspaceId: { type: string, format: uuid }
+        type: { $ref: '#/components/schemas/NotificationType' }
+        missionId: { type: string, format: uuid }
+        objectiveId:
+          oneOf: [ { type: string, format: uuid }, { type: 'null' } ]
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        readAt:
+          oneOf: [ { $ref: '#/components/schemas/DateTime' }, { type: 'null' } ]
+        revision: { type: integer, minimum: 1 }
+        presentation:
+          type: object
+          required: [ body ]
+          properties:
+            body:
+              type: string
+              description: >-
+                Bounded text built from the mission display id and title (or the objective's) and the
+                type's fixed verb; recomputed on read, never stored.
+    NotificationList:
+      type: array
+      items: { $ref: '#/components/schemas/NotificationDto' }
+    NotificationRevisionBody:
+      type: object
+      required: [ expectedRevision ]
+      properties:
+        expectedRevision:
+          type: integer
+          minimum: 1
+          description: The notification's current `revision`; a non-integer or value below 1 answers 400.
+    NotificationPreferenceDto:
+      type: object
+      required: [ type, transport, mode ]
+      properties:
+        type: { $ref: '#/components/schemas/NotificationPreferenceType' }
+        transport: { $ref: '#/components/schemas/NotificationTransport' }
+        mode: { $ref: '#/components/schemas/NotificationMode' }
+    NotificationPreferencesDto:
+      type: object
+      required: [ enabled, preferences, categories ]
+      properties:
+        enabled:
+          type: boolean
+          description: The master switch; false only when it was explicitly turned off.
+        preferences:
+          type: array
+          description: Every type with each of its eligible transports, in catalog order.
+          items: { $ref: '#/components/schemas/NotificationPreferenceDto' }
+        categories:
+          type: array
+          description: APNs-only projection for released iOS builds (absent rows read `alert`).
+          items:
+            type: object
+            required: [ category, mode ]
+            properties:
+              category: { $ref: '#/components/schemas/PushNotificationCategory' }
+              mode: { $ref: '#/components/schemas/NotificationMode' }
+    UpdateNotificationPreferencesBody:
+      type: object
+      description: Partial; every member is optional and the three are applied in order.
+      properties:
+        enabled:
+          type: boolean
+          description: Sets the master switch (stored as `all`/`all` with `alert` or `off`); a non-boolean
+            answers 400.
+        preferences:
+          type: array
+          description: Each entry must name a known type, an eligible transport for it and a known mode (400
+            otherwise).
+          items: { $ref: '#/components/schemas/NotificationPreferenceDto' }
+        categories:
+          type: array
+          description: Deprecated APNs-only alias; each entry sets that category's `apns` mode.
+          items:
+            type: object
+            required: [ category, mode ]
+            properties:
+              category: { $ref: '#/components/schemas/PushNotificationCategory' }
+              mode: { $ref: '#/components/schemas/NotificationMode' }
+    ApnsEnvironment:
+      type: string
+      enum: [ sandbox, production ]
+      description: Trimmed before comparison; anything else answers 400.
+    RegisterLiveActivityPushTokenBody:
+      type: object
+      required: [ pushToken, environment, bundleId ]
+      properties:
+        pushToken:
+          type: string
+          description: The opaque ActivityKit update token, trimmed; blank answers 400, longer than 4096
+            characters 400.
+        environment: { $ref: '#/components/schemas/ApnsEnvironment' }
+        bundleId:
+          type: string
+          description: Trimmed; blank answers 400, longer than 255 characters 400.
+        startedByPush:
+          type: boolean
+          description: True when APNs started the activity remotely (push-to-start handoff); a non-boolean
+            answers 400.
+    RegisterLiveActivityStartTokenBody:
+      type: object
+      required: [ startToken, environment, bundleId ]
+      properties:
+        startToken:
+          type: string
+          description: The opaque push-to-start token, trimmed; blank or longer than 512 characters answers 400.
+        environment: { $ref: '#/components/schemas/ApnsEnvironment' }
+        bundleId:
+          type: string
+          description: Trimmed; blank or longer than 255 characters answers 400.
+        activityType:
+          type: string
+          description: Trimmed; longer than 128 characters answers 400; absent or blank means
+            `OverlordActivityAttributes`.
+        appVersion:
+          type: string
+          description: Trimmed; longer than 64 characters answers 400; absent or blank stores null.
+    RevokeLiveActivityStartTokenBody:
+      type: object
+      required: [ startToken ]
+      properties:
+        startToken:
+          type: string
+          description: Trimmed; blank or longer than 512 characters answers 400.
+    RegisterDevicePushTokenBody:
+      type: object
+      required: [ deviceToken, environment, bundleId ]
+      properties:
+        deviceToken:
+          type: string
+          description: The opaque APNs device token, trimmed; blank or longer than 512 characters answers 400.
+        environment: { $ref: '#/components/schemas/ApnsEnvironment' }
+        bundleId:
+          type: string
+          description: Trimmed; blank or longer than 255 characters answers 400.
+        appVersion:
+          type: string
+          description: Trimmed; longer than 64 characters answers 400; absent or blank stores null.
+    RevokeDevicePushTokenBody:
+      type: object
+      required: [ deviceToken ]
+      properties:
+        deviceToken:
+          type: string
+          description: Trimmed; blank or longer than 512 characters answers 400.

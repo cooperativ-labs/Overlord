@@ -134,6 +134,18 @@ the code does not do.
   to itself with `error=state_mismatch`, and that request (lacking the native flow marker)
   answers a plain-text 400 page (reproduced).
 
+### Notifications and mobile registrations (batch 2)
+
+- **N1** (open). `PUT /api/profile/notification-preferences` is a partial merge, not a
+  replacement: omitted pairs keep their stored mode and an empty body answers the current
+  preferences (`updateNotificationPreferences`, `backend/push-notifications.ts`).
+  `putProfileNotificationPreferences`.
+- **N2** (open). Of the six mobile token routes, `PUT
+  /api/mobile/live-activities/{activityId}/push-token` answers 200 `{ ok: true }` and the
+  other five answer 204 with no body (reproduced). It is also the only one that needs an
+  active workspace membership (403 `No active workspace membership` without one, to address
+  the dispatch job). `putMobileLiveActivitiesByActivityIdPushToken`.
+
 ## 2. Non-conforming error shapes
 
 Every route in `backend/app.ts` that forwards errors through `handle()` or `next(err)`
@@ -297,6 +309,13 @@ decision and, if confirmed, a fix with its own contract impact.
   rename (`name`, `slug`), organization rename (`name`) and invitations (`email`,
   `roleKey`, `token`).
 
+- **X23** (open, isolation, read only). `GET /api/notifications` (`listNotifications`,
+  `backend/notifications.ts`) lists every undismissed notification addressed to the profile
+  with no membership, token-consent or mission-deletion filter, and recomputes
+  `presentation.body` from the current mission and objective titles. A member removed from a
+  workspace keeps seeing, and a token bound to another organization can read, the current
+  titles of missions in it. `getNotifications`.
+
 ## 4. Generator constructs needed
 
 Constructs used beyond the subset Clear Comply's generator
@@ -343,6 +362,11 @@ schema must change.
 - **G11** An optional security requirement (`{}` alongside the session schemes) on
   `getAuthDesktopCallback` and `getAuthBrowserCallback`, which read a browser session when
   present and redirect or answer a page without one instead of 401.
+
+- **G12** A JSON request body on `DELETE`: `deleteNotificationsById` (`expectedRevision`).
+  G9's 204 responses also cover `deleteMobileLiveActivitiesByActivityIdPushToken`,
+  `putMobileLiveActivitiesStartToken`, `postMobileLiveActivitiesStartTokenRevoke`,
+  `putMobilePushDeviceToken` and `postMobilePushDeviceTokenRevoke`.
 
 ## 5. Operations left as stubs
 
