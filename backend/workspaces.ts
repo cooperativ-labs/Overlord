@@ -1,3 +1,4 @@
+import { type Permission, PERMISSIONS } from '@overlord/auth';
 import type {
   AcceptWorkspaceInvitationBody,
   CreateOrganizationOnboardingBody,
@@ -17,6 +18,8 @@ import { syncSqlStudioForWorkspace } from './sql-studio/sql-studio-manager.ts';
 import {
   findActiveMembershipId,
   getActiveProfileId,
+  getActiveTokenId,
+  getActiveTokenScopes,
   getAuthorizedWorkspacesContext,
   getBootstrapWorkspaceIdOrNull,
   getImplicitWorkspaceIdOrNull,
@@ -36,7 +39,11 @@ import { deleteOrganizationIfEmpty } from './organizations.ts';
 import {
   actorIsAdmin,
   canViewOrganizationSettings,
-  listOrganizationAdminProfileIds
+  listOrganizationAdminProfileIds,
+  requireAnyWorkspacePermission,
+  requireTokenOrganizationGrant,
+  requireTokenWorkspaceGrant,
+  tokenSnapshotAdmitsWorkspace
 } from './rbac.ts';
 import { WORKSPACE_BUCKET_KEYS } from './storage-buckets.ts';
 import {
@@ -162,7 +169,17 @@ async function resolveCurrentProfileId(
  * workspace id from the client must pass first — the route-level RBAC gate
  * only checks roles in the caller's *active* workspace, not the target.
  */
-async function requireWorkspaceMember(workspaceId: string): Promise<string> {
+async function requireWorkspaceMember(
+  workspaceId: string,
+  permission: Permission
+): Promise<string> {
+  // A token request is further bounded by its organization, workspace consent
+  // and scope (contract/authorization.md "User tokens").
+  requireTokenWorkspaceGrant({
+    workspaceId,
+    permission,
+    notFoundMessage: 'Workspace not found or no active membership'
+  });
   const membershipId = await findActiveMembershipId(workspaceId, await resolveCurrentProfileId());
   if (!membershipId) {
     throw new ApiError(404, 'Workspace not found or no active membership');
@@ -171,8 +188,8 @@ async function requireWorkspaceMember(workspaceId: string): Promise<string> {
 }
 
 /** `requireWorkspaceMember`, plus an ADMIN role in that workspace. */
-async function requireWorkspaceAdmin(workspaceId: string): Promise<string> {
-  const workspaceUserId = await requireWorkspaceMember(workspaceId);
+async function requireWorkspaceAdmin(workspaceId: string, permission: Permission): Promise<string> {
+  const workspaceUserId = await requireWorkspaceMember(workspaceId, permission);
   if (!(await actorIsAdmin({ workspaceId, workspaceUserId }))) {
     throw new ApiError(403, 'Admin role required');
   }
@@ -188,9 +205,10 @@ async function requireWorkspaceAdmin(workspaceId: string): Promise<string> {
  * all".
  */
 async function requireWorkspaceManager(
-  workspaceId: string
+  workspaceId: string,
+  permission: Permission
 ): Promise<{ workspaceUserId: string; isAdmin: boolean }> {
-  const workspaceUserId = await requireWorkspaceMember(workspaceId);
+  const workspaceUserId = await requireWorkspaceMember(workspaceId, permission);
   const roleKeys = await listMemberRoleKeys({ workspaceId, workspaceUserId });
   const isAdmin = roleKeys.includes('ADMIN');
   if (!isAdmin && !roleKeys.includes('MANAGER')) {
@@ -251,8 +269,23 @@ const WORKSPACE_LIST_COLUMNS = `
        AND m.deleted_at IS NULL) AS member_count
 `;
 
-/** Every workspace the local operator is an active member of, across every organization. */
+/**
+ * Every workspace the caller is an active member of, across every
+ * organization; a token request sees only its organization's consented
+ * workspaces (its authorization snapshot).
+ */
 export async function listWorkspaces(): Promise<WorkspaceDto[]> {
+  return (await listMemberWorkspaces()).filter(workspace =>
+    tokenSnapshotAdmitsWorkspace(workspace.id)
+  );
+}
+
+/**
+ * Every workspace the caller is an active member of, without the token
+ * snapshot narrowing. Only for reloading a workspace this request just
+ * created, joined or changed.
+ */
+async function listMemberWorkspaces(): Promise<WorkspaceDto[]> {
   const localUserId = await resolveCurrentProfileId();
   const rows = await requireDatabaseClient().all<WorkspaceListRow>(
     `SELECT ${WORKSPACE_LIST_COLUMNS}
@@ -286,7 +319,7 @@ export async function listWorkspacesForOrganization(
       ORDER BY w.created_at ASC`,
     [localUserId, organizationId]
   );
-  return rows.map(toWorkspaceDto);
+  return rows.map(toWorkspaceDto).filter(workspace => tokenSnapshotAdmitsWorkspace(workspace.id));
 }
 
 /**
@@ -352,6 +385,16 @@ export async function createWorkspace(body: CreateWorkspaceBody): Promise<Worksp
   const creatorProfileId = await resolveCurrentProfileId();
   const organizationId = (body.organizationId ?? '').trim();
   if (!organizationId) throw new ApiError(400, 'organizationId is required');
+  if (getActiveTokenId() !== null) {
+    // A token creates workspaces only in its own organization, within its
+    // scope, and as ADMIN of a workspace it consents to.
+    await requireTokenOrganizationGrant({
+      organizationId,
+      permission: PERMISSIONS.WORKSPACE_CREATE,
+      everyWorkspace: false
+    });
+    await requireAnyWorkspacePermission(PERMISSIONS.WORKSPACE_CREATE);
+  }
   if (!(await canViewOrganizationSettings(creatorProfileId, organizationId))) {
     throw new ApiError(403, 'Workspace admin access to the organization required');
   }
@@ -464,7 +507,7 @@ export async function createWorkspace(body: CreateWorkspaceBody): Promise<Worksp
   // New workspaces become the active one, mirroring the team switcher: creating
   // a workspace drops you into it.
   if (!getAuthorizedWorkspacesContext()) await setActiveWorkspace(workspaceId);
-  const created = (await listWorkspaces()).find(w => w.id === workspaceId);
+  const created = (await listMemberWorkspaces()).find(w => w.id === workspaceId);
   if (!created) throw new ApiError(500, 'Workspace was created but could not be loaded');
   return created;
 }
@@ -586,7 +629,7 @@ export async function createOrganizationOnboarding(
   });
 
   if (!getAuthorizedWorkspacesContext()) await setActiveWorkspace(workspaceId);
-  const created = (await listWorkspaces()).find(w => w.id === workspaceId);
+  const created = (await listMemberWorkspaces()).find(w => w.id === workspaceId);
   if (!created) throw new ApiError(500, 'Workspace was created but could not be loaded');
   return created;
 }
@@ -602,7 +645,7 @@ export async function updateWorkspace(
   id: string,
   body: UpdateWorkspaceBody
 ): Promise<WorkspaceDto> {
-  const { workspaceUserId } = await requireWorkspaceManager(id);
+  const { workspaceUserId } = await requireWorkspaceManager(id, PERMISSIONS.WORKSPACE_UPDATE);
   await requireDatabaseClient().transaction(async tx => {
     const existing = await tx.get<WorkspaceRevisionRow>(
       `SELECT id, name, revision FROM workspaces WHERE id = ? AND deleted_at IS NULL`,
@@ -667,7 +710,7 @@ export async function updateWorkspace(
   if (id === getImplicitWorkspaceIdOrNull()) {
     await reloadActiveWorkspace();
   }
-  const updated = (await listWorkspaces()).find(w => w.id === id);
+  const updated = (await listMemberWorkspaces()).find(w => w.id === id);
   if (!updated) throw new ApiError(404, 'Workspace not found or no active membership');
   return updated;
 }
@@ -682,7 +725,7 @@ export async function updateWorkspace(
  * deletion is not extended to MANAGER). Returns the refreshed workspace list.
  */
 export async function deleteWorkspace(id: string): Promise<WorkspaceDto[]> {
-  const workspaceUserId = await requireWorkspaceAdmin(id);
+  const workspaceUserId = await requireWorkspaceAdmin(id, PERMISSIONS.WORKSPACE_DELETE);
   await requireDatabaseClient().transaction(async tx => {
     const existing = await tx.get<WorkspaceRevisionRow & { organization_id: string }>(
       `SELECT id, name, organization_id, revision FROM workspaces WHERE id = ? AND deleted_at IS NULL`,
@@ -758,7 +801,7 @@ async function listMemberRoleKeys({
 
 /** Active members of a workspace (`workspace_users` joined to `profiles`). Members only. */
 export async function listWorkspaceMembers(workspaceId: string): Promise<WorkspaceMemberDto[]> {
-  await requireWorkspaceMember(workspaceId);
+  await requireWorkspaceMember(workspaceId, PERMISSIONS.WORKSPACE_READ);
 
   const currentProfileId = await resolveCurrentProfileId();
   const rows = await requireDatabaseClient().all<WorkspaceMemberRow>(
@@ -826,7 +869,7 @@ export async function exportWorkspaceObjectivesCsv(
   );
   if (!workspace) throw new ApiError(404, 'Workspace not found');
 
-  await requireWorkspaceAdmin(workspaceId);
+  await requireWorkspaceAdmin(workspaceId, PERMISSIONS.WORKSPACE_READ);
 
   const projectOrder =
     requireDatabaseClient().dialect === 'sqlite'
@@ -938,8 +981,10 @@ export async function inviteWorkspaceMember(
   workspaceId: string,
   body: InviteWorkspaceMemberBody
 ): Promise<InviteWorkspaceMemberResultDto> {
-  const { isAdmin, workspaceUserId: invitedByWorkspaceUserId } =
-    await requireWorkspaceManager(workspaceId);
+  const { isAdmin, workspaceUserId: invitedByWorkspaceUserId } = await requireWorkspaceManager(
+    workspaceId,
+    PERMISSIONS.MEMBER_INVITE
+  );
 
   const email = (body.email ?? '').trim().toLowerCase();
   if (!email || !email.includes('@')) throw new ApiError(400, 'A valid email is required');
@@ -1058,7 +1103,7 @@ export async function inviteWorkspaceMember(
 export async function listWorkspaceInvitations(
   workspaceId: string
 ): Promise<WorkspaceInvitationDto[]> {
-  await requireWorkspaceManager(workspaceId);
+  await requireWorkspaceManager(workspaceId, PERMISSIONS.INVITATION_READ);
   const rows = await requireDatabaseClient().all<WorkspaceInvitationRow>(
     `SELECT ${INVITATION_COLUMNS} FROM workspace_invitations
        WHERE workspace_id = ? AND deleted_at IS NULL
@@ -1073,7 +1118,10 @@ export async function revokeWorkspaceInvitation(
   workspaceId: string,
   invitationId: string
 ): Promise<void> {
-  const { workspaceUserId: actorWorkspaceUserId } = await requireWorkspaceManager(workspaceId);
+  const { workspaceUserId: actorWorkspaceUserId } = await requireWorkspaceManager(
+    workspaceId,
+    PERMISSIONS.INVITATION_REVOKE
+  );
   await requireDatabaseClient().transaction(async tx => {
     const invitation = await tx.get<{ id: string; status: string; revision: number }>(
       `SELECT id, status, revision FROM workspace_invitations
@@ -1135,6 +1183,7 @@ export async function acceptWorkspaceInvitation(
     if (invitation.status !== 'pending') {
       throw new ApiError(409, `Invitation has already been ${invitation.status}`);
     }
+    await requireTokenMayAcceptInvitation(invitation.workspace_id, tx);
     const now = nowIso();
     if (invitation.expires_at <= now) {
       const revision = invitation.revision + 1;
@@ -1260,9 +1309,41 @@ export async function acceptWorkspaceInvitation(
 
   const workspaceId = outcome.workspaceId;
   if (!getAuthorizedWorkspacesContext()) await setActiveWorkspace(workspaceId);
-  const workspace = (await listWorkspaces()).find(w => w.id === workspaceId);
+  const workspace = (await listMemberWorkspaces()).find(w => w.id === workspaceId);
   if (!workspace) throw new ApiError(500, 'Joined workspace could not be loaded');
   return workspace;
+}
+
+/**
+ * Accepting an invitation adds a workspace to the account. A token request may
+ * do so only when the token is unrestricted in scope, bound to the invited
+ * workspace's organization and consents to every workspace of it (as a token
+ * the user minted for themselves does); the new workspace then falls inside
+ * its consent. Sessions and the loopback local operator are unaffected.
+ */
+async function requireTokenMayAcceptInvitation(
+  workspaceId: string,
+  client: DatabaseClient
+): Promise<void> {
+  const tokenId = getActiveTokenId();
+  if (tokenId === null) return;
+  const workspace = await client.get<{ organization_id: string }>(
+    `SELECT organization_id FROM workspaces WHERE id = ? AND deleted_at IS NULL`,
+    [workspaceId]
+  );
+  const token = await client.get<{ organization_id: string | null; all_workspaces: unknown }>(
+    `SELECT organization_id, all_workspaces FROM user_tokens WHERE id = ?`,
+    [tokenId]
+  );
+  const allWorkspaces = token?.all_workspaces === true || token?.all_workspaces === 1;
+  if (
+    !workspace ||
+    getActiveTokenScopes() !== null ||
+    !allWorkspaces ||
+    token?.organization_id !== workspace.organization_id
+  ) {
+    throw new ApiError(403, 'This token cannot accept invitations');
+  }
 }
 
 /**
@@ -1320,8 +1401,10 @@ export async function updateWorkspaceMemberRole(
   workspaceUserId: string,
   body: UpdateWorkspaceMemberRoleBody
 ): Promise<WorkspaceMemberDto> {
-  const { isAdmin, workspaceUserId: actorWorkspaceUserId } =
-    await requireWorkspaceManager(workspaceId);
+  const { isAdmin, workspaceUserId: actorWorkspaceUserId } = await requireWorkspaceManager(
+    workspaceId,
+    PERMISSIONS.ROLE_ASSIGN
+  );
 
   const roleKey = (body.roleKey ?? '').trim().toUpperCase();
   if (!WORKSPACE_ROLE_KEYS.has(roleKey)) throw new ApiError(400, `Unknown role: ${roleKey}`);
@@ -1392,8 +1475,10 @@ export async function removeWorkspaceMember(
   workspaceId: string,
   workspaceUserId: string
 ): Promise<void> {
-  const { isAdmin, workspaceUserId: actorWorkspaceUserId } =
-    await requireWorkspaceManager(workspaceId);
+  const { isAdmin, workspaceUserId: actorWorkspaceUserId } = await requireWorkspaceManager(
+    workspaceId,
+    PERMISSIONS.MEMBER_REMOVE
+  );
   await requireDatabaseClient().transaction(async tx => {
     const membership = await tx.get<{ id: string; revision: number }>(
       `SELECT id, revision FROM workspace_users

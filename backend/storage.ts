@@ -51,6 +51,7 @@ import { getActiveOrganizationIdOrNull } from './organizations.ts';
 import {
   isOrganizationAdmin,
   requireAnyWorkspacePermission,
+  requireTokenOrganizationGrant,
   requireWorkspacePermission
 } from './rbac.ts';
 import {
@@ -410,6 +411,11 @@ export async function uploadWorkspaceImage(
 export async function uploadOrganizationImage(input: UploadImageInput): Promise<StoredImageDto> {
   const organizationId = await requireActiveOrganizationId();
   const profileId = await resolveActiveProfileId();
+  await requireTokenOrganizationGrant({
+    organizationId,
+    permission: PERMISSIONS.ORGANIZATION_IMAGE_CREATE,
+    everyWorkspace: true
+  });
   if (!profileId || !(await isOrganizationAdmin(profileId, organizationId))) {
     throw new ApiError(403, 'Organization admin required');
   }

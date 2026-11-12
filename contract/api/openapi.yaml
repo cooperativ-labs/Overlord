@@ -1404,7 +1404,7 @@ paths:
       summary: List the caller's organizations
       description: >-
         Every live organization in which the authenticated profile has at least one active workspace
-        membership, oldest first. The list is not narrowed to a token's organization or workspace consent.
+        membership, oldest first. A token request lists only the organization the token is bound to.
         `isActive` marks the request's selected organization.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       responses:
@@ -1431,8 +1431,9 @@ paths:
       summary: Rename an organization or set its logo
       description: >-
         Organization admin only (an active `ADMIN` role in every live workspace of the organization),
-        checked against the profile's memberships; no RBAC action or token scope grant is evaluated. An
-        unknown or deleted organization answers 404, a non-admin 403. A change records one `organization`
+        checked against the profile's memberships. A token request must also be bound to the organization
+        (404 otherwise), consent to every live workspace of it (403 otherwise) and carry a scope covering
+        `organization:update` (403). An unknown or deleted organization answers 404, a non-admin 403. A change records one `organization`
         entity change per live workspace of the organization.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       requestBody:
@@ -1468,7 +1469,9 @@ paths:
       summary: List an organization's admins
       description: >-
         Organization admin only. Organization admins are derived: profiles with an active `ADMIN` role in
-        every live workspace of the organization. Ordered by display name.
+        every live workspace of the organization. A token request must be bound to the organization (404),
+        consent to all its live workspaces and carry a scope covering `organization:read` (403). Ordered
+        by display name.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       responses:
         '200':
@@ -1488,8 +1491,9 @@ paths:
       x-overlord-consumers: [webapp]
       summary: Make a member an organization admin
       description: >-
-        Organization admin only. Makes `ADMIN` the target's sole role in every live workspace of the
-        organization, joining it to workspaces it is not yet a member of. The target must already be an
+        Organization admin only; a token request must be bound to the organization (404), consent to all
+        its live workspaces and carry a scope covering `organization:admin_manage` (403). Makes `ADMIN` the
+        target's sole role in every live workspace of the organization, joining it to workspaces it is not yet a member of. The target must already be an
         active member of at least one of them (400 otherwise); an unknown profile answers 404. Answers the
         refreshed admin list.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
@@ -1530,7 +1534,9 @@ paths:
       x-overlord-consumers: [webapp]
       summary: Remove an organization admin
       description: >-
-        Organization admin only. Makes `MEMBER` the target's sole role in every live workspace of the
+        Organization admin only; a token request must be bound to the organization (404), consent to all
+        its live workspaces and carry a scope covering `organization:admin_manage` (403). Makes `MEMBER`
+        the target's sole role in every live workspace of the
         organization it belongs to. A profile that is not an organization admin answers 404; removing the
         last organization admin answers 409. Answers the refreshed admin list.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
@@ -1556,7 +1562,8 @@ paths:
       summary: List the caller's workspaces
       description: >-
         Every live workspace, in every organization, in which the authenticated profile is an active
-        member, oldest first. The list is not narrowed to a token's organization or workspace consent.
+        member, oldest first. A token request lists only the workspaces of its organization that it
+        consents to (as `GET /api/authorized-workspaces`).
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       responses:
         '200':
@@ -1575,9 +1582,9 @@ paths:
       summary: Create a workspace in an organization
       description: >-
         The caller must hold an active `ADMIN` role in at least one live workspace of the named
-        organization (403 otherwise, including for an unknown organization). `workspace:create` is
-        evaluated only for a caller with an attributed workspace member, which authenticated session and
-        token requests never have, so token scope grants do not apply. The caller becomes the new
+        organization (403 otherwise, including for an unknown organization). A token request must be
+        bound to the named organization (404 otherwise), carry a scope covering `workspace:create` and hold
+        `ADMIN` in a workspace it consents to (403). The caller becomes the new
         workspace's `ADMIN`, and every other organization admin is joined as `ADMIN`.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       requestBody:
@@ -1611,9 +1618,9 @@ paths:
       x-overlord-consumers: [mobile, webapp]
       summary: Rename a workspace or toggle SQL Studio
       description: >-
-        Active `ADMIN` or `MANAGER` of the target workspace, checked against the profile's memberships
-        (not the token's consent or scope grants). A non-member answers 404, a member without either role
-        403. Omitted members are unchanged; a change records a `workspace` entity change.
+        Active `ADMIN` or `MANAGER` of the target workspace, checked against the profile's memberships. A
+        non-member answers 404, a member without either role 403. A token request also needs the workspace
+        in its consent (404 otherwise) and a scope covering `workspace:update` (403). Omitted members are unchanged; a change records a `workspace` entity change.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       requestBody:
         required: true
@@ -1641,10 +1648,11 @@ paths:
       summary: Delete a workspace
       description: >-
         Active `ADMIN` of the target workspace (a non-member answers 404, a non-admin 403), checked
-        against the profile's memberships. Soft-deletes the workspace; its projects and missions are kept
+        against the profile's memberships; a token request also needs the workspace in its consent (404)
+        and a scope covering `workspace:delete` (403). Soft-deletes the workspace; its projects and missions are kept
         but unreachable. Deleting the organization's last live workspace also tombstones the organization,
-        purging its logo object and buckets. Answers the caller's remaining workspaces in every
-        organization (as `GET /api/workspaces`).
+        purging its logo object and buckets. Answers the caller's remaining workspaces (as
+        `GET /api/workspaces`).
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       responses:
         '200':
@@ -1671,7 +1679,9 @@ paths:
       x-overlord-consumers: [mobile, webapp]
       summary: List a workspace's members
       description: >-
-        Any active member of the target workspace (a non-member answers 404); no RBAC action is evaluated.
+        Any active member of the target workspace (a non-member answers 404); no role grant is evaluated.
+        A token request also needs the workspace in its consent (404) and a scope covering
+        `workspace:read` (403).
         Active memberships whose profile is live, oldest first. `isOperator` marks the caller.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       responses:
@@ -1704,6 +1714,8 @@ paths:
       summary: Remove a member from a workspace
       description: >-
         Active `ADMIN` or `MANAGER` of the target workspace; a `MANAGER` may not remove an `ADMIN` (403).
+        A token request also needs the workspace in its consent (404) and a scope covering
+        `member:remove` (403).
         Disables and soft-deletes the membership and its role rows. Removing the last `ADMIN` or the only
         member answers 409. A caller may remove itself.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
@@ -1739,7 +1751,8 @@ paths:
       summary: Set a member's workspace role
       description: >-
         Active `ADMIN` or `MANAGER` of the target workspace. A `MANAGER` may neither grant `ADMIN` nor
-        change an `ADMIN`'s role (403). Replaces the member's active role rows with exactly the requested
+        change an `ADMIN`'s role (403). A token request also needs the workspace in its consent (404) and a
+        scope covering `role:assign` (403). Replaces the member's active role rows with exactly the requested
         role; demoting the last `ADMIN` answers 409. Answers the member.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       requestBody:
@@ -1774,7 +1787,10 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
       summary: List a workspace's invitations
-      description: Active `ADMIN` or `MANAGER` of the target workspace. Every non-deleted invitation, newest first.
+      description: >-
+        Active `ADMIN` or `MANAGER` of the target workspace; a token request also needs the workspace in
+        its consent (404) and a scope covering `invitation:read` (403). Every non-deleted invitation,
+        newest first.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       responses:
         '200':
@@ -1795,6 +1811,8 @@ paths:
       summary: Invite an email address to a workspace
       description: >-
         Active `ADMIN` or `MANAGER` of the target workspace; a `MANAGER` may not invite an `ADMIN` (403).
+        A token request also needs the workspace in its consent (404) and a scope covering
+        `member:invite` (403).
         An email that already belongs to an active member answers 409. A pending invitation for the same
         email is revoked and replaced. The invitation expires after 14 days. When an email provider is
         configured (`RESEND_API_KEY`) the link is emailed and `acceptUrl` is omitted; otherwise
@@ -1838,7 +1856,8 @@ paths:
       x-overlord-consumers: [webapp]
       summary: Revoke an invitation
       description: >-
-        Active `ADMIN` or `MANAGER` of the target workspace. Revokes a pending invitation; an invitation
+        Active `ADMIN` or `MANAGER` of the target workspace; a token request also needs the workspace in
+        its consent (404) and a scope covering `invitation:revoke` (403). Revokes a pending invitation; an invitation
         that is already accepted, revoked or expired is left unchanged and still answers 200.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       responses:
@@ -1863,7 +1882,9 @@ paths:
         The invitation token is the credential; no RBAC action is evaluated. The token is matched by hash
         (404 when unknown); a non-pending invitation answers 409 and an expired one is marked `expired`
         and answers 410. The authenticated profile's email must equal the invited email, ignoring case
-        (403 otherwise). Joins the caller (or reuses an existing membership) and grants the invited role
+        (403 otherwise). A token request may accept only when its scope is unrestricted, it is bound to
+        the invited workspace's organization and it consents to every workspace of that organization (403
+        `This token cannot accept invitations` otherwise). Joins the caller (or reuses an existing membership) and grants the invited role
         only when the membership has no role yet. Answers the joined workspace.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       requestBody:
@@ -1906,7 +1927,7 @@ paths:
       description: >-
         Requires `workspace:read` in some workspace of the selected organization, then an active `ADMIN`
         role in the target workspace (checked against the profile's memberships; a non-member answers 404,
-        a non-admin 403). One row per live objective of a live mission and project, ordered by project
+        a non-admin 403). A token request also needs the target workspace in its consent (404). One row per live objective of a live mission and project, ordered by project
         name, mission title (case-insensitive), position and creation time.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       responses:
@@ -2619,7 +2640,8 @@ paths:
         stored in the lowest-id such workspace's bucket unless `workspaceId` names one);
         `workspace-images` needs `workspace_image:create` on the required `workspaceId`;
         `organization-images` needs `organization_image:create` and organization-admin status in the
-        request's selected organization (404 when none is selected). `attachments` and unknown keys answer
+        request's selected organization (404 when none is selected); a token request must also consent to
+        every live workspace of that organization (403). `attachments` and unknown keys answer
         404. Only PNG, JPEG, GIF and WebP (by the request's `Content-Type`) are accepted (415 otherwise);
         SVG is refused. At most 8 MiB, refused by the parser with 413 `body_too_large`. User and workspace
         images are recorded in their metadata table with an entity change; an organization image is only

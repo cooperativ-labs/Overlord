@@ -11,6 +11,7 @@
  * client watching any of the org's workspaces observes the change.
  */
 
+import { type Permission, PERMISSIONS } from '@overlord/auth';
 import type {
   AddOrganizationAdminBody,
   OrganizationAdminDto,
@@ -33,7 +34,9 @@ import { ApiError } from './errors.ts';
 import {
   isOrganizationAdmin,
   listOrganizationAdminProfileIds,
-  liveOrganizationWorkspaceIds
+  liveOrganizationWorkspaceIds,
+  requireTokenOrganizationGrant,
+  tokenSnapshotAdmitsOrganization
 } from './rbac.ts';
 import { isOrganizationImageKey, removeStoredObjects } from './storage.ts';
 import type { StorageBucketRef } from './storage-backends.ts';
@@ -112,7 +115,10 @@ export async function getActiveOrganizationIdOrNull(
   return resolveOrganizationIdForWorkspace(workspaceId, client);
 }
 
-/** Every organization `profileId` has at least one active workspace membership in. */
+/**
+ * Every organization `profileId` has at least one active workspace membership
+ * in; a token request sees only the organization it is bound to.
+ */
 export async function listOrganizationsForUser(
   profileId: string,
   client: DatabaseClient = requireDatabaseClient()
@@ -129,7 +135,11 @@ export async function listOrganizationsForUser(
       ORDER BY o.created_at ASC`,
     [profileId]
   );
-  return Promise.all(rows.map(row => toOrganizationDto(row, { activeOrganizationId, client })));
+  return Promise.all(
+    rows
+      .filter(row => tokenSnapshotAdmitsOrganization(row.id))
+      .map(row => toOrganizationDto(row, { activeOrganizationId, client }))
+  );
 }
 
 async function getOrganizationRow(id: string, client: DatabaseClient): Promise<OrganizationRow> {
@@ -157,9 +167,13 @@ async function requireCurrentProfileId(
  */
 async function requireOrganizationAdmin(
   organizationId: string,
-  client: DatabaseClient
+  client: DatabaseClient,
+  permission: Permission
 ): Promise<string> {
   const profileId = await requireCurrentProfileId(client);
+  // A token request must be bound to this organization, consent to all of its
+  // workspaces and carry a scope covering the operation.
+  await requireTokenOrganizationGrant({ organizationId, permission, everyWorkspace: true, client });
   await getOrganizationRow(organizationId, client);
   if (!(await isOrganizationAdmin(profileId, organizationId, client))) {
     throw new ApiError(403, 'Organization admin required');
@@ -257,7 +271,7 @@ export async function updateOrganization(
   body: UpdateOrganizationBody
 ): Promise<OrganizationDto> {
   const client = requireDatabaseClient();
-  await requireOrganizationAdmin(id, client);
+  await requireOrganizationAdmin(id, client, PERMISSIONS.ORGANIZATION_UPDATE);
 
   await client.transaction(async tx => {
     const existing = await getOrganizationRow(id, tx);
@@ -359,7 +373,7 @@ export async function listOrganizationAdmins(
   organizationId: string
 ): Promise<OrganizationAdminDto[]> {
   const client = requireDatabaseClient();
-  await requireOrganizationAdmin(organizationId, client);
+  await requireOrganizationAdmin(organizationId, client, PERMISSIONS.ORGANIZATION_READ);
   return loadOrganizationAdmins(organizationId, client);
 }
 
@@ -376,7 +390,11 @@ export async function addOrganizationAdmin(
   body: AddOrganizationAdminBody
 ): Promise<OrganizationAdminDto[]> {
   const client = requireDatabaseClient();
-  const actingProfileId = await requireOrganizationAdmin(organizationId, client);
+  const actingProfileId = await requireOrganizationAdmin(
+    organizationId,
+    client,
+    PERMISSIONS.ORGANIZATION_ADMIN_MANAGE
+  );
 
   const targetProfileId = (body.userId ?? '').trim();
   if (!targetProfileId) throw new ApiError(400, 'userId is required');
@@ -464,7 +482,7 @@ export async function removeOrganizationAdmin(
   body: RemoveOrganizationAdminBody
 ): Promise<OrganizationAdminDto[]> {
   const client = requireDatabaseClient();
-  await requireOrganizationAdmin(organizationId, client);
+  await requireOrganizationAdmin(organizationId, client, PERMISSIONS.ORGANIZATION_ADMIN_MANAGE);
 
   const targetProfileId = (body.userId ?? '').trim();
   if (!targetProfileId) throw new ApiError(400, 'userId is required');

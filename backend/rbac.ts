@@ -12,6 +12,7 @@ import { projectAllowed } from '../packages/core/service/context.ts';
 
 import {
   findActiveMembershipId,
+  getActiveTokenId,
   getActiveTokenProjectIds,
   getActiveTokenScopes,
   getAuthorizedWorkspace,
@@ -238,6 +239,86 @@ export async function requireAnyWorkspacePermission(
     throw new ApiError(403, `Permission denied: ${permission}`);
   }
   return { workspaceId, workspaceUserId };
+}
+
+/**
+ * Bound a `USER_TOKEN` request on an operation whose role requirement is
+ * derived from membership (workspace member, manager or admin) rather than a
+ * single role grant. The token's authorization snapshot (organization binding
+ * and workspace consent) must contain `workspaceId` — otherwise the workspace
+ * reads as `notFoundMessage` — and its scope must cover `permission` (403).
+ * The caller still applies its own membership/role check; sessions and the
+ * loopback local operator carry no token and are unaffected.
+ */
+export function requireTokenWorkspaceGrant({
+  workspaceId,
+  permission,
+  notFoundMessage
+}: {
+  workspaceId: string;
+  permission: Permission;
+  notFoundMessage: string;
+}): void {
+  if (getActiveTokenId() === null) return;
+  if (getAuthorizedWorkspacesContext() && !getAuthorizedWorkspace(workspaceId)) {
+    throw new ApiError(404, notFoundMessage);
+  }
+  if (!tokenScopeAllows(getActiveTokenScopes(), permission)) {
+    throw new ApiError(403, `Permission denied: ${permission}`);
+  }
+}
+
+/**
+ * The organization-level counterpart of {@link requireTokenWorkspaceGrant}. A
+ * token request must be bound to `organizationId` (otherwise 404
+ * `Organization not found`) and its scope must cover `permission`. With
+ * `everyWorkspace`, the token must also consent to every live workspace of the
+ * organization, because organization administration acts on all of them.
+ */
+export async function requireTokenOrganizationGrant({
+  organizationId,
+  permission,
+  everyWorkspace,
+  client = requireDatabaseClient()
+}: {
+  organizationId: string;
+  permission: Permission;
+  everyWorkspace: boolean;
+  client?: DatabaseClient;
+}): Promise<void> {
+  if (getActiveTokenId() === null) return;
+  const snapshot = getAuthorizedWorkspacesContext();
+  if (snapshot && snapshot.organizationId !== organizationId) {
+    throw new ApiError(404, 'Organization not found');
+  }
+  if (!tokenScopeAllows(getActiveTokenScopes(), permission)) {
+    throw new ApiError(403, `Permission denied: ${permission}`);
+  }
+  if (everyWorkspace && snapshot) {
+    for (const workspaceId of await liveOrganizationWorkspaceIds(organizationId, client)) {
+      if (!getAuthorizedWorkspace(workspaceId)) {
+        throw new ApiError(403, 'Organization admin required');
+      }
+    }
+  }
+}
+
+/**
+ * Whether a token request's snapshot admits `workspaceId`. Lists use this to
+ * narrow to the token's organization and consented workspaces, as
+ * `GET /api/authorized-workspaces` does; sessions and loopback are unaffected.
+ */
+export function tokenSnapshotAdmitsWorkspace(workspaceId: string): boolean {
+  if (getActiveTokenId() === null) return true;
+  const snapshot = getAuthorizedWorkspacesContext();
+  return !snapshot || getAuthorizedWorkspace(workspaceId) !== null;
+}
+
+/** Organization counterpart of {@link tokenSnapshotAdmitsWorkspace}. */
+export function tokenSnapshotAdmitsOrganization(organizationId: string): boolean {
+  if (getActiveTokenId() === null) return true;
+  const snapshot = getAuthorizedWorkspacesContext();
+  return !snapshot || snapshot.organizationId === organizationId;
 }
 
 /** Resolve and authorize a workspace together with the caller membership that belongs to it. */
