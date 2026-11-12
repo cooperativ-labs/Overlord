@@ -172,6 +172,28 @@ the code does not do.
   closes every client). Reproduced: renaming a workspace closed an open stream. Clients
   reconnect, so this is load, not data loss.
 
+### Hosted MCP OAuth and the MCP transport (batch 2)
+
+- **O1** (open). rest-notes.md lists `GET /oauth/authorize` as the browser authorization
+  redirect; the authorization-server metadata advertises `<base>/oauth/approve` (the web page)
+  as `authorization_endpoint` (`oauthAuthorizationServerMetadata`, `backend/oauth.ts`), so a
+  client following discovery never calls `/oauth/authorize` (reproduced).
+  `getWellKnownOauthAuthorizationServer`, `getOauthAuthorize`.
+- **O2** (open). `GET /mcp` reports `endpoint` from `req.protocol` and `Host`
+  (`mcpServerInfo`, `mcp/server.ts`), while the OAuth `resource` comes from
+  `webPublicBaseUrl` (the configured public URL, else `https` for any non-local host). Behind a
+  TLS-terminating proxy the two differ (`http://…/mcp` against `https://…/mcp`). `getMcp`.
+- **O3** (open). The token response sets no `Cache-Control: no-store` (RFC 6749 §5.1)
+  (reproduced). `postOauthToken`.
+- **O4** (open). The `/mcp` endpoint is not MCP Streamable HTTP: `GET` answers a JSON server
+  description instead of an SSE stream or 405, and `POST` always answers JSON (no SSE
+  upgrade, no `Mcp-Session-Id`). JSON-RPC errors use HTTP 200. `getMcp`, `postMcp`.
+- **O5** (open). `POST /oauth/register` accepts a form-encoded body, but a single
+  `redirect_uris` value parses as a string and is refused 400 (reproduced); only JSON or a
+  repeated key works. `POST /oauth/revoke` revokes any live user token whose secret is
+  presented, personal tokens included, without client authentication, and always answers 200.
+  `postOauthRegister`, `postOauthRevoke`.
+
 ## 2. Non-conforming error shapes
 
 Every route in `backend/app.ts` that forwards errors through `handle()` or `next(err)`
@@ -206,6 +228,12 @@ project-automation route guard (404).
   (`getAuthCallbackGithubRepository`, `getConnectionsKnowledgebaseCallback`) answer an HTML
   status page (200 connected, 400 otherwise) when the flow has no return target; they never
   answer JSON.
+
+- **E7** (open). `POST /oauth/authorize/request` and `/oauth/authorize/approve` answer
+  `ErrorEnvelope` whose `code` is an OAuth error code (`invalid_request`, `invalid_client`,
+  `invalid_scope`, `invalid_target`, `unsupported_response_type`), while the other OAuth
+  endpoints answer E4's `{ error, error_description }`. `postOauthRegister` and `postOauthToken`
+  fall back to `ErrorEnvelope` for 413 and 500.
 
 ## 3. Suspected code defects
 
@@ -386,6 +414,15 @@ decision and, if confirmed, a fix with its own contract impact.
 - **X5** also applies to image uploads: the raw parser limit equals `MAX_IMAGE_BYTES`, so
   `writeImageObject`'s own 413 message is unreachable (reproduced: 413 `body_too_large`).
 
+- **X29** (open; reproduced). A browser session whose profile belongs to two organizations
+  cannot approve a hosted MCP OAuth connection: `resolveAuthorizedWorkspaces` gives such a
+  session an empty authorization snapshot, and `handleOAuthApprove`'s
+  `requirePermission(user_token:self:create, issuance workspace)` therefore fails (403
+  `Permission denied: user_token:self:create`) even with an explicit `organizationId`.
+  rest-notes.md says the approval helpers "require an explicit single-organization consent
+  choice when more than one organization is available"; the request helper lists both
+  organizations, but approval can never succeed. `postOauthAuthorizeApprove`.
+
 ## 4. Generator constructs needed
 
 Constructs used beyond the subset Clear Comply's generator
@@ -437,6 +474,13 @@ schema must change.
   G9's 204 responses also cover `deleteMobileLiveActivitiesByActivityIdPushToken`,
   `putMobileLiveActivitiesStartToken`, `postMobileLiveActivitiesStartTokenRevoke`,
   `putMobilePushDeviceToken` and `postMobilePushDeviceTokenRevoke`.
+
+- **G13** A `201` success (`postOauthRegister`), form-encoded request bodies
+  (`application/x-www-form-urlencoded`) offered alongside JSON (`postOauthRegister`,
+  `postOauthToken`, `postOauthRevoke`), and request or response bodies that are a `oneOf` of an
+  object and an array of it (`postMcp`, JSON-RPC batches).
+- **G5** also covers `ServerMetaDto` (`MetaDto` plus server fields) and `OAuthApproveBody`
+  (the authorization request plus the decision).
 
 ## 5. Operations left as stubs
 
