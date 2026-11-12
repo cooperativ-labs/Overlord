@@ -11,7 +11,7 @@ components:
   protocol:
     label: 'Protocol Layer'
     stableIdentifier: protocol
-    referenceSpec: 'planning/feature-plans/03-agent-protocol.md'
+    referenceSpec: 'contract/protocol.md'
     owns:
       - 'ovld protocol subcommand names and flags'
       - 'packages/core protocol/service source package: shared service functions, repository helpers, and generated database types'
@@ -96,7 +96,7 @@ components:
   cli:
     label: 'CLI Layer'
     stableIdentifier: cli
-    referenceSpec: 'planning/feature-plans/02-cli-first-product-surface.md'
+    referenceSpec: 'contract/architecture.md'
     owns:
       - 'management command names and argument shapes'
       - 'ovld setup: interactive first-run configuration for backend target, agent connectors, and terminal launcher'
@@ -135,7 +135,7 @@ components:
   connector:
     label: 'Connector Layer'
     stableIdentifier: connector
-    referenceSpec: 'planning/feature-plans/05-connectors-and-agent-plugins.md'
+    referenceSpec: 'contract/architecture.md'
     owns:
       - 'connector core workflow instructions'
       - 'per-agent plugin/adapter files and managed file manifests'
@@ -161,7 +161,7 @@ components:
   runner:
     label: 'Runner Layer'
     stableIdentifier: runner
-    referenceSpec: 'planning/feature-plans/04-runner-and-launch-execution.md'
+    referenceSpec: 'contract/architecture.md'
     owns:
       - 'execution_requests queue claiming and launch'
       - 'working directory resolution: explicit workingDirectory, objective resource_key on the claiming target, primary target resource, then cwd .overlord/project.json fallback (matching the mission project among any linked projects in that file)'
@@ -291,8 +291,7 @@ components:
     label: 'Auth Layer'
     stableIdentifier: auth
     referenceSpecs:
-      - 'planning/feature-plans/07-user-token-authentication.md'
-      - 'planning/feature-plans/08-role-based-access-control.md'
+      - 'contract/authorization.md'
     owns:
       - 'token creation, rotation, revocation, tombstoning of revoked credentials, and hash storage'
       - 'role assignment CRUD'
@@ -333,7 +332,7 @@ components:
     stableIdentifier: extension
     referenceSpecs:
       - 'contract/data/README.md'
-      - 'planning/feature-plans/agent-harness-configuration-architecture.md'
+      - 'contract/architecture.md'
     referenceSection: 'Extension Points'
     owns:
       - 'user_harness_extensions authoring workflow'

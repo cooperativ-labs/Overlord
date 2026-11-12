@@ -21,7 +21,7 @@
 # collide and neither claims the other's coverage.
 
 contractVersion: '166'
-referenceSpec: 'cli/docs/03-agent-protocol.md'
+referenceSpec: 'contract/protocol.md'
 
 # Transport-level shape shared by every protocol command, independent of subcommand.
 requestEnvelope:

@@ -7,7 +7,7 @@ Part of the Overlord contract. [CONTRACT.md](CONTRACT.md) defines its scope, pre
 ### 7. Auth Layer
 
 **Stable identifier**: `auth`
-**Reference specs**: [`auth/docs/07-user-token-authentication.md`](../auth/docs/07-user-token-authentication.md), [`auth/docs/08-role-based-access-control.md`](../auth/docs/08-role-based-access-control.md)
+**Reference spec**: this document; design background (non-normative): [`auth/docs/07-user-token-authentication.md`](../auth/docs/07-user-token-authentication.md), [`auth/docs/08-role-based-access-control.md`](../auth/docs/08-role-based-access-control.md)
 
 Owns:
 
@@ -27,6 +27,99 @@ Does NOT own:
 
 - User identity schema (co-owned with Database Layer via schema contract)
 - Application business logic gating (callers act on the result of a permission check)
+
+### User tokens
+
+- **Ownership.** A `USER_TOKEN` is owned by the creating user account, visible and
+  manageable only by that user, and usable across any workspace where that user has
+  active membership; listing is independent of the currently active workspace.
+  Workspace authorization remains per-workspace through RBAC. Consent narrows, it never
+  grants: a token the user mints for themselves (CLI login, settings) consents to every
+  current and future workspace in that user's organization and asks for no selection; a
+  third-party OAuth client's token carries whatever the approval screen selected. Either
+  way, effective access is that consent intersected with live membership and
+  per-workspace RBAC.
+- **Secrets.** Secrets are high-entropy with the recognizable `out_` prefix. Only a hash
+  and a non-secret lookup prefix are stored. The raw secret is shown exactly once, at
+  creation; token lifecycle operations never return it otherwise, and tokens minted
+  internally by cloud `ovld auth login` are stored directly as CLI credentials and are not
+  printed. Raw tokens are never logged, and `out_…`-shaped values are redacted from CLI
+  diagnostics. List output never reveals raw secrets.
+- **Lifecycle.** Creation takes a user-supplied label and defaults `expires_at` to 90 days
+  from creation when no expiry is supplied (`DEFAULT_USER_TOKEN_TTL_DAYS`); callers may pass
+  an explicit expiry, or an explicit `null` to mint a non-expiring token. Revoked tokens
+  fail authentication immediately. A label can be changed without changing the secret. A
+  successful authentication updates the last-used timestamp.
+- **Authentication.** Token authentication resolves to a user identity before permission
+  checks and must not derive authorization scope from the token's issuance workspace.
+  Revocation and expiry are checked before scope evaluation.
+- **Scopes.** A token is created with a `scope` preset. `full` persists no scope rows and
+  inherits the full permissions of its creating user's roles. `mission_lifecycle` and
+  `project_automation` persist the grant patterns of `MISSION_LIFECYCLE_GRANTS` and
+  `PROJECT_AUTOMATION_GRANTS` (`auth/src/rbac/permissions.ts`) into `user_token_scopes`;
+  neither includes `user_token:self:*`, so a scoped token cannot mint further tokens.
+  Effective permissions are the owner's role grants in the requested workspace
+  **intersected with** the token's scope grants. Absence of scope rows means "no
+  token-level restriction". Scopes can only restrict, never exceed, the user's current
+  role: if the user's role is reduced in a workspace, the token becomes less powerful
+  there automatically. The `requirePermission` gate enforces this uniformly across REST,
+  protocol, and runner routes.
+- **`project_automation`.** It is minted with a required, non-empty `projectIds` list
+  (rejected for the other presets), persists the selected projects in
+  `user_token_projects`, and its selection is immutable: a different selection is a new
+  token. Issuance validates that the owner can `project:read` and `mission:create` in every
+  selected project and derives workspace consent from the selection:
+  `user_token_workspaces` receives exactly the owning workspaces and `all_workspaces` stays
+  `false`. At authentication the selected project ids join the request authorization
+  snapshot. Two default-deny layers then apply. First, the `/api`, `/ext`, `/sync`, and
+  `/realtime` guards admit only this route allowlist; every other route returns `404`
+  before a handler runs: `GET /api/authorized-workspaces`, `GET /api/projects`,
+  `GET /api/projects/:id`, `GET /api/projects/:id/statuses`,
+  `GET /api/projects/:id/tags`, `GET /api/projects/:id/missions`, `POST /api/missions`,
+  `GET /api/missions/:id`, `GET /api/missions/:id/objectives`,
+  `GET /api/missions/:id/events`, `GET /api/missions/:id/deliveries`,
+  `GET /api/missions/:id/artifacts`, `GET /api/missions/:id/context`,
+  `GET /api/missions/:id/file-changes`, `GET /api/search/v3`,
+  `GET /api/objectives/:id/attachments`, `GET /api/storage/attachments/:storageKey` (the
+  attachments bucket only), `GET /api/stream`, `GET /realtime`, `GET /sync/changes`,
+  `GET /mcp`, `POST /mcp`, and `POST /api/protocol/:subcommand` for exactly `create`
+  (project form only), `load-context`, `search-missions` (alias `search`),
+  `discover-project` (`--project-id` form only; the working-directory form and the
+  `project_selection_required` choice list would name hidden projects), `statuses`,
+  `list-deliveries`, `objective-changes`, `attachment-list`, `attachment-download-url`, and
+  `auth-status`. `GET /api/meta`, legacy `GET /api/missions/search` and
+  `GET /api/missions/search/v2`, the `/api/agent-requests` and `/api/agent-session-inputs`
+  readers, protocol `read-context`, and every `/ext/*` route are deliberately outside the
+  list even where a grant would pass. `GET /api/missions/:id` does not record
+  `mission_status_seen` for this preset. Second, one project-scope predicate makes any
+  project, mission, objective, attachment storage key, or agent request outside the
+  selection read as `404` without revealing existence, for UUID and display-id addressing
+  alike, while account-wide lists, search, `/sync/changes`, and SSE filter by the
+  selection before pagination and totals; no `project_id IS NULL` change row reaches the
+  preset. Protocol `create` requires `mission:create` in its target project for every
+  caller; `prompt`, `record-work`, `add-objectives`, inbox capture, and all session,
+  launch, queue, token, webhook, and administration commands are denied for this preset
+  before any write.
+- **Creator-token attribution.** Every mission a direct `out_` bearer creates is stamped
+  with `missions.created_by_token_id` (a soft reference, no foreign key) and
+  `missions.created_by_token_label` (a label snapshot), exposed read-only as
+  `MissionDto.createdByToken`. Rename changes only future snapshots; revoke and
+  soft-delete leave attribution readable; scheduled duplicates never copy it.
+
+### Role-based access control
+
+- **Permissions are domain capabilities.** Permission names are domain-oriented strings
+  such as `mission:create` or `execution_request:claim`, never database table names
+  unless the table also represents a stable domain resource. Grants support wildcard
+  expansion (`mission:*`, `*`) and self-scoped permissions such as `user_token:self:*`.
+  Business logic calls the authorization service for a capability; it does not check for
+  specific role names. Token scopes reuse the same canonical permission names.
+- **Default roles.** The default policy provider is backed by `overlord.rbac.toml`, which
+  defines the role grants and permission groups. `ADMIN` grants `*`. `PUBLIC` is the
+  unauthenticated read role for intentionally public resources (public workspace,
+  organization and user images).
+- **Last administrator.** A workspace's last `ADMIN` cannot be removed or demoted, and an
+  organization's last admin cannot be removed.
 
 ### Native GitHub sign-in recovery
 

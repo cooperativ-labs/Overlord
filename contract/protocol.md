@@ -10,7 +10,7 @@ Machine-readable command names, flags and response shape versions are in
 ### 1. Protocol Layer
 
 **Stable identifier**: `protocol`
-**Reference spec**: [`cli/docs/03-agent-protocol.md`](../cli/docs/03-agent-protocol.md)
+**Reference spec**: this document and [protocol-commands.yaml](protocol-commands.yaml); design background (non-normative): [`cli/docs/03-agent-protocol.md`](../cli/docs/03-agent-protocol.md)
 
 Owns:
 
@@ -67,6 +67,98 @@ Does NOT own:
 - Database schema (→ Database Layer)
 - Authentication mechanism (→ Auth Layer)
 - Runner queue/device/project-resource management commands (→ CLI / Runner / REST Layers)
+
+### Protocol requirements
+
+Command names, flags and response shapes are in
+[protocol-commands.yaml](protocol-commands.yaml). These requirements apply across them.
+
+- **Addressing.** Every subcommand that accepts `--mission-id` also accepts
+  `--objective-id` (objective UUID or `{mission.display_id}.{display_key}`). An objective
+  display id spells its parent mission, so `--mission-id` may be omitted whenever one is
+  supplied: the client CLI derives it before sending the request, and the backend derives
+  it again from the request body, because hosted MCP and direct REST callers never pass
+  through the CLI. An explicit `--mission-id` always wins and must name that objective's
+  own mission. An objective UUID names no mission, so `--mission-id` stays required with
+  one. The CLI fills `--objective-id` in from `OVERLORD_OBJECTIVE_ID` (and the recovered
+  launch bootstrap) on session-scoped subcommands; `update-objective` and
+  `discuss-objective` never inherit it. Cross-mission reads do not attach, change
+  objective state, update the active mission pointer or session cache, or redirect
+  subsequent updates and delivery. The reference grammar lives in `@overlord/contract`
+  (`parseObjectiveRef`, `formatObjectiveDisplayId`,
+  `missionDisplayIdFromObjectiveRef`) and is re-exported by `@overlord/database`; no
+  surface carries a private copy of it.
+- **Session lifecycle.** `heartbeat` updates liveness and transient telemetry without
+  creating a mission event. `ask` posts a blocking question and stops work. `deliver`
+  stores the summary, artifacts, and delivery report, marks the objective complete, and
+  moves the mission to review. `hook-event` records connector lifecycle events;
+  `UserPromptSubmit` records follow-up user activity without requiring a live session and
+  without reopening execution. `resume-follow-up` explicitly reopens a completed objective
+  for post-delivery implementation follow-up, reuses that objective rather than adding a
+  new one, transitions it to `pending_delivery`, and returns a new session key. A bare
+  `attach` must not silently reopen a completed objective. After delivery, implementation
+  work must not continue until follow-up execution is explicitly started. There is no
+  `ovld protocol permission-request` subcommand; permission requests are the agent-session
+  Decide capability (`ovld agent-session request`).
+- **Queue work.** Runner queue, device, and project-resource operations are management
+  surfaces, not part of the agent protocol. Agents never claim queue work through
+  `ovld protocol`; a user-facing agent may use `launch-objective` to create the same
+  execution request as the existing launch surface.
+- **Attach response.** `attach` returns mission metadata; current objective metadata,
+  including objective ID, instruction text, and optional `resourceKey`; all objective IDs,
+  states, and optional `resourceKey` values in order; the session object with
+  `sessionKey`; history/events relevant to the mission; artifacts; attachments visible to
+  the active objective; shared context; `projectResources` when available; concise
+  `agentInstructions`; and pending objective information when relevant. Runner-launched
+  agents carry `OVERLORD_EXECUTION_REQUEST_ID` and `OVERLORD_OBJECTIVE_ID`, which the CLI
+  forwards as `--execution-request-id` and `--objective-id` so the backend pins that
+  objective and links `execution_requests.launched_session_id` to the created session.
+  `attach` and `load-context` accept an optional `executionTargetId` so context assembly can
+  resolve project resource paths for that target. `projectResources` entries are
+  `{ resourceKey, label, isPrimary, isCurrent, path, state }`: `path` is absolute on the
+  session's execution target when known and null when the target is unknown or has no row
+  for that logical resource; `state` mirrors the latest target resource observation for
+  that row, or `unknown`.
+- **Update.** `update` phases are `draft`, `execute`, `review`, `deliver`, `complete`,
+  `blocked`, and `cancelled` (`UPDATE_PHASES`); its event types are `update`,
+  `user_follow_up`, `alert`, `discussion_summary`, and `decision` (`UPDATE_EVENT_TYPES`).
+- **Changed-file tracking.** Changed-file capture is mechanical, not agent-enumerated.
+  Connector callbacks append bounded metadata to an owner-only objective/session ledger;
+  `update`, `changes`, and `deliver` drain it through `sync-changes`. A native edit path
+  records `declared_edit` (Native) evidence only when the connector codec decodes a
+  successful outcome; failed, blocked, and cancelled calls add no path, and unknown and
+  partial outcomes record `outcome_unavailable` / `outcome_partial`. Shell callbacks record
+  `shell_activity_unverified` and other pathless callbacks `direct_path_unavailable`;
+  neither claims a path. No worktree-wide VCS delta is used as attribution. Paths an agent
+  declares (shell, script, and generator outputs, deletes, and both rename endpoints that
+  capture missed) are recorded as `agent_declared` (Declared) before the lifecycle request
+  and never downgrade native evidence. Ledger insertion rejects absolute paths outside the
+  checkout, parent traversal, symlink escapes, ignored and Overlord-managed paths, and
+  oversized input; only normalized workspace-relative paths, source, observation time,
+  bounded hook health, and session capture binding/callback state reach the backend.
+  Changed files are upserted by objective, resolved resource, and normalized path across
+  sessions; repeated observation refreshes the last observed time. There is no per-file
+  explanation input: change-rationale and changed-file payload fields
+  (`changeRationales`, `changedFiles`, `noFileChanges`, `skipRationaleFor`,
+  `observedDirtyPaths`) are rejected with `invalid_input`. Missing paths or capture gaps
+  produce bounded warnings and never reject the lifecycle transition.
+- **Delivery.** A summary is the only required delivery content; delivery-report
+  evidence and artifacts are optional annotations. The CLI drains objective-ledger
+  evidence before delivery; sync warnings, unavailable hooks, and missing paths never
+  reject delivery. Each deferred-work item `{ title, change, location, doneWhen }` is
+  bounded to 80, 400, 200, and 200 characters respectively (`DEFERRED_WORK_LIMITS`), and
+  all four fields are required. The protocol stores a deterministic presentation
+  immediately; delivery does not wait for an AI provider.
+- **Record-work.** `record-work` records work already completed without an attached
+  session: it creates a mission directly in review with a completed objective, stores a
+  delivery summary, artifacts and the delivery report if provided, records a
+  `changed_files` row with `agent_declared` provenance and no resource for every explicit
+  `declaredPaths` entry, stores delivery and changed-file records without an
+  `agent_sessions` row (session attribution is null), and enqueues the standard delivery
+  compose job exactly as a normal `deliver` does. It accepts the whole submission as a
+  single `--payload-json` / `--payload-file` envelope
+  (`{ objective, summary, title, declaredPaths, artifacts, deliveryReport }`), with explicit
+  flags overriding envelope fields.
 
 ## Interaction Surfaces
 

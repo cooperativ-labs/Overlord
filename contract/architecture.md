@@ -63,7 +63,7 @@ Does NOT own:
 ### 3. CLI Layer
 
 **Stable identifier**: `cli`
-**Reference spec**: [`cli/docs/02-cli-first-product-surface.md`](../cli/docs/02-cli-first-product-surface.md)
+**Reference spec**: this section; design background (non-normative): [`cli/docs/02-cli-first-product-surface.md`](../cli/docs/02-cli-first-product-surface.md)
 
 Owns:
 
@@ -79,6 +79,9 @@ Owns:
 - The **agent-session runtime**: the `ovld agent-session` command family and the compiled harness catalog (`cli/src/agent-session/catalog.generated.ts`). It is the only local module that carries agent-session traffic to the backend, and it does so with the channel-scoped `OVERLORD_SESSION_CHANNEL_TOKEN` — never the user's broad `USER_TOKEN`. The runtime reads the compiled catalog, never the descriptor YAML, because parsing YAML on a hook path would violate the latency invariant and the installed adapter may be older than the CLI. `ovld agent-session capabilities [<agent>] [--json]` is a human/agent-facing offline reader of that catalog: no network call, no write, no subprocess. `ovld doctor` additionally reports each connector's installed descriptor digest against the compiled catalog and which mission the current working directory's native session is bound to, and makes no network call to do either — an unbound session must be able to run it with nothing requested on its behalf. Adding a sixth harness must add zero agent-session subcommands
 - Human-readable CLI output format conventions
 - Human-readable `protocol create` / `prompt` output includes every created objective's persisted agent, model, resource, and queue/auto-advance settings, matching the structured mission response.
+- Output contracts: machine-readable JSON is available for the commands agents and scripts use; human commands are concise by default and support `--json`; protocol commands return JSON by default; commands that produce values needed by shell scripts may also print stable `KEY=value` lines on stderr (for example `SESSION_KEY=...`); errors include an actionable fix when possible.
+- `ovld attach [missionId] [agent]` queues an agent on a mission; optional `--objective-id` pins the queued objective, and without it the CLI picks a launchable objective (`submitted`, then `launching`, then `draft`) rather than always using position 0.
+- Local files: the published CLI stores global config under `~/.ovld/` (overridable with `OVLD_HOME`) and talks to a backend URL; local SQLite files and `local_fs` object storage are owned by the local backend/Desktop package, not by the published CLI. `.overlord/tmp/` and `.overlord/logs/` are reserved for context files, connector hook diagnostics, temporary settings, and launch scratch files. CLI commands that run inside a linked project opportunistically prune stale `.overlord/tmp/` entries; pruning is best-effort and age-based so recent follow-up context remains available. Linking a checkout adds precisely `.overlord/tmp/` and `.overlord/logs/` to its `.gitignore` when those patterns are absent, and writes a marked no-edit rule for `.overlord/project.json` to the checkout's `AGENTS.md` and `CLAUDE.md`.
 
 Does NOT own:
 
@@ -88,7 +91,7 @@ Does NOT own:
 ### 4. Connector Layer
 
 **Stable identifier**: `connector`
-**Reference spec**: [`connectors/docs/05-connectors-and-agent-plugins.md`](../connectors/docs/05-connectors-and-agent-plugins.md)
+**Reference spec**: this section; design background (non-normative): [`connectors/docs/05-connectors-and-agent-plugins.md`](../connectors/docs/05-connectors-and-agent-plugins.md)
 
 Owns:
 
@@ -99,6 +102,10 @@ Owns:
 - Connector capability declarations in the harness descriptor
 - The per-adapter **harness capability descriptor** (`connectors/adapters/<agent>/harness-capabilities.yaml`, validated by [`contract/harness-capabilities.schema.yaml`](harness-capabilities.schema.yaml)) and its executable fixtures. The descriptor is the only hand-authored source of agent-session interaction capability truth: it is simultaneously the runtime gating input, the CI contract, and the source from which generated `CAPABILITIES.md`, `connectors/HARNESS-MATRIX.md`, and the compiled CLI catalog are produced. Capability ids, statuses, integration shapes, tiers, and fixture kinds come from the closed `agentSession` vocabulary in `contract/extension-points.yaml`; `capabilityTier` is derived from passing fixtures and is never authored or persisted
 - Connector-owned native event-normalization and decision codecs. Native event and decision contracts belong to this layer; the CLI owns execution and transport but never becomes the source of truth for a harness dialect. `resolve` emits the harness's exact native decision shape, never a normalized Overlord shape, and every failure path returns _no decision_ so the harness's own behavior remains the floor
+- The canonical connector core (`connectors/core/overlord-mission/SKILL.md` and `reference/`), the single source of truth for durable Overlord workflow behavior. Adapters ship a thin harness-specific skill template with a `<!-- @connector-core -->` marker that `ovld agent-setup` interpolates with the core, and must not duplicate the core lifecycle rules.
+- The canonical local MCP shim (`connectors/core/scripts/overlord-mcp.mjs`), rendered at `ovld agent-setup` time for every adapter that installs a local stdio MCP bridge by substituting the adapter key for `__OVERLORD_ADAPTER_KEY__`; adapter directories contain no committed copy. The rendered shim remains a standalone runnable `.mjs` with no bundler or repo-local runtime import, its tool list stays in parity with the hosted MCP catalog, and its `serverInfo.version` follows `connectors/VERSION`.
+- The canonical post-tool capture callback (`connectors/core/scripts/capture-change-hook.sh`), the only implementation of the local post-tool mutation callback; setup substitutes the adapter key and installs it at each harness-native path, and adapter directories carry no copy.
+- `ovld agent-setup <agent>` installs or updates plugin files, merges user settings safely, writes executable hook scripts, writes a manifest of managed files, removes Overlord-owned files no longer in the current manifest, and is idempotent. `ovld doctor` checks each supported connector, reports installed version/status, detects missing hook executability, missing permission rules, and missing agent binaries, and suggests exact repair commands.
 - Per-adapter decision codec declarations at `connectors/adapters/<agent>/codec/<agent>.decision-codec.yaml`, referenced from the harness descriptor and compiled into `cli/src/agent-session/decision-codec-registry.generated.ts`. The pure interpreter owns bounded/redacted request-card construction; the connector declaration owns native event paths and exact literal response bodies. Exact allow, deny, and defer behavior is proven by `decision-codec` fixtures that execute the shipped interpreter
 
 Does NOT own:
@@ -111,7 +118,7 @@ Does NOT own:
 ### 5. Runner Layer
 
 **Stable identifier**: `runner`
-**Reference spec**: [`cli/docs/04-runner-and-launch-execution.md`](../cli/docs/04-runner-and-launch-execution.md)
+**Reference spec**: this section; design background (non-normative): [`cli/docs/04-runner-and-launch-execution.md`](../cli/docs/04-runner-and-launch-execution.md)
 
 Owns:
 
@@ -120,8 +127,10 @@ Owns:
 - Working directory resolution, ordered as explicit `workingDirectory`, objective `resource_key` on the claiming execution target, primary project resource for the target, then matching cwd `.overlord/project.json` fallback (the link whose `projectId` matches the mission project, among any number of projects recorded in that file); a missing objective-bound resource fails with `objective_resource_not_connected`
 - Launch-config resolution for manual, auto-advance, and claim-time launches: an explicit objective override wins, then per-agent defaults on the selected `project_resource_sources` descriptor, then user execution-target and workspace defaults
 - Per-mission branch/worktree preparation before local agent spawn when enabled, including the deterministic branch/worktree **planning** algorithm (`cli/src/branch-planning.ts`) — co-owned with the service layer and pinned to `contract/branch-planning-vectors.json` (see "Shared Deterministic Algorithms")
+- Branch and worktree layout: mission branches are named `<mission-title-slug>-<mission-sequence>` and worktrees live under `~/.ovld/worktrees/<project-slug>/<resource-key>/<branch-name-with-slashes-flattened>` (root overridable with `OVERLORD_WORKTREE_ROOT`), so the branch name is mission-scoped while the worktree path is resource-scoped. Subsequent launches reuse the branch recorded in `missions.active_branch`; once it has been merged or deleted after merge, the next launch starts a new cycle with a numeric suffix (`-2`, `-3`, ...). Preparation is never destructive: the main checkout is not stashed, reset, or force-checked out. After preparation the runner records `POST /api/missions/:id/branch-prepared`, which writes the resolved branch to `missions.active_branch` (the source of truth), records an audit entry under an allowed `mission_events` type (no dedicated `branch_prepared` event type exists), and stamps `execution_requests.launch_flags_json.branchAutomation` for queued runner requests
 - Same-mission branch/worktree reuse: if the planned worktree already exists and is checked out on the expected mission branch, the runner may launch into it even when it has uncommitted changes, so sequential objectives can continue work on the same branch without forcing an intermediate commit
 - Per-objective checkout isolation for parallel objectives: when the mission has `allowParallelObjectives` on, uses worktrees, has no explicit branch pin, and a sibling objective on the **same** effective `resource_key` is already `launching`/`executing`/`pending_delivery`, the runner plans `<mission branch>-<objectives.display_key>` in its own worktree instead of joining the sibling's dirty checkout, and reports `branchAutomation.isolated` on `branch-prepared`. The suffix is the objective's stable display key, so the decision needs no coordination between simultaneous launches and a relaunch returns the objective to its own worktree. Without worktrees the mission has one checkout and concurrent objectives share it deliberately — attribution comes only from each explicitly bound objective/session ledger, never from a checkout-wide scan
+- Launch environment: the launched agent environment exports `TMPDIR`, `TMP`, `TEMP`, and `OVERLORD_TMPDIR` pointing at the project `.overlord/tmp/`, `MISSION_ID`, `OVERLORD_MISSION_ID`, the resolved `OVERLORD_BACKEND_URL`, `OVERLORD_WORKING_DIRECTORY`, and `OVERLORD_CONTEXT_FILE` for the written briefing path under `.overlord/tmp/`. The documented launch-variable catalog is `LAUNCH_VARIABLES` in `@overlord/contract`. Project pre-launch commands (`ProjectDto.preLaunchCommands`, stored under `overlord.preLaunchCommands` in `projects.settings_json`) run inside the launch environment after the terminal enters the working directory and exports the launch env, but before the agent process starts; project launch environment variables (`ProjectDto.launchEnvVars`, stored under `overlord.launchEnvVars`) are exported before both the pre-launch commands and the agent run. Both may reference launch variables as `{VAR_NAME}` placeholders, and unknown placeholders are left verbatim. The runner claim response carries both for the runner path; a manual `ovld launch` fetches them from the mission's project
 - Runner launch environment variables, including `OVERLORD_PROJECT_RESOURCES` as a JSON sibling-resource manifest resolved for the launching execution target (each entry additively carries `accessMode`; `read` and `read_write` file-path sources both contribute their path to `OVERLORD_PROJECT_RESOURCES_PATHS` with explicit `:ro`/`:rw` suffixes, while URL/git sources contribute none)
 - Runner-instance identity and heartbeat: each runner process carries a stable `runnerInstanceId` and a `native`/`adopted` relation to the execution target it serves, published on every claim so the backend can report honest local liveness. Several runner instances may serve one target (a host runner plus containers adopting it); claiming stays target-level and a runner instance is never individually addressed
 - `ovld runner` commands
@@ -240,7 +249,7 @@ Does NOT own:
 ### 9. Extension System
 
 **Stable identifier**: `extension`
-**Reference specs**: `contract/data/README.md` → Extension Points section; [`connectors/docs/agent-harness-configuration-architecture.md`](../connectors/docs/agent-harness-configuration-architecture.md)
+**Reference specs**: `contract/data/README.md` → Extension Points section and this section; design background (non-normative): [`connectors/docs/agent-harness-configuration-architecture.md`](../connectors/docs/agent-harness-configuration-architecture.md)
 
 Owns:
 
