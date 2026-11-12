@@ -24,6 +24,9 @@ export default [
       'cli/src/agent-session/catalog.generated.ts',
       'cli/src/agent-session/codec-registry.generated.ts',
       'cli/src/agent-session/decision-codec-registry.generated.ts',
+      // REST types, Zod schemas and operation table generated from
+      // contract/api/openapi.yaml (see scripts/generate-api-contract.mjs)
+      'packages/contract/src/generated/**',
       '**/*.d.ts',
       '**/*.js',
       // Desktop: bundled server, staged SPA/CLI, migrations (see desktop/.gitignore)

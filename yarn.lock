@@ -2889,6 +2889,8 @@ __metadata:
 "@overlord/contract@workspace:*, @overlord/contract@workspace:packages/contract":
   version: 0.0.0-use.local
   resolution: "@overlord/contract@workspace:packages/contract"
+  dependencies:
+    zod: "npm:^4.6.7"
   languageName: unknown
   linkType: soft
 

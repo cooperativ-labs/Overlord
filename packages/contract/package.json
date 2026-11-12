@@ -1,7 +1,7 @@
 {
   "name": "@overlord/contract",
   "version": "0.1.0",
-  "description": "Shared REST API DTO types for Overlord server and clients.",
+  "description": "Shared REST API contract for Overlord server and clients: DTO types, and the Zod schemas and operation table generated from contract/api/openapi.yaml.",
   "type": "module",
   "private": true,
   "engines": {
@@ -13,6 +13,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./api": {
+      "types": "./dist/generated/api.d.ts",
+      "default": "./dist/generated/api.js"
     },
     "./mcp-tools": {
       "types": "./dist/mcp-tools.d.ts",
@@ -33,6 +37,9 @@
   "scripts": {
     "build": "../../node_modules/.bin/tsc --project tsconfig.build.json",
     "typecheck": "../../node_modules/.bin/tsc --project tsconfig.build.json --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
   },
   "license": "MIT"
 }

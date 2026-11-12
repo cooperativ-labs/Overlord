@@ -3,7 +3,7 @@ info:
   title: Overlord API
   # info.version is the API description's own Semantic Version; it changes when
   # this document changes and is never compared with the contract version.
-  version: 2.1.0
+  version: 2.1.1
   # The contract version (contract/VERSION) this document belongs to. Written
   # only by `yarn version:contract`.
   x-overlord-contract-version: 169.1.0
@@ -7663,7 +7663,12 @@ paths:
               schema:
                 oneOf:
                   - $ref: '#/components/schemas/GitHubPullRequestDto'
-                  - $ref: '#/components/schemas/OkResponse'
+                  - type: object
+                    description: '`handle()`''s acknowledgement when no pull request is recorded: exactly `{ ok: true }`.'
+                    additionalProperties: false
+                    required: [ ok ]
+                    properties:
+                      ok: { const: true }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404':
@@ -15702,12 +15707,14 @@ components:
           description: A result. `id` is absent only on the `{ jsonrpc, result null }` answer to a single
             notification.
           required: [ jsonrpc, result ]
+          additionalProperties: false
           properties:
             jsonrpc: { const: '2.0' }
             id: { $ref: '#/components/schemas/JsonRpcId' }
             result: { $ref: '#/components/schemas/JsonValue' }
         - type: object
           required: [ jsonrpc, id, error ]
+          additionalProperties: false
           properties:
             jsonrpc: { const: '2.0' }
             id: { $ref: '#/components/schemas/JsonRpcId' }
@@ -17180,14 +17187,17 @@ components:
         subagentId: { type: string }
         correlationId: { type: string }
         origin: { type: string }
-        summary: '{ type: string }'
+        summary: { type: string }
         payload:
           type: object
           description: At most 8 KiB serialized.
           additionalProperties: { $ref: '#/components/schemas/JsonValue' }
     AppendAgentSessionEventsBody:
-      description: One event, or a batch in `events`.
-      oneOf:
+      description: >-
+        One event, or a batch in `events`. A body whose `events` is an array is a batch (any
+        other members are ignored); any other body is one event. The members are therefore
+        `anyOf`, tried in that order.
+      anyOf:
         - type: object
           required: [ events ]
           properties:
@@ -17222,7 +17232,7 @@ components:
         kind:
           $ref: '#/components/schemas/AgentRequestKind'
           description: Defaults to `question`.
-        summary: '{ type: string }'
+        summary: { type: string }
         details:
           type: object
           additionalProperties: { $ref: '#/components/schemas/JsonValue' }
@@ -17282,7 +17292,7 @@ components:
               format: uuid
             - type: 'null'
         kind: { $ref: '#/components/schemas/AgentRequestKind' }
-        summary: '{ type: string }'
+        summary: { type: string }
         options:
           type: array
           description: The stored options as written.

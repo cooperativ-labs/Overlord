@@ -4,3 +4,4 @@ node_modules/
 **/build/
 coverage/
 src/types/db.ts
+packages/contract/src/generated/
