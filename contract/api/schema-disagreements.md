@@ -531,6 +531,8 @@ schema must change.
 - **G17** The operation-level `deprecated: true` flag on `getExtEverhourIntegration`,
   `putExtEverhourIntegration` and `deleteExtEverhourIntegration`; generated clients should carry it
   as a deprecation marker (batch 4).
+- **G8** also covers `getExtGithubMissionsByMissionIdPullRequest`, whose 200 is a `oneOf` of
+  `GitHubPullRequestDto` and `OkResponse`, told apart only by their keys (batch 4).
 
 ## 5. Operations left as stubs
 
@@ -544,3 +546,5 @@ notifications, auth, oauth, meta, mcp, storage, realtime, mobile, webhooks and c
 None from batch 3: every operation tagged run-queues, execution-targets, runner,
 launch-settings, agent-catalog, agent-requests, agent-session-channels, agent-session-inputs,
 worktrees, local-target and protocol (68) has schemas.
+
+None from batch 4: every operation tagged chat (16), everhour (20) and github (13) has schemas.

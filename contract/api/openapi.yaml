@@ -7150,7 +7150,22 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [unverified]
       x-overlord-extension: github
-      x-overlord-schema-status: stub
+      summary: The caller's GitHub repository authorization (compatibility alias)
+      description: >-
+        Compatibility alias over the shared account-connections module; `GET /api/connections?scope=all`
+        is the canonical listing. Owner-scoped, both editions, no RBAC action, no call to GitHub. Writes
+        as it reads: a live legacy GitHub authorization row is adopted onto the profile first.
+        `configured` says whether repository authorization can be started on this server; `account` and
+        `scopes` are set only while `connected`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The caller's GitHub repository authorization state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GitHubUserConnectionDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
     delete:
       operationId: deleteExtGithubUserConnection
       tags: [github]
@@ -7158,7 +7173,21 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [unverified]
       x-overlord-extension: github
-      x-overlord-schema-status: stub
+      summary: Disconnect the caller's GitHub repository authorization (compatibility alias)
+      description: >-
+        Compatibility alias over the shared account-connections module; `DELETE /api/connections/{id}` is
+        the canonical call. Owner-scoped, both editions. Erases the caller's GitHub credential, if any,
+        then revokes the token at GitHub best-effort and tombstones the legacy row. Always answers
+        `connected: false`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The caller's GitHub repository authorization state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GitHubUserConnectionDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /ext/github/user-connection/authorize:
     post:
       operationId: postExtGithubUserConnectionAuthorize
@@ -7167,7 +7196,42 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [unverified]
       x-overlord-extension: github
-      x-overlord-schema-status: stub
+      summary: Start GitHub repository authorization (compatibility alias)
+      description: >-
+        Compatibility alias over the shared account-connections module; `POST /api/connections` with
+        `provider: github` is the canonical start. Owner-scoped, both editions. Answers 503 `GitHub
+        repository authorization is not configured on this Overlord server.` when the GitHub OAuth client
+        or a write key is missing. A string `returnTo` must be `overlord://github/callback` or an
+        `http(s)` URL on one of the server's allowed browser origins (400 otherwise); any other type is
+        ignored. At most five sign-ins may be open per connection (429 `Too many GitHub sign-ins are open;
+        try again in a few minutes.`). The client opens `authorizationUrl`; GitHub returns to `GET
+        /api/auth/callback/github/repository`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BeginGitHubUserAuthorizationBody' }
+      responses:
+        '200':
+          description: Where to authorize.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GitHubUserAuthorizationDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429':
+          description: Five sign-ins are already open for the caller's GitHub connection.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '503':
+          description: GitHub repository authorization is not configured on this server.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   /ext/github/repository-owners:
     get:
       operationId: getExtGithubRepositoryOwners
@@ -7176,7 +7240,53 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [mobile]
       x-overlord-extension: github
-      x-overlord-schema-status: stub
+      summary: List the GitHub owners the caller can create private repositories under
+      description: >-
+        Owner-scoped, both editions. Uses the caller's own GitHub repository authorization (409 `Connect
+        GitHub before choosing a repository owner.` without one; 503 when it cannot be opened and the
+        provider is not configured, else 502). Reads the GitHub user (one token refresh on a 401; a second
+        401, or a changed GitHub identity, marks the connection `reauthorization_required` and answers
+        401), then every active organization membership and each organization's repository policy. Answers
+        the personal account first, then the organizations where the caller is an admin or members may
+        create repositories, by login. Records the account's login and avatar on the connection. GitHub's
+        401 and 403 are forwarded; other upstream failures answer 502.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The owners.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GitHubRepositoryOwnerList' }
+        '401':
+          description: >-
+            No session or token, the connection needs reauthorization (`Reconnect GitHub to refresh
+            repository access.`), the GitHub identity changed, or GitHub refused the token.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '403':
+          description: GitHub denied a request (`GitHub rejected the connected account request (403).`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '409':
+          description: The caller has no GitHub repository authorization.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '502':
+          description: >-
+            GitHub could not be reached (`Could not reach GitHub: …`), answered a server error, or
+            returned an incomplete answer.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '503':
+          description: GitHub repository authorization is not configured on this server.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   /ext/github/integration:
     get:
       operationId: getExtGithubIntegration
@@ -7185,7 +7295,31 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
       x-overlord-extension: github
-      x-overlord-schema-status: stub
+      summary: Read a workspace's GitHub App installation
+      description: Requires `workspace:read` in `workspaceId`. Does not call GitHub.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: workspaceId
+          in: query
+          required: true
+          description: The workspace. Missing or blank answers 400 `workspaceId query parameter is required`.
+          schema: { type: string }
+      responses:
+        '200':
+          description: The workspace's GitHub App installation state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GitHubIntegrationDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: The caller is not an active member of `workspaceId`, or it does not exist (`Workspace
+            not found`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
     delete:
       operationId: deleteExtGithubIntegration
       tags: [github]
@@ -7193,7 +7327,34 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
       x-overlord-extension: github
-      x-overlord-schema-status: stub
+      summary: Disconnect a workspace's GitHub App installation
+      description: >-
+        Requires `workspace:update` in `workspaceId`. Soft-deletes the installation record and every
+        GitHub project link in the workspace; the app stays installed on GitHub. Without an installation
+        it changes nothing. Answers the resulting state.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: workspaceId
+          in: query
+          required: true
+          description: The workspace. Missing or blank answers 400 `workspaceId query parameter is required`.
+          schema: { type: string }
+      responses:
+        '200':
+          description: The workspace's GitHub App installation state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GitHubIntegrationDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: The caller is not an active member of `workspaceId`, or it does not exist (`Workspace
+            not found`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /ext/github/install:
     post:
       operationId: postExtGithubInstall
@@ -7202,7 +7363,34 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
       x-overlord-extension: github
-      x-overlord-schema-status: stub
+      summary: Start a GitHub App installation for a workspace
+      description: >-
+        Requires `workspace:update` in `workspaceId`. Answers the app's installation URL with a signed
+        state naming the workspace, valid for ten minutes. 400 when the GitHub App is not configured.
+        Takes no body.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: workspaceId
+          in: query
+          required: true
+          description: The workspace. Missing or blank answers 400 `workspaceId query parameter is required`.
+          schema: { type: string }
+      responses:
+        '200':
+          description: Where to install the app.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GitHubInstallUrlDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: The caller is not an active member of `workspaceId`, or it does not exist (`Workspace
+            not found`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /ext/github/callback:
     get:
       operationId: getExtGithubCallback
@@ -7211,7 +7399,73 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [external]
       x-overlord-extension: github
-      x-overlord-schema-status: stub
+      summary: Complete a GitHub App installation
+      description: >-
+        GitHub's setup redirect, opened in the browser that started the installation, so it carries that
+        browser's session. Requires `workspace:update` in at least one of the caller's workspaces (403), a
+        configured GitHub App (400), a valid unexpired `state` (400), `workspace:update` in the workspace
+        the state names (404, 403) and a numeric `installation_id` (400). Reads the installation from
+        GitHub (client errors forwarded, 502 otherwise or when it has no account login) and stores or
+        replaces the workspace's installation. Answers JSON, not a redirect.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: installation_id
+          in: query
+          required: true
+          description: GitHub's installation id; decimal digits (400 otherwise).
+          schema: { type: string }
+        - name: state
+          in: query
+          required: true
+          description: The signed state from `POST /ext/github/install`.
+          schema: { type: string }
+      responses:
+        '200':
+          description: >-
+            Always `{ connected: true }`.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ connected ]
+                properties:
+                  connected: { const: true }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: >-
+            No session or token (`{ error }` from the authentication middleware), or GitHub refused the
+            request (forwarded from upstream: `GitHub API error (401): …`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '403':
+          description: >-
+            The caller lacks the route's RBAC action in the resource's workspace (`Permission denied: …`),
+            or GitHub denied the request (forwarded).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404':
+          description: >-
+            The caller is not an active member of `workspaceId`, or it does not exist (`Workspace not
+            found`); or GitHub answered 404 (forwarded).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '429':
+          description: >-
+            GitHub's rate limit (`GitHub API error (429): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '502':
+          description: >-
+            GitHub could not be reached (`Could not reach GitHub: …`), answered a server error, or
+            returned an incomplete answer.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   /ext/github/repos:
     get:
       operationId: getExtGithubRepos
@@ -7220,14 +7474,76 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
       x-overlord-extension: github
-      x-overlord-schema-status: stub
+      summary: List repositories the workspace's GitHub App can access
+      description: >-
+        Uses the workspace's GitHub App installation: the app must be configured on the server
+        (`GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_SLUG`; 400 otherwise) and installed for
+        the workspace (400 `Install the GitHub App in Settings → Integrations first.`). GitHub's client
+        errors are answered with the same status and `error` `GitHub API error (<status>): <message>`; an
+        unreachable GitHub or a server error answers 502. Requires `project:read` in `workspaceId`.
+        Answers the first 100 repositories of the installation, filtered by a case-insensitive substring
+        of `q` on the full name; a missing default branch reads `main`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: workspaceId
+          in: query
+          required: true
+          description: The workspace. Missing or blank answers 400 `workspaceId query parameter is required`.
+          schema: { type: string }
+        - name: q
+          in: query
+          required: false
+          description: Case-insensitive substring of `owner/name`.
+          schema: { type: string }
+      responses:
+        '200':
+          description: The repositories.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GitHubRepoSummaryList' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: >-
+            No session or token (`{ error }` from the authentication middleware), or GitHub refused the
+            request (forwarded from upstream: `GitHub API error (401): …`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '403':
+          description: >-
+            The caller lacks the route's RBAC action in the resource's workspace (`Permission denied: …`),
+            or GitHub denied the request (forwarded).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404':
+          description: >-
+            The caller is not an active member of `workspaceId`, or it does not exist (`Workspace not
+            found`); or GitHub answered 404 (forwarded).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '429':
+          description: >-
+            GitHub's rate limit (`GitHub API error (429): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '502':
+          description: >-
+            GitHub could not be reached (`Could not reach GitHub: …`), answered a server error, or
+            returned an incomplete answer.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   "/ext/github/projects/{projectId}/link":
     parameters:
       - name: projectId
         in: path
         required: true
-        schema:
-          type: string
+        description: Project UUID (404 for an unknown, deleted or foreign project).
+        schema: { type: string }
     get:
       operationId: getExtGithubProjectsByProjectIdLink
       tags: [github]
@@ -7235,7 +7551,25 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
       x-overlord-extension: github
-      x-overlord-schema-status: stub
+      summary: Read a project's GitHub repository link
+      description: >-
+        Requires `project:read` in the project's workspace. Does not call GitHub. `repo.private` is always
+        `false` on this read, whatever the repository's visibility.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The link; `repo` is null when unlinked.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectGitHubLinkDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: Unknown, deleted or foreign project (`Project not found` or `Project not found.`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
     put:
       operationId: putExtGithubProjectsByProjectIdLink
       tags: [github]
@@ -7243,14 +7577,75 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
       x-overlord-extension: github
-      x-overlord-schema-status: stub
+      summary: Link a project to a GitHub repository, or unlink it
+      description: >-
+        Uses the workspace's GitHub App installation: the app must be configured on the server
+        (`GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_SLUG`; 400 otherwise) and installed for
+        the workspace (400 `Install the GitHub App in Settings → Integrations first.`). GitHub's client
+        errors are answered with the same status and `error` `GitHub API error (<status>): <message>`; an
+        unreachable GitHub or a server error answers 502. Requires `project:update` in the project's
+        workspace. A missing, null, non-string or blank `repoFullName` removes the link without calling
+        GitHub. Otherwise it must read `owner/name` (400 `Repository must be written as owner/name.`) and
+        is read from GitHub through the workspace installation; the link stores GitHub's id, full name and
+        default branch (`main` when missing).
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LinkProjectGitHubBody' }
+      responses:
+        '200':
+          description: The link; `repo` is null after unlinking and carries the repository's visibility after linking.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectGitHubLinkDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: >-
+            No session or token (`{ error }` from the authentication middleware), or GitHub refused the
+            request (forwarded from upstream: `GitHub API error (401): …`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '403':
+          description: >-
+            The caller lacks the route's RBAC action in the resource's workspace (`Permission denied: …`),
+            or GitHub denied the request (forwarded).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404':
+          description: >-
+            Unknown, deleted or foreign project, or one outside a project_automation token's projects
+            (`Project not found`); or GitHub answered 404 (forwarded).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429':
+          description: >-
+            GitHub's rate limit (`GitHub API error (429): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '502':
+          description: >-
+            GitHub could not be reached (`Could not reach GitHub: …`), answered a server error, or
+            returned an incomplete answer.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   "/ext/github/missions/{missionId}/pull-request":
     parameters:
       - name: missionId
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Mission UUID. A display id passes authorization but is not found by the GitHub service (404); an
+          ambiguous display id answers 409.
+        schema: { type: string }
     get:
       operationId: getExtGithubMissionsByMissionIdPullRequest
       tags: [github]
@@ -7258,7 +7653,37 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
       x-overlord-extension: github
-      x-overlord-schema-status: stub
+      summary: Read the pull request recorded for a mission
+      description: >-
+        Requires `mission:read` in the mission's workspace. Does not call GitHub; answers the pull request
+        recorded when it was opened (its `state` is not refreshed). Without one the route answers `{ ok:
+        true }`, not null.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: >-
+            The recorded pull request, or `{ ok: true }` when none is recorded.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/GitHubPullRequestDto'
+                  - $ref: '#/components/schemas/OkResponse'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: >-
+            Unknown, deleted or foreign mission (`Mission not found` or `Mission not found.`), including a
+            display id, which passes authorization but is then read by UUID.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '409':
+          description: The mission display id is ambiguous in the caller's organization.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
     post:
       operationId: postExtGithubMissionsByMissionIdPullRequest
       tags: [github]
@@ -7266,7 +7691,73 @@ paths:
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
       x-overlord-extension: github
-      x-overlord-schema-status: stub
+      summary: Open a pull request for a mission's branch
+      description: >-
+        Uses the workspace's GitHub App installation: the app must be configured on the server
+        (`GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_SLUG`; 400 otherwise) and installed for
+        the workspace (400 `Install the GitHub App in Settings → Integrations first.`). GitHub's client
+        errors are answered with the same status and `error` `GitHub API error (<status>): <message>`; an
+        unreachable GitHub or a server error answers 502. Requires `mission:update` in the mission's
+        workspace. A pull request already recorded for the mission is answered unchanged without calling
+        GitHub. Otherwise the mission needs a published branch (409 `Publish the mission branch before
+        opening a pull request.`) and its project a GitHub link (400). Opens the pull request from the
+        mission's branch into the linked repository's default branch; `title` defaults to the mission
+        title, a blank `body` is omitted and `draft` is coerced to a boolean. The body is optional.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateGitHubPullRequestBody' }
+      responses:
+        '200':
+          description: The pull request.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GitHubPullRequestDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401':
+          description: >-
+            No session or token (`{ error }` from the authentication middleware), or GitHub refused the
+            request (forwarded from upstream: `GitHub API error (401): …`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '403':
+          description: >-
+            The caller lacks the route's RBAC action in the resource's workspace (`Permission denied: …`),
+            or GitHub denied the request (forwarded).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '404':
+          description: >-
+            Unknown, deleted or foreign mission (`Mission not found`), including a display id: the route
+            authorizes a display id but then reads the mission by UUID; or GitHub answered 404
+            (forwarded).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '409':
+          description: The mission has no published branch, or its display id is ambiguous.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429':
+          description: >-
+            GitHub's rate limit (`GitHub API error (429): …`, forwarded from upstream).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500': { $ref: '#/components/responses/InternalError' }
+        '502':
+          description: >-
+            GitHub could not be reached (`Could not reach GitHub: …`), answered a server error, or
+            returned an incomplete answer.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   "/api/projects/{id}/board/reorder":
     parameters:
       - name: id
@@ -18082,3 +18573,122 @@ components:
         comment:
           description: When present, replaces the comment (trimmed); null clears it.
           oneOf: [ { type: string }, { type: 'null' } ]
+    GitHubUserAccountDto:
+      type: object
+      required: [ id, login, avatarUrl ]
+      properties:
+        id: { type: string }
+        login: { type: string }
+        avatarUrl:
+          oneOf: [ { type: string }, { type: 'null' } ]
+    GitHubUserConnectionDto:
+      type: object
+      required: [ configured, connected, account, scopes ]
+      properties:
+        configured: { type: boolean }
+        connected: { type: boolean }
+        account:
+          description: Set while connected and the account's id and login are known.
+          oneOf: [ { $ref: '#/components/schemas/GitHubUserAccountDto' }, { type: 'null' } ]
+        scopes:
+          type: array
+          description: Granted OAuth scopes; empty unless connected.
+          items: { type: string }
+    GitHubUserAuthorizationDto:
+      type: object
+      required: [ authorizationUrl ]
+      properties:
+        authorizationUrl: { type: string }
+    BeginGitHubUserAuthorizationBody:
+      type: object
+      properties:
+        returnTo:
+          type: string
+          description: '`overlord://github/callback` or an `http(s)` URL on an allowed browser origin.'
+    GitHubRepositoryOwnerDto:
+      type: object
+      required: [ login, type, avatarUrl, canCreateRepositories ]
+      properties:
+        login: { type: string }
+        type:
+          type: string
+          enum: [ personal, organization ]
+        avatarUrl:
+          oneOf: [ { type: string }, { type: 'null' } ]
+        canCreateRepositories: { const: true }
+    GitHubRepositoryOwnerList:
+      type: array
+      minItems: 1
+      description: The personal account first, then organizations by login.
+      items: { $ref: '#/components/schemas/GitHubRepositoryOwnerDto' }
+    GitHubIntegrationDto:
+      type: object
+      required: [ configured, connected, accountLogin, accountType, workspaceName ]
+      properties:
+        configured:
+          type: boolean
+          description: Whether the GitHub App is configured on this server.
+        connected:
+          type: boolean
+          description: Whether the workspace has a live installation record.
+        accountLogin:
+          oneOf: [ { type: string }, { type: 'null' } ]
+        accountType:
+          oneOf: [ { type: string }, { type: 'null' } ]
+        workspaceName:
+          type: string
+          description: The workspace's name (never null; `''` if the workspace was deleted).
+    GitHubInstallUrlDto:
+      type: object
+      required: [ installUrl ]
+      properties:
+        installUrl: { type: string }
+    GitHubRepoSummaryDto:
+      type: object
+      required: [ id, fullName, defaultBranch, private ]
+      properties:
+        id: { type: string }
+        fullName: { type: string }
+        defaultBranch: { type: string }
+        private: { type: boolean }
+    GitHubRepoSummaryList:
+      type: array
+      maxItems: 100
+      items: { $ref: '#/components/schemas/GitHubRepoSummaryDto' }
+    ProjectGitHubLinkDto:
+      type: object
+      required: [ projectId, repo ]
+      properties:
+        projectId: { type: string, format: uuid }
+        repo:
+          oneOf: [ { $ref: '#/components/schemas/GitHubRepoSummaryDto' }, { type: 'null' } ]
+    LinkProjectGitHubBody:
+      type: object
+      properties:
+        repoFullName:
+          description: '`owner/name`; missing, null, non-string or blank unlinks.'
+          oneOf: [ { type: string }, { type: 'null' } ]
+    GitHubPullRequestDto:
+      type: object
+      required: [ number, url, state, headBranch, baseBranch ]
+      properties:
+        number: { type: integer, minimum: 1 }
+        url: { type: string }
+        state:
+          type: string
+          enum: [ open, closed ]
+          description: The state GitHub reported when the pull request was opened.
+        headBranch: { type: string }
+        baseBranch: { type: string }
+    CreateGitHubPullRequestBody:
+      type: object
+      properties:
+        title:
+          type: string
+          description: Defaults to the mission title when missing or blank.
+        body:
+          type: string
+          description: Omitted when missing or blank.
+        draft:
+          type: boolean
+          description: Coerced to a boolean; default false.
