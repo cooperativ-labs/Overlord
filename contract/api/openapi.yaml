@@ -5144,13 +5144,13 @@ paths:
       operationId: postMissionsByIdGenerateTitle
       tags: [missions]
       x-overlord-permission: unknown
-      x-overlord-permission-candidates: [mission:read, objective:read]
+      x-overlord-permission-candidates: [mission:update, mission:read, objective:read]
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
       summary: Regenerate a mission title
       description: >-
-        Requires `mission:read` and `objective:read` (no update permission is checked, though the title is
-        rewritten). Summarizes the earliest objective with instruction text through the Automations Layer
+        Requires `mission:update` in the mission's workspace, then `mission:read` and `objective:read` to
+        read the mission back. Summarizes the earliest objective with instruction text through the Automations Layer
         and persists the result.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       responses:
@@ -5304,13 +5304,13 @@ paths:
     post:
       operationId: postMissionsByIdTerminalSessionsForget
       tags: [missions]
-      x-overlord-permission: session:read
+      x-overlord-permission: session:attach
       x-overlord-edition: both
       x-overlord-consumers: [webapp]
       summary: Forget a mission's mapped Latch terminal session
       description: >-
-        Requires `session:read` (no update permission is checked, though the execution request's metadata
-        is rewritten). Removes the provider-session mapping so the session no longer appears in
+        Requires `session:attach` in the mission's workspace, since the execution request's session
+        metadata is rewritten. Removes the provider-session mapping so the session no longer appears in
         `terminalSessions`.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       requestBody:
