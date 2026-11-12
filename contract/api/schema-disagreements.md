@@ -211,6 +211,13 @@ the code does not do.
   (`chat unavailable`); any other failure becomes 500 `Connection request failed` with no
   `detail`, unlike the generic 500.
 
+### Run Queues (batch 3)
+
+- **Q1** (open, TypeScript optionality). `RunQueueEntryDto.waitingReason`,
+  `waitingOnObjectiveId`, `waitingOnObjectiveDisplayId` and `attemptCount` are optional in
+  packages/contract; `entryDto` (`packages/core/service/run-queue.ts`) always writes them, so
+  the schema requires them.
+
 ## 2. Non-conforming error shapes
 
 Every route in `backend/app.ts` that forwards errors through `handle()` or `next(err)`
@@ -315,6 +322,9 @@ schema must change.
   object and an array of it (`postMcp`, JSON-RPC batches).
 - **G5** also covers `ServerMetaDto` (`MetaDto` plus server fields) and `OAuthApproveBody`
   (the authorization request plus the decision).
+
+- **G12** also covers the optional JSON bodies of `deleteRunQueuesByQueueId` (`moveEntriesTo`)
+  and `deleteRunQueuesEntriesByEntryId` (`force`) (batch 3).
 
 ## 5. Operations left as stubs
 

@@ -3087,106 +3087,327 @@ paths:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Project UUID (display names are not accepted); an unknown, deleted or foreign project
+          answers 404.
+        schema: { type: string }
     get:
       operationId: getProjectsByIdRunQueues
       tags: [run-queues]
       x-overlord-permission: objective:read
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: List a project's Run Queues
+      description: >-
+        Requires `objective:read` in the project's workspace (backend/run-queue.ts `getProjectRunQueues`).
+        Queues are ordered default first, then by `position`; each queue's entries are ordered by stored
+        position and numbered from 1. A project with no queue answers an empty `queues` list (queues are
+        created on demand).
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The project's live queues and entries.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectRunQueuesDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
     post:
       operationId: postProjectsByIdRunQueues
       tags: [run-queues]
       x-overlord-permission: project:update
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Create a Run Queue
+      description: >-
+        Requires `project:update` in the project's workspace. Creates a paused, non-default queue at the
+        end of the project's queue order and schedules a dispatch tick. An optional `missionId` makes it a
+        mission-scoped queue; the mission must be a live mission of this project (404 `mission_not_found`
+        otherwise).
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateRunQueueBody' }
+      responses:
+        '200':
+          description: The new queue.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunQueueDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/projects/{id}/run-queues/order":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Project UUID; an unknown, deleted or foreign project answers 404.
+        schema: { type: string }
     patch:
       operationId: patchProjectsByIdRunQueuesOrder
       tags: [run-queues]
       x-overlord-permission: project:update
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Reorder a project's Run Queues
+      description: >-
+        Requires `project:update`. `orderedQueueIds` must name every live queue of the project exactly
+        once (400 `invalid_run_queue_order`; an absent list counts as empty), and the default queue, when
+        the project has one, must stay first (409 `default_run_queue_position`). Queue positions are
+        renumbered; entries and objective positions are unchanged.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReorderProjectRunQueuesBody' }
+      responses:
+        '200':
+          description: The project's queues in the new order.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProjectRunQueuesDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/projects/{id}/run-queues/entries":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: Project UUID; an unknown, deleted or foreign project answers 404.
+        schema: { type: string }
     post:
       operationId: postProjectsByIdRunQueuesEntries
       tags: [run-queues]
       x-overlord-permission: execution_request:create
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Queue an objective
+      description: >-
+        Requires `execution_request:create` in the project's workspace. Adds the objective to a queue and
+        marks it auto-advance. Without `queueId` the objective joins its mission's queue, which is created
+        on demand (named `<mission display id> · <mission title>`, paused unless an earlier sibling
+        objective is already running, in which case the running siblings are seeded ahead of it as
+        `running` entries and the queue is resumed). An objective already `executing` or
+        `pending_delivery` is entered as `running`. Unless `cascade` is `false`, every later
+        not-yet-started objective of the mission (`draft`, `submitted` or `future`, with instruction text)
+        is queued directly behind it. An objective that is already queued answers its existing entry
+        unchanged. Mission objective positions are rewritten to the queue order and a dispatch tick is
+        scheduled.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EnqueueRunQueueEntryBody' }
+      responses:
+        '200':
+          description: The objective's queue entry.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunQueueEntryDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/run-queues/{queueId}":
     parameters:
       - name: queueId
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Run Queue UUID. A live queue in a project the caller cannot reach answers 404 `Project not
+          found`; an unknown or deleted queue id answers 500 with `error: 'Run Queue not found'`.
+        schema: { type: string }
     patch:
       operationId: patchRunQueuesByQueueId
       tags: [run-queues]
       x-overlord-permission: project:update
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Rename, pause or resume a Run Queue
+      description: >-
+        Requires `project:update` in the queue's project. Omitted members are unchanged. Resuming (or
+        saving any queue that ends up unpaused) schedules a dispatch tick.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateRunQueueBody' }
+      responses:
+        '200':
+          description: The queue.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunQueueDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
     delete:
       operationId: deleteRunQueuesByQueueId
       tags: [run-queues]
       x-overlord-permission: project:update
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Delete a Run Queue
+      description: >-
+        Requires `project:update` in the queue's project. Takes an optional JSON body. The default queue
+        cannot be deleted (409 `default_run_queue`); a queue that still holds entries needs
+        `moveEntriesTo` (409 `run_queue_not_empty`), a live queue of the same project (404
+        `run_queue_not_found` otherwise), whose end the entries are appended to. Soft-deletes the queue.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DeleteRunQueueBody' }
+      responses:
+        '200':
+          description: Deleted.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunQueueRemovalDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/run-queues/{queueId}/order":
     parameters:
       - name: queueId
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Run Queue UUID. A live queue in a project the caller cannot reach answers 404 `Project not
+          found`; an unknown or deleted queue id answers 500 with `error: 'Run Queue not found'`.
+        schema: { type: string }
     patch:
       operationId: patchRunQueuesByQueueIdOrder
       tags: [run-queues]
       x-overlord-permission: execution_request:create
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Reorder a Run Queue's entries
+      description: >-
+        Requires `execution_request:create` in the queue's project. `orderedEntryIds` must name every live
+        entry of the queue exactly once (400 `invalid_run_queue_order`; an absent list counts as empty). A
+        `dispatched` or `running` entry must keep its index (409 `run_queue_entry_running`). Mission
+        objective positions are rewritten to the new order and a dispatch tick is scheduled.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReorderRunQueueBody' }
+      responses:
+        '200':
+          description: The queue.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunQueueDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/run-queues/entries/{entryId}":
     parameters:
       - name: entryId
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Run Queue entry UUID. A live entry in a project the caller cannot reach answers 404 `Project not
+          found`; an unknown or removed entry id answers 500 with `error: 'Run Queue entry not found'`.
+        schema: { type: string }
     patch:
       operationId: patchRunQueuesEntriesByEntryId
       tags: [run-queues]
       x-overlord-permission: execution_request:create
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Move or retry a Run Queue entry
+      description: >-
+        Requires `execution_request:create` in the entry's project. With `retry: true` the entry's hold
+        and attempt budget are cleared (it becomes `waiting` with `waitingReason: retry_pending`) and a
+        dispatch tick is scheduled; a `dispatched` or `running` entry answers 409
+        `run_queue_entry_running`, and combining `retry` with `queueId`, `afterEntryId` or `position`
+        answers 500 with `error: 'retry cannot be combined with a queue move'`. Otherwise the entry is
+        moved: to `queueId` (default its current queue; a live queue of the same project, else 404
+        `run_queue_not_found`), directly after `afterEntryId` (an entry of the destination queue, else 404
+        `run_queue_entry_not_found`), else to `position`, else to the end. A `dispatched` or `running`
+        entry cannot be moved (409 `run_queue_entry_running`). A moved entry becomes plain `waiting`; a
+        source queue left empty by the move is retired.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateRunQueueEntryBody' }
+      responses:
+        '200':
+          description: The entry.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunQueueEntryDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
     delete:
       operationId: deleteRunQueuesEntriesByEntryId
       tags: [run-queues]
       x-overlord-permission: execution_request:create
       x-overlord-edition: both
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Remove a Run Queue entry
+      description: >-
+        Requires `execution_request:create` in the entry's project. Takes an optional JSON body. Removes
+        the entry, turns the objective's auto-advance off and moves a not-yet-started objective to the end
+        of its mission's order. With `force: true` the objective's active execution requests are cleared,
+        an in-flight entry whose objective is still `launching` (with no active request left) is reset to
+        `draft`, and the queue is paused so the released dispatch tick does not start the next entry. A
+        non-default queue left empty is retired.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DeleteRunQueueEntryBody' }
+      responses:
+        '200':
+          description: What the removal did.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RunQueueEntryRemovalDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500': { $ref: '#/components/responses/InternalError' }
   "/api/projects/{id}/statuses":
     parameters:
       - name: id
@@ -11664,3 +11885,322 @@ components:
           items: { const: code }
         token_endpoint_auth_method: { const: none }
         scope: { type: string }
+    RunQueueEntryState:
+      type: string
+      description: Closed four-value entry state machine (contract/conformance.md).
+      enum: [ waiting, blocked, dispatched, running ]
+    RunQueueWaitingReason:
+      type: string
+      description: Why a `waiting` entry is not eligible right now; each clears on its own.
+      enum: [ mission_busy, resource_disconnected, retry_pending ]
+    ExecutionRequestStatus:
+      type: string
+      enum: [ queued, claimed, launching, launched, failed, cleared, cancelled, expired ]
+    RunQueueEntryDto:
+      type: object
+      description: One queue entry (packages/core/service/run-queue.ts `entryDto`).
+      required:
+        [
+          id,
+          queueId,
+          position,
+          state,
+          blockedReason,
+          waitingReason,
+          waitingOnObjectiveId,
+          waitingOnObjectiveDisplayId,
+          attemptCount,
+          objectiveId,
+          objectiveDisplayId,
+          objectiveTitle,
+          missionId,
+          missionDisplayId,
+          missionTitle,
+          assignedAgent,
+          resourceKey,
+          enqueuedAt,
+          executionRequestId,
+          executionRequest,
+          diagnosticCode
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        queueId: { type: string, format: uuid }
+        position:
+          type: integer
+          minimum: 1
+          description: 1-based rank within the queue (not the stored position).
+        state: { $ref: '#/components/schemas/RunQueueEntryState' }
+        blockedReason:
+          description: What a human must fix; set while `blocked`.
+          oneOf:
+            - type: string
+            - type: 'null'
+        waitingReason:
+          oneOf:
+            - { $ref: '#/components/schemas/RunQueueWaitingReason' }
+            - type: 'null'
+        waitingOnObjectiveId:
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        waitingOnObjectiveDisplayId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        attemptCount:
+          type: integer
+          minimum: 0
+          description: Dispatch attempts already spent; the ceiling is 3.
+        objectiveId: { type: string, format: uuid }
+        objectiveDisplayId: { type: string, description: '`<mission display id>.<objective key>`.' }
+        objectiveTitle:
+          oneOf:
+            - type: string
+            - type: 'null'
+        missionId: { type: string, format: uuid }
+        missionDisplayId: { type: string }
+        missionTitle: { type: string }
+        assignedAgent:
+          oneOf:
+            - type: string
+            - type: 'null'
+        resourceKey:
+          description: The objective's resource key, trimmed; blank is null.
+          oneOf:
+            - type: string
+            - type: 'null'
+        enqueuedAt: { $ref: '#/components/schemas/DateTime' }
+        executionRequestId:
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        executionRequest:
+          description: >-
+            State diagnostics of the linked execution request; null when the entry links none or the
+            request is deleted.
+          oneOf:
+            - type: object
+              required:
+                [
+                  status,
+                  lastError,
+                  claimedByDeviceId,
+                  claimedByExecutionTargetId,
+                  executionTargetId,
+                  createdAt,
+                  claimedAt,
+                  launchStartedAt,
+                  launchCompletedAt,
+                  updatedAt
+                ]
+              properties:
+                status: { $ref: '#/components/schemas/ExecutionRequestStatus' }
+                lastError:
+                  oneOf:
+                    - type: string
+                    - type: 'null'
+                claimedByDeviceId:
+                  oneOf:
+                    - type: string
+                    - type: 'null'
+                claimedByExecutionTargetId:
+                  oneOf:
+                    - type: string
+                    - type: 'null'
+                executionTargetId:
+                  oneOf:
+                    - type: string
+                    - type: 'null'
+                createdAt: { $ref: '#/components/schemas/DateTime' }
+                claimedAt:
+                  oneOf:
+                    - { $ref: '#/components/schemas/DateTime' }
+                    - type: 'null'
+                launchStartedAt:
+                  oneOf:
+                    - { $ref: '#/components/schemas/DateTime' }
+                    - type: 'null'
+                launchCompletedAt:
+                  oneOf:
+                    - { $ref: '#/components/schemas/DateTime' }
+                    - type: 'null'
+                updatedAt: { $ref: '#/components/schemas/DateTime' }
+            - type: 'null'
+        diagnosticCode:
+          description: A detected impossible queue/request state pair, if any.
+          oneOf:
+            - type: string
+              enum: [ terminal_request_dispatched, running_without_live_request ]
+            - type: 'null'
+    RunQueueDto:
+      type: object
+      required:
+        [
+          id,
+          projectId,
+          name,
+          isDefault,
+          missionId,
+          missionDisplayId,
+          paused,
+          position,
+          entries,
+          running
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        name: { type: string }
+        isDefault: { type: boolean }
+        missionId:
+          description: The mission of a mission-scoped queue; null for a free-standing queue.
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
+        missionDisplayId:
+          oneOf:
+            - type: string
+            - type: 'null'
+        paused: { type: boolean }
+        position:
+          type: number
+          description: Stored sort position (multiples of 1000).
+        entries:
+          type: array
+          items: { $ref: '#/components/schemas/RunQueueEntryDto' }
+        running:
+          description: The first `dispatched` or `running` entry, or null.
+          oneOf:
+            - { $ref: '#/components/schemas/RunQueueEntryDto' }
+            - type: 'null'
+    ProjectRunQueuesDto:
+      type: object
+      required: [ projectId, queues ]
+      properties:
+        projectId: { type: string, format: uuid }
+        queues:
+          type: array
+          items: { $ref: '#/components/schemas/RunQueueDto' }
+    CreateRunQueueBody:
+      type: object
+      required: [ name ]
+      properties:
+        name:
+          type: string
+          description: >-
+            Trimmed; blank or absent answers 400 `invalid_queue_name`. Not type-checked: a non-string
+            answers 500. Unique per project case-insensitively (a duplicate answers 409 from the
+            database constraint).
+        missionId:
+          description: Mission UUID of this project for a mission-scoped queue.
+          oneOf:
+            - type: string
+            - type: 'null'
+    ReorderProjectRunQueuesBody:
+      type: object
+      required: [ orderedQueueIds ]
+      properties:
+        orderedQueueIds:
+          type: array
+          items: { type: string }
+    EnqueueRunQueueEntryBody:
+      type: object
+      required: [ objectiveId ]
+      properties:
+        objectiveId:
+          type: string
+          description: >-
+            Objective UUID of an objective in this project; anything else (absent, a display id, another
+            project's objective) answers 404 `objective_not_found`.
+        queueId:
+          type: string
+          description: A live queue of this project (404 `run_queue_not_found` otherwise).
+        afterEntryId:
+          type: string
+          description: Place the entry directly after this entry of the destination queue (404
+            `run_queue_entry_not_found` otherwise).
+        position:
+          type: number
+          description: Explicit stored position, used when `afterEntryId` is absent; not validated.
+        cascade:
+          type: boolean
+          description: '`false` queues only this objective; default true.'
+    UpdateRunQueueBody:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Trimmed; blank answers 400 `invalid_queue_name`; a non-string answers 500.
+        paused:
+          type: boolean
+          description: Not type-checked; on SQLite any truthy value pauses.
+    DeleteRunQueueBody:
+      type: object
+      properties:
+        moveEntriesTo:
+          type: string
+          description: Destination queue UUID for the queue's remaining entries.
+    ReorderRunQueueBody:
+      type: object
+      required: [ orderedEntryIds ]
+      properties:
+        orderedEntryIds:
+          type: array
+          items: { type: string }
+    UpdateRunQueueEntryBody:
+      type: object
+      properties:
+        retry:
+          type: boolean
+          description: '`true` retries the entry instead of moving it.'
+        queueId: { type: string }
+        afterEntryId: { type: string }
+        position: { type: number }
+    DeleteRunQueueEntryBody:
+      type: object
+      properties:
+        force:
+          type: boolean
+          description: Only `true` forces; any other value is a plain removal.
+    RunQueueRemovalDto:
+      type: object
+      required: [ removed, projectId ]
+      properties:
+        removed: { const: true }
+        projectId: { type: string, format: uuid }
+    RunQueueEntryRemovalDto:
+      type: object
+      required:
+        [
+          removed,
+          forced,
+          objectiveId,
+          previousState,
+          objectiveReset,
+          clearedExecutionRequests,
+          removedEmptyQueueId
+        ]
+      properties:
+        removed: { const: true }
+        forced: { type: boolean }
+        objectiveId: { type: string, format: uuid }
+        previousState:
+          $ref: '#/components/schemas/RunQueueEntryState'
+          description: The entry's state at removal; `dispatched` or `running` means it was in flight.
+        objectiveReset:
+          type: boolean
+          description: A forced removal reset a stuck `launching` objective to `draft`.
+        clearedExecutionRequests:
+          type: integer
+          minimum: 0
+          description: Active execution requests a forced removal cleared (0 otherwise).
+        removedEmptyQueueId:
+          description: Non-default queue retired because this removal emptied it.
+          oneOf:
+            - type: string
+              format: uuid
+            - type: 'null'
