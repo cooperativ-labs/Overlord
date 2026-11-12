@@ -4,10 +4,16 @@ import {
   type RunResult
 } from '@overlord/database';
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import { type Readable } from 'node:stream';
 import test from 'node:test';
 
-import { createStorageBackend, readStorageReadSettings } from './storage-backends.ts';
+import {
+  createStorageBackend,
+  isWellFormedStorageKey,
+  readStorageReadSettings,
+  resolveLocalObjectPath
+} from './storage-backends.ts';
 import { startFakeS3, withS3Credentials } from './storage-test-fixture.ts';
 
 async function readStream(stream: Readable): Promise<Buffer> {
@@ -196,4 +202,26 @@ test('hosted S3 seed is env-gated and idempotent', async () => {
       }
     ]
   );
+});
+
+test('storage keys must be well-formed relative keys confined to the bucket', () => {
+  assert.equal(isWellFormedStorageKey('workspace-files/ws/attachments/a.txt'), true);
+  assert.equal(isWellFormedStorageKey('legacy.png'), true);
+  for (const key of [
+    '',
+    '/etc/passwd',
+    'a/../b',
+    '../a',
+    'a/./b',
+    'a//b',
+    'a\\b',
+    'a\u0000b',
+    'a/'
+  ]) {
+    assert.equal(isWellFormedStorageKey(key), false, JSON.stringify(key));
+  }
+  const root = path.join(path.sep, 'srv', 'bucket');
+  assert.equal(resolveLocalObjectPath(root, 'a/b.png'), path.join(root, 'a', 'b.png'));
+  assert.throws(() => resolveLocalObjectPath(root, '../bucket-sibling/x'));
+  assert.throws(() => resolveLocalObjectPath(root, 'a/../../x'));
 });

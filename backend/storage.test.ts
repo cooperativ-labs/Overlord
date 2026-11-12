@@ -237,3 +237,92 @@ test('resolveStoredObject serves legacy one-segment user image URLs by canonical
   assert.equal(resolved.filename, 'avatar.png');
   assert.ok(resolved.absolutePath?.endsWith(stored.storageKey));
 });
+
+test('organization images are served only for the caller organization image key shape', async () => {
+  const pngBytes = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+    'base64'
+  );
+  const storageRoot = path.join(tempDir, 'organization-storage');
+  const now = new Date().toISOString();
+  db.prepare(
+    `INSERT INTO storage_buckets (
+       id, organization_id, bucket_key, storage_backend, base_url, local_path, settings_json,
+       created_at, updated_at, revision
+     ) VALUES ('org-images-bucket', ?, 'organization-images', 'local_fs', NULL, ?, '{}', ?, ?, 1)`
+  ).run(DEFAULT_TEST_ORGANIZATION_ID, storageRoot, now, now);
+
+  const { uploadOrganizationImage } = await import('./storage.ts');
+  const { writeFileSync, mkdirSync } = await import('node:fs');
+  const stored = await uploadOrganizationImage({
+    bytes: pngBytes,
+    filename: 'logo.png',
+    contentType: 'image/png'
+  });
+  const resolved = await resolveStoredObject(
+    'organization-images',
+    stored.storageKey,
+    PERMISSIONS.ORGANIZATION_IMAGE_READ
+  );
+  assert.equal(resolved.contentType, 'image/png');
+  assert.ok(resolved.absolutePath?.startsWith(`${storageRoot}${path.sep}`));
+
+  writeFileSync(path.join(tempDir, 'outside.txt'), 'outside');
+  const otherKey =
+    'organization-files/other-organization/images/0f0f0f0f-0f0f-4f0f-8f0f-0f0f0f0f0f0f.png';
+  mkdirSync(path.dirname(path.join(storageRoot, otherKey)), { recursive: true });
+  writeFileSync(path.join(storageRoot, otherKey), pngBytes);
+
+  for (const storageKey of [
+    `organization-files/${DEFAULT_TEST_ORGANIZATION_ID}/images/../../../../outside.txt`,
+    '../outside.txt',
+    `${tempDir}/outside.txt`,
+    `organization-files/${DEFAULT_TEST_ORGANIZATION_ID}/images/logo.png`,
+    `organization-files/${DEFAULT_TEST_ORGANIZATION_ID}/images/${path.basename(stored.storageKey)}\u0000`,
+    otherKey
+  ]) {
+    await assert.rejects(
+      async () =>
+        await resolveStoredObject(
+          'organization-images',
+          storageKey,
+          PERMISSIONS.ORGANIZATION_IMAGE_READ
+        ),
+      (error: unknown) => error instanceof ApiError && error.status === 404,
+      storageKey
+    );
+  }
+
+  const { endpoint, objects, close } = await startFakeS3();
+  const restoreCredentials = withS3Credentials();
+  try {
+    db.prepare(
+      `UPDATE storage_buckets
+          SET storage_backend = 's3', local_path = NULL, settings_json = ?
+        WHERE id = 'org-images-bucket'`
+    ).run(JSON.stringify({ bucketName: 'overlord-storage', endpoint, region: 'us-east-1' }));
+    objects.set(`/overlord-storage/${otherKey}`, pngBytes);
+    await assert.rejects(
+      async () =>
+        await resolveStoredObject(
+          'organization-images',
+          otherKey,
+          PERMISSIONS.ORGANIZATION_IMAGE_READ
+        ),
+      (error: unknown) => error instanceof ApiError && error.status === 404
+    );
+    const own = `organization-files/${DEFAULT_TEST_ORGANIZATION_ID}/images/1f1f1f1f-1f1f-4f1f-8f1f-1f1f1f1f1f1f.png`;
+    objects.set(`/overlord-storage/${own}`, pngBytes);
+    const fromS3 = await resolveStoredObject(
+      'organization-images',
+      own,
+      PERMISSIONS.ORGANIZATION_IMAGE_READ
+    );
+    assert.ok(fromS3.bodyStream);
+    fromS3.bodyStream?.destroy();
+  } finally {
+    restoreCredentials();
+    db.prepare(`DELETE FROM storage_buckets WHERE id = 'org-images-bucket'`).run();
+    await close();
+  }
+});

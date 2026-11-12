@@ -35,7 +35,7 @@ import {
   listOrganizationAdminProfileIds,
   liveOrganizationWorkspaceIds
 } from './rbac.ts';
-import { removeStoredObjects } from './storage.ts';
+import { isOrganizationImageKey, removeStoredObjects } from './storage.ts';
 import type { StorageBucketRef } from './storage-backends.ts';
 
 interface OrganizationRow {
@@ -511,6 +511,14 @@ async function purgeOrganizationLogoObject(
   if (!logoUrl) return;
   const match = logoUrl.match(/^\/api\/storage\/organization-images\/(.+)$/);
   if (!match) return;
+  let storageKey: string;
+  try {
+    storageKey = decodeURIComponent(match[1]);
+  } catch {
+    return;
+  }
+  // Only this organization's own uploaded logo is ever removed.
+  if (!isOrganizationImageKey(organizationId, storageKey)) return;
 
   const bucket = await client.get<StorageBucketRef>(
     `SELECT id, bucket_key, storage_backend, local_path, settings_json
@@ -521,7 +529,7 @@ async function purgeOrganizationLogoObject(
   if (!bucket) return;
 
   try {
-    await removeStoredObjects([{ key: decodeURIComponent(match[1]), bucket }]);
+    await removeStoredObjects([{ key: storageKey, bucket }]);
   } catch {
     // Best-effort only — a storage cleanup failure must never block deleting
     // the last workspace of an organization.

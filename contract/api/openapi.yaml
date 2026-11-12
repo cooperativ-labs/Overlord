@@ -2689,9 +2689,12 @@ paths:
         bare legacy key also matches) and the caller needs the bucket's read action on that row's
         workspace; a `project_automation` token reads only attachments of its projects, and an unpromoted
         Inbox attachment only its owner. For `organization-images` there is no metadata row: the caller
-        needs `organization_image:read` in some authorized workspace and the object is read from the
-        selected organization's bucket by the key as given, with the content type taken from its
-        extension. Every miss answers 404 `File not found`. When the bucket presigns reads the response is
+        needs `organization_image:read` in some authorized workspace, and only a key of the selected
+        organization's own image shape (`organization-files/<organizationId>/images/<uuid>.<png|jpg|gif|webp>`)
+        is read from that organization's bucket, with the content type taken from its extension. On every
+        bucket the key must be a relative key of non-empty `/`-separated segments, none `.` or `..`, with
+        no backslash or control character, and it never resolves outside the bucket. Every miss answers
+        404 `File not found`. When the bucket presigns reads the response is
         a redirect to the storage provider instead of the bytes.
       security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
       responses:

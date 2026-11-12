@@ -108,6 +108,40 @@ export function readStorageReadSettings(settingsJson: unknown): StorageReadSetti
   return { presignReads, presignTtlSeconds };
 }
 
+/**
+ * Whether `key` is a well-formed relative object key: non-empty `/`-separated
+ * segments, none of them `.` or `..`, with no leading `/`, backslash, or
+ * control character. Every backend accepts only such keys, so a key can never
+ * address anything outside its bucket.
+ */
+export function isWellFormedStorageKey(key: string): boolean {
+  if (typeof key !== 'string' || key.length === 0 || key.length > 1024) return false;
+  for (const char of key) {
+    const code = char.charCodeAt(0);
+    if (code < 0x20 || code === 0x7f || char === '\\') return false;
+  }
+  return key.split('/').every(segment => segment !== '' && segment !== '.' && segment !== '..');
+}
+
+function requireWellFormedStorageKey(key: string): string {
+  if (!isWellFormedStorageKey(key)) throw new ApiError(404, 'File not found');
+  return key;
+}
+
+/**
+ * Resolve `key` to an absolute path inside the local bucket `root`. The key
+ * must be well formed and the normalised result must stay inside the root.
+ */
+export function resolveLocalObjectPath(root: string, key: string): string {
+  requireWellFormedStorageKey(key);
+  const resolvedRoot = path.resolve(root);
+  const absolutePath = path.resolve(resolvedRoot, key);
+  if (!absolutePath.startsWith(`${resolvedRoot}${path.sep}`)) {
+    throw new ApiError(404, 'File not found');
+  }
+  return absolutePath;
+}
+
 function objectKeyFor({
   storageKey,
   pathPrefix
@@ -115,6 +149,7 @@ function objectKeyFor({
   storageKey: string;
   pathPrefix?: string;
 }): string {
+  requireWellFormedStorageKey(storageKey);
   if (!pathPrefix || pathPrefix.trim() === '') return storageKey;
   const normalizedPrefix = pathPrefix.replace(/^\/+|\/+$/g, '');
   return normalizedPrefix ? `${normalizedPrefix}/${storageKey}` : storageKey;
@@ -141,13 +176,13 @@ function createLocalFsBackend({
 
   return {
     async put({ key, bytes }) {
+      const absolutePath = resolveLocalObjectPath(root, key);
       if (!existsSync(root)) mkdirSync(root, { recursive: true });
-      const absolutePath = path.join(root, key);
       mkdirSync(path.dirname(absolutePath), { recursive: true });
       writeFileSync(absolutePath, bytes);
     },
     async getStream({ key }) {
-      const absolutePath = path.join(root, key);
+      const absolutePath = resolveLocalObjectPath(root, key);
       if (!existsSync(absolutePath)) throw new ApiError(404, 'File not found');
       return createReadStream(absolutePath);
     }

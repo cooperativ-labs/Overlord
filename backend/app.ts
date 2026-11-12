@@ -1212,8 +1212,9 @@ app.post(
 );
 
 // Serve stored object bytes. The lookup is by exact backend key against the
-// recorded (non-deleted) metadata row, so only known objects are served and the
-// `storageKey` path segment cannot traverse the filesystem. Attachments carry
+// recorded (non-deleted) metadata row, or, for organization images, by the
+// caller organization's own image key shape; every backend also accepts only
+// well-formed relative keys confined to the bucket. Attachments carry
 // arbitrary, user-supplied bytes, so they are served as downloads with
 // `nosniff` to prevent the browser from rendering them inline (e.g. HTML/SVG).
 app.get(

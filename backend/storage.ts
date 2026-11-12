@@ -57,6 +57,7 @@ import {
   createStorageBackend,
   isRemoteStorageBackend,
   readStorageReadSettings,
+  resolveLocalObjectPath,
   type StorageBackend,
   type StorageBucketRef
 } from './storage-backends.ts';
@@ -170,6 +171,23 @@ function workspaceImageObjectKey(workspaceId: string, imageId: string, ext: stri
 
 function organizationImageObjectKey(organizationId: string, imageId: string, ext: string): string {
   return `organization-files/${organizationId}/images/${imageId}${ext}`;
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/**
+ * Whether `storageKey` is an image key `uploadOrganizationImage` writes for
+ * `organizationId`: `organization-files/<organizationId>/images/<uuid><ext>`
+ * with a supported image extension. Organization images have no metadata row,
+ * so this exact shape is what binds a key to its organization.
+ */
+export function isOrganizationImageKey(organizationId: string, storageKey: string): boolean {
+  const prefix = `organization-files/${organizationId}/images/`;
+  if (!storageKey.startsWith(prefix)) return false;
+  const name = storageKey.slice(prefix.length);
+  const ext = path.extname(name);
+  if (!Object.hasOwn(CONTENT_TYPE_BY_EXTENSION, ext)) return false;
+  return UUID_PATTERN.test(name.slice(0, name.length - ext.length));
 }
 
 export function attachmentObjectKey(
@@ -955,7 +973,7 @@ async function finalizeStoredObject({
     const root = path.isAbsolute(bucket.local_path)
       ? bucket.local_path
       : path.resolve(repoRoot, bucket.local_path);
-    const absolutePath = path.join(root, storageKey);
+    const absolutePath = resolveLocalObjectPath(root, storageKey);
     if (!existsSync(absolutePath)) throw new ApiError(404, 'File not found');
     return { absolutePath, contentType, filename, forceDownload };
   }
@@ -977,9 +995,11 @@ async function finalizeStoredObject({
  * The bucket's `STORAGE_BUCKETS` descriptor drives the dispatch. An
  * organization-scoped bucket (`organization-images`) has no per-object metadata
  * table (see `uploadOrganizationImage`), so content type is derived from the
- * storage key's extension instead of a database row, and the bucket is
- * resolved against the caller's active organization rather than the object's
- * workspace. The two attachments-only authorization rules (token project scope
+ * storage key's extension instead of a database row, the bucket is resolved
+ * against the caller's active organization rather than the object's
+ * workspace, and only keys of that organization's image shape
+ * (`isOrganizationImageKey`) are served. Every backend additionally accepts
+ * only well-formed relative keys confined to the bucket. The two attachments-only authorization rules (token project scope
  * and Inbox ownership) stay explicit below.
  */
 export async function resolveStoredObject(
@@ -992,6 +1012,9 @@ export async function resolveStoredObject(
   if (descriptor.scope === 'organization') {
     const organizationId = await requireActiveOrganizationId();
     await requireAnyWorkspacePermission(permission);
+    if (!isOrganizationImageKey(organizationId, storageKey)) {
+      throw new ApiError(404, 'File not found');
+    }
     const bucket = await resolveOrganizationBucket(organizationId, bucketKey);
     const ext = path.extname(storageKey).toLowerCase();
     return finalizeStoredObject({
