@@ -326,3 +326,53 @@ test('organization images are served only for the caller organization image key 
     await close();
   }
 });
+
+test('uploadUserImage attributes the image to the authenticated uploader', async () => {
+  const pngBytes = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+    'base64'
+  );
+  const dbModule = await import('./db.ts');
+  const ws = { id: WORKSPACE.id, slug: WORKSPACE.slug, name: WORKSPACE.name, kind: 'local' };
+  const now = new Date().toISOString();
+  db.prepare(
+    `INSERT INTO "user" ("id", "name", "email", "emailVerified", "image", "createdAt", "updatedAt")
+     VALUES ('second-uploader', 'Second', 'second-uploader@overlord.local', 1, NULL, ?, ?)`
+  ).run(now, now);
+  db.prepare(
+    `INSERT INTO workspace_users (id, workspace_id, profile_id, member_key, status, metadata_json,
+       created_at, updated_at, revision)
+     VALUES ('second-uploader-member', ?, 'second-uploader', 'auth:second-uploader', 'active', '{}', ?, ?, 1)`
+  ).run(WORKSPACE.id, now, now);
+  db.prepare(
+    `INSERT INTO role_assignments (id, workspace_id, workspace_user_id, role_key, resource_type,
+       resource_id, assigned_by_workspace_user_id, created_at, updated_at, revision)
+     VALUES ('second-uploader-role', ?, 'second-uploader-member', 'MEMBER', '', '', NULL, ?, ?, 1)`
+  ).run(WORKSPACE.id, now, now);
+
+  const stored = await dbModule.withRequestContextAsync(async () => {
+    dbModule.setActiveProfileId('second-uploader');
+    dbModule.setAuthorizedWorkspacesContext({
+      organizationId: DEFAULT_TEST_ORGANIZATION_ID,
+      workspaces: [
+        {
+          workspaceId: ws.id,
+          workspaceUserId: 'second-uploader-member',
+          roleKeys: ['MEMBER'],
+          workspace: ws
+        }
+      ]
+    });
+    dbModule.setActiveWorkspaceContext(null);
+    dbModule.setActiveWorkspaceUser(null);
+    return uploadUserImage(
+      { bytes: pngBytes, filename: 'mine.png', contentType: 'image/png' },
+      ws.id
+    );
+  });
+  assert.match(stored.storageKey, /^user-images\/second-uploader\//);
+  const row = db.prepare(`SELECT profile_id FROM user_images WHERE id = ?`).get(stored.id) as {
+    profile_id: string;
+  };
+  assert.equal(row.profile_id, 'second-uploader');
+});

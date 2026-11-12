@@ -37,6 +37,7 @@ import type { StorageBuckets } from '../packages/core/types/db.ts';
 import {
   getActiveTokenProjectIds,
   getActorWorkspaceUserId,
+  getAuthorizedWorkspacesContext,
   getImplicitWorkspaceIdOrNull,
   newId,
   nowIso,
@@ -233,16 +234,17 @@ async function writeImageObject(
   };
 }
 
-/** Resolve the operator's `profiles.id` for the active workspace actor. */
-async function operatorUserId(): Promise<string> {
+/**
+ * The uploader's `profiles.id`: the authenticated profile, or the one behind
+ * the attributed workspace member. Only the loopback local operator with
+ * neither (and no authenticated request) falls back to the oldest active
+ * human profile.
+ */
+async function uploaderProfileId(): Promise<string> {
   const client = requireDatabaseClient();
-  if (getActorWorkspaceUserId()) {
-    const row = await client.get<{ profile_id: string }>(
-      `SELECT profile_id FROM workspace_users WHERE id = ?`,
-      [getActorWorkspaceUserId()]
-    );
-    if (row) return row.profile_id;
-  }
+  const profileId = await resolveActiveProfileId(client);
+  if (profileId) return profileId;
+  if (getAuthorizedWorkspacesContext()) throw new ApiError(401, 'Authentication required');
   const fallback = await client.get<{ id: string }>(
     `SELECT id FROM profiles
       WHERE kind = 'human' AND status = 'active' AND deleted_at IS NULL
@@ -252,23 +254,24 @@ async function operatorUserId(): Promise<string> {
   return fallback.id;
 }
 
-/**
- * Upload an image to the `user-images` bucket and record it against the local
- * operator. Returns the stored-image descriptor including the URL to serve it.
- */
 function uploadWorkspaceId(explicitWorkspaceId?: string): string {
   const workspaceId = explicitWorkspaceId?.trim() || getImplicitWorkspaceIdOrNull();
   if (!workspaceId) throw new ApiError(400, 'workspaceId is required');
   return workspaceId;
 }
 
+/**
+ * Upload an image to the `user-images` bucket and record it against the
+ * uploader's profile. Returns the stored-image descriptor including the URL to
+ * serve it.
+ */
 export async function uploadUserImage(
   input: UploadImageInput,
   explicitWorkspaceId?: string
 ): Promise<StoredImageDto> {
   const workspaceId = uploadWorkspaceId(explicitWorkspaceId);
   const bucket = await resolveBucket('user-images', workspaceId);
-  const userId = await operatorUserId();
+  const userId = await uploaderProfileId();
   const written = await writeImageObject(bucket, input, (id, ext) =>
     userImageObjectKey(userId, id, ext)
   );

@@ -2646,7 +2646,8 @@ paths:
       description: >-
         The request body is the image's raw bytes (no JSON, no multipart). The permission depends on the
         bucket: `user-images` needs `user_image:self:create` in some authorized workspace (the image is
-        stored in the lowest-id such workspace's bucket unless `workspaceId` names one);
+        stored in the lowest-id such workspace's bucket unless `workspaceId` names one, under
+        `user-images/<profileId>/` and recorded against the authenticated uploader's profile);
         `workspace-images` needs `workspace_image:create` on the required `workspaceId`;
         `organization-images` needs `organization_image:create` and organization-admin status in the
         request's selected organization (404 when none is selected); a token request must also consent to
