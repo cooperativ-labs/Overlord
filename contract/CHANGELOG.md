@@ -5,6 +5,73 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [168.0.2] - 2026-11-12
+
+Phase 3 of `planning/feature-plans/contract-adr-openapi-migration.md`: reconciliation
+of the provenance entries `[95]`–`[168]` and the ADR backfill. Nothing on the wire, in
+the protocol, in stored data or in behaviour changed; every hoisted or corrected
+statement describes behaviour the code already has.
+
+### Added
+
+- [decisions/backfill-register.md](decisions/backfill-register.md): one row per
+  provenance entry (71), with its original date from git history, ticket, binding
+  statements, where each now lives, its ADR or "changelog only", what superseded it,
+  and whether it was checked against code.
+- ADRs 0011–0047. Six foundational records (closed and open vocabularies, conformance
+  manifests, namespaced extension points, golden vectors for duplicated algorithms, the
+  Local and Cloud editions, the harness capability descriptor) and 31 backfilled
+  records for decisions of versions 95–168 that still bind, each marked with its
+  origin (ADR 0005).
+
+### Changed
+
+- Binding statements that only a provenance entry carried are now in the normative
+  documents: the account-connection key ring, platform key, seal-key selection,
+  missing-key outcomes and re-seal rules, personal GitHub OAuth properties and legacy
+  adoption (from `[153]`, `[156]`, in [authorization.md](authorization.md)); the
+  configured Knowledgebase server policy (from `[156]`) and the Latch gateway and
+  worktree-discovery rules (from `[129]`) in [architecture.md](architecture.md); the
+  assistant's Knowledgebase write grant (from `[154]`, `[158]`) and Feature handoff
+  (from `[155]`) as new paragraphs of "Assistant Conversation Behaviour"; the
+  `pendingAsk` fields and age limit (from `[149]`); connection REST errors,
+  availability reasons, GitHub start and callback, Local behaviour and compatibility
+  aliases with their retirement criteria (from `[153]`, `[156]`, `[158]`), Inbox
+  attachment route detail (from `[168]`), Run Queue cascade, order write-through,
+  dequeue and retirement (from `[143]`), `diagnosticCode` (from `[110]`),
+  `objective_sibling_active` (from `[122]`), `hasExecutingObjective` (from `[107]`)
+  and schedule `validation_error` codes (from `[164]`) in
+  [api/rest-notes.md](api/rest-notes.md); the Inbox attachment storage workspace
+  (from `[168]`) and mission-summary compose triggers (from `[166]`) in
+  [data/README.md](data/README.md); `attachment-download-url --output` (from `[148]`)
+  and ended-session evidence recovery (from `[165]`) in [protocol.md](protocol.md) and
+  `protocol-commands.yaml`.
+- Corrected to the code: [protocol.md](protocol.md) "Inbox capture",
+  `components.yaml` and the MCP Server registry entry in
+  [architecture.md](architecture.md) said that `create` falls back to a discovered
+  project and that `overlord_create_mission` without `projectId` creates an inbox item.
+  Since `[141]` creation needs an explicit project or the explicit unassigned intent.
+- "Assistant Conversation Behaviour" (hoisted in 168.0.1) was reviewed against
+  `[152]`–`[159]`: its progress-label list now includes `Updating notes` and
+  `Checking Feature missions`, which the code emits.
+- Contradictions recorded, not resolved: `[152]` says a failed Knowledgebase source
+  check is treated as revoked, while the code and
+  [architecture.md](architecture.md) answer `unknown` (both fail closed); `[155]` says
+  `createdReceipts` lists created cards, while the code selects the five most recently
+  updated non-open (created or cancelled) cards, which the hoisted text describes;
+  `[168]` places Inbox attachment bytes in the owner's oldest qualifying membership as
+  a last fallback, which sits beside the "Workspace resolution taxonomy" rule that no
+  route selects the oldest membership (ADR 0047).
+
+### Version
+
+- Patch contract version 168.0.2, from 168.0.1: clarifications that copy existing
+  obligations into the normative documents and corrections of stale text to the
+  enforced behaviour, with no change to any interface, invariant, security property,
+  data meaning or observable behaviour. The ADRs record earlier decisions and make
+  none. `yarn connectors:capabilities` restamped the generated connector manifests;
+  hand-maintained manifests keep `168.0.0`, which shares the major version (ADR 0009).
+
 ## [168.0.1] - 2026-11-12
 
 Phase 2 of `planning/feature-plans/contract-adr-openapi-migration.md`: each topic
