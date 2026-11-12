@@ -1,30 +1,9 @@
+import type { CreateUserTokenResultDto, TokenScope, UserTokenDto } from '@overlord/contract';
+
 import { flagBoolean, flagValue, parseArgs } from './args.js';
 import { createBackendClient } from './backend-client.js';
 import { CliError } from './errors.js';
 import { printJson } from './output.js';
-
-// Light local mirrors of the relevant shared DTOs (the CLI package does not
-// depend on the webapp shared contract). Only the fields the CLI reads/sends.
-type TokenScope = 'full' | 'mission_lifecycle' | 'project_automation';
-
-interface UserTokenDto {
-  id: string;
-  label: string;
-  tokenPrefix: string;
-  status: string;
-  scope: TokenScope;
-  scopeGrants: string[];
-  projects: { id: string; name: string }[];
-  expiresAt: string | null;
-  lastUsedAt: string | null;
-  revokedAt: string | null;
-  createdAt: string;
-}
-
-interface CreateUserTokenResultDto {
-  token: UserTokenDto;
-  secret: string;
-}
 
 const DURATION_PATTERN = /^(\d+)\s*(h|d|w|mo|m|y)$/i;
 

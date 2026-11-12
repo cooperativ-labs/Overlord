@@ -1,3 +1,4 @@
+import type { MetaDto } from '@overlord/contract';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
@@ -6,26 +7,6 @@ import { flagBoolean, flagValue, type ParsedArgs } from './args.js';
 import { CliError } from './errors.js';
 import { printJson } from './output.js';
 import type { CliRuntime } from './runtime.js';
-
-interface OrganizationDto {
-  id: string;
-  name: string;
-  logoUrl: string | null;
-}
-
-interface WorkspaceDto {
-  id: string;
-  organizationId: string;
-  slug: string;
-  name: string;
-}
-
-interface MetaDto {
-  organization: OrganizationDto | null;
-  organizations: OrganizationDto[];
-  workspaces: WorkspaceDto[];
-  workspace: WorkspaceDto | null;
-}
 
 /** Bare-bones slug suggestion shown to an interactive user; the server derives the canonical one. */
 function suggestSlug(name: string): string {

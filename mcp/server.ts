@@ -16,6 +16,9 @@ import { hostedMcpWidgetResources, readHostedMcpWidget } from './widgets.ts';
 
 const MCP_PROTOCOL_VERSION = '2025-11-25';
 
+// The request as received, before it is checked. The checked request and the response
+// are described by contract/api/openapi.yaml (JsonRpcRequest, JsonRpcResponse in
+// @overlord/contract); these local shapes stay looser because they type unchecked input.
 type JsonRpcId = string | number | null;
 
 type JsonRpcRequest = {
