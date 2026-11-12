@@ -5,6 +5,59 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [168.0.1] - 2026-11-12
+
+Phase 2 of `planning/feature-plans/contract-adr-openapi-migration.md`: each topic
+document now reads on its own. Nothing on the wire, in the protocol, in stored data
+or in behaviour changed; every hoisted statement describes behaviour the code
+already has.
+
+### Changed
+
+- Version-history tags such as "(v166)", "(contract v152)", "since v153" and
+  "(Version 164)" were removed from [architecture.md](architecture.md),
+  [protocol.md](protocol.md), [authorization.md](authorization.md),
+  [conformance.md](conformance.md) and [data/README.md](data/README.md). Version
+  mentions that name a retired behaviour or a specific migration remain.
+- Binding detail that the topic documents left to changelog entries or
+  non-contract notes is now in the topic documents: the exact-reference mission
+  lookup (from `[155]`), the objective transcript rules (from `[162]` and
+  `docs/objective-transcript.md`), the assistant conversation behaviour (from
+  `[152]`, as a new architecture.md section "Assistant Conversation Behaviour",
+  without the statements later versions superseded), `AgentRequestDto.delivery`
+  and answer delivery (from `[129]`, in protocol.md), and the mission branch status
+  derivation (in data/README.md `mission_branch_observations`, which code cited but
+  no contract text defined).
+- `components.yaml` and `protocol-commands.yaml` no longer name planning notes as
+  reference specs. Their binding statements are hoisted into
+  [protocol.md](protocol.md) "Protocol requirements",
+  [authorization.md](authorization.md) "User tokens" and "Role-based access
+  control" (including the `project_automation` route allowlist from `[151]`), and
+  the CLI, Connector and Runner Layers of [architecture.md](architecture.md). The
+  notes remain linked as non-normative design background.
+- The "REST API Layer" registry entry and the route-level detail of the
+  "REST API → Database (HTTP Surface)" interaction surface (from architecture.md)
+  and the "REST API Boundary" section (from data/README.md) moved verbatim into
+  the normative holding file [api/rest-notes.md](api/rest-notes.md), which phase 4
+  replaces with `api/openapi.yaml`. Each former location keeps a pointer.
+  `yarn contract:check` requires the holding file or the OpenAPI description, and
+  the release range check treats a change to it like a change to the documents
+  it came from.
+- Authorization: "refresh tokens are not issued through contract version 2" now
+  reads that refresh tokens are not issued (the token endpoint supports only the
+  `authorization_code` grant), which is the current behaviour.
+
+### Version
+
+- Patch contract version 168.0.1, from 168.0.0: corrections and clarifications of
+  existing obligations, with no change to any interface, invariant, security
+  property, data meaning or observable behaviour. No ADR: no architecture,
+  security, isolation, data-meaning, migration, foundational-technology or
+  service-boundary decision was made; the restructuring carries out ADR 0001 and
+  the holding file precedes ADR 0006. `yarn connectors:capabilities` restamped
+  the generated connector manifests to `168.0.1`; hand-maintained manifests keep
+  `168.0.0`, which shares the major version (ADR 0009).
+
 ## [168.0.0] - 2026-11-12
 
 ### Changed
