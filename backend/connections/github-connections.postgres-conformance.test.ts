@@ -582,7 +582,7 @@ for (const adapter of adapters) {
         });
         const app = express();
         app.use(express.json());
-        // Mounted exactly as backend/index.ts does: the provider callback before the wildcard.
+        // Mounted exactly as backend/app.ts does: the provider callback before the wildcard.
         app.get(
           '/api/auth/callback/github/repository',
           createProfileConnectionCallbackHandler({ provider: 'github', runtime: () => runtime })
@@ -748,8 +748,8 @@ for (const adapter of adapters) {
   });
 }
 
-it('backend/index.ts mounts the GitHub repository callback before the Better Auth wildcard', () => {
-  const source = readFileSync(new URL('../index.ts', import.meta.url), 'utf8');
+it('backend/app.ts mounts the GitHub repository callback before the Better Auth wildcard', () => {
+  const source = readFileSync(new URL('../app.ts', import.meta.url), 'utf8');
   const callback = source.indexOf('GITHUB_REPOSITORY_CALLBACK_PATH,\n');
   const wildcard = source.indexOf("app.all('/api/auth/*'");
   assert.ok(callback > 0 && wildcard > 0 && callback < wildcard);

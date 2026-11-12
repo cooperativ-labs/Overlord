@@ -27,7 +27,7 @@ Excluded from review: `backend/dist-server/`, `backend/node_modules/`.
 | File | Lines | Why it is a standing candidate |
 |---|---:|---|
 | `backend/repository.ts` | ~7200 | Single module for nearly all persistence across every entity |
-| `backend/index.ts` | ~1900 | App assembly, route table, auth wiring, OAuth endpoints, MCP mount |
+| `backend/app.ts` | ~2400 | App assembly, route table, auth wiring, OAuth endpoints, MCP mount (`backend/index.ts` only starts it) |
 | `backend/workspaces.ts` | ~1470 | Workspace + membership + settings resolution in one unit |
 | `backend/execution/launch.ts` | ~1200 | Launch config resolution, target selection, command assembly |
 | `backend/ext/everhour/service.ts` | ~1140 | Extension service with its own client, mapping, and persistence |

@@ -4,7 +4,7 @@
  * objects, and which permissions gate its upload and serve routes.
  *
  * This is the one registry over the four keys. The upload route and the serve
- * route in backend/index.ts, the serve path in backend/storage.ts, and the
+ * route in backend/app.ts, the serve path in backend/storage.ts, and the
  * workspace bucket seeds (backend/workspaces.ts, backend/test-helpers.ts) all
  * read it instead of keeping their own key lists. It is a leaf module (no
  * runtime imports from the backend) so the test helpers can use it without
