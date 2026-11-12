@@ -5,6 +5,55 @@ is the current version and must equal [VERSION](VERSION); `yarn version:contract
 writes its skeleton. Dates use ISO 8601 and describe the contract change, not
 merely the files edited.
 
+## [168.0.3] - 2026-11-12
+
+Sentence-level audit of the eleven largest provenance entries (`[152]`, `[153]`,
+`[165]`, `[104]`, `[166]`, `[151]`, `[156]`, `[159]`, `[129]`, `[154]`, `[155]`), finishing
+phase 3 of `planning/feature-plans/contract-adr-openapi-migration.md`. Nothing on the
+wire, in the protocol, in stored data or in behaviour changed; every hoisted or corrected
+statement describes behaviour the code already has.
+
+### Added
+
+- [decisions/backfill-register.md](decisions/backfill-register.md) "Sentence-level
+  audit": per-version counts of binding-and-present, hoisted, superseded, non-binding and
+  contradicting sentences, every hoisted statement with its destination, and every
+  contradiction with the code location. The audited rows' "Checked by" column now reads
+  `sentence-audited`.
+
+### Changed
+
+- Binding statements that only these entries carried are now in the normative
+  documents: account-connection envelope format, Everhour adoption guard and the
+  `AccountConnectionDto` shape (from `[153]`); the exact `FileChangeDto`, the meaning of the
+  changed-file list, capture warnings across sessions, the version-165 provenance mapping,
+  the webhook `changedFiles` item shape, tradeoff provenance, the CLI-local `changes` read,
+  `attach --capture-binding`, `ovld changes status` and the event codec dialect (from
+  `[165]`); Run Queue dispatch, `overlord_search_missions` detail modes and project reference
+  resolution (from the `[104]` rows for 102, 100 and 97); the deferred-work id derivation,
+  the historical deferred-work migration and mission-summary evidence, watermark and
+  eligibility rules (from `[166]`); the `project_automation` allowlist growth rule (from
+  `[151]`); owner-only chat diagnostics capture, privacy and route rules and the summary
+  boundary validation (from `[159]`); the runner-queue transport, nullable execution-request
+  ids, `capability_call` and the refused-message reason (from `[129]`); and the
+  Knowledgebase tool policy guards, bounds, scope and outcomes (from `[154]`).
+- Corrected to the code: the "Tool catalog (fixed)" list in
+  [architecture.md](architecture.md) "Assistant Conversation Behaviour" now includes
+  `prepare_proposal`, `expand_capabilities`, the reviewed Knowledgebase writes and
+  `overlord_find_feature_missions`; `components.yaml` names the exact eight-field
+  `FileChangeDto` instead of five fields "only".
+- Contradiction recorded, not resolved: `[155]` and `components.yaml` name the assistant
+  system prompt `overlord-assistant-v5`, while the code is at `overlord-assistant-v8`.
+
+### Version
+
+- Patch contract version 168.0.3, from 168.0.2: clarifications that copy existing
+  obligations into the normative documents and corrections of stale text to the enforced
+  behaviour, with no change to any interface, invariant, security property, data meaning
+  or observable behaviour. No ADR: the audit records earlier decisions and makes none.
+  `yarn connectors:capabilities` restamped the generated connector manifests;
+  hand-maintained manifests keep `168.0.0`, which shares the major version (ADR 0009).
+
 ## [168.0.2] - 2026-11-12
 
 Phase 3 of `planning/feature-plans/contract-adr-openapi-migration.md`: reconciliation
