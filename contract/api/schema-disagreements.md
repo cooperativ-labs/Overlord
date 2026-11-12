@@ -326,6 +326,37 @@ the code does not do.
   `backend/agent-session-routes.ts` write service errors as `{ error, code }` themselves (never
   `details`); other failures reach `apiErrorHandler`.
 
+### Assistant chat (batch 4)
+
+- **Y1** (open). `ChatBlockDto` (packages/contract `chat.ts`) declares six block kinds; the writers
+  (`ChatRuns.text`, `ChatRuns.attachCitations`, `ChatProposals.prepare`, `unavailableBlocks`,
+  `packages/core/service/chat/`) produce only `text`, `evidence`, `proposal` and `unavailable`, and
+  the schema is closed to those four (as A3: adding a kind is a description change). Likewise the
+  `overlord` source locator's `entityType` is written as `project`, `mission` or `delivery` only
+  (`tools.ts`), with `projectId` always a string although the type allows `resource`, `objective` and
+  null; `ChatAssignmentDto.source` is written as `project_default` or `assistant_selection` only (the
+  type also has `user_preference`) and `model` is never null after `validateAssignment`;
+  `ChatProposalMissionDto.audienceWarning` ("set when the destination audience is broader") is always
+  the same fixed reminder. Affects every operation that answers messages, proposals or events.
+- **Y2** (open). `POST /api/chat/runs/{id}/continue` answers `{ run, replayed }`, which has no
+  TypeScript type (the web client inlines it); the schema is `ContinueChatRunResponse`.
+  `postChatRunsByIdContinue`.
+- **Y3** (open). Chat reads write: the snapshot, event and every mutating chat route recheck the
+  thread's sources (updating `chat_source_refs`, possibly invalidating content and failing unfinished
+  runs) and prune expired events, and every chat route except diagnostics appends its request and
+  response to the thread's diagnostics (`Conversations.observeHttp`, `backend/chat.ts`).
+  `getChatThreadsById`, `getChatThreadsByIdEvents` and the chat writes.
+- **Y4** (open). `CancelChatRunBody.clientRequestId` and `ContinueChatRunBody.clientRequestId` are
+  required (400) but never stored; Continue is idempotent per source run (`continued_from_run_id`),
+  not per request id (`Conversations.cancel`, `Conversations.continue`). `postChatRunsByIdCancel`,
+  `postChatRunsByIdContinue`.
+- **Y5** (open). `ChatEvidenceDto.stale` ("older than the client should treat as current") is
+  computed once, when the citation is attached (15 minutes), and stored in the message blocks; it is
+  not recomputed on read (`ChatRuns.attachCitations`).
+- **Y6** (open). `GET /api/chat/providers` has a 503 `provider_not_ready` branch for a router built
+  without a providers function (`createChatRouter`); `backend/app.ts` always supplies one, so it is
+  not described. `getChatProviders`.
+
 ## 2. Non-conforming error shapes
 
 Every route in `backend/app.ts` that forwards errors through `handle()` or `next(err)`
@@ -366,6 +397,13 @@ project-automation route guard (404).
   `invalid_scope`, `invalid_target`, `unsupported_response_type`), while the other OAuth
   endpoints answer E4's `{ error, error_description }`. `postOauthRegister` and `postOauthToken`
   fall back to `ErrorEnvelope` for 413 and 500.
+- **E8** (open; batch 4). The chat router answers any failure that is not a service error with 500
+  `{ error: 'Chat request failed' }`, without `detail` (`chatRoute`, `backend/chat/router-support.ts`;
+  C3 is the same for connections). `GET /api/chat/threads/{id}/events` writes its own errors before
+  the stream starts, `{ error, code }` for a chat error and `{ error: 'Chat request failed' }`
+  otherwise, without passing through `apiErrorHandler`; after the stream starts it can only end the
+  stream (`createChatRouter`, `backend/chat.ts`). All of these still match `ErrorEnvelope`.
+  `getChatThreadsByIdEvents` and every chat operation.
 
 ## 3. Suspected code defects
 
@@ -442,6 +480,13 @@ schema must change.
   the `X-Overlord-Device-Fingerprint` header parameter on the execution-target, launch-settings
   and observation operations, and `postRunnerClaim`'s Postgres long poll, whose headers are
   flushed before the body is written (batch 3).
+
+- **G15** One success status with two media types chosen by a query parameter:
+  `getChatThreadsByIdEvents` answers `application/json` (`ChatEventPageDto`) with `poll=1` and
+  `text/event-stream` (frames of `ChatStreamFrameDto`) otherwise (batch 4).
+- **G16** Unions discriminated only by a `const` member and no OpenAPI `discriminator`:
+  `ChatBlockDto` (`kind`), `ChatSourceLocatorDto` (`kind`), `ChatEventDto` (`kind`, eleven
+  variants) and `ChatStreamFrameDto` (`type`). Needs `z.discriminatedUnion` (or `z.union`) (batch 4).
 
 ## 5. Operations left as stubs
 

@@ -1348,7 +1348,44 @@ paths:
       x-overlord-permission: owner
       x-overlord-edition: cloud
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Assistant engine readiness and the caller's organization connections
+      description: >-
+        Owner-scoped and Cloud-only; no RBAC action. The owner is the authenticated profile in the
+        request's selected organization (a token's organization, or a session's only organization) and
+        must be an active member of a live workspace there. On a Local backend every `/api/chat/*` route
+        answers 404 `{ error: 'chat unavailable', code: 'chat_unavailable' }` after authentication. Errors
+        are `{ error, code }` with `code` from the closed ChatErrorCode set and `error` the code with
+        spaces. Answers the readiness of the one configured model provider (Gemini; `not_configured`
+        without a key, `rate_limited` while a provider rate limit is in force, `unavailable` after the
+        last run failed to reach it) and the caller's organization-scoped account connections in the
+        selected organization (the default `GET /api/connections` listing, so a Knowledgebase grant whose
+        access and refresh have both expired is moved to `reauthorization_required` as it is read).
+        Profile-scoped connections (Everhour, GitHub) are not included.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: Provider readiness and connections.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatProvidersResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: >-
+            `chat_unavailable` on a Local backend (every chat route, checked first); `not_found` when the
+            request has no selected organization, the caller is no longer an active member of it, or the
+            addressed thread, run, question, proposal or notification is unknown or belongs to another
+            owner or organization (existence is not disclosed). A `project_automation` token gets `{
+            error: 'Not found' }` from the route guard.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500':
+          description: >-
+            `{ error: 'Chat request failed' }` (no `detail`) for any failure that is not a service error;
+            a malformed JSON body is rejected earlier with the generic `{ error, detail }`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   /api/chat/threads:
     get:
       operationId: getChatThreads
@@ -1356,91 +1393,497 @@ paths:
       x-overlord-permission: owner
       x-overlord-edition: cloud
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: List the caller's chat threads
+      description: >-
+        Owner-scoped and Cloud-only; no RBAC action. The owner is the authenticated profile in the
+        request's selected organization (a token's organization, or a session's only organization) and
+        must be an active member of a live workspace there. On a Local backend every `/api/chat/*` route
+        answers 404 `{ error: 'chat unavailable', code: 'chat_unavailable' }` after authentication. Errors
+        are `{ error, code }` with `code` from the closed ChatErrorCode set and `error` the code with
+        spaces. The caller's threads in the selected organization, most recent activity first (ties by id,
+        descending), 50 per page. Archived threads are excluded unless `archived=1`, which lists archived
+        and unarchived threads together. `nextCursor` is set when more threads follow.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: archived
+          in: query
+          required: false
+          description: '`1` includes archived threads; any other value excludes them.'
+          schema: { type: string }
+        - name: cursor
+          in: query
+          required: false
+          description: >-
+            The opaque `nextCursor` of the previous page. A value that does not decode to a cursor answers
+            400 `invalid_request`.
+          schema: { type: string }
+      responses:
+        '200':
+          description: One page of threads.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatThreadListResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: >-
+            `chat_unavailable` on a Local backend (every chat route, checked first); `not_found` when the
+            request has no selected organization, the caller is no longer an active member of it, or the
+            addressed thread, run, question, proposal or notification is unknown or belongs to another
+            owner or organization (existence is not disclosed). A `project_automation` token gets `{
+            error: 'Not found' }` from the route guard.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500':
+          description: >-
+            `{ error: 'Chat request failed' }` (no `detail`) for any failure that is not a service error;
+            a malformed JSON body is rejected earlier with the generic `{ error, detail }`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
     post:
       operationId: postChatThreads
       tags: [chat]
       x-overlord-permission: owner
       x-overlord-edition: cloud
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Create a chat thread, optionally with its first message
+      description: >-
+        Owner-scoped and Cloud-only; no RBAC action. The owner is the authenticated profile in the
+        request's selected organization (a token's organization, or a session's only organization) and
+        must be an active member of a live workspace there. On a Local backend every `/api/chat/*` route
+        answers 404 `{ error: 'chat unavailable', code: 'chat_unavailable' }` after authentication. Errors
+        are `{ error, code }` with `code` from the closed ChatErrorCode set and `error` the code with
+        spaces. Creates an empty thread (title `''`, `titleSource: pending`) owned by the caller in the
+        selected organization. The body is optional; with `message`, the thread and the first message and
+        its run are created in one transaction, with the same validation and limits as `POST
+        /api/chat/threads/{id}/messages` (a failure creates no thread), and the thread title is then
+        generated from the message text. A body that is not a JSON object, or a `message` that is not an
+        object, answers 400 `invalid_request`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateChatThreadBody' }
+      responses:
+        '200':
+          description: The new thread; `message` and `run` are null without a first message.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreateChatThreadResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: >-
+            `chat_unavailable` on a Local backend (every chat route, checked first); `not_found` when the
+            request has no selected organization, the caller is no longer an active member of it, or the
+            addressed thread, run, question, proposal or notification is unknown or belongs to another
+            owner or organization (existence is not disclosed). A `project_automation` token gets `{
+            error: 'Not found' }` from the route guard.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '409':
+          description: >-
+            `connection_reauthorization_required`: the `knowledgebaseWrite` connection must be signed in
+            again.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429':
+          description: >-
+            The caller already has the maximum number of unfinished runs across all of their threads
+            (`concurrentRunsPerOwner`, default 3, `CHAT_MAX_CONCURRENT_RUNS_PER_OWNER`): `{ error: 'limit
+            exceeded', code: 'limit_exceeded' }`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500':
+          description: >-
+            `{ error: 'Chat request failed' }` (no `detail`) for any failure that is not a service error;
+            a malformed JSON body is rejected earlier with the generic `{ error, detail }`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   "/api/chat/threads/{id}":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Chat thread UUID. Another owner's or organization's thread, or an unknown id, answers 404
+          `not_found`.
+        schema: { type: string }
     get:
       operationId: getChatThreadsById
       tags: [chat]
       x-overlord-permission: owner
       x-overlord-edition: cloud
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Read a thread snapshot
+      description: >-
+        Owner-scoped and Cloud-only; no RBAC action. The owner is the authenticated profile in the
+        request's selected organization (a token's organization, or a session's only organization) and
+        must be an active member of a live workspace there. On a Local backend every `/api/chat/*` route
+        answers 404 `{ error: 'chat unavailable', code: 'chat_unavailable' }` after authentication. Errors
+        are `{ error, code }` with `code` from the closed ChatErrorCode set and `error` the code with
+        spaces. Reads the thread, its newest 100 messages (oldest first), the unfinished run, the most
+        recent terminal run, the open question, open proposals, the non-open proposals referenced by
+        proposal blocks in the page, and the event cursor, in one transaction. Content whose sources are
+        no longer authorized is already replaced by `unavailable` blocks. Writes as it reads: every source
+        of the thread is rechecked (which can invalidate content and fail unfinished runs), expired events
+        are pruned, and the exchange is appended to the thread's diagnostics.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: before
+          in: query
+          required: false
+          description: >-
+            A message id of this thread: answers the 100 messages before it instead of the newest. An id
+            that is not a message of the thread yields an empty `messages` page.
+          schema: { type: string }
+      responses:
+        '200':
+          description: The snapshot.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatThreadSnapshotDto' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: >-
+            `chat_unavailable` on a Local backend (every chat route, checked first); `not_found` when the
+            request has no selected organization, the caller is no longer an active member of it, or the
+            addressed thread, run, question, proposal or notification is unknown or belongs to another
+            owner or organization (existence is not disclosed). A `project_automation` token gets `{
+            error: 'Not found' }` from the route guard.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500':
+          description: >-
+            `{ error: 'Chat request failed' }` (no `detail`) for any failure that is not a service error;
+            a malformed JSON body is rejected earlier with the generic `{ error, detail }`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
     patch:
       operationId: patchChatThreadsById
       tags: [chat]
       x-overlord-permission: owner
       x-overlord-edition: cloud
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Rename or archive a chat thread
+      description: >-
+        Owner-scoped and Cloud-only; no RBAC action. The owner is the authenticated profile in the
+        request's selected organization (a token's organization, or a session's only organization) and
+        must be an active member of a live workspace there. On a Local backend every `/api/chat/*` route
+        answers 404 `{ error: 'chat unavailable', code: 'chat_unavailable' }` after authentication. Errors
+        are `{ error, code }` with `code` from the closed ChatErrorCode set and `error` the code with
+        spaces. `expectedRevision` must be a positive integer (400) and at least one of `title` and
+        `archived` must be present (400). `title` must be a non-blank string of at most 80 characters
+        (400); it is stored trimmed and sets `titleSource: user`. `archived` must be a boolean (400):
+        `true` sets `archivedAt`, `false` clears it. `expectedRevision` other than the thread's `revision`
+        answers 409 `stale_revision`. Appends a `thread.updated` event and bumps `revision`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateChatThreadBody' }
+      responses:
+        '200':
+          description: The updated thread.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatThreadDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: >-
+            `chat_unavailable` on a Local backend (every chat route, checked first); `not_found` when the
+            request has no selected organization, the caller is no longer an active member of it, or the
+            addressed thread, run, question, proposal or notification is unknown or belongs to another
+            owner or organization (existence is not disclosed). A `project_automation` token gets `{
+            error: 'Not found' }` from the route guard.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '409':
+          description: '`stale_revision`.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500':
+          description: >-
+            `{ error: 'Chat request failed' }` (no `detail`) for any failure that is not a service error;
+            a malformed JSON body is rejected earlier with the generic `{ error, detail }`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   "/api/chat/threads/{id}/diagnostics":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Chat thread UUID. Another owner's or organization's thread, or an unknown id, answers 404
+          `not_found`.
+        schema: { type: string }
     get:
       operationId: getChatThreadsByIdDiagnostics
       tags: [chat]
       x-overlord-permission: owner
       x-overlord-edition: cloud
       x-overlord-consumers: [webapp]
-      x-overlord-schema-status: stub
+      summary: Read a thread's diagnostic observations
+      description: >-
+        Owner-scoped and Cloud-only; no RBAC action. The owner is the authenticated profile in the
+        request's selected organization (a token's organization, or a session's only organization) and
+        must be an active member of a live workspace there. On a Local backend every `/api/chat/*` route
+        answers 404 `{ error: 'chat unavailable', code: 'chat_unavailable' }` after authentication. Errors
+        are `{ error, code }` with `code` from the closed ChatErrorCode set and `error` the code with
+        spaces. Owner-only, unredacted observations of the thread (persisted events with their run,
+        attempt and tool rows, provider exchanges, and HTTP exchanges on the thread's chat routes other
+        than this one), in sequence order, 100 per page after `after`. Responses carry `Cache-Control:
+        no-store`. Does not recheck sources.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: after
+          in: query
+          required: false
+          description: >-
+            Return entries with `seq` greater than this; decimal digits only, default `0` (400
+            `invalid_request` otherwise).
+          schema: { type: string }
+      responses:
+        '200':
+          description: One page of observations.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatDiagnosticPageDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: >-
+            `chat_unavailable` on a Local backend (every chat route, checked first); `not_found` when the
+            request has no selected organization, the caller is no longer an active member of it, or the
+            addressed thread, run, question, proposal or notification is unknown or belongs to another
+            owner or organization (existence is not disclosed). A `project_automation` token gets `{
+            error: 'Not found' }` from the route guard.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500':
+          description: >-
+            `{ error: 'Chat request failed' }` (no `detail`) for any failure that is not a service error;
+            a malformed JSON body is rejected earlier with the generic `{ error, detail }`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   "/api/chat/threads/{id}/messages":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Chat thread UUID. Another owner's or organization's thread, or an unknown id, answers 404
+          `not_found`.
+        schema: { type: string }
     post:
       operationId: postChatThreadsByIdMessages
       tags: [chat]
       x-overlord-permission: owner
       x-overlord-edition: cloud
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Submit a message
+      description: >-
+        Owner-scoped and Cloud-only; no RBAC action. The owner is the authenticated profile in the
+        request's selected organization (a token's organization, or a session's only organization) and
+        must be an active member of a live workspace there. On a Local backend every `/api/chat/*` route
+        answers 404 `{ error: 'chat unavailable', code: 'chat_unavailable' }` after authentication. Errors
+        are `{ error, code }` with `code` from the closed ChatErrorCode set and `error` the code with
+        spaces. Idempotent per `(thread, clientRequestId)`: a repeated `clientRequestId` (a non-blank
+        string of at most 200 characters, 400 otherwise) answers the original message and run with
+        `replayed: true` without validating the rest of the body. Otherwise `text` must be a non-blank
+        string of at most 16,000 characters (400). `knowledgebaseWrite`, when present and not null, must
+        be exactly `{ connectionId, workspace }` naming one of the caller's connected Knowledgebase
+        connections and one of its authorized workspaces (400 `invalid_request` otherwise, 409
+        `connection_reauthorization_required` when the connection needs signing in again). While the
+        thread's run is `queued` or `running` the message answers 409 `run_in_progress`. While it is
+        `waiting_user` the message answers its open question and resumes the same run: `optionId` must
+        name an option of the question (400), a question without free text requires one (400), a question
+        that is no longer open or authorized answers 409 `stale_revision`, and a `knowledgebaseWrite`
+        different from the run's existing grant answers 400. Otherwise a new run is queued, subject to the
+        per-owner limit (429). The first message also titles a `pending` thread.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SubmitChatMessageBody' }
+      responses:
+        '200':
+          description: The user message and its run.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SubmitChatMessageResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: >-
+            `chat_unavailable` on a Local backend (every chat route, checked first); `not_found` when the
+            request has no selected organization, the caller is no longer an active member of it, or the
+            addressed thread, run, question, proposal or notification is unknown or belongs to another
+            owner or organization (existence is not disclosed). A `project_automation` token gets `{
+            error: 'Not found' }` from the route guard.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '409':
+          description: >-
+            `run_in_progress`, `stale_revision` (the open question changed), or
+            `connection_reauthorization_required`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429':
+          description: >-
+            The caller already has the maximum number of unfinished runs across all of their threads
+            (`concurrentRunsPerOwner`, default 3, `CHAT_MAX_CONCURRENT_RUNS_PER_OWNER`): `{ error: 'limit
+            exceeded', code: 'limit_exceeded' }`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500':
+          description: >-
+            `{ error: 'Chat request failed' }` (no `detail`) for any failure that is not a service error;
+            a malformed JSON body is rejected earlier with the generic `{ error, detail }`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   "/api/chat/threads/{id}/presence":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Chat thread UUID. Another owner's or organization's thread, or an unknown id, answers 404
+          `not_found`.
+        schema: { type: string }
     put:
       operationId: putChatThreadsByIdPresence
       tags: [chat]
       x-overlord-permission: owner
       x-overlord-edition: cloud
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Renew or release a client's foreground presence
+      description: >-
+        Owner-scoped and Cloud-only; no RBAC action. The owner is the authenticated profile in the
+        request's selected organization (a token's organization, or a session's only organization) and
+        must be an active member of a live workspace there. On a Local backend every `/api/chat/*` route
+        answers 404 `{ error: 'chat unavailable', code: 'chat_unavailable' }` after authentication. Errors
+        are `{ error, code }` with `code` from the closed ChatErrorCode set and `error` the code with
+        spaces. `clientId` must be a non-blank string of at most 200 characters, `platform` one of `ios`,
+        `web`, `desktop` and `state` `foreground` or `released` (400 `invalid_request` otherwise).
+        `foreground` holds presence for `presenceTtlMs` (default 30 seconds); `released` ends it. Presence
+        with an acknowledgement suppresses pending conversation notifications for this client. Rechecks
+        membership but not sources.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateChatPresenceBody' }
+      responses:
+        '200':
+          description: The client's presence; `expiresAt` is null when released.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatPresenceDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: >-
+            `chat_unavailable` on a Local backend (every chat route, checked first); `not_found` when the
+            request has no selected organization, the caller is no longer an active member of it, or the
+            addressed thread, run, question, proposal or notification is unknown or belongs to another
+            owner or organization (existence is not disclosed). A `project_automation` token gets `{
+            error: 'Not found' }` from the route guard.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500':
+          description: >-
+            `{ error: 'Chat request failed' }` (no `detail`) for any failure that is not a service error;
+            a malformed JSON body is rejected earlier with the generic `{ error, detail }`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   "/api/chat/threads/{id}/ack":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Chat thread UUID. Another owner's or organization's thread, or an unknown id, answers 404
+          `not_found`.
+        schema: { type: string }
     post:
       operationId: postChatThreadsByIdAck
       tags: [chat]
       x-overlord-permission: owner
       x-overlord-edition: cloud
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Acknowledge rendered events
+      description: >-
+        Owner-scoped and Cloud-only; no RBAC action. The owner is the authenticated profile in the
+        request's selected organization (a token's organization, or a session's only organization) and
+        must be an active member of a live workspace there. On a Local backend every `/api/chat/*` route
+        answers 404 `{ error: 'chat unavailable', code: 'chat_unavailable' }` after authentication. Errors
+        are `{ error, code }` with `code` from the closed ChatErrorCode set and `error` the code with
+        spaces. Records that `clientId` (non-blank, at most 200 characters) rendered every event through
+        `seq`, a non-negative integer no greater than the thread's last event sequence (400
+        `invalid_request` otherwise). Monotonic and idempotent: a lower `seq` keeps the stored value. When
+        the client holds live foreground presence, pending conversation notifications of this thread at or
+        below the acknowledged sequence are suppressed and listed.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AckChatEventsBody' }
+      responses:
+        '200':
+          description: The stored acknowledgement.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatAckDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: >-
+            `chat_unavailable` on a Local backend (every chat route, checked first); `not_found` when the
+            request has no selected organization, the caller is no longer an active member of it, or the
+            addressed thread, run, question, proposal or notification is unknown or belongs to another
+            owner or organization (existence is not disclosed). A `project_automation` token gets `{
+            error: 'Not found' }` from the route guard.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500':
+          description: >-
+            `{ error: 'Chat request failed' }` (no `detail`) for any failure that is not a service error;
+            a malformed JSON body is rejected earlier with the generic `{ error, detail }`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   /api/chat/notifications:
     get:
       operationId: getChatNotifications
@@ -1448,91 +1891,453 @@ paths:
       x-overlord-permission: owner
       x-overlord-edition: cloud
       x-overlord-consumers: [mobile]
-      x-overlord-schema-status: stub
+      summary: List dispatched conversation notifications
+      description: >-
+        Owner-scoped and Cloud-only; no RBAC action. The owner is the authenticated profile in the
+        request's selected organization (a token's organization, or a session's only organization) and
+        must be an active member of a live workspace there. On a Local backend every `/api/chat/*` route
+        answers 404 `{ error: 'chat unavailable', code: 'chat_unavailable' }` after authentication. Errors
+        are `{ error, code }` with `code` from the closed ChatErrorCode set and `error` the code with
+        spaces. The caller's dispatched, non-dismissed conversation notifications in the selected
+        organization, newest dispatch first, at most 100. `unreadCount` counts every unread one, not only
+        those listed.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      responses:
+        '200':
+          description: The notification history.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatNotificationListResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: >-
+            `chat_unavailable` on a Local backend (every chat route, checked first); `not_found` when the
+            request has no selected organization, the caller is no longer an active member of it, or the
+            addressed thread, run, question, proposal or notification is unknown or belongs to another
+            owner or organization (existence is not disclosed). A `project_automation` token gets `{
+            error: 'Not found' }` from the route guard.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500':
+          description: >-
+            `{ error: 'Chat request failed' }` (no `detail`) for any failure that is not a service error;
+            a malformed JSON body is rejected earlier with the generic `{ error, detail }`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   "/api/chat/notifications/{id}/read":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Conversation notification UUID. Only the caller's dispatched, non-dismissed notifications in the
+          selected organization resolve; any other id answers 404 `not_found`.
+        schema: { type: string }
     post:
       operationId: postChatNotificationsByIdRead
       tags: [chat]
       x-overlord-permission: owner
       x-overlord-edition: cloud
       x-overlord-consumers: [mobile]
-      x-overlord-schema-status: stub
+      summary: Mark a conversation notification read
+      description: >-
+        Owner-scoped and Cloud-only; no RBAC action. The owner is the authenticated profile in the
+        request's selected organization (a token's organization, or a session's only organization) and
+        must be an active member of a live workspace there. On a Local backend every `/api/chat/*` route
+        answers 404 `{ error: 'chat unavailable', code: 'chat_unavailable' }` after authentication. Errors
+        are `{ error, code }` with `code` from the closed ChatErrorCode set and `error` the code with
+        spaces. `expectedRevision` must be a positive integer (400) equal to the notification's `revision`
+        (409 `stale_revision`). Marking an already read notification at its current revision answers it
+        unchanged.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MarkChatNotificationReadBody' }
+      responses:
+        '200':
+          description: The notification.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatNotificationDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: >-
+            `chat_unavailable` on a Local backend (every chat route, checked first); `not_found` when the
+            request has no selected organization, the caller is no longer an active member of it, or the
+            addressed thread, run, question, proposal or notification is unknown or belongs to another
+            owner or organization (existence is not disclosed). A `project_automation` token gets `{
+            error: 'Not found' }` from the route guard.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '409':
+          description: '`stale_revision`.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500':
+          description: >-
+            `{ error: 'Chat request failed' }` (no `detail`) for any failure that is not a service error;
+            a malformed JSON body is rejected earlier with the generic `{ error, detail }`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   "/api/chat/proposals/{id}/create":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Work proposal UUID. A proposal in another owner's or organization's thread, or an unknown id,
+          answers 404 `not_found`.
+        schema: { type: string }
     post:
       operationId: postChatProposalsByIdCreate
       tags: [chat]
       x-overlord-permission: owner
       x-overlord-edition: cloud
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Create draft missions from a work proposal
+      description: >-
+        Owner-scoped and Cloud-only; no RBAC action. The owner is the authenticated profile in the
+        request's selected organization (a token's organization, or a session's only organization) and
+        must be an active member of a live workspace there. On a Local backend every `/api/chat/*` route
+        answers 404 `{ error: 'chat unavailable', code: 'chat_unavailable' }` after authentication. Errors
+        are `{ error, code }` with `code` from the closed ChatErrorCode set and `error` the code with
+        spaces. The only path from a conversation to missions. `clientRequestId` (non-blank, at most 200
+        characters) and `expectedRevision` (positive integer) are required (400). The thread's sources are
+        rechecked first, and that result persists even when Create is refused. A proposal that already has
+        a receipt answers it with `replayed: true`; a `clientRequestId` the caller already used for
+        another proposal answers 400. Otherwise `expectedRevision` must equal the proposal's current
+        revision (409 `stale_revision`), and the proposal must be open, its revision authorized and
+        uninvalidated, the caller its responsible profile, the caller still able to create missions
+        (`mission:create`) in every destination project and workspace, every frozen agent, model and
+        reasoning selection still in the workspace's agent catalog, every resource key still registered
+        and every project still have a draft status (409 `proposal_not_creatable` otherwise; a destination
+        project the caller can no longer create missions in answers 404 `not_found`). Creates one draft
+        mission per proposed mission, in one transaction, and the receipt.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateFromChatProposalBody' }
+      responses:
+        '200':
+          description: The created proposal and its receipt.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreateFromChatProposalResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: >-
+            `chat_unavailable` on a Local backend (every chat route, checked first); `not_found` when the
+            request has no selected organization, the caller is no longer an active member of it, or the
+            addressed thread, run, question, proposal or notification is unknown or belongs to another
+            owner or organization (existence is not disclosed). A `project_automation` token gets `{
+            error: 'Not found' }` from the route guard.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '409':
+          description: '`stale_revision` or `proposal_not_creatable`.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500':
+          description: >-
+            `{ error: 'Chat request failed' }` (no `detail`) for any failure that is not a service error;
+            a malformed JSON body is rejected earlier with the generic `{ error, detail }`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   "/api/chat/questions/{id}/answer":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Question UUID. An unknown id, or a question in another owner's or organization's thread, answers
+          404 `not_found`.
+        schema: { type: string }
     post:
       operationId: postChatQuestionsByIdAnswer
       tags: [chat]
       x-overlord-permission: owner
       x-overlord-edition: cloud
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Answer an open question from its card
+      description: >-
+        Owner-scoped and Cloud-only; no RBAC action. The owner is the authenticated profile in the
+        request's selected organization (a token's organization, or a session's only organization) and
+        must be an active member of a live workspace there. On a Local backend every `/api/chat/*` route
+        answers 404 `{ error: 'chat unavailable', code: 'chat_unavailable' }` after authentication. Errors
+        are `{ error, code }` with `code` from the closed ChatErrorCode set and `error` the code with
+        spaces. The card form of answering by message. `expectedRevision` must be a positive integer (400)
+        equal to the question's revision while it is open (409 `stale_revision` once answered, superseded
+        or cancelled). The answer text is `text`, else the label of the option `optionId` names; it is
+        then validated as a message (`clientRequestId` and the text required, 400), and a question without
+        free text requires a valid `optionId` (400). Idempotent per `(thread, clientRequestId)` like `POST
+        /api/chat/threads/{id}/messages`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AnswerChatQuestionBody' }
+      responses:
+        '200':
+          description: The answer message and the resumed run.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SubmitChatMessageResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: >-
+            `chat_unavailable` on a Local backend (every chat route, checked first); `not_found` when the
+            request has no selected organization, the caller is no longer an active member of it, or the
+            addressed thread, run, question, proposal or notification is unknown or belongs to another
+            owner or organization (existence is not disclosed). A `project_automation` token gets `{
+            error: 'Not found' }` from the route guard.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '409':
+          description: '`stale_revision` or `run_in_progress`.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500':
+          description: >-
+            `{ error: 'Chat request failed' }` (no `detail`) for any failure that is not a service error;
+            a malformed JSON body is rejected earlier with the generic `{ error, detail }`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   "/api/chat/runs/{id}/cancel":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Run UUID. An unknown id, or a run in another owner's or organization's thread, answers 404
+          `not_found`.
+        schema: { type: string }
     post:
       operationId: postChatRunsByIdCancel
       tags: [chat]
       x-overlord-permission: owner
       x-overlord-edition: cloud
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Cancel a run
+      description: >-
+        Owner-scoped and Cloud-only; no RBAC action. The owner is the authenticated profile in the
+        request's selected organization (a token's organization, or a session's only organization) and
+        must be an active member of a live workspace there. On a Local backend every `/api/chat/*` route
+        answers 404 `{ error: 'chat unavailable', code: 'chat_unavailable' }` after authentication. Errors
+        are `{ error, code }` with `code` from the closed ChatErrorCode set and `error` the code with
+        spaces. `clientRequestId` must be a non-blank string of at most 200 characters (400); it is not
+        stored. Idempotent: a run that is already `completed`, `failed` or `cancelled` is answered
+        unchanged. Otherwise the run ends `cancelled`, its open question is cancelled and streaming
+        messages are marked `interrupted`.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CancelChatRunBody' }
+      responses:
+        '200':
+          description: The run.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatRunDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: >-
+            `chat_unavailable` on a Local backend (every chat route, checked first); `not_found` when the
+            request has no selected organization, the caller is no longer an active member of it, or the
+            addressed thread, run, question, proposal or notification is unknown or belongs to another
+            owner or organization (existence is not disclosed). A `project_automation` token gets `{
+            error: 'Not found' }` from the route guard.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '500':
+          description: >-
+            `{ error: 'Chat request failed' }` (no `detail`) for any failure that is not a service error;
+            a malformed JSON body is rejected earlier with the generic `{ error, detail }`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   "/api/chat/runs/{id}/continue":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Run UUID. An unknown id, or a run in another owner's or organization's thread, answers 404
+          `not_found`.
+        schema: { type: string }
     post:
       operationId: postChatRunsByIdContinue
       tags: [chat]
       x-overlord-permission: owner
       x-overlord-edition: cloud
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Continue a run whose allowance ran out
+      description: >-
+        Owner-scoped and Cloud-only; no RBAC action. The owner is the authenticated profile in the
+        request's selected organization (a token's organization, or a session's only organization) and
+        must be an active member of a live workspace there. On a Local backend every `/api/chat/*` route
+        answers 404 `{ error: 'chat unavailable', code: 'chat_unavailable' }` after authentication. Errors
+        are `{ error, code }` with `code` from the closed ChatErrorCode set and `error` the code with
+        spaces. `clientRequestId` must be a non-blank string of at most 200 characters (400); it is not
+        stored. Idempotent per source run: when a run already continues this one it is answered with
+        `replayed: true`. Otherwise the run must be the thread's latest run, `completed` with outcome
+        `allowance_exhausted` (409 `continue_not_available`), and the per-owner limit applies (429). The
+        new run keeps the source run's trigger message and Knowledgebase write grant.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ContinueChatRunBody' }
+      responses:
+        '200':
+          description: The continuing run.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ContinueChatRunResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: >-
+            `chat_unavailable` on a Local backend (every chat route, checked first); `not_found` when the
+            request has no selected organization, the caller is no longer an active member of it, or the
+            addressed thread, run, question, proposal or notification is unknown or belongs to another
+            owner or organization (existence is not disclosed). A `project_automation` token gets `{
+            error: 'Not found' }` from the route guard.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '409':
+          description: '`continue_not_available`.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '413': { $ref: '#/components/responses/PayloadTooLarge' }
+        '429':
+          description: >-
+            The caller already has the maximum number of unfinished runs across all of their threads
+            (`concurrentRunsPerOwner`, default 3, `CHAT_MAX_CONCURRENT_RUNS_PER_OWNER`): `{ error: 'limit
+            exceeded', code: 'limit_exceeded' }`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500':
+          description: >-
+            `{ error: 'Chat request failed' }` (no `detail`) for any failure that is not a service error;
+            a malformed JSON body is rejected earlier with the generic `{ error, detail }`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   "/api/chat/threads/{id}/events":
     parameters:
       - name: id
         in: path
         required: true
-        schema:
-          type: string
+        description: >-
+          Chat thread UUID. Another owner's or organization's thread, or an unknown id, answers 404
+          `not_found`.
+        schema: { type: string }
     get:
       operationId: getChatThreadsByIdEvents
       tags: [chat]
       x-overlord-permission: owner
       x-overlord-edition: cloud
       x-overlord-consumers: [mobile, webapp]
-      x-overlord-schema-status: stub
+      summary: Replay and stream thread events
+      description: >-
+        Owner-scoped and Cloud-only; no RBAC action. The owner is the authenticated profile in the
+        request's selected organization (a token's organization, or a session's only organization) and
+        must be an active member of a live workspace there. On a Local backend every `/api/chat/*` route
+        answers 404 `{ error: 'chat unavailable', code: 'chat_unavailable' }` after authentication. Errors
+        are `{ error, code }` with `code` from the closed ChatErrorCode set and `error` the code with
+        spaces. Events with `seq` greater than `after`, read from storage through the source-authorization
+        projection (an event whose sources are no longer authorized is replayed as `content.invalidated`).
+        With `poll=1` the route answers one JSON page of at most 200 events. Otherwise it answers
+        `text/event-stream`: replay, then live events, as unnamed `data:` frames whose JSON is a
+        `ChatStreamFrameDto` (no `event:` or `id:` lines). The server polls storage every 500 ms,
+        rechecking membership and sources each time, writes a `heartbeat` frame when 15 seconds have
+        passed since the last one, and, when the cursor falls behind retention while streaming, writes one
+        `snapshot_required` frame and ends the stream; any other failure after the stream started ends it
+        without a frame. A closed stream never implies that a run finished. Errors before the stream
+        starts are written by the route itself as `{ error, code }` (`{ error: 'Chat request failed' }`
+        with 500 for any other failure), except 401, the project-automation guard's 404 and the Local
+        `chat_unavailable` 404, which come from the shared middleware.
+      security: [ { sessionCookie: [] }, { sessionBearer: [] }, { userToken: [] } ]
+      parameters:
+        - name: after
+          in: query
+          required: true
+          description: >-
+            The last sequence already applied (a snapshot's `eventCursor`), decimal digits. Missing,
+            malformed, or greater than the thread's last event sequence answers 400 `invalid_request`;
+            below `retainedFromSeq - 1` answers 409 `snapshot_required`.
+          schema: { type: string }
+        - name: poll
+          in: query
+          required: false
+          description: '`1` answers one JSON page instead of a stream.'
+          schema: { type: string }
+      responses:
+        '200':
+          description: >-
+            With `poll=1`, a `ChatEventPageDto`. Otherwise `text/event-stream` with headers
+            `Cache-Control: no-cache, no-transform`, `Connection: keep-alive` and `X-Accel-Buffering: no`,
+            flushed before the first event.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatEventPageDto' }
+            text/event-stream:
+              schema: { $ref: '#/components/schemas/ChatStreamFrameDto' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404':
+          description: >-
+            `chat_unavailable` on a Local backend (every chat route, checked first); `not_found` when the
+            request has no selected organization, the caller is no longer an active member of it, or the
+            addressed thread, run, question, proposal or notification is unknown or belongs to another
+            owner or organization (existence is not disclosed). A `project_automation` token gets `{
+            error: 'Not found' }` from the route guard.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '409':
+          description: '`snapshot_required`: reload the snapshot and subscribe from its `eventCursor`.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
+        '500':
+          description: >-
+            `{ error: 'Chat request failed' }` (no `detail`) for any failure that is not a service error;
+            a malformed JSON body is rejected earlier with the generic `{ error, detail }`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorEnvelope' }
   /api/connections:
     get:
       operationId: getConnections
@@ -15218,3 +16023,883 @@ components:
         inputs:
           type: array
           items: { $ref: '#/components/schemas/AgentSessionInputDto' }
+    ChatThreadDto:
+      type: object
+      required:
+        [
+          id,
+          organizationId,
+          title,
+          titleSource,
+          archivedAt,
+          lastActivityAt,
+          activeRunState,
+          createdAt,
+          updatedAt,
+          revision
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        organizationId: { type: string, format: uuid }
+        title:
+          type: string
+          description: '`''''` until the first message titles the thread; at most 80 characters once set.'
+        titleSource:
+          type: string
+          enum: [ pending, generated, user ]
+        archivedAt:
+          oneOf: [ { $ref: '#/components/schemas/DateTime' }, { type: 'null' } ]
+        lastActivityAt: { $ref: '#/components/schemas/DateTime' }
+        activeRunState:
+          description: The state of the thread's unfinished run, or null.
+          oneOf:
+            - type: string
+              enum: [ queued, running, waiting_user ]
+            - type: 'null'
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+        revision: { type: integer, minimum: 1 }
+    ChatThreadListResponse:
+      type: object
+      required: [ items, nextCursor ]
+      properties:
+        items:
+          type: array
+          maxItems: 50
+          items: { $ref: '#/components/schemas/ChatThreadDto' }
+        nextCursor:
+          description: Opaque cursor for the next page, or null on the last page.
+          oneOf: [ { type: string }, { type: 'null' } ]
+    ChatTextBlockDto:
+      type: object
+      required: [ id, kind, text, fallbackText, evidenceIds ]
+      properties:
+        id: { type: string }
+        kind: { const: text }
+        text:
+          type: string
+          description: Markdown. Citations reference `evidenceIds`.
+        fallbackText: { type: string }
+        evidenceIds:
+          type: array
+          items: { type: string }
+    ChatEvidenceBlockDto:
+      type: object
+      required: [ id, kind, evidence, fallbackText ]
+      properties:
+        id: { type: string }
+        kind: { const: evidence }
+        evidence:
+          type: array
+          items: { $ref: '#/components/schemas/ChatEvidenceDto' }
+        fallbackText: { type: string }
+    ChatProposalBlockDto:
+      type: object
+      required: [ id, kind, proposalId, revision, fallbackText ]
+      properties:
+        id: { type: string }
+        kind: { const: proposal }
+        proposalId: { type: string, format: uuid }
+        revision: { type: integer, minimum: 1 }
+        fallbackText: { type: string }
+    ChatUnavailableBlockDto:
+      type: object
+      description: Replaces every block of a message whose sources are no longer authorized.
+      required: [ id, kind, reason, regenerable, fallbackText ]
+      properties:
+        id:
+          const: unavailable
+        kind: { const: unavailable }
+        reason: { const: source_access_lost }
+        regenerable: { const: true }
+        fallbackText: { type: string }
+    ChatBlockDto:
+      description: >-
+        One block of a message. The server writes these four kinds; the TypeScript union also declares
+        `question` and `mission` blocks, which no writer produces (see schema-disagreements.md).
+      oneOf:
+        - $ref: '#/components/schemas/ChatTextBlockDto'
+        - $ref: '#/components/schemas/ChatEvidenceBlockDto'
+        - $ref: '#/components/schemas/ChatProposalBlockDto'
+        - $ref: '#/components/schemas/ChatUnavailableBlockDto'
+    ChatSourceLocatorDto:
+      description: Where an evidence reference came from. Never an absolute path or credential.
+      oneOf:
+        - type: object
+          required: [ kind, connectionId, workspace, nodeId, path ]
+          properties:
+            kind: { const: knowledgebase }
+            connectionId: { type: string }
+            workspace: { type: string }
+            nodeId: { type: string }
+            path:
+              oneOf: [ { type: string }, { type: 'null' } ]
+        - type: object
+          required: [ kind, entityType, entityId, projectId ]
+          properties:
+            kind: { const: overlord }
+            entityType:
+              type: string
+              enum: [ project, mission, delivery ]
+            entityId: { type: string }
+            projectId: { type: string }
+        - type: object
+          required: [ kind, executionTargetId, projectId, resourceKey, relativePath, head ]
+          properties:
+            kind: { const: repository }
+            executionTargetId: { type: string }
+            projectId: { type: string }
+            resourceKey: { type: string }
+            relativePath:
+              description: Repository-relative path, or null for resource-level observations.
+              oneOf: [ { type: string }, { type: 'null' } ]
+            head:
+              oneOf: [ { type: string }, { type: 'null' } ]
+    ChatEvidenceDto:
+      type: object
+      required: [ id, source, sourceRevision, observedAt, label, excerpt, truncated, stale ]
+      properties:
+        id: { type: string }
+        source: { $ref: '#/components/schemas/ChatSourceLocatorDto' }
+        sourceRevision:
+          oneOf: [ { type: string }, { type: 'null' } ]
+        observedAt: { $ref: '#/components/schemas/DateTime' }
+        label: { type: string }
+        excerpt:
+          oneOf: [ { type: string }, { type: 'null' } ]
+        truncated: { type: boolean }
+        stale:
+          type: boolean
+          description: True when the observation is more than 15 minutes old when attached.
+    ChatMessageDto:
+      type: object
+      required:
+        [
+          id,
+          threadId,
+          role,
+          state,
+          blocks,
+          runId,
+          answersQuestionId,
+          clientRequestId,
+          createdAt,
+          updatedAt,
+          revision
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        threadId: { type: string, format: uuid }
+        role:
+          type: string
+          enum: [ user, assistant ]
+        state:
+          type: string
+          enum: [ streaming, complete, interrupted ]
+        blocks:
+          type: array
+          items: { $ref: '#/components/schemas/ChatBlockDto' }
+        runId:
+          oneOf: [ { type: string, format: uuid }, { type: 'null' } ]
+        answersQuestionId:
+          description: Set on a user message that answered a question.
+          oneOf: [ { type: string, format: uuid }, { type: 'null' } ]
+        clientRequestId:
+          description: The submitting client's request id on user messages; null on assistant messages.
+          oneOf: [ { type: string }, { type: 'null' } ]
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+        revision: { type: integer, minimum: 1 }
+    ChatRunUsageDto:
+      type: object
+      required: [ toolCalls, activeProcessingMs, gatheredContentBytes ]
+      properties:
+        toolCalls: { type: integer, minimum: 0 }
+        activeProcessingMs: { type: integer, minimum: 0 }
+        gatheredContentBytes: { type: integer, minimum: 0 }
+    ChatKnowledgebaseWriteDto:
+      type: object
+      description: >-
+        A per-request grant for the assistant to write to one Knowledgebase workspace through one of the
+        caller's connections.
+      required: [ connectionId, workspace ]
+      additionalProperties: false
+      properties:
+        connectionId:
+          type: string
+          format: uuid
+          description: A UUID (any letter case on input; answered in lower case).
+        workspace:
+          type: string
+          description: A Knowledgebase workspace slug (`^[a-z0-9][a-z0-9-]{0,62}$`).
+    ChatRunDto:
+      type: object
+      required:
+        [
+          id,
+          threadId,
+          triggerMessageId,
+          state,
+          outcome,
+          failureCode,
+          continueAvailable,
+          continuedFromRunId,
+          knowledgebaseWrite,
+          usage,
+          cancelRequestedAt,
+          createdAt,
+          updatedAt,
+          completedAt,
+          revision
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        threadId: { type: string, format: uuid }
+        triggerMessageId: { type: string, format: uuid }
+        state:
+          type: string
+          enum: [ queued, running, waiting_user, completed, failed, cancelled ]
+        outcome:
+          description: Set on `completed` runs.
+          oneOf:
+            - type: string
+              enum: [ answered, allowance_exhausted ]
+            - type: 'null'
+        failureCode:
+          description: Set on `failed` runs.
+          oneOf:
+            - type: string
+              enum:
+                [
+                  provider_unavailable,
+                  rate_limited,
+                  context_limit,
+                  unsupported_capability,
+                  interrupted,
+                  provider_error,
+                  source_access_lost
+                ]
+            - type: 'null'
+        continueAvailable:
+          type: boolean
+          description: >-
+            True on a run that completed `allowance_exhausted`: in the `run.updated` event that ended
+            it, and on a snapshot's `latestRun` while no run is unfinished and none continues it. False
+            everywhere else.
+        continuedFromRunId:
+          oneOf: [ { type: string, format: uuid }, { type: 'null' } ]
+        knowledgebaseWrite:
+          description: The Knowledgebase write grant of this run; null for research only.
+          oneOf: [ { $ref: '#/components/schemas/ChatKnowledgebaseWriteDto' }, { type: 'null' } ]
+        usage: { $ref: '#/components/schemas/ChatRunUsageDto' }
+        cancelRequestedAt:
+          oneOf: [ { $ref: '#/components/schemas/DateTime' }, { type: 'null' } ]
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+        completedAt:
+          oneOf: [ { $ref: '#/components/schemas/DateTime' }, { type: 'null' } ]
+        revision: { type: integer, minimum: 1 }
+    ChatQuestionOptionDto:
+      type: object
+      required: [ id, label ]
+      properties:
+        id: { type: string }
+        label: { type: string }
+    ChatQuestionDto:
+      type: object
+      required:
+        [
+          id,
+          threadId,
+          runId,
+          ordinal,
+          state,
+          prompt,
+          options,
+          allowFreeText,
+          answerMessageId,
+          createdAt,
+          answeredAt,
+          revision
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        threadId: { type: string, format: uuid }
+        runId: { type: string, format: uuid }
+        ordinal:
+          type: integer
+          minimum: 1
+          description: 1-based ordinal of the question within its run.
+        state:
+          type: string
+          enum: [ open, answered, superseded, cancelled ]
+        prompt: { type: string }
+        options:
+          type: array
+          maxItems: 20
+          items: { $ref: '#/components/schemas/ChatQuestionOptionDto' }
+        allowFreeText: { type: boolean }
+        answerMessageId:
+          oneOf: [ { type: string, format: uuid }, { type: 'null' } ]
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        answeredAt:
+          oneOf: [ { $ref: '#/components/schemas/DateTime' }, { type: 'null' } ]
+        revision: { type: integer, minimum: 1 }
+    ChatAssignmentDto:
+      type: object
+      description: The agent selection frozen when the proposal revision was prepared.
+      required: [ agent, model, reasoningEffort, source ]
+      properties:
+        agent: { type: string }
+        model:
+          type: string
+          description: Always a model enabled in the workspace catalog when the revision was prepared.
+        reasoningEffort:
+          oneOf: [ { type: string }, { type: 'null' } ]
+        source:
+          type: string
+          enum: [ project_default, assistant_selection ]
+    ChatProposalObjectiveDto:
+      type: object
+      required: [ title, objective, acceptanceCriteria, resourceKey, assignment, evidenceIds ]
+      properties:
+        title: { type: string }
+        objective: { type: string }
+        acceptanceCriteria:
+          type: array
+          maxItems: 50
+          items: { type: string }
+        resourceKey: { type: string }
+        assignment: { $ref: '#/components/schemas/ChatAssignmentDto' }
+        evidenceIds:
+          type: array
+          maxItems: 100
+          items: { type: string }
+    ChatProposalMissionDto:
+      type: object
+      required:
+        [
+          key,
+          projectId,
+          projectName,
+          workspaceId,
+          title,
+          objectives,
+          dependencies,
+          audienceWarning
+        ]
+      properties:
+        key:
+          type: string
+          description: Stable within a proposal across revisions.
+        projectId: { type: string }
+        projectName:
+          type: string
+          description: Snapshot for display; authorization is by `projectId`.
+        workspaceId: { type: string }
+        title: { type: string }
+        objectives:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items: { $ref: '#/components/schemas/ChatProposalObjectiveDto' }
+        dependencies:
+          type: array
+          maxItems: 10
+          description: Keys of other missions in this proposal.
+          items: { type: string }
+        audienceWarning:
+          description: Always set by the server to a fixed reminder that drafts are visible to the destination
+            project's members.
+          oneOf: [ { type: string }, { type: 'null' } ]
+    ChatProposalRevisionDto:
+      type: object
+      required: [ revision, missions, responsibleProfileId, invalidated, createdAt ]
+      properties:
+        revision: { type: integer, minimum: 1 }
+        missions:
+          type: array
+          maxItems: 10
+          description: Empty when `invalidated`.
+          items: { $ref: '#/components/schemas/ChatProposalMissionDto' }
+        responsibleProfileId: { type: string }
+        invalidated:
+          type: boolean
+          description: True when the revision's sources are no longer authorized.
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+    ChatCreatedMissionDto:
+      type: object
+      required: [ missionId, missionDisplayId, projectId, objectiveIds ]
+      properties:
+        missionId: { type: string, format: uuid }
+        missionDisplayId:
+          type: string
+          description: '`''''` when the mission no longer exists.'
+        projectId: { type: string }
+        objectiveIds:
+          type: array
+          items: { type: string, format: uuid }
+    ChatCreationReceiptDto:
+      type: object
+      required: [ id, proposalId, revision, missions, createdAt ]
+      properties:
+        id: { type: string, format: uuid }
+        proposalId: { type: string, format: uuid }
+        revision: { type: integer, minimum: 1 }
+        missions:
+          type: array
+          items: { $ref: '#/components/schemas/ChatCreatedMissionDto' }
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+    ChatProposalDto:
+      type: object
+      required: [ id, threadId, state, currentRevision, current, receipt, createdAt, updatedAt ]
+      properties:
+        id: { type: string, format: uuid }
+        threadId: { type: string, format: uuid }
+        state:
+          type: string
+          enum: [ open, created, cancelled ]
+        currentRevision: { type: integer, minimum: 1 }
+        current: { $ref: '#/components/schemas/ChatProposalRevisionDto' }
+        receipt:
+          oneOf: [ { $ref: '#/components/schemas/ChatCreationReceiptDto' }, { type: 'null' } ]
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        updatedAt: { $ref: '#/components/schemas/DateTime' }
+    ChatThreadSnapshotDto:
+      type: object
+      required:
+        [
+          thread,
+          messages,
+          hasEarlierMessages,
+          activeRun,
+          latestRun,
+          openQuestion,
+          openProposals,
+          referencedProposals,
+          eventCursor,
+          retainedFromSeq
+        ]
+      properties:
+        thread: { $ref: '#/components/schemas/ChatThreadDto' }
+        messages:
+          type: array
+          maxItems: 100
+          description: Oldest first.
+          items: { $ref: '#/components/schemas/ChatMessageDto' }
+        hasEarlierMessages: { type: boolean }
+        activeRun:
+          description: The unfinished run, or null.
+          oneOf: [ { $ref: '#/components/schemas/ChatRunDto' }, { type: 'null' } ]
+        latestRun:
+          description: The most recent `completed`, `failed` or `cancelled` run, or null.
+          oneOf: [ { $ref: '#/components/schemas/ChatRunDto' }, { type: 'null' } ]
+        openQuestion:
+          description: The open question while its sources are authorized, else null.
+          oneOf: [ { $ref: '#/components/schemas/ChatQuestionDto' }, { type: 'null' } ]
+        openProposals:
+          type: array
+          items: { $ref: '#/components/schemas/ChatProposalDto' }
+        referencedProposals:
+          type: array
+          description: Non-open proposals named by a proposal block in `messages`.
+          items: { $ref: '#/components/schemas/ChatProposalDto' }
+        eventCursor:
+          type: integer
+          minimum: 0
+          description: The thread's last event sequence; subscribe with `after = eventCursor`.
+        retainedFromSeq:
+          type: integer
+          minimum: 1
+          description: Oldest replayable sequence; `after` below `retainedFromSeq - 1` is `snapshot_required`.
+    ChatEventDto:
+      description: >-
+        One persisted thread event. Every kind carries `threadId`, `seq` (strictly increasing per
+        thread, gap-free in storage) and `createdAt`.
+      oneOf:
+        - type: object
+          required: [ kind, thread, threadId, seq, createdAt ]
+          properties:
+            kind: { const: thread.updated }
+            thread: { $ref: '#/components/schemas/ChatThreadDto' }
+            threadId: { type: string, format: uuid }
+            seq: { type: integer, minimum: 1 }
+            createdAt: { $ref: '#/components/schemas/DateTime' }
+        - type: object
+          required: [ kind, message, threadId, seq, createdAt ]
+          properties:
+            kind: { const: message.created }
+            message: { $ref: '#/components/schemas/ChatMessageDto' }
+            threadId: { type: string, format: uuid }
+            seq: { type: integer, minimum: 1 }
+            createdAt: { $ref: '#/components/schemas/DateTime' }
+        - type: object
+          required: [ kind, messageId, blockId, text, threadId, seq, createdAt ]
+          properties:
+            kind: { const: message.delta }
+            messageId: { type: string, format: uuid }
+            blockId: { type: string }
+            text:
+              type: string
+              description: Text appended to the block.
+            threadId: { type: string, format: uuid }
+            seq: { type: integer, minimum: 1 }
+            createdAt: { $ref: '#/components/schemas/DateTime' }
+        - type: object
+          required: [ kind, message, threadId, seq, createdAt ]
+          properties:
+            kind: { const: message.completed }
+            message: { $ref: '#/components/schemas/ChatMessageDto' }
+            threadId: { type: string, format: uuid }
+            seq: { type: integer, minimum: 1 }
+            createdAt: { $ref: '#/components/schemas/DateTime' }
+        - type: object
+          required: [ kind, run, threadId, seq, createdAt ]
+          properties:
+            kind: { const: run.updated }
+            run: { $ref: '#/components/schemas/ChatRunDto' }
+            threadId: { type: string, format: uuid }
+            seq: { type: integer, minimum: 1 }
+            createdAt: { $ref: '#/components/schemas/DateTime' }
+        - type: object
+          required: [ kind, runId, toolCallId, label, state, threadId, seq, createdAt ]
+          properties:
+            kind: { const: tool.updated }
+            runId: { type: string, format: uuid }
+            toolCallId: { type: string }
+            label:
+              type: string
+              description: Sanitized, user-facing progress label.
+            state:
+              type: string
+              enum: [ requested, executing, completed, failed, cancelled ]
+            threadId: { type: string, format: uuid }
+            seq: { type: integer, minimum: 1 }
+            createdAt: { $ref: '#/components/schemas/DateTime' }
+        - type: object
+          required: [ kind, question, threadId, seq, createdAt ]
+          properties:
+            kind: { const: question.opened }
+            question: { $ref: '#/components/schemas/ChatQuestionDto' }
+            threadId: { type: string, format: uuid }
+            seq: { type: integer, minimum: 1 }
+            createdAt: { $ref: '#/components/schemas/DateTime' }
+        - type: object
+          required: [ kind, question, threadId, seq, createdAt ]
+          properties:
+            kind: { const: question.closed }
+            question: { $ref: '#/components/schemas/ChatQuestionDto' }
+            threadId: { type: string, format: uuid }
+            seq: { type: integer, minimum: 1 }
+            createdAt: { $ref: '#/components/schemas/DateTime' }
+        - type: object
+          required: [ kind, proposal, threadId, seq, createdAt ]
+          properties:
+            kind: { const: proposal.revised }
+            proposal: { $ref: '#/components/schemas/ChatProposalDto' }
+            threadId: { type: string, format: uuid }
+            seq: { type: integer, minimum: 1 }
+            createdAt: { $ref: '#/components/schemas/DateTime' }
+        - type: object
+          required: [ kind, proposal, threadId, seq, createdAt ]
+          properties:
+            kind: { const: proposal.created }
+            proposal: { $ref: '#/components/schemas/ChatProposalDto' }
+            threadId: { type: string, format: uuid }
+            seq: { type: integer, minimum: 1 }
+            createdAt: { $ref: '#/components/schemas/DateTime' }
+        - type: object
+          required: [ kind, messageIds, proposalIds, threadId, seq, createdAt ]
+          properties:
+            kind: { const: content.invalidated }
+            messageIds:
+              type: array
+              description: Replace these messages from a fresh snapshot.
+              items: { type: string, format: uuid }
+            proposalIds:
+              type: array
+              items: { type: string, format: uuid }
+            threadId: { type: string, format: uuid }
+            seq: { type: integer, minimum: 1 }
+            createdAt: { $ref: '#/components/schemas/DateTime' }
+    ChatStreamFrameDto:
+      description: >-
+        The JSON of one `data:` frame on the event stream. The stream itself is `text/event-stream`
+        framing, not JSON.
+      oneOf:
+        - type: object
+          required: [ type, event ]
+          properties:
+            type: { const: event }
+            event: { $ref: '#/components/schemas/ChatEventDto' }
+        - type: object
+          required: [ type, retainedFromSeq ]
+          properties:
+            type: { const: snapshot_required }
+            retainedFromSeq: { type: integer, minimum: 1 }
+        - type: object
+          required: [ type, at ]
+          properties:
+            type: { const: heartbeat }
+            at: { $ref: '#/components/schemas/DateTime' }
+    ChatEventPageDto:
+      type: object
+      required: [ events, cursor, hasMore ]
+      properties:
+        events:
+          type: array
+          maxItems: 200
+          items: { $ref: '#/components/schemas/ChatEventDto' }
+        cursor:
+          type: integer
+          minimum: 0
+          description: The last returned `seq`, or the request's `after` when none; pass it as `after` next.
+        hasMore: { type: boolean }
+    SubmitChatMessageBody:
+      type: object
+      required: [ clientRequestId, text ]
+      properties:
+        clientRequestId:
+          type: string
+          maxLength: 200
+          description: Non-blank; idempotency key per thread.
+        text:
+          type: string
+          maxLength: 16000
+          description: Non-blank. Not validated on a replay.
+        optionId:
+          type: string
+          description: An option of the open question, when answering through a card option.
+        knowledgebaseWrite:
+          description: Authorizes Knowledgebase writes for the run this message starts or resumes.
+          oneOf: [ { $ref: '#/components/schemas/ChatKnowledgebaseWriteDto' }, { type: 'null' } ]
+    CreateChatThreadBody:
+      type: object
+      properties:
+        message:
+          $ref: '#/components/schemas/SubmitChatMessageBody'
+          description: Optional first message.
+    CreateChatThreadResponse:
+      type: object
+      required: [ thread, message, run ]
+      properties:
+        thread: { $ref: '#/components/schemas/ChatThreadDto' }
+        message:
+          oneOf: [ { $ref: '#/components/schemas/ChatMessageDto' }, { type: 'null' } ]
+        run:
+          oneOf: [ { $ref: '#/components/schemas/ChatRunDto' }, { type: 'null' } ]
+    UpdateChatThreadBody:
+      type: object
+      required: [ expectedRevision ]
+      description: At least one of `title` and `archived` is required.
+      properties:
+        expectedRevision: { type: integer, minimum: 1 }
+        title:
+          type: string
+          maxLength: 80
+          description: Non-blank; stored trimmed.
+        archived: { type: boolean }
+    SubmitChatMessageResponse:
+      type: object
+      required: [ message, run, replayed ]
+      properties:
+        message: { $ref: '#/components/schemas/ChatMessageDto' }
+        run: { $ref: '#/components/schemas/ChatRunDto' }
+        replayed:
+          type: boolean
+          description: True when an earlier submission with the same `clientRequestId` was answered.
+    AnswerChatQuestionBody:
+      type: object
+      required: [ clientRequestId, expectedRevision ]
+      description: '`text`, or an `optionId` whose label becomes the text, is required.'
+      properties:
+        clientRequestId:
+          type: string
+          maxLength: 200
+        expectedRevision: { type: integer, minimum: 1 }
+        optionId: { type: string }
+        text:
+          type: string
+          maxLength: 16000
+    CancelChatRunBody:
+      type: object
+      required: [ clientRequestId ]
+      properties:
+        clientRequestId:
+          type: string
+          maxLength: 200
+    ContinueChatRunBody:
+      type: object
+      required: [ clientRequestId ]
+      properties:
+        clientRequestId:
+          type: string
+          maxLength: 200
+    ContinueChatRunResponse:
+      type: object
+      required: [ run, replayed ]
+      properties:
+        run: { $ref: '#/components/schemas/ChatRunDto' }
+        replayed:
+          type: boolean
+          description: True when a run already continued the addressed run.
+    CreateFromChatProposalBody:
+      type: object
+      required: [ clientRequestId, expectedRevision ]
+      properties:
+        clientRequestId:
+          type: string
+          maxLength: 200
+          description: Non-blank; unique per owner across proposals.
+        expectedRevision: { type: integer, minimum: 1 }
+    CreateFromChatProposalResponse:
+      type: object
+      required: [ proposal, receipt, replayed ]
+      properties:
+        proposal: { $ref: '#/components/schemas/ChatProposalDto' }
+        receipt: { $ref: '#/components/schemas/ChatCreationReceiptDto' }
+        replayed: { type: boolean }
+    UpdateChatPresenceBody:
+      type: object
+      required: [ clientId, platform, state ]
+      properties:
+        clientId:
+          type: string
+          maxLength: 200
+        platform:
+          type: string
+          enum: [ ios, web, desktop ]
+        state:
+          type: string
+          enum: [ foreground, released ]
+    ChatPresenceDto:
+      type: object
+      required: [ clientId, expiresAt ]
+      properties:
+        clientId: { type: string }
+        expiresAt:
+          oneOf: [ { $ref: '#/components/schemas/DateTime' }, { type: 'null' } ]
+    AckChatEventsBody:
+      type: object
+      required: [ clientId, seq ]
+      properties:
+        clientId:
+          type: string
+          maxLength: 200
+        seq:
+          type: integer
+          minimum: 0
+          description: At most the thread's last event sequence.
+    ChatAckDto:
+      type: object
+      required: [ clientId, ackedSeq, suppressedNotificationIds ]
+      properties:
+        clientId: { type: string }
+        ackedSeq: { type: integer, minimum: 0 }
+        suppressedNotificationIds:
+          type: array
+          items: { type: string, format: uuid }
+    ChatProviderReadinessDto:
+      type: object
+      required: [ provider, model, state, checkedAt ]
+      properties:
+        provider: { const: gemini }
+        model: { type: string }
+        state:
+          type: string
+          enum: [ ready, not_configured, unavailable, rate_limited ]
+        checkedAt: { $ref: '#/components/schemas/DateTime' }
+    ChatProvidersResponse:
+      type: object
+      required: [ providers, connections ]
+      properties:
+        providers:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items: { $ref: '#/components/schemas/ChatProviderReadinessDto' }
+        connections:
+          type: array
+          description: The caller's organization-scoped connections in the selected organization.
+          items: { $ref: '#/components/schemas/AccountConnectionDto' }
+    ChatNotificationDto:
+      type: object
+      required:
+        [
+          id,
+          type,
+          organizationId,
+          threadId,
+          runId,
+          questionId,
+          threadTitle,
+          createdAt,
+          dispatchedAt,
+          readAt,
+          revision
+        ]
+      properties:
+        id: { type: string, format: uuid }
+        type:
+          type: string
+          enum: [ chat_needs_answer, chat_finished ]
+        organizationId: { type: string, format: uuid }
+        threadId: { type: string, format: uuid }
+        runId: { type: string, format: uuid }
+        questionId:
+          oneOf: [ { type: string, format: uuid }, { type: 'null' } ]
+        threadTitle:
+          type: string
+          description: The thread title captured at dispatch (`''` when none).
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        dispatchedAt: { $ref: '#/components/schemas/DateTime' }
+        readAt:
+          oneOf: [ { $ref: '#/components/schemas/DateTime' }, { type: 'null' } ]
+        revision: { type: integer, minimum: 1 }
+    ChatNotificationListResponse:
+      type: object
+      required: [ items, unreadCount ]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/ChatNotificationDto' }
+        unreadCount:
+          type: integer
+          minimum: 0
+          description: Every unread dispatched notification in the selected organization.
+    MarkChatNotificationReadBody:
+      type: object
+      required: [ expectedRevision ]
+      properties:
+        expectedRevision: { type: integer, minimum: 1 }
+    ChatDiagnosticDto:
+      type: object
+      required: [ seq, threadId, runId, attemptId, kind, createdAt, payload ]
+      properties:
+        seq: { type: integer, minimum: 1 }
+        threadId: { type: string, format: uuid }
+        runId:
+          oneOf: [ { type: string }, { type: 'null' } ]
+        attemptId:
+          oneOf: [ { type: string }, { type: 'null' } ]
+        kind:
+          type: string
+          description: An event kind, `http.exchange`, or a provider observation kind.
+        createdAt: { $ref: '#/components/schemas/DateTime' }
+        payload:
+          $ref: '#/components/schemas/JsonValue'
+          description: Unredacted observation.
+    ChatDiagnosticPageDto:
+      type: object
+      required: [ entries, nextCursor, hasMore ]
+      properties:
+        entries:
+          type: array
+          maxItems: 100
+          items: { $ref: '#/components/schemas/ChatDiagnosticDto' }
+        nextCursor:
+          type: integer
+          minimum: 0
+          description: The last returned `seq`, or the request's `after` when none.
+        hasMore: { type: boolean }
