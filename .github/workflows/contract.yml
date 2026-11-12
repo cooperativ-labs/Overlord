@@ -2,8 +2,8 @@ name: Contract
 
 # Mechanical contract alignment on every push and pull request
 # (contract/CONTRACT.md sections 5 and 6). The contract-impact declaration is
-# checked against a release range by scripts/contract-impact.mjs from the
-# release gate introduced in phase 5 of the contract migration, not here.
+# checked against a release range by `yarn release:preflight` (the release gate,
+# ADR 0052, contract/releases/README.md), not here.
 
 on:
   pull_request:

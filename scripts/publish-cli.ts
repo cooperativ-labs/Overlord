@@ -4,6 +4,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { enforceReleaseGate, SKIP_GATE_ENV, SKIP_GATE_FLAG } from './release-gate.mjs';
+
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const cliDir = path.join(repoRoot, 'cli');
 const cliDist = path.join(cliDir, 'dist', 'index.js');
@@ -55,6 +57,12 @@ Usage:
 Flags:
   --otp <code>   One-time password from your authenticator app
   --dry-run      Print the resolved publish command without uploading
+  ${SKIP_GATE_FLAG}
+                 Emergency only: publish without a matching release stamp
+                 (also ${SKIP_GATE_ENV}=1)
+
+The release gate refuses to publish unless the working tree is clean and
+yarn release:preflight has stamped HEAD (contract/releases/README.md).
 
 CI publishing uses npm trusted publishing (OIDC). Configure the trusted
 publisher on npmjs.com for this repository's workflow, grant
@@ -143,8 +151,21 @@ function ensureLocalPublisher(): void {
   console.log(`npm publisher: ${npmUser}`);
 }
 
+// Release gate (contract/releases/README.md, ADR 0052): refuses unless the tree
+// is clean and .release/preflight.json names HEAD. A dry run reports a refusal
+// without failing. Returns the arguments without the escape-hatch flag.
+function applyReleaseGate(argv: string[]): string[] {
+  if (argv.includes('--help')) return argv.filter(token => token !== SKIP_GATE_FLAG);
+  try {
+    return enforceReleaseGate({ step: 'cli:publish', argv, dryRun: argv.includes('--dry-run') })
+      .args;
+  } catch (error) {
+    fail((error as Error).message);
+  }
+}
+
 function main(): void {
-  const args = parseArgs(process.argv.slice(2));
+  const args = parseArgs(applyReleaseGate(process.argv.slice(2)));
   const version = resolveCliVersion();
   const publishEnv = stripAuthTokens();
   const publishArgs = ['publish', '--tag', 'latest', ...(args.otp ? [`--otp=${args.otp}`] : [])];

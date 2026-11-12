@@ -145,6 +145,24 @@ describe('contract range checker', () => {
     assert.match(violations[0], /cannot change contract\/: contract\/CONTRACT\.md/);
   });
 
+  it('accepts none when only a release record under contract/releases/ changed', () => {
+    const head = commit({
+      'contract/releases/168.0.0/README.md': '# Release 168.0.0\n\nBaseline SHA recorded.\n',
+      'contract/releases/baseline.json': '{}\n'
+    });
+    assert.deepEqual(check(start, head, 'none').violations, []);
+  });
+
+  it('still refuses none when a release record changes alongside other contract files', () => {
+    const head = commit({
+      'contract/releases/168.0.0/README.md': '# Release 168.0.0\n',
+      'contract/conformance.md': '# Conformance\n\nClarified.\n'
+    });
+    const { violations } = check(start, head, 'none');
+    assert.equal(violations.length, 1);
+    assert.match(violations[0], /cannot change contract\/: contract\/conformance\.md$/);
+  });
+
   for (const level of ['patch', 'minor', 'major']) {
     it(`accepts a matching ${level} declaration`, () => {
       const head = commit({ ...bumpFiles(level), 'contract/CONTRACT.md': `# Contract ${level}\n` });

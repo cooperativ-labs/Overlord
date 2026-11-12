@@ -4,6 +4,8 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { enforceReleaseGate, SKIP_GATE_ENV, SKIP_GATE_FLAG } from './release-gate.mjs';
+
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const desktopReleaseDir = path.join(repoRoot, 'desktop', 'release');
 
@@ -102,6 +104,11 @@ Flags:
   --draft              Create the release as a draft
   --prerelease         Mark the release as a prerelease
   --dry-run            Print the resolved release command and assets without calling GitHub
+  ${SKIP_GATE_FLAG}  Emergency only: publish without a matching release stamp
+                       (also ${SKIP_GATE_ENV}=1)
+
+The release gate refuses to publish unless the working tree is clean and
+yarn release:preflight has stamped HEAD (contract/releases/README.md).
 `);
 }
 
@@ -193,8 +200,21 @@ function releaseExists(tag: string, repo: string): boolean {
   return result.status === 0;
 }
 
+// Release gate (contract/releases/README.md, ADR 0052): refuses unless the tree
+// is clean and .release/preflight.json names HEAD. A dry run reports a refusal
+// without failing. Returns the arguments without the escape-hatch flag.
+function applyReleaseGate(argv: string[]): string[] {
+  if (argv.includes('--help')) return argv.filter(token => token !== SKIP_GATE_FLAG);
+  try {
+    return enforceReleaseGate({ step: 'desktop:publish', argv, dryRun: argv.includes('--dry-run') })
+      .args;
+  } catch (error) {
+    fail((error as Error).message);
+  }
+}
+
 function main(): void {
-  const args = parseArgs(process.argv.slice(2));
+  const args = parseArgs(applyReleaseGate(process.argv.slice(2)));
   const version = resolvePackageVersion();
   const tag = args.tag ?? `v${version}`;
   const title = args.title ?? `Overlord ${tag}`;

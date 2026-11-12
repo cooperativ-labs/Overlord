@@ -6,9 +6,8 @@
 // range is complete. It knows nothing about individual pushes, pull requests,
 // or commit trailers.
 //
-// The release gate that calls it (`yarn release:preflight`) is introduced in
-// phase 5 of planning/feature-plans/contract-adr-openapi-migration.md. Until
-// then it can be run by hand:
+// The release gate calls it from `yarn release:preflight` (scripts/release-gate.mjs,
+// ADR 0052). It can also be run by hand:
 //   node scripts/contract-impact.mjs --range-start <sha> --head <sha> --impact <level>
 
 import { execFileSync } from 'node:child_process';
@@ -27,6 +26,9 @@ import {
 export const CONTRACT_IMPACTS = Object.freeze(['none', 'patch', 'minor', 'major']);
 
 export const CONTRACT_DIRECTORY = 'contract/';
+// Release records are evidence about releases, not contract text (ADR 0052), so
+// adding or completing one does not count as changing the contract.
+export const RELEASE_RECORD_DIRECTORY = 'contract/releases/';
 export const DECISION_RECORD_PATTERN = /^contract\/decisions\/\d{4}-[^/]+\.md$/;
 export const DECISION_TRIGGER_FILES = Object.freeze([
   'contract/architecture.md',
@@ -112,7 +114,9 @@ export function contractRangeViolations({ rangeStart, head, declaredImpact, repo
   const changedPaths = [
     ...new Set(changes.flatMap(change => [change.path, change.previousPath].filter(Boolean)))
   ];
-  const contractFiles = changedPaths.filter(file => file.startsWith(CONTRACT_DIRECTORY));
+  const contractFiles = changedPaths.filter(
+    file => file.startsWith(CONTRACT_DIRECTORY) && !file.startsWith(RELEASE_RECORD_DIRECTORY)
+  );
 
   if (computedImpact === 'none' && contractFiles.length > 0) {
     violations.push(

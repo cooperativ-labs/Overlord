@@ -146,3 +146,8 @@ The publish script:
 
 Use `yarn desktop:publish --dry-run` to inspect the resolved release command
 without changing GitHub.
+
+Publishing is part of the release procedure in `contract/releases/README.md`:
+`yarn desktop:publish` refuses unless the working tree is clean and
+`yarn release:preflight` has stamped `HEAD` (`--skip-release-gate` is the
+emergency bypass).

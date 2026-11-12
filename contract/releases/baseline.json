@@ -1,0 +1,6 @@
+{
+  "description": "Range start of the first release, used by yarn release:preflight only while the remote has no production tag. See contract/releases/README.md and contract/releases/169.2.1/README.md.",
+  "baselineContractVersion": "169.2.1",
+  "rangeStart": "9a71cf44214ab0ea85d655df5139221e91ca2c4b",
+  "rangeStartContractVersion": "169.2.0"
+}
